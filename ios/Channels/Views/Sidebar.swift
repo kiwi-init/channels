@@ -2,17 +2,11 @@ import SwiftUI
 
 struct RouteScreen: View {
     let route: Route
-    @Environment(AppModel.self) private var model
 
     var body: some View {
         switch route {
         case .place(let spot): ConversationScreen(start: spot)
         case .tasks(let code): TasksScreen(code: code)
-        case .details(let code, let place):
-            DetailsScreen(code: code, current: place) { key in
-                model.path.removeAll()
-                model.open(.place(Spot(code: code, place: key)))
-            }
         }
     }
 }
@@ -158,105 +152,4 @@ struct PlaceLabel<Icon: View>: View {
             }
         }
     }
-}
-
-struct SearchScreen: View {
-    @Environment(AppModel.self) private var model
-    @State private var query = ""
-    @Environment(\.dismiss) private var dismiss
-
-    private var words: String { query.trimmingCharacters(in: .whitespaces).lowercased() }
-
-    private var places: [(String, RoomView, PlaceView)] {
-        guard !words.isEmpty else { return [] }
-        return model.channels.flatMap { room in
-            room.places.filter { place in
-                let title = place.kind == "main" ? "general \(room.title)" : place.title
-                return place.withMe && title.lowercased().contains(words)
-            }
-            .map { ("\(room.code)|\($0.key)", room, $0) }
-        }
-    }
-
-    private var hits: [Found] {
-        guard words.count > 1 else { return [] }
-        return model.channels.flatMap { room in
-            room.places.flatMap { place in
-                (model.shown(Spot(code: room.code, place: place.key))?.messages ?? [])
-                    .filter { !$0.event && $0.plain.lowercased().contains(words) }
-                    .map { Found(room: room, key: place.key, message: $0) }
-            }
-        }
-        .sorted { $0.message.at > $1.message.at }
-        .prefix(40)
-        .map { $0 }
-    }
-
-    private func go(_ spot: Spot) {
-        dismiss()
-        model.open(.place(spot))
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if !places.isEmpty {
-                    Section("Conversations") {
-                        ForEach(places, id: \.0) { found in
-                            let (room, place) = (found.1, found.2)
-                            Button {
-                                go(Spot(code: room.code, place: place.key))
-                            } label: {
-                                Label(
-                                    place.kind == "main" ? "general · \(room.title)" : place.title,
-                                    systemImage: place.kind == "main" ? "number" : place.kind == "task" ? "checklist" : "person")
-                            }
-                        }
-                    }
-                    .listRowBackground(Tone.raised)
-                }
-                if !hits.isEmpty {
-                    Section("Messages") {
-                        ForEach(hits, id: \.id) { hit in
-                            let (room, key, message) = (hit.room, hit.key, hit.message)
-                            Button {
-                                go(Spot(code: room.code, place: key))
-                            } label: {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("\(message.mine ? "You" : room.display(message.from)) · \(When.list(message.date))")
-                                        .font(.subheadline).foregroundStyle(Tone.ink3)
-                                    Text(message.plain).foregroundStyle(Tone.ink).lineLimit(3)
-                                }
-                            }
-                        }
-                    }
-                    .listRowBackground(Tone.raised)
-                }
-            }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Tone.canvas)
-            .overlay {
-                if !words.isEmpty && places.isEmpty && hits.isEmpty {
-                    ContentUnavailableView.search(text: query)
-                }
-            }
-            .navigationTitle("Search")
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Conversations and messages")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
-}
-
-struct Found: Identifiable {
-    let room: RoomView
-    let key: String
-    let message: MessageView
-
-    var id: String { "\(room.code)|\(key)|\(message.seq)" }
 }

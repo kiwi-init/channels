@@ -3,7 +3,6 @@ import SwiftUI
 enum Route: Hashable {
     case place(Spot)
     case tasks(String)
-    case details(String, String)
 }
 
 struct TasksScreen: View {

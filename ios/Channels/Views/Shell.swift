@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 enum Drawer: Equatable {
-    case closed, left, right
+    case closed, left
 }
 
 @MainActor
@@ -38,7 +38,6 @@ extension AppModel {
         switch showing {
         case .place(let spot): spot.code
         case .tasks(let code): code
-        case .details(let code, _): code
         case nil: nil
         }
     }
@@ -55,43 +54,29 @@ extension AppModel {
 struct Shell: View {
     @Environment(AppModel.self) private var model
     @State private var drag: CGFloat = 0
-    @State private var search = false
     @State private var settings = false
     @State private var axis: Axis?
     @GestureState private var touching = false
 
     private static let peek: CGFloat = 64
-    private static let members: CGFloat = 300
 
     var body: some View {
         GeometryReader { geo in
             let width = geo.size.width
             let left = width - Self.peek
-            let base: CGFloat =
-                switch model.drawer {
-                case .closed: 0
-                case .left: left
-                case .right: -Self.members
-                }
-            let x = min(left, max(-Self.members, base + drag))
+            let base: CGFloat = model.drawer == .left ? left : 0
+            let x = min(left, max(0, base + drag))
             ZStack(alignment: .topLeading) {
                 Tone.canvas.ignoresSafeArea()
                 if x > 0 {
                     HStack(spacing: 0) {
-                        Rail(search: $search, settings: $settings)
+                        Rail(settings: $settings)
                         SidePane()
                             .disabled(abs(drag) > 30)
                     }
                     .frame(width: left)
                     .transition(.identity)
                     .simultaneousGesture(swipe(left: left))
-                }
-                if x < 0, let code = model.frontCode, let room = model.rooms[code] {
-                    MembersPane(room: room)
-                        .disabled(abs(drag) > 30)
-                        .frame(width: Self.members)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .simultaneousGesture(swipe(left: left))
                 }
                 front
                     .accessibilityHidden(model.drawer != .closed)
@@ -103,11 +88,11 @@ struct Shell: View {
                         if model.drawer != .closed {
                             Color.clear
                                 .contentShape(Rectangle())
-                                .frame(width: model.drawer == .left ? Self.peek : width - Self.members)
-                                .frame(maxWidth: .infinity, alignment: model.drawer == .left ? .trailing : .leading)
+                                .frame(width: Self.peek)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
                                 .onTapGesture { close() }
                                 .accessibilityElement()
-                                .accessibilityLabel(model.drawer == .left ? "Close Channels" : "Close Members")
+                                .accessibilityLabel("Close Channels")
                                 .accessibilityAddTraits(.isButton)
                                 .accessibilityAction { close() }
                         }
@@ -115,9 +100,6 @@ struct Shell: View {
                     .simultaneousGesture(swipe(left: left))
             }
             .accessibilityAction(.escape) { close() }
-        }
-        .sheet(isPresented: $search) {
-            SearchScreen()
         }
         .sheet(isPresented: $settings) {
             NavigationStack {
@@ -145,7 +127,6 @@ struct Shell: View {
                 switch model.showing {
                 case .place(let spot): ConversationScreen(start: spot).id(spot.id)
                 case .tasks(let code): TasksScreen(code: code)
-                case .details(let code, let place): RouteScreen(route: .details(code, place))
                 case nil:
                     ContentUnavailableView {
                         Label(model.joining > 0 ? "Waiting to Be Let In" : "No Channels", systemImage: "bubble.left.and.bubble.right")
@@ -173,16 +154,6 @@ struct Shell: View {
                     }
                     .accessibilityLabel("Channels")
                 }
-                if model.frontCode != nil {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            withAnimation(Drawers.motion) { model.drawer = .right }
-                        } label: {
-                            Image(systemName: "person.2")
-                        }
-                        .accessibilityLabel("Members")
-                    }
-                }
             }
             .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
         }
@@ -199,7 +170,7 @@ struct Shell: View {
                     }
                 }
                 guard axis == .horizontal else { return }
-                if model.drawer == .closed && (!model.path.isEmpty || (value.translation.width < 0 && model.frontCode == nil)) { return }
+                if model.drawer == .closed && (!model.path.isEmpty || value.translation.width < 0) { return }
                 drag = value.translation.width
             }
             .onEnded { value in
@@ -213,9 +184,8 @@ struct Shell: View {
                 guard drag != 0 else { return }
                 let next: Drawer =
                     switch model.drawer {
-                    case .closed: moved > left * 0.35 ? .left : moved < -Self.members * 0.35 ? .right : .closed
+                    case .closed: moved > left * 0.35 ? .left : .closed
                     case .left: moved < -left * 0.3 ? .closed : .left
-                    case .right: moved > Self.members * 0.3 ? .closed : .right
                     }
                 if next != model.drawer { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
                 withAnimation(Drawers.motion) {
@@ -255,10 +225,8 @@ struct Shell: View {
                 case "needs":
                     model.pane = .needs
                     model.drawer = .left
-                case "members": model.drawer = .right
                 case "board": model.showing = .tasks(first.code)
                 case "settings": settings = true
-                case "tasks": model.path = [.details(first.code, "main")]
                 default: break
                 }
             }
@@ -267,7 +235,6 @@ struct Shell: View {
 }
 
 struct Rail: View {
-    @Binding var search: Bool
     @Binding var settings: Bool
     @Environment(AppModel.self) private var model
 
@@ -305,13 +272,6 @@ struct Rail: View {
             }
             .scrollIndicators(.hidden)
             VStack(spacing: 10) {
-                Button {
-                    search = true
-                } label: {
-                    Image(systemName: "magnifyingglass").font(.system(size: 18, weight: .semibold)).foregroundStyle(Tone.ink2).frame(width: 46, height: 46)
-                        .background(Tone.raised, in: RoundedRectangle(cornerRadius: 23, style: .continuous))
-                }
-                .accessibilityLabel("Search")
                 Button {
                     settings = true
                 } label: {
@@ -425,64 +385,5 @@ struct SideHeader: View {
         .padding(.bottom, 12)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
-    }
-}
-
-struct MembersPane: View {
-    let room: RoomView
-    @Environment(AppModel.self) private var model
-
-    private var crew: [MemberView] {
-        room.people.filter { $0.kind != "computer" }
-            .sorted { ($0.lead ? 0 : 1, $0.display) < ($1.lead ? 0 : 1, $1.display) }
-    }
-
-    private var groups: [(String, [MemberView])] {
-        let working = crew.filter { $0.working }
-        let online = crew.filter { !$0.working && ($0.here || room.isMe($0.name)) }
-        let offline = crew.filter { !$0.working && !$0.here && !room.isMe($0.name) }
-        return [("Working", working), ("Online", online), ("Offline", offline)].filter { !$0.1.isEmpty }
-    }
-
-    var body: some View {
-        List {
-            ForEach(groups, id: \.0) { group in
-                SideHeading(title: "\(group.0) — \(group.1.count)")
-                ForEach(group.1) { member in
-                    Button {
-                        if !room.isMe(member.name) { model.open(.place(Spot(code: room.code, place: room.dmKey(with: member.name)))) }
-                    } label: {
-                        PlaceLabel(title: member.display, detail: detail(member), unread: false) {
-                            Face(name: member.name, member: member, size: 28)
-                        }
-                        .opacity(group.0 == "Offline" ? 0.55 : 1)
-                    }
-                    .buttonStyle(.plain)
-                    .sideRow(on: false)
-                }
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .contentMargins(.top, 4, for: .scrollContent)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Members").font(.headline).foregroundStyle(Tone.ink)
-                Text(room.title).font(.caption).foregroundStyle(Tone.ink3).lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 18)
-            .padding(.top, 14)
-            .padding(.bottom, 12)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-        }
-    }
-
-    private func detail(_ member: MemberView) -> String? {
-        if room.isMe(member.name) { return "You" }
-        if member.working, let id = member.doing.first, let task = room.tasks.first(where: { $0.id == id }) { return "\(taskLabel(task.id)) \(task.title)" }
-        if member.working { return member.activity?.tool ?? "Working" }
-        return member.lead ? "Lead" : nil
     }
 }

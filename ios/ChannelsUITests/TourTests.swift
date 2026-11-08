@@ -55,11 +55,6 @@ final class TourTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(700))
         tapFirst("lead")
 
-        drag(fromX: 0.85, toX: 0.15)
-        snap("members")
-        drag(fromX: 0.15, toX: 0.85)
-        snap("members closed")
-
         let bubble = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Round '")).firstMatch
         if bubble.waitForExistence(timeout: 2) {
             bubble.press(forDuration: 0.8)
@@ -67,10 +62,6 @@ final class TourTests: XCTestCase {
             app.tap()
         }
 
-        drag(fromX: 0.25, toX: 0.9)
-        tapFirst("Search")
-        snap("search")
-        tapFirst("Done")
         drag(fromX: 0.25, toX: 0.9)
         tapFirst("You")
         snap("you")
@@ -93,7 +84,7 @@ final class TourTests: XCTestCase {
     func testScreensJowShot() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["TOUR"] != nil, "a hand-run walk: TEST_RUNNER_TOUR=1")
         let url = try XCTUnwrap(Bundle(for: TourTests.self).url(forResource: "fixture", withExtension: "json"), "the Make the fixture build phase didn't run")
-        for shot in ["list", "members", "needs", "board"] {
+        for shot in ["list", "needs", "board"] {
             app = XCUIApplication()
             app.launchEnvironment["CHANNELS_FIXTURE"] = try String(contentsOf: url, encoding: .utf8)
             app.launchArguments = ["-shot", shot]

@@ -42,13 +42,6 @@ struct ConversationScreen: View {
                 }
                 .navigationTitle(room.spotTitle(spot.place))
                 .subtitle(room.status(of: spot.place))
-                .toolbarTitleMenu {
-                    Button("Details", systemImage: "info.circle") { model.path.append(.details(room.code, spot.place)) }
-                    Button("Tasks", systemImage: "checklist") { model.path.append(.tasks(room.code)) }
-                    if spot.place != "main" {
-                        Button("#general", systemImage: "number") { model.path.append(.place(Spot(code: room.code))) }
-                    }
-                }
                 .onChange(of: room.placeView(spot.place)?.lastSeq) { _, _ in seen() }
             } else {
                 Centered(title: "This channel is gone", detail: "Its owner closed it, or this phone was removed from it.")
@@ -112,26 +105,6 @@ extension RoomView {
             needs > 0 ? "\(needs) \(needs == 1 ? "needs" : "need") you" : nil,
         ].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-}
-
-struct DetailsScreen: View {
-    let code: String
-    let current: String
-    let choose: (String) -> Void
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        Group {
-            if let room = model.rooms[code] {
-                ChannelDetails(room: room, current: current, choose: choose)
-                    .navigationTitle(room.spotTitle(current))
-            } else {
-                Centered(title: "This channel is gone", detail: "Its owner closed it, or this phone was removed from it.")
-            }
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
     }
 }
 
