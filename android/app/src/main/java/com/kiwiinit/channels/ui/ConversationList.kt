@@ -30,13 +30,13 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.MarkEmailUnread
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -81,7 +81,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConversationList(model: AppModel, open: (Spot) -> Unit, tasks: (String) -> Unit, settings: () -> Unit) {
+fun ConversationList(model: AppModel, open: (Spot) -> Unit, tasks: (String) -> Unit) {
     val tone = Tone.current
     var refreshing by remember { mutableStateOf(false) }
     val channels = model.channels
@@ -95,7 +95,7 @@ fun ConversationList(model: AppModel, open: (Spot) -> Unit, tasks: (String) -> U
     }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-        BigTitle("Chats") { Account(model, settings) }
+        BigTitle("Chats") { MarkAllRead(model) }
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshing = true }, modifier = Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)) {
                 model.unsaved?.let { why ->
@@ -149,34 +149,9 @@ private fun PlainRow(title: String, line: String, open: () -> Unit, icon: @Compo
 }
 
 @Composable
-private fun Account(model: AppModel, settings: () -> Unit) {
-    var menu by remember { mutableStateOf(false) }
-    val unread = model.rows(Filter.Unread).isNotEmpty()
-    Box {
-        Box(Modifier.size(44.dp).clip(RoundedCornerShape(22.dp)).clickable { menu = true }, contentAlignment = Alignment.Center) {
-            Face(model.person.ifEmpty { "?" }, null, 38.dp)
-        }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(
-                text = { Text(if (model.person.isEmpty()) "Settings" else "Settings · ${model.person}") },
-                leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                onClick = {
-                    menu = false
-                    settings()
-                },
-            )
-            if (unread) {
-                DropdownMenuItem(
-                    text = { Text("Mark all as read") },
-                    leadingIcon = { Icon(Icons.Filled.MarkEmailRead, contentDescription = null) },
-                    onClick = {
-                        menu = false
-                        model.markAllRead()
-                    },
-                )
-            }
-        }
-    }
+private fun MarkAllRead(model: AppModel) {
+    if (model.rows(Filter.Unread).isEmpty()) return
+    IconButton(onClick = { model.markAllRead() }) { Icon(Icons.Filled.MarkEmailRead, contentDescription = "Mark all as read", tint = Tone.current.ink2) }
 }
 
 @Composable

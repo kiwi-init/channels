@@ -16,7 +16,6 @@ import com.kiwiinit.channels.ui.Home
 import com.kiwiinit.channels.ui.Tab
 import com.kiwiinit.channels.ui.TasksScreen
 import com.kiwiinit.channels.ui.LinkScreen
-import com.kiwiinit.channels.ui.SettingsScreen
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -48,7 +47,7 @@ class ScreensTest {
     fun check() = shoot("check") { LinkScreen(it, linking = Linking.Check("Jow", "3f9a 0c41 77e2 b8d5 1a06")) }
 
     @Test
-    fun list() = shoot("list") { Home(it, open = {}, tasks = {}, settings = {}) }
+    fun list() = shoot("list") { Home(it, open = {}, tasks = {}) }
 
     @Test
     fun general() = shoot("general") { ConversationScreen(it, Spot(DEV), back = {}) }
@@ -57,10 +56,10 @@ class ScreensTest {
     fun leadChat() = shoot("lead-chat") { ConversationScreen(it, Spot(DEV, LEAD_CHAT), back = {}) }
 
     @Test
-    fun needs() = shoot("needs") { Home(it, open = {}, tasks = {}, settings = {}, first = Tab.Needs) }
+    fun needs() = shoot("needs") { Home(it, open = {}, tasks = {}, first = Tab.Needs) }
 
     @Test
-    fun needsReview() = shoot("needs-review", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList()) }) { Home(it, open = {}, tasks = {}, settings = {}, first = Tab.Needs) }
+    fun needsReview() = shoot("needs-review", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList()) }) { Home(it, open = {}, tasks = {}, first = Tab.Needs) }
 
     @Test
     fun tasks() = shoot("tasks") { TasksScreen(it, DEV, open = {}, back = {}) }
@@ -69,7 +68,7 @@ class ScreensTest {
     fun room() = shoot("room") { ConversationScreen(it, Spot(DEV, DESIGN_ROOM), back = {}) }
 
     @Test
-    fun settings() = shoot("settings") { SettingsScreen(it) {} }
+    fun settings() = shoot("settings") { Home(it, open = {}, tasks = {}, first = Tab.Settings) }
 
     private fun shoot(name: String, prepare: (AppModel) -> Unit = {}, screen: @Composable (AppModel) -> Unit) {
         for ((look, qualifier) in listOf("light" to "+notnight", "dark" to "+night")) {

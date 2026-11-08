@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.PanTool
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material3.Badge
@@ -34,22 +36,24 @@ import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.model.needing
 
-enum class Tab { Chats, Needs }
+enum class Tab { Chats, Needs, Settings }
 
 @Composable
-fun Home(model: AppModel, open: (Spot) -> Unit, tasks: (String) -> Unit, settings: () -> Unit, first: Tab = Tab.Chats) {
+fun Home(model: AppModel, open: (Spot) -> Unit, tasks: (String) -> Unit, first: Tab = Tab.Chats) {
     var tab by rememberSaveable { mutableStateOf(first) }
     BackHandler(enabled = tab != Tab.Chats) { tab = Tab.Chats }
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
-                Tab.Chats -> ConversationList(model, open, tasks, settings)
+                Tab.Chats -> ConversationList(model, open, tasks)
                 Tab.Needs -> NeedsList(model)
+                Tab.Settings -> SettingsScreen(model)
             }
         }
         NavigationBar {
             TabItem("Chats", Icons.Filled.Forum, Icons.Outlined.Forum, tab == Tab.Chats, 0) { tab = Tab.Chats }
             TabItem("Needs you", Icons.Filled.PanTool, Icons.Outlined.PanTool, tab == Tab.Needs, model.needing) { tab = Tab.Needs }
+            TabItem("You", Icons.Filled.AccountCircle, Icons.Outlined.AccountCircle, tab == Tab.Settings, 0) { tab = Tab.Settings }
         }
     }
 }
