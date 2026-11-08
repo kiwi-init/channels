@@ -46,9 +46,6 @@ final class AppModel {
     var linking: Linking = .idle
     var relinkAsked = false
     var path: [Route] = []
-    var showing: Route?
-    var drawer: Drawer = .closed
-    var pane: Pane = .needs
     var enrolled = false
     var joining = 0
     var unsaved: String?
@@ -497,9 +494,6 @@ final class AppModel {
         pending = [:]
         sentAs = [:]
         path = []
-        showing = nil
-        drawer = .closed
-        pane = .needs
         person = ""
         enrolled = false
         joining = 0

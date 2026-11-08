@@ -14,7 +14,7 @@ struct Screen {
     }
 
     func enter(after wait: Duration) async throws {
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'channels-dev'")).firstMatch
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 30), "the channel list never showed")
         try await Task.sleep(for: .seconds(1))
         row.tap()

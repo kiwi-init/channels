@@ -3,6 +3,7 @@ import SwiftUI
 enum Route: Hashable {
     case place(Spot)
     case tasks(String)
+    case needs
 }
 
 struct TasksScreen: View {
@@ -15,21 +16,21 @@ struct TasksScreen: View {
         let room = model.rooms[code]
         let tasks = room?.tasks.filter { !$0.archived } ?? []
         List {
-            if tasks.isEmpty {
-                Text("No tasks yet").type(.ui).foregroundStyle(Tone.ink3).sideRow(on: false)
-            }
             ForEach(Self.groups, id: \.state) { group in
-                let shown = tasks.filter { $0.state == group.state }.prefix(group.state == "done" ? 20 : 200)
+                let shown = tasks.filter { $0.state == group.state }.sorted { $0.updatedAt > $1.updatedAt }.prefix(group.state == "done" ? 20 : 200)
                 if !shown.isEmpty {
-                    SideHeading(title: group.title)
-                    ForEach(Array(shown)) { task in
-                        Button {
-                            model.path.append(.place(Spot(code: code, place: "task:\(task.id)")))
-                        } label: {
-                            TaskRow(task: task, room: room)
+                    Section {
+                        ForEach(Array(shown)) { task in
+                            Button {
+                                model.go(.place(Spot(code: code, place: "task:\(task.id)")))
+                            } label: {
+                                TaskRow(task: task, room: room)
+                            }
+                            .buttonStyle(.plain)
+                            .flatRow()
                         }
-                        .buttonStyle(.plain)
-                        .sideRow(on: false)
+                    } header: {
+                        Text(group.title).font(.subheadline.weight(.semibold)).foregroundStyle(Tone.ink2).textCase(nil)
                     }
                 }
             }
@@ -37,7 +38,12 @@ struct TasksScreen: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Tone.canvas)
-        .navigationTitle("Tasks")
+        .overlay {
+            if tasks.isEmpty {
+                ContentUnavailableView("No tasks yet", systemImage: "checklist")
+            }
+        }
+        .navigationTitle(room.map { "Tasks · \($0.title)" } ?? "Tasks")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -55,18 +61,26 @@ struct TaskRow: View {
         }
     }
 
+    private var who: String? {
+        task.owner.map { room?.display($0) ?? $0 }
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Circle().fill(tone).frame(width: 9, height: 9).padding(.top, 6).frame(width: 30)
+            Circle().fill(tone).frame(width: 9, height: 9).padding(.top, 6).frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
-                Text(task.title).type(.body).foregroundStyle(Tone.ink).lineLimit(2)
-                Text([taskLabel(task.id), task.owner.map { room?.display($0) ?? $0 }, When.list(task.updated)].compactMap { $0 }.joined(separator: " · "))
-                    .type(.ui)
+                Text(task.title).font(.body).foregroundStyle(Tone.ink).lineLimit(2)
+                if let last = task.last, !last.isEmpty, task.state != "done" {
+                    Text(last.replacingOccurrences(of: "\n", with: " ")).font(.subheadline).foregroundStyle(Tone.ink2).lineLimit(2)
+                }
+                Text([taskLabel(task.id), who, When.list(task.updated)].compactMap { $0 }.joined(separator: " · "))
+                    .font(.footnote)
                     .foregroundStyle(Tone.ink3)
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }

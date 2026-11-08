@@ -13,58 +13,52 @@ final class TourTests: XCTestCase {
         app.launchArguments = ["-shot", "tour"]
         app.launch()
         try await drawn()
-        snap("open")
+        snap("list")
 
-        app.swipeUp()
-        snap("scrolled down")
+        tapFirst("general")
+        snap("general")
         app.swipeDown()
-        app.swipeDown()
-        snap("scrolled up")
+        snap("general scrolled up")
+        back()
 
-        drag(fromX: 0.25, toX: 0.9)
-        snap("drawer")
         tapFirst("lead")
         snap("lead chat")
-
         let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
         if field.waitForExistence(timeout: 2) {
             field.tap()
             try await Task.sleep(for: .milliseconds(600))
-            snap("keyboard")
             field.typeText("Hello from the tour")
             snap("typed")
-            drag(fromX: 0.25, toX: 0.9)
-            snap("drawer with keyboard")
-            drag(fromX: 0.9, toX: 0.1)
         }
+        back()
 
-        drag(fromX: 0.25, toX: 0.9)
         tapFirst("Needs You")
         snap("needs")
         tapFirst("Run a command")
         snap("need form")
-        tapFirst("Needs You")
-        tapFirst("channels-dev")
-        snap("channel sidebar")
+        back()
+        back()
+
         tapFirst("Tasks")
         snap("tasks")
         tapFirst("Composer empties after Send, every time")
         snap("task thread")
-        let back = app.navigationBars.buttons.firstMatch
-        if back.exists && back.isHittable { back.tap() }
-        try await Task.sleep(for: .milliseconds(700))
-        tapFirst("lead")
+        back()
+        back()
 
-        let bubble = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Round '")).firstMatch
-        if bubble.waitForExistence(timeout: 2) {
-            bubble.press(forDuration: 0.8)
-            snap("long press")
-            app.tap()
-        }
-
-        drag(fromX: 0.25, toX: 0.9)
         tapFirst("You")
         snap("you")
+    }
+
+    @MainActor
+    private func back() {
+        let button = app.navigationBars.buttons.firstMatch
+        if button.exists && button.isHittable {
+            button.tap()
+        } else {
+            print("TOUR no back button")
+        }
+        Thread.sleep(forTimeInterval: 0.7)
     }
 
     @MainActor
@@ -84,7 +78,7 @@ final class TourTests: XCTestCase {
     func testScreensJowShot() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["TOUR"] != nil, "a hand-run walk: TEST_RUNNER_TOUR=1")
         let url = try XCTUnwrap(Bundle(for: TourTests.self).url(forResource: "fixture", withExtension: "json"), "the Make the fixture build phase didn't run")
-        for shot in ["list", "needs", "board"] {
+        for shot in ["list", "needs", "board", "channel"] {
             app = XCUIApplication()
             app.launchEnvironment["CHANNELS_FIXTURE"] = try String(contentsOf: url, encoding: .utf8)
             app.launchArguments = ["-shot", shot]
@@ -111,14 +105,6 @@ final class TourTests: XCTestCase {
         } else {
             print("TOUR couldn't tap \(label)")
         }
-        Thread.sleep(forTimeInterval: 0.7)
-    }
-
-    @MainActor
-    private func drag(fromX: CGFloat, toX: CGFloat) {
-        let a = app.coordinate(withNormalizedOffset: CGVector(dx: fromX, dy: 0.5))
-        let b = app.coordinate(withNormalizedOffset: CGVector(dx: toX, dy: 0.5))
-        a.press(forDuration: 0.05, thenDragTo: b, withVelocity: .fast, thenHoldForDuration: 0.05)
         Thread.sleep(forTimeInterval: 0.7)
     }
 

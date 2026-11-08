@@ -36,8 +36,10 @@ struct ConversationScreen: View {
                 }
                 .id(spot.id)
                 .bar(.bottom) {
-                    Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing, follow: follow) {
-                        withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
+                    if talks(room) || answering != nil || sendingBack != nil {
+                        Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing, follow: follow) {
+                            withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
+                        }
                     }
                 }
                 .navigationTitle(room.spotTitle(spot.place))
@@ -56,11 +58,14 @@ struct ConversationScreen: View {
         }
         .onDisappear { visible = false }
         .onChange(of: scene) { _, _ in seen() }
-        .onChange(of: model.drawer) { _, _ in seen() }
         .task(id: spot) {
             follow = Follow()
             await model.open(spot.code, place: spot.place == model.rooms[spot.code]?.sideKey ? "main" : spot.place)
         }
+    }
+
+    private func talks(_ room: RoomView) -> Bool {
+        spot.general || spot.place == room.sideKey || room.placeView(spot.place)?.kind == "room"
     }
 
     private func needs(_ room: RoomView) -> [NeedView] {
@@ -85,7 +90,7 @@ struct ConversationScreen: View {
     }
 
     private func seen() {
-        guard visible, scene == .active, model.drawer == .closed else { return }
+        guard visible, scene == .active else { return }
         model.markRead(spot)
     }
 }

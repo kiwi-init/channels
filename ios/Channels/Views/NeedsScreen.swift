@@ -6,7 +6,7 @@ struct NeedsScreen: View {
     @State private var failed: String?
 
     private func open(_ spot: Spot) {
-        model.open(.place(spot))
+        model.jump(.place(spot))
     }
 
     private var rooms: [RoomView] {
@@ -82,6 +82,7 @@ struct NeedsScreen: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .background(Tone.canvas)
         .overlay {
             if rooms.isEmpty {
                 ContentUnavailableView("Nothing needs you", systemImage: "checkmark.circle", description: Text("Questions, permissions and reviews for you show up here."))
