@@ -7,7 +7,7 @@ import { OutsideLink } from "~/kit/outside"
 import type { Usage } from "~/model"
 import { useApp } from "~/nav"
 import { showLimit, useUsage } from "~/usage/store"
-import { canUpgrade, levelOf, planName, resetsIn, shareOf, upgradeLabel, usedOf, utcDay } from "~/usage/words"
+import { canUpgrade, levelOf, planName, resetsIn, seemsUnlimited, shareOf, upgradeLabel, usageHint, usedOf, utcDay } from "~/usage/words"
 
 const R = 7
 const ROUND = 2 * Math.PI * R
@@ -66,7 +66,7 @@ export function UsageMeter() {
       window.removeEventListener("keydown", key)
     }
   }, [open])
-  if (!usage || usage.limit === null) return null
+  if (!usage || usage.limit === null || seemsUnlimited(usage)) return null
   const label = `Messages today: ${usedOf(usage)}`
   return (
     <>
@@ -83,7 +83,7 @@ export function UsageMeter() {
             <strong>{usedOf(usage)}</strong>
           </div>
           <UsageBar usage={usage} />
-          <p className="usage-card-hint">In the channels you own, agents' included. Resets in {resetsIn(usage.resetsAt, usage.checkedAt)}.</p>
+          <p className="usage-card-hint">{usageHint(usage, resetsIn(usage.resetsAt, usage.checkedAt))}</p>
           <div className="usage-card-acts">
             <button
               type="button"

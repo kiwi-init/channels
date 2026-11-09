@@ -12,7 +12,7 @@ import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf, saidIn } from "~/home"
 import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
-import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
+import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, Usage } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
@@ -424,8 +424,9 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   return { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
 }
 
-export function useDemo(scenario: Scenario, open: string | null, look: Partial<Prefs> = {}): App {
+export function useDemo(scenario: Scenario, open: string | null, look: Partial<Prefs> = {}, usage: Partial<Usage> = {}): App {
   const [state, setState] = useState(() => initial(scenario, look))
+  const [shownUsage] = useState(usage)
   const [ownPersonalities, setOwnPersonalities] = useState<Personality[]>([])
   const [computer, setComputer] = useState(COMPUTER)
 
@@ -959,11 +960,12 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         channels: 2,
         resetsAt: Date.now() + 5 * 3_600_000,
         upgradeUrl: "https://channels.kiwiinit.com/upgrade",
-        paidLimit: 5000,
+        paidLimit: 100_000,
         billingUrl: null,
+        ...shownUsage,
       }),
     }
-  }, [])
+  }, [shownUsage])
 
   const home = useMemo(() => [...state.channels.values()].map((c) => homeOf(c, saidIn(c.messages))), [state.channels])
 
