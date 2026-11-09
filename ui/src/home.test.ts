@@ -227,7 +227,8 @@ describe("homeOf", () => {
         ],
       })
     )
-    expect(h.agents).toEqual([
+    expect(h.agents.map((a) => a.person.name)).toEqual(["fern", "ivy", "moss", "zed"])
+    expect(h.agents.map((a) => ({ name: a.name, nick: a.nick, state: a.state, doing: a.doing, ...(a.since ? { since: a.since } : {}), task: a.task }))).toEqual([
       { name: "fern", nick: "Fern", state: "working", doing: "running Bash", since: 5, task: { id: 2, title: "task 2" } },
       { name: "ivy", nick: "ivy", state: "waiting", doing: "waiting for a person", task: null },
       { name: "moss", nick: "moss", state: "idle", doing: "idle", task: null },

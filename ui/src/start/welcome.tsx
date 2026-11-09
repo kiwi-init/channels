@@ -1,8 +1,8 @@
 import "~/styles/start.css"
-import { useEffect, useState, type KeyboardEvent } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 
 import { takeTurns } from "~/home"
-import { cx } from "~/kit/bits"
+import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
 import type { ChannelTile, HomeAgent, HomeAsk, HomeChannel } from "~/model"
@@ -60,6 +60,10 @@ function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly Ho
   const members = tiles.filter((t) => t.state === "member")
   const asks = takeTurns(members.map((t) => (byCode.get(t.code)?.asks ?? []).map((ask) => ({ tile: t, ask }))))
   const shown = all ? asks : asks.slice(0, ASKS_SHOWN)
+  const needs = (t: ChannelTile) => byCode.get(t.code)?.asks.length ?? t.needsYou
+  const first = [...tiles].sort((a, b) => Number(needs(b) > 0) - Number(needs(a) > 0))
+  const busy = first.filter((t) => isBusy(byCode.get(t.code)))
+  const quiet = first.filter((t) => !isBusy(byCode.get(t.code)))
   return (
     <main className="start-area home-area">
       <div className="start-drag" />
@@ -81,9 +85,18 @@ function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly Ho
             )}
           </section>
         )}
-        {tiles.map((t) => (
-          <ChannelPart key={t.code} tile={t} summary={byCode.get(t.code)} now={now} />
+        {busy.map((t) => (
+          <ChannelPart key={t.code} tile={t} summary={byCode.get(t.code)} />
         ))}
+        {quiet.length > 0 && (
+          <section className="calm-sec" aria-label="Quiet channels">
+            <ul className="calm-list">
+              {quiet.map((t) => (
+                <QuietRow key={t.code} tile={t} summary={byCode.get(t.code)} />
+              ))}
+            </ul>
+          </section>
+        )}
         <p className="calm-starts">
           <Starts quiet />
         </p>
@@ -101,43 +114,65 @@ function AskRow({ tile, ask, now }: { tile: ChannelTile; ask: HomeAsk; now: numb
     go({ to: "tab", tab: "needs" })
   }
   const act = ask.act
+  const text = useRef<HTMLSpanElement>(null)
+  const [long, setLong] = useState(false)
+  const [full, setFull] = useState(false)
+  useLayoutEffect(() => {
+    const el = text.current
+    if (!el || full) return
+    const measure = () => setLong(el.scrollHeight > el.clientHeight + 1)
+    measure()
+    const watch = new ResizeObserver(measure)
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [ask.text, full])
   return (
-    <li className="calm-ask">
+    <li className={cx("calm-ask", act.kind === "options" && "has-options")}>
       <button type="button" className="calm-ask-body" title={`Open in ${tile.title}`} onClick={open}>
-        <span className="calm-ask-text">{ask.text}</span>
-        <span className="calm-meta">
-          {tile.title} · {ask.what} · <time dateTime={new Date(ask.at).toISOString()}>{ago(ask.at, now)}</time>
+        <span ref={text} className={cx("calm-ask-text", full && "is-full")}>
+          {ask.text}
         </span>
       </button>
+      <span className="calm-meta">
+        {tile.title} · {ask.what} · <time dateTime={new Date(ask.at).toISOString()}>{ago(ask.at, now)}</time>
+        {(long || full) && (
+          <>
+            {" · "}
+            <button type="button" className="calm-more-inline" aria-expanded={full} onClick={() => setFull(!full)}>
+              {full ? "Show less" : "Show all"}
+            </button>
+          </>
+        )}
+      </span>
       <span className="calm-acts">
         {act.kind === "options" &&
           act.options.map((o) => (
-            <button key={o.answer} type="button" className="calm-act" onClick={() => actions.answerQuestion(code, ask.id, o.answer)}>
+            <button key={o.answer} type="button" className="calm-opt" onClick={() => actions.answerQuestion(code, ask.id, o.answer)}>
               {o.shown}
             </button>
           ))}
         {act.kind === "allow" && (
           <>
-            <button type="button" className="calm-act" onClick={() => actions.answerPermission(code, ask.id, false)}>
+            <button type="button" className="calm-opt" onClick={() => actions.answerPermission(code, ask.id, false)}>
               Deny
             </button>
-            <button type="button" className="calm-act" onClick={() => actions.answerPermission(code, ask.id, true)}>
+            <button type="button" className="calm-opt" onClick={() => actions.answerPermission(code, ask.id, true)}>
               Allow
             </button>
           </>
         )}
         {act.kind === "approve-spec" && (
-          <button type="button" className="calm-act" onClick={() => actions.approveSpec(code, act.ask, act.v)}>
+          <button type="button" className="calm-opt" onClick={() => actions.approveSpec(code, act.ask, act.v)}>
             Approve
           </button>
         )}
         {act.kind === "approve-task" && (
-          <button type="button" className="calm-act" onClick={() => actions.approveTask(code, act.task, true)}>
+          <button type="button" className="calm-opt" onClick={() => actions.approveTask(code, act.task, true)}>
             Approve
           </button>
         )}
         {act.kind === "open" && (
-          <button type="button" className="calm-act" onClick={open}>
+          <button type="button" className="calm-opt" onClick={open}>
             Open
           </button>
         )}
@@ -146,20 +181,45 @@ function AskRow({ tile, ask, now }: { tile: ChannelTile; ask: HomeAsk; now: numb
   )
 }
 
+function isBusy(summary: HomeChannel | undefined): boolean {
+  return !!summary?.agents.some((a) => a.state === "working" || a.state === "waiting")
+}
+
 function stateOf(tile: ChannelTile, summary: HomeChannel | undefined): string {
   if (tile.state === "waiting") return "waiting to be let in"
   if (!summary || summary.loading) return "opening"
-  if (summary.doneToday) return `${summary.doneToday} done today`
-  return summary.working || summary.red ? "" : "quiet"
+  return summary.doneToday ? `${summary.doneToday} done today` : ""
+}
+
+function count(names: readonly string[], word: string): string | null {
+  if (!names.length) return null
+  return names.length <= 2 ? `${names.join(", ")} ${word}` : `${names.length} ${word}`
 }
 
 function restLine(agents: readonly HomeAgent[]): string {
   const idle = agents.filter((a) => a.state === "idle").map((a) => a.nick)
   const away = agents.filter((a) => a.state === "away").map((a) => a.nick)
-  return [idle.length ? `${idle.join(", ")} idle` : null, away.length ? `${away.join(", ")} away` : null].filter(Boolean).join(" · ")
+  return [count(idle, "idle"), count(away, "away")].filter(Boolean).join(" · ")
 }
 
-function ChannelPart({ tile, summary, now }: { tile: ChannelTile; summary: HomeChannel | undefined; now: number }) {
+function Needs({ n }: { n: number }) {
+  return n > 0 ? <span className="calm-needs">{n === 1 ? "1 needs you" : `${n} need you`}</span> : null
+}
+
+function Red({ summary }: { summary: HomeChannel | undefined }) {
+  return summary?.red ? <span className="calm-meta tone-alert">{summary.red === 1 ? "1 check red" : `${summary.red} checks red`}</span> : null
+}
+
+function MessageLead({ tile, summary, writing, onWriting }: { tile: ChannelTile; summary: HomeChannel | undefined; writing: boolean; onWriting: (on: boolean) => void }) {
+  if (tile.state !== "member" || !summary || summary.loading) return null
+  return (
+    <button type="button" className={cx("calm-act", writing && "is-on")} onClick={() => onWriting(!writing)}>
+      {summary.leadName ? `Message ${summary.leadName}` : "Message #general"}
+    </button>
+  )
+}
+
+function ChannelPart({ tile, summary }: { tile: ChannelTile; summary: HomeChannel | undefined }) {
   const { go } = useApp()
   const needs = summary ? summary.asks.length : tile.needsYou
   const open = () => go({ to: "channel", code: tile.code })
@@ -168,52 +228,69 @@ function ChannelPart({ tile, summary, now }: { tile: ChannelTile; summary: HomeC
   const rest = restLine(agents)
   const state = stateOf(tile, summary)
   const [writing, setWriting] = useState(false)
-  const member = tile.state === "member"
   return (
     <section className="calm-sec" aria-label={tile.title}>
       <div className="calm-chan-row">
         <button type="button" className="calm-chan" onClick={open}>
           <span className="calm-chan-name">{tile.title}</span>
           {state && <span className="calm-meta">{state}</span>}
-          {summary?.red ? <span className="calm-meta tone-alert">{summary.red === 1 ? "1 check red" : `${summary.red} checks red`}</span> : null}
-          {needs > 0 && <span className="calm-needs">{needs === 1 ? "1 needs you" : `${needs} need you`}</span>}
+          <Red summary={summary} />
+          <Needs n={needs} />
         </button>
-        {member && summary && !summary.loading && (
-          <button type="button" className={cx("calm-act", writing && "is-on")} onClick={() => setWriting(!writing)}>
-            {summary.leadName ? `Message ${summary.leadName}` : "Message #general"}
-          </button>
-        )}
+        <MessageLead tile={tile} summary={summary} writing={writing} onWriting={setWriting} />
       </div>
       {writing && summary && <LeadNote tile={tile} summary={summary} onDone={() => setWriting(false)} />}
-      {active.length > 0 && (
-        <ul className="calm-list">
-          {active.map((a) => (
-            <AgentLine key={a.name} tile={tile} agent={a} now={now} />
-          ))}
-        </ul>
-      )}
+      <ul className="calm-list">
+        {active.map((a) => (
+          <AgentLine key={a.name} tile={tile} agent={a} />
+        ))}
+      </ul>
       {rest && <p className="calm-rest">{rest}</p>}
     </section>
   )
 }
 
-function AgentLine({ tile, agent, now }: { tile: ChannelTile; agent: HomeAgent; now: number }) {
+function QuietRow({ tile, summary }: { tile: ChannelTile; summary: HomeChannel | undefined }) {
+  const { go } = useApp()
+  const needs = summary ? summary.asks.length : tile.needsYou
+  const [writing, setWriting] = useState(false)
+  const status = stateOf(tile, summary) || restLine(summary?.agents ?? [])
+  return (
+    <li className={cx("calm-quiet", writing && "is-writing")}>
+      <div className="calm-chan-row">
+        <button type="button" className="calm-chan" onClick={() => go({ to: "channel", code: tile.code })}>
+          <span className="calm-chan-name">{tile.title}</span>
+          {status && <span className="calm-meta">{status}</span>}
+          <Red summary={summary} />
+          <Needs n={needs} />
+        </button>
+        <MessageLead tile={tile} summary={summary} writing={writing} onWriting={setWriting} />
+      </div>
+      {writing && summary && <LeadNote tile={tile} summary={summary} onDone={() => setWriting(false)} />}
+    </li>
+  )
+}
+
+function stateWords(agent: HomeAgent): string {
+  if (agent.state === "waiting") return "needs a person"
+  return agent.task ? "" : "working"
+}
+
+function AgentLine({ tile, agent }: { tile: ChannelTile; agent: HomeAgent }) {
   const { go } = useApp()
   const open = () => {
     go({ to: "channel", code: tile.code })
     if (agent.task) go({ to: "panel", panel: { kind: "task", task: agent.task.id } })
     else go({ to: "modal", modal: { kind: "person", name: agent.name } })
   }
+  const state = stateWords(agent)
   return (
     <li>
-      <button type="button" className={cx("calm-agent", `is-${agent.state}`)} onClick={open}>
-        <span className="calm-dot" aria-hidden="true" />
+      <button type="button" className={cx("calm-agent", `is-${agent.state}`)} title={agent.doing} onClick={open}>
+        <Avatar person={agent.person} size="sm" />
         <span className="calm-agent-name">{agent.nick}</span>
         <span className="calm-agent-task">{agent.task ? agent.task.title : ""}</span>
-        <span className="calm-agent-doing">
-          {agent.doing}
-          {agent.since ? ` · ${ago(agent.since, now)}` : ""}
-        </span>
+        {state && <span className="calm-agent-state">{state}</span>}
       </button>
     </li>
   )

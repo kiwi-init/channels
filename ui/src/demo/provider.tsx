@@ -11,6 +11,7 @@ import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf, saidIn } from "~/home"
+import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
 import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
@@ -312,9 +313,11 @@ export type Scenario =
   | "spec-changed"
   | "forgotten-computer"
   | "member"
+  | "home-calm"
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
+  if (scenario === "home-calm") return { account: DEMO_ACCOUNT, tiles: CALM_TILES, channels: new Map(CALM_CHANNELS.map((c) => [c.code, { ...c, docs: demoDocs(c.code) }])), prefs, seq: 1000 }
   const channels = new Map(
     [
       scenario === "long"

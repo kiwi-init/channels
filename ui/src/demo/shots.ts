@@ -18,6 +18,7 @@ const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "ki
 export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
   home: { scenario: "full", channel: null },
+  "home-calm": { scenario: "home-calm", channel: null },
   afk: { scenario: "full", channel: "kiwi", afk: true },
   "afk-still": { scenario: "full", channel: "kiwi", afk: true, prefs: { reduceMotion: true } },
   "long-feed": { scenario: "long", channel: "kiwi" },
