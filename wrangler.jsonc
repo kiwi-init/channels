@@ -52,8 +52,12 @@
     // or "@domain", comma-separated) create channels; anyone can still ask to join one. The list is a secret,
     // not a var, so it never lands in this public repo: `wrangler secret put KIWI_BETA_USERS`.
     // Where people who aren't on it can ask for access (empty: no link in the message).
-    // No quotas on channels, members or messages, and channels never expire. Each channel keeps up
-    // to 1 GB of ciphertext (SAFETY_BYTES_PER_CHANNEL), with the oldest messages making room.
+    // Each person sends up to 1,000 messages a day, 5,000 on the paid plan; admins (KIWI_ADMINS,
+    // a secret) have no limit. No caps on channels or members, and channels never expire. Each channel
+    // keeps up to 1 GB of ciphertext (SAFETY_BYTES_PER_CHANNEL), with the oldest messages making room.
+    "KIWI_QUOTA_PERSON_MESSAGES_PER_DAY": "1000",
+    "KIWI_QUOTA_PAID_MESSAGES_PER_DAY": "5000",
+    "KIWI_UPGRADE_URL": "https://buy.stripe.com/4gMaEW0Yyf1MdYwbfO6Ri04",
     "KIWI_BETA_WAITLIST_URL": "",
     "APNS_TEAM_ID": "57249C654W",
     "APNS_TOPIC": "com.kiwiinit.channels"

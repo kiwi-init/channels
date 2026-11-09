@@ -56,10 +56,14 @@ describe("settings", () => {
     });
   });
 
-  test("the hosted relay sets no limit: no cap on channels, members or messages, no expiry, and the 1 GB safety floor for bytes (T604)", async () => {
+  test("the hosted relay caps messages per person only: 1,000 a day free, 5,000 paid; no cap on channels or members, no expiry, and the 1 GB safety floor for bytes (T21)", async () => {
     const config = Bun.JSONC.parse(await Bun.file(join(import.meta.dir, "../wrangler.jsonc")).text()) as { vars: Record<string, string> };
-    expect(Object.keys(config.vars).filter((k) => k.startsWith("KIWI_QUOTA_"))).toEqual([]);
-    expect(policyFrom(config.vars)).toEqual(OPEN_POLICY);
+    expect(
+      Object.keys(config.vars)
+        .filter((k) => k.startsWith("KIWI_QUOTA_"))
+        .sort(),
+    ).toEqual(["KIWI_QUOTA_PAID_MESSAGES_PER_DAY", "KIWI_QUOTA_PERSON_MESSAGES_PER_DAY"]);
+    expect(policyFrom(config.vars)).toEqual({ ...OPEN_POLICY, personMessagesPerDay: 1000, paidMessagesPerDay: 5000, upgradeUrl: "https://buy.stripe.com/4gMaEW0Yyf1MdYwbfO6Ri04" });
   });
 });
 
