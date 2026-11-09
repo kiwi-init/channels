@@ -1,4 +1,4 @@
-import { RelayError } from "@kiwi/core/client/errors.ts";
+import { RelayError } from "@kiwi/core/client/relay-errors.ts";
 
 const worthRetrying = (err: unknown): boolean => err instanceof TypeError || (err instanceof RelayError && (err.status === 429 || err.status >= 500));
 

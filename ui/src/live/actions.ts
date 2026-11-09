@@ -1,7 +1,6 @@
 import { TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
 import { taskId, taskSpecRefusal } from "@kiwi/core/state.ts"
 import { assignTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
-import { tokenForCreate } from "@kiwi/app/auth.ts"
 import { forgetChannel, forgetPending, loadMember, loadPending, renameChannel } from "@kiwi/channel/store.ts"
 import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
@@ -26,6 +25,7 @@ const manage = () => import("~/live/manage")
 const rare = () => import("~/live/rare")
 const account = () => import("~/live/account-rare")
 const joining = () => import("~/live/join-rare")
+const auth = () => import("@kiwi/app/auth.ts")
 import { setWake } from "~/live/wakes"
 import { findDoc } from "~/chat/doc/find-doc"
 import type { Actions } from "~/model"
@@ -297,7 +297,7 @@ export function makeActions(): Actions {
     enrollBegin: () =>
       attempt(t("live.actions.enroll.failed"), async () =>
         (await account()).enrollBegin(
-          () => tokenForCreate(),
+          async () => (await auth()).tokenForCreate(),
           (d) => attempt(t("live.actions.join.channels.failed"), async () => (await joining()).joinGranted(d))
         )
       ),
