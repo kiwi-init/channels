@@ -55,7 +55,7 @@ struct QuickSend: View {
 
     private func placeholder(_ target: (spot: Spot, lead: String, room: RoomView)) -> String {
         let name = target.room.display(target.lead)
-        return model.channels.count > 1 ? "Message \(name) · \(target.room.title)" : "Message \(name)"
+        return model.channels.count > 1 ? String(localized: "Message \(name) · \(target.room.title)") : String(localized: "Message \(name)")
     }
 
     private func send(_ spot: Spot) {

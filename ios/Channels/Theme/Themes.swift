@@ -18,9 +18,9 @@ enum AppearanceChoice: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .system: "System"
-        case .light: "Light"
-        case .dark: "Dark"
+        case .system: String(localized: "System")
+        case .light: String(localized: "Light")
+        case .dark: String(localized: "Dark")
         }
     }
 
@@ -142,6 +142,7 @@ struct AppearanceSection: View {
                 ForEach(AppearanceChoice.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
+            LanguageRow()
             NavigationLink {
                 ThemeList(title: "Dark Theme", themes: theme.darks, chosen: $theme.darkTheme)
             } label: {
@@ -158,7 +159,7 @@ struct AppearanceSection: View {
 }
 
 struct ThemeList: View {
-    let title: String
+    let title: LocalizedStringKey
     let themes: [ThemeDef]
     @Binding var chosen: String
 

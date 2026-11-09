@@ -66,7 +66,7 @@ struct NeedsScreen: View {
                     NavigationLink {
                         ReviewDetail(review: review, room: room, open: open)
                     } label: {
-                        NeedsRow(face: review.by, room: room, kind: "Review \(taskLabel(review.task))", text: review.title, at: review.at)
+                        NeedsRow(face: review.by, room: room, kind: String(localized: "Review \(taskLabel(review.task))"), text: review.title, at: review.at)
                     }
                     .bare()
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -150,16 +150,16 @@ private struct NeedsRow: View {
 enum NeedText {
     static func label(_ need: NeedView) -> String {
         switch need.kind {
-        case "permission": "Permission"
-        case "join": "Wants to join"
-        default: need.changed == true ? "Spec changed" : "Spec"
+        case "permission": String(localized: "Permission")
+        case "join": String(localized: "Wants to join")
+        default: need.changed == true ? String(localized: "Spec changed") : String(localized: "Spec")
         }
     }
 
     static func title(_ need: NeedView) -> String {
         switch need.kind {
-        case "permission": need.title ?? "Use a tool"
-        case "join": need.name ?? "Someone"
+        case "permission": need.title ?? String(localized: "Use a tool")
+        case "join": need.name ?? String(localized: "Someone")
         default: need.title ?? ""
         }
     }
@@ -202,7 +202,7 @@ private struct AskDetail: View {
                 TextField("Your answer", text: $other, axis: .vertical)
                 Button("Send") { send(other) }.disabled(doing.busy || other.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             } header: {
-                Text(ask.choices.isEmpty ? "Answer" : "Something else")
+                Text(ask.choices.isEmpty ? String(localized: "Answer") : String(localized: "Something else"))
             } footer: {
                 if let failed = doing.failed { Text(failed).foregroundStyle(Tone.alert) }
             }
@@ -237,7 +237,7 @@ private struct NeedDetail: View {
                     Text(summary).type(.ui).foregroundStyle(Tone.ink2)
                 }
                 if need.kind == "join" {
-                    let about = [need.runs, need.machine, need.sponsor.map { "from \(room.display($0))'s computer" }].compactMap { $0 }.filter { !$0.isEmpty }
+                    let about = [need.runs, need.machine, need.sponsor.map { String(localized: "from \(room.display($0))'s computer") }].compactMap { $0 }.filter { !$0.isEmpty }
                     if !about.isEmpty { Text(about.joined(separator: " · ")).type(.ui).foregroundStyle(Tone.ink2) }
                 }
                 if need.kind != "permission" && need.kind != "join", let text = need.text, !text.isEmpty {
@@ -247,7 +247,7 @@ private struct NeedDetail: View {
                 Text(need.from.map { room.display($0) } ?? room.title)
             }
             if let code = need.code, !code.isEmpty {
-                Section(need.kind == "join" ? "Their screen shows" : "Command") {
+                Section(need.kind == "join" ? String(localized: "Their screen shows") : String(localized: "Command")) {
                     Text(code).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
                 }
             }
@@ -280,10 +280,10 @@ private struct NeedDetail: View {
     private var note: String? {
         switch need.kind {
         case "permission" where need.canAllow != true:
-            need.allower.map { "Only \(room.display($0)) can allow this one." } ?? "You can deny this one."
-        case "join" where need.pinned == true: "Invited with a personality: let them in on your computer."
-        case "join" where !room.isOwner: "Only the channel's owner can let them in."
-        case "join" where !(need.code ?? "").isEmpty: "Let them in only if their screen shows the same code."
+            need.allower.map { String(localized: "Only \(room.display($0)) can allow this one.") } ?? String(localized: "You can deny this one.")
+        case "join" where need.pinned == true: String(localized: "Invited with a personality: let them in on your computer.")
+        case "join" where !room.isOwner: String(localized: "Only the channel's owner can let them in.")
+        case "join" where !(need.code ?? "").isEmpty: String(localized: "Let them in only if their screen shows the same code.")
         default: nil
         }
     }
@@ -299,15 +299,15 @@ private struct NeedDetail: View {
         switch need.kind {
         case "permission":
             var out: [Action] = []
-            if need.canAllow == true { out.append(Action(title: "Allow Once", role: nil) { try await model.allow(code, id: need.id, allow: true) }) }
-            out.append(Action(title: "Deny", role: .destructive) { try await model.allow(code, id: need.id, allow: false) })
+            if need.canAllow == true { out.append(Action(title: String(localized: "Allow Once"), role: nil) { try await model.allow(code, id: need.id, allow: true) }) }
+            out.append(Action(title: String(localized: "Deny"), role: .destructive) { try await model.allow(code, id: need.id, allow: false) })
             return out
         case "join":
             guard need.pinned != true, room.isOwner else { return [] }
-            return [Action(title: "Let In", role: nil) { try await model.letIn(code, id: need.id) }]
+            return [Action(title: String(localized: "Let In"), role: nil) { try await model.letIn(code, id: need.id) }]
         default:
             guard let ask = need.ask, let v = need.v else { return [] }
-            return [Action(title: "Approve", role: nil) { try await model.approveSpec(code, ask: ask, v: v) }]
+            return [Action(title: String(localized: "Approve"), role: nil) { try await model.approveSpec(code, ask: ask, v: v) }]
         }
     }
 }
@@ -326,7 +326,7 @@ private struct ReviewDetail: View {
             Section {
                 Text(review.title).type(.body, .semibold)
             } header: {
-                Text([taskLabel(review.task), review.by.map { "by \(room.display($0))" }].compactMap { $0 }.joined(separator: " · "))
+                Text([taskLabel(review.task), review.by.map { String(localized: "by \(room.display($0))") }].compactMap { $0 }.joined(separator: " · "))
             }
             Section {
                 Button("Approve") { act($doing, dismiss) { try await model.approve(room.code, task: review.task) } }.disabled(doing.busy)

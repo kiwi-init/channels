@@ -15,7 +15,9 @@ struct TasksScreen: View {
     let code: String
     @Environment(AppModel.self) private var model
 
-    private static let groups: [(state: String, title: String)] = [("doing", "Working"), ("review", "In review"), ("todo", "To do"), ("done", "Done")]
+    private static let groups: [(state: String, title: String)] = [
+        ("doing", String(localized: "Working")), ("review", String(localized: "In review")), ("todo", String(localized: "To do")), ("done", String(localized: "Done")),
+    ]
 
     var body: some View {
         let room = model.rooms[code]
@@ -48,7 +50,7 @@ struct TasksScreen: View {
                 ContentUnavailableView("No tasks yet", systemImage: "checklist")
             }
         }
-        .navigationTitle(room.map { "Tasks · \($0.title)" } ?? "Tasks")
+        .navigationTitle(room.map { String(localized: "Tasks · \($0.title)") } ?? String(localized: "Tasks"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

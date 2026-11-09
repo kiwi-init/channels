@@ -101,7 +101,7 @@ struct ChannelRows: View {
                     model.go(.place(spot))
                 } label: {
                     let last = room.placeView(spot.place)?.last
-                    ConvoRow(title: spot.general ? "general" : room.spotTitle(spot.place), line: roomLine(last), at: last?.date, unread: model.unread(spot)) {
+                    ConvoRow(title: spot.general ? String(localized: "general") : room.spotTitle(spot.place), line: roomLine(last), at: last?.date, unread: model.unread(spot)) {
                         Image(systemName: "number").foregroundStyle(Tone.ink2).iconDisc(Tone.raised)
                     }
                 }
@@ -117,7 +117,7 @@ struct ChannelRows: View {
                 model.go(.tasks(room.code))
             } label: {
                 let counts = TaskCounts(room.tasks)
-                ConvoRow(title: "Tasks", line: counts.line, at: nil, unread: false) {
+                ConvoRow(title: String(localized: "Tasks"), line: counts.line, at: nil, unread: false) {
                     Image(systemName: "checklist").foregroundStyle(Tone.ink2).iconDisc(Tone.raised)
                 } badge: {
                     EmptyView()
@@ -134,21 +134,21 @@ struct ChannelRows: View {
         guard let member, member.working else { return nil }
         let task = member.doing.first.map { id in room.tasks.first { $0.id == id }.map { "\(taskLabel(id)) \($0.title)" } ?? taskLabel(id) }
         let tool = member.activity?.tool.flatMap { $0.isEmpty ? nil : $0 }
-        return [task.map { "Working on \($0)" } ?? "Working", tool].compactMap { $0 }.joined(separator: " · ")
+        return [task.map { String(localized: "Working on \($0)") } ?? String(localized: "Working"), tool].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func leadLine(_ last: MessageView?) -> String {
-        guard let last else { return room.connection == .connecting ? "Connecting…" : "Message your lead" }
-        return last.mine ? "You: \(Self.words(last))" : Self.words(last)
+        guard let last else { return room.connection == .connecting ? String(localized: "Connecting…") : String(localized: "Message your lead") }
+        return last.mine ? String(localized: "You: \(Self.words(last))") : Self.words(last)
     }
 
     private func roomLine(_ last: MessageView?) -> String {
-        guard let last else { return room.connection == .connecting ? "Connecting…" : "No messages yet" }
-        return "\(last.mine ? "You" : room.display(last.from)): \(Self.words(last))"
+        guard let last else { return room.connection == .connecting ? String(localized: "Connecting…") : String(localized: "No messages yet") }
+        return String(localized: "\(last.mine ? String(localized: "You") : room.display(last.from)): \(Self.words(last))")
     }
 
     static func words(_ m: MessageView) -> String {
-        if m.body.isEmpty && m.images > 0 { return m.images == 1 ? "Photo" : "\(m.images) Photos" }
+        if m.body.isEmpty && m.images > 0 { return String(localized: "\(m.images) Photos") }
         return m.plain.replacingOccurrences(of: "\n", with: " ")
     }
 }
@@ -170,8 +170,11 @@ struct TaskCounts {
     var total: Int { working + review + todo + done }
 
     var line: String {
-        let parts = [working > 0 ? "\(working) working" : nil, review > 0 ? "\(review) in review" : nil, todo > 0 ? "\(todo) to do" : nil].compactMap { $0 }
-        return parts.isEmpty ? "Nothing open" : parts.joined(separator: " · ")
+        let parts = [
+            working > 0 ? String(localized: "\(working) working") : nil, review > 0 ? String(localized: "\(review) in review") : nil,
+            todo > 0 ? String(localized: "\(todo) to do") : nil,
+        ].compactMap { $0 }
+        return parts.isEmpty ? String(localized: "Nothing open") : parts.joined(separator: " · ")
     }
 }
 
@@ -253,7 +256,7 @@ struct ConvoRow<Icon: View, Badge: View, Below: View>: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityValue(unread ? "Unread" : "")
+        .accessibilityValue(unread ? String(localized: "Unread") : "")
     }
 }
 
