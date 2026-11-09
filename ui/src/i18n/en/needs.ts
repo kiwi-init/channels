@@ -1,6 +1,7 @@
 import type { Msg } from "~/i18n/en"
+import { addWords } from "~/i18n/i18n"
 
-export default {
+const words = {
   "needs.list.unusual.joins": "Unusually many join requests today: the relay may be misbehaving. Let in only codes you've compared.",
   "needs.list.nothing": "Nothing needs you.",
   "needs.list.idle.label": "Asked, holding nothing up",
@@ -224,3 +225,7 @@ export default {
   "panels.task.show.less": "Show less",
   "panels.task.show.all": "Show all",
 } as const satisfies Record<string, Msg>
+
+addWords(words)
+
+export default words

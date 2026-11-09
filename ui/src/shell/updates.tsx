@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import { Fragment, useEffect, useState } from "react"
 
 import { Icon } from "~/kit/icons"

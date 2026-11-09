@@ -1,3 +1,4 @@
+import "~/i18n/en/github-later"
 import type { CSSProperties } from "react"
 
 import { COLORS, type Color } from "@kiwi/core/protocol.ts"

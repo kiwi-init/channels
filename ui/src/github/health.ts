@@ -1,3 +1,4 @@
+import "~/i18n/en/github-later"
 import type { GithubChore, GithubChoreError } from "@kiwi/core/github-health.ts"
 
 import type { Key } from "~/i18n/en"

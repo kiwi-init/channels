@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"

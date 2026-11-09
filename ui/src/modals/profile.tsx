@@ -1,3 +1,4 @@
+import "~/i18n/en/modals"
 import "~/styles/person.css"
 
 import { Fragment, useState, type ReactNode } from "react"

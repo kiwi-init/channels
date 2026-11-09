@@ -1,3 +1,4 @@
+import "~/i18n/en/modals"
 import { Fragment, useEffect, useState } from "react"
 
 import "~/styles/people-add.css"

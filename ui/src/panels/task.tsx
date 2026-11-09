@@ -1,3 +1,4 @@
+import "~/i18n/en/needs"
 import "~/styles/task-panel.css"
 
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"

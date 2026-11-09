@@ -1,3 +1,4 @@
+import "~/i18n/en/modals"
 import { t } from "~/i18n/i18n"
 import { Icon } from "~/kit/icons"
 

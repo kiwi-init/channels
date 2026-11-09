@@ -1,3 +1,4 @@
+import "~/i18n/en/needs"
 import "~/styles/needs.css"
 
 import { useEffect, useId, useState, type ReactNode } from "react"

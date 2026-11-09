@@ -1,3 +1,4 @@
+import "~/i18n/en/github-later"
 import "~/styles/tasks.css"
 import "~/styles/github.css"
 

@@ -1,3 +1,4 @@
+import "~/i18n/en/needs"
 import { whereLabel } from "~/chat/search-hits"
 import { ANYONE } from "@kiwi/channel/task-actions.ts"
 import { t } from "~/i18n/i18n"

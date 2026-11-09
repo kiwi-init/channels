@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import { lazy, Suspense, useId, useState } from "react"
 
 import "~/styles/start.css"

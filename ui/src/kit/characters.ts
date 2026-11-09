@@ -1,3 +1,4 @@
+import "~/i18n/en/github-later"
 import type { Key } from "~/i18n/en"
 
 export type Face = "lead" | "builder" | "reviewer" | "bug-hunter" | "explorer" | "releaser" | "default"

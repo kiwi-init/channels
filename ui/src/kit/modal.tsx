@@ -1,3 +1,4 @@
+import "~/i18n/en/github-later"
 import { useEffect, useRef, type ReactNode } from "react"
 
 import { t } from "~/i18n/i18n"

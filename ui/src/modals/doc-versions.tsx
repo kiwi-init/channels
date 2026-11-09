@@ -1,3 +1,4 @@
+import "~/i18n/en/modals"
 import { useEffect, useState } from "react"
 
 import "~/styles/doc-versions.css"

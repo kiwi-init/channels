@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import "~/styles/start.css"
 
 import type { Enrolling } from "~/model"

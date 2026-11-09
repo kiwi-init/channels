@@ -1,3 +1,4 @@
+import "~/i18n/en/github-later"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import type { Check, Issue, PullRequest } from "~/model"

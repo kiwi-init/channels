@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import { useEffect, useId, useRef, useState } from "react"
 
 import { handleFor, NAME_RE, RESERVED_NAMES } from "@kiwi/core/membership.ts"

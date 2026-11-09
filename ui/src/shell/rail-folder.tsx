@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import type { CSSProperties } from "react"
 
 import { cx } from "~/kit/bits"

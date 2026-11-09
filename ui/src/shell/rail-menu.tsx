@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 
 import type { Folder } from "~/model"

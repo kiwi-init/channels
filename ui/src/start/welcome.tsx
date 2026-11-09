@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import "~/styles/start.css"
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 

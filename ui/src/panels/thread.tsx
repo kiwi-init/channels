@@ -1,3 +1,4 @@
+import "~/i18n/en/needs"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import { Composer } from "~/chat/composer"

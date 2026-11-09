@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import { useCallback, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react"
 
 import { Conversation } from "~/chat/conversation"

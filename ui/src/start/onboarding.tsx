@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import "~/styles/onboarding.css"
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type AnimationEvent } from "react"

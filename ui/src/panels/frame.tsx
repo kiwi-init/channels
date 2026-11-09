@@ -1,3 +1,4 @@
+import "~/i18n/en/needs"
 import type { ReactNode } from "react"
 
 import { t } from "~/i18n/i18n"

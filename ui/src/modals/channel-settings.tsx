@@ -1,3 +1,4 @@
+import "~/i18n/en/modals"
 import { Notification01Icon, NotificationOff01Icon } from "@hugeicons/core-free-icons"
 import "~/styles/channel-settings.css"
 import "~/styles/new-room.css"

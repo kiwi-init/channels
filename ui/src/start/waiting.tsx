@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import "~/styles/start.css"
 import { Dot } from "~/kit/bits"
 import { ageOf, ago, useNow } from "~/kit/time"

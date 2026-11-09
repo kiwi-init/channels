@@ -1,6 +1,7 @@
 import type { Msg } from "~/i18n/en"
+import { addWords } from "~/i18n/i18n"
 
-export default {
+const words = {
   "modals.add.agent.title": "Add an agent",
   "modals.add.agent.sub": "Run the command in the folder it should work in. It installs kiwi if that computer has none, then asks to join; you check its code in Needs you.",
   "modals.add.agent.name": "Name",
@@ -230,3 +231,7 @@ export default {
   "modals.profile.cancel": "Cancel",
   "modals.profile.remove": "Remove",
 } as const satisfies Record<string, Msg>
+
+addWords(words)
+
+export default words
