@@ -36,4 +36,8 @@ export default {
   "usage.limit.fair.use": "付费方案的合理使用上限",
   "usage.limit.paid": "付费方案的每日上限",
   "usage.limit.free": "免费方案的每日上限",
+  "comment.actions": "评论操作",
+  "comment.react": "用 {emoji} 回应",
+  "comment.copy": "复制文本",
+  "comment.open.thread": "在讨论串中打开",
 } satisfies Catalog

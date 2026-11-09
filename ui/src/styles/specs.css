@@ -468,34 +468,23 @@
   animation: msg-flash 1.6s var(--ease);
 }
 
-.spec-comment-reply {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  margin: -4px 0;
-  border: 0;
-  border-radius: var(--r-row);
-  background: none;
-  color: var(--ink-2);
-  opacity: 0;
-  transition: opacity var(--fast);
+.spec-comment:hover,
+.spec-comment:focus-within {
+  position: relative;
 }
 
-.spec-comment-reply .icon {
-  transform: scaleY(-1);
+.spec-comment:hover .msg-tools,
+.spec-comment:focus-within .msg-tools {
+  display: flex;
 }
 
-.spec-comment:hover .spec-comment-reply,
-.spec-comment:focus-within .spec-comment-reply,
-.spec-comment-reply:focus-visible {
-  opacity: 1;
+.spec-comment .msg-tools {
+  right: 0;
 }
 
-.spec-comment-reply:hover {
-  background: var(--wash-2);
-  color: var(--ink);
+.spec-comment > .reacts,
+.spec-comment > .msg-failed {
+  margin-left: calc(1.5rem + 8px);
 }
 
 .spec-box-new > .compose-reply {

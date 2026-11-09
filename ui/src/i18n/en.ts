@@ -36,6 +36,10 @@ export const en = {
   "usage.limit.fair.use": "the paid plan's fair-use limit",
   "usage.limit.paid": "the paid plan's daily limit",
   "usage.limit.free": "the free plan's daily limit",
+  "comment.actions": "Comment actions",
+  "comment.react": "React {emoji}",
+  "comment.copy": "Copy text",
+  "comment.open.thread": "Open in the thread",
 } as const satisfies Record<string, Msg>
 
 export type Key = keyof typeof en

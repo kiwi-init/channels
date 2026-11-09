@@ -58,7 +58,7 @@ function groupsOf(channel: Channel, shown: Shown): Group[] {
 export function SpecsView({ channel, tall }: { channel: Channel; tall?: boolean }) {
   const { nav } = useApp()
   const spec = nav.spec !== undefined ? channel.specs?.find((s) => s.ask === nav.spec) : undefined
-  if (spec) return <SpecPage channel={channel} spec={spec} />
+  if (spec) return <SpecPage key={`${channel.code}:${spec.ask}`} channel={channel} spec={spec} />
   return <SpecList channel={channel} tall={!!tall} />
 }
 

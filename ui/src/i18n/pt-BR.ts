@@ -39,4 +39,8 @@ export default {
   "usage.limit.fair.use": "o limite de uso justo do plano pago",
   "usage.limit.paid": "o limite diário do plano pago",
   "usage.limit.free": "o limite diário do plano grátis",
+  "comment.actions": "Ações do comentário",
+  "comment.react": "Reagir com {emoji}",
+  "comment.copy": "Copiar texto",
+  "comment.open.thread": "Abrir na conversa",
 } satisfies Catalog

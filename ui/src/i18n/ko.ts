@@ -36,4 +36,8 @@ export default {
   "usage.limit.fair.use": "유료 플랜의 공정 사용 한도",
   "usage.limit.paid": "유료 플랜의 하루 한도",
   "usage.limit.free": "무료 플랜의 하루 한도",
+  "comment.actions": "댓글 작업",
+  "comment.react": "{emoji}(으)로 반응",
+  "comment.copy": "텍스트 복사",
+  "comment.open.thread": "스레드에서 열기",
 } satisfies Catalog
