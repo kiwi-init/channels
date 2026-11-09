@@ -43,8 +43,8 @@ const anchoredBox = (page: Page) => page.getByRole("textbox", { name: "Comment o
 const comments = (page: Page) => page.locator(".spec-comment").count();
 const posted = (page: Page, text: string) => page.locator(".spec-comment", { hasText: text }).count();
 
-const anchor = async (page: Page) => {
-  await page.evaluate(() => {
+const select = (page: Page) =>
+  page.evaluate(() => {
     const p = document.querySelector(".spec-doc p");
     const sel = window.getSelection();
     if (!p || !sel) return;
@@ -54,7 +54,15 @@ const anchor = async (page: Page) => {
     sel.addRange(range);
     p.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
   });
-  await page.locator(".spec-pop").click();
+
+const anchor = async (page: Page) => {
+  await page.locator(".spec-doc p").first().waitFor();
+  const pop = page.locator(".spec-pop");
+  for (let tries = 0; tries < 5 && !(await pop.count()); tries++) {
+    await select(page);
+    await page.waitForTimeout(200);
+  }
+  await pop.click();
   await anchoredBox(page).waitFor();
 };
 
