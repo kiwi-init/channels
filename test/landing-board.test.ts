@@ -79,3 +79,27 @@ describe("a channel that lands on merge warns until kiwi/review is required (#62
     expect(reviewNotRequired({ landing: null, repos: ["o/r"], github: github([]) })).toEqual([]);
   });
 });
+
+describe("a PR merged before its task was approved (#2000)", () => {
+  async function approvedAfterMerge(prefix: string | null): Promise<Message[]> {
+    const repos = await ev("jon", { op: "repos.set", repos: ["o/r"] });
+    const set = prefix ? [await ev("jon", { op: "branch.prefix.set", prefix })] : [];
+    const add = await ev("jon", { op: "task.add", title: "Ship", owner: "win", review: "mac", then: "merge" });
+    const round = await ev("win", { op: "task.update", task: add.seq, state: "review", at: HEAD });
+    const merged = await ev("jon", { op: "github", items: [pr("closed", true)(add.seq)] });
+    const pass = await ev("mac", { op: "task.update", task: add.seq, state: "done", verdict: "approved", round: 1, at: HEAD });
+    return [repos, ...set, add, round, merged, pass];
+  }
+
+  test("with a branch prefix, the PR links, and a merge before the approval stays a bypass a person closes", async () => {
+    const state = fold(await approvedAfterMerge("T"), roster);
+    const t = [...state.tasks.values()].at(-1)!;
+    expect(landingWaits(state, t)).toBe("shipped while its ship gate was shut (missing an approval before the merge): a person closes it with a reason");
+  });
+
+  test("without a branch prefix, the wait says how to link the PR", async () => {
+    const state = fold(await approvedAfterMerge(null), roster);
+    const t = [...state.tasks.values()].at(-1)!;
+    expect(landingWaits(state, t)).toBe(`waits for its PR to be linked: no branch prefix is set here, so link it with kiwi task proof T${t.id} <PR link>`);
+  });
+});
