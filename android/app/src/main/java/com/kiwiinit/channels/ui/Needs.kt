@@ -206,7 +206,7 @@ private fun NeedsYouRow(model: AppModel, room: RoomView, ask: AskView) {
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
             )
-            Text(ask.label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = tone.decide)
+            Text(askLabel(ask.label), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = tone.decide)
         }
         Markdown(ask.shown, Inks(MaterialTheme.colorScheme.onSurface, MaterialTheme.colorScheme.primary, tone.wash2, false))
         for (choice in ask.choices) {
@@ -347,3 +347,17 @@ private fun ReviewRow(model: AppModel, room: RoomView, review: ReviewView) {
         if (failed) Text(stringResource(R.string.send_failed), style = MaterialTheme.typography.labelMedium, color = tone.alert)
     }
 }
+
+private val ASK_LABELS = mapOf(
+    "Decision for you" to R.string.ask_decision,
+    "A step for you" to R.string.ask_step,
+    "Intent check for you" to R.string.ask_intent,
+    "Taste call for you" to R.string.ask_taste,
+    "Irreversible step for you" to R.string.ask_irreversible,
+    "Scope call for you" to R.string.ask_scope,
+    "Question for you" to R.string.question_for_you,
+    "Question for everyone" to R.string.ask_everyone,
+)
+
+@Composable
+private fun askLabel(label: String): String = ASK_LABELS[label]?.let { stringResource(it) } ?: label
