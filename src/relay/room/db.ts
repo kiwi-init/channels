@@ -371,10 +371,9 @@ export class RoomDb {
     const raw = this.get("usage");
     let saved: Counters | null = null;
     try {
-      saved = raw ? (JSON.parse(raw) as Counters) : null;
+      if (raw) saved = JSON.parse(raw) as Counters;
     } catch {
       // A damaged copy: storedBytes counts the channel again from its messages.
-      saved = null;
     }
     w.counters = saved && saved.head !== undefined ? this.withLater(saved) : saved;
     return w.counters;

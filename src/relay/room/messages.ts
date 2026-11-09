@@ -92,7 +92,6 @@ export const leaseNow: Effect.Effect<void, never, RoomServices | Directory> = Ef
   yield* leaseTake(got, ask.day);
 });
 
-
 const SEND_MEMORY_MS = 3_600_000;
 export const TICKET_TTL_MS = 120_000;
 export const MAX_TICKETS = 10;
