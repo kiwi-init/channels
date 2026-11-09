@@ -44,7 +44,7 @@ alone at `/preview/<name>`.
   line, and the copy buttons. There is no inline script, so the CSP stays
   `script-src 'self'`.
 - The landing's background is the AFK scene, `/afk/scene` (`afk/scene.html`, which
-  `scripts/docs-site.ts` builds from `ui/src/afk/scene.page.ts` as one inline file), in an
+  `scripts/docs-site.ts` builds from `ui/src/meadow/scene.page.ts` as one inline file), in an
   `<iframe sandbox="allow-scripts">`. `app.js` paints a sky for the hour behind
   it and sends the scene `{ kiwi: "afk", type: "state", at, needs: 0, still }`
   when it loads; the frame fades in once the scene posts

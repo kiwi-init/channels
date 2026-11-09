@@ -121,10 +121,10 @@ function buildDemo(): boolean {
 }
 
 async function buildScene(): Promise<string> {
-  const built = await Bun.build({ entrypoints: [join(UI, "src/afk/scene.page.ts")], minify: true, target: "browser" });
-  if (!built.success) throw new Error(`the AFK scene's build failed:\n${built.logs.join("\n")}`);
+  const built = await Bun.build({ entrypoints: [join(UI, "src/meadow/scene.page.ts")], minify: true, target: "browser" });
+  if (!built.success) throw new Error(`the meadow scene's build failed:\n${built.logs.join("\n")}`);
   const [entry, ...rest] = built.outputs;
-  if (!entry || rest.length) throw new Error(`the AFK scene must build to one script, not ${built.outputs.length} files`);
+  if (!entry || rest.length) throw new Error(`the meadow scene must build to one script, not ${built.outputs.length} files`);
   const script = (await entry.text()).replace(/<\/(script)/gi, "<\\/$1");
   mkdirSync(dirname(SCENE), { recursive: true });
   writeFileSync(

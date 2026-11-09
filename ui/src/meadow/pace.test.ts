@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { freshPace, paced, type Verdict } from "~/afk/pace"
+import { freshPace, paced, type Verdict } from "~/meadow/pace"
 
 const run = (frames: readonly number[]): { verdict: Verdict; at: number } => {
   const p = freshPace()

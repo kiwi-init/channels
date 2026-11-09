@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
-import { showAfk } from "~/afk/wait"
 import { rememberOnboarded } from "~/start/onboarded"
 import { DEMO_PREFS } from "~/demo/data"
 import { DEMO_HANDLES, navWithDemoHandles, renamedAgents, withDemoHandles } from "~/demo/handles"
@@ -26,7 +25,6 @@ export const demoPrefs: Prefs = { ...DEMO_PREFS, ...look }
 const seeded = shot?.nav?.where
 if (shot?.docs !== undefined && shot.channel && seeded && seeded.kind !== "dm" && seeded.kind !== "theirs") seedThreadDoc(shot.channel, docThread(seeded), shot.docs, shot.streams)
 
-if (shot?.afk) showAfk()
 if (!shot?.onboarding) rememberOnboarded(false)
 
 const SWITCH_AFTER_MS = 400
