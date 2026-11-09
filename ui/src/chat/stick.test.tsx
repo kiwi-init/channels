@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test"
+import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test"
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 
@@ -10,6 +10,13 @@ const LINE = 26.4
 const DOC_PAD = 40
 
 type Listener = () => void
+
+let clock = Date.parse("2026-01-01T00:00:00Z")
+
+function later(ms = 1_000): void {
+  clock += ms
+  setSystemTime(new Date(clock))
+}
 type Stick = ReturnType<typeof useStick>
 
 class Feed {
@@ -139,6 +146,7 @@ const container = () => ({
 const saved = { window: Reflect.get(globalThis, "window"), observer: Reflect.get(globalThis, "ResizeObserver"), act: Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT") }
 
 beforeAll(() => {
+  setSystemTime(new Date(clock))
   Reflect.set(globalThis, "window", globalThis)
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
   Reflect.set(
@@ -160,6 +168,7 @@ beforeAll(() => {
 })
 
 afterAll(() => {
+  setSystemTime()
   Reflect.set(globalThis, "window", saved.window)
   Reflect.set(globalThis, "ResizeObserver", saved.observer)
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", saved.act)
@@ -186,6 +195,7 @@ function userScroll(f: Feed, s: Stick, dy: number): void {
   f.fire("wheel")
   f.scrollTo(f.top + dy)
   s.remember()
+  later()
 }
 
 function arrive(f: Feed, s: Stick, seq: number, h: number): void {
@@ -243,6 +253,23 @@ describe("useStick in a thread doc", () => {
     docLine(f)
     expect(Math.abs(f.docTop - before)).toBeLessThan(1)
     expect(f.max - f.top).toBeGreaterThan(8)
+    await act(async () => root.unmount())
+  })
+
+  test("a wheel scroll still animating up from the bottom when a line arrives is not pulled back down (#2025)", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    f.fire("wheel")
+    f.scrollTo(f.max - 58)
+    f.rows.push({ seq: 101, h: 52.8 })
+    stick.settle()
+    expect(f.max - f.top).toBeGreaterThanOrEqual(100)
+    later()
+    const before = f.docTop
+    arrive(f, stick, 102, 52.8)
+    expect(Math.abs(f.docTop - before)).toBeLessThan(1)
     await act(async () => root.unmount())
   })
 

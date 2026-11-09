@@ -2,6 +2,8 @@ import { useCallback, useLayoutEffect, useRef } from "react"
 
 const NEAR_BOTTOM = 48
 
+const WHEEL_MS = 400
+
 interface Anchor {
   el: Element
   seq: number
@@ -64,6 +66,7 @@ export function useStick(following = true, still = false) {
   const touched = useRef(false)
   const room = useRef(0)
   const seen = useRef(Number.NaN)
+  const wheeled = useRef(Number.NEGATIVE_INFINITY)
 
   const correct = useCallback(() => {
     const box = scroller.current
@@ -88,6 +91,10 @@ export function useStick(following = true, still = false) {
       return
     }
     const top = box.getBoundingClientRect().top
+    if (still && Date.now() - wheeled.current < WHEEL_MS) {
+      anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
+      return
+    }
     const clamped = still && box.scrollTop < a.at && box.scrollTop >= box.scrollHeight - box.clientHeight - 0.5
     const shift = el.getBoundingClientRect().top - top - (clamped ? a.top : a.top - (box.scrollTop - a.at))
     const short = still ? box.scrollTop + shift - (box.scrollHeight - box.clientHeight) : 0
@@ -149,10 +156,16 @@ export function useStick(following = true, still = false) {
       touched.current = true
       remember()
     }
-    const kinds = ["wheel", "pointerdown", "keydown", "touchstart"] as const
+    const wheel = () => {
+      wheeled.current = Date.now()
+      touch()
+    }
+    const kinds = ["pointerdown", "keydown", "touchstart"] as const
     for (const kind of kinds) box.addEventListener(kind, touch, { passive: true })
+    box.addEventListener("wheel", wheel, { passive: true })
     return () => {
       for (const kind of kinds) box.removeEventListener(kind, touch)
+      box.removeEventListener("wheel", wheel)
     }
   }, [remember, still])
 
