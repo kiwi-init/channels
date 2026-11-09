@@ -63,7 +63,13 @@ describe("settings", () => {
         .filter((k) => k.startsWith("KIWI_QUOTA_"))
         .sort(),
     ).toEqual(["KIWI_QUOTA_PAID_MESSAGES_PER_DAY", "KIWI_QUOTA_PERSON_MESSAGES_PER_DAY"]);
-    expect(policyFrom(config.vars)).toEqual({ ...OPEN_POLICY, personMessagesPerDay: 1000, paidMessagesPerDay: 100000, upgradeUrl: "https://buy.stripe.com/9B63cucHgf1M8Ec6Zy6Ri05", billingUrl: "https://billing.stripe.com/p/login/14AdR8fTs4n8aMk1Fe6Ri00" });
+    expect(policyFrom(config.vars)).toEqual({
+      ...OPEN_POLICY,
+      personMessagesPerDay: 1000,
+      paidMessagesPerDay: 100000,
+      upgradeUrl: "https://buy.stripe.com/9B63cucHgf1M8Ec6Zy6Ri05",
+      billingUrl: "https://billing.stripe.com/p/login/14AdR8fTs4n8aMk1Fe6Ri00",
+    });
   });
 });
 
