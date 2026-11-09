@@ -10,7 +10,9 @@ type Vars = Readonly<Record<string, string | number>>
 
 export const LANG_NAMES: Record<Lang, string> = { en: "English", "pt-BR": "Português (Brasil)", ja: "日本語", ko: "한국어", "zh-CN": "简体中文" }
 
-export const CATALOGS: Record<Exclude<Lang, "en">, () => Promise<{ default: Catalog }>> = {
+export type Loaded = { default: Catalog; covers: readonly string[] }
+
+export const CATALOGS: Record<Exclude<Lang, "en">, () => Promise<Loaded>> = {
   "pt-BR": () => import("~/i18n/pt-BR"),
   ja: () => import("~/i18n/ja"),
   ko: () => import("~/i18n/ko"),
