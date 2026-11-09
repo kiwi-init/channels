@@ -52,6 +52,8 @@ import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Phase
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.theme.Tone
+import androidx.compose.ui.res.stringResource
+import com.kiwiinit.channels.R
 
 private fun chat(spot: Spot): String = "chat/${Uri.encode(spot.code)}/${Uri.encode(spot.place)}"
 
@@ -68,7 +70,7 @@ fun Root(model: AppModel, unlock: () -> Unit) {
                 Phase.Starting -> Unit
                 Phase.Unlinked -> LinkScreen(model)
                 Phase.Ready -> Guarded(model.lock.locked, unlock) { Ready(model) }
-                is Phase.Broken -> Centered("Channels can't start", phase.why)
+                is Phase.Broken -> Centered(stringResource(R.string.cant_start), phase.why)
             }
         }
     }
@@ -142,7 +144,7 @@ private fun Locked(unlock: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(Icons.Filled.Lock, contentDescription = null, tint = Tone.current.ink3, modifier = Modifier.size(32.dp))
-        Text("Channels is locked", style = MaterialTheme.typography.titleLarge)
-        FilledTonalButton(onClick = unlock, modifier = Modifier.padding(top = 4.dp)) { Text("Unlock") }
+        Text(stringResource(R.string.locked_title), style = MaterialTheme.typography.titleLarge)
+        FilledTonalButton(onClick = unlock, modifier = Modifier.padding(top = 4.dp)) { Text(stringResource(R.string.unlock)) }
     }
 }
