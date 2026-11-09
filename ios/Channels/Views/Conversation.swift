@@ -91,81 +91,84 @@ struct Conversation: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    if !room.whole && !room.messages.isEmpty {
-                        Text("Earlier messages aren't on this phone")
-                            .type(.meta)
-                            .foregroundStyle(Tone.ink3)
-                            .padding(.vertical, 14)
-                    }
-                    if room.whole || (room.messages.isEmpty && room.connection == .live) {
-                        Intro(room: room)
-                    }
-                    ForEach(
-                        Line.build(
-                            room.messages, asks: elsewhere, reviews: reviews, needs: needs, pending: model.pending["\(room.code)|\(room.place)"] ?? [],
-                            sentAs: model.sentAs[room.code] ?? [:])
-                    ) { line in
-                        LineView(line: line, room: room, solo: solo) { m in
-                            replyTo = m
-                            typing.wrappedValue = true
-                        } jump: { seq in
-                            let id = model.sentAs[room.code]?[seq].map { "p\($0)" } ?? "b\(seq)"
-                            withAnimation(Motion.ease) { position.scrollTo(id: id, anchor: .center) }
-                        } answer: { seq in
-                            if let ask = room.asks.first(where: { $0.seq == seq }) { answer(ask) }
-                        } sendBack: { review in
-                            sendBack(review)
-                        }
-                        .id(line.id)
-                        .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
-                    }
-                    if let worker, worker.working {
-                        WorkingRow(member: worker, room: room).id("working")
-                    }
-                    Color.clear.frame(height: 6).id("bottom")
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                if !room.whole && !room.messages.isEmpty {
+                    Text("Earlier messages aren't on this phone")
+                        .type(.meta)
+                        .foregroundStyle(Tone.ink3)
+                        .padding(.vertical, 14)
                 }
-                .scrollTargetLayout()
-                .padding(.horizontal, 12)
-            }
-            .scrollPosition($position)
-            .defaultScrollAnchor(.bottom)
-            .scrollDismissesKeyboard(.interactively)
-            .softBars()
-            .onScrollGeometryChange(for: Bool.self) { geo in
-                geo.visibleRect.maxY >= geo.contentSize.height - 60
-            } action: { _, near in
-                follow.atBottom = near
-                if near { follow.unseen = 0 }
-            }
-            .onChange(of: model.pending["\(room.code)|\(room.place)"]?.count ?? 0) { old, now in
-                guard now > old else { return }
-                withAnimation(Motion.sent) { proxy.scrollTo("bottom", anchor: .bottom) }
-            }
-            .onChange(of: room.messages.last?.seq) { old, _ in
-                guard old != nil, let last = room.messages.last else { return }
-                if follow.atBottom || last.mine {
-                    withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
-                } else if !last.event {
-                    follow.unseen += 1
+                if room.whole || (room.messages.isEmpty && room.connection == .live) {
+                    Intro(room: room)
                 }
-            }
-            .task(id: room.messages.isEmpty) {
-                guard !room.messages.isEmpty else { return }
-                try? await Task.sleep(for: .milliseconds(120))
-                proxy.scrollTo("bottom", anchor: .bottom)
-            }
-            .onChange(of: follow.jumps) {
-                withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
-            }
-            .onChange(of: typing.wrappedValue) { _, now in
-                guard now else { return }
-                Task {
-                    try? await Task.sleep(for: .milliseconds(250))
-                    withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
+                ForEach(
+                    Line.build(
+                        room.messages, asks: elsewhere, reviews: reviews, needs: needs, pending: model.pending["\(room.code)|\(room.place)"] ?? [],
+                        sentAs: model.sentAs[room.code] ?? [:])
+                ) { line in
+                    LineView(line: line, room: room, solo: solo) { m in
+                        replyTo = m
+                        typing.wrappedValue = true
+                    } jump: { seq in
+                        let id = model.sentAs[room.code]?[seq].map { "p\($0)" } ?? "b\(seq)"
+                        withAnimation(Motion.ease) { position.scrollTo(id: id, anchor: .center) }
+                    } answer: { seq in
+                        if let ask = room.asks.first(where: { $0.seq == seq }) { answer(ask) }
+                    } sendBack: { review in
+                        sendBack(review)
+                    }
+                    .id(line.id)
+                    .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
                 }
+                if let worker, worker.working {
+                    WorkingRow(member: worker, room: room).id("working")
+                }
+                Color.clear.frame(height: 6).id("bottom")
+            }
+            .scrollTargetLayout()
+            .padding(.horizontal, 12)
+        }
+        .scrollPosition($position)
+        .defaultScrollAnchor(.bottom)
+        .scrollDismissesKeyboard(.interactively)
+        .softBars()
+        .onScrollGeometryChange(for: Bool.self) { geo in
+            geo.visibleRect.maxY >= geo.contentSize.height - 60
+        } action: { _, near in
+            follow.atBottom = near
+            if near { follow.unseen = 0 }
+        }
+        .onScrollGeometryChange(for: Bool.self) { geo in
+            geo.contentSize.height > 0 && geo.visibleRect.minY > geo.contentSize.height - 24
+        } action: { _, past in
+            if past { position.scrollTo(edge: .bottom) }
+        }
+        .onChange(of: model.pending["\(room.code)|\(room.place)"]?.count ?? 0) { old, now in
+            guard now > old else { return }
+            withAnimation(Motion.sent) { position.scrollTo(edge: .bottom) }
+        }
+        .onChange(of: room.messages.last?.seq) { old, _ in
+            guard old != nil, let last = room.messages.last else { return }
+            if follow.atBottom || last.mine {
+                withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
+            } else if !last.event {
+                follow.unseen += 1
+            }
+        }
+        .task(id: room.messages.isEmpty) {
+            guard !room.messages.isEmpty else { return }
+            try? await Task.sleep(for: .milliseconds(120))
+            position.scrollTo(edge: .bottom)
+        }
+        .onChange(of: follow.jumps) {
+            withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
+        }
+        .onChange(of: typing.wrappedValue) { _, now in
+            guard now else { return }
+            Task {
+                try? await Task.sleep(for: .milliseconds(250))
+                withAnimation(Motion.ease) { position.scrollTo(edge: .bottom) }
             }
         }
     }
