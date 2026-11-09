@@ -112,7 +112,8 @@ export function doneGate(view: GateView, t: Task): DoneGate | undefined {
   const pr = landingPr(view, t);
   if (pr?.state !== "merged") {
     if (!landing) return undefined;
-    if (!pr) return { kind: "waiting", why: "its PR to be linked and merged" };
+    if (!pr)
+      return { kind: "waiting", why: view.branchPrefix ? "its PR to be linked and merged" : `its PR to be linked: no branch prefix is set here, so link it with kiwi task proof T${t.id} <PR link>` };
     return pr.state === "open" ? { kind: "waiting", why: `PR #${pr.number} to merge` } : { kind: "waiting", why: `a merged PR: #${pr.number} was closed without merging` };
   }
   if (!pr.sha) return { kind: "bypassed", missing: [`PR #${pr.number}'s head at the merge`] };
