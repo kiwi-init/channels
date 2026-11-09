@@ -19,7 +19,6 @@ export function resetsIn(resetsAt: number, now: number): string {
   return minutes < 60 ? span(minutes, "minute") : span(Math.round(minutes / 60), "hour")
 }
 
-
 export const usedOf = (u: Usage): string => (u.limit === null ? t("usage.used.today", { used: u.used }) : t("usage.used.of", { used: Math.min(u.used, u.limit), limit: u.limit }))
 
 const isFairUse = (limit: number | null | undefined): boolean => !!limit && limit >= FAIR_USE
