@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type SyntheticEvent } from "react"
 
-import { sendsOn, sendTitle, type SendKey } from "~/chat/send-keys"
+import { composing, sendsOn, sendTitle, type SendKey } from "~/chat/send-keys"
+import { listId, Suggestions, useSuggest } from "~/chat/suggest"
 import type { Channel, Spec, Where } from "~/model"
 import { useAct, useApp } from "~/nav"
 
@@ -36,6 +37,11 @@ export function CommentBox({ channel, spec, quote, onDone }: { channel: Channel;
   const enterSends = useApp().app.prefs.enterSends
   const [text, setText] = useState("")
   const box = useRef<HTMLTextAreaElement>(null)
+  const typed = (value: string, at: number) => {
+    setText(value)
+    s.moved(at)
+  }
+  const s = useSuggest({ channel, id: `spec:${channel.code}:${spec.ask}${quote ? ":quote" : ""}`, text, area: box, onText: typed })
   useEffect(() => {
     if (quote) box.current?.focus()
   }, [quote])
@@ -47,26 +53,34 @@ export function CommentBox({ channel, spec, quote, onDone }: { channel: Channel;
   }, [text])
   const send = () => {
     if (!text.trim()) return
-    actions.send(channel.code, whereOf(channel, spec.ask), quote ? quoted(quote, text) : text.trim(), { inThread: spec.ask })
-    setText("")
+    const said = s.sent(text.trim())
+    actions.send(channel.code, whereOf(channel, spec.ask), quote ? quoted(quote, said) : said, { inThread: spec.ask })
+    s.forget()
+    typed("", 0)
     onDone?.()
   }
-  const keys = commentKeys(enterSends, send, onDone)
+  const sendKeys = commentKeys(enterSends, send, onDone)
+  const field = {
+    ref: box,
+    className: "textarea spec-box-text",
+    value: text,
+    "aria-autocomplete": "list" as const,
+    "aria-expanded": s.count > 0,
+    "aria-controls": listId(s),
+    onChange: (e: ChangeEvent<HTMLTextAreaElement>) => typed(e.target.value, e.target.selectionStart),
+    onSelect: (e: SyntheticEvent<HTMLTextAreaElement>) => s.moved(e.currentTarget.selectionStart),
+    onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (composing(e) || s.keys(e)) return
+      sendKeys(e)
+    },
+  }
+  const suggest = <Suggestions channel={channel} s={s} />
   const title = sendTitle(enterSends)
   if (!quote)
     return (
       <div className="spec-box-new">
-        <textarea
-          ref={box}
-          className="textarea spec-box-text"
-          rows={1}
-          value={text}
-          placeholder="Comment"
-          title="Or select words in the spec to comment on them"
-          aria-label="Comment on the spec"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={keys}
-        />
+        {suggest}
+        <textarea {...field} rows={1} placeholder="Comment" title="Or select words in the spec to comment on them" aria-label="Comment on the spec" />
         {text.trim() && (
           <div className="spec-box-foot">
             <button type="button" className="btn" title={title} onClick={send}>
@@ -79,16 +93,8 @@ export function CommentBox({ channel, spec, quote, onDone }: { channel: Channel;
   return (
     <div className="spec-box-new is-anchored">
       <p className="spec-comment-quote">{quote}</p>
-      <textarea
-        ref={box}
-        className="textarea spec-box-text"
-        rows={3}
-        value={text}
-        placeholder="Say what's off, or ask about it"
-        aria-label="Comment on the selected words"
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={keys}
-      />
+      {suggest}
+      <textarea {...field} rows={3} placeholder="Say what's off, or ask about it" aria-label="Comment on the selected words" />
       <div className="spec-box-foot">
         {onDone && (
           <button type="button" className="btn is-quiet is-small" onClick={onDone}>

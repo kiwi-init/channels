@@ -35,7 +35,7 @@ const spec: Spec = {
   tasks: [],
 }
 
-const channel = { code: "c", you: "jow", messages: [], tasks: [], nicknames: new Map() } as unknown as Channel
+const channel = { code: "c", you: "jow", people: [], former: [], messages: [], tasks: [], nicknames: new Map() } as unknown as Channel
 
 const render = (enterSends: boolean, quote?: string): string =>
   renderToStaticMarkup(

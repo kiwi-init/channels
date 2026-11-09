@@ -542,8 +542,14 @@
 }
 
 .spec-box-new {
+  position: relative;
   display: grid;
   gap: 8px;
+}
+
+.spec-box-new > .mentions {
+  left: 0;
+  max-width: 100%;
 }
 
 .spec-box-new + .spec-box-new {
