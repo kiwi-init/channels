@@ -21,6 +21,7 @@ final class LanguageTests: XCTestCase {
         add(shot(app, "language choices"))
         japanese.tap()
         XCTAssertTrue(app.tabBars.buttons["あなた"].waitForExistence(timeout: 5), "the tab bar is in Japanese without a restart")
+        XCTAssertTrue(app.buttons["システム"].firstMatch.waitForExistence(timeout: 5), "words built in code switch too, not only SwiftUI literals")
         add(shot(app, "language ja"))
 
         languageRow(app).tap()

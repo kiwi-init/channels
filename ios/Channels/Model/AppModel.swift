@@ -161,7 +161,7 @@ final class AppModel {
             phase = .unlinked
         case .shut(let why):
             shut = true
-            phase = .broken(String(localized: "Channels can't read its sign-in: \(why.localizedDescription). Unlock this iPhone and it carries on."))
+            phase = .broken(spoken("Channels can't read its sign-in: \(why.localizedDescription). Unlock this iPhone and it carries on."))
         case .found(let saved):
             shut = false
             store(saved)
@@ -266,7 +266,7 @@ final class AppModel {
             return
         case .removed(let by):
             unlink()
-            linking = .failed(String(localized: "This iPhone was removed from your devices by \(by), so it deleted its keys and channels. Sign in to add it again."))
+            linking = .failed(spoken("This iPhone was removed from your devices by \(by), so it deleted its keys and channels. Sign in to add it again."))
         }
     }
 

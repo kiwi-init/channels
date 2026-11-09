@@ -46,7 +46,7 @@ struct LinkView: View {
             }
         case .opening:
             VStack(alignment: .leading, spacing: 0) {
-                waiting(String(localized: "Opening the sign-in…"))
+                waiting(spoken("Opening the sign-in…"))
                 QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
                     .padding(.top, 24)
             }
@@ -55,8 +55,8 @@ struct LinkView: View {
                 Text("Sign in with GitHub").type(.title, .semibold).foregroundStyle(Tone.ink)
                 Text(
                     code.isEmpty
-                        ? String(localized: "Use the account Channels on your computer uses.")
-                        : String(localized: "GitHub asks for this code. The button copies it: paste it there, then authorize.")
+                        ? spoken("Use the account Channels on your computer uses.")
+                        : spoken("GitHub asks for this code. The button copies it: paste it there, then authorize.")
                 )
                 .type(.ui)
                 .foregroundStyle(Tone.ink2)
@@ -72,7 +72,7 @@ struct LinkView: View {
                 if url != nil {
                     PrimaryButton(title: code.isEmpty ? "Open GitHub" : "Copy Code and Open GitHub") { model.openGitHub() }
                 }
-                waiting(String(localized: "Waiting for GitHub")).padding(.top, 20)
+                waiting(spoken("Waiting for GitHub")).padding(.top, 20)
                 QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
                     .padding(.top, 24)
             }
@@ -117,7 +117,7 @@ struct LinkView: View {
                 QuietButton(title: "Not My Key") { if !keeping { Task { await model.refuseLink(fingerprint) } } }
                     .padding(.top, 10)
             } else {
-                waiting(String(localized: "Waiting for your computer"))
+                waiting(spoken("Waiting for your computer"))
                 QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
                     .padding(.top, 24)
             }
@@ -133,9 +133,9 @@ struct LinkView: View {
 
     private var approveHint: String {
         switch model.linking {
-        case .asking: String(localized: "Channels on your computer asks about this iPhone. Click Continue there.")
-        case .check: String(localized: "Your computer took the digits.")
-        default: String(localized: "Type these digits there.")
+        case .asking: spoken("Channels on your computer asks about this iPhone. Click Continue there.")
+        case .check: spoken("Your computer took the digits.")
+        default: spoken("Type these digits there.")
         }
     }
 

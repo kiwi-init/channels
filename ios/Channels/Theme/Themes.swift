@@ -18,9 +18,9 @@ enum AppearanceChoice: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .system: String(localized: "System")
-        case .light: String(localized: "Light")
-        case .dark: String(localized: "Dark")
+        case .system: spoken("System")
+        case .light: spoken("Light")
+        case .dark: spoken("Dark")
         }
     }
 

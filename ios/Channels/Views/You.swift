@@ -20,10 +20,10 @@ struct SettingsScreen: View {
         let context = LAContext()
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil) else { return nil }
         switch context.biometryType {
-        case .faceID: return String(localized: "Face ID")
-        case .touchID: return String(localized: "Touch ID")
-        case .opticID: return String(localized: "Optic ID")
-        default: return String(localized: "Passcode")
+        case .faceID: return spoken("Face ID")
+        case .touchID: return spoken("Touch ID")
+        case .opticID: return spoken("Optic ID")
+        default: return spoken("Passcode")
         }
     }
 

@@ -178,7 +178,7 @@ struct WorkingRow: View {
     private var doing: String {
         if let tool = member.activity?.tool, !tool.isEmpty { return tool }
         if let id = member.doing.first, let task = room.tasks.first(where: { $0.id == id }) { return "\(taskLabel(id)) \(task.title)" }
-        return String(localized: "Working")
+        return spoken("Working")
     }
 
     var body: some View {
@@ -247,20 +247,20 @@ struct Intro: View {
         let empty = room.messages.isEmpty
         if room.place == "main" {
             let names = room.members.filter { $0.name != room.me }.map(\.display)
-            return [String(localized: "You, \(names.joined(separator: ", "))"), empty ? String(localized: "No messages yet") : String(localized: "The start of #general")]
+            return [spoken("You, \(names.joined(separator: ", "))"), empty ? spoken("No messages yet") : spoken("The start of #general")]
         }
         if let task {
             let who = task.owner.map { "\(room.display($0)) · " } ?? ""
             return [
-                String(localized: "\(who)\(task.state.capitalized) in \(room.title)"),
-                empty ? String(localized: "No messages yet") : String(localized: "The start of this task's thread"),
+                spoken("\(who)\(task.state.capitalized) in \(room.title)"),
+                empty ? spoken("No messages yet") : spoken("The start of this task's thread"),
             ]
         }
-        guard let person else { return [empty ? String(localized: "No messages yet") : String(localized: "The start of this thread")] }
+        guard let person else { return [empty ? spoken("No messages yet") : spoken("The start of this thread")] }
         let member = room.member(person)
-        let now: String? = member?.working == true ? (member?.doing.first.map { String(localized: "Working on \(taskLabel($0))") } ?? String(localized: "Working")) : nil
-        let role = person == room.lead ? String(localized: "Lead of \(room.title)") : String(localized: "In \(room.title)")
-        return [role, now ?? (empty ? String(localized: "Everyone in the channel can read this") : nil)].compactMap { $0 }
+        let now: String? = member?.working == true ? (member?.doing.first.map { spoken("Working on \(taskLabel($0))") } ?? spoken("Working")) : nil
+        let role = person == room.lead ? spoken("Lead of \(room.title)") : spoken("In \(room.title)")
+        return [role, now ?? (empty ? spoken("Everyone in the channel can read this") : nil)].compactMap { $0 }
     }
 }
 
@@ -642,8 +642,8 @@ struct AskLine: View {
     let other: () -> Void
 
     private var origin: String {
-        if let task = ask.task { return String(localized: "in \(taskLabel(task))") }
-        if let place = ask.place, place.hasPrefix("dm:") { return String(localized: "in a direct thread") }
+        if let task = ask.task { return spoken("in \(taskLabel(task))") }
+        if let place = ask.place, place.hasPrefix("dm:") { return spoken("in a direct thread") }
         return ""
     }
 
@@ -676,7 +676,7 @@ struct ReviewLine: View {
                 Color.clear.frame(width: 30, height: 30)
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text([review.by.map { room.display($0) }, String(localized: "in \(taskLabel(review.task))")].compactMap { $0 }.joined(separator: " · "))
+                Text([review.by.map { room.display($0) }, spoken("in \(taskLabel(review.task))")].compactMap { $0 }.joined(separator: " · "))
                     .type(.meta)
                     .foregroundStyle(Tone.ink3)
                     .padding(.leading, 12)
@@ -780,7 +780,7 @@ struct PollCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(open ? String(localized: "Question for you") : poll.chosen == nil ? String(localized: "Question") : String(localized: "Decided"))
+            Text(open ? spoken("Question for you") : poll.chosen == nil ? spoken("Question") : spoken("Decided"))
                 .type(.meta, .semibold)
                 .foregroundStyle(open ? Tone.decide : Tone.ink3)
                 .padding(.bottom, 4)
@@ -878,7 +878,7 @@ struct PollCard: View {
         }
         .buttonStyle(.plain)
         .disabled(!open)
-        .accessibilityLabel(chosen ? String(localized: "\(choice), chosen") : choice)
+        .accessibilityLabel(chosen ? spoken("\(choice), chosen") : choice)
     }
 }
 
@@ -989,7 +989,7 @@ struct Viewer: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close")
                 Spacer()
-                ShareLink(item: Image(uiImage: image), preview: SharePreview(String(localized: "Picture"), image: Image(uiImage: image))) {
+                ShareLink(item: Image(uiImage: image), preview: SharePreview(spoken("Picture"), image: Image(uiImage: image))) {
                     Image(systemName: "square.and.arrow.up").font(.system(size: 17, weight: .semibold)).foregroundStyle(.white).frame(width: 44, height: 44).glassCircle()
                 }
                 .accessibilityLabel("Share")

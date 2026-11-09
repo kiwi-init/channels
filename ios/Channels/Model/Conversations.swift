@@ -18,9 +18,9 @@ enum Filter: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .all: String(localized: "Conversations")
-        case .needs: String(localized: "Needs You")
-        case .unread: String(localized: "Unread")
+        case .all: spoken("Conversations")
+        case .needs: spoken("Needs You")
+        case .unread: spoken("Unread")
         }
     }
 
@@ -72,8 +72,8 @@ struct Row: Identifiable {
 
     private var origin: String {
         guard kind == .group, room.latest != nil else { return "" }
-        if room.latestIn.hasPrefix("task:"), let task = Int(room.latestIn.dropFirst(5)) { return String(localized: " in \(taskLabel(task))") }
-        return room.latestIn.hasPrefix("dm:") ? String(localized: " in a direct thread") : ""
+        if room.latestIn.hasPrefix("task:"), let task = Int(room.latestIn.dropFirst(5)) { return spoken(" in \(taskLabel(task))") }
+        return room.latestIn.hasPrefix("dm:") ? spoken(" in a direct thread") : ""
     }
     var lead: String? { kind == .lead ? room.lead : nil }
 
@@ -89,14 +89,14 @@ struct Row: Identifiable {
     }
 
     var line: String {
-        if room.connection == .connecting && last == nil { return String(localized: "Connecting…") }
-        if let need { return String(localized: "Needs you: \(need)") }
+        if room.connection == .connecting && last == nil { return spoken("Connecting…") }
+        if let need { return spoken("Needs you: \(need)") }
         if let draft { return "Draft: \(draft.text.isEmpty ? "Photo" : draft.text.replacingOccurrences(of: "\n", with: " "))" }
-        guard let last else { return kind == .lead ? String(localized: "Message \(title) directly") : String(localized: "No messages yet") }
+        guard let last else { return kind == .lead ? spoken("Message \(title) directly") : spoken("No messages yet") }
         let body =
             last.body.isEmpty && last.images > 0
-            ? (last.images == 1 ? String(localized: "Photo") : String(localized: "\(last.images) Photos")) : last.plain.replacingOccurrences(of: "\n", with: " ")
-        if kind == .lead { return last.mine ? String(localized: "You: \(body)") : body }
+            ? (last.images == 1 ? spoken("Photo") : spoken("\(last.images) Photos")) : last.plain.replacingOccurrences(of: "\n", with: " ")
+        if kind == .lead { return last.mine ? spoken("You: \(body)") : body }
         return "\(last.mine ? "You" : room.display(last.from))\(origin): \(body)"
     }
 }

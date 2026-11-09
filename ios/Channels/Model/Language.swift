@@ -14,7 +14,7 @@ enum Language: String, CaseIterable, Identifiable {
 
     var name: String {
         switch self {
-        case .system: String(localized: "System", bundle: Speech.bundle)
+        case .system: spoken("System")
         case .en: "English"
         case .ptBR: "Português (Brasil)"
         case .ja: "日本語"
@@ -56,10 +56,18 @@ final class LanguageStore {
     }
 }
 
+func spoken(_ words: LocalizedStringResource) -> String {
+    var words = words
+    words.locale = Speech.locale
+    return String(localized: words)
+}
+
 enum Speech {
     nonisolated(unsafe) private(set) static var bundle: Bundle = .main
+    nonisolated(unsafe) private(set) static var locale: Locale = .current
 
     static func use(_ language: Language) {
+        locale = language == .system ? .current : Locale(identifier: language.rawValue)
         bundle = language == .system ? .main : (Bundle.main.path(forResource: lproj(language), ofType: "lproj").flatMap(Bundle.init(path:)) ?? .main)
         object_setClass(Bundle.main, SpokenBundle.self)
     }
