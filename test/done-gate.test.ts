@@ -4,7 +4,8 @@ import { doneGate, inRange, landingsDue, runBlind, runStarts } from "@kiwi/core/
 import { landingWaits } from "@kiwi/core/prs.ts";
 import { shipGate } from "@kiwi/core/ship-gate.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
+import { FOLD_RULES, PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
+import { omit } from "@kiwi/core/omit.ts";
 import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 
 const T0 = 1_760_000_000_000;
@@ -655,6 +656,37 @@ describe("the done gate (#623 §5)", () => {
         const t = c.state().tasks.get(add.seq)!;
         expect(t.createdRts).toBeUndefined();
         expect(t.run).toMatchObject({ id: "job-1", blind: true });
+      });
+
+      test("a task restored without its creation receipt time can't land by itself, whatever its stored run says (#2744)", async () => {
+        const r = await cleared();
+        const kept: { base?: FoldBase } = {};
+        fold(r.c.log, roster, at(10_000), null, null, null, (b) => (kept.base = b));
+        if (!kept.base) throw new Error("the fold kept no base");
+        const base: FoldBase = { ...kept.base, tasks: kept.base.tasks.map((t) => omit(t, "createdRts")) };
+        await workflow(r, 4243, "job-1", now(r) + 500);
+        await r.passed("post", "job-1");
+        const replayed = fold(r.c.log.slice(base.n), roster, at(10_000), null, null, base);
+        expect(doneGate(replayed, replayed.tasks.get(r.t)!)).toEqual({ kind: "waiting", why: runBlind("job-1") });
+      });
+
+      test("a snapshot from older fold rules keeps no run evidence: its runs, marks and bound starts are dropped, and declared runs turn blind (#2744)", async () => {
+        const r = await cleared();
+        await workflow(r, 4242, "job-1", now(r) + 500);
+        const kept: { base?: FoldBase } = {};
+        fold(r.c.log, roster, at(10_000), null, null, null, (b) => (kept.base = b));
+        if (!kept.base?.github) throw new Error("the fold kept no base");
+        const older: FoldBase = { ...kept.base, rules: FOLD_RULES - 1, github: { ...kept.base.github, runsSince: 3, runsForgotten: 40 } };
+        await r.passed("post", "job-1");
+        const later = await r.c.task();
+        const replayed = fold(r.c.log.slice(older.n), roster, at(10_000), null, null, older);
+        expect(replayed.github).toMatchObject({ runsSince: null, runsForgotten: null });
+        expect(replayed.github.runs.size).toBe(0);
+        const t = replayed.tasks.get(r.t)!;
+        expect(t.run).toMatchObject({ id: "job-1", blind: true });
+        expect(t.run?.start).toBeUndefined();
+        expect(doneGate(replayed, t)).toEqual({ kind: "waiting", why: runBlind("job-1") });
+        expect(replayed.tasks.get(later)!.createdRts).toBeDefined();
       });
     });
   });

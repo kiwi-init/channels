@@ -2,6 +2,7 @@ import {
   editable,
   EVENT_OPS_VERSION,
   FOLD_RULES,
+  olderRules,
   GENERAL_ROOM,
   GITHUB_CLOSED_KEEP_MS,
   ignored,
@@ -276,7 +277,8 @@ function folding(
       if (target?.pk === f.pk) setRole(target, f.role, f.about);
     }
   };
-  const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, t]));
+  const runsKept = !!from && !olderRules(from);
+  const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, runsKept || !t.run ? t : { ...t, run: { ...omit(t.run, "start"), blind: true } }]));
   const facts = new Map<string, Fact>(from?.facts.map((f) => [f.key, f]));
   const docs = new Map<string, string>(from?.docs);
   const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
@@ -370,9 +372,9 @@ function folding(
       issues: new Map(from?.github?.issues?.map((i) => [prKey(i.repo, i.number), linkSafe(i)])),
       rules: new Map(from?.github?.rules?.map((r) => [repoKey(r.repo), r])),
       releases: releasesFrom(from?.github?.releases),
-      runs: new Map(from?.github?.runs?.map((r) => [runKey(r.repo, r.run), r])),
-      runsSince: from?.github?.runsSince ?? null,
-      runsForgotten: from?.github?.runsForgotten ?? null,
+      runs: new Map(runsKept ? from.github?.runs?.map((r) => [runKey(r.repo, r.run), r]) : []),
+      runsSince: runsKept ? (from.github?.runsSince ?? null) : null,
+      runsForgotten: runsKept ? (from.github?.runsForgotten ?? null) : null,
     },
     hold: from?.hold ?? null,
     githubWrite: from?.githubWrite ?? null,
