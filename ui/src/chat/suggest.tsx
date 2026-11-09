@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type RefObject } from "react"
+import { useCallback, useMemo, useRef, useState, type RefObject } from "react"
 
 import { mentionNames, type Picks } from "~/chat/linked"
 import { peopleMatches, taskMatches } from "~/chat/matches"
@@ -59,7 +59,10 @@ export function useSuggest({
   const tasks = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
   const mentions = useMemo(() => mentionNames(onePerPerson(channel.people), channel.former), [channel.people, channel.former])
 
+  const lastAt = useRef(text.length)
   const moved = useCallback((at: number) => {
+    if (at === lastAt.current) return
+    lastAt.current = at
     setCaret(at)
     setPick(0)
     setClosed(false)

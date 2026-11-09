@@ -473,13 +473,17 @@
   position: relative;
 }
 
-.spec-comment:hover .msg-tools,
-.spec-comment:focus-within .msg-tools {
-  display: flex;
-}
-
 .spec-comment .msg-tools {
   right: 0;
+  display: flex;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.spec-comment:hover .msg-tools,
+.spec-comment:focus-within .msg-tools {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .spec-comment > .reacts,
@@ -526,6 +530,7 @@
 
 .spec-comments {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   margin: 0 0 8px;
   padding: 0;
   list-style: none;

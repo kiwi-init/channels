@@ -384,6 +384,9 @@ jobs:
       - name: ui the spec page uses a wide window and its comment box grows, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-spec-layout.ts --dist ui/dist
+      - name: ui spec comments take keyboard focus, jump reply to reply, keep each spec's draft, and retry a failed send once, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-spec-comments.ts --dist ui/dist
       - name: ui Esc in search keeps the panel, and Settings doesn't offer a name change, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-esc-and-name.ts --dist ui/dist
