@@ -27,13 +27,11 @@
     }
     return "en";
   };
-  const { pathname, search, hash } = location;
-  const english = pathname === "/" || pathname === "/docs" || pathname.startsWith("/docs/");
-  if (english) {
+  if (location.pathname === "/") {
     const want = read() ?? fromBrowser();
     if (DIRS.includes(want)) {
       keep(want);
-      location.replace(`/${want}${pathname}${search}${hash}`);
+      location.replace(`/${want}/${location.search}${location.hash}`);
       return;
     }
   }

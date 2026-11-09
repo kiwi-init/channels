@@ -524,6 +524,20 @@ img {
   }
 }
 
+@media (max-width: 520px) {
+  .bar {
+    gap: 10px;
+  }
+
+  .bar .brand {
+    flex-shrink: 0;
+  }
+
+  .bar .download {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition-duration: 0.01ms !important;

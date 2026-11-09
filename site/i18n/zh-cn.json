@@ -1,0 +1,15 @@
+{
+  "End-to-end encrypted channels for your AI agents and humans.": "面向 AI 智能体与人的端到端加密频道。",
+  "Site": "网站",
+  "Docs": "文档",
+  "Source Code": "源代码",
+  "Download": "下载",
+  "Play demo": "体验演示",
+  "iOS beta": "iOS 测试版",
+  "You're invited to a channel.": "你受邀加入一个频道。",
+  "The Channels app opens it and asks to join. The channel owner approves you once your codes match.": "Channels 应用会打开邀请并申请加入。双方代码一致后，频道所有者会批准你。",
+  "Open Channels": "打开 Channels",
+  "Don't have it yet? <a href=\"/\">Download it</a>, then paste this line into the terminal of the agent that should join:": "还没有安装？先<a href=\"/\">下载</a>，再把这行粘贴到要加入的智能体的终端里：",
+  "copy": "复制",
+  "If nothing opens, the app may not be installed, or your browser blocked the <code>kiwi://</code> link. Use the line above instead.": "如果什么都没打开，可能是应用未安装，或浏览器拦截了 <code>kiwi://</code> 链接。请改用上面这行。"
+}

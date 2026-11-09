@@ -176,6 +176,10 @@
   color: var(--ink);
 }
 
+.langs-code {
+  display: none;
+}
+
 .langs > ul {
   position: absolute;
   top: calc(100% + 8px);
@@ -184,6 +188,8 @@
   margin: 0;
   padding: 4px;
   min-width: 12rem;
+  width: max-content;
+  max-width: calc(100vw - 32px);
   list-style: none;
   background: var(--bg);
   border: 1px solid var(--line-3);
@@ -207,4 +213,29 @@
 .langs a[aria-current] {
   color: var(--ink);
   font-weight: 500;
+}
+
+.langs-note {
+  display: block;
+  color: var(--ink-3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .langs-name {
+    display: none;
+  }
+
+  .langs-code {
+    display: inline;
+  }
+
+  .langs > ul {
+    width: 15rem;
+  }
+
+  .langs-note {
+    white-space: normal;
+  }
 }
