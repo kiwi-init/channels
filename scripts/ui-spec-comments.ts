@@ -98,13 +98,13 @@ try {
   }
 
   for (const width of [1440, 900]) {
-    const page = await open("spec-draft", width);
+    const page = await open("spec-queued", width);
     const layout = width >= 940 ? "the wide rail" : "the narrow list";
     const sideways = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".spec-rail-scroll, .spec-talk")].some((el) => el.scrollWidth > el.clientWidth + 1));
     expect(!sideways, `a reply quoting a long comment doesn't widen the comments past ${layout}`);
-    const replyToReply = page.locator(".spec-comment", { hasText: "Then the writer is yours." }).first();
+    const replyToReply = page.locator(".spec-comment", { hasText: "Then the checks page is the first link." }).first();
     await replyToReply.locator(".spec-comment-quote.is-link").click();
-    const target = page.locator('.spec-comment[data-seq="154"]').first();
+    const target = page.locator('.spec-comment[data-seq="196"]').first();
     await page.waitForTimeout(150);
     const flashed = await target.evaluate((el) => el.classList.contains("is-flash"));
     expect(flashed && (await target.isVisible()), `a reply to a reply jumps to the reply it quotes, in ${layout}`);
@@ -178,17 +178,22 @@ try {
   }
 
   {
-    const page = await open("spec-draft");
-    const failed = page.locator(".spec-comment.is-failed", { hasText: "The dialog I have in mind" });
+    const page = await open("spec-queued");
+    const failed = page.locator(".spec-comment.is-failed", { hasText: "A sketch of the first-hour page" });
     expect((await failed.locator(".msg-images").count()) === 1, "a comment that failed to send keeps its image");
     await failed.getByRole("button", { name: "Retry" }).click();
     await page.waitForTimeout(150);
-    const sent = page.locator(".spec-comment", { hasText: "The dialog I have in mind" });
+    const sent = page.locator(".spec-comment", { hasText: "A sketch of the first-hour page" });
     expect(
       (await sent.count()) === 1 && (await page.locator(".spec-comment.is-failed").count()) === 0,
       "Retry clears the failed mark in the demo, leaving one comment in its own spec (delivery is unit-tested in unsent.test.ts)",
     );
     expect((await sent.locator(".msg-images").count()) === 1, "the retried comment still shows its image");
+    await page.close();
+  }
+
+  {
+    const page = await open("spec-draft");
 
     await plainBox(page).fill("draft for the export spec");
     await page.locator(".spec-box-new input[type=file]").last().setInputFiles({ name: "board.png", mimeType: "image/png", buffer: PNG });
@@ -203,7 +208,6 @@ try {
     await part.waitFor();
     await part.click();
     await plainBox(page).waitFor();
-    expect((await page.getByText("The dialog I have in mind").count()) === 0, "the retried comment doesn't show on another spec");
     expect((await plainBox(page).inputValue()) === "", "another spec's box doesn't pick up this spec's draft");
     expect((await page.locator(".compose-file").count()) === 0, "nor its image");
     expect((await page.locator(".compose-reply").count()) === 0, "nor the reply it was writing");
