@@ -75,7 +75,6 @@ export interface GithubRun {
   run: number;
   title?: string;
   started: number;
-  seq: number;
 }
 
 export interface GithubState {
@@ -86,7 +85,7 @@ export interface GithubState {
   releases: Map<string, GithubRelease[]>;
   runs: Map<string, GithubRun>;
   runsSince: number | null;
-  runsForgotten: number;
+  runsForgotten: number | null;
 }
 
 const MAX_RELEASES = 30;
@@ -106,18 +105,19 @@ function addRun(g: GithubState, i: GithubNote, seq: number): void {
   const title = was?.title ?? i.title;
   g.runsSince ??= seq;
   g.runs.delete(key);
-  g.runs.set(key, { repo: i.repo, run: i.run, started: Math.min(i.started, was?.started ?? i.started), seq: was?.seq ?? seq, ...(title ? { title } : {}) });
+  g.runs.set(key, { repo: i.repo, run: i.run, started: Math.min(i.started, was?.started ?? i.started), ...(title ? { title } : {}) });
   for (const old of [...g.runs.values()].slice(0, Math.max(0, g.runs.size - MAX_RUNS))) {
     g.runs.delete(runKey(old.repo, old.run));
-    g.runsForgotten = Math.max(g.runsForgotten, old.seq);
+    g.runsForgotten = Math.max(g.runsForgotten ?? old.started, old.started);
   }
 }
 
-export const runsUnknownSince = (g: GithubState, seq: number): boolean => g.runsSince === null || g.runsSince > seq || g.runsForgotten > seq;
+export const runsUnknownSince = (g: GithubState, task: { id: number; createdRts?: number }): boolean =>
+  task.createdRts === undefined || g.runsSince === null || g.runsSince > task.id || (g.runsForgotten !== null && g.runsForgotten >= task.createdRts);
 
-export function runStart(g: GithubState, id: string): GithubRun | undefined {
+export function runStart(g: GithubState, id: string, since: number): GithubRun | undefined {
   let first: GithubRun | undefined;
-  for (const r of g.runs.values()) if ((r.title === id || String(r.run) === id) && (!first || r.started < first.started)) first = r;
+  for (const r of g.runs.values()) if ((r.title === id || String(r.run) === id) && r.started >= since && (!first || r.started < first.started)) first = r;
   return first;
 }
 

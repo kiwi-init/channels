@@ -596,16 +596,16 @@ describe("the done gate (#623 §5)", () => {
         const kept: { base?: FoldBase } = {};
         fold(r.c.log, roster, at(10_000), null, null, null, (b) => (kept.base = b));
         if (!kept.base) throw new Error("the fold kept no base");
-        expect(kept.base.github?.runsForgotten).toBeGreaterThan(r.t);
+        expect(kept.base.github?.runsForgotten).toBeGreaterThanOrEqual(r.c.state().tasks.get(r.t)!.createdRts!);
         const n = kept.base.n;
         await r.c.ev("jow", { op: "task.update", task: r.t, run: { id: "job-2" } });
         const replayed = fold(r.c.log.slice(n), roster, at(10_000), null, null, kept.base);
         expect(replayed.tasks.get(r.t)!.run).toMatchObject({ id: "job-2", blind: true });
       });
 
-      test("runs forgotten from before the task was created don't hold it back", async () => {
+      test("runs that started before the task was created, then were forgotten, don't hold it back", async () => {
         const r = await runTask(501);
-        expect(r.c.state().github.runsForgotten).toBeLessThan(r.t);
+        expect(r.c.state().github.runsForgotten).toBeLessThan(r.c.state().tasks.get(r.t)!.createdRts!);
         await r.declare("job-1");
         await r.approveRun("job-1");
         await r.passed("pre-ship", "job-1");
@@ -622,6 +622,39 @@ describe("the done gate (#623 §5)", () => {
         await workflow(r, 4243, "job-1", now(r) + 500);
         await r.passed("post", "job-1");
         expect(r.gate()).toEqual({ kind: "waiting", why: runBlind("job-1") });
+      });
+
+      test("a run under the name that started before the task is out of scope, kept, forgotten or seen again alike (#2442, #2447)", async () => {
+        const gates = [];
+        for (const forget of [false, true]) {
+          const r = await runTask(1);
+          if (forget) await crowd(r.c, 5000, 500, at(0));
+          expect(r.c.state().github.runs.has(`${R}/1`)).toBe(!forget);
+          await r.declare("ci-1");
+          await r.approveRun("ci-1");
+          await r.passed("pre-ship", "ci-1");
+          await workflow(r, 4243, "ci-1", now(r) + 500);
+          await r.passed("post", "ci-1");
+          await workflow(r, 1, "ci-1", at(0));
+          const t = r.c.state().tasks.get(r.t)!;
+          expect(t.run).toMatchObject({ start: { run: 4243 } });
+          expect(t.run?.blind).toBeUndefined();
+          gates.push(r.gate());
+        }
+        expect(gates).toEqual([
+          { kind: "landed", artifact: job("ci-1") },
+          { kind: "landed", artifact: job("ci-1") },
+        ]);
+      });
+
+      test("a task whose creation has no relay receipt time can't land by itself", async () => {
+        const c = await channel("run");
+        await crowd(c, 1, 1, at(0));
+        const add = await c.say("ann", "event", "", { ev: { op: "task.add", title: "export", owner: "ann", review: "mac" } }, "none");
+        await c.ev("ann", { op: "task.update", task: add.seq, run: { id: "job-1" } });
+        const t = c.state().tasks.get(add.seq)!;
+        expect(t.createdRts).toBeUndefined();
+        expect(t.run).toMatchObject({ id: "job-1", blind: true });
       });
     });
   });

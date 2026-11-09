@@ -94,7 +94,16 @@ describe("a task's PR, looked up from one index per fold", () => {
     ({
       branchPrefix: "T",
       tasks: new Map([7, 8, 9, 10].map((id) => [id, { id, createdAt: 0 }])),
-      github: { prs: new Map(prs.map((p) => [`o/r#${p.number}`, p])), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map(), runs: new Map(), runsSince: null, runsForgotten: 0 },
+      github: {
+        prs: new Map(prs.map((p) => [`o/r#${p.number}`, p])),
+        checks: new Map(),
+        issues: new Map(),
+        rules: new Map(),
+        releases: new Map(),
+        runs: new Map(),
+        runsSince: null,
+        runsForgotten: null,
+      },
     }) as unknown as Parameters<typeof taskPr>[0];
 
   test("an open PR wins over a newer closed one, the newest wins among equals, and the first stays on a tie", () => {

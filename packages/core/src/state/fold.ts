@@ -372,7 +372,7 @@ function folding(
       releases: releasesFrom(from?.github?.releases),
       runs: new Map(from?.github?.runs?.map((r) => [runKey(r.repo, r.run), r])),
       runsSince: from?.github?.runsSince ?? null,
-      runsForgotten: from?.github?.runsForgotten ?? 0,
+      runsForgotten: from?.github?.runsForgotten ?? null,
     },
     hold: from?.hold ?? null,
     githubWrite: from?.githubWrite ?? null,
