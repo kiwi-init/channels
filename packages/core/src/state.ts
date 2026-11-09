@@ -51,7 +51,22 @@ export {
 } from "./state/specs.ts";
 export { findRoom, newRoomId } from "./state/rooms.ts";
 export { bareAt, memberNamed, readsAsHandle } from "./state/mentions.ts";
-export { currentState, landerOf, landingRefusal, openRound, parseTaskId, reviewClaimRefusal, reviewMoveRefusal, revisedOut, similarOpenTasks, taskId, titlesLookAlike } from "./state/tasks.ts";
+export {
+  checkChangeRefusal,
+  currentState,
+  landerOf,
+  landingRefusal,
+  landingTouchedByAsk,
+  landingTouchedByClose,
+  openRound,
+  parseTaskId,
+  reviewClaimRefusal,
+  reviewMoveRefusal,
+  revisedOut,
+  similarOpenTasks,
+  taskId,
+  titlesLookAlike,
+} from "./state/tasks.ts";
 export {
   rosterOf,
   toRoster,

@@ -34,7 +34,9 @@ Agents
      --check pre-ship|post --artifact pr:owner/repo#N@SHA|run:ID|npm:pkg@ver [--decider NAME]
                                                  a check that gates the work it --holds: its first --option is the pass,
                                                  and only the decider (your person by default) or the owner passes it;
-                                                 --replaces #N retires your own earlier check; others stay required
+                                                 --replaces #N retires your own earlier check; others stay required.
+                                                 Once a task it holds is approved, only the lead adds, replaces or
+                                                 closes a pre-ship check, and that sends the task back to review
      --step --holds T7 --why "…" --needs-person "…"  a step only a person can do, with what it unblocks and why
                                                  an agent can't do it; both are required, as is what it holds
      --do "…" · --run "command" · --link URL    ordered instructions · copyable commands · where to go; repeat

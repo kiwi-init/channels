@@ -4,7 +4,7 @@ import { hasLanding, isReviewCheck, type Event } from "./protocol.ts";
 import { prLinks, taskOfPr } from "./prs.ts";
 import { linkedPr, sameHead } from "./stage.ts";
 import { atRun, checkPassed } from "./state/checks.ts";
-import { landingReopens } from "./state/tasks.ts";
+import { landingReopens, landingTouchedByClose } from "./state/tasks.ts";
 import { prKey, shaKey, type GithubCheck, type GithubPr, type GithubState } from "./state/github.ts";
 import type { ChannelState, ReviewRound, Task } from "./state/types.ts";
 
@@ -176,6 +176,8 @@ function shutBy(state: ChannelState, m: Outgoing): { tasks: Set<number>; rejecte
     if (rejected || (reopens && (gated(ev.task) || hasLanding(ev.then)))) tasks.add(ev.task);
   }
   if (m.check?.phase === "pre-ship") for (const id of m.holds ?? []) if (gated(id)) tasks.add(id);
+  const removed = ev?.op === "ask.close" ? ev.ask : m.check?.replaces;
+  if (removed !== undefined) for (const t of landingTouchedByClose(state.tasks, state.checks, removed)) tasks.add(t.id);
   const owner = [...state.members.values()].find((x) => x.owner)?.name;
   for (const id of m.re ?? []) {
     const c = state.checks.get(id);

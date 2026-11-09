@@ -26,7 +26,7 @@ import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf, sentTo } from "../room-rules.ts";
 import { askHeadOf, askOfMessage, fileTask } from "./asks.ts";
 import { cancelledWithSpec, closesOnItsOwn, foldSpec, noteSpecComment, specGate } from "./specs.ts";
-import { closeCancelled, taskId } from "./tasks.ts";
+import { backToReview, checkChangeRefusal, closeCancelled, landingTouchedByAsk, landingTouchedByClose, taskId } from "./tasks.ts";
 import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
@@ -483,6 +483,13 @@ function folding(
           continue;
         }
       }
+      const reopened = m.kind === "event" ? [] : landingTouchedByAsk(tasks, checks, m);
+      const lateCheck = checkChangeRefusal(reopened, { person: isPerson(member), lead: leads(member) }, m.check?.replaces === undefined ? "adds a check to" : "replaces a check on");
+      if (lateCheck) {
+        trust.set(m.seq, "refused");
+        rejected.set(m.seq, lateCheck);
+        continue;
+      }
       if (
         ctx.hold &&
         !isPerson(member) &&
@@ -515,6 +522,9 @@ function folding(
         }
         roomOf.set(m.seq, room);
         openCheck(checks, m);
+        const replaced = m.check?.replaces;
+        const changed = replaced === undefined ? `pre-ship check #${m.seq} added after the approval` : `pre-ship check #${replaced} replaced by #${m.seq} after the approval`;
+        for (const t of reopened) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, changed);
         answerChecks(checks, m, [...members.values()].find((x) => x.owner)?.name);
         const parentPlace = parent !== undefined ? placeOf.get(parent) : undefined;
         const to = m.to?.length === 1 ? m.to[0]! : undefined;
@@ -601,8 +611,14 @@ function folding(
         if (asker === undefined || !(ev.ask < m.seq)) reject(`#${ev.ask} isn't a question or a step waiting on someone`);
         else if (asker !== m.from && !isPerson(member)) reject("only who asked, or a person, closes an ask");
         else {
-          closedAsks.add(ev.ask);
-          closeCheck(checks, ev.ask, m);
+          const reopens = landingTouchedByClose(tasks, checks, ev.ask);
+          const lateClose = checkChangeRefusal(reopens, { person: isPerson(member), lead: leads(member) }, "closes a check on");
+          if (lateClose) reject(lateClose);
+          else {
+            closedAsks.add(ev.ask);
+            closeCheck(checks, ev.ask, m);
+            for (const t of reopens) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, `pre-ship check #${ev.ask} closed after the approval`);
+          }
         }
         continue;
       }

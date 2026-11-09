@@ -448,3 +448,21 @@ describe("every claimant at a commit is in the decision, judged or not (T2681 ro
     expect(reviewPosts(c.state(), CHECK)).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "approved", tasks: [ready, late] }]);
   });
 });
+
+describe("closing or replacing a pre-ship check after approval downgrades first (T3347)", () => {
+  test("the close or the replacement posts waiting before it goes out; a post check doesn't", async () => {
+    const c = await landingChannel();
+    await c.ev("jow", { op: "repos.set", repos: [R] });
+    const t = await c.task();
+    await c.pr(9, S1, t);
+    const artifact = { kind: "pr" as const, repo: R, pr: 9, sha: S1 };
+    const ask = await c.askCheck(t, { phase: "pre-ship", decider: "jow", artifact });
+    await c.answer(ask, "A");
+    await c.approve(t, S1);
+    expect(shipGate(c.state(), c.state().tasks.get(t)!)).toEqual({ open: true });
+    const waiting = [{ repo: R, sha: S1, verdict: "waiting" as const, tasks: [t], note: `T${t}: a pre-ship check isn't passed` }];
+    expect(downgrades(c.state(), CHECK, { from: "jow", body: "", ev: { op: "ask.close", ask: ask.seq } })).toEqual(waiting);
+    expect(downgrades(c.state(), CHECK, { from: "ann", body: "", holds: [t], check: { phase: "post", decider: "jow", artifact, replaces: ask.seq } })).toEqual(waiting);
+    expect(downgrades(c.state(), CHECK, { from: "ann", body: "", holds: [t], check: { phase: "post", decider: "jow", artifact } })).toEqual([]);
+  });
+});
