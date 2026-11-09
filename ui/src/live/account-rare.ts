@@ -1,5 +1,6 @@
 import { bridge, secrets } from "@kiwi/secrets/secrets.ts"
 import { launchedBy } from "@kiwi/app/forgotten-computers.ts"
+import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { devices, enrollAsk, github, githubBusy, githubCode, githubGate, listenForCodes, moved, selfEnroll } from "~/live/account"
 import { postDevicesNow } from "~/live/devices"
@@ -15,7 +16,7 @@ export type EnrollDone = { person: { name: string }; channels: { label: string; 
 
 const enrollBridge = () => {
   const b = bridge()
-  if (!b?.enrollBegin) throw new Error("signing in as one of your devices works in the Channels desktop app")
+  if (!b?.enrollBegin) throw new Error(t("live.account.enroll.desktop"))
   return b
 }
 
@@ -36,14 +37,14 @@ export async function enrollBegin(signIn: () => Promise<unknown>, done: (d: Enro
       if (enrollRun !== mine) return
       enrollRun = null
       selfEnroll.set(null)
-      announce(`Couldn't sign in as one of your devices: ${err instanceof Error ? err.message : String(err)}`, "error")
+      announce(t("live.account.enroll.failed", { why: err instanceof Error ? err.message : String(err) }), "error")
       return
     }
     if (enrollRun !== mine) return
     if (!next || next.stage === "gone" || next.stage === "done") {
       enrollRun = null
       selfEnroll.set(null)
-      if (next?.stage === "gone") announce("Your other computer turned this one away, or the ask ran out")
+      if (next?.stage === "gone") announce(t("live.account.enroll.gone"))
       if (next?.stage === "done") done(next)
       return
     }
@@ -69,8 +70,7 @@ export async function enrollCancel(): Promise<void> {
   const shown = selfEnroll.get()
   selfEnroll.set(null)
   await enrollBridge().enrollCancel()
-  if (shown?.stage === "check")
-    announce(`Kept nothing. If your other computer never showed ${shown.person.fingerprint}, someone else answered this computer. It may still list this computer under Devices: remove it there.`)
+  if (shown?.stage === "check") announce(t("live.account.kept.nothing", { fingerprint: shown.person.fingerprint }))
 }
 
 export async function launchedFrom(ids: readonly string[]): Promise<LaunchedAgent[]> {
@@ -90,16 +90,16 @@ export async function launchedFrom(ids: readonly string[]): Promise<LaunchedAgen
 
 export async function forgetDevice(ids: readonly string[], keep: readonly KeptAgent[] = []): Promise<void> {
   const b = bridge()
-  if (!b?.forgetDevice) throw new Error("forgetting a device needs the next Channels update")
+  if (!b?.forgetDevice) throw new Error(t("live.account.forget.needs.update"))
   if (keep.length) {
-    if (!b.keepAgents) throw new Error("keeping its agents needs the next Channels update")
+    if (!b.keepAgents) throw new Error(t("live.account.keep.needs.update"))
     const { keepAgents } = await import("@kiwi/app/device-lists.ts")
     for (const code of new Set(keep.map((k) => k.code))) {
       const got = await b.keepAgents(
         code,
         keep.filter((k) => k.code === code).map(({ pk, from }) => ({ pk, from }))
       )
-      if (!got) throw new Error("this computer isn't on your list of devices, so it can't take the agents over")
+      if (!got) throw new Error(t("live.account.not.a.device"))
       keepAgents(code, got.links, got.keep)
     }
   }
@@ -110,7 +110,7 @@ export async function forgetDevice(ids: readonly string[], keep: readonly KeptAg
 
 export async function renewDevice(...ids: string[]): Promise<void> {
   const b = bridge()
-  if (!b?.renewDevice) throw new Error("renewing a device needs the next Channels update")
+  if (!b?.renewDevice) throw new Error(t("live.account.renew.needs.update"))
   for (const id of ids) await b.renewDevice(id)
   await devices.load()
   postDevicesNow()
@@ -118,7 +118,7 @@ export async function renewDevice(...ids: string[]): Promise<void> {
 
 const enrolling = () => {
   const b = bridge()
-  if (!b?.enrollPoll) throw new Error("approving a device needs the next Channels update")
+  if (!b?.enrollPoll) throw new Error(t("live.account.approve.needs.update"))
   return b
 }
 
@@ -130,9 +130,9 @@ export async function enrollAnswer(id: string): Promise<void> {
 export async function enrollConfirm(id: string, digits: string): Promise<{ ok: true } | { ok: false; left: number }> {
   const r = await enrolling().enrollConfirm(id, digits)
   if (r.ok) {
-    announce(`${r.label} is one of your devices now`)
+    announce(t("live.account.device.added", { label: r.label }))
     await devices.load()
-  } else if (r.left === 0) announce("Turned it away: the digits didn't match", "error")
+  } else if (r.left === 0) announce(t("live.account.digits.mismatch"), "error")
   await enrollAsk.check()
   return r.ok ? { ok: true } : { ok: false, left: r.left }
 }
@@ -144,14 +144,14 @@ export async function enrollDeny(id: string): Promise<void> {
 
 export async function linkGithub(): Promise<void> {
   const b = bridge()
-  if (!b) throw new Error("Linking GitHub needs the Channels desktop app")
+  if (!b) throw new Error(t("live.account.github.desktop"))
   listenForCodes()
   githubBusy.set(null)
   try {
     const s = await b.githubLink()
     github.set(s.account ? { login: s.account.login } : null)
     if (s.signIn) githubGate.set(s.account ? "signed-in" : "needed")
-    if (s.account) announce(`Signed in with GitHub as ${s.account.login}`)
+    if (s.account) announce(t("live.account.github.signed.in", { login: s.account.login }))
   } catch (err) {
     githubBusy.set(err instanceof Error ? err.message : String(err))
     throw err
@@ -162,7 +162,7 @@ export async function linkGithub(): Promise<void> {
 
 export async function unlinkGithub(): Promise<void> {
   const b = bridge()
-  if (!b) throw new Error("Linking GitHub needs the Channels desktop app")
+  if (!b) throw new Error(t("live.account.github.desktop"))
   const s = await b.githubUnlink()
   github.set(s.account ? { login: s.account.login } : null)
 }
@@ -175,7 +175,7 @@ export async function dismissMoved(): Promise<void> {
 
 export async function setRelay(url: string): Promise<string | null> {
   const b = bridge()
-  if (!b) return "only the desktop app can change its relay"
+  if (!b) return t("live.account.relay.desktop")
   try {
     await b.setRelayUrl(url.trim())
     return null
@@ -186,19 +186,19 @@ export async function setRelay(url: string): Promise<string | null> {
 
 export async function installUpdate(): Promise<void> {
   const b = bridge()
-  if (!b) throw new Error("updates come with the Channels desktop app")
+  if (!b) throw new Error(t("live.account.updates.desktop"))
   await downloadAndRestart(b, announce)
 }
 
 export async function applyUi(): Promise<void> {
   const b = bridge()
-  if (!b) throw new Error("the new look comes with the Channels desktop app")
+  if (!b) throw new Error(t("live.account.new.look.desktop"))
   await b.applyUi()
 }
 
 export async function signOut(): Promise<void> {
   const b = bridge()
-  if (!b) throw new Error("only the desktop app keeps a sign-in")
+  if (!b) throw new Error(t("live.account.sign.in.desktop"))
   await b.signOut()
-  announce("Signed out of the relay. Your key and channels stay on this computer")
+  announce(t("live.account.signed.out"))
 }

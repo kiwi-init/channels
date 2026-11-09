@@ -5,6 +5,7 @@ import { loadMember, type StoredMember } from "@kiwi/channel/store.ts"
 import { useChannel } from "@kiwi/channel/use-channel.ts"
 import { useSecrets } from "@kiwi/secrets/secrets.ts"
 import { homeOf } from "~/home"
+import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { sendOptions } from "~/live/channel"
 import { dmRoomOf } from "~/live/dm"
@@ -65,7 +66,7 @@ const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }
 
   const post = useCallback(
     async (where: Where, text: string, opts: SendExtras): Promise<number> => {
-      if (where.kind === "theirs") throw new Error("Only the two of them write in their direct messages")
+      if (where.kind === "theirs") throw new Error(t("live.channel.theirs"))
       const body = text.trim()
       const room = where.kind === "dm" ? dmRoomOf(state, me, where.with) : undefined
       try {
@@ -74,19 +75,19 @@ const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }
         const refused = refusal(err)
         if (refused !== null) {
           const images = opts.images ?? []
-          announce(`${title}: ${backWords(refused, giveBack(composerKey(code, where, opts.inThread), body, images, stashText), images.length)}`, "error")
+          announce(t("live.home.refused", { title, text: backWords(refused, giveBack(composerKey(code, where, opts.inThread), body, images, stashText), images.length) }), "error")
           throw err
         }
         const why = err instanceof Error ? err.message : String(err)
         changeUnsent(roomId, (list) => [...list, { key: nextUnsentKey(), where, text: body, at: Date.now(), failed: why }])
-        announce(`Not sent in ${title}: ${why}. It waits in the channel with Retry.`, "error")
+        announce(t("live.home.not.sent", { title, why }), "error")
         throw err
       }
     },
     [state, messages, me, send, roomId, title, code]
   )
   const retry = useCallback(async (): Promise<number> => {
-    throw new Error("open the channel to retry")
+    throw new Error(t("live.home.open.to.retry"))
   }, [])
   const discard = useCallback((key: number) => void changeUnsent(roomId, (list) => list.filter((p) => p.key !== key)), [roomId])
 

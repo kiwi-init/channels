@@ -1,7 +1,9 @@
+import "~/i18n/en/settings"
 import "~/styles/themes.css"
 
 import { use, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 
+import { t } from "~/i18n/i18n"
 import { Icon } from "~/kit/icons"
 import type { Appearance, CustomTheme, ThemeBase } from "~/model"
 import { useApp } from "~/nav"
@@ -15,10 +17,11 @@ const SHOT = new URLSearchParams(location.search).get("shot")
 
 const DOTS = ["c-red", "c-yellow", "c-green", "c-teal", "c-blue", "c-violet"] as const
 
-const APPEARANCES = [
-  ["dark", "Dark"],
-  ["light", "Light"],
-] as const satisfies readonly (readonly [Appearance, string])[]
+const appearances = () =>
+  [
+    ["dark", t("settings.themes.dark")],
+    ["light", t("settings.themes.light")],
+  ] as const satisfies readonly (readonly [Appearance, string])[]
 
 interface Draft {
   id: string | null
@@ -87,43 +90,43 @@ export function Themes() {
 
   const q = query.trim().toLowerCase()
   return (
-    <section className="theme" aria-label="Theme" ref={ref}>
+    <section className="theme" aria-label={t("settings.themes.theme")} ref={ref}>
       {draft ? (
         <Editor key={draft.id ?? "new"} start={draft} themes={themes} onDone={() => setDraft(null)} />
       ) : (
         <>
           <div className="theme-head">
-            <h3 className="theme-title">Themes</h3>
+            <h3 className="theme-title">{t("settings.themes.themes")}</h3>
             <label className="theme-search">
               <Icon name="search" size={14} />
-              <input className="input" type="search" placeholder="Search themes" aria-label="Search themes" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <input className="input" type="search" placeholder={t("settings.themes.search")} aria-label={t("settings.themes.search")} value={query} onChange={(e) => setQuery(e.target.value)} />
             </label>
           </div>
           {(["dark", "light"] as const).map((appearance) => {
             const chosen = appearance === "dark" ? prefs.darkTheme : prefs.lightTheme
             const list = themes.filter((t) => t.appearance === appearance && (!q || t.name.toLowerCase().includes(q)))
-            const word = appearance === "dark" ? "Dark" : "Light"
+            const word = appearance === "dark" ? t("settings.themes.dark") : t("settings.themes.light")
             return (
               <div className="theme-group" key={appearance}>
                 <div className="theme-group-head">
                   <h4>{word}</h4>
-                  {now === appearance && <span className="theme-when">in use</span>}
+                  {now === appearance && <span className="theme-when">{t("settings.themes.in.use")}</span>}
                 </div>
                 <ul className="theme-grid">
-                  {list.map((t) => {
-                    const mine = prefs.customThemes.find((c) => c.id === t.id)
-                    const on = chosen === t.id
+                  {list.map((theme) => {
+                    const mine = prefs.customThemes.find((c) => c.id === theme.id)
+                    const on = chosen === theme.id
                     return (
-                      <li key={t.id} className="theme-card">
-                        <button type="button" className="theme-pick" aria-pressed={on} onClick={() => actions.setPrefs(appearance === "dark" ? { darkTheme: t.id } : { lightTheme: t.id })}>
+                      <li key={theme.id} className="theme-card">
+                        <button type="button" className="theme-pick" aria-pressed={on} onClick={() => actions.setPrefs(appearance === "dark" ? { darkTheme: theme.id } : { lightTheme: theme.id })}>
                           <span className="theme-frame">
-                            <Mini colors={t.colors} />
+                            <Mini colors={theme.colors} />
                           </span>
-                          <span className="theme-name">{t.name}</span>
+                          <span className="theme-name">{theme.name}</span>
                         </button>
                         {mine && (
-                          <button type="button" className="btn is-quiet is-small theme-edit" aria-label={`Edit ${t.name}`} onClick={() => startEdit(mine)}>
-                            Edit
+                          <button type="button" className="btn is-quiet is-small theme-edit" aria-label={t("settings.themes.edit.named", { name: theme.name })} onClick={() => startEdit(mine)}>
+                            {t("settings.themes.edit")}
                           </button>
                         )}
                       </li>
@@ -134,15 +137,11 @@ export function Themes() {
                       <span className="theme-frame is-new">
                         <Icon name="plus" size={18} />
                       </span>
-                      <span className="theme-name">New theme</span>
+                      <span className="theme-name">{t("settings.themes.new")}</span>
                     </button>
                   </li>
                 </ul>
-                {!list.length && (
-                  <p className="theme-none">
-                    No {appearance} themes match “{query.trim()}”.
-                  </p>
-                )}
+                {!list.length && <p className="theme-none">{t(appearance === "dark" ? "settings.themes.none.dark" : "settings.themes.none.light", { query: query.trim() })}</p>}
               </div>
             )
           })}
@@ -179,7 +178,7 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
       className="theme-editor"
       onSubmit={(e) => {
         e.preventDefault()
-        app.actions.saveTheme({ id: draft.id ?? `mine-${Date.now().toString(36)}`, name: name || "My theme", appearance: draft.appearance, base: draft.base })
+        app.actions.saveTheme({ id: draft.id ?? `mine-${Date.now().toString(36)}`, name: name || t("settings.themes.mine"), appearance: draft.appearance, base: draft.base })
         onDone()
       }}
       onKeyDown={(e) => {
@@ -188,18 +187,18 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
         onDone()
       }}
     >
-      <h3 className="theme-title">{draft.id ? "Edit theme" : "New theme"}</h3>
+      <h3 className="theme-title">{draft.id ? t("settings.themes.edit.title") : t("settings.themes.new")}</h3>
       <div className="theme-form">
         <label className="theme-field">
-          <span className="theme-label">Name</span>
-          <input className="input" autoFocus value={draft.name} placeholder="My theme" onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} />
+          <span className="theme-label">{t("settings.themes.name")}</span>
+          <input className="input" autoFocus value={draft.name} placeholder={t("settings.themes.mine")} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} />
         </label>
         <div className="theme-field">
-          <span className="theme-label">Appearance</span>
-          <Seg label="Appearance" value={draft.appearance} options={APPEARANCES} onChange={(appearance) => setDraft((d) => ({ ...d, appearance }))} />
+          <span className="theme-label">{t("settings.themes.appearance")}</span>
+          <Seg label={t("settings.themes.appearance")} value={draft.appearance} options={appearances()} onChange={(appearance) => setDraft((d) => ({ ...d, appearance }))} />
         </div>
         <label className="theme-field">
-          <span className="theme-label">Start from</span>
+          <span className="theme-label">{t("settings.themes.start.from")}</span>
           <select
             className="input theme-select"
             value={from}
@@ -209,9 +208,9 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
               if (t) setDraft((d) => ({ ...d, appearance: t.appearance, base: baseOf(t.colors) }))
             }}
           >
-            <option value="">{draft.id ? "Your colours" : "The theme you use now"}</option>
+            <option value="">{draft.id ? t("settings.themes.start.yours") : t("settings.themes.start.current")}</option>
             {(["dark", "light"] as const).map((a) => (
-              <optgroup key={a} label={a === "dark" ? "Dark" : "Light"}>
+              <optgroup key={a} label={a === "dark" ? t("settings.themes.dark") : t("settings.themes.light")}>
                 {themes
                   .filter((t) => t.appearance === a)
                   .map((t) => (
@@ -225,53 +224,53 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
         </label>
       </div>
       <div className="theme-colours">
-        <Colour label="Background" value={draft.base.background} onChange={(v) => setBase("background", v)} />
-        <Colour label="Text" value={draft.base.text} onChange={(v) => setBase("text", v)} />
-        <Colour label="Accent" value={draft.base.accent} onChange={(v) => setBase("accent", v)} />
+        <Colour label={t("settings.themes.background")} value={draft.base.background} onChange={(v) => setBase("background", v)} />
+        <Colour label={t("settings.themes.text")} value={draft.base.text} onChange={(v) => setBase("text", v)} />
+        <Colour label={t("settings.themes.accent")} value={draft.base.accent} onChange={(v) => setBase("accent", v)} />
       </div>
-      {adjusted && <p className="theme-note">Text or accent is nudged so it stays readable.</p>}
+      {adjusted && <p className="theme-note">{t("settings.themes.nudged")}</p>}
       <button type="button" className="btn is-quiet is-small theme-more" aria-expanded={more} onClick={() => setMore((m) => !m)}>
         <Icon name={more ? "down" : "chevron"} size={12} />
-        More colours
+        {t("settings.themes.more")}
       </button>
       {more && (
         <>
           <div className="theme-colours">
-            <Colour label="Done" value={draft.base.success} onChange={(v) => setBase("success", v)} />
-            <Colour label="Working" value={draft.base.info} onChange={(v) => setBase("info", v)} />
-            <Colour label="Needs you" value={draft.base.warning} onChange={(v) => setBase("warning", v)} />
-            <Colour label="Failed" value={draft.base.danger} onChange={(v) => setBase("danger", v)} />
+            <Colour label={t("settings.themes.done")} value={draft.base.success} onChange={(v) => setBase("success", v)} />
+            <Colour label={t("settings.themes.working")} value={draft.base.info} onChange={(v) => setBase("info", v)} />
+            <Colour label={t("settings.themes.needs.you")} value={draft.base.warning} onChange={(v) => setBase("warning", v)} />
+            <Colour label={t("settings.themes.failed")} value={draft.base.danger} onChange={(v) => setBase("danger", v)} />
           </div>
-          <p className="theme-note">Member colours. Magenta also marks work in review.</p>
+          <p className="theme-note">{t("settings.themes.members")}</p>
           <div className="theme-colours">
-            <Colour label="Red" value={draft.base.red} onChange={(v) => setBase("red", v)} />
-            <Colour label="Yellow" value={draft.base.yellow} onChange={(v) => setBase("yellow", v)} />
-            <Colour label="Green" value={draft.base.green} onChange={(v) => setBase("green", v)} />
-            <Colour label="Cyan" value={draft.base.cyan} onChange={(v) => setBase("cyan", v)} />
-            <Colour label="Blue" value={draft.base.blue} onChange={(v) => setBase("blue", v)} />
-            <Colour label="Magenta" value={draft.base.magenta} onChange={(v) => setBase("magenta", v)} />
+            <Colour label={t("settings.themes.red")} value={draft.base.red} onChange={(v) => setBase("red", v)} />
+            <Colour label={t("settings.themes.yellow")} value={draft.base.yellow} onChange={(v) => setBase("yellow", v)} />
+            <Colour label={t("settings.themes.green")} value={draft.base.green} onChange={(v) => setBase("green", v)} />
+            <Colour label={t("settings.themes.cyan")} value={draft.base.cyan} onChange={(v) => setBase("cyan", v)} />
+            <Colour label={t("settings.themes.blue")} value={draft.base.blue} onChange={(v) => setBase("blue", v)} />
+            <Colour label={t("settings.themes.magenta")} value={draft.base.magenta} onChange={(v) => setBase("magenta", v)} />
           </div>
         </>
       )}
       <div className="theme-foot">
         {draft.id && (
           <button type="button" className="btn is-danger is-small" onClick={() => setDeleting(true)}>
-            Delete theme
+            {t("settings.themes.delete")}
           </button>
         )}
         <span className="theme-foot-gap" />
         <button type="button" className="btn is-quiet" onClick={onDone}>
-          Cancel
+          {t("settings.controls.cancel")}
         </button>
         <button type="submit" className="btn is-primary">
-          Save theme
+          {t("settings.themes.save")}
         </button>
       </div>
       <Confirm
         open={deleting}
-        title="Delete this theme?"
-        sub="If it's in use, Channels Dark or Channels Light takes its place."
-        action="Delete theme"
+        title={t("settings.themes.delete.title")}
+        sub={t("settings.themes.delete.sub")}
+        action={t("settings.themes.delete")}
         onClose={() => setDeleting(false)}
         onConfirm={() => {
           setDeleting(false)
@@ -289,10 +288,10 @@ function Colour({ label, value, onChange }: { label: string; value: string; onCh
     <div className="theme-colour">
       <span className="theme-label">{label}</span>
       <span className="theme-colour-ctl">
-        <input type="color" className="theme-swatch" aria-label={`${label} colour`} value={value} onChange={(e) => onChange(e.target.value)} />
+        <input type="color" className="theme-swatch" aria-label={t("settings.themes.colour", { label })} value={value} onChange={(e) => onChange(e.target.value)} />
         <input
           className="input is-mono theme-hex"
-          aria-label={`${label} hex`}
+          aria-label={t("settings.themes.hex", { label })}
           spellCheck={false}
           maxLength={7}
           value={text ?? value}

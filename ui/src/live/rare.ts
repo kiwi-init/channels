@@ -10,6 +10,7 @@ import { bridge } from "@kiwi/secrets/secrets.ts"
 import { changeBlock } from "~/chat/doc/change-block"
 export { restoreOf, versionsOf } from "~/chat/doc/restore-version"
 import { stepReplyText } from "~/chat/step"
+import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { ownPrefs, setPrefs } from "~/live/prefs"
 import { muteKey } from "~/live/mute"
@@ -27,73 +28,73 @@ async function sends(run: Run, ...all: TaskSend[]): Promise<void> {
 export async function approveCompact(code: string, proposal: number): Promise<void> {
   const run = owner(code)
   const p = run.state.compactProposal
-  if (p?.seq !== proposal) throw new Error("that proposal was replaced or already approved")
+  if (p?.seq !== proposal) throw new Error(t("live.rare.proposal.replaced"))
   await event(run, `compacted the history through #${p.through}`, { op: "compact", summary: p.summary, through: p.through, proposal: p.seq })
-  announce(`History through #${p.through} compacted`)
+  announce(t("live.rare.compacted", { through: String(p.through) }))
 }
 
 export async function askCompact(code: string): Promise<void> {
   const run = need(code)
   const lead = run.state.lead && run.state.lead !== run.me ? run.state.lead : null
   await run.send(COMPACT_ASK, lead ? { to: [lead], kind: "ask" } : { kind: "ask" })
-  announce(lead ? `Asked ${memberName(run.state.members.get(lead), lead)} for a summary` : "Asked the agents for a summary")
+  announce(lead ? t("live.rare.asked.summary", { name: memberName(run.state.members.get(lead), lead) }) : t("live.rare.asked.agents.summary"))
 }
 
 export async function cancelTask(code: string, id: number, why: string): Promise<void> {
   const run = need(code)
-  const t = run.state.tasks.get(id)
-  if (!t) throw new Error(`no task ${taskId(id)}`)
+  const task = run.state.tasks.get(id)
+  if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
   const note = why.trim()
-  if (!note) throw new Error("say why it's cancelled")
-  await sends(run, cancelling(t, note, run.me), closedDigest(run.state, [...run.messages], t, { by: run.me, cancelled: note }))
+  if (!note) throw new Error(t("live.rare.say.why.cancelled"))
+  await sends(run, cancelling(task, note, run.me), closedDigest(run.state, [...run.messages], task, { by: run.me, cancelled: note }))
 }
 
 export async function closeTask(code: string, id: number, why: string): Promise<void> {
   const run = need(code)
-  const t = run.state.tasks.get(id)
-  if (!t) throw new Error(`no task ${taskId(id)}`)
+  const task = run.state.tasks.get(id)
+  if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
   const note = why.trim()
-  if (!note) throw new Error("say why it's closed without landing")
-  await sends(run, closeLanding(t, note))
+  if (!note) throw new Error(t("live.rare.say.why.closed"))
+  await sends(run, closeLanding(task, note))
 }
 
 export async function editTask(code: string, id: number, change: { title?: string; detail?: string }): Promise<void> {
   const run = need(code)
-  const t = run.state.tasks.get(id)
-  if (!t) throw new Error(`no task ${taskId(id)}`)
+  const task = run.state.tasks.get(id)
+  if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
   const title = change.title?.trim().slice(0, TASK_TITLE_MAX_LENGTH)
-  if (change.title !== undefined && !title) throw new Error("a task needs a title")
+  if (change.title !== undefined && !title) throw new Error(t("live.run.task.needs.title"))
   const detail = change.detail?.trim()
-  if (detail && detail.length > TASK_BODY_MAX_LENGTH) throw new Error(`a task's body is at most ${TASK_BODY_MAX_LENGTH} characters`)
-  const renamed = title && title !== t.title ? { title } : {}
-  const rewritten = detail !== undefined && detail !== (t.detail ?? "") ? { detail } : {}
+  if (detail && detail.length > TASK_BODY_MAX_LENGTH) throw new Error(t("live.rare.body.too.long", { max: String(TASK_BODY_MAX_LENGTH) }))
+  const renamed = title && title !== task.title ? { title } : {}
+  const rewritten = detail !== undefined && detail !== (task.detail ?? "") ? { detail } : {}
   if (!("title" in renamed) && !("detail" in rewritten)) return
-  await event(run, `edited ${taskId(id)}`, { op: "task.update", task: id, ...renamed, ...rewritten }, t.owner && t.owner !== run.me ? [t.owner] : undefined)
-  announce(`Saved ${taskId(id)}`)
+  await event(run, `edited ${taskId(id)}`, { op: "task.update", task: id, ...renamed, ...rewritten }, task.owner && task.owner !== run.me ? [task.owner] : undefined)
+  announce(t("live.rare.saved", { task: taskId(id) }))
 }
 
 export async function deleteTask(code: string, id: number): Promise<void> {
   const run = need(code)
-  const t = run.state.tasks.get(id)
-  if (!t) throw new Error(`no task ${taskId(id)}`)
-  const to = [...new Set([t.owner, t.createdBy].filter((n): n is string => !!n && n !== run.me))]
+  const task = run.state.tasks.get(id)
+  if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
+  const to = [...new Set([task.owner, task.createdBy].filter((n): n is string => !!n && n !== run.me))]
   await event(run, `deleted ${taskId(id)}`, { op: "task.delete", task: id }, to)
-  announce(`Deleted ${taskId(id)}`)
+  announce(t("live.rare.deleted", { task: taskId(id) }))
 }
 
 export async function deleteSpec(code: string, ask: number): Promise<void> {
   const run = need(code)
-  if (!run.state.specs.has(ask)) throw new Error(`#${ask} has no spec`)
+  if (!run.state.specs.has(ask)) throw new Error(t("live.rare.no.spec", { ask: String(ask) }))
   await event(run, `deleted #${ask}'s spec`, { op: "spec.delete", ask })
-  announce(`Deleted #${ask}'s spec`)
+  announce(t("live.rare.spec.deleted", { ask: String(ask) }))
 }
 
 export async function setReviewer(code: string, id: number, reviewer: string): Promise<void> {
   const run = need(code)
-  const t = run.state.tasks.get(id)
-  if (!t) throw new Error(`no task ${taskId(id)}`)
+  const task = run.state.tasks.get(id)
+  if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
   if (reviewer !== ANYONE) memberOf(run, reviewer)
-  await sends(run, changeReviewer(t, reviewer, run.me))
+  await sends(run, changeReviewer(task, reviewer, run.me))
 }
 
 export async function nameGoal(code: string, ask: number, name: string | null): Promise<void> {
@@ -105,7 +106,7 @@ export async function nameGoal(code: string, ask: number, name: string | null): 
 export async function newSpec(code: string, words: string, text: string): Promise<number> {
   const run = need(code)
   const said = words.trim()
-  if (!said) throw new Error("say what you want, in your own words")
+  if (!said) throw new Error(t("live.rare.say.what"))
   const ask = await run.post({ kind: "room", room: GENERAL_ROOM }, said, {})
   await writeSpec(code, ask, text.trim() || `# ${said.split("\n")[0]!.slice(0, 120)}`)
   return ask
@@ -114,8 +115,8 @@ export async function newSpec(code: string, words: string, text: string): Promis
 export async function writeSpec(code: string, ask: number, text: string): Promise<void> {
   const run = need(code)
   const clean = text.trim()
-  if (!clean) throw new Error("a spec needs words")
-  if (clean.length > MAX_SPEC) throw new Error(`a spec is at most ${MAX_SPEC} characters`)
+  if (!clean) throw new Error(t("live.rare.spec.empty"))
+  if (clean.length > MAX_SPEC) throw new Error(t("live.rare.spec.too.long", { max: String(MAX_SPEC) }))
   if (run.state.specs.get(ask)?.text.trim() === clean) return
   await event(run, `spec of #${ask}`, { op: "spec.set", ask, text: clean })
 }
@@ -123,24 +124,24 @@ export async function writeSpec(code: string, ask: number, text: string): Promis
 export async function approveSpec(code: string, ask: number, v: number): Promise<void> {
   const run = need(code)
   const spec = run.state.specs.get(ask)
-  if (!spec) throw new Error(`#${ask} has no spec`)
-  if (spec.v !== v) throw new Error("the spec changed while you read it: read it again, then approve")
+  if (!spec) throw new Error(t("live.rare.no.spec", { ask: String(ask) }))
+  if (spec.v !== v) throw new Error(t("live.rare.spec.changed"))
   await event(run, `approved the spec of #${ask}`, { op: "spec.approve", ask, v })
-  announce("Approved: it starts when an agent is free")
+  announce(t("live.rare.approved"))
 }
 
 export async function judgeSpec(code: string, ask: number, verdict: "accepted" | "back" | "dropped", note?: string): Promise<void> {
   const run = need(code)
   const clean = note?.trim().slice(0, MAX_SPEC_NOTE)
-  if (verdict === "back" && !clean) throw new Error("say what's missing, so the agents know what to fix")
+  if (verdict === "back" && !clean) throw new Error(t("live.rare.say.missing"))
   await event(run, verdict === "accepted" ? `accepted #${ask}` : verdict === "back" ? `sent #${ask} back` : `dropped #${ask}`, { op: "spec.result", ask, verdict, ...(clean ? { note: clean } : {}) })
-  announce(verdict === "accepted" ? "Accepted" : verdict === "back" ? "Sent back: it starts again when an agent is free" : "Dropped")
+  announce(t(verdict === "accepted" ? "live.rare.accepted" : verdict === "back" ? "live.rare.sent.back" : "live.rare.dropped"))
 }
 
 export async function change(code: string, seq: number, text: string | null): Promise<void> {
   const run = need(code)
   const original = run.messages.find((m) => m.seq === seq)
-  if (!original) throw new Error("that message isn't loaded")
+  if (!original) throw new Error(t("live.rare.message.not.loaded"))
   const ev: Event = text === null ? { op: "msg.delete", seq } : { op: "msg.edit", seq, body: text.trim() }
   const to = changeTo(original)
   const room = run.state.roomOf.get(seq)
@@ -151,7 +152,7 @@ export async function change(code: string, seq: number, text: string | null): Pr
 export async function answerStep(code: string, id: string, reply: StepReply): Promise<void> {
   const run = need(code)
   const m = run.messages.find((x) => x.seq === Number(id))
-  if (!m) throw new Error("that step is gone")
+  if (!m) throw new Error(t("live.rare.step.gone"))
   await run.send(stepReplyText(reply), { to: [m.from], re: [m.seq], kind: "msg", side: true, stepReply: reply })
 }
 
@@ -177,9 +178,9 @@ export async function checkUpdate(): Promise<UpdateCheck | null> {
 export async function answerPermission(code: string, id: string, allow: boolean): Promise<void> {
   const run = need(code)
   const m = run.messages.find((x) => x.seq === Number(id))
-  if (!m) throw new Error("that request is gone")
+  if (!m) throw new Error(t("live.run.request.gone"))
   const perm = permissionReply(m, allow, run.state)
-  if (!perm) throw new Error("this one can only be answered in the terminal")
+  if (!perm) throw new Error(t("live.rare.terminal.only"))
   await run.send(allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", side: true, perm })
 }
 
@@ -187,18 +188,18 @@ const STATES: Partial<Record<TaskStatus, "todo" | "doing" | "review" | "done">> 
 
 export async function approveTask(code: string, id: number, approve: boolean, why?: string): Promise<void> {
   const run = need(code)
-  const t = run.state.tasks.get(id)
-  if (!t) throw new Error(`no task ${taskId(id)}`)
-  if (approve) await sends(run, approving(t), closedDigest(run.state, [...run.messages], t, { by: run.me }))
-  else await sends(run, sendBackTask(t, why?.trim() || "sent back for another look"))
+  const task = run.state.tasks.get(id)
+  if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
+  if (approve) await sends(run, approving(task), closedDigest(run.state, [...run.messages], task, { by: run.me }))
+  else await sends(run, sendBackTask(task, why?.trim() || "sent back for another look"))
 }
 
 export async function setTaskStatus(code: string, id: number, status: TaskStatus): Promise<void> {
   const run = need(code)
-  const t = run.state.tasks.get(id)
-  if (!t) throw new Error(`no task ${taskId(id)}`)
+  const task = run.state.tasks.get(id)
+  if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
   const state = STATES[status]
-  if (!state) throw new Error("a task waits on its own, when something holds it")
-  const to = t.owner && t.owner !== run.me ? [t.owner] : undefined
+  if (!state) throw new Error(t("live.rare.task.waits"))
+  const to = task.owner && task.owner !== run.me ? [task.owner] : undefined
   await event(run, `${taskId(id)} ${state}`, { op: "task.update", task: id, state }, to)
 }

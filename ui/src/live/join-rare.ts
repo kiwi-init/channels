@@ -7,6 +7,7 @@ import { linkOf } from "@kiwi/channel/channel-ops.ts"
 import { joinCodeFromLink } from "@kiwi/app/deep-link.ts"
 import { bridge, secrets } from "@kiwi/secrets/secrets.ts"
 import { isSignInGone } from "@kiwi/channel/session.ts"
+import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import type { EnrollDone } from "~/live/account-rare"
 import { rememberOwner } from "~/live/invites"
@@ -48,7 +49,7 @@ export async function newChannel(title: string): Promise<string> {
 
 export async function lookUpInvite(typed: string): Promise<InviteInfo> {
   const code = joinCodeOf(typed)
-  if (!code) throw new Error("That isn't an invite. Codes start with mc2-")
+  if (!code) throw new Error(t("live.join.not.invite"))
   if (loadMember(code) || loadPending(code)) return { code, owner: null, state: "member" }
   const info = await inviteInfo(code)
   if (!info) return { code, owner: null, state: "gone" }
@@ -58,10 +59,10 @@ export async function lookUpInvite(typed: string): Promise<InviteInfo> {
 
 export async function joinChannel(typed: string, name?: string): Promise<string> {
   const code = joinCodeOf(typed)
-  if (!code) throw new Error("That isn't an invite. Codes start with mc2-")
+  if (!code) throw new Error(t("live.join.not.invite"))
   if (loadMember(code) || loadPending(code)) return code
   const person = secrets().person
-  if (!person) throw new Error("Say your name first")
+  if (!person) throw new Error(t("live.join.name.first"))
   await askToJoin(code, name?.trim() || handleFor(person.name))
   return code
 }
@@ -74,5 +75,5 @@ export async function joinGranted(d: EnrollDone): Promise<void> {
     await askToJoin(c.code, name)
     asked++
   }
-  announce(asked ? `Signed in as ${d.person.name}. Asked to join ${asked === 1 ? "1 channel" : `${asked} channels`}` : `Signed in as ${d.person.name}`)
+  announce(asked ? t("live.join.signed.in.asked", { name: d.person.name, count: asked }) : t("live.join.signed.in", { name: d.person.name }))
 }
