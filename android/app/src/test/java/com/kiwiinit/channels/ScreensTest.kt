@@ -70,8 +70,29 @@ class ScreensTest {
     @Test
     fun settings() = shoot("settings") { Home(it, open = {}, tasks = {}, first = Tab.Settings) }
 
-    private fun shoot(name: String, prepare: (AppModel) -> Unit = {}, screen: @Composable (AppModel) -> Unit) {
-        for ((look, qualifier) in listOf("light" to "+notnight", "dark" to "+night")) {
+    @Test
+    fun languages() {
+        for (language in listOf("ja", "pt-rBR")) {
+            val screens: List<Pair<String, @Composable (AppModel) -> Unit>> = listOf(
+                "link" to { LinkScreen(it) },
+                "list" to { Home(it, open = {}, tasks = {}) },
+                "general" to { ConversationScreen(it, Spot(DEV), back = {}) },
+                "needs" to { Home(it, open = {}, tasks = {}, first = Tab.Needs) },
+                "tasks" to { TasksScreen(it, DEV, open = {}, back = {}) },
+                "settings" to { Home(it, open = {}, tasks = {}, first = Tab.Settings) },
+            )
+            for ((name, screen) in screens) shoot("$language-$name", looks = listOf("light" to "+$language-notnight"), screen = screen)
+        }
+        RuntimeEnvironment.setQualifiers("+en-notnight")
+    }
+
+    private fun shoot(
+        name: String,
+        prepare: (AppModel) -> Unit = {},
+        looks: List<Pair<String, String>> = listOf("light" to "+notnight", "dark" to "+night"),
+        screen: @Composable (AppModel) -> Unit,
+    ) {
+        for ((look, qualifier) in looks) {
             RuntimeEnvironment.setQualifiers(qualifier)
             val model = sample(RuntimeEnvironment.getApplication())
             prepare(model)
