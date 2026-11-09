@@ -9,6 +9,7 @@ import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown
 import type { ASTNode, RendererCallbacks } from "react-native-enriched-markdown/lib/typescript/src/web/types"
 import { compareCells, nextSort, sanitizeMarkdownUrl, type SortDir } from "@kiwi/app/markdown.ts"
 import { messageAt, messageHash } from "@kiwi/core/message-link.ts"
+import { t } from "~/i18n/i18n"
 import { openOutside } from "~/kit/outside"
 
 import { MermaidBlock } from "~/chat/mermaid"
@@ -278,7 +279,12 @@ function Table({ node, style, styles, callbacks }: { node: ASTNode; style: Style
                   style={styles.tableHeaderCell[cell.attributes?.align ?? "default"]}
                   aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : "none"}
                 >
-                  <button type="button" className="md-sort" aria-label={`Sort by ${textOf(cell) || `column ${i + 1}`}`} onClick={() => setSort((was) => nextSort(was, i))}>
+                  <button
+                    type="button"
+                    className="md-sort"
+                    aria-label={t("chat.markdown.sort.by", { name: textOf(cell) || t("chat.markdown.column", { n: i + 1 }) })}
+                    onClick={() => setSort((was) => nextSort(was, i))}
+                  >
                     {inside(cell)}
                     <span aria-hidden="true">{direction === "asc" ? "↑" : direction === "desc" ? "↓" : ""}</span>
                   </button>
@@ -356,8 +362,8 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       code.dataset.copy = ""
       code.setAttribute("role", "button")
       code.tabIndex = 0
-      code.title = "Copy"
-      code.setAttribute("aria-label", `Copy ${text}`)
+      code.title = t("chat.markdown.copy")
+      code.setAttribute("aria-label", t("chat.markdown.copy.text", { text }))
     }
   }, [ast])
 

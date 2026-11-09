@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { bytesOf, sizeText } from "~/chat/doc/bytes"
 import { ImageButton, warmFeed } from "~/chat/image-button"
 import type { BlockFiles, DocFile, DocImage, Image } from "~/model"
+import { t } from "~/i18n/i18n"
 import { useAct } from "~/nav"
 
 type Shot = { state: "loading" } | { state: "gone"; why: string } | { state: "shown"; image: Image }
@@ -21,8 +22,8 @@ function DocShot({ code, img, open }: { code: string; img: DocImage; open: (url:
         return { url, width, height, alt: img.name, id: img.ref.id }
       })
       .then(
-        (image) => live && setShot(image === null ? { state: "gone", why: `${img.name} is no longer available` } : { state: "shown", image }),
-        () => live && setShot({ state: "gone", why: `${img.name} didn't load` })
+        (image) => live && setShot(image === null ? { state: "gone", why: t("chat.block.files.gone", { name: img.name }) } : { state: "shown", image }),
+        () => live && setShot({ state: "gone", why: t("chat.block.files.failed", { name: img.name }) })
       )
     return () => {
       live = false
@@ -31,7 +32,7 @@ function DocShot({ code, img, open }: { code: string; img: DocImage; open: (url:
   if (shot.state === "shown") return <ImageButton image={shot.image} onOpen={open} />
   return (
     <span className="msg-image-spot" title={img.name} role="status">
-      {shot.state === "gone" ? shot.why : "Loading image…"}
+      {shot.state === "gone" ? shot.why : t("chat.block.files.loading")}
     </span>
   )
 }
@@ -45,7 +46,7 @@ function DocFileChip({ code, file }: { code: string; file: DocFile }) {
     actions
       .docFile(code, file)
       .then((data) => {
-        if (data === null) return setSaid("no longer available")
+        if (data === null) return setSaid(t("chat.block.files.no.longer"))
         const url = URL.createObjectURL(new Blob([bytesOf(data)], { type: file.mime || "application/octet-stream" }))
         const a = document.createElement("a")
         a.href = url
@@ -53,11 +54,11 @@ function DocFileChip({ code, file }: { code: string; file: DocFile }) {
         a.click()
         window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
       })
-      .catch(() => setSaid("didn't download"))
+      .catch(() => setSaid(t("chat.block.files.no.download")))
       .finally(() => setBusy(false))
   }
   return (
-    <button type="button" className="msg-file" disabled={busy} aria-label={`Download ${file.name}`} onClick={download}>
+    <button type="button" className="msg-file" disabled={busy} aria-label={t("chat.block.files.download", { name: file.name })} onClick={download}>
       <span className="msg-file-name">{file.name}</span>
       <span className="msg-file-size">{said}</span>
     </button>

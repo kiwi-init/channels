@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react"
 import { createPortal } from "react-dom"
 
 import { cleanExcerpt } from "~/chat/quote"
+import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 
@@ -94,7 +95,7 @@ export function QuotePick({ root, onQuote, body = MESSAGE_TEXT }: { root: RefObj
       type="button"
       className={cx("quote-pick", picked.below && "is-below")}
       style={{ left: picked.x, top: picked.y }}
-      title="Quote this in a reply"
+      title={t("chat.quote.pick.title")}
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => {
         onQuote(picked.seq, picked.excerpt)
@@ -103,7 +104,7 @@ export function QuotePick({ root, onQuote, body = MESSAGE_TEXT }: { root: RefObj
       }}
     >
       <Icon name="reply" size={13} />
-      Quote
+      {t("chat.quote.pick.quote")}
     </button>,
     document.body
   )

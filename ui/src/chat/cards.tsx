@@ -1,3 +1,5 @@
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 import { cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { OutsideLink } from "~/kit/outside"
@@ -7,26 +9,31 @@ import { nickname, Shown } from "~/names"
 
 export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
   const { go } = useAct()
-  const t = channel.tasks.find((t) => t.id === id)
-  if (!t) return null
+  const task = channel.tasks.find((x) => x.id === id)
+  if (!task) return null
   return (
-    <button type="button" className={cx("chip", `is-${t.status}`)} title={STATUS_WORDS[t.status]} onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
-      <Dot status={t.status} />
-      <span className="chip-id">T{t.id}</span>
+    <button type="button" className={cx("chip", `is-${task.status}`)} title={STATUS_WORDS[task.status]} onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+      <Dot status={task.status} />
+      <span className="chip-id">T{task.id}</span>
       <span className="chip-title">
-        <Shown value={t.title} />
+        <Shown value={task.title} />
       </span>
-      {(t.owner || t.pr || t.status === "waiting") && (
+      {(task.owner || task.pr || task.status === "waiting") && (
         <span className="chip-meta">
-          {[t.owner && nickname(channel, t.owner), t.pr && `#${t.pr.number}`].filter(Boolean).join(" · ")}
-          {t.status === "waiting" && <span className="tone-decide">{t.owner || t.pr ? " · " : ""}needs you</span>}
+          {[task.owner && nickname(channel, task.owner), task.pr && `#${task.pr.number}`].filter(Boolean).join(" · ")}
+          {task.status === "waiting" && (
+            <span className="tone-decide">
+              {task.owner || task.pr ? " · " : ""}
+              {t("chat.cards.needs.you")}
+            </span>
+          )}
         </span>
       )}
     </button>
   )
 }
 
-const CHECKS: Record<PullRequest["checks"], string> = { pass: "checks passed", fail: "checks failed", running: "checks running", none: "no checks" }
+const CHECKS: Record<PullRequest["checks"], Key> = { pass: "chat.cards.checks.pass", fail: "chat.cards.checks.fail", running: "chat.cards.checks.running", none: "chat.cards.checks.none" }
 
 export function PrChip({ pr }: { pr: PullRequest }) {
   return (
@@ -56,7 +63,7 @@ export function PrChip({ pr }: { pr: PullRequest }) {
                       : ""
           }
         >
-          {pr.state === "merged" ? "merged" : pr.state === "closed" ? "closed" : CHECKS[pr.checks]}
+          {pr.state === "merged" ? t("chat.cards.merged") : pr.state === "closed" ? t("chat.cards.closed") : t(CHECKS[pr.checks])}
         </span>
       </span>
     </OutsideLink>

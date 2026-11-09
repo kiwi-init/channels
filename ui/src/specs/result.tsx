@@ -4,6 +4,7 @@ import { tickDoneWhen } from "@kiwi/core/state.ts"
 
 import { PrChip } from "~/chat/cards"
 import { DiffBar } from "~/github/parts"
+import { t } from "~/i18n/i18n"
 import { cx, Dot } from "~/kit/bits"
 import { ago } from "~/kit/time"
 import type { Channel, Spec, Task } from "~/model"
@@ -15,7 +16,7 @@ import { wordsPlain, wordsRaw } from "~/words"
 
 const whyCancelled = (task: Task, nicknames: ReadonlyMap<string, string>): string => {
   const note = task.notes.at(-1)
-  return note ? `: ${wordsPlain(note.text, nicknames)}` : ""
+  return note ? t("specs.result.cancelled.note", { note: wordsPlain(note.text, nicknames) }) : t("specs.result.cancelled")
 }
 
 export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
@@ -24,9 +25,9 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
   const [note, setNote] = useState("")
   const boxes = boxesOf(spec)
   const tasks = tasksOf(channel, spec)
-  const kept = tasks.filter((t) => !t.cancelled)
-  const tried = tasks.filter((t) => t.cancelled)
-  const prs = kept.flatMap((t) => (t.pr ? [t.pr] : []))
+  const kept = tasks.filter((task) => !task.cancelled)
+  const tried = tasks.filter((task) => task.cancelled)
+  const prs = kept.flatMap((task) => (task.pr ? [task.pr] : []))
   const adds = prs.reduce((n, p) => n + (p.additions ?? 0), 0)
   const dels = prs.reduce((n, p) => n + (p.deletions ?? 0), 0)
   const files = prs.reduce((n, p) => n + (p.files ?? 0), 0)
@@ -44,40 +45,40 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
           <p className="result-words">
             {spec.result
               ? spec.result.auto
-                ? `Closed by itself ${ago(spec.result.at)}: every box ticked, every task done`
-                : `${spec.result.verdict === "accepted" ? "Accepted" : "Dropped"} by ${nickname(channel, spec.result.by)} ${ago(spec.result.at)}`
+                ? t("specs.result.closed.by.itself", { when: ago(spec.result.at) })
+                : t(spec.result.verdict === "accepted" ? "specs.result.accepted.by" : "specs.result.dropped.by", { who: nickname(channel, spec.result.by), when: ago(spec.result.at) })
               : ready
-                ? `Delivered ${ago(Math.max(...kept.map((t) => t.updatedAt), spec.edited.at))}`
+                ? t("specs.result.delivered", { when: ago(Math.max(...kept.map((task) => task.updatedAt), spec.edited.at)) })
                 : spec.stage === "draft"
-                  ? "Nothing yet"
-                  : "Not delivered yet"}
+                  ? t("specs.result.nothing.yet")
+                  : t("specs.result.not.delivered")}
           </p>
           {(spec.result?.note || (ready && !spec.canJudge) || (!spec.result && !ready)) && (
             <p className="result-sub">
               {spec.result
                 ? spec.result.note
-                  ? `“${wordsPlain(spec.result.note, channel.nicknames)}”`
+                  ? t("specs.result.note", { note: wordsPlain(spec.result.note, channel.nicknames) })
                   : ""
                 : ready
-                  ? `It waits for ${nickname(channel, spec.by)}'s verdict.`
+                  ? t("specs.result.waits.verdict", { who: nickname(channel, spec.by) })
                   : spec.stage === "draft"
-                    ? "No work starts before the spec is approved."
-                    : "It lands here once every task is done and every box is ticked."}
+                    ? t("specs.result.no.work")
+                    : t("specs.result.lands.here")}
             </p>
           )}
         </div>
         {judge && !back && (
           <div className="result-actions">
             <button type="button" className="btn is-quiet is-danger-text" onClick={() => actions.judgeSpec(channel.code, spec.ask, "dropped")}>
-              Drop it
+              {t("specs.result.drop")}
             </button>
             {spec.approved && (
               <button type="button" className="btn" onClick={() => setBack(true)}>
-                Send back…
+                {t("specs.result.send.back")}
               </button>
             )}
             <button type="button" className={cx("btn", ready && "is-primary")} disabled={!ready && !spec.approved} onClick={() => actions.judgeSpec(channel.code, spec.ask, "accepted")}>
-              Accept
+              {t("specs.result.accept")}
             </button>
           </div>
         )}
@@ -88,13 +89,13 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
               rows={3}
               value={note}
               autoFocus
-              placeholder="What's missing or wrong? The agents start again from your note."
-              aria-label="Why it goes back"
+              placeholder={t("specs.result.back.placeholder")}
+              aria-label={t("specs.result.back.label")}
               onChange={(e) => setNote(e.target.value)}
             />
             <div className="result-actions">
               <button type="button" className="btn is-quiet" onClick={() => setBack(false)}>
-                Cancel
+                {t("specs.result.cancel")}
               </button>
               <button
                 type="button"
@@ -106,7 +107,7 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
                   setNote("")
                 }}
               >
-                Send it back
+                {t("specs.result.send.it.back")}
               </button>
             </div>
           </div>
@@ -115,9 +116,9 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
 
       <div className="result-cols">
         <div className="result-col">
-          <section className="result-part" aria-label="Done when">
+          <section className="result-part" aria-label={t("specs.result.done.when")}>
             <h2 className="inside-h">
-              <span className="inside-h-name">Done when</span>
+              <span className="inside-h-name">{t("specs.result.done.when")}</span>
             </h2>
             {boxes.length ? (
               <ul className="spec-boxes">
@@ -129,7 +130,7 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
                       role="checkbox"
                       aria-checked={b.done}
                       disabled={!!spec.result}
-                      title={b.done ? "Untick it" : "Tick it: it's proven"}
+                      title={b.done ? t("specs.result.untick") : t("specs.result.tick")}
                       onClick={() => tick(b.text, !b.done)}
                     >
                       <span className="spec-box" aria-hidden="true" />
@@ -141,24 +142,24 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
                 ))}
               </ul>
             ) : (
-              <p className="inside-none">No boxes: its tasks being done is the proof.</p>
+              <p className="inside-none">{t("specs.result.no.boxes")}</p>
             )}
           </section>
 
           {(tried.length > 0 || spec.backs.length > 0) && (
-            <section className="result-part" aria-label="Tried and sent back">
+            <section className="result-part" aria-label={t("specs.result.tried.label")}>
               <h2 className="inside-h">
-                <span className="inside-h-name">Tried along the way</span>
+                <span className="inside-h-name">{t("specs.result.tried")}</span>
               </h2>
               <ul className="result-tried">
-                {tried.map((t) => (
-                  <li key={t.id}>
-                    <span className="num">T{t.id}</span> <Shown value={t.title} /> <span className="dimmer">· cancelled{whyCancelled(t, channel.nicknames)}</span>
+                {tried.map((task) => (
+                  <li key={task.id}>
+                    <span className="num">T{task.id}</span> <Shown value={task.title} /> <span className="dimmer">{whyCancelled(task, channel.nicknames)}</span>
                   </li>
                 ))}
                 {spec.backs.map((b) => (
                   <li key={b.at}>
-                    Sent back by {nickname(channel, b.by)} {ago(b.at)}:{" "}
+                    {t("specs.result.sent.back.by", { who: nickname(channel, b.by), when: ago(b.at) })}{" "}
                     <span className="dimmer">
                       “<Shown value={b.note} />”
                     </span>
@@ -169,37 +170,40 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
           )}
         </div>
 
-        <section className="result-part result-proof" aria-label="The proof">
+        <section className="result-part result-proof" aria-label={t("specs.result.proof")}>
           <h2 className="inside-h">
-            <span className="inside-h-name">What came of it</span>
+            <span className="inside-h-name">{t("specs.result.came.of.it")}</span>
             {prs.length > 0 && (
               <span className="result-size num">
-                {merged}/{prs.length} merged · {files} files · <span className="tone-live">+{adds}</span> <span className="tone-alert">−{dels}</span>
+                {t("specs.result.size", { merged, total: prs.length, files })}
+                <span className="tone-live">+{adds}</span> <span className="tone-alert">−{dels}</span>
                 <DiffBar additions={adds} deletions={dels} />
               </span>
             )}
           </h2>
           {kept.length ? (
             <ul className="inside-tasks">
-              {kept.map((t) => (
-                <li key={t.id}>
-                  <button type="button" className="inside-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
-                    <Dot status={t.status} />
+              {kept.map((task) => (
+                <li key={task.id}>
+                  <button type="button" className="inside-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+                    <Dot status={task.status} />
                     <span className="inside-task-title">
-                      <Shown value={t.title} />
+                      <Shown value={task.title} />
                     </span>
                     <span className="inside-task-meta num">
-                      <span>T{t.id}</span>
-                      {t.owner && <span>{nickname(channel, t.owner)}</span>}
-                      {t.rounds.some((r) => r.result === "approved") && <span>reviewed by {nickname(channel, t.rounds.find((r) => r.result === "approved")?.judge ?? t.reviewer ?? "")}</span>}
+                      <span>T{task.id}</span>
+                      {task.owner && <span>{nickname(channel, task.owner)}</span>}
+                      {task.rounds.some((r) => r.result === "approved") && (
+                        <span>{t("specs.result.reviewed.by", { who: nickname(channel, task.rounds.find((r) => r.result === "approved")?.judge ?? task.reviewer ?? "") })}</span>
+                      )}
                     </span>
                   </button>
-                  {t.pr && <PrChip pr={t.pr} />}
+                  {task.pr && <PrChip pr={task.pr} />}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="inside-none">No tasks yet.</p>
+            <p className="inside-none">{t("specs.result.no.tasks")}</p>
           )}
         </section>
       </div>

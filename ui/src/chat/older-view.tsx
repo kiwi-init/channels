@@ -6,6 +6,7 @@ import { MessageRow } from "~/chat/message"
 import type { Older } from "~/chat/search-box"
 import { whereLabel } from "~/chat/search-hits"
 import { paintHits } from "~/chat/search-paint"
+import { t } from "~/i18n/i18n"
 import { Loading } from "~/kit/bits"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, OlderHit } from "~/model"
@@ -45,9 +46,9 @@ export function OlderView({ channel, older, onBack }: { channel: Channel; older:
   return (
     <div className="feed-wrap older">
       <div className="older-bar" role="status">
-        <span>Viewing older messages{hitAt ? ` around ${day(hitAt)}` : ""}</span>
+        <span>{hitAt ? t("chat.older.view.viewing.around", { day: day(hitAt) }) : t("chat.older.view.viewing")}</span>
         <button type="button" className="btn is-small" onClick={onBack}>
-          Back to latest
+          {t("chat.older.view.back")}
         </button>
       </div>
       <div className="feed">
@@ -55,7 +56,7 @@ export function OlderView({ channel, older, onBack }: { channel: Channel; older:
           {rows === undefined ? (
             <Loading />
           ) : rows === null || rows.length === 0 ? (
-            <p className="search-none">That part of the history isn't on this device yet.</p>
+            <p className="search-none">{t("chat.older.view.missing")}</p>
           ) : (
             rows.map((o, i) => (
               <Fragment key={o.seq}>

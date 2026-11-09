@@ -23,6 +23,8 @@ import {
   type Tool,
 } from "@kiwi/app/annotate.ts"
 import { compressImage, readBase64 } from "@kiwi/app/compress-image.ts"
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
@@ -42,16 +44,16 @@ const TOOL_PATHS: Record<Tool, string> = {
 const UNDO = "M5.5 4 3 6.5 5.5 9M3 6.5h6.5a3.25 3.25 0 0 1 0 6.5H8"
 const REDO = "M10.5 4 13 6.5 10.5 9M13 6.5H6.5a3.25 3.25 0 0 0 0 6.5H8"
 
-const TOOLS: { tool: Tool; label: string; key: string }[] = [
-  { tool: "move", label: "Move", key: "V" },
-  { tool: "pen", label: "Pen", key: "P" },
-  { tool: "arrow", label: "Arrow", key: "A" },
-  { tool: "box", label: "Box", key: "B" },
-  { tool: "text", label: "Text", key: "T" },
-  { tool: "hide", label: "Hide (blacks it out)", key: "H" },
+const TOOLS: { tool: Tool; label: Key; key: string }[] = [
+  { tool: "move", label: "chat.annotator.tool.move", key: "V" },
+  { tool: "pen", label: "chat.annotator.tool.pen", key: "P" },
+  { tool: "arrow", label: "chat.annotator.tool.arrow", key: "A" },
+  { tool: "box", label: "chat.annotator.tool.box", key: "B" },
+  { tool: "text", label: "chat.annotator.tool.text", key: "T" },
+  { tool: "hide", label: "chat.annotator.tool.hide", key: "H" },
 ]
 
-const INK_NAMES: Record<Ink, string> = { alert: "Red", decide: "Amber", accent: "Blue", ink: "Ink" }
+const INK_NAMES: Record<Ink, Key> = { alert: "chat.annotator.ink.red", decide: "chat.annotator.ink.amber", accent: "chat.annotator.ink.blue", ink: "chat.annotator.ink.ink" }
 const HIDE = "#000"
 const PAD = 24
 
@@ -181,15 +183,15 @@ async function burn(img: HTMLImageElement, marks: Mark[], name: string, mime: st
   canvas.width = base.width
   canvas.height = base.height
   const ctx = canvas.getContext("2d")
-  if (!ctx) throw new Error("this window can't draw the image")
+  if (!ctx) throw new Error(t("chat.annotator.cant.draw"))
   ctx.drawImage(img, 0, 0, base.width, base.height)
   ctx.scale(base.width / nw, base.height / nh)
   paint(ctx, marks, strokeWidth(nw, nh), textSize(nw, nh), color, font)
   const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"))
-  if (!png) throw new Error("this window can't draw the image")
+  if (!png) throw new Error(t("chat.annotator.cant.draw"))
   if ((mime === "image/png" || mime === "image/gif") && png.size <= MAX_IMAGE_BYTES) return { name: markedName(name, "image/png"), mime: "image/png", data: await readBase64(png) }
   const out = await compressImage(png, MAX_IMAGE_BYTES)
-  if (!out) throw new Error("the marked image couldn't be read")
+  if (!out) throw new Error(t("chat.annotator.cant.read"))
   return { name: markedName(name, out.mime), mime: out.mime, data: out.data }
 }
 
@@ -199,7 +201,7 @@ async function toPng(blob: Blob): Promise<Blob> {
   canvas.width = bitmap.width
   canvas.height = bitmap.height
   canvas.getContext("2d")?.drawImage(bitmap, 0, 0)
-  return new Promise((ok, fail) => canvas.toBlob((b) => (b ? ok(b) : fail(new Error("couldn't make a PNG"))), "image/png"))
+  return new Promise((ok, fail) => canvas.toBlob((b) => (b ? ok(b) : fail(new Error(t("chat.annotator.no.png")))), "image/png"))
 }
 
 function useStageSize(el: HTMLElement | null): { width: number; height: number } {
@@ -355,7 +357,7 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
 
   const current = async (): Promise<Upload> => {
     if (!marks.length) return { name, mime, data: dataOf(image.url) }
-    if (!img.current || !dialog.current) throw new Error("the image hasn't loaded")
+    if (!img.current || !dialog.current) throw new Error(t("chat.annotator.not.loaded"))
     return burn(img.current, marks, name, mime, dialog.current)
   }
   const download = async () => {
@@ -366,11 +368,11 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
       a.download = out.name
       a.click()
     } catch (err) {
-      toast(`Not saved: ${say(err)}`, "error")
+      toast(t("chat.annotator.not.saved", { why: say(err) }), "error")
     }
   }
   const copy = () => {
-    if (!navigator.clipboard) return toast("Not copied: this window has no clipboard", "error")
+    if (!navigator.clipboard) return toast(t("chat.annotator.no.clipboard"), "error")
     const png = current().then((out) => {
       const blob = base64Blob(out.data, out.mime)
       return out.mime === "image/png" ? blob : toPng(blob)
@@ -380,17 +382,17 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
         setCopied(true)
         window.setTimeout(() => setCopied(false), 1500)
       },
-      (err: unknown) => toast(`Not copied: ${say(err)}`, "error")
+      (err: unknown) => toast(t("chat.annotator.not.copied", { why: say(err) }), "error")
     )
   }
   const send = async () => {
     if (!onSend || !marks.length) return
     try {
       onSend(note.trim(), await current())
-      toast(`Sent to ${sender}`)
+      toast(t("chat.annotator.sent.to", { name: sender }))
       onClose()
     } catch (err) {
-      toast(`Not sent: ${say(err)}`, "error")
+      toast(t("chat.annotator.not.sent", { why: say(err) }), "error")
     }
   }
 
@@ -401,7 +403,7 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
     <dialog
       ref={dialog}
       className="annot"
-      aria-label={`Mark up ${name}`}
+      aria-label={t("chat.annotator.mark.up", { name })}
       onCancel={(e) => {
         e.preventDefault()
         if (!typing && !asking) leave()
@@ -419,16 +421,22 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
           </div>
         </div>
         <div className="annot-actions">
-          <button type="button" className="btn is-quiet annot-zoom" onClick={() => setFull((f) => !f)} aria-label={full ? "Fit to window" : "Actual size"}>
-            {full ? "100%" : `Fit · ${Math.round(scale * 100)}%`}
+          <button type="button" className="btn is-quiet annot-zoom" onClick={() => setFull((f) => !f)} aria-label={full ? t("chat.annotator.fit.window") : t("chat.annotator.actual.size")}>
+            {full ? "100%" : t("chat.annotator.fit.percent", { percent: Math.round(scale * 100) })}
           </button>
-          <button type="button" className="icon-btn" aria-label={copied ? "Copied" : "Copy image"} title={copied ? "Copied" : "Copy image"} onClick={copy}>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={copied ? t("chat.annotator.copied") : t("chat.annotator.copy.image")}
+            title={copied ? t("chat.annotator.copied") : t("chat.annotator.copy.image")}
+            onClick={copy}
+          >
             <Icon name={copied ? "check" : "copy"} />
           </button>
-          <button type="button" className="icon-btn" aria-label="Download" title="Download" onClick={() => void download()}>
+          <button type="button" className="icon-btn" aria-label={t("chat.annotator.download")} title={t("chat.annotator.download")} onClick={() => void download()}>
             <Icon name="download" />
           </button>
-          <button type="button" className="icon-btn annot-close" aria-label="Close" title="Close" autoFocus onClick={leave}>
+          <button type="button" className="icon-btn annot-close" aria-label={t("chat.annotator.close")} title={t("chat.annotator.close")} autoFocus onClick={leave}>
             <Icon name="close" />
           </button>
         </div>
@@ -462,7 +470,7 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
             {typing && natural && (
               <input
                 autoFocus
-                aria-label="Text on the image"
+                aria-label={t("chat.annotator.text.on.image")}
                 className="annot-typing"
                 value={typing.text}
                 onChange={(e) => setTyping({ ...typing, text: e.target.value })}
@@ -481,30 +489,30 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
       </div>
 
       <div className="annot-bar">
-        <div role="toolbar" aria-label="Markup tools" className="annot-tools">
-          {TOOLS.map((t) => (
+        <div role="toolbar" aria-label={t("chat.annotator.tools")} className="annot-tools">
+          {TOOLS.map((item) => (
             <button
-              key={t.tool}
+              key={item.tool}
               type="button"
               className="annot-tool"
-              aria-label={`${t.label} (${t.key})`}
-              title={`${t.label} (${t.key})`}
-              aria-pressed={tool === t.tool}
-              onClick={() => setTool(t.tool)}
+              aria-label={t("chat.annotator.tool.with.key", { tool: t(item.label), key: item.key })}
+              title={t("chat.annotator.tool.with.key", { tool: t(item.label), key: item.key })}
+              aria-pressed={tool === item.tool}
+              onClick={() => setTool(item.tool)}
             >
-              <Glyph d={TOOL_PATHS[t.tool]} />
+              <Glyph d={TOOL_PATHS[item.tool]} />
             </button>
           ))}
           <span className="annot-sep" aria-hidden="true" />
-          <div role="radiogroup" aria-label="Color" className="annot-inks">
+          <div role="radiogroup" aria-label={t("chat.annotator.color")} className="annot-inks">
             {INKS.map((k) => (
               <button
                 key={k}
                 type="button"
                 role="radio"
                 aria-checked={ink === k}
-                aria-label={INK_NAMES[k]}
-                title={INK_NAMES[k]}
+                aria-label={t(INK_NAMES[k])}
+                title={t(INK_NAMES[k])}
                 className="annot-ink"
                 style={{ background: `var(--${k})` }}
                 onClick={() => setInk(k)}
@@ -512,10 +520,10 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
             ))}
           </div>
           <span className="annot-sep" aria-hidden="true" />
-          <button type="button" className="annot-tool" aria-label="Undo" title="Undo" onClick={undo} disabled={!marks.length}>
+          <button type="button" className="annot-tool" aria-label={t("chat.annotator.undo")} title={t("chat.annotator.undo")} onClick={undo} disabled={!marks.length}>
             <Glyph d={UNDO} />
           </button>
-          <button type="button" className="annot-tool" aria-label="Redo" title="Redo" onClick={redo} disabled={!undone.length}>
+          <button type="button" className="annot-tool" aria-label={t("chat.annotator.redo")} title={t("chat.annotator.redo")} onClick={redo} disabled={!undone.length}>
             <Glyph d={REDO} />
           </button>
         </div>
@@ -537,23 +545,23 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
             className="annot-note"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder={marks.length ? `Reply to ${sender} with your marks…` : "Mark something up to reply with it"}
-            aria-label="Note with your marks"
+            placeholder={marks.length ? t("chat.annotator.reply.with.marks", { name: sender }) : t("chat.annotator.mark.to.reply")}
+            aria-label={t("chat.annotator.note")}
           />
-          <button type="submit" className="icon-btn annot-send" aria-label="Send with marks" disabled={!marks.length}>
+          <button type="submit" className="icon-btn annot-send" aria-label={t("chat.annotator.send")} disabled={!marks.length}>
             <Icon name="send" />
           </button>
         </form>
       )}
 
       {asking && (
-        <div role="alertdialog" aria-label="Discard your marks?" className="annot-ask">
-          <span>Discard {marks.length === 1 ? "your mark" : `your ${marks.length} marks`}?</span>
+        <div role="alertdialog" aria-label={t("chat.annotator.discard.ask")} className="annot-ask">
+          <span>{marks.length === 1 ? t("chat.annotator.discard.one") : t("chat.annotator.discard.many", { count: marks.length })}</span>
           <button type="button" className="btn is-quiet" onClick={() => setAsking(false)}>
-            Keep editing
+            {t("chat.annotator.keep.editing")}
           </button>
           <button type="button" className="btn is-danger" autoFocus onClick={onClose}>
-            Discard
+            {t("chat.annotator.discard")}
           </button>
         </div>
       )}

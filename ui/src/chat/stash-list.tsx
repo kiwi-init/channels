@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 
 import type { Stashed } from "~/chat/stash"
+import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 import { ago } from "~/kit/time"
 
 export default function StashList({ list, onTake, onDrop, onClose }: { list: readonly Stashed[]; onTake: (i: number) => void; onDrop: (i: number) => void; onClose: () => void }) {
@@ -28,7 +30,7 @@ export default function StashList({ list, onTake, onDrop, onClose }: { list: rea
         }
       }}
     >
-      <ul ref={rows} aria-label="Stashed drafts">
+      <ul ref={rows} aria-label={t("chat.stash.list.label")}>
         {list.map((s, i) => (
           <li key={`${s.at}-${i}`}>
             <button type="button" className="stash-row" onFocus={() => setOn(i)} onMouseEnter={() => setOn(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => onTake(i)}>
@@ -38,9 +40,7 @@ export default function StashList({ list, onTake, onDrop, onClose }: { list: rea
           </li>
         ))}
       </ul>
-      <p className="stash-foot">
-        <kbd>⌫</kbd> drops one
-      </p>
+      <p className="stash-foot">{tr("chat.stash.list.drops.one", { key: <kbd>⌫</kbd> })}</p>
     </div>
   )
 }

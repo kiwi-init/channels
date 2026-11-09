@@ -2,6 +2,8 @@ import "~/styles/specs.css"
 
 import type { CSSProperties } from "react"
 
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
@@ -27,7 +29,7 @@ export function SpecCard({ channel, spec }: { channel: Channel; spec: Spec }) {
     <div className={cx("spec-card", `is-${spec.stage}`, spec.changed && "is-changed")}>
       <button type="button" className="spec-card-main" onClick={() => open(spec.stage === "delivered" ? "result" : spec.stage === "working" ? "inside" : "spec")}>
         <SpecMark spec={spec} />
-        <span className="spec-card-kind">Spec</span>
+        <span className="spec-card-kind">{t("specs.card.kind")}</span>
         <span className="spec-card-title">
           <Shown value={spec.title} />
         </span>
@@ -40,17 +42,17 @@ export function SpecCard({ channel, spec }: { channel: Channel; spec: Spec }) {
         <span className="spec-card-meta">
           <span className={line.tone}>{line.word}</span>
           <span>{line.line}</span>
-          {said > 0 && <span className="num">{said === 1 ? "1 comment" : `${said} comments`}</span>}
+          {said > 0 && <span className="num">{t("specs.card.comments", { count: said })}</span>}
         </span>
       </button>
     </div>
   )
 }
 
-const NEED_VERB: Record<SpecAsk["why"], string> = {
-  approve: "wrote a spec for you to approve",
-  changed: "changed a spec you approved",
-  result: "delivered what a spec asked for",
+const NEED_VERB: Record<SpecAsk["why"], Key> = {
+  approve: "specs.card.need.approve",
+  changed: "specs.card.need.changed",
+  result: "specs.card.need.result",
 }
 
 export function SpecNeedCard({ channel, ask }: { channel: Channel; ask: SpecAsk }) {
@@ -60,13 +62,13 @@ export function SpecNeedCard({ channel, ask }: { channel: Channel; ask: SpecAsk 
   const by = ask.why === "result" ? (workersOf(channel, spec)[0] ?? tasksOf(channel, spec).at(-1)?.owner ?? spec.edited.by) : spec.edited.by
   const boxes = boxesOf(spec)
   return (
-    <article className="needs-card is-open spec-need" aria-label={`${nickname(channel, by)} ${NEED_VERB[ask.why]}`}>
+    <article className="needs-card is-open spec-need" aria-label={t("specs.card.need.label", { who: nickname(channel, by), verb: t(NEED_VERB[ask.why]) })}>
       <header className="needs-head">
         <Avatar person={faceOf(channel, by)} size="sm" />
         <button type="button" className="needs-name" onClick={() => go({ to: "modal", modal: { kind: "person", name: by } })}>
           {nickname(channel, by)}
         </button>
-        <span className="needs-verb">{NEED_VERB[ask.why]}</span>
+        <span className="needs-verb">{t(NEED_VERB[ask.why])}</span>
         <span className="needs-meta">
           <time className="needs-time" dateTime={new Date(ask.at).toISOString()}>
             {ago(ask.at)}
@@ -97,29 +99,29 @@ export function SpecNeedCard({ channel, ask }: { channel: Channel; ask: SpecAsk 
         {ask.why === "approve" ? (
           <>
             <button type="button" className="btn is-primary" onClick={() => actions.approveSpec(channel.code, spec.ask, spec.v)}>
-              Approve
+              {t("specs.card.approve")}
             </button>
             <button type="button" className="btn" onClick={() => go({ to: "spec", ask: spec.ask, part: "spec" })}>
-              Read and comment
+              {t("specs.card.read.and.comment")}
             </button>
-            <span className="spec-need-hint">It starts when an agent is free.</span>
+            <span className="spec-need-hint">{t("specs.card.starts.when.free")}</span>
           </>
         ) : ask.why === "changed" ? (
           <>
             <button type="button" className="btn is-primary" onClick={() => go({ to: "spec", ask: spec.ask, part: "spec" })}>
-              See what changed
+              {t("specs.card.see.changes")}
             </button>
             <button type="button" className="btn" onClick={() => actions.approveSpec(channel.code, spec.ask, spec.v)}>
-              Approve the change
+              {t("specs.card.approve.change")}
             </button>
           </>
         ) : (
           <>
             <button type="button" className="btn is-primary" onClick={() => go({ to: "spec", ask: spec.ask, part: "result" })}>
-              Open the result
+              {t("specs.card.open.result")}
             </button>
             <button type="button" className="btn" onClick={() => actions.judgeSpec(channel.code, spec.ask, "accepted")}>
-              Accept
+              {t("specs.card.accept")}
             </button>
           </>
         )}
