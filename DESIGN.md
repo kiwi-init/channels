@@ -12,7 +12,7 @@ Canonical sources: `ui/src/styles/tokens.css` (`:root`), `ui/src/theme/`
 
 ## 1. Identity in one line
 
-Quiet and fast. A warm near-black canvas, Cinder Peak (white in light), ink
+Quiet and fast. A near-black canvas, Channels Dark (Channels Light in light), ink
 for what matters and greys for the rest, the system font for what people read and
 Paper Mono for the machine's words (times, ids, counts, code). No glass, no
 blur, no gradients for show. Colour means a state, never decoration.
@@ -30,44 +30,45 @@ blur, no gradients for show. Colour means a state, never decoration.
   the same in every theme, except `float` and `shadow-float`, which each
   side sets (§5).
 - Settings → Appearance picks system / light / dark, and a theme for each
-  side. Built in (`channels.ts`): Cinder Peak (`cinder-peak`, the default
-  dark), OLED Black (`channels-oled`, true black), Channels Dark (`#111113`)
-  and Channels Light (the default light), then the Rex themes
+  side. Built in (`channels.ts`): Channels Dark (`channels-dark`, the default
+  dark), Cinder Peak (`cinder-peak`, warm), OLED Black (`channels-oled`, true
+  black) and Channels Light (the default light), then the Rex themes
   (`rex-themes.ts`, loaded only when one is picked) and the person's own.
   `system` leaves `data-theme` unset so the media query decides.
-- `tokens.css` paints the two defaults, Cinder Peak and Channels Light, with
-  no script. Every other theme, OLED Black included, is applied by
+- `tokens.css` paints the two defaults, Channels Dark and Channels Light, with
+  no script. Every other theme, Cinder Peak and OLED Black included, is applied by
   `applyTheme()`: every token set inline on `<html>`. A custom theme is 13 base colours (background, text,
   accent, success, warning, danger, info and six ANSI-style hues);
   `compose()` in `derive.ts` derives the whole token set from them.
-- A saved OLED Black moves to Cinder Peak once (`movedDark`, flag
-  `ui.prefs.cinder`), as a saved Channels Dark once moved to OLED Black
-  (`ui.prefs.oled`). Picking either again sticks; every other saved theme is
-  kept.
+- A saved Cinder Peak, the old default, moves to Channels Dark once
+  (`movedDark`, flag `ui.prefs.channels-dark`), after the earlier moves
+  (Channels Dark to OLED Black, `ui.prefs.oled`; OLED Black to Cinder Peak,
+  `ui.prefs.cinder`). Picking any of them again sticks; every other saved
+  theme is kept.
 
 ## 3. Color tokens
 
 The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 
-| Token | Dark (Cinder Peak) | OLED Black | Light |
+| Token | Dark (Channels Dark) | OLED Black | Light |
 |---|---|---|---|
-| `bg` (canvas, rail, sidebar, panels) | `#151011` | `#000000` | `#ffffff` |
-| `bg-2` (raised: dialogs, cards) | `#1c1718` | `#0c0c0d` | `#f7f7f8` |
-| `bg-3` (fills: buttons, fields, tiles, tracks) | `#252021` | `#18181a` | `#efeff1` |
-| `ink` | `#ddccc6` | `#ececef` | `#18181b` |
-| `ink-2` (secondary text, idle controls) | `#a39591` | `#a3a3ab` | `#56565e` |
-| `ink-3` (quiet floor: hints, placeholders, meta) | `#8a7e7b` | `#808089` | `#6c6c74` |
-| `line` / `line-2` / `line-3` (hairlines, light to strong) | ink 7.5 / 11.2 / 16.2% | white 8 / 11 / 15% | black 6 / 9 / 13% |
-| `wash` / `wash-2` (hover, pressed, chosen) | ink 5.6 / 10% | white 4.5 / 8% | black 3.5 / 6% |
+| `bg` (canvas, rail, sidebar, panels) | `#111113` | `#000000` | `#ffffff` |
+| `bg-2` (raised: dialogs, cards) | `#18181b` | `#0c0c0d` | `#f7f7f8` |
+| `bg-3` (fills: buttons, fields, tiles, tracks) | `#212125` | `#18181a` | `#efeff1` |
+| `ink` | `#ececef` | `#ececef` | `#18181b` |
+| `ink-2` (secondary text, idle controls) | `#a3a3ab` | `#a3a3ab` | `#56565e` |
+| `ink-3` (quiet floor: hints, placeholders, meta) | `#808089` | `#808089` | `#6c6c74` |
+| `line` / `line-2` / `line-3` (hairlines, light to strong) | white 6 / 9 / 13% | white 8 / 11 / 15% | black 6 / 9 / 13% |
+| `wash` / `wash-2` (hover, pressed, chosen) | white 4.5 / 8% | white 4.5 / 8% | black 3.5 / 6% |
 | `scrim` (under a dialog) | black 55% | black 70% | black 22% |
-| `on-ink` (text on an `ink` fill) | `#151011` | `#000000` | `#ffffff` |
-| `accent`, `link` | `#ff6b4a` | `#8ab4ff` | `#1a56db` |
+| `on-ink` (text on an `ink` fill) | `#111113` | `#000000` | `#ffffff` |
+| `accent`, `link` | `#8ab4ff` | `#8ab4ff` | `#1a56db` |
 | `accent-wash` | accent 14% | accent 14% | accent 8% |
-| `live` (online, done, passed) | `#97ad72` | `#32d074` | `#1f9a55` |
-| `doing` (working, running) | `#9188c4` | `#5b9bff` | `#2f6fe4` |
-| `review` (in review) | `#d47a94` | `#b48cff` | `#7a4fd6` |
-| `decide` (needs you) and `decide-wash` | `#f0a04f`, 12% | `#f5b041`, 12% | `#a35a00`, 10% |
-| `alert` (failed, error, danger) and `alert-wash` | `#f25c4a`, 12% | `#ff6259`, 12% | `#d1342a`, 8% |
+| `live` (online, done, passed) | `#32d074` | `#32d074` | `#1f9a55` |
+| `doing` (working, running) | `#5b9bff` | `#5b9bff` | `#2f6fe4` |
+| `review` (in review) | `#b48cff` | `#b48cff` | `#7a4fd6` |
+| `decide` (needs you) and `decide-wash` | `#f5b041`, 12% | `#f5b041`, 12% | `#a35a00`, 10% |
+| `alert` (failed, error, danger) and `alert-wash` | `#ff6259`, 12% | `#ff6259`, 12% | `#d1342a`, 8% |
 
 - `selection` is ink at 28%. `white` is for a knob or a glyph on a coloured
   fill.
@@ -77,7 +78,7 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 - `c-red … c-brown` are the member colours: a person's initials and the
   tint behind them (`.av[data-color]`, 18%). They never colour chrome.
 - `h-claude, h-codex, h-gemini, h-opencode` colour the harness badge on an agent's face.
-- Channels Dark is the same set on `#111113` / `#18181b` / `#212125`.
+- Cinder Peak is the warm set on `#151011` / `#1c1718` / `#252021`, ink `#ddccc6`, accent `#ff6b4a`.
 
 ## 4. Typography
 
@@ -518,7 +519,7 @@ reach. Its look is the desktop's: §3's tokens on stock controls.
 - **Every place in the channel.** Rooms, direct threads (with people, with agents, between
   others) and task threads all open on the phone, each as one conversation screen.
 - **Type, colour, faces.** SF Pro through Dynamic Type (`Step`). `Tone` carries §3's tokens
-  for the theme picked in Settings > Appearance (every desktop theme; Cinder Peak and Channels
+  for the theme picked in Settings > Appearance (every desktop theme; Channels Dark and Channels
   Light by default). `bubbleMine` is ink with `onInk` text,
   `bubbleThem` the raised fill; the accent is for actions and links only. Round buttons, the
   name pill, the composer and the search capsule are Liquid Glass tinted with `raised`
@@ -586,7 +587,7 @@ reach. Its look is the desktop's: §3's tokens on stock controls.
    add a class to the mono rule if it shows the machine's words.
 2. Build from `ui/src/kit/` (`Modal`, `Field`, `Seg`, `Toggle`, `Avatar`,
    `Dot`, `Count`, `Icon`) before writing a new control.
-3. Check it in dark and light, in Cinder Peak, OLED Black and one Rex theme, at Large
+3. Check it in dark and light, in Channels Dark, Cinder Peak, OLED Black and one Rex theme, at Large
    text and with reduced motion.
 4. Add it to `ui/src/demo/shots.ts` and look at it:
    `bun scripts/shoot-app.ts --dist ui/dist --only <name> --theme dark,light`,

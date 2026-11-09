@@ -7,11 +7,11 @@ export type ThemePrefs = Pick<Prefs, "theme" | "darkTheme" | "lightTheme" | "cus
 
 type Owned = Pick<Prefs, "darkTheme" | "lightTheme" | "customThemes">
 
-const fallback = (a: Appearance): ColorTheme => (a === "dark" ? CINDER_PEAK : CHANNELS_LIGHT)
+const fallback = (a: Appearance): ColorTheme => (a === "dark" ? CHANNELS_DARK : CHANNELS_LIGHT)
 
-export const isBuiltin = (t: ColorTheme): boolean => t.id === CINDER_PEAK.id || t.id === CHANNELS_LIGHT.id
+export const isBuiltin = (t: ColorTheme): boolean => t.id === CHANNELS_DARK.id || t.id === CHANNELS_LIGHT.id
 
-const BUILT = [CINDER_PEAK, CHANNELS_OLED, CHANNELS_DARK, CHANNELS_LIGHT]
+const BUILT = [CHANNELS_DARK, CINDER_PEAK, CHANNELS_OLED, CHANNELS_LIGHT]
 
 const OURS = BUILT.map((t) => t.id)
 
@@ -72,16 +72,17 @@ export function baseOf(c: Colors): Required<ThemeBase> {
   }
 }
 
-export function movedDark(saved: string, moved: { oled: boolean; cinder: boolean }): string {
+export function movedDark(saved: string, moved: { oled: boolean; cinder: boolean; channels: boolean }): string {
   const was = !moved.oled && saved === CHANNELS_DARK.id ? CHANNELS_OLED.id : saved
-  return !moved.cinder && was === CHANNELS_OLED.id ? CINDER_PEAK.id : was
+  const then = !moved.cinder && was === CHANNELS_OLED.id ? CINDER_PEAK.id : was
+  return !moved.channels && then === CINDER_PEAK.id ? CHANNELS_DARK.id : then
 }
 
 export function savedTheme(p: Owned, t: CustomTheme): Owned {
   const customThemes = p.customThemes.some((c) => c.id === t.id) ? p.customThemes.map((c) => (c.id === t.id ? t : c)) : [...p.customThemes, t]
   return {
     customThemes,
-    darkTheme: t.appearance === "dark" ? t.id : p.darkTheme === t.id ? CINDER_PEAK.id : p.darkTheme,
+    darkTheme: t.appearance === "dark" ? t.id : p.darkTheme === t.id ? CHANNELS_DARK.id : p.darkTheme,
     lightTheme: t.appearance === "light" ? t.id : p.lightTheme === t.id ? CHANNELS_LIGHT.id : p.lightTheme,
   }
 }
@@ -89,7 +90,7 @@ export function savedTheme(p: Owned, t: CustomTheme): Owned {
 export function deletedTheme(p: Owned, id: string): Owned {
   return {
     customThemes: p.customThemes.filter((c) => c.id !== id),
-    darkTheme: p.darkTheme === id ? CINDER_PEAK.id : p.darkTheme,
+    darkTheme: p.darkTheme === id ? CHANNELS_DARK.id : p.darkTheme,
     lightTheme: p.lightTheme === id ? CHANNELS_LIGHT.id : p.lightTheme,
   }
 }

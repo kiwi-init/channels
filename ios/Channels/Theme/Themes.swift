@@ -57,7 +57,7 @@ final class Swatch: @unchecked Sendable {
 @Observable
 final class ThemeStore {
     static let shared = ThemeStore()
-    static let darkDefault = "cinder-peak"
+    static let darkDefault = "channels-dark"
     static let lightDefault = "channels-light"
 
     let all: [ThemeDef]
