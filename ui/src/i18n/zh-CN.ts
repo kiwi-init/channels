@@ -4,8 +4,12 @@ import chatFeed from "~/i18n/zh-CN/chat-feed"
 import live from "~/i18n/zh-CN/live"
 import settings from "~/i18n/zh-CN/settings"
 import specs from "~/i18n/zh-CN/specs"
+import modals from "~/i18n/zh-CN/modals"
+import needs from "~/i18n/zh-CN/needs"
+import shell from "~/i18n/zh-CN/shell"
+import github from "~/i18n/zh-CN/github"
 
-export const covers = ["chat.", "live.", "settings.", "specs.", "tasks.", "usage."]
+export const covers = ["chat.", "github.", "kit.", "live.", "modals.", "needs.", "palette.", "panels.", "settings.", "shell.", "specs.", "start.", "tasks.", "usage."]
 
 export default {
   ...chatCompose,
@@ -13,6 +17,10 @@ export default {
   ...live,
   ...settings,
   ...specs,
+  ...modals,
+  ...needs,
+  ...shell,
+  ...github,
   "settings.language": "语言",
   "settings.language.system": "跟随系统",
   "usage.today": "今日消息",

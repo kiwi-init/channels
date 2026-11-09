@@ -39,6 +39,8 @@ export default {
   "specs.doc.comment": "コメント",
   "specs.doc.line.comments": "仕様の行へのコメント",
   "specs.doc.reply": "返信",
+  "specs.doc.comment.actions": "コメントの操作",
+  "specs.doc.open.thread": "スレッドで開く",
   "specs.doc.show.comment": "このコメントを表示",
   "specs.doc.show.line": "仕様でこの行を表示",
   "specs.doc.diff.label": "承認後の変更点",

@@ -19,7 +19,7 @@ function picksFor(id: string): Picks {
   return made
 }
 
-type Pickable = { key: string; preventDefault(): void; stopPropagation(): void }
+type Pickable = { key: string; ctrlKey?: boolean; metaKey?: boolean; preventDefault(): void; stopPropagation(): void }
 
 export type Suggest = {
   id: string
@@ -43,27 +43,34 @@ export function useSuggest({
   text,
   area,
   onText,
+  withFormer = false,
 }: {
   channel: Channel
   id: string
   text: string
   area: RefObject<HTMLTextAreaElement | null>
   onText: (value: string, at: number) => void
+  withFormer?: boolean
 }): Suggest {
   const [caret, setCaret] = useState(text.length)
   const [pick, setPick] = useState(0)
-  const [closed, setClosed] = useState(false)
+  const [closedOn, setClosedOn] = useState<string | null>(null)
+  const [seen, setSeen] = useState(text)
+  if (seen !== text) {
+    setSeen(text)
+    setClosedOn(null)
+  }
+  const closed = closedOn !== null && closedOn === `${caret}:${text}`
   const typed = text.slice(0, caret)
   const query = closed ? undefined : MENTION.exec(typed)?.[2]
   const taskQuery = closed || query !== undefined ? undefined : TASK_REF.exec(typed)?.[2]
-  const people = query === undefined ? [] : peopleMatches(channel.people, query)
+  const people = query === undefined ? [] : peopleMatches(withFormer ? [...channel.people, ...(channel.former ?? [])] : channel.people, query)
   const tasks = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
   const mentions = useMemo(() => mentionNames(onePerPerson(channel.people), channel.former), [channel.people, channel.former])
 
   const moved = useCallback((at: number) => {
     setCaret(at)
     setPick(0)
-    setClosed(false)
   }, [])
   const insert = (before: string) => {
     onText(before + text.slice(caret), before.length)
@@ -86,7 +93,7 @@ export function useSuggest({
       setPick((pick + (e.key === "ArrowDown" ? 1 : count - 1)) % count)
       return true
     }
-    if (e.key === "Enter" || e.key === "Tab") {
+    if ((e.key === "Enter" && !e.ctrlKey && !e.metaKey) || e.key === "Tab") {
       e.preventDefault()
       const p = people[pick]
       const t = tasks[pick]
@@ -98,7 +105,7 @@ export function useSuggest({
     if (e.key === "Escape") {
       e.preventDefault()
       e.stopPropagation()
-      setClosed(true)
+      setClosedOn(`${caret}:${text}`)
       return true
     }
     return false

@@ -4,8 +4,12 @@ import chatFeed from "~/i18n/pt-BR/chat-feed"
 import live from "~/i18n/pt-BR/live"
 import settings from "~/i18n/pt-BR/settings"
 import specs from "~/i18n/pt-BR/specs"
+import modals from "~/i18n/pt-BR/modals"
+import needs from "~/i18n/pt-BR/needs"
+import shell from "~/i18n/pt-BR/shell"
+import github from "~/i18n/pt-BR/github"
 
-export const covers = ["chat.", "live.", "settings.", "specs.", "tasks.", "usage."]
+export const covers = ["chat.", "github.", "kit.", "live.", "modals.", "needs.", "palette.", "panels.", "settings.", "shell.", "specs.", "start.", "tasks.", "usage."]
 
 export default {
   ...chatCompose,
@@ -13,6 +17,10 @@ export default {
   ...live,
   ...settings,
   ...specs,
+  ...modals,
+  ...needs,
+  ...shell,
+  ...github,
   "settings.language": "Idioma",
   "settings.language.system": "Sistema",
   "usage.today": "Mensagens hoje",

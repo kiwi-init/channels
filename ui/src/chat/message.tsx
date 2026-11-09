@@ -31,7 +31,7 @@ const QuestionCard = lazy(() => import("~/chat/question-card"))
 const SpecCard = later(() => import("~/specs/card").then((m) => m.SpecCard))
 const BlockFilesView = later(() => import("~/chat/block-files").then((m) => m.BlockFilesView))
 
-const QUICK = ["👍", "🔥", "👀", "✅"]
+export const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
 
 function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
@@ -91,6 +91,50 @@ function Spot({ code, img }: { code: string; img: ImageSpot }) {
     <span ref={at} className="msg-image-spot" title={img.alt} role="status">
       {img.state === "gone" ? t("chat.message.image.gone") : t("chat.message.image.loading")}
     </span>
+  )
+}
+
+export function Reacts({ channel, m }: { channel: Channel; m: Message }) {
+  const { actions } = useAct()
+  if (!m.reactions?.length) return null
+  return (
+    <div className="reacts">
+      {m.reactions.map((r) =>
+        isGifReaction(r.emoji) ? (
+          <Suspense key={r.emoji} fallback={null}>
+            <Gifs channel={channel} m={m} r={r} />
+          </Suspense>
+        ) : (
+          <button
+            key={r.emoji}
+            type="button"
+            className={cx("react", r.by.includes(channel.you) && "is-mine")}
+            title={r.by.map((b) => nickname(channel, b)).join(", ")}
+            aria-pressed={r.by.includes(channel.you)}
+            disabled={m.where.kind === "theirs"}
+            onClick={() => actions.react(channel.code, m.seq, r.emoji)}
+          >
+            {r.emoji} <span className="num">{r.by.length}</span>
+          </button>
+        )
+      )}
+    </div>
+  )
+}
+
+export function Unsent({ channel, m }: { channel: Channel; m: Message }) {
+  const { actions } = useAct()
+  if (m.failed === undefined) return null
+  return (
+    <p className="msg-failed" role="status" title={m.failed}>
+      {t("chat.message.not.sent")}
+      <button type="button" className="msg-failed-act" onClick={() => actions.retry(channel.code, m.seq)}>
+        {t("chat.message.retry")}
+      </button>
+      <button type="button" className="msg-failed-act" onClick={() => actions.discard(channel.code, m.seq)}>
+        {m.block !== undefined ? t("chat.message.back.to.draft") : t("chat.message.delete")}
+      </button>
+    </p>
   )
 }
 
@@ -252,17 +296,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </Suspense>
         )}
         {m.leftOut && <p className="msg-left-out left-out-why">{m.leftOut}</p>}
-        {m.failed !== undefined && (
-          <p className="msg-failed" role="status" title={m.failed}>
-            {t("chat.message.not.sent")}
-            <button type="button" className="msg-failed-act" onClick={() => actions.retry(channel.code, m.seq)}>
-              {t("chat.message.retry")}
-            </button>
-            <button type="button" className="msg-failed-act" onClick={() => actions.discard(channel.code, m.seq)}>
-              {m.block !== undefined ? t("chat.message.back.to.draft") : t("chat.message.delete")}
-            </button>
-          </p>
-        )}
+        <Unsent channel={channel} m={m} />
         {m.task !== undefined && <TaskChip channel={channel} id={m.task} />}
         {spec && !inThread && (
           <Suspense fallback={null}>
@@ -282,29 +316,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             <QuestionCard channel={channel} ask={ask} />
           </Suspense>
         )}
-        {(m.reactions?.length ?? 0) > 0 && (
-          <div className="reacts">
-            {m.reactions?.map((r) =>
-              isGifReaction(r.emoji) ? (
-                <Suspense key={r.emoji} fallback={null}>
-                  <Gifs channel={channel} m={m} r={r} />
-                </Suspense>
-              ) : (
-                <button
-                  key={r.emoji}
-                  type="button"
-                  className={cx("react", r.by.includes(channel.you) && "is-mine")}
-                  title={r.by.map((b) => nickname(channel, b)).join(", ")}
-                  aria-pressed={r.by.includes(channel.you)}
-                  disabled={m.where.kind === "theirs"}
-                  onClick={() => actions.react(channel.code, m.seq, r.emoji)}
-                >
-                  {r.emoji} <span className="num">{r.by.length}</span>
-                </button>
-              )
-            )}
-          </div>
-        )}
+        <Reacts channel={channel} m={m} />
         {m.receipt && (
           <p className="msg-receipt" aria-live="polite">
             {m.receipt}

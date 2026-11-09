@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useState, type CSSProperties, type ReactNode } from "react"
 
+import { t } from "~/i18n/i18n"
 import { useMoved } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
@@ -51,9 +52,28 @@ export function Avatar({
   )
 }
 
-export const STATUS_WORDS: Record<TaskStatus, string> = { todo: "to do", doing: "working", review: "in review", landing: "landing", done: "done", waiting: "needs you" }
+export const STATUS_WORDS: Readonly<Record<TaskStatus, string>> = {
+  get todo() {
+    return t("kit.bits.status.todo")
+  },
+  get doing() {
+    return t("kit.bits.status.doing")
+  },
+  get review() {
+    return t("kit.bits.status.review")
+  },
+  get landing() {
+    return t("kit.bits.status.landing")
+  },
+  get done() {
+    return t("kit.bits.status.done")
+  },
+  get waiting() {
+    return t("kit.bits.status.waiting")
+  },
+}
 
-export const statusWord = (t: { status: TaskStatus; cancelled?: boolean }): string => (t.cancelled ? "cancelled" : STATUS_WORDS[t.status])
+export const statusWord = (task: { status: TaskStatus; cancelled?: boolean }): string => (task.cancelled ? t("kit.bits.cancelled") : STATUS_WORDS[task.status])
 
 export function Dot({ status }: { status: TaskStatus }) {
   const moved = useMoved(status)
@@ -106,7 +126,7 @@ export function Loading() {
   const late = useLate(true, 400)
   return (
     <div className="empty" role="status">
-      {late && <p className="empty-text">Loading…</p>}
+      {late && <p className="empty-text">{t("kit.bits.loading")}</p>}
     </div>
   )
 }

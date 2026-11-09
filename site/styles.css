@@ -114,6 +114,16 @@ body[data-sky] .top .nav:hover {
   color: var(--on-scene);
 }
 
+body[data-sky] .top .langs > summary {
+  color: var(--on-scene-2);
+  text-shadow: 0 0 16px var(--scene-glow);
+}
+
+body[data-sky] .top .langs > summary:hover,
+body[data-sky] .top .langs[open] > summary {
+  color: var(--on-scene);
+}
+
 .landing {
   position: relative;
   isolation: isolate;

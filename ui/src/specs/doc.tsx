@@ -3,28 +3,23 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 
 import { useNames, useTaskIds } from "~/chat/conversation"
 import { Body } from "~/chat/body"
-import { MessageImages } from "~/chat/message"
-import { preview } from "~/chat/preview"
 import { QuotePick } from "~/chat/quote-pick"
 import { jumpTo } from "~/chat/reply"
 import { type Words, wordsPlain, wordsRaw, wrote } from "~/words"
 import { t } from "~/i18n/i18n"
-import { Avatar, cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
-import { clock } from "~/kit/time"
+import { cx } from "~/kit/bits"
 import type { Channel, Spec } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
-import { commentsOf, faceOf, lineDiff, quoteIn, splitQuote, type Comment } from "~/specs/read"
+import { commentsOf, lineDiff, quoteIn, type Comment } from "~/specs/read"
 import { CommentBox, type CommentReply } from "~/specs/comment-box"
+import { CommentItem, openImage } from "~/specs/comment-item"
 
 const WIDE_PX = 940
 const TALK_SHOWN = 3
 const DIFF_CONTEXT = 1
 const BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, td, th, pre"
 const COMMENT_TEXT = ".spec-comment .md"
-
-const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
 
 function shownText(spec: Spec): Words {
   const lines = wordsRaw(spec.text).split("\n")
@@ -239,57 +234,6 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
         </aside>
       )}
     </div>
-  )
-}
-
-function CommentItem({
-  channel,
-  c,
-  names,
-  tasks,
-  showQuote,
-  onQuote,
-  onReply,
-  onRe,
-}: {
-  channel: Channel
-  c: Comment
-  names: ReadonlyMap<string, string>
-  tasks: ReadonlySet<number>
-  showQuote?: boolean
-  onQuote?: () => void
-  onReply?: () => void
-  onRe?: () => void
-}) {
-  const to = c.re === undefined ? undefined : channel.messages.find((m) => m.seq === c.re)
-  return (
-    <article className={cx("spec-comment", c.m.pending && "is-pending")} data-seq={c.m.seq}>
-      <header className="spec-comment-head">
-        <Avatar person={faceOf(channel, c.m.from)} size="sm" />
-        <span className="spec-comment-name">{nickname(channel, c.m.from)}</span>
-        <time className="spec-comment-time">{clock(c.m.at)}</time>
-        {onReply && !c.m.pending && (
-          <button type="button" className="spec-comment-reply" aria-label={t("specs.doc.reply")} title={t("specs.doc.reply")} onClick={onReply}>
-            <Icon name="reply" size={13} />
-          </button>
-        )}
-      </header>
-      {to && onRe && (
-        <button type="button" className="spec-comment-quote is-link" title={t("specs.doc.show.comment")} onClick={onRe}>
-          <span>
-            <b>{nickname(channel, to.from)}</b> {c.excerpt ? `“${preview(c.excerpt)}”` : preview(splitQuote(wordsRaw(to.text)).text)}
-          </span>
-        </button>
-      )}
-      {showQuote && c.quote && <p className="spec-comment-quote">{c.quote}</p>}
-      {onQuote && c.quote && (
-        <button type="button" className="spec-comment-quote is-link" title={t("specs.doc.show.line")} onClick={onQuote}>
-          <span>{c.quote}</span>
-        </button>
-      )}
-      {c.text.trim() && <Body text={wrote(c.text)} seq={c.m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />}
-      {c.m.images && <MessageImages code={channel.code} images={c.m.images} open={openImage} />}
-    </article>
   )
 }
 

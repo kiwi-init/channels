@@ -13,6 +13,30 @@ const UI = join(ROOT, "ui");
 const DEMO = join(SITE, "demo");
 const SCENE = join(SITE, "afk", "scene.html");
 const REPO = "https://github.com/kiwi-init/channels";
+const ORIGIN = "https://channels.kiwiinit.com";
+
+const I18N = join(SITE, "i18n");
+const PRODUCT_NAMES = new Set(["Channels", "Kiwi"]);
+
+interface Lang {
+  dir: string;
+  tag: string;
+  name: string;
+  code: string;
+  label: string;
+  docsNote: string;
+}
+
+export const LANGS: readonly Lang[] = [
+  { dir: "", tag: "en", name: "English", code: "EN", label: "Language", docsNote: "" },
+  { dir: "pt-br", tag: "pt-BR", name: "Português (Brasil)", code: "PT", label: "Idioma", docsNote: "Documentação só em inglês por enquanto" },
+  { dir: "ja", tag: "ja", name: "日本語", code: "JA", label: "言語", docsNote: "ドキュメントは現在英語のみです" },
+  { dir: "ko", tag: "ko", name: "한국어", code: "KO", label: "언어", docsNote: "문서는 현재 영어로만 제공됩니다" },
+  { dir: "zh-cn", tag: "zh-CN", name: "简体中文", code: "ZH", label: "语言", docsNote: "文档暂时只有英文版" },
+];
+const ENGLISH = LANGS[0] as Lang;
+
+const home = (lang: Lang): string => (lang.dir ? `/${lang.dir}/` : "/");
 
 type Node = {
   type: string;
@@ -288,6 +312,20 @@ function pagerHtml(pages: Page[], at: number): string {
 
 const THEME_PICK = `<div class="theme" role="group" aria-label="Theme"><button type="button" data-theme-pick="system" aria-label="Match the system" title="Match the system"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="2.75" width="12.5" height="8.5" rx="1.5"></rect><path d="M5.5 14h5M8 11.25V14"></path></svg></button><button type="button" data-theme-pick="light" aria-label="Light" title="Light"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.75"></circle><path d="M8 1.25v1.5M8 13.25v1.5M1.25 8h1.5M13.25 8h1.5M3.23 3.23l1.06 1.06M11.71 11.71l1.06 1.06M3.23 12.77l1.06-1.06M11.71 4.29l1.06-1.06"></path></svg></button><button type="button" data-theme-pick="dark" aria-label="Dark" title="Dark"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.6 10.1A5.75 5.75 0 0 1 5.9 2.4a5.75 5.75 0 1 0 7.7 7.7Z"></path></svg></button></div>`;
 
+export function alternatesHtml(): string {
+  const of = (lang: Lang) => `${ORIGIN}${home(lang)}`;
+  return [...LANGS.map((l) => `<link rel="alternate" hreflang="${l.tag}" href="${of(l)}" />`), `<link rel="alternate" hreflang="x-default" href="${of(ENGLISH)}" />`].join("\n    ");
+}
+
+export function switcherHtml(here: Lang, docsPath = ""): string {
+  const links = LANGS.map((l) => {
+    const href = docsPath && l === ENGLISH ? `/${docsPath}` : home(l);
+    const note = docsPath && l.docsNote ? `<span class="langs-note">${escape(l.docsNote)}</span>` : "";
+    return `<li><a href="${href}" hreflang="${l.tag}" lang="${l.tag}" data-lang-pick="${l.dir || "en"}"${l === here ? ' aria-current="true"' : ""}>${escape(l.name)}${note}</a></li>`;
+  }).join("");
+  return `<details class="langs"><summary aria-label="${escape(`${here.label}: ${here.name}`)}" title="${escape(here.name)}"><span class="langs-name">${escape(here.name)}</span><span class="langs-code" aria-hidden="true">${here.code}</span></summary><ul>${links}</ul></details>`;
+}
+
 function pageHtml(pages: Page[], at: number, body: string, figures: Set<string>): string {
   const page = pages[at];
   if (!page) throw new Error(`no page ${at}`);
@@ -314,6 +352,7 @@ function pageHtml(pages: Page[], at: number, body: string, figures: Set<string>)
     <link rel="stylesheet" href="/docs.css" />
     <link rel="stylesheet" href="/docs/figures.css" />
     <script src="/theme.js"></script>
+    <script src="/lang.js"></script>
     <script type="module" src="/docs.js"></script>${scripts}
   </head>
   <body>
@@ -321,8 +360,9 @@ function pageHtml(pages: Page[], at: number, body: string, figures: Set<string>)
       <a class="brand" href="/"><img src="/icon.svg" alt="" width="22" height="22" />Channels</a>
       <a class="section" href="/docs/">Docs</a>
       <span class="grow"></span>
-      <a class="quiet" href="/">Download</a>
+      <a class="quiet download" href="/">Download</a>
       <a class="quiet gh" href="${REPO}" aria-label="Source on GitHub" title="Source on GitHub">${GITHUB_ICON}</a>
+      ${switcherHtml(ENGLISH, `docs/${page.slug}`)}
       ${THEME_PICK}
     </header>
     <div class="docs">
@@ -337,6 +377,48 @@ ${body}
   </body>
 </html>
 `;
+}
+
+export const wordsOf = (lang: Lang): Record<string, string> => (lang.dir ? JSON.parse(readFileSync(join(I18N, `${lang.dir}.json`), "utf8")) : {});
+
+const TEXT_SPOTS = [(t: string) => `>${t}<`, ...["alt", "title", "aria-label", "content"].map((name) => (t: string) => ` ${name}="${t}"`)];
+
+function translate(html: string, words: Record<string, string>): string {
+  let out = html;
+  for (const [en, to] of Object.entries(words).sort(([a], [b]) => b.length - a.length)) {
+    for (const spot of TEXT_SPOTS) out = out.replaceAll(spot(en), () => spot(to));
+  }
+  return out;
+}
+
+export function landingWords(html: string): string[] {
+  const body = html.replace(/<!-- langs -->[\s\S]*?<!-- \/langs -->/, "").replace(/<(script|style|pre|code)\b[^>]*>[\s\S]*?<\/\1>/g, "");
+  const texts = [...body.matchAll(/>([^<>]+)</g), ...body.matchAll(/\s(?:alt|title|aria-label)="([^"]+)"/g), ...body.matchAll(/name="description" content="([^"]+)"/g)].map((m) => m[1] ?? "");
+  return [...new Set(texts.map((t) => t.replace(/\s+/g, " ").trim()))].filter((t) => /[A-Za-z]{2}/.test(t) && !PRODUCT_NAMES.has(t));
+}
+
+export function landingHtml(english: string, lang: Lang): string {
+  const words = translate(english, wordsOf(lang));
+  const html = (lang.dir ? words.replace(/href="\/"/g, `href="${home(lang)}"`) : words)
+    .replace('<html lang="en">', `<html lang="${lang.tag}">`)
+    .replace(/<!-- alternates -->[\s\S]*?<!-- \/alternates -->/, `<!-- alternates -->\n    ${alternatesHtml()}\n    <!-- /alternates -->`)
+    .replace(/<!-- langs -->[\s\S]*?<!-- \/langs -->/, `<!-- langs -->${switcherHtml(lang)}<!-- /langs -->`);
+  if (!html.includes(`hreflang="${lang.tag}"`) || !html.includes('class="langs"')) throw new Error("site/index.html lost its <!-- alternates --> or <!-- langs --> marks");
+  return html;
+}
+
+function writeLanding(): string[] {
+  const index = join(SITE, "index.html");
+  const english = readFileSync(index, "utf8");
+  const fresh = landingHtml(english, ENGLISH);
+  if (fresh !== english) throw new Error("site/index.html's language marks are stale: run `bun scripts/docs-site.ts --landing` and commit it");
+  return LANGS.filter((l) => l.dir).map((lang) => {
+    const dir = join(SITE, lang.dir);
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "index.html"), landingHtml(english, lang));
+    return relative(ROOT, join(dir, "index.html"));
+  });
 }
 
 async function build(): Promise<string[]> {
@@ -359,6 +441,7 @@ async function build(): Promise<string[]> {
       copyFileSync(from, join(OUT, img));
     }
   }
+  written.push(...writeLanding());
   written.push(...(await writeFigures()));
   written.push(await buildScene());
   return written;
@@ -427,7 +510,7 @@ function serve(port: number): void {
         if (run.exitCode !== 0) return new Response(run.stderr.toString(), { status: 500 });
         return new Response(run.stdout.toString(), { headers: { ...headersFor(pathname), "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
       }
-      if ((pathname === "/" || pathname.startsWith("/docs")) && !extname(pathname)) {
+      if ((pathname === "/" || pathname.startsWith("/docs") || LANGS.some((l) => l.dir && pathname.startsWith(`/${l.dir}/`))) && !extname(pathname)) {
         const run = Bun.spawnSync(["bun", import.meta.path, "--draft"], { cwd: ROOT, stderr: "pipe" });
         if (run.exitCode !== 0) return new Response(run.stderr.toString(), { status: 500 });
       }
@@ -449,7 +532,11 @@ async function previewHtml(name: string): Promise<string> {
 if (import.meta.main) {
   const at = process.argv.indexOf("--serve");
   const figure = process.argv.indexOf("--figure");
-  if (figure >= 0) {
+  if (process.argv.includes("--landing")) {
+    const index = join(SITE, "index.html");
+    writeFileSync(index, landingHtml(readFileSync(index, "utf8"), ENGLISH));
+    console.log("site/index.html: alternates and the language switcher refreshed");
+  } else if (figure >= 0) {
     process.stdout.write(await previewHtml(process.argv[figure + 1] ?? ""));
   } else if (at >= 0) {
     buildDemo();
@@ -457,6 +544,6 @@ if (import.meta.main) {
     serve(Number(process.argv[at + 1] ?? 4400) || 4400);
   } else {
     const written = await build();
-    console.log(`wrote ${written.length} files to site/docs`);
+    console.log(`wrote ${written.length} files: site/docs, each language's landing under site/<lang>/, and the figures`);
   }
 }

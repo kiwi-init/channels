@@ -1,3 +1,6 @@
+import "~/i18n/en/github-later"
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 import type { Check, Issue, PullRequest } from "~/model"
 
 export type Shown = "open" | "closed"
@@ -10,26 +13,26 @@ export interface Group<T> {
   rows: T[]
 }
 
-const HEADS: Record<GroupKey, string> = {
-  fail: "Checks failed",
-  running: "Checks running",
-  ready: "Ready",
-  none: "No checks yet",
-  merged: "Merged",
-  closed: "Closed without merging",
-  free: "Not picked up",
-  held: "Being worked on",
-  done: "Done",
-  dropped: "Not planned",
+const HEADS: Record<GroupKey, Key> = {
+  fail: "github.groups.fail",
+  running: "github.groups.running",
+  ready: "github.groups.ready",
+  none: "github.groups.none",
+  merged: "github.groups.merged",
+  closed: "github.groups.closed",
+  free: "github.groups.free",
+  held: "github.groups.held",
+  done: "github.groups.done",
+  dropped: "github.groups.dropped",
 }
 
 export const isOpen = (x: { state: string }): boolean => x.state === "open" || x.state === "draft"
 
 export function ciOf(pr: PullRequest): "fail" | "running" | "ready" | "none" {
-  const t = pr.ticks
-  if (t?.failed.length || pr.checks === "fail") return "fail"
-  if (t?.running || pr.checks === "running") return "running"
-  if ((t && t.passed > 0) || pr.checks === "pass") return "ready"
+  const ticks = pr.ticks
+  if (ticks?.failed.length || pr.checks === "fail") return "fail"
+  if (ticks?.running || pr.checks === "running") return "running"
+  if ((ticks && ticks.passed > 0) || pr.checks === "pass") return "ready"
   return "none"
 }
 
@@ -38,7 +41,7 @@ function grouped<T>(rows: readonly T[], order: readonly GroupKey[], keyOf: (row:
   for (const r of rows) out.get(keyOf(r))?.push(r)
   return order.flatMap((key) => {
     const list = out.get(key) ?? []
-    return list.length ? [{ key, label: HEADS[key], rows: list }] : []
+    return list.length ? [{ key, label: t(HEADS[key]), rows: list }] : []
   })
 }
 
@@ -71,12 +74,11 @@ export function matches(item: { title: string; number: number; repo: string; by?
 
 export function checksSummary(list: readonly Check[]): string {
   const n = (s: Check["state"]) => list.filter((c) => c.state === s).length
-  return [
-    [n("fail"), "failed"],
-    [n("running") + n("waiting"), "running"],
-    [n("pass"), "passed"],
-    [n("skipped"), "skipped"],
+  const counts: [number, Key][] = [
+    [n("fail"), "github.groups.summary.failed"],
+    [n("running") + n("waiting"), "github.groups.summary.running"],
+    [n("pass"), "github.groups.summary.passed"],
+    [n("skipped"), "github.groups.summary.skipped"],
   ]
-    .flatMap(([count, word]) => (count ? [`${count} ${word}`] : []))
-    .join(" · ")
+  return counts.flatMap(([count, key]) => (count ? [t(key, { count })] : [])).join(" · ")
 }

@@ -29,9 +29,30 @@ Product words, translated the same way everywhere. Channels and Kiwi stay as the
 | doc              | documento       | ドキュメント     | 문서         | 文档     |
 | comment          | comentário      | コメント         | 댓글         | 评论     |
 | plan (billing)   | plano           | プラン           | 플랜         | 方案     |
-| land (a task)    | integrar        | 反映             | 반영         | 落地     |
+| land, landing    | integrar        | 反映             | 반영         | 落地     |
 | forget (device)  | esquecer        | 削除             | 삭제         | 移除     |
+| full trust       | confiança total | 完全に信頼       | 전체 신뢰    | 完全信任 |
 | personality      | personalidade   | パーソナリティ   | 성격         | 性格     |
+| handle           | identificador   | ハンドル         | 핸들         | 标识名   |
+| nickname         | apelido         | ニックネーム     | 닉네임       | 昵称     |
+| seat             | assento         | シート           | 좌석         | 席位     |
+| powers           | permissões      | 権限             | 권한         | 权限     |
+| reviewer         | revisor         | レビュアー       | 리뷰어       | 审核人   |
+| round (review)   | rodada          | ラウンド         | 라운드       | 轮       |
+| gate             | trava           | ゲート           | 게이트       | 门禁     |
+| harness          | harness         | ハーネス         | 하네스       | harness  |
+| repo             | repo            | リポジトリ       | 저장소       | 仓库     |
+| branch           | branch          | ブランチ         | 브랜치       | 分支     |
+| issue            | issue           | Issue            | 이슈         | Issue    |
+| check (CI)       | verificação     | チェック         | 검사         | 检查     |
+| release          | release         | リリース         | 릴리스       | 发布     |
+| goal             | objetivo        | 目標             | 목표         | 目标     |
+| notes            | notas           | メモ             | 메모         | 笔记     |
+| mute             | silenciar       | ミュート         | 알림 끄기    | 静音     |
+| folder           | pasta           | フォルダ         | 폴더         | 文件夹   |
+| device           | dispositivo     | デバイス         | 기기         | 设备     |
+| settings         | Configurações   | 設定             | 설정         | 设置     |
+| Home             | Início          | ホーム           | 홈           | 主页     |
 
 ## Tone
 

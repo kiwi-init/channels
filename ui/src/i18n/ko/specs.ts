@@ -39,6 +39,8 @@ export default {
   "specs.doc.comment": "댓글",
   "specs.doc.line.comments": "스펙의 줄에 단 댓글",
   "specs.doc.reply": "답장",
+  "specs.doc.comment.actions": "댓글 작업",
+  "specs.doc.open.thread": "스레드에서 열기",
   "specs.doc.show.comment": "이 댓글 보기",
   "specs.doc.show.line": "스펙에서 이 줄 보기",
   "specs.doc.diff.label": "승인 후 바뀐 내용",
