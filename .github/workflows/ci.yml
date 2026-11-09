@@ -16,6 +16,10 @@ on:
         description: "desktop / distros also updates this released version's AppImage to the latest release (update.sh)"
         required: false
         default: ""
+      doc_still_loops:
+        description: "build / doc's busy-doc stillness check in WebKit runs this many loops with --trace, and keeps its log as the doc-still-trace artifact; empty runs it once"
+        required: false
+        default: ""
       release:
         description: "desktop / distros checks this published version's AppImage (checked against its SHA256SUMS) instead of this run's build, and doesn't wait for desktop / linux"
         required: false
@@ -281,7 +285,21 @@ jobs:
           exit "$status"
       - name: ui a busy thread doc never scrolls on its own, under the composer or while you read, in WebKit
         if: ${{ !cancelled() && matrix.part == 'view' }}
-        run: bun scripts/ui-doc-still.ts --dist ui/dist
+        env:
+          LOOPS: ${{ inputs.doc_still_loops }}
+        run: |
+          if [ -z "$LOOPS" ]; then exec bun scripts/ui-doc-still.ts --dist ui/dist; fi
+          case "$LOOPS" in *[!0-9]*) echo "doc_still_loops: a number of loops"; exit 1 ;; esac
+          mkdir -p "$RUNNER_TEMP/doc-still"
+          set -o pipefail
+          bun scripts/ui-doc-still.ts --dist ui/dist --trace --loops "$LOOPS" 2>&1 | tee "$RUNNER_TEMP/doc-still/doc-still.log"
+      - if: ${{ !cancelled() && matrix.part == 'view' && inputs.doc_still_loops != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: doc-still-trace
+          path: ${{ runner.temp }}/doc-still
+          if-no-files-found: ignore
+          overwrite: true
       - name: composer in a doc, late refusals keep the draft, PDFs, Edit in the composer, slow pasted images, the / menu and ⌘Enter, in Chromium and WebKit
         if: ${{ !cancelled() && matrix.part == 'send' }}
         run: |
