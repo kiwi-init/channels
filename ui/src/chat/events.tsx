@@ -1,9 +1,10 @@
 import { Suspense, useCallback, useState } from "react"
 import { createPortal } from "react-dom"
+import { Activity01Icon } from "@hugeicons/core-free-icons"
 
 import { useUpdatesSlot } from "~/chat/updates-slot"
 import { cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import type { Channel, Message } from "~/model"
 
@@ -39,7 +40,7 @@ export function Updates({ channel, runs, here, jump }: Props) {
         aria-haspopup="dialog"
         onClick={() => setOpen(!open)}
       >
-        <Icon name="updates" />
+        <GlyphIcon glyph={Activity01Icon} />
       </button>
       {open && (
         <Suspense fallback={null}>

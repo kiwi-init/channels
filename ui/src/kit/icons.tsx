@@ -1,5 +1,4 @@
 import {
-  Activity01Icon,
   Add01Icon,
   ArrowDown01Icon,
   ArrowLeft01Icon,
@@ -59,7 +58,6 @@ const GLYPHS = {
   expand: SquareIcon,
   close: Cancel01Icon,
   search: Search01Icon,
-  updates: Activity01Icon,
   reply: ArrowTurnBackwardIcon,
   thread: BubbleChatIcon,
   check: Tick02Icon,

@@ -3,7 +3,6 @@ import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutE
 import { Composer } from "~/chat/composer"
 import { docOf } from "~/chat/doc-of"
 import { EditHere } from "~/chat/editing"
-import { Updates } from "~/chat/events"
 import { splitUpdates } from "~/chat/split-updates"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
 import { docFeeds, EMPTY_FEED, withDocMedia, withLines } from "~/chat/doc/finished"
@@ -28,6 +27,7 @@ import { between, nickname, shown } from "~/names"
 import { wordsRaw } from "~/words"
 import { openMessage } from "~/live/open-message"
 
+const Updates = later(() => import("~/chat/events").then((m) => m.Updates))
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
 const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
 const LiveThreadDoc = later(() => import("~/chat/doc/editor").then((m) => m.LiveThreadDoc))
@@ -525,7 +525,11 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
           <QuotePick root={content} onQuote={quote} />
         </Suspense>
       )}
-      <Updates channel={channel} runs={runs} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
+      {runs.length > 0 && (
+        <Suspense fallback={null}>
+          <Updates channel={channel} runs={runs} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
+        </Suspense>
+      )}
       <div className="feed" ref={scroller} onScroll={onScroll}>
         <div className="feed-list" ref={content}>
           {list.length === 0 && !compact
