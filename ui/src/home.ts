@@ -9,6 +9,7 @@ import { withNames } from "~/chat/linked"
 import { wordsPlain, wordsRaw } from "~/words"
 
 const CLIP = 280
+const QUESTION_CLIP = 1200
 const SAID_CLIP = 200
 const OPTIONS_SHOWN = 4
 const MOVING_SHOWN = 3
@@ -25,7 +26,7 @@ function lineOf(c: Source, a: Ask): { what: string; text: string; act: HomeAct }
     case "question": {
       const plain = !a.irreversible && !a.step && !a.handoff && a.options.length > 0 && a.options.length <= OPTIONS_SHOWN
       const options = a.options.map((o) => ({ shown: wordsPlain(o, c.nicknames), answer: wordsRaw(o) }))
-      return { what: `${nickname(c, a.from)} asks`, text: clip(wordsPlain(a.text, c.nicknames)), act: plain ? { kind: "options", options } : { kind: "open" } }
+      return { what: `${nickname(c, a.from)} asks`, text: clip(wordsPlain(a.text, c.nicknames), QUESTION_CLIP), act: plain ? { kind: "options", options } : { kind: "open" } }
     }
     case "permission":
       return { what: `${nickname(c, a.from)} ${a.title}`, text: clip(a.summary || a.code), act: a.canAllow ? { kind: "allow" } : { kind: "open" } }
@@ -66,6 +67,7 @@ function agentOf(c: Source, p: Person): HomeAgent {
   return {
     name: p.name,
     nick: nickname(c, p.name),
+    person: p,
     state,
     doing: live?.text ?? (state === "away" ? "offline" : restOf(p)),
     ...(live?.since ? { since: live.since } : {}),

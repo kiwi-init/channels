@@ -513,6 +513,7 @@ export interface HomeTask {
 export interface HomeAgent {
   name: string
   nick: string
+  person: Person
   state: "working" | "waiting" | "idle" | "away"
   doing: string
   since?: number
