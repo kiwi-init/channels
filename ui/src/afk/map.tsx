@@ -40,12 +40,12 @@ function countsOf(home: HomeChannel): string {
   )
 }
 
-export function MapView({ open }: { open: (code: string, needs: boolean) => void }) {
+export function MapView({ home, open }: { home: readonly HomeChannel[]; open: (code: string, needs: boolean) => void }) {
   const { app } = useApp()
   const now = useNow(60_000)
   const sky = darkBehind(daylight(new Date(now))) ? "night" : "day"
   const pins = useMemo((): Pin[] => {
-    const byCode = new Map(app.home.map((h) => [h.code, h]))
+    const byCode = new Map(home.map((h) => [h.code, h]))
     return app.channels
       .filter((t) => t.state === "member")
       .flatMap((tile) => {
@@ -54,7 +54,7 @@ export function MapView({ open }: { open: (code: string, needs: boolean) => void
       })
       .sort((a, b) => b.home.asks.length - a.home.asks.length || b.home.working - a.home.working || b.tile.last - a.tile.last)
       .slice(0, SPOTS.length)
-  }, [app.channels, app.home])
+  }, [app.channels, home])
   const faceOf = (pin: Pin, a: HomeAgent) =>
     (app.channel?.code === pin.tile.code ? app.channel.people.find((p) => p.name === a.name) : undefined) ?? { name: a.name, kind: "agent" as const, presence: "online" as const }
   return (

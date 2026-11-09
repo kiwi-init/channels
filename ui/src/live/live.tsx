@@ -29,6 +29,7 @@ import { useDeviceLists } from "~/live/devices"
 import { useGone, useHome, useOpened } from "~/live/store"
 import type { App, ChannelTile } from "~/model"
 import { later } from "~/kit/later"
+import { useAfkShown } from "~/afk/wait"
 import type { Go } from "~/nav"
 
 const HomeMembers = later(() => import("~/live/home").then((m) => m.HomeMembers))
@@ -171,6 +172,7 @@ function useOpenLinks(go: (g: Go) => void, ready: boolean) {
 
 export function LiveDuties({ open, view, go }: { open: string | null; view: View; go: (g: Go) => void }) {
   const { person, channels } = useSecrets()
+  const afk = useAfkShown()
   const gate = useGithubGate()
   useOpenLinks(go, !!person && gate !== "needed" && gate !== "unknown")
   const restored = useRef(false)
@@ -189,7 +191,17 @@ export function LiveDuties({ open, view, go }: { open: string | null; view: View
   useEffect(() => {
     if (member) rememberChannel(member.code)
   }, [member])
-  if (member && !member.relay) return <OpenMember key={member.code} member={member} view={view} />
+  if (member && !member.relay)
+    return (
+      <>
+        <OpenMember key={member.code} member={member} view={view} />
+        {afk && person && (
+          <Suspense fallback={null}>
+            <HomeMembers except={member.code} />
+          </Suspense>
+        )}
+      </>
+    )
   if (pending) return <OpenPending key={pending.code} pending={pending} />
   if (!open && person)
     return (

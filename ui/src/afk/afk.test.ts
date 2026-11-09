@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import { untilAfk } from "~/afk/wait"
-import { afkRows } from "~/afk/rows"
+import { afkRows, withOpened } from "~/afk/rows"
 import type { ChannelTile, HomeChannel } from "~/model"
 
 const tile = (code: string, over: Partial<ChannelTile> = {}): ChannelTile => ({ code, title: code, state: "member", unread: 0, needsYou: 0, last: 0, ...over })
@@ -57,6 +57,25 @@ describe("the AFK sky's channels", () => {
     const [row] = afkRows([tile("c")], [home("c", { said: { from: "a", at: 0, text: "x".repeat(200) } })])
     expect(row?.line?.length).toBe(90)
     expect(row?.line?.endsWith("…")).toBe(true)
+  })
+})
+
+describe("the AFK map's channels", () => {
+  test("the open channel is on it even though Home's feed only runs while Home is open", () => {
+    expect(withOpened([], home("open")).map((h) => h.code)).toEqual(["open"])
+  })
+
+  test("the open channel's own summary replaces a stale one from Home's feed, and the rest stay", () => {
+    const list = withOpened([home("open", { working: 0 }), home("other")], home("open", { working: 3 }))
+    expect(list.map((h) => [h.code, h.working])).toEqual([
+      ["open", 3],
+      ["other", 0],
+    ])
+  })
+
+  test("with no channel open it is Home's feed as it is", () => {
+    const feed = [home("a")]
+    expect(withOpened(feed, null)).toBe(feed)
   })
 })
 
