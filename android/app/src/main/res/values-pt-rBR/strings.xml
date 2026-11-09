@@ -37,7 +37,7 @@
     <string name="everyone_reads">Todos no canal podem ler isto</string>
     <string name="finish_in_browser">Termine de entrar no seu navegador</string>
     <string name="from_line">%1$s: %2$s</string>
-    <string name="here">aqui</string>
+    <string name="here">online</string>
     <string name="in_direct_thread">numa conversa direta</string>
     <string name="in_task">em %1$s</string>
     <string name="jump_latest">Ir para as mais recentes</string>
@@ -88,6 +88,12 @@
     <string name="previous">Anterior</string>
     <string name="question">Pergunta</string>
     <string name="question_for_you">Pergunta para você</string>
+    <string name="ask_decision">Decisão para você</string>
+    <string name="ask_step">Um passo para você</string>
+    <string name="ask_intent">Checagem de intenção para você</string>
+    <string name="ask_taste">Questão de gosto para você</string>
+    <string name="ask_irreversible">Passo irreversível para você</string>
+    <string name="ask_scope">Decisão de escopo para você</string>
     <string name="ready_for_review">Aguardando sua revisão</string>
     <string name="recent">Recentes</string>
     <string name="reconnecting">Reconectando…</string>

@@ -88,6 +88,12 @@
     <string name="previous">前の会話</string>
     <string name="question">質問</string>
     <string name="question_for_you">あなたへの質問</string>
+    <string name="ask_decision">あなたの判断</string>
+    <string name="ask_step">あなたの作業</string>
+    <string name="ask_intent">あなたの意図確認</string>
+    <string name="ask_taste">あなたの好みの判断</string>
+    <string name="ask_irreversible">あなたの取り消せない操作</string>
+    <string name="ask_scope">あなたの範囲の判断</string>
     <string name="ready_for_review">あなたのレビュー待ち</string>
     <string name="recent">最近</string>
     <string name="reconnecting">再接続中…</string>

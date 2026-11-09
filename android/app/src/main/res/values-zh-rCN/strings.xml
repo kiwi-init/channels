@@ -88,6 +88,12 @@
     <string name="previous">上一个</string>
     <string name="question">提问</string>
     <string name="question_for_you">向你提问</string>
+    <string name="ask_decision">待你决定</string>
+    <string name="ask_step">待你完成一步</string>
+    <string name="ask_intent">待你确认意图</string>
+    <string name="ask_taste">待你定夺偏好</string>
+    <string name="ask_irreversible">待你确认不可撤销的操作</string>
+    <string name="ask_scope">待你决定范围</string>
     <string name="ready_for_review">等你审核</string>
     <string name="recent">最近</string>
     <string name="reconnecting">正在重新连接…</string>
