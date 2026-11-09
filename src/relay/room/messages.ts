@@ -20,7 +20,7 @@ const LOW = LEASE_BATCH / 4;
 
 interface LeaseState {
   day: string;
-  left: number;
+  granted: number;
   over: boolean;
   blocked: boolean;
   limit: number | null;
@@ -35,8 +35,10 @@ function personOverMessage(limit: number | null, ts: number, upgradeUrl: string 
 const stateOf = (db: RoomDb, day: string): LeaseState => {
   const raw = db.get(LEASE_KEY);
   const s = raw ? (JSON.parse(raw) as LeaseState) : null;
-  return s?.day === day ? s : { day, left: 0, over: false, blocked: false, limit: null, asked: 0 };
+  return s?.day === day && typeof s.granted === "number" ? s : { day, granted: 0, over: false, blocked: false, limit: null, asked: 0 };
 };
+
+const leftOf = (db: RoomDb, s: LeaseState, ts: number): number => s.granted - db.messagesOn(ts);
 
 const quotaOwner = (db: RoomDb, policy: RoomPolicy): string | null => (policy.personMessagesPerDay ? (db.ownerUser() ?? null) : null);
 
@@ -47,7 +49,7 @@ const checkLease = (db: RoomDb, policy: RoomPolicy, day: string, ts: number) =>
     const s = stateOf(db, day);
     if (s.blocked) return yield* new Forbidden({ message: OWNER_BLOCKED });
     const upgrade = upgradeFor(policy.upgradeUrl, owner);
-    if (s.over || s.left <= -LEASE_BATCH) return yield* new TooMany({ message: personOverMessage(s.limit ?? policy.personMessagesPerDay, ts, upgrade) });
+    if (s.over || leftOf(db, s, ts) <= -LEASE_BATCH) return yield* new TooMany({ message: personOverMessage(s.limit ?? policy.personMessagesPerDay, ts, upgrade) });
   });
 
 export const leaseWant: Effect.Effect<Effects, never, RoomServices> = Effect.gen(function* () {
@@ -60,7 +62,7 @@ export const leaseWant: Effect.Effect<Effects, never, RoomServices> = Effect.gen
   const day = utcDay(ts);
   const s = stateOf(db, day);
   if (ts - s.asked < (s.over || s.blocked ? ASK_OVER_MS : ASK_AGAIN_MS)) return {};
-  if (!s.over && !s.blocked && s.left > LOW) return {};
+  if (!s.over && !s.blocked && leftOf(db, s, ts) > LOW) return {};
   db.set(LEASE_KEY, JSON.stringify({ ...s, asked: ts }));
   const ask: LeaseAsk = { room: db.roomId, day, used: db.messagesOn(ts), free, paid: policy.paidMessagesPerDay, admin: policy.admins.includes(owner.toLowerCase()) };
   return { lease: { user: owner, ask } };
@@ -71,9 +73,9 @@ export const leaseTake = (got: Lease | null, day: string) =>
     const db = yield* RoomStore;
     if (!got || !db.exists()) return;
     const s = stateOf(db, day);
-    const left = s.left + got.grant;
-    const over = left <= 0 && (got.grant === 0 || got.remaining === 0);
-    db.set(LEASE_KEY, JSON.stringify({ ...s, left, over, blocked: got.blocked, limit: got.limit, asked: over || got.blocked ? s.asked : 0 } satisfies LeaseState));
+    const granted = s.granted + got.grant;
+    const over = granted - db.messagesOn(yield* Clock.currentTimeMillis) <= 0 && (got.grant === 0 || got.remaining === 0);
+    db.set(LEASE_KEY, JSON.stringify({ ...s, granted, over, blocked: got.blocked, limit: got.limit, asked: over || got.blocked ? s.asked : 0 } satisfies LeaseState));
   });
 
 export const leaseNow: Effect.Effect<void, never, RoomServices | Directory> = Effect.gen(function* () {
@@ -90,11 +92,6 @@ export const leaseNow: Effect.Effect<void, never, RoomServices | Directory> = Ef
   yield* leaseTake(got, ask.day);
 });
 
-const spendLease = (db: RoomDb, policy: RoomPolicy, day: string) => {
-  if (!quotaOwner(db, policy)) return;
-  const s = stateOf(db, day);
-  db.set(LEASE_KEY, JSON.stringify({ ...s, left: s.left - 1 }));
-};
 
 const SEND_MEMORY_MS = 3_600_000;
 export const TICKET_TTL_MS = 120_000;
@@ -151,7 +148,6 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
     if (bytes + ct.length > cap) bytes -= db.dropSnapshot();
 
     db.insert(seq, ts, iv, ct, e, cid ? { sender, cid, since: ts - SEND_MEMORY_MS } : undefined);
-    spendLease(db, policy, day);
     if (tickets.length) db.deliverTickets(tickets, seq);
     if (slots.free?.length) db.freeSlots(slots.free, sender);
     if (slots.take) db.takeSlot(slots.take.id, sender, seq, ts + slots.take.ttl, ts);
