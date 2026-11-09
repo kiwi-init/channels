@@ -1,8 +1,12 @@
 import type { Catalog } from "~/i18n/i18n"
+import live from "~/i18n/pt-BR/live"
+import settings from "~/i18n/pt-BR/settings"
 
-export const covers = ["settings.language.", "usage."]
+export const covers = ["live.", "settings.", "usage."]
 
 export default {
+  ...live,
+  ...settings,
   "settings.language": "Idioma",
   "settings.language.system": "Sistema",
   "usage.today": "Mensagens hoje",

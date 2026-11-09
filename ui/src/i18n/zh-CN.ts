@@ -1,8 +1,12 @@
 import type { Catalog } from "~/i18n/i18n"
+import live from "~/i18n/zh-CN/live"
+import settings from "~/i18n/zh-CN/settings"
 
-export const covers = ["settings.language.", "usage."]
+export const covers = ["live.", "settings.", "usage."]
 
 export default {
+  ...live,
+  ...settings,
   "settings.language": "语言",
   "settings.language.system": "跟随系统",
   "usage.today": "今日消息",
