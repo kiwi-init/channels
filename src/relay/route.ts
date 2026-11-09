@@ -16,7 +16,7 @@ import * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
 import { verifyRequest } from "@kiwi/core/auth.ts";
 import { b64url, ownerFingerprint } from "@kiwi/core/crypto.ts";
-import { GITHUB_SYNC_LISTS, MAX_BLOB_BYTES, PAGE_LIMIT, wellFormedFreed, wellFormedSendId, wellFormedSlot } from "@kiwi/core/protocol.ts";
+import { GITHUB_SYNC_LISTS, MAX_BLOB_BYTES, PAGE_LIMIT, reviewCheckOf, wellFormedFreed, wellFormedSendId, wellFormedSlot } from "@kiwi/core/protocol.ts";
 import { PUSH_PATH } from "@kiwi/core/push.ts";
 import { ChannelGone, BadRequest, Fenced, Forbidden, NotFound, NotOwner, Refused, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
@@ -629,8 +629,8 @@ const routes: RoomRoute[] = [
         const upTo = b.upTo;
         if (upTo !== undefined && !(typeof upTo === "number" && Number.isSafeInteger(upTo) && upTo >= 0)) return yield* new BadRequest({ message: "upTo: the last seq the app has folded" });
         const note = typeof b.note === "string" ? b.note.slice(0, 1000) : "";
-        const host = githubReviewHost(yield* githubApp);
         const db = yield* RoomStore;
+        const host = githubReviewHost(yield* githubApp, reviewCheckOf(db.roomId));
         const key = `${repo}@${sha}`;
         const write = Effect.gen(function* () {
           if (verdict === "approved") {

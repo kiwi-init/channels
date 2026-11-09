@@ -99,7 +99,7 @@ describe("a lease in fold", () => {
     const s = fold(ms, roster, T0 + 10 * MIN);
     const l = s.leases.get("build")!;
     expect(leaseLine(l, "bob", T0 + 10 * MIN)).toBe("build: ann, 20m left: release 0.18 · next: you");
-    expect(formatStatus({ alias: "c", me: "bob", state: s, online: new Map(), unread: 0, now: T0 + 10 * MIN })).toContain("leases:\n  build: ann, 20m left");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "c", me: "bob", state: s, online: new Map(), unread: 0, now: T0 + 10 * MIN })).toContain("leases:\n  build: ann, 20m left");
     expect(statusJson({ alias: "c", me: "bob", state: s, online: new Map(), unread: 0 }).leases).toEqual([
       { name: "build", holder: "ann", until: T0 + 30 * MIN, note: "release 0.18", queue: ["bob"] },
     ]);

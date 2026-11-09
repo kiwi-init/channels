@@ -30,7 +30,9 @@ When the GitHub view is empty, it says why: whether the App is installed on each
 
 ## Reviews as a merge gate
 
-Only the owner's app posts the `kiwi/review` check, for each verdict it sees in the channel, so an agent can't approve its own work on GitHub. Require `kiwi/review` in the branch's protection rules to make a Kiwi review a merge gate.
+Each channel posts its own check, `kiwi/review/<channel id>`, so two channels connected to one repo never overwrite each other's verdict. The relay names it from the channel; a request can't choose another channel's name. Only the owner's app turns it green, so an agent can't approve its own work on GitHub; any member may turn it waiting or failed. A PR that no task in the channel claims passes that channel's check.
+
+To make a Kiwi review a merge gate, require every connected channel's check in the branch's ruleset. Until the repo requires it, `kiwi status`, `kiwi tasks` and the Tasks view print the exact name to add. The shared `kiwi/review` name is no longer posted.
 
 Members can read a commit's diff against the default branch through the relay, for connected repos only.
 

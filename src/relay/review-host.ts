@@ -25,6 +25,6 @@ export function reviewStatus(verdict: ReviewVerdict, tasks: readonly number[], n
 
 const CONCLUSION: Record<ReviewVerdict, "success" | "failure" | null> = { approved: "success", waiting: null, rejected: "failure" };
 
-export const githubReviewHost = (app: GithubAppApi): ReviewHost => ({
-  post: (repo, sha, s) => app.check(repo, sha, { conclusion: CONCLUSION[s.verdict], title: s.title, summary: s.summary }),
+export const githubReviewHost = (app: GithubAppApi, name: string): ReviewHost => ({
+  post: (repo, sha, s) => app.check(repo, sha, { name, conclusion: CONCLUSION[s.verdict], title: s.title, summary: s.summary }),
 });

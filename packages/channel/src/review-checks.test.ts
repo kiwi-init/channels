@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { generateIdentity, sign, verify } from "@kiwi/core/identity.ts";
-import type { Event, Message } from "@kiwi/core/protocol.ts";
+import { reviewCheckOf, type Event, type Message } from "@kiwi/core/protocol.ts";
 import { fold } from "@kiwi/core/state.ts";
 import { checkedUpTo, checkPosted, checksToPost, issuesToPost, linksToPost, tasksToClose } from "./review-checks.ts";
 import { closeFromGithub } from "./task-actions.ts";
@@ -30,7 +30,7 @@ describe("posting review checks from the owner's app", () => {
     const kiwiReview = (run: number, conclusion?: string) =>
       say(jon, "jon", {
         op: "github",
-        items: [{ repo: "o/r", at: seq, event: "check_run", sha, name: "kiwi/review", run, status: conclusion ? "completed" : "in_progress", ...(conclusion ? { conclusion } : {}) }],
+        items: [{ repo: "o/r", at: seq, event: "check_run", sha, name: reviewCheckOf(room), run, status: conclusion ? "completed" : "in_progress", ...(conclusion ? { conclusion } : {}) }],
       } as Event);
     await say(jon, "jon", { op: "repos.set", repos: ["o/r"] });
     await say(jon, "jon", { op: "branch.prefix.set", prefix: "T" });

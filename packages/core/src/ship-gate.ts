@@ -1,6 +1,6 @@
 import { choiceIn, runPin, type CheckAsk } from "./checks.ts";
 import type { ReviewCheck } from "./client/github.ts";
-import { hasLanding, REVIEW_CHECK, type Event } from "./protocol.ts";
+import { hasLanding, isReviewCheck, type Event } from "./protocol.ts";
 import { prLinks, taskOfPr } from "./prs.ts";
 import { linkedPr, sameHead } from "./stage.ts";
 import { atRun, checkPassed } from "./state/checks.ts";
@@ -16,7 +16,7 @@ const approvedRound = (t: Task): ReviewRound | undefined => {
 };
 
 const runsAt = (github: GithubState, repo: string, sha: string): GithubCheck[] =>
-  [...(github.checks.get(shaKey(repo, sha))?.values() ?? [])].filter((c) => c.name !== REVIEW_CHECK && c.run !== undefined);
+  [...(github.checks.get(shaKey(repo, sha))?.values() ?? [])].filter((c) => !isReviewCheck(c.name) && c.run !== undefined);
 
 function runGate(state: ChannelState, t: Task): Gate {
   const id = t.run?.id;
@@ -121,16 +121,16 @@ const CONCLUSION: Record<ReviewCheck["verdict"], string | undefined> = { approve
 
 export const UNCLAIMED = "no Kiwi task claims this PR";
 
-const postedAt = (state: ChannelState, repo: string, sha: string): GithubCheck | undefined => state.github.checks.get(shaKey(repo, sha))?.get(REVIEW_CHECK);
+const postedAt = (state: ChannelState, check: string, repo: string, sha: string): GithubCheck | undefined => state.github.checks.get(shaKey(repo, sha))?.get(check);
 
 const connectedRepos = (state: ChannelState): Set<string> => new Set(state.repos.map((r) => r.toLowerCase()));
 
-export function reviewPosts(state: ChannelState): ReviewPost[] {
+export function reviewPosts(state: ChannelState, check: string): ReviewPost[] {
   const out: ReviewPost[] = [];
   const connected = connectedRepos(state);
   for (const c of commitsOf(state).values()) {
     const at = { repo: c.repo, sha: c.sha, pr: Math.min(...c.prs.map((p) => p.number)) };
-    const posted = postedAt(state, c.repo, c.sha);
+    const posted = postedAt(state, check, c.repo, c.sha);
     if (!c.claimed) {
       if (connected.has(c.repo.toLowerCase()) && posted?.conclusion !== "success") out.push({ ...at, verdict: "approved", tasks: [], note: UNCLAIMED });
       continue;
@@ -184,7 +184,7 @@ function shutBy(state: ChannelState, m: Outgoing): { tasks: Set<number>; rejecte
   return { tasks, rejected };
 }
 
-function claimedBy(state: ChannelState, m: Outgoing, commits: ReadonlyMap<string, Commit>, taken: ReadonlySet<string>): ReviewCheck[] {
+function claimedBy(state: ChannelState, check: string, m: Outgoing, commits: ReadonlyMap<string, Commit>, taken: ReadonlySet<string>): ReviewCheck[] {
   const ev = m.ev;
   if (ev?.op !== "task.update" || !ev.proof || !state.tasks.has(ev.task)) return [];
   const connected = connectedRepos(state);
@@ -195,16 +195,16 @@ function claimedBy(state: ChannelState, m: Outgoing, commits: ReadonlyMap<string
     const commit = commits.get(key);
     const claims = commit?.claims ?? [];
     if (taken.has(key) || claims.some(({ t, pr: at }) => t.id === ev.task && at.number === pr.number)) return [];
-    if (postedAt(state, pr.repo, pr.sha)?.conclusion === "failure") return [];
+    if (postedAt(state, check, pr.repo, pr.sha)?.conclusion === "failure") return [];
     const tasks = [...new Set([...idsOf(claims), ev.task])].sort((a, b) => a - b);
     return [{ repo: pr.repo, sha: pr.sha, verdict: "waiting" as const, tasks, note: `T${ev.task}: just linked to this PR, so its gate isn't open yet` }];
   });
 }
 
-export function downgrades(state: ChannelState, m: Outgoing): ReviewCheck[] {
+export function downgrades(state: ChannelState, check: string, m: Outgoing): ReviewCheck[] {
   const commits = commitsOf(state);
   const shutDown = shutDowngrades(state, m, commits);
-  return [...shutDown, ...claimedBy(state, m, commits, new Set(shutDown.map((c) => shaKey(c.repo, c.sha))))];
+  return [...shutDown, ...claimedBy(state, check, m, commits, new Set(shutDown.map((c) => shaKey(c.repo, c.sha))))];
 }
 
 function shutDowngrades(state: ChannelState, m: Outgoing, commits: ReadonlyMap<string, Commit>): ReviewCheck[] {
@@ -231,9 +231,9 @@ function shutDowngrades(state: ChannelState, m: Outgoing, commits: ReadonlyMap<s
   return out;
 }
 
-export async function postDowngrades(state: ChannelState, m: Outgoing, post: (c: ReviewCheck) => Promise<{ ticket?: string }>): Promise<string[]> {
+export async function postDowngrades(state: ChannelState, check: string, m: Outgoing, post: (c: ReviewCheck) => Promise<{ ticket?: string }>): Promise<string[]> {
   const tickets: string[] = [];
-  for (const c of downgrades(state, m)) {
+  for (const c of downgrades(state, check, m)) {
     try {
       const r = await post(c);
       if (r.ticket) tickets.push(r.ticket);

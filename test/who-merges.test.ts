@@ -59,7 +59,7 @@ describe("who merges a channel's pull requests (#623 §6)", () => {
     expect(prompt).not.toContain("merge its PR at the approved head");
     expect(briefText({ alias: "contrib", agent: "win", mc: "kiwi", listen: "", merges: "people" })).toContain(PEOPLE_MERGE);
     expect(briefText({ alias: "contrib", agent: "win", mc: "kiwi", listen: "", merges: "agents" })).not.toContain(PEOPLE_MERGE);
-    expect(formatStatus({ alias: "contrib", me: "win", state: s, online: new Map(), unread: 0 })).toContain("who merges: people");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "contrib", me: "win", state: s, online: new Map(), unread: 0 })).toContain("who merges: people");
   });
 
   async function landingPrompt(then: "release:tag" | "release:npm:@kiwi/cli@1.2.3" | "run", withPr: boolean): Promise<string> {

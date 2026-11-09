@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
-import { GENERAL_ROOM, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { GENERAL_ROOM, reviewCheckOf, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { reviewNotRequired } from "@kiwi/core/prs.ts"
 import { dmPlace, fullyTrusted, placeKey, type ChannelState } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, saveRecent } from "@kiwi/channel/recent.ts"
@@ -166,7 +166,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const next = nextOf(state)
   const prs = useMemo(() => prsOf(state), [state])
   const issues = useMemo(() => issuesOf(state), [state])
-  const unguarded = useMemo(() => reviewNotRequired(state), [state])
+  const reviewCheck = reviewCheckOf(roomId)
+  const unguarded = useMemo(() => reviewNotRequired(state, reviewCheck), [state, reviewCheck])
   const docs = useMemo(() => Object.fromEntries(state.docs), [state.docs])
   const mergedAt = useMemo(() => [...state.github.prs.values()].flatMap((p) => (p.state === "merged" ? [p.at] : [])), [state.github.prs])
 
@@ -198,7 +199,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       ...(state.landing && state.landing !== "none" ? { landing: state.landing } : {}),
       ...(state.merges === "people" ? { peopleMerge: true as const } : {}),
-      ...(unguarded.length ? { reviewNotRequired: unguarded } : {}),
+      ...(unguarded.length ? { reviewNotRequired: { repos: unguarded, check: reviewCheck } } : {}),
       rooms,
       directs,
       threads,
@@ -245,6 +246,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       state.landing,
       state.merges,
       unguarded,
+      reviewCheck,
       rooms,
       directs,
       threads,

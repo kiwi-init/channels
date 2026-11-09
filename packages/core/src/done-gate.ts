@@ -1,5 +1,5 @@
 import { runPin, type CheckArtifact } from "./checks.ts";
-import { hasLanding, REVIEW_CHECK, type Landing } from "./protocol.ts";
+import { hasLanding, isReviewCheck, type Landing } from "./protocol.ts";
 import { prOfTask } from "./prs.ts";
 import { sameHead } from "./stage.ts";
 import { askedBefore, atRun, checkPassed, passedAt, replacedBefore, type CheckState } from "./state/checks.ts";
@@ -34,7 +34,7 @@ function heldAtShipping(view: GateView, t: Task, pr: GithubPr, head: string, shi
     if (!c.holds.includes(t.id) || c.phase !== "pre-ship" || !askedBefore(c, shipped) || replacedBefore(c, shipped)) continue;
     if (!atPr(c, pr, head) || !passedAt(c, shipped)) missing.push(`check #${c.seq} passed before the merge`);
   }
-  const runs = [...(view.github.checks.get(shaKey(pr.repo, head))?.values() ?? [])].filter((c) => c.name !== REVIEW_CHECK);
+  const runs = [...(view.github.checks.get(shaKey(pr.repo, head))?.values() ?? [])].filter((c) => !isReviewCheck(c.name));
   for (const id of round?.result.kind === "approved" ? (round.result.runs ?? []) : []) if (!runs.some((c) => succeededBy(c, id, shipped))) missing.push(`CI run ${id} green before the merge`);
   return missing;
 }

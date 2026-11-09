@@ -147,8 +147,8 @@ export function Lanes({ channel }: { channel: Channel }) {
     <div className="lanes" role="region" aria-label="Agent lanes">
       {channel.reviewNotRequired && (
         <p className="lanes-warning" role="note">
-          Tasks here land on merge, but {channel.reviewNotRequired.join(", ")} doesn't require kiwi/review, so a PR can merge before its task's gate opens. The owner can require it in the repo's
-          ruleset.
+          Tasks here land on merge, but {channel.reviewNotRequired.repos.join(", ")} doesn't require <code>{channel.reviewNotRequired.check}</code>, so a PR can merge before its task's gate opens. The
+          owner can require it in the repo's ruleset.
         </p>
       )}
       {lanes.map((lane) => (

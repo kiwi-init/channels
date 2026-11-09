@@ -245,7 +245,7 @@ describe("approved, it starts by itself when an agent is free, and comes back as
     const log = await signedLog([say("ana", "export please"), write("lead", 1, SPEC), approve("ana", 1, 2)]);
     const s = fold(log, roster, T0);
     expect(formatSpecs(s)).toBe("#1 Export annotations as CSV · approved: starts when an agent is free (next; 2 agents are free) · 0/2 done when");
-    expect(formatStatus({ alias: "ch", me: "dev", state: s, online: new Map(), unread: 0, now: T0 }) as string).toContain("specs (1 open)");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "ch", me: "dev", state: s, online: new Map(), unread: 0, now: T0 }) as string).toContain("specs (1 open)");
     expect(describeEvent(log[2]!, s)).toBe("approved the spec of #1: agents start it as soon as one is free");
   });
 });

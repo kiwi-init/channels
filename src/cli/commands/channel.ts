@@ -6,6 +6,7 @@ import { taskId } from "@kiwi/core/state.ts";
 import { daemonSeat, type DaemonSeat } from "../../daemon.ts";
 import { isWakeVia, wakeKey, wakeWords } from "@kiwi/core/wake.ts";
 import { ago, holdLine, formatRooms, formatStatus, statusJson } from "@kiwi/core/format.ts";
+import { reviewCheckOf } from "@kiwi/core/protocol.ts";
 import { bindDirectory, seatsFor } from "../../hooks.ts";
 import { heldText, seatHeldAway } from "../../hold.ts";
 import { setWake, wakeSeats } from "../../wake-seats.ts";
@@ -122,7 +123,7 @@ export const channelCommands: Record<string, Command> = {
           { client: p.client, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) },
         ]),
       );
-      const snap = { alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
+      const snap = { alias: s.alias, check: reviewCheckOf(s.ch.roomId), me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
       const all = !!opt.all;
       out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus({ ...snap, all }));
       yield* noteRead(s);
