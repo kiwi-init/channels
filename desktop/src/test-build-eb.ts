@@ -35,7 +35,7 @@ export function driveForTests(win: BrowserWindow): void {
         linksOpened,
         argv: () => ({ argv: process.argv, launch: launchArgs() }),
         closeWindow: () => (win.requestClose(), true),
-        window: () => ({ visible: win.isVisible(), minimized: win.isMinimized() }),
+        window: () => ({ visible: win.isVisible(), minimized: win.isMinimized(), maximized: win.isMaximized() }),
         frame: () => win.getFrame(),
         spellCheck: () => win.spellCheck,
         looks: () => windowLooks(),

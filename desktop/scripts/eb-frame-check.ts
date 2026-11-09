@@ -34,7 +34,43 @@ async function run<T>(what: (d: Driver) => Promise<T>): Promise<T> {
   }
 }
 
+const doubleClickTop = (): string | null => {
+  const drags = (el: Element): boolean => {
+    for (let at: Element | null = el; at; at = at.parentElement) {
+      const region = getComputedStyle(at).getPropertyValue("--electrobun-app-region").trim() || getComputedStyle(at).getPropertyValue("-webkit-app-region").trim();
+      if (region === "no-drag") return false;
+      if (region === "drag") return true;
+    }
+    return false;
+  };
+  for (let y = 8; y <= 48; y += 8)
+    for (let x = 16; x < innerWidth; x += 24) {
+      const el = document.elementFromPoint(x, y);
+      if (!el || !drags(el)) continue;
+      el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, detail: 2, clientX: x, clientY: y }));
+      el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, button: 0, detail: 2, clientX: x, clientY: y }));
+      return `${el.tagName.toLowerCase()}.${[...el.classList].join(".")} at ${x},${y}`;
+    }
+  return null;
+};
+const zoomed = async (d: Driver): Promise<boolean> => ((await d.main("window")) as { maximized?: unknown }).maximized === true;
+
 try {
+  await run(async (d) => {
+    if (await zoomed(d)) return void problems.push("a first start opens zoomed, so a double click can't show it zooms");
+    const hit = await d.evaluate(doubleClickTop, null);
+    if (!hit) return void problems.push("no drag region in the top 48px of the window to double-click");
+    console.log(`double-clicked ${hit}`);
+    await until("the window zoomed by a double click on its top bar", 10_000, async () => (await zoomed(d)) || null).catch(() =>
+      problems.push("a double click on the top bar doesn't zoom the window"),
+    );
+    console.log(`zoomed: ${JSON.stringify(await d.main("frame"))}`);
+    await d.evaluate(doubleClickTop, null);
+    await until("the window back from zoom by a second double click", 10_000, async () => !(await zoomed(d)) || null).catch(() =>
+      problems.push("a second double click on the top bar doesn't bring the window back"),
+    );
+  });
+  spawnSync("defaults", ["delete", TEST_ID, "NSWindow Frame Channels"], { stdio: "ignore" });
   const first = await run(async (d) => (await d.main("frame")) as Frame);
   console.log(`first start: ${JSON.stringify(first)}`);
   if (first.width > 1200 || first.height > 800 || first.width < 768) problems.push(`a first start opens at ${first.width}x${first.height}, not 1200x800 or the screen's size`);
