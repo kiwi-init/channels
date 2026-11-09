@@ -121,6 +121,10 @@ const CONCLUSION: Record<ReviewCheck["verdict"], string | undefined> = { approve
 
 export const UNCLAIMED = "no Kiwi task claims this PR";
 
+const NO_VERDICT = "no verdict at this head yet";
+
+const UNJUDGED: Gate = { open: false, rejected: false, missing: [NO_VERDICT] };
+
 const postedAt = (state: ChannelState, check: string, repo: string, sha: string): GithubCheck | undefined => state.github.checks.get(shaKey(repo, sha))?.get(check);
 
 const connectedRepos = (state: ChannelState): Set<string> => new Set(state.repos.map((r) => r.toLowerCase()));
@@ -136,15 +140,13 @@ export function reviewPosts(state: ChannelState, check: string): ReviewPost[] {
       continue;
     }
     if (!c.claims.length) continue;
-    const gates = c.claims.flatMap(({ t, pr }) => {
-      const gate = gateOf(state, t, pr);
-      return gate ? [{ t, gate }] : [];
-    });
-    if (!gates.length) {
+    const judged = c.claims.map(({ t, pr }) => ({ t, gate: gateOf(state, t, pr) }));
+    if (judged.every(({ gate }) => !gate)) {
       const ids = idsOf(c.claims);
-      if (posted?.conclusion === "success") out.push({ ...at, verdict: "waiting", tasks: ids, note: `${labelOf(ids)}: no verdict at this head yet` });
+      if (posted?.conclusion === "success") out.push({ ...at, verdict: "waiting", tasks: ids, note: `${labelOf(ids)}: ${NO_VERDICT}` });
       continue;
     }
+    const gates = judged.map(({ t, gate }) => ({ t, gate: gate ?? UNJUDGED }));
     const shut = gates.flatMap(({ t, gate }) => (gate.open ? [] : [{ t, gate }]));
     const verdict: ReviewCheck["verdict"] = !shut.length ? "approved" : shut.some(({ gate }) => !gate.open && gate.rejected) ? "rejected" : "waiting";
     if (posted && (CONCLUSION[verdict] === undefined ? !posted.conclusion : posted.conclusion === CONCLUSION[verdict])) continue;

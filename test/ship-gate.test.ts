@@ -396,3 +396,55 @@ describe("one kiwi/review check per channel (T2681, #2888)", () => {
     expect(shipGate(s, s.tasks.get(t)!)).toEqual({ open: true });
   });
 });
+
+describe("every claimant at a commit is in the decision, judged or not (T2681 round 2)", () => {
+  async function plain() {
+    const c = channel();
+    await c.ev("jow", { op: "branch.prefix.set", prefix: "T" });
+    await c.ev("jow", { op: "repos.set", repos: [R] });
+    return c;
+  }
+  const linkPr9 = (t: number): Event => ({ op: "task.update", task: t, proof: { url: `https://github.com/${R}/pull/9` } });
+
+  test("two tasks on one PR: one's PASS doesn't pass the PR while the other has no verdict at its head", async () => {
+    const c = await plain();
+    const ready = await c.task("ready");
+    const unjudged = await c.task("unjudged");
+    await c.pr(9, S1, ready);
+    await c.ev("ann", linkPr9(unjudged));
+    await c.approve(ready, S1);
+    expect(c.state().tasks.get(unjudged)!.rounds).toHaveLength(0);
+    expect(reviewPosts(c.state(), CHECK)).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "waiting", tasks: [ready, unjudged], note: `T${unjudged}: no verdict at this head yet` }]);
+    await c.approve(unjudged, S1);
+    expect(reviewPosts(c.state(), CHECK)).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "approved", tasks: [ready, unjudged] }]);
+  });
+
+  test("separate PRs sharing a commit: a PASS on one doesn't pass the commit while the other's task is unjudged", async () => {
+    const c = await plain();
+    const ready = await c.task("ready");
+    const unjudged = await c.task("unjudged");
+    await c.pr(9, S1, ready);
+    await c.pr(10, S1, unjudged);
+    await c.approve(ready, S1);
+    expect(reviewPosts(c.state(), CHECK)).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "waiting", tasks: [ready, unjudged], note: `T${unjudged}: no verdict at this head yet` }]);
+  });
+
+  test("a task linking a passed PR downgrades it first, and reconciling keeps it waiting until that task passes too", async () => {
+    const c = await plain();
+    const ready = await c.task("ready");
+    await c.pr(9, S1, ready);
+    await c.approve(ready, S1);
+    expect(reviewPosts(c.state(), CHECK)).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "approved", tasks: [ready] }]);
+    await c.github([{ event: "check_run", sha: S1, name: CHECK, run: 900, status: "completed", conclusion: "success" }]);
+    const late = await c.task("late");
+    expect(downgrades(c.state(), CHECK, { from: "ann", body: "", ev: linkPr9(late) })).toEqual([
+      { repo: R, sha: S1, verdict: "waiting", tasks: [ready, late], note: `T${late}: just linked to this PR, so its gate isn't open yet` },
+    ]);
+    await c.ev("ann", linkPr9(late));
+    expect(reviewPosts(c.state(), CHECK)).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "waiting", tasks: [ready, late], note: `T${late}: no verdict at this head yet` }]);
+    await c.github([{ event: "check_run", sha: S1, name: CHECK, run: 901, status: "in_progress" }]);
+    expect(reviewPosts(c.state(), CHECK)).toEqual([]);
+    await c.approve(late, S1);
+    expect(reviewPosts(c.state(), CHECK)).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "approved", tasks: [ready, late] }]);
+  });
+});
