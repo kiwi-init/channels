@@ -57,7 +57,8 @@ const zoomed = async (d: Driver): Promise<boolean> => ((await d.main("window")) 
 
 try {
   await run(async (d) => {
-    if (await zoomed(d)) return void problems.push("a first start opens zoomed, so a double click can't show it zooms");
+    await d.main("placeForTest");
+    if (await zoomed(d)) return void problems.push("the window is still zoomed after it was made smaller, so a double click can't show it zooms");
     const hit = await d.evaluate(doubleClickTop, null);
     if (!hit) return void problems.push("no drag region in the top 48px of the window to double-click");
     console.log(`double-clicked ${hit}`);
