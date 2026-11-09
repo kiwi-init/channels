@@ -54,7 +54,12 @@ export function useSuggest({
   const [caret, setCaret] = useState(text.length)
   const [pick, setPick] = useState(0)
   const [closedOn, setClosedOn] = useState<string | null>(null)
-  const closed = closedOn === `${caret}:${text}`
+  const [seen, setSeen] = useState(text)
+  if (seen !== text) {
+    setSeen(text)
+    setClosedOn(null)
+  }
+  const closed = closedOn !== null && closedOn === `${caret}:${text}`
   const typed = text.slice(0, caret)
   const query = closed ? undefined : MENTION.exec(typed)?.[2]
   const taskQuery = closed || query !== undefined ? undefined : TASK_REF.exec(typed)?.[2]
