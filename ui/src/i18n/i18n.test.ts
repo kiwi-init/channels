@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
-import { en, type Key, type Msg } from "~/i18n/en"
+import type { Key, Msg } from "~/i18n/en"
+import { english } from "~/i18n/en/all"
 import { addWords, CATALOGS, langOf, LANGS, t } from "~/i18n/i18n"
 
 const holes = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!).sort()
@@ -12,14 +13,14 @@ describe("every catalog says everything English says in the areas it covers (spe
   for (const [lang, load] of Object.entries(CATALOGS)) {
     test(`${lang}: the same keys, the same {holes}, and only plural forms ${lang} has`, async () => {
       const { default: catalog, covers } = await load()
-      const english: Readonly<Record<string, Msg>> = en
-      const keys = Object.keys(english).filter((k) => covered(covers, k)) as Key[]
+      const all: Readonly<Record<string, Msg>> = english
+      const keys = Object.keys(all).filter((k) => covered(covers, k)) as Key[]
       expect(keys.filter((k) => catalog[k] === undefined)).toEqual([])
-      expect(Object.keys(catalog).filter((k) => !(k in english) || !covered(covers, k))).toEqual([])
+      expect(Object.keys(catalog).filter((k) => !(k in all) || !covered(covers, k))).toEqual([])
       const categories = new Intl.PluralRules(lang).resolvedOptions().pluralCategories as string[]
       for (const key of keys) {
         const msg = catalog[key]!
-        const source = english[key]!
+        const source = all[key]!
         const want = holes(typeof source === "string" ? source : source.other)
         for (const text of forms(msg)) expect({ key, holes: holes(text) }).toEqual({ key, holes: want })
         if (typeof msg !== "string") {

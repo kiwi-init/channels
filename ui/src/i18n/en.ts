@@ -1,3 +1,5 @@
+import type { english } from "~/i18n/en/all"
+
 export type Msg = string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>> & { other: string }>
 
 export const en = {
@@ -38,4 +40,4 @@ export const en = {
   "usage.limit.free": "the free plan's daily limit",
 } as const satisfies Record<string, Msg>
 
-export type Key = keyof typeof en
+export type Key = keyof typeof english
