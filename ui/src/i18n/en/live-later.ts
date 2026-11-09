@@ -78,6 +78,13 @@ const words = {
   "live.home.refused": "{title}: {text}",
   "live.home.not.sent": "Not sent in {title}: {why}. It waits in the channel with Retry.",
   "live.home.open.to.retry": "open the channel to retry",
+  "live.home.wants.to.join": "Wants to join",
+  "live.home.review": "Review T{id}",
+  "live.home.bypass": "T{id} shipped with its gate shut",
+  "live.home.spec": "Spec #{ask}",
+  "live.home.spec.done": "Spec #{ask} is done: check it",
+  "live.home.spec.changed": "Spec #{ask} changed",
+  "live.home.spec.approve": "Approve spec #{ask}",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

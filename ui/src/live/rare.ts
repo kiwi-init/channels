@@ -18,9 +18,7 @@ import { muteKey } from "~/live/mute"
 import { event, memberOf, need, owner } from "~/live/run"
 import type { Run } from "~/live/store"
 import type { TaskStatus, UpdateCheck } from "~/model"
-
-const COMPACT_ASK =
-  "Please draft a /compact summary of the history so far: name every open task (T7) and open question (#123) by its id, then run `kiwi compact --file summary.md`. I'll approve it in the app."
+import { SENT } from "~/sent"
 
 async function sends(run: Run, ...all: TaskSend[]): Promise<void> {
   for (const { body, opts } of all) await run.send(body, opts)
@@ -37,7 +35,7 @@ export async function approveCompact(code: string, proposal: number): Promise<vo
 export async function askCompact(code: string): Promise<void> {
   const run = need(code)
   const lead = run.state.lead && run.state.lead !== run.me ? run.state.lead : null
-  await run.send(COMPACT_ASK, lead ? { to: [lead], kind: "ask" } : { kind: "ask" })
+  await run.send(SENT.compactAsk, lead ? { to: [lead], kind: "ask" } : { kind: "ask" })
   announce(lead ? t("live.rare.asked.summary", { name: memberName(run.state.members.get(lead), lead) }) : t("live.rare.asked.agents.summary"))
 }
 
