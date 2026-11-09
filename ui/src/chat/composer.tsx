@@ -8,7 +8,7 @@ import { lastOwn, nextEdit, type Edit } from "~/chat/compose-edit"
 import { withExcerpt } from "~/chat/quote"
 import { sayerAt } from "~/chat/doc/sayer"
 import { preview, useReplying } from "~/chat/reply"
-import { attached, composerKey, drafts, giveBack, tooLong, useGivenBack } from "~/chat/drafts"
+import { attached, composerKey, drafts, giveBack, tooLong, useGivenBack, useRestored } from "~/chat/drafts"
 import { composing, sendsOn, sendTitle } from "~/chat/send-keys"
 import { STASH_SHOT, stashText, useStash } from "~/chat/stash"
 import { t } from "~/i18n/i18n"
@@ -74,6 +74,13 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     setFilesNow(attached.get(key) ?? [])
     area.current?.focus()
   }, [back, key, moved])
+  const restored = useRestored()
+  const [seenRestored, setSeenRestored] = useState(restored)
+  if (seenRestored !== restored) {
+    setSeenRestored(restored)
+    const kept = files.length ? undefined : attached.get(key)
+    if (kept) setFilesNow(kept)
+  }
   const [alsoRoom, setAlsoRoom] = useState(false)
   const enterSends = app.prefs.enterSends
   const stash = useStash(key)
