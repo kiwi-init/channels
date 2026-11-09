@@ -28,7 +28,7 @@ function lineOf(c: Source, a: Ask): { what: string; text: string; act: HomeAct }
     case "question": {
       const plain = !a.irreversible && !a.step && !a.handoff && a.options.length > 0 && a.options.length <= OPTIONS_SHOWN
       const options = a.options.map((o) => ({ shown: wordsPlain(o, c.nicknames), answer: wordsRaw(o) }))
-      return { what: `${nickname(c, a.from)} asks`, text: clip(wordsPlain(a.text, c.nicknames), QUESTION_CLIP), act: plain ? { kind: "options", options } : { kind: "open" } }
+      return { what: t("live.home.asks", { who: nickname(c, a.from) }), text: clip(wordsPlain(a.text, c.nicknames), QUESTION_CLIP), act: plain ? { kind: "options", options } : { kind: "open" } }
     }
     case "permission":
       return { what: `${nickname(c, a.from)} ${a.title}`, text: clip(a.summary || a.code), act: a.canAllow ? { kind: "allow" } : { kind: "open" } }
@@ -55,12 +55,12 @@ function lineOf(c: Source, a: Ask): { what: string; text: string; act: HomeAct }
   }
 }
 
-function movingOf(c: Source, t: Task): HomeTask {
-  const owner: Person | undefined = t.owner ? c.people.find((p) => p.name === t.owner) : undefined
+function movingOf(c: Source, task: Task): HomeTask {
+  const owner: Person | undefined = task.owner ? c.people.find((p) => p.name === task.owner) : undefined
   const live = owner ? liveOf(owner) : null
-  const stage = stageWords(t)
-  const state = stage.text || live?.text || (t.status === "waiting" ? "needs you" : t.status === "review" ? "in review" : "")
-  return { id: t.id, title: wordsPlain(t.title, c.nicknames), who: t.owner ? nickname(c, t.owner) : null, state, busy: !!live?.busy, red: stage.red }
+  const stage = stageWords(task)
+  const state = stage.text || live?.text || (task.status === "waiting" ? t("live.home.needs.you") : task.status === "review" ? t("live.home.in.review") : "")
+  return { id: task.id, title: wordsPlain(task.title, c.nicknames), who: task.owner ? nickname(c, task.owner) : null, state, busy: !!live?.busy, red: stage.red }
 }
 
 const AGENT_ORDER: Record<HomeAgent["state"], number> = { working: 0, waiting: 1, idle: 2, away: 3 }
