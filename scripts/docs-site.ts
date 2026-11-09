@@ -13,6 +13,25 @@ const UI = join(ROOT, "ui");
 const DEMO = join(SITE, "demo");
 const SCENE = join(SITE, "afk", "scene.html");
 const REPO = "https://github.com/kiwi-init/channels";
+const ORIGIN = "https://channels.kiwiinit.com";
+
+interface Lang {
+  dir: string;
+  tag: string;
+  name: string;
+}
+
+export const LANGS: readonly Lang[] = [
+  { dir: "", tag: "en", name: "English" },
+  { dir: "pt-br", tag: "pt-BR", name: "Português (Brasil)" },
+  { dir: "ja", tag: "ja", name: "日本語" },
+  { dir: "ko", tag: "ko", name: "한국어" },
+  { dir: "zh-cn", tag: "zh-CN", name: "简体中文" },
+];
+const ENGLISH = LANGS[0] as Lang;
+
+const home = (lang: Lang): string => (lang.dir ? `/${lang.dir}/` : "/");
+const outOf = (lang: Lang): string => (lang.dir ? join(SITE, lang.dir, "docs") : OUT);
 
 type Node = {
   type: string;
@@ -60,11 +79,12 @@ function frontMatter(raw: string): { meta: Record<string, string>; body: string 
   return { meta, body: raw.slice(match[0].length) };
 }
 
-function readPages(): Page[] {
+function readPages(lang: Lang = ENGLISH): Page[] {
   const pages = readdirSync(DOCS)
     .filter((f) => f.endsWith(".md"))
     .map((file): Page => {
-      const { meta, body } = frontMatter(readFileSync(join(DOCS, file), "utf8"));
+      const own = lang.dir ? join(DOCS, lang.dir, file) : "";
+      const { meta, body } = frontMatter(readFileSync(own && existsSync(own) ? own : join(DOCS, file), "utf8"));
       const tree = fromMarkdown(body, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] }) as Node;
       const h1 = (tree.children ?? []).find((n) => n.type === "heading" && n.depth === 1);
       if (!h1) throw new Error(`docs/${file} has no # title`);
@@ -82,16 +102,16 @@ function readPages(): Page[] {
   return pages.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
 }
 
-const hrefOf = (slug: string): string => (slug ? `/docs/${slug}` : "/docs/");
+const hrefOf = (slug: string, lang: Lang = ENGLISH): string => `${home(lang)}docs/${slug}`;
 
-function linkOf(url: string, slugs: Set<string>): string {
+function linkOf(url: string, slugs: Set<string>, lang: Lang): string {
   if (/^[a-z]+:|^#|^\//i.test(url)) return url;
   const [path, hash = ""] = url.split("#");
   const tail = hash ? `#${hash}` : "";
   if (!path) return tail;
   if (!path.includes("/") && path.endsWith(".md")) {
     const slug = path === "index.md" ? "" : path.slice(0, -3);
-    if (slugs.has(slug)) return hrefOf(slug) + tail;
+    if (slugs.has(slug)) return hrefOf(slug, lang) + tail;
   }
   const target = posix.normalize(posix.join("docs", path));
   const kind = existsSync(join(ROOT, target)) && statSync(join(ROOT, target)).isDirectory() ? "tree" : "blob";
@@ -99,6 +119,7 @@ function linkOf(url: string, slugs: Set<string>): string {
 }
 
 interface Render {
+  lang: Lang;
   slugs: Set<string>;
   figures: Set<string>;
   images: Set<string>;
@@ -208,7 +229,7 @@ async function render(node: Node, r: Render): Promise<string> {
     case "blockquote":
       return `<blockquote>${await kids()}</blockquote>\n`;
     case "link": {
-      const href = linkOf(node.url ?? "", r.slugs);
+      const href = linkOf(node.url ?? "", r.slugs, r.lang);
       const out = /^https?:/.test(href) && !href.startsWith(REPO + "/") ? ' rel="noopener"' : "";
       return `<a href="${escape(href)}"${out}>${await kids()}</a>`;
     }
@@ -262,7 +283,7 @@ async function render(node: Node, r: Render): Promise<string> {
 const GITHUB_ICON =
   '<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg>';
 
-function navHtml(pages: Page[], here: Page): string {
+function navHtml(pages: Page[], here: Page, lang: Lang): string {
   const groups: { name: string; pages: Page[] }[] = [];
   for (const p of pages) {
     const last = groups[groups.length - 1];
@@ -273,22 +294,34 @@ function navHtml(pages: Page[], here: Page): string {
     .map(
       (g) =>
         `<div class="group">${g.name ? `<p class="group-name">${escape(g.name)}</p>` : ""}<ul>${g.pages
-          .map((p) => `<li><a href="${hrefOf(p.slug)}"${p === here ? ' aria-current="page"' : ""}>${escape(p.title)}</a></li>`)
+          .map((p) => `<li><a href="${hrefOf(p.slug, lang)}"${p === here ? ' aria-current="page"' : ""}>${escape(p.title)}</a></li>`)
           .join("")}</ul></div>`,
     )
     .join("");
 }
 
-function pagerHtml(pages: Page[], at: number): string {
+function pagerHtml(pages: Page[], at: number, lang: Lang): string {
   const prev = pages[at - 1];
   const next = pages[at + 1];
-  const link = (p: Page | undefined, rel: string, label: string) => (p ? `<a class="${rel}" rel="${rel}" href="${hrefOf(p.slug)}"><span>${label}</span>${escape(p.title)}</a>` : "<span></span>");
+  const link = (p: Page | undefined, rel: string, label: string) => (p ? `<a class="${rel}" rel="${rel}" href="${hrefOf(p.slug, lang)}"><span>${label}</span>${escape(p.title)}</a>` : "<span></span>");
   return `<nav class="pager" aria-label="Pages">${link(prev, "prev", "Previous")}${link(next, "next", "Next")}</nav>`;
 }
 
 const THEME_PICK = `<div class="theme" role="group" aria-label="Theme"><button type="button" data-theme-pick="system" aria-label="Match the system" title="Match the system"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.75" y="2.75" width="12.5" height="8.5" rx="1.5"></rect><path d="M5.5 14h5M8 11.25V14"></path></svg></button><button type="button" data-theme-pick="light" aria-label="Light" title="Light"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.75"></circle><path d="M8 1.25v1.5M8 13.25v1.5M1.25 8h1.5M13.25 8h1.5M3.23 3.23l1.06 1.06M11.71 11.71l1.06 1.06M3.23 12.77l1.06-1.06M11.71 4.29l1.06-1.06"></path></svg></button><button type="button" data-theme-pick="dark" aria-label="Dark" title="Dark"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.6 10.1A5.75 5.75 0 0 1 5.9 2.4a5.75 5.75 0 1 0 7.7 7.7Z"></path></svg></button></div>`;
 
-function pageHtml(pages: Page[], at: number, body: string, figures: Set<string>): string {
+export function alternatesHtml(path: string): string {
+  const of = (lang: Lang) => `${ORIGIN}${home(lang)}${path}`;
+  return [...LANGS.map((l) => `<link rel="alternate" hreflang="${l.tag}" href="${of(l)}" />`), `<link rel="alternate" hreflang="x-default" href="${of(ENGLISH)}" />`].join("\n    ");
+}
+
+export function switcherHtml(path: string, here: Lang): string {
+  const links = LANGS.map(
+    (l) => `<li><a href="${home(l)}${path}" hreflang="${l.tag}" lang="${l.tag}" data-lang-pick="${l.dir || "en"}"${l === here ? ' aria-current="true"' : ""}>${escape(l.name)}</a></li>`,
+  ).join("");
+  return `<details class="langs"><summary aria-label="Language">${escape(here.name)}</summary><ul>${links}</ul></details>`;
+}
+
+function pageHtml(pages: Page[], at: number, body: string, figures: Set<string>, lang: Lang = ENGLISH): string {
   const page = pages[at];
   if (!page) throw new Error(`no page ${at}`);
   const scripts = [...figures]
@@ -296,9 +329,10 @@ function pageHtml(pages: Page[], at: number, body: string, figures: Set<string>)
     .map((f) => `\n    <script type="module" src="/figures/${f}/live.js"></script>`)
     .join("");
   const title = page.slug ? `${page.title} · Channels docs` : "Channels docs";
-  const nav = navHtml(pages, page);
+  const nav = navHtml(pages, page, lang);
+  const path = `docs/${page.slug}`;
   return `<!doctype html>
-<html lang="en">
+<html lang="${lang.tag}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -307,6 +341,7 @@ function pageHtml(pages: Page[], at: number, body: string, figures: Set<string>)
     <meta name="theme-color" content="#111113" media="(prefers-color-scheme: dark)" />
     <title>${escape(title)}</title>
     <meta name="description" content="${escape(page.description)}" />
+    ${alternatesHtml(path)}
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="preload" href="/fonts/PaperMono.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/anatomy/iso.css" />
@@ -314,15 +349,17 @@ function pageHtml(pages: Page[], at: number, body: string, figures: Set<string>)
     <link rel="stylesheet" href="/docs.css" />
     <link rel="stylesheet" href="/docs/figures.css" />
     <script src="/theme.js"></script>
+    <script src="/lang.js"></script>
     <script type="module" src="/docs.js"></script>${scripts}
   </head>
   <body>
     <header class="bar">
-      <a class="brand" href="/"><img src="/icon.svg" alt="" width="22" height="22" />Channels</a>
-      <a class="section" href="/docs/">Docs</a>
+      <a class="brand" href="${home(lang)}"><img src="/icon.svg" alt="" width="22" height="22" />Channels</a>
+      <a class="section" href="${home(lang)}docs/">Docs</a>
       <span class="grow"></span>
-      <a class="quiet" href="/">Download</a>
+      <a class="quiet" href="${home(lang)}">Download</a>
       <a class="quiet gh" href="${REPO}" aria-label="Source on GitHub" title="Source on GitHub">${GITHUB_ICON}</a>
+      ${switcherHtml(path, lang)}
       ${THEME_PICK}
     </header>
     <div class="docs">
@@ -330,7 +367,7 @@ function pageHtml(pages: Page[], at: number, body: string, figures: Set<string>)
       <main class="page">
         <details class="side-mini"><summary>${escape(page.title)}</summary><nav aria-label="Docs">${nav}</nav></details>
 ${body}
-        ${pagerHtml(pages, at)}
+        ${pagerHtml(pages, at, lang)}
         <p class="edit"><a href="${REPO}/blob/main/docs/${page.file}">Edit this page</a></p>
       </main>
     </div>
@@ -339,26 +376,54 @@ ${body}
 `;
 }
 
+export function landingHtml(english: string, lang: Lang): string {
+  const html = english
+    .replace('<html lang="en">', `<html lang="${lang.tag}">`)
+    .replace(/<!-- alternates -->[\s\S]*?<!-- \/alternates -->/, `<!-- alternates -->\n    ${alternatesHtml("")}\n    <!-- /alternates -->`)
+    .replace(/<!-- langs -->[\s\S]*?<!-- \/langs -->/, `<!-- langs -->${switcherHtml("", lang)}<!-- /langs -->`)
+    .replace(/href="\/docs\/"/g, `href="${home(lang)}docs/"`)
+    .replace('<a class="brand" href="/">', `<a class="brand" href="${home(lang)}">`);
+  if (!html.includes(`hreflang="${lang.tag}"`) || !html.includes('class="langs"')) throw new Error("site/index.html lost its <!-- alternates --> or <!-- langs --> marks");
+  return html;
+}
+
+function writeLanding(): string[] {
+  const index = join(SITE, "index.html");
+  const english = readFileSync(index, "utf8");
+  const fresh = landingHtml(english, ENGLISH);
+  if (fresh !== english) throw new Error("site/index.html's language marks are stale: run `bun scripts/docs-site.ts --landing` and commit it");
+  return LANGS.filter((l) => l.dir).map((lang) => {
+    const file = join(SITE, lang.dir, "index.html");
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, landingHtml(english, lang));
+    return relative(ROOT, file);
+  });
+}
+
 async function build(): Promise<string[]> {
   if (!DRAFT) buildDemo();
-  const pages = readPages();
-  const slugs = new Set(pages.map((p) => p.slug));
-  rmSync(OUT, { recursive: true, force: true });
-  mkdirSync(OUT, { recursive: true });
   const written: string[] = [];
-  for (const [at, page] of pages.entries()) {
-    const r: Render = { slugs, figures: new Set(), images: new Set() };
-    const body = await render(page.tree, r);
-    const file = join(OUT, page.slug ? `${page.slug}.html` : "index.html");
-    writeFileSync(file, pageHtml(pages, at, body, r.figures));
-    written.push(relative(ROOT, file));
-    for (const img of r.images) {
-      const from = join(DOCS, img);
-      if (!existsSync(from)) throw new Error(`docs/${page.file} shows ${img}, which isn't in docs/`);
-      mkdirSync(dirname(join(OUT, img)), { recursive: true });
-      copyFileSync(from, join(OUT, img));
+  for (const lang of LANGS) {
+    const pages = readPages(lang);
+    const slugs = new Set(pages.map((p) => p.slug));
+    const out = outOf(lang);
+    rmSync(out, { recursive: true, force: true });
+    mkdirSync(out, { recursive: true });
+    for (const [at, page] of pages.entries()) {
+      const r: Render = { lang, slugs, figures: new Set(), images: new Set() };
+      const body = await render(page.tree, r);
+      const file = join(out, page.slug ? `${page.slug}.html` : "index.html");
+      writeFileSync(file, pageHtml(pages, at, body, r.figures, lang));
+      written.push(relative(ROOT, file));
+      for (const img of r.images) {
+        const from = join(DOCS, img);
+        if (!existsSync(from)) throw new Error(`docs/${page.file} shows ${img}, which isn't in docs/`);
+        mkdirSync(dirname(join(OUT, img)), { recursive: true });
+        copyFileSync(from, join(OUT, img));
+      }
     }
   }
+  written.push(...writeLanding());
   written.push(...(await writeFigures()));
   written.push(await buildScene());
   return written;
@@ -427,7 +492,7 @@ function serve(port: number): void {
         if (run.exitCode !== 0) return new Response(run.stderr.toString(), { status: 500 });
         return new Response(run.stdout.toString(), { headers: { ...headersFor(pathname), "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
       }
-      if ((pathname === "/" || pathname.startsWith("/docs")) && !extname(pathname)) {
+      if ((pathname === "/" || /^\/([a-z-]+\/)?docs/.test(pathname) || LANGS.some((l) => l.dir && pathname.startsWith(`/${l.dir}/`))) && !extname(pathname)) {
         const run = Bun.spawnSync(["bun", import.meta.path, "--draft"], { cwd: ROOT, stderr: "pipe" });
         if (run.exitCode !== 0) return new Response(run.stderr.toString(), { status: 500 });
       }
@@ -449,7 +514,11 @@ async function previewHtml(name: string): Promise<string> {
 if (import.meta.main) {
   const at = process.argv.indexOf("--serve");
   const figure = process.argv.indexOf("--figure");
-  if (figure >= 0) {
+  if (process.argv.includes("--landing")) {
+    const index = join(SITE, "index.html");
+    writeFileSync(index, landingHtml(readFileSync(index, "utf8"), ENGLISH));
+    console.log("site/index.html: alternates and the language switcher refreshed");
+  } else if (figure >= 0) {
     process.stdout.write(await previewHtml(process.argv[figure + 1] ?? ""));
   } else if (at >= 0) {
     buildDemo();
@@ -457,6 +526,6 @@ if (import.meta.main) {
     serve(Number(process.argv[at + 1] ?? 4400) || 4400);
   } else {
     const written = await build();
-    console.log(`wrote ${written.length} files to site/docs`);
+    console.log(`wrote ${written.length} files: site/docs, each language under site/<lang>/, and the figures`);
   }
 }
