@@ -12,6 +12,10 @@ const flag = (name: string): string | undefined => {
 const url = flag("--url");
 const dist = flag("--dist");
 if (dist && !existsSync(join(dist, "index.html"))) throw new Error(`no index.html in ${dist}: run bun run ui:build first`);
+const t0 = performance.now();
+const clock = () => `${Math.round(performance.now() - t0)}ms`;
+let trail: string[] = [];
+const trace = (line: string) => void trail.push(`${clock()} ${line}`);
 const server = dist
   ? Bun.serve({
       port: 0,
@@ -19,7 +23,12 @@ const server = dist
       async fetch(req) {
         const path = decodeURIComponent(new URL(req.url).pathname);
         const file = Bun.file(path.startsWith("/reactions/") ? resolve(import.meta.dir, "../site", "." + path) : join(dist, path === "/" || !path.includes(".") ? "index.html" : path));
-        return (await file.exists()) ? new Response(file) : new Response("not found", { status: 404 });
+        const there = await file.exists();
+        if (path.startsWith("/reactions/")) {
+          trace(`server: ${path} ${there ? 200 : 404}${req.signal.aborted ? ", already aborted" : ""}`);
+          req.signal.addEventListener("abort", () => trace(`server: ${path} aborted by the client`));
+        }
+        return there ? new Response(file) : new Response("not found", { status: 404 });
       },
     })
   : null;
@@ -46,11 +55,22 @@ try {
   const page = await browser.newPage({ viewport: { width: size[0] ?? 1440, height: size[1] ?? 900 }, deviceScaleFactor: 2 });
   const errors: string[] = [];
   let at = "";
-  page.on("pageerror", (e) => errors.push(`${at}: ${e.message}`));
+  const isReaction = reactionsOn(base);
+  page.on("pageerror", (e) => {
+    trace(`page error: ${e.message}`);
+    errors.push(`${at}: ${e.message}\n  what led up to it:\n${trail.map((l) => `    ${l}`).join("\n")}`);
+  });
+  page.on("request", (r) => isReaction(new URL(r.url())) && trace(`page: asks ${new URL(r.url()).pathname}`));
+  page.on("response", (r) => isReaction(new URL(r.url())) && trace(`page: ${new URL(r.url()).pathname} answered ${r.status()}`));
+  page.on("requestfinished", (r) => isReaction(new URL(r.url())) && trace(`page: ${new URL(r.url()).pathname} finished`));
+  page.on("requestfailed", (r) => isReaction(new URL(r.url())) && trace(`page: ${new URL(r.url()).pathname} failed: ${r.failure()?.errorText ?? "no reason given"}`));
+  page.on("framenavigated", (f) => f === page.mainFrame() && trace(`page: navigated to ${f.url().replace(base, "/")}`));
   const reactions = settleRequests(page, reactionsOn(base));
   for (const theme of themes) {
     for (const name of names) {
+      trail = trail.slice(-12);
       at = `${name}-${theme}`;
+      trace(`shot ${at} starts`);
       await page.evaluate(() => {
         try {
           localStorage.clear();
