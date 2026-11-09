@@ -35,6 +35,7 @@ const words = {
   "shell.new.room.create.members.for": "Create members-only room for {count}",
   "shell.new.room.create.members": "Create members-only room",
   "shell.new.room.create": "Create room",
+  "shell.new.room.failed": "Couldn't create the room.",
   "shell.rail.menu.folder.named": "{name} folder",
   "shell.rail.menu.folder": "Folder",
   "shell.rail.menu.folder.name": "Folder name",

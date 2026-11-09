@@ -6,7 +6,8 @@ import { useState, type ReactNode } from "react"
 
 import { githubTrouble, type GithubTrouble } from "@kiwi/core/github-health.ts"
 
-import { choreTitle, since } from "~/github/health"
+import { choreNext, choreTitle, since } from "~/github/health"
+import { Details } from "~/kit/failed"
 import { ciOf, isOpen, issueGroups, matches, prGroups, type Group, type GroupKey, type Shown } from "~/github/groups"
 import { checksLine, DiffBar, IssueMark, PrMark, Ticks } from "~/github/parts"
 import type { Key } from "~/i18n/en"
@@ -220,7 +221,8 @@ function Nothing({ query, clear, shown, icon, trouble }: { query: string; clear:
   if (trouble?.kind === "failed")
     return (
       <Empty title={t("github.view.failed", { title: choreTitle(trouble.what, trouble.repo) })} icon="github">
-        <p>{trouble.message}</p>
+        <p>{choreNext(trouble.message)}</p>
+        <Details raw={trouble.message} />
       </Empty>
     )
   return (

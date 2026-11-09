@@ -12,6 +12,7 @@ import { changeBlock } from "~/chat/doc/change-block"
 export { restoreOf, versionsOf } from "~/chat/doc/restore-version"
 import { stepReplyText } from "~/chat/step"
 import { t } from "~/i18n/i18n"
+import { Plain, plainly } from "~/kit/failed"
 import { announce } from "~/kit/toasts"
 import { ownPrefs, setPrefs } from "~/live/prefs"
 import { muteKey } from "~/live/mute"
@@ -25,9 +26,9 @@ async function sends(run: Run, ...all: TaskSend[]): Promise<void> {
 }
 
 export async function approveCompact(code: string, proposal: number): Promise<void> {
-  const run = owner(code)
+  const run = plainly(() => owner(code))
   const p = run.state.compactProposal
-  if (p?.seq !== proposal) throw new Error(t("live.rare.proposal.replaced"))
+  if (p?.seq !== proposal) throw new Plain(t("live.rare.proposal.replaced"))
   await event(run, `compacted the history through #${p.through}`, { op: "compact", summary: p.summary, through: p.through, proposal: p.seq })
   announce(t("live.rare.compacted", { through: String(p.through) }))
 }
@@ -103,9 +104,9 @@ export async function nameGoal(code: string, ask: number, name: string | null): 
 }
 
 export async function newSpec(code: string, words: string, text: string): Promise<number> {
-  const run = need(code)
+  const run = plainly(() => need(code))
   const said = words.trim()
-  if (!said) throw new Error(t("live.rare.say.what"))
+  if (!said) throw new Plain(t("live.rare.say.what"))
   const ask = await run.post({ kind: "room", room: GENERAL_ROOM }, said, {})
   await writeSpec(code, ask, text.trim() || `# ${said.split("\n")[0]!.slice(0, 120)}`)
   return ask

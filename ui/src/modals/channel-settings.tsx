@@ -10,6 +10,7 @@ import { t } from "~/i18n/i18n"
 import { tr } from "~/i18n/rich"
 import { autofocus, Avatar, cx, IconButton } from "~/kit/bits"
 import { Field, Toggle } from "~/kit/form"
+import { Details, Failed, failedToast, failure, rawOf, type Failure } from "~/kit/failed"
 import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
 import { GlyphIcon, Icon } from "~/kit/icons"
@@ -102,7 +103,10 @@ function General({ channel, onEnd }: { channel: Channel; onEnd: () => void }) {
   const [saving, setSaving] = useState<"transcript" | "log" | null>(null)
   const save = (kind: "transcript" | "log") => {
     setSaving(kind)
-    void app.actions.exportHistory(channel.code, kind).finally(() => setSaving(null))
+    void app.actions
+      .exportHistory(channel.code, kind)
+      .catch((err: unknown) => failedToast(t("modals.channel.settings.history.failed"), err))
+      .finally(() => setSaving(null))
   }
   return (
     <>
@@ -471,12 +475,16 @@ function Repos({ channel, sets }: { channel: Channel; sets: boolean }) {
   const { app } = useApp()
   const [draft, setDraft] = useState("")
   const [mine, setMine] = useState<string[]>([])
+  const [offers, setOffers] = useState<Failure | null>(null)
   const valid = REPO.test(draft.trim())
   const listId = useId()
   useEffect(() => {
     if (!sets) return
     let live = true
-    void app.actions.myRepos().then((r) => live && setMine(r))
+    void app.actions.myRepos().then(
+      (r) => live && setMine(r),
+      (err: unknown) => live && setOffers(repoFailure(err))
+    )
     return () => {
       live = false
     }
@@ -522,9 +530,16 @@ function Repos({ channel, sets }: { channel: Channel; sets: boolean }) {
           </button>
         </form>
       )}
+      {sets && offers && <Failed failure={offers} />}
       <GithubTrouble channel={channel} />
     </>
   )
+}
+
+function repoFailure(err: unknown): Failure | null {
+  if (/link GitHub/i.test(rawOf(err))) return null
+  const expired = /expired/i.test(rawOf(err))
+  return failure(t("modals.channel.settings.repos.failed"), err, { other: t(expired ? "modals.channel.settings.repos.expired" : "modals.channel.settings.repos.type") })
 }
 
 function GithubTrouble({ channel }: { channel: Channel }) {
@@ -544,7 +559,10 @@ function GithubTrouble({ channel }: { channel: Channel }) {
         </li>
       ))}
       {health.errors.map((e) => (
-        <li key={`${e.what}:${e.repo ?? ""}`}>{choreLine(e)}</li>
+        <li key={`${e.what}:${e.repo ?? ""}`}>
+          {choreLine(e)}
+          <Details raw={e.message} />
+        </li>
       ))}
     </ul>
   )

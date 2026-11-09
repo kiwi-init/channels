@@ -839,7 +839,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setGoal: (code, goal) => edit(code, (c) => ({ ...c, goal: goal || undefined })),
       setHold: (code, on, note) => edit(code, (c) => ({ ...c, hold: on ? { note, by: c.you, at: Date.now() } : undefined })),
       askCompact: (code) => edit(code, (c) => (c.proposal ? c : withCompact(c, false))),
-      approveCompact: (code, proposal) => edit(code, (c) => (c.proposal?.seq === proposal ? { ...c, compact: { ...c.proposal, by: c.you, at: Date.now() }, proposal: undefined } : c)),
+      approveCompact: async (code, proposal) => edit(code, (c) => (c.proposal?.seq === proposal ? { ...c, compact: { ...c.proposal, by: c.you, at: Date.now() }, proposal: undefined } : c)),
       myRepos: async () => ["kiwi-init/channels", "kiwi-init/electrobun-livewire", "kiwi-init/landing", "ojowwalker77/dotfiles"],
       addRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: [...new Set([...c.repos, repo])] })),
       removeRepo: (code, repo) => edit(code, (c) => ({ ...c, repos: c.repos.filter((r) => r !== repo) })),
@@ -906,7 +906,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       dismissMoved: () => setState((s) => (s.account ? { ...s, account: { ...s.account, moved: undefined } } : s)),
       windowControl: () => {},
       checkUpdate: async () => ({ state: "current", version: "2026.10.8" }),
-      setRelay: async (url) => (/^https?:\/\//.test(url.trim()) ? null : "a relay is an http(s) address"),
+      setRelay: async (url) => {
+        if (!/^https?:\/\//.test(url.trim())) throw new Error("that isn't a relay URL (https, or http on localhost)")
+      },
       installUpdate: () => setState((s) => (s.account?.update ? { ...s, account: { ...s.account, version: s.account.update.version, update: undefined } } : s)),
       signOut: () => setState((s) => ({ ...s, account: null, tiles: [] })),
       setNewMembers: (code, can) => edit(code, (c) => ({ ...c, newMembers: can })),
@@ -935,7 +937,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       saveTheme: (theme) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...savedTheme(s.prefs, theme) } })),
       deleteTheme: (id) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...deletedTheme(s.prefs, id) } })),
       savePersonalities: setOwnPersonalities,
-      setHooks: (harness, on) => setComputer((c) => ({ ...c, hooks: c.hooks.map((h) => (h.harness === harness ? { ...h, state: on ? "installed" : "off" } : h)) })),
+      setHooks: async (harness, on) => setComputer((c) => ({ ...c, hooks: c.hooks.map((h) => (h.harness === harness ? { ...h, state: on ? "installed" : "off" } : h)) })),
       setContextLine: (on) => setComputer((c) => ({ ...c, contextLine: on })),
       launchedFrom: async (ids) => DEMO_LAUNCHED.filter((a) => ids.includes(a.from)),
       computerSettings: () =>

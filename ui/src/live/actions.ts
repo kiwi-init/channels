@@ -154,14 +154,7 @@ export function makeActions(): Actions {
       }),
     setReviewer: (code, id, reviewer) => attempt(t("live.actions.reviewer.not.changed"), async () => (await rare()).setReviewer(code, id, reviewer)),
     nameGoal: (code, ask, name) => attempt(t("live.actions.goal.not.named"), async () => (await rare()).nameGoal(code, ask, name)),
-    newSpec: async (code, words, text) => {
-      try {
-        return await (await rare()).newSpec(code, words, text)
-      } catch (err) {
-        announce(t("live.actions.spec.not.started", { why: say(err) }))
-        return null
-      }
-    },
+    newSpec: async (code, words, text) => (await rare()).newSpec(code, words, text),
     writeSpec: (code, ask, text) => attempt(t("live.actions.spec.not.saved"), async () => (await rare()).writeSpec(code, ask, text)),
     approveSpec: (code, ask, v) => attempt(t("live.actions.not.approved"), async () => (await rare()).approveSpec(code, ask, v)),
     judgeSpec: (code, ask, verdict, note) =>
@@ -177,7 +170,7 @@ export function makeActions(): Actions {
     setAgentColor: (code, name, color) => attempt(t("live.actions.colour.not.changed"), async () => (await manage()).setAgentColor(code, name, color)),
     setNickname: (code, name, nickname) => attempt(t("live.actions.nickname.not.changed"), async () => (await manage()).setNickname(code, name, nickname)),
     setPowers: (code, name, powers) => attempt(t("live.actions.not.changed"), async () => (await manage()).setPowers(code, name, powers)),
-    addRoom: (code, typed, members) => tried(t("live.actions.room.not.made"), async () => (await manage()).addRoom(code, typed, members)),
+    addRoom: async (code, typed, members) => (await manage()).addRoom(code, typed, members),
     setRoomMembers: async (code, id, members) =>
       (await tried(t("live.actions.room.members.not.changed"), async () => {
         await (await manage()).setRoomMembers(code, id, members)
@@ -209,17 +202,11 @@ export function makeActions(): Actions {
     setGoal: (code, goal) => attempt(t("live.actions.goal.not.set"), async () => (await manage()).setGoal(code, goal)),
     setHold: (code, on, note) => attempt(t(on ? "live.actions.not.paused" : "live.actions.not.resumed"), async () => (await manage()).setHold(code, on, note)),
     askCompact: (code) => attempt(t("live.actions.not.asked"), async () => (await rare()).askCompact(code)),
-    approveCompact: (code, proposal) => attempt(t("live.actions.not.compacted"), async () => (await rare()).approveCompact(code, proposal)),
+    approveCompact: async (code, proposal) => (await rare()).approveCompact(code, proposal),
     myUsage,
     myRepos: async () => {
       const b = bridge()
-      if (!b) return []
-      try {
-        return (await b.githubRepos()).map((r) => r.fullName)
-      } catch {
-        // Unlinked GitHub, or no reach to it: the field still takes owner/repo typed by hand.
-        return []
-      }
+      return b ? (await b.githubRepos()).map((r) => r.fullName) : []
     },
     addRepo: (code, repo) => attempt(t("live.actions.repo.not.added"), async () => (await manage()).addRepo(code, repo)),
     removeRepo: (code, repo) => attempt(t("live.actions.repo.not.removed"), async () => (await manage()).removeRepo(code, repo)),
@@ -306,7 +293,7 @@ export function makeActions(): Actions {
     saveTheme,
     deleteTheme,
     savePersonalities: (list) => attempt(t("live.actions.not.saved"), () => savePersonalities(list)),
-    setHooks: (harness, on) => attempt(t("live.actions.hooks.failed"), () => setHooks(harness, on)),
+    setHooks,
     checkComputer,
     computerSettings,
     launchedFrom: async (ids) => (await account()).launchedFrom(ids),

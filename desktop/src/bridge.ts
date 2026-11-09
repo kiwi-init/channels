@@ -368,7 +368,7 @@ export interface MachineView {
   online: boolean | null;
 }
 
-export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
+export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string; why?: "not-registered" | "busy" | "no-answer" | "failed" };
 
 export interface KiwiBridge {
   /** The relay URL injected at load (query param, else the default). */

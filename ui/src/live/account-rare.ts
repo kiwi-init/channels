@@ -2,6 +2,7 @@ import "~/i18n/en/live-later"
 import { bridge, secrets } from "@kiwi/secrets/secrets.ts"
 import { launchedBy } from "@kiwi/app/forgotten-computers.ts"
 import { t } from "~/i18n/i18n"
+import { Plain } from "~/kit/failed"
 import { announce } from "~/kit/toasts"
 import { devices, enrollAsk, github, githubBusy, githubCode, githubGate, listenForCodes, moved, selfEnroll } from "~/live/account"
 import { postDevicesNow } from "~/live/devices"
@@ -174,14 +175,15 @@ export async function dismissMoved(): Promise<void> {
   if (b && typeof b.dismissMovedApp === "function") await b.dismissMovedApp()
 }
 
-export async function setRelay(url: string): Promise<string | null> {
+export async function setRelay(url: string): Promise<void> {
   const b = bridge()
-  if (!b) return t("live.account.relay.desktop")
+  if (!b) throw new Plain(t("live.account.relay.desktop"))
   try {
     await b.setRelayUrl(url.trim())
-    return null
   } catch (err) {
-    return err instanceof Error ? err.message.replace(/^.*?Error: /, "") : String(err)
+    // The app's own refusal of the address is said in words; anything else keeps its raw text for Details.
+    if (/isn't a relay URL/i.test(err instanceof Error ? err.message : String(err))) throw new Plain(t("live.account.relay.not.url"))
+    throw err
   }
 }
 

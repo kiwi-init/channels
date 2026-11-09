@@ -67,6 +67,7 @@ const words = {
   "live.account.github.desktop": "Linking GitHub needs the Channels desktop app",
   "live.account.github.signed.in": "Signed in with GitHub as {login}",
   "live.account.relay.desktop": "only the desktop app can change its relay",
+  "live.account.relay.not.url": "that isn't a relay address: use https, or http on localhost",
   "live.account.updates.desktop": "updates come with the Channels desktop app",
   "live.account.new.look.desktop": "the new look comes with the Channels desktop app",
   "live.account.sign.in.desktop": "only the desktop app keeps a sign-in",
