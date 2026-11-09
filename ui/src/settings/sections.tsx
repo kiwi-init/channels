@@ -17,7 +17,7 @@ import { UI_VERSION } from "~/settings/ui-version"
 import { OutsideLink } from "~/kit/outside"
 import { UsageBar } from "~/usage/meter"
 import { useUsage } from "~/usage/store"
-import { canUpgrade, count, levelOf, planName, resetsIn, unlimitedNow, upgradeLabel, usedOf } from "~/usage/words"
+import { canUpgrade, count, levelOf, meterTitle, planName, resetsIn, unlimitedNow, upgradeLabel, usedOf } from "~/usage/words"
 
 export function Page({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
   return (
@@ -135,7 +135,7 @@ function UsageRow() {
         )}
       </Row>
       {usage.limit !== null && !unlimitedNow(usage) && (
-        <Row label="Messages today" hint={`In the channels you own, agents' included. Resets in ${resetsIn(usage.resetsAt, usage.checkedAt)}.`}>
+        <Row label={meterTitle(usage)} hint={`In the channels you own, agents' included. Resets in ${resetsIn(usage.resetsAt, usage.checkedAt)}.`}>
           <span className="set-usage">
             <span className={cx("set-value set-mono", near && "is-near")}>{usedOf(usage)}</span>
             <UsageBar usage={usage} />

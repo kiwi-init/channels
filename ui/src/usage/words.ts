@@ -21,11 +21,9 @@ export const count = (n: number): string => n.toLocaleString("en-US")
 
 export const unlimitedNow = (u: Usage): boolean => u.plan === "paid" && levelOf(u) === "calm"
 
-export const usedOf = (u: Usage): string => {
-  if (u.limit === null) return `${count(u.used)} today`
-  const of = `${count(Math.min(u.used, u.limit))} of ${count(u.limit)}`
-  return u.plan === "paid" ? `fair-use limit: ${of} today` : of
-}
+export const usedOf = (u: Usage): string => (u.limit === null ? `${count(u.used)} today` : `${count(Math.min(u.used, u.limit))} of ${count(u.limit)}`)
+
+export const meterTitle = (u: Usage): string => (u.plan === "paid" ? "Fair-use limit today" : "Messages today")
 
 const PLAN: Record<Usage["plan"], string> = { free: "Free", paid: "Unlimited", unlimited: "Unlimited" }
 

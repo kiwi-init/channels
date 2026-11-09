@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 
 import { dailyLimit } from "~/live/refused"
 import type { Usage } from "~/model"
-import { canUpgrade, levelOf, planName, resetsIn, shareOf, unlimitedNow, upgradeLabel, usedOf } from "~/usage/words"
+import { canUpgrade, levelOf, meterTitle, planName, resetsIn, shareOf, unlimitedNow, upgradeLabel, usedOf } from "~/usage/words"
 
 const free: Usage = { plan: "free", blocked: false, used: 412, limit: 1000, channels: 2, resetsAt: 0, upgradeUrl: "https://pay.test", paidLimit: 5000, billingUrl: null }
 
@@ -35,7 +35,9 @@ describe("today's messages", () => {
     expect(planName(paid)).toBe("Unlimited")
     expect(unlimitedNow(paid)).toBe(true)
     expect(unlimitedNow({ ...paid, used: 80_000 })).toBe(false)
-    expect(usedOf({ ...paid, used: 86_400 })).toBe("fair-use limit: 86,400 of 100,000 today")
+    expect(meterTitle(paid)).toBe("Fair-use limit today")
+    expect(usedOf({ ...paid, used: 86_400 })).toBe("86,400 of 100,000")
+    expect(meterTitle(free)).toBe("Messages today")
     expect(unlimitedNow(free)).toBe(false)
     expect(usedOf(free)).toBe("412 of 1,000")
   })

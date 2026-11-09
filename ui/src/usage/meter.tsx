@@ -7,7 +7,7 @@ import { OutsideLink } from "~/kit/outside"
 import type { Usage } from "~/model"
 import { useApp } from "~/nav"
 import { showLimit, useUsage } from "~/usage/store"
-import { canUpgrade, levelOf, planName, resetsIn, shareOf, unlimitedNow, upgradeLabel, usedOf, utcDay } from "~/usage/words"
+import { canUpgrade, levelOf, meterTitle, planName, resetsIn, shareOf, unlimitedNow, upgradeLabel, usedOf, utcDay } from "~/usage/words"
 
 const R = 7
 const ROUND = 2 * Math.PI * R
@@ -67,16 +67,16 @@ export function UsageMeter() {
     }
   }, [open])
   if (!usage || usage.limit === null || unlimitedNow(usage)) return null
-  const label = `Messages today: ${usedOf(usage)}`
+  const label = `${meterTitle(usage)}: ${usedOf(usage)}`
   return (
     <>
       <button ref={button} type="button" className={cx("rail-usage", open && "is-on")} aria-label={label} title={label} aria-expanded={open} onClick={() => setOpen(!open)}>
         <Ring usage={usage} />
       </button>
       {at && (
-        <div ref={card} className="usage-card" role="dialog" aria-label="Messages today" style={{ left: at.right + 8, bottom: window.innerHeight - at.bottom }}>
+        <div ref={card} className="usage-card" role="dialog" aria-label={meterTitle(usage)} style={{ left: at.right + 8, bottom: window.innerHeight - at.bottom }}>
           <div className="usage-card-head">
-            <span>Messages today</span>
+            <span>{meterTitle(usage)}</span>
             <span className="usage-card-plan">{planName(usage)}</span>
           </div>
           <div className="usage-card-count">
