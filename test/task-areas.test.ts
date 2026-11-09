@@ -6,9 +6,12 @@ import { join } from "node:path";
 import { formatTask } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormedEvent, type Event, type Message } from "@kiwi/core/protocol.ts";
-import { areasOf, taskAreas, taskCandidates } from "@kiwi/core/routing.ts";
+import { areasOf, taskAreas, taskCandidates, type Candidate } from "@kiwi/core/routing.ts";
+import { reasonText } from "@kiwi/core/routing-text.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { branchAreas } from "../src/areas.ts";
+
+const withText = (cs: readonly Candidate[]) => cs.map(({ whys, ...c }) => ({ ...c, reasons: whys.map(reasonText) }));
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -62,7 +65,7 @@ describe("the folders a task changed", () => {
     const bDone = await ev("bo", { op: "task.update", task: b.seq, state: "done", areas: ["web/src/components"] });
     const next = await ev("jon", { op: "task.add", title: "Webhook retries in src/relay/github.ts" });
     const s = fold([a, aDone, b, bDone, next], roster);
-    expect(taskCandidates(s, next.seq)).toEqual([
+    expect(withText(taskCandidates(s, next.seq))).toEqual([
       { name: "ana", score: 2, queue: 0, reasons: [`touched src/relay in T${a.seq}`], warm: false },
       { name: "bo", score: 0, queue: 0, reasons: [], warm: false },
     ]);

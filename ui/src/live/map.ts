@@ -4,6 +4,7 @@ import { nameKey, runsLine } from "@kiwi/core/membership.ts"
 import type { Card, DocBlockRef, Event } from "@kiwi/core/protocol.ts"
 import { answersAsHuman, permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
+import type { EventSay } from "@kiwi/core/event-words.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
 import { checksOf, FAILED, landingWaits, prLinks, readyForPerson, taskOfPr, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
@@ -41,10 +42,10 @@ import {
   type Task as CoreTask,
 } from "@kiwi/core/state.ts"
 import type { GithubCheck, GithubIssue, GithubPr } from "@kiwi/core/state/github.ts"
-import { decisionLabel } from "@kiwi/app/asks.ts"
 import { revokedComputer } from "@kiwi/app/forgotten-computers.ts"
 import { handoffLabel } from "@kiwi/app/handoff.ts"
-import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@kiwi/app/permission-view.ts"
+import { permissionCode, visibleText } from "@kiwi/app/permission-view.ts"
+import { decisionWords, permissionNotesOf, permissionTitleOf } from "~/live/ask-words"
 import { reviewsFor, taskActions } from "@kiwi/channel/task-actions.ts"
 import { taskGroups } from "@kiwi/app/views.ts"
 import { roomOfMessage, roomSeenKey } from "@kiwi/app/rooms.ts"
@@ -295,6 +296,10 @@ function mentionsYou(m: Wire, me: string): boolean {
 
 const SUMMARISED = (m: Wire): boolean => m.ev?.op === "task.add" || (m.ev?.op === "task.update" && !!m.ev.state)
 
+const sayEvent: EventSay = (key, vars) => t(`events.${key}`, vars)
+
+const eventWhat = (m: Wire, state: ChannelState): string => describeEvent(m, state, (handle) => nameIn(state, handle), sayEvent)
+
 function nameIn(state: ChannelState, name: string): string {
   const m = state.members.get(name)
   return m?.display || name
@@ -314,7 +319,7 @@ function eventText(m: Wire, state: ChannelState): string {
     case "role.set":
       return ev.role ? t("live.map.role", { name: nameIn(state, ev.member), role: ev.role }) : t("live.map.no.role", { name: nameIn(state, ev.member) })
     default:
-      return t("live.map.event", { who, what: describeEvent(m, state, (handle) => nameIn(state, handle)) })
+      return t("live.map.event", { who, what: eventWhat(m, state) })
   }
 }
 
@@ -567,7 +572,7 @@ export function leftOutOf(state: ChannelState, messages: readonly Wire[], me: st
         seq: m.seq,
         from: m.from,
         at: m.ts,
-        text: wrote(t("live.map.event", { who: nameIn(state, m.from), what: describeEvent(m, state, (handle) => nameIn(state, handle)) })),
+        text: wrote(t("live.map.event", { who: nameIn(state, m.from), what: eventWhat(m, state) })),
         where: { kind: "room", room: GENERAL_ROOM },
         system: true,
         leftOut,
@@ -667,10 +672,10 @@ function historyOf(state: ChannelState, messages: readonly Wire[], me: string): 
   return out
 }
 
-function suggestionFor(state: ChannelState, t: CoreTask): { name: string; why: Words } | undefined {
+function suggestionFor(state: ChannelState, t: CoreTask): Task["suggested"] {
   if (t.owner || t.state === "done") return undefined
   const top = pickFor(taskCandidates(state, t.id))
-  return top ? { name: top.name, why: wrote(top.reasons[0] ?? "has its context") } : undefined
+  return top ? { name: top.name, ...(top.whys[0] ? { reason: top.whys[0] } : {}) } : undefined
 }
 
 const landsWaiting = (state: ChannelState, t: CoreTask): { waits?: string; bypassed?: string[]; ready?: true } => {
@@ -814,11 +819,11 @@ export function asksOf(
         canDeny: mine || owner,
         ...(m.permission.canAllow && human && !mine ? { allower: human } : {}),
         tool: m.permission.tool,
-        title: permissionTitle(m.permission),
+        title: permissionTitleOf(m.permission),
         ...(m.permission.description ? { summary: m.permission.description } : {}),
         code: permissionCode(m.permission),
         ...(m.permission.cwd ? { cwd: m.permission.cwd } : {}),
-        notes: permissionNotes(m.permission),
+        notes: permissionNotesOf(m.permission),
         ...(m.permission.replaced !== undefined ? { replaced: visibleText(m.permission.replaced) } : {}),
         ...(m.permission.content !== undefined ? { content: visibleText(m.permission.content) } : {}),
         ...(task !== undefined ? { task } : {}),
@@ -844,15 +849,7 @@ export function asksOf(
       from: m.from,
       at: m.ts,
       text: wrote(m.body),
-      label: m.handoff
-        ? t("live.said.browser.you")
-        : m.esc
-          ? askedOf
-            ? decisionLabel(m).replace(/ for you$/, "")
-            : decisionLabel(m)
-          : m.to?.includes(me)
-            ? t("live.map.question.you")
-            : t("live.map.question.everyone"),
+      label: m.handoff ? t("live.said.browser.you") : m.esc ? decisionWords(m, !askedOf) : m.to?.includes(me) ? t("live.map.question.you") : t("live.map.question.everyone"),
       ...(!m.handoff && !m.esc ? { plain: true as const } : {}),
       ...(m.decision === "irreversible" ? { irreversible: true as const } : {}),
       options: (m.choices ?? []).map(wrote),

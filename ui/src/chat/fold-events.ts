@@ -1,4 +1,7 @@
+import "~/i18n/en/chat-later"
 import { isRunning, type GithubNote } from "@kiwi/core/protocol.ts"
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 import type { Message, Task } from "~/model"
 
 export interface GithubPart {
@@ -66,12 +69,24 @@ export function linesOf(run: readonly Message[], tasks: ReadonlyMap<number, Task
 
 const FAILED = new Set(["failure", "timed_out", "cancelled", "action_required", "startup_failure"])
 
-const PR_WORD: Record<string, string> = { opened: "opened", reopened: "reopened", closed: "closed", ready_for_review: "ready for review", converted_to_draft: "back to draft", edited: "edited" }
+const PR_WORD: Readonly<Record<string, Key>> = {
+  opened: "chat.fold.opened",
+  reopened: "chat.fold.reopened",
+  closed: "chat.fold.closed",
+  ready_for_review: "chat.fold.ready",
+  converted_to_draft: "chat.fold.draft",
+  edited: "chat.fold.edited",
+}
+
+const prWord = (action: string | undefined): string | undefined => {
+  const key = action === undefined ? undefined : PR_WORD[action]
+  return key && t(key)
+}
 
 function checkWord(i: GithubNote): string | null {
   if (!i.conclusion) return null
-  if (i.conclusion === "success") return "passed"
-  if (FAILED.has(i.conclusion)) return "failed"
+  if (i.conclusion === "success") return t("live.map.check.passed")
+  if (FAILED.has(i.conclusion)) return t("live.map.check.failed")
   return i.conclusion.replace(/_/g, " ")
 }
 
@@ -85,17 +100,22 @@ export function githubSummary(items: readonly GithubNote[]): GithubPart[] {
     if (i.event === "pull_request" && i.number) {
       const key = `${i.repo}#${i.number}`
       const was = prs.get(key)
-      const word = i.merged ? "merged" : PR_WORD[i.action ?? ""]
+      const word = i.merged ? t("chat.fold.merged") : prWord(i.action)
       if (i.action === "synchronize") syncs++
       const url = i.url ?? was?.url
-      prs.set(key, { ref: `#${i.number}`, ...(url ? { url } : {}), text: word ?? was?.text ?? "updated" })
+      prs.set(key, { ref: `#${i.number}`, ...(url ? { url } : {}), text: word ?? was?.text ?? t("chat.fold.updated") })
     } else if (i.event === "issues" && i.number) {
-      issues.set(`${i.repo}#${i.number}`, { ref: `issue #${i.number}`, ...(i.url ? { url: i.url } : {}), text: i.action ?? "updated" })
+      issues.set(`${i.repo}#${i.number}`, { ref: t("chat.fold.issue", { number: String(i.number) }), ...(i.url ? { url: i.url } : {}), text: prWord(i.action) ?? i.action ?? t("chat.fold.updated") })
     } else if ((i.event === "check_run" || i.event === "workflow_run") && i.name) {
       const word = checkWord(i)
       if (word) checks.set(i.name, word)
     } else if (i.event === "push") pushes++
   }
   const pushed = pushes || syncs
-  return [...prs.values(), ...issues.values(), ...(pushed ? [{ text: pushed === 1 ? "1 push" : `${pushed} pushes` }] : []), ...[...checks].map(([name, word]) => ({ text: `${name} ${word}` }))]
+  return [
+    ...prs.values(),
+    ...issues.values(),
+    ...(pushed ? [{ text: t("chat.fold.pushes", { count: pushed }) }] : []),
+    ...[...checks].map(([name, word]) => ({ text: t("chat.fold.check", { name, word }) })),
+  ]
 }

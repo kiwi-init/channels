@@ -264,6 +264,13 @@ const words = {
   "settings.agents.this.computer": "This computer",
   "settings.agents.checkpoint": "Ask agents for a checkpoint past 250k context",
   "settings.agents.checkpoint.hint": "An agent here past 250k tokens is asked to write where its work stands before it ends its turn.",
+  "settings.sections.interface.built.in": "built in",
+  "settings.personalities.role.builder": "Builder",
+  "settings.personalities.role.reviewer": "Reviewer",
+  "settings.personalities.role.bug.hunter": "Bug hunter",
+  "settings.personalities.role.explorer": "Explorer",
+  "settings.personalities.role.releaser": "Releaser",
+  "settings.personalities.role.lead": "Lead",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

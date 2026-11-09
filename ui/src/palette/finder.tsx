@@ -7,7 +7,7 @@ import { Icon } from "~/kit/icons"
 import { docOf } from "~/chat/doc-of"
 import type { App, Channel, Task, TaskStatus, Theme, Where } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
-import { nickname, onePerPerson, shown } from "~/names"
+import { nickname, onePerPerson, roleWord, shown } from "~/names"
 import { SIDEBAR_KEYS } from "@kiwi/app/sidebar-hidden.ts"
 import { toggleSide } from "~/shell/side"
 import { statusOf } from "~/shell/sidebar"
@@ -279,7 +279,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
         label: shown(person),
         keys: [person.name, person.role ?? "", person.runs ?? "", person.kind === "agent" ? "agent" : "person"],
         lead: <Avatar person={person} size="sm" />,
-        meta: [person.you ? t("palette.finder.person.you") : person.role, status].filter(Boolean).join(" · "),
+        meta: [person.you ? t("palette.finder.person.you") : person.role && roleWord(person.role), status].filter(Boolean).join(" · "),
         run: () => {
           close()
           if (nav.page !== "channel") go({ to: "back" })

@@ -7,9 +7,13 @@ import specs from "~/i18n/pt-BR/specs"
 import modals from "~/i18n/pt-BR/modals"
 import needs from "~/i18n/pt-BR/needs"
 import shell from "~/i18n/pt-BR/shell"
+import status from "~/i18n/pt-BR/status"
+import events from "~/i18n/pt-BR/events"
 import github from "~/i18n/pt-BR/github"
 
 export default {
+  ...events,
+  ...status,
   ...chatCompose,
   ...chatFeed,
   ...live,

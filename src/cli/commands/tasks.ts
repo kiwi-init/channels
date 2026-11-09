@@ -7,7 +7,8 @@ import { formatTask, formatTasks, issueLinkText, looksLikeLine, taskStateWord } 
 import { isLanding, reviewCheckOf, type Landing, type TaskState } from "@kiwi/core/protocol.ts";
 import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
 import { askRefusal, isPerson, taskSpecRefusal, leadCheckpointKey, mayNameGoal, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
-import { formatCandidates, pickFor, taskCandidates } from "@kiwi/core/routing.ts";
+import { pickFor, taskCandidates } from "@kiwi/core/routing.ts";
+import { formatCandidates, reasonText } from "@kiwi/core/routing-text.ts";
 import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, keepDaemon, offlineOk, out, session } from "../context.ts";
@@ -195,7 +196,7 @@ export const taskCommands: Record<string, Command> = {
           const next = args.slice(4).join(" ") || opt.note || undefined;
           const state = yield* s.taskHandoff(id, to, next, opt.first === true);
           const t = state.tasks.get(id)!;
-          const why = top ? `: ${top.reasons.join("; ")}` : "";
+          const why = top ? `: ${top.whys.map(reasonText).join("; ")}` : "";
           return out(`${taskId(id)} is ${t.owner}'s now${opt.first ? ", before their other tasks" : ""}${why}${next ? "" : ' (add where it stands next time: kiwi task assign T7 NAME "…")'}`);
         }
         const verdictOf = { approve: "approved", reject: "rejected" } as const;

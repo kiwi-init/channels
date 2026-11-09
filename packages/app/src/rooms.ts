@@ -10,12 +10,14 @@ export interface RoomEntry {
 
 export const cleanRoomName = (typed: string): string => roomName(typed.replace(/^[#\s]+/, ""));
 
-export function roomProblem(rooms: Iterable<Pick<Room, "id" | "name">>, typed: string, renaming?: string): string | null {
+export type RoomProblem = { kind: "unnamed" } | { kind: "taken"; name: string } | { kind: "full"; max: number };
+
+export function roomProblem(rooms: Iterable<Pick<Room, "id" | "name">>, typed: string, renaming?: string): RoomProblem | null {
   const name = cleanRoomName(typed);
   const all = [...rooms];
-  if (!name) return "A room needs a name";
-  if (all.some((r) => r.id !== renaming && r.name.toLowerCase() === name.toLowerCase())) return `A room is already called #${name}`;
-  if (!renaming && all.length >= MAX_ROOMS) return `A channel holds at most ${MAX_ROOMS} rooms`;
+  if (!name) return { kind: "unnamed" };
+  if (all.some((r) => r.id !== renaming && r.name.toLowerCase() === name.toLowerCase())) return { kind: "taken", name };
+  if (!renaming && all.length >= MAX_ROOMS) return { kind: "full", max: MAX_ROOMS };
   return null;
 }
 

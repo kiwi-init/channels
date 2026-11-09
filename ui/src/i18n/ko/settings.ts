@@ -266,4 +266,11 @@ export default {
 
   "settings.controls.save": "저장",
   "settings.controls.cancel": "취소",
+  "settings.sections.interface.built.in": "기본 제공",
+  "settings.personalities.role.builder": "빌더",
+  "settings.personalities.role.reviewer": "리뷰어",
+  "settings.personalities.role.bug.hunter": "버그 헌터",
+  "settings.personalities.role.explorer": "탐색가",
+  "settings.personalities.role.releaser": "릴리스 담당",
+  "settings.personalities.role.lead": "리드",
 } satisfies Catalog

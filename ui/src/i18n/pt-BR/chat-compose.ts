@@ -188,4 +188,8 @@ export default {
   "chat.markdown.column": "coluna {n}",
   "chat.markdown.copy": "Copiar",
   "chat.markdown.copy.text": "Copiar {text}",
+  "chat.markdown.code.block": "Bloco de código",
+  "chat.markdown.code.block.lang": "Bloco de código: {lang}",
+  "chat.markdown.task": "Tarefa: {text}",
+  "chat.doc.media.didnt.load": "{name} não carregou",
 } satisfies Catalog

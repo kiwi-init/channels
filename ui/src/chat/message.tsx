@@ -16,7 +16,7 @@ import { clock } from "~/kit/time"
 import { memberOf, type Channel, type Image, type ImageSpot, type Message, type Person } from "~/model"
 import { openMessage as showMessage } from "~/live/open-message"
 import { useAct } from "~/nav"
-import { nickname } from "~/names"
+import { nickname, roleWord } from "~/names"
 import { wordsPlain, wordsRaw, wrote } from "~/words"
 import { withNames } from "~/chat/linked"
 import { showMenu } from "~/kit/menu-open"
@@ -255,7 +255,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             <button
               type="button"
               className="msg-name"
-              title={who?.role && who.role.toLowerCase() !== nickname(channel, m.from).toLowerCase() ? who.role : undefined}
+              title={who?.role && who.role.toLowerCase() !== nickname(channel, m.from).toLowerCase() ? roleWord(who.role) : undefined}
               onClick={() => go({ to: "modal", modal: { kind: "person", name: m.from } })}
               onContextMenu={(e) => who && showMenu(e, nickname(channel, m.from), (x) => [x.personItems({ channel, go }, who)])}
             >

@@ -226,6 +226,23 @@ const words = {
   "chat.updates.panel.updates": { one: "{count} update", other: "{count} updates" },
   "chat.updates.panel.open": "Open",
   "chat.updates.panel.and.more": " and {count} more",
+  "chat.markdown.code.block": "Code block",
+  "chat.markdown.code.block.lang": "Code block: {lang}",
+  "chat.markdown.task": "Task: {text}",
+  "chat.doc.media.didnt.load": "{name} didn't load",
+  "chat.fold.opened": "opened",
+  "chat.fold.reopened": "reopened",
+  "chat.fold.closed": "closed",
+  "chat.fold.ready": "ready for review",
+  "chat.fold.draft": "back to draft",
+  "chat.fold.edited": "edited",
+  "chat.fold.merged": "merged",
+  "chat.fold.updated": "updated",
+  "chat.fold.issue": "issue #{number}",
+  "chat.fold.pushes": { one: "{count} push", other: "{count} pushes" },
+  "chat.fold.check": "{name} {word}",
+  "chat.doc.channel.removed": "the channel was removed",
+  "chat.doc.channel.closed": "the channel was closed",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

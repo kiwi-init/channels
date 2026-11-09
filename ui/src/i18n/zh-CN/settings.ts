@@ -264,4 +264,11 @@ export default {
 
   "settings.controls.save": "保存",
   "settings.controls.cancel": "取消",
+  "settings.sections.interface.built.in": "内置",
+  "settings.personalities.role.builder": "构建者",
+  "settings.personalities.role.reviewer": "审核人",
+  "settings.personalities.role.bug.hunter": "找 Bug 的人",
+  "settings.personalities.role.explorer": "探索者",
+  "settings.personalities.role.releaser": "发布者",
+  "settings.personalities.role.lead": "负责人",
 } satisfies Catalog

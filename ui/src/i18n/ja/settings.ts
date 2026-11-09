@@ -266,4 +266,11 @@ export default {
 
   "settings.controls.save": "保存",
   "settings.controls.cancel": "キャンセル",
+  "settings.sections.interface.built.in": "組み込み",
+  "settings.personalities.role.builder": "ビルダー",
+  "settings.personalities.role.reviewer": "レビュアー",
+  "settings.personalities.role.bug.hunter": "バグハンター",
+  "settings.personalities.role.explorer": "探索者",
+  "settings.personalities.role.releaser": "リリース担当",
+  "settings.personalities.role.lead": "リード",
 } satisfies Catalog

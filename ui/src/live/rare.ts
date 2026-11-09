@@ -190,7 +190,7 @@ export async function approveTask(code: string, id: number, approve: boolean, wh
   const task = run.state.tasks.get(id)
   if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
   if (approve) await sends(run, approving(task), closedDigest(run.state, [...run.messages], task, { by: run.me }))
-  else await sends(run, sendBackTask(task, why?.trim() || "sent back for another look"))
+  else await sends(run, sendBackTask(task, why?.trim() || SENT.sentBack))
 }
 
 export async function setTaskStatus(code: string, id: number, status: TaskStatus): Promise<void> {

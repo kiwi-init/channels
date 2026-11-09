@@ -1,8 +1,9 @@
 import { ignored, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { MAIN, placeKey, type ChannelState } from "@kiwi/core/state.ts"
-import { onIt, receipt, type Busy, type Marks } from "@kiwi/channel/receipts.ts"
+import { onItOf, receiptOf, type Busy, type Marks, type OnIt, type Receipt } from "@kiwi/channel/receipts.ts"
 import { roomOfMessage } from "@kiwi/app/rooms.ts"
 import { liveOf } from "~/doing"
+import { span, t } from "~/i18n/i18n"
 import type { Message, Person } from "~/model"
 
 export function receiptsOf(
@@ -29,10 +30,34 @@ export function receiptsOf(
     return messages.some((x) => x.seq > m.seq && x.kind !== "event" && from.includes(x.from) && (x.re?.includes(m.seq) || state.threadOf.get(x.seq) === root))
   }
   for (const m of new Set(last.values())) {
-    const said = onIt(m, state, marks, pkOf, busy, replied(m), now) ?? receipt(m, state, marks, pkOf, time)
+    const on = onItOf(m, state, marks, pkOf, busy, replied(m), now)
+    const said = on ? onItWords(on) : receiptWords(receiptOf(m, state, marks, pkOf), time)
     if (said) out.set(m.seq, said)
   }
   return out
+}
+
+function receiptWords(r: Receipt | null, time: (at: number) => string): string | null {
+  if (!r) return null
+  switch (r.kind) {
+    case "delivered":
+      return t("live.receipts.delivered")
+    case "read":
+      return r.at === undefined ? t("live.receipts.read") : t("live.receipts.read.at", { time: time(r.at) })
+    case "everyone":
+      return r.at === undefined ? t("live.receipts.read.everyone") : t("live.receipts.read.everyone.at", { time: time(r.at) })
+    case "some":
+      return t("live.receipts.read.by", { names: r.names.join(", ") })
+    case "count":
+      return t("live.receipts.read.count", { read: r.read, of: r.of })
+  }
+}
+
+function onItWords(o: OnIt): string {
+  if (!o.busy) return t("live.receipts.on.it", { name: o.name })
+  if (o.minutes < 1) return t("live.receipts.on.it.doing", { name: o.name, doing: o.busy.text })
+  const lasted = o.minutes < 60 ? span(o.minutes, "minute") : span(Math.floor(o.minutes / 60), "hour")
+  return t("live.receipts.on.it.for", { name: o.name, doing: o.busy.text, time: lasted })
 }
 
 export function withReceipts(messages: Message[], receipts: ReadonlyMap<number, string>): Message[] {

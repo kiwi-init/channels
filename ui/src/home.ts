@@ -76,7 +76,7 @@ function agentOf(c: Source, p: Person): HomeAgent {
     nick: nickname(c, p.name),
     person: p,
     state,
-    doing: live?.text ?? (state === "away" ? "offline" : restOf(p)),
+    doing: live?.text ?? (state === "away" ? t("doing.offline") : restOf(p)),
     ...(live?.since ? { since: live.since } : {}),
     task: task ? { id: task.id, title: wordsPlain(task.title, c.nicknames) } : null,
   }

@@ -568,7 +568,7 @@ const tasks: Task[] = [
     id: 15,
     title: wrote("Rotate the relay's signing key"),
     status: "todo",
-    suggested: { name: "atlas", why: wrote("worked T9 before") },
+    suggested: { name: "atlas", reason: { kind: "worked", task: 9, warm: false } },
     leftBy: "scout",
     createdBy: "maya",
     createdAt: m(200),

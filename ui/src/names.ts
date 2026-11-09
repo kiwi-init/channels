@@ -1,10 +1,13 @@
 import { useContext } from "react"
 
 import type { Channel, Person } from "~/model"
+import { t } from "~/i18n/i18n"
 import { AppContext } from "~/nav"
 import { wordsPlain, type Words } from "~/words"
 
 export const nicknamesOf = (members: Iterable<{ name: string; display?: string | undefined }>): ReadonlyMap<string, string> => new Map([...members].map((m) => [m.name, m.display || m.name]))
+
+export const roleWord = (role: string): string => (role === "lead" ? t("names.role.lead") : role === "owner" ? t("names.role.owner") : role)
 
 export const nickname = (channel: Pick<Channel, "nicknames">, handle: string): string => channel.nicknames.get(handle) ?? handle
 

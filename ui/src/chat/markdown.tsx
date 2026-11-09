@@ -357,6 +357,12 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       const href = a.getAttribute("href") ?? ""
       if (!a.title && a.textContent?.trim() !== href) a.title = href
     }
+    for (const pre of box.current?.querySelectorAll<HTMLElement>("pre[aria-label]") ?? []) {
+      const lang = /^Code block(?:: (.+))?$/.exec(pre.getAttribute("aria-label") ?? "")
+      if (lang) pre.setAttribute("aria-label", lang[1] ? t("chat.markdown.code.block.lang", { lang: lang[1] }) : t("chat.markdown.code.block"))
+    }
+    for (const check of box.current?.querySelectorAll<HTMLInputElement>('input[type="checkbox"][aria-label^="Task: "]') ?? [])
+      check.setAttribute("aria-label", t("chat.markdown.task", { text: (check.getAttribute("aria-label") ?? "").slice(6) }))
     for (const code of box.current?.querySelectorAll<HTMLElement>("code") ?? []) {
       const text = code.textContent ?? ""
       if (code.closest("pre, a") || text.length < COPYABLE || text.includes("\n")) continue

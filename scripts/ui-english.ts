@@ -5,10 +5,11 @@ import { parseSync } from "oxc-parser";
 const ROOT = join(import.meta.dir, "..");
 const SRC = join(ROOT, "ui/src");
 const ALLOW = join(import.meta.dir, "ui-english.json");
-const SKIP = /(?:\.test\.tsx?|\.page\.ts|\.d\.ts)$|^(?:demo|i18n)\/|^sent\.ts$/;
+const SKIP = /(?:\.test\.tsx?|\.page\.ts|\.d\.ts)$|^(?:demo|i18n)\/|^sent\.ts$|^chat\/thumb(?:s|-shrink)\.ts$|^kit\/typing-(?:record|trace)\.ts$/;
 const SHOWN_ATTRS = new Set(["label", "title", "aria-label", "aria-description", "placeholder", "alt", "hint", "lede", "sub", "tip", "verb"]);
 const SENTENCE = /^[A-Z][a-z']+(?:\s|[.,:;!?…]|$)|[a-z]{2,}\s+[a-z]{2,}.*[.?!…]$/;
-const AS_IS = new Set(["Channels", "channels", "Channels is not a harness", "GitHub", "Linux", "Windows", "Inter", "Lato", "Atkinson", "Esc", "kiwi login"]);
+const PHRASE = /^(?:[a-z']+|§)(?: (?:[a-z']+|§))+$/;
+const AS_IS = new Set(["Channels", "channels", "Channels is not a harness", "GitHub", "Linux", "Windows", "Inter", "Lato", "Atkinson", "Esc", "kiwi login", "kiwi doctor"]);
 const ID_TEMPLATE = /^T\{\}(?:(?: | · )\{\})*\s?$/;
 const DEV_ERRORS = /^(?:TypeError|RangeError|SyntaxError|ReferenceError)$/;
 const THEME_TYPE = /\bColorTheme\b/;
@@ -22,6 +23,8 @@ function looksShown(text: string): boolean {
   return /[A-Za-z]{2,}/.test(s) && SENTENCE.test(s) && !AS_IS.has(s);
 }
 
+const isPhrase = (text: string): boolean => PHRASE.test(text.trim()) && /[a-z]{3,}/.test(text) && !AS_IS.has(text.trim());
+
 const hasWords = (text: string): boolean => /[A-Za-z]{2,}/.test(text) && !AS_IS.has(text.trim());
 
 function keyName(n: Node | undefined): string {
@@ -30,6 +33,8 @@ function keyName(n: Node | undefined): string {
   if (n.type === "Literal") return String(n.value);
   return "";
 }
+
+const QUIET_KEYS = new Set(["type", "key", "rel"]);
 
 const WRAPPERS = new Set(["TSAsExpression", "TSSatisfiesExpression", "ParenthesizedExpression"]);
 
@@ -44,7 +49,9 @@ function calleeName(n: Node): string {
 }
 
 const QUIET_CALLS =
-  /^(?:t|console\.\w+|require|import|cx|noteTyping|querySelector|\w+\.querySelector(?:All)?|\w+\.(?:get|set|remove)Item|\w+\.startsWith|\w+\.endsWith|\w+\.includes|\w+\.(?:add|remove|toggle|contains))$/;
+  /^(?:t|console\.\w+|require|import|cx|noteTyping|event|send|sends|\w+\.send|querySelector|\w+\.querySelector(?:All)?|\w+\.(?:get|set|remove)Item|\w+\.startsWith|\w+\.endsWith|\w+\.includes|\w+\.(?:add|remove|toggle|contains))$/;
+
+export const skipped = (path: string): boolean => SKIP.test(path);
 
 export function englishIn(file: string, code: string): number {
   const { program } = parseSync(file, code);
@@ -87,6 +94,7 @@ export function englishIn(file: string, code: string): number {
         if (QUIET_CALLS.test(calleeName(n)) || DEV_ERRORS.test(calleeName(n))) return;
         break;
       case "VariableDeclarator": {
+        if (QUIET_KEYS.has(keyName(n.id as Node))) return;
         const typed = (n.id as Node)?.typeAnnotation as Node | undefined;
         if (typed && THEME_TYPE.test(code.slice(Number(typed.start), Number(typed.end)))) themes.add(unwrapped(n.init as Node));
         break;
@@ -109,15 +117,15 @@ export function englishIn(file: string, code: string): number {
         walk(n.consequent, quiet);
         return;
       case "Property":
-        if (themes.has(n) || keyName(n.key as Node) === "type") return;
+        if (themes.has(n) || QUIET_KEYS.has(keyName(n.key as Node))) return;
         walk(n.value, quiet);
         return;
       case "Literal":
-        if (!quiet && typeof n.value === "string" && looksShown(n.value)) found++;
+        if (!quiet && typeof n.value === "string" && (looksShown(n.value) || isPhrase(n.value))) found++;
         return;
       case "TemplateLiteral": {
         const text = (n.quasis as Node[]).map((q) => String((q.value as Node)?.cooked ?? "")).join("{}");
-        if (!quiet && !ID_TEMPLATE.test(text) && looksShown(text.replace(/\{\}/g, "x"))) found++;
+        if (!quiet && !ID_TEMPLATE.test(text) && (looksShown(text.replace(/\{\}/g, "x")) || isPhrase(text.replace(/\{\}/g, "§")))) found++;
         walk(n.expressions, quiet);
         return;
       }
@@ -131,7 +139,7 @@ export function englishIn(file: string, code: string): number {
 async function counts(): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   for await (const path of new Glob("**/*.{ts,tsx}").scan(SRC)) {
-    if (SKIP.test(path)) continue;
+    if (skipped(path)) continue;
     const n = englishIn(path, await Bun.file(join(SRC, path)).text());
     if (n) out[`ui/src/${path}`] = n;
   }

@@ -188,4 +188,8 @@ export default {
   "chat.markdown.column": "列 {n}",
   "chat.markdown.copy": "コピー",
   "chat.markdown.copy.text": "{text} をコピー",
+  "chat.markdown.code.block": "コードブロック",
+  "chat.markdown.code.block.lang": "コードブロック: {lang}",
+  "chat.markdown.task": "タスク: {text}",
+  "chat.doc.media.didnt.load": "{name} を読み込めませんでした",
 } satisfies Catalog

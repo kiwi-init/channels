@@ -34,6 +34,7 @@ import { changedSinceApproval, changedAfterApproval, freeAgents, specOfComment, 
 import { commentsLine, commentsWaiting, specLine } from "./spec-lines.ts";
 import { landingWaits, reviewNotRequired, rulesText } from "./prs.ts";
 import { artifactText } from "./done-gate.ts";
+import { sayEvent, type EventKey, type EventSay } from "./event-words.ts";
 import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 export function tokensWord(n: number): string {
@@ -73,15 +74,14 @@ export function parseDuration(s: string): number {
   return Math.round(total);
 }
 
-const STATE_VERB: Record<TaskState | OldTaskState, string> = {
-  todo: "reopened",
-  doing: "started",
-  review: "sent for review",
-  landing: "approved, landing",
-  done: "finished",
-  // Older clients' states.
-  blocked: "is blocked on",
-  cancelled: "cancelled",
+const STATE_SAY: Record<TaskState | OldTaskState, EventKey> = {
+  todo: "task.reopened",
+  doing: "task.started",
+  review: "task.review",
+  landing: "task.landing",
+  done: "task.finished",
+  blocked: "task.blocked",
+  cancelled: "task.cancelled",
 };
 
 /** A task's state as people read it: "todo" on the wire is open. */
@@ -113,175 +113,181 @@ export function proofLabel(p: { url: string; label?: string }): string {
  */
 /** " via mac-mini": the computer that let an agent in, as its join reads. */
 
-export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle: string) => string = (handle) => handle): string {
+export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle: string) => string = (handle) => handle, say: EventSay = sayEvent): string {
   const ev = m.ev;
   if (!ev) return m.body;
   const task = (id: number) => {
     const title = state?.tasks.get(id)?.title;
     return title ? `${taskId(id)} “${title}”` : taskId(id);
   };
-  const note = (n?: string) => (n ? `: ${n}` : "");
-  const round = ev.op === "task.update" ? roundTag(state?.tasks.get(ev.task), m.seq, ev.round) : "";
+  const note = (n?: string) => (n ? say("note", { note: n }) : "");
+  const review = (r: string) => (r === "*" ? say("review.anyone") : say("review.by", { name: inlineText(nameOf(r), 40) }));
+  const round = ev.op === "task.update" ? roundTag(state?.tasks.get(ev.task), m.seq, ev.round, say) : "";
   switch (ev.op) {
     case "hello": {
       const who = state?.members.get(m.from);
       const role = ev.role && (who?.owner || who?.persona?.name === ev.role) ? ev.role : undefined;
       const about = ev.about && (who?.owner || who?.persona?.instructions === ev.about) ? ev.about : undefined;
-      return `joined${role ? ` as ${role}` : ""}${about ? ` (${about})` : ""}`;
+      if (role && about) return say("joined.as.about", { role, about });
+      if (role) return say("joined.as", { role });
+      return about ? say("joined.about", { about }) : say("joined");
     }
     case "role.set":
-      return ev.role ? `made ${nameOf(ev.member)} ${ev.role}${ev.about ? ` (${ev.about})` : ""}` : `cleared ${nameOf(ev.member)}'s role`;
+      return ev.role
+        ? ev.about
+          ? say("role.set.about", { name: nameOf(ev.member), role: ev.role, about: ev.about })
+          : say("role.set", { name: nameOf(ev.member), role: ev.role })
+        : say("role.cleared", { name: nameOf(ev.member) });
     case "role.refuse":
-      return `kept ${nameOf(ev.member)}'s role as it was`;
+      return say("role.kept", { name: nameOf(ev.member) });
     case "power.set": {
       const { power, on } = powerChange(ev);
-      return `${nameOf(ev.member)} ${on ? "now" : "no longer"} ${power.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`)}`;
+      return say(on ? "power.on" : "power.off", { name: nameOf(ev.member), power: say(`power.${power}`) });
     }
     case "picture.set":
-      return ev.picture ? "set their picture" : "cleared their picture";
+      return ev.picture ? say("picture.set") : say("picture.cleared");
     case "color.set":
-      return ev.color ? `${ev.member === m.from ? "picked" : `gave ${nameOf(ev.member)}`} the colour ${ev.color}` : `cleared ${ev.member === m.from ? "their" : `${nameOf(ev.member)}'s`} colour`;
+      if (ev.color) return ev.member === m.from ? say("color.picked", { color: ev.color }) : say("color.gave", { name: nameOf(ev.member), color: ev.color });
+      return ev.member === m.from ? say("color.cleared.own") : say("color.cleared", { name: nameOf(ev.member) });
     case "scope.set":
-      return `set what ${nameOf(ev.member)} may do: ${ev.scopes === null ? "full" : describeScopes(readScopes(ev.scopes) ?? [])}`;
+      return say("scope.set", { name: nameOf(ev.member), scopes: ev.scopes === null ? say("scope.full") : describeScopes(readScopes(ev.scopes) ?? []) });
     case "mode.set":
-      return `${ev.coordinatorOnly ? "turned on" : "turned off"} coordinator-only (gone: it no longer gates anything)`;
+      return ev.coordinatorOnly ? say("mode.on") : say("mode.off");
     case "room.seal":
-      return "changed a members-only room";
+      return say("room.seal");
     case "room.msg":
-      return "wrote in a members-only room";
+      return say("room.msg");
     case "room.create":
-      return ev.dm
-        ? "started a direct conversation"
-        : ev.self
-          ? "keeps their own notes"
-          : ev.members
-            ? `made the members-only room #${inlineText(ev.name, 40)}`
-            : `made the room #${inlineText(ev.name, 40)}`;
+      return ev.dm ? say("room.dm") : ev.self ? say("room.self") : say(ev.members ? "room.create.members" : "room.create", { room: inlineText(ev.name, 40) });
     case "room.members":
-      return "changed who a room is for";
+      return say("room.members");
     case "room.leave":
-      return "left a room";
+      return say("room.leave");
     case "doc.open":
-      return `started the shared doc of ${inlineText(ev.thread, 60)}`;
+      return say("doc.open", { thread: inlineText(ev.thread, 60) });
     case "room.rename": {
       // Rooms are named by id in the event; say which one it was, by its name now if it has another.
       const now = state?.rooms.get(ev.id)?.name;
       const name = inlineText(ev.name, 40);
-      return now && now !== name ? `renamed a room to #${name} (now #${now})` : `renamed a room to #${name}`;
+      return now && now !== name ? say("room.rename.now", { room: name, now }) : say("room.rename", { room: name });
     }
     case "seat.reclaim":
-      return `moved ${nameOf(ev.member)}'s seat to a new key (${ev.from} → ${ev.to}): the old key is out`;
+      return say("seat.reclaim", { name: nameOf(ev.member), from: ev.from, to: ev.to });
     case "task.add":
-      return `added task ${taskId(m.seq)} “${ev.title}”${ev.from !== undefined ? ` (from ${taskId(ev.from)})` : ""}${ev.issue ? ` from ${ev.issue.repo}#${ev.issue.number}` : ""}${ev.owner ? ` for ${nameOf(ev.owner)}` : ""}${ev.review ? `; ${reviewPhrase(ev.review === "*" ? "*" : nameOf(ev.review))}` : ""}`;
+      return say("task.add", {
+        task: `${taskId(m.seq)} “${ev.title}”`,
+        from: ev.from !== undefined ? say("task.add.from", { task: taskId(ev.from) }) : "",
+        issue: ev.issue ? say("task.add.issue", { issue: `${ev.issue.repo}#${ev.issue.number}` }) : "",
+        owner: ev.owner ? say("task.add.for", { name: nameOf(ev.owner) }) : "",
+        review: ev.review ? say("task.add.review", { review: review(ev.review) }) : "",
+      });
     case "card":
-      return `described itself: ${cardLine(ev) || "nothing"}`;
+      return say("card", { card: cardLine(ev) || say("card.nothing") });
     case "task.claim":
-      return `claimed ${task(ev.task)}`;
+      return say("task.claim", { task: task(ev.task) });
     case "task.first":
-      return `put ${task(ev.task)} before its owner's other tasks`;
+      return say("task.first", { task: task(ev.task) });
     case "task.landed":
-      return `landed ${task(ev.task)}: ${artifactText(ev.artifact)}`;
+      return say("task.landed", { task: task(ev.task), at: artifactText(ev.artifact) });
     case "task.delete":
-      return `deleted ${taskId(ev.task)}${note(ev.why)}`;
+      return say("task.delete", { task: taskId(ev.task), note: note(ev.why) });
     case "task.update": {
-      if (ev.verdict === "approved" && ev.state === "done") return `approved ${task(ev.task)}${round}${note(ev.note)}`;
-      if (ev.verdict === "rejected" && ev.state === "doing") return `rejected ${task(ev.task)}${round}${note(ev.note)}`;
-      if (ev.state === "review") return `${STATE_VERB.review} ${task(ev.task)}${round}${note(ev.note)}`;
-      if (ev.state === "done" && state?.tasks.get(ev.task)?.review && state.tasks.get(ev.task)?.approvedBy === m.from) return `approved ${task(ev.task)}${note(ev.note)}`;
-      if (ev.review !== undefined && !ev.state)
-        return ev.review ? `asked for ${task(ev.task)} to be reviewed: ${reviewPhrase(ev.review === "*" ? "*" : nameOf(ev.review))}${note(ev.note)}` : `dropped the review on ${task(ev.task)}`;
-      if (ev.state === "blocked") return `is blocked on ${task(ev.task)}${note(ev.note)}`;
+      const t = task(ev.task);
+      if (ev.verdict === "approved" && ev.state === "done") return say("task.approved", { task: t, round, note: note(ev.note) });
+      if (ev.verdict === "rejected" && ev.state === "doing") return say("task.rejected", { task: t, round, note: note(ev.note) });
+      if (ev.state === "review") return say("task.review", { task: t, round, note: note(ev.note) });
+      if (ev.state === "done" && state?.tasks.get(ev.task)?.review && state.tasks.get(ev.task)?.approvedBy === m.from) return say("task.approved", { task: t, round: "", note: note(ev.note) });
+      if (ev.review !== undefined && !ev.state) return ev.review ? say("task.review.asked", { task: t, review: review(ev.review), note: note(ev.note) }) : say("task.review.dropped", { task: t });
+      if (ev.state === "blocked") return say("task.blocked", { task: t, note: note(ev.note) });
       // Handed over: given to someone, back to open for them to start.
-      if (ev.owner && (!ev.state || ev.state === "todo")) return `assigned ${task(ev.task)} to ${nameOf(ev.owner)}${note(ev.note)}`;
-      if (ev.state) return `${STATE_VERB[ev.state]} ${task(ev.task)}${note(ev.note)}`;
-      if (ev.owner) return `assigned ${task(ev.task)} to ${nameOf(ev.owner)}${note(ev.note)}`;
-      if (ev.owner === null) return `unassigned ${task(ev.task)}${note(ev.note)}`;
-      if (ev.title && ev.detail !== undefined) return `renamed ${taskId(ev.task)} to “${ev.title}” and rewrote its body`;
-      if (ev.title) return `renamed ${taskId(ev.task)} to “${ev.title}”`;
-      if (ev.detail !== undefined) return `rewrote ${task(ev.task)}'s body`;
-      if (ev.proof) return `added proof to ${task(ev.task)}: ${proofLabel(ev.proof)} ${ev.proof.url}${note(ev.note)}`;
-      return `noted on ${task(ev.task)}${note(ev.note)}`;
+      if (ev.owner && (!ev.state || ev.state === "todo")) return say("task.assigned", { task: t, name: nameOf(ev.owner), note: note(ev.note) });
+      if (ev.state) return say(STATE_SAY[ev.state], { task: t, round: "", note: note(ev.note) });
+      if (ev.owner) return say("task.assigned", { task: t, name: nameOf(ev.owner), note: note(ev.note) });
+      if (ev.owner === null) return say("task.unassigned", { task: t, note: note(ev.note) });
+      if (ev.title && ev.detail !== undefined) return say("task.renamed.rewrote", { task: taskId(ev.task), title: ev.title });
+      if (ev.title) return say("task.renamed", { task: taskId(ev.task), title: ev.title });
+      if (ev.detail !== undefined) return say("task.rewrote", { task: t });
+      if (ev.proof) return say("task.proof", { task: t, proof: proofLabel(ev.proof), url: ev.proof.url, note: note(ev.note) });
+      return say("task.noted", { task: t, note: note(ev.note) });
     }
     // Older clients' claims: still said, though they hold nothing now.
     case "claim":
-      return `claimed ${ev.paths.join(", ")} (claims are gone; this holds nothing)${note(ev.note)}`;
+      return say("claim", { paths: ev.paths.join(", "), note: note(ev.note) });
     case "release":
-      return ev.paths?.length ? `released ${ev.paths.join(", ")}` : "released all claims";
+      return ev.paths?.length ? say("release", { paths: ev.paths.join(", ") }) : say("release.all");
     case "fact.set":
-      if (/^answering #\d+$/.test(ev.key) && ev.value === m.from) return `is ${ev.key}`;
-      return `set ${ev.key} = ${ev.value}`;
+      if (/^answering #\d+$/.test(ev.key) && ev.value === m.from) return say("answering", { seq: ev.key.slice(11) });
+      return say("fact.set", { key: ev.key, value: ev.value });
     case "fact.del":
-      return `unset ${ev.key}`;
+      return say("fact.del", { key: ev.key });
     case "lease.take":
-      return `asked for ${ev.name} for ${span(ev.ttl)}${note(ev.note)}`;
+      return say("lease.take", { name: ev.name, ttl: span(ev.ttl), note: note(ev.note) });
     case "lease.free":
-      return `let go of ${ev.name}`;
+      return say("lease.free", { name: ev.name });
     case "charter.set":
-      return ev.text ? `set the goal: ${ev.text}` : "cleared the goal";
+      return ev.text ? say("charter.set", { text: ev.text }) : say("charter.cleared");
     case "compact.propose":
-      return `proposed compacting the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
+      return say("compact.propose", { through: String(ev.through), summary: inlineText(ev.summary, 200) });
     case "compact":
-      return `compacted the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
+      return say("compact", { through: String(ev.through), summary: inlineText(ev.summary, 200) });
     case "github":
       return githubLine(ev.items);
-    case "github.release":
-      if (ev.gone) return `${ev.repo} withdrew ${inlineText(ev.tag, 60)}: GitHub lists it as a prerelease or a draft now, not a release`;
-      return `${ev.repo} released ${inlineText(ev.tag, 60)}: ${ev.prs.length ? `${ev.prs.length} PR${ev.prs.length === 1 ? "" : "s"}, ` : ""}${ev.shas.length} commit${ev.shas.length === 1 ? "" : "s"}`;
+    case "github.release": {
+      const tag = inlineText(ev.tag, 60);
+      if (ev.gone) return say("github.gone", { repo: ev.repo, tag });
+      const commits = say(ev.shas.length === 1 ? "github.commit" : "github.commits", { count: String(ev.shas.length) });
+      if (!ev.prs.length) return say("github.release", { repo: ev.repo, tag, commits });
+      return say("github.release.prs", { repo: ev.repo, tag, prs: say(ev.prs.length === 1 ? "github.pr" : "github.prs", { count: String(ev.prs.length) }), commits });
+    }
     case "github.rules":
-      return `read ${ev.repo}'s rules for ${inlineText(ev.branch, 60)}: ${rulesText(ev)}`;
+      return say("github.rules", { repo: ev.repo, branch: inlineText(ev.branch, 60), rules: rulesText(ev) });
     case "repos.set":
-      return ev.repos.length ? `set the channel's repos: ${ev.repos.join(", ")}` : "cleared the channel's repos";
+      return ev.repos.length ? say("repos.set", { repos: ev.repos.join(", ") }) : say("repos.cleared");
     case "hold.set":
-      return ev.on ? `put the channel ON HOLD${note(ev.note)}. Agents: stop all work now and change nothing; only answer people until it's lifted` : "lifted the hold: agents may carry on";
+      return ev.on ? say("hold.on", { note: note(ev.note) }) : say("hold.off");
     case "voice.set":
-      return `${ev.on ? "allowed voice in" : "turned voice off for"} the channel (gone: Channels no longer has voice)`;
+      return ev.on ? say("voice.on") : say("voice.off");
     case "github.write.set":
-      return ev.on ? "let Kiwi write to GitHub: a comment links each new PR and issue to its task, and a task closing closes its issue" : "stopped Kiwi writing to GitHub";
+      return ev.on ? say("github.write.on") : say("github.write.off");
     case "branch.prefix.set":
-      return ev.prefix
-        ? `set the branch prefix to ${ev.prefix}: a PR from a branch like ${ev.prefix}7-… shows on task T7`
-        : "cleared the branch prefix: a PR shows on a task only when someone posts its link";
+      return ev.prefix ? say("branch.prefix.set", { prefix: ev.prefix }) : say("branch.prefix.cleared");
     case "merges.set":
-      return ev.by === "people" ? "set who merges to people: agents leave a PR for a person to merge once its task's gate is open" : "set who merges to agents again";
+      return ev.by === "people" ? say("merges.people") : say("merges.agents");
     case "landing.set":
-      return ev.then && ev.then !== "none" ? `set how tasks land to ${ev.then}: an approved task stays landing until that has happened` : "set tasks to finish on approval again";
+      return ev.then && ev.then !== "none" ? say("landing.set", { then: ev.then }) : say("landing.approval");
     case "react":
-      return ev.emoji ? `reacted ${ev.emoji} to #${ev.seq}` : `took back the reaction on #${ev.seq}`;
+      return ev.emoji ? say("react", { emoji: ev.emoji, seq: String(ev.seq) }) : say("react.back", { seq: String(ev.seq) });
     case "msg.edit":
-      return `edited #${ev.seq}: ${ev.body}`;
+      return say("msg.edit", { seq: String(ev.seq), body: ev.body });
     case "msg.delete":
-      return `deleted #${ev.seq}`;
+      return say("msg.delete", { seq: String(ev.seq) });
     case "member.gone":
-      return `removed ${ev.member}'s key ${ev.pk.slice(0, 8)}${ev.why ? `: ${inlineText(ev.why, 200)}` : ""}`;
+      return say("member.gone", { name: ev.member, key: ev.pk.slice(0, 8), why: ev.why ? note(inlineText(ev.why, 200)) : "" });
     case "member.back":
-      return `let ${ev.member}'s key ${ev.pk.slice(0, 8)} back in`;
+      return say("member.back", { name: ev.member, key: ev.pk.slice(0, 8) });
     case "nickname.set":
-      return ev.nickname ? `called ${nameOf(ev.member)} ${inlineText(ev.nickname, 40)}` : `took ${nameOf(ev.member)}'s nickname away`;
+      return ev.nickname ? say("nickname.set", { name: nameOf(ev.member), nickname: inlineText(ev.nickname, 40) }) : say("nickname.cleared", { name: nameOf(ev.member) });
     case "ask.name":
-      return ev.name ? `named the goal of #${ev.ask}: ${inlineText(ev.name, 80)}` : `took back the goal's name of #${ev.ask}`;
+      return ev.name ? say("ask.name", { ask: String(ev.ask), name: inlineText(ev.name, 80) }) : say("ask.name.cleared", { ask: String(ev.ask) });
     case "ask.close":
-      return ev.why ? `closed #${ev.ask}: ${inlineText(ev.why, 160)}` : `closed #${ev.ask}`;
+      return ev.why ? say("ask.close", { ask: String(ev.ask), why: inlineText(ev.why, 160) }) : say("ask.closed", { ask: String(ev.ask) });
     case "devices":
-      return "updated their list of devices";
+      return say("devices");
     case "spec.set": {
       const spec = state?.specs.get(ev.ask);
-      const after = spec && changedAfterApproval(spec, m.seq) ? `changed #${ev.ask}'s spec after it was approved` : `wrote the spec of #${ev.ask}`;
-      return `${after}: ${inlineText(specTitleOf(ev.text) ?? ev.text, 120)}`;
+      const title = inlineText(specTitleOf(ev.text) ?? ev.text, 120);
+      return say(spec && changedAfterApproval(spec, m.seq) ? "spec.changed" : "spec.set", { ask: String(ev.ask), title });
     }
     case "spec.ready":
-      return `marked the spec of #${ev.ask} ready for approval`;
+      return say("spec.ready", { ask: String(ev.ask) });
     case "spec.approve":
-      return `approved the spec of #${ev.ask}: agents start it as soon as one is free`;
+      return say("spec.approve", { ask: String(ev.ask) });
     case "specs.only.set":
-      return ev.on ? "turned on Tasks only from approved specs: from now on a task is filed under a spec a person approved" : "turned off Tasks only from approved specs";
+      return ev.on ? say("specs.only.on") : say("specs.only.off");
     case "spec.result":
-      return ev.verdict === "accepted"
-        ? `accepted what #${ev.ask}'s spec delivered${note(ev.note)}`
-        : ev.verdict === "back"
-          ? `sent #${ev.ask}'s spec back${note(ev.note)}`
-          : `dropped #${ev.ask}'s spec${note(ev.note)}`;
+      return say(ev.verdict === "accepted" ? "spec.accepted" : ev.verdict === "back" ? "spec.back" : "spec.dropped", { ask: String(ev.ask), note: note(ev.note) });
     case "spec.delete":
-      return `deleted #${ev.ask}'s spec${note(ev.why)}`;
+      return say("spec.delete", { ask: String(ev.ask), note: note(ev.why) });
   }
 }
 
@@ -720,10 +726,10 @@ export function formatTasks(state: ChannelState, check: string, opts: { all?: bo
   return [...(warning ? [warning] : []), ...groupedLines(state, tasks, "")].join("\n");
 }
 
-export function roundTag(t: Task | undefined, seq: number, named: number | undefined): string {
+export function roundTag(t: Task | undefined, seq: number, named: number | undefined, say: EventSay = sayEvent): string {
   const r = t?.rounds.find((x) => x.seq === seq) ?? t?.rounds.find((x) => x.result.kind !== "open" && x.result.seq === seq) ?? (named !== undefined ? t?.rounds.find((x) => x.n === named) : undefined);
-  if (!r) return named !== undefined ? ` (round ${named})` : "";
-  return ` (round ${r.n}${r.at ? ` @ ${shortArtifact(r.at)}` : ""})`;
+  if (!r) return named !== undefined ? say("round", { n: String(named) }) : "";
+  return r.at ? say("round.at", { n: String(r.n), at: shortArtifact(r.at) }) : say("round", { n: String(r.n) });
 }
 
 function shortArtifact(at: string): string {

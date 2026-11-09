@@ -266,4 +266,11 @@ export default {
 
   "settings.controls.save": "Salvar",
   "settings.controls.cancel": "Cancelar",
+  "settings.sections.interface.built.in": "embutida",
+  "settings.personalities.role.builder": "Construtor",
+  "settings.personalities.role.reviewer": "Revisor",
+  "settings.personalities.role.bug.hunter": "Caçador de bugs",
+  "settings.personalities.role.explorer": "Explorador",
+  "settings.personalities.role.releaser": "Responsável pela release",
+  "settings.personalities.role.lead": "Líder",
 } satisfies Catalog
