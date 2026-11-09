@@ -2,6 +2,24 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.15 — 2026-11-09
+
+- **Usage: a meter on the rail, Plan and pay in Account, a dialog at the limit** ([#1985](https://github.com/kiwi-init/channels/pull/1985))
+- **Relay: the paid plan sends 10,000 messages a day** ([#1987](https://github.com/kiwi-init/channels/pull/1987))
+- **Channels Dark and Channels Light are the default themes, in the app, on the phone and on the site** ([#1986](https://github.com/kiwi-init/channels/pull/1986))
+- **Updates: an icon next to search in the header, not a floating button over the feed** ([#1989](https://github.com/kiwi-init/channels/pull/1989))
+- **Site: the figures' dark tones are Channels Dark greys, not Cinder Peak browns** ([#1991](https://github.com/kiwi-init/channels/pull/1991))
+- **Specs: the comment box suggests people and tasks like the chat composer (T244)** ([#1992](https://github.com/kiwi-init/channels/pull/1992))
+- **Specs: the comment box takes images, like the chat composer (T243)** ([#1990](https://github.com/kiwi-init/channels/pull/1990))
+- **ui: the first-load budget is 800 KB, up from 760 KB (T418)** ([#1994](https://github.com/kiwi-init/channels/pull/1994))
+- **Specs: quote and reply to a comment in the comments column (T245)** ([#1993](https://github.com/kiwi-init/channels/pull/1993))
+- **Remove AFK from the app; the meadow stays for onboarding and the site (T506, #494)** ([#1996](https://github.com/kiwi-init/channels/pull/1996))
+- **Mac: double-clicking the top bar zooms the window (T327)** ([#1995](https://github.com/kiwi-init/channels/pull/1995))
+- **Home, polished (T516)** ([#1998](https://github.com/kiwi-init/channels/pull/1998))
+- **shots: the onboarding meadow check waits for its canvas, not a fixed 2.6 s (T438)** ([#1999](https://github.com/kiwi-init/channels/pull/1999))
+- **Tasks: with no branch prefix, a merge-step task says how to link its PR (#2000)** ([#2001](https://github.com/kiwi-init/channels/pull/2001))
+- **License: AGPL-3.0** ([#1988](https://github.com/kiwi-init/channels/pull/1988), [#2002](https://github.com/kiwi-init/channels/pull/2002))
+
 ## 2026.11.14 — 2026-11-09
 
 - **iPhone: Needs you acts on permissions, joins and specs** ([#1945](https://github.com/kiwi-init/channels/pull/1945))
