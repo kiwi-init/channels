@@ -1,4 +1,5 @@
 import type { english } from "~/i18n/en/all"
+import chat from "~/i18n/en/chat"
 import live from "~/i18n/en/live"
 import settingsShared from "~/i18n/en/settings-shared"
 
@@ -7,6 +8,7 @@ export type Msg = string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>>
 export const en = {
   ...live,
   ...settingsShared,
+  ...chat,
   "settings.language": "Language",
   "settings.language.system": "System",
   "usage.today": "Messages today",
