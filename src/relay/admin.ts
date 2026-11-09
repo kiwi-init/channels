@@ -5,6 +5,7 @@ import { corsPreflight, withCors } from "./mailbox.ts";
 import { limitOf, PLANS, type Person, type PersonRow, type Plan } from "./people.ts";
 import { upgradeFor, type RelayPolicy } from "./policy.ts";
 import { errorResponse } from "./room/http.ts";
+import { utcDay } from "./room/limits.ts";
 
 export interface PeopleAdmin {
   people(): Promise<PersonRow[]>;
@@ -23,6 +24,7 @@ interface Usage {
   channels: number;
   resetsAt: number;
   upgradeUrl: string | null;
+  people?: { total: number; today: number };
 }
 
 const nextUtcMidnight = (now: number) => {
@@ -73,6 +75,11 @@ export async function onAdminHttp(req: Request, human: HumanAuth | null, policy:
       resetsAt: nextUtcMidnight(now),
       upgradeUrl: upgradeFor(policy.upgradeUrl, user),
     };
+    if (admin) {
+      const people = await store.people();
+      const today = utcDay(now);
+      usage.people = { total: people.length, today: people.filter((p) => utcDay(p.seen) === today).length };
+    }
     return withCors(Response.json(usage));
   }
   if (!policy.admins.includes(user.toLowerCase())) return refuse(new Forbidden({ message: NOT_ADMIN }));

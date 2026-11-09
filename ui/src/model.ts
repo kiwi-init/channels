@@ -859,6 +859,7 @@ export interface Usage {
   channels: number
   resetsAt: number
   upgradeUrl: string | null
+  people?: { total: number; today: number }
 }
 
 export type Finding = { ok: true; what: string } | { ok: false; what: string; how: string }
