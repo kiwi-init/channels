@@ -55,6 +55,7 @@ export class PeopleBook {
       "CREATE TABLE IF NOT EXISTS person_index (user TEXT PRIMARY KEY, login TEXT, plan TEXT NOT NULL, blocked INTEGER NOT NULL, day TEXT NOT NULL, used INTEGER NOT NULL, channels INTEGER NOT NULL, seen INTEGER NOT NULL)",
     );
     sql.run("CREATE TABLE IF NOT EXISTS stripe_customers (customer TEXT PRIMARY KEY, user TEXT NOT NULL)");
+    sql.run("CREATE TABLE IF NOT EXISTS stripe_events (customer TEXT PRIMARY KEY, at INTEGER NOT NULL)");
     sql.run("CREATE TABLE IF NOT EXISTS person_usage (user TEXT NOT NULL, room TEXT NOT NULL, day TEXT NOT NULL, used INTEGER NOT NULL, granted INTEGER NOT NULL, PRIMARY KEY (user, room))");
   }
 
@@ -137,5 +138,12 @@ export class PeopleBook {
 
   linkCustomer(customer: string, user: string): void {
     this.sql.run("INSERT OR REPLACE INTO stripe_customers (customer, user) VALUES (?, ?)", customer, user);
+  }
+
+  newer(customer: string, at: number): boolean {
+    const last = this.sql.all<{ at: number }>("SELECT at FROM stripe_events WHERE customer = ?", customer)[0]?.at;
+    if (last !== undefined && at < last) return false;
+    this.sql.run("INSERT OR REPLACE INTO stripe_events (customer, at) VALUES (?, ?)", customer, at);
+    return true;
   }
 }

@@ -14,6 +14,7 @@ import { makeRelay, runRoomSync } from "../src/relay/route.ts";
 import { grantFor, LEASE_BATCH, limitOf, PeopleBook, type Plan } from "../src/relay/people.ts";
 import { OPEN_POLICY, Policy, policyFrom, upgradeFor, type RelayPolicy } from "../src/relay/policy.ts";
 import { stripeSignature } from "../src/relay/stripe.ts";
+import { withoutPurchaseLinks } from "../ios/engine/refusal.ts";
 
 setDefaultTimeout(30_000);
 
@@ -106,6 +107,20 @@ describe("settings", () => {
 });
 
 describe("messages per person per day", () => {
+  test("phones show the over-quota refusal without the purchase link", async () => {
+    const { relay } = relayWith({ personMessagesPerDay: 1, upgradeUrl: "https://buy.stripe.com/abc" });
+    const room = await channelOf(relay, "alice");
+    await room.send("a");
+    const said = await room.send("b").then(
+      () => "",
+      (e: Error) => e.message,
+    );
+    expect(said).toContain("buy.stripe.com/abc?client_reference_id=github_1");
+    expect(withoutPurchaseLinks(said)).toMatch(/^this channel's owner has used today's 1 messages; more can be sent after 00:00 UTC \(in \d+(h|m)[^)]*\)$/);
+    expect(withoutPurchaseLinks("a plain refusal")).toBe("a plain refusal");
+    expect(withoutPurchaseLinks("paid only, see https://billing.stripe.com/p/x")).toBe("paid only, see");
+  });
+
   test("one owner's channels share the quota; others aren't affected; the next UTC day starts over", async () => {
     const { relay, clock } = relayWith({ personMessagesPerDay: 3, upgradeUrl: "https://kiwi.test/upgrade" });
     const [one, two, bobs] = [await channelOf(relay, "alice"), await channelOf(relay, "alice"), await channelOf(relay, "bob")];
@@ -302,7 +317,7 @@ describe("Stripe", () => {
   };
   const usage = async (relay: string, login: string) => (await (await fetch(`${relay}/v1/me/usage`, { headers: { "x-human-token": token(login) } })).json()) as { plan: string; limit: number };
 
-  test("a paid checkout moves the person to paid; a lapsed or cancelled subscription moves them back", async () => {
+  test("a paid checkout moves the person to paid; an unpaid or cancelled subscription moves them back, a retrying one doesn't", async () => {
     const clock = { now: Date.UTC(2026, 10, 8, 12) };
     const { relay } = relayWith({ personMessagesPerDay: 5, paidMessagesPerDay: 50 }, clock);
     await channelOf(relay, "bob");
@@ -310,11 +325,52 @@ describe("Stripe", () => {
     expect(await paid.json()).toEqual({ ok: true, did: "paid" });
     expect(await usage(relay, "bob")).toMatchObject({ plan: "paid", limit: 50 });
     await hook(relay, clock, { type: "customer.subscription.updated", data: { object: { customer: "cus_1", status: "past_due" } } });
+    expect(await usage(relay, "bob")).toMatchObject({ plan: "paid", limit: 50 });
+    await hook(relay, clock, { type: "customer.subscription.updated", data: { object: { customer: "cus_1", status: "unpaid" } } });
     expect(await usage(relay, "bob")).toMatchObject({ plan: "free", limit: 5 });
     await hook(relay, clock, { type: "customer.subscription.updated", data: { object: { customer: "cus_1", status: "active" } } });
     expect((await usage(relay, "bob")).plan).toBe("paid");
     await hook(relay, clock, { type: "customer.subscription.deleted", data: { object: { customer: "cus_1", status: "canceled" } } });
     expect((await usage(relay, "bob")).plan).toBe("free");
+  });
+
+  test("a subscription-mode checkout in reais upgrades like one in dollars", async () => {
+    const clock = { now: Date.UTC(2026, 10, 8, 12) };
+    const { relay } = relayWith({ personMessagesPerDay: 5, paidMessagesPerDay: 50 }, clock);
+    await channelOf(relay, "bob");
+    const session = {
+      object: "checkout.session",
+      mode: "subscription",
+      client_reference_id: "github_2",
+      customer: "cus_br",
+      subscription: "sub_br",
+      currency: "brl",
+      amount_total: 5500,
+      payment_status: "paid",
+      status: "complete",
+    };
+    const done = await hook(relay, clock, { id: "evt_br", type: "checkout.session.completed", created: 1_794_000_000, data: { object: session } });
+    expect(await done.json()).toEqual({ ok: true, did: "paid" });
+    expect(await usage(relay, "bob")).toMatchObject({ plan: "paid", limit: 50 });
+    await hook(relay, clock, { type: "customer.subscription.deleted", created: 1_794_000_100, data: { object: { id: "sub_br", customer: "cus_br", status: "canceled" } } });
+    expect((await usage(relay, "bob")).plan).toBe("free");
+  });
+
+  test("an event older than the last one applied changes nothing", async () => {
+    const clock = { now: Date.UTC(2026, 10, 8, 12) };
+    const { relay } = relayWith({ personMessagesPerDay: 5, paidMessagesPerDay: 50 }, clock);
+    await channelOf(relay, "bob");
+    const checkout = { type: "checkout.session.completed", created: 100, data: { object: { client_reference_id: "github_2", customer: "cus_1", payment_status: "paid" } } };
+    await hook(relay, clock, checkout);
+    await hook(relay, clock, { type: "customer.subscription.deleted", created: 200, data: { object: { customer: "cus_1", status: "canceled" } } });
+    expect(await (await hook(relay, clock, checkout)).json()).toEqual({ ok: true, did: "stale" });
+    expect(await (await hook(relay, clock, { type: "customer.subscription.updated", created: 150, data: { object: { customer: "cus_1", status: "active" } } })).json()).toEqual({
+      ok: true,
+      did: "stale",
+    });
+    expect((await usage(relay, "bob")).plan).toBe("free");
+    await hook(relay, clock, { type: "checkout.session.completed", created: 300, data: { object: { client_reference_id: "github_2", customer: "cus_1", payment_status: "paid" } } });
+    expect((await usage(relay, "bob")).plan).toBe("paid");
   });
 
   test("Stripe never lowers an unlimited person, and ignores what it doesn't know", async () => {
@@ -343,5 +399,7 @@ describe("Stripe", () => {
   test("upgrade links carry who's paying", () => {
     expect(upgradeFor("https://buy.stripe.com/abc", "github_9")).toBe("https://buy.stripe.com/abc?client_reference_id=github_9");
     expect(upgradeFor(null, "github_9")).toBeNull();
+    expect(upgradeFor("https://buy.stripe.com/abc?prefilled_email=a%40b.c", "github_9")).toBe("https://buy.stripe.com/abc?prefilled_email=a%40b.c&client_reference_id=github_9");
+    expect(upgradeFor("https://buy.stripe.com/abc?client_reference_id=github_1&locale=pt-BR", "github_9")).toBe("https://buy.stripe.com/abc?client_reference_id=github_9&locale=pt-BR");
   });
 });
