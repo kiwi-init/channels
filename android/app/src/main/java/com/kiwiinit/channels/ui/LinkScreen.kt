@@ -35,6 +35,7 @@ import com.kiwiinit.channels.R
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Linking
 import com.kiwiinit.channels.theme.Tone
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun LinkScreen(model: AppModel, modifier: Modifier = Modifier, linking: Linking = model.linking) {
@@ -54,60 +55,60 @@ fun LinkScreen(model: AppModel, modifier: Modifier = Modifier, linking: Linking 
             contentScale = ContentScale.Crop,
             modifier = Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)),
         )
-        Text("Channels", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 28.dp))
-        Text("Your agents, on your phone.", style = MaterialTheme.typography.bodyLarge, color = tone.ink2, modifier = Modifier.padding(top = 4.dp))
+        Text(stringResource(R.string.channels), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 28.dp))
+        Text(stringResource(R.string.tagline), style = MaterialTheme.typography.bodyLarge, color = tone.ink2, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.size(40.dp))
         when (linking) {
             Linking.Idle, is Linking.Failed -> {
-                Text("Sign in", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.sign_in), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "With the account Channels on your computer uses, then approve this phone there.",
+                    stringResource(R.string.sign_in_lead),
                     style = MaterialTheme.typography.bodyMedium,
                     color = tone.ink2,
                     modifier = Modifier.padding(top = 6.dp),
                 )
                 if (linking is Linking.Failed) Text(linking.why, style = MaterialTheme.typography.bodyMedium, color = tone.alert, modifier = Modifier.padding(top = 16.dp))
-                PrimaryButton("Sign in", modifier = Modifier.padding(top = 24.dp)) { model.signIn() }
+                PrimaryButton(stringResource(R.string.sign_in), modifier = Modifier.padding(top = 24.dp)) { model.signIn() }
             }
             is Linking.SigningIn -> {
                 val url = linking.url
                 if (url == null) {
-                    Waiting("Opening the sign-in…")
+                    Waiting(stringResource(R.string.opening_sign_in))
                 } else {
-                    Text("Sign in in your browser", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.sign_in_browser), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Use the account Channels on your computer uses.",
+                        stringResource(R.string.sign_in_browser_lead),
                         style = MaterialTheme.typography.bodyMedium,
                         color = tone.ink2,
                         modifier = Modifier.padding(top = 6.dp),
                     )
                     if (linking.code.isNotEmpty()) {
-                        Text("Check the page shows", style = MaterialTheme.typography.bodyMedium, color = tone.ink3, modifier = Modifier.padding(top = 24.dp))
+                        Text(stringResource(R.string.check_page_shows), style = MaterialTheme.typography.bodyMedium, color = tone.ink3, modifier = Modifier.padding(top = 24.dp))
                         Text(linking.code, fontSize = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp, modifier = Modifier.padding(top = 4.dp, bottom = 24.dp))
                     } else {
                         Spacer(Modifier.size(24.dp))
                     }
-                    Waiting("Finish signing in in your browser")
-                    QuietButton("Open the sign-in page", Modifier.padding(top = 24.dp)) { model.browse(url) }
+                    Waiting(stringResource(R.string.finish_in_browser))
+                    QuietButton(stringResource(R.string.open_sign_in_page), Modifier.padding(top = 24.dp)) { model.browse(url) }
                 }
-                QuietButton("Cancel", Modifier.padding(top = 10.dp)) { model.cancelLink() }
+                QuietButton(stringResource(R.string.cancel), Modifier.padding(top = 10.dp)) { model.cancelLink() }
             }
             Linking.Asking -> {
-                Text("Approve this phone", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.approve_phone), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Open Channels on your computer and let this phone in. It then shows digits to type there.",
+                    stringResource(R.string.approve_phone_lead),
                     style = MaterialTheme.typography.bodyMedium,
                     color = tone.ink2,
                     modifier = Modifier.padding(top = 6.dp),
                 )
                 Spacer(Modifier.size(24.dp))
-                Waiting("Waiting for your computer")
-                QuietButton("Cancel", Modifier.padding(top = 24.dp)) { model.cancelLink() }
+                Waiting(stringResource(R.string.waiting_computer))
+                QuietButton(stringResource(R.string.cancel), Modifier.padding(top = 24.dp)) { model.cancelLink() }
             }
             is Linking.Approve -> {
-                Text("Approve this phone", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.approve_phone), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Open Channels on your computer. When it asks about this phone, type these digits there.",
+                    stringResource(R.string.approve_digits_lead),
                     style = MaterialTheme.typography.bodyMedium,
                     color = tone.ink2,
                     modifier = Modifier.padding(top = 6.dp),
@@ -119,12 +120,12 @@ fun LinkScreen(model: AppModel, modifier: Modifier = Modifier, linking: Linking 
                     letterSpacing = 2.sp,
                     modifier = Modifier.padding(vertical = 24.dp),
                 )
-                Waiting("Waiting for your computer")
-                QuietButton("Cancel", Modifier.padding(top = 24.dp)) { model.cancelLink() }
+                Waiting(stringResource(R.string.waiting_computer))
+                QuietButton(stringResource(R.string.cancel), Modifier.padding(top = 24.dp)) { model.cancelLink() }
             }
             is Linking.Check -> {
                 var keeping by remember(linking) { mutableStateOf(false) }
-                Text("Is this your key, ${linking.name}?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.key_check_title, linking.name), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Text(
                     linking.fingerprint,
                     fontSize = 24.sp,
@@ -133,15 +134,15 @@ fun LinkScreen(model: AppModel, modifier: Modifier = Modifier, linking: Linking 
                     modifier = Modifier.padding(vertical = 20.dp),
                 )
                 Text(
-                    "Your computer shows it in its approval and in Settings, under Your key for new devices. Join only if they match: a different key means someone else answered this phone.",
+                    stringResource(R.string.key_check_lead),
                     style = MaterialTheme.typography.bodyMedium,
                     color = tone.ink2,
                 )
-                PrimaryButton("It matches, join", busy = keeping, modifier = Modifier.padding(top = 24.dp)) {
+                PrimaryButton(stringResource(R.string.key_matches), busy = keeping, modifier = Modifier.padding(top = 24.dp)) {
                     keeping = true
                     model.keepLink()
                 }
-                QuietButton("It doesn't match", Modifier.padding(top = 10.dp)) { if (!keeping) model.refuseLink(linking.fingerprint) }
+                QuietButton(stringResource(R.string.key_differs), Modifier.padding(top = 10.dp)) { if (!keeping) model.refuseLink(linking.fingerprint) }
             }
         }
         Spacer(Modifier.size(24.dp))

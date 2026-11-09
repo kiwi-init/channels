@@ -5,24 +5,25 @@ import { PRESETS } from "@kiwi/core/presets.ts"
 import type { Event } from "@kiwi/core/protocol.ts"
 import { fullyTrusted } from "@kiwi/core/state.ts"
 import { secrets } from "@kiwi/secrets/secrets.ts"
+import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { openedRun, type Run } from "~/live/store"
 
 export function need(code: string): Run {
   const run = openedRun(code)
-  if (!run) throw new Error("open the channel first")
+  if (!run) throw new Error(t("live.run.open.first"))
   return run
 }
 
 export function owner(code: string): Run {
   const run = need(code)
-  if (!run.isOwner) throw new Error("only the channel's owner can do that")
+  if (!run.isOwner) throw new Error(t("live.run.owner.only"))
   return run
 }
 
 export function memberOf(run: Run, name: string): RosterMember {
   const m = run.roster.find((r) => r.active && !r.unverified && r.name === name)
-  if (!m) throw new Error(`${name} isn't in this channel`)
+  if (!m) throw new Error(t("live.run.not.member", { name }))
   return m
 }
 
@@ -34,12 +35,12 @@ export function personalities(): Personality[] {
 
 export function setup(code: string): Run {
   const run = need(code)
-  if (!run.isOwner && !fullyTrusted(run.state.members.get(run.me))) throw new Error("only the owner, or a person they fully trust, sets up the channel")
+  if (!run.isOwner && !fullyTrusted(run.state.members.get(run.me))) throw new Error(t("live.run.setup.only"))
   return run
 }
 
 export const say = (err: unknown): string => (err instanceof Error ? err.message : String(err))
 
 export function attempt(what: string, run: () => Promise<unknown>): void {
-  void (async () => run())().catch((err: unknown) => announce(`${what}: ${say(err)}`, "error"))
+  void (async () => run())().catch((err: unknown) => announce(t("live.run.failed", { what, why: say(err) }), "error"))
 }

@@ -117,6 +117,9 @@ jobs:
       - name: ui css units
         if: ${{ !cancelled() }}
         run: bun scripts/css-units.ts
+      - name: ui words in catalogs
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-english.ts
       - name: knip
         if: ${{ !cancelled() }}
         run: bun run knip
@@ -257,7 +260,7 @@ jobs:
           bun scripts/ui-image-thumbs.ts --webkit || status=1
           exit "$status"
       - name: doc steady, tall lines sent below the fold keep their height when you scroll to them, in Chromium and WebKit
-        if: ${{ !cancelled() && matrix.part == 'view' }}
+        if: ${{ !cancelled() && matrix.part == 'send' }}
         run: |
           status=0
           bun scripts/ui-doc-steady.ts || status=1
@@ -271,7 +274,7 @@ jobs:
           bun scripts/ui-msg-edit.ts --webkit || status=1
           exit "$status"
       - name: ui a busy thread doc never scrolls on its own, under the composer or while you read, in WebKit
-        if: ${{ !cancelled() && matrix.part == 'send' }}
+        if: ${{ !cancelled() && matrix.part == 'view' }}
         run: bun scripts/ui-doc-still.ts --dist ui/dist
       - name: composer in a doc, late refusals keep the draft, PDFs, Edit in the composer, slow pasted images, the / menu and ⌘Enter, in Chromium and WebKit
         if: ${{ !cancelled() && matrix.part == 'send' }}
@@ -873,7 +876,7 @@ jobs:
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['ios']
     runs-on: macos-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -889,6 +892,26 @@ jobs:
       - name: app build
         if: ${{ !cancelled() }}
         run: xcodebuild -project ios/Channels.xcodeproj -scheme Channels -configuration Release -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/ios" CODE_SIGNING_ALLOWED=NO build
+      - name: every word the app shows is in its String Catalog
+        if: ${{ !cancelled() }}
+        run: bun ios/scripts/catalog-check.ts ios/Channels/Localizable.xcstrings "$RUNNER_TEMP/ios"
+      - name: languages in the simulator (a Language pick changes the app at once, and the phone's language is followed)
+        if: ${{ !cancelled() }}
+        run: |
+          sim=$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
+          xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/languages.xcresult" -only-testing:ChannelsUITests/LanguageTests CODE_SIGNING_ALLOWED=NO test
+      - name: language shots
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/ios-language-shots"
+          [ -d "$RUNNER_TEMP/languages.xcresult" ] && xcrun xcresulttool export attachments --path "$RUNNER_TEMP/languages.xcresult" --output-path "$RUNNER_TEMP/ios-language-shots" || true
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-language-shots
+          path: ${{ runner.temp }}/ios-language-shots
+          if-no-files-found: ignore
+          overwrite: true
 
   # The Android app: Gradle bundles the engine, builds a release APK (R8) and runs Android lint on it.
   # The APK is signed with the repo's release keystore (KIWI_ANDROID_KEYSTORE_BASE64 with its password secrets,
@@ -971,6 +994,8 @@ jobs:
           p=$(echo "$NEEDS" | jq -r '.plan.result // "absent from needs"')
           if [ "$p" != "success" ]; then echo "plan: $p"; exit 1; fi
           if [ -z "$PLAN" ]; then echo "plan produced no job selection"; exit 1; fi
+          sel=$(jq -n -r --argjson plan "$PLAN" 'if ($plan | type) == "object" and ([$plan | to_entries[] | .value] | all(type == "boolean")) and([$plan | to_entries[] | select(.value == true)] | length > 0) then "ok" else "invalid job selection" end')
+          if [ "$sel" != "ok" ]; then echo "plan produced $sel"; exit 1; fi
           bad=$(echo "$NEEDS" | jq -r 'to_entries[] | select(.key != "plan") | select(.value.result != "success" and .value.result != "skipped") | "\(.key): \(.value.result)"')
           if [ -n "$bad" ]; then echo "$bad"; exit 1; fi
           stray=$(echo "$NEEDS" | jq -r --argjson plan "$PLAN" 'to_entries[] | select(.key != "plan") | select($plan[.key] == false) | select(.value.result == "success") | "\(.key): ran but not selected"')

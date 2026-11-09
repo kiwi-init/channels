@@ -6,7 +6,7 @@ struct NeedLine: View {
     let room: RoomView
 
     private var taskWhere: String? {
-        need.task.map { "in \(taskLabel($0))" }
+        need.task.map { spoken("in \(taskLabel($0))") }
     }
 
     var body: some View {
@@ -85,16 +85,16 @@ struct NeedCard: View {
 
     private var label: String {
         switch need.kind {
-        case "permission": "Permission for you"
-        case "join": need.who == "human" ? "A person wants to join" : "An agent wants to join"
-        default: need.changed == true ? "Spec changed: approve again" : "Spec ready for you"
+        case "permission": spoken("Permission for you")
+        case "join": need.who == "human" ? spoken("A person wants to join") : spoken("An agent wants to join")
+        default: need.changed == true ? spoken("Spec changed: approve again") : spoken("Spec ready for you")
         }
     }
 
     @ViewBuilder private var content: some View {
         switch need.kind {
         case "permission":
-            Text(need.title ?? "Use a tool").type(.body).foregroundStyle(Tone.ink).padding(.bottom, 6)
+            Text(need.title ?? spoken("Use a tool")).type(.body).foregroundStyle(Tone.ink).padding(.bottom, 6)
             if let summary = need.summary, !summary.isEmpty {
                 Text(summary).type(.ui).foregroundStyle(Tone.ink2).padding(.bottom, 6)
             }
@@ -110,8 +110,8 @@ struct NeedCard: View {
                     .padding(.bottom, 10)
             }
         case "join":
-            Text(need.name ?? "Someone").type(.body, .semibold).foregroundStyle(Tone.ink).padding(.bottom, 2)
-            let about = [need.runs, need.machine, need.sponsor.map { "from \($0)'s computer" }].compactMap { $0 }.filter { !$0.isEmpty }
+            Text(need.name ?? spoken("Someone")).type(.body, .semibold).foregroundStyle(Tone.ink).padding(.bottom, 2)
+            let about = [need.runs, need.machine, need.sponsor.map { spoken("from \($0)'s computer") }].compactMap { $0 }.filter { !$0.isEmpty }
             if !about.isEmpty {
                 Text(about.joined(separator: " · ")).type(.ui).foregroundStyle(Tone.ink2).padding(.bottom, 6)
             }
@@ -140,11 +140,11 @@ struct NeedCard: View {
     private var note: String? {
         switch need.kind {
         case "permission" where need.canAllow != true:
-            need.allower.map { "Only \(room.display($0)) can allow this one" } ?? "You can deny this one"
+            need.allower.map { spoken("Only \(room.display($0)) can allow this one") } ?? spoken("You can deny this one")
         case "join" where need.pinned == true:
-            "Invited with a personality: let them in on your computer"
+            spoken("Invited with a personality: let them in on your computer")
         case "join" where !(need.code ?? "").isEmpty:
-            "Let them in only if their screen shows the same code"
+            spoken("Let them in only if their screen shows the same code")
         default: nil
         }
     }
@@ -162,16 +162,16 @@ struct NeedCard: View {
         case "permission":
             var out: [Action] = []
             if need.canAllow == true {
-                out.append(Action(title: "Allow once", symbol: "checkmark.circle", tone: Tone.ink) { try await model.allow(code, id: need.id, allow: true) })
+                out.append(Action(title: spoken("Allow once"), symbol: "checkmark.circle", tone: Tone.ink) { try await model.allow(code, id: need.id, allow: true) })
             }
-            out.append(Action(title: "Deny", symbol: "xmark.circle", tone: Tone.alert) { try await model.allow(code, id: need.id, allow: false) })
+            out.append(Action(title: spoken("Deny"), symbol: "xmark.circle", tone: Tone.alert) { try await model.allow(code, id: need.id, allow: false) })
             return out
         case "join":
             guard need.pinned != true, room.isOwner else { return [] }
-            return [Action(title: "Let in", symbol: "person.crop.circle.badge.checkmark", tone: Tone.ink) { try await model.letIn(code, id: need.id) }]
+            return [Action(title: spoken("Let in"), symbol: "person.crop.circle.badge.checkmark", tone: Tone.ink) { try await model.letIn(code, id: need.id) }]
         default:
             guard let ask = need.ask, let v = need.v else { return [] }
-            return [Action(title: "Approve", symbol: "checkmark.circle", tone: Tone.ink) { try await model.approveSpec(code, ask: ask, v: v) }]
+            return [Action(title: spoken("Approve"), symbol: "checkmark.circle", tone: Tone.ink) { try await model.approveSpec(code, ask: ask, v: v) }]
         }
     }
 

@@ -131,7 +131,7 @@ extension View {
 }
 
 struct PrimaryButton: View {
-    let title: String
+    let title: LocalizedStringKey
     var busy = false
     let action: () -> Void
 
@@ -152,7 +152,7 @@ struct PrimaryButton: View {
 }
 
 struct QuietButton: View {
-    let title: String
+    let title: LocalizedStringKey
     let action: () -> Void
 
     var body: some View {
@@ -180,7 +180,7 @@ struct Dot: View {
 enum When {
     static func short(_ date: Date, now: Date = .now) -> String {
         let s = now.timeIntervalSince(date)
-        if s < 60 { return "now" }
+        if s < 60 { return spoken("now") }
         if s < 3600 { return "\(Int(s / 60))m" }
         if s < 86400 && Calendar.current.isDate(date, inSameDayAs: now) { return date.formatted(.dateTime.hour().minute()) }
         if s < 6 * 86400 { return date.formatted(.dateTime.weekday(.abbreviated)) }
@@ -188,10 +188,10 @@ enum When {
     }
 
     static func dayWord(_ date: Date, now: Date = .now) -> String {
-        if Calendar.current.isDateInToday(date) { return "Today" }
-        if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
+        if Calendar.current.isDateInToday(date) { return spoken("Today") }
+        if Calendar.current.isDateInYesterday(date) { return spoken("Yesterday") }
         if now.timeIntervalSince(date) < 6 * 86400 { return date.formatted(.dateTime.weekday(.wide)) }
-        return "\(date.formatted(.dateTime.day().month(.abbreviated).year())) at"
+        return spoken("\(date.formatted(.dateTime.day().month(.abbreviated).year())) at")
     }
 
     static func elapsed(from start: Date, to now: Date) -> String {
@@ -206,7 +206,7 @@ enum When {
     static func list(_ date: Date, now: Date = .now) -> String {
         let calendar = Calendar.current
         if calendar.isDateInToday(date) { return date.formatted(.dateTime.hour().minute()) }
-        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        if calendar.isDateInYesterday(date) { return spoken("Yesterday") }
         if now.timeIntervalSince(date) < 6 * 86400 { return date.formatted(.dateTime.weekday(.wide)) }
         return date.formatted(.dateTime.month(.defaultDigits).day().year(.twoDigits))
     }

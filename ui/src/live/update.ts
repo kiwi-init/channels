@@ -1,9 +1,10 @@
 import type { KiwiBridge, UpdateView } from "@kiwi/secrets/secrets.ts"
+import { t } from "~/i18n/i18n"
 
 export type Updater = Pick<KiwiBridge, "getUpdate" | "checkUpdate" | "installUpdate" | "onUpdate" | "openExternal">
 
 const restart = async (b: Updater, version: string): Promise<void> => {
-  if ((await b.installUpdate()) === false) throw new Error(`Channels ${version} didn't go in place. Try again, or get it from the release page`)
+  if ((await b.installUpdate()) === false) throw new Error(t("live.update.not.in.place", { version }))
 }
 
 export async function downloadAndRestart(b: Updater, say: (text: string) => void): Promise<void> {
@@ -11,11 +12,11 @@ export async function downloadAndRestart(b: Updater, say: (text: string) => void
   if (u?.state === "ready") return restart(b, u.version)
   if (u?.blocked) return b.openExternal(u.url)
   const next = u?.state === "downloading" ? u : await b.checkUpdate()
-  if (next.state === "current") return say("Channels is up to date")
-  if (next.state === "failed") throw new Error("GitHub didn't answer, try again in a minute")
+  if (next.state === "current") return say(t("live.update.current"))
+  if (next.state === "failed") throw new Error(t("live.update.github.failed"))
   if (next.state === "ready") return restart(b, next.version)
   if (next.state === "available") return b.openExternal(next.url)
-  say(`Downloading Channels ${next.version}. It restarts when it's in`)
+  say(t("live.update.downloading", { version: next.version }))
   let done = false
   let off = () => {}
   const settle = (s: UpdateView | null) => {
@@ -23,7 +24,7 @@ export async function downloadAndRestart(b: Updater, say: (text: string) => void
     done = true
     off()
     if (s.state === "ready") void restart(b, s.version).catch((e: unknown) => say(e instanceof Error ? e.message : String(e)))
-    else say(`Channels ${s.version} didn't download. Try again, or get it from the release page`)
+    else say(t("live.update.not.downloaded", { version: s.version }))
   }
   off = b.onUpdate(settle)
   if (done) off()

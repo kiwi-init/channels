@@ -4,6 +4,8 @@ import type { ComputerSettings, SeatWake } from "@kiwi/core/computer-settings.ts
 import type { HookHarness, HookRow, HookState } from "@kiwi/core/harnesses.ts"
 import { harnessName } from "@kiwi/app/harness.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 import { store } from "~/live/value"
 import type { Finding, ThisComputer } from "~/model"
 
@@ -14,7 +16,7 @@ const shown = (rows: HookRow[]): ThisComputer["hooks"] =>
 
 function need() {
   const b = bridge()
-  if (!b) throw new Error("this needs the Channels desktop app")
+  if (!b) throw new Error(t("live.computer.desktop.only"))
   return b
 }
 
@@ -47,19 +49,28 @@ export const checkComputer = (): Promise<Finding[] | null> => need().doctor()
 
 export async function setContextLine(on: boolean): Promise<void> {
   const got = await need().setContextLine(on ? "on" : "off")
-  if (!got) throw new Error("kiwi didn't change it")
+  if (!got) throw new Error(t("live.computer.not.changed"))
   const now = computer.get()
   if (now) computer.set({ ...now, contextLine: got === "on" })
 }
 
-const HOOK: Record<Exclude<HookState, "absent">, string> = { installed: "on", partial: "partly on", outdated: "out of date", missing: "not installed", off: "off" }
-const WAKE: Record<SeatWake, string> = { on: "wakes on a message", off: "doesn't wake", webhook: "wakes by webhook" }
+const HOOK: Record<Exclude<HookState, "absent">, Key> = {
+  installed: "live.computer.hook.installed",
+  partial: "live.computer.hook.partial",
+  outdated: "live.computer.hook.outdated",
+  missing: "live.computer.hook.missing",
+  off: "live.computer.hook.off",
+}
+const WAKE: Record<SeatWake, Key> = { on: "live.computer.wake.on", off: "live.computer.wake.off", webhook: "live.computer.wake.webhook" }
 
 function settingsLines(s: ComputerSettings): [string, string[]][] {
-  const hooks = s.hooks.flatMap((h) => (h.state === "absent" ? [] : [`${harnessName(h.harness)} ${HOOK[h.state]}`]))
+  const hooks = s.hooks.flatMap((h) => (h.state === "absent" ? [] : [t("live.computer.hook.line", { harness: harnessName(h.harness), state: t(HOOK[h.state]) })]))
   return [
-    ["Hooks", hooks.length ? hooks : ["None"]],
-    ["Agents", s.seats.length ? s.seats.map((seat) => `${seat.agent} in ${seat.channel}, ${WAKE[seat.wake]}`) : ["None yet"]],
+    [t("live.computer.hooks"), hooks.length ? hooks : [t("live.computer.none")]],
+    [
+      t("live.computer.agents"),
+      s.seats.length ? s.seats.map((seat) => t("live.computer.seat", { agent: seat.agent, channel: seat.channel, wake: t(WAKE[seat.wake]) })) : [t("live.computer.none.yet")],
+    ],
   ]
 }
 

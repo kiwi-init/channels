@@ -8,6 +8,8 @@ import com.kiwiinit.channels.engine.MessageView
 import com.kiwiinit.channels.engine.PlaceView
 import com.kiwiinit.channels.engine.ReviewView
 import com.kiwiinit.channels.engine.RoomView
+import androidx.annotation.StringRes
+import com.kiwiinit.channels.R
 
 data class Spot(val code: String, val place: String = "main") {
     val id: String get() = "$code|$place"
@@ -20,10 +22,10 @@ data class Spot(val code: String, val place: String = "main") {
 
 enum class RowKind { Group, Lead, Room }
 
-enum class Filter(val title: String) {
-    All("All"),
-    Needs("Needs you"),
-    Unread("Unread"),
+enum class Filter(@StringRes val title: Int) {
+    All(R.string.all),
+    Needs(R.string.needs_you),
+    Unread(R.string.unread),
 }
 
 data class Row(
@@ -54,29 +56,28 @@ data class Row(
 
     val fullTitle: String get() = qualifier?.let { "$title · $it" } ?: title
 
-    val line: String
-        get() {
-            if (room.connection == Connection.Connecting && last == null) return "Connecting…"
-            need?.let { return "Needs you: $it" }
-            draft?.let { return "Draft: ${if (it.text.isEmpty()) "Photo" else it.text.oneLine()}" }
-            val newest = last ?: return if (kind == RowKind.Lead) "Message your lead" else "No messages yet"
-            val body = if (newest.body.isEmpty() && newest.images > 0) {
-                if (newest.images == 1) "Photo" else "${newest.images} Photos"
-            } else {
-                newest.plain.oneLine()
-            }
-            if (kind == RowKind.Lead) return if (newest.mine) "You: $body" else body
-            return "${if (newest.mine) "You" else room.display(newest.from)}: $body"
+    fun line(w: Words): String {
+        if (room.connection == Connection.Connecting && last == null) return w(R.string.connecting)
+        need?.let { return w(R.string.needs_you_line, it) }
+        draft?.let { return w(R.string.draft_line, if (it.text.isEmpty()) w(R.string.photo) else it.text.oneLine()) }
+        val newest = last ?: return if (kind == RowKind.Lead) w(R.string.message_your_lead) else w(R.string.no_messages_yet)
+        val body = if (newest.body.isEmpty() && newest.images > 0) {
+            if (newest.images == 1) w(R.string.photo) else w.count(R.plurals.n_photos, newest.images)
+        } else {
+            newest.plain.oneLine()
         }
+        if (kind == RowKind.Lead) return if (newest.mine) w(R.string.you_line, body) else body
+        return w(R.string.from_line, if (newest.mine) w(R.string.you) else room.display(newest.from), body)
+    }
 }
 
 data class TaskCounts(val working: Int, val review: Int, val todo: Int) {
-    val line: String
-        get() = listOfNotNull(
-            if (working > 0) "$working working" else null,
-            if (review > 0) "$review in review" else null,
-            if (todo > 0) "$todo to do" else null,
-        ).joinToString(" · ").ifEmpty { "Nothing open" }
+    fun line(w: Words): String =
+        listOfNotNull(
+            if (working > 0) w.count(R.plurals.n_working, working) else null,
+            if (review > 0) w.count(R.plurals.n_in_review, review) else null,
+            if (todo > 0) w.count(R.plurals.n_to_do, todo) else null,
+        ).joinToString(" · ").ifEmpty { w(R.string.nothing_open) }
 
     companion object {
         fun of(room: RoomView): TaskCounts {

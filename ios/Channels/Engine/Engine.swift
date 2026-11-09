@@ -10,9 +10,9 @@ enum EngineError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .missing: "The app is missing its engine. Reinstall Channels."
+        case .missing: spoken("The app is missing its engine. Reinstall Channels.")
         case .refused(let why): why
-        case .garbled: "The engine answered something this app can't read."
+        case .garbled: spoken("The engine answered something this app can't read.")
         }
     }
 }
@@ -74,7 +74,7 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         guard let text = raw as? String, let data = text.data(using: .utf8),
             let reply = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { throw EngineError.garbled }
-        guard reply["ok"] as? Bool == true else { throw EngineError.refused(reply["error"] as? String ?? "Something went wrong.") }
+        guard reply["ok"] as? Bool == true else { throw EngineError.refused(reply["error"] as? String ?? spoken("Something went wrong.")) }
         return try JSONSerialization.data(withJSONObject: reply["value"] ?? NSNull(), options: .fragmentsAllowed)
     }
 
@@ -156,7 +156,7 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
             }
             Task { await fetchForEngine(id, url, body) }
         case "removed":
-            onPush(.removed(object["by"] as? String ?? "another device"))
+            onPush(.removed(object["by"] as? String ?? spoken("another device")))
         case "kept":
             guard let code = object["code"] as? String, let sealed = object["sealed"], let blob = try? JSONSerialization.data(withJSONObject: sealed) else {
                 return dropped("a kept push without a code or sealed view")

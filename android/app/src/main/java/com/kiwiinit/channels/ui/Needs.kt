@@ -58,6 +58,8 @@ import com.kiwiinit.channels.model.oneLine
 import com.kiwiinit.channels.model.taskLabel
 import com.kiwiinit.channels.theme.Tone
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.stringResource
+import com.kiwiinit.channels.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,7 +69,7 @@ private fun Screen(title: String, back: () -> Unit, content: @Composable (Paddin
             TopAppBar(
                 title = { Text(title, maxLines = 1) },
                 navigationIcon = {
-                    IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back)) }
                 },
             )
         },
@@ -78,10 +80,10 @@ private fun Screen(title: String, back: () -> Unit, content: @Composable (Paddin
 fun NeedsList(model: AppModel) {
     val many = model.channels.size > 1
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-        BigTitle("Needs you")
+        BigTitle(stringResource(R.string.needs_you))
         LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)) {
             if (model.channels.none { it.asks.isNotEmpty() || it.reviews.isNotEmpty() }) {
-                item(key = "none") { Centered("Nothing needs you", "Questions, decisions and reviews show up here.", Modifier.padding(top = 80.dp)) }
+                item(key = "none") { Centered(stringResource(R.string.nothing_needs_you), stringResource(R.string.nothing_needs_you_lead), Modifier.padding(top = 80.dp)) }
             }
             for (room in model.channels) {
                 if (room.asks.isEmpty() && room.reviews.isEmpty()) continue
@@ -96,18 +98,18 @@ fun NeedsList(model: AppModel) {
 @Composable
 fun TasksScreen(model: AppModel, code: String, open: (Spot) -> Unit, back: () -> Unit) {
     val room = model.rooms[code]
-    Screen(room?.let { "Tasks · ${it.title}" } ?: "Tasks", back) { padding ->
+    Screen(room?.let { stringResource(R.string.tasks_in, it.title) } ?: stringResource(R.string.tasks), back) { padding ->
         if (room == null) {
-            Centered("This channel is gone", "Its owner closed it, or this phone was removed from it.", Modifier.padding(padding))
+            Centered(stringResource(R.string.channel_gone), stringResource(R.string.channel_gone_lead), Modifier.padding(padding))
             return@Screen
         }
         val live = room.tasks.filter { !it.archived }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
-            if (live.isEmpty()) item(key = "none") { Centered("Nothing open", "Tasks your lead hands out show up here.", Modifier.padding(top = 80.dp)) }
+            if (live.isEmpty()) item(key = "none") { Centered(stringResource(R.string.nothing_open), stringResource(R.string.nothing_open_lead), Modifier.padding(top = 80.dp)) }
             for ((state, title) in TASK_STATES) {
                 val these = live.filter { it.state == state }
                 if (these.isEmpty()) continue
-                item(key = "head-$state") { Header("$title · ${these.size}", if (state == "review") Tone.current.decide else Tone.current.ink3) }
+                item(key = "head-$state") { Header("${stringResource(title)} · ${these.size}", if (state == "review") Tone.current.decide else Tone.current.ink3) }
                 item(key = "list-$state") {
                     Card {
                         these.forEachIndexed { i, task ->
@@ -121,7 +123,7 @@ fun TasksScreen(model: AppModel, code: String, open: (Spot) -> Unit, back: () ->
     }
 }
 
-private val TASK_STATES = listOf("doing" to "Working", "review" to "In review", "todo" to "To do", "done" to "Done")
+private val TASK_STATES = listOf("doing" to R.string.state_doing, "review" to R.string.state_review, "todo" to R.string.state_todo, "done" to R.string.state_done)
 
 @Composable
 private fun TaskRow(room: RoomView, task: TaskView, open: () -> Unit) {
@@ -198,7 +200,7 @@ private fun NeedsYouRow(model: AppModel, room: RoomView, ask: AskView) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Face(ask.from, room.member(ask.from), 24.dp)
             Text(
-                listOfNotNull(room.display(ask.from), ask.task?.let(::taskLabel), When.short(ask.millis)).joinToString(" · "),
+                listOfNotNull(room.display(ask.from), ask.task?.let(::taskLabel), When.short(words(), ask.millis)).joinToString(" · "),
                 style = MaterialTheme.typography.labelMedium,
                 color = tone.ink3,
                 modifier = Modifier.weight(1f),
@@ -230,24 +232,24 @@ private fun NeedsYouRow(model: AppModel, room: RoomView, ask: AskView) {
                     modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(tone.wash2).padding(horizontal = 12.dp, vertical = 10.dp),
                     decorationBox = { inner ->
                         Box {
-                            if (text.isEmpty()) Text("Your answer", style = MaterialTheme.typography.bodyLarge, color = tone.ink3)
+                            if (text.isEmpty()) Text(stringResource(R.string.your_answer), style = MaterialTheme.typography.bodyLarge, color = tone.ink3)
                             inner()
                         }
                     },
                 )
                 FilledIconButton(onClick = { submit(text) }, enabled = text.isNotBlank() && sending == null, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send answer", modifier = Modifier.size(18.dp))
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send_answer), modifier = Modifier.size(18.dp))
                 }
             }
         } else {
             Text(
-                if (ask.choices.isEmpty()) "Answer" else "Something else",
+                if (ask.choices.isEmpty()) stringResource(R.string.answer) else stringResource(R.string.something_else),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { replying = true }.padding(vertical = 6.dp, horizontal = 4.dp),
             )
         }
-        if (failed) Text("Couldn't send · Try again", style = MaterialTheme.typography.labelMedium, color = tone.alert)
+        if (failed) Text(stringResource(R.string.send_failed), style = MaterialTheme.typography.labelMedium, color = tone.alert)
     }
 }
 
@@ -282,13 +284,13 @@ private fun ReviewRow(model: AppModel, room: RoomView, review: ReviewView) {
             val by = review.by
             if (by != null) Face(by, room.member(by), 24.dp)
             Text(
-                listOfNotNull(by?.let { room.display(it) }, taskLabel(review.task), When.short(review.millis)).joinToString(" · "),
+                listOfNotNull(by?.let { room.display(it) }, taskLabel(review.task), When.short(words(), review.millis)).joinToString(" · "),
                 style = MaterialTheme.typography.labelMedium,
                 color = tone.ink3,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
             )
-            Text("Review", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = tone.decide)
+            Text(stringResource(R.string.review), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = tone.decide)
         }
         Text(
             buildAnnotatedString {
@@ -298,7 +300,7 @@ private fun ReviewRow(model: AppModel, room: RoomView, review: ReviewView) {
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        Text("Ready for your review · check the work itself, not just the word", style = MaterialTheme.typography.bodySmall, color = tone.ink3)
+        Text(stringResource(R.string.review_lead), style = MaterialTheme.typography.bodySmall, color = tone.ink3)
         val writing = why
         if (writing == null) {
             Row(
@@ -309,11 +311,11 @@ private fun ReviewRow(model: AppModel, room: RoomView, review: ReviewView) {
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Approve", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.approve), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                 if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
             }
             Text(
-                "Send back",
+                stringResource(R.string.send_back),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = !busy) { why = "" }.padding(vertical = 6.dp, horizontal = 4.dp),
@@ -328,7 +330,7 @@ private fun ReviewRow(model: AppModel, room: RoomView, review: ReviewView) {
                     modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(tone.wash2).padding(horizontal = 12.dp, vertical = 10.dp),
                     decorationBox = { inner ->
                         Box {
-                            if (writing.isEmpty()) Text("What to change", style = MaterialTheme.typography.bodyLarge, color = tone.ink3)
+                            if (writing.isEmpty()) Text(stringResource(R.string.what_to_change), style = MaterialTheme.typography.bodyLarge, color = tone.ink3)
                             inner()
                         }
                     },
@@ -338,10 +340,10 @@ private fun ReviewRow(model: AppModel, room: RoomView, review: ReviewView) {
                     enabled = writing.isNotBlank() && !busy,
                     modifier = Modifier.size(40.dp),
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send back", modifier = Modifier.size(18.dp))
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send_back), modifier = Modifier.size(18.dp))
                 }
             }
         }
-        if (failed) Text("Couldn't send · Try again", style = MaterialTheme.typography.labelMedium, color = tone.alert)
+        if (failed) Text(stringResource(R.string.send_failed), style = MaterialTheme.typography.labelMedium, color = tone.alert)
     }
 }

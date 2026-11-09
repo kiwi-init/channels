@@ -18,10 +18,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Language as LanguageIcon
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,12 +41,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import com.kiwiinit.channels.R
 import com.kiwiinit.channels.model.AppModel
+import com.kiwiinit.channels.model.Language
 import com.kiwiinit.channels.theme.Tone
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +58,10 @@ fun SettingsScreen(model: AppModel) {
     val tone = Tone.current
     val context = LocalContext.current
     var confirm by remember { mutableStateOf(false) }
+    var picking by remember { mutableStateOf(false) }
+    val chosen = remember { Language.chosen(context) }
+    val system = stringResource(R.string.language_system)
+    val languageName = Language.choices.firstOrNull { it.first.equals(chosen, ignoreCase = true) }?.second ?: system
     val version = remember {
         try {
             val info = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -64,37 +73,38 @@ fun SettingsScreen(model: AppModel) {
     }
     val relayHost = model.relay.toUri().host ?: model.relay
     val guarded = when {
-        !model.lock.available -> "Off, no screen lock"
-        model.lock.biometric -> "Biometrics, after 30 s"
-        else -> "Screen lock, after 30 s"
+        !model.lock.available -> stringResource(R.string.lock_off)
+        model.lock.biometric -> stringResource(R.string.lock_biometric)
+        else -> stringResource(R.string.lock_screen)
     }
     Scaffold(
-        topBar = { BigTitle("You") },
+        topBar = { BigTitle(stringResource(R.string.tab_you)) },
         contentWindowInsets = WindowInsets(0),
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
             Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Face(model.person.ifEmpty { "?" }, null, 80.dp)
                 Text(model.person, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp))
-                Text(if (model.enrolled) "Signed in as one of your devices" else "Linked to your Mac", style = MaterialTheme.typography.bodyMedium, color = tone.ink3)
+                Text(if (model.enrolled) stringResource(R.string.signed_in_device) else stringResource(R.string.linked_to_mac), style = MaterialTheme.typography.bodyMedium, color = tone.ink3)
             }
-            Section("This phone")
+            Section(stringResource(R.string.this_phone))
             Group {
-                Setting(Icons.Filled.Forum, tone.live, "Channels", "${model.channels.size}")
-                Setting(Icons.Filled.Router, tone.doing, "Relay", relayHost)
-                Setting(Icons.Filled.Lock, tone.ink3, "Lock", guarded)
+                Setting(Icons.Filled.Forum, tone.live, stringResource(R.string.channels), "${model.channels.size}")
+                Setting(Icons.Filled.Router, tone.doing, stringResource(R.string.relay), relayHost)
+                Setting(Icons.Filled.Lock, tone.ink3, stringResource(R.string.lock), guarded)
+                Setting(Icons.Filled.LanguageIcon, MaterialTheme.colorScheme.primary, stringResource(R.string.language), languageName) { picking = true }
             }
             if (!model.enrolled) {
                 Spacer(Modifier.size(16.dp))
                 Group {
-                    Setting(Icons.Filled.Link, MaterialTheme.colorScheme.primary, "Link again", null) { model.relinkAsked = true }
+                    Setting(Icons.Filled.Link, MaterialTheme.colorScheme.primary, stringResource(R.string.link_again), null) { model.relinkAsked = true }
                 }
-                Foot("Brings the channels you joined on your Mac since you linked.")
+                Foot(stringResource(R.string.link_again_foot))
             }
             Spacer(Modifier.size(16.dp))
             Group {
                 Text(
-                    if (model.enrolled) "Sign out of this phone" else "Unlink this phone",
+                    if (model.enrolled) stringResource(R.string.sign_out_phone) else stringResource(R.string.unlink_phone),
                     style = MaterialTheme.typography.bodyLarge,
                     color = tone.alert,
                     textAlign = TextAlign.Center,
@@ -103,13 +113,13 @@ fun SettingsScreen(model: AppModel) {
             }
             Foot(
                 if (model.enrolled) {
-                    "This phone holds its own key and your channels' keys, sealed by its keystore. Signing out deletes them from this phone; forget it in Settings → Devices on your computer too."
+                    stringResource(R.string.keys_foot_enrolled)
                 } else {
-                    "This phone holds your person key and your channels' keys, sealed by its keystore. Unlinking deletes them from this phone."
+                    stringResource(R.string.keys_foot_linked)
                 },
             )
             Text(
-                "Channels $version",
+                stringResource(R.string.version_line, version),
                 style = MaterialTheme.typography.labelMedium,
                 color = tone.ink3,
                 textAlign = TextAlign.Center,
@@ -117,18 +127,44 @@ fun SettingsScreen(model: AppModel) {
             )
         }
     }
+    if (picking) {
+        AlertDialog(
+            onDismissRequest = { picking = false },
+            title = { Text(stringResource(R.string.language)) },
+            text = {
+                Column {
+                    for ((tag, name) in listOf("" to system) + Language.choices) {
+                        val on = tag.equals(chosen, ignoreCase = true)
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable {
+                                picking = false
+                                context.activity()?.let { Language.choose(it, tag) }
+                            }.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = on, onClick = null)
+                            Spacer(Modifier.width(12.dp))
+                            Text(name, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { picking = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false },
-            title = { Text(if (model.enrolled) "Sign out of this phone?" else "Unlink this phone?") },
-            text = { Text(if (model.enrolled) "Its keys are deleted. Sign in again to come back." else "Its keys are deleted. Link again from your Mac to come back.") },
+            title = { Text(if (model.enrolled) stringResource(R.string.sign_out_q) else stringResource(R.string.unlink_q)) },
+            text = { Text(if (model.enrolled) stringResource(R.string.sign_out_body) else stringResource(R.string.unlink_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false
                     model.unlink()
-                }) { Text(if (model.enrolled) "Sign out" else "Unlink", color = tone.alert) }
+                }) { Text(if (model.enrolled) stringResource(R.string.sign_out) else stringResource(R.string.unlink), color = tone.alert) }
             },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }

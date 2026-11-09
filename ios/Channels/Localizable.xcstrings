@@ -1,0 +1,394 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    " %@" : {
+      "shouldTranslate" : false
+    },
+    " in %@" : {},
+    " in a direct thread" : {},
+    "#%lld " : {
+      "shouldTranslate" : false
+    },
+    "%@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      },
+      "shouldTranslate" : false
+    },
+    "%@ at" : {},
+    "%@ chose" : {},
+    "%@ is working: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ is working: %2$@"
+          }
+        }
+      }
+    },
+    "%@%@ in %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@%2$@ in %3$@"
+          }
+        }
+      }
+    },
+    "%@, chosen" : {},
+    "%@: " : {
+      "shouldTranslate" : false
+    },
+    "%@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@"
+          }
+        }
+      },
+      "shouldTranslate" : false
+    },
+    "%lld" : {
+      "shouldTranslate" : false
+    },
+    "%lld Photos" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Photo"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Photos"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld in review" : {},
+    "%lld new, jump to the latest" : {},
+    "%lld photos couldn't be added" : {},
+    "%lld to do" : {},
+    "%lld working" : {},
+    "A person wants to join" : {},
+    "A sample channel. Sign in to see yours." : {},
+    "Add photos" : {},
+    "Allow Once" : {},
+    "Allow once" : {},
+    "An agent wants to join" : {},
+    "Answer" : {},
+    "Answer %@" : {},
+    "Appearance" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "外観"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aparência"
+          }
+        }
+      }
+    },
+    "Approve" : {},
+    "Approve on your computer" : {},
+    "Approve the spec of #%lld" : {},
+    "Brings the channels you joined on your Mac since you linked." : {},
+    "Cancel" : {},
+    "Channels" : {},
+    "Channels %@" : {},
+    "Channels can't read its sign-in: %@. Unlock this iPhone and it carries on." : {},
+    "Channels can't start" : {},
+    "Channels is locked" : {},
+    "Channels on your computer asks about this iPhone. Click Continue there." : {},
+    "Chats" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "チャット"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversas"
+          }
+        }
+      }
+    },
+    "Close" : {},
+    "Code " : {},
+    "Command" : {},
+    "Connecting…" : {},
+    "Conversations" : {},
+    "Copy" : {},
+    "Copy Code and Open GitHub" : {},
+    "Couldn't do that" : {},
+    "Couldn't send · Try again" : {},
+    "Dark" : {},
+    "Dark Theme" : {},
+    "Decided" : {},
+    "Delete" : {},
+    "Deny" : {},
+    "Done" : {},
+    "Earlier messages aren't on this phone" : {},
+    "Everyone in the channel can read this" : {},
+    "Face ID" : {},
+    "GitHub asks for this code. The button copies it: paste it there, then authorize." : {},
+    "In %@" : {},
+    "In reply to %@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "In reply to %1$@: %2$@"
+          }
+        }
+      }
+    },
+    "In review" : {},
+    "Invited with a personality: let them in on your computer" : {},
+    "Invited with a personality: let them in on your computer." : {},
+    "Its keys are deleted. Link again from your Mac to come back." : {},
+    "Its keys are deleted. Sign in again to come back." : {},
+    "Its owner closed it, or this phone was removed from it." : {},
+    "Join" : {},
+    "Join if your computer shows the same key. A different one means someone else answered." : {},
+    "Jump to the latest" : {},
+    "Kept nothing. If your computer never showed %@, someone else answered this iPhone. Your computer may still list it under Devices: remove it there." : {},
+    "Language" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "言語"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idioma"
+          }
+        }
+      }
+    },
+    "Lead of %@" : {},
+    "Let In" : {},
+    "Let in" : {},
+    "Let them in only if their screen shows the same code" : {},
+    "Let them in only if their screen shows the same code." : {},
+    "Light" : {},
+    "Light Theme" : {},
+    "Link Again" : {},
+    "Link your Mac again to bring your channels." : {},
+    "Linked to your Mac" : {},
+    "Lock" : {},
+    "Lock with %@" : {},
+    "Look Around First" : {},
+    "Mark as Read" : {},
+    "Mark as Unread" : {},
+    "Message" : {},
+    "Message %@" : {},
+    "Message %@ directly" : {},
+    "Message %@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Message %1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "Message your lead" : {},
+    "Needs You" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要対応"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para você"
+          }
+        }
+      }
+    },
+    "Needs you: %@" : {},
+    "No Channels" : {},
+    "No messages yet" : {},
+    "No tasks yet" : {},
+    "Not Delivered" : {},
+    "Not My Key" : {},
+    "Not delivered" : {},
+    "Not sent: %@" : {},
+    "Nothing needs you" : {},
+    "Nothing open" : {},
+    "OK" : {},
+    "Off, no passcode" : {},
+    "One of your devices" : {},
+    "Only %@ can allow this one" : {},
+    "Only %@ can allow this one." : {},
+    "Only the channel's owner can let them in." : {},
+    "Open %@" : {},
+    "Open GitHub" : {},
+    "Open it to load the messages" : {},
+    "Open the Conversation" : {},
+    "Opening the sign-in…" : {},
+    "Optic ID" : {},
+    "Passcode" : {},
+    "Permission" : {},
+    "Permission for you" : {},
+    "Photo" : {},
+    "Picture" : {},
+    "Question" : {},
+    "Question for you" : {},
+    "Questions, permissions and reviews for you show up here." : {},
+    "Ready for your review" : {},
+    "Reconnecting…" : {},
+    "Relay" : {},
+    "Reply" : {},
+    "Reply to %@" : {},
+    "Review" : {},
+    "Review %@" : {},
+    "Send" : {},
+    "Send Back" : {},
+    "Send back" : {},
+    "Send back %@" : {},
+    "Send back…" : {},
+    "Share" : {},
+    "Sign In" : {},
+    "Sign Out" : {},
+    "Sign Out of This iPhone" : {},
+    "Sign in" : {},
+    "Sign in with GitHub" : {},
+    "Sign out of this iPhone?" : {},
+    "Sign-in not saved" : {},
+    "Someone" : {},
+    "Something else" : {},
+    "Something else…" : {},
+    "Something went wrong." : {},
+    "Spec" : {},
+    "Spec changed" : {},
+    "Spec changed: approve again" : {},
+    "Spec ready for you" : {},
+    "Starting Channels" : {},
+    "System" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "システム"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sistema"
+          }
+        }
+      }
+    },
+    "Tapback" : {},
+    "Tasks" : {},
+    "Tasks · %@" : {},
+    "The app is missing its engine. Reinstall Channels." : {},
+    "The engine answered something this app can't read." : {},
+    "The start of #general" : {},
+    "The start of this task's thread" : {},
+    "The start of this thread" : {},
+    "Their screen shows" : {},
+    "This channel is gone" : {},
+    "This iPhone" : {},
+    "This iPhone couldn't save your sign-in: %@. You stay signed in until Channels closes, and it tries again each time you open it." : {},
+    "This iPhone holds its own device key and its channels' keys in its keychain. Signing out deletes them from this phone; forget it in Settings → Devices on your computer too." : {},
+    "This iPhone holds your person key and your channels' keys in its keychain. Unlinking deletes them from this phone." : {},
+    "This iPhone joins the channels your computer had when it approved it." : {},
+    "This iPhone was removed from your devices by %@, so it deleted its keys and channels. Sign in to add it again." : {},
+    "To do" : {},
+    "Today" : {},
+    "Touch ID" : {},
+    "Try Again" : {},
+    "Type these digits there." : {},
+    "Unlink" : {},
+    "Unlink This iPhone" : {},
+    "Unlink this iPhone?" : {},
+    "Unlock" : {},
+    "Unlock your channels" : {},
+    "Unread" : {},
+    "Use a tool" : {},
+    "Use the account Channels on your computer uses." : {},
+    "Waiting for GitHub" : {},
+    "Waiting for your computer" : {},
+    "Waiting to Be Let In" : {},
+    "Wants to join" : {},
+    "What needs to change" : {},
+    "What to change" : {},
+    "With the account Channels on your computer uses, then approve this iPhone there." : {},
+    "Working" : {},
+    "Working on %@" : {},
+    "Yesterday" : {},
+    "You" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "あなた"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você"
+          }
+        }
+      }
+    },
+    "You can deny this one" : {},
+    "You can deny this one." : {},
+    "You're looking at a sample channel. Sign in to see yours." : {},
+    "You, %@" : {},
+    "You: %@" : {},
+    "Your agents, on your phone." : {},
+    "Your answer" : {},
+    "Your computer took the digits." : {},
+    "Your key, %@" : {},
+    "a photo couldn't be added" : {},
+    "another device" : {},
+    "by %@" : {},
+    "from %@'s computer" : {},
+    "general" : {},
+    "in %@" : {},
+    "in a direct thread" : {},
+    "now" : {},
+    "working" : {},
+    "working on %@" : {},
+    "· %lld working" : {}
+  },
+  "version" : "1.0"
+}
