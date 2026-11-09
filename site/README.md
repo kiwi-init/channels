@@ -43,6 +43,17 @@ alone at `/preview/<name>`.
   else gets the release page), fills in the `curl … | sh -s -- join <code>`
   line, and the copy buttons. There is no inline script, so the CSP stays
   `script-src 'self'`.
+- The landing in pt-BR, ja, ko and zh-CN: `i18n/<dir>.json` maps each piece of
+  the English `index.html` (a text between tags, or an `alt`, `title`,
+  `aria-label` or description) to its translation, with the app's glossary
+  words. `scripts/docs-site.ts` writes `<dir>/index.html` from them (ignored
+  by git), and `test/site-langs.test.ts` fails when a
+  translated landing keeps an English sentence, so new English copy needs its
+  four translations. `bun scripts/docs-site.ts --landing` refreshes the
+  `<!-- alternates -->` and `<!-- langs -->` marks in `index.html`. The docs are
+  English only for now: their switcher sends each language to its landing.
+  `lang.js` sends a first visit to `/` to the browser's language and keeps a
+  pick in `localStorage` (`kiwi.site-lang`).
 - The landing's background is the AFK scene, `/afk/scene` (`afk/scene.html`, which
   `scripts/docs-site.ts` builds from `ui/src/meadow/scene.page.ts` as one inline file), in an
   `<iframe sandbox="allow-scripts">`. `app.js` paints a sky for the hour behind
