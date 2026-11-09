@@ -4,6 +4,7 @@ import { cx, IconButton } from "~/kit/bits"
 import { Toggle } from "~/kit/form"
 import { setDebugOptions, useDebugOptions } from "~/kit/debug"
 import { Icon } from "~/kit/icons"
+import { LANG_NAMES, LANGS, setLanguage, t, useLanguage, type LangPref } from "~/i18n/i18n"
 import type { TextFont } from "@kiwi/app/theme.ts"
 import { personFingerprint } from "@kiwi/core/fingerprint.ts"
 import { KEYS_UNSEALED } from "@kiwi/secrets/keys-at-rest.ts"
@@ -196,9 +197,29 @@ export function AppearanceSection() {
         <Row label="Motion">
           <Seg label="Motion" value={prefs.reduceMotion ? "reduced" : "full"} options={MOTION} onChange={(m) => set({ reduceMotion: m === "reduced" })} />
         </Row>
+        <LanguageRow />
       </Group>
       <Themes />
     </Page>
+  )
+}
+
+function LanguageRow() {
+  const { pref } = useLanguage()
+  return (
+    <Row label={t("settings.language")}>
+      <span className="set-select">
+        <select className="input" aria-label={t("settings.language")} value={pref} onChange={(e) => setLanguage(e.target.value as LangPref)}>
+          <option value="system">{t("settings.language.system")}</option>
+          {LANGS.map((lang) => (
+            <option key={lang} value={lang} lang={lang}>
+              {LANG_NAMES[lang]}
+            </option>
+          ))}
+        </select>
+        <Icon name="down" size={14} />
+      </span>
+    </Row>
   )
 }
 
