@@ -132,6 +132,7 @@ function stripeBook(env: Env): StripeBook {
     setPlan: async (user, plan) => void (await admin(env).set(user, { plan })),
     customer: async (customer) => ((await (await index().fetch("https://people/customer", { method: "POST", body: JSON.stringify({ customer }) })).json()) as { user: string | null }).user,
     linkCustomer: async (customer, user) => void (await index().fetch("https://people/link", { method: "POST", body: JSON.stringify({ customer, user }) })),
+    newer: async (customer, at) => ((await (await index().fetch("https://people/newer", { method: "POST", body: JSON.stringify({ customer, at }) })).json()) as { newer: boolean }).newer,
   };
 }
 
@@ -463,6 +464,10 @@ export class People extends DurableObject<Env> {
       const { customer, user } = (await req.json()) as { customer: string; user: string };
       this.book.linkCustomer(customer, user);
       return Response.json({ ok: true });
+    }
+    if (req.method === "POST" && path === "/newer") {
+      const { customer, at } = (await req.json()) as { customer: string; at: number };
+      return Response.json({ newer: this.book.newer(customer, at) });
     }
     if (req.method === "POST") {
       this.book.note((await req.json()) as PersonRow);

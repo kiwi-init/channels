@@ -5,13 +5,14 @@ export const STRIPE_PATH = "/v1/stripe/webhook";
 const STRIPE_TOLERANCE_S = 300;
 const MAX_BODY = 256 * 1024;
 const USER = /^github_\d+$/;
-const PAID_STATUSES = new Set(["active", "trialing"]);
+const PAID_STATUSES = new Set(["active", "trialing", "past_due"]);
 
 export interface StripeBook {
   person(user: string): Promise<Person>;
   setPlan(user: string, plan: Plan): Promise<void>;
   customer(customer: string): Promise<string | null>;
   linkCustomer(customer: string, user: string): Promise<void>;
+  newer(customer: string, at: number): Promise<boolean>;
 }
 
 type Json = Record<string, unknown>;
@@ -54,18 +55,23 @@ async function downgrade(book: StripeBook, user: string): Promise<void> {
 async function apply(book: StripeBook, event: Json): Promise<string> {
   const data = obj(obj(event["data"])["object"]);
   const customer = str(data["customer"]);
+  const at = Number.isSafeInteger(event["created"]) ? (event["created"] as number) : 0;
+  const current = async () => !customer || (await book.newer(customer, at));
   switch (event["type"]) {
     case "checkout.session.completed": {
       const user = str(data["client_reference_id"]);
       if (!user || !USER.test(user)) return "no person on the session";
       if (customer) await book.linkCustomer(customer, user);
-      if (data["payment_status"] !== "unpaid") await upgrade(book, user);
+      if (data["payment_status"] === "unpaid") return "paid";
+      if (!(await current())) return "stale";
+      await upgrade(book, user);
       return "paid";
     }
     case "customer.subscription.updated":
     case "customer.subscription.deleted": {
       const user = customer ? await book.customer(customer) : null;
       if (!user) return "unknown customer";
+      if (!(await current())) return "stale";
       const paid = event["type"] === "customer.subscription.updated" && PAID_STATUSES.has(String(data["status"]));
       await (paid ? upgrade(book, user) : downgrade(book, user));
       return paid ? "paid" : "free";

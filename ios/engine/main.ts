@@ -10,6 +10,7 @@ import type { ChannelIdentityView, EnrollPersonView, EnrollStatusView, FromMachi
 import { createEnrollee, type Enrollee } from "../../desktop/src/devices.ts";
 import { Keyring } from "../../desktop/src/keyring.ts";
 import { personMachines, type Asker, type PairedComputer } from "../../desktop/src/remote.ts";
+import { withoutPurchaseLinks } from "./refusal.ts";
 import { acceptSeat, withAccess } from "../../desktop/src/seats.ts";
 import { needsOf } from "./needs.ts";
 import { registerPush } from "./push.ts";
@@ -548,7 +549,7 @@ async function ask(json: string): Promise<string> {
   try {
     reply = { ok: true, value: (await handle(JSON.parse(json) as Ask)) ?? null };
   } catch (e) {
-    reply = { ok: false, error: e instanceof Error ? e.message : String(e) };
+    reply = { ok: false, error: withoutPurchaseLinks(e instanceof Error ? e.message : String(e)) };
   }
   return JSON.stringify(reply);
 }

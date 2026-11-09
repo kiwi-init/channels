@@ -356,6 +356,7 @@ export function startRelay(
     setPlan: async (user, plan) => void (await admin.set(user, { plan })),
     customer: async (c) => book.customer(c),
     linkCustomer: async (c, user) => book.linkCustomer(c, user),
+    newer: async (c, at) => book.newer(c, at),
   };
   const listOf = (user: string) => (people.query("SELECT entry FROM owned WHERE user = ?").all(user) as { entry: string }[]).map((r) => JSON.parse(r.entry) as DirectoryEntry);
 
