@@ -30,7 +30,6 @@ struct ChannelList: View {
         .background(Tone.canvas)
         .refreshable { await model.refresh() }
         .scrollDismissesKeyboard(.interactively)
-        .bar(.bottom) { QuickSend() }
         .animation(Motion.ease, value: model.waiting)
         .overlay {
             if model.channels.isEmpty {
@@ -46,6 +45,7 @@ struct ChannelList: View {
             }
         }
         .navigationTitle("Channels")
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
@@ -75,27 +75,6 @@ struct ChannelRows: View {
 
     var body: some View {
         Group {
-            if let spot = room.leadSpot, let lead = room.lead {
-                let member = room.member(lead)
-                Button {
-                    model.go(.place(spot))
-                } label: {
-                    let last = room.placeView(spot.place)?.last
-                    ConvoRow(
-                        title: room.display(lead), line: leadLine(last), at: last?.date, unread: model.unread(spot), live: live(member),
-                        since: member?.working == true ? member?.activity?.since.map { Date(timeIntervalSince1970: $0 / 1000) } : nil
-                    ) {
-                        Face(name: lead, member: member, size: 44)
-                    }
-                }
-                .flatRow()
-                .swipeActions(edge: .leading) { ReadToggle(spot: spot) }
-                .contextMenu {
-                    RowMenu(spot: spot)
-                } preview: {
-                    PeekView(spot: spot).environment(model)
-                }
-            }
             ForEach(rooms, id: \.self) { spot in
                 Button {
                     model.go(.place(spot))
@@ -128,18 +107,6 @@ struct ChannelRows: View {
             .flatRow()
         }
         .buttonStyle(.plain)
-    }
-
-    private func live(_ member: MemberView?) -> String? {
-        guard let member, member.working else { return nil }
-        let task = member.doing.first.map { id in room.tasks.first { $0.id == id }.map { "\(taskLabel(id)) \($0.title)" } ?? taskLabel(id) }
-        let tool = member.activity?.tool.flatMap { $0.isEmpty ? nil : $0 }
-        return [task.map { spoken("Working on \($0)") } ?? spoken("Working"), tool].compactMap { $0 }.joined(separator: " · ")
-    }
-
-    private func leadLine(_ last: MessageView?) -> String {
-        guard let last else { return room.connection == .connecting ? spoken("Connecting…") : spoken("Message your lead") }
-        return last.mine ? spoken("You: \(Self.words(last))") : Self.words(last)
     }
 
     private func roomLine(_ last: MessageView?) -> String {

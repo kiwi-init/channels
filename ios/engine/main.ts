@@ -122,7 +122,7 @@ function start(next: Saved, kept: Record<string, unknown> = {}): number {
     budget,
   });
   keyring = ring;
-  for (const seat of next.seats) openRoom(ring, seat);
+  for (const seat of next.seats) openRoom(ring, seat, seat.code ? kept[seat.code] : null);
   void warm(ring, kept);
   watchJoins();
   if (next.person) {
@@ -137,7 +137,9 @@ function personPk(): string | null {
   return saved?.person?.pk ?? saved?.device?.person.pk ?? null;
 }
 
-function openRoom(ring: Keyring, seat: ChannelIdentityView): void {
+const viewOf = (sealed: unknown): unknown => (sealed && typeof sealed === "object" && "view" in sealed ? sealed.view : sealed);
+
+function openRoom(ring: Keyring, seat: ChannelIdentityView, kept: unknown = null): void {
   if (!seat.code || !seat.access || rooms.has(seat.code)) return;
   const code = seat.code;
   const room = new Room(ring, seat, {
@@ -149,7 +151,7 @@ function openRoom(ring: Keyring, seat: ChannelIdentityView): void {
     needs: needsOf,
   });
   rooms.set(code, room);
-  void room.start();
+  void room.start(kept);
 }
 
 function drop(code: string): void {
@@ -177,10 +179,14 @@ function shown(ring: Keyring, view: RoomView): void {
     const latest = keeping.get(view.code)?.view ?? view;
     keeping.delete(view.code);
     if (keyring !== ring) return;
-    ring
-      .keep(view.code, latest)
-      .then((sealed) => {
-        if (sealed && keyring === ring) post({ type: "kept", code: view.code, sealed });
+    const held =
+      rooms
+        .get(view.code)
+        ?.held()
+        .catch(() => null) ?? null;
+    Promise.all([ring.keep(view.code, latest), held])
+      .then(([sealed, rows]) => {
+        if (sealed && keyring === ring) post({ type: "kept", code: view.code, sealed: rows ? { view: sealed, ...rows } : { view: sealed } });
       })
       .catch(() => {});
   }, KEEP_EVERY_MS);
@@ -191,7 +197,7 @@ async function warm(ring: Keyring, kept: Record<string, unknown>): Promise<void>
   await Promise.all(
     Object.entries(kept).map(async ([code, sealed]) => {
       if (!rooms.has(code) || live.has(code)) return;
-      const view = (await ring.openKept(code, sealed).catch(() => null)) as RoomView | null;
+      const view = (await ring.openKept(code, viewOf(sealed)).catch(() => null)) as RoomView | null;
       if (!view || typeof view !== "object" || view.code !== code || keyring !== ring || live.has(code)) return;
       warmed.add(code);
       post({ type: "room", room: { ...view, connection: "connecting" } });

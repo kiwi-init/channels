@@ -157,11 +157,15 @@ jobs:
 
   # The app, the CLI binary and the worker, each built and smoke-tested.
   build:
-    name: build / bundles
+    name: build / bundles, ${{ matrix.part }}
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['build']
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [app, ui-a, ui-b]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -171,12 +175,13 @@ jobs:
       - name: ui build
         run: bun run ui:build
       - name: ui bundle budget
+        if: ${{ !cancelled() && matrix.part == 'app' }}
         run: bun scripts/ui-bundle.ts
       - name: ui harness build, with the plain-browser key store
         if: ${{ !cancelled() }}
         run: bun scripts/ui-harness.ts
       - name: app smoke
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'app' }}
         timeout-minutes: 5
         run: bun scripts/smoke-app.ts
       - if: failure()
@@ -188,19 +193,19 @@ jobs:
           overwrite: true
       # The new UI's long-feed demo in WebKit: it renders the latest rows, and nothing jumps while it scrolls. It scrolls once and gates on rows and jumps; the timed runs are by hand.
       - name: ui scroll in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-scroll-fps.ts --check --dist ui/dist
       - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-still.ts --dist ui/dist
       - name: ui a remote edit landing between your keys never undoes your caret or selection (⇧← and ←), in Chromium and WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-doc-select-race.ts
       - name: ui people see agents by nickname, never by handle, on the main screens (demo agents get real-looking handles)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'ui-b' }}
         run: bun scripts/ui-handles.ts --dist ui/dist
       - name: cli build
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'app' }}
         run: |
           bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
           probe="$RUNNER_TEMP/kiwi-autoload"
@@ -210,10 +215,10 @@ jobs:
           (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi" --version)
           test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
       - name: cli smoke
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'app' }}
         run: bun scripts/smoke-cli.ts dist/kiwi
       - name: relay worker
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'app' }}
         run: bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
 
   # The thread doc in Chromium and WebKit, written from the composer: replay, send, follow, image order, image copies, steady, a busy doc holding still and what the composer keeps from writing in the doc. Three legs balanced on the 2026-11-06 step medians (note gates/baseline): send ~2.2, edit ~2.4, view ~2.4 min of tests, every test exactly one leg; ci-ok fails unless every leg that ran passed.
@@ -349,11 +354,15 @@ jobs:
           exit "$status"
 
   shots:
-    name: build / shots
+    name: build / shots, ${{ matrix.engine }}
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['shots']
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -361,77 +370,79 @@ jobs:
         with:
           webkit: "true"
       - run: bun run ui:build
-      - name: ui shots in Chromium and WebKit
+      - name: ui shots in Chromium and WebKit, ${{ matrix.engine }}
         run: |
           pids=""
           for shard in 1/2 2/2; do
-            bun scripts/shoot-app.ts --dist ui/dist --theme dark --shard "$shard" "$RUNNER_TEMP/shots" &
-            pids="$pids $!"
-            bun scripts/shoot-app.ts --dist ui/dist --browser webkit --theme light --shard "$shard" "$RUNNER_TEMP/shots-webkit" &
+            if [ "${{ matrix.engine }}" = chromium ]; then
+              bun scripts/shoot-app.ts --dist ui/dist --theme dark --shard "$shard" "$RUNNER_TEMP/shots" &
+            else
+              bun scripts/shoot-app.ts --dist ui/dist --browser webkit --theme light --shard "$shard" "$RUNNER_TEMP/shots-webkit" &
+            fi
             pids="$pids $!"
           done
           status=0
-          bun scripts/shoot-app.ts --dist ui/dist --size 390x844 --only channel,tasks --theme dark "$RUNNER_TEMP/shots/phone" || status=1
+          if [ "${{ matrix.engine }}" = chromium ]; then
+            bun scripts/shoot-app.ts --dist ui/dist --size 390x844 --only channel,tasks --theme dark "$RUNNER_TEMP/shots/phone" || status=1
+          fi
           for pid in $pids; do wait "$pid" || status=1; done
           exit "$status"
       - name: ui stash clicks in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-stash-click.ts --dist ui/dist
-      - name: shots wait for reaction requests in Chromium and WebKit
+      - name: shots wait for reaction requests in ${{ matrix.engine }}
         if: ${{ !cancelled() }}
-        run: |
-          bun scripts/shots-settle.ts --browser chromium --dist ui/dist
-          bun scripts/shots-settle.ts --browser webkit --dist ui/dist
+        run: bun scripts/shots-settle.ts --browser ${{ matrix.engine }} --dist ui/dist
       - name: ui scrolling up a feed of event runs keeps loading to its first row, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-scroll-up.ts --dist ui/dist
       - name: ui the spec page uses a wide window and its comment box grows, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-spec-layout.ts --dist ui/dist
       - name: ui spec comments take keyboard focus, jump reply to reply, keep each spec's draft, and retry a failed send once, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-spec-comments.ts --dist ui/dist
       - name: ui Esc in search keeps the panel, and Settings doesn't offer a name change, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-esc-and-name.ts --dist ui/dist
       - name: ui the composer keeps each room's draft and images to itself, and an image sends without a file name as text, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-composer-rooms.ts --dist ui/dist
       - name: ui muting a room dims it in the sidebar, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
       - name: ui People lists you first, and your row opens your profile, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-people-you.ts --dist ui/dist
       - name: ui settings, profiles, Invite and Add an agent open in one modal that Esc, a click outside and Back close, with focus kept inside, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-modal.ts --dist ui/dist
       - name: ui edit and delete your own message (toolbar, Enter, ↑, Esc, the delete confirm), in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-edit-delete.ts --dist ui/dist
       - name: ui search reaches older history, Search older history fetches more only on a click, and an older hit opens its stretch (Back to latest, react and copy only), in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-older-search.ts --dist ui/dist
       - name: ui a reload keeps the room, tab and scroll, and ⌘[ / ⌘] step back and forward after search jumps, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-restore-place.ts --dist ui/dist
       - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist
       - name: ui history archive (newest window on reload, rows kept below it, backfill, leave), on WebKit's IndexedDB
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-history-archive.ts
       - name: ui top bar in Chromium moves the window only from its background
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-drag-regions.ts --dist ui/dist
       - name: ui rooms are flat in Chromium and WebKit, a reply shows inline with its quote and nothing opens a thread
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-flat-rooms.ts --dist ui/dist && bun scripts/ui-flat-rooms.ts --dist ui/dist --webkit
       - name: ui onboarding's meadow holds still with the app's own Reduce motion, in Chromium and WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-onboarding-meadow.ts --dist ui/dist && bun scripts/ui-onboarding-meadow.ts --dist ui/dist --webkit
       - name: ui portrait window in WebKit is one tall page, agents, tasks and chat in view, and landscape is unchanged
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-tall-page.ts --dist ui/dist
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -903,7 +914,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           sim=$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
-          xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/languages.xcresult" -only-testing:ChannelsUITests/LanguageTests -only-testing:ChannelsUITests/UpdatesTests CODE_SIGNING_ALLOWED=NO test
+          xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/languages.xcresult" -only-testing:ChannelsUITests/LanguageTests -only-testing:ChannelsUITests/UpdatesTests -only-testing:ChannelsUITests/DemoTests CODE_SIGNING_ALLOWED=NO test
       - name: language shots
         if: ${{ !cancelled() }}
         run: |

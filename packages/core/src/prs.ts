@@ -1,5 +1,4 @@
 import { inlineText } from "./membership.ts";
-import { REVIEW_CHECK } from "./protocol.ts";
 import type { Task } from "./state/types.ts";
 import { prChecks, prKey, rulesOf, type ChannelState, type GithubPr, type GithubState } from "./state.ts";
 import { artifactText, doneGate, gateNow, landingPr } from "./done-gate.ts";
@@ -109,9 +108,9 @@ export function taskOfBranch(branch: string | undefined, prefix: string | null):
   return m ? Number(m[1]) : null;
 }
 
-export function reviewNotRequired(state: Pick<ChannelState, "landing" | "repos" | "github">): string[] {
+export function reviewNotRequired(state: Pick<ChannelState, "landing" | "repos" | "github">, check: string): string[] {
   if (state.landing !== "merge") return [];
-  return state.repos.filter((repo) => !rulesOf(state.github, repo)?.required.includes(REVIEW_CHECK));
+  return state.repos.filter((repo) => !rulesOf(state.github, repo)?.required.includes(check));
 }
 
 export function landingWaits(state: ChannelState, task: Task): string | null {

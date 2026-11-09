@@ -244,7 +244,7 @@ export default {
   "tasks.lanes.empty.hint": "Adicione um pela barra lateral.",
   "tasks.lanes.label": "Raias dos agentes",
   "tasks.lanes.review.warning":
-    "As tarefas aqui fecham no merge, mas {branches} não exige kiwi/review, então um PR pode ser mesclado antes de o portão da tarefa abrir. O dono pode exigir isso no ruleset do repositório.",
+    "As tarefas aqui fecham no merge, mas {branches} não exige {check}, então um PR pode ser mesclado antes de o portão da tarefa abrir. O dono pode exigir isso no ruleset do repositório.",
   "tasks.now.needs.you": "precisa de você",
   "tasks.now.in.progress.count": "{count} em andamento",
   "tasks.now.done.today.count": { one: "{count} feita hoje", other: "{count} feitas hoje" },

@@ -56,7 +56,7 @@ describe("a person's ask gets a goal in plain words", () => {
     const s = fold(log, roster, T0);
     expect(head(s, 1)).toMatchObject({ id: 1, by: "jow", words: RAW, goal: GOAL, goalBy: "lead" });
     expect(s.rejected.get(3)).toBeUndefined();
-    const board = formatTasks(s, {});
+    const board = formatTasks(s, "kiwi/review/test", {});
     expect(board).toContain(`${GOAL} (from #1 jow: “ok so the appimage thing, can we make it actually start on …”)`);
     expect(describeEvent(log[2]!, s)).toBe(`named the goal of #1: ${GOAL}`);
   });
@@ -74,7 +74,7 @@ describe("a person's ask gets a goal in plain words", () => {
     expect(steps).toEqual([GOAL, "AppImage starts on Fedora and Arch", "Fedora and Arch", undefined]);
     const s = fold(log, roster, T0);
     expect(head(s, 1)).toEqual({ id: 1, by: "ann", words: RAW, at: T0 });
-    expect(formatTasks(s, {})).toContain(`#1 ann: “${RAW}”`);
+    expect(formatTasks(s, "kiwi/review/test", {})).toContain(`#1 ann: “${RAW}”`);
   });
 
   test("anyone else is refused, and so is a message no task is filed under or an empty name", async () => {

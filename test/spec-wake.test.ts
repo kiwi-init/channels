@@ -118,12 +118,12 @@ describe("a spec's comments and approvals reach everyone on it", () => {
     const log = await signedLog([...steps.slice(0, 7), say("dev", "gzip is a follow-up", 7)]);
     const before = fold(log.slice(0, 7), roster, T0);
     const line = 'a comment waits for your answer: #7 (kiwi show 1; answer with kiwi spec comment 1 "…")';
-    expect(formatStatus({ alias: "ch", me: "dev", state: before, online: new Map(), unread: 0, now: T0 })).toContain(`    ${line}`);
+    expect(formatStatus({ check: "kiwi/review/test", alias: "ch", me: "dev", state: before, online: new Map(), unread: 0, now: T0 })).toContain(`    ${line}`);
     expect(reentryText(before, "dev", T0)).toContain(`#1's spec “Export annotations as CSV”: ${line}`);
-    expect(formatStatus({ alias: "ch", me: "kim", state: before, online: new Map(), unread: 0, now: T0 })).not.toContain("waits for your answer");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "ch", me: "kim", state: before, online: new Map(), unread: 0, now: T0 })).not.toContain("waits for your answer");
     const after = fold(log, roster, T0);
-    expect(formatStatus({ alias: "ch", me: "dev", state: after, online: new Map(), unread: 0, now: T0 })).not.toContain("waits for your answer");
-    expect(formatStatus({ alias: "ch", me: "ops", state: after, online: new Map(), unread: 0, now: T0 })).toContain("a comment waits for your answer: #8 (kiwi show 1");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "ch", me: "dev", state: after, online: new Map(), unread: 0, now: T0 })).not.toContain("waits for your answer");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "ch", me: "ops", state: after, online: new Map(), unread: 0, now: T0 })).toContain("a comment waits for your answer: #8 (kiwi show 1");
   });
 });
 

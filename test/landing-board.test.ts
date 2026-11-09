@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { formatTasks } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { REVIEW_CHECK } from "@kiwi/core/protocol.ts";
+import { REVIEW_CHECK, reviewCheckOf } from "@kiwi/core/protocol.ts";
 import { landingWaits, reviewNotRequired, taskPr } from "@kiwi/core/prs.ts";
 import type { Event, GithubNote, Landing, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
@@ -45,7 +45,7 @@ describe("what a landing task still waits for (#623 §2)", () => {
     const t = [...open.tasks.values()].at(-1)!;
     expect(t.state).toBe("landing");
     expect(landingWaits(open, t)).toBe("waits for PR #7 to merge");
-    expect(formatTasks(open)).toContain("· waits for PR #7 to merge");
+    expect(formatTasks(open, "kiwi/review/test")).toContain("· waits for PR #7 to merge");
     const closed = fold(await landing("merge", pr("closed")), roster);
     expect(landingWaits(closed, [...closed.tasks.values()].at(-1)!)).toBe("waits: PR #7 was closed without merging");
     const merged = fold(await landing("release:tag", pr("closed", true)), roster);
@@ -62,6 +62,7 @@ describe("what a landing task still waits for (#623 §2)", () => {
 });
 
 describe("a channel that lands on merge warns until kiwi/review is required (#623 §4)", () => {
+  const CHECK = reviewCheckOf("a".repeat(32));
   const github = (required: string[]) => ({
     prs: new Map(),
     checks: new Map(),
@@ -73,10 +74,12 @@ describe("a channel that lands on merge warns until kiwi/review is required (#62
     runsForgotten: null,
   });
   test("only a merge channel warns, for each repo whose rules don't require it or are unknown", () => {
-    expect(reviewNotRequired({ landing: "merge", repos: ["o/r", "o/other"], github: github(["ci-ok"]) })).toEqual(["o/r", "o/other"]);
-    expect(reviewNotRequired({ landing: "merge", repos: ["o/r"], github: github(["ci-ok", REVIEW_CHECK]) })).toEqual([]);
-    expect(reviewNotRequired({ landing: "release:tag", repos: ["o/r"], github: github([]) })).toEqual([]);
-    expect(reviewNotRequired({ landing: null, repos: ["o/r"], github: github([]) })).toEqual([]);
+    expect(reviewNotRequired({ landing: "merge", repos: ["o/r", "o/other"], github: github(["ci-ok"]) }, CHECK)).toEqual(["o/r", "o/other"]);
+    expect(reviewNotRequired({ landing: "merge", repos: ["o/r"], github: github(["ci-ok", CHECK]) }, CHECK)).toEqual([]);
+    expect(reviewNotRequired({ landing: "merge", repos: ["o/r"], github: github(["ci-ok", REVIEW_CHECK]) }, CHECK)).toEqual(["o/r"]);
+    expect(reviewNotRequired({ landing: "merge", repos: ["o/r"], github: github(["ci-ok", reviewCheckOf("b".repeat(32))]) }, CHECK)).toEqual(["o/r"]);
+    expect(reviewNotRequired({ landing: "release:tag", repos: ["o/r"], github: github([]) }, CHECK)).toEqual([]);
+    expect(reviewNotRequired({ landing: null, repos: ["o/r"], github: github([]) }, CHECK)).toEqual([]);
   });
 });
 

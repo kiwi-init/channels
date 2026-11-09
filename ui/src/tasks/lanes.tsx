@@ -159,7 +159,7 @@ export function Lanes({ channel }: { channel: Channel }) {
     <div className="lanes" role="region" aria-label={t("tasks.lanes.label")}>
       {channel.reviewNotRequired && (
         <p className="lanes-warning" role="note">
-          {t("tasks.lanes.review.warning", { branches: channel.reviewNotRequired.join(", ") })}
+          {t("tasks.lanes.review.warning", { branches: channel.reviewNotRequired.repos.join(", "), check: channel.reviewNotRequired.check })}
         </p>
       )}
       {lanes.map((lane) => (

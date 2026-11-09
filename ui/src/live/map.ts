@@ -559,8 +559,9 @@ export function leftOutOf(state: ChannelState, messages: readonly Wire[], me: st
   for (const m of messages) {
     const trust = state.trust.get(m.seq)
     if (!ignored(trust) || isOverlay(m)) continue
-    const why = state.rejected.get(m.seq) ?? (trust === "forged" ? `not signed by ${m.from}'s key` : "not allowed here")
-    const leftOut = `${trust === "forged" ? "Bad signature" : "Refused"}: ${why}`
+    const forged = trust === "forged"
+    const why = state.rejected.get(m.seq) ?? (forged ? t("live.map.left.out.not.signed", { who: m.from }) : t("live.map.left.out.not.allowed"))
+    const leftOut = t(forged ? "live.map.left.out.forged" : "live.map.left.out.refused", { why })
     if (m.kind === "event")
       out.push({
         seq: m.seq,
@@ -570,8 +571,9 @@ export function leftOutOf(state: ChannelState, messages: readonly Wire[], me: st
         where: { kind: "room", room: GENERAL_ROOM },
         system: true,
         leftOut,
+        ...(forged ? { forged: true as const } : {}),
       })
-    else out.push({ seq: m.seq, from: m.from, at: m.ts, text: wrote(m.body), where: whereOf(state, m, me), leftOut })
+    else out.push({ seq: m.seq, from: m.from, at: m.ts, text: wrote(m.body), where: whereOf(state, m, me), leftOut, ...(forged ? { forged: true as const } : {}) })
   }
   return out
 }
@@ -842,7 +844,16 @@ export function asksOf(
       from: m.from,
       at: m.ts,
       text: wrote(m.body),
-      label: m.handoff ? "Browser for you" : m.esc ? (askedOf ? decisionLabel(m).replace(/ for you$/, "") : decisionLabel(m)) : m.to?.includes(me) ? "Question for you" : "Question for everyone",
+      label: m.handoff
+        ? t("live.said.browser.you")
+        : m.esc
+          ? askedOf
+            ? decisionLabel(m).replace(/ for you$/, "")
+            : decisionLabel(m)
+          : m.to?.includes(me)
+            ? t("live.map.question.you")
+            : t("live.map.question.everyone"),
+      ...(!m.handoff && !m.esc ? { plain: true as const } : {}),
       ...(m.decision === "irreversible" ? { irreversible: true as const } : {}),
       options: (m.choices ?? []).map(wrote),
       holds,

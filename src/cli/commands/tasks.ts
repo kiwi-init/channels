@@ -4,7 +4,7 @@ import { contextLineOn, Keystore, loadConfig } from "../../config.ts";
 import { runPin, wellFormedRunId } from "@kiwi/core/checks.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, issueLinkText, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
-import { isLanding, type Landing, type TaskState } from "@kiwi/core/protocol.ts";
+import { isLanding, reviewCheckOf, type Landing, type TaskState } from "@kiwi/core/protocol.ts";
 import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
 import { askRefusal, isPerson, taskSpecRefusal, leadCheckpointKey, mayNameGoal, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { formatCandidates, pickFor, taskCandidates } from "@kiwi/core/routing.ts";
@@ -42,7 +42,7 @@ const board = () =>
           const sess = yield* openSession(alias, c, me);
           const { state } = yield* sess.state();
           const owner = opt.mine ? sess.me : opt.owner;
-          const lines = formatTasks(state, { all: opt.all, owner });
+          const lines = formatTasks(state, reviewCheckOf(c.roomId), { all: opt.all, owner });
           out(`## ${alias}${lines === "no tasks" ? " — no tasks" : ""}`);
           if (lines !== "no tasks")
             out(
@@ -56,7 +56,7 @@ const board = () =>
       }
       const s = yield* session();
       const { state } = yield* s.state();
-      out(formatTasks(state, { all: opt.all, owner: opt.mine ? s.me : opt.owner }));
+      out(formatTasks(state, reviewCheckOf(s.ch.roomId), { all: opt.all, owner: opt.mine ? s.me : opt.owner }));
     }),
   );
 

@@ -3,7 +3,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react"
 
 import type { Folder } from "~/model"
 import { useAct, useApp } from "~/nav"
-import { dropOn, FOLDER_NAME, newFolderId, renamed, ungrouped } from "~/shell/folders"
+import { dropOn, folderName, newFolderId, renamed, ungrouped } from "~/shell/folders"
 import { t } from "~/i18n/i18n"
 
 export type Menu = { kind: "folder"; id: string; top: number } | { kind: "channel"; code: string; top: number }
@@ -90,7 +90,7 @@ export default function RailMenu({ menu, folders, title, save, close }: { menu: 
                 {t("shell.rail.menu.add.to", { name: f.name })}
               </button>
             ))}
-            <button type="button" role="menuitem" onClick={() => act([...folders, { id: newFolderId(), name: FOLDER_NAME, codes: [menu.code], open: true }])}>
+            <button type="button" role="menuitem" onClick={() => act([...folders, { id: newFolderId(), name: folderName(), codes: [menu.code], open: true }])}>
               {t("shell.rail.menu.new.folder")}
             </button>
           </>

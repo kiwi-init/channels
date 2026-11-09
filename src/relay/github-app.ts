@@ -1,4 +1,3 @@
-import { REVIEW_CHECK } from "@kiwi/core/protocol.ts";
 import * as Context from "effect/Context";
 import { GITHUB_CLOSED_KEEP_MS, MAX_RELEASE_COMMITS, MAX_REQUIRED_CHECKS, MERGE_METHODS, REPO_RE, type GithubNote, type GithubSyncList, type MergeMethod } from "@kiwi/core/protocol.ts";
 import { syncNotes } from "./github.ts";
@@ -162,7 +161,7 @@ export type GithubReply<T> = { ok: true; value: T } | { ok: false; status: numbe
 
 export interface GithubAppApi {
   diff(repo: string, sha: string): Promise<GithubReply<{ diff: string; base: string; truncated: boolean }>>;
-  check(repo: string, sha: string, c: { conclusion: "success" | "failure" | null; title: string; summary: string }): Promise<GithubReply<{ url: string | null }>>;
+  check(repo: string, sha: string, c: { name: string; conclusion: "success" | "failure" | null; title: string; summary: string }): Promise<GithubReply<{ url: string | null }>>;
   comment(repo: string, number: number, body: string): Promise<GithubReply<{ url: string | null }>>;
   issue(repo: string, number: number): Promise<GithubReply<GithubIssueInfo>>;
   closeIssue(repo: string, number: number, reason: "completed" | "not_planned", body: string): Promise<GithubReply<{ url: string | null }>>;
@@ -310,7 +309,7 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
         method: "POST",
         headers: { ...headers(t.value), "content-type": "application/json" },
         body: JSON.stringify({
-          name: REVIEW_CHECK,
+          name: c.name,
           head_sha: sha,
           ...(c.conclusion ? { status: "completed", conclusion: c.conclusion } : { status: "in_progress" }),
           output: { title: c.title, summary: c.summary },

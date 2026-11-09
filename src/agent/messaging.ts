@@ -33,7 +33,23 @@ import {
 } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
-import { allowedOnHold, decidersOf, humanOf, isPerson, nextIn, ON_HOLD, ownerOf, placeIn, taskId, unnamedAsks, unnamedTasks, type ChannelState } from "@kiwi/core/state.ts";
+import {
+  allowedOnHold,
+  checkChangeRefusal,
+  decidersOf,
+  humanOf,
+  isPerson,
+  landingTouchedByAsk,
+  landingTouchedByClose,
+  nextIn,
+  ON_HOLD,
+  ownerOf,
+  placeIn,
+  taskId,
+  unnamedAsks,
+  unnamedTasks,
+  type ChannelState,
+} from "@kiwi/core/state.ts";
 import type { BlockMedia } from "@kiwi/core/doc/blocks.ts";
 import { addressed, blockMedia, docPlaceOfMessage, dropBlock, editBlock, readDoc, writeBlock, type DocPlace } from "./docs.ts";
 import { SessionListen } from "./listen.ts";
@@ -353,6 +369,10 @@ export class SessionMessaging extends SessionListen {
       const check = ask.check && decider ? { phase: ask.check.phase, decider, artifact: ask.check.artifact, ...(ask.check.replaces !== undefined ? { replaces: ask.check.replaces } : {}) } : undefined;
       const unknown = ask.holds?.find((id) => !state.tasks.has(id) && !state.askHeads.has(id));
       if (unknown !== undefined) return yield* new Rejected(`${unknown} is neither a task nor a person's message here: --holds names tasks like T7 and asks like #18`);
+      const lead = !!me && (!!me.owner || me.persona?.role === "lead" || state.lead === this.me);
+      const touched = check ? landingTouchedByAsk(state.tasks, state.checks, { check, ...(ask.choices ? { choices: ask.choices } : {}), ...(ask.holds ? { holds: ask.holds } : {}) }) : [];
+      const late = check ? checkChangeRefusal(touched, { person: false, lead }, check.replaces === undefined ? "adds a check to" : "replaces a check on") : null;
+      if (late) return yield* new Rejected(late);
       if (ask.task !== undefined && re !== undefined) {
         const place = state.placeOf.get(re);
         if (place?.kind !== "task" || place.task !== ask.task) {
@@ -471,6 +491,11 @@ export class SessionMessaging extends SessionListen {
   );
 
   readonly closeAsk = Effect.fn("AgentSession.closeAsk")({ self: this }, function* (this: SessionMessaging, ask: number, why: string | undefined) {
+    const { state } = yield* this.state();
+    const me = state.members.get(this.me);
+    const lead = !!me && (!!me.owner || me.persona?.role === "lead" || state.lead === this.me);
+    const late = checkChangeRefusal(landingTouchedByClose(state.tasks, state.checks, ask), { person: !!me && isPerson(me), lead }, "closes a check on");
+    if (late) return yield* new Rejected(late);
     return yield* this.event({ op: "ask.close", ask, ...(why ? { why } : {}) }, why ? `closed #${ask}: ${why}` : `closed #${ask}`, undefined, ask);
   });
 

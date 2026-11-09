@@ -14,6 +14,7 @@ import { ago, clock } from "~/kit/time"
 import type { Channel, Spec } from "~/model"
 import { useAct } from "~/nav"
 import { nickname, Shown } from "~/names"
+import { SENT } from "~/sent"
 import { alarmsOf, boxesOf, faceOf, insideOf, lastMove, storyOf, tasksOf, workersOf, type Alarm } from "~/specs/read"
 
 const STORY_SHOWN = 5
@@ -44,7 +45,7 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
   const ask = () => {
     const lead = channel.lead && channel.lead !== channel.you ? channel.lead : null
     const where = channel.messages.find((m) => m.seq === spec.ask)?.where ?? { kind: "room" as const, room: "general" }
-    actions.send(channel.code, where, `${lead ? `@${lead} ` : ""}where does this stand? A few lines for people, please: what's done, what's next, what might need us.`, { inThread: spec.ask })
+    actions.send(channel.code, where, `${lead ? `@${lead} ` : ""}${SENT.specWhereNow}`, { inThread: spec.ask })
   }
   return (
     <div className="spec-inside">

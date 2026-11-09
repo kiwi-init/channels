@@ -3,7 +3,7 @@
 import { ROLE_LABEL } from "./personality.ts";
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
-import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange, REVIEW_CHECK } from "./protocol.ts";
+import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import { sentTo } from "./room-rules.ts";
@@ -445,10 +445,10 @@ function taskLine(state: ChannelState, t: Task): string {
   return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}${waits ? ` · ${waits}` : ""}`;
 }
 
-export function reviewRuleWarning(state: ChannelState): string | null {
-  const repos = reviewNotRequired(state);
+export function reviewRuleWarning(state: ChannelState, check: string): string | null {
+  const repos = reviewNotRequired(state, check);
   return repos.length
-    ? `warning: tasks here land on merge, but ${repos.join(", ")} doesn't require ${REVIEW_CHECK}, so a PR can merge before its task's gate is open (an owner step: require it in the repo's ruleset)`
+    ? `warning: tasks here land on merge, but ${repos.join(", ")} doesn't require ${check}, so a PR can merge before its task's gate is open (an owner step: require it in the repo's ruleset)`
     : null;
 }
 
@@ -489,6 +489,7 @@ export function presenceWords(on: { client: string; reach?: Reach; readAt?: numb
 
 export interface Snapshot {
   alias: string;
+  check: string;
   me: string;
   state: ChannelState;
   online: Map<string, { client: string; role?: string; reach?: Reach; readAt?: number; wake?: WakeVia }>;
@@ -544,7 +545,7 @@ export function issueLinkText(state: Pick<ChannelState, "githubWrite">): string 
 }
 
 /** `kiwi status --json`: the members a lead routes work between, by role and load. */
-export function statusJson({ alias, me, state, online, unread }: Snapshot) {
+export function statusJson({ alias, me, state, online, unread }: Omit<Snapshot, "check">) {
   const names = [...state.members.values()].filter((m) => m.active).map((m) => m.name);
   return {
     channel: alias,
@@ -600,7 +601,7 @@ function heldLine(state: ChannelState, a: Message): string {
   return `${a.step ? " [step]" : a.decision ? ` [${a.decision}]` : ""}${held.length ? ` · holds ${held.join(", ")}` : ""}`;
 }
 
-export function formatStatus({ alias, me, state, online, unread, now = Date.now(), all = false }: Snapshot): string {
+export function formatStatus({ alias, check, me, state, online, unread, now = Date.now(), all = false }: Snapshot): string {
   const out: string[] = [];
   const meM = state.members.get(me);
   out.push(`channel ${alias} · you are ${me}${meM?.persona ? ` (${inlineText(meM.persona?.name, 80)})` : ""} · head #${state.head}${unread ? ` · ${unread} unread` : ""}`);
@@ -614,7 +615,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   if (charter) out.push(charter);
   if (state.repos.length) out.push(`repos: ${state.repos.join(", ")}`);
   if (state.merges === "people") out.push("who merges: people (agents leave pull requests for a person to merge)");
-  const ruleWarning = reviewRuleWarning(state);
+  const ruleWarning = reviewRuleWarning(state, check);
   if (ruleWarning) out.push(ruleWarning);
   const human = humanOf(state, me);
   const trusted = meM && !isPerson(meM) ? trustedOf(state).filter((x) => x !== human) : [];
@@ -710,11 +711,11 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   return out.join("\n");
 }
 
-export function formatTasks(state: ChannelState, opts: { all?: boolean; owner?: string } = {}): string {
+export function formatTasks(state: ChannelState, check: string, opts: { all?: boolean; owner?: string } = {}): string {
   let tasks = [...state.tasks.values()];
   if (!opts.all) tasks = tasks.filter((t) => t.state !== "done" && !t.archived);
   if (opts.owner) tasks = tasks.filter((t) => t.owner === opts.owner);
-  const warning = reviewRuleWarning(state);
+  const warning = reviewRuleWarning(state, check);
   if (!tasks.length) return warning ? `${warning}\nno tasks` : "no tasks";
   return [...(warning ? [warning] : []), ...groupedLines(state, tasks, "")].join("\n");
 }

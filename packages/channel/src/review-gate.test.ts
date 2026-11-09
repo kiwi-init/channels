@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 
 import type { ChannelOps } from "../../../desktop/src/bridge.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { PROTOCOL_VERSION, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
+import { PROTOCOL_VERSION, reviewCheckOf, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { postDowngrades, shipGate } from "@kiwi/core/ship-gate.ts";
 import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts";
 import { RelayError } from "@kiwi/core/client/relay-errors.ts";
@@ -69,7 +69,7 @@ describe("a person withdrawing a pass from the app, with the owner's app offline
       },
     } as unknown as ChannelOps;
     const link = new ChannelLink("code", "room", ids[from]!.pk, ids.jow!.pk, ops);
-    link.beforeSend = (body, opts) => postDowngrades(state, { ...opts, from, body }, (c) => link.postReviewCheck(c));
+    link.beforeSend = (body, opts) => postDowngrades(state, reviewCheckOf(link.roomId), { ...opts, from, body }, (c) => link.postReviewCheck(c));
     return { link, calls };
   };
 

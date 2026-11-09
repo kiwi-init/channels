@@ -162,4 +162,11 @@ export default {
   "live.map.check.needs.action": "needs action",
   "live.map.check.didnt.start": "didn't start",
   "live.map.check.not.started": "not started",
+  "live.map.question.you": "Question for you",
+  "live.map.question.everyone": "Question for everyone",
+  "live.map.left.out.forged": "Bad signature: {why}",
+  "live.map.left.out.refused": "Refused: {why}",
+  "live.map.left.out.not.signed": "not signed by {who}'s key",
+  "live.map.left.out.not.allowed": "not allowed here",
+  "live.channel.recent.you": "You",
 } as const satisfies Record<string, Msg>

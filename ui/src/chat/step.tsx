@@ -7,10 +7,11 @@ import { tr } from "~/i18n/rich"
 import { Icon } from "~/kit/icons"
 import { OutsideLink } from "~/kit/outside"
 import { copyText } from "~/kit/toasts"
+import { SENT } from "~/sent"
 
 export function stepReplyText(reply: StepReply): string {
-  if (reply.outcome === "done") return reply.output ? `Done\n\n${reply.output}` : "Done"
-  return `${reply.outcome === "cant" ? "Can't do it" : "Not needed"}: ${reply.reason}`
+  if (reply.outcome === "done") return reply.output ? `${SENT.stepDone}\n\n${reply.output}` : SENT.stepDone
+  return `${reply.outcome === "cant" ? SENT.stepCant : SENT.stepNotNeeded}: ${reply.reason}`
 }
 
 const copy = (command: string) => copyText(command, t("chat.step.copied"))

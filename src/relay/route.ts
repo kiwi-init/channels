@@ -16,7 +16,7 @@ import * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
 import { verifyRequest } from "@kiwi/core/auth.ts";
 import { b64url, ownerFingerprint } from "@kiwi/core/crypto.ts";
-import { GITHUB_SYNC_LISTS, MAX_BLOB_BYTES, PAGE_LIMIT, wellFormedFreed, wellFormedSendId, wellFormedSlot } from "@kiwi/core/protocol.ts";
+import { GITHUB_SYNC_LISTS, MAX_BLOB_BYTES, PAGE_LIMIT, reviewCheckOf, wellFormedFreed, wellFormedSendId, wellFormedSlot } from "@kiwi/core/protocol.ts";
 import { PUSH_PATH } from "@kiwi/core/push.ts";
 import { ChannelGone, BadRequest, Fenced, Forbidden, NotFound, NotOwner, Refused, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
@@ -620,16 +620,17 @@ const routes: RoomRoute[] = [
         const verdict = b.verdict;
         if (verdict !== "approved" && verdict !== "waiting" && verdict !== "rejected") return yield* new BadRequest({ message: "verdict: approved, waiting or rejected" });
         const tasks = b.tasks ?? (b.task === undefined ? undefined : [b.task]);
-        if (!Array.isArray(tasks) || !tasks.length || tasks.length > MAX_CHECK_TASKS || !tasks.every((t): t is number => typeof t === "number" && Number.isSafeInteger(t) && t > 0))
-          return yield* new BadRequest({ message: `tasks: 1 to ${MAX_CHECK_TASKS} task numbers` });
+        if (!Array.isArray(tasks) || tasks.length > MAX_CHECK_TASKS || !tasks.every((t): t is number => typeof t === "number" && Number.isSafeInteger(t) && t > 0))
+          return yield* new BadRequest({ message: `tasks: up to ${MAX_CHECK_TASKS} task numbers` });
+        if (!tasks.length && verdict !== "approved") return yield* new BadRequest({ message: "tasks: a PR no task claims only passes; waiting or rejected names its tasks" });
         const owned = me === (yield* readMeta).ownerPk;
         if (verdict === "approved" && !owned) return yield* new NotOwner({ message: "only the owner's app turns kiwi/review green; a member posts waiting or rejected" });
         if (!owned && !allow(`ghcheck:${(yield* RoomStore).roomId}:${me}`, GITHUB_READS_PER_MINUTE)) return yield* new TooMany({ message: "too many kiwi/review posts; wait a minute" });
         const upTo = b.upTo;
         if (upTo !== undefined && !(typeof upTo === "number" && Number.isSafeInteger(upTo) && upTo >= 0)) return yield* new BadRequest({ message: "upTo: the last seq the app has folded" });
         const note = typeof b.note === "string" ? b.note.slice(0, 1000) : "";
-        const host = githubReviewHost(yield* githubApp);
         const db = yield* RoomStore;
+        const host = githubReviewHost(yield* githubApp, reviewCheckOf(db.roomId));
         const key = `${repo}@${sha}`;
         const write = Effect.gen(function* () {
           if (verdict === "approved") {

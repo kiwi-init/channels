@@ -894,6 +894,10 @@ export const EVENT_OPS_VERSION = 22;
 
 export const REVIEW_CHECK = "kiwi/review";
 
+export const reviewCheckOf = (roomId: string): string => `${REVIEW_CHECK}/${roomId}`;
+
+export const isReviewCheck = (name: string): boolean => name === REVIEW_CHECK || name.startsWith(`${REVIEW_CHECK}/`);
+
 export const opsVersion = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 1 && (x as number) <= 10_000;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 

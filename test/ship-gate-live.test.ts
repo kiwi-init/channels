@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
 import type { CheckArtifact } from "@kiwi/core/checks.ts";
-import type { Event } from "@kiwi/core/protocol.ts";
+import { reviewCheckOf, type Event } from "@kiwi/core/protocol.ts";
 import { shipGate } from "@kiwi/core/ship-gate.ts";
 import { AgentLive, AgentSession } from "../src/agent.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -105,24 +105,33 @@ describe("rule 1: an agent's gate-shutting change goes out only after kiwi/revie
     expect(await gate()).toEqual({ open: true });
   });
 
-  test("with GitHub unreachable a new pre-ship check isn't sent, and the agent is told so", async () => {
+  test("a builder can't add a pre-ship check to the approved task: it's refused before anything is posted (T3347)", async () => {
+    expect(await refusal(askCheck("Does the tray icon work on KDE?"))).toBe(`only a person or the lead adds a check to T${task} once it's approved`);
+    expect(posted).toEqual([]);
+    await event({ op: "role.set", member: "dev", role: "lead" });
+  });
+
+  test("with GitHub unreachable the lead's new pre-ship check isn't sent, and the lead is told so", async () => {
     expect(await refusal(askCheck("Does the tray icon work on KDE?"))).toMatch(new RegExp(`^kiwi/review on ${REPO}@aaaaaaa has to turn waiting before this goes out, .*nothing was sent, try again$`));
     expect(await gate()).toEqual({ open: true });
     expect(posted).toEqual([]);
   });
 
-  test("with no owner app online, the asking agent alone turns kiwi/review waiting, then its check lands", async () => {
+  test("with no owner app online, the asking lead alone turns kiwi/review waiting, then its check lands and the task is back in review", async () => {
     checks = "up";
     await askCheck("Does the tray icon work on KDE?");
-    expect(posted).toEqual([{ name: "kiwi/review", head_sha: SHA, status: "in_progress", output: { title: `T${task}: waiting in Kiwi`, summary: `T${task}: a pre-ship check isn't passed` } }]);
+    expect(posted).toEqual([
+      { name: reviewCheckOf(owner.ownerCh.roomId), head_sha: SHA, status: "in_progress", output: { title: `T${task}: waiting in Kiwi`, summary: `T${task}: a pre-ship check isn't passed` } },
+    ]);
     expect(await gate()).toMatchObject({ open: false, rejected: false });
+    expect((await run(dev.state())).state.tasks.get(task)!.state).toBe("review");
   });
 
   test("opening a new round posts waiting first; a reviewer's rejection then posts failure before the verdict goes out", async () => {
     const before = posted.length;
     await run(dev.taskUpdate(task, { state: "review", at: SHA }));
     expect(posted.slice(before)).toMatchObject([{ status: "in_progress" }]);
-    await run(rev.taskUpdate(task, { state: "doing", verdict: "rejected", note: "the icon is blurry", round: 2 }));
+    await run(rev.taskUpdate(task, { state: "doing", verdict: "rejected", note: "the icon is blurry", round: 3 }));
     expect(posted.at(-1)).toMatchObject({ status: "completed", conclusion: "failure", output: { title: `T${task}: changes requested in Kiwi`, summary: `T${task}: changes requested` } });
     expect(await gate()).toMatchObject({ open: false, rejected: true });
   });

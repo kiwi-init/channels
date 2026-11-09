@@ -380,6 +380,7 @@ export interface Message {
   failed?: string
   mentionsYou?: boolean
   leftOut?: string
+  forged?: true
   fromDoc?: true
   receipt?: string
   edited?: number
@@ -416,6 +417,7 @@ export interface QuestionAsk {
   at: number
   text: Words
   label: string
+  plain?: true
   irreversible?: true
   options: Words[]
   holds: number[]
@@ -595,7 +597,7 @@ export interface Channel {
   newMembers?: "read" | "write"
   newPowers?: Powers
   repos: string[]
-  reviewNotRequired?: string[]
+  reviewNotRequired?: { repos: string[]; check: string }
   prs?: PullRequest[]
   issues?: Issue[]
   github?: GithubHealth
