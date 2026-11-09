@@ -11,6 +11,8 @@ import { preview, useReplying } from "~/chat/reply"
 import { attached, composerKey, drafts, giveBack, tooLong, useGivenBack } from "~/chat/drafts"
 import { composing, sendsOn, sendTitle } from "~/chat/send-keys"
 import { STASH_SHOT, stashText, useStash } from "~/chat/stash"
+import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { openMenu } from "~/kit/menu-open"
@@ -27,11 +29,11 @@ const StashList = lazy(() => import("~/chat/stash-list"))
 type Cue = { key: string; back: boolean; left: number; lost?: number }
 
 function placeOf(channel: Channel, where: Where, inThread?: number): string {
-  if (inThread !== undefined) return "this thread"
+  if (inThread !== undefined) return t("chat.composer.this.thread")
   if (where.kind === "room") return `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}`
   if (where.kind === "task") return `T${where.task}`
-  if (where.kind === "dm") return `your chat with ${nickname(channel, where.with)}`
-  return "here"
+  if (where.kind === "dm") return t("chat.composer.your.chat.with", { name: nickname(channel, where.with) })
+  return t("chat.composer.here")
 }
 
 type ComposerProps = { channel: Channel; where: Where; placeholder: string; inThread?: number; doc?: string | null }
@@ -87,9 +89,9 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     if (gifsOpen) return setGifsOpen(false)
     const at = plus.current?.getBoundingClientRect()
     if (!at) return
-    const image = { label: "Image", run: () => picker.current?.click() }
+    const image = { label: t("chat.composer.image"), run: () => picker.current?.click() }
     const gif = { label: "GIF", run: () => setGifsOpen(true) }
-    openMenu.set({ x: at.left, y: at.top, label: "Add to the message", groups: [gifsReady ? [image, gif] : [image]], above: true })
+    openMenu.set({ x: at.left, y: at.top, label: t("chat.composer.add.to.message"), groups: [gifsReady ? [image, gif] : [image]], above: true })
   }
 
   useLayoutEffect(() => {
@@ -134,7 +136,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     zone: form,
     toast,
     anyFile: !!doc,
-    refused: () => (edit ? "An edit changes only the text. Send the image in a new message." : null),
+    refused: () => (edit ? t("chat.composer.edit.text.only") : null),
   })
   const queued = useRef<string | null>(null)
   const at = useContext(EditHere)
@@ -149,7 +151,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     holdEarlier(channel.code, "edit", partialSeq)
     void earlierTo(channel.code, partialSeq).then((ok) => {
       if (!live || ok) return
-      toast("The whole message couldn't be loaded, so it can't be edited right now", "error")
+      toast(t("chat.composer.edit.not.loaded"), "error")
       stopEditing()
     })
     return () => {
@@ -257,7 +259,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   return (
     <div className="compose" ref={box}>
       {listed.length > 0 && (
-        <ul className="mentions" role="listbox" aria-label="Commands" id={`${key}-commands`}>
+        <ul className="mentions" role="listbox" aria-label={t("chat.composer.commands")} id={`${key}-commands`}>
           {listed.map((c, i) => (
             <li key={c.name} role="option" aria-selected={i === s.pick}>
               <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === s.pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => s.insert(`/${c.name} `)}>
@@ -304,14 +306,12 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
               type="button"
               className={cx("stash-chip", listOpen && "is-open")}
               aria-expanded={listOpen}
-              title="Stashed drafts (⇧⌘S brings back the newest)"
+              title={t("chat.composer.stashed.title")}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => setListOf(listOpen ? null : key)}
             >
               <Icon name="tray" size={14} />
-              <span>
-                <b>{stash.list.length}</b> stashed
-              </span>
+              <span>{tr("chat.composer.stashed.count", { n: <b>{stash.list.length}</b> })}</span>
             </button>
           </div>
         )}
@@ -321,10 +321,10 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
           <div className={cx("compose-reply", excerpt && "is-excerpt")}>
             <Icon name="reply" size={13} />
             <span className="compose-reply-text">
-              {excerpt ? "Quoting" : "Replying to"} <b>{nickname(channel, replyTo.from)}</b>{" "}
+              {tr(excerpt ? "chat.composer.quoting" : "chat.composer.replying.to", { name: <b>{nickname(channel, replyTo.from)}</b> })}{" "}
               <span className={excerpt ? "compose-reply-excerpt" : "dim"}>{excerpt ? `“${quoteLine.slice(0, 160)}${quoteLine.length > 160 ? "…" : ""}”` : quoteLine.slice(0, 160)}</span>
             </span>
-            <button type="button" className="compose-reply-x" aria-label="Cancel reply" title="Cancel reply (Esc)" onClick={() => replying?.set(null)}>
+            <button type="button" className="compose-reply-x" aria-label={t("chat.composer.cancel.reply")} title={t("chat.composer.cancel.reply.esc")} onClick={() => replying?.set(null)}>
               <Icon name="close" size={13} />
             </button>
           </div>
@@ -334,8 +334,8 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
             ref={plus}
             type="button"
             className="compose-attach"
-            aria-label="Add an image or a GIF"
-            title="Add an image or a GIF"
+            aria-label={t("chat.composer.add.image.gif")}
+            title={t("chat.composer.add.image.gif")}
             aria-haspopup="menu"
             data-gif-toggle
             disabled={!!edit}
@@ -344,7 +344,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
             <Icon name="plus" />
           </button>
           <Suspense fallback={null}>
-            <Gifs open={gifsOpen} onReady={setGifsReady} onClose={closeGifs} onFile={(file) => (file ? attach([file]) : toast("That GIF couldn't be loaded", "error"))} />
+            <Gifs open={gifsOpen} onReady={setGifsReady} onClose={closeGifs} onFile={(file) => (file ? attach([file]) : toast(t("chat.composer.gif.failed"), "error"))} />
           </Suspense>
           <input
             ref={picker}
@@ -361,11 +361,11 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
             ref={area}
             rows={1}
             value={text}
-            aria-label="Message"
+            aria-label={t("chat.composer.message")}
             aria-autocomplete="list"
             aria-expanded={options > 0}
             aria-controls={listId(s) ?? (listed.length > 0 ? `${key}-commands` : undefined)}
-            placeholder={excerpt ? "Say something about it" : replyTo ? `Reply to ${nickname(channel, replyTo.from)}` : placeholder}
+            placeholder={excerpt ? t("chat.composer.say.about.it") : replyTo ? t("chat.composer.reply.to", { name: nickname(channel, replyTo.from) }) : placeholder}
             onChange={(e) => {
               setCue(null)
               update(e.target.value, e.target.selectionStart)
@@ -423,37 +423,37 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
               }
             }}
           />
-          <button type="submit" className={cx("send", ready && "is-ready")} aria-label={edit ? "Save" : "Send"} title={sendTitle(enterSends)} disabled={!ready}>
+          <button type="submit" className={cx("send", ready && "is-ready")} aria-label={edit ? t("chat.composer.save") : t("chat.composer.send")} title={sendTitle(enterSends)} disabled={!ready}>
             <Icon name="send" />
           </button>
         </div>
         {inThread !== undefined && (
           <label className="compose-also">
             <input type="checkbox" checked={alsoRoom} onChange={(e) => setAlsoRoom(e.target.checked)} />
-            Also send to {placeOf(channel, where)}
+            {t("chat.composer.also.send.to", { place: placeOf(channel, where) })}
           </label>
         )}
       </form>
       {edit && (
         <p className="compose-hint" role="status">
-          <b>Editing</b> <span>·</span> <kbd>Esc</kbd> cancels
+          <b>{t("chat.composer.editing")}</b> <span>·</span> {tr("chat.composer.key.cancels", { key: <kbd>Esc</kbd> })}
         </p>
       )}
       {running && !cue && !edit && (
         <p className="compose-hint" role="status">
-          <b>/{running.command.name}</b> <span>·</span> {running.command.summary} <span>·</span> <kbd>{enterSends ? "↩" : "⌘↩"}</kbd> runs it
+          <b>/{running.command.name}</b> <span>·</span> {running.command.summary} <span>·</span> {tr("chat.composer.key.runs.it", { key: <kbd>{enterSends ? "↩" : "⌘↩"}</kbd> })}
           {running.command.args && !running.args ? ` · ${running.command.args}` : ""}
         </p>
       )}
       {cue && (
         <p className="compose-hint" role="status">
-          <b>{cue.back ? "Back from the stash" : "Stashed"}</b> <span>·</span>{" "}
+          <b>{cue.back ? t("chat.composer.back.from.stash") : t("chat.composer.stashed")}</b> <span>·</span>{" "}
           {cue.back ? (
-            `${cue.left} left`
+            t("chat.composer.left", { count: cue.left })
           ) : (
             <>
-              <kbd>⇧⌘S</kbd> brings it back
-              {cue.lost ? ` · ${cue.lost === 1 ? "its file" : `its ${cue.lost} files`} didn't fit in the stash` : ""}
+              {tr("chat.composer.key.brings.back", { key: <kbd>⇧⌘S</kbd> })}
+              {cue.lost ? ` · ${cue.lost === 1 ? t("chat.composer.lost.file") : t("chat.composer.lost.files", { count: cue.lost })}` : ""}
             </>
           )}
         </p>

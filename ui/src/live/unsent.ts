@@ -1,3 +1,4 @@
+import { t } from "~/i18n/i18n"
 import type { Pending } from "~/live/map"
 import type { SendExtras, Where } from "~/model"
 
@@ -27,7 +28,7 @@ export const resendOf = (p: Pending): SendExtras => ({
 
 export async function retryUnsent(list: readonly Pending[], key: number, drop: (key: number) => void, post: (where: Where, text: string, extras: SendExtras) => Promise<number>): Promise<number> {
   const p = list.find((x) => x.key === key)
-  if (!p) throw new Error("that message is gone")
+  if (!p) throw new Error(t("live.channel.message.gone"))
   drop(key)
   return post(p.where, p.text, resendOf(p))
 }

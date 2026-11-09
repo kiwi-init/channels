@@ -26,12 +26,16 @@ on:
 # finishes, one run waits, and a newer push replaces the waiting one, so main's full run keeps
 # finishing while merges come every few minutes. Each merge group has a ref of its own, so groups
 # never cancel each other. A dispatched run replaces an older dispatched run on the same ref only
-# when it asks for exactly the same thing: the group carries a hash of the jobs, release and
-# update_from inputs, so a jobs=doc run never replaces a jobs=desktop-linux validation on the same
-# head, a release check never replaces a plain one, and dispatches never share a group with a push
-# to main, which stays uncancellable by anything but itself.
+# when it asks for exactly the same thing: the group carries each of the jobs, release and
+# update_from inputs as its JSON string (toJSON quotes and escapes, so a tuple's encoding
+# is unique and no delimiter inside an input can impersonate another tuple), so a jobs=doc
+# run never replaces a jobs=desktop-linux validation on the same head, a release check
+# never replaces a plain one, and dispatches never share a group with a push to main,
+# which stays uncancellable by anything but itself. GitHub compares group names without
+# letter case, so identity here ignores case too, exactly as far as the host's own
+# comparison collapses it (the spec's choice, #3101).
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || (github.event_name == 'workflow_dispatch' && format('{0}-dispatch-j{1}-r{2}-u{3}', github.ref, inputs.jobs, inputs.release, inputs.update_from)) || github.run_id }}
+  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || (github.event_name == 'workflow_dispatch' && format('{0}-dispatch-{1}{2}{3}', github.ref, toJSON(inputs.jobs), toJSON(inputs.release), toJSON(inputs.update_from))) || github.run_id }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:

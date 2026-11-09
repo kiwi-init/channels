@@ -1,6 +1,14 @@
 import type { Catalog } from "~/i18n/i18n"
+import chatCompose from "~/i18n/ja/chat-compose"
+import chatFeed from "~/i18n/ja/chat-feed"
+import specs from "~/i18n/ja/specs"
+
+export const covers = ["chat.", "settings.language.", "specs.", "tasks.", "usage."]
 
 export default {
+  ...chatCompose,
+  ...chatFeed,
+  ...specs,
   "settings.language": "言語",
   "settings.language.system": "システム",
   "usage.today": "今日のメッセージ",
@@ -36,8 +44,4 @@ export default {
   "usage.limit.fair.use": "有料プランの公正利用の上限",
   "usage.limit.paid": "有料プランの1日の上限",
   "usage.limit.free": "無料プランの1日の上限",
-  "comment.actions": "コメントの操作",
-  "comment.react": "{emoji} でリアクション",
-  "comment.copy": "テキストをコピー",
-  "comment.open.thread": "スレッドで開く",
 } satisfies Catalog

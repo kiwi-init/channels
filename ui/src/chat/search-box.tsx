@@ -1,8 +1,10 @@
+import "~/i18n/en/chat-later"
 import { marks, terms } from "@kiwi/core/search-rank.ts"
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react"
 
 import "~/styles/search.css"
 import { hitKey, hitText, messageIndex, searchHits, whereLabel, type Hit } from "~/chat/search-hits"
+import { t } from "~/i18n/i18n"
 import { cx, Dot } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
@@ -16,8 +18,6 @@ const OLDER_SHOWN = 30
 const FETCH_HIT: Hit = { kind: "fetch" }
 
 type Pull = { asked: number; until?: number } | { failed: string }
-
-const count = (n: number) => n.toLocaleString("en-US")
 
 const date = (at: number) => new Date(at).toLocaleDateString([], { month: "short", day: "numeric", ...(new Date(at).getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }) })
 
@@ -37,8 +37,8 @@ function useSettled(value: string): string {
   if (now && settled !== value) setSettled(value)
   useEffect(() => {
     if (now) return
-    const t = window.setTimeout(() => setSettled(value), SETTLE_MS)
-    return () => window.clearTimeout(t)
+    const timer = window.setTimeout(() => setSettled(value), SETTLE_MS)
+    return () => window.clearTimeout(timer)
   }, [value, now])
   return now ? value : settled
 }
@@ -191,8 +191,8 @@ export function SearchBox({
   const olderMore = olderNow ? olderNow.hits.length - OLDER_SHOWN : 0
   const notes = (
     <>
-      {olderMore > 0 && <p className="search-note">{olderMore} more older matches; add a word to narrow them.</p>}
-      {olderNow?.state === "indexing" && <p className="search-note">Still indexing older history, so more may turn up.</p>}
+      {olderMore > 0 && <p className="search-note">{t("chat.search.box.more.older", { count: olderMore })}</p>}
+      {olderNow?.state === "indexing" && <p className="search-note">{t("chat.search.box.indexing")}</p>}
     </>
   )
   return (
@@ -205,7 +205,7 @@ export function SearchBox({
           className="search-input"
           autoComplete="off"
           spellCheck={false}
-          placeholder="Search this channel"
+          placeholder={t("chat.search.box.placeholder")}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)
@@ -219,7 +219,7 @@ export function SearchBox({
           }}
           onKeyDown={onKey}
           role="combobox"
-          aria-label="Search this channel"
+          aria-label={t("chat.search.box.placeholder")}
           aria-expanded={open}
           aria-controls={open ? listId : undefined}
           aria-autocomplete="list"
@@ -229,8 +229,8 @@ export function SearchBox({
           <button
             type="button"
             className="search-clear"
-            aria-label="Clear search"
-            title="Clear search"
+            aria-label={t("chat.search.box.clear")}
+            title={t("chat.search.box.clear")}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               setQuery("")
@@ -243,24 +243,24 @@ export function SearchBox({
         )}
       </div>
       {open && (
-        <div ref={listRef} id={listId} className="search-pop" role="listbox" aria-label="Search results">
-          {found === 0 && olderNow?.state !== "indexing" && <p className="search-none">Nothing matches “{settled.trim()}”.</p>}
+        <div ref={listRef} id={listId} className="search-pop" role="listbox" aria-label={t("chat.search.box.results")}>
+          {found === 0 && olderNow?.state !== "indexing" && <p className="search-none">{t("chat.search.box.nothing", { query: settled.trim() })}</p>}
           {hits.map((hit, i) => (
             <div key={hitKey(hit)}>
               {i === 0 && hit.kind === "task" && (
                 <div className="search-heading" aria-hidden="true">
-                  Tasks
+                  {t("chat.search.box.tasks")}
                 </div>
               )}
               {i === firstMessage && (
                 <div className="search-heading" aria-hidden="true">
-                  Messages
+                  {t("chat.search.box.messages")}
                 </div>
               )}
               {hit.kind === "fetch" && notes}
               {i === firstOlder && (
                 <div className="search-heading" aria-hidden="true">
-                  Older messages · {olderNow?.hits.length}
+                  {t("chat.search.box.older", { count: olderNow?.hits.length ?? 0 })}
                 </div>
               )}
               <div
@@ -325,14 +325,16 @@ function FetchRow({ pull, since, upTo }: { pull: Pull | null; since: number | nu
     <span className="search-msg search-fetch" aria-busy={asked !== null}>
       <span className="search-line">
         <Icon name="download" size={14} />
-        <span className="search-who">{asked === null ? "Search older history" : "Fetching older messages…"}</span>
+        <span className="search-who">{asked === null ? t("chat.search.box.search.older") : t("chat.search.box.fetching")}</span>
       </span>
       <span className="search-text">
         {asked !== null
-          ? `${count(asked)} of up to ${count(upTo)}`
+          ? t("chat.search.box.progress", { asked, upTo })
           : pull && "failed" in pull
-            ? `Couldn't fetch them: ${pull.failed}.`
-            : `${since ? `Searched back to ${date(since)}. ` : ""}Fetches up to ${count(upTo)} older messages from the relay.`}
+            ? t("chat.search.box.fetch.failed", { error: pull.failed })
+            : since
+              ? t("chat.search.box.fetches.since", { date: date(since), count: upTo })
+              : t("chat.search.box.fetches", { count: upTo })}
       </span>
     </span>
   )

@@ -1,5 +1,7 @@
+import "~/i18n/en/specs"
 import { useState, type ReactNode } from "react"
 
+import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel, Task } from "~/model"
@@ -36,17 +38,17 @@ function Line({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function TaskLine({ channel, t }: { channel: Channel; t: Task }) {
+function TaskLine({ channel, task }: { channel: Channel; task: Task }) {
   const { go } = useApp()
-  const stage = stageWords(t)
+  const stage = stageWords(task)
   return (
-    <button type="button" className="now-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
-      <span className="now-id num">T{t.id}</span>
+    <button type="button" className="now-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+      <span className="now-id num">T{task.id}</span>
       <span className="now-title">
-        <Shown value={t.title} />
+        <Shown value={task.title} />
       </span>
-      {t.status === "waiting" && <span className="now-needs">needs you</span>}
-      <span className={cx("now-stage", stage.red && "tone-alert")}>{[t.owner ? nickname(channel, t.owner) : null, stage.text].filter(Boolean).join(" · ")}</span>
+      {task.status === "waiting" && <span className="now-needs">{t("tasks.now.needs.you")}</span>}
+      <span className={cx("now-stage", stage.red && "tone-alert")}>{[task.owner ? nickname(channel, task.owner) : null, stage.text].filter(Boolean).join(" · ")}</span>
     </button>
   )
 }
@@ -55,36 +57,36 @@ export function NowCard({ channel }: { channel: Channel }) {
   const [folded, setFolded] = useState(readFolded)
   const now = nowOf(channel)
   const working = now.working.length + now.more
-  const counts = [working ? `${working} in progress` : null, now.doneCount ? `${now.doneCount} done today` : null].filter(Boolean).join(" · ")
+  const counts = [working ? t("tasks.now.in.progress.count", { count: working }) : null, now.doneCount ? t("tasks.now.done.today.count", { count: now.doneCount }) : null].filter(Boolean).join(" · ")
   const fold = () => {
     setFolded(!folded)
     keepFolded(!folded)
   }
   return (
-    <section className="now" aria-label="Now">
+    <section className="now" aria-label={t("tasks.now.label")}>
       <button type="button" className="now-head" aria-expanded={!folded} onClick={fold}>
-        <span className="now-name">Now</span>
+        <span className="now-name">{t("tasks.now.label")}</span>
         <span className="now-next">{now.next}</span>
         {counts && <span className="now-counts num">{counts}</span>}
         <Icon name="down" size={14} />
       </button>
       {!folded && (
         <div className="now-body">
-          <Line label="In progress">
+          <Line label={t("tasks.now.in.progress")}>
             {now.working.length ? (
               <>
-                {now.working.map((t) => (
-                  <TaskLine key={t.id} channel={channel} t={t} />
+                {now.working.map((task) => (
+                  <TaskLine key={task.id} channel={channel} task={task} />
                 ))}
-                {now.more > 0 && <span className="now-more">+{now.more} more</span>}
+                {now.more > 0 && <span className="now-more">{t("tasks.now.more", { count: now.more })}</span>}
               </>
             ) : (
-              <span className="now-quiet">nothing right now</span>
+              <span className="now-quiet">{t("tasks.now.nothing")}</span>
             )}
           </Line>
           {now.doneCount > 0 && (
-            <Line label="Done today">
-              <span className="now-done">{now.done.map((t) => wordsPlain(t.title, channel.nicknames)).join(" · ")}</span>
+            <Line label={t("tasks.now.done.today")}>
+              <span className="now-done">{now.done.map((task) => wordsPlain(task.title, channel.nicknames)).join(" · ")}</span>
             </Line>
           )}
         </div>

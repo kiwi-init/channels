@@ -1,6 +1,14 @@
 import type { Catalog } from "~/i18n/i18n"
+import chatCompose from "~/i18n/zh-CN/chat-compose"
+import chatFeed from "~/i18n/zh-CN/chat-feed"
+import specs from "~/i18n/zh-CN/specs"
+
+export const covers = ["chat.", "settings.language.", "specs.", "tasks.", "usage."]
 
 export default {
+  ...chatCompose,
+  ...chatFeed,
+  ...specs,
   "settings.language": "语言",
   "settings.language.system": "跟随系统",
   "usage.today": "今日消息",
@@ -36,8 +44,4 @@ export default {
   "usage.limit.fair.use": "付费方案的合理使用上限",
   "usage.limit.paid": "付费方案的每日上限",
   "usage.limit.free": "免费方案的每日上限",
-  "comment.actions": "评论操作",
-  "comment.react": "用 {emoji} 回应",
-  "comment.copy": "复制文本",
-  "comment.open.thread": "在讨论串中打开",
 } satisfies Catalog

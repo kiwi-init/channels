@@ -1,14 +1,21 @@
+import "~/i18n/en/settings"
 import "~/styles/settings.css"
 
 import { useState } from "react"
 
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 import { autofocus } from "~/kit/bits"
 import { Field } from "~/kit/form"
 import { Modal } from "~/kit/modal"
 import type { EnrollAsk } from "~/model"
 import { useApp } from "~/nav"
 
-const KIND: Record<EnrollAsk["as"], string> = { desktop: "computer", phone: "phone", computer: "computer for agents" }
+const KIND: Record<EnrollAsk["as"], readonly [Key, Key]> = {
+  desktop: ["settings.enroll.kind.desktop", "settings.enroll.kind.desktop.os"],
+  phone: ["settings.enroll.kind.phone", "settings.enroll.kind.phone.os"],
+  computer: ["settings.enroll.kind.computer", "settings.enroll.kind.computer.os"],
+}
 
 export function EnrollDialog() {
   const { app } = useApp()
@@ -38,9 +45,9 @@ export function EnrollDialog() {
       dismiss="x"
       open={open}
       onClose={close}
-      label="Approve a new device"
-      title={`Let ${ask.label} sign in as you?`}
-      sub={`A ${KIND[ask.as]}${ask.os ? ` on ${ask.os}` : ""}. It joins your channels as you: only approve a device you're holding now.`}
+      label={t("settings.enroll.label")}
+      title={t("settings.enroll.title", { device: ask.label })}
+      sub={t("settings.enroll.sub", { what: ask.os ? t(KIND[ask.as][1], { os: ask.os }) : t(KIND[ask.as][0]) })}
     >
       <form
         className="set-confirm"
@@ -53,13 +60,13 @@ export function EnrollDialog() {
         {ask.stage === "waiting" && (
           <p className="set-pair-wait">
             <span className="set-pip is-waiting" aria-hidden="true" />
-            Waiting for {ask.label} to show its code…
+            {t("settings.enroll.waiting", { device: ask.label })}
           </p>
         )}
         {ask.stage === "digits" && (
           <Field
-            label={`The 6 digits ${ask.label} shows`}
-            hint={mine.left !== null ? `Those don't match. ${mine.left} ${mine.left === 1 ? "try" : "tries"} left.` : ask.fingerprint ? `Then it shows your key: ${ask.fingerprint}` : undefined}
+            label={t("settings.enroll.digits", { device: ask.label })}
+            hint={mine.left !== null ? t("settings.enroll.no.match", { count: mine.left }) : ask.fingerprint ? t("settings.enroll.then.key", { key: ask.fingerprint }) : undefined}
           >
             <input
               ref={autofocus}
@@ -75,16 +82,16 @@ export function EnrollDialog() {
         )}
         <div className="modal-foot">
           <button type="button" className="btn is-quiet" onClick={deny}>
-            Not mine
+            {t("settings.enroll.not.mine")}
           </button>
           {ask.stage === "new" && (
             <button type="submit" className="btn is-primary" ref={autofocus}>
-              Continue
+              {t("settings.enroll.continue")}
             </button>
           )}
           {ask.stage === "digits" && (
             <button type="submit" className="btn is-primary" disabled={digits.length !== 6 || mine.busy}>
-              Approve
+              {t("settings.enroll.approve")}
             </button>
           )}
         </div>

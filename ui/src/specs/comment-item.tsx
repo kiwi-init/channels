@@ -1,3 +1,4 @@
+import "~/i18n/en/specs"
 import { Body } from "~/chat/body"
 import { t } from "~/i18n/i18n"
 import { MessageImages, QUICK, Reacts, Unsent } from "~/chat/message"
@@ -44,29 +45,29 @@ export function CommentItem({
         <span className="spec-comment-name">{nickname(channel, c.m.from)}</span>
         <time className="spec-comment-time">{clock(c.m.at)}</time>
         {settled && (
-          <span className="msg-tools" role="toolbar" aria-label={t("comment.actions")}>
+          <span className="msg-tools" role="toolbar" aria-label={t("specs.doc.comment.actions")}>
             {c.m.where.kind !== "theirs" &&
               QUICK.map((e) => (
-                <button key={e} type="button" className="msg-tool" aria-label={t("comment.react", { emoji: e })} onClick={() => actions.react(channel.code, c.m.seq, e)}>
+                <button key={e} type="button" className="msg-tool" aria-label={t("chat.message.react", { emoji: e })} onClick={() => actions.react(channel.code, c.m.seq, e)}>
                   {e}
                 </button>
               ))}
             {onReply && (
-              <button type="button" className="msg-tool" aria-label="Reply" title="Reply" onClick={onReply}>
+              <button type="button" className="msg-tool" aria-label={t("specs.doc.reply")} title={t("specs.doc.reply")} onClick={onReply}>
                 <Icon name="reply" size={14} />
               </button>
             )}
-            <button type="button" className="msg-tool" aria-label={t("comment.copy")} title={t("comment.copy")} onClick={() => copyText(c.text.trim() || wordsRaw(c.m.text))}>
+            <button type="button" className="msg-tool" aria-label={t("chat.message.copy.text")} title={t("chat.message.copy.text")} onClick={() => copyText(c.text.trim() || wordsRaw(c.m.text))}>
               <Icon name="copy" size={14} />
             </button>
-            <button type="button" className="msg-tool" aria-label={t("comment.open.thread")} title={t("comment.open.thread")} onClick={() => openMessage(channel.code, c.m.seq)}>
+            <button type="button" className="msg-tool" aria-label={t("specs.doc.open.thread")} title={t("specs.doc.open.thread")} onClick={() => openMessage(channel.code, c.m.seq)}>
               <Icon name="thread" size={14} />
             </button>
           </span>
         )}
       </header>
       {to && onRe && (
-        <button type="button" className="spec-comment-quote is-link" title="Show this comment" onClick={onRe}>
+        <button type="button" className="spec-comment-quote is-link" title={t("specs.doc.show.comment")} onClick={onRe}>
           <span>
             <b>{nickname(channel, to.from)}</b> {c.excerpt ? `“${preview(c.excerpt)}”` : preview(splitQuote(wordsRaw(to.text)).text)}
           </span>
@@ -74,7 +75,7 @@ export function CommentItem({
       )}
       {showQuote && c.quote && <p className="spec-comment-quote">{c.quote}</p>}
       {onQuote && c.quote && (
-        <button type="button" className="spec-comment-quote is-link" title="Show this line in the spec" onClick={onQuote}>
+        <button type="button" className="spec-comment-quote is-link" title={t("specs.doc.show.line")} onClick={onQuote}>
           <span>{c.quote}</span>
         </button>
       )}

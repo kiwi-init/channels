@@ -1,6 +1,14 @@
 import type { Catalog } from "~/i18n/i18n"
+import chatCompose from "~/i18n/ko/chat-compose"
+import chatFeed from "~/i18n/ko/chat-feed"
+import specs from "~/i18n/ko/specs"
+
+export const covers = ["chat.", "settings.language.", "specs.", "tasks.", "usage."]
 
 export default {
+  ...chatCompose,
+  ...chatFeed,
+  ...specs,
   "settings.language": "언어",
   "settings.language.system": "시스템",
   "usage.today": "오늘 메시지",
@@ -36,8 +44,4 @@ export default {
   "usage.limit.fair.use": "유료 플랜의 공정 사용 한도",
   "usage.limit.paid": "유료 플랜의 하루 한도",
   "usage.limit.free": "무료 플랜의 하루 한도",
-  "comment.actions": "댓글 작업",
-  "comment.react": "{emoji}(으)로 반응",
-  "comment.copy": "텍스트 복사",
-  "comment.open.thread": "스레드에서 열기",
 } satisfies Catalog

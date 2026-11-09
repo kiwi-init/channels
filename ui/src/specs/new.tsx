@@ -1,5 +1,7 @@
+import "~/i18n/en/specs"
 import { useState } from "react"
 
+import { t } from "~/i18n/i18n"
 import { autofocus } from "~/kit/bits"
 import { Field } from "~/kit/form"
 import { Modal } from "~/kit/modal"
@@ -29,34 +31,27 @@ export function NewSpec({ channel, onClose }: { channel: Channel; onClose: () =>
       dismiss="x"
       open
       onClose={onClose}
-      label="New spec"
-      title="New spec"
+      label={t("specs.new.title")}
+      title={t("specs.new.title")}
       foot={
         <>
           <button type="button" className="btn is-quiet" onClick={onClose}>
-            Cancel
+            {t("specs.new.cancel")}
           </button>
           <button type="button" className="btn is-primary" disabled={!words.trim() || busy} onClick={() => void start()}>
-            Post and start the draft
+            {t("specs.new.post")}
           </button>
         </>
       }
     >
       <div className="spec-new">
-        <Field label="What do you want?" hint="Your words stay on the spec as written.">
-          <textarea
-            className="textarea"
-            rows={4}
-            ref={autofocus}
-            value={words}
-            onChange={(e) => setWords(e.target.value)}
-            placeholder="The labels as a spreadsheet for Friday's review: one row per box, with who drew it."
-          />
+        <Field label={t("specs.new.want")} hint={t("specs.new.want.hint")}>
+          <textarea className="textarea" rows={4} ref={autofocus} value={words} onChange={(e) => setWords(e.target.value)} placeholder={t("specs.new.want.placeholder")} />
         </Field>
-        <Field label="A short name" hint="Optional.">
-          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Export annotations as CSV" />
+        <Field label={t("specs.new.name")} hint={t("specs.new.optional")}>
+          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("specs.new.name.placeholder")} />
         </Field>
-        <p className="spec-new-how">It posts in #general, and {lead ?? "the lead"} drafts the spec for you to approve.</p>
+        <p className="spec-new-how">{t("specs.new.how", { lead: lead ?? t("specs.new.the.lead") })}</p>
       </div>
     </Modal>
   )

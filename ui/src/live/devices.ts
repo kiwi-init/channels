@@ -3,6 +3,7 @@ import { useEffect } from "react"
 import { loadMember } from "@kiwi/channel/store.ts"
 import { linkOf } from "@kiwi/channel/channel-ops.ts"
 import { bridge, type DeviceNewsView } from "@kiwi/secrets/secrets.ts"
+import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { whileShown } from "~/live/shown"
 import { store } from "~/live/value"
@@ -34,18 +35,14 @@ function tell(news: DeviceNewsView): void {
     const key = `removed:${news.removed.by}`
     if (!seen.has(key)) {
       fresh.push(key)
-      announce(
-        news.removed.wiped
-          ? `${news.removed.by} forgot this app, so it deleted its keys and the channels it joined. Channels it made stay`
-          : `${news.removed.by} forgot this app. It keeps your person key, but it can't approve devices any more`
-      )
+      announce(news.removed.wiped ? t("live.devices.wiped", { by: news.removed.by }) : t("live.devices.removed", { by: news.removed.by }))
     }
   }
   for (const r of news.revokes) {
     const key = `${r.device}:${r.at}`
     if (!r.older || seen.has(key)) continue
     fresh.push(key)
-    announce(`${r.by} forgot ${r.label}, which you had longer. If that wasn't you, forget ${r.by}`)
+    announce(t("live.devices.revoked", { by: r.by, label: r.label }))
   }
   if (!fresh.length) return
   try {

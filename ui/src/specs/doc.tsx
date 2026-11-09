@@ -1,3 +1,4 @@
+import "~/i18n/en/specs"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 
 import { useNames, useTaskIds } from "~/chat/conversation"
@@ -5,6 +6,7 @@ import { Body } from "~/chat/body"
 import { QuotePick } from "~/chat/quote-pick"
 import { jumpTo } from "~/chat/reply"
 import { type Words, wordsPlain, wordsRaw, wrote } from "~/words"
+import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
 import type { Channel, Spec } from "~/model"
 import { useAct } from "~/nav"
@@ -161,12 +163,12 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
   )
 
   const talk = (
-    <section className="spec-talk" aria-label="Comments on the whole spec">
+    <section className="spec-talk" aria-label={t("specs.doc.talk.label")}>
       <h2 className="spec-talk-h">
-        {loose.length ? `${loose.length} ${loose.length === 1 ? "comment" : "comments"}` : "Comments"}
+        {loose.length ? t("specs.doc.comments.count", { count: loose.length }) : t("specs.doc.comments")}
         {loose.length > TALK_SHOWN && (
           <button type="button" className="btn is-quiet is-small" aria-expanded={allTalk} onClick={() => setAllTalk(!allTalk)}>
-            {allTalk ? "Latest only" : `All ${loose.length}`}
+            {allTalk ? t("specs.doc.latest.only") : t("specs.doc.all", { count: loose.length })}
           </button>
         )}
       </h2>
@@ -182,7 +184,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
         {spec.changed && spec.approved && (
           <div className="spec-diff-bar">
             <button type="button" className="btn is-quiet is-small" aria-expanded={diff} onClick={() => setDiff(!diff)}>
-              {diff ? "Hide the changes" : "Show the changes"}
+              {diff ? t("specs.doc.hide.changes") : t("specs.doc.show.changes")}
             </button>
           </div>
         )}
@@ -201,14 +203,14 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
                 window.getSelection()?.removeAllRanges()
               }}
             >
-              Comment
+              {t("specs.doc.comment")}
             </button>
           )}
         </div>
         {!wide && talk}
       </div>
       {wide && (
-        <aside className="spec-rail" aria-label="Comments">
+        <aside className="spec-rail" aria-label={t("specs.doc.comments")}>
           <div
             ref={scroll}
             className="spec-rail-scroll"
@@ -218,7 +220,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
             }}
           >
             {anchored.length > 0 && (
-              <ul className="spec-rail-lines" aria-label="Comments on lines of the spec">
+              <ul className="spec-rail-lines" aria-label={t("specs.doc.line.comments")}>
                 {anchored.map((c) => (
                   <li key={c.m.seq} className={cx("spec-rail-item", hot === c.m.seq && "is-hot")} onMouseEnter={() => setHot(c.m.seq)} onMouseLeave={() => setHot(null)}>
                     <CommentItem channel={channel} c={c} names={names} tasks={tasks} onQuote={() => toLine(c.m.seq)} onReply={() => replyTo(c.m.seq)} />
@@ -247,13 +249,13 @@ function Diff({ before, after }: { before: string; after: string }) {
     else rows.push({ kind: "gap", from: i, n: 1 })
   })
   return (
-    <ol className="spec-diff" aria-label="What changed since it was approved">
+    <ol className="spec-diff" aria-label={t("specs.doc.diff.label")}>
       {rows.map((r) => {
         if (r.kind === "gap")
           return (
             <li key={`gap-${r.from}`} className="spec-diff-line is-gap">
               <button type="button" className="spec-diff-gap" onClick={() => setWhole(true)}>
-                ⋯ {r.n} unchanged {r.n === 1 ? "line" : "lines"}
+                {t("specs.doc.unchanged", { count: r.n })}
               </button>
             </li>
           )
@@ -295,18 +297,18 @@ function Editor({ channel, spec, onDone }: { channel: Channel; spec: Spec; onDon
   return (
     <div className="spec-editor">
       <div className="spec-editor-bar">
-        <span className="spec-editor-hint">⌘S saves · Esc cancels</span>
-        {moved && <span className="tone-decide spec-editor-moved">{nickname(channel, spec.edited.by)} saved a newer version while you edited: saving replaces it.</span>}
+        <span className="spec-editor-hint">{t("specs.doc.editor.hint")}</span>
+        {moved && <span className="tone-decide spec-editor-moved">{t("specs.doc.editor.moved", { who: nickname(channel, spec.edited.by) })}</span>}
         <button type="button" className="btn is-quiet" onClick={onDone}>
-          Cancel
+          {t("specs.doc.cancel")}
         </button>
         <button type="button" className="btn is-primary" disabled={!text.trim()} onClick={save}>
-          Save
+          {t("specs.doc.save")}
         </button>
       </div>
       <div className="spec-editor-panes">
-        <textarea className="textarea is-mono spec-source" value={text} spellCheck aria-label="The spec, in markdown" onChange={(e) => setText(e.target.value)} onKeyDown={keys} />
-        <div className="spec-preview" aria-label="Preview">
+        <textarea className="textarea is-mono spec-source" value={text} spellCheck aria-label={t("specs.doc.source")} onChange={(e) => setText(e.target.value)} onKeyDown={keys} />
+        <div className="spec-preview" aria-label={t("specs.doc.preview")}>
           <Body text={wrote(text)} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
         </div>
       </div>

@@ -1,6 +1,14 @@
+import type { english } from "~/i18n/en/all"
+import chat from "~/i18n/en/chat"
+import live from "~/i18n/en/live"
+import settingsShared from "~/i18n/en/settings-shared"
+
 export type Msg = string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>> & { other: string }>
 
 export const en = {
+  ...live,
+  ...settingsShared,
+  ...chat,
   "settings.language": "Language",
   "settings.language.system": "System",
   "usage.today": "Messages today",
@@ -36,10 +44,6 @@ export const en = {
   "usage.limit.fair.use": "the paid plan's fair-use limit",
   "usage.limit.paid": "the paid plan's daily limit",
   "usage.limit.free": "the free plan's daily limit",
-  "comment.actions": "Comment actions",
-  "comment.react": "React {emoji}",
-  "comment.copy": "Copy text",
-  "comment.open.thread": "Open in the thread",
 } as const satisfies Record<string, Msg>
 
-export type Key = keyof typeof en
+export type Key = keyof typeof english

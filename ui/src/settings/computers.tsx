@@ -1,5 +1,8 @@
+import "~/i18n/en/settings"
+
 import { useEffect, useState } from "react"
 
+import { t } from "~/i18n/i18n"
 import { cx, IconButton } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
@@ -38,12 +41,12 @@ function TheirSettings({ computer }: { computer: Computer }) {
   return (
     <div className="set-device-settings">
       {got === null ? (
-        <p className="set-device-meta">Asking {computer.label}…</p>
+        <p className="set-device-meta">{t("settings.computers.asking", { device: computer.label })}</p>
       ) : !got.ok ? (
         <p className="set-device-meta">
           {got.why}
           <button type="button" className="btn is-quiet is-small" onClick={again}>
-            Try again
+            {t("settings.computers.try.again")}
           </button>
         </p>
       ) : (
@@ -60,7 +63,7 @@ function TheirSettings({ computer }: { computer: Computer }) {
               </div>
             ))}
           </dl>
-          <p className="set-device-meta">Read only. Change these on {computer.label}.</p>
+          <p className="set-device-meta">{t("settings.computers.read.only", { device: computer.label })}</p>
         </>
       )}
     </div>
@@ -71,9 +74,9 @@ const DAY = 86_400_000
 const RENEW_WITHIN = 14 * DAY
 
 function expiry(until: number, now = Date.now()): string {
-  if (until <= now) return "expired"
+  if (until <= now) return t("settings.computers.expired")
   const days = Math.ceil((until - now) / DAY)
-  return days === 1 ? "expires tomorrow" : `expires in ${days} days`
+  return days === 1 ? t("settings.computers.expires.tomorrow") : t("settings.computers.expires.in", { count: days })
 }
 
 const due = (until: number, now = Date.now()): boolean => until - now < RENEW_WITHIN
@@ -81,7 +84,7 @@ const due = (until: number, now = Date.now()): boolean => until - now < RENEW_WI
 function DeviceMeta({ d, runner }: { d: Device; runner: Device | null }) {
   const now = useNow(60_000)
   const soonest = [d, runner].flatMap((x) => (x && due(x.until, now) ? [x.until] : [])).sort((a, b) => a - b)[0]
-  const about = [d.os, d.as === "computer" && "agents only", runner && "runs your agents"].filter(Boolean).join(" · ")
+  const about = [d.os, d.as === "computer" && t("settings.computers.agents.only"), runner && t("settings.computers.runs.agents")].filter(Boolean).join(" · ")
   return (
     <span className="set-device-status">
       {about}
@@ -102,20 +105,17 @@ function DeviceNotices({ account }: { account: Account }) {
     <>
       {account.forgotHere && (
         <p className="set-fine set-warning" role="note">
-          {account.forgotHere.by} forgot this app: it can't approve or change your devices any more.
+          {t("settings.computers.forgot.here", { who: account.forgotHere.by })}
         </p>
       )}
       {account.forgotten?.map((f) => (
         <p key={`${f.label}:${f.at}`} className="set-fine set-warning" role="note">
-          {f.by} forgot {f.label} on {day(f.at)}, and you had {f.label} longer. If that wasn't you, forget {f.by}.
+          {t("settings.computers.forgot", { who: f.by, device: f.label, day: day(f.at) })}
         </p>
       ))}
     </>
   )
 }
-
-const FORGET_ONE = "It can't sign in as you again. Channels you don't own drop it later."
-const FORGET_RAN = "It can't sign in as you again. It started these agents of yours:"
 
 function ForgetDevice({ forget, onClose }: { forget: { row: Device; runner: Device | null } | null; onClose: () => void }) {
   const { app } = useApp()
@@ -144,9 +144,9 @@ function ForgetDevice({ forget, onClose }: { forget: { row: Device; runner: Devi
   return (
     <Confirm
       open={!!forget}
-      title={`Forget ${forget?.row.label ?? ""}?`}
-      sub={agents?.length ? FORGET_RAN : FORGET_ONE}
-      action="Forget"
+      title={t("settings.computers.forget.title", { device: forget?.row.label ?? "" })}
+      sub={agents?.length ? t("settings.computers.forget.ran") : t("settings.computers.forget.one")}
+      action={t("settings.computers.forget")}
       ready={agents !== null}
       onClose={close}
       onConfirm={() => {
@@ -165,13 +165,13 @@ function ForgetDevice({ forget, onClose }: { forget: { row: Device; runner: Devi
                     .map((a) => a.name)
                     .join(", ")}
                 </span>
-                <span className="set-forget-in"> in {title(code)}</span>
+                <span className="set-forget-in"> {t("settings.computers.forget.in", { channel: title(code) })}</span>
               </li>
             ))}
           </ul>
-          <div className="set-forget-choices" role="radiogroup" aria-label="Its agents">
-            <ForgetChoice on={!keep} pick={() => setKeep(false)} label="This computer is lost: remove its agents too" about="They leave every channel." />
-            <ForgetChoice on={keep} pick={() => setKeep(true)} label="I replaced the app here: keep them" about="They stay, now tied to this computer." />
+          <div className="set-forget-choices" role="radiogroup" aria-label={t("settings.computers.forget.agents")}>
+            <ForgetChoice on={!keep} pick={() => setKeep(false)} label={t("settings.computers.forget.lost")} about={t("settings.computers.forget.lost.about")} />
+            <ForgetChoice on={keep} pick={() => setKeep(true)} label={t("settings.computers.forget.keep")} about={t("settings.computers.forget.keep.about")} />
           </div>
         </>
       )}
@@ -202,9 +202,9 @@ function SignedDevices({ devices }: { devices: Device[] }) {
     return row ? { row, runner: runnerOf(row) } : null
   })
   return (
-    <section className="set-group" aria-label="Signed in as you">
+    <section className="set-group" aria-label={t("settings.computers.signed.in")}>
       <div className="heading">
-        <h3>Signed in as you</h3>
+        <h3>{t("settings.computers.signed.in")}</h3>
       </div>
       {app.account && <DeviceNotices account={app.account} />}
       <ul className="set-devices">
@@ -219,7 +219,7 @@ function SignedDevices({ devices }: { devices: Device[] }) {
               <span className="set-device-text">
                 <span className="set-device-name">
                   {d.label}
-                  {d.thisOne && <span className="set-tag">this app</span>}
+                  {d.thisOne && <span className="set-tag">{t("settings.computers.this.app")}</span>}
                 </span>
                 <span className="set-device-meta">
                   <DeviceMeta d={d} runner={runner} />
@@ -228,12 +228,12 @@ function SignedDevices({ devices }: { devices: Device[] }) {
               <span className="set-device-actions-inline">
                 {renew.length > 0 && (
                   <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.renewDevice(...renew)}>
-                    Renew
+                    {t("settings.computers.renew")}
                   </button>
                 )}
                 {!d.thisOne && (
                   <button type="button" className="btn is-quiet is-small set-forget" onClick={() => setForget({ row: d, runner })}>
-                    Forget
+                    {t("settings.computers.forget")}
                   </button>
                 )}
               </span>
@@ -247,8 +247,7 @@ function SignedDevices({ devices }: { devices: Device[] }) {
 }
 
 function phoneWarning(phone: Computer): string {
-  const held = phone.holds?.length ? `your person key and the keys of ${phone.holds.join(", ")}` : "your person key and the keys of the channels you had when you linked it"
-  return `It holds ${held}. Forgetting only drops it from this list: unlink it on the phone to sign it out. A lost phone can't be cut off from here yet.`
+  return phone.holds?.length ? t("settings.computers.phone.holds", { channels: phone.holds.join(", ") }) : t("settings.computers.phone.holds.linked")
 }
 
 function PairLine({ text, label }: { text: string; label: string }) {
@@ -282,14 +281,14 @@ export function ComputersSection() {
   const computers = [...account.computers].sort((a, b) => Number(b.thisOne) - Number(a.thisOne) || Number(b.online) - Number(a.online))
 
   return (
-    <Page title="Computers and phones">
+    <Page title={t("settings.settings.computers")}>
       {!account.devices?.length && account.forgotHere && <DeviceNotices account={account} />}
       {account.devices && account.devices.length > 0 && (
         <>
           <SignedDevices devices={account.devices} />
-          <section className="set-group" aria-label="Paired with a code">
+          <section className="set-group" aria-label={t("settings.computers.paired")}>
             <div className="heading">
-              <h3>Paired with a code</h3>
+              <h3>{t("settings.computers.paired")}</h3>
             </div>
           </section>
         </>
@@ -303,13 +302,13 @@ export function ComputersSection() {
             <span className="set-device-text">
               <span className="set-device-name">
                 {c.label}
-                {c.thisOne && <span className="set-tag">this computer</span>}
+                {c.thisOne && <span className="set-tag">{t("settings.computers.this.computer")}</span>}
               </span>
               <span className="set-device-meta">
                 <span className={cx("set-pip", c.online && "is-online")} aria-hidden="true" />
                 <span className="set-device-status">
-                  {c.online ? "online" : `offline · ${ago(c.lastSeen)}`}
-                  {!isPhone(c) && ` · ${c.agents === 0 ? "no agents" : c.agents === 1 ? "1 agent" : `${c.agents} agents`}`}
+                  {c.online ? t("settings.computers.online") : t("settings.computers.offline", { ago: ago(c.lastSeen) })}
+                  {!isPhone(c) && ` · ${c.agents === 0 ? t("settings.computers.no.agents") : t("settings.computers.agents", { count: c.agents })}`}
                 </span>
               </span>
             </span>
@@ -317,11 +316,11 @@ export function ComputersSection() {
               <span className="set-device-actions-inline">
                 {!isPhone(c) && (
                   <button type="button" className="btn is-quiet is-small" aria-expanded={shown === c.id} onClick={() => setShown(shown === c.id ? null : c.id)}>
-                    Its settings
+                    {t("settings.computers.its.settings")}
                   </button>
                 )}
                 <button type="button" className="btn is-quiet is-small set-forget" onClick={() => setForget(c)}>
-                  Forget
+                  {t("settings.computers.forget")}
                 </button>
               </span>
             )}
@@ -331,29 +330,29 @@ export function ComputersSection() {
       </ul>
 
       {linking ? (
-        <div className="set-pair" role="region" aria-label={linking === "phone" ? "Link a phone" : "Add a computer"}>
-          <p className="set-pair-what">{linking === "phone" ? "Link a phone" : "Add a computer"}</p>
+        <div className="set-pair" role="region" aria-label={linking === "phone" ? t("settings.computers.link.phone") : t("settings.computers.add.computer")}>
+          <p className="set-pair-what">{linking === "phone" ? t("settings.computers.link.phone") : t("settings.computers.add.computer")}</p>
           {linking === "phone" ? (
-            <p className="set-pair-how">Open Channels on the phone and tap Sign In. This app then asks for the 6 digits it shows.</p>
+            <p className="set-pair-how">{t("settings.computers.how.phone")}</p>
           ) : (
             <>
-              <p className="set-pair-how">Run this on the other computer. This app then asks for the 6 digits it shows.</p>
-              <PairLine text="kiwi login" label="Copy the command" />
+              <p className="set-pair-how">{t("settings.computers.how.computer")}</p>
+              <PairLine text="kiwi login" label={t("settings.computers.copy.command")} />
             </>
           )}
           <div className="set-pair-foot">
             {account.enrollError ? (
               <span className="set-pair-wait is-stuck" role="alert">
-                Can't see the {linking}: {account.enrollError.replace(/[.\s]+$/, "")}.
+                {t(linking === "phone" ? "settings.computers.stuck.phone" : "settings.computers.stuck.computer", { error: account.enrollError.replace(/[.\s]+$/, "") })}
               </span>
             ) : (
               <span className="set-pair-wait">
                 <span className="set-pip is-waiting" aria-hidden="true" />
-                Waiting for the {linking}…
+                {t(linking === "phone" ? "settings.computers.waiting.phone" : "settings.computers.waiting.computer")}
               </span>
             )}
             <button type="button" className="btn is-quiet is-small" onClick={() => setLinking(null)}>
-              Cancel
+              {t("settings.controls.cancel")}
             </button>
           </div>
         </div>
@@ -361,20 +360,20 @@ export function ComputersSection() {
         <div className="actions set-device-actions">
           <button type="button" className="btn" onClick={() => setLinking("computer")}>
             <Icon name="computer" size={14} />
-            Add a computer
+            {t("settings.computers.add.computer")}
           </button>
           <button type="button" className="btn" onClick={() => setLinking("phone")}>
             <Icon name="phone" size={14} />
-            Link a phone
+            {t("settings.computers.link.phone")}
           </button>
         </div>
       )}
 
       <Confirm
         open={!!forget}
-        title={`Forget ${forget?.label ?? ""}?`}
-        sub={forget && isPhone(forget) ? phoneWarning(forget) : "It's signed out and its agents stop."}
-        action="Forget"
+        title={t("settings.computers.forget.title", { device: forget?.label ?? "" })}
+        sub={forget && isPhone(forget) ? phoneWarning(forget) : t("settings.computers.signed.out")}
+        action={t("settings.computers.forget")}
         onClose={() => setForget(null)}
         onConfirm={() => {
           if (forget) app.actions.forgetComputer(forget.id)
