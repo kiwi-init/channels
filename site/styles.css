@@ -233,6 +233,13 @@ h1 {
   clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
 
+.ios::before {
+  width: 9px;
+  height: 15px;
+  border-radius: 2px;
+  clip-path: none;
+}
+
 .demo:hover {
   box-shadow: inset 0 0 0 1px var(--line-4);
 }

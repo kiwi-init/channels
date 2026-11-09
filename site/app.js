@@ -1,6 +1,7 @@
 const REPO = "kiwi-init/channels";
 const RELEASE = `https://github.com/${REPO}/releases/latest/download`;
 const INSTALL = `${location.origin}/install`;
+const IOS_BETA = "https://testflight.apple.com/join/qvKqgRNJ";
 
 const DOWNLOADS = [
   { id: "mac-arm64", os: "macOS", detail: "Apple silicon", file: "Channels-2026.11.13-mac-arm64.dmg" },
@@ -11,7 +12,8 @@ const fileUrl = (d) => `${RELEASE}/${encodeURIComponent(d.file)}`;
 
 function guessPlatform(nav) {
   const ua = nav?.userAgent ?? "";
-  if (/iPhone|iPad|iPod|Android/i.test(ua)) return "";
+  if (/iPhone|iPad|iPod/i.test(ua)) return "ios";
+  if (/Android/i.test(ua)) return "";
   if (/Macintosh|Mac OS X/i.test(ua)) return "mac-arm64";
   if (/aarch64|arm/i.test(ua)) return "";
   if (/Linux|X11/i.test(ua)) return "linux-appimage";
@@ -32,6 +34,13 @@ async function refinePlatform(nav, guess) {
 
 function renderPrimary(mine) {
   const button = document.getElementById("download");
+  if (button && mine === "ios") {
+    button.href = IOS_BETA;
+    button.textContent = "Get iOS Beta";
+    button.title = "TestFlight";
+    document.getElementById("ios-beta")?.remove();
+    return;
+  }
   const d = DOWNLOADS.find((x) => x.id === mine);
   if (!button || !d) return;
   button.href = fileUrl(d);
