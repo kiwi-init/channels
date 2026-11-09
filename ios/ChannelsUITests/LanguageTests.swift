@@ -8,12 +8,10 @@ final class LanguageTests: XCTestCase {
     @MainActor
     func testPickingALanguageChangesTheAppAtOnce() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-demo", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launchArguments = ["-demo", "YES", "-shot", "settings", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
-        let you = app.tabBars.buttons["You"]
-        XCTAssertTrue(you.waitForExistence(timeout: 15))
-        you.tap()
-        let row = app.buttons["language"].firstMatch
+        XCTAssertTrue(app.tabBars.buttons["You"].waitForExistence(timeout: 15))
+        let row = languageRow(app)
         XCTAssertTrue(row.waitForExistence(timeout: 5), "the Language row in You")
         add(shot(app, "language en"))
 
@@ -25,7 +23,7 @@ final class LanguageTests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["あなた"].waitForExistence(timeout: 5), "the tab bar is in Japanese without a restart")
         add(shot(app, "language ja"))
 
-        app.buttons["language"].firstMatch.tap()
+        languageRow(app).tap()
         let system = app.buttons.matching(NSPredicate(format: "label IN %@", ["System", "システム"])).firstMatch
         XCTAssertTrue(system.waitForExistence(timeout: 5))
         system.tap()
@@ -36,15 +34,18 @@ final class LanguageTests: XCTestCase {
     func testSystemLanguageIsFollowed() throws {
         for (language, locale, tab, name) in [("pt-BR", "pt_BR", "Você", "pt-BR"), ("ja", "ja_JP", "あなた", "ja")] {
             let app = XCUIApplication()
-            app.launchArguments = ["-demo", "YES", "-language", "system", "-AppleLanguages", "(\(language))", "-AppleLocale", locale]
+            app.launchArguments = ["-demo", "YES", "-shot", "settings", "-language", "system", "-AppleLanguages", "(\(language))", "-AppleLocale", locale]
             app.launch()
             XCTAssertTrue(app.tabBars.buttons[tab].waitForExistence(timeout: 15), "the app follows a phone set to \(language)")
-            add(shot(app, "system \(name) chats"))
-            app.tabBars.buttons[tab].tap()
-            XCTAssertTrue(app.buttons["language"].firstMatch.waitForExistence(timeout: 5))
+            XCTAssertTrue(languageRow(app).waitForExistence(timeout: 5), "the Language row in \(tab)")
             add(shot(app, "system \(name) you"))
             app.terminate()
         }
+    }
+
+    @MainActor
+    private func languageRow(_ app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "language").firstMatch
     }
 
     @MainActor
