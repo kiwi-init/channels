@@ -30,7 +30,6 @@ struct ChannelList: View {
         .background(Tone.canvas)
         .refreshable { await model.refresh() }
         .scrollDismissesKeyboard(.interactively)
-        .bar(.bottom) { QuickSend() }
         .animation(Motion.ease, value: model.waiting)
         .overlay {
             if model.channels.isEmpty {
@@ -46,6 +45,7 @@ struct ChannelList: View {
             }
         }
         .navigationTitle("Channels")
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
