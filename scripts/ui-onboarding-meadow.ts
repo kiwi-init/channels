@@ -30,7 +30,12 @@ try {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.port}/?shot=onboarding-still`);
-  await page.waitForTimeout(2600);
+  const drawn = await page
+    .waitForSelector("canvas[data-meadow]", { state: "attached", timeout: 20_000 })
+    .then(() => true)
+    .catch(() => false);
+  check("the onboarding's meadow canvas comes within 20 s", drawn);
+  await page.waitForTimeout(600);
   const motion = await page.evaluate(() => document.documentElement.dataset.motion ?? "");
   const intro = await page.evaluate(() => document.querySelector("canvas[data-meadow]")?.getAttribute("data-meadow") ?? "none");
   check(`with the app's Reduce motion on (${motion}), the onboarding's meadow holds still (${intro})`, motion === "reduced" && intro !== "moving" && intro !== "none");
