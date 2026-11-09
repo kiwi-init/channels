@@ -1,5 +1,7 @@
+import "~/i18n/en/chat-later"
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react"
 import { sanitizeMarkdownUrl } from "@kiwi/app/markdown.ts"
+import { t } from "~/i18n/i18n"
 import { copyText } from "~/kit/toasts"
 
 type Mermaid = (typeof import("mermaid"))["default"]
@@ -92,7 +94,7 @@ export function errorLine(e: unknown): string {
       .split("\n")
       .find((l) => l.trim())
       ?.trim()
-      .replace(/:\s*$/, "") || "it isn’t valid Mermaid"
+      .replace(/:\s*$/, "") || t("chat.mermaid.invalid")
   )
 }
 
@@ -182,7 +184,7 @@ export function drawCached(source: string, scheme: string, render: (source: stri
     drawings.set(key, held)
     return held
   }
-  const fresh = source.length > MAX_SOURCE ? Promise.resolve<Drawn>({ kind: "error", message: `it's too long to draw (over ${MAX_SOURCE.toLocaleString("en")} characters)` }) : render(source)
+  const fresh = source.length > MAX_SOURCE ? Promise.resolve<Drawn>({ kind: "error", message: t("chat.mermaid.too.long", { count: MAX_SOURCE }) }) : render(source)
   drawings.set(key, fresh)
   const oldest = drawings.keys().next()
   if (drawings.size > MAX_DRAWN && !oldest.done) drawings.delete(oldest.value)
@@ -192,7 +194,7 @@ export function drawCached(source: string, scheme: string, render: (source: stri
 function useScheme(): string {
   const read = () => {
     const root = document.documentElement
-    return `${root.dataset.theme ?? ""}:${root.dataset.font ?? ""}:${matchMedia("(prefers-color-scheme: dark)").matches}:${root.style.cssText}`
+    return `${root.lang}:${root.dataset.theme ?? ""}:${root.dataset.font ?? ""}:${matchMedia("(prefers-color-scheme: dark)").matches}:${root.style.cssText}`
   }
   const [scheme, setScheme] = useState("")
   useEffect(() => {
@@ -201,7 +203,7 @@ function useScheme(): string {
     const media = matchMedia("(prefers-color-scheme: dark)")
     media.addEventListener("change", update)
     const watch = new MutationObserver(update)
-    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-font", "style"] })
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["lang", "data-theme", "data-font", "style"] })
     return () => {
       media.removeEventListener("change", update)
       watch.disconnect()
@@ -276,7 +278,7 @@ export function MermaidBlock({ source, code, onLink }: { source: string; code: R
     return (
       <div className="md-mermaid">
         {code}
-        <p className="md-mermaid-error">Couldn’t draw this Mermaid diagram: {drawn.message}</p>
+        <p className="md-mermaid-error">{t("chat.mermaid.error", { message: drawn.message })}</p>
       </div>
     )
   }
@@ -287,7 +289,7 @@ export function MermaidBlock({ source, code, onLink }: { source: string; code: R
         {drawn && (
           <div className="md-mermaid-tools is-code">
             <button type="button" onClick={() => setShowCode(false)}>
-              Diagram
+              {t("chat.mermaid.diagram")}
             </button>
           </div>
         )}
@@ -297,14 +299,14 @@ export function MermaidBlock({ source, code, onLink }: { source: string; code: R
   return (
     <div className="md-mermaid">
       <figure ref={box} onScroll={measure} onClick={clicked} className={more ? "md-mermaid-drawn code-more" : "md-mermaid-drawn"}>
-        <div role="img" aria-label="Mermaid diagram" dangerouslySetInnerHTML={{ __html: drawn.svg }} />
+        <div role="img" aria-label={t("chat.mermaid.label")} dangerouslySetInnerHTML={{ __html: drawn.svg }} />
       </figure>
       <div className="md-mermaid-tools">
         <button type="button" onClick={() => setShowCode(true)}>
-          Code
+          {t("chat.mermaid.code")}
         </button>
-        <button type="button" aria-label="Copy Mermaid source" onClick={() => copyText(source)}>
-          Copy
+        <button type="button" aria-label={t("chat.mermaid.copy.source")} onClick={() => copyText(source)}>
+          {t("chat.mermaid.copy")}
         </button>
       </div>
     </div>

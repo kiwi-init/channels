@@ -119,9 +119,10 @@
   --float-3: color-mix(in srgb, var(--float) 80%, var(--ink));
   --shadow-float: 0 0 0 1px var(--line-2), inset 0 1px 0 var(--line), 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 12px rgb(0 0 0 / 0.3);
 
-  --mono: "Paper Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
-  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
-  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
+  --mono: "Paper Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, var(--cjk), monospace;
+  --cjk: "PingFang SC", "Hiragino Sans", "Apple SD Gothic Neo", "Noto Sans CJK SC", "Noto Sans CJK JP", "Noto Sans CJK KR", "Microsoft YaHei", "Yu Gothic UI", "Malgun Gothic";
+  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, var(--cjk), sans-serif;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, var(--cjk), sans-serif;
 
   --text-scale: 1.1;
 
@@ -160,18 +161,18 @@
 }
 
 :root[data-font="inter"] {
-  --ui: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
-  --sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
+  --ui: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, var(--cjk), sans-serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, var(--cjk), sans-serif;
 }
 
 :root[data-font="lato"] {
-  --ui: "Lato", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
-  --sans: "Lato", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
+  --ui: "Lato", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, var(--cjk), sans-serif;
+  --sans: "Lato", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, var(--cjk), sans-serif;
 }
 
 :root[data-font="atkinson"] {
-  --ui: "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
-  --sans: "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
+  --ui: "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, var(--cjk), sans-serif;
+  --sans: "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, var(--cjk), sans-serif;
 }
 
 :root[data-theme="light"] {
@@ -260,4 +261,12 @@
     --float: var(--bg);
     --shadow-float: 0 0 0 1px var(--line-2), 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 12px rgb(0 0 0 / 0.06);
   }
+}
+
+:root:lang(ja) {
+  --cjk: "Hiragino Sans", "Noto Sans CJK JP", "Yu Gothic UI", "PingFang SC", "Apple SD Gothic Neo", "Noto Sans CJK SC", "Noto Sans CJK KR";
+}
+
+:root:lang(ko) {
+  --cjk: "Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", "PingFang SC", "Hiragino Sans", "Noto Sans CJK SC", "Noto Sans CJK JP";
 }

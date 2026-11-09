@@ -1,8 +1,10 @@
+import "~/i18n/en/shell-later"
 import { Fragment, useEffect, useState } from "react"
 
 import { Icon } from "~/kit/icons"
 import { copyText } from "~/kit/toasts"
 import { useApp } from "~/nav"
+import { t } from "~/i18n/i18n"
 
 type Card = { key: string; text: string; detail?: string; path?: string; act?: string; busy?: string; onAct?: () => void; progress?: number }
 
@@ -11,17 +13,18 @@ function useCards(): Card[] {
   const account = app.account
   const cards: Card[] = []
   const ask = account?.enrollAsk
-  if (ask && ask.stage !== "elsewhere") cards.push({ key: "ask", text: `${ask.label} wants to sign in as you`, act: "Review", onAct: () => go({ to: "settings", section: "computers" }) })
+  if (ask && ask.stage !== "elsewhere")
+    cards.push({ key: "ask", text: t("shell.updates.sign.in.ask", { name: ask.label }), act: t("shell.updates.review"), onAct: () => go({ to: "settings", section: "computers" }) })
   const moved = account?.moved
   if (moved)
     cards.push({
       key: `moved ${moved.to}`,
-      text: `Channels moved to ${moved.to.slice(0, moved.to.lastIndexOf("/")) || moved.to}`,
-      ...(moved.from ? { detail: "The old copy can be deleted:", path: moved.from } : { detail: "You can delete the copy you downloaded." }),
-      act: "OK",
+      text: t("shell.updates.moved", { path: moved.to.slice(0, moved.to.lastIndexOf("/")) || moved.to }),
+      ...(moved.from ? { detail: t("shell.updates.moved.old.copy"), path: moved.from } : { detail: t("shell.updates.moved.delete.copy") }),
+      act: t("shell.updates.ok"),
       onAct: () => app.actions.dismissMoved(),
     })
-  if (account?.uiUpdate) cards.push({ key: "look", text: "A new look is ready", act: "Switch", onAct: () => app.actions.applyUi() })
+  if (account?.uiUpdate) cards.push({ key: "look", text: t("shell.updates.look.ready"), act: t("shell.updates.switch"), onAct: () => app.actions.applyUi() })
   const update = account?.update
   if (update) {
     const state = update.state ?? (update.ready ? "ready" : "downloading")
@@ -29,12 +32,12 @@ function useCards(): Card[] {
     const key = `update ${update.version} ${state}`
     cards.push(
       state === "ready"
-        ? { key, text: `Channels ${update.version} is ready`, act: "Restart", busy: "Restarting…", onAct: install }
+        ? { key, text: t("shell.updates.ready", { version: update.version }), act: t("shell.updates.restart"), busy: t("shell.updates.restarting"), onAct: install }
         : state === "available"
           ? update.blocked
-            ? { key, text: `Channels ${update.version} is out`, act: "Get it", onAct: install }
-            : { key, text: `Channels ${update.version} is out`, act: "Update", busy: "Checking…", onAct: install }
-          : { key, text: `Downloading Channels ${update.version}`, progress: update.progress ?? 0 }
+            ? { key, text: t("shell.updates.out", { version: update.version }), act: t("shell.updates.get.it"), onAct: install }
+            : { key, text: t("shell.updates.out", { version: update.version }), act: t("shell.updates.update"), busy: t("shell.updates.checking"), onAct: install }
+          : { key, text: t("shell.updates.downloading", { version: update.version }), progress: update.progress ?? 0 }
     )
   }
   return cards
@@ -43,7 +46,7 @@ function useCards(): Card[] {
 function CopyPath({ path }: { path: string }) {
   const parts = path.split("/")
   return (
-    <button type="button" className="side-card-path" title="Copy the path" onClick={() => copyText(path, "Path copied")}>
+    <button type="button" className="side-card-path" title={t("shell.updates.copy.path")} onClick={() => copyText(path, t("shell.updates.path.copied"))}>
       <Icon name="copy" size={12} />
       {parts.map((part, i) => (
         <Fragment key={i}>
@@ -63,8 +66,8 @@ function SideCard({ card }: { card: Card }) {
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     if (!busy) return
-    const t = setTimeout(() => setBusy(false), 30_000)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => setBusy(false), 30_000)
+    return () => clearTimeout(timer)
   }, [busy])
   const pct = card.progress === undefined ? null : Math.round(card.progress * 100)
   return (
@@ -101,7 +104,7 @@ export function SideCards() {
   const cards = useCards()
   if (!cards.length) return null
   return (
-    <ul className="side-cards" aria-label="Waiting on you">
+    <ul className="side-cards" aria-label={t("shell.updates.waiting.on.you")}>
       {cards.map((c) => (
         <SideCard key={c.key} card={c} />
       ))}

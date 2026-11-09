@@ -1,3 +1,4 @@
+import { span, t } from "~/i18n/i18n"
 import type { Usage } from "~/model"
 
 export type Level = "calm" | "near" | "full"
@@ -15,12 +16,10 @@ export function levelOf(u: Usage): Level {
 
 export function resetsIn(resetsAt: number, now: number): string {
   const minutes = Math.max(1, Math.round((resetsAt - now) / 60_000))
-  return minutes < 60 ? `${minutes}m` : `${Math.round(minutes / 60)}h`
+  return minutes < 60 ? span(minutes, "minute") : span(Math.round(minutes / 60), "hour")
 }
 
-export const count = (n: number): string => n.toLocaleString("en-US")
-
-export const usedOf = (u: Usage): string => (u.limit === null ? `${count(u.used)} today` : `${count(Math.min(u.used, u.limit))} of ${count(u.limit)}`)
+export const usedOf = (u: Usage): string => (u.limit === null ? t("usage.used.today", { used: u.used }) : t("usage.used.of", { used: Math.min(u.used, u.limit), limit: u.limit }))
 
 const isFairUse = (limit: number | null | undefined): boolean => !!limit && limit >= FAIR_USE
 
@@ -28,31 +27,30 @@ export const fairUse = (u: Usage): boolean => u.plan === "paid" && isFairUse(u.l
 
 export const seemsUnlimited = (u: Usage): boolean => fairUse(u) && levelOf(u) === "calm"
 
-const PLAN: Record<Usage["plan"], string> = { free: "Free", paid: "Paid", unlimited: "Unlimited" }
+const PLAN = { free: "usage.plan.free", paid: "usage.plan.paid", unlimited: "usage.plan.unlimited" } as const satisfies Record<Usage["plan"], string>
 
-export const planName = (u: Usage): string => (fairUse(u) ? "Unlimited" : PLAN[u.plan])
+export const planName = (u: Usage): string => t(fairUse(u) ? "usage.plan.unlimited" : PLAN[u.plan])
 
 export function upgradeLabel(u: Usage): string {
-  if (isFairUse(u.paidLimit)) return "Get unlimited"
-  return u.paidLimit ? `Get ${count(u.paidLimit)} a day` : "Upgrade"
+  if (isFairUse(u.paidLimit)) return t("usage.get.unlimited")
+  return u.paidLimit ? t("usage.get.per.day", { count: u.paidLimit }) : t("usage.upgrade")
 }
 
 export function paidPlanLine(u: Usage): string | null {
-  if (isFairUse(u.paidLimit)) return "The paid plan is unlimited."
-  return u.paidLimit ? `The paid plan sends ${count(u.paidLimit)} messages a day.` : null
+  if (isFairUse(u.paidLimit)) return t("usage.paid.unlimited")
+  return u.paidLimit ? t("usage.paid.sends", { count: u.paidLimit }) : null
 }
 
 export function planHint(u: Usage): string {
-  if (u.plan === "unlimited") return "No daily limit on this relay."
-  if (seemsUnlimited(u)) return "No daily limit."
-  if (fairUse(u)) return `A fair-use limit of ${count(u.limit ?? 0)} messages a day.`
-  const a = u.limit === null ? "No daily limit" : `${count(u.limit)} messages a day`
-  const paid = u.plan === "free" ? paidPlanLine(u) : null
-  return paid ? `${a}. ${paid}` : `${a}.`
+  if (u.plan === "unlimited") return t("usage.relay.no.limit")
+  if (seemsUnlimited(u)) return t("usage.no.limit")
+  if (fairUse(u)) return t("usage.fair.use", { count: u.limit ?? 0 })
+  const first = u.limit === null ? t("usage.no.limit") : t("usage.per.day", { count: u.limit })
+  const second = u.plan === "free" ? paidPlanLine(u) : null
+  return second ? t("usage.two.sentences", { first, second }) : first
 }
 
-export const usageHint = (u: Usage, resets: string): string =>
-  fairUse(u) ? `The paid plan's fair-use limit, agents' included. Resets in ${resets}.` : `In the channels you own, agents' included. Resets in ${resets}.`
+export const usageHint = (u: Usage, resets: string): string => t(fairUse(u) ? "usage.hint.fair.use" : "usage.hint", { time: resets })
 
 export const canUpgrade = (u: Usage): boolean => u.plan === "free" && !!u.upgradeUrl
 

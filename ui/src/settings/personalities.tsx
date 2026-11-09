@@ -1,3 +1,4 @@
+import "~/i18n/en/settings"
 import "~/styles/personalities.css"
 
 import { useEffect, useRef, useState } from "react"
@@ -5,66 +6,79 @@ import { useEffect, useRef, useState } from "react"
 import { copyOf, freeId } from "@kiwi/core/personalities.ts"
 import { CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, ROLE_LABEL, ROLES, type Capability, type Personality, type Role } from "@kiwi/core/personality.ts"
 import { PRESETS } from "@kiwi/core/presets.ts"
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { RoleFace } from "~/kit/role-face"
 import { useApp } from "~/nav"
 import { Confirm, Row, Seg } from "~/settings/controls"
 
-const TAGLINE: Record<string, string> = {
-  builder: "Takes a task from start to done",
-  reviewer: "Reviews rounds; never codes the task it reviews",
-  "bug-hunter": "Reproduces first, a failing test, then the fix",
-  explorer: "Proposals and mockups; no code before a yes",
-  releaser: "CI, builds and releases, under a lock",
-  lead: "Keeps the board; one per channel",
+const TAGLINE: Record<string, Key> = {
+  builder: "settings.personalities.tagline.builder",
+  reviewer: "settings.personalities.tagline.reviewer",
+  "bug-hunter": "settings.personalities.tagline.bug.hunter",
+  explorer: "settings.personalities.tagline.explorer",
+  releaser: "settings.personalities.tagline.releaser",
+  lead: "settings.personalities.tagline.lead",
 }
 
-const CAPABILITY_TEXT: Record<Capability, readonly [string, string]> = {
-  write: ["Write and ask", "Messages, questions, ask-human"],
-  tasks: ["Work tasks", "Claim, update, finish its own"],
-  prs: ["Open PRs", "The repo's own way"],
-  merge: ["Merge PRs", "When the project's checks allow"],
-  review: ["Review", "Approve or send back others' rounds"],
-  release: ["Release", "Tags, builds, publishes"],
-  assign: ["Assign work", "Hand tasks to others (the lead)"],
-  notes: ["Set notes", "Channel facts"],
+const CAPABILITY_TEXT: Record<Capability, readonly [Key, Key]> = {
+  write: ["settings.personalities.can.write", "settings.personalities.can.write.hint"],
+  tasks: ["settings.personalities.can.tasks", "settings.personalities.can.tasks.hint"],
+  prs: ["settings.personalities.can.prs", "settings.personalities.can.prs.hint"],
+  merge: ["settings.personalities.can.merge", "settings.personalities.can.merge.hint"],
+  review: ["settings.personalities.can.review", "settings.personalities.can.review.hint"],
+  release: ["settings.personalities.can.release", "settings.personalities.can.release.hint"],
+  assign: ["settings.personalities.can.assign", "settings.personalities.can.assign.hint"],
+  notes: ["settings.personalities.can.notes", "settings.personalities.can.notes.hint"],
 }
 
 const ROLE_OPTIONS = ROLES.map((r) => [r, ROLE_LABEL[r]] as const) satisfies readonly (readonly [Role, string])[]
 
-const BLANK: Omit<Personality, "id"> = { name: "New personality", glyph: "✳", role: "builder", capabilities: ["write", "tasks", "notes"], areas: [], instructions: "" }
+const BLANK: Omit<Personality, "id" | "name"> = { glyph: "✳", role: "builder", capabilities: ["write", "tasks", "notes"], areas: [], instructions: "" }
 
 const SHOT = new URLSearchParams(location.search).get("shot")
 
-const tagline = (p: Personality): string => TAGLINE[p.id] ?? `${ROLE_LABEL[p.role]}${p.areas.length ? `, limited to ${p.areas.join(", ")}` : ""}`
+function tagline(p: Personality): string {
+  const own = TAGLINE[p.id]
+  if (own) return t(own)
+  return p.areas.length ? t("settings.personalities.tagline.limited", { role: ROLE_LABEL[p.role], areas: p.areas.join(", ") }) : ROLE_LABEL[p.role]
+}
 
 export function Personalities() {
   const { app } = useApp()
   const own = app.ownPersonalities
   const taken = new Set([...PRESETS, ...own].map((p) => p.id))
-  const copy = (p: Personality): Personality => ({ ...copyOf(p, taken), name: `${p.name} (yours)`.slice(0, MAX_NAME) })
+  const copy = (p: Personality): Personality => ({ ...copyOf(p, taken), name: t("settings.personalities.yours", { name: p.name }).slice(0, MAX_NAME) })
   const [draft, setDraft] = useState<Personality | null>(() => (SHOT === "personality-editor" && PRESETS[0] ? copy(PRESETS[0]) : null))
 
   if (draft) return <Editor key={draft.id} start={draft} isNew={!own.some((p) => p.id === draft.id)} onDone={() => setDraft(null)} />
   return (
-    <section className="set-group" aria-label="Personalities">
+    <section className="set-group" aria-label={t("settings.personalities.title")}>
       <div className="heading">
-        <h3>Personalities</h3>
+        <h3>{t("settings.personalities.title")}</h3>
       </div>
       <ul className="persona-cards">
         {PRESETS.map((p) => (
-          <Card key={p.id} p={p} verb="Copy" onOpen={() => setDraft(copy(p))} />
+          <Card key={p.id} p={p} preset onOpen={() => setDraft(copy(p))} />
         ))}
         {own.map((p) => (
-          <Card key={p.id} p={p} verb="Edit" onOpen={() => setDraft(p)} />
+          <Card key={p.id} p={p} preset={false} onOpen={() => setDraft(p)} />
         ))}
         <li>
-          <button type="button" className="persona-card is-new" onClick={() => setDraft({ ...BLANK, id: freeId(BLANK.name, taken) })}>
+          <button
+            type="button"
+            className="persona-card is-new"
+            onClick={() => {
+              const name = t("settings.personalities.new")
+              setDraft({ ...BLANK, name, id: freeId(name, taken) })
+            }}
+          >
             <span className="persona-card-face">
               <Icon name="plus" size={16} />
             </span>
-            <span className="persona-card-name">New personality</span>
+            <span className="persona-card-name">{t("settings.personalities.new")}</span>
           </button>
         </li>
       </ul>
@@ -72,11 +86,10 @@ export function Personalities() {
   )
 }
 
-function Card({ p, verb, onOpen }: { p: Personality; verb: "Copy" | "Edit"; onOpen: () => void }) {
-  const preset = verb === "Copy"
+function Card({ p, preset, onOpen }: { p: Personality; preset: boolean; onOpen: () => void }) {
   return (
     <li>
-      <button type="button" className="persona-card" aria-label={`${verb} ${p.name}`} onClick={onOpen}>
+      <button type="button" className="persona-card" aria-label={t(preset ? "settings.personalities.copy.named" : "settings.personalities.edit.named", { name: p.name })} onClick={onOpen}>
         <span className="persona-card-face" aria-hidden="true">
           <RoleFace role={p.role} />
         </span>
@@ -92,7 +105,7 @@ function Card({ p, verb, onOpen }: { p: Personality; verb: "Copy" | "Edit"; onOp
           <span className="persona-card-line">{tagline(p)}</span>
         </span>
         <span className="persona-card-verb" aria-hidden="true">
-          {verb}
+          {t(preset ? "settings.personalities.copy" : "settings.personalities.edit")}
         </span>
       </button>
     </li>
@@ -123,7 +136,7 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
     <form
       ref={ref}
       className="persona-editor"
-      aria-label={isNew ? "New personality" : `Edit ${start.name}`}
+      aria-label={isNew ? t("settings.personalities.new") : t("settings.personalities.edit.named", { name: start.name })}
       onSubmit={(e) => {
         e.preventDefault()
         const glyph = [...draft.glyph.trim()].length === 1 ? draft.glyph.trim() : start.glyph
@@ -137,45 +150,45 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
         onDone()
       }}
     >
-      <h3 className="persona-title">{isNew ? "New personality" : "Edit personality"}</h3>
+      <h3 className="persona-title">{isNew ? t("settings.personalities.new") : t("settings.personalities.edit.title")}</h3>
       <div className="persona-form">
         <label className="persona-field is-glyph">
-          <span className="persona-label">Glyph</span>
+          <span className="persona-label">{t("settings.personalities.glyph")}</span>
           <input className="input" value={draft.glyph} onChange={(e) => set({ glyph: e.target.value })} />
         </label>
         <label className="persona-field">
-          <span className="persona-label">Name</span>
+          <span className="persona-label">{t("settings.personalities.name")}</span>
           <input className="input" autoFocus value={draft.name} maxLength={MAX_NAME} onChange={(e) => set({ name: e.target.value })} />
         </label>
       </div>
       <div className="persona-field">
-        <span className="persona-label">Role</span>
-        <Seg label="Role" value={draft.role} options={ROLE_OPTIONS} onChange={(role) => set({ role })} />
+        <span className="persona-label">{t("settings.personalities.role")}</span>
+        <Seg label={t("settings.personalities.role")} value={draft.role} options={ROLE_OPTIONS} onChange={(role) => set({ role })} />
       </div>
       <div className="persona-field">
-        <span className="persona-label">Capabilities</span>
+        <span className="persona-label">{t("settings.personalities.capabilities")}</span>
         <div className="set-rows">
           {CAPABILITIES.map((c) => (
-            <Row key={c} label={CAPABILITY_TEXT[c][0]} hint={CAPABILITY_TEXT[c][1]}>
-              <Toggle label={CAPABILITY_TEXT[c][0]} on={draft.capabilities.includes(c)} onChange={() => toggle(c)} />
+            <Row key={c} label={t(CAPABILITY_TEXT[c][0])} hint={t(CAPABILITY_TEXT[c][1])}>
+              <Toggle label={t(CAPABILITY_TEXT[c][0])} on={draft.capabilities.includes(c)} onChange={() => toggle(c)} />
             </Row>
           ))}
         </div>
       </div>
       <div className="persona-field">
-        <span className="persona-label">Areas</span>
+        <span className="persona-label">{t("settings.personalities.areas")}</span>
         <div className="persona-areas">
-          {draft.areas.length === 0 && <span className="persona-area is-any">Anywhere</span>}
+          {draft.areas.length === 0 && <span className="persona-area is-any">{t("settings.personalities.anywhere")}</span>}
           {draft.areas.map((a) => (
-            <button key={a} type="button" className="persona-area" aria-label={`Remove ${a}`} onClick={() => set({ areas: draft.areas.filter((x) => x !== a) })}>
+            <button key={a} type="button" className="persona-area" aria-label={t("settings.personalities.area.remove", { area: a })} onClick={() => set({ areas: draft.areas.filter((x) => x !== a) })}>
               {a}
               <Icon name="close" size={12} />
             </button>
           ))}
           <input
             className="input persona-area-add"
-            aria-label="Add an area"
-            placeholder="Add a path, like web/"
+            aria-label={t("settings.personalities.area.add")}
+            placeholder={t("settings.personalities.area.placeholder")}
             value={area}
             maxLength={MAX_AREA}
             onChange={(e) => setArea(e.target.value)}
@@ -189,10 +202,10 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
         </div>
       </div>
       <label className="persona-field">
-        <span className="persona-label">Instructions</span>
+        <span className="persona-label">{t("settings.personalities.instructions")}</span>
         <textarea
           className="textarea persona-instructions"
-          placeholder="What the agent is told when it joins"
+          placeholder={t("settings.personalities.instructions.placeholder")}
           value={draft.instructions}
           maxLength={MAX_INSTRUCTIONS}
           onChange={(e) => set({ instructions: e.target.value })}
@@ -201,22 +214,22 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
       <div className="persona-foot">
         {!isNew && (
           <button type="button" className="btn is-danger is-small" onClick={() => setDeleting(true)}>
-            Delete personality
+            {t("settings.personalities.delete")}
           </button>
         )}
         <span className="persona-foot-gap" />
         <button type="button" className="btn is-quiet" onClick={onDone}>
-          Cancel
+          {t("settings.controls.cancel")}
         </button>
         <button type="submit" className="btn is-primary">
-          Save personality
+          {t("settings.personalities.save")}
         </button>
       </div>
       <Confirm
         open={deleting}
-        title="Delete this personality?"
-        sub="It goes away on this computer."
-        action="Delete personality"
+        title={t("settings.personalities.delete.title")}
+        sub={t("settings.personalities.delete.sub")}
+        action={t("settings.personalities.delete")}
         onClose={() => setDeleting(false)}
         onConfirm={() => {
           setDeleting(false)

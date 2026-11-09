@@ -26,12 +26,16 @@ on:
 # finishes, one run waits, and a newer push replaces the waiting one, so main's full run keeps
 # finishing while merges come every few minutes. Each merge group has a ref of its own, so groups
 # never cancel each other. A dispatched run replaces an older dispatched run on the same ref only
-# when it asks for exactly the same thing: the group carries a hash of the jobs, release and
-# update_from inputs, so a jobs=doc run never replaces a jobs=desktop-linux validation on the same
-# head, a release check never replaces a plain one, and dispatches never share a group with a push
-# to main, which stays uncancellable by anything but itself.
+# when it asks for exactly the same thing: the group carries each of the jobs, release and
+# update_from inputs as its JSON string (toJSON quotes and escapes, so a tuple's encoding
+# is unique and no delimiter inside an input can impersonate another tuple), so a jobs=doc
+# run never replaces a jobs=desktop-linux validation on the same head, a release check
+# never replaces a plain one, and dispatches never share a group with a push to main,
+# which stays uncancellable by anything but itself. GitHub compares group names without
+# letter case, so identity here ignores case too, exactly as far as the host's own
+# comparison collapses it (the spec's choice, #3101).
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || (github.event_name == 'workflow_dispatch' && format('{0}-dispatch-j{1}-r{2}-u{3}', github.ref, inputs.jobs, inputs.release, inputs.update_from)) || github.run_id }}
+  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || (github.event_name == 'workflow_dispatch' && format('{0}-dispatch-{1}{2}{3}', github.ref, toJSON(inputs.jobs), toJSON(inputs.release), toJSON(inputs.update_from))) || github.run_id }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:
@@ -114,6 +118,9 @@ jobs:
       - name: ui css units
         if: ${{ !cancelled() }}
         run: bun scripts/css-units.ts
+      - name: ui words in catalogs
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-english.ts
       - name: knip
         if: ${{ !cancelled() }}
         run: bun run knip
@@ -381,6 +388,9 @@ jobs:
       - name: ui the spec page uses a wide window and its comment box grows, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-spec-layout.ts --dist ui/dist
+      - name: ui spec comments take keyboard focus, jump reply to reply, keep each spec's draft, and retry a failed send once, in WebKit
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-spec-comments.ts --dist ui/dist
       - name: ui Esc in search keeps the panel, and Settings doesn't offer a name change, in WebKit
         if: ${{ !cancelled() }}
         run: bun scripts/ui-esc-and-name.ts --dist ui/dist
@@ -889,11 +899,11 @@ jobs:
       - name: every word the app shows is in its String Catalog
         if: ${{ !cancelled() }}
         run: bun ios/scripts/catalog-check.ts ios/Channels/Localizable.xcstrings "$RUNNER_TEMP/ios"
-      - name: languages in the simulator (a Language pick changes the app at once, and the phone's language is followed)
+      - name: UI tests in the simulator (a Language pick changes the app at once, the phone's language is followed, updates sit behind an icon)
         if: ${{ !cancelled() }}
         run: |
           sim=$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
-          xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/languages.xcresult" -only-testing:ChannelsUITests/LanguageTests CODE_SIGNING_ALLOWED=NO test
+          xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/languages.xcresult" -only-testing:ChannelsUITests/LanguageTests -only-testing:ChannelsUITests/UpdatesTests CODE_SIGNING_ALLOWED=NO test
       - name: language shots
         if: ${{ !cancelled() }}
         run: |

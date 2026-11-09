@@ -128,6 +128,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.stringResource
+import com.kiwiinit.channels.R
 
 sealed interface Line {
     val id: String
@@ -298,7 +300,7 @@ fun Conversation(
                 if (room.whole || (room.messages.isEmpty() && room.connection == Connection.Live)) Intro(room)
                 if (!room.whole && room.messages.isNotEmpty()) {
                     Text(
-                        "Earlier messages aren't on this phone",
+                        stringResource(R.string.earlier_not_here),
                         style = MaterialTheme.typography.labelMedium,
                         color = Tone.current.ink3,
                         modifier = Modifier.padding(vertical = 14.dp),
@@ -311,9 +313,10 @@ fun Conversation(
 
 @Composable
 private fun TimeLine(at: Long) {
+    val w = words()
     Text(
         buildAnnotatedString {
-            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(When.dayWord(at)) }
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(When.dayWord(w, at)) }
             append(" ${When.clock(at)}")
         },
         style = MaterialTheme.typography.labelMedium,
@@ -341,11 +344,11 @@ fun Intro(room: RoomView) {
     val tone = Tone.current
     val lines: List<String> = if (lead == null) {
         val names = room.members.filter { it.name != room.me }.map { it.display }
-        listOf("You, ${names.joinToString(", ")}", if (room.messages.isEmpty()) "No messages yet" else "The start of #general")
+        listOf(stringResource(R.string.you_and, names.joinToString(", ")), if (room.messages.isEmpty()) stringResource(R.string.no_messages_yet) else stringResource(R.string.start_of_general))
     } else {
         val member = room.member(lead)
-        val now = if (member?.working == true) member.doing.firstOrNull()?.let { "Working on ${taskLabel(it)}" } ?: "Working" else null
-        listOfNotNull("Lead of ${room.title}", now ?: if (room.messages.isEmpty()) "Everyone in the channel can read this" else null)
+        val now = if (member?.working == true) member.doing.firstOrNull()?.let { stringResource(R.string.working_on_cap, taskLabel(it)) } ?: stringResource(R.string.working_cap) else null
+        listOfNotNull(stringResource(R.string.lead_of, room.title), now ?: if (room.messages.isEmpty()) stringResource(R.string.everyone_reads) else null)
     }
     Column(
         Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = if (room.messages.isEmpty()) 72.dp else 28.dp, bottom = 20.dp),
@@ -559,7 +562,7 @@ private fun BubbleBody(model: AppModel, room: RoomView, message: MessageView, fi
             }
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("Reply") },
+                text = { Text(stringResource(R.string.reply)) },
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null) },
                 onClick = {
                     menu = false
@@ -567,7 +570,7 @@ private fun BubbleBody(model: AppModel, room: RoomView, message: MessageView, fi
                 },
             )
             DropdownMenuItem(
-                text = { Text("Copy") },
+                text = { Text(stringResource(R.string.copy)) },
                 leadingIcon = { Icon(Icons.Filled.ContentCopy, contentDescription = null) },
                 onClick = {
                     menu = false
@@ -637,7 +640,7 @@ fun PollCard(model: AppModel, room: RoomView, poll: Poll, other: () -> Unit) {
             .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 8.dp),
     ) {
         Text(
-            if (open) "Question for you" else if (poll.chosen == null) "Question" else "Decided",
+            if (open) stringResource(R.string.question_for_you) else if (poll.chosen == null) stringResource(R.string.question) else stringResource(R.string.decided),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = if (open) tone.decide else tone.ink3,
@@ -700,19 +703,19 @@ fun PollCard(model: AppModel, room: RoomView, poll: Poll, other: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp).padding(start = 2.dp))
-                Text("Something else…", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.something_else_more), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
             }
         }
         val chosenBy = poll.chosen
         if (chosenBy != null) {
             Text(
-                "${if (chosenBy.by == room.me) "You" else room.display(chosenBy.by)} chose",
+                stringResource(R.string.chose, if (chosenBy.by == room.me) stringResource(R.string.you) else room.display(chosenBy.by)),
                 style = MaterialTheme.typography.labelMedium,
                 color = tone.ink3,
                 modifier = Modifier.padding(top = 4.dp),
             )
         } else if (failed) {
-            Text("Couldn't send · Try again", style = MaterialTheme.typography.labelMedium, color = tone.alert, modifier = Modifier.padding(top = 4.dp))
+            Text(stringResource(R.string.send_failed), style = MaterialTheme.typography.labelMedium, color = tone.alert, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
@@ -720,8 +723,8 @@ fun PollCard(model: AppModel, room: RoomView, poll: Poll, other: () -> Unit) {
 @Composable
 private fun AskLine(model: AppModel, room: RoomView, ask: AskView, other: () -> Unit) {
     val origin = when {
-        ask.task != null -> "in ${taskLabel(ask.task)}"
-        ask.place?.startsWith("dm:") == true -> "in a direct thread"
+        ask.task != null -> stringResource(R.string.in_task, taskLabel(ask.task))
+        ask.place?.startsWith("dm:") == true -> stringResource(R.string.in_direct_thread)
         else -> ""
     }
     Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.Bottom) {
@@ -747,7 +750,7 @@ private fun ReviewLine(model: AppModel, room: RoomView, review: ReviewView, back
         Spacer(Modifier.width(8.dp))
         Column {
             Text(
-                listOfNotNull(by?.let { room.display(it) }, "in ${taskLabel(review.task)}").joinToString(" · "),
+                listOfNotNull(by?.let { room.display(it) }, stringResource(R.string.in_task, taskLabel(review.task))).joinToString(" · "),
                 style = MaterialTheme.typography.labelMedium,
                 color = Tone.current.ink3,
                 modifier = Modifier.padding(start = 12.dp, bottom = 3.dp),
@@ -771,7 +774,7 @@ private fun ReviewCard(model: AppModel, room: RoomView, review: ReviewView, back
             .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 8.dp),
     ) {
         Text(
-            "Ready for your review",
+            stringResource(R.string.ready_for_review),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = tone.decide,
@@ -807,7 +810,7 @@ private fun ReviewCard(model: AppModel, room: RoomView, review: ReviewView, back
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = tone.onThem, modifier = Modifier.size(20.dp))
-            Text("Approve", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = tone.onThem, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.approve), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = tone.onThem, modifier = Modifier.weight(1f))
             if (approving) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
         }
         HorizontalDivider(color = tone.line, modifier = Modifier.padding(start = 30.dp))
@@ -817,10 +820,10 @@ private fun ReviewCard(model: AppModel, room: RoomView, review: ReviewView, back
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-            Text("Send back…", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+            Text(stringResource(R.string.send_back_more), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
         }
         if (failed) {
-            Text("Couldn't send · Try again", style = MaterialTheme.typography.labelMedium, color = tone.alert, modifier = Modifier.padding(top = 4.dp))
+            Text(stringResource(R.string.send_failed), style = MaterialTheme.typography.labelMedium, color = tone.alert, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
@@ -838,11 +841,11 @@ private fun PendingBubble(model: AppModel, item: Pending, spot: Spot) {
         if (item.failed) {
             Box {
                 IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Filled.ErrorOutline, contentDescription = "Not delivered", tint = tone.alert)
+                    Icon(Icons.Filled.ErrorOutline, contentDescription = stringResource(R.string.not_delivered), tint = tone.alert)
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
-                        text = { Text("Try again") },
+                        text = { Text(stringResource(R.string.try_again)) },
                         leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
                         onClick = {
                             menu = false
@@ -850,7 +853,7 @@ private fun PendingBubble(model: AppModel, item: Pending, spot: Spot) {
                         },
                     )
                     DropdownMenuItem(
-                        text = { Text("Delete") },
+                        text = { Text(stringResource(R.string.delete)) },
                         leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
                         onClick = {
                             menu = false
@@ -870,7 +873,7 @@ private fun PendingBubble(model: AppModel, item: Pending, spot: Spot) {
                 Markdown(item.body, Inks(tone.onMine, tone.onMine, tone.onMine.copy(alpha = 0.12f), true))
             }
             if (item.failed) {
-                Text("Not delivered", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = tone.alert, modifier = Modifier.padding(top = 3.dp))
+                Text(stringResource(R.string.not_delivered), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = tone.alert, modifier = Modifier.padding(top = 3.dp))
             }
         }
     }
@@ -892,14 +895,14 @@ private fun Picture(model: AppModel, code: String, seq: Int, index: Int) {
         if (got != null) {
             Image(
                 got,
-                contentDescription = "Picture",
+                contentDescription = stringResource(R.string.picture),
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.widthIn(max = 240.dp).heightIn(max = 320.dp).clickable { shown = true },
             )
         } else {
             Box(Modifier.size(200.dp, 150.dp).background(tone.wash2), contentAlignment = Alignment.Center) {
                 if (failed) {
-                    Icon(Icons.Filled.BrokenImage, contentDescription = "Picture unavailable", tint = tone.ink3)
+                    Icon(Icons.Filled.BrokenImage, contentDescription = stringResource(R.string.picture_unavailable), tint = tone.ink3)
                 } else {
                     CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                 }
@@ -921,7 +924,7 @@ fun Viewer(image: ImageBitmap, close: () -> Unit) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = fade))) {
             Image(
                 image,
-                contentDescription = "Picture",
+                contentDescription = stringResource(R.string.picture),
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize()
                     .pointerInput(Unit) {
@@ -963,9 +966,9 @@ fun Viewer(image: ImageBitmap, close: () -> Unit) {
                     },
             )
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                IconButton(onClick = close) { Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White) }
+                IconButton(onClick = close) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.close), tint = Color.White) }
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = { share(context, image) }) { Icon(Icons.Filled.Share, contentDescription = "Share", tint = Color.White) }
+                IconButton(onClick = { share(context, image) }) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.share), tint = Color.White) }
             }
         }
     }

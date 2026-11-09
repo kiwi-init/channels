@@ -1,9 +1,11 @@
+import "~/i18n/en/live-later"
 import { handBackText, heldBy } from "@kiwi/core/handback.ts"
 import { NAME_RE, nameKey, type JoinRequest, type Member as RosterMember } from "@kiwi/core/membership.ts"
 import { personaOf, personaScopes, type Persona } from "@kiwi/core/personality.ts"
 import { pinned } from "@kiwi/core/pin.ts"
 import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scopes.ts"
 import { secrets } from "@kiwi/secrets/secrets.ts"
+import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { newMemberPowers, newMemberScopes } from "~/live/defaults"
 import { attempt, event, memberOf, need, owner, personalities, say, setup } from "~/live/run"
@@ -29,8 +31,7 @@ function agentManager(code: string, name: string): { run: Run; m: RosterMember }
   const m = memberOf(run, name)
   if (run.isOwner) return { run, m }
   const me = run.state.members.get(run.me)
-  if (!me?.active || !me.managesAgents || m.kind !== "agent" || m.owner || m.name === run.me)
-    throw new Error("only the owner, or a person who manages agents, changes an agent's role, personality or nickname")
+  if (!me?.active || !me.managesAgents || m.kind !== "agent" || m.owner || m.name === run.me) throw new Error(t("live.manage.agents.manager.only"))
   return { run, m }
 }
 
@@ -39,20 +40,20 @@ async function personaFor(r: JoinRequest, choice: JoinChoice): Promise<Persona |
   const all = personalities()
   if (choice.persona !== undefined) {
     const p = all.find((x) => x.id === choice.persona)
-    if (!p) throw new Error("that personality isn't on this computer")
+    if (!p) throw new Error(t("live.manage.personality.missing"))
     return personaOf(p)
   }
   if (!r.pin) return null
   const pin = await pinned(r.pin, all)
-  if (!pin) throw new Error(`${r.name} was invited as ${r.pin.name}, which isn't on this computer anymore`)
+  if (!pin) throw new Error(t("live.manage.pin.gone", { name: r.name, persona: r.pin.name }))
   return pin
 }
 
 export async function letIn(run: Run, r: JoinRequest, choice: JoinChoice): Promise<string> {
   const name = choice.as?.trim() || r.name
   if (name !== r.name) {
-    if (!NAME_RE.test(name)) throw new Error(`${name} can't be a name: letters, digits, . _ - only`)
-    if (run.roster.some((m) => m.active && m.pk !== r.pk && nameKey(m.name) === nameKey(name))) throw new Error(`${name} is taken here too`)
+    if (!NAME_RE.test(name)) throw new Error(t("live.manage.bad.name", { name }))
+    if (run.roster.some((m) => m.active && m.pk !== r.pk && nameKey(m.name) === nameKey(name))) throw new Error(t("live.manage.name.taken", { name }))
   }
   if (r.computer && (r.computer.revoked || revokedComputer(r.computer.person, r.computer.pk))) throw new Error(forgottenComputer(r.display || r.name, r.computer))
   const persona = await personaFor(r, choice)
@@ -70,7 +71,7 @@ export async function letIn(run: Run, r: JoinRequest, choice: JoinChoice): Promi
   } finally {
     await Promise.all([run.refreshRequests(), run.refreshRoster()])
   }
-  return persona ? `${r.display || name} joined as ${persona.name}` : `${r.display || name} joined`
+  return persona ? t("live.manage.joined.as", { name: r.display || name, persona: persona.name }) : t("live.manage.joined", { name: r.display || name })
 }
 
 async function scopesFor(run: Run, name: string, scopes: Scope[]): Promise<void> {
@@ -88,7 +89,7 @@ export async function setRole(code: string, name: string, role: string | null): 
 
 export async function removeMember(code: string, name: string): Promise<void> {
   const run = need(code)
-  if (!run.isOwner && !sponsorsAgent(run.state.members, run.me, name)) throw new Error("only the owner removes people, and other people's agents")
+  if (!run.isOwner && !sponsorsAgent(run.state.members, run.me, name)) throw new Error(t("live.manage.remove.owner.only"))
   const m = memberOf(run, name)
   const held = heldBy(run.state, name)
   const lead = run.state.lead && run.state.lead !== name ? [run.state.lead] : undefined
@@ -96,7 +97,7 @@ export async function removeMember(code: string, name: string): Promise<void> {
   if (run.isOwner) await run.ch.remove(m.pk)
   else await event(run, `removed ${name}`, { op: "member.gone", member: m.name, pk: m.pk })
   await run.refreshRoster()
-  announce(`Removed ${m.display || name}`)
+  announce(t("live.manage.removed", { name: m.display || name }))
 }
 
 export async function setAgentColor(code: string, name: string, color: Color | null): Promise<void> {
@@ -107,7 +108,7 @@ export async function setAgentColor(code: string, name: string, color: Color | n
 export async function setPersona(code: string, name: string, id: string | null): Promise<void> {
   const { run, m } = agentManager(code, name)
   const p = id === null ? null : personalities().find((x) => x.id === id)
-  if (p === undefined) throw new Error("that personality isn't on this computer")
+  if (p === undefined) throw new Error(t("live.manage.personality.missing"))
   const persona = p ? personaOf(p) : null
   const wire = wireScopes(persona ? personaScopes(persona) : [...SCOPES])
   const seq = await event(run, persona ? `made ${m.name} ${persona.name}` : `took ${m.name}'s personality away`, {
@@ -177,7 +178,7 @@ export async function setGithubWrite(code: string, on: boolean): Promise<void> {
 
 export async function setLanding(code: string, typed: string | null): Promise<void> {
   const then = typed?.trim() || null
-  if (then !== null && !isLanding(then)) throw new Error("tasks land on merge, release:tag, release:npm:PKG@RANGE, run or none")
+  if (then !== null && !isLanding(then)) throw new Error(t("live.manage.bad.landing"))
   await event(setup(code), then && then !== "none" ? `tasks land on: ${then}` : "tasks finish on approval", { op: "landing.set", then })
 }
 
@@ -187,7 +188,7 @@ export async function setPeopleMerge(code: string, on: boolean): Promise<void> {
 
 export async function setBranchPrefix(code: string, typed: string | null): Promise<void> {
   const prefix = typed?.trim() || null
-  if (prefix && !BRANCH_PREFIX_RE.test(prefix)) throw new Error("a branch prefix is up to 32 letters, digits, dots, dashes, underscores or slashes")
+  if (prefix && !BRANCH_PREFIX_RE.test(prefix)) throw new Error(t("live.manage.bad.branch.prefix"))
   await event(setup(code), prefix ? `branch prefix: ${prefix}` : "cleared the branch prefix", { op: "branch.prefix.set", prefix })
 }
 
@@ -215,7 +216,7 @@ export const removeRepo = (code: string, repo: string): Promise<void> =>
 
 async function roomFolded(run: () => Run | null, room: { id: string; name: string }): Promise<void> {
   for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (run()?.state.rooms.get(room.id)?.name === room.name) return
-  throw new Error(`#${room.name} was sent but hasn't come back from the relay yet: look again in a moment`)
+  throw new Error(t("live.manage.room.not.back", { room: room.name }))
 }
 
 const picks = (run: Run, names: readonly string[]) =>
@@ -227,7 +228,7 @@ const picks = (run: Run, names: readonly string[]) =>
 const open = (rooms: Iterable<{ id: string; name: string; members?: unknown }>) => [...rooms].filter((r) => !r.members)
 
 const updateFirst = (err: unknown): never => {
-  throw new Error(/no such call|not a call|unknown call|makeRoom|changeRoom|leaveRoom/i.test(say(err)) ? "update Channels to make members-only rooms" : say(err))
+  throw new Error(/no such call|not a call|unknown call|makeRoom|changeRoom|leaveRoom/i.test(say(err)) ? t("live.manage.update.for.rooms") : say(err))
 }
 
 export async function leaveRoom(code: string, id: string): Promise<void> {
@@ -254,7 +255,7 @@ export async function addRoom(code: string, typed: string, members?: string[]): 
 
 export async function renameRoom(code: string, id: string, typed: string): Promise<void> {
   const run = setup(code)
-  if (!run.state.rooms.has(id)) throw new Error("that room isn't in this channel")
+  if (!run.state.rooms.has(id)) throw new Error(t("live.manage.room.missing"))
   const problem = roomProblem(run.state.rooms.values(), typed, id)
   if (problem) throw new Error(problem)
   const room = { id, name: cleanRoomName(typed) }
@@ -269,25 +270,25 @@ export async function renameRoom(code: string, id: string, typed: string): Promi
 
 export async function setRoomMembers(code: string, id: string, members: string[]): Promise<void> {
   const run = setup(code)
-  if (!run.state.rooms.get(id)?.members) throw new Error("that isn't a members-only room you're in")
+  if (!run.state.rooms.get(id)?.members) throw new Error(t("live.manage.not.members.room"))
   await run.ch.changeRoom(id, { members: picks(run, members) }).catch(updateFirst)
 }
 
 export async function answerJoin(code: string, id: string, yes: boolean, choice?: JoinChoice): Promise<void> {
   const run = owner(code)
   const r = run.requests.find((x) => x.id === id)
-  if (!r) throw new Error("that request is gone")
+  if (!r) throw new Error(t("live.run.request.gone"))
   if (!yes) {
     await run.ch.deny(r.id)
     await run.refreshRequests()
-    return announce(`Turned ${r.display || r.name} away`)
+    return announce(t("live.manage.turned.away", { name: r.display || r.name }))
   }
   if (r.check === "unchecked") {
     await run.ch.checkRequest(r)
     await run.refreshRequests()
-    return announce(`Asked ${r.display || r.name} for its code: compare it, then let it in`)
+    return announce(t("live.manage.asked.code", { name: r.display || r.name }))
   }
-  if (r.check !== "ready" || !r.code) return announce(`Waiting for ${r.display || r.name}'s code`)
+  if (r.check !== "ready" || !r.code) return announce(t("live.manage.waiting.code", { name: r.display || r.name }))
   announce(await letIn(run, r, choice ?? {}))
   if (choice?.color) await event(run, `made ${choice.as?.trim() || r.name} ${choice.color}`, { op: "color.set", member: choice.as?.trim() || r.name, color: choice.color })
 }
@@ -296,7 +297,7 @@ export const exportHistory: Actions["exportHistory"] = async (code, kind) => {
   try {
     const run = need(code)
     const b = bridge()
-    if (b && !("saveFile" in b)) return announce("Saving the history needs the next Channels update")
+    if (b && !("saveFile" in b)) return announce(t("live.manage.save.needs.update"))
     const [{ checkedState, exportNote, logExport, logFileName, transcript }, history] = await Promise.all([import("@kiwi/app/log-export.ts"), run.ch.history(0)])
     const log = logExport(history)
     const state = await checkedState(history, run.foldFrom, () => run.ch.snapshot().catch(() => null), run.state)
@@ -306,7 +307,7 @@ export const exportHistory: Actions["exportHistory"] = async (code, kind) => {
     const name = logFileName(title, at, kind)
     if (b) {
       const saved = await b.saveFile(name, text)
-      announce(`Saved ${saved} to Downloads`)
+      announce(t("live.manage.saved.downloads", { file: saved }))
     } else {
       const url = URL.createObjectURL(new Blob([text], { type: kind === "log" ? "application/jsonl" : "text/markdown" }))
       const a = document.createElement("a")
@@ -318,26 +319,26 @@ export const exportHistory: Actions["exportHistory"] = async (code, kind) => {
     const note = exportNote(log)
     if (!note.complete) announce(note.text)
   } catch (err) {
-    announce(`Not saved: ${err instanceof Error ? err.message : String(err)}`, "error")
+    announce(t("live.manage.not.saved", { why: err instanceof Error ? err.message : String(err) }), "error")
   }
 }
 
 export const forgetComputer: Actions["forgetComputer"] = (id) =>
-  attempt("Couldn't forget it", async () => {
+  attempt(t("live.manage.forget.failed"), async () => {
     if (id.startsWith("phone:")) {
       const b = bridge()
-      if (!b?.forgetPhone) throw new Error("forgetting a phone here needs the next Channels update; until then, unlink it on the phone")
+      if (!b?.forgetPhone) throw new Error(t("live.manage.forget.phone.needs.update"))
       await b.forgetPhone(Number(id.slice("phone:".length)))
-      return announce("Forgot it. Unlink it on the phone too")
+      return announce(t("live.manage.forgot.phone"))
     }
     const removed = await removeComputer(id)
-    announce(removed.length ? `Forgot it and removed ${removed.join(", ")}` : "Forgot it")
+    announce(removed.length ? t("live.manage.forgot.removed", { names: removed.join(", ") }) : t("live.manage.forgot"))
   })
 
 export const joinCommand: Actions["joinCommand"] = async (code, as) => {
-  if (!loadMember(code)) throw new Error("you're not in that channel")
+  if (!loadMember(code)) throw new Error(t("live.run.not.in.channel"))
   const picked = as.persona ? personalities().find((p) => p.id === as.persona) : undefined
-  if (as.persona && !picked) throw new Error("that personality isn't on this computer")
+  if (as.persona && !picked) throw new Error(t("live.manage.personality.missing"))
   const pin = picked ? await owner(code).ch.pinPersona(picked) : null
   return inviteLine(relayUrl(), code, { ...(as.nick ? { nick: as.nick } : {}), persona: pin })
 }

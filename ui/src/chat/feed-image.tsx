@@ -1,5 +1,6 @@
 import { Suspense } from "react"
 
+import { t } from "~/i18n/i18n"
 import { later } from "~/kit/later"
 import type { Image } from "~/model"
 
@@ -11,7 +12,7 @@ export function ShownImage({ image, open }: { image: Image; open: (url: string, 
     <Suspense
       fallback={
         <span className="msg-image-spot" title={image.alt} role="status">
-          Loading image…
+          {t("chat.feed.image.loading")}
         </span>
       }
     >

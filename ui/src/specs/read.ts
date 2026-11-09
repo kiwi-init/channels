@@ -1,5 +1,8 @@
+import "~/i18n/en/specs"
 import { doneWhen, type DoneWhen } from "@kiwi/core/state.ts"
 
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 import type { Channel, Message, Person, Spec, Task } from "~/model"
 import { memberOf } from "~/model"
 import { nickname } from "~/names"
@@ -7,7 +10,10 @@ import { wordsPlain, wordsRaw } from "~/words"
 
 type Tone = "tone-quiet" | "tone-doing" | "tone-review" | "tone-decide" | "tone-live" | "tone-alert"
 
-const ordinal = (n: number): string => (n === 1 ? "next in line" : `${n}${n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th"} in line`)
+const ordinal = (n: number): string =>
+  n === 1
+    ? t("specs.read.next.in.line")
+    : t(n % 10 === 2 && n % 100 !== 12 ? "specs.read.nd.in.line" : n % 10 === 3 && n % 100 !== 13 ? "specs.read.rd.in.line" : "specs.read.th.in.line", { place: n })
 
 export function boxesOf(spec: Pick<Spec, "text">): DoneWhen[] {
   return doneWhen(wordsRaw(spec.text))
@@ -39,24 +45,40 @@ export function stageLine(channel: Channel, spec: Spec): StageLine {
   const done = tasks.filter((t) => t.status === "done" && !t.cancelled).length
   switch (spec.stage) {
     case "draft":
-      return { word: "draft", tone: "tone-quiet", line: spec.canJudge ? "waits for your approval" : `waits for ${asker} to approve it` }
+      return { word: t("specs.read.word.draft"), tone: "tone-quiet", line: spec.canJudge ? t("specs.read.waits.your.approval") : t("specs.read.waits.approval", { who: asker }) }
     case "queued": {
-      if (spec.changed) return { word: "changed", tone: "tone-decide", line: `changed since ${nickname(channel, spec.approved?.by ?? spec.by)} approved it` }
-      if (spec.planner) return { word: "starting", tone: "tone-doing", line: `${nickname(channel, spec.planner)} is planning it` }
+      if (spec.changed) return { word: t("specs.read.word.changed"), tone: "tone-decide", line: t("specs.read.changed.since", { who: nickname(channel, spec.approved?.by ?? spec.by) }) }
+      if (spec.planner) return { word: t("specs.read.word.starting"), tone: "tone-doing", line: t("specs.read.planning", { who: nickname(channel, spec.planner) }) }
       const free = freeCount(channel)
       const place = spec.queue ?? 1
-      return { word: "approved", tone: "tone-quiet", line: `starts when an agent is free · ${ordinal(place)}${free ? ` · ${free} free` : " · none free yet"}` }
+      return {
+        word: t("specs.read.word.approved"),
+        tone: "tone-quiet",
+        line: [t("specs.read.starts.when.free"), ordinal(place), free ? t("specs.read.free", { count: free }) : t("specs.read.none.free")].join(" · "),
+      }
     }
     case "working": {
       const who = workersOf(channel, spec).map((n) => nickname(channel, n))
-      return { word: "working", tone: "tone-doing", line: [who.length ? who.join(", ") : null, `${done} of ${tasks.filter((t) => !t.cancelled).length} tasks done`].filter(Boolean).join(" · ") }
+      return {
+        word: t("specs.read.word.working"),
+        tone: "tone-doing",
+        line: [who.length ? who.join(", ") : null, t("specs.read.tasks.done", { done, total: tasks.filter((task) => !task.cancelled).length })].filter(Boolean).join(" · "),
+      }
     }
     case "delivered":
-      return { word: "delivered", tone: "tone-decide", line: spec.canJudge ? "waits for your verdict" : `waits for ${asker}'s verdict` }
+      return { word: t("specs.read.word.delivered"), tone: "tone-decide", line: spec.canJudge ? t("specs.read.waits.your.verdict") : t("specs.read.waits.verdict", { who: asker }) }
     case "accepted":
-      return { word: "accepted", tone: "tone-live", line: spec.result?.auto ? "closed by itself" : `by ${nickname(channel, spec.result?.by ?? spec.by)}` }
+      return {
+        word: t("specs.read.word.accepted"),
+        tone: "tone-live",
+        line: spec.result?.auto ? t("specs.read.closed.by.itself") : t("specs.read.by", { who: nickname(channel, spec.result?.by ?? spec.by) }),
+      }
     case "dropped":
-      return { word: "dropped", tone: "tone-quiet", line: spec.result?.note ? wordsPlain(spec.result.note, channel.nicknames) : `by ${nickname(channel, spec.result?.by ?? spec.by)}` }
+      return {
+        word: t("specs.read.word.dropped"),
+        tone: "tone-quiet",
+        line: spec.result?.note ? wordsPlain(spec.result.note, channel.nicknames) : t("specs.read.by", { who: nickname(channel, spec.result?.by ?? spec.by) }),
+      }
   }
 }
 
@@ -149,14 +171,16 @@ const STUCK_MS = 45 * 60_000
 
 export function alarmsOf(channel: Channel, spec: Spec, now = Date.now()): Alarm[] {
   const out: Alarm[] = []
-  if (spec.changed) out.push({ kind: "changed", text: `The spec changed since ${nickname(channel, spec.approved?.by ?? spec.by)} approved it: new work waits for a person to approve the change.` })
+  if (spec.changed) out.push({ kind: "changed", text: t("specs.read.alarm.changed", { who: nickname(channel, spec.approved?.by ?? spec.by) }) })
   if (spec.result) return out
-  for (const t of tasksOf(channel, spec)) {
-    if (!live(t)) continue
-    const rejected = t.rounds.filter((r) => r.result === "rejected").length
-    if (rejected >= 2) out.push({ kind: "circling", task: t.id, text: `T${t.id} was sent back ${rejected} times: the agents may be going in circles.` })
-    if (t.pr?.checks === "fail" || (t.pr?.ticks?.failed.length ?? 0) > 0) out.push({ kind: "red", task: t.id, text: `T${t.id}'s checks failed on PR #${t.pr?.number}.` })
-    if (t.status === "doing" && now - t.updatedAt > STUCK_MS) out.push({ kind: "stuck", task: t.id, text: `T${t.id} hasn't moved for ${Math.round((now - t.updatedAt) / 60_000)} minutes.` })
+  for (const task of tasksOf(channel, spec)) {
+    if (!live(task)) continue
+    const id = String(task.id)
+    const rejected = task.rounds.filter((r) => r.result === "rejected").length
+    if (rejected >= 2) out.push({ kind: "circling", task: task.id, text: t("specs.read.alarm.circling", { task: id, times: rejected }) })
+    if (task.pr?.checks === "fail" || (task.pr?.ticks?.failed.length ?? 0) > 0) out.push({ kind: "red", task: task.id, text: t("specs.read.alarm.red", { task: id, pr: String(task.pr?.number) }) })
+    if (task.status === "doing" && now - task.updatedAt > STUCK_MS)
+      out.push({ kind: "stuck", task: task.id, text: t("specs.read.alarm.stuck", { task: id, minutes: Math.round((now - task.updatedAt) / 60_000) }) })
   }
   return out
 }
@@ -169,53 +193,60 @@ export interface StoryLine {
   task?: number
 }
 
-const MOVE_WORDS: Partial<Record<Task["history"][number]["what"], string>> = {
-  created: "filed",
-  took: "took",
-  started: "started",
-  review: "sent for review",
-  approved: "approved",
-  rejected: "sent back",
-  done: "finished",
-  cancelled: "cancelled",
-  assigned: "handed on",
-  proof: "added proof to",
-  checkpoint: "saved where it stands on",
+const MOVE_WORDS: Partial<Record<Task["history"][number]["what"], Key>> = {
+  created: "specs.read.move.created",
+  took: "specs.read.move.took",
+  started: "specs.read.move.started",
+  review: "specs.read.move.review",
+  approved: "specs.read.move.approved",
+  rejected: "specs.read.move.rejected",
+  done: "specs.read.move.done",
+  cancelled: "specs.read.move.cancelled",
+  assigned: "specs.read.move.assigned",
+  proof: "specs.read.move.proof",
+  checkpoint: "specs.read.move.checkpoint",
 }
 
 const MOVE_TONES: Partial<Record<Task["history"][number]["what"], Tone>> = { approved: "tone-live", done: "tone-live", rejected: "tone-alert", review: "tone-review", cancelled: "tone-quiet" }
 
 export function storyOf(channel: Channel, spec: Spec): StoryLine[] {
-  const out: StoryLine[] = [{ at: spec.at, who: spec.by, text: `asked: “${wordsPlain(spec.words, channel.nicknames)}”` }]
+  const out: StoryLine[] = [{ at: spec.at, who: spec.by, text: t("specs.read.story.asked", { words: wordsPlain(spec.words, channel.nicknames) }) }]
   if (spec.edits > 0)
     out.push({
       at: spec.edited.at,
       who: spec.edited.by,
-      text: spec.edits > 1 ? `edited the spec (${spec.edits} edits by ${spec.editors.map((n) => nickname(channel, n)).join(", ")})` : "wrote the spec",
+      text: spec.edits > 1 ? t("specs.read.story.edited", { count: spec.edits, who: spec.editors.map((n) => nickname(channel, n)).join(", ") }) : t("specs.read.story.wrote"),
     })
-  if (spec.approved) out.push({ at: spec.approved.at, who: spec.approved.by, text: "approved the spec", tone: "tone-live" })
-  for (const b of spec.backs) out.push({ at: b.at, who: b.by, text: `sent it back: “${wordsPlain(b.note, channel.nicknames)}”`, tone: "tone-alert" })
-  for (const t of tasksOf(channel, spec)) {
-    for (const h of t.history) {
+  if (spec.approved) out.push({ at: spec.approved.at, who: spec.approved.by, text: t("specs.read.story.approved"), tone: "tone-live" })
+  for (const b of spec.backs) out.push({ at: b.at, who: b.by, text: t("specs.read.story.sent.back", { note: wordsPlain(b.note, channel.nicknames) }), tone: "tone-alert" })
+  for (const task of tasksOf(channel, spec)) {
+    const id = String(task.id)
+    for (const h of task.history) {
       const verb = MOVE_WORDS[h.what]
       if (!verb) continue
       out.push({
         at: h.at,
         who: h.by,
-        text: `${verb} T${t.id}${h.what === "created" ? ` “${wordsPlain(t.title, channel.nicknames)}”` : ""}${h.what === "assigned" && h.to ? ` to ${nickname(channel, h.to)}` : ""}`,
-        task: t.id,
+        text:
+          h.what === "created"
+            ? t(verb, { task: id, title: wordsPlain(task.title, channel.nicknames) })
+            : h.what === "assigned" && h.to
+              ? t("specs.read.move.assigned.to", { task: id, who: nickname(channel, h.to) })
+              : t(verb, { task: id }),
+        task: task.id,
         ...(MOVE_TONES[h.what] ? { tone: MOVE_TONES[h.what] } : {}),
       })
     }
-    const pr = t.pr
-    if (pr?.at !== undefined) out.push({ at: pr.at, who: pr.by ?? t.owner ?? t.createdBy, text: `opened PR #${pr.number}`, task: t.id })
-    if (pr?.mergedAt !== undefined) out.push({ at: pr.mergedAt, who: pr.by ?? t.owner ?? t.createdBy, text: `merged PR #${pr.number}`, task: t.id, tone: "tone-live" })
+    const pr = task.pr
+    if (pr?.at !== undefined) out.push({ at: pr.at, who: pr.by ?? task.owner ?? task.createdBy, text: t("specs.read.story.opened.pr", { pr: String(pr.number) }), task: task.id })
+    if (pr?.mergedAt !== undefined)
+      out.push({ at: pr.mergedAt, who: pr.by ?? task.owner ?? task.createdBy, text: t("specs.read.story.merged.pr", { pr: String(pr.number) }), task: task.id, tone: "tone-live" })
   }
   if (spec.result)
     out.push({
       at: spec.result.at,
       who: spec.result.by,
-      text: spec.result.verdict === "accepted" ? "accepted the result" : "dropped it",
+      text: spec.result.verdict === "accepted" ? t("specs.read.story.accepted") : t("specs.read.story.dropped"),
       tone: spec.result.verdict === "accepted" ? "tone-live" : "tone-quiet",
     })
   return out.sort((a, b) => a.at - b.at)

@@ -5,6 +5,7 @@ import { useUnsealedKeys } from "@kiwi/secrets/keys-at-rest.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { bridge, useSecrets, type ComputerView, type DeviceNewsView, type MovedView, type PhoneView } from "@kiwi/secrets/secrets.ts"
 import { useUpdate } from "@kiwi/app/update.ts"
+import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { deviceNews } from "~/live/devices"
 import { store, type Listener } from "~/live/value"
@@ -23,7 +24,7 @@ export function listenForCodes(): void {
   codeListener = b.onGithubCode((c) => {
     githubCode.set(c)
     void navigator.clipboard?.writeText(c.code).catch(() => {})
-    announce(`Type ${c.code} on GitHub (copied)`)
+    announce(t("live.account.github.code", { code: c.code }))
     void b.openExternal(c.url).catch(() => {})
   })
 }
@@ -52,7 +53,7 @@ export const enrollAsk = (() => {
     timer = null
     const b = bridge()
     if (!b?.enrollPoll) {
-      if (b) enrollTrouble.set("this Channels app can't approve devices: update it")
+      if (b) enrollTrouble.set(t("live.account.cant.approve"))
       return
     }
     try {

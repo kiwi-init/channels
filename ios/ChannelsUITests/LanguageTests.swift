@@ -45,6 +45,22 @@ final class LanguageTests: XCTestCase {
     }
 
     @MainActor
+    func testScreensInJapaneseAndPortuguese() throws {
+        for (language, locale) in [("ja", "ja_JP"), ("pt-BR", "pt_BR")] {
+            for screen in ["chats", "channel", "needs", "tasks"] {
+                let app = XCUIApplication()
+                app.launchArguments = ["-demo", "YES", "-shot", screen, "-language", "system", "-AppleLanguages", "(\(language))", "-AppleLocale", locale]
+                app.launch()
+                XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15), "the app opens in \(language)")
+                _ = app.staticTexts.firstMatch.waitForExistence(timeout: 10)
+                Thread.sleep(forTimeInterval: 1)
+                add(shot(app, "\(language) \(screen)"))
+                app.terminate()
+            }
+        }
+    }
+
+    @MainActor
     private func languageRow(_ app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: "language").firstMatch
     }

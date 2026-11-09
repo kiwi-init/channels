@@ -1,15 +1,17 @@
+import "~/i18n/en/shell-later"
 import "~/styles/start.css"
 
 import type { Enrolling } from "~/model"
 import { useApp } from "~/nav"
+import { t } from "~/i18n/i18n"
 
 function Asking() {
   return (
     <>
-      <h1 className="start-word">Open Channels on your other computer</h1>
+      <h1 className="start-word">{t("start.enroll.open.other")}</h1>
       <p className="start-asking" aria-live="polite">
         <span className="start-pip" aria-hidden="true" />
-        Approve this computer there.
+        {t("start.enroll.approve.there")}
       </p>
     </>
   )
@@ -18,7 +20,7 @@ function Asking() {
 function Digits({ digits }: { digits: string }) {
   return (
     <>
-      <h1 className="start-word">Type these on your other computer</h1>
+      <h1 className="start-word">{t("start.enroll.type.these")}</h1>
       <p className="start-digits" aria-live="polite" aria-label={digits.split("").join(" ")}>
         {digits.slice(0, 3)}
         <span aria-hidden="true"> </span>
@@ -32,17 +34,17 @@ function Check({ person }: { person: { name: string; fingerprint: string } }) {
   const { app } = useApp()
   return (
     <>
-      <h1 className="start-word">Is this your key, {person.name}?</h1>
+      <h1 className="start-word">{t("start.enroll.your.key", { name: person.name })}</h1>
       <p className="start-key" aria-live="polite">
         {person.fingerprint}
       </p>
-      <p className="start-hint">Compare it with your other computer, in Settings › Account. A different key means someone else answered: don't join.</p>
+      <p className="start-hint">{t("start.enroll.compare")}</p>
       <div className="start-row start-check">
         <button type="button" className="btn is-primary" autoFocus onClick={() => app.actions.enrollKeep()}>
-          It matches, join
+          {t("start.enroll.matches")}
         </button>
         <button type="button" className="btn is-quiet" onClick={() => app.actions.enrollCancel()}>
-          It doesn't match
+          {t("start.enroll.no.match")}
         </button>
       </div>
     </>
@@ -62,7 +64,7 @@ export default function Enroll({ enrolling }: { enrolling: Extract<Enrolling, { 
       {enrolling.stage !== "check" && (
         <div className="start-others">
           <button type="button" className="btn is-quiet" onClick={() => app.actions.enrollCancel()}>
-            Cancel
+            {t("start.enroll.cancel")}
           </button>
         </div>
       )}

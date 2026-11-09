@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import type { BlockMedia } from "@kiwi/core/doc/blocks.ts"
 import type { Node } from "prosemirror-model"
@@ -5,6 +6,7 @@ import type { NodeView } from "prosemirror-view"
 
 import { bytesOf, sizeText } from "~/chat/doc/bytes"
 import { fileOf, imageOf } from "~/chat/doc/schema"
+import { t } from "~/i18n/i18n"
 import type { DocFile, DocImage, Upload } from "~/model"
 
 export interface DocMedia {
@@ -54,7 +56,7 @@ export function imageView(media: () => DocMedia | null, open: (url: string, alt:
         .then(
           async (data) => {
             if (!live) return
-            if (data === null) return lost(`${img.name} is no longer available`)
+            if (data === null) return lost(t("chat.doc.media.gone", { name: img.name }))
             const url = `data:${img.mime};base64,${data}`
             const { DOC_BOX, keyOf, scaleFor, thumbs } = await import("~/chat/thumbs")
             if (!live) return
@@ -109,7 +111,7 @@ export function fileView(media: () => DocMedia | null): (node: Node) => NodeView
     size.textContent = sizeText(Number(node.attrs.size) || 0)
     button.append(label, size)
     button.disabled = !f
-    button.setAttribute("aria-label", `Download ${name}`)
+    button.setAttribute("aria-label", t("chat.doc.media.download", { name }))
     button.addEventListener("click", () => {
       const m = media()
       if (!m || !f) return
@@ -118,7 +120,7 @@ export function fileView(media: () => DocMedia | null): (node: Node) => NodeView
         .file(f)
         .then((data) => {
           if (data === null) {
-            size.textContent = "no longer available"
+            size.textContent = t("chat.doc.media.no.longer")
             return
           }
           const url = URL.createObjectURL(new Blob([bytesOf(data)], { type: f.mime || "application/octet-stream" }))
@@ -129,7 +131,7 @@ export function fileView(media: () => DocMedia | null): (node: Node) => NodeView
           window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
         })
         .catch(() => {
-          size.textContent = "didn't download"
+          size.textContent = t("chat.doc.media.no.download")
         })
         .finally(() => {
           button.disabled = false

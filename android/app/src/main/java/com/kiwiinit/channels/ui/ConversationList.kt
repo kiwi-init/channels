@@ -78,6 +78,10 @@ import com.kiwiinit.channels.model.spotTitle
 import com.kiwiinit.channels.theme.Tone
 import kotlin.math.abs
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.kiwiinit.channels.R
+import com.kiwiinit.channels.model.Words
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,7 +99,7 @@ fun ConversationList(model: AppModel, open: (Spot) -> Unit, tasks: (String) -> U
     }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-        BigTitle("Chats") { MarkAllRead(model) }
+        BigTitle(stringResource(R.string.tab_chats)) { MarkAllRead(model) }
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshing = true }, modifier = Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)) {
                 model.unsaved?.let { why ->
@@ -122,14 +126,14 @@ private fun ChannelHeader(room: RoomView) {
     val tone = Tone.current
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 4.dp).semantics { heading() }, verticalAlignment = Alignment.CenterVertically) {
         Text(room.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = tone.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (room.working > 0) Text(" · ${room.working} working", style = MaterialTheme.typography.titleSmall, color = tone.doing)
-        if (room.connection == com.kiwiinit.channels.engine.Connection.Connecting) Text(" · connecting…", style = MaterialTheme.typography.titleSmall, color = tone.ink3)
+        if (room.working > 0) Text(" · " + pluralStringResource(R.plurals.n_working, room.working, room.working), style = MaterialTheme.typography.titleSmall, color = tone.doing)
+        if (room.connection == com.kiwiinit.channels.engine.Connection.Connecting) Text(" · " + stringResource(R.string.connecting_lower), style = MaterialTheme.typography.titleSmall, color = tone.ink3)
     }
 }
 
 @Composable
 private fun TasksRow(room: RoomView, open: () -> Unit) {
-    PlainRow("Tasks", TaskCounts.of(room).line, open) { Disc(Icons.Filled.Checklist, 52.dp) }
+    PlainRow(stringResource(R.string.tasks), TaskCounts.of(room).line(words()), open) { Disc(Icons.Filled.Checklist, 52.dp) }
 }
 
 @Composable
@@ -151,19 +155,19 @@ private fun PlainRow(title: String, line: String, open: () -> Unit, icon: @Compo
 @Composable
 private fun MarkAllRead(model: AppModel) {
     if (model.rows(Filter.Unread).isEmpty()) return
-    IconButton(onClick = { model.markAllRead() }) { Icon(Icons.Filled.MarkEmailRead, contentDescription = "Mark all as read", tint = Tone.current.ink2) }
+    IconButton(onClick = { model.markAllRead() }) { Icon(Icons.Filled.MarkEmailRead, contentDescription = stringResource(R.string.mark_all_read), tint = Tone.current.ink2) }
 }
 
 @Composable
 private fun Empty(model: AppModel) {
     val waiting = model.waiting
     Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(if (waiting > 0) "Waiting to be let in" else "No conversations", style = MaterialTheme.typography.titleMedium)
+        Text(if (waiting > 0) stringResource(R.string.waiting_let_in) else stringResource(R.string.no_conversations), style = MaterialTheme.typography.titleMedium)
         Text(
             when {
-                waiting > 0 -> "Asked to join ${if (waiting == 1) "1 channel" else "$waiting channels"} as you. Channels you own let this phone in while Channels is open on your computer."
-                model.enrolled -> "This phone joins the channels your computer had when it approved it."
-                else -> "Link your Mac again to bring your channels."
+                waiting > 0 -> pluralStringResource(R.plurals.n_asked_to_join, waiting, waiting)
+                model.enrolled -> stringResource(R.string.enrolled_empty)
+                else -> stringResource(R.string.linked_empty)
             },
             style = MaterialTheme.typography.bodyMedium,
             color = Tone.current.ink3,
@@ -172,7 +176,7 @@ private fun Empty(model: AppModel) {
         )
         if (!model.enrolled) {
             Text(
-                "Link again",
+                stringResource(R.string.link_again),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(8.dp)).clickable { model.relinkAsked = true }.padding(8.dp),
@@ -252,7 +256,7 @@ private fun RowMenu(model: AppModel, row: ConversationRow, close: () -> Unit, op
     val ask = row.asks.firstOrNull { it.choices.isNotEmpty() }
     if (ask != null) {
         Text(
-            "Answer ${row.room.display(ask.from)}",
+            stringResource(R.string.answer_who, row.room.display(ask.from)),
             style = MaterialTheme.typography.labelMedium,
             color = Tone.current.decide,
             modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp),
@@ -272,7 +276,7 @@ private fun RowMenu(model: AppModel, row: ConversationRow, close: () -> Unit, op
     val other = row.room.other(row.spot)
     if (other != null) {
         DropdownMenuItem(
-            text = { Text(if (other.general) "Open # general" else "Message ${row.room.spotTitle(other.place)}") },
+            text = { Text(if (other.general) stringResource(R.string.open_general) else stringResource(R.string.message_who, row.room.spotTitle(other.place))) },
             leadingIcon = { Icon(if (other.general) Icons.Filled.Tag else Icons.AutoMirrored.Outlined.Chat, contentDescription = null) },
             onClick = {
                 close()
@@ -281,7 +285,7 @@ private fun RowMenu(model: AppModel, row: ConversationRow, close: () -> Unit, op
         )
     }
     DropdownMenuItem(
-        text = { Text(if (row.unread) "Mark as read" else "Mark as unread") },
+        text = { Text(if (row.unread) stringResource(R.string.mark_read) else stringResource(R.string.mark_unread)) },
         leadingIcon = { Icon(if (row.unread) Icons.Filled.MarkEmailRead else Icons.Filled.MarkEmailUnread, contentDescription = null) },
         onClick = {
             close()
@@ -315,7 +319,7 @@ private fun ConversationRowView(row: ConversationRow) {
                 )
                 row.last?.let {
                     Text(
-                        When.list(it.millis),
+                        When.list(words(), it.millis),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = strong,
                         color = if (row.unread) MaterialTheme.colorScheme.onSurface else tone.ink3,
@@ -342,19 +346,23 @@ private fun ConversationRowView(row: ConversationRow) {
 @Composable
 private fun preview(row: ConversationRow): androidx.compose.ui.text.AnnotatedString {
     val tone = Tone.current
-    return buildAnnotatedString { words(row, tone) }
+    val w = words()
+    return buildAnnotatedString { spans(row, tone, w) }
 }
 
-private fun androidx.compose.ui.text.AnnotatedString.Builder.words(row: ConversationRow, tone: com.kiwiinit.channels.theme.Tones) {
+private fun androidx.compose.ui.text.AnnotatedString.Builder.spans(row: ConversationRow, tone: com.kiwiinit.channels.theme.Tones, w: Words) {
     val need = row.need
-    val line = row.line
+    val line = row.line(w)
+    val drafted = w(R.string.draft_line, "\u0000").substringBefore("\u0000")
     if (need != null) {
-        withStyle(SpanStyle(color = tone.decide, fontWeight = FontWeight.SemiBold)) { append("Needs you: ") }
+        val (before, after) = w(R.string.needs_you_line, "\u0000").split("\u0000", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+        withStyle(SpanStyle(color = tone.decide, fontWeight = FontWeight.SemiBold)) { append(before) }
         append(need)
+        append(after)
         if (row.needs > 1) append(" · ${row.needs}")
-    } else if (row.draft != null && line.startsWith("Draft: ")) {
-        withStyle(SpanStyle(color = tone.alert)) { append("Draft: ") }
-        append(line.removePrefix("Draft: "))
+    } else if (row.draft != null && line.startsWith(drafted)) {
+        withStyle(SpanStyle(color = tone.alert)) { append(drafted) }
+        append(line.removePrefix(drafted))
     } else {
         append(line)
     }

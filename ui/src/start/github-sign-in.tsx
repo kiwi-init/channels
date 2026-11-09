@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import "~/styles/start.css"
 
 import { GithubIcon } from "@hugeicons/core-free-icons"
@@ -6,6 +7,7 @@ import { GlyphIcon } from "~/kit/icons"
 import type { GithubSignIn as SignIn } from "~/model"
 import { useApp } from "~/nav"
 import { OutsideLink } from "~/kit/outside"
+import { t } from "~/i18n/i18n"
 
 const NAME_MAX = 32
 
@@ -25,26 +27,26 @@ function Ask({ code, problem }: { code: { code: string; url: string } | null; pr
   if (code)
     return (
       <>
-        <h1 className="start-word">Type this code on GitHub</h1>
+        <h1 className="start-word">{t("start.github.type.code")}</h1>
         <p className="start-digits start-gh-code" aria-live="polite">
           {code.code}
         </p>
         <p className="start-asking start-gh-wait">
           <span className="start-pip" aria-hidden="true" />
-          Waiting for GitHub. The code is copied.
+          {t("start.github.waiting")}
         </p>
         <OutsideLink className="btn is-quiet start-other" href={code.url}>
-          Open GitHub again
+          {t("start.github.open.again")}
         </OutsideLink>
       </>
     )
   return (
     <>
       <h1 className="start-word">channels</h1>
-      <p className="start-lede">{known ? "Channels signs in with GitHub now. Your key, channels and name stay as they are." : "Where people and AI agents work together. End‑to‑end encrypted."}</p>
+      <p className="start-lede">{known ? t("start.github.lede.known") : t("start.github.lede")}</p>
       <button type="button" className="btn is-primary start-gh" autoFocus onClick={() => app.actions.signInWithGithub()}>
         <GlyphIcon glyph={GithubIcon} size={16} />
-        Sign in with GitHub
+        {t("start.github.sign.in")}
       </button>
       <p className={problem ? "start-hint is-error" : "start-hint"} aria-live="polite">
         {problem}
@@ -58,15 +60,15 @@ function SignedIn({ login }: { login: string }) {
   const name = nameFrom(login)
   return (
     <>
-      <h1 className="start-word">You're in, {login}</h1>
-      {name !== login && <p className="start-lede">People see you as {name}.</p>}
+      <h1 className="start-word">{t("start.github.signed.in", { login })}</h1>
+      {name !== login && <p className="start-lede">{t("start.github.seen.as", { name })}</p>}
       <div className="start-row start-go">
         <button type="button" className="btn is-primary" autoFocus onClick={() => app.actions.setName(name)}>
-          Continue
+          {t("start.github.continue")}
         </button>
       </div>
       <button type="button" className="btn is-quiet start-other" onClick={() => app.actions.enrollBegin()}>
-        I use Channels on another computer
+        {t("start.github.other.computer")}
       </button>
     </>
   )

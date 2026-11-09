@@ -4,6 +4,7 @@ import { decodeJoinCode } from "@kiwi/core/crypto.ts"
 import { checkJoin } from "@kiwi/channel/join.ts"
 import { type PendingJoin } from "@kiwi/channel/store.ts"
 import { isJoinBlip } from "@kiwi/app/join-blip.ts"
+import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { inviteOwner } from "~/live/invites"
 import { closeOpened, publish } from "~/live/store"
@@ -13,11 +14,11 @@ const POLL_MS = 2000
 
 export function pendingTitle(code: string): string {
   const owner = inviteOwner(code)
-  if (owner) return `${owner}'s channel`
+  if (owner) return t("live.pending.title.owner", { owner })
   try {
-    return `Channel ${decodeJoinCode(code).roomId.slice(0, 4).toUpperCase()}`
+    return t("live.pending.title.code", { id: decodeJoinCode(code).roomId.slice(0, 4).toUpperCase() })
   } catch {
-    return "A channel"
+    return t("live.pending.title")
   }
 }
 
@@ -43,7 +44,7 @@ export const OpenPending = memo(function OpenPending({ pending }: { pending: Pen
       } catch (err) {
         if (stop) return
         if (isJoinBlip(err)) setState("unreachable")
-        else announce(`Couldn't check the request: ${err instanceof Error ? err.message : String(err)}`, "error")
+        else announce(t("live.pending.check.failed", { why: err instanceof Error ? err.message : String(err) }), "error")
       }
       timer = setTimeout(() => void tick(), POLL_MS)
     }

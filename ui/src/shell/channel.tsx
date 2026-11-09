@@ -22,6 +22,7 @@ import { useSideways } from "~/kit/sideways"
 import { openTasks } from "~/tasks/open"
 import { headerLine } from "~/now"
 import { between, nickname } from "~/names"
+import { t } from "~/i18n/i18n"
 
 const TallPage = lazy(() => import("~/shell/tall"))
 const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
@@ -148,8 +149,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         <button
           type="button"
           className="icon-btn top-drawer"
-          aria-label={`Rooms and people${news ? ", new messages" : ""} (${SIDEBAR_KEYS})`}
-          title={`Show or hide rooms and people (${SIDEBAR_KEYS})`}
+          aria-label={t(news ? "shell.channel.drawer.label.news" : "shell.channel.drawer.label", { keys: SIDEBAR_KEYS })}
+          title={t("shell.channel.drawer.title", { keys: SIDEBAR_KEYS })}
           aria-pressed={drawer}
           onClick={toggleSide}
         >
@@ -162,14 +163,14 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             className="top-chan"
             aria-pressed={nav.modal?.kind === "channel"}
             onClick={() => go({ to: "modal", modal: nav.modal?.kind === "channel" ? null : { kind: "channel" } })}
-            aria-label={`${channel.title}: channel settings`}
-            title="Channel settings"
+            aria-label={t("shell.channel.settings.label", { name: channel.title })}
+            title={t("shell.channel.settings")}
           >
             <span className="top-name">{channel.title}</span>
             <Icon name="down" size={14} />
           </button>
         </div>
-        <nav ref={tabsRef} className="tabs" aria-label="Views">
+        <nav ref={tabsRef} className="tabs" aria-label={t("shell.channel.views")}>
           <button type="button" aria-pressed={nav.tab === "chat" || paged} onClick={() => go({ to: "tab", tab: "chat" })}>
             {here}
           </button>
@@ -178,15 +179,15 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               type="button"
               aria-pressed={nav.tab === "specs" || nav.tab === "tasks"}
               onClick={() => go({ to: "spec", ask: null })}
-              title={specsNeed ? `${specsNeed} waiting on you` : `${specs.length} open specs, ${tasks} open tasks`}
+              title={specsNeed ? t("shell.channel.specs.need", { count: specsNeed }) : t("shell.channel.specs.open", { specs: specs.length, tasks })}
             >
-              Specs
-              {specsNeed > 0 && <span className="tab-red is-decide" role="img" aria-label="waiting on you" />}
+              {t("shell.channel.specs")}
+              {specsNeed > 0 && <span className="tab-red is-decide" role="img" aria-label={t("shell.channel.waiting.on.you")} />}
             </button>
           )}
           {!tall && (agents || nav.tab === "agents") && (
             <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} title={line.length ? line.join(" · ") : undefined} onClick={() => go({ to: "tab", tab: "agents" })}>
-              Agents
+              {t("shell.channel.agents")}
             </button>
           )}
           {(github || nav.tab === "github") && (
@@ -194,22 +195,22 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               type="button"
               aria-pressed={nav.tab === "github"}
               onClick={() => go({ to: "tab", tab: "github" })}
-              title={red ? "An open pull request's checks failed" : `${openPrs.length} open pull requests, ${openIssues} open issues`}
+              title={red ? t("shell.channel.github.red") : t("shell.channel.github.open", { prs: openPrs.length, issues: openIssues })}
             >
-              GitHub
-              {red && <span className="tab-red" role="img" aria-label="checks failed" />}
+              {t("shell.channel.github")}
+              {red && <span className="tab-red" role="img" aria-label={t("shell.channel.checks.failed")} />}
             </button>
           )}
           {(needs > 0 || nav.tab === "needs") && (
             <button type="button" className="is-needs" aria-pressed={nav.tab === "needs"} onClick={() => go({ to: "tab", tab: "needs" })}>
-              Needs you <Count n={needs} loud />
+              {t("shell.channel.needs.you")} <Count n={needs} loud />
             </button>
           )}
         </nav>
         <div className={cx("top-tools", searching && "is-searching")}>
           {channel.hold && nav.tab !== "chat" && (
             <span className="top-hold" title={channel.hold.note}>
-              paused
+              {t("shell.channel.paused")}
             </span>
           )}
           {searching && (
@@ -221,7 +222,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           )}
           <div className="top-group">
             <span className="top-updates" ref={setUpdatesSlot} />
-            <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
+            <IconButton icon="search" label={t("shell.channel.search")} onClick={() => setSearching(true)} />
           </div>
         </div>
       </header>
@@ -261,21 +262,21 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       {offline && (
         <p className="conn" role="status">
           <span className="dot is-doing" aria-hidden="true" />
-          {channel.connection === "connecting" ? "Connecting…" : "Reconnecting…"}
+          {channel.connection === "connecting" ? t("shell.channel.connecting") : t("shell.channel.reconnecting")}
         </p>
       )}
       {nav.panel && !paged && (
-        <aside className="panel" aria-label="Details">
+        <aside className="panel" aria-label={t("shell.channel.details")}>
           <div
             className="panel-grip"
             role="separator"
             aria-orientation="vertical"
-            aria-label="Resize the panel"
+            aria-label={t("shell.channel.resize")}
             aria-valuemin={panel.min}
             aria-valuemax={panel.max}
             aria-valuenow={panel.width}
             tabIndex={0}
-            title="Drag to resize · double-click to reset"
+            title={t("shell.channel.resize.title")}
             {...panel.grip}
           />
           <PanelView channel={channel} />

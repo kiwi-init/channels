@@ -11,8 +11,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import com.kiwiinit.channels.R
 
-class Lock(private val app: Context, linked: Boolean) {
+class Lock(private val app: Context, linked: Boolean, private val words: () -> Words) {
     var locked by mutableStateOf(linked)
         private set
     private var leftAt: Long? = null
@@ -60,7 +61,7 @@ class Lock(private val app: Context, linked: Boolean) {
         asking = true
         prompt.authenticate(
             BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Unlock your channels")
+                .setTitle(words()(R.string.unlock_channels))
                 .setAllowedAuthenticators(ALLOWED)
                 .build(),
         )

@@ -9,6 +9,7 @@ import { EditHere, useEditing } from "~/chat/editing"
 import { quotedExcerpt } from "~/chat/quote"
 import { preview, useReplying } from "~/chat/reply"
 import { Body } from "~/chat/body"
+import { t } from "~/i18n/i18n"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
@@ -30,7 +31,7 @@ const QuestionCard = lazy(() => import("~/chat/question-card"))
 const SpecCard = later(() => import("~/specs/card").then((m) => m.SpecCard))
 const BlockFilesView = later(() => import("~/chat/block-files").then((m) => m.BlockFilesView))
 
-const QUICK = ["👍", "🔥", "👀", "✅"]
+export const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
 
 function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
@@ -55,7 +56,7 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
       </div>
       {over && (
         <button type="button" className="msg-more" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {open ? "Show less" : "Show more"}
+          {open ? t("chat.message.show.less") : t("chat.message.show.more")}
         </button>
       )}
     </>
@@ -83,13 +84,57 @@ function Spot({ code, img }: { code: string; img: ImageSpot }) {
   if (img.state === "failed")
     return (
       <button type="button" className="msg-image-spot is-failed" title={img.alt} onClick={() => actions.loadImage(code, img.spot)}>
-        Couldn't load image. Retry
+        {t("chat.message.image.failed")}
       </button>
     )
   return (
     <span ref={at} className="msg-image-spot" title={img.alt} role="status">
-      {img.state === "gone" ? "Image no longer available" : "Loading image…"}
+      {img.state === "gone" ? t("chat.message.image.gone") : t("chat.message.image.loading")}
     </span>
+  )
+}
+
+export function Reacts({ channel, m }: { channel: Channel; m: Message }) {
+  const { actions } = useAct()
+  if (!m.reactions?.length) return null
+  return (
+    <div className="reacts">
+      {m.reactions.map((r) =>
+        isGifReaction(r.emoji) ? (
+          <Suspense key={r.emoji} fallback={null}>
+            <Gifs channel={channel} m={m} r={r} />
+          </Suspense>
+        ) : (
+          <button
+            key={r.emoji}
+            type="button"
+            className={cx("react", r.by.includes(channel.you) && "is-mine")}
+            title={r.by.map((b) => nickname(channel, b)).join(", ")}
+            aria-pressed={r.by.includes(channel.you)}
+            disabled={m.where.kind === "theirs"}
+            onClick={() => actions.react(channel.code, m.seq, r.emoji)}
+          >
+            {r.emoji} <span className="num">{r.by.length}</span>
+          </button>
+        )
+      )}
+    </div>
+  )
+}
+
+export function Unsent({ channel, m }: { channel: Channel; m: Message }) {
+  const { actions } = useAct()
+  if (m.failed === undefined) return null
+  return (
+    <p className="msg-failed" role="status" title={m.failed}>
+      {t("chat.message.not.sent")}
+      <button type="button" className="msg-failed-act" onClick={() => actions.retry(channel.code, m.seq)}>
+        {t("chat.message.retry")}
+      </button>
+      <button type="button" className="msg-failed-act" onClick={() => actions.discard(channel.code, m.seq)}>
+        {m.block !== undefined ? t("chat.message.back.to.draft") : t("chat.message.delete")}
+      </button>
+    </p>
   )
 }
 
@@ -101,16 +146,16 @@ function Quote({ quoted, who, names, excerpt, onClick }: { quoted: Message; who:
   const line = useMemo(() => withNames(wordsRaw(quoted.text), names, preview), [quoted.text, names])
   if (excerpt)
     return (
-      <button type="button" className="msg-quote is-excerpt" onClick={onClick} aria-label={`Quoting ${who}: ${excerpt.slice(0, 80)}. Show it`}>
+      <button type="button" className="msg-quote is-excerpt" onClick={onClick} aria-label={t("chat.message.quoting", { who, excerpt: excerpt.slice(0, 80) })}>
         <span className="msg-quote-who">{who}</span>
         <span className="msg-quote-text">{excerpt}</span>
       </button>
     )
   return (
-    <button type="button" className="msg-quote" onClick={onClick} aria-label={`Replying to ${who}: ${line.slice(0, 80)}. Show it`}>
+    <button type="button" className="msg-quote" onClick={onClick} aria-label={t("chat.message.replying", { who, line: line.slice(0, 80) })}>
       <Icon name="reply" size={12} />
       <span className="msg-quote-who">{who}</span>
-      <span className="msg-quote-text">{line || (quoted.images?.length ? "an image" : "…")}</span>
+      <span className="msg-quote-text">{line || (quoted.images?.length ? t("chat.message.an.image") : "…")}</span>
     </button>
   )
 }
@@ -185,7 +230,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     if (m.pending || m.failed !== undefined || m.leftOut || m.fromDoc || m.deleted || editing) return
     const target = e.target
     const reply = replying && quoting ? () => replying.set(m) : null
-    showMenu(e, "Message", (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, at }))
+    showMenu(e, t("chat.message.menu"), (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, at }))
   }
 
   return (
@@ -221,8 +266,8 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               {clock(m.at)}
             </time>
             {m.edited !== undefined && (
-              <span className="msg-edited" title={`Edited ${clock(m.edited)}`}>
-                edited
+              <span className="msg-edited" title={t("chat.message.edited.at", { time: clock(m.edited) })}>
+                {t("chat.message.edited")}
               </span>
             )}
           </p>
@@ -231,7 +276,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} excerpt={cited?.excerpt ?? null} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />
         )}
         {m.deleted ? (
-          <p className="msg-deleted">Message deleted</p>
+          <p className="msg-deleted">{t("chat.message.deleted")}</p>
         ) : editing ? (
           <Suspense fallback={null}>
             <Changes kind="editor" channel={channel} m={m} />
@@ -240,8 +285,8 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           <Clamp on={who?.kind === "agent" && !inThread}>{body && <Body text={wrote(body)} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
         )}
         {compact && m.edited !== undefined && !editing && (
-          <span className="msg-edited" title={`Edited ${clock(m.edited)}`}>
-            edited
+          <span className="msg-edited" title={t("chat.message.edited.at", { time: clock(m.edited) })}>
+            {t("chat.message.edited")}
           </span>
         )}
         {m.images && <MessageImages code={channel.code} images={m.images} open={openImage} />}
@@ -251,17 +296,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </Suspense>
         )}
         {m.leftOut && <p className="msg-left-out left-out-why">{m.leftOut}</p>}
-        {m.failed !== undefined && (
-          <p className="msg-failed" role="status" title={m.failed}>
-            Couldn't send
-            <button type="button" className="msg-failed-act" onClick={() => actions.retry(channel.code, m.seq)}>
-              Retry
-            </button>
-            <button type="button" className="msg-failed-act" onClick={() => actions.discard(channel.code, m.seq)}>
-              {m.block !== undefined ? "Back to draft" : "Delete"}
-            </button>
-          </p>
-        )}
+        <Unsent channel={channel} m={m} />
         {m.task !== undefined && <TaskChip channel={channel} id={m.task} />}
         {spec && !inThread && (
           <Suspense fallback={null}>
@@ -281,29 +316,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             <QuestionCard channel={channel} ask={ask} />
           </Suspense>
         )}
-        {(m.reactions?.length ?? 0) > 0 && (
-          <div className="reacts">
-            {m.reactions?.map((r) =>
-              isGifReaction(r.emoji) ? (
-                <Suspense key={r.emoji} fallback={null}>
-                  <Gifs channel={channel} m={m} r={r} />
-                </Suspense>
-              ) : (
-                <button
-                  key={r.emoji}
-                  type="button"
-                  className={cx("react", r.by.includes(channel.you) && "is-mine")}
-                  title={r.by.map((b) => nickname(channel, b)).join(", ")}
-                  aria-pressed={r.by.includes(channel.you)}
-                  disabled={m.where.kind === "theirs"}
-                  onClick={() => actions.react(channel.code, m.seq, r.emoji)}
-                >
-                  {r.emoji} <span className="num">{r.by.length}</span>
-                </button>
-              )
-            )}
-          </div>
-        )}
+        <Reacts channel={channel} m={m} />
         {m.receipt && (
           <p className="msg-receipt" aria-live="polite">
             {m.receipt}
@@ -311,10 +324,10 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
         )}
       </div>
       {!m.pending && m.failed === undefined && !m.leftOut && !m.fromDoc && !m.deleted && !editing && (
-        <div className="msg-tools" role="toolbar" aria-label="Message actions">
+        <div className="msg-tools" role="toolbar" aria-label={t("chat.message.actions")}>
           {m.where.kind !== "theirs" &&
             QUICK.map((e) => (
-              <button key={e} type="button" className="msg-tool" aria-label={`React ${e}`} onClick={() => actions.react(channel.code, m.seq, e)}>
+              <button key={e} type="button" className="msg-tool" aria-label={t("chat.message.react", { emoji: e })} onClick={() => actions.react(channel.code, m.seq, e)}>
                 {e}
               </button>
             ))}
@@ -329,11 +342,11 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             </Suspense>
           )}
           {replying && quoting && (
-            <button type="button" className="msg-tool" aria-label="Reply" title="Reply" onClick={() => replying.set(m)}>
+            <button type="button" className="msg-tool" aria-label={t("chat.message.reply")} title={t("chat.message.reply")} onClick={() => replying.set(m)}>
               <Icon name="reply" size={14} />
             </button>
           )}
-          <button type="button" className="msg-tool" aria-label="Copy text" title="Copy text" onClick={() => copyText(wordsRaw(m.text))}>
+          <button type="button" className="msg-tool" aria-label={t("chat.message.copy.text")} title={t("chat.message.copy.text")} onClick={() => copyText(wordsRaw(m.text))}>
             <Icon name="copy" size={14} />
           </button>
         </div>

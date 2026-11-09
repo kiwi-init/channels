@@ -1,10 +1,11 @@
+import { t } from "~/i18n/i18n"
 import { Modal } from "~/kit/modal"
 import { openOutside } from "~/kit/outside"
 import type { Usage } from "~/model"
 import { useApp } from "~/nav"
 import { UsageBar } from "~/usage/meter"
 import { closeLimit, useUsage, type LimitHit } from "~/usage/store"
-import { canUpgrade, count, fairUse, paidPlanLine, resetsIn, upgradeLabel } from "~/usage/words"
+import { canUpgrade, fairUse, paidPlanLine, resetsIn, upgradeLabel } from "~/usage/words"
 
 export function LimitDialog({ hit }: { hit: LimitHit }) {
   const { app } = useApp()
@@ -14,20 +15,20 @@ export function LimitDialog({ hit }: { hit: LimitHit }) {
   const full = usage !== null && usage.limit !== null && usage.used >= usage.limit
   const mine = hit.code === null || owner?.you === true || (owner === null && full)
   const later = usage ? resetsIn(usage.resetsAt, usage.checkedAt) : null
-  const again = later ? `Messages send again in ${later}, at 00:00 UTC.` : "Messages send again at 00:00 UTC."
+  const again = later ? t("usage.again.in", { time: later }) : t("usage.again")
   if (!mine) {
-    const who = owner ? (owner.display ?? owner.name) : "This channel's owner"
+    const who = owner ? (owner.display ?? owner.name) : t("usage.channel.owner")
     return (
       <Modal
         dismiss="outside"
-        label="This channel is out of messages today"
-        title="This channel is out of messages today"
-        sub={`${who} has used today's messages, so nobody can send here for now. ${again}`}
+        label={t("usage.channel.out")}
+        title={t("usage.channel.out")}
+        sub={t("usage.channel.out.sub", { who, again })}
         onClose={closeLimit}
         size="narrow"
         foot={
           <button type="button" className="btn is-primary" autoFocus onClick={closeLimit}>
-            OK
+            {t("usage.ok")}
           </button>
         }
       />
@@ -38,16 +39,16 @@ export function LimitDialog({ hit }: { hit: LimitHit }) {
   return (
     <Modal
       dismiss="outside"
-      label="Today's messages are used up"
-      title="Today's messages are used up"
-      sub={limit === null ? `Your channels have used today's messages. ${again}` : `Your channels sent ${count(limit)} messages today, agents' included: ${planLimit(usage)}. ${again}`}
+      label={t("usage.used.up")}
+      title={t("usage.used.up")}
+      sub={limit === null ? t("usage.used.up.sub", { again }) : t("usage.used.up.count", { count: limit, plan: planLimit(usage), again })}
       onClose={closeLimit}
       size="narrow"
       foot={
         upgrade && usage ? (
           <>
             <button type="button" className="btn is-quiet" onClick={closeLimit}>
-              Not now
+              {t("usage.not.now")}
             </button>
             <button
               type="button"
@@ -63,7 +64,7 @@ export function LimitDialog({ hit }: { hit: LimitHit }) {
           </>
         ) : (
           <button type="button" className="btn is-primary" autoFocus onClick={closeLimit}>
-            OK
+            {t("usage.ok")}
           </button>
         )
       }
@@ -79,6 +80,6 @@ export function LimitDialog({ hit }: { hit: LimitHit }) {
 }
 
 function planLimit(usage: Usage | null): string {
-  if (usage && fairUse(usage)) return "the paid plan's fair-use limit"
-  return usage?.plan === "paid" ? "the paid plan's daily limit" : "the free plan's daily limit"
+  if (usage && fairUse(usage)) return t("usage.limit.fair.use")
+  return t(usage?.plan === "paid" ? "usage.limit.paid" : "usage.limit.free")
 }

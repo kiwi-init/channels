@@ -1,5 +1,6 @@
+import { t } from "~/i18n/i18n"
 import type { Pending } from "~/live/map"
-import type { SendExtras } from "~/model"
+import type { SendExtras, Where } from "~/model"
 
 const byRoom = new Map<string, Pending[]>()
 let lastKey = 0
@@ -24,3 +25,10 @@ export const resendOf = (p: Pending): SendExtras => ({
   ...(p.images?.length ? { images: p.images } : {}),
   ...(p.block ? { block: p.block } : {}),
 })
+
+export async function retryUnsent(list: readonly Pending[], key: number, drop: (key: number) => void, post: (where: Where, text: string, extras: SendExtras) => Promise<number>): Promise<number> {
+  const p = list.find((x) => x.key === key)
+  if (!p) throw new Error(t("live.channel.message.gone"))
+  drop(key)
+  return post(p.where, p.text, resendOf(p))
+}

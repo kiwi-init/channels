@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { useEffect, useMemo, useState } from "react"
 
 import { HANDOFF_DONE, HANDOFF_FAILED } from "@kiwi/core/protocol.ts"
@@ -7,6 +8,8 @@ import { Body } from "~/chat/body"
 import { jumpTo } from "~/chat/reply"
 import { InlineLinks, InlineText } from "~/chat/inline-text"
 import { StepAnswer, StepHow } from "~/chat/step"
+import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
@@ -29,22 +32,20 @@ function useNow(until: number | undefined): number {
 }
 
 function openBrowser(handoff: Handoff): void {
-  if (handoff.expiresAt <= Date.now()) return announce("The link has expired", "error")
-  openOutside(handoff.url, () => announce("Couldn't open the browser", "error"))
+  if (handoff.expiresAt <= Date.now()) return announce(t("chat.question.card.link.expired.toast"), "error")
+  openOutside(handoff.url, () => announce(t("chat.question.card.browser.failed"), "error"))
 }
 
 function HandoffLink({ handoff, now }: { handoff: Handoff; now: number }) {
-  if (handoff.expiresAt <= now) return <p className="ask-state">{handoff.label} · link expired</p>
+  if (handoff.expiresAt <= now) return <p className="ask-state">{t("chat.question.card.link.expired", { label: handoff.label })}</p>
   const minutes = Math.max(1, Math.ceil((handoff.expiresAt - now) / 60_000))
   return (
     <div className="ask-handoff">
       <button type="button" className="btn is-primary is-small" onClick={() => openBrowser(handoff)}>
         <Icon name="external" size={14} />
-        Open browser
+        {t("chat.question.card.open.browser")}
       </button>
-      <span className="ask-state">
-        {handoff.label} · expires in {minutes} min
-      </span>
+      <span className="ask-state">{t("chat.question.card.expires.in", { label: handoff.label, minutes })}</span>
     </div>
   )
 }
@@ -58,13 +59,11 @@ function seeAsk(code: string, seq: number): void {
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
 
 function ClosedAsk({ channel, closed }: { channel: Channel; closed: Closed }) {
-  const who = closed.by === channel.you ? "you" : nickname(channel, closed.by)
+  const who = closed.by === channel.you ? t("chat.question.card.you") : nickname(channel, closed.by)
   const parts = closed.why ? wordsPlain(closed.why, channel.nicknames).split(/(#\d+)/) : []
   return (
     <div className="ask-done">
-      <p>
-        Closed by {who} <time>{clock(closed.at)}</time>
-      </p>
+      <p>{tr("chat.question.card.closed.by", { who, time: <time>{clock(closed.at)}</time> })}</p>
       {closed.why && (
         <p className="ask-reply">
           {parts.map((part, i) =>
@@ -90,37 +89,27 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
   const asker = nickname(channel, ask.from)
   const tasks = useMemo(() => new Set(channel.tasks.map((t) => t.id)), [channel.tasks])
   if (ask.answer) {
-    const who = ask.answer.by === channel.you ? "You" : nickname(channel, ask.answer.by)
+    const who = ask.answer.by === channel.you ? t("chat.question.card.you.start") : nickname(channel, ask.answer.by)
     const at = <time>{clock(ask.answer.at)}</time>
     const reply = wordsRaw(ask.answer.text)
     if (ask.handoff && (reply === HANDOFF_DONE || reply === HANDOFF_FAILED))
-      return (
-        <p className="ask-done">
-          {who} {reply === HANDOFF_DONE ? "finished in the browser" : "couldn’t finish in the browser"} {at}
-        </p>
-      )
-    const verb = ask.step ? "answered" : "replied"
+      return <p className="ask-done">{tr(reply === HANDOFF_DONE ? "chat.question.card.finished.browser" : "chat.question.card.not.finished.browser", { who, time: at })}</p>
+    const verb = ask.step ? "chat.question.card.answered" : "chat.question.card.replied"
     const answer = ask.answer
     if (answer.shownIn === "feed")
       return (
         <p className="ask-done">
-          {who} {verb} {at} ·{" "}
+          {tr(verb, { who, time: at })} ·{" "}
           <button type="button" className="ask-seq" onClick={() => seeAsk(channel.code, answer.seq)}>
-            Show the reply
+            {t("chat.question.card.show.reply")}
           </button>
         </p>
       )
     if (ask.options.some((o) => wordsSame(o, answer.text)))
-      return (
-        <p className="ask-done">
-          {who} chose <b>{wordsPlain(answer.text, channel.nicknames)}</b> {at}
-        </p>
-      )
+      return <p className="ask-done">{tr("chat.question.card.chose", { who, choice: <b>{wordsPlain(answer.text, channel.nicknames)}</b>, time: at })}</p>
     return (
       <div className="ask-done">
-        <p>
-          {who} {verb} {at}
-        </p>
+        <p>{tr(verb, { who, time: at })}</p>
         <div className="ask-reply">
           <Body text={answer.text} seq={Number(ask.id)} names={channel.nicknames} tasks={tasks} onImage={openImage} onMessage={(seq) => seeAsk(channel.code, seq)} />
         </div>
@@ -135,13 +124,13 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
       {ask.handoff && other === null && ask.handoff.expiresAt > now && (
         <div className="actions">
           <button type="button" className="btn is-small" onClick={() => actions.answerQuestion(channel.code, ask.id, HANDOFF_DONE)}>
-            Done
+            {t("chat.question.card.done")}
           </button>
           <button type="button" className="btn is-quiet is-small" onClick={() => actions.answerQuestion(channel.code, ask.id, HANDOFF_FAILED)}>
-            Couldn’t
+            {t("chat.question.card.couldnt")}
           </button>
           <button type="button" className="btn is-quiet is-small" onClick={() => setOther("")}>
-            Something else…
+            {t("chat.question.card.something.else")}
           </button>
         </div>
       )}
@@ -162,7 +151,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
       )}
       {(ask.step || (ask.handoff && ask.handoff.expiresAt > now)) && other === null ? null : other === null ? (
         <button type="button" className={choice ? "ask-option is-else" : "btn is-quiet is-small"} onClick={() => setOther("")}>
-          Something else…
+          {t("chat.question.card.something.else")}
         </button>
       ) : (
         <form
@@ -178,14 +167,14 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
               autoFocus={!free}
               className="input"
               value={other}
-              aria-label={`Reply to ${asker}`}
-              title="Answers this card, in its thread"
+              aria-label={t("chat.question.card.reply.to", { asker })}
+              title={t("chat.question.card.reply.title")}
               onChange={(e) => setOther(e.target.value)}
-              placeholder={`Your reply to ${asker}`}
+              placeholder={t("chat.question.card.reply.placeholder", { asker })}
               onKeyDown={(e) => e.key === "Escape" && !free && setOther(null)}
             />
             <button type="submit" className="btn is-primary is-small" disabled={!other.trim()}>
-              Reply
+              {t("chat.question.card.reply")}
             </button>
           </div>
         </form>

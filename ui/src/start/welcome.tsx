@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import "~/styles/start.css"
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 
@@ -9,10 +10,13 @@ import type { ChannelTile, HomeAgent, HomeAsk, HomeChannel } from "~/model"
 import { useApp } from "~/nav"
 import { onboarded } from "~/start/onboarded"
 import { Onboarding } from "~/start/onboarding"
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 
 export function Welcome() {
   const { app } = useApp()
-  const tiles = app.channels.filter((t) => t.state !== "gone")
+  const tiles = app.channels.filter((c) => c.state !== "gone")
   if (!tiles.length) return <Empty />
   return <Hud tiles={tiles} home={app.home} />
 }
@@ -24,7 +28,7 @@ function Empty() {
       {intro && <Onboarding onDone={() => setIntro(false)} />}
       <div className="start-drag" />
       <div className="start-welcome start-home">
-        <h1 className="start-title">No channels yet</h1>
+        <h1 className="start-title">{t("start.welcome.no.channels")}</h1>
         <div className="start-choices">
           <Starts />
         </div>
@@ -39,12 +43,12 @@ function Starts({ quiet }: { quiet?: true }) {
     <>
       <button type="button" className={quiet ? undefined : "btn is-primary"} onClick={() => go({ to: "dialog", dialog: "new-channel" })}>
         <Icon name="plus" size={quiet ? 12 : 14} />
-        New channel
+        {t("start.welcome.new.channel")}
       </button>
       {quiet && <span aria-hidden="true">·</span>}
       <button type="button" className={quiet ? undefined : "btn"} onClick={() => go({ to: "dialog", dialog: "join" })}>
         {!quiet && <Icon name="link" size={14} />}
-        Join with a code
+        {t("start.welcome.join")}
       </button>
     </>
   )
@@ -57,22 +61,20 @@ function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly Ho
   useEffect(() => void onboarded(true), [])
   const now = useNow(60_000)
   const byCode = new Map(home.map((h) => [h.code, h]))
-  const members = tiles.filter((t) => t.state === "member")
-  const asks = takeTurns(members.map((t) => (byCode.get(t.code)?.asks ?? []).map((ask) => ({ tile: t, ask }))))
+  const members = tiles.filter((c) => c.state === "member")
+  const asks = takeTurns(members.map((c) => (byCode.get(c.code)?.asks ?? []).map((ask) => ({ tile: c, ask }))))
   const shown = all ? asks : asks.slice(0, ASKS_SHOWN)
-  const needs = (t: ChannelTile) => byCode.get(t.code)?.asks.length ?? t.needsYou
+  const needs = (c: ChannelTile) => byCode.get(c.code)?.asks.length ?? c.needsYou
   const first = [...tiles].sort((a, b) => Number(needs(b) > 0) - Number(needs(a) > 0))
-  const busy = first.filter((t) => isBusy(byCode.get(t.code)))
-  const quiet = first.filter((t) => !isBusy(byCode.get(t.code)))
+  const busy = first.filter((c) => isBusy(byCode.get(c.code)))
+  const quiet = first.filter((c) => !isBusy(byCode.get(c.code)))
   return (
     <main className="start-area home-area">
       <div className="start-drag" />
       <div className="calm">
         {asks.length > 0 && (
-          <section className="calm-sec" aria-label="Waiting on you">
-            <h2 className="calm-head">
-              Waiting on you <span className="num">{asks.length}</span>
-            </h2>
+          <section className="calm-sec" aria-label={t("start.welcome.waiting.on.you")}>
+            <h2 className="calm-head">{tr("start.welcome.waiting.head", { n: <span className="num">{asks.length}</span> })}</h2>
             <ol className="calm-list">
               {shown.map(({ tile, ask }) => (
                 <AskRow key={`${tile.code}:${ask.id}`} tile={tile} ask={ask} now={now} />
@@ -80,19 +82,19 @@ function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly Ho
             </ol>
             {asks.length > ASKS_SHOWN && (
               <button type="button" className="calm-more" onClick={() => setAll(!all)}>
-                {all ? "Show fewer" : `${asks.length - ASKS_SHOWN} more`}
+                {all ? t("start.welcome.show.fewer") : t("start.welcome.more", { count: asks.length - ASKS_SHOWN })}
               </button>
             )}
           </section>
         )}
-        {busy.map((t) => (
-          <ChannelPart key={t.code} tile={t} summary={byCode.get(t.code)} />
+        {busy.map((c) => (
+          <ChannelPart key={c.code} tile={c} summary={byCode.get(c.code)} />
         ))}
         {quiet.length > 0 && (
-          <section className="calm-sec" aria-label="Quiet channels">
+          <section className="calm-sec" aria-label={t("start.welcome.quiet")}>
             <ul className="calm-list">
-              {quiet.map((t) => (
-                <QuietRow key={t.code} tile={t} summary={byCode.get(t.code)} />
+              {quiet.map((c) => (
+                <QuietRow key={c.code} tile={c} summary={byCode.get(c.code)} />
               ))}
             </ul>
           </section>
@@ -128,7 +130,7 @@ function AskRow({ tile, ask, now }: { tile: ChannelTile; ask: HomeAsk; now: numb
   }, [ask.text, full])
   return (
     <li className={cx("calm-ask", act.kind === "options" && "has-options")}>
-      <button type="button" className="calm-ask-body" title={`Open in ${tile.title}`} onClick={open}>
+      <button type="button" className="calm-ask-body" title={t("start.welcome.open.in", { name: tile.title })} onClick={open}>
         <span ref={text} className={cx("calm-ask-text", full && "is-full")}>
           {ask.text}
         </span>
@@ -139,7 +141,7 @@ function AskRow({ tile, ask, now }: { tile: ChannelTile; ask: HomeAsk; now: numb
           <>
             {" · "}
             <button type="button" className="calm-more-inline" aria-expanded={full} onClick={() => setFull(!full)}>
-              {full ? "Show less" : "Show all"}
+              {full ? t("start.welcome.show.less") : t("start.welcome.show.all")}
             </button>
           </>
         )}
@@ -154,26 +156,26 @@ function AskRow({ tile, ask, now }: { tile: ChannelTile; ask: HomeAsk; now: numb
         {act.kind === "allow" && (
           <>
             <button type="button" className="calm-opt" onClick={() => actions.answerPermission(code, ask.id, false)}>
-              Deny
+              {t("start.welcome.deny")}
             </button>
             <button type="button" className="calm-opt" onClick={() => actions.answerPermission(code, ask.id, true)}>
-              Allow
+              {t("start.welcome.allow")}
             </button>
           </>
         )}
         {act.kind === "approve-spec" && (
           <button type="button" className="calm-opt" onClick={() => actions.approveSpec(code, act.ask, act.v)}>
-            Approve
+            {t("start.welcome.approve")}
           </button>
         )}
         {act.kind === "approve-task" && (
           <button type="button" className="calm-opt" onClick={() => actions.approveTask(code, act.task, true)}>
-            Approve
+            {t("start.welcome.approve")}
           </button>
         )}
         {act.kind === "open" && (
           <button type="button" className="calm-opt" onClick={open}>
-            Open
+            {t("start.welcome.open")}
           </button>
         )}
       </span>
@@ -186,35 +188,35 @@ function isBusy(summary: HomeChannel | undefined): boolean {
 }
 
 function stateOf(tile: ChannelTile, summary: HomeChannel | undefined): string {
-  if (tile.state === "waiting") return "waiting to be let in"
-  if (!summary || summary.loading) return "opening"
-  return summary.doneToday ? `${summary.doneToday} done today` : ""
+  if (tile.state === "waiting") return t("start.welcome.state.waiting")
+  if (!summary || summary.loading) return t("start.welcome.state.opening")
+  return summary.doneToday ? t("start.welcome.state.done.today", { count: summary.doneToday }) : ""
 }
 
-function count(names: readonly string[], word: string): string | null {
+function count(names: readonly string[], named: Key, counted: Key): string | null {
   if (!names.length) return null
-  return names.length <= 2 ? `${names.join(", ")} ${word}` : `${names.length} ${word}`
+  return names.length <= 2 ? t(named, { names: names.join(t("start.welcome.names.sep")) }) : t(counted, { count: names.length })
 }
 
 function restLine(agents: readonly HomeAgent[]): string {
   const idle = agents.filter((a) => a.state === "idle").map((a) => a.nick)
   const away = agents.filter((a) => a.state === "away").map((a) => a.nick)
-  return [count(idle, "idle"), count(away, "away")].filter(Boolean).join(" · ")
+  return [count(idle, "start.welcome.rest.idle.named", "start.welcome.rest.idle"), count(away, "start.welcome.rest.away.named", "start.welcome.rest.away")].filter(Boolean).join(" · ")
 }
 
 function Needs({ n }: { n: number }) {
-  return n > 0 ? <span className="calm-needs">{n === 1 ? "1 needs you" : `${n} need you`}</span> : null
+  return n > 0 ? <span className="calm-needs">{t("start.welcome.needs.you", { count: n })}</span> : null
 }
 
 function Red({ summary }: { summary: HomeChannel | undefined }) {
-  return summary?.red ? <span className="calm-meta tone-alert">{summary.red === 1 ? "1 check red" : `${summary.red} checks red`}</span> : null
+  return summary?.red ? <span className="calm-meta tone-alert">{t("start.welcome.checks.red", { count: summary.red })}</span> : null
 }
 
 function MessageLead({ tile, summary, writing, onWriting }: { tile: ChannelTile; summary: HomeChannel | undefined; writing: boolean; onWriting: (on: boolean) => void }) {
   if (tile.state !== "member" || !summary || summary.loading) return null
   return (
     <button type="button" className={cx("calm-act", writing && "is-on")} onClick={() => onWriting(!writing)}>
-      {summary.leadName ? `Message ${summary.leadName}` : "Message #general"}
+      {summary.leadName ? t("start.welcome.message.lead", { name: summary.leadName }) : t("start.welcome.message.general")}
     </button>
   )
 }
@@ -272,8 +274,8 @@ function QuietRow({ tile, summary }: { tile: ChannelTile; summary: HomeChannel |
 }
 
 function stateWords(agent: HomeAgent): string {
-  if (agent.state === "waiting") return "needs a person"
-  return agent.task ? "" : "working"
+  if (agent.state === "waiting") return t("start.welcome.agent.needs.person")
+  return agent.task ? "" : t("start.welcome.agent.working")
 }
 
 function AgentLine({ tile, agent }: { tile: ChannelTile; agent: HomeAgent }) {
@@ -306,7 +308,7 @@ function LeadNote({ tile, summary, onDone }: { tile: ChannelTile; summary: HomeC
     app.actions.send(tile.code, summary.lead ? { kind: "dm", with: summary.lead } : { kind: "room", room: "general" }, body)
     setText("")
     onDone()
-    toast(to ? `Sent to ${to} in ${tile.title}` : `Sent to #general in ${tile.title}`)
+    toast(to ? t("start.welcome.sent.to", { name: to, channel: tile.title }) : t("start.welcome.sent.general", { channel: tile.title }))
   }
   const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return
@@ -325,12 +327,12 @@ function LeadNote({ tile, summary, onDone }: { tile: ChannelTile; summary: HomeC
         rows={1}
         autoFocus
         value={text}
-        aria-label={to ? `Message ${to} in ${tile.title}` : `Write to #general in ${tile.title}`}
-        placeholder={to ? `Message ${to}…` : "Write to #general…"}
+        aria-label={to ? t("start.welcome.note.label", { name: to, channel: tile.title }) : t("start.welcome.note.label.general", { channel: tile.title })}
+        placeholder={to ? t("start.welcome.note.placeholder", { name: to }) : t("start.welcome.note.placeholder.general")}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={keys}
       />
-      <button type="button" className={cx("calm-send", text.trim() && "is-ready")} aria-label="Send" title="Send (Enter)" disabled={!text.trim()} onClick={send}>
+      <button type="button" className={cx("calm-send", text.trim() && "is-ready")} aria-label={t("start.welcome.send")} title={t("start.welcome.send.title")} disabled={!text.trim()} onClick={send}>
         <Icon name="send" size={14} />
       </button>
     </div>
