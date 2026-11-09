@@ -2,6 +2,10 @@ import type { english } from "~/i18n/en/all"
 import chat from "~/i18n/en/chat"
 import live from "~/i18n/en/live"
 import settingsShared from "~/i18n/en/settings-shared"
+import modals from "~/i18n/en/modals"
+import needs from "~/i18n/en/needs"
+import shell from "~/i18n/en/shell"
+import github from "~/i18n/en/github"
 
 export type Msg = string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>> & { other: string }>
 
@@ -9,6 +13,10 @@ export const en = {
   ...live,
   ...settingsShared,
   ...chat,
+  ...modals,
+  ...needs,
+  ...shell,
+  ...github,
   "settings.language": "Language",
   "settings.language.system": "System",
   "usage.today": "Messages today",
