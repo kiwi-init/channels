@@ -20,7 +20,7 @@ final class BlankFeedTests: XCTestCase {
         let screen = try Screen.list(extra)
         try await screen.enter(after: .milliseconds(800))
         let app = screen.app
-        let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
+        let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10), "the composer")
         field.tap()
         try await Task.sleep(for: .milliseconds(900))

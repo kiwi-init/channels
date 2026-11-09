@@ -153,6 +153,7 @@ struct Dock: View {
                     .foregroundStyle(Tone.ink)
                     .lineLimit(1...6)
                     .focused(typing)
+                    .accessibilityIdentifier("composer")
                     .padding(.leading, 15)
                     .padding(.vertical, 11)
                 if canSend || sending { sendButton }
