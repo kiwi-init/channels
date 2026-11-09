@@ -433,7 +433,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     if (!last && !others.length) return
     const lead = last ? state.lead : prior?.lead
     saveRecent(code, {
-      from: last ? (last.from === me ? "You" : last.from) : (prior?.from ?? ""),
+      from: last ? (last.from === me ? t("live.channel.recent.you") : last.from) : (prior?.from ?? ""),
       text: last ? last.body.slice(0, 120) : (prior?.text ?? ""),
       ts: last?.ts ?? prior?.ts ?? member.at,
       people: others.length ? others.map((p) => p.display ?? p.name) : (prior?.people ?? []),

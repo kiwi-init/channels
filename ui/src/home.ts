@@ -1,3 +1,4 @@
+import "~/i18n/en/live-later"
 import { GENERAL_ROOM } from "@kiwi/core/protocol.ts"
 import { liveOf, restOf } from "~/doing"
 import type { Ask, Channel, HomeAct, HomeAgent, HomeAsk, HomeChannel, HomeLine, HomeTask, Message, Person, Task } from "~/model"
@@ -7,6 +8,7 @@ import { nowOf, stageWords } from "~/now"
 import { preview } from "~/chat/preview"
 import { withNames } from "~/chat/linked"
 import { wordsPlain, wordsRaw } from "~/words"
+import { t } from "~/i18n/i18n"
 
 const CLIP = 280
 const QUESTION_CLIP = 1200
@@ -26,34 +28,39 @@ function lineOf(c: Source, a: Ask): { what: string; text: string; act: HomeAct }
     case "question": {
       const plain = !a.irreversible && !a.step && !a.handoff && a.options.length > 0 && a.options.length <= OPTIONS_SHOWN
       const options = a.options.map((o) => ({ shown: wordsPlain(o, c.nicknames), answer: wordsRaw(o) }))
-      return { what: `${nickname(c, a.from)} asks`, text: clip(wordsPlain(a.text, c.nicknames), QUESTION_CLIP), act: plain ? { kind: "options", options } : { kind: "open" } }
+      return { what: t("live.home.asks", { who: nickname(c, a.from) }), text: clip(wordsPlain(a.text, c.nicknames), QUESTION_CLIP), act: plain ? { kind: "options", options } : { kind: "open" } }
     }
     case "permission":
       return { what: `${nickname(c, a.from)} ${a.title}`, text: clip(a.summary || a.code), act: a.canAllow ? { kind: "allow" } : { kind: "open" } }
     case "join":
-      return { what: "Wants to join", text: a.name, act: { kind: "open" } }
+      return { what: t("live.home.wants.to.join"), text: a.name, act: { kind: "open" } }
     case "review": {
       const task = c.tasks.find((t) => t.id === a.task)
-      return { what: `Review T${a.task}`, text: clip(task ? wordsPlain(task.title, c.nicknames) : `T${a.task}`), act: task ? { kind: "approve-task", task: a.task } : { kind: "open" } }
+      return {
+        what: t("live.home.review", { id: String(a.task) }),
+        text: clip(task ? wordsPlain(task.title, c.nicknames) : `T${a.task}`),
+        act: task ? { kind: "approve-task", task: a.task } : { kind: "open" },
+      }
     }
     case "bypass":
-      return { what: `T${a.task} shipped with its gate shut`, text: clip(a.missing.join(", ")), act: { kind: "open" } }
+      return { what: t("live.home.bypass", { id: String(a.task) }), text: clip(a.missing.join(", ")), act: { kind: "open" } }
     case "spec": {
       const spec = c.specs?.find((s) => s.ask === a.ask)
-      const text = clip(spec ? wordsPlain(spec.title, c.nicknames) : `Spec #${a.ask}`)
-      if (a.why === "result") return { what: `Spec #${a.ask} is done: check it`, text, act: { kind: "open" } }
-      if (a.why === "changed") return { what: `Spec #${a.ask} changed`, text, act: spec ? { kind: "approve-spec", ask: a.ask, v: spec.v } : { kind: "open" } }
-      return { what: `Approve spec #${a.ask}`, text, act: spec ? { kind: "approve-spec", ask: a.ask, v: spec.v } : { kind: "open" } }
+      const ask = String(a.ask)
+      const text = clip(spec ? wordsPlain(spec.title, c.nicknames) : t("live.home.spec", { ask }))
+      if (a.why === "result") return { what: t("live.home.spec.done", { ask }), text, act: { kind: "open" } }
+      if (a.why === "changed") return { what: t("live.home.spec.changed", { ask }), text, act: spec ? { kind: "approve-spec", ask: a.ask, v: spec.v } : { kind: "open" } }
+      return { what: t("live.home.spec.approve", { ask }), text, act: spec ? { kind: "approve-spec", ask: a.ask, v: spec.v } : { kind: "open" } }
     }
   }
 }
 
-function movingOf(c: Source, t: Task): HomeTask {
-  const owner: Person | undefined = t.owner ? c.people.find((p) => p.name === t.owner) : undefined
+function movingOf(c: Source, task: Task): HomeTask {
+  const owner: Person | undefined = task.owner ? c.people.find((p) => p.name === task.owner) : undefined
   const live = owner ? liveOf(owner) : null
-  const stage = stageWords(t)
-  const state = stage.text || live?.text || (t.status === "waiting" ? "needs you" : t.status === "review" ? "in review" : "")
-  return { id: t.id, title: wordsPlain(t.title, c.nicknames), who: t.owner ? nickname(c, t.owner) : null, state, busy: !!live?.busy, red: stage.red }
+  const stage = stageWords(task)
+  const state = stage.text || live?.text || (task.status === "waiting" ? t("live.home.needs.you") : task.status === "review" ? t("live.home.in.review") : "")
+  return { id: task.id, title: wordsPlain(task.title, c.nicknames), who: task.owner ? nickname(c, task.owner) : null, state, busy: !!live?.busy, red: stage.red }
 }
 
 const AGENT_ORDER: Record<HomeAgent["state"], number> = { working: 0, waiting: 1, idle: 2, away: 3 }

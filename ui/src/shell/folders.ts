@@ -1,7 +1,8 @@
 import type { ChannelTile, Folder } from "~/model"
 import type { DropTarget } from "~/shell/rail-items"
+import { t } from "~/i18n/i18n"
 
-export const FOLDER_NAME = "Folder"
+export const folderName = (): string => t("shell.folders.default")
 
 export const newFolderId = (): string => `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 const MAX_NAME = 40
@@ -18,10 +19,10 @@ export function dropOn(folders: readonly Folder[], code: string, target: DropTar
   }
   const holder = rest.find((f) => f.codes.includes(target.code))
   if (holder) return rest.map((f) => (f === holder ? { ...f, codes: f.codes.flatMap((c) => (c === target.code ? [c, code] : [c])) } : f))
-  return [...rest, { id: newId(), name: FOLDER_NAME, codes: [target.code, code], open: false }]
+  return [...rest, { id: newId(), name: folderName(), codes: [target.code, code], open: false }]
 }
 
-export const renamed = (folders: readonly Folder[], id: string, name: string): Folder[] => folders.map((f) => (f.id === id ? { ...f, name: name.trim().slice(0, MAX_NAME) || FOLDER_NAME } : f))
+export const renamed = (folders: readonly Folder[], id: string, name: string): Folder[] => folders.map((f) => (f.id === id ? { ...f, name: name.trim().slice(0, MAX_NAME) || folderName() } : f))
 
 export const toggled = (folders: readonly Folder[], id: string): Folder[] => folders.map((f) => (f.id === id ? { ...f, open: !f.open } : f))
 

@@ -25,7 +25,7 @@ export function runFirst(list: readonly Message[], i: number): number {
 }
 
 export function foldText(run: readonly Message[]): string {
-  const forged = run.filter((m) => m.leftOut?.startsWith("Bad signature")).length
+  const forged = run.filter((m) => m.forged).length
   const why = forged === run.length ? (run.length === 1 ? t("chat.left.out.bad.signature") : t("chat.left.out.bad.signatures")) : forged === 0 ? t("chat.left.out.refused") : t("chat.left.out.either")
   return t("chat.left.out.fold", { count: run.length, why })
 }

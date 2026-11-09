@@ -5,9 +5,13 @@ import { parseSync } from "oxc-parser";
 const ROOT = join(import.meta.dir, "..");
 const SRC = join(ROOT, "ui/src");
 const ALLOW = join(import.meta.dir, "ui-english.json");
-const SKIP = /(?:\.test\.tsx?|\.page\.ts|\.d\.ts)$|^(?:demo|i18n)\//;
+const SKIP = /(?:\.test\.tsx?|\.page\.ts|\.d\.ts)$|^(?:demo|i18n)\/|^sent\.ts$/;
 const SHOWN_ATTRS = new Set(["label", "title", "aria-label", "aria-description", "placeholder", "alt", "hint", "lede", "sub", "tip", "verb"]);
 const SENTENCE = /^[A-Z][a-z']+(?:\s|[.,:;!?…]|$)|[a-z]{2,}\s+[a-z]{2,}.*[.?!…]$/;
+const AS_IS = new Set(["Channels", "channels", "Channels is not a harness", "GitHub", "Linux", "Windows", "Inter", "Lato", "Atkinson", "Esc", "kiwi login"]);
+const ID_TEMPLATE = /^T\{\}(?:(?: | · )\{\})*\s?$/;
+const DEV_ERRORS = /^(?:TypeError|RangeError|SyntaxError|ReferenceError)$/;
+const THEME_TYPE = /\bColorTheme\b/;
 
 type Node = { type?: string; [k: string]: unknown };
 
@@ -15,8 +19,21 @@ const isNode = (v: unknown): v is Node => typeof v === "object" && v !== null;
 
 function looksShown(text: string): boolean {
   const s = text.trim();
-  return /[A-Za-z]{2,}/.test(s) && SENTENCE.test(s);
+  return /[A-Za-z]{2,}/.test(s) && SENTENCE.test(s) && !AS_IS.has(s);
 }
+
+const hasWords = (text: string): boolean => /[A-Za-z]{2,}/.test(text) && !AS_IS.has(text.trim());
+
+function keyName(n: Node | undefined): string {
+  if (!n) return "";
+  if (n.type === "Identifier") return String(n.name);
+  if (n.type === "Literal") return String(n.value);
+  return "";
+}
+
+const WRAPPERS = new Set(["TSAsExpression", "TSSatisfiesExpression", "ParenthesizedExpression"]);
+
+const unwrapped = (n: Node): Node => (isNode(n) && WRAPPERS.has(String(n.type)) ? unwrapped(n.expression as Node) : n);
 
 function calleeName(n: Node): string {
   const c = n.callee as Node | undefined;
@@ -27,11 +44,12 @@ function calleeName(n: Node): string {
 }
 
 const QUIET_CALLS =
-  /^(?:t|console\.\w+|require|import|cx|querySelector|\w+\.querySelector(?:All)?|\w+\.(?:get|set|remove)Item|\w+\.startsWith|\w+\.endsWith|\w+\.includes|\w+\.(?:add|remove|toggle|contains))$/;
+  /^(?:t|console\.\w+|require|import|cx|noteTyping|querySelector|\w+\.querySelector(?:All)?|\w+\.(?:get|set|remove)Item|\w+\.startsWith|\w+\.endsWith|\w+\.includes|\w+\.(?:add|remove|toggle|contains))$/;
 
-function englishIn(file: string, code: string): number {
+export function englishIn(file: string, code: string): number {
   const { program } = parseSync(file, code);
   let found = 0;
+  const themes = new Set<Node>();
   const walk = (n: unknown, quiet: boolean): void => {
     if (Array.isArray(n)) {
       for (const x of n) walk(x, quiet);
@@ -50,22 +68,40 @@ function englishIn(file: string, code: string): number {
         if (n.source) return;
         break;
       case "JSXText":
-        if (/[A-Za-z]{2,}/.test(String(n.value))) found++;
+        if (hasWords(String(n.value))) found++;
         return;
       case "JSXAttribute": {
         const name = String((n.name as Node)?.name ?? "");
         const value = n.value as Node | null;
         if (value?.type === "Literal" && typeof value.value === "string") {
-          if (SHOWN_ATTRS.has(name) && /[A-Za-z]{2,}/.test(value.value)) found++;
+          if (SHOWN_ATTRS.has(name) && hasWords(value.value)) found++;
           return;
         }
         walk(value, quiet || !SHOWN_ATTRS.has(name));
         return;
       }
       case "CallExpression":
-      case "NewExpression":
         if (QUIET_CALLS.test(calleeName(n))) return;
         break;
+      case "NewExpression":
+        if (QUIET_CALLS.test(calleeName(n)) || DEV_ERRORS.test(calleeName(n))) return;
+        break;
+      case "VariableDeclarator": {
+        const typed = (n.id as Node)?.typeAnnotation as Node | undefined;
+        if (typed && THEME_TYPE.test(code.slice(Number(typed.start), Number(typed.end)))) themes.add(unwrapped(n.init as Node));
+        break;
+      }
+      case "ObjectExpression":
+        if (themes.has(n)) for (const p of n.properties as Node[]) if (keyName(p.key as Node) === "name") themes.add(p);
+        break;
+      case "ArrayExpression":
+        if (themes.has(n)) for (const e of n.elements as Node[]) if (isNode(e)) themes.add(unwrapped(e));
+        break;
+      case "AssignmentExpression": {
+        const left = n.left as Node;
+        if (keyName(left?.property as Node) === "type") return;
+        break;
+      }
       case "BinaryExpression":
         if (n.operator !== "+") return;
         break;
@@ -73,6 +109,7 @@ function englishIn(file: string, code: string): number {
         walk(n.consequent, quiet);
         return;
       case "Property":
+        if (themes.has(n) || keyName(n.key as Node) === "type") return;
         walk(n.value, quiet);
         return;
       case "Literal":
@@ -80,7 +117,7 @@ function englishIn(file: string, code: string): number {
         return;
       case "TemplateLiteral": {
         const text = (n.quasis as Node[]).map((q) => String((q.value as Node)?.cooked ?? "")).join("{}");
-        if (!quiet && looksShown(text.replace(/\{\}/g, "x"))) found++;
+        if (!quiet && !ID_TEMPLATE.test(text) && looksShown(text.replace(/\{\}/g, "x"))) found++;
         walk(n.expressions, quiet);
         return;
       }
@@ -111,7 +148,10 @@ if (import.meta.main) {
   const allowed = (await Bun.file(ALLOW).json()) as Record<string, number>;
   const grew = Object.entries(now).filter(([f, n]) => n > (allowed[f] ?? 0));
   const shrank = Object.entries(allowed).filter(([f, n]) => (now[f] ?? 0) < n);
-  for (const [f, n] of grew) console.error(`${f}: ${n} user-facing English strings, ${allowed[f] ?? 0} allowed. Put new words in ui/src/i18n/en.ts and show them with t().`);
+  for (const [f, n] of grew)
+    console.error(
+      `${f}: ${n} user-facing English strings, ${allowed[f] ?? 0} allowed. Put new words in an English area file under ui/src/i18n/en/ and show them with t(); text sent to the channel goes in ui/src/sent.ts.`,
+    );
   for (const [f, n] of shrank) console.error(`${f}: ${now[f] ?? 0} English strings left, the allowlist still says ${n}. Run bun scripts/ui-english.ts --write.`);
   if (grew.length || shrank.length) process.exit(1);
   console.log(`ui-english: ${Object.values(now).reduce((a, b) => a + b, 0)} English strings left in ${Object.keys(now).length} files, none new`);

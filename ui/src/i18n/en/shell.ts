@@ -61,5 +61,6 @@ export default {
   "shell.rail.tile.new.messages": "new messages",
   "shell.rail.tile.waiting": "waiting to be let in",
   "shell.rail.tile.sep": ", ",
+  "shell.folders.default": "Folder",
   "palette.palette.jump.to": "Jump to",
 } as const satisfies Record<string, Msg>

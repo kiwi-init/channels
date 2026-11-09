@@ -9,8 +9,6 @@ import needs from "~/i18n/ja/needs"
 import shell from "~/i18n/ja/shell"
 import github from "~/i18n/ja/github"
 
-export const covers = ["chat.", "github.", "kit.", "live.", "modals.", "needs.", "palette.", "panels.", "settings.", "shell.", "specs.", "start.", "tasks.", "usage."]
-
 export default {
   ...chatCompose,
   ...chatFeed,

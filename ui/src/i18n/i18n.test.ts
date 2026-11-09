@@ -7,16 +7,14 @@ import { addWords, CATALOGS, langOf, LANGS, t } from "~/i18n/i18n"
 const holes = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!).sort()
 const forms = (msg: Msg): string[] => (typeof msg === "string" ? [msg] : Object.values(msg))
 
-const covered = (covers: readonly string[], key: string): boolean => covers.some((area) => `${key}.`.startsWith(area))
-
-describe("every catalog says everything English says in the areas it covers (spec #759)", () => {
+describe("every catalog says everything English says (spec #759)", () => {
   for (const [lang, load] of Object.entries(CATALOGS)) {
     test(`${lang}: the same keys, the same {holes}, and only plural forms ${lang} has`, async () => {
-      const { default: catalog, covers } = await load()
+      const { default: catalog } = await load()
       const all: Readonly<Record<string, Msg>> = english
-      const keys = Object.keys(all).filter((k) => covered(covers, k)) as Key[]
+      const keys = Object.keys(all) as Key[]
       expect(keys.filter((k) => catalog[k] === undefined)).toEqual([])
-      expect(Object.keys(catalog).filter((k) => !(k in all) || !covered(covers, k))).toEqual([])
+      expect(Object.keys(catalog).filter((k) => !(k in all))).toEqual([])
       const categories = new Intl.PluralRules(lang).resolvedOptions().pluralCategories as string[]
       for (const key of keys) {
         const msg = catalog[key]!

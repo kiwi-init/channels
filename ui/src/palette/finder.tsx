@@ -375,7 +375,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       {
         id: "action:trace-scroll",
         group: "actions",
-        label: "Trace scrolling for 20 seconds",
+        label: t("palette.finder.trace.scroll"),
         keys: ["debug", "flicker", "scroll"],
         lead: <Icon name="search" size={14} />,
         run: () => {
@@ -386,37 +386,37 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       {
         id: "action:copy-scroll-trace",
         group: "actions",
-        label: "Copy scroll trace",
+        label: t("palette.finder.copy.scroll.trace"),
         keys: ["debug", "flicker", "scroll"],
         lead: <Icon name="copy" size={14} />,
         run: () => {
           close()
-          void Promise.all([import("~/kit/scroll-trace"), import("~/kit/toasts")]).then(([m, toasts]) => toasts.copyText(m.scrollTrace(), "Scroll trace copied"))
+          void Promise.all([import("~/kit/scroll-trace"), import("~/kit/toasts")]).then(([m, toasts]) => toasts.copyText(m.scrollTrace(), t("palette.finder.scroll.trace.copied")))
         },
       },
       {
         id: "action:trace-typing",
         group: "actions",
-        label: "Trace typing for 60 seconds",
+        label: t("palette.finder.trace.typing"),
         keys: ["debug", "typing", "doc", "erased"],
         lead: <Icon name="search" size={14} />,
         run: () => {
           close()
           void Promise.all([import("~/kit/typing-trace"), import("~/kit/toasts")]).then(([m, toasts]) => {
             m.startTypingTrace()
-            toasts.announce("Tracing typing for 60 seconds")
+            toasts.announce(t("palette.finder.tracing.typing"))
           })
         },
       },
       {
         id: "action:copy-typing-trace",
         group: "actions",
-        label: "Copy typing trace",
+        label: t("palette.finder.copy.typing.trace"),
         keys: ["debug", "typing", "doc", "erased"],
         lead: <Icon name="copy" size={14} />,
         run: () => {
           close()
-          void Promise.all([import("~/kit/typing-trace"), import("~/kit/toasts")]).then(([m, toasts]) => toasts.copyText(m.typingTrace(), "Typing trace copied"))
+          void Promise.all([import("~/kit/typing-trace"), import("~/kit/toasts")]).then(([m, toasts]) => toasts.copyText(m.typingTrace(), t("palette.finder.typing.trace.copied")))
         },
       }
     )
