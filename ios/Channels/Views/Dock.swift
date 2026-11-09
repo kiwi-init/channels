@@ -91,7 +91,7 @@ struct Dock: View {
             }
             if !mentionable.isEmpty { mentions }
             if let sendingBack {
-                bar("arrowshape.turn.up.left.fill", Tone.decide, "Send back \(taskLabel(sendingBack.task))", sendingBack.title) { self.sendingBack = nil }
+                bar("arrowshape.turn.up.left.fill", Tone.decide, spoken("Send back \(taskLabel(sendingBack.task))"), sendingBack.title) { self.sendingBack = nil }
             } else if let answering {
                 bar("hand.raised.fill", Tone.decide, room.display(answering.from), answering.plain) { self.answering = nil }
             } else if let replyTo {
@@ -261,12 +261,12 @@ struct Dock: View {
     }
 
     private var placeholder: String {
-        if room.connection != .live { return "Connecting…" }
-        if sendingBack != nil { return "What to change" }
-        if let replyTo { return "Reply to \(room.display(replyTo.from))" }
-        if let answering { return "Answer \(room.display(answering.from))" }
-        if let here, here.kind == "dm", let other = room.other(in: here) { return "Message \(room.display(other))" }
-        return "Message"
+        if room.connection != .live { return spoken("Connecting…") }
+        if sendingBack != nil { return spoken("What to change") }
+        if let replyTo { return spoken("Reply to \(room.display(replyTo.from))") }
+        if let answering { return spoken("Answer \(room.display(answering.from))") }
+        if let here, here.kind == "dm", let other = room.other(in: here) { return spoken("Message \(room.display(other))") }
+        return spoken("Message")
     }
 
     private func restore(_ key: Spot) {
@@ -298,7 +298,7 @@ struct Dock: View {
                 lost += 1
             }
         }
-        if lost > 0 { error = lost == 1 ? "a photo couldn't be added" : "\(lost) photos couldn't be added" }
+        if lost > 0 { error = lost == 1 ? spoken("a photo couldn't be added") : spoken("\(lost) photos couldn't be added") }
     }
 
     private func clear(sent text: String, _ key: Spot) {
@@ -380,6 +380,6 @@ struct JumpButton: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(follow.unseen > 0 ? "\(follow.unseen) new, jump to the latest" : "Jump to the latest")
+        .accessibilityLabel(follow.unseen > 0 ? spoken("\(follow.unseen) new, jump to the latest") : spoken("Jump to the latest"))
     }
 }

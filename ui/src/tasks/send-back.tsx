@@ -1,6 +1,19 @@
+import "~/i18n/en/specs"
 import { useState } from "react"
 
-export function SendBack({ onSend, onCancel, ask = "What needs to change?", submit = "Send" }: { onSend: (why: string) => void; onCancel: () => void; ask?: string; submit?: string }) {
+import { t } from "~/i18n/i18n"
+
+export function SendBack({
+  onSend,
+  onCancel,
+  ask = t("tasks.sendback.ask"),
+  submit = t("tasks.sendback.send"),
+}: {
+  onSend: (why: string) => void
+  onCancel: () => void
+  ask?: string
+  submit?: string
+}) {
   const [why, setWhy] = useState("")
   return (
     <form

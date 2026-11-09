@@ -34,11 +34,13 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.json.JSONObject
+import com.kiwiinit.channels.R
+import com.kiwiinit.channels.model.Words
 
 class EngineException(message: String) : Exception(message)
 
 @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
-class Engine(private val app: Context, private val onPush: (Push) -> Unit, private val onLost: () -> Unit) {
+class Engine(private val app: Context, private val words: () -> Words, private val onPush: (Push) -> Unit, private val onLost: () -> Unit) {
     private val host = MutableContextWrapper(app)
     private val main = Handler(Looper.getMainLooper())
     private val reader = Executors.newSingleThreadExecutor()
@@ -77,7 +79,7 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
 
     fun destroy() {
         dead = true
-        fail("The engine stopped.")
+        fail(words()(R.string.engine_stopped))
         detach()
         web.destroy()
         reader.shutdown()
@@ -94,10 +96,11 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
             when (val found = call(PROBE)) {
                 "ok" -> return
                 "insecure" -> continue
-                else -> throw EngineException(found)
+                "missing" -> throw EngineException(words()(R.string.engine_missing))
+                else -> throw EngineException(words()(R.string.webview_too_old))
             }
         }
-        throw EngineException("This phone's WebView won't run Channels' encryption. Update Android System WebView from the Play Store, then open Channels again.")
+        throw EngineException(words()(R.string.webview_no_crypto))
     }
 
     suspend fun ask(request: JsonObject): JsonElement {
@@ -105,16 +108,16 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
         val reply = try {
             wire.parseToJsonElement(text).jsonObject
         } catch (e: IllegalArgumentException) {
-            throw EngineException("The engine answered something this app can't read: ${e.message}")
+            throw EngineException(words()(R.string.engine_unreadable, e.message.orEmpty()))
         }
         if (reply["ok"]?.jsonPrimitive?.booleanOrNull != true) {
-            throw EngineException(reply["error"]?.jsonPrimitive?.contentOrNull ?: "Something went wrong.")
+            throw EngineException(reply["error"]?.jsonPrimitive?.contentOrNull ?: words()(R.string.something_wrong))
         }
         return reply["value"] ?: JsonNull
     }
 
     private suspend fun call(expr: String): String {
-        if (dead) throw EngineException("The engine stopped.")
+        if (dead) throw EngineException(words()(R.string.engine_stopped))
         val id = ids.incrementAndGet()
         val done = CompletableDeferred<String>()
         calls[id] = done
@@ -210,7 +213,7 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
 
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
             dead = true
-            fail("The engine stopped.")
+            fail(words()(R.string.engine_stopped))
             main.post { onLost() }
             return true
         }
@@ -227,12 +230,12 @@ class Engine(private val app: Context, private val onPush: (Push) -> Unit, priva
         const val PROBE =
             """(async () => {
   if (!globalThis.isSecureContext || !globalThis.crypto || !crypto.subtle) return "insecure";
-  if (typeof kiwi !== "object") return "The app is missing its engine. Reinstall Channels.";
+  if (typeof kiwi !== "object") return "missing";
   try {
     await crypto.subtle.generateKey({ name: "Ed25519" }, false, ["sign", "verify"]);
     await crypto.subtle.generateKey({ name: "X25519" }, false, ["deriveBits"]);
   } catch (e) {
-    return "This phone's WebView is too old for Channels' encryption. Update Android System WebView from the Play Store, then open Channels again.";
+    return "old";
   }
   return "ok";
 })()"""

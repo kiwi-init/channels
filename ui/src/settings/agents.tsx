@@ -1,5 +1,10 @@
+import "~/i18n/en/settings"
+
 import { useState } from "react"
 
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 import { cx } from "~/kit/bits"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
@@ -13,32 +18,34 @@ import { Page } from "~/settings/sections"
 
 type Hook = ThisComputer["hooks"][number]
 
-const HOOK_SAYS: Record<Hook["state"], { state: string; action: string; tone?: string; why?: string }> = {
-  installed: { state: "Hooks on", action: "Remove" },
-  partial: { state: "Hooks out of date", action: "Update", tone: "tone-decide", why: "Its hooks can't wake the agent when a message comes." },
-  outdated: { state: "Hooks out of date", action: "Update", tone: "tone-decide", why: "Its hooks are from an older kiwi." },
-  missing: { state: "No hooks", action: "Add" },
-  off: { state: "No hooks", action: "Add", why: "You removed them. Kiwi won't add them back until you add them." },
-}
+const REMOVE = { action: "settings.agents.hooks.remove", label: "settings.agents.hooks.remove.for" } as const
+const UPDATE = { action: "settings.agents.hooks.update", label: "settings.agents.hooks.update.for" } as const
+const ADD = { action: "settings.agents.hooks.add", label: "settings.agents.hooks.add.for" } as const
 
-const HOOKS_DO = "Hooks bring new messages to agents here, and their permission prompts to Needs you."
+const HOOK_SAYS: Record<Hook["state"], { state: Key; action: Key; label: Key; tone?: string; why?: Key }> = {
+  installed: { state: "settings.agents.hooks.on", ...REMOVE },
+  partial: { state: "settings.agents.hooks.old", ...UPDATE, tone: "tone-decide", why: "settings.agents.hooks.why.partial" },
+  outdated: { state: "settings.agents.hooks.old", ...UPDATE, tone: "tone-decide", why: "settings.agents.hooks.why.outdated" },
+  missing: { state: "settings.agents.hooks.none", ...ADD },
+  off: { state: "settings.agents.hooks.none", ...ADD, why: "settings.agents.hooks.why.off" },
+}
 
 function HookState({ hook }: { hook: Hook }) {
   const { app } = useApp()
   const says = HOOK_SAYS[hook.state]
   return (
     <>
-      <span className={cx("set-harness-state", says.tone)} title={says.why}>
-        {says.state}
+      <span className={cx("set-harness-state", says.tone)} title={says.why && t(says.why)}>
+        {t(says.state)}
       </span>
       <button
         type="button"
         className="btn is-quiet is-small"
-        title={HOOKS_DO}
-        aria-label={`${says.action} hooks for ${hook.label}`}
+        title={t("settings.agents.hooks.do")}
+        aria-label={t(says.label, { harness: hook.label })}
         onClick={() => app.actions.setHooks(hook.harness, hook.state !== "installed")}
       >
-        {says.action}
+        {t(says.action)}
       </button>
     </>
   )
@@ -87,8 +94,8 @@ function HarnessRow({ harness, label, version, path, hook }: { harness: Harness;
 
 function KiwiState({ computer }: { computer: ThisComputer | null }) {
   if (!computer) return null
-  if (!computer.kiwi.running) return <span className="set-kiwi tone-decide">kiwi isn't running</span>
-  return <span className="set-kiwi">{computer.kiwi.version ? `kiwi ${computer.kiwi.version} · running` : "kiwi · running"}</span>
+  if (!computer.kiwi.running) return <span className="set-kiwi tone-decide">{t("settings.agents.kiwi.stopped")}</span>
+  return <span className="set-kiwi">{computer.kiwi.version ? t("settings.agents.kiwi.running.version", { version: computer.kiwi.version }) : t("settings.agents.kiwi.running")}</span>
 }
 
 function CheckComputer() {
@@ -104,9 +111,12 @@ function CheckComputer() {
   const problems = Array.isArray(state) ? state.filter((f) => !f.ok).length : 0
   return (
     <>
-      <Row label="Check this computer" hint={Array.isArray(state) ? (problems ? `${problems} to fix` : "Nothing to fix") : "Install, relay, devices and hooks."}>
+      <Row
+        label={t("settings.agents.check")}
+        hint={Array.isArray(state) ? (problems ? t("settings.agents.check.problems", { count: problems }) : t("settings.agents.check.fine")) : t("settings.agents.check.hint")}
+      >
         <button type="button" className="btn is-small" disabled={state === "running"} onClick={run}>
-          {state === "running" ? "Checking…" : Array.isArray(state) ? "Check again" : "Check"}
+          {state === "running" ? t("settings.sections.checking") : Array.isArray(state) ? t("settings.agents.check.again") : t("settings.agents.check.run")}
         </button>
       </Row>
       {Array.isArray(state) && (
@@ -116,11 +126,7 @@ function CheckComputer() {
           ))}
         </ul>
       )}
-      {state === "failed" && (
-        <p className="set-row-hint set-findings-none">
-          kiwi doctor didn't answer. Run it in a terminal to see why: <code>kiwi doctor</code>
-        </p>
-      )}
+      {state === "failed" && <p className="set-row-hint set-findings-none">{tr("settings.agents.check.failed", { command: <code>{"kiwi doctor"}</code> })}</p>}
     </>
   )
 }
@@ -154,25 +160,25 @@ export function AgentsSection() {
   const here = app.harnesses.filter((h) => h.installed || hooks.some((k) => k.harness === h.id))
   const away = app.harnesses.filter((h) => !here.includes(h))
   return (
-    <Page title="Agents">
+    <Page title={t("settings.settings.agents")}>
       <Personalities />
 
-      <Group title="Harnesses" aside={<KiwiState computer={computer} />}>
+      <Group title={t("settings.agents.harnesses")} aside={<KiwiState computer={computer} />}>
         {here.map((h) => (
           <HarnessRow key={h.id} harness={h.id} label={h.label} version={h.version} path={h.path} hook={hooks.find((k) => k.harness === h.id)} />
         ))}
         {loose.map((k) => (
           <HarnessRow key={k.harness} harness={k.harness} label={k.label} hook={k} />
         ))}
-        {away.length > 0 && <p className="set-harness-away">Not installed: {away.map((h) => h.label).join(", ")}</p>}
+        {away.length > 0 && <p className="set-harness-away">{t("settings.agents.not.installed", { names: away.map((h) => h.label).join(", ") })}</p>}
       </Group>
 
       {computer && (
-        <Group title="This computer">
+        <Group title={t("settings.agents.this.computer")}>
           <CheckComputer />
           {computer.contextLine !== null && (
-            <Row label="Ask agents for a checkpoint past 250k context" hint="An agent here past 250k tokens is asked to write where its work stands before it ends its turn.">
-              <Toggle label="Ask agents for a checkpoint past 250k context" on={computer.contextLine} onChange={actions.setContextLine} />
+            <Row label={t("settings.agents.checkpoint")} hint={t("settings.agents.checkpoint.hint")}>
+              <Toggle label={t("settings.agents.checkpoint")} on={computer.contextLine} onChange={actions.setContextLine} />
             </Row>
           )}
         </Group>

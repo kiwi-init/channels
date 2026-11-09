@@ -30,7 +30,6 @@ struct ChannelList: View {
         .background(Tone.canvas)
         .refreshable { await model.refresh() }
         .scrollDismissesKeyboard(.interactively)
-        .bar(.bottom) { QuickSend() }
         .animation(Motion.ease, value: model.waiting)
         .overlay {
             if model.channels.isEmpty {
@@ -46,6 +45,7 @@ struct ChannelList: View {
             }
         }
         .navigationTitle("Channels")
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
@@ -75,33 +75,12 @@ struct ChannelRows: View {
 
     var body: some View {
         Group {
-            if let spot = room.leadSpot, let lead = room.lead {
-                let member = room.member(lead)
-                Button {
-                    model.go(.place(spot))
-                } label: {
-                    let last = room.placeView(spot.place)?.last
-                    ConvoRow(
-                        title: room.display(lead), line: leadLine(last), at: last?.date, unread: model.unread(spot), live: live(member),
-                        since: member?.working == true ? member?.activity?.since.map { Date(timeIntervalSince1970: $0 / 1000) } : nil
-                    ) {
-                        Face(name: lead, member: member, size: 44)
-                    }
-                }
-                .flatRow()
-                .swipeActions(edge: .leading) { ReadToggle(spot: spot) }
-                .contextMenu {
-                    RowMenu(spot: spot)
-                } preview: {
-                    PeekView(spot: spot).environment(model)
-                }
-            }
             ForEach(rooms, id: \.self) { spot in
                 Button {
                     model.go(.place(spot))
                 } label: {
                     let last = room.placeView(spot.place)?.last
-                    ConvoRow(title: spot.general ? "general" : room.spotTitle(spot.place), line: roomLine(last), at: last?.date, unread: model.unread(spot)) {
+                    ConvoRow(title: spot.general ? spoken("general") : room.spotTitle(spot.place), line: roomLine(last), at: last?.date, unread: model.unread(spot)) {
                         Image(systemName: "number").foregroundStyle(Tone.ink2).iconDisc(Tone.raised)
                     }
                 }
@@ -117,7 +96,7 @@ struct ChannelRows: View {
                 model.go(.tasks(room.code))
             } label: {
                 let counts = TaskCounts(room.tasks)
-                ConvoRow(title: "Tasks", line: counts.line, at: nil, unread: false) {
+                ConvoRow(title: spoken("Tasks"), line: counts.line, at: nil, unread: false) {
                     Image(systemName: "checklist").foregroundStyle(Tone.ink2).iconDisc(Tone.raised)
                 } badge: {
                     EmptyView()
@@ -130,25 +109,13 @@ struct ChannelRows: View {
         .buttonStyle(.plain)
     }
 
-    private func live(_ member: MemberView?) -> String? {
-        guard let member, member.working else { return nil }
-        let task = member.doing.first.map { id in room.tasks.first { $0.id == id }.map { "\(taskLabel(id)) \($0.title)" } ?? taskLabel(id) }
-        let tool = member.activity?.tool.flatMap { $0.isEmpty ? nil : $0 }
-        return [task.map { "Working on \($0)" } ?? "Working", tool].compactMap { $0 }.joined(separator: " · ")
-    }
-
-    private func leadLine(_ last: MessageView?) -> String {
-        guard let last else { return room.connection == .connecting ? "Connecting…" : "Message your lead" }
-        return last.mine ? "You: \(Self.words(last))" : Self.words(last)
-    }
-
     private func roomLine(_ last: MessageView?) -> String {
-        guard let last else { return room.connection == .connecting ? "Connecting…" : "No messages yet" }
-        return "\(last.mine ? "You" : room.display(last.from)): \(Self.words(last))"
+        guard let last else { return room.connection == .connecting ? spoken("Connecting…") : spoken("No messages yet") }
+        return spoken("\(last.mine ? spoken("You") : room.display(last.from)): \(Self.words(last))")
     }
 
     static func words(_ m: MessageView) -> String {
-        if m.body.isEmpty && m.images > 0 { return m.images == 1 ? "Photo" : "\(m.images) Photos" }
+        if m.body.isEmpty && m.images > 0 { return spoken("\(m.images) Photos") }
         return m.plain.replacingOccurrences(of: "\n", with: " ")
     }
 }
@@ -170,8 +137,11 @@ struct TaskCounts {
     var total: Int { working + review + todo + done }
 
     var line: String {
-        let parts = [working > 0 ? "\(working) working" : nil, review > 0 ? "\(review) in review" : nil, todo > 0 ? "\(todo) to do" : nil].compactMap { $0 }
-        return parts.isEmpty ? "Nothing open" : parts.joined(separator: " · ")
+        let parts = [
+            working > 0 ? spoken("\(working) working") : nil, review > 0 ? spoken("\(review) in review") : nil,
+            todo > 0 ? spoken("\(todo) to do") : nil,
+        ].compactMap { $0 }
+        return parts.isEmpty ? spoken("Nothing open") : parts.joined(separator: " · ")
     }
 }
 
@@ -253,7 +223,7 @@ struct ConvoRow<Icon: View, Badge: View, Below: View>: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-        .accessibilityValue(unread ? "Unread" : "")
+        .accessibilityValue(unread ? spoken("Unread") : "")
     }
 }
 

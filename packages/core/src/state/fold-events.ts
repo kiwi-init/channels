@@ -52,7 +52,7 @@ function unlandShaken(c: GateCtx, t: Task, mark: Mark, why: string): void {
 
 function startRuns(c: GateCtx, tasks: ReadonlyMap<number, Task>, mark: Mark): void {
   for (const t of tasks.values()) {
-    const start = t.run ? runStart(c.github, t.run.id) : undefined;
+    const start = t.run ? runStart(c.github, t.run.id, t.createdRts ?? Number.NEGATIVE_INFINITY) : undefined;
     if (!t.run || !start || (t.run.start && start.started >= t.run.start.started)) continue;
     t.run.start = start;
     unlandShaken(c, t, mark, `GitHub reports run ${start.run} for ${t.run.id}, started earlier`);
@@ -518,6 +518,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         owner: ev.owner || undefined,
         createdBy: m.from,
         createdAt: at,
+        ...(m.rts !== undefined ? { createdRts: m.rts } : {}),
         updatedAt: at,
         notes: [],
         ...(ev.review?.trim() ? { review: ev.review.trim() } : {}),
@@ -652,6 +653,20 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
             : state === "done" && !cancel && ev.close === undefined
               ? { kind: "approved", by: m.from, seq: m.seq, ts: at, ...rts }
               : { kind: "withdrawn", seq: m.seq };
+      const judge = review ? mayFinish : isPerson(member) || lead;
+      if (!open && lands && state === "landing" && judge) {
+        const linked = prOfTask(c.github, c.branchPrefix, task);
+        const head = ev.at?.trim() || (linked?.state === "open" ? linked.sha : undefined);
+        task.rounds.push({
+          n: (task.rounds.at(-1)?.n ?? 0) + 1,
+          ...(head ? { at: head } : {}),
+          by: m.from,
+          seq: m.seq,
+          ts: at,
+          ...rts,
+          result: { kind: "approved", by: m.from, seq: m.seq, ts: at, ...rts, ...(head ? runsOf(ev.runs ?? runsAtHead(c, task, head)) : {}) },
+        });
+      }
       if (state === "review") {
         if (open) open.result = { kind: "withdrawn", seq: m.seq };
         const head = reopens ? (ev.run && newRun(task, ev.run) ? runPin(ev.run.id) : task.rounds.at(-1)?.at) : ev.at?.trim();
@@ -703,14 +718,14 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (ev.proof && !task.proof?.some((p) => p.url === ev.proof!.url) && (task.proof?.length ?? 0) < PROOF_MAX)
         task.proof = [...(task.proof ?? []), { seq: m.seq, by: m.from, ts: at, url: ev.proof.url, ...(ev.proof.label ? { label: ev.proof.label } : {}) }];
       if (ev.run && task.run?.id !== ev.run.id) {
-        const start = runStart(c.github, ev.run.id);
+        const start = runStart(c.github, ev.run.id, task.createdRts ?? Number.NEGATIVE_INFINITY);
         task.run = {
           id: ev.run.id,
           seq: m.seq,
           by: m.from,
           ...(ev.run.started !== undefined ? { reportedStart: ev.run.started } : {}),
           ...(start ? { start } : {}),
-          ...(runsUnknownSince(c.github, task.id) ? { blind: true as const } : {}),
+          ...(runsUnknownSince(c.github, task) ? { blind: true as const } : {}),
         };
       } else if (ev.run?.started !== undefined && task.run && task.run.reportedStart === undefined) {
         task.run.reportedStart = ev.run.started;

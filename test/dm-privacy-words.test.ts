@@ -25,11 +25,13 @@ describe("direct messages never claim to be private: every member of the channel
   });
 
   test("an empty DM on the desktop says who can read it", () => {
-    expect(read("ui/src/chat/feed-notes.tsx")).toContain("Everyone in the channel can read your messages with ${nickname(channel, where.with)}.");
+    expect(read("ui/src/i18n/en/chat-later.ts")).toContain('"chat.feed.notes.dm.everyone": "Everyone in the channel can read your messages with {name}."');
+    expect(read("ui/src/chat/feed-notes.tsx")).toContain('t("chat.feed.notes.dm.everyone", { name: nickname(channel, where.with) })');
   });
 
   test("the phones' lead chat says who can read it", () => {
     expect(read("ios/Channels/Views/Conversation.swift")).toContain('"Everyone in the channel can read this"');
-    expect(read("android/app/src/main/java/com/kiwiinit/channels/ui/Conversation.kt")).toContain('"Everyone in the channel can read this"');
+    expect(read("android/app/src/main/res/values/strings.xml")).toContain('<string name="everyone_reads">Everyone in the channel can read this</string>');
+    expect(read("android/app/src/main/java/com/kiwiinit/channels/ui/Conversation.kt")).toContain("R.string.everyone_reads");
   });
 });

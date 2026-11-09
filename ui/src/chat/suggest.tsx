@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState, type RefObject } from "react"
 
 import { mentionNames, type Picks } from "~/chat/linked"
 import { peopleMatches, taskMatches } from "~/chat/matches"
+import { t } from "~/i18n/i18n"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import type { Channel, Person, Task } from "~/model"
 import { nickname, onePerPerson, shown, Shown } from "~/names"
@@ -18,7 +19,7 @@ function picksFor(id: string): Picks {
   return made
 }
 
-type Pickable = { key: string; preventDefault(): void; stopPropagation(): void }
+type Pickable = { key: string; ctrlKey?: boolean; metaKey?: boolean; preventDefault(): void; stopPropagation(): void }
 
 export type Suggest = {
   id: string
@@ -42,27 +43,34 @@ export function useSuggest({
   text,
   area,
   onText,
+  withFormer = false,
 }: {
   channel: Channel
   id: string
   text: string
   area: RefObject<HTMLTextAreaElement | null>
   onText: (value: string, at: number) => void
+  withFormer?: boolean
 }): Suggest {
   const [caret, setCaret] = useState(text.length)
   const [pick, setPick] = useState(0)
-  const [closed, setClosed] = useState(false)
+  const [closedOn, setClosedOn] = useState<string | null>(null)
+  const [seen, setSeen] = useState(text)
+  if (seen !== text) {
+    setSeen(text)
+    setClosedOn(null)
+  }
+  const closed = closedOn !== null && closedOn === `${caret}:${text}`
   const typed = text.slice(0, caret)
   const query = closed ? undefined : MENTION.exec(typed)?.[2]
   const taskQuery = closed || query !== undefined ? undefined : TASK_REF.exec(typed)?.[2]
-  const people = query === undefined ? [] : peopleMatches(channel.people, query)
+  const people = query === undefined ? [] : peopleMatches(withFormer ? [...channel.people, ...(channel.former ?? [])] : channel.people, query)
   const tasks = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
   const mentions = useMemo(() => mentionNames(onePerPerson(channel.people), channel.former), [channel.people, channel.former])
 
   const moved = useCallback((at: number) => {
     setCaret(at)
     setPick(0)
-    setClosed(false)
   }, [])
   const insert = (before: string) => {
     onText(before + text.slice(caret), before.length)
@@ -85,7 +93,7 @@ export function useSuggest({
       setPick((pick + (e.key === "ArrowDown" ? 1 : count - 1)) % count)
       return true
     }
-    if (e.key === "Enter" || e.key === "Tab") {
+    if ((e.key === "Enter" && !e.ctrlKey && !e.metaKey) || e.key === "Tab") {
       e.preventDefault()
       const p = people[pick]
       const t = tasks[pick]
@@ -97,7 +105,7 @@ export function useSuggest({
     if (e.key === "Escape") {
       e.preventDefault()
       e.stopPropagation()
-      setClosed(true)
+      setClosedOn(`${caret}:${text}`)
       return true
     }
     return false
@@ -127,7 +135,7 @@ export function listId(s: Suggest): string | undefined {
 export function Suggestions({ channel, s }: { channel: Channel; s: Suggest }) {
   if (s.tasks.length)
     return (
-      <ul className="mentions" role="listbox" aria-label="Tasks" id={`${s.id}-tasks`}>
+      <ul className="mentions" role="listbox" aria-label={t("chat.suggest.tasks")} id={`${s.id}-tasks`}>
         {s.tasks.map((t, i) => (
           <li key={t.id} role="option" aria-selected={i === s.pick}>
             <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === s.pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => s.completeTask(t.id)}>
@@ -144,13 +152,13 @@ export function Suggestions({ channel, s }: { channel: Channel; s: Suggest }) {
     )
   if (!s.people.length) return null
   return (
-    <ul className="mentions" role="listbox" aria-label="People" id={`${s.id}-people`}>
+    <ul className="mentions" role="listbox" aria-label={t("chat.suggest.people")} id={`${s.id}-people`}>
       {s.people.map((p, i) => (
         <li key={p.name} role="option" aria-selected={i === s.pick}>
           <button type="button" tabIndex={-1} className={cx("mention-row", i === s.pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => s.complete(p.name)}>
             <Avatar person={p} size="sm" pip />
             <span className="mention-name">{shown(p)}</span>
-            <span className="dim">{p.role ?? p.runs ?? (p.kind === "human" ? "person" : "agent")}</span>
+            <span className="dim">{p.role ?? p.runs ?? (p.kind === "human" ? t("chat.suggest.person") : t("chat.suggest.agent"))}</span>
           </button>
         </li>
       ))}

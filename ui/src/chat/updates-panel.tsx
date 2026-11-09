@@ -1,6 +1,8 @@
+import "~/i18n/en/chat-later"
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { linesOf, type EventLine, type TaskRun } from "~/chat/fold-events"
+import { t } from "~/i18n/i18n"
 import { cx, Dot, statusWord } from "~/kit/bits"
 import { OutsideLink } from "~/kit/outside"
 import { clock, day, sameDay } from "~/kit/time"
@@ -51,7 +53,7 @@ export function Panel({ channel, runs, here, target, onClose }: { channel: Chann
     if (target !== null) box.current?.querySelector(`[data-seq="${target}"]`)?.scrollIntoView({ block: "center" })
   }, [target])
   return (
-    <div ref={box} role="dialog" aria-label="Updates" className="updates-panel">
+    <div ref={box} role="dialog" aria-label={t("chat.updates.panel.label")} className="updates-panel">
       {items.slice(0, shownTo).map((item) =>
         item.kind === "day" ? (
           <p key={`day${item.at}`} className="updates-day">
@@ -70,7 +72,7 @@ export function Panel({ channel, runs, here, target, onClose }: { channel: Chann
       )}
       {items.length > shownTo && (
         <button type="button" className="sys-more updates-older" onClick={() => setLimit(shownTo + PAGE)}>
-          Show older
+          {t("chat.updates.panel.show.older")}
         </button>
       )}
     </div>
@@ -82,19 +84,19 @@ function Line({ channel, line, tasks, here, forced }: { channel: Channel; line: 
   const shown = open || forced
   const toggle = (more: string) => (
     <button type="button" className="sys-more" aria-expanded={shown} onClick={() => setOpen(!shown)}>
-      {shown ? "· fewer" : `· ${more}`}
+      {`· ${shown ? t("chat.updates.panel.fewer") : more}`}
     </button>
   )
   if (line.kind === "one") return <Row m={line.m} here={here} yours={!!(line.m.task !== undefined && tasks.get(line.m.task)?.youReview)} />
   if (line.kind === "events") {
     const last = line.list[line.list.length - 1]!
-    if (!shown) return <Row m={last} here={here} more={toggle(`${line.list.length - 1} more`)} />
+    if (!shown) return <Row m={last} here={here} more={toggle(t("chat.updates.panel.more", { count: line.list.length - 1 }))} />
     return [...line.list].reverse().map((m) => <Row key={m.seq} m={m} here={here} more={m === last ? toggle("") : undefined} />)
   }
   if (line.kind === "github") return <GithubRow line={line} />
   return (
     <>
-      <TasksRow line={line} tasks={tasks} more={toggle(`${line.list.length} updates`)} />
+      <TasksRow line={line} tasks={tasks} more={toggle(t("chat.updates.panel.updates", { count: line.list.length }))} />
       {shown && line.tasks.map((t) => <TaskRow key={t.id} channel={channel} run={t} task={tasks.get(t.id)} />)}
     </>
   )
@@ -109,7 +111,7 @@ function Row({ m, here, yours, more }: { m: Message; here: number | null; yours?
       <time>{clock(m.at)}</time>
       {m.task !== undefined && m.task !== here && (
         <button type="button" className="fold-act" onClick={() => go({ to: "panel", panel: { kind: "task", task: m.task! } })}>
-          Open
+          {t("chat.updates.panel.open")}
         </button>
       )}
       {more}
@@ -142,7 +144,7 @@ function TasksRow({ line, tasks, more }: { line: Extract<EventLine, { kind: "tas
             </Fragment>
           )
         })}
-        {line.tasks.length > named.length && ` and ${line.tasks.length - named.length} more`}
+        {line.tasks.length > named.length && t("chat.updates.panel.and.more", { count: line.tasks.length - named.length })}
       </span>
       <time>{clock(last.at)}</time>
       {more}

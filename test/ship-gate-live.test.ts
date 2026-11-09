@@ -114,7 +114,9 @@ describe("rule 1: an agent's gate-shutting change goes out only after kiwi/revie
   test("with no owner app online, the asking agent alone turns kiwi/review waiting, then its check lands", async () => {
     checks = "up";
     await askCheck("Does the tray icon work on KDE?");
-    expect(posted).toEqual([{ name: reviewCheckOf(owner.ownerCh.roomId), head_sha: SHA, status: "in_progress", output: { title: `T${task}: waiting in Kiwi`, summary: `T${task}: a pre-ship check isn't passed` } }]);
+    expect(posted).toEqual([
+      { name: reviewCheckOf(owner.ownerCh.roomId), head_sha: SHA, status: "in_progress", output: { title: `T${task}: waiting in Kiwi`, summary: `T${task}: a pre-ship check isn't passed` } },
+    ]);
     expect(await gate()).toMatchObject({ open: false, rejected: false });
   });
 

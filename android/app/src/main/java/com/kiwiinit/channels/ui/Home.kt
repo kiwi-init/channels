@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.model.needing
+import androidx.compose.ui.res.stringResource
+import com.kiwiinit.channels.R
 
 enum class Tab { Chats, Needs, Settings }
 
@@ -51,9 +53,9 @@ fun Home(model: AppModel, open: (Spot) -> Unit, tasks: (String) -> Unit, first: 
             }
         }
         NavigationBar {
-            TabItem("Chats", Icons.Filled.Forum, Icons.Outlined.Forum, tab == Tab.Chats, 0) { tab = Tab.Chats }
-            TabItem("Needs you", Icons.Filled.PanTool, Icons.Outlined.PanTool, tab == Tab.Needs, model.needing) { tab = Tab.Needs }
-            TabItem("You", Icons.Filled.AccountCircle, Icons.Outlined.AccountCircle, tab == Tab.Settings, 0) { tab = Tab.Settings }
+            TabItem(stringResource(R.string.tab_chats), Icons.Filled.Forum, Icons.Outlined.Forum, tab == Tab.Chats, 0) { tab = Tab.Chats }
+            TabItem(stringResource(R.string.needs_you), Icons.Filled.PanTool, Icons.Outlined.PanTool, tab == Tab.Needs, model.needing) { tab = Tab.Needs }
+            TabItem(stringResource(R.string.tab_you), Icons.Filled.AccountCircle, Icons.Outlined.AccountCircle, tab == Tab.Settings, 0) { tab = Tab.Settings }
         }
     }
 }

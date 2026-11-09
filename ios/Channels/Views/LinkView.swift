@@ -46,17 +46,21 @@ struct LinkView: View {
             }
         case .opening:
             VStack(alignment: .leading, spacing: 0) {
-                waiting("Opening the sign-in…")
+                waiting(spoken("Opening the sign-in…"))
                 QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
                     .padding(.top, 24)
             }
         case .signingIn(let url, let code):
             VStack(alignment: .leading, spacing: 0) {
                 Text("Sign in with GitHub").type(.title, .semibold).foregroundStyle(Tone.ink)
-                Text(code.isEmpty ? "Use the account Channels on your computer uses." : "GitHub asks for this code. The button copies it: paste it there, then authorize.")
-                    .type(.ui)
-                    .foregroundStyle(Tone.ink2)
-                    .padding(.top, 6)
+                Text(
+                    code.isEmpty
+                        ? spoken("Use the account Channels on your computer uses.")
+                        : spoken("GitHub asks for this code. The button copies it: paste it there, then authorize.")
+                )
+                .type(.ui)
+                .foregroundStyle(Tone.ink2)
+                .padding(.top, 6)
                 if !code.isEmpty {
                     Text(code)
                         .font(.mono(.title))
@@ -68,7 +72,7 @@ struct LinkView: View {
                 if url != nil {
                     PrimaryButton(title: code.isEmpty ? "Open GitHub" : "Copy Code and Open GitHub") { model.openGitHub() }
                 }
-                waiting("Waiting for GitHub").padding(.top, 20)
+                waiting(spoken("Waiting for GitHub")).padding(.top, 20)
                 QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
                     .padding(.top, 24)
             }
@@ -113,7 +117,7 @@ struct LinkView: View {
                 QuietButton(title: "Not My Key") { if !keeping { Task { await model.refuseLink(fingerprint) } } }
                     .padding(.top, 10)
             } else {
-                waiting("Waiting for your computer")
+                waiting(spoken("Waiting for your computer"))
                 QuietButton(title: "Cancel") { Task { await model.cancelLink() } }
                     .padding(.top, 24)
             }
@@ -129,9 +133,9 @@ struct LinkView: View {
 
     private var approveHint: String {
         switch model.linking {
-        case .asking: "Channels on your computer asks about this iPhone. Click Continue there."
-        case .check: "Your computer took the digits."
-        default: "Type these digits there."
+        case .asking: spoken("Channels on your computer asks about this iPhone. Click Continue there.")
+        case .check: spoken("Your computer took the digits.")
+        default: spoken("Type these digits there.")
         }
     }
 

@@ -1,9 +1,11 @@
+import "~/i18n/en/specs"
 import "~/styles/tasks.css"
 import "~/styles/github.css"
 import "~/styles/specs.css"
 
 import { useState } from "react"
 
+import { t } from "~/i18n/i18n"
 import { Avatar, cx, Loading } from "~/kit/bits"
 import { Empty } from "~/kit/empty"
 import { Track } from "~/kit/glide"
@@ -36,29 +38,29 @@ function groupsOf(channel: Channel, shown: Shown): Group[] {
   const specs = channel.specs ?? []
   if (shown === "done")
     return [
-      { key: "accepted", label: "Accepted", rows: specs.filter((s) => s.stage === "accepted") },
-      { key: "dropped", label: "Dropped", rows: specs.filter((s) => s.stage === "dropped") },
+      { key: "accepted", label: t("specs.view.accepted"), rows: specs.filter((s) => s.stage === "accepted") },
+      { key: "dropped", label: t("specs.view.dropped"), rows: specs.filter((s) => s.stage === "dropped") },
     ].filter((g) => g.rows.length)
   const open = specs.filter((s) => !s.result)
   const yours = open.filter(needsYou)
   const rest = open.filter((s) => !needsYou(s))
   return [
-    { key: "yours", label: "Needs you", tone: "tone-decide", rows: yours },
-    { key: "working", label: "Working", tone: "tone-doing", rows: rest.filter((s) => s.stage === "working" || (s.stage === "queued" && !!s.planner)) },
+    { key: "yours", label: t("specs.view.needs.you"), tone: "tone-decide", rows: yours },
+    { key: "working", label: t("specs.view.working"), tone: "tone-doing", rows: rest.filter((s) => s.stage === "working" || (s.stage === "queued" && !!s.planner)) },
     {
       key: "queued",
-      label: "Waiting for an agent",
+      label: t("specs.view.waiting"),
       rows: rest.filter((s) => s.stage === "queued" && !s.planner).sort((a, b) => (a.queue ?? 99) - (b.queue ?? 99)),
     },
-    { key: "drafts", label: "Drafts", rows: rest.filter((s) => s.stage === "draft") },
-    { key: "delivered", label: "Delivered", rows: rest.filter((s) => s.stage === "delivered") },
+    { key: "drafts", label: t("specs.view.drafts"), rows: rest.filter((s) => s.stage === "draft") },
+    { key: "delivered", label: t("specs.view.delivered"), rows: rest.filter((s) => s.stage === "delivered") },
   ].filter((g) => g.rows.length)
 }
 
 export function SpecsView({ channel, tall }: { channel: Channel; tall?: boolean }) {
   const { nav } = useApp()
   const spec = nav.spec !== undefined ? channel.specs?.find((s) => s.ask === nav.spec) : undefined
-  if (spec) return <SpecPage channel={channel} spec={spec} />
+  if (spec) return <SpecPage key={`${channel.code}:${spec.ask}`} channel={channel} spec={spec} />
   return <SpecList channel={channel} tall={!!tall} />
 }
 
@@ -69,26 +71,26 @@ function SpecList({ channel, tall }: { channel: Channel; tall: boolean }) {
   const open = specs.filter((s) => !s.result).length
   const groups = groupsOf(channel, shown)
   const inSpecs = new Set(specs.flatMap((s) => s.tasks))
-  const loose = channel.tasks.filter((t) => !inSpecs.has(t.id) && !t.archived && t.status !== "done")
-  const live = channel.tasks.some((t) => !t.archived)
+  const loose = channel.tasks.filter((task) => !inSpecs.has(task.id) && !task.archived && task.status !== "done")
+  const live = channel.tasks.some((task) => !task.archived)
   return (
     <div className="board">
       <div className="board-list gh-list specs-list">
         {live && !tall && <NowCard channel={channel} />}
         <div className="gh-top">
           {specs.length > 0 && (
-            <Track className="seg" role="group" aria-label="Open or done">
+            <Track className="seg" role="group" aria-label={t("specs.view.open.or.done")}>
               <button type="button" aria-pressed={shown === "open"} onClick={() => setShown("open")}>
-                Open <span className="gh-n num">{open}</span>
+                {t("specs.view.open")} <span className="gh-n num">{open}</span>
               </button>
               <button type="button" aria-pressed={shown === "done"} onClick={() => setShown("done")}>
-                Done <span className="gh-n num">{specs.length - open}</span>
+                {t("specs.view.done")} <span className="gh-n num">{specs.length - open}</span>
               </button>
             </Track>
           )}
           <button type="button" className="btn is-primary" onClick={() => setMaking(true)}>
             <Icon name="plus" size={14} />
-            New spec
+            {t("specs.view.new")}
           </button>
         </div>
         {groups.length || (shown === "open" && loose.length) ? (
@@ -96,12 +98,12 @@ function SpecList({ channel, tall }: { channel: Channel; tall: boolean }) {
             {groups.map((g) => (
               <GroupCard key={g.key} channel={channel} group={g} />
             ))}
-            {shown === "open" && loose.length > 0 && <Loose channel={channel} tasks={loose} label={specs.length ? "Not in a spec" : "Tasks"} />}
+            {shown === "open" && loose.length > 0 && <Loose channel={channel} tasks={loose} label={specs.length ? t("specs.view.not.in.spec") : t("specs.view.tasks")} />}
           </div>
         ) : channel.loading ? (
           <Loading />
         ) : (
-          <Empty title={!specs.length ? "No specs yet." : shown === "open" ? "No open specs." : "Nothing finished yet."} icon="spec" />
+          <Empty title={!specs.length ? t("specs.view.empty") : shown === "open" ? t("specs.view.empty.open") : t("specs.view.empty.done")} icon="spec" />
         )}
       </div>
       {making && <NewSpec channel={channel} onClose={() => setMaking(false)} />}
@@ -141,15 +143,15 @@ function Loose({ channel, tasks, label }: { channel: Channel; tasks: Task[]; lab
         </h2>
       </div>
       <ul className="board-rows">
-        {rows.map((t) => (
-          <li key={t.id}>
-            <TaskRow channel={channel} t={t} on={t.id === on} />
+        {rows.map((task) => (
+          <li key={task.id}>
+            <TaskRow channel={channel} t={task} on={task.id === on} />
           </li>
         ))}
       </ul>
       {tasks.length > LOOSE_SHOWN && (
         <button type="button" className="board-more" onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `Show ${tasks.length - LOOSE_SHOWN} more`}
+          {all ? t("specs.view.show.fewer") : t("specs.view.show.more", { count: tasks.length - LOOSE_SHOWN })}
         </button>
       )}
     </section>
@@ -161,9 +163,9 @@ function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
   const who = workersOf(channel, spec)
   const part = spec.stage === "delivered" ? "result" : spec.stage === "working" ? "inside" : "spec"
   const on = nav.panel?.kind === "task" ? nav.panel.task : null
-  const tasks = spec.result ? [] : tasksOf(channel, spec).filter((t) => !t.archived && !t.cancelled)
-  const open = tasks.filter((t) => t.status !== "done")
-  const [unfolded, setUnfolded] = useState(() => open.some((t) => t.status === "waiting" || t.id === on))
+  const tasks = spec.result ? [] : tasksOf(channel, spec).filter((task) => !task.archived && !task.cancelled)
+  const open = tasks.filter((task) => task.status !== "done")
+  const [unfolded, setUnfolded] = useState(() => open.some((task) => task.status === "waiting" || task.id === on))
   const shown = unfolded && open.length > 0
   return (
     <li className={cx("gh-item", shown && "is-unfolded")}>
@@ -185,26 +187,26 @@ function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
           type="button"
           className="spec-fold num"
           aria-expanded={shown}
-          aria-label={`${shown ? "Hide" : "Show"} the ${open.length} open ${open.length === 1 ? "task" : "tasks"} of ${wordsPlain(spec.title, channel.nicknames)}`}
+          aria-label={t(shown ? "specs.view.hide.tasks" : "specs.view.show.tasks", { count: open.length, title: wordsPlain(spec.title, channel.nicknames) })}
           onClick={() => setUnfolded(!unfolded)}
         >
           {tasks.length - open.length}/{tasks.length}
-          <span>{tasks.length === 1 ? "task" : "tasks"}</span>
+          <span>{t("specs.view.task.word", { count: tasks.length })}</span>
           <Icon name="down" size={12} />
         </button>
       ) : tasks.length > 0 ? (
         <span className="spec-fold is-done num">
           {tasks.length}/{tasks.length}
-          <span>{tasks.length === 1 ? "task" : "tasks"}</span>
+          <span>{t("specs.view.task.word", { count: tasks.length })}</span>
         </span>
       ) : (
         <span className="spec-fold is-empty" aria-hidden="true" />
       )}
       {shown && (
         <ul className="board-rows spec-steps">
-          {open.map((t) => (
-            <li key={t.id}>
-              <TaskRow channel={channel} t={t} on={t.id === on} />
+          {open.map((task) => (
+            <li key={task.id}>
+              <TaskRow channel={channel} t={task} on={task.id === on} />
             </li>
           ))}
         </ul>

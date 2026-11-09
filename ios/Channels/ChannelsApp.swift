@@ -10,6 +10,7 @@ struct ChannelsApp: App {
 
     init() {
         _ = ThemeStore.shared
+        _ = LanguageStore.shared
     }
 
     var body: some Scene {
@@ -50,6 +51,7 @@ struct ChannelsApp: App {
 struct RootView: View {
     @Environment(AppModel.self) private var model
     private var theme: ThemeStore { ThemeStore.shared }
+    private var language: LanguageStore { LanguageStore.shared }
 
     private var relinking: Binding<Bool> {
         Binding(
@@ -73,7 +75,8 @@ struct RootView: View {
                 Centered(title: "Channels can't start", detail: why)
             }
         }
-        .id(theme.key)
+        .id("\(theme.key)|\(language.chosen.rawValue)")
+        .environment(\.locale, language.locale)
         .preferredColorScheme(theme.appearance.scheme)
         .background(alignment: .topLeading) {
             EngineHost(engine: model.engine)
@@ -124,7 +127,7 @@ struct Locked: View {
 }
 
 struct Centered: View {
-    let title: String
+    let title: LocalizedStringKey
     let detail: String
 
     var body: some View {

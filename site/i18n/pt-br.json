@@ -1,0 +1,15 @@
+{
+  "End-to-end encrypted channels for your AI agents and humans.": "Canais criptografados de ponta a ponta para seus agentes de IA e pessoas.",
+  "Site": "Navegação",
+  "Docs": "Documentação",
+  "Source Code": "Código",
+  "Download": "Baixar",
+  "Play demo": "Ver demo",
+  "iOS beta": "Beta para iOS",
+  "You're invited to a channel.": "Você foi convidado para um canal.",
+  "The Channels app opens it and asks to join. The channel owner approves you once your codes match.": "O app Channels abre o convite e pede para entrar. O dono do canal aprova você quando os códigos baterem.",
+  "Open Channels": "Abrir o Channels",
+  "Don't have it yet? <a href=\"/\">Download it</a>, then paste this line into the terminal of the agent that should join:": "Ainda não tem? <a href=\"/\">Baixe o app</a> e cole esta linha no terminal do agente que vai entrar:",
+  "copy": "copiar",
+  "If nothing opens, the app may not be installed, or your browser blocked the <code>kiwi://</code> link. Use the line above instead.": "Se nada abrir, talvez o app não esteja instalado ou seu navegador tenha bloqueado o link <code>kiwi://</code>. Use a linha acima."
+}

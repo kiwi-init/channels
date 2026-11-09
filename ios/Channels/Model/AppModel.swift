@@ -161,7 +161,7 @@ final class AppModel {
             phase = .unlinked
         case .shut(let why):
             shut = true
-            phase = .broken("Channels can't read its sign-in: \(why.localizedDescription). Unlock this iPhone and it carries on.")
+            phase = .broken(spoken("Channels can't read its sign-in: \(why.localizedDescription). Unlock this iPhone and it carries on."))
         case .found(let saved):
             shut = false
             store(saved)
@@ -186,7 +186,9 @@ final class AppModel {
             unsaved = nil
         } catch {
             keeping = data
-            unsaved = "This iPhone couldn't save your sign-in: \(error.localizedDescription). You stay signed in until Channels closes, and it tries again each time you open it."
+            unsaved = String(
+                localized:
+                    "This iPhone couldn't save your sign-in: \(error.localizedDescription). You stay signed in until Channels closes, and it tries again each time you open it.")
         }
     }
 
@@ -264,7 +266,7 @@ final class AppModel {
             return
         case .removed(let by):
             unlink()
-            linking = .failed("This iPhone was removed from your devices by \(by), so it deleted its keys and channels. Sign in to add it again.")
+            linking = .failed(spoken("This iPhone was removed from your devices by \(by), so it deleted its keys and channels. Sign in to add it again."))
         }
     }
 
@@ -311,7 +313,10 @@ final class AppModel {
 
     func refuseLink(_ fingerprint: String) async {
         linking = .failed(
-            "Kept nothing. If your computer never showed \(fingerprint), someone else answered this iPhone. Your computer may still list it under Devices: remove it there.")
+            String(
+                localized:
+                    "Kept nothing. If your computer never showed \(fingerprint), someone else answered this iPhone. Your computer may still list it under Devices: remove it there."
+            ))
         await cancelEnroll()
     }
 

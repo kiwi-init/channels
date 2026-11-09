@@ -49,7 +49,7 @@ final class Lock {
         defer { asking = false }
         let context = LAContext()
         do {
-            locked = !(try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock your channels"))
+            locked = !(try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: spoken("Unlock your channels")))
         } catch {
             locked = true
         }

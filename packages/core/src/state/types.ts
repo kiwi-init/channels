@@ -123,6 +123,7 @@ export interface Task {
   owner?: string;
   createdBy: string;
   createdAt: number;
+  createdRts?: number;
   updatedAt: number;
   notes: TaskNote[];
   proof?: TaskProof[];
@@ -322,7 +323,7 @@ export interface FoldBase {
     releases?: GithubRelease[];
     runs?: GithubRun[];
     runsSince?: number | null;
-    runsForgotten?: number;
+    runsForgotten?: number | null;
   };
   hold: Hold | null;
   voice?: boolean;

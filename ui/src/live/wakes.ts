@@ -2,6 +2,7 @@ import { useMemo, useSyncExternalStore } from "react"
 
 import type { WakeSeat } from "@kiwi/core/wake.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
+import { t } from "~/i18n/i18n"
 
 let seats: readonly WakeSeat[] = []
 let asking = false
@@ -43,7 +44,7 @@ export function useWakes(room: string): ReadonlyMap<string, boolean> {
 
 export async function setWake(room: string, agent: string, on: boolean): Promise<void> {
   const b = bridge()
-  if (!b) throw new Error("Only the desktop app wakes agents on this computer")
-  if (!seats.some((s) => s.room === room && s.agent === agent)) throw new Error(`${agent} doesn't run on this computer, so it can't wake it`)
+  if (!b) throw new Error(t("live.wakes.desktop.only"))
+  if (!seats.some((s) => s.room === room && s.agent === agent)) throw new Error(t("live.wakes.not.here", { agent }))
   tell(await b.setWake(room, agent, on ? "on" : "off"))
 }

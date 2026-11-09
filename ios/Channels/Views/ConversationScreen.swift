@@ -51,9 +51,14 @@ struct ConversationScreen: View {
                 }
                 .navigationTitle(room.spotTitle(spot.place))
                 .subtitle(room.status(of: spot.place))
+                .toolbar {
+                    if room.messages.contains(where: \.event) {
+                        ToolbarItem(placement: .topBarTrailing) { UpdatesButton(room: room) }
+                    }
+                }
                 .onChange(of: room.placeView(spot.place)?.lastSeq) { _, _ in seen() }
             } else {
-                Centered(title: "This channel is gone", detail: "Its owner closed it, or this phone was removed from it.")
+                Centered(title: "This channel is gone", detail: spoken("Its owner closed it, or this phone was removed from it."))
             }
         }
         .background(Tone.canvas)
@@ -114,14 +119,14 @@ extension RoomView {
         let place = placeView(key)
         let main = key == "main"
         let other = (place.flatMap { self.other(in: $0) } ?? dmWith(key)).flatMap { member($0) }
-        let busy = other.flatMap { o in o.working ? (o.doing.first.map { "working on \(taskLabel($0))" } ?? "working") : nil }
+        let busy = other.flatMap { o in o.working ? (o.doing.first.map { spoken("working on \(taskLabel($0))") } ?? spoken("working")) : nil }
         let needs = main ? asks.count + reviews.count + open.count : 0
         let parts: [String] = [
-            key.hasPrefix("dm:") ? (busy ?? (other?.here == true ? "here" : "away")) : nil,
-            connection == .connecting ? "Connecting…" : nil,
-            connection == .reconnecting ? "Reconnecting…" : nil,
-            main && working > 0 ? "\(working) working" : nil,
-            needs > 0 ? "\(needs) \(needs == 1 ? "needs" : "need") you" : nil,
+            key.hasPrefix("dm:") ? (busy ?? (other?.here == true ? spoken("here") : spoken("away"))) : nil,
+            connection == .connecting ? spoken("Connecting…") : nil,
+            connection == .reconnecting ? spoken("Reconnecting…") : nil,
+            main && working > 0 ? spoken("\(working) working") : nil,
+            needs > 0 ? spoken("\(needs) need you") : nil,
         ].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }

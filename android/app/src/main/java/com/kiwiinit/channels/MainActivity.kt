@@ -1,5 +1,6 @@
 package com.kiwiinit.channels
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -8,6 +9,8 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.kiwiinit.channels.model.AppModel
+import com.kiwiinit.channels.model.Language
+import com.kiwiinit.channels.model.Words
 import com.kiwiinit.channels.theme.ChannelsTheme
 import com.kiwiinit.channels.ui.Root
 
@@ -15,9 +18,14 @@ class MainActivity : FragmentActivity() {
     private val model: AppModel get() = (application as ChannelsApp).model
     private lateinit var prompt: BiometricPrompt
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(Language.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        model.words = Words(resources)
         prompt = model.lock.prompt(this)
         model.boot()
         lifecycle.addObserver(

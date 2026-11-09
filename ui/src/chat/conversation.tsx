@@ -16,6 +16,7 @@ import { threadReply } from "~/chat/quote"
 import { flash, jumpTo, ReplyContext, useReplying, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
+import { t } from "~/i18n/i18n"
 import { Loading } from "~/kit/bits"
 import { land } from "~/kit/glide"
 import { later } from "~/kit/later"
@@ -174,7 +175,11 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
         ) : (
           <Feed key={`${key}\n${nav.visit}\n${channel.loading ? "loading" : "ready"}`} channel={channel} where={where} spot={spot} jump={here} doc={doc} />
         )}
-        {where.kind === "theirs" ? <ReadOnly channel={channel} between={where.between} /> : <Composer channel={channel} where={where} placeholder={`Message ${placeName}`} doc={doc} />}
+        {where.kind === "theirs" ? (
+          <ReadOnly channel={channel} between={where.between} />
+        ) : (
+          <Composer channel={channel} where={where} placeholder={t("chat.conversation.message.place", { place: placeName })} doc={doc} />
+        )}
       </EditHere.Provider>
     </ReplyContext.Provider>
   )
@@ -553,12 +558,12 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
                     )}
                     {m.membersOnly && !list[i - 1]?.membersOnly && where.kind === "dm" && (
                       <p className="day is-members" role="separator">
-                        <span>From here on, new messages are sent to you and {nickname(channel, where.with)} alone</span>
+                        <span>{t("chat.conversation.members.only", { name: nickname(channel, where.with) })}</span>
                       </p>
                     )}
                     {m.seq === mark && (
                       <p className="feed-new" role="separator">
-                        <span>New</span>
+                        <span>{t("chat.conversation.new")}</span>
                       </p>
                     )}
                     {compact && m.seq === foldAt && (
@@ -610,7 +615,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
       </div>
       {(fresh > 0 || far) && (
         <button type="button" className="feed-jump" onClick={toLatest}>
-          {fresh > 0 ? `${fresh} new ${fresh === 1 ? "message" : "messages"}` : "Jump to latest"}
+          {fresh > 0 ? t("chat.conversation.new.messages", { count: fresh }) : t("chat.conversation.jump.latest")}
           <span aria-hidden="true"> ↓</span>
         </button>
       )}
@@ -624,7 +629,7 @@ function ChatterFold({ channel, run, open, onToggle }: { channel: Channel; run: 
       <span className="sys-line" />
       <span className="sys-text">{chatterLine(run, (n) => nickname(channel, n))}</span>
       <button type="button" className="fold-act" aria-expanded={open} onClick={onToggle}>
-        {open ? "Hide" : "Show"}
+        {open ? t("chat.conversation.hide") : t("chat.conversation.show")}
       </button>
     </p>
   )
@@ -636,7 +641,7 @@ function Fold({ run, open, onToggle }: { run: readonly Message[]; open: boolean;
       <span className="sys-line" />
       <span>{foldText(run)}</span>
       <button type="button" className="fold-act" aria-expanded={open} onClick={onToggle}>
-        {open ? "Hide" : run.length === 1 ? "Show it" : "Show them"}
+        {open ? t("chat.conversation.hide") : run.length === 1 ? t("chat.conversation.show.it") : t("chat.conversation.show.them")}
       </button>
     </p>
   )
@@ -645,7 +650,7 @@ function Fold({ run, open, onToggle }: { run: readonly Message[]; open: boolean;
 export function ReadOnly({ channel, between: names }: { channel: Channel; between: readonly [string, string] }) {
   return (
     <div className="compose">
-      <p className="compose-note">Only {between(channel, names)} write here.</p>
+      <p className="compose-note">{t("chat.conversation.only.write", { names: between(channel, names) })}</p>
     </div>
   )
 }
@@ -671,7 +676,7 @@ function Working({ people }: { people: Person[] }) {
             {liveOf(p)?.text}
           </Fragment>
         ))}
-        {more > 0 && `, ${more} more working`}
+        {more > 0 && t("chat.conversation.more.working", { count: more })}
       </span>
     </p>
   )

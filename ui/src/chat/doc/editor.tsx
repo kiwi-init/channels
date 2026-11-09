@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import "~/styles/thread-doc.css"
 
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react"
@@ -34,6 +35,9 @@ import { preview } from "~/chat/reply"
 import { letSay } from "~/chat/doc/sayer"
 import { DOC_LEVEL, onWriterFloor, writerFloor } from "@kiwi/core/doc/level.ts"
 import { useCommands } from "~/chat/use-commands"
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 import { Icon } from "~/kit/icons"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { clock } from "~/kit/time"
@@ -420,7 +424,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
   const view: EditorView = new EditorView(mount, {
     state,
     editable: () => false,
-    attributes: { class: "doc", role: "textbox", "aria-multiline": "true", "aria-label": "Thread" },
+    attributes: { class: "doc", role: "textbox", "aria-multiline": "true", "aria-label": t("chat.doc.editor.thread") },
     nodeViews: {
       block: (node) => new BlockView(node, heads, feet, shown),
       mention: mentionView(opts.name),
@@ -459,11 +463,11 @@ function ReplyLine({ channel, to, quote, onClose }: { channel: Channel; to: Mess
     <div className={cx("compose-reply", "blk-re", quote && "is-excerpt")}>
       <Icon name="reply" size={13} />
       <span className="compose-reply-text">
-        {quote ? "Quoting" : "Replying to"} {to && <b>{nickname(channel, to.from)}</b>}{" "}
+        {tr(quote ? "chat.doc.editor.quoting" : "chat.doc.editor.replying.to", { name: to && <b>{nickname(channel, to.from)}</b> })}{" "}
         <span className={quote ? "compose-reply-excerpt" : "dim"}>{quote ? `“${line.slice(0, 160)}${line.length > 160 ? "…" : ""}”` : line.slice(0, 160)}</span>
       </span>
       {onClose && (
-        <button type="button" className="compose-reply-x" aria-label="Cancel reply" title="Cancel reply (Esc)" onClick={onClose}>
+        <button type="button" className="compose-reply-x" aria-label={t("chat.doc.editor.cancel.reply")} title={t("chat.doc.editor.cancel.reply.esc")} onClick={onClose}>
           <Icon name="close" size={13} />
         </button>
       )}
@@ -483,11 +487,13 @@ function Head({ channel, attrs, onUnreply }: { channel: Channel; attrs: BlockAtt
         <button type="button" className="msg-name" title={clock(attrs.at)} onClick={() => go({ to: "modal", modal: { kind: "person", name: attrs.author } })}>
           {nickname(channel, attrs.author)}
         </button>
-        {(attrs.kind === "tool" || attrs.kind === "comment") && <span className="blk-kind">{attrs.kind}</span>}
+        {(attrs.kind === "tool" || attrs.kind === "comment") && <span className="blk-kind">{t(KINDS[attrs.kind])}</span>}
       </span>
     </>
   )
 }
+
+const KINDS: Record<"tool" | "comment", Key> = { tool: "chat.doc.editor.kind.tool", comment: "chat.doc.editor.kind.comment" }
 
 type Option = { kind: "@"; person: Person } | { kind: "#"; task: Task } | { kind: "/"; command: Command }
 
@@ -524,7 +530,13 @@ function Suggest({ channel, query, options, pick, at, onPick }: { channel: Chann
   }, [pick, place])
   if (options.length === 0) return null
   return (
-    <ul ref={list} className="mentions doc-suggest" role="listbox" aria-label={query.kind === "@" ? "People" : query.kind === "/" ? "Commands" : "Tasks"} style={place}>
+    <ul
+      ref={list}
+      className="mentions doc-suggest"
+      role="listbox"
+      aria-label={query.kind === "@" ? t("chat.doc.editor.people") : query.kind === "/" ? t("chat.doc.editor.commands") : t("chat.doc.editor.tasks")}
+      style={place}
+    >
       {options.map((o, i) => (
         <li key={o.kind === "@" ? o.person.name : o.kind === "/" ? o.command.name : o.task.id} role="option" aria-selected={i === pick}>
           {o.kind === "/" ? (
@@ -726,16 +738,16 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
         : where.kind === "dm"
           ? nickname(channel, where.with)
           : ""
-  const prompt = where.kind === "dm" ? `Write to ${place}` : `Write in ${place}`
+  const prompt = where.kind === "dm" ? t("chat.doc.editor.write.to", { place }) : t("chat.doc.editor.write.in", { place })
 
   return (
-    <div ref={box} className="thread-doc is-read-only" style={{ "--place": JSON.stringify(`${prompt} · ${SEND_KEYS} sends`) } as CSSProperties}>
+    <div ref={box} className="thread-doc is-read-only" style={{ "--place": JSON.stringify(t("chat.doc.editor.placeholder", { prompt, keys: SEND_KEYS })) } as CSSProperties}>
       {tooOld && (
         <p className="doc-old">
-          A newer Channels writes here. You can read; typing comes back with the new look.
+          {t("chat.doc.editor.too.old")}
           {app.account?.uiUpdate && (
             <button type="button" onClick={() => app.actions.applyUi()}>
-              Switch
+              {t("chat.doc.editor.switch")}
             </button>
           )}
         </p>
@@ -806,7 +818,7 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
         new LiveDoc(
           (at, on) => actions.openDoc(code, thread, at, on),
           first.current,
-          (why) => announce(`The shared doc didn't open: ${why}`, "error"),
+          (why) => announce(t("chat.doc.editor.didnt.open", { why }), "error"),
           {
             me,
             post: (text, block, reply) => actions.send(code, here.current, reply?.quote ? withExcerpt(reply.quote, text) : text, { block, ...(reply ? { replyTo: reply.re } : {}) }),
@@ -836,7 +848,7 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
               (t) => back(t, files),
               files.length
                 ? putAll(files, media).catch((e: unknown) => {
-                    announce(`Not sent: ${e instanceof Error && e.message ? e.message : "a file couldn't be uploaded"}`, "error")
+                    announce(t("chat.doc.editor.not.sent", { why: e instanceof Error && e.message ? e.message : t("chat.doc.editor.upload.failed") }), "error")
                     throw e
                   })
                 : undefined

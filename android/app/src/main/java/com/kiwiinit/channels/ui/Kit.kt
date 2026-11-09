@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +51,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kiwiinit.channels.R
+import com.kiwiinit.channels.model.Words
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import com.kiwiinit.channels.engine.MemberView
 import com.kiwiinit.channels.engine.RoomView
 import com.kiwiinit.channels.model.Buzz
@@ -285,10 +292,10 @@ object When {
 
     fun clock(millis: Long): String = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale).format(Instant.ofEpochMilli(millis).atZone(zone))
 
-    fun short(millis: Long, now: Long = System.currentTimeMillis()): String {
+    fun short(w: Words, millis: Long, now: Long = System.currentTimeMillis()): String {
         val s = (now - millis) / 1000
-        if (s < 60) return "now"
-        if (s < 3600) return "${s / 60}m"
+        if (s < 60) return w(R.string.now)
+        if (s < 3600) return w(R.string.minutes_short, s / 60)
         val date = day(millis)
         val today = day(now)
         if (date == today) return clock(millis)
@@ -296,24 +303,37 @@ object When {
         return pattern("MMMd").format(Instant.ofEpochMilli(millis).atZone(zone))
     }
 
-    fun dayWord(millis: Long, now: Long = System.currentTimeMillis()): String {
+    fun dayWord(w: Words, millis: Long, now: Long = System.currentTimeMillis()): String {
         val date = day(millis)
         val today = day(now)
-        if (date == today) return "Today"
-        if (date == today.minusDays(1)) return "Yesterday"
+        if (date == today) return w(R.string.today)
+        if (date == today.minusDays(1)) return w(R.string.yesterday)
         if (ChronoUnit.DAYS.between(date, today) < 6) return pattern("EEEE").format(Instant.ofEpochMilli(millis).atZone(zone))
         return pattern("yMMMd").format(Instant.ofEpochMilli(millis).atZone(zone))
     }
 
-    fun list(millis: Long, now: Long = System.currentTimeMillis()): String {
+    fun list(w: Words, millis: Long, now: Long = System.currentTimeMillis()): String {
         val date = day(millis)
         val today = day(now)
         if (date == today) return clock(millis)
-        if (date == today.minusDays(1)) return "Yesterday"
+        if (date == today.minusDays(1)) return w(R.string.yesterday)
         if (ChronoUnit.DAYS.between(date, today) < 6) return pattern("EEE").format(Instant.ofEpochMilli(millis).atZone(zone))
         if (date.year == today.year) return pattern("MMMd").format(Instant.ofEpochMilli(millis).atZone(zone))
         return pattern("yMd").format(Instant.ofEpochMilli(millis).atZone(zone))
     }
 
     fun sameDay(a: Long, b: Long): Boolean = day(a) == day(b)
+}
+
+tailrec fun Context.activity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.activity()
+    else -> null
+}
+
+@Composable
+fun words(): Words {
+    val context = LocalContext.current
+    val conf = LocalConfiguration.current
+    return remember(context, conf) { Words(context.resources) }
 }

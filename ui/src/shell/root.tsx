@@ -1,5 +1,6 @@
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
+import { Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 
+import { useLanguage } from "~/i18n/i18n"
 import { Boundary } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
@@ -24,7 +25,16 @@ const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRo
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 const LimitDialog = later(() => import("~/usage/limit").then((m) => m.LimitDialog))
 
-export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
+export function Root(props: { app: App; nav: Nav; go: (go: Go) => void }) {
+  const { lang } = useLanguage()
+  return (
+    <Fragment key={lang}>
+      <Shown {...props} />
+    </Fragment>
+  )
+}
+
+function Shown({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast, dismissToast] = useToasts()
   const ctx = useMemo(() => ({ app, nav, go, toast }), [app, nav, go, toast])
   const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])

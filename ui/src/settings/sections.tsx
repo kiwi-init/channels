@@ -1,9 +1,13 @@
+import "~/i18n/en/settings"
+
 import { useEffect, useState, type ReactNode } from "react"
 
 import { cx, IconButton } from "~/kit/bits"
 import { Toggle } from "~/kit/form"
 import { setDebugOptions, useDebugOptions } from "~/kit/debug"
 import { Icon } from "~/kit/icons"
+import { LANG_NAMES, LANGS, setLanguage, t, useLanguage, type LangPref } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 import type { TextFont } from "@kiwi/app/theme.ts"
 import { personFingerprint } from "@kiwi/core/fingerprint.ts"
 import { KEYS_UNSEALED } from "@kiwi/secrets/keys-at-rest.ts"
@@ -38,50 +42,50 @@ export function AccountSection() {
   if (!account) return null
   const { actions } = app
   return (
-    <Page title="Account">
+    <Page title={t("settings.settings.account")}>
       <Group>
-        <Row label="Name" tip="Part of your key, so it can't change.">
+        <Row label={t("settings.sections.name")} tip={t("settings.sections.name.tip")}>
           <span className="set-value">{account.name}</span>
         </Row>
-        <Row label="GitHub" hint={account.githubSignIn ? "You sign in with it." : account.github ? undefined : "Pull requests in tasks, and your picture in channels."}>
+        <Row label="GitHub" hint={account.githubSignIn ? t("settings.sections.github.sign.in") : account.github ? undefined : t("settings.sections.github.why")}>
           {account.githubSignIn && account.github ? (
             <span className="set-value">@{account.github.login}</span>
           ) : account.github ? (
             <>
               <span className="set-value">@{account.github.login}</span>
               <button type="button" className="btn is-quiet is-small" onClick={actions.unlinkGithub}>
-                Unlink
+                {t("settings.sections.github.unlink")}
               </button>
             </>
           ) : (
             <button type="button" className="btn is-primary is-small" onClick={actions.linkGithub}>
-              Link GitHub
+              {t("settings.sections.github.link")}
             </button>
           )}
         </Row>
         {account.githubCode && !account.github && (
-          <Row label="GitHub code" hint="Type it on the GitHub page that opened.">
+          <Row label={t("settings.sections.github.code")} hint={t("settings.sections.github.code.hint")}>
             <code className="set-value set-key">{account.githubCode.code}</code>
             <IconButton
               icon="copy"
-              label="Copy the GitHub code"
+              label={t("settings.sections.github.code.copy")}
               onClick={() => {
-                copyText(account.githubCode?.code ?? "", "Code copied")
+                copyText(account.githubCode?.code ?? "", t("settings.sections.github.code.copied"))
               }}
             />
             <OutsideLink className="btn is-quiet is-small" href={account.githubCode.url}>
-              Open GitHub
+              {t("settings.sections.github.open")}
             </OutsideLink>
           </Row>
         )}
         {account.key && (
-          <Row label="Your key" hint="Others check what you send against it.">
+          <Row label={t("settings.sections.key")} hint={t("settings.sections.key.hint")}>
             <code className="set-value set-key">{account.key}</code>
             <IconButton
               icon="copy"
-              label="Copy your key"
+              label={t("settings.sections.key.copy")}
               onClick={() => {
-                copyText(account.key ?? "", "Key copied")
+                copyText(account.key ?? "", t("settings.sections.key.copied"))
               }}
             />
           </Row>
@@ -96,14 +100,14 @@ export function AccountSection() {
       )}
       <div className="set-end">
         <button type="button" className="btn is-small set-forget" onClick={() => setLeaving(true)}>
-          Sign out
+          {t("settings.sections.sign.out")}
         </button>
       </div>
       <Confirm
         open={leaving}
-        title="Sign out of the relay?"
-        sub="Your keys, channels and their history stay on this computer."
-        action="Sign out"
+        title={t("settings.sections.sign.out.title")}
+        sub={t("settings.sections.sign.out.sub")}
+        action={t("settings.sections.sign.out")}
         onClose={() => setLeaving(false)}
         onConfirm={() => {
           setLeaving(false)
@@ -121,7 +125,7 @@ function UsageRow() {
   const near = levelOf(usage) !== "calm"
   return (
     <>
-      <Row label="Plan" hint={planHint(usage)}>
+      <Row label={t("settings.sections.plan")} hint={planHint(usage)}>
         <span className="set-value">{planName(usage)}</span>
         {canUpgrade(usage) && usage.upgradeUrl && (
           <OutsideLink className="btn is-primary is-small" href={usage.upgradeUrl}>
@@ -130,12 +134,12 @@ function UsageRow() {
         )}
         {usage.plan === "paid" && usage.billingUrl && (
           <OutsideLink className="btn is-small" href={usage.billingUrl}>
-            Manage
+            {t("settings.sections.manage")}
           </OutsideLink>
         )}
       </Row>
       {usage.limit !== null && !seemsUnlimited(usage) && (
-        <Row label="Messages today" hint={usageHint(usage, resetsIn(usage.resetsAt, usage.checkedAt))}>
+        <Row label={t("usage.today")} hint={usageHint(usage, resetsIn(usage.resetsAt, usage.checkedAt))}>
           <span className="set-usage">
             <span className={cx("set-value set-mono", near && "is-near")}>{usedOf(usage)}</span>
             <UsageBar usage={usage} />
@@ -143,62 +147,86 @@ function UsageRow() {
         </Row>
       )}
       {usage.people && (
-        <Row label="People" hint="On this relay. Only its admins see this.">
-          <span className="set-value set-mono">{`${usage.people.total.toLocaleString()} · ${usage.people.today.toLocaleString()} active today`}</span>
+        <Row label={t("settings.sections.people")} hint={t("settings.sections.people.hint")}>
+          <span className="set-value set-mono">{t("settings.sections.people.count", { total: usage.people.total, today: usage.people.today })}</span>
         </Row>
       )}
     </>
   )
 }
 
-const THEMES = [
-  ["system", "System"],
-  ["dark", "Dark"],
-  ["light", "Light"],
-] as const satisfies readonly (readonly [Theme, string])[]
+const themes = () =>
+  [
+    ["system", t("settings.sections.theme.system")],
+    ["dark", t("settings.sections.theme.dark")],
+    ["light", t("settings.sections.theme.light")],
+  ] as const satisfies readonly (readonly [Theme, string])[]
 
-const SIZES = [
-  [-1, "Small"],
-  [0, "Default"],
-  [1, "Large"],
-  [2, "Larger"],
-  [3, "Largest"],
-] as const satisfies readonly (readonly [number, string])[]
+const sizes = () =>
+  [
+    [-1, t("settings.sections.size.small")],
+    [0, t("settings.sections.size.default")],
+    [1, t("settings.sections.size.large")],
+    [2, t("settings.sections.size.larger")],
+    [3, t("settings.sections.size.largest")],
+  ] as const satisfies readonly (readonly [number, string])[]
 
-const FONTS = [
-  ["system", "System"],
-  ["inter", "Inter"],
-  ["lato", "Lato"],
-  ["atkinson", "Atkinson"],
-] as const satisfies readonly (readonly [TextFont, string])[]
+const fonts = () =>
+  [
+    ["system", t("settings.sections.font.system")],
+    ["inter", "Inter"],
+    ["lato", "Lato"],
+    ["atkinson", "Atkinson"],
+  ] as const satisfies readonly (readonly [TextFont, string])[]
 
-const MOTION = [
-  ["full", "Full"],
-  ["reduced", "Reduced"],
-] as const
+const motion = () =>
+  [
+    ["full", t("settings.sections.motion.full")],
+    ["reduced", t("settings.sections.motion.reduced")],
+  ] as const
 
 export function AppearanceSection() {
   const { app } = useApp()
   const { prefs, actions } = app
   const set = (p: Partial<Prefs>) => actions.setPrefs(p)
   return (
-    <Page title="Appearance" lede="On this computer only.">
+    <Page title={t("settings.settings.appearance")} lede={t("settings.sections.appearance.lede")}>
       <Group>
-        <Row label="Mode">
-          <Seg label="Mode" value={prefs.theme} options={THEMES} onChange={(theme) => set({ theme })} />
+        <Row label={t("settings.sections.mode")}>
+          <Seg label={t("settings.sections.mode")} value={prefs.theme} options={themes()} onChange={(theme) => set({ theme })} />
         </Row>
-        <Row label="Text size">
-          <Seg<number> label="Text size" value={prefs.textSize} options={SIZES} onChange={(textSize) => set({ textSize })} />
+        <Row label={t("settings.sections.text.size")}>
+          <Seg<number> label={t("settings.sections.text.size")} value={prefs.textSize} options={sizes()} onChange={(textSize) => set({ textSize })} />
         </Row>
-        <Row label="Font">
-          <Seg label="Font" value={prefs.font} options={FONTS} onChange={(font) => set({ font })} />
+        <Row label={t("settings.sections.font")}>
+          <Seg label={t("settings.sections.font")} value={prefs.font} options={fonts()} onChange={(font) => set({ font })} />
         </Row>
-        <Row label="Motion">
-          <Seg label="Motion" value={prefs.reduceMotion ? "reduced" : "full"} options={MOTION} onChange={(m) => set({ reduceMotion: m === "reduced" })} />
+        <Row label={t("settings.sections.motion")}>
+          <Seg label={t("settings.sections.motion")} value={prefs.reduceMotion ? "reduced" : "full"} options={motion()} onChange={(m) => set({ reduceMotion: m === "reduced" })} />
         </Row>
+        <LanguageRow />
       </Group>
       <Themes />
     </Page>
+  )
+}
+
+function LanguageRow() {
+  const { pref } = useLanguage()
+  return (
+    <Row label={t("settings.language")}>
+      <span className="set-select">
+        <select className="input" aria-label={t("settings.language")} value={pref} onChange={(e) => setLanguage(e.target.value as LangPref)}>
+          <option value="system">{t("settings.language.system")}</option>
+          {LANGS.map((lang) => (
+            <option key={lang} value={lang} lang={lang}>
+              {LANG_NAMES[lang]}
+            </option>
+          ))}
+        </select>
+        <Icon name="down" size={14} />
+      </span>
+    </Row>
   )
 }
 
@@ -207,15 +235,18 @@ function VersionRow({ account }: { account: Account }) {
   const update = account.update
   const on = <span className="set-mono">{account.version}</span>
   return update?.ready ? (
-    <Row label={<New>{update.version} is ready</New>} hint={<>You're on {on}. Channels restarts on the new one.</>}>
+    <Row label={<New>{t("settings.sections.update.ready", { version: update.version })}</New>} hint={tr("settings.sections.update.ready.hint", { version: on })}>
       <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
-        Restart to update
+        {t("settings.sections.update.restart")}
       </button>
     </Row>
   ) : update?.state === "available" ? (
-    <Row label={<New>{update.version} is out</New>} hint={update.blocked ? "This copy can't replace itself where it is." : <>You're on {on}.</>}>
+    <Row
+      label={<New>{t("settings.sections.update.out", { version: update.version })}</New>}
+      hint={update.blocked ? t("settings.sections.update.blocked") : tr("settings.sections.update.on", { version: on })}
+    >
       <button type="button" className="btn is-primary is-small" onClick={app.actions.installUpdate}>
-        {update.blocked ? "Get it" : "Download and restart"}
+        {update.blocked ? t("settings.sections.update.get") : t("settings.sections.update.download")}
       </button>
     </Row>
   ) : update ? (
@@ -223,11 +254,11 @@ function VersionRow({ account }: { account: Account }) {
       label={
         <span className="set-state tone-doing">
           <span className="set-state-dot is-doing" aria-hidden="true" />
-          Downloading {update.version}
+          {t("settings.sections.update.downloading", { version: update.version })}
           <span className="set-mono">{update.progress ? ` · ${Math.round(update.progress * 100)}%` : "…"}</span>
         </span>
       }
-      hint="You can keep working. We ask before restarting."
+      hint={t("settings.sections.update.keep.working")}
     />
   ) : account.desktop ? (
     <CheckUpdates version={account.version} />
@@ -251,7 +282,7 @@ function UpToDate() {
       <span className="tone-live">
         <Icon name="check" size={14} />
       </span>
-      Up to date
+      {t("settings.sections.up.to.date")}
     </span>
   )
 }
@@ -262,33 +293,33 @@ export function AboutSection() {
   const account = app.account
   if (!account) return null
   return (
-    <Page title="About" lede="Channels by Kiwi Init.">
+    <Page title={t("settings.settings.about")} lede={t("settings.sections.about.lede")}>
       <Group>
         <VersionRow account={account} />
-        <Row label="Interface" hint="The look Channels is running. It updates on its own.">
+        <Row label={t("settings.sections.interface")} hint={t("settings.sections.interface.hint")}>
           <code className="set-value set-mono">{UI_VERSION}</code>
           <IconButton
             icon="copy"
-            label="Copy the interface version"
+            label={t("settings.sections.interface.copy")}
             onClick={() => {
-              copyText(UI_VERSION, "Version copied")
+              copyText(UI_VERSION, t("settings.sections.interface.copied"))
             }}
           />
         </Row>
         {account.desktop ? (
           <RelayRow relay={account.relay ?? ""} />
         ) : (
-          <Row label="Relay">
-            <span className="set-value set-mono">{account.relay ?? "Not connected"}</span>
+          <Row label={t("settings.sections.relay")}>
+            <span className="set-value set-mono">{account.relay ?? t("settings.sections.relay.none")}</span>
           </Row>
         )}
       </Group>
       <Group>
-        <Row label="Debug options" hint="Adds trace tools to the command palette, to record scrolling or typing for a bug report. On this computer only.">
-          <Toggle label="Debug options" on={debug} onChange={setDebugOptions} />
+        <Row label={t("settings.sections.debug")} hint={t("settings.sections.debug.hint")}>
+          <Toggle label={t("settings.sections.debug")} on={debug} onChange={setDebugOptions} />
         </Row>
       </Group>
-      <p className="set-fine">Built on open source software. Each project's license ships inside the app.</p>
+      <p className="set-fine">{t("settings.sections.licenses")}</p>
     </Page>
   )
 }
@@ -305,9 +336,9 @@ function CheckUpdates({ version }: { version: string }) {
       .finally(() => setBusy(false))
   }
   return (
-    <Row label={<UpToDate />} hint={<span role="status">{busy ? "Checking…" : result ? updateFound(result) : <span className="set-mono">{version}</span>}</span>}>
+    <Row label={<UpToDate />} hint={<span role="status">{busy ? t("settings.sections.checking") : result ? updateFound(result) : <span className="set-mono">{version}</span>}</span>}>
       <button type="button" className="btn is-quiet is-small" disabled={busy} onClick={check}>
-        Check now
+        {t("settings.sections.check.now")}
       </button>
     </Row>
   )
@@ -318,21 +349,21 @@ function RelayRow({ relay }: { relay: string }) {
   const [error, setError] = useState<string | null>(null)
   return (
     <Row
-      label="Relay"
+      label={t("settings.sections.relay")}
       hint={
         error ? (
           <span role="alert" className="tone-alert">
             {error.slice(0, 1).toUpperCase() + error.slice(1)}
           </span>
         ) : (
-          "Changing it reloads the app."
+          t("settings.sections.relay.hint")
         )
       }
     >
       <InlineEdit
         value={relay}
-        label="Relay"
-        verb="Change"
+        label={t("settings.sections.relay")}
+        verb={t("settings.sections.relay.change")}
         onSave={(url) => {
           setError(null)
           void app.actions.setRelay(url).then(setError)
@@ -353,7 +384,7 @@ function LoginKey({ pk }: { pk: string }) {
   }, [pk])
   if (shown?.pk !== pk) return null
   return (
-    <Row label="Your key for new devices" hint="A device you add must show this. Anything else isn't you.">
+    <Row label={t("settings.sections.login.key")} hint={t("settings.sections.login.key.hint")}>
       <code className="set-value set-key">{shown.key}</code>
     </Row>
   )

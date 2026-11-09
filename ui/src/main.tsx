@@ -6,6 +6,7 @@ import "~/styles/base.css"
 import "~/styles/shell.css"
 import "~/styles/chat.css"
 import { Boundary } from "~/kit/boundary"
+import { startLanguage } from "~/i18n/i18n"
 import { warmLater } from "~/kit/later"
 import { LiveDuties, useLive } from "~/live/live"
 import { storedThemePrefs } from "~/live/prefs"
@@ -77,8 +78,8 @@ const start = (prefs: ThemePrefs, app: ReactNode) => {
     render(app)
     warmLater()
   }
-  if (wantsRex(prefs)) void loadRex().then(go, go)
-  else go()
+  const ready = Promise.all([startLanguage(), wantsRex(prefs) ? loadRex() : undefined])
+  void ready.then(go, go)
 }
 
 if (demo) void import("~/demo/app").then(({ DemoApp, demoPrefs }) => start(demoPrefs, <DemoApp />))

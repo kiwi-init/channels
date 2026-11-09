@@ -37,5 +37,9 @@ doc-fuzz-*.txt
 
 # scripts/docs-site.ts: the docs pages, built from docs/, and the app in demo mode, built from ui/
 site/docs/
+site/pt-br/
+site/ja/
+site/ko/
+site/zh-cn/
 site/demo/
 site/afk/

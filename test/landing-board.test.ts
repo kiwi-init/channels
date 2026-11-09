@@ -71,7 +71,7 @@ describe("a channel that lands on merge warns until kiwi/review is required (#62
     releases: new Map(),
     runs: new Map(),
     runsSince: null,
-    runsForgotten: 0,
+    runsForgotten: null,
   });
   test("only a merge channel warns, for each repo whose rules don't require it or are unknown", () => {
     expect(reviewNotRequired({ landing: "merge", repos: ["o/r", "o/other"], github: github(["ci-ok"]) }, CHECK)).toEqual(["o/r", "o/other"]);
@@ -123,5 +123,47 @@ describe("a PR from before its task never links by branch (#2003)", () => {
     expect(landingWaits(state, t)).toBe("waits for its PR to be linked and merged");
     const fresh = fold([repos, old, prefix, add, round, pass, await ev("jon", { op: "github", items: [pr("open")(id)] })], roster);
     expect(taskPr(fresh, id)?.pr.number).toBe(7);
+  });
+});
+
+describe("an approve on a task that never asked for review opens its ship gate (#2020)", () => {
+  const SHIPPED = "4444444444444444444444444444444444444444";
+  async function approvedWithoutRound(): Promise<{ id: number; msgs: Message[] }> {
+    const repos = await ev("jon", { op: "repos.set", repos: ["o/r"] });
+    const prefix = await ev("jon", { op: "branch.prefix.set", prefix: "T" });
+    const add = await ev("jon", { op: "task.add", title: "Ship", owner: "win", then: "merge" });
+    const doing = await ev("win", { op: "task.update", task: add.seq, state: "doing" });
+    const open = await ev("jon", { op: "github", items: [pr("open")(add.seq)] });
+    const approve = await ev("jon", { op: "task.update", task: add.seq, state: "done", verdict: "approved", note: "approved" });
+    return { id: add.seq, msgs: [repos, prefix, add, doing, open, approve] };
+  }
+
+  test("the approve records a round at the open PR's head, and the merge at that head lands the task", async () => {
+    const { id, msgs } = await approvedWithoutRound();
+    const before = fold(msgs, roster);
+    expect(before.tasks.get(id)!.state).toBe("landing");
+    expect(before.tasks.get(id)!.rounds.at(-1)).toMatchObject({ at: HEAD, result: { kind: "approved", by: "jon" } });
+    const merged = fold([...msgs, await ev("jon", { op: "github", items: [pr("closed", true)(id)] })], roster);
+    expect(landingWaits(merged, merged.tasks.get(id)!) ?? "").not.toContain("ship gate was shut");
+  });
+
+  test("the owner agent approving its own task records no round, so its merge stays a bypass", async () => {
+    const repos = await ev("jon", { op: "repos.set", repos: ["o/r"] });
+    const prefix = await ev("jon", { op: "branch.prefix.set", prefix: "T" });
+    const add = await ev("jon", { op: "task.add", title: "Ship", owner: "win", then: "merge" });
+    const open = await ev("jon", { op: "github", items: [pr("open")(add.seq)] });
+    const self = await ev("win", { op: "task.update", task: add.seq, state: "done", verdict: "approved", note: "approved" });
+    const merged = await ev("jon", { op: "github", items: [pr("closed", true)(add.seq)] });
+    const state = fold([repos, prefix, add, open, self, merged], roster);
+    const t = state.tasks.get(add.seq)!;
+    expect(t.rounds).toEqual([]);
+    expect(landingWaits(state, t)).toBe("shipped while its ship gate was shut (missing an approval before the merge): a person closes it with a reason");
+  });
+
+  test("a new head pushed after that approve still sends the task back to review", async () => {
+    const { id, msgs } = await approvedWithoutRound();
+    const pushed = await ev("jon", { op: "github", items: [{ ...pr("open")(id), sha: SHIPPED }] });
+    const state = fold([...msgs, pushed], roster);
+    expect(state.tasks.get(id)!.state).toBe("review");
   });
 });
