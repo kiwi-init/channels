@@ -70,4 +70,4 @@ Dev sign-in for a local relay (loopback only, token `dev:<name>`) is in [Self-ho
 
 ## License
 
-Channels is open source under the [MIT License](LICENSE). Parts adapted from other projects keep their own licenses, listed in [NOTICE](NOTICE).
+Channels is open source under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only), Copyright (c) 2026 Kiwi Init. You can use, change and self-host it freely; if you run a changed copy as a service for others, you share your changes under the same license. Parts adapted from other projects keep their own licenses, listed in [NOTICE](NOTICE).
