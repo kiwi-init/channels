@@ -314,4 +314,32 @@ describe("kiwi/review on a PR no task claims (T2681)", () => {
     await c.approve(ready, S1);
     expect(reviewPosts(c.state())).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "waiting", tasks: [ready, blocked], note: `T${blocked}: an approval` }]);
   });
+
+  test("an unclaimed PR at the same commit as a claimed one adds no success: kiwi/review is one status per commit (#2823)", async () => {
+    const c = await landingChannel();
+    await c.ev("jow", { op: "repos.set", repos: [R] });
+    const t = await c.task();
+    await c.pr(9, S1, t);
+    await c.github([{ event: "pull_request", action: "opened", number: 10, state: "open", branch: "unclaimed", sha: S1 }]);
+    expect(reviewPosts(c.state())).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "waiting", tasks: [t], note: `T${t}: an approval` }]);
+    await c.approve(t, S1);
+    expect(reviewPosts(c.state())).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "approved", tasks: [t] }]);
+  });
+
+  test("every PR a task links counts as claimed, not only the one it shows: by branch and by proof (#2823)", async () => {
+    const c = await landingChannel();
+    await c.ev("jow", { op: "repos.set", repos: [R] });
+    const t = await c.task();
+    await c.pr(9, S1, t);
+    await c.pr(10, S2, t);
+    await c.github([{ event: "pull_request", action: "opened", number: 11, state: "open", branch: "other", sha: "3".repeat(40) }]);
+    await c.ev("ann", { op: "task.update", task: t, proof: { url: `https://github.com/${R}/pull/11` } });
+    const posts = reviewPosts(c.state());
+    expect(posts.filter((p) => p.verdict === "approved")).toEqual([]);
+    expect(posts.map((p) => [p.pr, p.verdict, p.tasks])).toEqual([
+      [9, "waiting", [t]],
+      [10, "waiting", [t]],
+      [11, "waiting", [t]],
+    ]);
+  });
 });
