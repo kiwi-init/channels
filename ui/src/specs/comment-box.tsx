@@ -77,7 +77,7 @@ export function CommentBox({
     setText(value)
     s.moved(at)
   }
-  const s = useSuggest({ channel, id: `spec:${channel.code}:${spec.ask}${quote ? ":quote" : ""}`, text, area: box, onText: typed })
+  const s = useSuggest({ channel, id: `spec:${channel.code}:${spec.ask}${quote ? ":quote" : ""}`, text, area: box, onText: typed, withFormer: true })
   const { attach, paste, reading, dropping, dropZone } = useAttach({ files, setFiles, zone, toast })
   useEffect(() => {
     if (quote || reply) box.current?.focus()

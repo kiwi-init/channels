@@ -70,18 +70,19 @@ const imeEnter = (page: Page, box: "plain" | "anchored") =>
   );
 
 try {
-  const composerNames = await (async () => {
+  {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await page.goto(`http://127.0.0.1:${server.port}/?shot=channel`);
     const area = page.getByRole("textbox", { name: "Message" });
-    await area.fill("Ask @");
+    await area.fill("Ask @ma");
     await page.locator('[role="option"]').first().waitFor();
-    const all = await names(page);
     await area.press("Escape");
     expect((await page.locator('[role="option"]').count()) === 0, "Escape closes the chat composer's suggestions too");
+    await area.fill("Ask @wi");
+    await page.waitForTimeout(100);
+    expect((await page.locator('[role="option"]').count()) > 0, "and a new query at the same caret offset opens them again");
     await page.close();
-    return all;
-  })();
+  }
   {
     const page = await open("spec-draft");
     const plain = page.locator(".spec-comment", { hasText: "Drafted it. Two open questions inside." }).first();
@@ -110,59 +111,69 @@ try {
     await page.close();
   }
 
-  {
-    const page = await open("spec-draft");
-    const before = await comments(page);
-    await plainBox(page).fill("Ask @");
-    await page.locator('[role="option"]').first().waitFor();
-    const inSpec = await names(page);
-    expect(inSpec.join() === composerNames.join(), `@ in a spec comment box lists the people the chat composer lists (${inSpec.join(", ")})`);
-    await plainBox(page).fill("Ask @ma");
-    await page.locator('[role="option"]').first().waitFor();
-    await plainBox(page).press("Enter");
-    const value = await plainBox(page).inputValue();
-    expect(value.includes("@maya") && (await comments(page)) === before, "with Enter-sends on, Enter accepts a suggestion and doesn't send");
-    await plainBox(page).fill("Ask @ma");
-    await page.locator('[role="option"]').first().waitFor();
-    await plainBox(page).press("Escape");
-    expect((await page.locator('[role="option"]').count()) === 0 && (await plainBox(page).inputValue()) === "Ask @ma", "Escape only closes the list");
-    await imeEnter(page, "plain");
-    expect((await comments(page)) === before, "an Enter confirming an IME composition doesn't send from the plain box");
+  for (const shot of ["spec-draft", "spec-ctrl-enter"]) {
+    const on = shot === "spec-draft";
+    for (const which of ["plain", "anchored"] as const) {
+      const page = await open(shot);
+      if (which === "anchored") await anchor(page);
+      const box = which === "plain" ? plainBox(page) : anchoredBox(page);
+      const where = `${which} box, Enter-sends ${on ? "on" : "off"}`;
+      const list = page.locator('[role="option"]');
+      const before = await comments(page);
 
-    await anchor(page);
-    await anchoredBox(page).fill("Needs @ma");
-    await page.locator('[role="option"]').first().waitFor();
-    await anchoredBox(page).press("Escape");
-    expect((await anchoredBox(page).count()) === 1 && (await page.locator('[role="option"]').count()) === 0, "in the anchored box, Escape closes the list first and keeps the box");
-    await anchoredBox(page).press("Tab");
-    await imeEnter(page, "anchored");
-    expect((await comments(page)) === before, "an Enter confirming an IME composition doesn't send from the anchored box");
-    await anchoredBox(page).fill("Needs a date");
-    await anchoredBox(page).press("Enter");
-    await page.waitForTimeout(150);
-    expect((await posted(page, "Needs a date")) === 1, "Enter sends the anchored box with Enter-sends on");
-    await page.close();
+      await box.fill("Ask @ma");
+      await list.first().waitFor();
+      await imeEnter(page, which);
+      expect((await box.inputValue()) === "Ask @ma" && (await comments(page)) === before, `${where}: an IME Enter with the list open neither picks nor sends`);
+      await box.press("Enter");
+      expect((await box.inputValue()).startsWith("Ask @maya") && (await comments(page)) === before, `${where}: Enter picks the suggestion and doesn't send`);
+      await box.fill("Ask @wi");
+      await list.first().waitFor();
+      await box.press("Tab");
+      expect((await box.inputValue()).startsWith("Ask @win") && (await comments(page)) === before, `${where}: Tab picks the suggestion and doesn't send`);
+      await box.fill("Ask @ma");
+      await list.first().waitFor();
+      await box.press("Escape");
+      expect((await list.count()) === 0 && (await box.count()) === 1 && (await box.inputValue()) === "Ask @ma", `${where}: Escape only closes the list`);
+      await box.fill("Ask @wi");
+      await page.waitForTimeout(100);
+      expect((await list.count()) > 0, `${where}: a new query at the same caret offset opens the list again`);
+      await box.fill("Ask @sc");
+      await list.first().waitFor();
+      expect((await names(page)).includes("scout"), `${where}: a former member is suggested`);
+
+      if (which === "plain") {
+        await box.fill(`Meta ${where} @ma`);
+        await list.first().waitFor();
+        await box.press("Meta+Enter");
+        await page.waitForTimeout(150);
+        expect((await posted(page, `Meta ${where}`)) === 1, `${where}: Meta+Enter with the list open sends`);
+      }
+      await box.fill(`Ctrl ${where} @ma`);
+      await list.first().waitFor();
+      await box.press("Control+Enter");
+      await page.waitForTimeout(150);
+      expect((await posted(page, `Ctrl ${where}`)) === 1, `${where}: Ctrl+Enter with the list open sends`);
+
+      if (which === "anchored") await anchor(page);
+      await box.fill(`Plain enter ${where}`);
+      await box.press("Enter");
+      await page.waitForTimeout(150);
+      expect((await posted(page, `Plain enter ${where}`)) === (on ? 1 : 0), `${where}: a plain Enter ${on ? "sends" : "doesn't send"}`);
+      await page.close();
+    }
   }
 
   {
-    const page = await open("spec-ctrl-enter");
-    const before = await comments(page);
-    await plainBox(page).fill("Ask @ma");
+    const page = await open("spec-draft");
+    await plainBox(page).fill("Thanks @sc");
     await page.locator('[role="option"]').first().waitFor();
     await plainBox(page).press("Enter");
-    expect((await plainBox(page).inputValue()).includes("@maya") && (await comments(page)) === before, "with Enter-sends off, Enter accepts a suggestion and doesn't send");
-    await plainBox(page).press("Enter");
-    expect((await comments(page)) === before, "with Enter-sends off, a plain Enter doesn't send");
+    const value = await plainBox(page).inputValue();
     await plainBox(page).press("Control+Enter");
     await page.waitForTimeout(150);
-    expect((await comments(page)) === before + 1, "with Enter-sends off, Ctrl+Enter sends");
-    await anchor(page);
-    await anchoredBox(page).fill("Settle the date first");
-    await anchoredBox(page).press("Enter");
-    expect((await posted(page, "Settle the date first")) === 0, "with Enter-sends off, a plain Enter doesn't send the anchored box");
-    await anchoredBox(page).press("Control+Enter");
-    await page.waitForTimeout(150);
-    expect((await posted(page, "Settle the date first")) === 1, "with Enter-sends off, Ctrl+Enter sends the anchored box");
+    const said = page.locator(".spec-comment", { hasText: "Thanks" }).last();
+    expect(value === "Thanks @scout " && (await said.innerText()).includes("scout"), "a former member completes to their handle, and the sent comment names them");
     await page.close();
   }
 
@@ -173,8 +184,11 @@ try {
     await failed.getByRole("button", { name: "Retry" }).click();
     await page.waitForTimeout(150);
     const sent = page.locator(".spec-comment", { hasText: "The dialog I have in mind" });
-    expect((await sent.count()) === 1 && (await page.locator(".spec-comment.is-failed").count()) === 0, "Retry sends it once, in its own spec");
-    expect((await sent.locator(".msg-images").count()) === 1, "the retried comment still carries its image");
+    expect(
+      (await sent.count()) === 1 && (await page.locator(".spec-comment.is-failed").count()) === 0,
+      "Retry clears the failed mark in the demo, leaving one comment in its own spec (delivery is unit-tested in unsent.test.ts)",
+    );
+    expect((await sent.locator(".msg-images").count()) === 1, "the retried comment still shows its image");
 
     await plainBox(page).fill("draft for the export spec");
     await page.locator(".spec-box-new input[type=file]").last().setInputFiles({ name: "board.png", mimeType: "image/png", buffer: PNG });

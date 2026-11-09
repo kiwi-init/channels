@@ -16,7 +16,7 @@ import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/thre
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { withReach } from "~/live/reach"
-import { changeUnsent, nextUnsentKey, resendOf, unsentBlock, unsentIn } from "~/live/unsent"
+import { changeUnsent, nextUnsentKey, retryUnsent, unsentBlock, unsentIn } from "~/live/unsent"
 import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
@@ -351,13 +351,11 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
   const retry = useCallback(
     async (key: number): Promise<number> => {
-      const p = pending.find((x) => x.key === key)
-      if (!p) throw new Error("that message is gone")
-      discard(key)
+      const block = unsentBlock(pending, key)
       try {
-        return await post(p.where, p.text, resendOf(p))
+        return await retryUnsent(pending, key, discard, post)
       } catch (err) {
-        if (p.block && refusal(err) !== null) giveBackBlock(p.block.id)
+        if (block && refusal(err) !== null) giveBackBlock(block)
         throw err
       }
     },
