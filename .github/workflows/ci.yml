@@ -178,7 +178,7 @@ jobs:
         if: ${{ !cancelled() && matrix.part == 'app' }}
         run: bun scripts/ui-bundle.ts
       - name: ui harness build, with the plain-browser key store
-        if: ${{ !cancelled() && matrix.part != 'app' }}
+        if: ${{ !cancelled() }}
         run: bun scripts/ui-harness.ts
       - name: app smoke
         if: ${{ !cancelled() && matrix.part == 'app' }}
