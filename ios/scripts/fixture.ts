@@ -34,15 +34,20 @@ const long = (n: number) =>
     "- CI now fails if any of that slides back",
   ].join("\n");
 
-const said: [string, string][] = [];
-for (let n = 1; n <= 6; n++) said.push(["jow", `progress update ${n}?`], [n % 2 ? "lead" : "dev", long(n)]);
-said.push(["lead", "Notes in https://example.com/release"]);
+const said: [string, string, "msg" | "event"][] = [];
+const updates: Record<number, string> = { 2: "GitHub: 13 updates", 4: "GitHub: 20 updates", 6: "GitHub: 5 updates" };
+for (let n = 1; n <= 6; n++) {
+  said.push(["jow", `progress update ${n}?`, "msg"], [n % 2 ? "lead" : "dev", long(n), "msg"]);
+  const update = updates[n];
+  if (update) said.push(["jow", update, "event"]);
+}
+said.push(["lead", "Notes in https://example.com/release", "msg"]);
 
 const start = Date.now() - said.length * 60_000;
 const log: Message[] = [];
-for (const [i, [from, body]] of said.entries()) {
+for (const [i, [from, body, kind]] of said.entries()) {
   const ts = start + i * 60_000;
-  const signed = await sign(ids[from]!, { v: 1 as const, id: crypto.randomUUID(), from, kind: "msg" as const, body, ts });
+  const signed = await sign(ids[from]!, { v: 1 as const, id: crypto.randomUUID(), from, kind, body, ts });
   log.push({ ...signed, seq: i + 1, rts: ts, sigOk: await verify(signed) });
 }
 

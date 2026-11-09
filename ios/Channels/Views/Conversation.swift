@@ -4,7 +4,6 @@ import UIKit
 struct Line: Identifiable {
     enum Kind {
         case time(Date)
-        case event(MessageView)
         case bubble(MessageView, first: Bool, last: Bool)
         case ask(AskView)
         case review(ReviewView)
@@ -29,7 +28,7 @@ struct Line: Identifiable {
         for m in messages {
             if let c = m.chosen { answers["\(c.by)|\(c.choice)", default: []].append(m.seq) }
         }
-        for m in messages {
+        for m in messages where !m.event {
             let key = "\(m.from)|\(m.body)"
             if m.choices.isEmpty, let poll = answers[key]?.firstIndex(where: { $0 < m.seq }) {
                 answers[key]?.remove(at: poll)
@@ -46,11 +45,6 @@ struct Line: Identifiable {
             if newDay || gap > 15 * 60_000 {
                 out.append(Line(id: "t\(m.seq)", kind: .time(m.date)))
                 prev = nil
-            }
-            if m.event {
-                out.append(Line(id: "e\(m.seq)", kind: .event(m)))
-                prev = nil
-                continue
             }
             let first = prev == nil || prev?.from != m.from || m.quote != nil
             if !first, let lastLine = out.last, case .bubble(let p, let pFirst, _) = lastLine.kind {
@@ -290,15 +284,6 @@ struct LineView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 14)
                 .padding(.bottom, 6)
-        case .event(let m):
-            Text("\(room.display(m.from)) \(m.body)")
-                .type(.meta)
-                .foregroundStyle(Tone.ink3)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 32)
-                .padding(.vertical, 4)
         case .bubble(let m, let first, let last):
             BubbleRow(message: m, first: first, last: last, room: room, solo: solo, reply: reply, jump: jump, answer: answer)
         }
