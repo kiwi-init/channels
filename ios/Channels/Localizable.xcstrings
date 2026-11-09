@@ -2529,34 +2529,6 @@
         }
       }
     },
-    "Message your lead" : {
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "リードにメッセージ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "리드에게 메시지 보내기"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mensagem para seu líder"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "给负责人发消息"
-          }
-        }
-      }
-    },
     "Needs You" : {
       "localizations" : {
         "ja" : {
