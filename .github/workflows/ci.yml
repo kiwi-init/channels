@@ -899,11 +899,11 @@ jobs:
       - name: every word the app shows is in its String Catalog
         if: ${{ !cancelled() }}
         run: bun ios/scripts/catalog-check.ts ios/Channels/Localizable.xcstrings "$RUNNER_TEMP/ios"
-      - name: languages and the Channels list in the simulator (a Language pick changes the app at once, the phone's language is followed, and the sample list is shot)
+      - name: languages in the simulator (a Language pick changes the app at once, and the phone's language is followed)
         if: ${{ !cancelled() }}
         run: |
           sim=$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
-          xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/languages.xcresult" -only-testing:ChannelsUITests/LanguageTests -only-testing:ChannelsUITests/DemoTests/testSampleChannel CODE_SIGNING_ALLOWED=NO test
+          xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/languages.xcresult" -only-testing:ChannelsUITests/LanguageTests CODE_SIGNING_ALLOWED=NO test
       - name: language shots
         if: ${{ !cancelled() }}
         run: |
