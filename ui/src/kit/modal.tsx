@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react"
 
+import { t } from "~/i18n/i18n"
 import { cx, IconButton } from "~/kit/bits"
 
 type ModalSize = "narrow" | "wide"
@@ -85,7 +86,7 @@ export function Modal({
               <h2>{title}</h2>
               {sub && <p>{sub}</p>}
             </div>
-            <IconButton icon="close" label="Close" onClick={onClose} />
+            <IconButton icon="close" label={t("kit.modal.close")} onClick={onClose} />
             {tabs && <div className="modal-tabs">{tabs}</div>}
           </header>
           {children && <div className={cx("modal-body", className)}>{children}</div>}

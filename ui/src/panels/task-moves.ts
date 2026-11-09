@@ -1,48 +1,62 @@
 import { whereLabel } from "~/chat/search-hits"
 import { ANYONE } from "@kiwi/channel/task-actions.ts"
+import { t } from "~/i18n/i18n"
 import type { Channel, TaskEvent } from "~/model"
 import { nickname } from "~/names"
 
-export const someone = (channel: Channel, name: string): string => (name === channel.you ? "you" : nickname(channel, name))
+export const someone = (channel: Channel, name: string): string => (name === channel.you ? t("panels.moves.you") : nickname(channel, name))
+
+function mentioned(channel: Channel, e: TaskEvent): string {
+  if (!e.where) return t("panels.moves.mention")
+  const label = whereLabel(channel, e.where)
+  if (label.startsWith("@ ")) return t("panels.moves.mention.dm", { name: label.slice(2) })
+  return t("panels.moves.mention.in", { where: label.replace(/^# /, "#") })
+}
 
 export function moveWords(channel: Channel, e: TaskEvent): string {
-  const to = e.to ? (e.to === ANYONE ? "anyone" : someone(channel, e.to)) : ""
+  const to = e.to ? (e.to === ANYONE ? t("panels.moves.anyone") : someone(channel, e.to)) : ""
   switch (e.what) {
     case "created":
-      return e.to ? `created it for ${to}` : "created it"
+      return e.to ? t("panels.moves.created.for", { name: to }) : t("panels.moves.created")
     case "took":
-      return "took it"
+      return t("panels.moves.took")
     case "assigned":
-      return `gave it to ${to}`
+      return t("panels.moves.assigned", { name: to })
     case "unassigned":
-      return "unassigned it"
+      return t("panels.moves.unassigned")
     case "started":
-      return "started it"
+      return t("panels.moves.started")
     case "blocked":
-      return "marked it blocked"
+      return t("panels.moves.blocked")
     case "reopened":
-      return "reopened it"
+      return t("panels.moves.reopened")
     case "review":
-      return e.round ? `sent it for review · round ${e.round}` : "sent it for review"
+      return e.round ? t("panels.moves.review.round", { round: e.round }) : t("panels.moves.review")
     case "approved":
-      return e.round ? `approved round ${e.round}` : "approved it"
+      return e.round ? t("panels.moves.approved.round", { round: e.round }) : t("panels.moves.approved")
     case "rejected":
-      return e.round ? `sent round ${e.round} back` : "sent it back"
+      return e.round ? t("panels.moves.rejected.round", { round: e.round }) : t("panels.moves.rejected")
     case "done":
-      return "marked it done"
+      return t("panels.moves.done")
     case "cancelled":
-      return "cancelled it"
+      return t("panels.moves.cancelled")
     case "reviewer":
-      return e.to === ANYONE ? "opened its review to anyone who hasn't worked on it" : e.to === e.by ? "took the review" : e.to ? `asked ${to} to review it` : "cleared its reviewer"
+      return e.to === ANYONE
+        ? t("panels.moves.reviewer.anyone")
+        : e.to === e.by
+          ? t("panels.moves.reviewer.took")
+          : e.to
+            ? t("panels.moves.reviewer.asked", { name: to })
+            : t("panels.moves.reviewer.cleared")
     case "renamed":
-      return "renamed it"
+      return t("panels.moves.renamed")
     case "proof":
-      return "added proof"
+      return t("panels.moves.proof")
     case "checkpoint":
-      return "saved a checkpoint"
+      return t("panels.moves.checkpoint")
     case "note":
-      return "added a note"
+      return t("panels.moves.note")
     case "mention":
-      return `mentioned it in ${e.where ? whereLabel(channel, e.where).replace(/^# /, "#").replace(/^@ /, "a message to ") : "a message"}`
+      return mentioned(channel, e)
   }
 }

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useSyncExternalStore, type MouseEvent } from "react"
 
+import { t } from "~/i18n/i18n"
 import { Icon } from "~/kit/icons"
 import { nativeMenuAllowed, selectedBeforePress } from "~/kit/native-menu"
 import { store } from "~/live/value"
@@ -46,7 +47,14 @@ function showMenuBelow(el: HTMLElement, label: string, groups: MenuGroups): void
 
 export function MoreButton({ label, groups }: { label: string; groups: () => MenuGroups }) {
   return (
-    <button type="button" className="icon-btn" aria-label={`More for ${label}`} title="More" aria-haspopup="menu" onClick={(e) => showMenuBelow(e.currentTarget, label, groups())}>
+    <button
+      type="button"
+      className="icon-btn"
+      aria-label={t("kit.menu.open.more.for", { label })}
+      title={t("kit.menu.open.more")}
+      aria-haspopup="menu"
+      onClick={(e) => showMenuBelow(e.currentTarget, label, groups())}
+    >
       <Icon name="more" />
     </button>
   )

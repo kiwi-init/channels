@@ -7,22 +7,22 @@ import { Settle, useStill } from "~/meadow/settle"
 import { cx } from "~/kit/bits"
 import { rememberOnboarded } from "~/start/onboarded"
 import { PLEDGE, pledged, same } from "~/start/pledge"
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 
 const WORD = "Channels"
-const LEDE = "end-to-end encrypted channels for AI agents"
-const PLAIN = "ship it on friday"
 const HEX = "0123456789abcdef"
-const TRUST = ["Messages are sealed on your device. The relay carries them and can't read them.", "Bring any harness: Claude Code, Codex, OpenCode, Pi and more."] as const
-const SAYS = ["Channels is not a harness, nor does it manage your agents.", "Agents connected to a channel are not bots, but they can assume personalities."] as const
+const TRUST: readonly Key[] = ["start.onboarding.trust.sealed", "start.onboarding.trust.harness"]
+const SAYS: readonly Key[] = ["start.onboarding.says.not.harness", "start.onboarding.says.not.bots"]
 const noise = (n: number): string => Array.from({ length: n }, (_, i) => (i % 5 === 4 ? " " : (HEX[Math.floor(Math.random() * 16)] ?? "0"))).join("")
 
-function Sealed({ still }: { still: boolean }) {
-  const [text, setText] = useState(() => noise(PLAIN.length))
+function Sealed({ still, length }: { still: boolean; length: number }) {
+  const [text, setText] = useState(() => noise(length))
   useEffect(() => {
     if (still) return
-    const t = window.setInterval(() => setText(noise(PLAIN.length)), 140)
-    return () => window.clearInterval(t)
-  }, [still])
+    const timer = window.setInterval(() => setText(noise(length)), 140)
+    return () => window.clearInterval(timer)
+  }, [still, length])
   return <>{text}</>
 }
 
@@ -48,6 +48,8 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const latest = useRef({ still, leaving })
   const sayId = useId()
   const done = pledged(typed)
+  const lede = t("start.onboarding.lede")
+  const plain = t("start.onboarding.plain")
 
   useEffect(() => {
     latest.current = { still, leaving }
@@ -85,8 +87,8 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     if (!done) return
     rememberOnboarded()
-    const t = window.setTimeout(() => setLeaving(true), still ? 0 : 600)
-    return () => window.clearTimeout(t)
+    const timer = window.setTimeout(() => setLeaving(true), still ? 0 : 600)
+    return () => window.clearTimeout(timer)
   }, [done, still])
 
   useEffect(() => {
@@ -101,7 +103,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     <dialog
       ref={box}
       className={cx("onb", leaving && "is-leaving")}
-      aria-label="Welcome to Channels"
+      aria-label={t("start.onboarding.welcome")}
       onCancel={(e) => e.preventDefault()}
       onClose={() => {
         if (!latest.current.leaving) box.current?.showModal()
@@ -120,49 +122,49 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             </span>
           </h1>
           <p className="onb-lede">
-            <span className="onb-sr">{LEDE}</span>
+            <span className="onb-sr">{lede}</span>
             <span aria-hidden="true">
-              <Settle text={LEDE} still={still} rate={48} delay={1.4} />
+              <Settle text={lede} still={still} rate={48} delay={1.4} />
             </span>
           </p>
           <button type="button" className="onb-next" autoFocus onClick={() => setStep("trust")}>
-            continue
+            {t("start.onboarding.continue")}
           </button>
         </main>
       ) : step === "trust" ? (
         <main key="trust" className="onb-step">
           <div className="onb-wire" aria-hidden="true">
-            <span className="onb-wire-head">your device</span>
+            <span className="onb-wire-head">{t("start.onboarding.your.device")}</span>
             <span />
-            <span className="onb-wire-head">relay</span>
+            <span className="onb-wire-head">{t("start.onboarding.relay")}</span>
             <span />
-            <span className="onb-wire-head">their device</span>
+            <span className="onb-wire-head">{t("start.onboarding.their.device")}</span>
             <span>
-              <Settle text={PLAIN} still={still} rate={30} delay={0.3} />
+              <Settle text={plain} still={still} rate={30} delay={0.3} />
             </span>
             <span className="onb-wire-arrow">→</span>
             <span className="onb-wire-sealed">
-              <Sealed still={still} />
+              <Sealed still={still} length={plain.length} />
             </span>
             <span className="onb-wire-arrow">→</span>
             <span>
-              <Settle text={PLAIN} still={still} rate={30} delay={1.3} />
+              <Settle text={plain} still={still} rate={30} delay={1.3} />
             </span>
           </div>
           <div className="onb-says">
             {TRUST.map((line, i) => (
-              <Line key={line} text={line} still={still} delay={1.8 + i * 1.3} />
+              <Line key={line} text={t(line)} still={still} delay={1.8 + i * 1.3} />
             ))}
           </div>
           <button type="button" className="onb-next is-later" autoFocus onClick={() => setStep("pledge")}>
-            continue
+            {t("start.onboarding.continue")}
           </button>
         </main>
       ) : (
         <main key="pledge" className="onb-step is-pledge">
           <div id={sayId} className="onb-says">
             {SAYS.map((line, i) => (
-              <Line key={line} text={line} still={still} delay={0.3 + i * 1.3} />
+              <Line key={line} text={t(line)} still={still} delay={0.3 + i * 1.3} />
             ))}
           </div>
           <label className={cx("onb-type", done && "is-done")}>
@@ -188,7 +190,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               autoCorrect="off"
               spellCheck={false}
               readOnly={done}
-              aria-label={`Type “${PLEDGE}” to begin`}
+              aria-label={t("start.onboarding.type.pledge", { pledge: PLEDGE })}
               aria-describedby={sayId}
               onPaste={(e) => e.preventDefault()}
               onDrop={(e) => e.preventDefault()}

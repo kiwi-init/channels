@@ -7,6 +7,7 @@ import { autofocus, cx } from "~/kit/bits"
 import { Modal } from "~/kit/modal"
 import type { InviteInfo } from "~/model"
 import { useApp } from "~/nav"
+import { t } from "~/i18n/i18n"
 
 const CODE = /^[A-Za-z0-9._~-]+$/
 
@@ -20,10 +21,10 @@ function decode(text: string): string {
 }
 
 function inviteCode(text: string): string | null {
-  const t = text.trim()
-  if (!t) return null
-  const link = /^kiwi:\/\/join\/([^?#\s]+)/i.exec(t)
-  const raw = link ? link[1] : /^https?:\/\/\S*#/i.test(t) ? t.slice(t.lastIndexOf("#") + 1) : t
+  const trimmed = text.trim()
+  if (!trimmed) return null
+  const link = /^kiwi:\/\/join\/([^?#\s]+)/i.exec(trimmed)
+  const raw = link ? link[1] : /^https?:\/\/\S*#/i.test(trimmed) ? trimmed.slice(trimmed.lastIndexOf("#") + 1) : trimmed
   const code = decode(raw ?? "").replace(/\/+$/, "")
   return CODE.test(code) ? code : null
 }
@@ -45,20 +46,16 @@ function JoinForm({ onClose }: { onClose: () => void }) {
   const nameId = useId()
   const code = inviteCode(text)
   const bad = text.trim() !== "" && !code
-  const nameProblem = !NAME_RE.test(name.trim())
-    ? "Letters, numbers, dots, dashes or underscores, up to 32"
-    : RESERVED_NAMES.has(name.trim().toLowerCase())
-      ? "That name is kept for Channels itself"
-      : null
+  const nameProblem = !NAME_RE.test(name.trim()) ? t("start.join.name.allowed", { max: 32 }) : RESERVED_NAMES.has(name.trim().toLowerCase()) ? t("start.join.name.reserved") : null
 
   const inspect = async (c: string) => {
     try {
       const info = await app.actions.inviteInfo(c)
       if (info.state === "member") return go({ to: "channel", code: info.code })
-      if (info.state === "gone") setError("This invite no longer works: the channel was deleted, or the code is wrong. Ask whoever sent it for a new one.")
+      if (info.state === "gone") setError(t("start.join.gone"))
       else setInvite(info)
     } catch (err) {
-      setError(`Couldn't check the invite: ${err instanceof Error ? err.message : String(err)}`)
+      setError(t("start.join.check.failed", { why: err instanceof Error ? err.message : String(err) }))
     } finally {
       setBusy(false)
     }
@@ -75,9 +72,9 @@ function JoinForm({ onClose }: { onClose: () => void }) {
       <Modal
         dismiss="x"
         onClose={onClose}
-        label="Join a channel"
-        title={owner ? `${owner} invited you to a channel` : "You're invited to a channel"}
-        sub={`${owner ?? "The owner"} sees your name and a code to check, then lets you in.`}
+        label={t("start.join.title")}
+        title={owner ? t("start.join.invited.by", { owner }) : t("start.join.invited")}
+        sub={owner ? t("start.join.sub.named", { owner }) : t("start.join.sub")}
       >
         <form
           className="start-form"
@@ -90,13 +87,13 @@ function JoinForm({ onClose }: { onClose: () => void }) {
               const joined = await app.actions.joinChannel(invite.code, name.trim())
               go({ to: "channel", code: joined })
             } catch (err) {
-              setError(`Couldn't send the request: ${err instanceof Error ? err.message : String(err)}`)
+              setError(t("start.join.send.failed", { why: err instanceof Error ? err.message : String(err) }))
               setBusy(false)
             }
           }}
         >
           <label className="field" htmlFor={nameId}>
-            <span className="field-label">Your name in this channel</span>
+            <span className="field-label">{t("start.join.your.name")}</span>
             <input
               id={nameId}
               ref={autofocus}
@@ -114,10 +111,10 @@ function JoinForm({ onClose }: { onClose: () => void }) {
           </p>
           <div className="modal-foot start-foot">
             <button type="button" className="btn is-quiet" onClick={() => (setInvite(null), setError(null))}>
-              Back
+              {t("start.join.back")}
             </button>
             <button type="submit" className="btn is-primary" disabled={busy || !!nameProblem}>
-              {busy ? "Asking…" : "Ask to join"}
+              {busy ? t("start.join.asking") : t("start.join.ask")}
             </button>
           </div>
         </form>
@@ -125,9 +122,9 @@ function JoinForm({ onClose }: { onClose: () => void }) {
     )
   }
 
-  const hint = error ?? (bad ? "That isn't an invite. It looks like kiwi://join/…, a link with #mc2-…, or a code." : null)
+  const hint = error ?? (bad ? t("start.join.not.invite") : null)
   return (
-    <Modal dismiss="x" onClose={onClose} label="Join a channel" title="Join a channel">
+    <Modal dismiss="x" onClose={onClose} label={t("start.join.title")} title={t("start.join.title")}>
       <form
         className="start-form"
         onSubmit={async (e) => {
@@ -139,7 +136,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
         }}
       >
         <label className="field" htmlFor={inputId}>
-          <span className="field-label">Invite link or code</span>
+          <span className="field-label">{t("start.join.invite.label")}</span>
           <input
             id={inputId}
             ref={autofocus}
@@ -147,7 +144,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}
-            placeholder="kiwi://join/… or a code"
+            placeholder={t("start.join.placeholder")}
             value={text}
             onChange={(e) => {
               setText(e.target.value)
@@ -162,7 +159,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
         </p>
         <div className="modal-foot start-foot">
           <button type="submit" className="btn is-primary" disabled={!code || busy}>
-            {busy ? "Checking…" : "Continue"}
+            {busy ? t("start.join.checking") : t("start.join.continue")}
           </button>
         </div>
       </form>

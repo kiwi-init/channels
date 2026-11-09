@@ -16,29 +16,31 @@ import { Empty } from "~/kit/empty"
 import { Modal } from "~/kit/modal"
 import { Icon } from "~/kit/icons"
 import { MoreButton } from "~/kit/menu-open"
-import { ago } from "~/kit/time"
+import { ageOf, ago } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
 import { openMessage } from "~/live/open-message"
 import { useApp } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { wordsPlain, wordsRaw } from "~/words"
 import { IssueMark, issueWord, PrCard } from "~/github/parts"
+import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 import { PanelHead } from "~/panels/frame"
 import { moveWords, someone } from "~/panels/task-moves"
 import { TONES } from "~/tasks/row"
 import { SendBack } from "~/tasks/send-back"
 
 function since(at: number): string {
-  const a = ago(at)
-  if (a === "now") return "just now"
-  return /^\d+[mhd]$/.test(a) ? `${a} ago` : a
+  const age = ageOf(at)
+  if (age === "now") return t("panels.task.just.now")
+  return age === "recent" ? t("panels.task.ago", { time: ago(at) }) : ago(at)
 }
 
 const holds = (a: Ask, id: number): a is PermissionAsk | QuestionAsk =>
   a.kind === "permission" ? a.task === id && !a.answer : a.kind === "question" ? (a.task === id || a.holds.includes(id)) && !a.answer && !a.closed : false
 
 export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
-  const task = channel.tasks.find((t) => t.id === id)
+  const task = channel.tasks.find((k) => k.id === id)
   const talk = useMemo(() => channel.messages.filter((m) => m.where.kind === "task" && m.where.task === id), [channel.messages, id])
   useWhole(channel.code, "task", talk)
   const names = useNames(channel)
@@ -62,7 +64,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
     return (
       <>
         <PanelHead title={`T${id}`} />
-        <Empty title="This task is gone." />
+        <Empty title={t("panels.task.gone")} />
       </>
     )
   const waits = channel.asks.filter((a) => holds(a, id))
@@ -97,14 +99,14 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
         {task.history.length > 0 && <Activity key={`activity-${task.id}`} channel={channel} history={task.history} />}
         {talk.length > 0 && (
           <section className="panel-section task-talk">
-            <Heading>Conversation</Heading>
+            <Heading>{t("panels.task.conversation")}</Heading>
             {talk.map((m, i) => (
               <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} tasks={tasks} inThread quote={quoteOf(talk, i, bySeq)} onQuote={onQuote} />
             ))}
           </section>
         )}
       </div>
-      <Composer key={`compose-${task.id}`} channel={channel} where={{ kind: "task", task: task.id }} placeholder={`Message in T${task.id}`} />
+      <Composer key={`compose-${task.id}`} channel={channel} where={{ kind: "task", task: task.id }} placeholder={t("panels.task.message.in", { task: String(task.id) })} />
     </EditHere.Provider>
   )
 }
@@ -116,7 +118,7 @@ function Who({ channel, name }: { channel: Channel; name: string }) {
     <button type="button" className="task-who" onClick={() => go({ to: "modal", modal: { kind: "person", name } })}>
       <Avatar person={person} size="sm" />
       <span className="task-who-name">{nickname(channel, name)}</span>
-      {name === channel.you && <span className="dimmer">you</span>}
+      {name === channel.you && <span className="dimmer">{t("panels.task.you")}</span>}
     </button>
   )
 }
@@ -127,29 +129,29 @@ function Props({ channel, task, may }: { channel: Channel; task: Task; may: bool
   return (
     <>
       <dl className="props task-props tp-props">
-        <dt>Owner</dt>
+        <dt>{t("panels.task.owner")}</dt>
         <dd>
-          {task.owner ? <Who channel={channel} name={task.owner} /> : <span className="dimmer">nobody yet</span>}
+          {task.owner ? <Who channel={channel} name={task.owner} /> : <span className="dimmer">{t("panels.task.nobody.yet")}</span>}
           {open && (
             <button type="button" className="task-change" onClick={() => setPicking("owner")}>
-              {task.owner ? "Reassign" : "Assign"}
+              {task.owner ? t("panels.task.reassign") : t("panels.task.assign")}
             </button>
           )}
         </dd>
         {(task.reviewer || open) && (
           <>
-            <dt>Reviewer</dt>
+            <dt>{t("panels.task.reviewer")}</dt>
             <dd>
               {!task.reviewer ? (
                 <button type="button" className="task-change tp-ask" onClick={() => setPicking("reviewer")}>
-                  Ask for a review
+                  {t("panels.task.ask.review")}
                 </button>
               ) : (
                 <>
-                  {task.reviewer === ANYONE ? <span>anyone who hasn't worked on it</span> : <Who channel={channel} name={task.reviewer} />}
+                  {task.reviewer === ANYONE ? <span>{t("panels.task.anyone.unworked")}</span> : <Who channel={channel} name={task.reviewer} />}
                   {open && (
                     <button type="button" className="task-change" onClick={() => setPicking("reviewer")}>
-                      Change
+                      {t("panels.task.change")}
                     </button>
                   )}
                 </>
@@ -159,29 +161,22 @@ function Props({ channel, task, may }: { channel: Channel; task: Task; may: bool
         )}
         {task.lands && (
           <>
-            <dt>Lands on</dt>
+            <dt>{t("panels.task.lands.on")}</dt>
             <dd>
               <span className="cset-mono">{task.lands.then}</span>
-              {task.lands.by && (
-                <>
-                  {" · by "}
-                  <Who channel={channel} name={task.lands.by} />
-                </>
-              )}
-              {task.status === "landing" && <span className="dimmer"> · approved, not landed yet</span>}
+              {task.lands.by && tr("panels.task.lands.by", { who: <Who channel={channel} name={task.lands.by} /> })}
+              {task.status === "landing" && <span className="dimmer">{t("panels.task.lands.approved")}</span>}
               {task.lands.waits && <span className={task.lands.bypassed ? "tone-alert" : "dimmer"}> · {task.lands.waits}</span>}
             </dd>
           </>
         )}
         {task.closedWith && (
           <>
-            <dt>Closed</dt>
-            <dd>
-              without landing: <Shown value={task.closedWith} />
-            </dd>
+            <dt>{t("panels.task.closed")}</dt>
+            <dd>{tr("panels.task.closed.without", { why: <Shown value={task.closedWith} /> })}</dd>
           </>
         )}
-        <dt>Asked by</dt>
+        <dt>{t("panels.task.asked.by")}</dt>
         <dd>
           <Who channel={channel} name={task.createdBy} />
         </dd>
@@ -198,17 +193,17 @@ function Suggested({ channel, task, suggested }: { channel: Channel; task: Task;
     <div className="task-suggest">
       <Avatar person={memberOf(channel, suggested.name)} size="sm" />
       <p className="task-suggest-text">
-        <span className="dimmer">Suggested</span> {nickname(channel, suggested.name)} <span className="dim">· {wordsPlain(suggested.why, channel.nicknames)}</span>
+        <span className="dimmer">{t("panels.task.suggested")}</span> {nickname(channel, suggested.name)} <span className="dim">· {wordsPlain(suggested.why, channel.nicknames)}</span>
       </p>
       <button
         type="button"
         className="btn is-small"
         onClick={() => {
           app.actions.assignTask(channel.code, task.id, suggested.name, wordsRaw(suggested.why))
-          toast(`T${task.id} is ${nickname(channel, suggested.name)}'s now`)
+          toast(t("panels.task.yours.now", { task: String(task.id), name: nickname(channel, suggested.name) }))
         }}
       >
-        Assign
+        {t("panels.task.assign")}
       </button>
     </div>
   )
@@ -221,7 +216,7 @@ function Choice({ channel, person, on, about, onPick }: { channel: Channel; pers
       <span className="task-pick-text">
         <span className="task-pick-name">
           {nickname(channel, person.name)}
-          {person.you && <span className="dimmer"> · you</span>}
+          {person.you && <span className="dimmer">{t("panels.task.choice.you")}</span>}
         </span>
         <span className="task-pick-about">{about}</span>
       </span>
@@ -233,7 +228,13 @@ function Choice({ channel, person, on, about, onPick }: { channel: Channel; pers
 const agentsFirst = (a: Person, b: Person): number => (a.kind === b.kind ? 0 : a.kind === "agent" ? -1 : 1)
 
 const aboutOf = (p: Person): string =>
-  [p.kind === "agent" ? "Agent" : "Person", p.role === "lead" ? "lead" : undefined, p.load?.doing.length ? `on ${p.load.doing.map((t) => `T${t}`).join(", ")}` : undefined].filter(Boolean).join(" · ")
+  [
+    p.kind === "agent" ? t("panels.task.about.agent") : t("panels.task.about.person"),
+    p.role === "lead" ? t("panels.task.about.lead") : undefined,
+    p.load?.doing.length ? t("panels.task.about.on", { tasks: p.load.doing.map((n) => `T${n}`).join(", ") }) : undefined,
+  ]
+    .filter(Boolean)
+    .join(" · ")
 
 function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
   const { app, toast } = useApp()
@@ -247,7 +248,7 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
   const rest = people.filter((p) => p.name !== task.suggested?.name).sort(agentsFirst)
   const pick = (name: string) => {
     app.actions.assignTask(channel.code, task.id, name, why.trim() || (name === task.suggested?.name ? wordsRaw(task.suggested.why) : ""))
-    toast(`T${task.id} is ${nickname(channel, name)}'s now`)
+    toast(t("panels.task.yours.now", { task: String(task.id), name: nickname(channel, name) }))
     close()
   }
   return (
@@ -255,12 +256,20 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
       dismiss="x"
       open={open}
       onClose={close}
-      label={`Who works on T${task.id}?`}
-      title={`Who works on T${task.id}?`}
-      sub={task.owner ? `Now ${someone(channel, task.owner)}. The new owner gets a message with your note.` : "The new owner gets a message with your note."}
+      label={t("panels.task.who.works", { task: String(task.id) })}
+      title={t("panels.task.who.works", { task: String(task.id) })}
+      sub={task.owner ? t("panels.task.assign.sub.now", { name: someone(channel, task.owner) }) : t("panels.task.assign.sub")}
     >
       <div className="task-pick">
-        <input ref={autofocus} className="input" value={why} aria-label="A note for them" placeholder="A note for them (optional)" maxLength={300} onChange={(e) => setWhy(e.target.value)} />
+        <input
+          ref={autofocus}
+          className="input"
+          value={why}
+          aria-label={t("panels.task.note.label")}
+          placeholder={t("panels.task.note.placeholder")}
+          maxLength={300}
+          onChange={(e) => setWhy(e.target.value)}
+        />
         <div className="task-pick-list">
           {[...first, ...rest].map((p) => (
             <Choice
@@ -268,7 +277,7 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
               channel={channel}
               person={p}
               on={p.name === task.owner}
-              about={p.name === task.suggested?.name ? `Suggested · ${wordsPlain(task.suggested.why, channel.nicknames)}` : aboutOf(p)}
+              about={p.name === task.suggested?.name ? t("panels.task.suggested.about", { why: wordsPlain(task.suggested.why, channel.nicknames) }) : aboutOf(p)}
               onPick={() => pick(p.name)}
             />
           ))}
@@ -283,18 +292,19 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
   const people = channel.people.filter((p) => !p.left && !p.readOnly && p.name !== task.owner).sort(agentsFirst)
   const pick = (name: string) => {
     app.actions.setReviewer(channel.code, task.id, name)
-    toast(name === ANYONE ? `Anyone who hasn't worked on T${task.id} can review it` : `${nickname(channel, name)} reviews T${task.id}`)
+    toast(name === ANYONE ? t("panels.task.anyone.reviews", { task: String(task.id) }) : t("panels.task.reviews", { name: nickname(channel, name), task: String(task.id) }))
     onClose()
   }
-  const now = task.reviewer ? (task.reviewer === ANYONE ? "Now anyone who hasn't worked on it. " : `Now ${someone(channel, task.reviewer)}. `) : ""
+  const now = task.reviewer ? (task.reviewer === ANYONE ? t("panels.task.reviewer.now.anyone") : t("panels.task.reviewer.now", { name: someone(channel, task.reviewer) })) : ""
+  const verdict = task.status === "review" ? t("panels.task.reviewer.open") : t("panels.task.reviewer.later")
   return (
     <Modal
       dismiss="outside"
       open={open}
       onClose={onClose}
-      label={`Who reviews T${task.id}?`}
-      title={`Who reviews T${task.id}?`}
-      sub={`${now}${task.status === "review" ? "They give the verdict on the open round." : "They give the verdict when it's sent for review."}`}
+      label={t("panels.task.who.reviews", { task: String(task.id) })}
+      title={t("panels.task.who.reviews", { task: String(task.id) })}
+      sub={now ? t("panels.task.reviewer.sub", { now, verdict }) : verdict}
     >
       <div className="task-pick-list">
         <button type="button" className="task-pick-row" aria-pressed={task.reviewer === ANYONE} disabled={task.reviewer === ANYONE} onClick={() => pick(ANYONE)}>
@@ -302,8 +312,8 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
             <Icon name="at" size={14} />
           </span>
           <span className="task-pick-text">
-            <span className="task-pick-name">Anyone</span>
-            <span className="task-pick-about">Whoever hasn't worked on it</span>
+            <span className="task-pick-name">{t("panels.task.anyone")}</span>
+            <span className="task-pick-about">{t("panels.task.anyone.about")}</span>
           </span>
           {task.reviewer === ANYONE && <Icon name="check" size={14} />}
         </button>
@@ -318,7 +328,7 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
 function Waits({ channel, waits }: { channel: Channel; waits: (PermissionAsk | QuestionAsk)[] }) {
   const { go } = useApp()
   return (
-    <section className="panel-section" aria-label="Waiting on an answer">
+    <section className="panel-section" aria-label={t("panels.task.waiting.label")}>
       <div className="task-box is-waiting">
         <ul className="task-waits">
           {waits.map((a) => (
@@ -331,7 +341,7 @@ function Waits({ channel, waits }: { channel: Channel; waits: (PermissionAsk | Q
           ))}
         </ul>
         <button type="button" className="btn is-small" onClick={() => go({ to: "tab", tab: "needs" })}>
-          Answer in Needs you
+          {t("panels.task.answer.in.needs")}
         </button>
       </div>
     </section>
@@ -362,33 +372,35 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
   const owner = task.owner ? nickname(channel, task.owner) : null
   const ask =
     task.youReview === "send-back"
-      ? `This waits for ${task.reviewer && task.reviewer !== ANYONE ? `${nickname(channel, task.reviewer)}'s` : "a"} review. You can still send it back.`
+      ? task.reviewer && task.reviewer !== ANYONE
+        ? t("panels.task.review.send.back.named", { name: nickname(channel, task.reviewer) })
+        : t("panels.task.review.send.back")
       : task.reviewer === channel.you
         ? owner
-          ? `${owner} asks for your review.`
-          : "This waits for your review."
+          ? t("panels.task.review.asks", { owner })
+          : t("panels.task.review.yours")
         : task.reviewer === ANYONE
-          ? "This waits for a review from someone who hasn't worked on it."
-          : "This waits for a review."
+          ? t("panels.task.review.unworked")
+          : t("panels.task.review.waits")
   const sendBack = (why: string) => {
     app.actions.approveTask(channel.code, task.id, false, why)
     setSending(false)
-    toast(`Sent T${task.id} back${owner ? ` to ${owner}` : ""}`)
+    toast(owner ? t("panels.task.sent.back.to", { task: String(task.id), name: owner }) : t("panels.task.sent.back", { task: String(task.id) }))
   }
   const summary = brief && last && (
     <div className="tp-brief">
-      <p className="tp-brief-head">Round {last.n} in short</p>
+      <p className="tp-brief-head">{t("panels.task.round.short", { n: last.n })}</p>
       <p className="tp-brief-text">{wordsPlain(brief, channel.nicknames)}</p>
     </div>
   )
   if (!yours)
     return (
-      <section className="panel-section" aria-label="Review">
+      <section className="panel-section" aria-label={t("panels.task.review.label")}>
         {summary}
       </section>
     )
   return (
-    <section className="panel-section" aria-label="Review">
+    <section className="panel-section" aria-label={t("panels.task.review.label")}>
       <div className="task-box is-waiting tp-review">
         <p className="task-review-ask">{ask}</p>
         {summary}
@@ -402,14 +414,14 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
                 className="btn is-primary"
                 onClick={() => {
                   app.actions.approveTask(channel.code, task.id, true)
-                  toast(`Approved T${task.id}`)
+                  toast(t("panels.task.approved", { task: String(task.id) }))
                 }}
               >
-                Approve
+                {t("panels.task.approve")}
               </button>
             )}
             <button type="button" className="btn" onClick={() => setSending(true)}>
-              Send back
+              {t("panels.task.send.back")}
             </button>
           </div>
         )}
@@ -428,12 +440,12 @@ function TaskMenu({ channel, task }: { channel: Channel; task: Task }) {
       <MoreButton
         label={label}
         groups={() => [
-          [{ label: "Edit…", run: () => setEditing(true) }, ...(task.status === "done" ? [] : [{ label: "Cancel…", run: () => setCancelling(true) }])],
+          [{ label: t("panels.task.menu.edit"), run: () => setEditing(true) }, ...(task.status === "done" ? [] : [{ label: t("panels.task.menu.cancel"), run: () => setCancelling(true) }])],
           [
             {
-              label: "Delete…",
+              label: t("panels.task.menu.delete"),
               run: () => app.actions.deleteTask(channel.code, task.id),
-              confirm: { title: `Delete ${label}?`, sub: "It leaves the board and the counts. The history keeps one line saying you deleted it.", yes: "Delete task" },
+              confirm: { title: t("panels.task.delete.title", { task: String(task.id) }), sub: t("panels.task.delete.sub"), yes: t("panels.task.delete.yes") },
             },
           ],
         ]}
@@ -458,9 +470,9 @@ function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Ta
       dismiss="x"
       open={open}
       onClose={close}
-      label={`Edit T${task.id}`}
-      title={`Edit T${task.id}`}
-      sub={task.owner ? `${someone(channel, task.owner)} sees the change in the task's history.` : "The change shows in the task's history."}
+      label={t("panels.task.edit.heading", { task: String(task.id) })}
+      title={t("panels.task.edit.heading", { task: String(task.id) })}
+      sub={task.owner ? t("panels.task.edit.sub.owner", { name: someone(channel, task.owner) }) : t("panels.task.edit.sub")}
     >
       <form
         className="task-cancel task-edit"
@@ -471,14 +483,29 @@ function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Ta
           onClose()
         }}
       >
-        <input ref={autofocus} className="input" value={title} aria-label="Title" placeholder="Title" maxLength={200} onChange={(e) => setTitle(e.target.value)} />
-        <textarea className="textarea" rows={8} value={detail} aria-label="Body" placeholder="What to do, where the code is and why" onChange={(e) => setDetail(e.target.value)} />
+        <input
+          ref={autofocus}
+          className="input"
+          value={title}
+          aria-label={t("panels.task.edit.title")}
+          placeholder={t("panels.task.edit.title")}
+          maxLength={200}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <textarea
+          className="textarea"
+          rows={8}
+          value={detail}
+          aria-label={t("panels.task.edit.body")}
+          placeholder={t("panels.task.edit.body.placeholder")}
+          onChange={(e) => setDetail(e.target.value)}
+        />
         <div className="modal-foot">
           <button type="button" className="btn is-quiet" onClick={close}>
-            Cancel
+            {t("panels.task.edit.cancel")}
           </button>
           <button type="submit" className="btn is-primary" disabled={!title.trim()}>
-            Save
+            {t("panels.task.edit.save")}
           </button>
         </div>
       </form>
@@ -490,21 +517,21 @@ function State({ channel, task, may }: { channel: Channel; task: Task; may: bool
   const { app } = useApp()
   return (
     <div className="tp-state">
-      <p className="tp-status" title={`Created ${since(task.createdAt)}`}>
+      <p className="tp-status" title={t("panels.task.created", { when: since(task.createdAt) })}>
         <Dot status={task.status} />
         <span className={task.cancelled ? "dim" : TONES[task.status]}>{statusWord(task)}</span>
-        {task.archived && <span className="dimmer">· archived</span>}
+        {task.archived && <span className="dimmer">{t("panels.task.archived")}</span>}
         <span className="dimmer">· {since(task.updatedAt)}</span>
       </p>
       {may && (
         <span className="tp-moves">
           {task.status === "done" ? (
             <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "todo")}>
-              Reopen
+              {t("panels.task.reopen")}
             </button>
           ) : (
             <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "done")}>
-              Mark done
+              {t("panels.task.mark.done")}
             </button>
           )}
         </span>
@@ -525,9 +552,9 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
       dismiss="x"
       open={open}
       onClose={close}
-      label={`Cancel T${task.id}?`}
-      title={`Cancel T${task.id}?`}
-      sub={`It closes for everyone, marked cancelled${task.status === "review" ? ", and its open review round ends" : ""}.`}
+      label={t("panels.task.cancel.title", { task: String(task.id) })}
+      title={t("panels.task.cancel.title", { task: String(task.id) })}
+      sub={task.status === "review" ? t("panels.task.cancel.sub.review") : t("panels.task.cancel.sub")}
     >
       <form
         className="task-cancel"
@@ -535,7 +562,7 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
           e.preventDefault()
           if (!why.trim()) return
           app.actions.cancelTask(channel.code, task.id, why.trim())
-          toast(`Cancelled T${task.id}`)
+          toast(t("panels.task.cancelled", { task: String(task.id) }))
           close()
         }}
       >
@@ -543,17 +570,17 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
           ref={autofocus}
           className="input"
           value={why}
-          aria-label="Why it's cancelled"
-          placeholder={task.owner ? `Why, so ${someone(channel, task.owner)} knows` : "Why it's cancelled"}
+          aria-label={t("panels.task.cancel.why")}
+          placeholder={task.owner ? t("panels.task.cancel.why.owner", { name: someone(channel, task.owner) }) : t("panels.task.cancel.why")}
           maxLength={500}
           onChange={(e) => setWhy(e.target.value)}
         />
         <div className="modal-foot">
           <button type="button" className="btn is-quiet" onClick={close}>
-            Keep it
+            {t("panels.task.cancel.keep")}
           </button>
           <button type="submit" className="btn is-danger" disabled={!why.trim()}>
-            Cancel task
+            {t("panels.task.cancel.yes")}
           </button>
         </div>
       </form>
@@ -571,10 +598,10 @@ function Activity({ channel, history }: { channel: Channel; history: TaskEvent[]
   const hidden = history.length - shown.length
   return (
     <section className="panel-section">
-      <Heading>Activity</Heading>
+      <Heading>{t("panels.task.activity")}</Heading>
       {hidden > 0 && (
         <button type="button" className="task-change task-earlier" onClick={() => setAll(true)}>
-          Show {hidden} earlier
+          {t("panels.task.show.earlier", { count: hidden })}
         </button>
       )}
       <ol className="task-history">
@@ -593,7 +620,8 @@ function Move({ channel, e }: { channel: Channel; e: TaskEvent }) {
   const long = note.length > LONG
   const line = (
     <>
-      <span className="task-move-who">{e.by === channel.you ? "You" : nickname(channel, e.by)}</span> {moveWords(channel, e)} <span className="dimmer num">· {ago(e.at)}</span>
+      {tr("panels.task.move.line", { who: <span className="task-move-who">{e.by === channel.you ? t("panels.task.move.you") : nickname(channel, e.by)}</span>, what: moveWords(channel, e) })}{" "}
+      <span className="dimmer num">· {ago(e.at)}</span>
     </>
   )
   return (
@@ -608,7 +636,7 @@ function Move({ channel, e }: { channel: Channel; e: TaskEvent }) {
       {note && <p className={cx("task-move-note", e.what === "mention" && "is-quote", long && !full && "is-cut")}>{note}</p>}
       {long && (
         <button type="button" className="task-change" onClick={() => setFull((v) => !v)}>
-          {full ? "Show less" : "Show all"}
+          {full ? t("panels.task.show.less") : t("panels.task.show.all")}
         </button>
       )}
     </li>

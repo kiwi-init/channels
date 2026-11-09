@@ -7,7 +7,7 @@ import needs from "~/i18n/zh-CN/needs"
 import shell from "~/i18n/zh-CN/shell"
 import github from "~/i18n/zh-CN/github"
 
-export const covers = ["chat.", "settings.language.", "specs.", "tasks.", "usage."]
+export const covers = ["chat.", "github.", "kit.", "modals.", "needs.", "palette.", "panels.", "settings.language.", "shell.", "specs.", "start.", "tasks.", "usage."]
 
 export default {
   ...chatCompose,

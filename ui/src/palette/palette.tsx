@@ -3,6 +3,7 @@ import { Suspense, useEffect, useRef } from "react"
 import "~/styles/palette.css"
 import { later } from "~/kit/later"
 import { useApp } from "~/nav"
+import { t } from "~/i18n/i18n"
 
 const Finder = later(() => import("~/palette/finder").then((m) => m.Finder))
 
@@ -30,7 +31,7 @@ export function Palette() {
     <dialog
       ref={ref}
       className="palette"
-      aria-label="Jump to"
+      aria-label={t("palette.palette.jump.to")}
       onClose={() => open && close()}
       onClick={(e) => {
         if (e.target === e.currentTarget) close()

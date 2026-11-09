@@ -9,6 +9,7 @@ import { threadReply } from "~/chat/quote"
 import { threadRoot } from "~/chat/thread-root"
 import { QuotePick } from "~/chat/quote-pick"
 import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
+import { t } from "~/i18n/i18n"
 import { Empty } from "~/kit/empty"
 import type { Channel } from "~/model"
 import { nickname } from "~/names"
@@ -71,28 +72,28 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
   }, [seq, last, replies, channel.you, toBottom])
   const onQuote = useCallback((target: number) => void jumpTo(content.current, target), [content])
   const quote = useCallback((at: number, excerpt: string) => threadReply.set({ code: channel.code, root: seq, to: at, excerpt }), [channel.code, seq])
-  const following = channel.threads?.find((t) => t.root === seq)?.following ?? channel.follows?.[seq] ?? (root?.from === channel.you || !!root?.mentionsYou)
+  const following = channel.threads?.find((th) => th.root === seq)?.following ?? channel.follows?.[seq] ?? (root?.from === channel.you || !!root?.mentionsYou)
 
   if (waiting)
     return (
       <>
-        <PanelHead title="Thread" />
+        <PanelHead title={t("panels.thread.title")} />
         <div className="feed" />
       </>
     )
   if (!root)
     return (
       <>
-        <PanelHead title="Thread" />
-        <Empty title="This message is gone." />
+        <PanelHead title={t("panels.thread.title")} />
+        <Empty title={t("panels.thread.gone")} />
       </>
     )
   return (
     <ReplyContext.Provider value={replying}>
       <EditHere.Provider value="panel">
-        <PanelHead title="Thread" sub={`· ${nickname(channel, root.from)}`}>
+        <PanelHead title={t("panels.thread.title")} sub={t("panels.thread.sub", { name: nickname(channel, root.from) })}>
           <button type="button" className="btn is-small is-quiet" aria-pressed={following} onClick={() => actions.followThread(channel.code, seq, !following)}>
-            {following ? "Following" : "Follow"}
+            {following ? t("panels.thread.following") : t("panels.thread.follow")}
           </button>
         </PanelHead>
         {root.where.kind !== "theirs" && <QuotePick root={content} onQuote={quote} />}
@@ -101,15 +102,17 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
             <div className="thread-root">
               <MessageRow channel={channel} m={root} compact={false} names={names} tasks={tasks} inThread />
             </div>
-            <p className="thread-count">
-              {replies.length} {replies.length === 1 ? "reply" : "replies"}
-            </p>
+            <p className="thread-count">{t("panels.thread.replies", { count: replies.length })}</p>
             {replies.map((m, i) => (
               <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(replies, i)} names={names} tasks={tasks} inThread quote={quoteOf(replies, i, bySeq, seq)} onQuote={onQuote} />
             ))}
           </div>
         </div>
-        {root.where.kind === "theirs" ? <ReadOnly channel={channel} between={root.where.between} /> : <Composer channel={channel} where={root.where} inThread={seq} placeholder="Reply in thread" />}
+        {root.where.kind === "theirs" ? (
+          <ReadOnly channel={channel} between={root.where.between} />
+        ) : (
+          <Composer channel={channel} where={root.where} inThread={seq} placeholder={t("panels.thread.placeholder")} />
+        )}
       </EditHere.Provider>
     </ReplyContext.Provider>
   )

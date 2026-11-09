@@ -11,10 +11,20 @@ import { SIDEBAR_KEYS } from "@kiwi/app/sidebar-hidden.ts"
 import { toggleSide } from "~/shell/side"
 import { statusOf } from "~/shell/sidebar"
 import { wordsPlain } from "~/words"
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 
-type Group = "Channels" | "Rooms" | "People" | "Tasks" | "Actions"
+type Group = "channels" | "rooms" | "people" | "tasks" | "actions"
 
-const GROUPS: Group[] = ["Channels", "Rooms", "People", "Tasks", "Actions"]
+const GROUPS: Group[] = ["channels", "rooms", "people", "tasks", "actions"]
+
+const GROUP_KEYS: Record<Group, Key> = {
+  channels: "palette.finder.group.channels",
+  rooms: "palette.finder.group.rooms",
+  people: "palette.finder.group.people",
+  tasks: "palette.finder.group.tasks",
+  actions: "palette.finder.group.actions",
+}
 
 const LIMIT = 8
 
@@ -24,10 +34,10 @@ const FIRST_QUERY = new URLSearchParams(location.search).get("q") ?? ""
 
 const TONE: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", landing: "tone-review", done: "tone-live", waiting: "tone-decide" }
 
-const THEMES: { theme: Theme; label: string; icon: "moon" | "sun" | "computer" }[] = [
-  { theme: "dark", label: "Theme: Dark", icon: "moon" },
-  { theme: "light", label: "Theme: Light", icon: "sun" },
-  { theme: "system", label: "Theme: System", icon: "computer" },
+const THEMES: { theme: Theme; label: Key; icon: "moon" | "sun" | "computer" }[] = [
+  { theme: "dark", label: "palette.finder.theme.dark", icon: "moon" },
+  { theme: "light", label: "palette.finder.theme.light", icon: "sun" },
+  { theme: "system", label: "palette.finder.theme.system", icon: "computer" },
 ]
 
 interface Item {
@@ -41,12 +51,12 @@ interface Item {
   run: () => void
 }
 
-function versionsHere(channel: Channel, nav: Nav): { thread: string; name: string } | null {
+function versionsHere(channel: Channel, nav: Nav): { thread: string; name: string; here: boolean } | null {
   const where: Where = nav.panel?.kind === "task" ? { kind: "task", task: nav.panel.task } : nav.where
   const thread = docOf(channel, where)
   if (!thread || !channel.docs?.[thread]) return null
-  const name = where.kind === "task" ? `T${where.task}` : where.kind === "room" ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}` : "This conversation"
-  return { thread, name }
+  const name = where.kind === "task" ? `T${where.task}` : where.kind === "room" ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}` : t("palette.finder.this.conversation")
+  return { thread, name, here: where.kind !== "task" && where.kind !== "room" }
 }
 
 interface Ranked {
@@ -104,7 +114,7 @@ export function Finder() {
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
-          placeholder="Jump to…"
+          placeholder={t("palette.finder.placeholder")}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)
@@ -112,19 +122,19 @@ export function Finder() {
           }}
           onKeyDown={onKey}
           role="combobox"
-          aria-label="Jump to"
+          aria-label={t("palette.finder.jump.to")}
           aria-expanded="true"
           aria-controls={listId}
           aria-autocomplete="list"
           aria-activedescendant={flat.length ? optionId(current) : undefined}
         />
       </div>
-      <div ref={listRef} id={listId} className="palette-list" role="listbox" aria-label="Results">
-        {groups.length === 0 && <p className="palette-none">Nothing matches “{query.trim()}”.</p>}
+      <div ref={listRef} id={listId} className="palette-list" role="listbox" aria-label={t("palette.finder.results")}>
+        {groups.length === 0 && <p className="palette-none">{t("palette.finder.nothing.matches", { query: query.trim() })}</p>}
         {groups.map((g, gi) => (
-          <div key={g.group} className="palette-group" role="group" aria-label={g.group}>
+          <div key={g.group} className="palette-group" role="group" aria-label={t(GROUP_KEYS[g.group])}>
             <div className="palette-heading" aria-hidden="true">
-              {g.group}
+              {t(GROUP_KEYS[g.group])}
             </div>
             {g.items.map((item, n) => {
               const i = (starts[gi] ?? 0) + n
@@ -221,19 +231,19 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
     const here = nav.page === "channel" && nav.channel === tile.code
     items.push({
       id: `channel:${tile.code}`,
-      group: "Channels",
+      group: "channels",
       label: tile.title,
       keys: [tile.code],
       lead: <span className={cx("palette-tile", tile.state !== "member" && "is-waiting")}>{tile.icon ? <img src={tile.icon} alt="" /> : tile.title.slice(0, 1).toUpperCase()}</span>,
       meta:
         tile.state === "waiting" ? (
-          "waiting to be let in"
+          t("palette.finder.channel.waiting")
         ) : tile.needsYou > 0 ? (
-          <span className="tone-decide">{tile.needsYou} need you</span>
+          <span className="tone-decide">{t("palette.finder.channel.need.you", { count: tile.needsYou })}</span>
         ) : here ? (
-          "open"
+          t("palette.finder.channel.open")
         ) : tile.unread > 0 ? (
-          "new messages"
+          t("palette.finder.channel.new.messages")
         ) : undefined,
       run: () => (here ? close() : go({ to: "channel", code: tile.code })),
     })
@@ -244,10 +254,15 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
     for (const room of channel.rooms) {
       items.push({
         id: `room:${room.id}`,
-        group: "Rooms",
+        group: "rooms",
         label: room.name,
         lead: <span className="palette-hash">#</span>,
-        meta: room.mentions > 0 ? <span className="tone-decide">{room.mentions} for you</span> : room.unread > 0 ? `${room.unread} new` : undefined,
+        meta:
+          room.mentions > 0 ? (
+            <span className="tone-decide">{t("palette.finder.room.for.you", { count: room.mentions })}</span>
+          ) : room.unread > 0 ? (
+            t("palette.finder.room.new", { count: room.unread })
+          ) : undefined,
         run: () => {
           close()
           go({ to: "where", where: { kind: "room", room: room.id } })
@@ -259,11 +274,11 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       const status = statusOf(person, channel)
       items.push({
         id: `person:${person.name}`,
-        group: "People",
+        group: "people",
         label: shown(person),
         keys: [person.name, person.role ?? "", person.runs ?? "", person.kind === "agent" ? "agent" : "person"],
         lead: <Avatar person={person} size="sm" />,
-        meta: [person.you ? "you" : person.role, status].filter(Boolean).join(" · "),
+        meta: [person.you ? t("palette.finder.person.you") : person.role, status].filter(Boolean).join(" · "),
         run: () => {
           close()
           if (nav.page !== "channel") go({ to: "back" })
@@ -272,10 +287,10 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       })
     }
 
-    for (const task of channel.tasks.filter((t) => !t.archived && t.status !== "done").sort(byRecent)) {
+    for (const task of channel.tasks.filter((task) => !task.archived && task.status !== "done").sort(byRecent)) {
       items.push({
         id: `task:${task.id}`,
-        group: "Tasks",
+        group: "tasks",
         label: wordsPlain(task.title, channel.nicknames),
         tag: `T${task.id}`,
         keys: [String(task.id), task.owner ?? "", task.owner ? nickname(channel, task.owner) : ""],
@@ -294,32 +309,32 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
   items.push(
     {
       id: "action:new-channel",
-      group: "Actions",
-      label: "New channel",
+      group: "actions",
+      label: t("palette.finder.new.channel"),
       keys: ["create", "start"],
       lead: <Icon name="plus" size={14} />,
       run: () => go({ to: "dialog", dialog: "new-channel" }),
     },
     {
       id: "action:join",
-      group: "Actions",
-      label: "Join with a code",
+      group: "actions",
+      label: t("palette.finder.join"),
       keys: ["invite", "link"],
       lead: <Icon name="link" size={14} />,
       run: () => go({ to: "dialog", dialog: "join" }),
     },
     {
       id: "action:computers",
-      group: "Actions",
-      label: "Your computers",
+      group: "actions",
+      label: t("palette.finder.computers"),
       keys: ["phones", "devices", "machines"],
       lead: <Icon name="computer" size={14} />,
       run: () => go({ to: "settings", section: "computers" }),
     },
     {
       id: "action:settings",
-      group: "Actions",
-      label: "Settings",
+      group: "actions",
+      label: t("palette.finder.settings"),
       keys: ["preferences", "account"],
       lead: <Icon name="gear" size={14} />,
       run: () => go({ to: "settings" }),
@@ -329,8 +344,8 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
   if (channel && nav.page === "channel")
     items.push({
       id: "action:sidebar",
-      group: "Actions",
-      label: "Toggle sidebar",
+      group: "actions",
+      label: t("palette.finder.toggle.sidebar"),
       keys: ["hide", "show", "rooms", "people"],
       lead: <Icon name="sidebar" size={14} />,
       meta: <kbd className="palette-kbd">{SIDEBAR_KEYS}</kbd>,
@@ -344,8 +359,8 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
   if (versions)
     items.push({
       id: "action:doc-versions",
-      group: "Actions",
-      label: `Earlier versions of ${versions.name === "This conversation" ? "this doc" : `the ${versions.name} doc`}`,
+      group: "actions",
+      label: versions.here ? t("palette.finder.versions.here") : t("palette.finder.versions.of", { name: versions.name }),
       keys: ["restore", "history", "undo", "doc"],
       lead: <Icon name="spec" size={14} />,
       run: () => {
@@ -358,7 +373,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
     items.push(
       {
         id: "action:trace-scroll",
-        group: "Actions",
+        group: "actions",
         label: "Trace scrolling for 20 seconds",
         keys: ["debug", "flicker", "scroll"],
         lead: <Icon name="search" size={14} />,
@@ -369,53 +384,53 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       },
       {
         id: "action:copy-scroll-trace",
-        group: "Actions",
+        group: "actions",
         label: "Copy scroll trace",
         keys: ["debug", "flicker", "scroll"],
         lead: <Icon name="copy" size={14} />,
         run: () => {
           close()
-          void Promise.all([import("~/kit/scroll-trace"), import("~/kit/toasts")]).then(([m, t]) => t.copyText(m.scrollTrace(), "Scroll trace copied"))
+          void Promise.all([import("~/kit/scroll-trace"), import("~/kit/toasts")]).then(([m, toasts]) => toasts.copyText(m.scrollTrace(), "Scroll trace copied"))
         },
       },
       {
         id: "action:trace-typing",
-        group: "Actions",
+        group: "actions",
         label: "Trace typing for 60 seconds",
         keys: ["debug", "typing", "doc", "erased"],
         lead: <Icon name="search" size={14} />,
         run: () => {
           close()
-          void Promise.all([import("~/kit/typing-trace"), import("~/kit/toasts")]).then(([m, t]) => {
+          void Promise.all([import("~/kit/typing-trace"), import("~/kit/toasts")]).then(([m, toasts]) => {
             m.startTypingTrace()
-            t.announce("Tracing typing for 60 seconds")
+            toasts.announce("Tracing typing for 60 seconds")
           })
         },
       },
       {
         id: "action:copy-typing-trace",
-        group: "Actions",
+        group: "actions",
         label: "Copy typing trace",
         keys: ["debug", "typing", "doc", "erased"],
         lead: <Icon name="copy" size={14} />,
         run: () => {
           close()
-          void Promise.all([import("~/kit/typing-trace"), import("~/kit/toasts")]).then(([m, t]) => t.copyText(m.typingTrace(), "Typing trace copied"))
+          void Promise.all([import("~/kit/typing-trace"), import("~/kit/toasts")]).then(([m, toasts]) => toasts.copyText(m.typingTrace(), "Typing trace copied"))
         },
       }
     )
 
-  for (const t of THEMES) {
-    const on = app.prefs.theme === t.theme
+  for (const theme of THEMES) {
+    const on = app.prefs.theme === theme.theme
     items.push({
-      id: `action:theme-${t.theme}`,
-      group: "Actions",
-      label: t.label,
+      id: `action:theme-${theme.theme}`,
+      group: "actions",
+      label: t(theme.label),
       keys: ["appearance", "mode"],
-      lead: <Icon name={t.icon} size={14} />,
-      meta: on ? <Icon name="check" size={14} label="Current theme" /> : undefined,
+      lead: <Icon name={theme.icon} size={14} />,
+      meta: on ? <Icon name="check" size={14} label={t("palette.finder.current.theme")} /> : undefined,
       run: () => {
-        if (!on) app.actions.setPrefs({ theme: t.theme })
+        if (!on) app.actions.setPrefs({ theme: theme.theme })
         close()
       },
     })

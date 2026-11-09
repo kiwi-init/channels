@@ -8,6 +8,7 @@ import type { Channel } from "~/model"
 import { useApp } from "~/nav"
 import { shown, Shown } from "~/names"
 import { statusOf, taskOf } from "~/shell/sidebar"
+import { t } from "~/i18n/i18n"
 
 const KEY = "channels.tall.work"
 const SHARE = 0.42
@@ -89,7 +90,7 @@ function Crew({ channel }: { channel: Channel }) {
   const { nav, go } = useApp()
   const agents = channel.people.filter((p) => p.kind === "agent" && !p.left)
   return (
-    <nav className="crew" aria-label="Agents">
+    <nav className="crew" aria-label={t("shell.tall.agents")}>
       {agents.map((p) => {
         const on = nav.modal?.kind === "person" && nav.modal.name === p.name
         const task = taskOf(p, channel)
@@ -111,7 +112,7 @@ function Crew({ channel }: { channel: Channel }) {
                   <span className="num">T{task.id}</span> <Shown value={task.title} />
                 </>
               ) : (
-                <span className="crew-idle">no task</span>
+                <span className="crew-idle">{t("shell.tall.no.task")}</span>
               )}
             </span>
           </button>
@@ -120,8 +121,8 @@ function Crew({ channel }: { channel: Channel }) {
       <button
         type="button"
         className={cx("crew-add", nav.modal?.kind === "add-agent" && "is-on")}
-        aria-label="Add agent"
-        title="Add agent"
+        aria-label={t("shell.tall.add.agent")}
+        title={t("shell.tall.add.agent")}
         onClick={() => go({ to: "modal", modal: { kind: "add-agent" } })}
       >
         <Icon name="plus" size={14} />
@@ -137,11 +138,11 @@ export default function TallPage({ channel, jump, work, open }: { channel: Chann
   return (
     <div className="tall" style={{ "--work-h": `${split.height}px` } as CSSProperties}>
       <Crew channel={channel} />
-      <section className={cx("tall-work", open != null && "is-open")} aria-label={open != null ? "Details" : "Tasks"}>
+      <section className={cx("tall-work", open != null && "is-open")} aria-label={open != null ? t("shell.tall.details") : t("shell.tall.tasks")}>
         {open ?? work}
       </section>
-      <div className="tall-grip" role="separator" aria-orientation="horizontal" aria-label="Resize tasks and chat" tabIndex={0} title="Drag to resize · double-click to reset" {...split.grip} />
-      <section className="tall-chat" aria-label="Conversation">
+      <div className="tall-grip" role="separator" aria-orientation="horizontal" aria-label={t("shell.tall.resize")} tabIndex={0} title={t("shell.tall.resize.title")} {...split.grip} />
+      <section className="tall-chat" aria-label={t("shell.tall.conversation")}>
         <Conversation channel={channel} jump={jump} />
       </section>
     </div>

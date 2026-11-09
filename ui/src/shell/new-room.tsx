@@ -10,6 +10,7 @@ import type { Channel } from "~/model"
 import { useApp } from "~/nav"
 import { roomPeople, shown } from "~/names"
 import { useAppCan } from "~/live/app-can"
+import { t } from "~/i18n/i18n"
 
 const roomName = (typed: string): string => typed.trim().replace(/^#/, "").trim().toLowerCase().replace(/\s+/g, "-")
 
@@ -40,7 +41,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
     })
   const ready = !!name && !problem && !busy
   return (
-    <Modal dismiss="x" onClose={onClose} label="New room" title="New room">
+    <Modal dismiss="x" onClose={onClose} label={t("shell.new.room.title")} title={t("shell.new.room.title")}>
       <form
         className="room-form"
         onSubmit={async (e) => {
@@ -63,8 +64,8 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
             autoComplete="off"
             spellCheck={false}
             maxLength={40}
-            placeholder="room-name"
-            aria-label="Room name"
+            placeholder={t("shell.new.room.placeholder")}
+            aria-label={t("shell.new.room.name")}
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             aria-invalid={problem ? true : undefined}
@@ -75,20 +76,20 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
             {problem}
           </p>
         )}
-        <Track className="seg room-who" role="group" aria-label="Who's in">
+        <Track className="seg room-who" role="group" aria-label={t("shell.new.room.who")}>
           <button type="button" aria-pressed={!only} onClick={() => setOnly(false)}>
-            Everyone
+            {t("shell.new.room.everyone")}
           </button>
-          <button type="button" aria-pressed={only} disabled={!canPick} title={canPick ? undefined : "Update Channels to make members-only rooms"} onClick={() => setOnly(true)}>
-            Members only
+          <button type="button" aria-pressed={only} disabled={!canPick} title={canPick ? undefined : t("shell.new.room.update.to.pick")} onClick={() => setOnly(true)}>
+            {t("shell.new.room.members.only")}
           </button>
         </Track>
-        {only && <p className="room-hint">Only its members are sent what's said here. Anyone in the channel can still open it.</p>}
+        {only && <p className="room-hint">{t("shell.new.room.members.hint")}</p>}
         {only && (
           <div className="room-pick">
             {[
-              ["People", people],
-              ["Agents", agents],
+              [t("shell.new.room.people"), people],
+              [t("shell.new.room.agents"), agents],
             ].map(([title, list]) =>
               typeof title === "string" && Array.isArray(list) && list.length ? (
                 <fieldset key={title} className="room-group">
@@ -108,7 +109,13 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
         )}
         <div className="modal-foot">
           <button type="submit" className="btn is-primary" disabled={!ready || (only && picked.size === 0)}>
-            {busy ? "Making it…" : only ? `Create members-only room${picked.size ? ` for ${picked.size + 1}` : ""}` : "Create room"}
+            {busy
+              ? t("shell.new.room.making")
+              : only
+                ? picked.size
+                  ? t("shell.new.room.create.members.for", { count: picked.size + 1 })
+                  : t("shell.new.room.create.members")
+                : t("shell.new.room.create")}
           </button>
         </div>
       </form>

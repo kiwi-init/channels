@@ -108,7 +108,7 @@ function numberFormat(options: Intl.NumberFormatOptions = {}): Intl.NumberFormat
 
 const num = (n: number): string => numberFormat().format(n)
 
-export const span = (n: number, unit: "minute" | "hour"): string => numberFormat({ style: "unit", unit, unitDisplay: "narrow" }).format(n)
+export const span = (n: number, unit: "minute" | "hour" | "day"): string => numberFormat({ style: "unit", unit, unitDisplay: "narrow" }).format(n)
 
 function plural(lang: Lang, n: number): Intl.LDMLPluralRule {
   let r = rules.get(lang)

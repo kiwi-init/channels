@@ -1,8 +1,9 @@
 import "~/styles/start.css"
 import { Dot } from "~/kit/bits"
-import { ago, useNow } from "~/kit/time"
+import { ageOf, ago, useNow } from "~/kit/time"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
+import { t } from "~/i18n/i18n"
 
 export function Waiting({ channel }: { channel: Channel }) {
   const { app, go } = useApp()
@@ -21,10 +22,10 @@ export function Waiting({ channel }: { channel: Channel }) {
       <main className="start-area">
         <div className="start-drag" />
         <div className="start-wait">
-          <h1 className="start-title">{owner ?? "The owner"} didn't let you in.</h1>
-          <p className="start-sub">Your request to join {channel.title} was declined. Ask for a new invite if that was a mistake.</p>
+          <h1 className="start-title">{owner ? t("start.waiting.declined.named", { owner }) : t("start.waiting.declined")}</h1>
+          <p className="start-sub">{t("start.waiting.declined.sub", { name: channel.title })}</p>
           <button type="button" className="btn" onClick={cancel}>
-            Back to channels
+            {t("start.waiting.back")}
           </button>
         </div>
       </main>
@@ -35,22 +36,22 @@ export function Waiting({ channel }: { channel: Channel }) {
       <div className="start-wait">
         <p className="start-wait-state">
           <Dot status="doing" />
-          Asked {since === "now" ? "just now" : `${since} ago`}
+          {ageOf(waiting.since, now) === "now" ? t("start.waiting.asked.now") : t("start.waiting.asked.ago", { since })}
         </p>
-        <h1 className="start-title">{owner ? `Waiting for ${owner} to let you in.` : `Waiting for the owner of ${channel.title} to let you in.`}</h1>
-        {waiting.state === "unreachable" && <p className="start-hint is-error">Can't reach the relay right now. Still trying…</p>}
+        <h1 className="start-title">{owner ? t("start.waiting.for.named", { owner }) : t("start.waiting.for.owner", { name: channel.title })}</h1>
+        {waiting.state === "unreachable" && <p className="start-hint is-error">{t("start.waiting.unreachable")}</p>}
         {waiting.code ? (
           <>
-            <p className="start-sub">Tell them your code. They'll check it matches the one on their screen.</p>
-            <p className="start-code" aria-label={`Your code: ${waiting.code.split("").join(" ")}`}>
+            <p className="start-sub">{t("start.waiting.tell.code")}</p>
+            <p className="start-code" aria-label={t("start.waiting.your.code", { code: waiting.code.split("").join(" ") })}>
               {waiting.code}
             </p>
           </>
         ) : (
-          <p className="start-sub">Your code shows here once {owner ?? "the owner"} opens your request. Then read it to them: they check it matches the one on their screen.</p>
+          <p className="start-sub">{owner ? t("start.waiting.code.soon.named", { owner }) : t("start.waiting.code.soon")}</p>
         )}
         <button type="button" className="btn is-quiet" onClick={cancel}>
-          Cancel request
+          {t("start.waiting.cancel")}
         </button>
       </div>
     </main>

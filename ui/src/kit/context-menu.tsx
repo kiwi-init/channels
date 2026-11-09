@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 
+import { t } from "~/i18n/i18n"
 import { Modal } from "~/kit/modal"
 import { openMenu, type MenuItem, type OpenMenu } from "~/kit/menu-open"
 
@@ -75,7 +76,7 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
         foot={
           <>
             <button type="button" className="btn" onClick={() => openMenu.set(null)}>
-              Cancel
+              {t("kit.context.menu.cancel")}
             </button>
             <button
               type="button"

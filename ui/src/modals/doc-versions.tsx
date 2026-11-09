@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 
 import "~/styles/doc-versions.css"
+import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
 import { Modal } from "~/kit/modal"
 import { announce } from "~/kit/toasts"
@@ -38,38 +39,38 @@ export function DocVersions({ channel, thread, name, onClose }: { channel: Chann
     setBusy(true)
     const done = await app.actions.restoreDocVersion(channel.code, thread, th, v.upto).catch(() => false)
     setBusy(false)
-    if (!done) return void announce("Couldn't restore that version. Try again.")
-    announce(`Restored the doc to ${day(v.ts).toLowerCase()} at ${clock(v.ts)}`)
+    if (!done) return void announce(t("modals.doc.versions.restore.failed"))
+    announce(t("modals.doc.versions.restored", { day: day(v.ts).toLowerCase(), time: clock(v.ts) }))
     onClose()
   }
   const foot = picked ? (
     <>
-      <span className="doc-versions-ask">Replace the doc with the version from {ago(picked.ts)} ago? Everyone sees the change.</span>
+      <span className="doc-versions-ask">{t("modals.doc.versions.replace.ask", { time: ago(picked.ts) })}</span>
       <button type="button" className="btn is-small" disabled={busy} onClick={() => setPicked(null)}>
-        Cancel
+        {t("modals.doc.versions.cancel")}
       </button>
       <button type="button" className="btn is-small is-primary" disabled={busy} onClick={() => void restore(picked)}>
-        {busy ? "Restoring…" : "Restore"}
+        {busy ? t("modals.doc.versions.restoring") : t("modals.doc.versions.restore")}
       </button>
     </>
   ) : undefined
   const body = !can ? (
-    <p className="set-group-hint">Update the app to restore earlier versions.</p>
+    <p className="set-group-hint">{t("modals.doc.versions.update.app")}</p>
   ) : !th ? (
-    <p className="set-group-hint">This conversation has no doc yet.</p>
+    <p className="set-group-hint">{t("modals.doc.versions.no.doc")}</p>
   ) : !mine ? (
-    <p className="set-group-hint">Loading…</p>
+    <p className="set-group-hint">{t("modals.doc.versions.loading")}</p>
   ) : "failed" in mine ? (
-    <p className="set-group-hint">Couldn't load the versions.</p>
+    <p className="set-group-hint">{t("modals.doc.versions.load.failed")}</p>
   ) : mine.versions.length === 0 ? (
-    <p className="set-group-hint">No earlier versions yet. The doc keeps one an hour, up to nine.</p>
+    <p className="set-group-hint">{t("modals.doc.versions.none")}</p>
   ) : (
     <div className={cx("doc-versions", picked && "is-picking")}>
       <Group>
         {mine.versions.map((v) => (
-          <Row key={v.upto} label={`${day(v.ts)}, ${clock(v.ts)}`} hint={`${ago(v.ts)} ago · ${size(v.bytes)}`}>
+          <Row key={v.upto} label={t("modals.doc.versions.row.label", { day: day(v.ts), time: clock(v.ts) })} hint={t("modals.doc.versions.row.hint", { time: ago(v.ts), size: size(v.bytes) })}>
             <button type="button" className="btn is-small" disabled={busy} aria-pressed={picked?.upto === v.upto} onClick={() => setPicked(v)}>
-              Restore
+              {t("modals.doc.versions.restore")}
             </button>
           </Row>
         ))}
@@ -77,7 +78,7 @@ export function DocVersions({ channel, thread, name, onClose }: { channel: Chann
     </div>
   )
   return (
-    <Modal dismiss="outside" onClose={onClose} label="Earlier versions" title="Earlier versions" sub={name} size="narrow" foot={foot}>
+    <Modal dismiss="outside" onClose={onClose} label={t("modals.doc.versions.title")} title={t("modals.doc.versions.title")} sub={name} size="narrow" foot={foot}>
       {body}
     </Modal>
   )
