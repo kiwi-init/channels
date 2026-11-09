@@ -41,7 +41,7 @@
             show()
             Task {
                 while true {
-                    try? await Task.sleep(for: .milliseconds(700))
+                    try? await Task.sleep(for: .milliseconds(1500))
                     add("Busy \(seq + 1): arrived while you type", from: "builder")
                     show()
                 }
