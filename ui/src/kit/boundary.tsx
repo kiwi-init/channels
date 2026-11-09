@@ -30,7 +30,7 @@ export function Crashed({ whole, title, sub, children }: { whole?: boolean; titl
   )
 }
 
-export function startAtHome(): void {
+function startAtHome(): void {
   rememberChannel(null)
   location.reload()
 }

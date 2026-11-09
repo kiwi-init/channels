@@ -25,7 +25,7 @@ const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRo
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 const LimitDialog = later(() => import("~/usage/limit").then((m) => m.LimitDialog))
 
-export type Broken = { channel: boolean; retry: () => void }
+type Broken = { channel: boolean; retry: () => void }
 
 type RootProps = { app: App; nav: Nav; go: (go: Go) => void; broken?: Broken }
 
