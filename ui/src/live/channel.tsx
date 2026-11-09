@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
+import { memo, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { GENERAL_ROOM, reviewCheckOf, type Message as Wire } from "@kiwi/core/protocol.ts"
@@ -16,7 +16,7 @@ import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/thre
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { withReach } from "~/live/reach"
-import { changeUnsent, nextUnsentKey, retryUnsent, unsentBlock, unsentIn } from "~/live/unsent"
+import { capUnsent, changeUnsent, nextUnsentKey, resendDue, retryUnsent, unsentBlock, unsentIn } from "~/live/unsent"
 import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
@@ -307,7 +307,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         ...(opts.images?.length ? { images: opts.images } : {}),
         ...(opts.block ? { block: opts.block } : {}),
       }
-      setPending((list) => [...list.filter((p) => p.seq === undefined || !landed.has(p.seq)), next].slice(-PENDING_MAX))
+      setPending((list) => capUnsent([...list.filter((p) => p.seq === undefined || !landed.has(p.seq)), next], PENDING_MAX))
       try {
         const seq = await inTurn(async () => {
           const room = where.kind === "dm" ? await sealedIn(where.with) : undefined
@@ -364,6 +364,11 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     },
     [pending, discard, post]
   )
+  const resend = useEffectEvent(() => void resendDue(roomId, Date.now(), retry))
+  const up = connection === "live" && caughtUp
+  useEffect(() => {
+    if (up) resend()
+  }, [up])
 
   const run = useMemo(
     (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard: toDraft, refreshRequests, refreshRoster, foldFrom, older }),
