@@ -70,4 +70,4 @@ Dev sign-in for a local relay (loopback only, token `dev:<name>`) is in [Self-ho
 
 ## License
 
-Channels is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). You can read, change and self-host it for personal use, and so can non-profits, schools and public bodies. Any use by or for a business needs a commercial license from Kiwi Init. Parts adapted from other projects keep their own licenses, listed in [NOTICE](NOTICE).
+Channels is open source under the [MIT License](LICENSE). Parts adapted from other projects keep their own licenses, listed in [NOTICE](NOTICE).
