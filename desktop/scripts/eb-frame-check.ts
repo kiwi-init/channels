@@ -68,8 +68,11 @@ try {
   await run(async (d) => {
     await d.main("placeForTest");
     if (await zoomed(d)) return void problems.push("the window is still zoomed after it was made smaller, so a double click can't show it zooms");
-    const hit = await d.evaluate(doubleClickTop, null);
-    if (!hit) return void problems.push("no drag region in the top 48px of the window to double-click");
+    const hit = await until("a drag region in the top 48px of the window", 15_000, () => d.evaluate(doubleClickTop, null)).catch(() => null);
+    if (!hit) {
+      const top = await d.evaluate(() => [...new Set([8, 24, 40].map((y) => document.elementFromPoint(innerWidth / 2, y)?.outerHTML.slice(0, 120) ?? "nothing"))], null);
+      return void problems.push(`no drag region in the top 48px of the window to double-click; at the top: ${top.join(" | ")}`);
+    }
     console.log(`double-clicked ${hit}`);
     await until("the window zoomed by a double click on its top bar", 10_000, async () => (await zoomed(d)) || null).catch(() =>
       problems.push("a double click on the top bar doesn't zoom the window"),
