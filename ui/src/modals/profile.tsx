@@ -17,7 +17,7 @@ import { ageOf, ago } from "~/kit/time"
 import { copyText } from "~/kit/toasts"
 import { ALL_POWERS, memberOf, NO_POWERS, trusted, type App, type Channel, type Person, type Task } from "~/model"
 import { useApp } from "~/nav"
-import { devicesOf, nickname, seatRoot, shown, Shown } from "~/names"
+import { devicesOf, nickname, roleWord, seatRoot, shown, Shown } from "~/names"
 import { contextOf, liveOf, restOf } from "~/doing"
 import { Group, InlineEdit, Row } from "~/settings/controls"
 
@@ -45,7 +45,7 @@ export function Profile({ channel, name, onClose }: { channel: Channel; name: st
     )
   const tags = [
     ...new Set(
-      [person.you && t("modals.profile.tag.you"), person.owner && t("modals.profile.tag.owner"), person.role, person.readOnly && t("modals.profile.tag.reads.only")].filter(
+      [person.you && t("modals.profile.tag.you"), person.owner && t("modals.profile.tag.owner"), person.role && roleWord(person.role), person.readOnly && t("modals.profile.tag.reads.only")].filter(
         (tag): tag is string => !!tag
       )
     ),

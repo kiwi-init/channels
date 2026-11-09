@@ -26,6 +26,9 @@ import { wordsPlain, wordsRaw } from "~/words"
 import { IssueMark, issueWord, PrCard } from "~/github/parts"
 import { t } from "~/i18n/i18n"
 import { tr } from "~/i18n/rich"
+import { SENT } from "~/sent"
+import { reasonWords } from "~/live/reason-words"
+import { reasonText } from "@kiwi/core/routing-text.ts"
 import { PanelHead } from "~/panels/frame"
 import { moveWords, someone } from "~/panels/task-moves"
 import { TONES } from "~/tasks/row"
@@ -194,13 +197,13 @@ function Suggested({ channel, task, suggested }: { channel: Channel; task: Task;
     <div className="task-suggest">
       <Avatar person={memberOf(channel, suggested.name)} size="sm" />
       <p className="task-suggest-text">
-        <span className="dimmer">{t("panels.task.suggested")}</span> {nickname(channel, suggested.name)} <span className="dim">· {wordsPlain(suggested.why, channel.nicknames)}</span>
+        <span className="dimmer">{t("panels.task.suggested")}</span> {nickname(channel, suggested.name)} <span className="dim">· {reasonWords(suggested.reason)}</span>
       </p>
       <button
         type="button"
         className="btn is-small"
         onClick={() => {
-          app.actions.assignTask(channel.code, task.id, suggested.name, wordsRaw(suggested.why))
+          app.actions.assignTask(channel.code, task.id, suggested.name, suggested.reason ? reasonText(suggested.reason) : SENT.hasContext)
           toast(t("panels.task.yours.now", { task: String(task.id), name: nickname(channel, suggested.name) }))
         }}
       >
@@ -248,7 +251,7 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
   const first = task.suggested ? people.filter((p) => p.name === task.suggested?.name) : []
   const rest = people.filter((p) => p.name !== task.suggested?.name).sort(agentsFirst)
   const pick = (name: string) => {
-    app.actions.assignTask(channel.code, task.id, name, why.trim() || (name === task.suggested?.name ? wordsRaw(task.suggested.why) : ""))
+    app.actions.assignTask(channel.code, task.id, name, why.trim() || (name === task.suggested?.name ? (task.suggested.reason ? reasonText(task.suggested.reason) : SENT.hasContext) : ""))
     toast(t("panels.task.yours.now", { task: String(task.id), name: nickname(channel, name) }))
     close()
   }
@@ -278,7 +281,7 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
               channel={channel}
               person={p}
               on={p.name === task.owner}
-              about={p.name === task.suggested?.name ? t("panels.task.suggested.about", { why: wordsPlain(task.suggested.why, channel.nicknames) }) : aboutOf(p)}
+              about={p.name === task.suggested?.name ? t("panels.task.suggested.about", { why: reasonWords(task.suggested.reason) }) : aboutOf(p)}
               onPick={() => pick(p.name)}
             />
           ))}

@@ -88,6 +88,18 @@ const words = {
   "live.home.spec.done": "Spec #{ask} is done: check it",
   "live.home.spec.changed": "Spec #{ask} changed",
   "live.home.spec.approve": "Approve spec #{ask}",
+  "live.room.unnamed": "A room needs a name",
+  "live.room.taken": "A room is already called #{name}",
+  "live.room.full": "A channel holds at most {count} rooms",
+  "live.why.worked": "worked {task} before",
+  "live.why.from": "worked {task}, where it came from",
+  "live.why.follow.up": "worked {task}, a follow-up of it",
+  "live.why.sibling": "worked {task}, also from {parent}",
+  "live.why.grand": "worked {task}, where {parent} came from",
+  "live.why.areas": "touched {areas} in {task}",
+  "live.why.warm": "{why} (this session)",
+  "live.why.context": "has its context",
+  "doing.offline": "offline",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

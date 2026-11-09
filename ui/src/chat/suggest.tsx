@@ -5,7 +5,7 @@ import { peopleMatches, taskMatches } from "~/chat/matches"
 import { t } from "~/i18n/i18n"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import type { Channel, Person, Task } from "~/model"
-import { nickname, onePerPerson, shown, Shown } from "~/names"
+import { nickname, onePerPerson, roleWord, shown, Shown } from "~/names"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
 const TASK_REF = /(^|\s)#([^#\n]{0,40})$/u
@@ -158,7 +158,7 @@ export function Suggestions({ channel, s }: { channel: Channel; s: Suggest }) {
           <button type="button" tabIndex={-1} className={cx("mention-row", i === s.pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => s.complete(p.name)}>
             <Avatar person={p} size="sm" pip />
             <span className="mention-name">{shown(p)}</span>
-            <span className="dim">{p.role ?? p.runs ?? (p.kind === "human" ? t("chat.suggest.person") : t("chat.suggest.agent"))}</span>
+            <span className="dim">{(p.role && roleWord(p.role)) ?? p.runs ?? (p.kind === "human" ? t("chat.suggest.person") : t("chat.suggest.agent"))}</span>
           </button>
         </li>
       ))}

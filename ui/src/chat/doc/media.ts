@@ -75,9 +75,9 @@ export function imageView(media: () => DocMedia | null, open: (url: string, alt:
             dom.className = "doc-image"
             dom.replaceChildren(pic)
           },
-          () => lost(`${img.name} didn't load`)
+          () => lost(t("chat.doc.media.didnt.load", { name: img.name }))
         )
-        .catch(() => lost(`${img.name} didn't load`))
+        .catch(() => lost(t("chat.doc.media.didnt.load", { name: img.name })))
     }
     load()
     return {

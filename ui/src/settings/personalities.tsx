@@ -4,7 +4,7 @@ import "~/styles/personalities.css"
 import { useEffect, useRef, useState } from "react"
 
 import { copyOf, freeId } from "@kiwi/core/personalities.ts"
-import { CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, ROLE_LABEL, ROLES, type Capability, type Personality, type Role } from "@kiwi/core/personality.ts"
+import { CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, ROLES, type Capability, type Personality, type Role } from "@kiwi/core/personality.ts"
 import { PRESETS } from "@kiwi/core/presets.ts"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
@@ -34,7 +34,16 @@ const CAPABILITY_TEXT: Record<Capability, readonly [Key, Key]> = {
   notes: ["settings.personalities.can.notes", "settings.personalities.can.notes.hint"],
 }
 
-const ROLE_OPTIONS = ROLES.map((r) => [r, ROLE_LABEL[r]] as const) satisfies readonly (readonly [Role, string])[]
+const ROLE_LABEL: Record<Role, Key> = {
+  builder: "settings.personalities.role.builder",
+  reviewer: "settings.personalities.role.reviewer",
+  "bug-hunter": "settings.personalities.role.bug.hunter",
+  explorer: "settings.personalities.role.explorer",
+  releaser: "settings.personalities.role.releaser",
+  lead: "settings.personalities.role.lead",
+}
+
+const roleOptions = (): readonly (readonly [Role, string])[] => ROLES.map((r) => [r, t(ROLE_LABEL[r])] as const)
 
 const BLANK: Omit<Personality, "id" | "name"> = { glyph: "✳", role: "builder", capabilities: ["write", "tasks", "notes"], areas: [], instructions: "" }
 
@@ -43,7 +52,7 @@ const SHOT = new URLSearchParams(location.search).get("shot")
 function tagline(p: Personality): string {
   const own = TAGLINE[p.id]
   if (own) return t(own)
-  return p.areas.length ? t("settings.personalities.tagline.limited", { role: ROLE_LABEL[p.role], areas: p.areas.join(", ") }) : ROLE_LABEL[p.role]
+  return p.areas.length ? t("settings.personalities.tagline.limited", { role: t(ROLE_LABEL[p.role]), areas: p.areas.join(", ") }) : t(ROLE_LABEL[p.role])
 }
 
 export function Personalities() {
@@ -163,7 +172,7 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
       </div>
       <div className="persona-field">
         <span className="persona-label">{t("settings.personalities.role")}</span>
-        <Seg label={t("settings.personalities.role")} value={draft.role} options={ROLE_OPTIONS} onChange={(role) => set({ role })} />
+        <Seg label={t("settings.personalities.role")} value={draft.role} options={roleOptions()} onChange={(role) => set({ role })} />
       </div>
       <div className="persona-field">
         <span className="persona-label">{t("settings.personalities.capabilities")}</span>

@@ -18,13 +18,13 @@ import { inviteLine } from "@kiwi/app/join-line.ts"
 import type { Color } from "@kiwi/core/protocol.ts"
 import { openedChannel, openedRun, type Run } from "~/live/store"
 import type { Actions, JoinChoice, Powers } from "~/model"
-import { BRANCH_PREFIX_RE, isLanding, POWERS, ROOM_ID_RE, type Power } from "@kiwi/core/protocol.ts"
+import { BRANCH_PREFIX_RE, isLanding, POWERS, ROOM_ID_RE } from "@kiwi/core/protocol.ts"
 import { newRoomId, sponsorsAgent } from "@kiwi/core/state.ts"
 import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
+import { roomProblemWords } from "~/live/room-problem"
+import { SENT } from "~/sent"
 import { revokedComputer } from "@kiwi/app/forgotten-computers.ts"
 import { forgottenComputer } from "@kiwi/core/client/requests.ts"
-
-const POWER_WORDS: Record<Power, string> = { addsAgents: "add agents", answersDecisions: "answer decisions", managesAgents: "manage agents" }
 
 function agentManager(code: string, name: string): { run: Run; m: RosterMember } {
   const run = need(code)
@@ -142,7 +142,7 @@ export async function setPowers(code: string, name: string, powers: Partial<Powe
   for (const power of POWERS) {
     const on = powers[power]
     if (on === undefined || on === !!m[power]) continue
-    await event(run, `${on ? "gave" : "took"} ${name} ${on ? "" : "back "}the power to ${POWER_WORDS[power]}`, { op: "power.set", member: name, pk: m.pk, power, on, was: !!m[power] })
+    await event(run, `${on ? "gave" : "took"} ${name} ${on ? "" : "back "}the power to ${SENT.power[power]}`, { op: "power.set", member: name, pk: m.pk, power, on, was: !!m[power] })
   }
   await run.ch.updatePowers(m, {
     addsAgents: powers.addsAgents ?? !!m.addsAgents,
@@ -238,7 +238,7 @@ export async function leaveRoom(code: string, id: string): Promise<void> {
 export async function addRoom(code: string, typed: string, members?: string[]): Promise<string> {
   const run = setup(code)
   const problem = roomProblem(run.state.rooms.values(), typed)
-  if (problem) throw new Error(problem)
+  if (problem) throw new Error(roomProblemWords(problem))
   const name = cleanRoomName(typed)
   if (members?.length) {
     const id = await run.ch.makeRoom(name, picks(run, members)).catch(updateFirst)
@@ -257,7 +257,7 @@ export async function renameRoom(code: string, id: string, typed: string): Promi
   const run = setup(code)
   if (!run.state.rooms.has(id)) throw new Error(t("live.manage.room.missing"))
   const problem = roomProblem(run.state.rooms.values(), typed, id)
-  if (problem) throw new Error(problem)
+  if (problem) throw new Error(roomProblemWords(problem))
   const room = { id, name: cleanRoomName(typed) }
   if (run.state.rooms.get(id)?.members) {
     await run.ch.changeRoom(id, { name: room.name }).catch(updateFirst)

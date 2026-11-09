@@ -3,6 +3,7 @@ import type { TextFont } from "@kiwi/app/theme.ts"
 import type { GithubHealth } from "@kiwi/core/github-health.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
+import type { Reason } from "@kiwi/core/routing.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import type { DocBlockRef, GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { DocEvent } from "../../desktop/src/bridge.ts"
@@ -192,7 +193,7 @@ export interface Task {
   lands?: { then: string; by?: string; waits?: string; bypassed?: string[]; ready?: true }
   closedWith?: Words
   youReview?: "verdict" | "send-back"
-  suggested?: { name: string; why: Words }
+  suggested?: { name: string; reason?: Reason }
   leftBy?: string
 }
 

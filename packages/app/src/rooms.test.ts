@@ -18,19 +18,19 @@ describe("a room the owner makes or renames from channel settings (T987)", () =>
 
   test("a name typed with more #s and spaces is the same name: refused when taken, and signed exactly as the event sends it", () => {
     const mobile = { id: "m0b1le00", name: "mobile" };
-    expect(roomProblem([general, mobile], "# #mobile")).toBe("A room is already called #mobile");
+    expect(roomProblem([general, mobile], "# #mobile")).toEqual({ kind: "taken", name: "mobile" });
     const sent = { id: "n3w00000", name: cleanRoomName("#a #b") };
     expect(roomsAfter([general], sent)).toEqual([general, sent]);
   });
 
   test("is refused before it's sent for what the fold would refuse: no name, a name taken in any case, too many rooms", () => {
-    expect(roomProblem([general, desktop], "  # ")).toBe("A room needs a name");
-    expect(roomProblem([general, desktop], "Desktop")).toBe("A room is already called #Desktop");
+    expect(roomProblem([general, desktop], "  # ")).toEqual({ kind: "unnamed" });
+    expect(roomProblem([general, desktop], "Desktop")).toEqual({ kind: "taken", name: "Desktop" });
     expect(roomProblem([general, desktop], "mobile")).toBeNull();
     expect(roomProblem([general, desktop], "DESKTOP", desktop.id)).toBeNull();
-    expect(roomProblem([general, desktop], "general", desktop.id)).toBe("A room is already called #general");
+    expect(roomProblem([general, desktop], "general", desktop.id)).toEqual({ kind: "taken", name: "general" });
     const full = Array.from({ length: MAX_ROOMS }, (_, i) => ({ id: `r${i}`, name: `room-${i}` }));
-    expect(roomProblem(full, "one more")).toBe(`A channel holds at most ${MAX_ROOMS} rooms`);
+    expect(roomProblem(full, "one more")).toEqual({ kind: "full", max: MAX_ROOMS });
     expect(roomProblem(full, "renamed", "r3")).toBeNull();
   });
 

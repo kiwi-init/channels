@@ -1,4 +1,5 @@
 import { liveOf } from "~/doing"
+import { t } from "~/i18n/i18n"
 import type { Channel, Message, Person, PullRequest, Task } from "~/model"
 import { shown } from "~/names"
 import { wordsPlain } from "~/words"
@@ -21,24 +22,27 @@ export const startOfDay = (now: number): number => {
 
 const live = (channel: Pick<Channel, "tasks">): Task[] => channel.tasks.filter((t) => !t.archived && !t.cancelled)
 
-export function stageWords(t: Task): { text: string; red: boolean } {
-  const pr = t.pr ? `PR #${t.pr.number}` : null
-  const ticks = t.pr?.ticks
+export function stageWords(task: Task): { text: string; red: boolean } {
+  const pr = task.pr ? `PR #${task.pr.number}` : null
+  const ticks = task.pr?.ticks
   const at = (words: string): string => (pr ? `${pr} · ${words}` : words)
-  if (t.lands?.bypassed) return { text: at("shipped with its gate shut"), red: true }
-  if (t.lands?.ready) return { text: at("ready for a person to merge"), red: false }
-  switch (t.stage) {
+  if (task.lands?.bypassed) return { text: at(t("now.gate.shut")), red: true }
+  if (task.lands?.ready) return { text: at(t("now.ready.to.merge")), red: false }
+  switch (task.stage) {
     case "red": {
       const failed = ticks?.failed ?? []
-      return { text: at(failed.length === 1 ? `${failed[0]} failed` : failed.length ? `${failed.length} checks failed` : "checks failed"), red: true }
+      return {
+        text: at(failed.length === 1 ? t("now.check.failed", { check: failed[0]! }) : failed.length ? t("now.checks.failed.count", { count: failed.length }) : t("now.checks.failed")),
+        red: true,
+      }
     }
     case "proving":
-      return { text: at(ticks?.running ? "checks running" : ticks ? "checks passed" : "no checks yet"), red: false }
+      return { text: at(ticks?.running ? t("now.checks.running") : ticks ? t("now.checks.passed") : t("now.checks.none")), red: false }
     case "yours":
-      return { text: at("review owed"), red: false }
+      return { text: at(t("now.review.owed")), red: false }
     case "done":
-      if (t.release) return { text: at(`shipped in ${t.release}`), red: false }
-      return { text: pr && t.pr?.state === "merged" ? `${pr} merged` : "done", red: false }
+      if (task.release) return { text: at(t("now.shipped.in", { release: task.release })), red: false }
+      return { text: pr && task.pr?.state === "merged" ? t("now.pr.merged", { pr }) : t("now.done"), red: false }
     default:
       return { text: pr ?? "", red: false }
   }
@@ -75,7 +79,9 @@ const agents = (channel: Channel): Person[] => channel.people.filter((p) => p.ki
 export function headerLine(channel: Channel, needs: number, now = Date.now()): string[] {
   const working = agents(channel).filter((p) => liveOf(p)?.busy).length
   const merged = (channel.mergedAt ?? []).filter((at) => at >= startOfDay(now)).length
-  return [working ? `${working} working` : null, merged ? `${merged} merged today` : null, needs ? `${needs} ${needs === 1 ? "needs" : "need"} you` : null].filter((x): x is string => !!x)
+  return [working ? t("now.working", { count: working }) : null, merged ? t("now.merged.today", { count: merged }) : null, needs ? t("now.need.you", { count: needs }) : null].filter(
+    (x): x is string => !!x
+  )
 }
 
 interface Recent {

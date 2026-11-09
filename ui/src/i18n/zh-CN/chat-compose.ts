@@ -188,4 +188,8 @@ export default {
   "chat.markdown.column": "第 {n} 列",
   "chat.markdown.copy": "复制",
   "chat.markdown.copy.text": "复制 {text}",
+  "chat.markdown.code.block": "代码块",
+  "chat.markdown.code.block.lang": "代码块：{lang}",
+  "chat.markdown.task": "任务：{text}",
+  "chat.doc.media.didnt.load": "{name} 未能加载",
 } satisfies Catalog

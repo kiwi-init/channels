@@ -24,7 +24,7 @@ const readBase64 = (file: File): Promise<string> =>
       const url = String(reader.result)
       done(url.slice(url.indexOf(",") + 1))
     }
-    reader.onerror = () => fail(reader.error ?? new Error("the image couldn't be read"))
+    reader.onerror = () => fail(reader.error)
     reader.readAsDataURL(file)
   })
 

@@ -17,7 +17,7 @@ import { useApp } from "~/nav"
 import { Confirm, Group, InlineEdit, Row, Seg } from "~/settings/controls"
 import { Themes } from "~/settings/themes"
 import { copyText } from "~/kit/toasts"
-import { UI_VERSION } from "~/settings/ui-version"
+import { uiVersion } from "~/settings/ui-version"
 import { OutsideLink } from "~/kit/outside"
 import { UsageBar } from "~/usage/meter"
 import { useUsage } from "~/usage/store"
@@ -292,17 +292,18 @@ export function AboutSection() {
   const debug = useDebugOptions()
   const account = app.account
   if (!account) return null
+  const version = uiVersion()
   return (
     <Page title={t("settings.settings.about")} lede={t("settings.sections.about.lede")}>
       <Group>
         <VersionRow account={account} />
         <Row label={t("settings.sections.interface")} hint={t("settings.sections.interface.hint")}>
-          <code className="set-value set-mono">{UI_VERSION}</code>
+          <code className="set-value set-mono">{version}</code>
           <IconButton
             icon="copy"
             label={t("settings.sections.interface.copy")}
             onClick={() => {
-              copyText(UI_VERSION, t("settings.sections.interface.copied"))
+              copyText(version, t("settings.sections.interface.copied"))
             }}
           />
         </Row>

@@ -7,9 +7,13 @@ import specs from "~/i18n/ko/specs"
 import modals from "~/i18n/ko/modals"
 import needs from "~/i18n/ko/needs"
 import shell from "~/i18n/ko/shell"
+import status from "~/i18n/ko/status"
+import events from "~/i18n/ko/events"
 import github from "~/i18n/ko/github"
 
 export default {
+  ...events,
+  ...status,
   ...chatCompose,
   ...chatFeed,
   ...live,

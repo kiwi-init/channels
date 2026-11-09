@@ -4,12 +4,13 @@ import "~/styles/new-room.css"
 import { useState } from "react"
 
 import { roomProblem } from "@kiwi/app/rooms.ts"
+import { roomProblemWords } from "~/live/room-problem"
 import { autofocus, Avatar, cx } from "~/kit/bits"
 import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
-import { roomPeople, shown } from "~/names"
+import { roleWord, roomPeople, shown } from "~/names"
 import { useAppCan } from "~/live/app-can"
 import { t } from "~/i18n/i18n"
 
@@ -74,7 +75,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
         </span>
         {problem && (
           <p className="room-hint is-error" role="alert">
-            {problem}
+            {roomProblemWords(problem)}
           </p>
         )}
         <Track className="seg room-who" role="group" aria-label={t("shell.new.room.who")}>
@@ -100,7 +101,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
                       <input type="checkbox" checked={picked.has(p.name)} onChange={(e) => pick(p.name, e.target.checked)} />
                       <Avatar person={p} size="sm" />
                       <span className="room-member-name">{shown(p)}</span>
-                      {p.role && <span className="room-member-role">{p.role}</span>}
+                      {p.role && <span className="room-member-role">{roleWord(p.role)}</span>}
                     </label>
                   ))}
                 </fieldset>

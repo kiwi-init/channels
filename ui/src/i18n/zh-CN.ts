@@ -7,9 +7,13 @@ import specs from "~/i18n/zh-CN/specs"
 import modals from "~/i18n/zh-CN/modals"
 import needs from "~/i18n/zh-CN/needs"
 import shell from "~/i18n/zh-CN/shell"
+import status from "~/i18n/zh-CN/status"
+import events from "~/i18n/zh-CN/events"
 import github from "~/i18n/zh-CN/github"
 
 export default {
+  ...events,
+  ...status,
   ...chatCompose,
   ...chatFeed,
   ...live,
