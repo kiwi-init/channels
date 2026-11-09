@@ -1,3 +1,4 @@
+import "~/i18n/en/live-later"
 import { bridge, secrets } from "@kiwi/secrets/secrets.ts"
 import { launchedBy } from "@kiwi/app/forgotten-computers.ts"
 import { t } from "~/i18n/i18n"

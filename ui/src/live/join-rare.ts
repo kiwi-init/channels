@@ -1,3 +1,4 @@
+import "~/i18n/en/live-later"
 import { handleFor } from "@kiwi/core/membership.ts"
 import { ROBOT_FACES } from "@kiwi/core/protocol.ts"
 import { tokenForCreate } from "@kiwi/app/auth.ts"

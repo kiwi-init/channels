@@ -1,3 +1,4 @@
+import "~/i18n/en/live-later"
 import { handBackText, heldBy } from "@kiwi/core/handback.ts"
 import { NAME_RE, nameKey, type JoinRequest, type Member as RosterMember } from "@kiwi/core/membership.ts"
 import { personaOf, personaScopes, type Persona } from "@kiwi/core/personality.ts"

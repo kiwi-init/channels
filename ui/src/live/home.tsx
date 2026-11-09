@@ -1,3 +1,4 @@
+import "~/i18n/en/live-later"
 import { memo, useCallback, useLayoutEffect, useMemo } from "react"
 
 import { useKnownChannels } from "@kiwi/channel/list.ts"
