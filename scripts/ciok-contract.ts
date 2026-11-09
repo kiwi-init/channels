@@ -33,17 +33,58 @@ const DOC_TESTS: [name: string, command: string][] = [
 
 const PARTS = ["send", "edit", "view"] as const;
 
-const doc = Bun.YAML.parse(await Bun.file(".github/workflows/ci.yml").text()) as {
-  jobs: Record<string, { steps?: Step[]; strategy?: { matrix?: { part?: string[] } } }>;
-};
+type JobDef = { steps?: Step[]; strategy?: { matrix?: { part?: string[] } } };
+
+function record(x: unknown): Record<string, unknown> | null {
+  return x !== null && typeof x === "object" && !Array.isArray(x) ? (x as Record<string, unknown>) : null;
+}
+
+function stepOf(x: unknown): Step | null {
+  const r = record(x);
+  if (!r) return null;
+  const name = r.name === undefined || typeof r.name === "string" ? r.name : null;
+  const cond = r.if === undefined || typeof r.if === "string" ? r.if : null;
+  const run = r.run === undefined || typeof r.run === "string" ? r.run : null;
+  if (name === null || cond === null || run === null) return null;
+  return { name, if: cond, run };
+}
+
+function jobDefs(doc: unknown): Map<string, JobDef> | null {
+  const out = new Map<string, JobDef>();
+  const jobs = record(record(doc)?.jobs);
+  if (!jobs) return null;
+  for (const [name, def] of Object.entries(jobs)) {
+    const r = record(def);
+    if (!r) return null;
+    const rawSteps = r.steps === undefined ? [] : r.steps;
+    if (!Array.isArray(rawSteps)) return null;
+    const steps: Step[] = [];
+    for (const raw of rawSteps) {
+      const step = stepOf(raw);
+      if (!step) return null;
+      steps.push(step);
+    }
+    let strategy: JobDef["strategy"] | undefined;
+    const matrix = record(record(r.strategy)?.matrix);
+    if (matrix && matrix.part !== undefined) {
+      if (!Array.isArray(matrix.part) || !matrix.part.every((x) => typeof x === "string")) return null;
+      strategy = { matrix: { part: matrix.part as string[] } };
+    }
+    out.set(name, { steps, strategy });
+  }
+  return out;
+}
+
+const parsed = jobDefs(Bun.YAML.parse(await Bun.file(".github/workflows/ci.yml").text()));
 const failures: string[] = [];
 const check = (what: string, ok: boolean) => {
   if (!ok) failures.push(what);
 };
 
-const ciok = doc.jobs["ci-ok"]?.steps?.[0];
-check("ci-ok exists with a first step", ciok !== undefined);
-const fullRun = doc.jobs["ci-ok"]?.steps?.map((s) => s.run ?? "").join("\n") ?? "";
+const ciokSteps = parsed?.get("ci-ok")?.steps;
+const ciok = ciokSteps?.[0];
+check("ci-ok exists with a first step", ciok !== undefined && ciokSteps !== undefined);
+const fullRun = (ciokSteps ?? []).map((s) => s.run ?? "").join("\n");
 check("ci-ok requires plan success", /plan\.result \/\/ "absent from needs"/.test(fullRun) !== false && /\.plan\.result/.test(fullRun));
 check("ci-ok iterates the plan's selected keys, not needs", /\$plan \| to_entries\[\] \| select\(\.value == true\)/.test(fullRun));
 check("ci-ok rejects unselected successes", /ran but not selected/.test(fullRun));
@@ -124,6 +165,10 @@ v = verdict(DOCPLAN, needs({}));
 check("plan absent from needs is rejected", v.code !== 0);
 v = verdict("not json", needs({ plan: "success" }));
 check("invalid plan selection is rejected", v.code !== 0);
+v = verdict("{}", needs({ plan: "success" }));
+check("empty selection object is rejected", v.code !== 0 && v.out.includes("invalid job selection"));
+v = verdict('{"doc":"true"}', needs({ plan: "success", doc: "skipped" }));
+check("non-boolean selection values are rejected", v.code !== 0 && v.out.includes("invalid job selection"));
 v = verdict(DOCPLAN, needs({ plan: "success", doc: "success", fuzz: "success" }));
 check("stray unselected success is rejected", v.code !== 0 && v.out.includes("fuzz: ran but not selected"));
 
@@ -145,7 +190,7 @@ const distrosPlan = JSON.stringify({
 v = verdict(distrosPlan, needs({ plan: "success", "desktop-distros": "skipped", "desktop-linux": "skipped" }));
 check("dispatch naming distros without linux is rejected loudly", v.code !== 0 && v.out.includes("desktop-distros: selected by plan, skipped"));
 
-const docJob = doc.jobs.doc;
+const docJob = parsed?.get("doc");
 const parts = docJob?.strategy?.matrix?.part ?? [];
 check(`doc matrix parts are ${PARTS.join(",")}`, parts.length === PARTS.length && parts.every((p, i) => p === PARTS[i]));
 const SETUP_STEPS = ["ui build", "ui harness build, with the plain-browser key store"];
