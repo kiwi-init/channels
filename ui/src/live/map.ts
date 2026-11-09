@@ -5,7 +5,7 @@ import type { Card, DocBlockRef, Event } from "@kiwi/core/protocol.ts"
 import { answersAsHuman, permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
-import { checksOf, FAILED, landingWaits, prLinks, readyForPerson, taskOfBranch, taskPr } from "@kiwi/core/prs.ts"
+import { checksOf, FAILED, landingWaits, prLinks, readyForPerson, taskOfPr, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
 import { doneGate } from "@kiwi/core/done-gate.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
@@ -352,11 +352,6 @@ function checkList(state: ChannelState, pr: GithubPr): Check[] {
   return list.sort((a, b) => CHECK_ORDER[a.state] - CHECK_ORDER[b.state] || a.name.localeCompare(b.name))
 }
 
-function taskOfPr(state: ChannelState, pr: GithubPr): number | undefined {
-  const id = taskOfBranch(pr.branch, state.branchPrefix)
-  return id !== null && state.tasks.has(id) ? id : undefined
-}
-
 function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number; url: string }): PullRequest {
   const real = "state" in pr ? pr : state.github.prs.get(prKey(pr.repo, pr.number))
   const checks = real ? prChecks(state.github, real) : []
@@ -364,7 +359,7 @@ function prOf(state: ChannelState, pr: GithubPr | { repo: string; number: number
   const running = checks.some((c) => c.conclusion === undefined)
   const ticks = real ? checksOf(state, real) : undefined
   const list = real ? checkList(state, real) : []
-  const task = real ? taskOfPr(state, real) : undefined
+  const task = (real && taskOfPr(real, state)) ?? undefined
   const shipped = real ? releaseOf(state.github, real) : undefined
   return {
     repo: pr.repo,

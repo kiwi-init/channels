@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { formatTasks } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { REVIEW_CHECK } from "@kiwi/core/protocol.ts";
-import { landingWaits, reviewNotRequired } from "@kiwi/core/prs.ts";
+import { landingWaits, reviewNotRequired, taskPr } from "@kiwi/core/prs.ts";
 import type { Event, GithubNote, Landing, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 
@@ -101,5 +101,24 @@ describe("a PR merged before its task was approved (#2000)", () => {
     const state = fold(await approvedAfterMerge(null), roster);
     const t = [...state.tasks.values()].at(-1)!;
     expect(landingWaits(state, t)).toBe(`waits for its PR to be linked: no branch prefix is set here, so link it with kiwi task proof T${t.id} <PR link>`);
+  });
+});
+
+describe("a PR from before its task never links by branch (#2003)", () => {
+  test("an old merged PR whose branch number matches a task filed later stays off it", async () => {
+    const repos = await ev("jon", { op: "repos.set", repos: ["o/r"] });
+    const id = seq + 3;
+    const old = await ev("jon", { op: "github", items: [{ event: "pull_request", repo: "o/r", number: 5, state: "closed", merged: true, branch: `T${id}-old`, sha: HEAD, at: seq, happened: seq }] });
+    const prefix = await ev("jon", { op: "branch.prefix.set", prefix: "T" });
+    const add = await ev("jon", { op: "task.add", title: "Ship", owner: "win", review: "mac", then: "merge" });
+    expect(add.seq).toBe(id);
+    const round = await ev("win", { op: "task.update", task: add.seq, state: "review", at: HEAD });
+    const pass = await ev("mac", { op: "task.update", task: add.seq, state: "done", verdict: "approved", round: 1, at: HEAD });
+    const state = fold([repos, old, prefix, add, round, pass], roster);
+    const t = state.tasks.get(id)!;
+    expect(taskPr(state, id)).toBeUndefined();
+    expect(landingWaits(state, t)).toBe("waits for its PR to be linked and merged");
+    const fresh = fold([repos, old, prefix, add, round, pass, await ev("jon", { op: "github", items: [pr("open")(id)] })], roster);
+    expect(taskPr(fresh, id)?.pr.number).toBe(7);
   });
 });
