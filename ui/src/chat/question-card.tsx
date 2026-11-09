@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { useEffect, useMemo, useState } from "react"
 
 import { HANDOFF_DONE, HANDOFF_FAILED } from "@kiwi/core/protocol.ts"

@@ -1,3 +1,4 @@
+import "~/i18n/en/specs"
 import "~/styles/specs.css"
 
 import type { CSSProperties } from "react"

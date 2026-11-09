@@ -1,3 +1,4 @@
+import "~/i18n/en/specs"
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type SyntheticEvent } from "react"
 
 import { AttachedFiles, DropHint, IMAGE_TYPES, useAttach } from "~/chat/attach"

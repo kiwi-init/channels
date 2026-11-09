@@ -1,6 +1,7 @@
 import type { Msg } from "~/i18n/en"
+import { addWords } from "~/i18n/i18n"
 
-export default {
+const words = {
   "specs.card.kind": "Spec",
   "specs.card.comments": { one: "{count} comment", other: "{count} comments" },
   "specs.card.need.approve": "wrote a spec for you to approve",
@@ -259,3 +260,7 @@ export default {
   "tasks.sendback.ask": "What needs to change?",
   "tasks.sendback.send": "Send",
 } as const satisfies Record<string, Msg>
+
+addWords(words)
+
+export default words

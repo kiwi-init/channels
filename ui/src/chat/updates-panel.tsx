@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { linesOf, type EventLine, type TaskRun } from "~/chat/fold-events"

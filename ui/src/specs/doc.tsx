@@ -1,3 +1,4 @@
+import "~/i18n/en/specs"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 
 import { useNames, useTaskIds } from "~/chat/conversation"

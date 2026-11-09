@@ -1,3 +1,4 @@
+import "~/i18n/en/specs"
 import "~/styles/tasks.css"
 
 import { t } from "~/i18n/i18n"

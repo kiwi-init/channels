@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { useEffect, useState } from "react"
 
 import { bytesOf, sizeText } from "~/chat/doc/bytes"

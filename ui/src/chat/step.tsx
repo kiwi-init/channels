@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { useState, type ReactNode } from "react"
 
 import type { Step, StepReply } from "@kiwi/core/protocol.ts"

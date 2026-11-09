@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { marks, terms } from "@kiwi/core/search-rank.ts"
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react"
 

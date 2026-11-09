@@ -1,18 +1,14 @@
 import type { english } from "~/i18n/en/all"
+import chat from "~/i18n/en/chat"
 import live from "~/i18n/en/live"
 import settingsShared from "~/i18n/en/settings-shared"
-import chatCompose from "~/i18n/en/chat-compose"
-import chatFeed from "~/i18n/en/chat-feed"
-import specs from "~/i18n/en/specs"
 
 export type Msg = string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>> & { other: string }>
 
 export const en = {
   ...live,
   ...settingsShared,
-  ...chatCompose,
-  ...chatFeed,
-  ...specs,
+  ...chat,
   "settings.language": "Language",
   "settings.language.system": "System",
   "usage.today": "Messages today",

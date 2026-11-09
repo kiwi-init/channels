@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { useEffect, useRef, useState } from "react"
 
 import type { Stashed } from "~/chat/stash"

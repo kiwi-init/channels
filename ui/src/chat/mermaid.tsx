@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react"
 import { sanitizeMarkdownUrl } from "@kiwi/app/markdown.ts"
 import { t } from "~/i18n/i18n"

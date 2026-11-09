@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import "~/styles/annotator.css"
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"

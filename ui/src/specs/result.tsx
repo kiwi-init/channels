@@ -1,3 +1,4 @@
+import "~/i18n/en/specs"
 import { useState } from "react"
 
 import { tickDoneWhen } from "@kiwi/core/state.ts"

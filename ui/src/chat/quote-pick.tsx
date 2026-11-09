@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { useEffect, useRef, useState, type RefObject } from "react"
 import { createPortal } from "react-dom"
 

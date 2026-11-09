@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import type { BlockMedia } from "@kiwi/core/doc/blocks.ts"
 import type { Node } from "prosemirror-model"

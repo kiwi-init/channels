@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import "~/styles/thread-doc.css"
 
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react"

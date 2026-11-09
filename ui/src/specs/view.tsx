@@ -1,3 +1,4 @@
+import "~/i18n/en/specs"
 import "~/styles/tasks.css"
 import "~/styles/github.css"
 import "~/styles/specs.css"

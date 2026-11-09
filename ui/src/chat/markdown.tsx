@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react"
 import type { MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
 import { normalizeMarkdownStyle } from "react-native-enriched-markdown/lib/module/normalizeMarkdownStyle.web.js"

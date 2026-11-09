@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { gifFile, gifHost, useCatalog, useGifSrc, type Catalog, type Gif } from "~/chat/gifs"

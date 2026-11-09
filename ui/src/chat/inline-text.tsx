@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import type { MouseEvent, ReactNode } from "react"
 
 import { hitsIn, type Found } from "@kiwi/app/mentions.ts"

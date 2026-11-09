@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { openOutside } from "~/kit/outside"
 import { askDelete, startEditing, type EditAt } from "~/chat/editing"
 import { GENERAL_ROOM } from "@kiwi/core/protocol.ts"

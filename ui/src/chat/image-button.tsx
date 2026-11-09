@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { useEffect, useState } from "react"
 
 import { FEED_BOX, keyOf, scaleFor, thumbs, warmFor, type Shot } from "~/chat/thumbs"

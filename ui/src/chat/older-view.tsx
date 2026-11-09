@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import "~/styles/search.css"

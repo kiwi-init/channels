@@ -1,3 +1,4 @@
+import "~/i18n/en/specs"
 import { doneWhen, type DoneWhen } from "@kiwi/core/state.ts"
 
 import type { Key } from "~/i18n/en"

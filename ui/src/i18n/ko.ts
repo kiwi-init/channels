@@ -3,7 +3,7 @@ import chatCompose from "~/i18n/ko/chat-compose"
 import chatFeed from "~/i18n/ko/chat-feed"
 import specs from "~/i18n/ko/specs"
 
-export const covers = ["settings.language.", "usage."]
+export const covers = ["chat.", "settings.language.", "specs.", "tasks.", "usage."]
 
 export default {
   ...chatCompose,

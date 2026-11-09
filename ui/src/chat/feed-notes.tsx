@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { lazy, Suspense } from "react"
 
 import { t } from "~/i18n/i18n"

@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { useState } from "react"
 
 import { Body } from "~/chat/body"
