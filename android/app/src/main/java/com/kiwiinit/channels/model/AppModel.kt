@@ -53,6 +53,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import com.kiwiinit.channels.R
 
 sealed interface Phase {
     data object Starting : Phase
@@ -102,8 +103,9 @@ class AppModel(private val app: Application) {
     }
     private var booted = false
 
+    var words = Words(app.resources)
     val vault = Vault(app)
-    val lock = Lock(app, vault.exists())
+    val lock = Lock(app, vault.exists()) { words }
     val buzz = MutableSharedFlow<Buzz>(extraBufferCapacity = 8)
 
     var engine by mutableStateOf<Engine?>(null)
@@ -161,13 +163,13 @@ class AppModel(private val app: Application) {
     }
 
     private suspend fun startEngine(): Boolean {
-        val next = Engine(app, ::take, ::lost)
+        val next = Engine(app, { words }, ::take, ::lost)
         engine = next
         return try {
             next.load()
             true
         } catch (e: EngineException) {
-            phase = Phase.Broken(e.message ?: "The engine didn't start.")
+            phase = Phase.Broken(e.message ?: words(R.string.engine_didnt_start))
             false
         }
     }
@@ -189,7 +191,7 @@ class AppModel(private val app: Application) {
             vault.load() ?: ByteArray(0)
         } catch (e: VaultException) {
             // The keys are still on the phone but the keystore didn't open them this time: say so rather than link again over them.
-            phase = Phase.Broken("Channels couldn't open your sign-in: ${e.message}. Close Channels and open it again.")
+            phase = Phase.Broken(words(R.string.cant_open_sign_in, e.message.orEmpty()))
             null
         }
 
@@ -212,7 +214,7 @@ class AppModel(private val app: Application) {
             )
             phase = Phase.Ready
         } catch (e: EngineException) {
-            phase = Phase.Broken(e.message ?: "The engine didn't start.")
+            phase = Phase.Broken(e.message ?: words(R.string.engine_didnt_start))
         }
     }
 
@@ -227,7 +229,7 @@ class AppModel(private val app: Application) {
         }
     }
 
-    private suspend fun ask(request: JsonObject) = (engine ?: throw EngineException("Channels is still starting.")).ask(request)
+    private suspend fun ask(request: JsonObject) = (engine ?: throw EngineException(words(R.string.still_starting))).ask(request)
 
     private fun take(push: Push) {
         when (push) {
@@ -252,7 +254,7 @@ class AppModel(private val app: Application) {
             is Push.Log, is Push.Fetch -> Unit
             is Push.Removed -> {
                 unlink()
-                linking = Linking.Failed("This phone was removed from your devices by ${push.by}, so it deleted its keys and channels. Sign in to add it again.")
+                linking = Linking.Failed(words(R.string.removed_by, push.by))
             }
         }
     }
@@ -312,7 +314,7 @@ class AppModel(private val app: Application) {
                 val person = read(EnrollPerson.serializer(), ask(buildJsonObject { put("op", "enrollCheck") }))
                 linking = Linking.Check(person.name, person.fingerprint)
             } catch (e: EngineException) {
-                if (linking != Linking.Idle) linking = Linking.Failed(e.message ?: "Signing in didn't work. Try again.")
+                if (linking != Linking.Idle) linking = Linking.Failed(e.message ?: words(R.string.sign_in_failed))
             }
         }
     }
@@ -326,14 +328,14 @@ class AppModel(private val app: Application) {
                 rooms.clear()
                 begin(data)
             } catch (e: EngineException) {
-                if (linking != Linking.Idle) linking = Linking.Failed(e.message ?: "Signing in didn't work. Try again.")
+                if (linking != Linking.Idle) linking = Linking.Failed(e.message ?: words(R.string.sign_in_failed))
             }
         }
     }
 
     fun refuseLink(fingerprint: String) {
         linking = Linking.Failed(
-            "Kept nothing. If your computer never showed $fingerprint, someone else answered this phone. Your computer may still list it under Devices: remove it there.",
+            words(R.string.kept_nothing, fingerprint),
         )
         scope.launch {
             try {
@@ -456,7 +458,7 @@ class AppModel(private val app: Application) {
             wire.decodeFromJsonElement(serializer, value)
         } catch (e: IllegalArgumentException) {
             // An answer in a shape this build doesn't know reads as a failed ask, so the screen offers to try again.
-            throw EngineException("Your computer answered in a way this app doesn't know yet. Update Channels on this phone.")
+            throw EngineException(words(R.string.update_phone))
         }
 
     fun later(block: suspend () -> Unit) {
@@ -478,7 +480,7 @@ class AppModel(private val app: Application) {
         } catch (e: VaultException) {
             // The session runs from memory: the notice says so, and the next start or push saves again.
             keeping = data
-            unsaved = "This phone couldn't save your sign-in: ${e.message}. You stay signed in until Channels closes, and it tries again each time you open it."
+            unsaved = words(R.string.cant_save_sign_in, e.message.orEmpty())
         }
     }
 

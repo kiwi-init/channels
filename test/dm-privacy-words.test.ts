@@ -30,6 +30,7 @@ describe("direct messages never claim to be private: every member of the channel
 
   test("the phones' lead chat says who can read it", () => {
     expect(read("ios/Channels/Views/Conversation.swift")).toContain('"Everyone in the channel can read this"');
-    expect(read("android/app/src/main/java/com/kiwiinit/channels/ui/Conversation.kt")).toContain('"Everyone in the channel can read this"');
+    expect(read("android/app/src/main/res/values/strings.xml")).toContain('<string name="everyone_reads">Everyone in the channel can read this</string>');
+    expect(read("android/app/src/main/java/com/kiwiinit/channels/ui/Conversation.kt")).toContain("R.string.everyone_reads");
   });
 });

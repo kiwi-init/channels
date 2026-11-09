@@ -87,6 +87,9 @@ import com.kiwiinit.channels.model.spotTitle
 import com.kiwiinit.channels.model.taskLabel
 import com.kiwiinit.channels.theme.Tone
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import com.kiwiinit.channels.R
 
 @Composable
 fun ConversationScreen(
@@ -135,7 +138,7 @@ fun ConversationScreen(
     if (room == null) {
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
             Header(model, null, spot, previous, back = back, switchTo = ::switchTo)
-            Centered("This channel is gone", "Its owner closed it, or this phone was removed from it.")
+            Centered(stringResource(R.string.channel_gone), stringResource(R.string.channel_gone_lead))
         }
         return
     }
@@ -216,7 +219,7 @@ private fun Jump(visible: Boolean, unseen: Int, modifier: Modifier, go: () -> Un
     AnimatedVisibility(visible = visible, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut(), modifier = modifier) {
         BadgedBox(badge = { if (unseen > 0) Badge { Text("$unseen") } }) {
             SmallFloatingActionButton(onClick = go, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = if (unseen > 0) "$unseen new, jump to the latest" else "Jump to the latest")
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = if (unseen > 0) pluralStringResource(R.plurals.n_new_jump, unseen, unseen) else stringResource(R.string.jump_latest))
             }
         }
     }
@@ -234,6 +237,7 @@ private fun Header(
 ) {
     val tone = Tone.current
     val view = LocalView.current
+    val backLabel = stringResource(R.string.back_hold)
     var menu by remember { mutableStateOf(false) }
     val other = room?.other(spot)
     val elsewhere = model.rows(Filter.Unread).any { it.spot != spot && it.spot != other }
@@ -254,7 +258,7 @@ private fun Header(
                             menu = true
                         },
                     )
-                    .semantics { contentDescription = "Back. Touch and hold for your other conversations" },
+                    .semantics { contentDescription = backLabel },
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
@@ -300,15 +304,15 @@ private fun Status(room: RoomView, place: PlaceView?) {
     val tone = Tone.current
     val dmName = place?.let { room.other(it) }
     val dm: MemberView? = dmName?.let { room.member(it) }
-    val busy = if (dm != null && dm.working) dm.doing.firstOrNull()?.let { "working on ${taskLabel(it)}" } ?: "working" else null
+    val busy = if (dm != null && dm.working) dm.doing.firstOrNull()?.let { stringResource(R.string.working_on, taskLabel(it)) } ?: stringResource(R.string.working) else null
     val main = place?.kind == "main"
     val needs = if (main) room.asks.size + room.reviews.size else 0
     val parts = listOfNotNull(
-        if (place?.kind == "dm") (busy ?: (if (dm?.here == true) "here" else "away")) else null,
-        if (room.connection == Connection.Connecting) "Connecting…" else null,
-        if (room.connection == Connection.Reconnecting) "Reconnecting…" else null,
-        if (main && room.working > 0) "${room.working} working" else null,
-        if (needs > 0) "$needs ${if (needs == 1) "needs" else "need"} you" else null,
+        if (place?.kind == "dm") (busy ?: (if (dm?.here == true) stringResource(R.string.here) else stringResource(R.string.away))) else null,
+        if (room.connection == Connection.Connecting) stringResource(R.string.connecting) else null,
+        if (room.connection == Connection.Reconnecting) stringResource(R.string.reconnecting) else null,
+        if (main && room.working > 0) pluralStringResource(R.plurals.n_working, room.working, room.working) else null,
+        if (needs > 0) pluralStringResource(R.plurals.n_need_you, needs, needs) else null,
     )
     if (parts.isEmpty()) return
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -329,11 +333,12 @@ private fun Flip(model: AppModel, room: RoomView, other: Spot, go: () -> Unit) {
     val asks = room.asksIn(other.place).isNotEmpty() || (other.general && room.reviews.isNotEmpty())
     val fresh = model.unread(other)
     val lead = room.lead
+    val label = if (other.general) stringResource(R.string.open_general) else stringResource(R.string.open_chat_with, room.spotTitle(other.place))
     Box(
         Modifier.size(48.dp)
             .clip(CircleShape)
             .clickable(onClick = go)
-            .semantics { contentDescription = if (other.general) "Open # general" else "Open your chat with ${room.spotTitle(other.place)}" },
+            .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
         if (other.general) {
@@ -355,6 +360,7 @@ private fun Flip(model: AppModel, room: RoomView, other: Spot, go: () -> Unit) {
 private fun BackMenu(model: AppModel, spot: Spot, previous: Spot?, pick: (Spot) -> Unit) {
     val used = mutableSetOf(spot)
     val tone = Tone.current
+    val w = words()
 
     @Composable
     fun item(row: ConversationRow, prefix: String? = null) {
@@ -363,7 +369,7 @@ private fun BackMenu(model: AppModel, spot: Spot, previous: Spot?, pick: (Spot) 
                 Column(Modifier.widthIn(max = 260.dp)) {
                     Text(row.fullTitle, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
                     Text(
-                        prefix?.let { "$it · ${row.line}" } ?: row.line,
+                        row.line(w).let { line -> prefix?.let { "$it · $line" } ?: line },
                         style = MaterialTheme.typography.bodySmall,
                         color = tone.ink3,
                         maxLines = 1,
@@ -388,9 +394,9 @@ private fun BackMenu(model: AppModel, spot: Spot, previous: Spot?, pick: (Spot) 
     val lastRow = last?.let { model.row(it) }
     if (last != null && lastRow != null) {
         used += last
-        item(lastRow, "Previous")
+        item(lastRow, stringResource(R.string.previous))
     }
-    section("Needs you", model.rows(Filter.Needs), 3)
-    section("Unread", model.rows(Filter.Unread), 3)
-    section("Recent", model.rows(Filter.All), 6)
+    section(stringResource(R.string.needs_you), model.rows(Filter.Needs), 3)
+    section(stringResource(R.string.unread), model.rows(Filter.Unread), 3)
+    section(stringResource(R.string.recent), model.rows(Filter.All), 6)
 }

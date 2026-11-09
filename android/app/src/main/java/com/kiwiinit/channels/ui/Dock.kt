@@ -100,6 +100,8 @@ import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.res.stringResource
+import com.kiwiinit.channels.R
 
 private const val PREVIEW_SIDE = 512
 
@@ -179,12 +181,12 @@ fun Dock(
         room.members.filter { it.name != room.me && (it.name.lowercase().startsWith(mention) || it.display.lowercase().startsWith(mention)) }
     }
     val placeholder = when {
-        room.connection != Connection.Live -> "Connecting…"
-        sendingBack != null -> "What to change"
-        replyTo != null -> "Reply to ${room.display(replyTo.from)}"
-        answering != null -> "Answer ${room.display(answering.from)}"
-        here != null && here.kind == "dm" && room.other(here) != null -> "Message ${room.display(room.other(here) ?: "")}"
-        else -> "Message"
+        room.connection != Connection.Live -> stringResource(R.string.connecting)
+        sendingBack != null -> stringResource(R.string.what_to_change)
+        replyTo != null -> stringResource(R.string.reply_to, room.display(replyTo.from))
+        answering != null -> stringResource(R.string.answer_who, room.display(answering.from))
+        here != null && here.kind == "dm" && room.other(here) != null -> stringResource(R.string.message_who, room.display(room.other(here) ?: ""))
+        else -> stringResource(R.string.message)
     }
 
     fun complete(name: String) {
@@ -241,11 +243,11 @@ fun Dock(
 
     Column(modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 6.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         error?.let {
-            Text("Not sent: $it", style = MaterialTheme.typography.labelMedium, color = tone.alert, modifier = Modifier.padding(horizontal = 8.dp))
+            Text(stringResource(R.string.not_sent, it), style = MaterialTheme.typography.labelMedium, color = tone.alert, modifier = Modifier.padding(horizontal = 8.dp))
         }
         if (mentionable.isNotEmpty()) Mentions(mentionable) { complete(it) }
         if (sendingBack != null) {
-            Bar(Icons.AutoMirrored.Filled.Reply, tone.decide, "Send back ${taskLabel(sendingBack.task)}", sendingBack.title, clearSendBack)
+            Bar(Icons.AutoMirrored.Filled.Reply, tone.decide, stringResource(R.string.send_back_task, taskLabel(sendingBack.task)), sendingBack.title, clearSendBack)
         } else if (answering != null) {
             Bar(Icons.Filled.PanTool, tone.decide, room.display(answering.from), answering.plain, clearAnswer)
         } else if (replyTo != null) {
@@ -256,7 +258,7 @@ fun Dock(
                 onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                 modifier = Modifier.size(48.dp),
             ) {
-                Icon(Icons.Filled.Add, contentDescription = "Add photos")
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_photos))
             }
             Column(
                 Modifier.weight(1f).heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh),
@@ -265,7 +267,7 @@ fun Dock(
                     LazyRow(contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(attached, key = { it.id }) { a ->
                             Box(Modifier.size(64.dp).clip(RoundedCornerShape(12.dp))) {
-                                Image(a.image, contentDescription = "Attached photo", contentScale = ContentScale.Crop, modifier = Modifier.size(64.dp))
+                                Image(a.image, contentDescription = stringResource(R.string.attached_photo), contentScale = ContentScale.Crop, modifier = Modifier.size(64.dp))
                                 Box(
                                     Modifier.align(Alignment.TopEnd)
                                         .padding(3.dp)
@@ -275,7 +277,7 @@ fun Dock(
                                         .clickable { attached = attached.filter { it.id != a.id } },
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    Icon(Icons.Filled.Cancel, contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Filled.Cancel, contentDescription = stringResource(R.string.remove), tint = Color.White, modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
@@ -307,7 +309,7 @@ fun Dock(
                             if (sending) {
                                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                             } else {
-                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", modifier = Modifier.size(18.dp))
+                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send), modifier = Modifier.size(18.dp))
                             }
                         }
                     }
@@ -355,6 +357,6 @@ private fun Bar(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Col
             maxLines = 1,
             modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = cancel) { Icon(Icons.Filled.Cancel, contentDescription = "Cancel", tint = tone.ink3) }
+        IconButton(onClick = cancel) { Icon(Icons.Filled.Cancel, contentDescription = stringResource(R.string.cancel), tint = tone.ink3) }
     }
 }
