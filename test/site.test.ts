@@ -60,7 +60,15 @@ interface Nav {
 type Message = (e: { source: unknown; data: unknown }) => void;
 
 function load(pathname: string, hash = "", navigator: Nav = { userAgent: "" }, withScene = false) {
-  const page = { landing: node(), invite: node(), "open-app": node(), "join-cmd": node(), download: node(), ...(withScene ? { scene: node() } : {}) };
+  const page = {
+    landing: node(),
+    invite: node(),
+    "open-app": node(),
+    "join-cmd": node(),
+    download: node(),
+    "ios-beta": node(),
+    ...(withScene ? { scene: node() } : {}),
+  };
   const isPart = (id: string): id is keyof typeof page => id in page;
   const body = { dataset: {} as Record<string, string> };
   const document = {
@@ -142,10 +150,18 @@ test("every Linux, Ubuntu too, gets the AppImage: there is no .deb", async () =>
   expect(linux.download.href).toMatch(/\/Channels-[\d.]+-linux-x86_64\.AppImage$/);
 });
 
-test("Windows, phones and ARM Linux keep the button on the release page", async () => {
+test("an iPhone's button opens the iOS beta on TestFlight", async () => {
+  const page = load("/", "", { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148" });
+  await settle();
+  expect(page.download.href).toMatch(/^https:\/\/testflight\.apple\.com\/join\//);
+  expect(page.download.textContent).toBe("Get iOS Beta");
+  expect(page["ios-beta"].removed).toBe(true);
+});
+
+test("Windows, Android and ARM Linux keep the button on the release page", async () => {
   for (const userAgent of [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+    "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36",
     "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
   ]) {
     const page = load("/", "", { userAgent });
