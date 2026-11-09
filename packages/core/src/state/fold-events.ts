@@ -653,6 +653,20 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
             : state === "done" && !cancel && ev.close === undefined
               ? { kind: "approved", by: m.from, seq: m.seq, ts: at, ...rts }
               : { kind: "withdrawn", seq: m.seq };
+      const judge = review ? mayFinish : isPerson(member) || lead;
+      if (!open && lands && state === "landing" && judge) {
+        const linked = prOfTask(c.github, c.branchPrefix, task);
+        const head = ev.at?.trim() || (linked?.state === "open" ? linked.sha : undefined);
+        task.rounds.push({
+          n: (task.rounds.at(-1)?.n ?? 0) + 1,
+          ...(head ? { at: head } : {}),
+          by: m.from,
+          seq: m.seq,
+          ts: at,
+          ...rts,
+          result: { kind: "approved", by: m.from, seq: m.seq, ts: at, ...rts, ...(head ? runsOf(ev.runs ?? runsAtHead(c, task, head)) : {}) },
+        });
+      }
       if (state === "review") {
         if (open) open.result = { kind: "withdrawn", seq: m.seq };
         const head = reopens ? (ev.run && newRun(task, ev.run) ? runPin(ev.run.id) : task.rounds.at(-1)?.at) : ev.at?.trim();
