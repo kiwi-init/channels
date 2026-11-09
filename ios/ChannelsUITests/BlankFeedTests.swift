@@ -56,7 +56,9 @@ final class BlankFeedTests: XCTestCase {
         let top = screen.app.navigationBars.firstMatch.frame.maxY
         let bottom = field.frame.minY - 8
         let feed = try screen.texts().filter { $0.label.count > 12 && $0.frame.midY > top && $0.frame.midY < bottom }
-        print("FEED \(moment): \(feed.count) texts between y \(Int(top)) and \(Int(bottom))")
+        print(
+            "FEED \(moment): \(feed.count) texts between y \(Int(top)) and \(Int(bottom)), composer focused \(field.hasFocus) at \(Date.now.formatted(.iso8601.time(includingFractionalSeconds: true)))"
+        )
         if feed.isEmpty {
             let shot = XCTAttachment(screenshot: screen.app.screenshot())
             shot.name = "blank feed: \(moment)"
