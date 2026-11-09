@@ -2028,43 +2028,25 @@ button.msg-image-spot:hover {
   background: var(--raise-2);
 }
 
+.top-updates {
+  display: contents;
+}
+
 .updates {
-  position: absolute;
-  top: 10px;
-  right: 16px;
-  z-index: 5;
+  position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  pointer-events: none;
 }
 
-.updates > * {
-  pointer-events: auto;
-}
-
-.updates-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 1.75rem;
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--r-ctl);
-  background: var(--float);
-  color: var(--ink-2);
-  font: 500 var(--t-meta) var(--ui);
-  box-shadow: var(--shadow-pop);
-  cursor: pointer;
-}
-
-.updates-toggle:hover,
 .updates-toggle.is-on {
   color: var(--ink);
+  background: var(--wash);
 }
 
 .updates-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
   display: flex;
   flex-direction: column;
   width: min(420px, calc(100vw - 32px));
