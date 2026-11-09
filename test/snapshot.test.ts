@@ -406,6 +406,12 @@ describe("the relay keeps one snapshot per channel", () => {
       expect(await put(ok)).toBe(200);
       expect(bytes()).toBe(before + 1);
       expect(await runAgent(s.ownerCh.fx.snapshot())).toBeNull();
+      server.stop(true);
+      const failed = await runAgent(s.ownerCh.fx.snapshot()).then(
+        () => "answered",
+        (err: unknown) => (err instanceof Error ? err.name : String(err)),
+      );
+      expect(failed).not.toBe("answered");
     } finally {
       server.stop(true);
       rmSync(dir, { recursive: true, force: true });

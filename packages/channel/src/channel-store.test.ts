@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import type { Member } from "@kiwi/core/membership.ts";
-import { PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
+import { FOLD_RULES, PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
+import { fold, type FoldBase } from "@kiwi/core/state.ts";
 import type { ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts";
 import { ChannelLink } from "./channel-ops.ts";
 import { APP_BEACON_MS, ChannelStore, PAGE, REACH, WINDOW } from "./channel-store.ts";
@@ -551,5 +552,67 @@ describe("history from the relay is fetched only when asked (T977, #1944)", () =
     } finally {
       useHistoryDb(null);
     }
+  });
+});
+
+describe("a channel longer than the window, opened with no base under it (T1759)", () => {
+  const HEAD = REACH + 1_000;
+  const baseAt = (n: number): FoldBase => {
+    const made: { base?: FoldBase } = {};
+    fold([], [], 0, null, null, null, (b) => void (made.base = b));
+    return { ...made.base!, n, rules: FOLD_RULES };
+  };
+  const hearWindow = (r: ReturnType<typeof relay>) => {
+    for (let seq = HEAD - REACH + 1; seq <= HEAD; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
+  };
+  const sealedBase = (r: ReturnType<typeof relay>) => (r.kept.at(-1)?.state as { base: unknown } | undefined)?.base;
+
+  test("a snapshot request that fails is asked again, and the channel opens on its whole history", async () => {
+    let asked = 0;
+    const r = relay(HEAD, { answers: { snapshot: () => (++asked === 1 ? Promise.reject(new Error("the wifi dropped")) : baseAt(HEAD - REACH)) } });
+    const store = new ChannelStore(member, undefined, { link: r.link, lend: r.lend });
+    const close = store.open();
+    await sleep(100);
+    expect(r.follows).toHaveLength(0);
+    expect(store.handle.value.connection).toBe("reconnecting");
+    await sleep(700);
+    expect(r.follows).toHaveLength(1);
+    expect(r.called("snapshot")).toHaveLength(2);
+    hearWindow(r);
+    await until(() => store.handle.value.caughtUp);
+    close();
+  });
+
+  test("with no snapshot to be had, the window still trims but its partial base is never sealed to disk", async () => {
+    const r = relay(HEAD);
+    const { store, close } = await opened(r);
+    hearWindow(r);
+    await sleep(40);
+    await until(() => store.handle.value.messages.length === WINDOW);
+    expect(store.handle.value.caughtUp).toBe(false);
+    await sleep(3_300);
+    expect(r.kept.length).toBeGreaterThan(0);
+    expect(sealedBase(r)).toBeNull();
+    close();
+  }, 10_000);
+
+  test("the next store for that channel asks for the snapshot again and doesn't take the partial base for the whole history", async () => {
+    const first = relay(HEAD);
+    const one = await opened(first);
+    hearWindow(first);
+    await sleep(40);
+    await until(() => one.store.handle.value.messages.length === WINDOW);
+    one.close();
+    const again = relay(HEAD);
+    const two = await opened(again);
+    expect(again.called("snapshot")).toHaveLength(1);
+    expect(two.store.handle.value.messages).toHaveLength(WINDOW);
+    expect(two.store.handle.value.state.head).toBe(HEAD);
+    expect(two.store.handle.value.caughtUp).toBe(false);
+    two.close();
+    const healed = relay(HEAD, { answers: { snapshot: () => baseAt(HEAD - 100) } });
+    const three = await opened(healed);
+    expect(three.store.handle.value.caughtUp).toBe(true);
+    three.close();
   });
 });

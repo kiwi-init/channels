@@ -131,6 +131,7 @@ export class ChannelStore {
   private readonly keyOf: ReadonlySignal<Map<string, string>>;
   private readonly state: ReadonlySignal<ChannelState>;
   private readonly caughtUp: ReadonlySignal<boolean>;
+  private readonly partial: ReadonlySignal<boolean>;
   private readonly head: ReadonlySignal<number>;
   private readonly trimDue: ReadonlySignal<number>;
   private readonly reconcileDue: ReadonlySignal<string>;
@@ -194,6 +195,10 @@ export class ChannelStore {
     this.caughtUp = computed(() => {
       const start = this.start.value;
       return !!start?.whole && (this.messages.value.at(-1)?.seq ?? 0) >= start.head;
+    });
+    this.partial = computed(() => {
+      const start = this.start.value;
+      return start ? !start.whole : !!was?.partial;
     });
     this.head = computed(() => this.state.value.head);
     this.trimDue = computed(() => (this.start.value ? this.messages.value.length : -1));
@@ -350,6 +355,7 @@ export class ChannelStore {
         guardFloor: this.guardFloor.value,
         roomsFloor: this.roomsFloor.value,
         base: this.base.value,
+        partial: this.partial.value,
       },
       this.light ? "light" : "full",
     );
@@ -357,7 +363,7 @@ export class ChannelStore {
 
   private keepSealed(): (() => void) | undefined {
     if (!this.start.value || this.gone.value) return;
-    const kept = toKept({ roster: this.roster.value, base: this.base.value, guardFloor: this.guardFloor.value, roomsFloor: this.roomsFloor.value });
+    const kept = toKept({ roster: this.roster.value, base: this.partial.value ? null : this.base.value, guardFloor: this.guardFloor.value, roomsFloor: this.roomsFloor.value });
     const t = setTimeout(() => {
       void this.ch
         .keep(kept)
@@ -561,7 +567,7 @@ export class ChannelStore {
           .then((opened) => (markOnce("kiwi:cache-open"), opened))
           .catch(() => null),
       plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, REACH).catch(() => null),
-      snapshot: () => ch.snapshot().catch(() => null),
+      snapshot: () => ch.snapshot(),
       kept: async () => {
         const sealed = await readKept(ch.roomId, ch.pk).catch(() => null);
         markOnce("kiwi:kept-read");
