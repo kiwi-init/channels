@@ -134,6 +134,11 @@ struct Conversation: View {
                 follow.atBottom = near
                 if near { follow.unseen = 0 }
             }
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                geo.contentSize.height > 0 && geo.visibleRect.minY > geo.contentSize.height - 24
+            } action: { _, past in
+                if past { position.scrollTo(edge: .bottom) }
+            }
             .onChange(of: model.pending["\(room.code)|\(room.place)"]?.count ?? 0) { old, now in
                 guard now > old else { return }
                 withAnimation(Motion.sent) { proxy.scrollTo("bottom", anchor: .bottom) }
