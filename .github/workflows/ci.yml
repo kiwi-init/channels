@@ -388,61 +388,61 @@ jobs:
           for pid in $pids; do wait "$pid" || status=1; done
           exit "$status"
       - name: ui stash clicks in WebKit
-        if: ${ !cancelled() && matrix.engine == 'chromium' }
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-stash-click.ts --dist ui/dist
       - name: shots wait for reaction requests in ${{ matrix.engine }}
         if: ${{ !cancelled() }}
         run: bun scripts/shots-settle.ts --browser ${{ matrix.engine }} --dist ui/dist
       - name: ui scrolling up a feed of event runs keeps loading to its first row, in WebKit
-        if: ${ !cancelled() && matrix.engine == 'webkit' }
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-scroll-up.ts --dist ui/dist
       - name: ui the spec page uses a wide window and its comment box grows, in WebKit
-        if: ${ !cancelled() && matrix.engine == 'chromium' }
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-spec-layout.ts --dist ui/dist
       - name: ui spec comments take keyboard focus, jump reply to reply, keep each spec's draft, and retry a failed send once, in WebKit
-        if: ${ !cancelled() && matrix.engine == 'webkit' }
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-spec-comments.ts --dist ui/dist
       - name: ui Esc in search keeps the panel, and Settings doesn't offer a name change, in WebKit
-        if: ${ !cancelled() && matrix.engine == 'chromium' }
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-esc-and-name.ts --dist ui/dist
       - name: ui the composer keeps each room's draft and images to itself, and an image sends without a file name as text, in WebKit
-        if: ${ !cancelled() && matrix.engine == 'webkit' }
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-composer-rooms.ts --dist ui/dist
       - name: ui muting a room dims it in the sidebar, in WebKit
-        if: ${ !cancelled() && matrix.engine == 'chromium' }
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
       - name: ui People lists you first, and your row opens your profile, in WebKit
-        if: ${ !cancelled() && matrix.engine == 'webkit' }
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-people-you.ts --dist ui/dist
       - name: ui settings, profiles, Invite and Add an agent open in one modal that Esc, a click outside and Back close, with focus kept inside, in WebKit
-        if: ${ !cancelled() && matrix.engine == 'chromium' }
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-modal.ts --dist ui/dist
       - name: ui edit and delete your own message (toolbar, Enter, ↑, Esc, the delete confirm), in WebKit
-        if: ${ !cancelled() && matrix.engine == 'webkit' }
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-edit-delete.ts --dist ui/dist
       - name: ui search reaches older history, Search older history fetches more only on a click, and an older hit opens its stretch (Back to latest, react and copy only), in WebKit
-        if: ${ !cancelled() && matrix.engine == 'chromium' }
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-older-search.ts --dist ui/dist
       - name: ui a reload keeps the room, tab and scroll, and ⌘[ / ⌘] step back and forward after search jumps, in WebKit
-        if: ${ !cancelled() && matrix.engine == 'webkit' }
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-restore-place.ts --dist ui/dist
       - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
-        if: ${ !cancelled() && matrix.engine == 'chromium' }
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist
       - name: ui history archive (newest window on reload, rows kept below it, backfill, leave), on WebKit's IndexedDB
-        if: ${ !cancelled() && matrix.engine == 'webkit' }
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-history-archive.ts
       - name: ui top bar in Chromium moves the window only from its background
-        if: ${ !cancelled() && matrix.engine == 'chromium' }
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-drag-regions.ts --dist ui/dist
       - name: ui rooms are flat in Chromium and WebKit, a reply shows inline with its quote and nothing opens a thread
-        if: ${ !cancelled() && matrix.engine == 'webkit' }
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-flat-rooms.ts --dist ui/dist && bun scripts/ui-flat-rooms.ts --dist ui/dist --webkit
       - name: ui onboarding's meadow holds still with the app's own Reduce motion, in Chromium and WebKit
-        if: ${ !cancelled() && matrix.engine == 'chromium' }
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-onboarding-meadow.ts --dist ui/dist && bun scripts/ui-onboarding-meadow.ts --dist ui/dist --webkit
       - name: ui portrait window in WebKit is one tall page, agents, tasks and chat in view, and landscape is unchanged
-        if: ${ !cancelled() && matrix.engine == 'webkit' }
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-tall-page.ts --dist ui/dist
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
