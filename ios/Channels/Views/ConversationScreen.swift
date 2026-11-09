@@ -51,6 +51,11 @@ struct ConversationScreen: View {
                 }
                 .navigationTitle(room.spotTitle(spot.place))
                 .subtitle(room.status(of: spot.place))
+                .toolbar {
+                    if room.messages.contains(where: \.event) {
+                        ToolbarItem(placement: .topBarTrailing) { UpdatesButton(room: room) }
+                    }
+                }
                 .onChange(of: room.placeView(spot.place)?.lastSeq) { _, _ in seen() }
             } else {
                 Centered(title: "This channel is gone", detail: spoken("Its owner closed it, or this phone was removed from it."))
