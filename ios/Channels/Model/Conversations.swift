@@ -240,6 +240,10 @@ extension AppModel {
     }
 
     private func deliver(_ item: Pending, _ spot: Spot) {
+        if demo {
+            if let at = pending[spot.id]?.firstIndex(where: { $0.id == item.id }) { pending[spot.id]?[at].seq = -1 - at }
+            return
+        }
         Task {
             do {
                 guard let seq = try await send(spot, item.body, re: item.re) else {

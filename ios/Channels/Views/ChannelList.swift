@@ -5,6 +5,18 @@ struct ChannelList: View {
 
     var body: some View {
         List {
+            if model.demo {
+                HStack(spacing: 12) {
+                    Text("A sample channel. Sign in to see yours.").font(.subheadline).foregroundStyle(Tone.ink2)
+                    Spacer(minLength: 0)
+                    Button("Sign In") { model.endDemo() }
+                        .font(.subheadline.weight(.semibold))
+                        .buttonStyle(.borderless)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 6)
+                .flatRow()
+            }
             ForEach(model.channels, id: \.code) { room in
                 Section {
                     ChannelRows(room: room)

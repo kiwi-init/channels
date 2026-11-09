@@ -78,19 +78,32 @@ struct SettingsScreen: View {
                 }
                 .listRowBackground(Tone.raised)
             }
-            Section {
-                Button(role: .destructive) {
-                    confirm = true
-                } label: {
-                    Text(model.enrolled ? "Sign Out of This iPhone" : "Unlink This iPhone").frame(maxWidth: .infinity)
+            if model.demo {
+                Section {
+                    Button {
+                        model.endDemo()
+                    } label: {
+                        Text("Sign In").frame(maxWidth: .infinity)
+                    }
+                } footer: {
+                    Text("You're looking at a sample channel. Sign in to see yours.")
                 }
-            } footer: {
-                Text(
-                    model.enrolled
-                        ? "This iPhone holds its own device key and its channels' keys in its keychain. Signing out deletes them from this phone; forget it in Settings → Devices on your computer too."
-                        : "This iPhone holds your person key and your channels' keys in its keychain. Unlinking deletes them from this phone.")
+                .listRowBackground(Tone.raised)
+            } else {
+                Section {
+                    Button(role: .destructive) {
+                        confirm = true
+                    } label: {
+                        Text(model.enrolled ? "Sign Out of This iPhone" : "Unlink This iPhone").frame(maxWidth: .infinity)
+                    }
+                } footer: {
+                    Text(
+                        model.enrolled
+                            ? "This iPhone holds its own device key and its channels' keys in its keychain. Signing out deletes them from this phone; forget it in Settings → Devices on your computer too."
+                            : "This iPhone holds your person key and your channels' keys in its keychain. Unlinking deletes them from this phone.")
+                }
+                .listRowBackground(Tone.raised)
             }
-            .listRowBackground(Tone.raised)
             Section {
             } footer: {
                 Text("Channels \(version)").frame(maxWidth: .infinity)

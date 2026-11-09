@@ -29,6 +29,7 @@ enum Push {
 @MainActor
 final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     let web: WKWebView
+    var demo = false
     private var loaded: CheckedContinuation<Void, Error>?
     private let decoder = JSONDecoder()
     private let logger = Logger(subsystem: "com.kiwiinit.channels", category: "engine")
@@ -67,6 +68,7 @@ final class Engine: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
 
     @discardableResult
     func ask(_ request: [String: Any]) async throws -> Data {
+        if demo { throw EngineError.refused(Demo.refusal) }
         let json = String(data: try JSONSerialization.data(withJSONObject: request), encoding: .utf8) ?? "{}"
         let raw = try await web.callAsyncJavaScript("return await kiwi.ask(json)", arguments: ["json": json], in: nil, contentWorld: .page)
         guard let text = raw as? String, let data = text.data(using: .utf8),

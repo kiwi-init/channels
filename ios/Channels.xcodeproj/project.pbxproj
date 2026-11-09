@@ -221,7 +221,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nBUN=\"$(command -v bun || true)\"\nfor b in /opt/homebrew/bin/bun \"$HOME/.bun/bin/bun\" /usr/local/bin/bun; do [ -z \"$BUN\" ] && [ -x \"$b\" ] && BUN=\"$b\"; done\n[ -n \"$BUN\" ] || { echo \"error: bun is needed to bundle the engine (https://bun.sh)\"; exit 1; }\nOUT=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH\"\nmkdir -p \"$OUT\"\n\"$BUN\" build \"$SRCROOT/engine/main.ts\" --target browser --format iife --minify --outfile \"$OUT/engine.js\"\n\"$BUN\" \"$SRCROOT/scripts/themes.ts\" \"$OUT/themes.json\"\n";
+			shellScript = "set -e\nBUN=\"$(command -v bun || true)\"\nfor b in /opt/homebrew/bin/bun \"$HOME/.bun/bin/bun\" /usr/local/bin/bun; do [ -z \"$BUN\" ] && [ -x \"$b\" ] && BUN=\"$b\"; done\n[ -n \"$BUN\" ] || { echo \"error: bun is needed to bundle the engine (https://bun.sh)\"; exit 1; }\nOUT=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH\"\nmkdir -p \"$OUT\"\n\"$BUN\" build \"$SRCROOT/engine/main.ts\" --target browser --format iife --minify --outfile \"$OUT/engine.js\"\n\"$BUN\" \"$SRCROOT/scripts/themes.ts\" \"$OUT/themes.json\"\n\"$BUN\" \"$SRCROOT/scripts/fixture.ts\" \"$OUT/sample.json\"\n";
 		};
 		C5814D49690D9A3699F3598A /* Make the fixture */ = {
 			isa = PBXShellScriptBuildPhase;
