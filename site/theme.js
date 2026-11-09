@@ -1,5 +1,5 @@
 const KEY = "channels-theme";
-const COLOR = { light: "#ffffff", dark: "#151011" };
+const COLOR = { light: "#ffffff", dark: "#111113" };
 const root = document.documentElement;
 const system = matchMedia("(prefers-color-scheme: dark)");
 let forced = new URLSearchParams(location.search).get("theme");

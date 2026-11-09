@@ -26,7 +26,7 @@ typedef struct {
 
 static gpointer look_off_main(gpointer data) {
   Ask *ask = data;
-  ask->look(ask->window, 720, 480, 0xf2f2f5, 0x151011);
+  ask->look(ask->window, 720, 480, 0xf2f2f5, 0x111113);
   g_idle_add(stop, NULL);
   return NULL;
 }
@@ -93,10 +93,10 @@ int main(int argc, char **argv) {
   g_object_set(gtk_settings_get_default(), "gtk-application-prefer-dark-theme", TRUE, NULL);
   spin(200);
   guint32 dark = background(window);
-  if (light != 0xf2f2f5 || dark != 0x151011) {
-    fprintf(stderr, "kiwi-look-test: the window's background is #%06x light and #%06x dark, not the page's #f2f2f5 and #151011\n", light, dark);
+  if (light != 0xf2f2f5 || dark != 0x111113) {
+    fprintf(stderr, "kiwi-look-test: the window's background is #%06x light and #%06x dark, not the page's #f2f2f5 and #111113\n", light, dark);
     bad++;
   } else
-    printf("background: #f2f2f5, and #151011 once GTK prefers dark, as the page's (no white edge while a resize catches up)\n");
+    printf("background: #f2f2f5, and #111113 once GTK prefers dark, as the page's (no white edge while a resize catches up)\n");
   return bad ? 1 : 0;
 }

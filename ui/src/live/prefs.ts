@@ -12,10 +12,11 @@ type Own = Pick<Prefs, "muted" | "enterSends" | "darkTheme" | "lightTheme" | "cu
 const KEY = "ui.prefs"
 const MOVED = "ui.prefs.oled"
 const CINDER = "ui.prefs.cinder"
+const CHANNELS = "ui.prefs.channels-dark"
 const DEFAULTS: Own = {
   muted: [],
   enterSends: true,
-  darkTheme: "cinder-peak",
+  darkTheme: "channels-dark",
   lightTheme: "channels-light",
   customThemes: [],
   folders: [],
@@ -29,7 +30,7 @@ type Store = Pick<Storage, "getItem" | "setItem">
 
 export function readPrefs(store: Store): Own {
   const raw = JSON.parse(store.getItem(KEY) ?? "{}") as Partial<Own> & { calm?: unknown }
-  const moved = { oled: store.getItem(MOVED) === "1", cinder: store.getItem(CINDER) === "1" }
+  const moved = { oled: store.getItem(MOVED) === "1", cinder: store.getItem(CINDER) === "1", channels: store.getItem(CHANNELS) === "1" }
   const read: Own = {
     muted: Array.isArray(raw.muted) ? [...new Set(raw.muted.filter((k): k is string => typeof k === "string" && !!k))].slice(0, 500) : [],
     enterSends: typeof raw.enterSends === "boolean" ? raw.enterSends : DEFAULTS.enterSends,
@@ -39,11 +40,12 @@ export function readPrefs(store: Store): Own {
     folders: cleanFolders(raw.folders),
     afk: afkMinutes(raw.afk ?? raw.calm),
   }
-  if (!moved.oled || !moved.cinder) {
+  if (!moved.oled || !moved.cinder || !moved.channels) {
     try {
       if (typeof raw.darkTheme === "string" && raw.darkTheme !== read.darkTheme) store.setItem(KEY, JSON.stringify(read))
       store.setItem(MOVED, "1")
       store.setItem(CINDER, "1")
+      store.setItem(CHANNELS, "1")
     } catch {
       // Without storage the move runs again on the next load and lands the same way.
     }

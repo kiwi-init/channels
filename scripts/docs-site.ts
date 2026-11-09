@@ -304,7 +304,7 @@ function pageHtml(pages: Page[], at: number, body: string, figures: Set<string>)
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#151011" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#111113" media="(prefers-color-scheme: dark)" />
     <title>${escape(title)}</title>
     <meta name="description" content="${escape(page.description)}" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />

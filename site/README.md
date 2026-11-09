@@ -31,7 +31,7 @@ alone at `/preview/<name>`.
   `anatomy/` (`iso-kit.js`, `lathe.js`, `tube.js`, `iso.css`; MIT, its
   `LICENSE` beside it). The same files load in Bun at build time and in the
   browser.
-- `docs.css` and `docs.js` are the pages' style (Cinder Peak, Paper Mono for
+- `docs.css` and `docs.js` are the pages' style (Channels Dark, Paper Mono for
   headings) and their copy buttons. `.iso` in `docs.css` is the figures'
   palette: every figure takes its tones from there.
 
@@ -55,7 +55,7 @@ alone at `/preview/<name>`.
   only by this site. The frame asks for `/afk/scene`, not `scene.html`: Cloudflare
   redirects `.html` addresses to the bare one.
 - `theme.css`, `theme.js` — the colours both the landing and the docs use:
-  Cinder Peak in dark and Channels Light in light, through `light-dark()`, plus
+  Channels Dark in dark and Channels Light in light, through `light-dark()`, plus
   the figures' palette (`.iso`). The docs header's System, Light and Dark buttons
   set `data-theme` on the page and keep the choice in `localStorage`; with no
   choice the page follows the system. `?theme=light` or `?theme=dark` shows one
