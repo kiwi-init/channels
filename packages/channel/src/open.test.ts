@@ -253,6 +253,27 @@ describe("opening a channel", () => {
     expect(base).toBe(3000);
   });
 
+  test("a snapshot that failed is asked for again by the next try, and one that answered never is (T1759)", async () => {
+    const r = relay();
+    let asked = 0;
+    const steps = onceEach({
+      ...r.make(5000, [], null),
+      snapshot: () => (++asked === 1 ? Promise.reject(new Error("the wifi dropped")) : Promise.resolve(base(3000))),
+    });
+    const first = openChannel(steps, undefined, 2000).catch((err: unknown) => err);
+    await r.settle();
+    await r.roundTrip();
+    expect(await first).toBeInstanceOf(Error);
+    expect(r.painted).toEqual([]);
+    const second = openChannel(steps, undefined, 2000);
+    await r.settle();
+    await r.roundTrip();
+    expect(await second).toEqual({ head: 5000, since: 3000, whole: true });
+    await steps.snapshot();
+    expect(asked).toBe(2);
+    expect(r.painted).toEqual([{ at: 2, seqs: [], base: 3000 }]);
+  });
+
   test("the hand-over keeps what the plan keeps and drops only what the early paint added", () => {
     const early = new Set([1, 2, 3]);
     expect(handOver([1, 2, 3, 9].map(msg), early, [2, 3, 4].map(msg)).map((m) => m.seq)).toEqual([2, 3, 4, 9]);

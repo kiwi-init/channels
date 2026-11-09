@@ -1,5 +1,4 @@
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import { decodedWhole, olderRules, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type DocEnvelope } from "../protocol.ts";
 import { MissingKey } from "../refusals.ts";
 import { openSnapshot, sealSnapshot, wellFormedSnapshot } from "../snapshot.ts";
@@ -12,7 +11,7 @@ import type { ChannelHistory } from "./history.ts";
 import type { Relay } from "./relay.ts";
 
 export interface SnapshotsFx {
-  snapshot(): Effect.Effect<FoldBase | null, never, Relay>;
+  snapshot(): Effect.Effect<FoldBase | null, MemberRefusal, Relay>;
   snapshotAt(): Effect.Effect<number | null, MemberRefusal, Relay>;
   putSnapshot(base: FoldBase): Effect.Effect<number, Refused, Relay>;
   snapshotIfDue(every?: number): Effect.Effect<number | null, Refused, Relay>;
@@ -49,9 +48,8 @@ export class ChannelSnapshots {
   ) {}
 
   private readonly sealedSnapshot = Effect.gen({ self: this }, function* () {
-    const got = yield* Effect.exit(this.ch.request<{ snapshot: unknown }>("/snapshot"));
-    if (Exit.isFailure(got) || !wellFormedSnapshot(got.value.snapshot)) return null;
-    const s = got.value.snapshot;
+    const { snapshot: s } = yield* this.ch.request<{ snapshot: unknown }>("/snapshot");
+    if (!wellFormedSnapshot(s)) return null;
     yield* this.history.keyFor(s.e);
     return yield* Effect.promise(() => openSnapshot(this.ch.access, s).catch(() => null));
   });

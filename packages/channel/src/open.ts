@@ -35,7 +35,11 @@ export interface Opened {
 export function onceEach(steps: OpenSteps): OpenSteps {
   const memo = <T>(run: () => Promise<T>): (() => Promise<T>) => {
     let kept: Promise<T> | null = null;
-    return () => (kept ??= run());
+    return () =>
+      (kept ??= run().catch((err: unknown) => {
+        kept = null;
+        throw err;
+      }));
   };
   return { ...steps, rotate: memo(steps.rotate), cache: memo(steps.cache), kept: memo(steps.kept), snapshot: memo(steps.snapshot) };
 }
@@ -56,7 +60,7 @@ export function warmUp(steps: OpenSteps, was: Warm | undefined, limit: number): 
     const first = cache?.opened.length ? Math.min(...cache.opened.map((m) => m.seq)) : undefined;
     const base = was?.base ?? kept?.base ?? null;
     const covered = first === 1 || (base !== null && first !== undefined && base.n >= first - 1);
-    if (!covered) void steps.snapshot();
+    if (!covered) void steps.snapshot().catch(() => null);
     if (kept) steps.early(provisional(cache, limit), kept);
   });
 }
@@ -73,11 +77,12 @@ export async function openChannel(steps: OpenSteps, was: Warm | undefined, limit
   const kept = was?.base ? null : await steps.kept();
   const keptBase = usableBase(keptBaseUpTo(kept, head), from);
   const warm = usableBase(was?.base ?? null, from) ?? keptBase;
-  const snap = (from > 0 && !warm) || (warm !== null && olderRules(warm)) ? await steps.snapshot() : null;
+  const partial = was?.partial ? was.base : null;
+  const snap = (from > 0 && !warm) || (warm !== null && (olderRules(warm) || warm === partial)) ? await steps.snapshot() : null;
   const base = newestRules([usableBase(snap, from), keptBase, warm]);
   steps.paint(cached, base, head);
   if (await rotated) await steps.roster();
-  return { head, since, whole: startsWhole(head, limit, since, firstSeq, base ?? warm) };
+  return { head, since, whole: startsWhole(head, limit, since, firstSeq, base === partial ? null : (base ?? warm)) };
 }
 
 export function handOver<T extends { seq: number }>(shown: readonly T[], early: ReadonlySet<number>, planned: readonly T[]): T[] {
