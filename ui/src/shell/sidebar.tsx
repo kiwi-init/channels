@@ -14,6 +14,7 @@ import { between, nickname, onePerPerson, shown } from "~/names"
 import { comingBack, hiddenKey, hiddenPlaces, keptHidden, setHidden } from "~/shell/hidden-places"
 import { leftDirects } from "~/shell/left-directs"
 import { wordsPlain } from "~/words"
+import { t } from "~/i18n/i18n"
 
 const SideCards = later(() => import("~/shell/updates").then((m) => m.SideCards))
 
@@ -57,8 +58,10 @@ export function Sidebar({ channel }: { channel: Channel }) {
   const toggleHidden = () => setShowHidden(!showHidden)
   return (
     <div ref={sideRef} className="side">
-      <section aria-label="Rooms">
-        <Heading action={channel.youOwn || channel.youTrusted ? <IconButton icon="plus" label="New room" onClick={() => go({ to: "dialog", dialog: "new-room" })} /> : undefined}>Rooms</Heading>
+      <section aria-label={t("shell.sidebar.rooms")}>
+        <Heading action={channel.youOwn || channel.youTrusted ? <IconButton icon="plus" label={t("shell.sidebar.new.room")} onClick={() => go({ to: "dialog", dialog: "new-room" })} /> : undefined}>
+          {t("shell.sidebar.rooms")}
+        </Heading>
         <ul>
           {channel.rooms.map((r) => {
             const where = { kind: "room", room: r.id } as const
@@ -70,11 +73,11 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   type="button"
                   className={cx("side-row", on && "is-on", (r.muted ? r.mentions : r.unread) > 0 && "is-news", r.muted && "is-muted")}
                   aria-current={on ? "page" : undefined}
-                  title={r.muted ? `#${r.name} is muted` : undefined}
+                  title={r.muted ? t("shell.sidebar.room.muted", { name: r.name }) : undefined}
                   onClick={() => go({ to: "where", where })}
                   onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go }, actions, on, canLeave, r))}
                 >
-                  <span className="side-hash">{r.members ? <Icon name="people" size={12} label="Members only" /> : "#"}</span>
+                  <span className="side-hash">{r.members ? <Icon name="people" size={12} label={t("shell.sidebar.members.only")} /> : "#"}</span>
                   <span className="side-label">{r.name}</span>
                   <Count n={r.muted ? r.mentions : r.mentions || r.unread} loud={r.mentions > 0} />
                 </button>
@@ -86,8 +89,10 @@ export function Sidebar({ channel }: { channel: Channel }) {
       </section>
 
       {(me || humans.length > 0 || leftPeople.length > 0 || channel.youOwn) && (
-        <section aria-label="People">
-          <Heading action={channel.youOwn ? <IconButton icon="plus" label="Invite people" onClick={() => go({ to: "modal", modal: { kind: "invite" } })} /> : undefined}>People</Heading>
+        <section aria-label={t("shell.sidebar.people")}>
+          <Heading action={channel.youOwn ? <IconButton icon="plus" label={t("shell.sidebar.invite.people")} onClick={() => go({ to: "modal", modal: { kind: "invite" } })} /> : undefined}>
+            {t("shell.sidebar.people")}
+          </Heading>
           <ul>
             {me && <You person={me} />}
             {humans.map((p) => (
@@ -101,7 +106,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
               <li>
                 <button type="button" className={cx("side-row is-add", nav.modal?.kind === "invite" && "is-on")} onClick={() => go({ to: "modal", modal: { kind: "invite" } })}>
                   <Icon name="plus" size={14} />
-                  <span className="side-label">Invite people</span>
+                  <span className="side-label">{t("shell.sidebar.invite.people")}</span>
                 </button>
               </li>
             )}
@@ -109,8 +114,10 @@ export function Sidebar({ channel }: { channel: Channel }) {
         </section>
       )}
 
-      <section aria-label="Agents">
-        <Heading action={agents.length > 0 ? <IconButton icon="plus" label="Add an agent" onClick={() => go({ to: "modal", modal: { kind: "add-agent" } })} /> : undefined}>Agents</Heading>
+      <section aria-label={t("shell.sidebar.agents")}>
+        <Heading action={agents.length > 0 ? <IconButton icon="plus" label={t("shell.sidebar.add.agent")} onClick={() => go({ to: "modal", modal: { kind: "add-agent" } })} /> : undefined}>
+          {t("shell.sidebar.agents")}
+        </Heading>
         <ul>
           {agents.map((p) => (
             <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
@@ -120,17 +127,17 @@ export function Sidebar({ channel }: { channel: Channel }) {
           ))}
           {hiddenAgents > 0 && <HiddenRows count={hiddenAgents} open={showHidden} toggle={toggleHidden} />}
           {theirsShown &&
-            channel.theirs.map((t) => {
-              const where = { kind: "theirs", between: t.between } as const
+            channel.theirs.map((pair) => {
+              const where = { kind: "theirs", between: pair.between } as const
               const on = onChat && sameWhere(nav.where, where)
               return (
-                <li key={t.between.join("&")}>
+                <li key={pair.between.join("&")}>
                   <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "where", where })}>
                     <span className="side-pair">
-                      <Avatar person={memberOf(channel, t.between[0])} size="sm" />
-                      <Avatar person={memberOf(channel, t.between[1])} size="sm" />
+                      <Avatar person={memberOf(channel, pair.between[0])} size="sm" />
+                      <Avatar person={memberOf(channel, pair.between[1])} size="sm" />
                     </span>
-                    <span className="side-label">{between(channel, t.between)}</span>
+                    <span className="side-label">{between(channel, pair.between)}</span>
                   </button>
                 </li>
               )
@@ -139,7 +146,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
             <li>
               <button type="button" className="side-row is-add" aria-expanded={openTheirs} onClick={() => setOpenTheirs(!openTheirs)}>
                 <Icon name={openTheirs ? "down" : "chevron"} size={14} />
-                <span className="side-label">{openTheirs ? "Show less" : `${channel.theirs.length} between others`}</span>
+                <span className="side-label">{openTheirs ? t("shell.sidebar.show.less") : t("shell.sidebar.between.others", { count: channel.theirs.length })}</span>
               </button>
             </li>
           )}
@@ -147,7 +154,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
             <li>
               <button type="button" className={cx("side-row is-add", nav.modal?.kind === "add-agent" && "is-on")} onClick={() => go({ to: "modal", modal: { kind: "add-agent" } })}>
                 <Icon name="plus" size={14} />
-                <span className="side-label">Add an agent</span>
+                <span className="side-label">{t("shell.sidebar.add.agent")}</span>
               </button>
             </li>
           )}
@@ -168,10 +175,10 @@ const rank = (p: Person): number => (liveOf(p) ? 0 : 3) + (p.role === "lead" ? 0
 export function statusOf(p: Person, channel: Channel): string {
   const live = liveOf(p)
   if (live) return live.text
-  const t = taskOf(p, channel)
-  if (t) return `T${t.id} ${STATUS_WORDS[t.status]}`
-  if (p.presence === "offline") return `offline · ${ago(p.lastSeen)}`
-  if (p.kind === "human") return p.presence === "away" ? "away" : "online"
+  const task = taskOf(p, channel)
+  if (task) return `T${task.id} ${STATUS_WORDS[task.status]}`
+  if (p.presence === "offline") return t("shell.sidebar.offline.ago", { ago: ago(p.lastSeen) })
+  if (p.kind === "human") return p.presence === "away" ? t("shell.sidebar.away") : t("shell.sidebar.online")
   return restOf(p)
 }
 
@@ -182,7 +189,7 @@ function HiddenRows({ count, open, toggle }: { count: number; open: boolean; tog
     <li>
       <button type="button" className="side-row is-add" aria-expanded={open} onClick={toggle}>
         <Icon name={open ? "down" : "chevron"} size={14} />
-        <span className="side-label">{open ? "Show less" : `${count} hidden`}</span>
+        <span className="side-label">{open ? t("shell.sidebar.show.less") : t("shell.sidebar.hidden", { count })}</span>
       </button>
     </li>
   )
@@ -201,13 +208,13 @@ function Former({ channel, direct }: { channel: Channel; direct: Direct }) {
         type="button"
         className={cx("side-row", agent && "side-member is-off", on && "is-on", direct.unread > 0 && "is-news")}
         aria-current={on ? "page" : undefined}
-        title={agent ? "Left the channel" : undefined}
+        title={agent ? t("shell.sidebar.left.channel") : undefined}
         onClick={() => go({ to: "where", where })}
         onContextMenu={(e) => showMenu(e, nickname(channel, direct.with), (x) => x.directGroups({ channel, go }, actions, on, direct, who))}
       >
         <Avatar person={who} size="sm" />
         <span className={agent ? "side-name" : "side-label"}>{nickname(channel, direct.with)}</span>
-        {agent && <span className="side-state">left</span>}
+        {agent && <span className="side-state">{t("shell.sidebar.left")}</span>}
         <Count n={direct.unread} loud />
       </button>
     </li>
@@ -218,10 +225,10 @@ function You({ person }: { person: Person }) {
   const { go } = useApp()
   return (
     <li>
-      <button type="button" className="side-row side-member" title="Your profile" onClick={() => go({ to: "modal", modal: { kind: "person", name: person.name } })}>
+      <button type="button" className="side-row side-member" title={t("shell.sidebar.your.profile")} onClick={() => go({ to: "modal", modal: { kind: "person", name: person.name } })}>
         <Avatar person={person} size="sm" pip />
         <span className="side-name">{shown(person)}</span>
-        <span className="side-state">you</span>
+        <span className="side-state">{t("shell.sidebar.you")}</span>
       </button>
     </li>
   )
@@ -245,14 +252,14 @@ function Member({ person, channel, direct }: { person: Person; channel: Channel;
         title={task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)} · ${statusOf(person, channel)}` : statusOf(person, channel)}
         onClick={() => go({ to: "where", where })}
         onContextMenu={(e) =>
-          showMenu(e, shown(person), (x) => [unread > 0 ? [{ label: "Mark as read", run: () => actions.markRead(channel.code, where) }] : [], x.personItems({ channel, go }, person)])
+          showMenu(e, shown(person), (x) => [unread > 0 ? [{ label: t("shell.sidebar.mark.read"), run: () => actions.markRead(channel.code, where) }] : [], x.personItems({ channel, go }, person)])
         }
       >
         <Avatar person={person} size="sm" pip />
         <span className="side-name">{shown(person)}</span>
         {agent && (
           <span key={live?.text} className="side-state">
-            {live ? (live.busy ? live.text : "needs a person") : person.presence === "offline" ? "offline" : "idle"}
+            {live ? (live.busy ? live.text : t("shell.sidebar.needs.person")) : person.presence === "offline" ? t("shell.sidebar.offline") : t("shell.sidebar.idle")}
           </span>
         )}
         <Count n={unread} loud />

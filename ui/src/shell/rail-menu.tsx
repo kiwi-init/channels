@@ -1,8 +1,10 @@
+import "~/i18n/en/shell-later"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 
 import type { Folder } from "~/model"
 import { useAct, useApp } from "~/nav"
 import { dropOn, FOLDER_NAME, newFolderId, renamed, ungrouped } from "~/shell/folders"
+import { t } from "~/i18n/i18n"
 
 export type Menu = { kind: "folder"; id: string; top: number } | { kind: "channel"; code: string; top: number }
 
@@ -38,7 +40,13 @@ export default function RailMenu({ menu, folders, title, save, close }: { menu: 
   }
   const holder = menu.kind === "channel" ? folders.find((f) => f.codes.includes(menu.code)) : undefined
   return (
-    <div ref={box} className="rail-menu" role="menu" aria-label={folder ? `${folder.name} folder` : menu.kind === "channel" ? title(menu.code) : "Folder"} style={{ top: menu.top }}>
+    <div
+      ref={box}
+      className="rail-menu"
+      role="menu"
+      aria-label={folder ? t("shell.rail.menu.folder.named", { name: folder.name }) : menu.kind === "channel" ? title(menu.code) : t("shell.rail.menu.folder")}
+      style={{ top: menu.top }}
+    >
       {menu.kind === "folder" && folder && (
         <>
           <form
@@ -49,12 +57,12 @@ export default function RailMenu({ menu, folders, title, save, close }: { menu: 
             }}
           >
             <label>
-              <span>Folder name</span>
+              <span>{t("shell.rail.menu.folder.name")}</span>
               <input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
             </label>
           </form>
           <button type="button" role="menuitem" onClick={() => act(ungrouped(folders, folder.id))}>
-            Ungroup
+            {t("shell.rail.menu.ungroup")}
           </button>
         </>
       )}
@@ -67,23 +75,23 @@ export default function RailMenu({ menu, folders, title, save, close }: { menu: 
             close()
           }}
         >
-          {muted ? "Unmute channel" : "Mute channel"}
+          {muted ? t("shell.rail.menu.unmute") : t("shell.rail.menu.mute")}
         </button>
       )}
       {menu.kind === "channel" &&
         (holder ? (
           <button type="button" role="menuitem" onClick={() => act(dropOn(folders, menu.code, { kind: "rail" }, newFolderId))}>
-            Take out of {holder.name}
+            {t("shell.rail.menu.take.out", { name: holder.name })}
           </button>
         ) : (
           <>
             {folders.map((f) => (
               <button key={f.id} type="button" role="menuitem" onClick={() => act(dropOn(folders, menu.code, { kind: "folder", id: f.id }, newFolderId))}>
-                Add to {f.name}
+                {t("shell.rail.menu.add.to", { name: f.name })}
               </button>
             ))}
             <button type="button" role="menuitem" onClick={() => act([...folders, { id: newFolderId(), name: FOLDER_NAME, codes: [menu.code], open: true }])}>
-              New folder
+              {t("shell.rail.menu.new.folder")}
             </button>
           </>
         ))}

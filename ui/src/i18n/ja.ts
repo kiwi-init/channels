@@ -2,13 +2,21 @@ import type { Catalog } from "~/i18n/i18n"
 import chatCompose from "~/i18n/ja/chat-compose"
 import chatFeed from "~/i18n/ja/chat-feed"
 import specs from "~/i18n/ja/specs"
+import modals from "~/i18n/ja/modals"
+import needs from "~/i18n/ja/needs"
+import shell from "~/i18n/ja/shell"
+import github from "~/i18n/ja/github"
 
-export const covers = ["chat.", "settings.language.", "specs.", "tasks.", "usage."]
+export const covers = ["chat.", "github.", "kit.", "modals.", "needs.", "palette.", "panels.", "settings.language.", "shell.", "specs.", "start.", "tasks.", "usage."]
 
 export default {
   ...chatCompose,
   ...chatFeed,
   ...specs,
+  ...modals,
+  ...needs,
+  ...shell,
+  ...github,
   "settings.language": "言語",
   "settings.language.system": "システム",
   "usage.today": "今日のメッセージ",

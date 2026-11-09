@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import type { CSSProperties } from "react"
 
 import { cx } from "~/kit/bits"
@@ -5,6 +6,7 @@ import { Icon } from "~/kit/icons"
 import type { ChannelTile, Folder } from "~/model"
 import { folderNews } from "~/shell/folders"
 import { Face } from "~/shell/rail"
+import { t } from "~/i18n/i18n"
 
 export default function FolderTile({
   folder,
@@ -23,9 +25,15 @@ export default function FolderTile({
 }) {
   const news = folderNews(tiles, on)
   const shut = !folder.open
-  const label = [`${folder.name} folder`, `${tiles.length} channels`, news.needsYou ? `${news.needsYou} need you` : "", news.unread ? "new messages" : "", shut ? "closed" : "open"]
+  const label = [
+    t("shell.rail.folder.named", { name: folder.name }),
+    t("shell.rail.folder.channels", { count: tiles.length }),
+    news.needsYou ? t("shell.rail.folder.need.you", { count: news.needsYou }) : "",
+    news.unread ? t("shell.rail.folder.new.messages") : "",
+    shut ? t("shell.rail.folder.closed") : t("shell.rail.folder.open"),
+  ]
     .filter(Boolean)
-    .join(", ")
+    .join(t("shell.rail.folder.sep"))
   return (
     <button
       type="button"
@@ -38,9 +46,9 @@ export default function FolderTile({
     >
       {shut ? (
         <span className="folder-grid" aria-hidden="true">
-          {tiles.slice(0, 4).map((t, i) => (
-            <span key={t.code} className="folder-mini" style={{ "--i": i } as CSSProperties}>
-              <Face tile={t} />
+          {tiles.slice(0, 4).map((mini, i) => (
+            <span key={mini.code} className="folder-mini" style={{ "--i": i } as CSSProperties}>
+              <Face tile={mini} />
             </span>
           ))}
         </span>
