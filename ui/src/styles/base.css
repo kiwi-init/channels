@@ -1232,6 +1232,12 @@ html .md {
   font: var(--t-ui) / 1.6 var(--ui);
 }
 
+.crash-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 @keyframes dialog-in {
   from {
     opacity: 0;

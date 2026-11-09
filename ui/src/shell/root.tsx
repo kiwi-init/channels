@@ -1,7 +1,7 @@
 import { Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 
-import { useLanguage } from "~/i18n/i18n"
-import { Boundary } from "~/kit/boundary"
+import { t, useLanguage } from "~/i18n/i18n"
+import { Boundary, Crashed } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
@@ -25,7 +25,11 @@ const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRo
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 const LimitDialog = later(() => import("~/usage/limit").then((m) => m.LimitDialog))
 
-export function Root(props: { app: App; nav: Nav; go: (go: Go) => void }) {
+export type Broken = { channel: boolean; retry: () => void }
+
+type RootProps = { app: App; nav: Nav; go: (go: Go) => void; broken?: Broken }
+
+export function Root(props: RootProps) {
   const { lang } = useLanguage()
   return (
     <Fragment key={lang}>
@@ -34,7 +38,7 @@ export function Root(props: { app: App; nav: Nav; go: (go: Go) => void }) {
   )
 }
 
-function Shown({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
+function Shown({ app, nav, go, broken }: RootProps) {
   const [toasts, toast, dismissToast] = useToasts()
   const ctx = useMemo(() => ({ app, nav, go, toast }), [app, nav, go, toast])
   const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])
@@ -66,6 +70,17 @@ function Shown({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
               <Suspense fallback={null}>
                 <Settings />
               </Suspense>
+            ) : broken ? (
+              <Crashed title={t(broken.channel ? "kit.boundary.channel.title" : "kit.boundary.view.title")} sub={t("kit.boundary.retry.sub")}>
+                <button type="button" className="btn is-primary" onClick={broken.retry}>
+                  {t("kit.boundary.retry")}
+                </button>
+                {broken.channel && (
+                  <button type="button" className="btn" onClick={() => go({ to: "home" })}>
+                    {t("kit.boundary.home")}
+                  </button>
+                )}
+              </Crashed>
             ) : app.channel ? (
               <ChannelScreen key={app.channel.code} channel={app.channel} />
             ) : (
