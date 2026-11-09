@@ -5,16 +5,24 @@ import { useEffect, useMemo, useRef, useState, type AnimationEvent } from "react
 import { hideAfk } from "~/afk/wait"
 import { MapView } from "~/afk/map"
 import type { Meadow } from "~/afk/meadow"
-import { afkRows } from "~/afk/rows"
+import { afkRows, withOpened } from "~/afk/rows"
 import { useStill } from "~/afk/settle"
+import { homeOf, saidIn } from "~/home"
 import { cx } from "~/kit/bits"
+import type { App } from "~/model"
 import { useApp } from "~/nav"
 
 const SWALLOWED = ["keydown", "keyup", "wheel", "pointerdown", "contextmenu"] as const
 
+function useAfkHome(app: App) {
+  const opened = useMemo(() => (app.channel ? homeOf(app.channel, saidIn(app.channel.messages)) : null), [app.channel])
+  return useMemo(() => withOpened(app.home, opened), [opened, app.home])
+}
+
 export function Afk() {
   const { app, go } = useApp()
-  const rows = useMemo(() => afkRows(app.channels, app.home), [app.channels, app.home])
+  const home = useAfkHome(app)
+  const rows = useMemo(() => afkRows(app.channels, home), [app.channels, home])
   const still = useStill()
   const [leaving, setLeaving] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -84,7 +92,7 @@ export function Afk() {
   return (
     <div ref={box} className={cx("afk", leaving && "is-leaving")} role="dialog" aria-modal="true" aria-label="AFK" tabIndex={-1} onAnimationEnd={ended}>
       <div ref={stage} className="afk-back" aria-hidden="true" />
-      <MapView open={open} />
+      <MapView home={home} open={open} />
     </div>
   )
 }

@@ -31,3 +31,7 @@ export function afkRows(tiles: readonly ChannelTile[], home: readonly HomeChanne
     .slice(0, SHOWN)
     .map(({ t }) => ({ code: t.code, title: t.title, needs: t.needsYou, line: lineOf(byCode.get(t.code)) }))
 }
+
+export function withOpened(home: readonly HomeChannel[], opened: HomeChannel | null): readonly HomeChannel[] {
+  return opened ? [opened, ...home.filter((h) => h.code !== opened.code)] : home
+}
