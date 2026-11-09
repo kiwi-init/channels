@@ -17,6 +17,7 @@ import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer, useTall } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
+import { setUpdatesSlot } from "~/chat/updates-slot"
 import { useSideways } from "~/kit/sideways"
 import { openTasks } from "~/tasks/open"
 import { headerLine } from "~/now"
@@ -219,6 +220,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             </div>
           )}
           <div className="top-group">
+            <span className="top-updates" ref={setUpdatesSlot} />
             <IconButton icon="search" label="Search this channel (⌘F)" onClick={() => setSearching(true)} />
           </div>
         </div>
