@@ -733,3 +733,25 @@ html .set-body {
 .modal .set-group-hint {
   margin-bottom: 4px;
 }
+
+.set-select {
+  position: relative;
+  display: block;
+  width: 11rem;
+}
+
+.set-select select {
+  appearance: none;
+  width: 100%;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+.set-select .icon {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: var(--ink-2);
+  transform: translateY(-50%);
+  pointer-events: none;
+}

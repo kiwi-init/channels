@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import { cx } from "~/kit/bits"
 import { OutsideLink } from "~/kit/outside"
 import type { Usage } from "~/model"
+import { t } from "~/i18n/i18n"
 import { useApp } from "~/nav"
 import { showLimit, useUsage } from "~/usage/store"
 import { canUpgrade, levelOf, planName, resetsIn, seemsUnlimited, shareOf, upgradeLabel, usageHint, usedOf, utcDay } from "~/usage/words"
@@ -67,16 +68,16 @@ export function UsageMeter() {
     }
   }, [open])
   if (!usage || usage.limit === null || seemsUnlimited(usage)) return null
-  const label = `Messages today: ${usedOf(usage)}`
+  const label = t("usage.today.label", { used: usedOf(usage) })
   return (
     <>
       <button ref={button} type="button" className={cx("rail-usage", open && "is-on")} aria-label={label} title={label} aria-expanded={open} onClick={() => setOpen(!open)}>
         <Ring usage={usage} />
       </button>
       {at && (
-        <div ref={card} className="usage-card" role="dialog" aria-label="Messages today" style={{ left: at.right + 8, bottom: window.innerHeight - at.bottom }}>
+        <div ref={card} className="usage-card" role="dialog" aria-label={t("usage.today")} style={{ left: at.right + 8, bottom: window.innerHeight - at.bottom }}>
           <div className="usage-card-head">
-            <span>Messages today</span>
+            <span>{t("usage.today")}</span>
             <span className="usage-card-plan">{planName(usage)}</span>
           </div>
           <div className="usage-card-count">
@@ -93,7 +94,7 @@ export function UsageMeter() {
                 go({ to: "settings", section: "account" })
               }}
             >
-              Account
+              {t("usage.account")}
             </button>
             {canUpgrade(usage) && usage.upgradeUrl && (
               <OutsideLink className="btn is-small is-primary" href={usage.upgradeUrl}>
