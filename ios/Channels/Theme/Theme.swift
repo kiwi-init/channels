@@ -75,6 +75,12 @@ enum Palette {
         "pink": 0xf2559a,
         "brown": 0xb08463,
     ]
+
+    static func tint(for key: String) -> String {
+        let names = fills.keys.sorted()
+        let hash = key.unicodeScalars.reduce(UInt(5381)) { $0 &* 33 &+ UInt($1.value) }
+        return names[Int(hash % UInt(names.count))]
+    }
 }
 
 enum Radius {

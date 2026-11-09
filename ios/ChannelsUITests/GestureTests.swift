@@ -14,7 +14,7 @@ struct Screen {
     }
 
     func enter(after wait: Duration) async throws {
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'channels-dev'")).firstMatch
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 30), "the channel list never showed")
         try await Task.sleep(for: .seconds(1))
         row.tap()
@@ -113,18 +113,6 @@ final class GestureTests: XCTestCase {
     func testDragStartingBesideTheBubblesScrolls() async throws {
         let moved = try await drags(onBubble: false)
         XCTAssertTrue(moved.allSatisfy { $0 > 100 }, "a 200 pt drag beside the bubbles moved the chat \(moved) pt")
-    }
-
-    @MainActor
-    func testSwipingABubbleRightReplies() async throws {
-        let screen = try Screen.list()
-        try await screen.enter(after: .milliseconds(800))
-        let window = screen.window
-        screen.drag(from: CGPoint(x: window.width * 0.3, y: window.height * 0.42), by: CGVector(dx: 160, dy: 4), hold: 0.2)
-        let any = screen.app.descendants(matching: .any)
-        let reply = any.matching(NSPredicate(format: "placeholderValue BEGINSWITH 'Reply to'")).firstMatch
-        XCTAssertTrue(reply.waitForExistence(timeout: 3), "swiping a bubble right didn't start a reply")
-        XCTAssertTrue(any.matching(NSPredicate(format: "label == 'Back'")).firstMatch.exists, "swiping a bubble right left the conversation")
     }
 
     @MainActor

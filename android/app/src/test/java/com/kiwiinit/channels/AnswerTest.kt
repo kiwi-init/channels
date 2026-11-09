@@ -15,7 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.kiwiinit.channels.theme.ChannelsTheme
-import com.kiwiinit.channels.ui.DetailsScreen
+import com.kiwiinit.channels.ui.NeedsList
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -55,7 +55,7 @@ class AnswerTest {
         val model = sample(RuntimeEnvironment.getApplication())
         compose.setContent {
             ChannelsTheme {
-                Surface(Modifier.fillMaxSize()) { DetailsScreen(model, DEV, "main", back = {}, choose = {}) }
+                Surface(Modifier.fillMaxSize()) { NeedsList(model) }
             }
         }
         compose.waitForIdle()

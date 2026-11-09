@@ -39,7 +39,7 @@ class UnseenTest {
         compose.setContent {
             ChannelsTheme {
                 Surface(Modifier.fillMaxSize()) {
-                    ConversationScreen(model, Spot(DEV), chosen = null, consumeChosen = {}, back = {}, details = {})
+                    ConversationScreen(model, Spot(DEV), back = {})
                 }
             }
         }

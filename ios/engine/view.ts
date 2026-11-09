@@ -1,8 +1,8 @@
-import { ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
-import { rootOf } from "@kiwi/core/room-rules.ts";
+import { GENERAL_ROOM, ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
+import { personOf, rootOf, sentTo, type Seat } from "@kiwi/core/room-rules.ts";
 import { answersDecisions, decidersOf, dmPlace, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
-import { inGeneral } from "@kiwi/core/state/places.ts";
-import type { FoldMember } from "@kiwi/core/state/types.ts";
+import { roomOfMessage } from "@kiwi/core/state/rooms.ts";
+import type { FoldMember, Room } from "@kiwi/core/state/types.ts";
 
 import { askLabel, asksFor, chosenOf, heldAsks } from "@kiwi/app/asks.ts";
 import { avatarIndex } from "@kiwi/app/avatar-pick.ts";
@@ -62,13 +62,41 @@ function memberView(m: FoldMember, state: ChannelState, online: ReadonlyMap<stri
     harness,
     mono: harness !== null && monoHarness(harness),
     doing: [...state.tasks.values()].filter((t) => t.owner === m.name && t.state === "doing").map((t) => t.id),
+    person: personOf(m, [...state.members.values()]),
   };
 }
 
+const ROOM_KEY = /^room:(.+)$/;
+
+export const isRoomKey = (key: string): boolean => ROOM_KEY.test(key);
+
+const roomKey = (id: string): string => `room:${id}`;
+
+interface Seen {
+  rooms: ReadonlyMap<string, Room>;
+  members: ReadonlyMap<string, Seat>;
+}
+
+export function roomsFor(state: Seen, me: string): Room[] {
+  return [...state.rooms.values()].filter((r) => r.id !== GENERAL_ROOM && !r.dm && !r.self && sentTo(r, me, state.members));
+}
+
+export const roomKeysFor = (state: Seen, me: string): string[] => roomsFor(state, me).map((r) => roomKey(r.id));
+
+export function roomOfKey(state: Seen, me: string, key: string): Room | null {
+  const id = ROOM_KEY.exec(key)?.[1];
+  return id ? (roomsFor(state, me).find((r) => r.id === id) ?? null) : null;
+}
+
+function spotOf(state: Pick<ChannelState, "placeOf" | "roomOf">, m: Pick<Message, "seq" | "room">): string {
+  const place = state.placeOf.get(m.seq) ?? MAIN;
+  if (place.kind !== "main") return placeKey(place);
+  const room = roomOfMessage(state, m);
+  return room === GENERAL_ROOM ? "main" : roomKey(room);
+}
+
 function shownIn(m: Message, state: ChannelState, key: string): boolean {
-  const here = key === placeKey(MAIN) ? inGeneral(state, m.seq) : placeKey(state.placeOf.get(m.seq) ?? MAIN) === key;
-  if (!here) return false;
-  return !isQuiet(m) && !ignored(state.trust.get(m.seq));
+  return spotOf(state, m) === key && !isQuiet(m) && !ignored(state.trust.get(m.seq));
 }
 
 export function leadChatKey(state: Pick<ChannelState, "lead" | "members">, me: string): string | null {
@@ -87,7 +115,9 @@ export function roomView(r: RoomInput): RoomView {
     answersDecisions(state.members, me),
   );
   const waiting = new Set([...decisions, ...escalations].map((m) => m.seq));
-  const here = placeFromKey(r.place) ? r.place : "main";
+  const root = rootOf(me, state.members);
+  const myself = (name: string) => name === me || rootOf(name, state.members) === root;
+  const here = placeFromKey(r.place) || roomOfKey(state, me, r.place) ? r.place : "main";
   const visible = r.messages.filter((m) => shownIn(m, state, here));
   const general = here === "main" ? visible : r.messages.filter((m) => shownIn(m, state, "main"));
   const shown = visible.slice(-SHOWN);
@@ -109,7 +139,7 @@ export function roomView(r: RoomInput): RoomView {
       shown: said(m.body),
       plain: plain(m.body),
       event: m.kind === "event",
-      mine: m.from === me,
+      mine: myself(m.from),
       quote: quoted && quoted.kind !== "event" ? { seq: quoted.seq, from: quoted.from, words: oneLine(plain(quoted.body), QUOTE_CHARS) } : null,
       choices: m.choices ?? [],
       chosen: chosen ? { choice: chosen.choice, by: chosen.by } : null,
@@ -121,30 +151,51 @@ export function roomView(r: RoomInput): RoomView {
   };
 
   const messages = shown.map((m, i) => messageView(m, i > 0 ? shown[i - 1] : visible[visible.length - shown.length - 1]));
-  const root = rootOf(me, state.members);
   const sideKey = leadChatKey(state, me);
   const sideAll = sideKey ? r.messages.filter((m) => shownIn(m, state, sideKey)) : [];
   const sideShown = sideAll.slice(-SHOWN);
   const side = sideShown.map((m, i) => messageView(m, i > 0 ? sideShown[i - 1] : sideAll[sideAll.length - sideShown.length - 1]));
   const lastChat = general.findLast((m) => m.kind !== "event");
   const lastIn = new Map<string, Message>();
+  const countIn = new Map<string, number>();
   for (const m of r.messages) {
     if (m.kind === "event" || isQuiet(m) || ignored(state.trust.get(m.seq))) continue;
-    lastIn.set(placeKey(state.placeOf.get(m.seq) ?? MAIN), m);
+    const key = spotOf(state, m);
+    lastIn.set(key, m);
+    countIn.set(key, (countIn.get(key) ?? 0) + 1);
   }
   const nameOf = (name: string) => state.members.get(name)?.display ?? name;
-  const keyOf = (m: Message) => placeKey(state.placeOf.get(m.seq) ?? MAIN);
+  const keyOf = (m: Message) => spotOf(state, m);
+  const roomKeys = roomKeysFor(state, me);
   const latest = lastPreview(
     r.messages.filter((m) => keyOf(m) !== sideKey),
     (seq) => state.trust.get(seq),
   );
   const latestIn = latest ? keyOf(latest) : "main";
-  const rank = (key: string) => (key === "main" ? 0 : key === sideKey ? 1 : 2);
+  const rank = (key: string) => (key === "main" ? 0 : key === sideKey ? 1 : isRoomKey(key) ? 2 : 3);
+  const roomPlace = (key: string): PlaceView | null => {
+    const room = roomOfKey(state, me, key);
+    if (!room) return null;
+    const last = lastIn.get(key);
+    return {
+      key,
+      kind: "room",
+      title: room.name,
+      with: [],
+      withMe: true,
+      task: null,
+      lastSeq: last?.seq ?? 0,
+      last: last ? messageView(last, undefined) : null,
+      count: countIn.get(key) ?? 0,
+      done: false,
+    };
+  };
   const placeView = (key: string): PlaceView | null => {
+    if (isRoomKey(key)) return roomPlace(key);
     const p = placeFromKey(key);
     if (!p || (p.kind === "task" && key !== here && state.tasks.get(p.task)?.archived)) return null;
     const last = lastIn.get(key);
-    const summary = state.places.get(key);
+    const summary = p.kind === "main" ? undefined : state.places.get(key);
     const withMe = p.kind !== "dm" || p.with.includes(root);
     const title =
       p.kind === "main"
@@ -152,7 +203,7 @@ export function roomView(r: RoomInput): RoomView {
         : p.kind === "task"
           ? `${taskId(p.task)} ${state.tasks.get(p.task)?.title ?? ""}`.trim()
           : withMe
-            ? nameOf(p.with.find((n) => n !== me) ?? me)
+            ? nameOf(p.with.find((n) => n !== root) ?? root)
             : p.with.map(nameOf).join(" & ");
     return {
       key,
@@ -163,12 +214,12 @@ export function roomView(r: RoomInput): RoomView {
       task: p.kind === "task" ? p.task : null,
       lastSeq: summary?.last ?? last?.seq ?? 0,
       last: last ? messageView(last, undefined) : null,
-      count: summary?.count ?? 0,
+      count: summary?.count ?? countIn.get(key) ?? 0,
       done: p.kind === "task" && (!!summary?.done || state.tasks.get(p.task)?.state === "done"),
     };
   };
   const others = [...state.places.keys(), ...lastIn.keys()].filter((k) => k !== "main" && k !== sideKey);
-  const placeKeys = ["main", ...(sideKey ? [sideKey] : []), ...(here !== "main" ? [here] : []), ...others];
+  const placeKeys = ["main", ...(sideKey ? [sideKey] : []), ...roomKeys, ...(here !== "main" ? [here] : []), ...others];
   const places = [...new Set(placeKeys)]
     .flatMap((k) => {
       const v = placeView(k);
@@ -201,7 +252,7 @@ export function roomView(r: RoomInput): RoomView {
       label: askLabel(m, me),
       choices: m.choices ?? [],
       task: place?.kind === "task" ? place.task : null,
-      place: placeKey(place ?? MAIN),
+      place: spotOf(state, m),
     };
   });
 
@@ -219,6 +270,7 @@ export function roomView(r: RoomInput): RoomView {
     title: r.title,
     icon: iconView(r.icon, r.title),
     me,
+    root,
     isOwner: r.isOwner,
     connection: r.connection,
     gone: r.gone,

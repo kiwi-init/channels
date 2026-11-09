@@ -109,7 +109,7 @@ extension RoomView {
     }
 
     func asks(in key: String) -> [AskView] {
-        key == sideKey ? asks.filter { $0.place == key } : asks.filter { $0.place != sideKey }
+        key == "main" ? asks.filter { $0.place != sideKey } : asks.filter { $0.place == key }
     }
 
     func elsewhere() -> [AskView] {
@@ -124,8 +124,23 @@ extension RoomView {
     }
 
     func spotTitle(_ key: String) -> String {
-        guard key != "main", let lead else { return title }
-        return display(lead)
+        guard key != "main" else { return title }
+        if key == sideKey, let lead { return display(lead) }
+        if let title = placeView(key)?.title { return title }
+        if let id = taskIn(key) { return "\(taskLabel(id)) \(tasks.first { $0.id == id }?.title ?? "")".trimmingCharacters(in: .whitespaces) }
+        if let other = dmWith(key) { return display(other) }
+        return title
+    }
+
+    func taskIn(_ key: String) -> Int? {
+        key.hasPrefix("task:") ? Int(key.dropFirst(5)) : nil
+    }
+
+    func dmWith(_ key: String) -> String? {
+        guard key.hasPrefix("dm:") else { return nil }
+        let pair = key.dropFirst(3).split(separator: "~").map(String.init)
+        guard pair.count == 2, pair.contains(where: isMe) else { return nil }
+        return pair.first { !isMe($0) }
     }
 }
 
@@ -162,28 +177,13 @@ extension AppModel {
 
     var waiting: Int { channels.reduce(0) { $0 + $1.asks.count + $1.reviews.count + $1.open.count } }
 
-    func isPinned(_ spot: Spot) -> Bool { pinned.contains(spot.id) }
-
-    func togglePin(_ spot: Spot) {
-        if isPinned(spot) {
-            pinned.removeAll { $0 == spot.id }
-        } else {
-            pinned.append(spot.id)
-        }
-        UserDefaults.standard.set(pinned, forKey: "pinned")
-    }
-
-    func pins() -> [Row] {
-        let all = rows(.all)
-        return pinned.compactMap { id in all.first { $0.id == id } }
-    }
-
     func unread(_ spot: Spot) -> Bool {
         guard let room = rooms[spot.code] else { return false }
         return fresh(room, spot.place)
     }
 
     func markRead(_ spot: Spot) {
+        keptUnread.remove(spot.id)
         guard let room = rooms[spot.code], let top = room.placeView(spot.place)?.lastSeq else { return }
         if spot.general {
             guard top > (seen[spot.code] ?? 0) else { return }
@@ -196,8 +196,14 @@ extension AppModel {
         }
     }
 
+    func canMarkUnread(_ spot: Spot) -> Bool {
+        guard let last = rooms[spot.code]?.placeView(spot.place)?.last else { return false }
+        return !last.mine
+    }
+
     func markUnread(_ spot: Spot) {
-        guard let room = rooms[spot.code], let last = room.placeView(spot.place)?.last, !last.mine else { return }
+        guard canMarkUnread(spot), let last = rooms[spot.code]?.placeView(spot.place)?.last else { return }
+        keptUnread.insert(spot.id)
         if spot.general {
             seen[spot.code] = last.seq - 1
             UserDefaults.standard.set(seen, forKey: "seen")
@@ -214,13 +220,7 @@ extension AppModel {
     func shown(_ spot: Spot) -> RoomView? {
         guard let room = rooms[spot.code] else { return nil }
         if spot.place == room.sideKey { return room.showing(spot.place, Feed(messages: room.side ?? [], whole: room.whole)) }
-        return room.place == "main" ? room : room.showing("main", feeds[spot.id])
-    }
-
-    func visit(_ spot: Spot) {
-        visited.removeAll { $0 == spot }
-        visited.insert(spot, at: 0)
-        if visited.count > 12 { visited.removeLast() }
+        return room.place == spot.place ? room : room.showing(spot.place, feeds[spot.id])
     }
 
     func post(_ spot: Spot, _ body: String, re: Int?) {
@@ -242,11 +242,15 @@ extension AppModel {
     private func deliver(_ item: Pending, _ spot: Spot) {
         Task {
             do {
-                let seq = try await send(spot, item.body, re: item.re)
-                sentAs[seq] = item.id
+                guard let seq = try await send(spot, item.body, re: item.re) else {
+                    pending[spot.id]?.removeAll { $0.id == item.id }
+                    return
+                }
+                sentAs[spot.code, default: [:]][seq] = item.id
                 if let at = pending[spot.id]?.firstIndex(where: { $0.id == item.id }) { pending[spot.id]?[at].seq = seq }
                 settle(spot.code)
             } catch {
+                Trouble.note("send", error)
                 if let at = pending[spot.id]?.firstIndex(where: { $0.id == item.id }) { pending[spot.id]?[at].failed = true }
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
             }

@@ -4,7 +4,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 
-import { roomView } from "../ios/engine/view.ts";
+import { roomsFor, roomView, type RoomInput } from "../ios/engine/view.ts";
 import type { RoomView } from "../ios/engine/wire.ts";
 
 const T0 = 1_700_000_000_000;
@@ -27,7 +27,11 @@ const say = (from: string, body: string, more: Partial<Draft> = {}): Draft => ({
 const ev = (from: string, e: Event): Draft => ({ from, kind: "event", body: "", ev: e });
 
 function view(log: Message[], me: string): RoomView {
-  return roomView({
+  return roomView(inputOf(log, me));
+}
+
+function inputOf(log: Message[], me: string): RoomInput {
+  return {
     code: "code",
     title: "channels-dev",
     icon: null,
@@ -42,7 +46,7 @@ function view(log: Message[], me: string): RoomView {
     state: fold(log, roster, T0 + log.length * 60_000),
     online: new Map(),
     place: "main",
-  });
+  };
 }
 
 beforeAll(async () => {
@@ -114,6 +118,34 @@ describe("the phone's room view", () => {
     const room = view(await signedLog([say("lead", "Board is up."), say("jow", "thanks")]), "jow");
     expect(room.latest?.body).toBe("thanks");
     expect(room.latestIn).toBe("main");
+  });
+});
+
+describe("one person, several seats", () => {
+  test("a person's desktop and phone seats share a person; an agent is its own", async () => {
+    const phone = await generateIdentity("jow-2");
+    const people: Roster = [...roster, { name: "jow-2", pk: phone.pk, owner: false, at: 0, active: true, kind: "human", sponsor: { name: "Jow", handle: "jow", user: "u1" } }];
+    const log = await signedLog([say("lead", "hi")]);
+    const room = roomView({
+      code: "code",
+      title: "c",
+      icon: null,
+      me: "jow-2",
+      isOwner: false,
+      connection: "live",
+      gone: null,
+      error: null,
+      head: log.length,
+      whole: true,
+      messages: log,
+      state: fold(log, people, T0 + 60_000),
+      online: new Map(),
+      place: "main",
+    });
+    const person = (name: string) => room.members.find((m) => m.name === name)?.person;
+    expect(person("jow")).toBe("person:u1");
+    expect(person("jow-2")).toBe("person:u1");
+    expect(person("lead")).not.toBe(person("dev"));
   });
 });
 
@@ -199,5 +231,70 @@ describe("a phone on a second seat of its person (T1372)", () => {
     roster = was;
     expect(side?.key).toBe("dm:jow~lead");
     expect(side?.lastSeq).toBe(2);
+  });
+
+  test("its DMs are titled with the other side and the desktop's words read as its own", async () => {
+    ids["jow-2"] ??= await generateIdentity("jow-2");
+    const sponsor = { user: "p-jow", name: "Jow", handle: "jow" };
+    const was = roster;
+    roster = [{ ...was[0]!, sponsor }, { name: "jow-2", pk: ids["jow-2"]!.pk, owner: false, at: 0, active: true, kind: "human", sponsor }, ...was.slice(1)];
+    const log = await signedLog([say("lead", "Only for you.", { to: ["jow"], dm: true }), say("jow", "From the Mac.", { to: ["lead"], dm: true })]);
+    const room = roomView({
+      code: "code",
+      title: "c",
+      icon: null,
+      me: "jow-2",
+      isOwner: false,
+      connection: "live",
+      gone: null,
+      error: null,
+      head: log.length,
+      whole: true,
+      messages: log,
+      state: fold(log, roster, T0 + log.length * 60_000),
+      online: new Map(),
+      place: "dm:jow~lead",
+    });
+    roster = was;
+    expect(room.root).toBe("jow");
+    expect(room.places.find((p) => p.key === "dm:jow~lead")?.title).toBe("lead");
+    expect(room.messages.map((m) => [m.from, m.mine])).toEqual([
+      ["lead", false],
+      ["jow", true],
+    ]);
+  });
+});
+
+describe("named rooms on the phone (#437)", () => {
+  test("each room you're in is a place of its own, and #general leaves room messages out", async () => {
+    const log = await signedLog([ev("jow", { op: "room.create", id: "design01", name: "design" }), say("lead", "lunch?"), say("dev", "mockups are up", { room: "design01" })]);
+    const main = view(log, "jow");
+    const room = main.places.find((p) => p.key === "room:design01");
+    expect(room).toMatchObject({ kind: "room", title: "design", lastSeq: 3, count: 1 });
+    expect(room?.last?.body).toBe("mockups are up");
+    expect(main.messages.filter((m) => !m.event).map((m) => m.body)).toEqual(["lunch?"]);
+    expect(main.places.find((p) => p.key === "main")?.lastSeq).toBe(2);
+    expect(main.latestIn).toBe("room:design01");
+    const inRoom = roomView({ ...inputOf(log, "jow"), place: "room:design01" });
+    expect(inRoom.place).toBe("room:design01");
+    expect(inRoom.messages.map((m) => m.body)).toEqual(["mockups are up"]);
+  });
+
+  test("a room that isn't there falls back to #general", async () => {
+    const log = await signedLog([say("lead", "lunch?")]);
+    expect(roomView({ ...inputOf(log, "jow"), place: "room:nope0001" }).place).toBe("main");
+  });
+
+  test("members-only rooms show only to their members, and DM and self rooms never show", () => {
+    const members = new Map([
+      ["jow", { name: "jow", pk: "a", owner: true, at: 0, active: true, kind: "human" as const }],
+      ["dev", { name: "dev", pk: "b", owner: false, at: 0, active: true, kind: "agent" as const }],
+    ]);
+    const rooms = new Map([
+      ["ops00001", { id: "ops00001", name: "ops", createdBy: "jow", at: 0, members: [{ name: "dev", pk: "b" }] }],
+      ["mine0001", { id: "mine0001", name: "mine", createdBy: "jow", at: 0, members: [{ name: "jow", pk: "a" }] }],
+      ["dm000001", { id: "dm000001", name: "", createdBy: "jow", at: 0, dm: true as const, members: [{ name: "jow", pk: "a" }] }],
+    ]);
+    expect(roomsFor({ rooms, members }, "jow").map((r) => r.name)).toEqual(["mine"]);
   });
 });

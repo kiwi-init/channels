@@ -59,8 +59,6 @@ struct Dock: View {
     @Binding var answering: AskView?
     @Binding var sendingBack: ReviewView?
     var typing: FocusState<Bool>.Binding
-    let follow: Follow
-    let jump: () -> Void
     @Environment(AppModel.self) private var model
     @State private var draft = ""
     @State private var sending = false
@@ -73,7 +71,8 @@ struct Dock: View {
 
     private var here: PlaceView? { room.placeView(spot.place) }
     private var hasText: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    private var canSend: Bool { !sending && room.connection == .live && (hasText || !attached.isEmpty) }
+    private var deciding: Bool { answering != nil || sendingBack != nil }
+    private var canSend: Bool { !sending && room.connection == .live && (hasText || (!deciding && !attached.isEmpty)) }
 
     private var mention: String? {
         guard let token = draft.split(separator: " ", omittingEmptySubsequences: false).last, token.hasPrefix("@") else { return nil }
@@ -107,12 +106,6 @@ struct Dock: View {
         .padding(.top, 6)
         .padding(.bottom, 6)
         .animation(.snappy(duration: 0.25), value: mentionable.map(\.name))
-        .overlay(alignment: .topTrailing) {
-            if !follow.atBottom {
-                jumpButton.padding(.trailing, 14).offset(y: -40).transition(.scale(scale: 0.5).combined(with: .opacity))
-            }
-        }
-        .animation(.snappy(duration: 0.25), value: follow.atBottom)
         .photosPicker(isPresented: $choosing, selection: $picked, maxSelectionCount: 4, matching: .images)
         .onAppear { restore(spot) }
         .onDisappear { model.keep(Draft(text: draft, attached: attached), spot.code, spot.place) }
@@ -203,36 +196,17 @@ struct Dock: View {
             Spacer()
             Button(action: cancel) {
                 Image(systemName: "xmark.circle.fill").font(.system(size: 17)).foregroundStyle(Tone.ink3)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.vertical, -12)
+            .padding(.trailing, -12)
             .accessibilityLabel("Cancel")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .glass(18)
-    }
-
-    private var jumpButton: some View {
-        Button(action: jump) {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "arrow.down")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Tone.ink)
-                    .frame(width: 34, height: 34)
-                    .glassCircle()
-                if follow.unseen > 0 {
-                    Text("\(follow.unseen)")
-                        .type(.stamp, .bold)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .frame(minWidth: 18, minHeight: 18)
-                        .background(Tone.accent, in: Capsule())
-                        .offset(x: 4, y: -4)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(follow.unseen > 0 ? "\(follow.unseen) new, jump to the latest" : "Jump to the latest")
     }
 
     private var tray: some View {
@@ -252,9 +226,11 @@ struct Dock: View {
                                     .font(.system(size: 18))
                                     .symbolRenderingMode(.palette)
                                     .foregroundStyle(.white, .black.opacity(0.55))
+                                    .padding(3)
+                                    .frame(width: 44, height: 44, alignment: .topTrailing)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .padding(3)
                         }
                 }
             }
@@ -275,11 +251,11 @@ struct Dock: View {
             .foregroundStyle(.white)
             .frame(width: 32, height: 32)
             .background(Tone.accent, in: Circle())
+            .padding(6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!canSend)
-        .padding(.trailing, 6)
-        .padding(.bottom, 6)
         .transition(.scale.combined(with: .opacity))
         .accessibilityLabel("Send")
     }
@@ -309,10 +285,20 @@ struct Dock: View {
     }
 
     private func load(_ items: [PhotosPickerItem]) async {
+        var lost = 0
         for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let jpeg = Shrink.jpeg(image) else { continue }
-            attached.append(Attached(image: image, data: jpeg))
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let jpeg = Shrink.jpeg(image) else {
+                    lost += 1
+                    continue
+                }
+                attached.append(Attached(image: image, data: jpeg))
+            } catch {
+                Trouble.note("photo picker", error)
+                lost += 1
+            }
         }
+        if lost > 0 { error = lost == 1 ? "a photo couldn't be added" : "\(lost) photos couldn't be added" }
     }
 
     private func clear(sent text: String, _ key: Spot) {
@@ -340,15 +326,18 @@ struct Dock: View {
         let pictures = attached.enumerated().map { i, a in Outgoing(name: "photo-\(i + 1).jpg", mime: "image/jpeg", data: a.data.base64EncodedString()) }
         Task {
             do {
-                if pictures.isEmpty, let review = sendingBack {
+                var body = text
+                if let review = sendingBack {
                     try await model.sendBack(from.code, task: review.task, why: text)
                     sendingBack = nil
-                } else if pictures.isEmpty, let ask = answering {
+                    body = ""
+                } else if let ask = answering {
                     try await model.answer(from.code, seq: ask.seq, text: text)
                     answering = nil
-                } else {
-                    try await model.send(from, text, re: replyTo?.seq, pictures: pictures)
+                    body = ""
                 }
+                if body.isEmpty, drafting == from, draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { clear(sent: text, from) }
+                if !pictures.isEmpty { try await model.send(from, body, re: replyTo?.seq, pictures: pictures) }
                 if drafting == from {
                     if draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { clear(sent: text, from) }
                     attached = []
@@ -357,9 +346,40 @@ struct Dock: View {
                     model.keep(Draft(), from.code, from.place)
                 }
             } catch {
+                Trouble.note("send from the composer", error)
                 self.error = error.localizedDescription
             }
             sending = false
         }
+    }
+}
+
+struct JumpButton: View {
+    let follow: Follow
+    let jump: () -> Void
+
+    var body: some View {
+        Button(action: jump) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Tone.ink)
+                    .frame(width: 34, height: 34)
+                    .glassCircle()
+                if follow.unseen > 0 {
+                    Text("\(follow.unseen)")
+                        .type(.stamp, .bold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(Tone.accent, in: Capsule())
+                        .offset(x: 4, y: -4)
+                }
+            }
+            .padding(5)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(follow.unseen > 0 ? "\(follow.unseen) new, jump to the latest" : "Jump to the latest")
     }
 }

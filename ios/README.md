@@ -21,9 +21,9 @@ the phone verifies and decrypts exactly as the Mac does. Swift asks it things wi
 handler: a `RoomView` per channel, ready to draw, and the saved keys whenever they change,
 which `Vault.swift` keeps in the keychain.
 
-A phone signs in as one of your devices (`docs/plans/linked-devices.md` §2): Sign In opens the relay's
-sign-in in Safari, the phone shows six digits, and you type them where Channels on your computer
-asks to approve it. SECURITY.md has what that moves and why the relay can't read it.
+A phone signs in as one of your devices (`docs/plans/linked-devices.md` §2): Sign In copies GitHub's code
+and opens GitHub's page in a sheet that closes by itself once you authorize. The phone then shows
+six digits to type where Channels on your computer asks to approve it, and your key to check. SECURITY.md has what that moves and why the relay can't read it.
 
 ## Run it on your iPhone
 
