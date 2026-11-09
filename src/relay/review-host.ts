@@ -13,6 +13,7 @@ export interface ReviewHost {
 }
 
 export function reviewStatus(verdict: ReviewVerdict, tasks: readonly number[], note: string): ReviewStatus {
+  if (!tasks.length) return { verdict, title: "No Kiwi task claims this PR", summary: note || "No task in this channel holds this PR, so Kiwi doesn't gate it." };
   const named = tasks.map((t) => `T${t}`).join(", ");
   const shown = {
     approved: { title: `${named} approved in Kiwi`, summary: "Approved." },

@@ -620,8 +620,9 @@ const routes: RoomRoute[] = [
         const verdict = b.verdict;
         if (verdict !== "approved" && verdict !== "waiting" && verdict !== "rejected") return yield* new BadRequest({ message: "verdict: approved, waiting or rejected" });
         const tasks = b.tasks ?? (b.task === undefined ? undefined : [b.task]);
-        if (!Array.isArray(tasks) || !tasks.length || tasks.length > MAX_CHECK_TASKS || !tasks.every((t): t is number => typeof t === "number" && Number.isSafeInteger(t) && t > 0))
-          return yield* new BadRequest({ message: `tasks: 1 to ${MAX_CHECK_TASKS} task numbers` });
+        if (!Array.isArray(tasks) || tasks.length > MAX_CHECK_TASKS || !tasks.every((t): t is number => typeof t === "number" && Number.isSafeInteger(t) && t > 0))
+          return yield* new BadRequest({ message: `tasks: up to ${MAX_CHECK_TASKS} task numbers` });
+        if (!tasks.length && verdict !== "approved") return yield* new BadRequest({ message: "tasks: a PR no task claims only passes; waiting or rejected names its tasks" });
         const owned = me === (yield* readMeta).ownerPk;
         if (verdict === "approved" && !owned) return yield* new NotOwner({ message: "only the owner's app turns kiwi/review green; a member posts waiting or rejected" });
         if (!owned && !allow(`ghcheck:${(yield* RoomStore).roomId}:${me}`, GITHUB_READS_PER_MINUTE)) return yield* new TooMany({ message: "too many kiwi/review posts; wait a minute" });

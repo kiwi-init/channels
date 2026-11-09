@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import type { CheckAsk } from "@kiwi/core/checks.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { PROTOCOL_VERSION, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
-import { downgrades, reviewPosts, shipGate } from "@kiwi/core/ship-gate.ts";
+import { PROTOCOL_VERSION, REVIEW_CHECK, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
+import { downgrades, reviewPosts, shipGate, UNCLAIMED, type Outgoing } from "@kiwi/core/ship-gate.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 
 const T0 = 1_760_000_000_000;
@@ -242,5 +242,76 @@ describe("the downgrade a gate-shutting change posts first (#623 rule 1)", () =>
     expect(downgrades(c.state(), { from: "jow", body: "B", re: [ask.seq] })).toMatchObject([{ verdict: "waiting" }]);
     expect(downgrades(c.state(), { from: "jow", body: "A", re: [ask.seq] })).toEqual([]);
     expect(downgrades(c.state(), { from: "mac", body: "B", re: [ask.seq] })).toEqual([]);
+  });
+});
+
+describe("kiwi/review on a PR no task claims (T2681)", () => {
+  const URL9 = `https://github.com/${R}/pull/9`;
+  const linkEv = (t: number): Event => ({ op: "task.update", task: t, proof: { url: URL9 } });
+  const link = (t: number): Outgoing => ({ from: "ann", body: "", ev: linkEv(t) });
+  async function unclaimed(connect = true) {
+    const c = await landingChannel();
+    await c.ev("jow", { op: "repos.set", repos: connect ? [R] : [] });
+    await c.github([{ event: "pull_request", action: "opened", number: 9, state: "open", branch: "feature-x", sha: S1 }]);
+    const posted = (run: number, conclusion?: string) =>
+      c.github([{ event: "check_run", sha: S1, name: REVIEW_CHECK, run, status: conclusion ? "completed" : "in_progress", ...(conclusion ? { conclusion } : {}) }]);
+    return { ...c, posted };
+  }
+
+  test("an open PR of a connected repo that no task claims passes, once per head", async () => {
+    expect(reviewPosts((await unclaimed(false)).state())).toEqual([]);
+    const c = await unclaimed();
+    expect(reviewPosts(c.state())).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "approved", tasks: [], note: UNCLAIMED }]);
+    await c.posted(900, "success");
+    expect(reviewPosts(c.state())).toEqual([]);
+    await c.github([{ event: "push", branch: "feature-x", sha: S2 }]);
+    expect(reviewPosts(c.state())).toEqual([{ repo: R, sha: S2, pr: 9, verdict: "approved", tasks: [], note: UNCLAIMED }]);
+  });
+
+  test("a task linking the PR after its success downgrades it first, then it follows the task's gate", async () => {
+    const c = await unclaimed();
+    await c.posted(900, "success");
+    const t = await c.task();
+    expect(downgrades(c.state(), link(t))).toEqual([{ repo: R, sha: S1, verdict: "waiting", tasks: [t], note: `T${t}: just linked to this PR, so its gate isn't open yet` }]);
+    await c.ev("ann", linkEv(t));
+    expect(reviewPosts(c.state())).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "waiting", tasks: [t], note: `T${t}: an approval` }]);
+    await c.posted(901);
+    expect(reviewPosts(c.state())).toEqual([]);
+    await c.approve(t, S1);
+    expect(reviewPosts(c.state())).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "approved", tasks: [t] }]);
+  });
+
+  test("linking downgrades nothing on a PR already failed, a repo that isn't connected, or one the task already holds", async () => {
+    const failed = await unclaimed();
+    await failed.posted(900, "failure");
+    expect(downgrades(failed.state(), link(await failed.task()))).toEqual([]);
+    const off = await unclaimed(false);
+    expect(downgrades(off.state(), link(await off.task()))).toEqual([]);
+    const held = await unclaimed();
+    const t = await held.task();
+    await held.ev("ann", linkEv(t));
+    expect(downgrades(held.state(), link(t))).toEqual([]);
+  });
+
+  test("a claimed PR with no verdict at its head turns a standing success into waiting", async () => {
+    const c = channel();
+    await c.ev("jow", { op: "branch.prefix.set", prefix: "T" });
+    await c.ev("jow", { op: "repos.set", repos: [R] });
+    const t = await c.task();
+    await c.pr(9, S1, t);
+    expect(reviewPosts(c.state())).toEqual([]);
+    await c.github([{ event: "check_run", sha: S1, name: REVIEW_CHECK, run: 900, status: "completed", conclusion: "success" }]);
+    expect(reviewPosts(c.state())).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "waiting", tasks: [t], note: `T${t}: no verdict at this head yet` }]);
+  });
+
+  test("a PR shared with a blocked task stays shut, even after it passed unclaimed", async () => {
+    const c = await unclaimed();
+    await c.posted(900, "success");
+    const ready = await c.task("ready");
+    const blocked = await c.task("blocked");
+    await c.ev("ann", linkEv(ready));
+    await c.ev("ann", linkEv(blocked));
+    await c.approve(ready, S1);
+    expect(reviewPosts(c.state())).toEqual([{ repo: R, sha: S1, pr: 9, verdict: "waiting", tasks: [ready, blocked], note: `T${blocked}: an approval` }]);
   });
 });

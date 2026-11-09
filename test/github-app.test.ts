@@ -158,7 +158,24 @@ describe("diffs and review checks through the relay", () => {
     await room("POST", "/github/check", owner, { repo: "ojow/channels", sha, verdict: "rejected", task: 7 });
     expect(last()).toMatchObject({ conclusion: "failure", output: { title: "T7: changes requested in Kiwi" } });
     expect((await room("POST", "/github/check", owner, { ...body, verdict: "maybe" })).status).toBe(400);
-    expect((await room("POST", "/github/check", owner, { ...body, tasks: [] })).status).toBe(400);
+    expect((await room("POST", "/github/check", owner, { ...body, tasks: [-1] })).status).toBe(400);
+  });
+
+  test("a PR no task claims passes, from the owner only; waiting or failed always names its tasks (T2681)", async () => {
+    const fresh = "d".repeat(40);
+    const unclaimed = { repo: "ojow/channels", sha: fresh, verdict: "approved", tasks: [], note: "no Kiwi task claims this PR" };
+    const last = () => JSON.parse(calls.filter((c) => c.path === "/repos/ojow/channels/check-runs").at(-1)!.body) as Record<string, unknown>;
+    expect((await room("POST", "/github/check", member, unclaimed)).status).toBe(403);
+    expect((await room("POST", "/github/check", owner, unclaimed)).status).toBe(200);
+    expect(last()).toEqual({
+      name: REVIEW_CHECK,
+      head_sha: fresh,
+      status: "completed",
+      conclusion: "success",
+      output: { title: "No Kiwi task claims this PR", summary: "no Kiwi task claims this PR" },
+    });
+    expect((await room("POST", "/github/check", member, { ...unclaimed, verdict: "waiting" })).status).toBe(400);
+    expect((await room("POST", "/github/check", owner, { ...unclaimed, verdict: "rejected" })).status).toBe(400);
   });
 
   test("only the owner comments on a PR of a connected repo (the link back to its task)", async () => {

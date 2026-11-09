@@ -1,10 +1,11 @@
 import { choiceIn, runPin, type CheckAsk } from "./checks.ts";
 import type { ReviewCheck } from "./client/github.ts";
 import { hasLanding, REVIEW_CHECK, type Event } from "./protocol.ts";
+import { prLinks } from "./prs.ts";
 import { linkedPr, sameHead } from "./stage.ts";
 import { atRun, checkPassed } from "./state/checks.ts";
 import { landingReopens } from "./state/tasks.ts";
-import { shaKey, type GithubCheck, type GithubPr, type GithubState } from "./state/github.ts";
+import { prKey, shaKey, type GithubCheck, type GithubPr, type GithubState } from "./state/github.ts";
 import type { ChannelState, ReviewRound, Task } from "./state/types.ts";
 
 export type Gate = { open: true } | { open: false; rejected: boolean; missing: string[] };
@@ -76,7 +77,7 @@ function heldPrs(state: ChannelState): Map<string, Held> {
     const pr = linkedPr(state, t);
     const sha = pr?.sha;
     if (!pr || !sha || pr.state !== "open") continue;
-    const key = `${pr.repo.toLowerCase()}#${pr.number}`;
+    const key = prKey(pr.repo, pr.number);
     const held = byPr.get(key) ?? { pr: { ...pr, sha }, tasks: [] };
     held.tasks.push(t);
     byPr.set(key, held);
@@ -88,21 +89,41 @@ const labelOf = (ids: readonly number[]): string => ids.map((id) => `T${id}`).jo
 
 const CONCLUSION: Record<ReviewCheck["verdict"], string | undefined> = { approved: "success", waiting: undefined, rejected: "failure" };
 
+export const UNCLAIMED = "no Kiwi task claims this PR";
+
+const postedAt = (state: ChannelState, pr: GithubPr & { sha: string }): GithubCheck | undefined => state.github.checks.get(shaKey(pr.repo, pr.sha))?.get(REVIEW_CHECK);
+
+const connectedRepos = (state: ChannelState): Set<string> => new Set(state.repos.map((r) => r.toLowerCase()));
+
+function unclaimedPrs(state: ChannelState, held: ReadonlyMap<string, Held>): (GithubPr & { sha: string })[] {
+  const connected = connectedRepos(state);
+  return [...state.github.prs.values()].flatMap((pr) =>
+    pr.state === "open" && pr.sha && connected.has(pr.repo.toLowerCase()) && !held.has(prKey(pr.repo, pr.number)) ? [{ ...pr, sha: pr.sha }] : [],
+  );
+}
+
 export function reviewPosts(state: ChannelState): ReviewPost[] {
   const out: ReviewPost[] = [];
-  for (const { pr, tasks } of heldPrs(state).values()) {
+  const held = heldPrs(state);
+  for (const { pr, tasks } of held.values()) {
     const gates = tasks.flatMap((t) => {
       const gate = gateOf(state, t, pr);
       return gate ? [{ t, gate }] : [];
     });
-    if (!gates.length) continue;
+    const posted = postedAt(state, pr);
+    if (!gates.length) {
+      const ids = tasks.map((t) => t.id).sort((a, b) => a - b);
+      if (posted?.conclusion === "success") out.push({ repo: pr.repo, sha: pr.sha, pr: pr.number, verdict: "waiting", tasks: ids, note: `${labelOf(ids)}: no verdict at this head yet` });
+      continue;
+    }
     const shut = gates.flatMap(({ t, gate }) => (gate.open ? [] : [{ t, gate }]));
     const verdict: ReviewCheck["verdict"] = !shut.length ? "approved" : shut.some(({ gate }) => !gate.open && gate.rejected) ? "rejected" : "waiting";
-    const posted = state.github.checks.get(shaKey(pr.repo, pr.sha))?.get(REVIEW_CHECK);
     if (posted && (CONCLUSION[verdict] === undefined ? !posted.conclusion : posted.conclusion === CONCLUSION[verdict])) continue;
     const note = shut.map(({ t, gate }) => `T${t.id}: ${gate.open ? "" : gate.missing.join(", ")}`).join("; ");
     out.push({ repo: pr.repo, sha: pr.sha, pr: pr.number, verdict, tasks: gates.map(({ t }) => t.id).sort((a, b) => a - b), ...(note ? { note } : {}) });
   }
+  for (const pr of unclaimedPrs(state, held))
+    if (postedAt(state, pr)?.conclusion !== "success") out.push({ repo: pr.repo, sha: pr.sha, pr: pr.number, verdict: "approved", tasks: [], note: UNCLAIMED });
   return out.sort((a, b) => a.repo.localeCompare(b.repo) || a.pr - b.pr);
 }
 
@@ -136,12 +157,33 @@ function shutBy(state: ChannelState, m: Outgoing): { tasks: Set<number>; rejecte
   return { tasks, rejected };
 }
 
+function claimedBy(state: ChannelState, m: Outgoing, held: ReadonlyMap<string, Held>, taken: ReadonlySet<string>): ReviewCheck[] {
+  const ev = m.ev;
+  if (ev?.op !== "task.update" || !ev.proof || !state.tasks.has(ev.task)) return [];
+  const connected = connectedRepos(state);
+  return prLinks(ev.proof.url).flatMap((link) => {
+    const key = prKey(link.repo, link.number);
+    const pr = state.github.prs.get(key);
+    const holders = held.get(key)?.tasks.map((t) => t.id) ?? [];
+    if (!pr?.sha || pr.state !== "open" || !connected.has(pr.repo.toLowerCase()) || holders.includes(ev.task) || taken.has(shaKey(pr.repo, pr.sha))) return [];
+    if (postedAt(state, { ...pr, sha: pr.sha })?.conclusion === "failure") return [];
+    const tasks = [...holders, ev.task].sort((a, b) => a - b);
+    return [{ repo: pr.repo, sha: pr.sha, verdict: "waiting" as const, tasks, note: `T${ev.task}: just linked to this PR, so its gate isn't open yet` }];
+  });
+}
+
 export function downgrades(state: ChannelState, m: Outgoing): ReviewCheck[] {
+  const held = heldPrs(state);
+  const shutDown = shutDowngrades(state, m, held);
+  return [...shutDown, ...claimedBy(state, m, held, new Set(shutDown.map((c) => shaKey(c.repo, c.sha))))];
+}
+
+function shutDowngrades(state: ChannelState, m: Outgoing, held: ReadonlyMap<string, Held>): ReviewCheck[] {
   const { tasks: shut, rejected } = shutBy(state, m);
   if (!shut.size) return [];
-  const connected = new Set(state.repos.map((r) => r.toLowerCase()));
+  const connected = connectedRepos(state);
   const out: ReviewCheck[] = [];
-  for (const { pr, tasks } of heldPrs(state).values()) {
+  for (const { pr, tasks } of held.values()) {
     const hit = tasks.filter((t) => shut.has(t.id)).map((t) => t.id);
     if (!hit.length || !connected.has(pr.repo.toLowerCase())) continue;
     const already = tasks.some((t) => {
