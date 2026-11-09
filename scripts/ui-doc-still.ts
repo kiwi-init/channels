@@ -160,7 +160,8 @@ const TRACE = (): void => {
       watched.add(l);
       new MutationObserver((records) => {
         const rows = records.flatMap((r) => [...r.addedNodes]).filter((n) => n instanceof HTMLElement && n.dataset.seq).length;
-        if (rows) push(`rows +${rows} committed: ${snap()}`);
+        const gone = records.flatMap((r) => [...r.removedNodes]).flatMap((n) => (n instanceof HTMLElement && n.dataset.seq ? [n.dataset.seq] : []));
+        if (rows || gone.length) push(`rows +${rows}${gone.length ? ` −${gone.length} (seq ${gone.join(", ")})` : ""} committed: ${snap()}`);
       }).observe(l, { childList: true });
     }
     const doc = box && l?.querySelector(".thread-doc");

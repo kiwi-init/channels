@@ -67,6 +67,12 @@ export function useStick(following = true, still = false) {
   const room = useRef(0)
   const seen = useRef(Number.NaN)
   const wheeled = useRef(Number.NEGATIVE_INFINITY)
+  const reserve = useRef(0)
+  const pad = useCallback(() => {
+    const h = room.current + reserve.current
+    if (spacer.current) spacer.current.style.height = h > 0 ? `${h}px` : ""
+  }, [])
+  const bottom = (box: HTMLElement): number => box.scrollHeight - box.clientHeight - reserve.current
 
   const correct = useCallback(() => {
     const box = scroller.current
@@ -74,20 +80,20 @@ export function useStick(following = true, still = false) {
     if (!box || !list) return
     height.current = list.offsetHeight
     if (stuck.current && !(still && anchor.current)) {
-      box.scrollTop = box.scrollHeight
+      box.scrollTop = bottom(box)
       return
     }
     const a = anchor.current
     if (!a) return
     if (still && a.el.isConnected && !laidOut(a.el)) {
       anchor.current = null
-      box.scrollTop = stuck.current ? box.scrollHeight : a.at
+      box.scrollTop = stuck.current ? bottom(box) : a.at
       return
     }
     const el = a.el.isConnected ? a.el : anchorRow(list, a.seq)
     if (!el) {
       anchor.current = null
-      if (stuck.current) box.scrollTop = box.scrollHeight
+      if (stuck.current) box.scrollTop = bottom(box)
       return
     }
     const top = box.getBoundingClientRect().top
@@ -100,13 +106,13 @@ export function useStick(following = true, still = false) {
     const short = still ? box.scrollTop + shift - (box.scrollHeight - box.clientHeight) : 0
     if (short > 0.5) {
       room.current += short
-      if (spacer.current) spacer.current.style.height = `${room.current}px`
+      pad()
     }
     if (Math.abs(shift) > 0.5) box.scrollTop += shift
-    const gap = box.scrollHeight - box.clientHeight - box.scrollTop
-    if (still && stuck.current && gap > 0.5 && gap < NEAR_BOTTOM) box.scrollTop = box.scrollHeight
+    const gap = bottom(box) - box.scrollTop
+    if (still && stuck.current && gap > 0.5 && gap < NEAR_BOTTOM) box.scrollTop = bottom(box)
     anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
-  }, [still])
+  }, [still, pad])
 
   const settle = useCallback(() => {
     const box = scroller.current
@@ -123,10 +129,14 @@ export function useStick(following = true, still = false) {
     const list = content.current
     if (!box || !list) return
     if (height.current && list.offsetHeight !== height.current) settle()
-    const hidden = box.scrollHeight - box.scrollTop - box.clientHeight
+    if (reserve.current > 0 && Date.now() - wheeled.current >= WHEEL_MS) {
+      reserve.current = Math.max(0, reserve.current - Math.max(0, gapIn(box)))
+      pad()
+    }
+    const hidden = box.scrollHeight - box.scrollTop - box.clientHeight - reserve.current
     if (room.current > 0 && hidden > 0.5) {
       room.current = Math.max(0, room.current - hidden)
-      if (spacer.current) spacer.current.style.height = room.current ? `${room.current}px` : ""
+      pad()
     }
     const gap = gapIn(box)
     const up = box.scrollTop < seen.current - 0.5
@@ -136,7 +146,7 @@ export function useStick(following = true, still = false) {
     anchor.current = (still && touched.current ? docIn(box, list) : null) ?? (stuck.current ? null : anchorIn(box, list))
     height.current = list.offsetHeight
     seen.current = box.scrollTop
-  }, [settle, still])
+  }, [settle, still, pad])
 
   useLayoutEffect(() => {
     const box = scroller.current
@@ -156,8 +166,12 @@ export function useStick(following = true, still = false) {
       touched.current = true
       remember()
     }
-    const wheel = () => {
+    const wheel = (e: WheelEvent) => {
       wheeled.current = Date.now()
+      if (e.deltaY < 0 && reserve.current < box.clientHeight) {
+        reserve.current = box.clientHeight
+        pad()
+      }
       touch()
     }
     const kinds = ["pointerdown", "keydown", "touchstart"] as const
@@ -167,19 +181,23 @@ export function useStick(following = true, still = false) {
       for (const kind of kinds) box.removeEventListener(kind, touch)
       box.removeEventListener("wheel", wheel)
     }
-  }, [remember, still])
+  }, [remember, still, pad])
 
-  const toBottom = useCallback((smooth: boolean) => {
-    const box = scroller.current
-    if (!box) return
-    stuck.current = true
-    anchor.current = null
-    if (room.current) {
-      room.current = 0
-      if (spacer.current) spacer.current.style.height = ""
-    }
-    box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
-  }, [])
+  const toBottom = useCallback(
+    (smooth: boolean) => {
+      const box = scroller.current
+      if (!box) return
+      stuck.current = true
+      anchor.current = null
+      if (room.current || reserve.current) {
+        room.current = 0
+        reserve.current = 0
+        pad()
+      }
+      box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
+    },
+    [pad]
+  )
 
   const toOffset = useCallback((top: number) => {
     const box = scroller.current
