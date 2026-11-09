@@ -355,6 +355,8 @@ private val ASK_LABELS = mapOf(
     "Taste call for you" to R.string.ask_taste,
     "Irreversible step for you" to R.string.ask_irreversible,
     "Scope call for you" to R.string.ask_scope,
+    "Question for you" to R.string.question_for_you,
+    "Question for everyone" to R.string.ask_everyone,
 )
 
 @Composable

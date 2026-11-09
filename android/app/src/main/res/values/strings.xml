@@ -94,6 +94,7 @@
     <string name="ask_taste">Taste call for you</string>
     <string name="ask_irreversible">Irreversible step for you</string>
     <string name="ask_scope">Scope call for you</string>
+    <string name="ask_everyone">Question for everyone</string>
     <string name="ready_for_review">Ready for your review</string>
     <string name="recent">Recent</string>
     <string name="reconnecting">Reconnecting…</string>

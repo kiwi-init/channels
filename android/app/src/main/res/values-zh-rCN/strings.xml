@@ -94,6 +94,7 @@
     <string name="ask_taste">待你定夺偏好</string>
     <string name="ask_irreversible">待你确认不可撤销的操作</string>
     <string name="ask_scope">待你决定范围</string>
+    <string name="ask_everyone">向所有人提问</string>
     <string name="ready_for_review">等你审核</string>
     <string name="recent">最近</string>
     <string name="reconnecting">正在重新连接…</string>

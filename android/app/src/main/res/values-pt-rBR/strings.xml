@@ -94,6 +94,7 @@
     <string name="ask_taste">Questão de gosto para você</string>
     <string name="ask_irreversible">Passo irreversível para você</string>
     <string name="ask_scope">Decisão de escopo para você</string>
+    <string name="ask_everyone">Pergunta para todos</string>
     <string name="ready_for_review">Aguardando sua revisão</string>
     <string name="recent">Recentes</string>
     <string name="reconnecting">Reconectando…</string>
