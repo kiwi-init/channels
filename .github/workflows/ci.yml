@@ -968,6 +968,8 @@ jobs:
           p=$(echo "$NEEDS" | jq -r '.plan.result // "absent from needs"')
           if [ "$p" != "success" ]; then echo "plan: $p"; exit 1; fi
           if [ -z "$PLAN" ]; then echo "plan produced no job selection"; exit 1; fi
+          sel=$(jq -n -r --argjson plan "$PLAN" 'if ($plan | type) == "object" and ([$plan | to_entries[] | .value] | all(type == "boolean")) and([$plan | to_entries[] | select(.value == true)] | length > 0) then "ok" else "invalid job selection" end')
+          if [ "$sel" != "ok" ]; then echo "plan produced $sel"; exit 1; fi
           bad=$(echo "$NEEDS" | jq -r 'to_entries[] | select(.key != "plan") | select(.value.result != "success" and .value.result != "skipped") | "\(.key): \(.value.result)"')
           if [ -n "$bad" ]; then echo "$bad"; exit 1; fi
           stray=$(echo "$NEEDS" | jq -r --argjson plan "$PLAN" 'to_entries[] | select(.key != "plan") | select($plan[.key] == false) | select(.value.result == "success") | "\(.key): ran but not selected"')
