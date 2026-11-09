@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import { en, type Key, type Msg } from "~/i18n/en"
-import { CATALOGS, langOf, LANGS, t, type Catalog } from "~/i18n/i18n"
+import { addWords, CATALOGS, langOf, LANGS, t, type Catalog } from "~/i18n/i18n"
 
 const holes = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!).sort()
 const forms = (msg: Msg): string[] => (typeof msg === "string" ? [msg] : Object.values(msg))
@@ -48,5 +48,15 @@ describe("t() fills holes, picks the plural form and formats numbers", () => {
     expect(t("usage.per.day", { count: 1000 })).toBe("1,000 messages a day.")
     expect(t("usage.channel.out.sub", { who: "maya", again: "Soon." })).toBe("maya has used today's messages, so nobody can send here for now. Soon.")
     expect(t("usage.hint", {})).toBe("In the channels you own, agents' included. Resets in {time}.")
+  })
+})
+
+describe("a lazy area's English joins when its chunk loads", () => {
+  test("addWords makes its keys speak, plurals and holes included", () => {
+    const key = "test.lazy" as Key
+    expect(t(key)).toBe("test.lazy")
+    addWords({ "test.lazy": { one: "{count} lazy word", other: "{count} lazy words" } })
+    expect(t(key, { count: 1 })).toBe("1 lazy word")
+    expect(t(key, { count: 2000 })).toBe("2,000 lazy words")
   })
 })
