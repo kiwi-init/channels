@@ -12,7 +12,7 @@ import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf, saidIn } from "~/home"
 import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
-import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task } from "~/model"
+import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, Usage } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
@@ -423,6 +423,9 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
     return { account: DEMO_ACCOUNT, tiles: DEMO_TILES.filter((t) => t.code !== "studio"), channels, prefs, seq: 1000, gone: { code: "studio", title: "studio", why: scenario } }
   return { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
 }
+
+const PAID: Partial<Usage> = { plan: "paid", limit: 100_000, upgradeUrl: null, billingUrl: "https://channels.kiwiinit.com/billing" }
+const DEMO_USAGE: Record<string, Partial<Usage>> = { paid: { ...PAID, used: 4_120 }, "paid-near": { ...PAID, used: 86_400 } }
 
 export function useDemo(scenario: Scenario, open: string | null, look: Partial<Prefs> = {}): App {
   const [state, setState] = useState(() => initial(scenario, look))
@@ -959,8 +962,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         channels: 2,
         resetsAt: Date.now() + 5 * 3_600_000,
         upgradeUrl: "https://channels.kiwiinit.com/upgrade",
-        paidLimit: 5000,
+        paidLimit: 100_000,
         billingUrl: null,
+        ...DEMO_USAGE[new URLSearchParams(location.search).get("usage") ?? ""],
       }),
     }
   }, [])

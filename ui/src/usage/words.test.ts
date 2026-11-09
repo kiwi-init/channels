@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 
 import { dailyLimit } from "~/live/refused"
 import type { Usage } from "~/model"
-import { canUpgrade, levelOf, resetsIn, shareOf, upgradeLabel, usedOf } from "~/usage/words"
+import { canUpgrade, levelOf, planName, resetsIn, shareOf, unlimitedNow, upgradeLabel, usedOf } from "~/usage/words"
 
 const free: Usage = { plan: "free", blocked: false, used: 412, limit: 1000, channels: 2, resetsAt: 0, upgradeUrl: "https://pay.test", paidLimit: 5000, billingUrl: null }
 
@@ -22,12 +22,22 @@ describe("today's messages", () => {
     expect(resetsIn(0, 0)).toBe("1m")
   })
 
-  test("only a free person with an upgrade link is offered the paid plan, named by its limit", () => {
+  test("only a free person with an upgrade link is offered the paid plan, as unlimited", () => {
     expect(canUpgrade(free)).toBe(true)
-    expect(upgradeLabel(free)).toBe("Get 5,000 a day")
+    expect(upgradeLabel(free)).toBe("Get unlimited")
     expect(upgradeLabel({ ...free, paidLimit: null })).toBe("Upgrade")
     expect(canUpgrade({ ...free, plan: "paid" })).toBe(false)
     expect(canUpgrade({ ...free, upgradeUrl: null })).toBe(false)
+  })
+
+  test("a paid person reads Unlimited with no count, until 80% of the fair-use cap (#659)", () => {
+    const paid: Usage = { ...free, plan: "paid", used: 4120, limit: 100_000, upgradeUrl: null }
+    expect(planName(paid)).toBe("Unlimited")
+    expect(unlimitedNow(paid)).toBe(true)
+    expect(unlimitedNow({ ...paid, used: 80_000 })).toBe(false)
+    expect(usedOf({ ...paid, used: 86_400 })).toBe("fair-use limit: 86,400 of 100,000 today")
+    expect(unlimitedNow(free)).toBe(false)
+    expect(usedOf(free)).toBe("412 of 1,000")
   })
 
   test("the relay's daily-limit refusal opens the dialog; a per-minute rate limit doesn't", () => {

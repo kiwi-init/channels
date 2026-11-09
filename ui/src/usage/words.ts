@@ -19,13 +19,19 @@ export function resetsIn(resetsAt: number, now: number): string {
 
 export const count = (n: number): string => n.toLocaleString("en-US")
 
-export const usedOf = (u: Usage): string => (u.limit === null ? `${count(u.used)} today` : `${count(Math.min(u.used, u.limit))} of ${count(u.limit)}`)
+export const unlimitedNow = (u: Usage): boolean => u.plan === "paid" && levelOf(u) === "calm"
 
-const PLAN: Record<Usage["plan"], string> = { free: "Free", paid: "Paid", unlimited: "Unlimited" }
+export const usedOf = (u: Usage): string => {
+  if (u.limit === null) return `${count(u.used)} today`
+  const of = `${count(Math.min(u.used, u.limit))} of ${count(u.limit)}`
+  return u.plan === "paid" ? `fair-use limit: ${of} today` : of
+}
+
+const PLAN: Record<Usage["plan"], string> = { free: "Free", paid: "Unlimited", unlimited: "Unlimited" }
 
 export const planName = (u: Usage): string => PLAN[u.plan]
 
-export const upgradeLabel = (u: Usage): string => (u.paidLimit ? `Get ${count(u.paidLimit)} a day` : "Upgrade")
+export const upgradeLabel = (u: Usage): string => (u.paidLimit ? "Get unlimited" : "Upgrade")
 
 export const canUpgrade = (u: Usage): boolean => u.plan === "free" && !!u.upgradeUrl
 

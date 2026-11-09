@@ -42,7 +42,9 @@ export function LimitDialog({ hit }: { hit: LimitHit }) {
       sub={
         limit === null
           ? `Your channels have used today's messages. ${again}`
-          : `Your channels sent ${count(limit)} messages today, agents' included: ${usage?.plan === "paid" ? "the paid plan's" : "the free plan's"} daily limit. ${again}`
+          : usage?.plan === "paid"
+            ? `Your channels sent ${count(limit)} messages today, agents' included: the fair-use limit that stops a runaway loop. ${again}`
+            : `Your channels sent ${count(limit)} messages today, agents' included: the free plan's daily limit. ${again}`
       }
       onClose={closeLimit}
       size="narrow"
@@ -74,7 +76,7 @@ export function LimitDialog({ hit }: { hit: LimitHit }) {
       {usage && usage.limit !== null && (
         <div className="usage-limit">
           <UsageBar usage={usage} />
-          {upgrade && usage.paidLimit ? <p className="usage-limit-hint">The paid plan sends {count(usage.paidLimit)} messages a day.</p> : null}
+          {upgrade && usage.paidLimit ? <p className="usage-limit-hint">The paid plan has no daily limit.</p> : null}
         </div>
       )}
     </Modal>

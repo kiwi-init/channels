@@ -92,6 +92,7 @@ export const SHOTS: Record<string, Shot> = {
   "enroll-desktop-digits": { scenario: "enroll-desktop-digits", channel: null },
   "enroll-desktop-check": { scenario: "enroll-desktop-check", channel: null },
   "settings-devices": { scenario: "devices", channel: "kiwi", nav: { page: "settings", section: "computers" } },
+  "settings-account": { scenario: "full", channel: "kiwi", nav: { page: "settings", section: "account" } },
   "side-update-moved": { scenario: "update-moved", channel: "kiwi" },
   "side-update-moved-mac": { scenario: "update-moved-mac", channel: "kiwi" },
   "settings-forget-agents": { scenario: "devices", channel: "kiwi", nav: { page: "settings", section: "computers" } },

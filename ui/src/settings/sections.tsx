@@ -17,7 +17,7 @@ import { UI_VERSION } from "~/settings/ui-version"
 import { OutsideLink } from "~/kit/outside"
 import { UsageBar } from "~/usage/meter"
 import { useUsage } from "~/usage/store"
-import { canUpgrade, count, levelOf, planName, resetsIn, upgradeLabel, usedOf } from "~/usage/words"
+import { canUpgrade, count, levelOf, planName, resetsIn, unlimitedNow, upgradeLabel, usedOf } from "~/usage/words"
 
 export function Page({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
   return (
@@ -134,7 +134,7 @@ function UsageRow() {
           </OutsideLink>
         )}
       </Row>
-      {usage.limit !== null && (
+      {usage.limit !== null && !unlimitedNow(usage) && (
         <Row label="Messages today" hint={`In the channels you own, agents' included. Resets in ${resetsIn(usage.resetsAt, usage.checkedAt)}.`}>
           <span className="set-usage">
             <span className={cx("set-value set-mono", near && "is-near")}>{usedOf(usage)}</span>
@@ -153,9 +153,9 @@ function UsageRow() {
 
 function planHint(u: Usage): string {
   if (u.plan === "unlimited") return "No daily limit on this relay."
+  if (u.plan === "paid") return "Unlimited messages."
   const a = u.limit === null ? "No daily limit" : `${count(u.limit)} messages a day`
-  if (u.plan === "paid") return `${a}.`
-  return u.paidLimit ? `${a}. The paid plan sends ${count(u.paidLimit)}.` : `${a}.`
+  return u.paidLimit ? `${a}. The paid plan is unlimited.` : `${a}.`
 }
 
 const THEMES = [
