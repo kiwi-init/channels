@@ -463,6 +463,46 @@
   opacity: 0.55;
 }
 
+.spec-comment.is-flash {
+  border-radius: var(--r-ctl);
+  animation: msg-flash 1.6s var(--ease);
+}
+
+.spec-comment-reply {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px 0;
+  border: 0;
+  border-radius: var(--r-row);
+  background: none;
+  color: var(--ink-2);
+  opacity: 0;
+  transition: opacity var(--fast);
+}
+
+.spec-comment-reply .icon {
+  transform: scaleY(-1);
+}
+
+.spec-comment:hover .spec-comment-reply,
+.spec-comment:focus-within .spec-comment-reply,
+.spec-comment-reply:focus-visible {
+  opacity: 1;
+}
+
+.spec-comment-reply:hover {
+  background: var(--wash-2);
+  color: var(--ink);
+}
+
+.spec-box-new > .compose-reply {
+  min-width: 0;
+  margin: 0;
+}
+
 .spec-comment-quote {
   margin: 8px 0 0;
   padding-left: 8px;
@@ -527,6 +567,11 @@
   transition:
     color var(--fast),
     border-color var(--fast);
+}
+
+.spec-comment-quote.is-link b {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .spec-comment-quote.is-link > span {

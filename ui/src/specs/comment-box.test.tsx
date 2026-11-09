@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import { sendsOn, sendTitle, type SendKey } from "~/chat/send-keys"
-import type { Channel, Spec } from "~/model"
+import type { Channel, Message, Spec } from "~/model"
 import { ActContext, AppContext, type Act, type Ctx } from "~/nav"
-import { CommentBox, commentKeys } from "~/specs/comment-box"
+import { CommentBox, commentKeys, type CommentReply } from "~/specs/comment-box"
 import { wrote } from "~/words"
 
 const key = (more: Partial<SendKey>): SendKey & { preventDefault(): void } => ({
@@ -37,11 +37,11 @@ const spec: Spec = {
 
 const channel = { code: "c", you: "jow", messages: [], tasks: [], nicknames: new Map() } as unknown as Channel
 
-const render = (enterSends: boolean, quote?: string): string =>
+const render = (enterSends: boolean, quote?: string, reply?: CommentReply): string =>
   renderToStaticMarkup(
     <AppContext.Provider value={{ app: { channel, prefs: { enterSends } }, go: () => {} } as unknown as Ctx}>
       <ActContext.Provider value={{ actions: {}, go: () => {}, toast: () => {} } as unknown as Act}>
-        <CommentBox channel={channel} spec={spec} quote={quote} onDone={() => {}} />
+        <CommentBox channel={channel} spec={spec} quote={quote} reply={reply ?? null} onUnreply={() => {}} onDone={() => {}} />
       </ActContext.Provider>
     </AppContext.Provider>
   )
@@ -94,5 +94,17 @@ describe("one send rule for the chat composer and spec comments (#1842)", () => 
     expect(render(false, "a quoted line")).toContain(`title="${sendTitle(false)}"`)
     expect(sendTitle(true)).toBe("Send (Enter)")
     expect(sendTitle(false)).toBe("Send (⌘ Enter)")
+  })
+
+  test("replying to a comment shows who and what it quotes, like the chat composer (#1840)", () => {
+    const to = { seq: 12, from: "win", at: 0, text: wrote("subtasks should nest"), where: { kind: "room", room: "general" }, inThread: 10 } as Message
+    const quoting = render(true, undefined, { to, excerpt: "should nest" })
+    expect(quoting).toContain("Quoting <b>win</b>")
+    expect(quoting).toContain("“should nest”")
+    expect(quoting).toContain('placeholder="Say something about it"')
+    const replying = render(true, undefined, { to, excerpt: null })
+    expect(replying).toContain("Replying to <b>win</b>")
+    expect(replying).toContain('placeholder="Reply to win"')
+    expect(render(true)).not.toContain("compose-reply")
   })
 })

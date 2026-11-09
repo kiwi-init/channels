@@ -1,8 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 
+import { preview } from "~/chat/preview"
+import { withExcerpt } from "~/chat/quote"
 import { sendsOn, sendTitle, type SendKey } from "~/chat/send-keys"
-import type { Channel, Spec, Where } from "~/model"
+import { cx } from "~/kit/bits"
+import { Icon } from "~/kit/icons"
+import type { Channel, Message, Spec, Where } from "~/model"
+import { nickname } from "~/names"
 import { useAct, useApp } from "~/nav"
+import { splitQuote } from "~/specs/read"
+import { wordsRaw } from "~/words"
 
 function whereOf(channel: Channel, ask: number): Where {
   return channel.messages.find((m) => m.seq === ask)?.where ?? { kind: "room", room: "general" }
@@ -31,14 +38,33 @@ export function commentKeys(enterSends: boolean, send: () => void, cancel?: () =
   }
 }
 
-export function CommentBox({ channel, spec, quote, onDone }: { channel: Channel; spec: Spec; quote?: string; onDone?: () => void }) {
+export interface CommentReply {
+  to: Message
+  excerpt: string | null
+}
+
+export function CommentBox({
+  channel,
+  spec,
+  quote,
+  reply,
+  onUnreply,
+  onDone,
+}: {
+  channel: Channel
+  spec: Spec
+  quote?: string
+  reply?: CommentReply | null
+  onUnreply?: () => void
+  onDone?: () => void
+}) {
   const { actions } = useAct()
   const enterSends = useApp().app.prefs.enterSends
   const [text, setText] = useState("")
   const box = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
-    if (quote) box.current?.focus()
-  }, [quote])
+    if (quote || reply) box.current?.focus()
+  }, [quote, reply])
   useLayoutEffect(() => {
     const el = box.current
     if (!el) return
@@ -47,35 +73,53 @@ export function CommentBox({ channel, spec, quote, onDone }: { channel: Channel;
   }, [text])
   const send = () => {
     if (!text.trim()) return
-    actions.send(channel.code, whereOf(channel, spec.ask), quote ? quoted(quote, text) : text.trim(), { inThread: spec.ask })
+    if (reply) {
+      actions.send(channel.code, whereOf(channel, spec.ask), reply.excerpt ? withExcerpt(reply.excerpt, text) : text.trim(), { inThread: spec.ask, replyTo: reply.to.seq })
+      onUnreply?.()
+    } else actions.send(channel.code, whereOf(channel, spec.ask), quote ? quoted(quote, text) : text.trim(), { inThread: spec.ask })
     setText("")
     onDone?.()
   }
-  const keys = commentKeys(enterSends, send, onDone)
+  const keys = commentKeys(enterSends, send, reply ? onUnreply : onDone)
   const title = sendTitle(enterSends)
-  if (!quote)
+  if (!quote) {
+    const who = reply ? nickname(channel, reply.to.from) : ""
+    const line = reply ? (reply.excerpt ?? preview(splitQuote(wordsRaw(reply.to.text)).text)).replace(/\s+/g, " ") : ""
     return (
       <div className="spec-box-new">
+        {reply && (
+          <div className={cx("compose-reply", reply.excerpt && "is-excerpt")}>
+            <Icon name="reply" size={13} />
+            <span className="compose-reply-text">
+              {reply.excerpt ? "Quoting" : "Replying to"} <b>{who}</b>{" "}
+              <span className={reply.excerpt ? "compose-reply-excerpt" : "dim"}>{reply.excerpt ? `“${line.slice(0, 160)}${line.length > 160 ? "…" : ""}”` : line.slice(0, 160)}</span>
+            </span>
+            <button type="button" className="compose-reply-x" aria-label="Cancel reply" title="Cancel reply (Esc)" onClick={onUnreply}>
+              <Icon name="close" size={13} />
+            </button>
+          </div>
+        )}
         <textarea
           ref={box}
           className="textarea spec-box-text"
           rows={1}
           value={text}
-          placeholder="Comment"
+          placeholder={reply ? (reply.excerpt ? "Say something about it" : `Reply to ${who}`) : "Comment"}
           title="Or select words in the spec to comment on them"
-          aria-label="Comment on the spec"
+          aria-label={reply ? `Reply to ${who}` : "Comment on the spec"}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={keys}
         />
         {text.trim() && (
           <div className="spec-box-foot">
             <button type="button" className="btn" title={title} onClick={send}>
-              Comment
+              {reply ? "Reply" : "Comment"}
             </button>
           </div>
         )}
       </div>
     )
+  }
   return (
     <div className="spec-box-new is-anchored">
       <p className="spec-comment-quote">{quote}</p>

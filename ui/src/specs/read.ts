@@ -67,6 +67,8 @@ export function needsYou(spec: Spec): boolean {
 export interface Comment {
   m: Message
   quote?: string
+  re?: number
+  excerpt?: string
   text: string
 }
 
@@ -91,13 +93,13 @@ function onSpecThread(channel: Pick<Channel, "specs">, spec: SpecThread): (m: Me
 
 export function commentsOf(channel: Pick<Channel, "messages" | "specs">, spec: SpecThread): Comment[] {
   const on = onSpecThread(channel, spec)
-  return channel.messages
-    .filter((m) => on(m) && !m.system && !m.deleted)
-    .sort((a, b) => a.seq - b.seq)
-    .map((m) => {
-      const { quote, text } = splitQuote(wordsRaw(m.text))
-      return { m, ...(quote ? { quote } : {}), text }
-    })
+  const shown = channel.messages.filter((m) => on(m) && !m.system && !m.deleted).sort((a, b) => a.seq - b.seq)
+  const seqs = new Set(shown.map((m) => m.seq))
+  return shown.map((m) => {
+    const { quote, text } = splitQuote(wordsRaw(m.text))
+    if (m.replyTo !== undefined && seqs.has(m.replyTo)) return { m, re: m.replyTo, ...(quote ? { excerpt: quote } : {}), text }
+    return { m, ...(quote ? { quote } : {}), text }
+  })
 }
 
 const squash = (s: string): string =>
