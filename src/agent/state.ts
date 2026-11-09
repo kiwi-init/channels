@@ -7,7 +7,7 @@ import type { Identity } from "@kiwi/core/identity.ts";
 import type { DaemonPeek } from "../daemon/protocol.ts";
 import { seatHolds, seatRefusal } from "../hold.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
-import { decodedWhole, GENERAL_ROOM, knownOp, olderRules, outgrown, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
+import { decodedWhole, GENERAL_ROOM, knownOp, olderRules, outgrown, PAGE_LIMIT, reviewCheckOf, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { downgrades } from "@kiwi/core/ship-gate.ts";
 import { findRoom, fold, rosterOf, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
@@ -64,7 +64,7 @@ export class SessionState {
       if (m && this.log && seq === lastSeq(this.log) + 1) this.log = [...this.log, m];
       else this.owed = Math.max(this.owed, seq);
     };
-    this.ch.downgradesFor = (m) => (this.folded ? downgrades(this.folded, m) : []);
+    this.ch.downgradesFor = (m) => (this.folded ? downgrades(this.folded, reviewCheckOf(this.ch.roomId), m) : []);
   }
 
   get me(): string {

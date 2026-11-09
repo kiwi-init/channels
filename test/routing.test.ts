@@ -45,11 +45,11 @@ describe("cards", () => {
     const s = fold(await cards(), roster);
     expect(s.members.get("mac")!.card).toMatchObject({ os: "macos", tools: ["git", "xcode", "docker"], repo: "ojow/channels" });
     expect(cardLine(s.members.get("linux")!.card)).toBe("linux x64 · tools: git, docker, gpu · the CI box");
-    const status = formatStatus({ alias: "c", me: "mac", state: s, online: new Map(), unread: 0 });
+    const status = formatStatus({ check: "kiwi/review/test", alias: "c", me: "mac", state: s, online: new Map(), unread: 0 });
     expect(status).toContain("codex · ojow/channels\n");
     expect(status).not.toContain("tools:");
     expect(status).not.toContain(" · key ");
-    const all = formatStatus({ alias: "c", me: "mac", state: s, online: new Map(), unread: 0, all: true });
+    const all = formatStatus({ check: "kiwi/review/test", alias: "c", me: "mac", state: s, online: new Map(), unread: 0, all: true });
     expect(all).toContain("codex · windows x64 · ojow/channels · tools: git, dotnet");
     expect(all).toContain(" · key ");
   });
@@ -219,7 +219,7 @@ describe("review", () => {
     expect(s.rejected.get(selfDone.seq)).toContain("someone who hasn't worked on it");
     expect(s.tasks.get(t)!.notes.map((n) => n.text)).toEqual(["missing the Windows steps"]);
     expect(s.tasks.get(t)!.approvedBy).toBe("linux");
-    expect(formatTasks(fold([add, claim], roster))).toContain("[review by anyone who hasn't worked on it]");
+    expect(formatTasks(fold([add, claim], roster), "kiwi/review/test")).toContain("[review by anyone who hasn't worked on it]");
   });
 
   test("handing it to someone first doesn't make the doer its reviewer", async () => {

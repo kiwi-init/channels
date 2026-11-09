@@ -52,7 +52,7 @@ describe("an old channel's roles read the same as personalities", () => {
     expect(brief("puma")).toContain("Your instructions: keeps the board");
     expect(brief("wren")).toContain("You join as frontend (Builder). You may write and ask.");
     expect(brief("otter")).toContain("You join as tester (Builder). You may only read.");
-    const status = formatStatus({ alias: "c", me: "puma", state: s, online: new Map(), unread: 0, now: 0 });
+    const status = formatStatus({ check: "kiwi/review/test", alias: "c", me: "puma", state: s, online: new Map(), unread: 0, now: 0 });
     expect(status).toContain("you are puma (Lead)");
     expect(status).toContain("wren — frontend (Builder)");
   });

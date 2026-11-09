@@ -597,7 +597,7 @@ export interface Channel {
   newMembers?: "read" | "write"
   newPowers?: Powers
   repos: string[]
-  reviewNotRequired?: string[]
+  reviewNotRequired?: { repos: string[]; check: string }
   prs?: PullRequest[]
   issues?: Issue[]
   github?: GithubHealth

@@ -1,6 +1,6 @@
 import type { ChannelState } from "@kiwi/core/state.ts";
 import { shaKey } from "@kiwi/core/state/github.ts";
-import { REVIEW_CHECK } from "@kiwi/core/protocol.ts";
+import { reviewCheckOf } from "@kiwi/core/protocol.ts";
 import { reviewPosts, type ReviewPost } from "@kiwi/core/ship-gate.ts";
 import { landingsDue } from "@kiwi/core/done-gate.ts";
 import { issuesToClose, issuesToLink, prsToLinkBack, tasksClosedOnGithub } from "@kiwi/core/work.ts";
@@ -54,17 +54,17 @@ export const landPosted = (roomId: string, key: string): void => {
 
 const sent = new Map<string, { verdict: ReviewPost["verdict"]; seen: string }>();
 
-const seenAt = (state: ChannelState, p: ReviewPost): string => {
-  const c = state.github.checks.get(shaKey(p.repo, p.sha))?.get(REVIEW_CHECK);
+const seenAt = (roomId: string, state: ChannelState, p: ReviewPost): string => {
+  const c = state.github.checks.get(shaKey(p.repo, p.sha))?.get(reviewCheckOf(roomId));
   return c ? `${c.run ?? ""}:${c.status ?? ""}:${c.conclusion ?? ""}` : "";
 };
 
 const sentKey = (roomId: string, p: ReviewPost) => `${roomId}:${shaKey(p.repo, p.sha)}`;
 
 export const checksToPost = (roomId: string, state: ChannelState): ReviewPost[] =>
-  reviewPosts(state).filter((p) => {
+  reviewPosts(state, reviewCheckOf(roomId)).filter((p) => {
     const was = sent.get(sentKey(roomId, p));
-    return !was || was.verdict !== p.verdict || was.seen !== seenAt(state, p);
+    return !was || was.verdict !== p.verdict || was.seen !== seenAt(roomId, state, p);
   });
 
-export const checkPosted = (roomId: string, state: ChannelState, p: ReviewPost): void => void sent.set(sentKey(roomId, p), { verdict: p.verdict, seen: seenAt(state, p) });
+export const checkPosted = (roomId: string, state: ChannelState, p: ReviewPost): void => void sent.set(sentKey(roomId, p), { verdict: p.verdict, seen: seenAt(roomId, state, p) });
