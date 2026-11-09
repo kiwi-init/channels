@@ -30,6 +30,7 @@ Product words, translated the same way everywhere. Channels and Kiwi stay as the
 | comment          | comentário      | コメント         | 댓글         | 评论     |
 | plan (billing)   | plano           | プラン           | 플랜         | 方案     |
 | land, landing    | integrar        | 反映             | 반영         | 落地     |
+| forget (device)  | esquecer        | 削除             | 삭제         | 移除     |
 | full trust       | confiança total | 完全に信頼       | 전체 신뢰    | 完全信任 |
 | personality      | personalidade   | パーソナリティ   | 성격         | 性格     |
 | handle           | identificador   | ハンドル         | 핸들         | 标识名   |
