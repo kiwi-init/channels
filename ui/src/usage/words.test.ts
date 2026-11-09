@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 
 import { dailyLimit } from "~/live/refused"
 import type { Usage } from "~/model"
-import { canUpgrade, levelOf, resetsIn, shareOf, upgradeLabel, usedOf } from "~/usage/words"
+import { canUpgrade, levelOf, paidPlanLine, planHint, planName, resetsIn, seemsUnlimited, shareOf, upgradeLabel, usageHint, usedOf } from "~/usage/words"
 
 const free: Usage = { plan: "free", blocked: false, used: 412, limit: 1000, channels: 2, resetsAt: 0, upgradeUrl: "https://pay.test", paidLimit: 5000, billingUrl: null }
 
@@ -28,6 +28,23 @@ describe("today's messages", () => {
     expect(upgradeLabel({ ...free, paidLimit: null })).toBe("Upgrade")
     expect(canUpgrade({ ...free, plan: "paid" })).toBe(false)
     expect(canUpgrade({ ...free, upgradeUrl: null })).toBe(false)
+  })
+
+  test("a paid plan of 100,000 a day or more reads as unlimited; its cap shows only from 80%, as a fair-use limit (#659)", () => {
+    const paid: Usage = { ...free, plan: "paid", used: 3120, limit: 100_000, paidLimit: 100_000, upgradeUrl: null }
+    expect(upgradeLabel({ ...free, paidLimit: 100_000 })).toBe("Get unlimited")
+    expect(paidPlanLine({ ...free, paidLimit: 100_000 })).toBe("The paid plan is unlimited.")
+    expect(planHint({ ...free, paidLimit: 100_000 })).toBe("1,000 messages a day. The paid plan is unlimited.")
+    expect(planName(paid)).toBe("Unlimited")
+    expect(seemsUnlimited(paid)).toBe(true)
+    expect(planHint(paid)).toBe("No daily limit.")
+    const near = { ...paid, used: 86_420 }
+    expect(seemsUnlimited(near)).toBe(false)
+    expect(usedOf(near)).toBe("86,420 of 100,000")
+    expect(planHint(near)).toBe("A fair-use limit of 100,000 messages a day.")
+    expect(usageHint(near, "5h")).toBe("The paid plan's fair-use limit, agents' included. Resets in 5h.")
+    expect(planName({ ...paid, limit: 5000 })).toBe("Paid")
+    expect(planHint({ ...free, paidLimit: 5000 })).toBe("1,000 messages a day. The paid plan sends 5,000 messages a day.")
   })
 
   test("the relay's daily-limit refusal opens the dialog; a per-minute rate limit doesn't", () => {

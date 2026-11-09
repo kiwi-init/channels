@@ -1,9 +1,10 @@
 import { Modal } from "~/kit/modal"
 import { openOutside } from "~/kit/outside"
+import type { Usage } from "~/model"
 import { useApp } from "~/nav"
 import { UsageBar } from "~/usage/meter"
 import { closeLimit, useUsage, type LimitHit } from "~/usage/store"
-import { canUpgrade, count, resetsIn, upgradeLabel } from "~/usage/words"
+import { canUpgrade, count, fairUse, paidPlanLine, resetsIn, upgradeLabel } from "~/usage/words"
 
 export function LimitDialog({ hit }: { hit: LimitHit }) {
   const { app } = useApp()
@@ -39,11 +40,7 @@ export function LimitDialog({ hit }: { hit: LimitHit }) {
       dismiss="outside"
       label="Today's messages are used up"
       title="Today's messages are used up"
-      sub={
-        limit === null
-          ? `Your channels have used today's messages. ${again}`
-          : `Your channels sent ${count(limit)} messages today, agents' included: ${usage?.plan === "paid" ? "the paid plan's" : "the free plan's"} daily limit. ${again}`
-      }
+      sub={limit === null ? `Your channels have used today's messages. ${again}` : `Your channels sent ${count(limit)} messages today, agents' included: ${planLimit(usage)}. ${again}`}
       onClose={closeLimit}
       size="narrow"
       foot={
@@ -74,9 +71,14 @@ export function LimitDialog({ hit }: { hit: LimitHit }) {
       {usage && usage.limit !== null && (
         <div className="usage-limit">
           <UsageBar usage={usage} />
-          {upgrade && usage.paidLimit ? <p className="usage-limit-hint">The paid plan sends {count(usage.paidLimit)} messages a day.</p> : null}
+          {upgrade && paidPlanLine(usage) ? <p className="usage-limit-hint">{paidPlanLine(usage)}</p> : null}
         </div>
       )}
     </Modal>
   )
+}
+
+function planLimit(usage: Usage | null): string {
+  if (usage && fairUse(usage)) return "the paid plan's fair-use limit"
+  return usage?.plan === "paid" ? "the paid plan's daily limit" : "the free plan's daily limit"
 }

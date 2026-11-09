@@ -38,7 +38,7 @@ const switchTo = threadAt(params.get("switch"))
 
 export function DemoApp() {
   const [nav, setNav] = useState<Nav>(() => ({ ...(shot?.channel ? navigate(startNav(null), { to: "channel", code: shot.channel }) : startNav(null)), ...shot?.nav }))
-  const app = useDemo(shot?.scenario ?? "full", nav.channel, look)
+  const app = useDemo(shot?.scenario ?? "full", nav.channel, look, shot?.usage)
   const go = useCallback((g: Go) => setNav((n) => navigate(n, g)), [])
   useEffect(uiBooted, [])
   useKeepPlace(nav)

@@ -1,5 +1,5 @@
 import type { Scenario } from "~/demo/provider"
-import type { Prefs } from "~/model"
+import type { Prefs, Usage } from "~/model"
 import type { Nav } from "~/nav"
 
 export interface Shot {
@@ -10,7 +10,10 @@ export interface Shot {
   docs?: number
   streams?: boolean
   onboarding?: true
+  usage?: Partial<Usage>
 }
+
+const PAID: Partial<Usage> = { plan: "paid", used: 3_120, limit: 100_000, paidLimit: 100_000, upgradeUrl: null, billingUrl: "https://billing.stripe.com/demo" }
 
 const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "kiwi", nav })
 
@@ -105,6 +108,9 @@ export const SHOTS: Record<string, Shot> = {
   removed: { scenario: "removed", channel: "studio" },
   waiting: { scenario: "full", channel: "ops" },
   settings: kiwi({ page: "settings", section: "account" }),
+  "settings-paid": { ...kiwi({ page: "settings", section: "account" }), usage: PAID },
+  "settings-paid-near": { ...kiwi({ page: "settings", section: "account" }), usage: { ...PAID, used: 86_420 } },
+  "settings-paid-full": { ...kiwi({ page: "settings", section: "account" }), usage: { ...PAID, used: 100_000 } },
   "settings-appearance": kiwi({ page: "settings", section: "appearance" }),
   "settings-themes": {
     ...kiwi({ page: "settings", section: "appearance" }),

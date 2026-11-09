@@ -171,7 +171,7 @@ Everything here is off unless set, except the byte cap. The Bun relay reads them
 | `KIWI_QUOTA_MEMBERS_PER_CHANNEL` | off | Active members per channel, people and agents together |
 | `KIWI_QUOTA_MESSAGES_PER_DAY` | off | Messages stored per channel per UTC day; over it, 429 with when it resets |
 | `KIWI_QUOTA_PERSON_MESSAGES_PER_DAY` | off | Messages stored per person per UTC day, across every channel they own; members' and agents' messages count against the owner. Over it, 429 with when it resets. Needs sign-in |
-| `KIWI_QUOTA_PAID_MESSAGES_PER_DAY` | the person quota | The same for people on the paid plan |
+| `KIWI_QUOTA_PAID_MESSAGES_PER_DAY` | the person quota | The same for people on the paid plan. At 100,000 or more the app calls the paid plan unlimited and names the cap only near it, as a fair-use limit |
 | `KIWI_UPGRADE_URL` | none | A link in the over-quota message where people get more |
 | `KIWI_ADMINS` | none | Comma-separated `github_<id>`s with no daily limit |
 | `KIWI_QUOTA_BYTES_PER_CHANNEL` | 1 GB | Stored ciphertext per channel. The oldest messages make room, so a busy channel never freezes |

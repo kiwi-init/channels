@@ -7,7 +7,7 @@ import { Icon } from "~/kit/icons"
 import type { TextFont } from "@kiwi/app/theme.ts"
 import { personFingerprint } from "@kiwi/core/fingerprint.ts"
 import { KEYS_UNSEALED } from "@kiwi/secrets/keys-at-rest.ts"
-import type { Account, Prefs, Theme, UpdateCheck, Usage } from "~/model"
+import type { Account, Prefs, Theme, UpdateCheck } from "~/model"
 import { updateFound } from "~/settings/update-check"
 import { useApp } from "~/nav"
 import { Confirm, Group, InlineEdit, Row, Seg } from "~/settings/controls"
@@ -17,7 +17,7 @@ import { UI_VERSION } from "~/settings/ui-version"
 import { OutsideLink } from "~/kit/outside"
 import { UsageBar } from "~/usage/meter"
 import { useUsage } from "~/usage/store"
-import { canUpgrade, count, levelOf, planName, resetsIn, upgradeLabel, usedOf } from "~/usage/words"
+import { canUpgrade, levelOf, planHint, planName, resetsIn, seemsUnlimited, upgradeLabel, usageHint, usedOf } from "~/usage/words"
 
 export function Page({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
   return (
@@ -134,8 +134,8 @@ function UsageRow() {
           </OutsideLink>
         )}
       </Row>
-      {usage.limit !== null && (
-        <Row label="Messages today" hint={`In the channels you own, agents' included. Resets in ${resetsIn(usage.resetsAt, usage.checkedAt)}.`}>
+      {usage.limit !== null && !seemsUnlimited(usage) && (
+        <Row label="Messages today" hint={usageHint(usage, resetsIn(usage.resetsAt, usage.checkedAt))}>
           <span className="set-usage">
             <span className={cx("set-value set-mono", near && "is-near")}>{usedOf(usage)}</span>
             <UsageBar usage={usage} />
@@ -149,13 +149,6 @@ function UsageRow() {
       )}
     </>
   )
-}
-
-function planHint(u: Usage): string {
-  if (u.plan === "unlimited") return "No daily limit on this relay."
-  const a = u.limit === null ? "No daily limit" : `${count(u.limit)} messages a day`
-  if (u.plan === "paid") return `${a}.`
-  return u.paidLimit ? `${a}. The paid plan sends ${count(u.paidLimit)}.` : `${a}.`
 }
 
 const THEMES = [
