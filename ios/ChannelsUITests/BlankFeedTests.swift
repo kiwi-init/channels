@@ -35,6 +35,12 @@ final class BlankFeedTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(wait))
                 try look(screen, field, "step \(at + 1) (\(words.debugDescription.prefix(24))) after \(wait) ms")
             }
+            if at == 1 {
+                let shot = XCTAttachment(screenshot: app.screenshot())
+                shot.name = "typing two lines\(extra.isEmpty ? "" : " in a busy channel")"
+                shot.lifetime = .keepAlways
+                add(shot)
+            }
         }
         let start = CGPoint(x: screen.window.midX, y: screen.window.height * 0.35)
         screen.drag(from: start, by: CGVector(dx: 0, dy: 260), hold: 0.1)
