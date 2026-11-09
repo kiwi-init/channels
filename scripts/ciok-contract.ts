@@ -6,7 +6,10 @@ const DOC_TESTS: [name: string, command: string][] = [
   ["doc replay, a line you send from the composer shows once, whole, in a second window of yours too", "bun scripts/ui-doc-replay.ts --chromium --second-window --rounds=2"],
   ["doc send, sending at the bottom, scrolled up or a long line keeps the view where it was", "bun scripts/ui-send-scroll.ts"],
   ["doc follow, at the bottom the view follows an agent's lines, also right after you send while it posts and edits, in Chromium and WebKit", "bun scripts/ui-doc-follow.ts"],
-  ["AFK meadow, the AFK scene draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer, in WebKit", "bun scripts/ui-afk-meadow.ts"],
+  [
+    "meadow, the scene behind onboarding and the site draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer, in WebKit",
+    "bun scripts/ui-meadow.ts",
+  ],
   ["doc image order, a line sent with an image from the composer stays above the lines sent after it", "bun scripts/ui-doc-image-order.ts"],
   [
     "image copies, a Retina shot in the feed and the doc shows from a copy sized to its box, while the viewer, Save image and a drag get the original, in Chromium and WebKit",

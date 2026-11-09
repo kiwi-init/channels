@@ -240,9 +240,9 @@ jobs:
       - name: doc follow, at the bottom the view follows an agent's lines, also right after you send while it posts and edits, in Chromium and WebKit
         if: ${{ !cancelled() && matrix.part == 'view' }}
         run: bun scripts/ui-doc-follow.ts
-      - name: AFK meadow, the AFK scene draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer, in WebKit
+      - name: meadow, the scene behind onboarding and the site draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer, in WebKit
         if: ${{ !cancelled() && matrix.part == 'view' }}
-        run: bun scripts/ui-afk-meadow.ts
+        run: bun scripts/ui-meadow.ts
       - name: doc image order, a line sent with an image from the composer stays above the lines sent after it
         if: ${{ !cancelled() && matrix.part == 'send' }}
         run: bun scripts/ui-doc-image-order.ts
@@ -417,9 +417,9 @@ jobs:
       - name: ui rooms are flat in Chromium and WebKit, a reply shows inline with its quote and nothing opens a thread
         if: ${{ !cancelled() }}
         run: bun scripts/ui-flat-rooms.ts --dist ui/dist && bun scripts/ui-flat-rooms.ts --dist ui/dist --webkit
-      - name: ui AFK covers the window, a key or a click on the sky dismisses it without reaching the app, a mouse move keeps it, a channel click opens that channel, and the app's own Reduce motion keeps it still, in Chromium and WebKit
+      - name: ui onboarding's meadow holds still with the app's own Reduce motion, in Chromium and WebKit
         if: ${{ !cancelled() }}
-        run: bun scripts/ui-afk.ts --dist ui/dist && bun scripts/ui-afk.ts --dist ui/dist --webkit
+        run: bun scripts/ui-onboarding-meadow.ts --dist ui/dist && bun scripts/ui-onboarding-meadow.ts --dist ui/dist --webkit
       - name: ui portrait window in WebKit is one tall page, agents, tasks and chat in view, and landscape is unchanged
         if: ${{ !cancelled() }}
         run: bun scripts/ui-tall-page.ts --dist ui/dist
