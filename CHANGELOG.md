@@ -2,6 +2,33 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.14 — 2026-11-09
+
+- **iPhone: Needs you acts on permissions, joins and specs** ([#1945](https://github.com/kiwi-init/channels/pull/1945))
+- **iPhone: the composer empties after Send, every time** ([#1946](https://github.com/kiwi-init/channels/pull/1946))
+- **iPhone: the desktop's look: Cinder Peak and Channels Light, no glass** ([#1948](https://github.com/kiwi-init/channels/pull/1948))
+- **iPhone: agents wear the desktop's role faces** ([#1949](https://github.com/kiwi-init/channels/pull/1949))
+- **iPhone: tinted Liquid Glass on the chrome** ([#1952](https://github.com/kiwi-init/channels/pull/1952))
+- **Permissions: any seat of the agent's person allows, not only the one humanOf picks** ([#1954](https://github.com/kiwi-init/channels/pull/1954))
+- **iPhone push: register the APNs token with every channel** ([#1951](https://github.com/kiwi-init/channels/pull/1951))
+- **iPhone cold start: the list opens from sealed copies of each channel** ([#1955](https://github.com/kiwi-init/channels/pull/1955))
+- **iPhone: avatars as the desktop draws them, no prism left** ([#1953](https://github.com/kiwi-init/channels/pull/1953))
+- **iPhone engine: places lists every room, DM and task thread** ([#1956](https://github.com/kiwi-init/channels/pull/1956))
+- **Relay: a per-person daily message quota, leased to each owned channel (T17)** ([#1967](https://github.com/kiwi-init/channels/pull/1967))
+- **Relay: admin routes to list people and set their plan or block (T19)** ([#1968](https://github.com/kiwi-init/channels/pull/1968))
+- **Today's use in Account; the quota's 429 as one line in the CLI (T20)** ([#1969](https://github.com/kiwi-init/channels/pull/1969))
+- **Stripe: the paid plan via a Payment Link and a signed webhook (T21)** ([#1970](https://github.com/kiwi-init/channels/pull/1970))
+- **iOS: upload a TestFlight build on every iOS push to main** ([#1974](https://github.com/kiwi-init/channels/pull/1974))
+- **Phones: the iPhone and Android apps as they run today, in one PR** ([#1976](https://github.com/kiwi-init/channels/pull/1976))
+- **Relay: 1.6 storage row writes per message instead of 6.5 (T89)** ([#1975](https://github.com/kiwi-init/channels/pull/1975))
+- **Relay: 1,000 messages a day free, 5,000 paid, with the upgrade link (T21)** ([#1978](https://github.com/kiwi-init/channels/pull/1978))
+- **Docs: a privacy page at /docs/privacy** ([#1977](https://github.com/kiwi-init/channels/pull/1977))
+- **iOS: Look Around First opens a sample channel** ([#1979](https://github.com/kiwi-init/channels/pull/1979))
+- **Landing: the site build makes /afk/scene, so the meadow draws behind the landing again** ([#1980](https://github.com/kiwi-init/channels/pull/1980))
+- **AFK: the map shows every channel's pin from inside a channel, not only from Home** ([#1981](https://github.com/kiwi-init/channels/pull/1981))
+- **Account: admins see how many people use the relay and how many were on it today (spec #131)** ([#1982](https://github.com/kiwi-init/channels/pull/1982))
+- **Site: Get iOS Beta on the landing page** ([#1983](https://github.com/kiwi-init/channels/pull/1983))
+
 ## 2026.11.13 — 2026-11-07
 
 - **Linux: a quiet start, proven on Arch KDE, and spell check proven to underline (T7214)** ([#1931](https://github.com/kiwi-init/channels/pull/1931))
