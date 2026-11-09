@@ -4,7 +4,7 @@ final class DemoTests: XCTestCase {
     @MainActor
     func testSampleChannel() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-demo", "YES"]
+        app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         XCTAssertTrue(app.staticTexts["A sample channel. Sign in to see yours."].waitForExistence(timeout: 15))
         add(shot(app, "demo list"))
