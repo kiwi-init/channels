@@ -291,20 +291,21 @@ describe("the done gate (#623 §5)", () => {
         await c.ev("ann", { op: "task.update", task: t, state: "review", at: `run:${id}` });
         await c.ev("mac", { op: "task.update", task: t, state: "done", verdict: "approved", round: c.state().tasks.get(t)!.rounds.length, at: `run:${id}` });
       };
-      const passed = async (phase: CheckAsk["phase"], id: string) => {
-        const ask = await c.say("ann", "blocking", "Is the run good?", { to: ["jow"], esc: true, choices: ["A: good", "B: not yet"], holds: [t], check: runCheck(phase, id) });
-        return c.answer(ask, "A: good");
-      };
+      const ask = (phase: CheckAsk["phase"], id: string) =>
+        c.say("ann", "blocking", "Is the run good?", { to: ["jow"], esc: true, choices: ["A: good", "B: not yet"], holds: [t], check: runCheck(phase, id) });
+      const answer = (m: Message) => c.answer(m, "A: good");
+      const passed = async (phase: CheckAsk["phase"], id: string) => answer(await ask(phase, id));
       const gate = () => doneGate(c.state(), c.state().tasks.get(t)!);
-      return { c, t, declare, approveRun, passed, gate };
+      return { c, t, declare, approveRun, ask, answer, passed, gate };
     }
 
     test("a run approved at its declared id, cleared before it started and confirmed after, still waits with only the start its runner reports", async () => {
       const r = await runTask(1);
       await r.declare("job-1");
+      const pre = await r.ask("pre-ship", "job-1");
       await r.approveRun("job-1");
-      expect(shipGate(r.c.state(), r.c.state().tasks.get(r.t)!)).toEqual({ open: false, rejected: false, missing: ["a pre-ship check passed for run job-1"] });
-      await r.passed("pre-ship", "job-1");
+      expect(shipGate(r.c.state(), r.c.state().tasks.get(r.t)!)).toEqual({ open: false, rejected: false, missing: [`check #${pre.seq}`] });
+      await r.answer(pre);
       expect(shipGate(r.c.state(), r.c.state().tasks.get(r.t)!)).toEqual({ open: true });
       expect(r.gate()).toEqual({ kind: "waiting", why: runStarts("job-1") });
       await r.declare("job-1", at(r.c.log.length) + 500);
@@ -320,8 +321,8 @@ describe("the done gate (#623 §5)", () => {
     test("a reported start later than the real one can't turn a late pre-ship pass into a landing", async () => {
       const r = await runTask(1);
       await r.declare("job-1");
-      await r.approveRun("job-1");
       const ask = await r.c.say("ann", "blocking", "Is the run good?", { to: ["jow"], esc: true, choices: ["A: good", "B: not yet"], holds: [r.t], check: runCheck("pre-ship", "job-1") });
+      await r.approveRun("job-1");
       const realStart = at(r.c.log.length) + 100;
       const answer = await r.c.answer(ask, "A: good");
       expect(answer.rts!).toBeGreaterThan(realStart);
@@ -334,8 +335,9 @@ describe("the done gate (#623 §5)", () => {
     test("a post check answered with no trusted receipt time can't land a run", async () => {
       const r = await runTask();
       await r.declare("job-1");
+      const pre = await r.ask("pre-ship", "job-1");
       await r.approveRun("job-1");
-      await r.passed("pre-ship", "job-1");
+      await r.answer(pre);
       await r.declare("job-1", at(r.c.log.length) + 500);
       const post = await r.c.say("ann", "blocking", "Did it work?", { to: ["jow"], esc: true, choices: ["A: good", "B: not yet"], holds: [r.t], check: runCheck("post", "job-1") });
       await r.c.answer(post, "A: good", "none");
@@ -346,8 +348,9 @@ describe("the done gate (#623 §5)", () => {
     test("case 7: a run confirmation quoting a different run id doesn't count", async () => {
       const r = await runTask(1);
       await r.declare("job-1");
+      const pre = await r.ask("pre-ship", "job-1");
       await r.approveRun("job-1");
-      await r.passed("pre-ship", "job-1");
+      await r.answer(pre);
       await r.declare("job-1", at(r.c.log.length) + 500);
       await r.passed("post", "job-2");
       expect(r.gate()).toEqual({ kind: "waiting", why: runStarts("job-1") });
@@ -359,8 +362,8 @@ describe("the done gate (#623 §5)", () => {
     test("case 14: a pre-ship check answered after the run's start counts as a bypass", async () => {
       const r = await runTask();
       await r.declare("job-1");
-      await r.approveRun("job-1");
       const ask = await r.c.say("ann", "blocking", "Is the run good?", { to: ["jow"], esc: true, choices: ["A: good", "B: not yet"], holds: [r.t], check: runCheck("pre-ship", "job-1") });
+      await r.approveRun("job-1");
       const started = at(r.c.log.length) + 500;
       await r.c.answer(ask, "A: good");
       await r.declare("job-1", started);
@@ -372,8 +375,9 @@ describe("the done gate (#623 §5)", () => {
     test("an approval pinned to another run, or none before the start, is a bypass", async () => {
       const r = await runTask();
       await r.declare("job-1");
+      const pre = await r.ask("pre-ship", "job-1");
       await r.approveRun("job-0");
-      await r.passed("pre-ship", "job-1");
+      await r.answer(pre);
       expect(shipGate(r.c.state(), r.c.state().tasks.get(r.t)!)).toEqual({ open: false, rejected: false, missing: ["an approval at run job-1"] });
       await r.declare("job-1", at(r.c.log.length) + 500);
       expect(r.gate()).toEqual({ kind: "bypassed", missing: ["an approval at run job-1"] });
@@ -382,8 +386,9 @@ describe("the done gate (#623 §5)", () => {
     test("case 15: started 10:00, pre-ship pass 10:05, proof at 10:10 with no start time: it stays landing and never lands by itself", async () => {
       const r = await runTask();
       await r.declare("job-1");
+      const pre = await r.ask("pre-ship", "job-1");
       await r.approveRun("job-1");
-      await r.passed("pre-ship", "job-1");
+      await r.answer(pre);
       await r.c.ev("ann", { op: "task.update", task: r.t, run: { id: "job-1" }, note: "ran" });
       await r.passed("post", "job-1");
       expect(r.gate()?.kind).toBe("waiting");
@@ -442,8 +447,9 @@ describe("the done gate (#623 §5)", () => {
       async function cleared() {
         const r = await runTask(1);
         await r.declare("job-1");
+        const pre = await r.ask("pre-ship", "job-1");
         await r.approveRun("job-1");
-        await r.passed("pre-ship", "job-1");
+        await r.answer(pre);
         return r;
       }
 
@@ -477,8 +483,9 @@ describe("the done gate (#623 §5)", () => {
         const r = await runTask(1);
         const early = now(r) + 500;
         await r.declare("job-1");
+        const pre = await r.ask("pre-ship", "job-1");
         await r.approveRun("job-1");
-        await r.passed("pre-ship", "job-1");
+        await r.answer(pre);
         await workflow(r, 4243, "job-1", now(r) + 500);
         await workflow(r, 4242, "job-1", early);
         await r.passed("post", "job-1");
@@ -492,8 +499,9 @@ describe("the done gate (#623 §5)", () => {
         const r = await runTask(1);
         await workflow(r, 4242, "Deploy", now(r) + 500);
         await r.declare("4242");
+        const pre = await r.ask("pre-ship", "4242");
         await r.approveRun("4242");
-        await r.passed("pre-ship", "4242");
+        await r.answer(pre);
         expect(r.c.state().tasks.get(r.t)!.run?.start).toMatchObject({ run: 4242 });
         expect(r.gate()).toEqual({ kind: "bypassed", missing: ["an approval before the run", "a pre-ship check passed before the run"] });
       });
@@ -513,8 +521,9 @@ describe("the done gate (#623 §5)", () => {
         const r = await runTask(1);
         await r.declare("job-1");
         const claimed = now(r);
+        const pre = await r.ask("pre-ship", "job-1");
         await r.approveRun("job-1");
-        await r.passed("pre-ship", "job-1");
+        await r.answer(pre);
         await r.declare("job-1", claimed);
         await workflow(r, 4242, "job-1", now(r) + 500);
         await r.passed("post", "job-1");
@@ -540,8 +549,9 @@ describe("the done gate (#623 §5)", () => {
         const r = await runTask(1);
         const early = now(r) + 500;
         await r.declare("job-1");
+        const pre = await r.ask("pre-ship", "job-1");
         await r.approveRun("job-1");
-        await r.passed("pre-ship", "job-1");
+        await r.answer(pre);
         await landed(r);
         const kept: { base?: FoldBase } = {};
         fold(r.c.log, roster, at(10_000), null, null, null, (b) => (kept.base = b));
@@ -586,8 +596,9 @@ describe("the done gate (#623 §5)", () => {
         await workflow(r, 4242, "job-1", now(r) + 500);
         await crowd(r.c, 5000, 500, now(r) + 500);
         await r.declare("job-1");
+        const pre = await r.ask("pre-ship", "job-1");
         await r.approveRun("job-1");
-        await r.passed("pre-ship", "job-1");
+        await r.answer(pre);
         await workflow(r, 4243, "job-1", now(r) + 500);
         await r.passed("post", "job-1");
         expect(r.c.state().tasks.get(r.t)!.run).toMatchObject({ blind: true, start: { run: 4243 } });
@@ -608,8 +619,9 @@ describe("the done gate (#623 §5)", () => {
         const r = await runTask(501);
         expect(r.c.state().github.runsForgotten).toBeLessThan(r.c.state().tasks.get(r.t)!.createdRts!);
         await r.declare("job-1");
+        const pre = await r.ask("pre-ship", "job-1");
         await r.approveRun("job-1");
-        await r.passed("pre-ship", "job-1");
+        await r.answer(pre);
         await workflow(r, 4243, "job-1", now(r) + 500);
         await r.passed("post", "job-1");
         expect(r.gate()).toEqual({ kind: "landed", artifact: job("job-1") });
@@ -618,8 +630,9 @@ describe("the done gate (#623 §5)", () => {
       test("a task created before Kiwi held any GitHub run start can't land by itself", async () => {
         const r = await runTask();
         await r.declare("job-1");
+        const pre = await r.ask("pre-ship", "job-1");
         await r.approveRun("job-1");
-        await r.passed("pre-ship", "job-1");
+        await r.answer(pre);
         await workflow(r, 4243, "job-1", now(r) + 500);
         await r.passed("post", "job-1");
         expect(r.gate()).toEqual({ kind: "waiting", why: runBlind("job-1") });
@@ -632,8 +645,9 @@ describe("the done gate (#623 §5)", () => {
           if (forget) await crowd(r.c, 5000, 500, at(0));
           expect(r.c.state().github.runs.has(`${R}/1`)).toBe(!forget);
           await r.declare("ci-1");
+          const pre = await r.ask("pre-ship", "ci-1");
           await r.approveRun("ci-1");
-          await r.passed("pre-ship", "ci-1");
+          await r.answer(pre);
           await workflow(r, 4243, "ci-1", now(r) + 500);
           await r.passed("post", "ci-1");
           await workflow(r, 1, "ci-1", at(0));

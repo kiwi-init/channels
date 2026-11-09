@@ -161,7 +161,7 @@ export class ChannelStore {
     this.ch.beforeSend = async (body, opts) => {
       const state = this.state.value;
       const from = [...state.members.values()].find((m) => m.pk === member.identity.pk)?.name;
-      const may = opts.ev?.op === "task.update" || !!opts.check || !!opts.re?.some((id) => state.checks.has(id));
+      const may = opts.ev?.op === "task.update" || opts.ev?.op === "ask.close" || !!opts.check || !!opts.re?.some((id) => state.checks.has(id));
       return from && may ? (await import("@kiwi/core/ship-gate.ts")).postDowngrades(state, reviewCheckOf(this.ch.roomId), { ...opts, from, body }, (c) => this.ch.postReviewCheck(c)) : [];
     };
     this.lend = deps?.lend ?? ((code) => watches().lend(code));

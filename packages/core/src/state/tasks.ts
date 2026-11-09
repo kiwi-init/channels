@@ -1,4 +1,6 @@
 import { hasLanding, type Landing, type OldTaskState, type TaskState, type Verdict } from "../protocol.ts";
+import type { CheckAsk, CheckPhase } from "../checks.ts";
+import type { CheckState } from "./checks.ts";
 import type { ChannelState, ReviewRound, Task } from "./types.ts";
 
 export function taskId(id: number): string {
@@ -88,6 +90,56 @@ export function landingRefusal(task: Task, ev: LandingChange, from: { person: bo
 export function landingReopens(task: Task, ev: LandingChange): boolean {
   if (task.state !== "landing") return false;
   return (ev.then !== undefined && ev.then !== (task.then ?? "none")) || landerAfter(task, ev) !== landerOf(task) || newPr(task, ev.proof) || newRun(task, ev.run);
+}
+
+const landingHeld = (tasks: ReadonlyMap<number, Task>, phase: CheckPhase, holds: readonly number[]): Task[] =>
+  phase !== "pre-ship"
+    ? []
+    : holds.flatMap((id) => {
+        const t = tasks.get(id);
+        return t?.state === "landing" ? [t] : [];
+      });
+
+const liveCheck = (checks: ReadonlyMap<number, CheckState>, id: number): CheckState | undefined => {
+  const c = checks.get(id);
+  return c && c.closed === undefined && c.supersededBy === undefined ? c : undefined;
+};
+
+export function landingTouchedByAsk(
+  tasks: ReadonlyMap<number, Task>,
+  checks: ReadonlyMap<number, CheckState>,
+  m: { check?: CheckAsk; choices?: readonly string[]; holds?: readonly number[] },
+): Task[] {
+  if (!m.check || !m.choices?.length) return [];
+  const was = m.check.replaces === undefined ? undefined : liveCheck(checks, m.check.replaces);
+  return [...new Set([...landingHeld(tasks, m.check.phase, m.holds ?? []), ...(was ? landingHeld(tasks, was.phase, was.holds) : [])])];
+}
+
+export const landingTouchedByClose = (tasks: ReadonlyMap<number, Task>, checks: ReadonlyMap<number, CheckState>, ask: number): Task[] => {
+  const c = liveCheck(checks, ask);
+  return c ? landingHeld(tasks, c.phase, c.holds) : [];
+};
+
+export function checkChangeRefusal(touched: readonly Task[], from: { person: boolean; lead: boolean }, change: "adds a check to" | "replaces a check on" | "closes a check on"): string | null {
+  if (!touched.length || from.person || from.lead) return null;
+  return `only a person or the lead ${change} ${touched.map((t) => taskId(t.id)).join(", ")} once it's approved`;
+}
+
+export function backToReview(task: Task, mark: { seq: number; by: string; ts: number; rts?: number }, why: string): void {
+  const last = task.rounds.at(-1);
+  task.rounds.push({
+    n: (last?.n ?? 0) + 1,
+    ...(last?.at ? { at: last.at } : {}),
+    by: mark.by,
+    seq: mark.seq,
+    ts: mark.ts,
+    ...(mark.rts !== undefined ? { rts: mark.rts } : {}),
+    result: { kind: "open" },
+  });
+  task.state = "review";
+  task.approvedBy = undefined;
+  task.updatedAt = mark.ts;
+  task.notes.push({ seq: mark.seq, by: mark.by, ts: mark.ts, text: `${why}: back to review` });
 }
 
 export function reviewMoveRefusal(task: Task, from: { name: string; person: boolean; lead: boolean }, review: string | null | undefined): string | null {
