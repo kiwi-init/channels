@@ -164,6 +164,30 @@ describe("the done gate (#623 §5)", () => {
     expect(doneGate(c.state(), c.state().tasks.get(t)!)?.kind).toBe("bypassed");
   });
 
+  test("case 5: a closed check, or a passed one its asker replaced, keeps the ship gate shut, and a merge then is a bypass", async () => {
+    const closed = await channel();
+    const a = await closed.task();
+    await closed.opened(a, S1);
+    const ask = await closed.askCheck(a, kde(S1));
+    await closed.answer(ask, "A: works on KDE");
+    await closed.ev("ann", { op: "ask.close", ask: ask.seq });
+    await closed.approve(a, S1);
+    expect(shipGate(closed.state(), closed.state().tasks.get(a)!)).toEqual({ open: false, rejected: false, missing: [`check #${ask.seq}`] });
+    await closed.merged(a, S1, at(closed.log.length + 1));
+    expect(doneGate(closed.state(), closed.state().tasks.get(a)!)).toEqual({ kind: "bypassed", missing: [`check #${ask.seq} passed before the merge`] });
+
+    const replaced = await channel();
+    const b = await replaced.task();
+    await replaced.opened(b, S1);
+    const first = await replaced.askCheck(b, kde(S1));
+    await replaced.answer(first, "A: works on KDE");
+    const second = await replaced.say("ann", "blocking", "Check it again", { to: ["jow"], esc: true, choices: OPTIONS, holds: [b], check: { ...kde(S1), replaces: first.seq } });
+    await replaced.approve(b, S1);
+    expect(shipGate(replaced.state(), replaced.state().tasks.get(b)!)).toEqual({ open: false, rejected: false, missing: [`check #${second.seq}`] });
+    await replaced.merged(b, S1, at(replaced.log.length + 1));
+    expect(doneGate(replaced.state(), replaced.state().tasks.get(b)!)).toEqual({ kind: "bypassed", missing: [`check #${second.seq} passed before the merge`] });
+  });
+
   test("a recorded CI run counts by when it finished: a late report of an early green holds, a rerun failing after the merge doesn't undo it", async () => {
     const c = await channel();
     const t = await c.task();
@@ -468,6 +492,32 @@ describe("the done gate (#623 §5)", () => {
         expect(t).toMatchObject({ state: "done", landed: { key: `T${r.t}:run:job-1`, by: "jow" } });
         expect(r.c.state().rejected.get(again.seq)).toBeUndefined();
         expect(t.notes.filter((n) => n.text.startsWith("landed:"))).toHaveLength(1);
+      });
+
+      test("case 7: with GitHub's start for job-1, a post check confirming job-2 doesn't land it, and a task.landed naming job-2 is refused", async () => {
+        const r = await cleared();
+        await workflow(r, 4242, "job-1", now(r) + 500);
+        await r.passed("post", "job-2");
+        expect(r.gate()).toEqual({ kind: "waiting", why: "a passed post check at run job-1, answered after it started" });
+        const wrong = await r.c.land("jow", r.t, job("job-2"));
+        expect(r.c.state().rejected.get(wrong.seq)).toBe(`T${r.t} hasn't landed: it waits for a passed post check at run job-1, answered after it started`);
+        await r.passed("post", "job-1");
+        expect(r.gate()).toEqual({ kind: "landed", artifact: job("job-1") });
+      });
+
+      test("case 12: once the run under its current id lands, a task.landed naming the id it declared before is refused", async () => {
+        const r = await runTask(1);
+        await r.declare("job-0");
+        await r.declare("job-1");
+        const pre = await r.ask("pre-ship", "job-1");
+        await r.approveRun("job-1");
+        await r.answer(pre);
+        await workflow(r, 4242, "job-1", now(r) + 500);
+        await r.passed("post", "job-1");
+        expect(r.gate()).toEqual({ kind: "landed", artifact: job("job-1") });
+        const stale = await r.c.land("jow", r.t, job("job-0"));
+        expect(r.c.state().rejected.get(stale.seq)).toBe(`T${r.t} lands at run job-1, not run job-0`);
+        expect(r.c.state().tasks.get(r.t)!.state).toBe("landing");
       });
 
       test("a post check answered before GitHub's start doesn't confirm the run", async () => {
