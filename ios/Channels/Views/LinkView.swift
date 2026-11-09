@@ -41,6 +41,8 @@ struct LinkView: View {
                 problems
                 PrimaryButton(title: "Sign In") { Task { await model.signIn() } }
                     .padding(.top, 20)
+                QuietButton(title: "Look Around First") { model.startDemo() }
+                    .padding(.top, 8)
             }
         case .opening:
             VStack(alignment: .leading, spacing: 0) {

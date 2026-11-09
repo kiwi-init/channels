@@ -47,6 +47,7 @@ final class AppModel {
     var relinkAsked = false
     var path: [Route] = []
     var tab: AppTab = .chats
+    var demo = false
     var focusNext: Spot?
     var enrolled = false
     var joining = 0
@@ -115,6 +116,10 @@ final class AppModel {
             return
         }
         #if DEBUG
+            if UserDefaults.standard.bool(forKey: "demo") {
+                startDemo()
+                return
+            }
             if let json = ProcessInfo.processInfo.environment["CHANNELS_FIXTURE"] {
                 do {
                     let room = try JSONDecoder().decode(RoomView.self, from: Data(json.utf8))
@@ -491,7 +496,36 @@ final class AppModel {
         return out
     }
 
+    func startDemo() {
+        do {
+            let room = try Demo.room()
+            engine.demo = true
+            demo = true
+            rooms = [room.code: room]
+            path = []
+            tab = .chats
+            phase = .ready
+        } catch {
+            Trouble.note("open the sample channel", error)
+        }
+    }
+
+    func endDemo() {
+        engine.demo = false
+        demo = false
+        rooms = [:]
+        feeds = [:]
+        pending = [:]
+        path = []
+        tab = .chats
+        phase = .unlinked
+    }
+
     func unlink() {
+        if demo {
+            endDemo()
+            return
+        }
         Vault.wipe()
         Kept.wipe()
         push.forget()
