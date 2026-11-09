@@ -587,8 +587,54 @@
 }
 
 .spec-box-new {
+  position: relative;
   display: grid;
   gap: 8px;
+  border-radius: var(--r-ctl);
+}
+
+.spec-box-new.is-dropping {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.spec-box-new .compose-files {
+  padding: 0;
+}
+
+.spec-box-field {
+  position: relative;
+}
+
+.spec-box-field .spec-box-text {
+  padding-right: calc(var(--ctl) - 2px);
+}
+
+.spec-box-attach {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: calc(var(--ctl) - 6px);
+  height: calc(var(--ctl) - 6px);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: none;
+  color: var(--ink-3);
+  transition:
+    background var(--fast),
+    color var(--fast);
+}
+
+.spec-box-attach:hover {
+  background: var(--wash-2);
+  color: var(--ink);
+}
+
+.spec-box-new > .mentions {
+  left: 0;
+  max-width: 100%;
 }
 
 .spec-box-new + .spec-box-new {

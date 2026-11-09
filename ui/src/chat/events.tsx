@@ -1,6 +1,9 @@
 import { Suspense, useCallback, useState } from "react"
+import { createPortal } from "react-dom"
 
+import { useUpdatesSlot } from "~/chat/updates-slot"
 import { cx } from "~/kit/bits"
+import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import type { Channel, Message } from "~/model"
 
@@ -22,17 +25,28 @@ export function Updates({ channel, runs, here, jump }: Props) {
     setOpened(target)
     if (target !== null) setOpen(true)
   }
-  if (!runs.length) return null
-  return (
+  const slot = useUpdatesSlot()
+  if (!runs.length || !slot) return null
+  return createPortal(
     <div className="updates">
-      <button type="button" className={cx("updates-toggle", open && "is-on")} data-updates-toggle aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)}>
-        Updates
+      <button
+        type="button"
+        className={cx("icon-btn", "updates-toggle", open && "is-on")}
+        data-updates-toggle
+        aria-label="Updates"
+        title="Updates"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setOpen(!open)}
+      >
+        <Icon name="updates" />
       </button>
       {open && (
         <Suspense fallback={null}>
           <Panel channel={channel} runs={runs} here={here} target={target} onClose={close} />
         </Suspense>
       )}
-    </div>
+    </div>,
+    slot
   )
 }

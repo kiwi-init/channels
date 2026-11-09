@@ -4,7 +4,8 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { sendsOn, sendTitle, type SendKey } from "~/chat/send-keys"
 import type { Channel, Message, Spec } from "~/model"
 import { ActContext, AppContext, type Act, type Ctx } from "~/nav"
-import { CommentBox, commentKeys, type CommentReply } from "~/specs/comment-box"
+import { pastedFiles } from "~/chat/attach"
+import { CommentBox, commentKeys, commentOf, type CommentReply } from "~/specs/comment-box"
 import { wrote } from "~/words"
 
 const key = (more: Partial<SendKey>): SendKey & { preventDefault(): void } => ({
@@ -35,7 +36,7 @@ const spec: Spec = {
   tasks: [],
 }
 
-const channel = { code: "c", you: "jow", messages: [], tasks: [], nicknames: new Map() } as unknown as Channel
+const channel = { code: "c", you: "jow", people: [], former: [], messages: [], tasks: [], nicknames: new Map() } as unknown as Channel
 
 const render = (enterSends: boolean, quote?: string, reply?: CommentReply): string =>
   renderToStaticMarkup(
@@ -106,5 +107,39 @@ describe("one send rule for the chat composer and spec comments (#1842)", () => 
     expect(replying).toContain("Replying to <b>win</b>")
     expect(replying).toContain('placeholder="Reply to win"')
     expect(render(true)).not.toContain("compose-reply")
+  })
+})
+
+const shot = { name: "shot.png", mime: "image/png", data: "iVBORw0KGgo=" }
+
+const clip = (files: File[], items: File[] = []) =>
+  ({ files: Object.assign([...files], { item: (i: number) => files[i] ?? null }), items: items.map((f) => ({ kind: "file", getAsFile: () => f })) }) as unknown as Pick<DataTransfer, "files" | "items">
+
+describe("spec comments take images like the chat composer (#1838)", () => {
+  test("both comment boxes offer an image button", () => {
+    expect(render(true)).toContain('aria-label="Add an image"')
+    expect(render(true, "a quoted line")).toContain('aria-label="Add an image"')
+  })
+
+  test("a pasted screenshot is taken from the clipboard's files or its items, and only images", () => {
+    const png = new File(["x"], "shot.png", { type: "image/png" })
+    const txt = new File(["x"], "notes.txt", { type: "text/plain" })
+    expect(pastedFiles(clip([png, txt]), false)).toEqual([png])
+    expect(pastedFiles(clip([], [png]), false)).toEqual([png])
+    expect(pastedFiles(clip([png, txt]), true)).toEqual([png, txt])
+  })
+
+  test("a comment with only an image sends, as one message in the spec thread carrying it", () => {
+    expect(commentOf(10, "  ", [])).toBeNull()
+    expect(commentOf(10, "", [shot])).toEqual({ text: "", extras: { inThread: 10, images: [shot] } })
+    expect(commentOf(10, " looks off ", [shot])).toEqual({ text: "looks off", extras: { inThread: 10, images: [shot] } })
+    expect(commentOf(10, "here", [shot], "a line")).toEqual({ text: "> a line\n\nhere", extras: { inThread: 10, images: [shot] } })
+    expect(commentOf(10, "words", [])).toEqual({ text: "words", extras: { inThread: 10 } })
+  })
+
+  test("a reply to a comment carries replyTo, and quotes its excerpt when there is one (#1840)", () => {
+    const to = { seq: 12, from: "win", at: 0, text: wrote("subtasks should nest"), where: { kind: "room", room: "general" }, inThread: 10 } as Message
+    expect(commentOf(10, "only one level", [], undefined, { to, excerpt: "should nest" })).toEqual({ text: "> should nest\n\nonly one level", extras: { inThread: 10, replyTo: 12 } })
+    expect(commentOf(10, "agreed", [shot], undefined, { to, excerpt: null })).toEqual({ text: "agreed", extras: { inThread: 10, replyTo: 12, images: [shot] } })
   })
 })

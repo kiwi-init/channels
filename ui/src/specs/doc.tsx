@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 
 import { useNames, useTaskIds } from "~/chat/conversation"
 import { Body } from "~/chat/body"
+import { MessageImages } from "~/chat/message"
 import { preview } from "~/chat/preview"
 import { QuotePick } from "~/chat/quote-pick"
 import { jumpTo } from "~/chat/reply"
@@ -284,7 +285,8 @@ function CommentItem({
           <span>{c.quote}</span>
         </button>
       )}
-      <Body text={wrote(c.text)} seq={c.m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
+      {c.text.trim() && <Body text={wrote(c.text)} seq={c.m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />}
+      {c.m.images && <MessageImages code={channel.code} images={c.m.images} open={openImage} />}
     </article>
   )
 }
