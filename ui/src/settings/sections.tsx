@@ -16,6 +16,9 @@ import { Themes } from "~/settings/themes"
 import { copyText } from "~/kit/toasts"
 import { UI_VERSION } from "~/settings/ui-version"
 import { OutsideLink } from "~/kit/outside"
+import { UsageBar } from "~/usage/meter"
+import { useUsage } from "~/usage/store"
+import { canUpgrade, count, levelOf, planName, resetsIn, upgradeLabel, usedOf } from "~/usage/words"
 
 export function Page({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
   return (
@@ -112,30 +115,32 @@ export function AccountSection() {
   )
 }
 
-const NEAR = 0.8
-
 function UsageRow() {
   const { app } = useApp()
-  const [usage, setUsage] = useState<(Usage & { hours: number }) | null>(null)
-  useEffect(() => {
-    let live = true
-    void app.actions.myUsage().then((u) => live && setUsage(u && { ...u, hours: Math.max(1, Math.round((u.resetsAt - Date.now()) / 3_600_000)) }))
-    return () => {
-      live = false
-    }
-  }, [app.actions])
+  const usage = useUsage(app.actions.myUsage)
   if (!usage) return null
-  const near = usage.limit !== null && usage.used >= usage.limit * NEAR
+  const near = levelOf(usage) !== "calm"
   return (
     <>
+      <Row label="Plan" hint={planHint(usage)}>
+        <span className="set-value">{planName(usage)}</span>
+        {canUpgrade(usage) && usage.upgradeUrl && (
+          <OutsideLink className="btn is-primary is-small" href={usage.upgradeUrl}>
+            {upgradeLabel(usage)}
+          </OutsideLink>
+        )}
+        {usage.plan === "paid" && usage.billingUrl && (
+          <OutsideLink className="btn is-small" href={usage.billingUrl}>
+            Manage
+          </OutsideLink>
+        )}
+      </Row>
       {usage.limit !== null && (
-        <Row label="Messages today" hint={`In the channels you own, agents' included. Resets in ${usage.hours}h.`}>
-          <span className={cx("set-value set-mono", near && "is-near")}>{`${usage.used.toLocaleString()} of ${usage.limit.toLocaleString()}`}</span>
-          {near && usage.upgradeUrl && (
-            <OutsideLink className="btn is-primary is-small" href={usage.upgradeUrl}>
-              Get more
-            </OutsideLink>
-          )}
+        <Row label="Messages today" hint={`In the channels you own, agents' included. Resets in ${resetsIn(usage.resetsAt, usage.checkedAt)}.`}>
+          <span className="set-usage">
+            <span className={cx("set-value set-mono", near && "is-near")}>{usedOf(usage)}</span>
+            <UsageBar usage={usage} />
+          </span>
         </Row>
       )}
       {usage.people && (
@@ -145,6 +150,13 @@ function UsageRow() {
       )}
     </>
   )
+}
+
+function planHint(u: Usage): string {
+  if (u.plan === "unlimited") return "No daily limit on this relay."
+  const a = u.limit === null ? "No daily limit" : `${count(u.limit)} messages a day`
+  if (u.plan === "paid") return `${a}.`
+  return u.paidLimit ? `${a}. The paid plan sends ${count(u.paidLimit)}.` : `${a}.`
 }
 
 const THEMES = [

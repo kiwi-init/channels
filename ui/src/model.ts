@@ -859,6 +859,8 @@ export interface Usage {
   channels: number
   resetsAt: number
   upgradeUrl: string | null
+  paidLimit?: number | null
+  billingUrl?: string | null
   people?: { total: number; today: number }
 }
 

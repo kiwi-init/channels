@@ -30,6 +30,7 @@ export interface RelayPolicy {
   personMessagesPerDay: number | null;
   paidMessagesPerDay: number | null;
   upgradeUrl: string | null;
+  billingUrl: string | null;
   admins: string[];
   /** Ciphertext bytes a channel may hold across its retained messages. */
   bytesPerChannel: number;
@@ -52,6 +53,7 @@ export const OPEN_POLICY: RelayPolicy = {
   personMessagesPerDay: null,
   paidMessagesPerDay: null,
   upgradeUrl: null,
+  billingUrl: null,
   admins: [],
   bytesPerChannel: SAFETY_BYTES_PER_CHANNEL,
   expireAfterDays: null,
@@ -86,6 +88,7 @@ export function policyFrom(env: Record<string, string | undefined>): RelayPolicy
     personMessagesPerDay: positive(env.KIWI_QUOTA_PERSON_MESSAGES_PER_DAY),
     paidMessagesPerDay: positive(env.KIWI_QUOTA_PAID_MESSAGES_PER_DAY),
     upgradeUrl: env.KIWI_UPGRADE_URL?.trim() || null,
+    billingUrl: env.KIWI_BILLING_URL?.trim() || null,
     admins: (env.KIWI_ADMINS ?? "")
       .split(",")
       .map((s) => s.trim().toLowerCase())
