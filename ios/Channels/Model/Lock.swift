@@ -6,6 +6,7 @@ import Observation
 @Observable
 final class Lock {
     private static let grace: TimeInterval = 30
+    static let offKey = "lockOff"
 
     var locked = Lock.startsLocked
     @ObservationIgnored private var leftAt: Date?
@@ -15,8 +16,13 @@ final class Lock {
         #if DEBUG
             if UserDefaults.standard.string(forKey: "shot") != nil { return false }
         #endif
+        if UserDefaults.standard.bool(forKey: offKey) { return false }
         if case .empty = Vault.load() { return false }
         return true
+    }
+
+    private var on: Bool {
+        !UserDefaults.standard.bool(forKey: Lock.offKey)
     }
 
     var available: Bool {
@@ -28,7 +34,7 @@ final class Lock {
     }
 
     func back() async {
-        if let leftAt, Date.now.timeIntervalSince(leftAt) > Lock.grace { locked = true }
+        if on, let leftAt, Date.now.timeIntervalSince(leftAt) > Lock.grace { locked = true }
         leftAt = nil
         await unlock()
     }

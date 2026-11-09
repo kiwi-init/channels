@@ -194,6 +194,11 @@ enum When {
         return "\(date.formatted(.dateTime.day().month(.abbreviated).year())) at"
     }
 
+    static func elapsed(from start: Date, to now: Date) -> String {
+        let s = max(0, Int(now.timeIntervalSince(start)))
+        return s < 60 ? "\(s)s" : s < 3600 ? "\(s / 60)m \(s % 60)s" : "\(s / 3600)h \(s % 3600 / 60)m"
+    }
+
     static func clock(_ date: Date) -> String {
         date.formatted(.dateTime.hour().minute())
     }

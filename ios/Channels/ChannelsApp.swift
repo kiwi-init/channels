@@ -5,6 +5,7 @@ struct ChannelsApp: App {
     @UIApplicationDelegateAdaptor(PushDelegate.self) private var push
     @State private var model = AppModel()
     @State private var lock = Lock()
+    @State private var cover = LockCover()
     @Environment(\.scenePhase) private var scene
 
     init() {
@@ -15,9 +16,11 @@ struct ChannelsApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .overlay {
-                    if lock.locked && model.phase == .ready {
-                        Locked { Task { await lock.unlock() } }
+                .onChange(of: lock.locked && model.phase == .ready, initial: true) { _, shut in
+                    if shut {
+                        cover.show { Task { await lock.unlock() } }
+                    } else {
+                        cover.hide()
                     }
                 }
                 .task { await model.boot() }
@@ -58,11 +61,11 @@ struct RootView: View {
         Group {
             switch model.phase {
             case .starting:
-                Tone.canvas.ignoresSafeArea()
+                Starting()
             case .unlinked:
                 LinkView()
             case .ready:
-                ConversationList()
+                Shell()
                     .sheet(isPresented: relinking) {
                         LinkView().presentationDragIndicator(.visible)
                     }
@@ -81,6 +84,28 @@ struct RootView: View {
         }
         .background(Tone.canvas)
         .tint(Tone.accent)
+    }
+}
+
+struct Starting: View {
+    @State private var slow = false
+
+    var body: some View {
+        ZStack {
+            Tone.canvas.ignoresSafeArea()
+            if slow {
+                VStack(spacing: 14) {
+                    Image("Mark").resizable().scaledToFit().frame(width: 56, height: 56)
+                    ProgressView()
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Starting Channels")
+            }
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(600))
+            slow = true
+        }
     }
 }
 

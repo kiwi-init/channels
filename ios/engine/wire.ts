@@ -78,6 +78,7 @@ export interface MemberView {
   harness: string | null;
   mono: boolean;
   doing: number[];
+  person: string;
 }
 
 interface QuoteView {
@@ -192,6 +193,7 @@ export interface RoomView {
   title: string;
   icon: IconView;
   me: string;
+  root: string;
   isOwner: boolean;
   connection: Connection;
   gone: "removed" | "closed" | null;

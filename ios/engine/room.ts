@@ -122,11 +122,8 @@ export class Room {
       this.error = null;
       this.schedule();
     } catch (e) {
+      if (e instanceof ChannelGone) return this.fail(e);
       this.schedule();
-      if (e instanceof ChannelGone) {
-        this.gone = e.why;
-        return;
-      }
       this.error = e instanceof Error ? e.message : String(e);
       this.connection = "reconnecting";
       if (this.closed) return;

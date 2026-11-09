@@ -77,13 +77,25 @@ final class ThemeStore {
     var lights: [ThemeDef] { all.filter { !$0.dark } }
 
     private init() {
-        let url = Bundle.main.url(forResource: "themes", withExtension: "json")
-        all = url.flatMap { try? Data(contentsOf: $0) }.flatMap { try? JSONDecoder().decode([ThemeDef].self, from: $0) } ?? []
+        all = ThemeStore.bundled()
         let saved = UserDefaults.standard
         appearance = AppearanceChoice(rawValue: saved.string(forKey: "appearance") ?? "") ?? .system
         darkTheme = saved.string(forKey: "darkTheme") ?? ThemeStore.darkDefault
         lightTheme = saved.string(forKey: "lightTheme") ?? ThemeStore.lightDefault
         Palettes.set(dark: swatch(darkTheme, ThemeStore.darkDefault), light: swatch(lightTheme, ThemeStore.lightDefault))
+    }
+
+    private static func bundled() -> [ThemeDef] {
+        guard let url = Bundle.main.url(forResource: "themes", withExtension: "json") else {
+            Trouble.note("themes.json missing from the app")
+            return []
+        }
+        do {
+            return try JSONDecoder().decode([ThemeDef].self, from: Data(contentsOf: url))
+        } catch {
+            Trouble.note("themes.json unreadable", error)
+            return []
+        }
     }
 
     func name(_ id: String) -> String {
