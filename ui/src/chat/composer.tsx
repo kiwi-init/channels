@@ -1,8 +1,6 @@
 import { lazy, Suspense, useCallback, useContext, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
 
-import { MAX_FILE_BYTES, MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
-import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
-import { takePasted } from "@kiwi/app/pasted.ts"
+import { AttachedFiles, DropHint, IMAGE_TYPES, useAttach } from "~/chat/attach"
 import { matchCommands, parseCommand } from "~/chat/commands"
 import { useCommands } from "~/chat/use-commands"
 import { EditHere, startEditing, stopEditing, useEditingIn } from "~/chat/editing"
@@ -35,26 +33,6 @@ function placeOf(channel: Channel, where: Where, inThread?: number): string {
   if (where.kind === "dm") return `your chat with ${nickname(channel, where.with)}`
   return "here"
 }
-
-const MAX_FILES = 8
-const IMAGE_TYPES = new Set<string>(RASTER_MIMES)
-
-function imageName(file: File): string {
-  if (file.name) return file.name
-  const ext = file.type === "image/jpeg" ? "jpg" : (file.type.split("/")[1] ?? "png")
-  return `pasted.${ext}`
-}
-
-const readBase64 = (file: File): Promise<string> =>
-  new Promise((done, fail) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const url = String(reader.result)
-      done(url.slice(url.indexOf(",") + 1))
-    }
-    reader.onerror = () => fail(reader.error ?? new Error("the image couldn't be read"))
-    reader.readAsDataURL(file)
-  })
 
 type ComposerProps = { channel: Channel; where: Where; placeholder: string; inThread?: number; doc?: string | null }
 
@@ -94,7 +72,6 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     setFilesNow(attached.get(key) ?? [])
     area.current?.focus()
   }, [back, key, moved])
-  const [dropping, setDropping] = useState(false)
   const [alsoRoom, setAlsoRoom] = useState(false)
   const enterSends = app.prefs.enterSends
   const stash = useStash(key)
@@ -114,75 +91,6 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     const gif = { label: "GIF", run: () => setGifsOpen(true) }
     openMenu.set({ x: at.left, y: at.top, label: "Add to the message", groups: [gifsReady ? [image, gif] : [image]], above: true })
   }
-
-  const add = (upload: Upload) => setFiles((now) => (now.length < MAX_FILES ? [...now, upload] : now))
-  const [reading, setReading] = useState(0)
-  const queued = useRef<string | null>(null)
-  const track = (job: Promise<unknown>): void => {
-    setReading((n) => n + 1)
-    void job.finally(() => setReading((n) => n - 1))
-  }
-  const attach = (list: readonly File[]) => {
-    if (edit) return void toast("An edit changes only the text. Send the image in a new message.", "error")
-    const room = MAX_FILES - files.length
-    if (list.length > room) toast(`Up to ${MAX_FILES} images in one message`)
-    for (const f of list.slice(0, Math.max(0, room))) {
-      const name = imageName(f)
-      const image = IMAGE_TYPES.has(f.type)
-      if (!image && !doc) {
-        toast(`${name} isn't a PNG, JPEG, GIF or WebP`, "error")
-        continue
-      }
-      if (!image && (!f.size || f.size > MAX_FILE_BYTES)) {
-        toast(`${name} is empty or too big to send`, "error")
-        continue
-      }
-      if (image && f.size > MAX_IMAGE_BYTES) {
-        track(
-          import("@kiwi/app/compress-image.ts").then(({ compressImage, renamed }) =>
-            compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be read`, "error")))
-          )
-        )
-        continue
-      }
-      track(
-        readBase64(f).then(
-          (data) => add({ name, mime: f.type || "application/octet-stream", data }),
-          () => toast(`${name} couldn't be read`, "error")
-        )
-      )
-    }
-  }
-
-  const takeIn = (dt: DataTransfer) => {
-    setDropping(false)
-    if (dt.files.length) return attach([...dt.files])
-    void takeDropped(dt).then(({ files: dropped, refused }) => {
-      for (const why of refused) toast(why, "error")
-      attach(dropped)
-    })
-  }
-
-  const droppedOver = useEffectEvent((e: DragEvent, dt: DataTransfer) => {
-    const el = form.current
-    if (!el || (e.target instanceof Node && el.contains(e.target))) return
-    const r = el.getBoundingClientRect()
-    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) takeIn(dt)
-  })
-
-  useEffect(() => {
-    const block = (e: DragEvent) => {
-      if (!e.dataTransfer || !fileDrag(e.dataTransfer)) return
-      e.preventDefault()
-      if (e.type === "drop") droppedOver(e, e.dataTransfer)
-    }
-    window.addEventListener("dragover", block)
-    window.addEventListener("drop", block)
-    return () => {
-      window.removeEventListener("dragover", block)
-      window.removeEventListener("drop", block)
-    }
-  }, [])
 
   useLayoutEffect(() => {
     const el = area.current
@@ -220,6 +128,15 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     drafts.set(key, value)
   }
   const [edit, setEdit] = useState<Edit | null>(null)
+  const { attach, paste, reading, dropping, dropZone } = useAttach({
+    files,
+    setFiles,
+    zone: form,
+    toast,
+    anyFile: !!doc,
+    refused: () => (edit ? "An edit changes only the text. Send the image in a new message." : null),
+  })
+  const queued = useRef<string | null>(null)
   const at = useContext(EditHere)
   const editingSeq = useEditingIn(channel.code, at)
   const found = editingSeq === null ? undefined : channel.messages.find((m) => m.seq === editingSeq)
@@ -360,20 +277,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
           e.preventDefault()
           send()
         }}
-        onDragOver={(e) => {
-          if (!fileDrag(e.dataTransfer)) return
-          e.preventDefault()
-          setDropping(true)
-        }}
-        onDragLeave={(e) => {
-          if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return
-          setDropping(false)
-        }}
-        onDrop={(e) => {
-          if (!fileDrag(e.dataTransfer)) return
-          e.preventDefault()
-          takeIn(e.dataTransfer)
-        }}
+        {...dropZone}
       >
         {stash.list.length > 0 && (
           <div
@@ -411,23 +315,8 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
             </button>
           </div>
         )}
-        {dropping && (
-          <div className="compose-drop" aria-hidden="true">
-            Drop images to attach
-          </div>
-        )}
-        {files.length > 0 && (
-          <ul className="compose-files" aria-label="Attached images">
-            {files.map((f, i) => (
-              <li key={`${f.name}-${i}`} className="compose-file">
-                {f.mime.startsWith("image/") ? <img src={`data:${f.mime};base64,${f.data}`} alt={f.name} /> : <span className="compose-file-name">{f.name}</span>}
-                <button type="button" className="compose-file-x" aria-label={`Remove ${f.name}`} title="Remove" onClick={() => setFiles((now) => now.filter((_, j) => j !== i))}>
-                  <Icon name="close" size={12} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        {dropping && <DropHint />}
+        <AttachedFiles files={files} onRemove={(i) => setFiles((now) => now.filter((_, j) => j !== i))} />
         {replyTo && (
           <div className={cx("compose-reply", excerpt && "is-excerpt")}>
             <Icon name="reply" size={13} />
@@ -482,16 +371,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
               update(e.target.value, e.target.selectionStart)
             }}
             onSelect={(e) => s.moved(e.currentTarget.selectionStart)}
-            onPaste={(e) => {
-              const fromItems = [...e.clipboardData.items]
-                .filter((item) => item.kind === "file")
-                .map((item) => item.getAsFile())
-                .filter((file): file is File => !!file)
-              const images = (e.clipboardData.files.length ? [...e.clipboardData.files] : fromItems).filter((f) => doc || f.type.startsWith("image/"))
-              if (!images.length) return track(takePasted(e.clipboardData).then((f) => f && attach([f])))
-              if (!e.clipboardData.getData("text/plain")) e.preventDefault()
-              attach(images)
-            }}
+            onPaste={paste}
             onKeyDown={(e) => {
               if (composing(e)) return
               if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "s") {

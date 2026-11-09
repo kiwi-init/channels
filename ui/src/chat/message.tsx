@@ -12,7 +12,7 @@ import { Body } from "~/chat/body"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
-import { memberOf, type Channel, type ImageSpot, type Message, type Person } from "~/model"
+import { memberOf, type Channel, type Image, type ImageSpot, type Message, type Person } from "~/model"
 import { openMessage as showMessage } from "~/live/open-message"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
@@ -91,6 +91,10 @@ function Spot({ code, img }: { code: string; img: ImageSpot }) {
       {img.state === "gone" ? "Image no longer available" : "Loading image…"}
     </span>
   )
+}
+
+export function MessageImages({ code, images, open }: { code: string; images: readonly (Image | ImageSpot)[]; open: (url: string, alt: string) => void }) {
+  return <div className="msg-images">{images.map((img) => ("spot" in img ? <Spot key={img.spot} code={code} img={img} /> : <ShownImage key={img.url} image={img} open={open} />))}</div>
 }
 
 function Quote({ quoted, who, names, excerpt, onClick }: { quoted: Message; who: string; names: ReadonlyMap<string, string>; excerpt: string | null; onClick?: () => void }) {
@@ -240,9 +244,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             edited
           </span>
         )}
-        {m.images && (
-          <div className="msg-images">{m.images.map((img) => ("spot" in img ? <Spot key={img.spot} code={channel.code} img={img} /> : <ShownImage key={img.url} image={img} open={openImage} />))}</div>
-        )}
+        {m.images && <MessageImages code={channel.code} images={m.images} open={openImage} />}
         {m.docMedia && (
           <Suspense fallback={null}>
             <BlockFilesView code={channel.code} media={m.docMedia} open={openImage} />
