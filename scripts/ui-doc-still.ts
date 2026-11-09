@@ -276,6 +276,7 @@ async function watching(browser: Browser): Promise<string | null> {
   for (let loop = 1; loop <= LOOPS; loop++) {
     const why = await watchOnce(browser, loop);
     if (why) return LOOPS > 1 ? `${why} (loop ${loop} of ${LOOPS})` : why;
+    if (LOOPS > 1 && loop % 10 === 0) console.log(`  ${loop} of ${LOOPS} loops still`);
   }
   if (LOOPS > 1) console.log(`  the doc stayed still in all ${LOOPS} loops`);
   return null;

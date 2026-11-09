@@ -231,7 +231,7 @@ jobs:
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['doc']
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: ${{ inputs.doc_still_loops != '' && 60 || 15 }}
     strategy:
       fail-fast: false
       matrix:
