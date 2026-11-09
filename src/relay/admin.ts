@@ -24,6 +24,8 @@ interface Usage {
   channels: number;
   resetsAt: number;
   upgradeUrl: string | null;
+  paidLimit: number | null;
+  billingUrl: string | null;
   people?: { total: number; today: number };
 }
 
@@ -74,6 +76,8 @@ export async function onAdminHttp(req: Request, human: HumanAuth | null, policy:
       channels: row.channels,
       resetsAt: nextUtcMidnight(now),
       upgradeUrl: upgradeFor(policy.upgradeUrl, user),
+      paidLimit: free ? (policy.paidMessagesPerDay ?? null) : null,
+      billingUrl: row.plan === "paid" ? policy.billingUrl : null,
     };
     if (admin) {
       const people = await store.people();

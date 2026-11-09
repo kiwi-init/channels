@@ -10,6 +10,7 @@ import { ContextMenus } from "~/kit/menu-open"
 import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
 import { Rail } from "~/shell/rail"
+import { useLimitHit } from "~/usage/store"
 import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
 import { loadRex, useRex } from "~/theme/rex"
 import { activeTheme, wantsRex } from "~/theme/themes"
@@ -23,6 +24,7 @@ const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 const Afk = later(() => import("~/afk/afk").then((m) => m.Afk))
+const LimitDialog = later(() => import("~/usage/limit").then((m) => m.LimitDialog))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast, dismissToast] = useToasts()
@@ -94,9 +96,19 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
         <ContextMenus />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
         <AfkWatch minutes={app.prefs.afk} />
+        <LimitWatch />
       </ActContext>
     </AppContext>
   )
+}
+
+function LimitWatch() {
+  const hit = useLimitHit()
+  return hit ? (
+    <Suspense fallback={null}>
+      <LimitDialog hit={hit} />
+    </Suspense>
+  ) : null
 }
 
 function AfkWatch({ minutes }: { minutes: number }) {

@@ -33,7 +33,9 @@ import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
 import { appCan } from "~/live/app-can"
 import { useMarksSync } from "~/live/read-sync"
-import { refusal } from "~/live/refused"
+import { dailyLimit, refusal } from "~/live/refused"
+import { myUsage } from "~/live/usage"
+import { loadUsage, showLimit } from "~/usage/store"
 import { backWords, composerKey, giveBack } from "~/chat/drafts"
 import { giveBackBlock } from "~/chat/doc/give-back"
 import { stashText } from "~/chat/stash"
@@ -318,6 +320,10 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       } catch (err) {
         const why = refusal(err)
         if (why === null) {
+          if (dailyLimit(err)) {
+            loadUsage(myUsage, true)
+            showLimit(code)
+          }
           setPending((list) => list.map((p) => (p.key === key ? { ...p, failed: err instanceof Error ? err.message : String(err) } : p)))
           throw err
         }

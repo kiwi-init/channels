@@ -58,13 +58,22 @@ function setPlan(dataDir: string, user: string, plan: Plan, blocked = false) {
 
 describe("settings", () => {
   test("the person quota, the paid quota, the upgrade link and admins come from the environment", () => {
-    expect(policyFrom({ KIWI_QUOTA_PERSON_MESSAGES_PER_DAY: "500", KIWI_QUOTA_PAID_MESSAGES_PER_DAY: "3000", KIWI_UPGRADE_URL: " https://x/up ", KIWI_ADMINS: "github_1, GitHub_2" })).toMatchObject({
+    expect(
+      policyFrom({
+        KIWI_QUOTA_PERSON_MESSAGES_PER_DAY: "500",
+        KIWI_QUOTA_PAID_MESSAGES_PER_DAY: "3000",
+        KIWI_UPGRADE_URL: " https://x/up ",
+        KIWI_BILLING_URL: "https://x/billing",
+        KIWI_ADMINS: "github_1, GitHub_2",
+      }),
+    ).toMatchObject({
       personMessagesPerDay: 500,
       paidMessagesPerDay: 3000,
       upgradeUrl: "https://x/up",
+      billingUrl: "https://x/billing",
       admins: ["github_1", "github_2"],
     });
-    expect(policyFrom({})).toMatchObject({ personMessagesPerDay: null, paidMessagesPerDay: null, upgradeUrl: null, admins: [] });
+    expect(policyFrom({})).toMatchObject({ personMessagesPerDay: null, paidMessagesPerDay: null, upgradeUrl: null, billingUrl: null, admins: [] });
   });
 
   test("each plan's limit, and grants that never pass it", () => {
@@ -240,7 +249,16 @@ describe("today's use", () => {
     await ch.send("2");
     const read = async (login: string) => (await fetch(`${relay}/v1/me/usage`, { headers: { "x-human-token": token(login) } })).json();
     const bob = (await read("bob")) as { used: number };
-    expect(bob).toMatchObject({ plan: "free", blocked: false, limit: 5, channels: 1, resetsAt: Date.UTC(2026, 10, 9), upgradeUrl: "https://kiwi.test/upgrade?client_reference_id=github_2" });
+    expect(bob).toMatchObject({
+      plan: "free",
+      blocked: false,
+      limit: 5,
+      channels: 1,
+      resetsAt: Date.UTC(2026, 10, 9),
+      upgradeUrl: "https://kiwi.test/upgrade?client_reference_id=github_2",
+      paidLimit: 50,
+      billingUrl: null,
+    });
     expect(bob.used).toBeGreaterThanOrEqual(1);
     expect(bob.used).toBeLessThanOrEqual(2);
     expect(await read("alice")).toMatchObject({ plan: "unlimited", limit: null, used: 0 });
@@ -258,6 +276,16 @@ describe("today's use", () => {
     expect((await read("bob")).people).toBeUndefined();
     clock.now = Date.UTC(2026, 10, 10, 9, 0);
     expect((await read("alice")).people).toEqual({ total: 2, today: 0 });
+  });
+
+  test("a paid person also gets the billing link, to manage or cancel; a free one doesn't", async () => {
+    const { relay, dataDir } = relayWith({ personMessagesPerDay: 5, paidMessagesPerDay: 50, billingUrl: "https://kiwi.test/billing" });
+    await channelOf(relay, "bob");
+    await channelOf(relay, "carol");
+    setPlan(dataDir, "github_3", "paid");
+    const read = async (login: string) => (await (await fetch(`${relay}/v1/me/usage`, { headers: { "x-human-token": token(login) } })).json()) as { plan: string; billingUrl: string | null };
+    expect(await read("carol")).toMatchObject({ plan: "paid", billingUrl: "https://kiwi.test/billing" });
+    expect(await read("bob")).toMatchObject({ plan: "free", billingUrl: null });
   });
 
   test("with no quota configured there's no limit to show", async () => {
