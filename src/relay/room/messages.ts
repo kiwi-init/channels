@@ -134,7 +134,7 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
 
   const cap = policy.bytesPerChannel;
   if (ct.length > cap) return yield* new TooLarge({ message: `that message is bigger than this channel may hold (${formatBytes(cap)})` });
-  const sent = cid && tickets.length ? db.sendOf(sender, cid) : null;
+  const sent = cid && tickets.length ? db.priorSend(sender, cid, ts - SEND_MEMORY_MS) : null;
   if (sent) return { repeat: true, seq: sent.seq, ts: sent.ts } satisfies Repeat;
   for (const id of tickets) {
     const t = db.ticket(id);
@@ -143,20 +143,19 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   }
   const seq = db.head() + 1;
   const store = (): Envelope | Repeat => {
-    const prior = cid ? db.claimSend(sender, cid, seq, ts) : null;
+    const prior = cid ? db.priorSend(sender, cid, ts - SEND_MEMORY_MS) : null;
     if (prior) return { repeat: true, seq: prior.seq, ts: prior.ts } satisfies Repeat;
     let bytes = db.storedBytes();
     if (bytes + ct.length > cap) bytes -= db.dropOldest(bytes + ct.length - cap) + db.pruneBlobs();
     if (bytes + ct.length > cap) bytes -= db.dropOldestBlobs(bytes + ct.length - cap);
     if (bytes + ct.length > cap) bytes -= db.dropSnapshot();
 
-    db.insert(seq, ts, iv, ct, e);
+    db.insert(seq, ts, iv, ct, e, cid ? { sender, cid, since: ts - SEND_MEMORY_MS } : undefined);
     spendLease(db, policy, day);
     if (tickets.length) db.deliverTickets(tickets, seq);
     if (slots.free?.length) db.freeSlots(slots.free, sender);
     if (slots.take) db.takeSlot(slots.take.id, sender, seq, ts + slots.take.ttl, ts);
     bytes += ct.length;
-    if (seq % 100 === 0) db.pruneSends(ts - SEND_MEMORY_MS);
     db.setCounters({ bytes, day, n: today + 1, head: seq });
     return { seq, ts, iv, ct, e };
   };
