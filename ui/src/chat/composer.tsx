@@ -13,30 +13,18 @@ import { preview, useReplying } from "~/chat/reply"
 import { attached, composerKey, drafts, giveBack, tooLong, useGivenBack } from "~/chat/drafts"
 import { composing, sendsOn, sendTitle } from "~/chat/send-keys"
 import { STASH_SHOT, stashText, useStash } from "~/chat/stash"
-import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
+import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { openMenu } from "~/kit/menu-open"
 import type { Channel, Upload, Where } from "~/model"
 import { useApp } from "~/nav"
-import { nickname, onePerPerson, shown, Shown } from "~/names"
-import { mentionNames, withNames, type Picks } from "~/chat/linked"
-import { peopleMatches, taskMatches } from "~/chat/matches"
+import { nickname } from "~/names"
+import { withNames } from "~/chat/linked"
+import { listId, Suggestions, useSuggest } from "~/chat/suggest"
 import { wordsRaw } from "~/words"
 
 const Gifs = lazy(() => import("~/chat/gif-picker"))
 const StashList = lazy(() => import("~/chat/stash-list"))
-
-const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
-const TASK_REF = /(^|\s)#([^#\n]{0,40})$/u
-
-const picked = new Map<string, Picks>()
-function picksFor(key: string): Picks {
-  const have = picked.get(key)
-  if (have) return have
-  const made: Picks = new Map()
-  picked.set(key, made)
-  return made
-}
 
 type Cue = { key: string; back: boolean; left: number; lost?: number }
 
@@ -81,10 +69,9 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   const excerpt = replyTo ? (replying?.excerpt ?? null) : null
   const key = composerKey(channel.code, where, inThread)
   const [text, setText] = useState(() => drafts.get(key) ?? "")
-  const [caret, setCaret] = useState(text.length)
-  const [pick, setPick] = useState(0)
-  const [closed, setClosed] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
+  const s = useSuggest({ channel, id: key, text, area, onText: (value, at) => update(value, at) })
+  const moved = s.moved
   const box = useRef<HTMLDivElement>(null)
   const form = useRef<HTMLFormElement>(null)
   const picker = useRef<HTMLInputElement>(null)
@@ -103,10 +90,10 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     seenBack.current = back
     const got = drafts.get(key) ?? ""
     setText(got)
-    setCaret(got.length)
+    moved(got.length)
     setFilesNow(attached.get(key) ?? [])
     area.current?.focus()
-  }, [back, key])
+  }, [back, key, moved])
   const [dropping, setDropping] = useState(false)
   const [alsoRoom, setAlsoRoom] = useState(false)
   const enterSends = app.prefs.enterSends
@@ -222,22 +209,14 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     }
   }, [])
 
-  const typed = text.slice(0, caret)
-  const query = closed ? undefined : MENTION.exec(typed)?.[2]
-  const taskQuery = closed || query !== undefined ? undefined : TASK_REF.exec(typed)?.[2]
-  const matches = query === undefined ? [] : peopleMatches(channel.people, query)
-  const taskOptions = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
   const commands = useCommands(channel, inThread !== undefined)
-  const listed = closed || query !== undefined || taskQuery !== undefined ? [] : matchCommands(commands, text)
+  const listed = s.quiet ? [] : matchCommands(commands, text)
   const running = files.length ? null : parseCommand(commands, text)
-  const options = matches.length || taskOptions.length || listed.length
-  const mentions = useMemo(() => mentionNames(onePerPerson(channel.people), channel.former), [channel.people, channel.former])
+  const options = s.count || listed.length
 
-  const update = (value: string, at = value.length) => {
+  function update(value: string, at = value.length) {
     setText(value)
-    setCaret(at)
-    setPick(0)
-    setClosed(false)
+    s.moved(at)
     drafts.set(key, value)
   }
   const [edit, setEdit] = useState<Edit | null>(null)
@@ -304,7 +283,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     }
     const body = value.trim()
     if (!body && !files.length) return
-    const said = mentions.sent(body, picksFor(key))
+    const said = s.sent(body)
     const sent = excerpt ? withExcerpt(excerpt, said) : said
     const long = tooLong(sent)
     if (long) {
@@ -319,7 +298,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     }
     const back = (t: string, f: readonly Upload[]) => giveBack(key, t, f, stashText) === "stash" && setCue({ key, back: false, left: 0, lost: f.length })
     if (!say?.(said, replyTo ? { re: replyTo.seq, quote: excerpt } : null, back, files)) app.actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
-    picked.delete(key)
+    s.forget()
     replying?.set(null)
     setAlsoRoom(false)
     setFiles([])
@@ -335,18 +314,6 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     if (!reading) sendQueued()
   }, [reading])
   const ready = !!text.trim() || files.length > 0
-  const complete = (name: string) => insert(text.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${mentions.typed(name, picksFor(key))} `))
-  const completeTask = (id: number) => insert(text.slice(0, caret).replace(TASK_REF, (_all, pre: string) => `${pre}T${id} `))
-  const insert = (before: string) => {
-    const next = before + text.slice(caret)
-    update(next, before.length)
-    requestAnimationFrame(() => {
-      const el = area.current
-      if (!el) return
-      el.focus()
-      el.setSelectionRange(before.length, before.length)
-    })
-  }
 
   const putAway = () => {
     if (!text.trim()) return
@@ -375,8 +342,8 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
       {listed.length > 0 && (
         <ul className="mentions" role="listbox" aria-label="Commands" id={`${key}-commands`}>
           {listed.map((c, i) => (
-            <li key={c.name} role="option" aria-selected={i === pick}>
-              <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => insert(`/${c.name} `)}>
+            <li key={c.name} role="option" aria-selected={i === s.pick}>
+              <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === s.pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => s.insert(`/${c.name} `)}>
                 <span className="command-name">/{c.name}</span>
                 {c.args && <span className="task-row-id">{c.args}</span>}
                 <span className="task-row-title dim">{c.summary}</span>
@@ -385,35 +352,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
           ))}
         </ul>
       )}
-      {taskOptions.length > 0 && (
-        <ul className="mentions" role="listbox" aria-label="Tasks" id={`${key}-tasks`}>
-          {taskOptions.map((t, i) => (
-            <li key={t.id} role="option" aria-selected={i === pick}>
-              <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => completeTask(t.id)}>
-                <Dot status={t.status} />
-                <span className="task-row-id">T{t.id}</span>
-                <span className="task-row-title">
-                  <Shown value={t.title} />
-                </span>
-                <span className="dim">{t.owner ? nickname(channel, t.owner) : STATUS_WORDS[t.status]}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {matches.length > 0 && (
-        <ul className="mentions" role="listbox" aria-label="People" id={`${key}-people`}>
-          {matches.map((p, i) => (
-            <li key={p.name} role="option" aria-selected={i === pick}>
-              <button type="button" tabIndex={-1} className={cx("mention-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => complete(p.name)}>
-                <Avatar person={p} size="sm" pip />
-                <span className="mention-name">{shown(p)}</span>
-                <span className="dim">{p.role ?? p.runs ?? (p.kind === "human" ? "person" : "agent")}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <Suggestions channel={channel} s={s} />
       <form
         ref={form}
         className={cx("composer", replyTo && "is-replying", dropping && "is-dropping")}
@@ -536,13 +475,13 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
             aria-label="Message"
             aria-autocomplete="list"
             aria-expanded={options > 0}
-            aria-controls={matches.length > 0 ? `${key}-people` : taskOptions.length > 0 ? `${key}-tasks` : listed.length > 0 ? `${key}-commands` : undefined}
+            aria-controls={listId(s) ?? (listed.length > 0 ? `${key}-commands` : undefined)}
             placeholder={excerpt ? "Say something about it" : replyTo ? `Reply to ${nickname(channel, replyTo.from)}` : placeholder}
             onChange={(e) => {
               setCue(null)
               update(e.target.value, e.target.selectionStart)
             }}
-            onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+            onSelect={(e) => s.moved(e.currentTarget.selectionStart)}
             onPaste={(e) => {
               const fromItems = [...e.clipboardData.items]
                 .filter((item) => item.kind === "file")
@@ -574,30 +513,18 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
                 send()
                 return
               }
-              if (options) {
-                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                  e.preventDefault()
-                  setPick((pick + (e.key === "ArrowDown" ? 1 : options - 1)) % options)
-                  return
-                }
-                if (e.key === "Enter" || e.key === "Tab") {
-                  e.preventDefault()
-                  const p = matches[pick]
-                  const t = taskOptions[pick]
-                  const c = listed[pick]
-                  if (p) complete(p.name)
-                  else if (t) completeTask(t.id)
-                  else if (c && e.key === "Enter" && running?.command === c) send()
-                  else if (c) insert(`/${c.name} `)
-                  return
-                }
-                if (e.key === "Escape") {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  setClosed(true)
-                  return
-                }
-              }
+              const enter = e.key === "Enter"
+              if (
+                s.keys(e, {
+                  count: listed.length,
+                  choose: (i) => {
+                    const c = listed[i]
+                    if (c && enter && running?.command === c) send()
+                    else if (c) s.insert(`/${c.name} `)
+                  },
+                })
+              )
+                return
               if (e.key === "Escape" && edit) {
                 e.preventDefault()
                 e.stopPropagation()
