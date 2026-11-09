@@ -287,7 +287,7 @@ describe("changes after approval go back to review, and only a person or the lea
   });
 });
 
-describe("a run task's pre-ship check is what its landing step asks for (T3347)", () => {
+describe("a run task asks its pre-ship check before the approval (T3347)", () => {
   async function runCheck(from: string, t: number, run: string): Promise<Message> {
     seq++;
     const check = { phase: "pre-ship" as const, decider: "jon", artifact: { kind: "run" as const, id: run } };
@@ -307,19 +307,42 @@ describe("a run task's pre-ship check is what its landing step asks for (T3347)"
     const p = await sign(ids[from]!, base);
     return { ...p, seq, rts: seq, sigOk: await verify(p) };
   }
-
-  test("the first pre-ship check at the approved run is the builder's to ask; another one after it is a change", async () => {
+  async function runTask() {
     const add = await ev("owl", { op: "task.add", title: "migrate", owner: "win", review: "mac", then: "run" });
     const declare = await ev("win", { op: "task.update", task: add.seq, run: { id: "job-1" } });
     const review = await ev("win", { op: "task.update", task: add.seq, state: "review", at: "run:job-1" });
-    const pass = await ev("mac", { op: "task.update", task: add.seq, state: "done", verdict: "approved", round: 1, at: "run:job-1" });
-    const first = await runCheck("win", add.seq, "job-1");
-    const second = await runCheck("win", add.seq, "job-1");
-    const other = await runCheck("win", add.seq, "job-2");
-    const s = fold([add, declare, review, pass, first, second, other], roster);
-    expect(s.rejected.has(first.seq)).toBe(false);
-    expect(s.rejected.get(second.seq)).toBe(`only a person or the lead adds a check to T${add.seq} once it's approved`);
-    expect(s.rejected.has(other.seq)).toBe(true);
-    expect(s.tasks.get(add.seq)!.state).toBe("landing");
+    const pass = (round: number) => ev("mac", { op: "task.update", task: add.seq, state: "done", verdict: "approved", round, at: "run:job-1" });
+    return { t: add.seq, log: [add, declare, review], pass };
+  }
+
+  test("declare the run, ask its pre-ship check, then approve: the check is part of what was approved", async () => {
+    const { t, log, pass } = await runTask();
+    const check = await runCheck("win", t, "job-1");
+    const approval = await pass(1);
+    const s = fold([...log, check, approval], roster);
+    expect(s.rejected.has(check.seq)).toBe(false);
+    expect(s.tasks.get(t)!.state).toBe("landing");
+    expect(s.checks.get(check.seq)!.holds).toEqual([t]);
+  });
+
+  test("a builder can't add the run's first pre-ship check after the PASS", async () => {
+    const { t, log, pass } = await runTask();
+    const approval = await pass(1);
+    const late = await runCheck("win", t, "job-1");
+    const s = fold([...log, approval, late], roster);
+    expect(s.rejected.get(late.seq)).toBe(`only a person or the lead adds a check to T${t} once it's approved`);
+    expect(s.checks.has(late.seq)).toBe(false);
+    expect(s.tasks.get(t)!.state).toBe("landing");
+  });
+
+  test("the lead adding a forgotten pre-ship check after the PASS sends the run task back to review", async () => {
+    const { t, log, pass } = await runTask();
+    const approval = await pass(1);
+    const late = await runCheck("owl", t, "job-1");
+    const s = fold([...log, approval, late], roster);
+    expect(s.rejected.has(late.seq)).toBe(false);
+    const task = s.tasks.get(t)!;
+    expect(task.state).toBe("review");
+    expect(task.rounds.at(-1)).toMatchObject({ n: 2, at: "run:job-1", by: "owl", result: { kind: "open" } });
   });
 });

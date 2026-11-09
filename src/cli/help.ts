@@ -123,7 +123,9 @@ Agents
                                                  they're doing; task first T7 marks an owned task the same way
      task proof T7 https://… [--label preview] [--note "…"]   evidence on the task: a preview deploy, a recording, your
                                                  session; shown on the task page above its activity
-     task proof T7 --run ID [--started TIME]     a run task declares the run it ships as (before its review), then reports
+     task proof T7 --run ID [--started TIME]     a run task declares the run it ships as and asks its pre-ship check at
+                                                 that run (ask-human --check pre-ship --artifact run:ID), both before
+                                                 its review; then it reports
                                                  the run's own start time from its system, like a Job's status.startTime
                                                  (2026-11-06T10:00:00Z); Kiwi can't verify a reported start, so it only
                                                  shows a bypass. A GitHub Actions run whose run-name is the ID (or whose

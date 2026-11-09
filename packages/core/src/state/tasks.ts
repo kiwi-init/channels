@@ -105,23 +105,14 @@ const liveCheck = (checks: ReadonlyMap<number, CheckState>, id: number): CheckSt
   return c && c.closed === undefined && c.supersededBy === undefined ? c : undefined;
 };
 
-const stepAsks = (t: Task, checks: ReadonlyMap<number, CheckState>, check: CheckAsk): boolean =>
-  t.then === "run" &&
-  check.replaces === undefined &&
-  check.artifact.kind === "run" &&
-  check.artifact.id === t.run?.id &&
-  ![...checks.values()].some((c) => c.phase === "pre-ship" && c.holds.includes(t.id) && liveCheck(checks, c.seq));
-
 export function landingTouchedByAsk(
   tasks: ReadonlyMap<number, Task>,
   checks: ReadonlyMap<number, CheckState>,
   m: { check?: CheckAsk; choices?: readonly string[]; holds?: readonly number[] },
 ): Task[] {
-  const check = m.check;
-  if (!check || !m.choices?.length) return [];
-  const was = check.replaces === undefined ? undefined : liveCheck(checks, check.replaces);
-  const added = landingHeld(tasks, check.phase, m.holds ?? []).filter((t) => !stepAsks(t, checks, check));
-  return [...new Set([...added, ...(was ? landingHeld(tasks, was.phase, was.holds) : [])])];
+  if (!m.check || !m.choices?.length) return [];
+  const was = m.check.replaces === undefined ? undefined : liveCheck(checks, m.check.replaces);
+  return [...new Set([...landingHeld(tasks, m.check.phase, m.holds ?? []), ...(was ? landingHeld(tasks, was.phase, was.holds) : [])])];
 }
 
 export const landingTouchedByClose = (tasks: ReadonlyMap<number, Task>, checks: ReadonlyMap<number, CheckState>, ask: number): Task[] => {
