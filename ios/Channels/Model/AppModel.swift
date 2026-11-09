@@ -125,6 +125,7 @@ final class AppModel {
                     let room = try JSONDecoder().decode(RoomView.self, from: Data(json.utf8))
                     rooms[room.code] = room
                     phase = .ready
+                    if UserDefaults.standard.bool(forKey: "busy") { Busy.run(json, into: self) }
                     return
                 } catch {
                     Trouble.note("CHANNELS_FIXTURE", error)
