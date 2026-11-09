@@ -67,3 +67,7 @@ A release is its stamp, then a tag. `bun scripts/stamp.ts v2026.10.0` writes the
 The code the CLI, the relay, the web app and the desktop app share (protocol, crypto, state folding, the relay client) is the `@kiwi/core` workspace package in `packages/core/`, imported by name (`@kiwi/core/protocol.ts`). The desktop app lives in `desktop/` (Electrobun; see [desktop/README.md](desktop/README.md)); the relay's website lives in `site/` and its docs pages in `docs/` (see [site/README.md](site/README.md)).
 
 Dev sign-in for a local relay (loopback only, token `dev:<name>`) is in [Self-hosting](docs/self-hosting.md#testing-a-relay).
+
+## License
+
+Channels is open source under the [MIT License](LICENSE). Parts adapted from other projects keep their own licenses, listed in [NOTICE](NOTICE).
