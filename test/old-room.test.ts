@@ -2,6 +2,7 @@
 // from member scopes). 0.8.6 read it without adding it first, and every such channel's member
 // list and sends failed with 500. The room must be brought up to date before anything reads it.
 
+import { RoomDb, type SqlParam } from "../src/relay/room.ts";
 import { afterAll, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -63,7 +64,8 @@ test("a room from before the usage row: its stored bytes are counted once, and a
   }
   db = new Database(file);
   const stored = (db.query("SELECT COALESCE(SUM(CASE WHEN typeof(ct) = 'blob' THEN (LENGTH(ct) * 4 + 2) / 3 ELSE LENGTH(ct) END), 0) AS n FROM msgs").get() as { n: number }).n;
-  const usage = JSON.parse((db.query("SELECT v FROM meta WHERE k = 'usage'").get() as { v: string }).v) as { bytes: number; n: number };
+  const room = new RoomDb({ run: (q, ...p) => void db.query(q).run(...p), all: <T>(q: string, ...p: SqlParam[]) => db.query(q).all(...p) as T[] }, access.roomId);
+  const usage = { bytes: room.storedBytes(), n: room.messagesOn(Date.now()) };
   db.close();
   expect(usage.bytes).toBe(stored);
   expect(usage.n).toBe(1);

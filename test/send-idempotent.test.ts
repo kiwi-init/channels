@@ -10,7 +10,7 @@ import { startRelay } from "../src/relay/bun.ts";
 import { GithubApp, GithubPush, githubPushFrom } from "../src/relay/github-app.ts";
 import { Human } from "../src/relay/human.ts";
 import { OPEN_POLICY, Policy } from "../src/relay/policy.ts";
-import { Directory, onClientFrame, RoomDb, type Sql } from "../src/relay/room.ts";
+import { Directory, forgetRoom, onClientFrame, RoomDb, type Sql } from "../src/relay/room.ts";
 import { makeRelay, runRoomSync } from "../src/relay/route.ts";
 
 setDefaultTimeout(30_000);
@@ -48,27 +48,53 @@ const relayCtx = makeRelay(
 );
 
 describe("the room remembers each sender's send ids", () => {
+  const stored = (db: RoomDb, seq: number, ts: number, sender: string, cid: string) => db.insert(seq, ts, "iv", "ct", 1, { sender, cid, since: ts - 100 });
+
   test("a repeat gets the first seq and time back; another sender's same id, or one past the memory, is new", () => {
     const mem = new Database(":memory:");
     const db = new RoomDb(sqlOf(mem), "c".repeat(32));
     db.init();
     const cid = "send-id-000000000001";
-    expect(db.claimSend("alice", cid, 5, 100)).toBeNull();
-    expect(db.claimSend("alice", cid, 6, 200)).toEqual({ seq: 5, ts: 100 });
-    expect(db.claimSend("bob", cid, 6, 200)).toBeNull();
-    db.pruneSends(150);
-    expect(db.claimSend("alice", cid, 7, 300)).toBeNull();
-    expect(db.claimSend("bob", cid, 8, 300)).toEqual({ seq: 6, ts: 200 });
+    expect(db.priorSend("alice", cid, 0)).toBeNull();
+    stored(db, 5, 100, "alice", cid);
+    expect(db.priorSend("alice", cid, 100)).toEqual({ seq: 5, ts: 100 });
+    expect(db.priorSend("bob", cid, 100)).toBeNull();
+    stored(db, 6, 200, "bob", cid);
+    expect(db.priorSend("alice", cid, 150)).toBeNull();
+    expect(db.priorSend("bob", cid, 150)).toEqual({ seq: 6, ts: 200 });
     mem.close();
   });
 
-  test("a room from before send ids gets their table when it opens", () => {
+  test("the memory lives on the message rows: a fresh connection finds the send ids of the last hour and no others", () => {
     const mem = new Database(":memory:");
-    const db = new RoomDb(sqlOf(mem), "d".repeat(32));
+    const db = new RoomDb(sqlOf(mem), "e".repeat(32));
     db.init();
-    mem.run("DROP TABLE sends");
-    db.migrate();
-    expect(db.claimSend("alice", "send-id-000000000002", 1, 1)).toBeNull();
+    for (let i = 1; i <= 600; i++) stored(db, i, i * 10, "alice", `send-id-${String(i).padStart(12, "0")}`);
+    forgetRoom(db.sql);
+    const again = new RoomDb(sqlOf(mem), "e".repeat(32));
+    expect(again.priorSend("alice", "send-id-000000000600", 5000)).toEqual({ seq: 600, ts: 6000 });
+    expect(again.priorSend("alice", "send-id-000000000500", 5000)).toEqual({ seq: 500, ts: 5000 });
+    expect(again.priorSend("alice", "send-id-000000000499", 5000)).toBeNull();
+    expect(mem.query("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = 'sends'").get()).toEqual({ n: 0 });
+    mem.close();
+  });
+
+  test("a room from before keeps the send ids its old table held, and the table goes", () => {
+    const mem = new Database(":memory:");
+    const sql = sqlOf(mem);
+    const db = new RoomDb(sql, "d".repeat(32));
+    db.init();
+    mem.run("DROP TABLE msgs");
+    mem.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)");
+    mem.run("CREATE TABLE sends (sender TEXT NOT NULL, cid TEXT NOT NULL, seq INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (sender, cid))");
+    mem.run("INSERT INTO msgs (seq, ts, iv, ct, e) VALUES (1, 100, 'iv', 'ct', 1), (2, 200, 'iv', 'ct', 1)");
+    mem.run("INSERT INTO sends VALUES ('alice', 'send-id-000000000002', 2, 200)");
+    forgetRoom(sql);
+    const opened = new RoomDb(sql, "d".repeat(32));
+    opened.migrate();
+    expect(opened.priorSend("alice", "send-id-000000000002", 150)).toEqual({ seq: 2, ts: 200 });
+    expect(opened.priorSend("alice", "send-id-000000000001", 0)).toBeNull();
+    expect(mem.query("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = 'sends'").get()).toEqual({ n: 0 });
     mem.close();
   });
 });

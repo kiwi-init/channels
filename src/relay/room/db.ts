@@ -40,8 +40,6 @@ const SLOTS_TABLE = "CREATE TABLE slots (id TEXT PRIMARY KEY, holder TEXT NOT NU
 
 const REVIEW_TICKETS_TABLE = "CREATE TABLE review_tickets (id TEXT PRIMARY KEY, key TEXT NOT NULL, holder TEXT NOT NULL, issued INTEGER NOT NULL, seq INTEGER)";
 
-const SENDS_TABLE = "CREATE TABLE sends (sender TEXT NOT NULL, cid TEXT NOT NULL, seq INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (sender, cid))";
-
 const DELEGATIONS_TABLE = "CREATE TABLE delegations (pk TEXT PRIMARY KEY, d TEXT NOT NULL, until INTEGER NOT NULL, keys TEXT NOT NULL)";
 
 const DOCS_TABLE = "CREATE TABLE docs (th TEXT NOT NULL, dseq INTEGER NOT NULL, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL, PRIMARY KEY (th, dseq))";
@@ -118,13 +116,26 @@ interface Warm {
   blobs: boolean | null;
   notes: boolean | null;
   push: boolean | null;
+  sends: Map<string, Sent> | null;
+  counters: Counters | null | undefined;
 }
+
+interface Sent {
+  seq: number;
+  ts: number;
+}
+
+const SEND_SCAN = 256;
+
+const COUNTERS_EVERY = 50;
+
+const sendKey = (sender: string, cid: string): string => `${sender} ${cid}`;
 
 const warmRooms = new WeakMap<Sql, Warm>();
 
 type Revised = "roster" | "info";
 
-const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map(), blobs: null, notes: null, push: null });
+const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map(), blobs: null, notes: null, push: null, sends: null, counters: undefined });
 
 export function forgetRoom(sql: Sql): void {
   warmRooms.delete(sql);
@@ -161,7 +172,7 @@ export class RoomDb {
   init(): void {
     warmRooms.set(this.sql, { ...coldRoom(), exists: true, head: 0, blobs: false, notes: false });
     this.sql.run("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
-    this.sql.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)");
+    this.sql.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL, sent TEXT)");
     this.sql.run(
       "CREATE TABLE members (pk TEXT PRIMARY KEY, xpk TEXT NOT NULL, rec TEXT NOT NULL, rec_e INTEGER NOT NULL, since INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, read_only INTEGER NOT NULL DEFAULT 0, admits_until INTEGER, admitted_by TEXT, delegation TEXT)",
     );
@@ -172,7 +183,6 @@ export class RoomDb {
     this.sql.run(READS_TABLE);
     this.sql.run(SLOTS_TABLE);
     this.sql.run(REVIEW_TICKETS_TABLE);
-    this.sql.run(SENDS_TABLE);
     this.sql.run(DELEGATIONS_TABLE);
     this.sql.run(DOCS_TABLE);
     this.sql.run(DOC_SNAPS_TABLE);
@@ -194,7 +204,11 @@ export class RoomDb {
     this.sql.run(READS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(SLOTS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(REVIEW_TICKETS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
-    this.sql.run(SENDS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
+    if (!this.sql.all<{ name: string }>("PRAGMA table_info(msgs)").some((c) => c.name === "sent")) this.sql.run("ALTER TABLE msgs ADD COLUMN sent TEXT");
+    if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sends'").length) {
+      this.sql.run("UPDATE msgs SET sent = (SELECT s.sender || ' ' || s.cid FROM sends s WHERE s.seq = msgs.seq) WHERE seq IN (SELECT seq FROM sends)");
+      this.sql.run("DROP TABLE sends");
+    }
     this.sql.run(DELEGATIONS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(DOCS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(DOC_SNAPS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
@@ -268,22 +282,36 @@ export class RoomDb {
     }
   }
 
-  insert(seq: number, ts: number, iv: string, ct: string, e: number): void {
-    this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e) VALUES (?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e);
+  insert(seq: number, ts: number, iv: string, ct: string, e: number, send?: { sender: string; cid: string; since: number }): void {
+    const sent = send ? sendKey(send.sender, send.cid) : null;
+    if (sent) this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e, sent) VALUES (?, ?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e, sent);
+    else this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e) VALUES (?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e);
     this.warm.head = seq;
+    if (!send || !sent) return;
+    const sends = this.recentSends(send.since);
+    sends.set(sent, { seq, ts });
+    if (seq % 100 === 0) for (const [k, v] of sends) if (v.ts < send.since) sends.delete(k);
   }
 
-  claimSend(sender: string, cid: string, seq: number, ts: number): { seq: number; ts: number } | null {
-    if (this.sql.all<{ seq: number }>("INSERT OR IGNORE INTO sends (sender, cid, seq, ts) VALUES (?, ?, ?, ?) RETURNING seq", sender, cid, seq, ts).length) return null;
-    return this.sql.all<{ seq: number; ts: number }>("SELECT seq, ts FROM sends WHERE sender = ? AND cid = ?", sender, cid)[0] ?? null;
+  priorSend(sender: string, cid: string, since: number): Sent | null {
+    const hit = this.recentSends(since).get(sendKey(sender, cid));
+    return hit && hit.ts >= since ? hit : null;
   }
 
-  pruneSends(before: number): void {
-    this.sql.run("DELETE FROM sends WHERE ts < ?", before);
-  }
-
-  sendOf(sender: string, cid: string): { seq: number; ts: number } | null {
-    return this.sql.all<{ seq: number; ts: number }>("SELECT seq, ts FROM sends WHERE sender = ? AND cid = ?", sender, cid)[0] ?? null;
+  private recentSends(since: number): Map<string, Sent> {
+    const w = this.warm;
+    if (w.sends) return w.sends;
+    const sends = new Map<string, Sent>();
+    let below = Number.MAX_SAFE_INTEGER;
+    for (;;) {
+      const rows = this.sql.all<{ seq: number; ts: number; sent: string | null }>("SELECT seq, ts, sent FROM msgs WHERE seq < ? ORDER BY seq DESC LIMIT ?", below, SEND_SCAN);
+      for (const r of rows) if (r.sent && r.ts >= since) sends.set(r.sent, { seq: r.seq, ts: r.ts });
+      const last = rows.at(-1);
+      if (!last || rows.length < SEND_SCAN || last.ts < since) break;
+      below = last.seq;
+    }
+    w.sends = sends;
+    return sends;
   }
 
   issueTicket(id: string, key: string, holder: string, issued: number): void {
@@ -338,17 +366,40 @@ export class RoomDb {
   }
 
   counters(): Counters | null {
+    const w = this.warm;
+    if (w.counters !== undefined) return w.counters;
     const raw = this.get("usage");
-    if (!raw) return null;
+    let saved: Counters | null = null;
     try {
-      return JSON.parse(raw) as Counters;
+      if (raw) saved = JSON.parse(raw) as Counters;
     } catch {
-      return null;
+      // A damaged copy: storedBytes counts the channel again from its messages.
     }
+    w.counters = saved && saved.head !== undefined ? this.withLater(saved) : saved;
+    return w.counters;
+  }
+
+  private withLater(saved: Counters): Counters {
+    const u = { ...saved };
+    for (const r of this.sql.all<{ seq: number; ts: number; n: number }>(`SELECT seq, ts, ${CT_CHARS} AS n FROM msgs WHERE seq > ? ORDER BY seq`, saved.head ?? 0)) {
+      const day = utcDay(r.ts);
+      u.n = day === u.day ? u.n + 1 : 1;
+      u.day = day;
+      u.bytes += r.n;
+      u.head = r.seq;
+    }
+    return u;
   }
 
   setCounters(u: Counters): void {
-    this.set("usage", JSON.stringify(u));
+    const full = { ...u, head: this.head() };
+    this.set("usage", JSON.stringify(full));
+    this.warm.counters = full;
+  }
+
+  countMessage(u: Counters): void {
+    if (!this.get("usage") || this.head() % COUNTERS_EVERY === 0) return this.setCounters(u);
+    this.warm.counters = { ...u, head: this.head() };
   }
 
   messagesOn(now: number): number {

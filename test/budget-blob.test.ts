@@ -116,7 +116,7 @@ describe("message ciphertext stored as bytes", () => {
     const chars = (db.query(`SELECT SUM(${CT_CHARS}) AS n ${real}`).get() as { n: number }).n;
     const blobs = (db.query(`SELECT COUNT(*) AS n ${real} AND typeof(ct) = 'blob' AND typeof(iv) = 'blob'`).get() as { n: number }).n;
     const total = (db.query(`SELECT SUM(${CT_CHARS}) AS n FROM msgs`).get() as { n: number }).n;
-    const usage = JSON.parse((db.query("SELECT v FROM meta WHERE k = 'usage'").get() as { v: string }).v) as { bytes: number };
+    const usage = { bytes: new RoomDb({ run: () => {}, all: <T>(q: string, ...p: SqlParam[]) => db.query(q).all(...p) as T[] }, roomId).storedBytes() };
     const rows = db.query(`SELECT iv, ct ${real}`).all() as { iv: string | Uint8Array; ct: string | Uint8Array }[];
     db.close();
 

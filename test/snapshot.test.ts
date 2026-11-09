@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import { RoomDb, type SqlParam } from "../src/relay/room.ts";
 import { describe, expect, setDefaultTimeout, setSystemTime, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -377,9 +378,15 @@ describe("the relay keeps one snapshot per channel", () => {
         d.close();
         return JSON.parse(row.v) as { bytes: number; ct: string };
       };
-      const before = meta("usage").bytes;
+      const bytes = () => {
+        const d = new Database(join(dir, `${s.roomId}.sqlite`));
+        const n = new RoomDb({ run: (q, ...p) => void d.query(q).run(...p), all: <T>(q: string, ...p: SqlParam[]) => d.query(q).all(...p) as T[] }, s.roomId).storedBytes();
+        d.close();
+        return n;
+      };
+      const before = bytes();
       expect(await runAgent(s.ownerCh.fx.putSnapshot(base!))).toBe(5);
-      expect(meta("usage").bytes).toBe(before + meta("snapshot").ct.length);
+      expect(bytes()).toBe(before + meta("snapshot").ct.length);
       expect(await runAgent(s.ownerCh.fx.snapshotAt())).toBe(5);
       expect(canonical(await runAgent(s.ownerCh.fx.snapshot()))).toBe(canonical(base));
       const put = async (snapshot: unknown) => {
@@ -397,7 +404,7 @@ describe("the relay keeps one snapshot per channel", () => {
       expect(await put({ ...ok, e: 1 })).toBe(400);
       expect(await put({ ...ok, sig: "short" })).toBe(400);
       expect(await put(ok)).toBe(200);
-      expect(meta("usage").bytes).toBe(before + 1);
+      expect(bytes()).toBe(before + 1);
       expect(await runAgent(s.ownerCh.fx.snapshot())).toBeNull();
     } finally {
       server.stop(true);
@@ -424,7 +431,12 @@ describe("the relay keeps one snapshot per channel", () => {
         d.close();
         return rows;
       };
-      const usage = () => (JSON.parse(read<{ v: string }>("SELECT v FROM meta WHERE k = 'usage'").v) as { bytes: number }).bytes;
+      const usage = () => {
+        const d = new Database(join(dir, `${s.roomId}.sqlite`));
+        const n = new RoomDb({ run: (q, ...p) => void d.query(q).run(...p), all: <T>(q: string, ...p: SqlParam[]) => d.query(q).all(...p) as T[] }, s.roomId).storedBytes();
+        d.close();
+        return n;
+      };
       const through = (n: number) => read<{ n: number }>(`SELECT COALESCE(SUM(CASE WHEN typeof(ct) = 'blob' THEN (LENGTH(ct) * 4 + 2) / 3 ELSE LENGTH(ct) END), 0) AS n FROM msgs WHERE seq <= ${n}`).n;
       const put = async (snapshot: unknown) => {
         const body = JSON.stringify({ snapshot });
