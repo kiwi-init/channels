@@ -30,8 +30,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -41,7 +42,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -53,11 +53,8 @@ import com.kiwiinit.channels.model.Phase
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.theme.Tone
 
-private const val CHOOSE = "choose"
-
 private fun chat(spot: Spot): String = "chat/${Uri.encode(spot.code)}/${Uri.encode(spot.place)}"
 
-private fun details(spot: Spot): String = "details/${Uri.encode(spot.code)}/${Uri.encode(spot.place)}"
 
 
 @Composable
@@ -66,7 +63,7 @@ fun Root(model: AppModel, unlock: () -> Unit) {
     LaunchedEffect(model) { model.buzz.collect { view.buzz(it) } }
     Surface(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize()) {
-            model.engine?.let { EngineHost(it) }
+            model.engine?.let { key(it) { EngineHost(it) } }
             when (val phase = model.phase) {
                 Phase.Starting -> Unit
                 Phase.Unlinked -> LinkScreen(model)
@@ -79,9 +76,9 @@ fun Root(model: AppModel, unlock: () -> Unit) {
 
 @Composable
 internal fun Guarded(locked: Boolean, unlock: () -> Unit, content: @Composable () -> Unit) {
+    val kept = rememberSaveableStateHolder()
     Box(Modifier.fillMaxSize()) {
-        content()
-        if (locked) Locked(unlock)
+        if (locked) Locked(unlock) else kept.SaveableStateProvider("unlocked") { content() }
     }
 }
 
@@ -107,7 +104,7 @@ private fun Ready(model: AppModel) {
         popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, slide) + fadeOut(tween(220)) },
     ) {
         composable("list") {
-            ConversationList(model, open = { nav.navigate(chat(it)) }, settings = { nav.navigate("settings") })
+            Home(model, open = { nav.navigate(chat(it)) }, tasks = { nav.navigate("tasks/${Uri.encode(it)}") })
         }
         composable(
             "chat/{code}/{place}",
@@ -115,35 +112,10 @@ private fun Ready(model: AppModel) {
         ) { entry ->
             val code = entry.arguments?.getString("code") ?: ""
             val place = entry.arguments?.getString("place") ?: "main"
-            val chosen by entry.savedStateHandle.getStateFlow<String?>(CHOOSE, null).collectAsStateWithLifecycle()
-            ConversationScreen(
-                model = model,
-                start = Spot(code, place),
-                chosen = chosen,
-                consumeChosen = { entry.savedStateHandle[CHOOSE] = null },
-                back = { nav.popBackStack() },
-                details = { nav.navigate(details(it)) },
-            )
+            ConversationScreen(model = model, start = Spot(code, place), back = { nav.popBackStack() })
         }
-        composable(
-            "details/{code}/{place}",
-            arguments = listOf(navArgument("code") { type = NavType.StringType }, navArgument("place") { type = NavType.StringType }),
-        ) { entry ->
-            val code = entry.arguments?.getString("code") ?: ""
-            val place = entry.arguments?.getString("place") ?: "main"
-            DetailsScreen(
-                model,
-                code,
-                place,
-                back = { nav.popBackStack() },
-                choose = { key ->
-                    nav.previousBackStackEntry?.savedStateHandle?.set(CHOOSE, key)
-                    nav.popBackStack()
-                },
-            )
-        }
-        composable("settings") {
-            SettingsScreen(model) { nav.popBackStack() }
+        composable("tasks/{code}", arguments = listOf(navArgument("code") { type = NavType.StringType })) { entry ->
+            TasksScreen(model, entry.arguments?.getString("code") ?: "", open = { nav.navigate(chat(it)) }, back = { nav.popBackStack() })
         }
     }
     if (model.relinking) {

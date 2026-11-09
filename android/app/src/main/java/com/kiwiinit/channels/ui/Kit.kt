@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -204,31 +205,26 @@ fun ChannelAvatar(room: RoomView, size: Dp = 50.dp, modifier: Modifier = Modifie
 
 @Composable
 fun RowAvatar(row: Row, size: Dp = 52.dp) {
-    val tone = Tone.current
     val ring = MaterialTheme.colorScheme.surface
     Box(Modifier.size(size)) {
         when (row.kind) {
-            RowKind.Group -> {
-                ChannelAvatar(row.room, size)
-                if (row.working) {
-                    Box(
-                        Modifier.align(Alignment.TopEnd)
-                            .size(size * 0.26f)
-                            .clip(CircleShape)
-                            .background(tone.doing)
-                            .border(2.dp, ring, CircleShape),
-                    )
-                }
-            }
+            RowKind.Group, RowKind.Room -> Disc(Icons.Filled.Tag, size)
             RowKind.Lead -> Face(row.lead ?: row.title, row.lead?.let { row.room.member(it) }, size)
         }
-        if (row.kind != RowKind.Group && row.qualifier != null && size >= 44.dp) {
+        if (row.qualifier != null && size >= 44.dp) {
             ChannelAvatar(
                 row.room,
                 size * 0.4f,
                 Modifier.align(Alignment.BottomEnd).offset(x = 3.dp, y = 3.dp).border(2.dp, ring, CircleShape),
             )
         }
+    }
+}
+
+@Composable
+fun Disc(icon: androidx.compose.ui.graphics.vector.ImageVector, size: Dp = 52.dp, tint: Color = Tone.current.ink2, fill: Color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+    Box(Modifier.size(size).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(size * 0.42f))
     }
 }
 

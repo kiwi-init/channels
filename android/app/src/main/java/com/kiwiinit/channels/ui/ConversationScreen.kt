@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -93,10 +92,7 @@ import kotlinx.coroutines.launch
 fun ConversationScreen(
     model: AppModel,
     start: Spot,
-    chosen: String?,
-    consumeChosen: () -> Unit,
     back: () -> Unit,
-    details: (Spot) -> Unit,
 ) {
     var spot by rememberSaveable(stateSaver = Spot.saver) { mutableStateOf(start) }
     var previous by remember { mutableStateOf<Spot?>(null) }
@@ -130,20 +126,15 @@ fun ConversationScreen(
         }
     }
 
-    LaunchedEffect(chosen) {
-        val key = chosen ?: return@LaunchedEffect
-        consumeChosen()
-        switchTo(Spot(spot.code, key))
-    }
     LaunchedEffect(spot) {
         model.visit(spot)
-        model.open(spot.code)
+        model.open(spot)
     }
 
     val room = model.shown(spot)
     if (room == null) {
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-            Header(model, null, spot, previous, back = back, details = {}, switchTo = ::switchTo)
+            Header(model, null, spot, previous, back = back, switchTo = ::switchTo)
             Centered("This channel is gone", "Its owner closed it, or this phone was removed from it.")
         }
         return
@@ -154,7 +145,7 @@ fun ConversationScreen(
     }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).navigationBarsPadding().imePadding()) {
-        Header(model, room, spot, previous, back = back, details = { details(spot) }, switchTo = ::switchTo)
+        Header(model, room, spot, previous, back = back, switchTo = ::switchTo)
         Box(Modifier.weight(1f)) {
             AnimatedContent(
                 targetState = spot,
@@ -239,7 +230,6 @@ private fun Header(
     spot: Spot,
     previous: Spot?,
     back: () -> Unit,
-    details: () -> Unit,
     switchTo: (Spot) -> Unit,
 ) {
     val tone = Tone.current
@@ -286,10 +276,7 @@ private fun Header(
         if (room != null) {
             val place = room.placeView(spot.place)
             Row(
-                Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable {
-                    view.buzz(Buzz.Tap)
-                    details()
-                }.padding(horizontal = 6.dp, vertical = 6.dp),
+                Modifier.weight(1f).padding(horizontal = 6.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {

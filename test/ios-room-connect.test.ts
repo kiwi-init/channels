@@ -81,3 +81,39 @@ describe("a phone room connects whatever the network did first (T948)", () => {
     long.room.stop();
   });
 });
+
+describe("a phone room sends into a named room (#437)", () => {
+  test("a send from room:<id> carries the room, and one for a room it can't see is refused", async () => {
+    const sent: { body: string; opts: Record<string, unknown> }[] = [];
+    let hear: (ev: unknown) => void = () => {};
+    const me = { name: "me", pk: "pk", owner: true, at: 0, active: true, kind: "human" };
+    const keyring = {
+      call: async (_code: string, op: string, ...args: unknown[]): Promise<unknown> => {
+        if (op === "head") return 1;
+        if (op === "members") return [me];
+        if (op === "send") {
+          sent.push({ body: args[0] as string, opts: args[1] as Record<string, unknown> });
+          return 2;
+        }
+        return null;
+      },
+      follow: (_code: string, _since: number, on: (ev: unknown) => void): (() => void) => {
+        hear = on;
+        return () => {};
+      },
+      presence: async () => null,
+    } as unknown as Keyring;
+    const seat = { code: "code", label: "me", idName: "me", name: "general", pk: "pk", access: { ownerPk: "pk" } } as unknown as ChannelIdentityView;
+    const room = new Room(keyring, seat, { emit: () => {}, lost: () => {}, person: () => null, log: () => {}, devices: () => {} });
+    await room.start();
+    hear({
+      _tag: "Message",
+      message: { v: 1, id: "c", seq: 1, ts: 1, rts: 1, from: "me", pk: "pk", sig: "", sigOk: true, kind: "event", body: "", ev: { op: "room.create", id: "design01", name: "design" } },
+    });
+    await wait(100);
+    expect(await room.send("mockups?", null, [], "room:design01")).toBe(2);
+    expect(sent[0]?.opts).toMatchObject({ kind: "msg", room: "design01" });
+    await expect(room.send("hi", null, [], "room:nope0001")).rejects.toThrow("that room isn't open to you");
+    room.stop();
+  });
+});

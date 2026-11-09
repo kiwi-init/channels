@@ -14,9 +14,11 @@ import com.kiwiinit.channels.engine.ReviewView
 import com.kiwiinit.channels.engine.RoomView
 import com.kiwiinit.channels.engine.TaskView
 import com.kiwiinit.channels.model.AppModel
+import com.kiwiinit.channels.model.Feed
 
 const val DEV = "dev"
 const val LEAD_CHAT = "dm:jow~lively-swan"
+const val DESIGN_ROOM = "room:design01"
 
 private const val MINUTE = 60_000.0
 
@@ -24,6 +26,7 @@ fun sample(app: Application): AppModel {
     val model = AppModel(app)
     model.rooms[DEV] = dev()
     model.rooms["site"] = site()
+    model.feeds["$DEV|$DESIGN_ROOM"] = Feed(design(), whole = true)
     return model
 }
 
@@ -95,8 +98,17 @@ private fun dev(): RoomView {
         places = listOf(
             PlaceView("main", "main", "channels-dev", lastSeq = 8, last = messages.last()),
             PlaceView(LEAD_CHAT, "dm", "lively-swan", with = listOf("jow", "lively-swan"), lastSeq = 23, last = side.last()),
+            PlaceView(DESIGN_ROOM, "room", "design", lastSeq = 41, last = design().last()),
             PlaceView("task:24", "task", "T24", task = 24, lastSeq = 30),
         ),
+    )
+}
+
+private fun design(): List<MessageView> {
+    val at = System.currentTimeMillis() - 40 * MINUTE
+    return listOf(
+        MessageView(40, "hearty-badger", at, "msg", "Mockups for the one-column list are up: Needs you on top, then the lead, the rooms and tasks."),
+        MessageView(41, "jow", at + 6 * MINUTE, "msg", "Love it. Keep the lead first, I talk to it the most.", mine = true),
     )
 }
 
