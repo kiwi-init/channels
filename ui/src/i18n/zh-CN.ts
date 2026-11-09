@@ -1,12 +1,18 @@
 import type { Catalog } from "~/i18n/i18n"
+import chatCompose from "~/i18n/zh-CN/chat-compose"
+import chatFeed from "~/i18n/zh-CN/chat-feed"
 import live from "~/i18n/zh-CN/live"
 import settings from "~/i18n/zh-CN/settings"
+import specs from "~/i18n/zh-CN/specs"
 
-export const covers = ["live.", "settings.", "usage."]
+export const covers = ["chat.", "live.", "settings.", "specs.", "tasks.", "usage."]
 
 export default {
+  ...chatCompose,
+  ...chatFeed,
   ...live,
   ...settings,
+  ...specs,
   "settings.language": "语言",
   "settings.language.system": "跟随系统",
   "usage.today": "今日消息",

@@ -2,6 +2,7 @@ import { Suspense, useCallback, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { useUpdatesSlot } from "~/chat/updates-slot"
+import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
@@ -33,8 +34,8 @@ export function Updates({ channel, runs, here, jump }: Props) {
         type="button"
         className={cx("icon-btn", "updates-toggle", open && "is-on")}
         data-updates-toggle
-        aria-label="Updates"
-        title="Updates"
+        aria-label={t("chat.events.updates")}
+        title={t("chat.events.updates")}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen(!open)}

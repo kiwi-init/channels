@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, useState, type ClipboardEvent, type DragEven
 import { MAX_FILE_BYTES, MAX_IMAGE_BYTES, RASTER_MIMES } from "@kiwi/core/protocol.ts"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { takePasted } from "@kiwi/app/pasted.ts"
+import { t } from "~/i18n/i18n"
 import { Icon } from "~/kit/icons"
 import type { Tone } from "~/kit/toasts"
 import type { Upload } from "~/model"
@@ -65,22 +66,22 @@ export function useAttach({
     const no = refused?.()
     if (no) return void toast(no, "error")
     const room = MAX_FILES - files.length
-    if (list.length > room) toast(`Up to ${MAX_FILES} images in one message`)
+    if (list.length > room) toast(t("chat.attach.up.to", { count: MAX_FILES }))
     for (const f of list.slice(0, Math.max(0, room))) {
       const name = imageName(f)
       const image = IMAGE_TYPES.has(f.type)
       if (!image && !anyFile) {
-        toast(`${name} isn't a PNG, JPEG, GIF or WebP`, "error")
+        toast(t("chat.attach.not.image", { name }), "error")
         continue
       }
       if (!image && (!f.size || f.size > MAX_FILE_BYTES)) {
-        toast(`${name} is empty or too big to send`, "error")
+        toast(t("chat.attach.too.big", { name }), "error")
         continue
       }
       if (image && f.size > MAX_IMAGE_BYTES) {
         track(
           import("@kiwi/app/compress-image.ts").then(({ compressImage, renamed }) =>
-            compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(`${name} couldn't be read`, "error")))
+            compressImage(f, MAX_IMAGE_BYTES).then((done) => (done ? add({ ...done, name: renamed(name, done.mime) }) : toast(t("chat.attach.unreadable", { name }), "error")))
           )
         )
         continue
@@ -88,7 +89,7 @@ export function useAttach({
       track(
         readBase64(f).then(
           (data) => add({ name, mime: f.type || "application/octet-stream", data }),
-          () => toast(`${name} couldn't be read`, "error")
+          () => toast(t("chat.attach.unreadable", { name }), "error")
         )
       )
     }
@@ -154,7 +155,7 @@ export function useAttach({
 export function DropHint() {
   return (
     <div className="compose-drop" aria-hidden="true">
-      Drop images to attach
+      {t("chat.attach.drop")}
     </div>
   )
 }
@@ -162,11 +163,11 @@ export function DropHint() {
 export function AttachedFiles({ files, onRemove }: { files: readonly Upload[]; onRemove: (i: number) => void }) {
   if (!files.length) return null
   return (
-    <ul className="compose-files" aria-label="Attached images">
+    <ul className="compose-files" aria-label={t("chat.attach.attached")}>
       {files.map((f, i) => (
         <li key={`${f.name}-${i}`} className="compose-file">
           {f.mime.startsWith("image/") ? <img src={`data:${f.mime};base64,${f.data}`} alt={f.name} /> : <span className="compose-file-name">{f.name}</span>}
-          <button type="button" className="compose-file-x" aria-label={`Remove ${f.name}`} title="Remove" onClick={() => onRemove(i)}>
+          <button type="button" className="compose-file-x" aria-label={t("chat.attach.remove.name", { name: f.name })} title={t("chat.attach.remove")} onClick={() => onRemove(i)}>
             <Icon name="close" size={12} />
           </button>
         </li>

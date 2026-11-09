@@ -1,7 +1,9 @@
+import "~/i18n/en/chat-later"
 import type { MouseEvent, ReactNode } from "react"
 
 import { hitsIn, type Found } from "@kiwi/app/mentions.ts"
 import { jumpTo } from "~/chat/reply"
+import { t } from "~/i18n/i18n"
 import { OutsideLink } from "~/kit/outside"
 import type { Channel } from "~/model"
 import { openMessage } from "~/live/open-message"
@@ -58,7 +60,7 @@ export function PartView({ part, channel, go }: { part: Part; channel: Channel; 
   switch (hit.kind) {
     case "task":
       return channel.tasks.some((t) => t.id === hit.id) ? (
-        <button type="button" className="inline-ref" title="Open the task" onClick={quiet(() => go({ to: "panel", panel: { kind: "task", task: hit.id } }))}>
+        <button type="button" className="inline-ref" title={t("chat.inline.text.open.task")} onClick={quiet(() => go({ to: "panel", panel: { kind: "task", task: hit.id } }))}>
           T{hit.id}
         </button>
       ) : (
@@ -66,14 +68,19 @@ export function PartView({ part, channel, go }: { part: Part; channel: Channel; 
       )
     case "ref":
       return (
-        <button type="button" className="inline-ref" title="Show the message" onClick={quiet(() => showMessage(channel.code, hit.seq))}>
+        <button type="button" className="inline-ref" title={t("chat.inline.text.show.message")} onClick={quiet(() => showMessage(channel.code, hit.seq))}>
           #{hit.seq}
         </button>
       )
     case "link":
       return (
-        <button type="button" className="inline-ref" title="Show the message" onClick={quiet(() => (hit.code === channel.code ? showMessage(channel.code, hit.seq) : openMessage(hit.code, hit.seq)))}>
-          message #{hit.seq}
+        <button
+          type="button"
+          className="inline-ref"
+          title={t("chat.inline.text.show.message")}
+          onClick={quiet(() => (hit.code === channel.code ? showMessage(channel.code, hit.seq) : openMessage(hit.code, hit.seq)))}
+        >
+          {t("chat.inline.text.message.ref", { seq: String(hit.seq) })}
         </button>
       )
     case "mention":

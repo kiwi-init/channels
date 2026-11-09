@@ -1,6 +1,8 @@
+import "~/i18n/en/chat-later"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { gifFile, gifHost, useCatalog, useGifSrc, type Catalog, type Gif } from "~/chat/gifs"
+import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel, Message, Reaction } from "~/model"
@@ -37,7 +39,7 @@ function GifTool({ channel, m, catalog }: { channel: Channel; m: Message; catalo
   const close = useCallback(() => setOpen(false), [])
   return (
     <>
-      <button type="button" className="msg-tool" aria-label="React with a GIF" title="React with a GIF" aria-expanded={open} data-gif-toggle onClick={() => setOpen((v) => !v)}>
+      <button type="button" className="msg-tool" aria-label={t("chat.gif.picker.react")} title={t("chat.gif.picker.react")} aria-expanded={open} data-gif-toggle onClick={() => setOpen((v) => !v)}>
         <Icon name="gif" size={15} />
       </button>
       {open && <GifPicker catalog={catalog} className="gifs-on-msg" onClose={close} onPick={(g) => actions.react(channel.code, m.seq, g.key)} />}
@@ -67,8 +69,8 @@ function GifPicker({ catalog, className, onClose, onPick }: { catalog: Catalog; 
   }, [onClose])
   const group = catalog.groups.find((g) => g.reaction === tab)
   return (
-    <div ref={box} role="dialog" aria-label="GIFs" className={cx("gifs", className)}>
-      <div role="tablist" aria-label="Feelings" className="gifs-tabs">
+    <div ref={box} role="dialog" aria-label={t("chat.gif.picker.gifs")} className={cx("gifs", className)}>
+      <div role="tablist" aria-label={t("chat.gif.picker.feelings")} className="gifs-tabs">
         {catalog.groups.map((g) => (
           <button key={g.reaction} type="button" role="tab" aria-selected={g.reaction === tab} className={cx("gifs-tab", g.reaction === tab && "is-on")} onClick={() => setTab(g.reaction)}>
             {g.reaction.replace(/-/g, " ")}
@@ -118,7 +120,7 @@ function GifChip({ channel, m, r, gif }: { channel: Channel; m: Message; r: Reac
       type="button"
       className={cx("react-gif", mine && "is-mine")}
       title={`${gif.feeling} · ${who}`}
-      aria-label={`${gif.feeling}, from ${who}`}
+      aria-label={t("chat.gif.picker.from", { feeling: gif.feeling, who })}
       aria-pressed={mine}
       disabled={m.where.kind === "theirs"}
       onClick={() => actions.react(channel.code, m.seq, r.emoji)}

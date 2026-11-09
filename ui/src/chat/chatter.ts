@@ -1,3 +1,4 @@
+import { t } from "~/i18n/i18n"
 import type { Channel, Message } from "~/model"
 import { memberOf } from "~/model"
 import { wordsRaw } from "~/words"
@@ -53,12 +54,11 @@ export function chatterRuns(channel: Who, list: readonly Message[]): Map<number,
 export function chatterLine(run: readonly Message[], names: (name: string) => string): string {
   const who = [...new Set(run.map((m) => m.from))]
   const tasks = [...new Set(run.flatMap((m) => [...(m.task !== undefined ? [m.task] : []), ...[...wordsRaw(m.text).matchAll(/\bT(\d+)\b/g)].map((x) => Number(x[1]))]))].sort((a, b) => a - b)
-  const people = who.length <= 3 ? who.map(names).join(", ") : `${who.length} agents`
-  const about = tasks.length
-    ? ` about ${tasks
-        .slice(0, 4)
-        .map((t) => `T${t}`)
-        .join(", ")}${tasks.length > 4 ? "…" : ""}`
-    : ""
-  return `${people} · ${run.length} messages between agents${about}`
+  const people = who.length <= 3 ? who.map(names).join(", ") : t("chat.chatter.agents", { count: who.length })
+  if (!tasks.length) return t("chat.chatter.line", { people, count: run.length })
+  const about = `${tasks
+    .slice(0, 4)
+    .map((n) => `T${n}`)
+    .join(", ")}${tasks.length > 4 ? "…" : ""}`
+  return t("chat.chatter.line.about", { people, count: run.length, tasks: about })
 }

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 import { MAX_BODY_LENGTH } from "@kiwi/core/protocol.ts"
+import { t } from "~/i18n/i18n"
 import type { Upload, Where } from "~/model"
 
 export const composerKey = (code: string, where: Where, inThread?: number): string => `${code}:${JSON.stringify(where)}:${inThread ?? ""}`
@@ -90,14 +91,12 @@ export function useGivenBack(key: string): number {
   )
 }
 
-const count = (n: number): string => n.toLocaleString("en")
-
 export function tooLong(text: string): string | null {
   const over = text.length - MAX_BODY_LENGTH
-  return over > 0 ? `Too long to send: ${count(text.length)} characters, ${count(over)} over the ${count(MAX_BODY_LENGTH)} limit` : null
+  return over > 0 ? t("chat.drafts.too.long", { length: text.length, over, limit: MAX_BODY_LENGTH }) : null
 }
 
 export function backWords(why: string, placed: Placed, images: number): string {
-  const lost = placed === "stash" && images ? `; its ${images === 1 ? "image" : `${images} images`} didn't fit in the stash` : ""
-  return placed === "composer" ? `Not sent: ${why}. It's back in the composer.` : `Not sent: ${why}. It's in the stash: ⇧⌘S brings it back${lost}.`
+  const lost = placed === "stash" && images ? (images === 1 ? t("chat.drafts.lost.image") : t("chat.drafts.lost.images", { count: images })) : ""
+  return placed === "composer" ? t("chat.drafts.back.composer", { why }) : t("chat.drafts.back.stash", { why, lost })
 }
