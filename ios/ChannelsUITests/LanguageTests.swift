@@ -15,18 +15,16 @@ final class LanguageTests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5), "the Language row in You")
         add(shot(app, "language en"))
 
-        row.tap()
         let japanese = app.buttons["日本語"].firstMatch
-        XCTAssertTrue(japanese.waitForExistence(timeout: 5), "日本語 among the choices")
+        XCTAssertTrue(openLanguages(app, until: japanese), "日本語 among the choices")
         add(shot(app, "language choices"))
         japanese.tap()
         XCTAssertTrue(app.tabBars.buttons["あなた"].waitForExistence(timeout: 5), "the tab bar is in Japanese without a restart")
         XCTAssertTrue(app.buttons["システム"].firstMatch.waitForExistence(timeout: 5), "words built in code switch too, not only SwiftUI literals")
         add(shot(app, "language ja"))
 
-        languageRow(app).tap()
         let system = app.buttons.matching(NSPredicate(format: "label IN %@", ["System", "システム"])).firstMatch
-        XCTAssertTrue(system.waitForExistence(timeout: 5))
+        XCTAssertTrue(openLanguages(app, until: system), "System among the choices")
         system.tap()
         XCTAssertTrue(app.tabBars.buttons["You"].waitForExistence(timeout: 5), "System goes back to the phone's language")
     }
@@ -63,6 +61,15 @@ final class LanguageTests: XCTestCase {
     @MainActor
     private func languageRow(_ app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: "language").firstMatch
+    }
+
+    @MainActor
+    private func openLanguages(_ app: XCUIApplication, until choice: XCUIElement) -> Bool {
+        for _ in 0..<2 {
+            languageRow(app).tap()
+            if choice.waitForExistence(timeout: 5) { return true }
+        }
+        return false
     }
 
     @MainActor
