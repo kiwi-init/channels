@@ -1,4 +1,4 @@
-import { startMeadow, type Meadow } from "~/afk/meadow"
+import { startMeadow, type Meadow } from "~/meadow/meadow"
 
 let current: Meadow | null = null
 

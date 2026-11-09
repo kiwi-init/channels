@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { daylight, moonPhase } from "~/afk/daylight"
+import { daylight, moonPhase } from "~/meadow/daylight"
 
 const at = (h: number, m = 0): Date => new Date(2026, 10, 5, h, m)
 

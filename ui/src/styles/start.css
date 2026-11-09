@@ -519,14 +519,33 @@
   margin-right: -2px;
 }
 
+.calm-quiet .calm-chan-row {
+  position: relative;
+}
+
 .calm-quiet .calm-chan-row > .calm-act {
+  position: absolute;
+  right: 0;
+  margin: 0;
   opacity: 0;
+  pointer-events: none;
+}
+
+.calm-quiet .calm-needs {
+  transition: opacity var(--fast) var(--ease);
 }
 
 .calm-quiet:hover .calm-chan-row > .calm-act,
 .calm-quiet:focus-within .calm-chan-row > .calm-act,
 .calm-quiet.is-writing .calm-chan-row > .calm-act {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.calm-quiet:hover .calm-needs,
+.calm-quiet:focus-within .calm-needs,
+.calm-quiet.is-writing .calm-needs {
+  opacity: 0;
 }
 
 .calm-quiet .calm-chan {

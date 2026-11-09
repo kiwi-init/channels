@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
 
-import { AFK_MINUTES } from "~/afk/wait"
 import { cx, IconButton } from "~/kit/bits"
 import { Toggle } from "~/kit/form"
 import { setDebugOptions, useDebugOptions } from "~/kit/debug"
@@ -185,8 +184,6 @@ const MOTION = [
   ["reduced", "Reduced"],
 ] as const
 
-const AFK = AFK_MINUTES.map((m): readonly [number, string] => [m, m ? `${m} min` : "Off"])
-
 export function AppearanceSection() {
   const { app } = useApp()
   const { prefs, actions } = app
@@ -205,9 +202,6 @@ export function AppearanceSection() {
         </Row>
         <Row label="Motion">
           <Seg label="Motion" value={prefs.reduceMotion ? "reduced" : "full"} options={MOTION} onChange={(m) => set({ reduceMotion: m === "reduced" })} />
-        </Row>
-        <Row label="AFK" hint="After this long without the mouse or keys, the AFK scene shows every channel.">
-          <Seg<number> label="AFK" value={prefs.afk} options={AFK} onChange={(afk) => set({ afk })} />
         </Row>
       </Group>
       <Themes />

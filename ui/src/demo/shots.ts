@@ -9,7 +9,6 @@ export interface Shot {
   prefs?: Partial<Prefs>
   docs?: number
   streams?: boolean
-  afk?: true
   onboarding?: true
 }
 
@@ -19,8 +18,6 @@ export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
   home: { scenario: "full", channel: null },
   "home-calm": { scenario: "home-calm", channel: null },
-  afk: { scenario: "full", channel: "kiwi", afk: true },
-  "afk-still": { scenario: "full", channel: "kiwi", afk: true, prefs: { reduceMotion: true } },
   "long-feed": { scenario: "long", channel: "kiwi" },
   opening: { scenario: "opening", channel: "kiwi" },
   "opening-tasks": { scenario: "opening", channel: "kiwi", nav: { tab: "tasks" } },

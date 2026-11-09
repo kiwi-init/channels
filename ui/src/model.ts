@@ -720,7 +720,6 @@ export interface Prefs {
   lightTheme: string
   customThemes: CustomTheme[]
   folders: Folder[]
-  afk: number
 }
 
 export interface SendExtras {

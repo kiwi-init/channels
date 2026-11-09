@@ -34,6 +34,27 @@ async function run<T>(what: (d: Driver) => Promise<T>): Promise<T> {
   }
 }
 
+const doubleClickTop = (): string | null => {
+  const drags = (el: Element): boolean => {
+    for (let at: Element | null = el; at; at = at.parentElement) {
+      const region = getComputedStyle(at).getPropertyValue("--electrobun-app-region").trim() || getComputedStyle(at).getPropertyValue("-webkit-app-region").trim();
+      if (region === "no-drag") return false;
+      if (region === "drag") return true;
+    }
+    return false;
+  };
+  for (let y = 8; y <= 48; y += 8)
+    for (let x = 16; x < innerWidth; x += 24) {
+      const el = document.elementFromPoint(x, y);
+      if (!el || !drags(el)) continue;
+      el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, detail: 2, clientX: x, clientY: y }));
+      el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, button: 0, detail: 2, clientX: x, clientY: y }));
+      return `${el.tagName.toLowerCase()}.${[...el.classList].join(".")} at ${x},${y}`;
+    }
+  return null;
+};
+const zoomed = async (d: Driver): Promise<boolean> => ((await d.main("window")) as { maximized?: unknown }).maximized === true;
+
 try {
   const first = await run(async (d) => (await d.main("frame")) as Frame);
   console.log(`first start: ${JSON.stringify(first)}`);
@@ -44,6 +65,24 @@ try {
   console.log(`after a restart: ${JSON.stringify(back)}`);
   if (!same(placed, back)) problems.push(`after a restart the window is at ${JSON.stringify(back)}, not where it was left (${JSON.stringify(placed)})`);
   if (same(first, back)) problems.push("after a restart the window is back where a first start puts it");
+  await run(async (d) => {
+    await d.main("placeForTest");
+    if (await zoomed(d)) return void problems.push("the window is still zoomed after it was made smaller, so a double click can't show it zooms");
+    const hit = await until("a drag region in the top 48px of the window", 15_000, () => d.evaluate(doubleClickTop, null)).catch(() => null);
+    if (!hit) {
+      const top = await d.evaluate(() => [...new Set([8, 24, 40].map((y) => document.elementFromPoint(innerWidth / 2, y)?.outerHTML.slice(0, 120) ?? "nothing"))], null);
+      return void problems.push(`no drag region in the top 48px of the window to double-click; at the top: ${top.join(" | ")}`);
+    }
+    console.log(`double-clicked ${hit}`);
+    await until("the window zoomed by a double click on its top bar", 10_000, async () => (await zoomed(d)) || null).catch(() =>
+      problems.push("a double click on the top bar doesn't zoom the window"),
+    );
+    console.log(`zoomed: ${JSON.stringify(await d.main("frame"))}`);
+    await d.evaluate(doubleClickTop, null);
+    await until("the window back from zoom by a second double click", 10_000, async () => !(await zoomed(d)) || null).catch(() =>
+      problems.push("a second double click on the top bar doesn't bring the window back"),
+    );
+  });
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
 } finally {

@@ -1,6 +1,5 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
 
-import { showAfk, useAfkShown, useAfkWait } from "~/afk/wait"
 import { Boundary } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
@@ -23,21 +22,13 @@ const EnrollDialog = later(() => import("~/settings/enroll").then((m) => m.Enrol
 const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
-const Afk = later(() => import("~/afk/afk").then((m) => m.Afk))
 const LimitDialog = later(() => import("~/usage/limit").then((m) => m.LimitDialog))
 
 export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
   const [toasts, toast, dismissToast] = useToasts()
   const ctx = useMemo(() => ({ app, nav, go, toast }), [app, nav, go, toast])
   const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])
-  usePaletteKey(
-    useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]),
-    useCallback(() => {
-      if (nav.dialog === "palette") go({ to: "dialog", dialog: null })
-      else if (document.querySelector("dialog[open]")) return
-      showAfk()
-    }, [go, nav.dialog])
-  )
+  usePaletteKey(useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]))
   useHistoryKeys(go, !!nav.modal)
   useTheme(app)
 
@@ -95,7 +86,6 @@ export function Root({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => voi
         <Palette />
         <ContextMenus />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
-        <AfkWatch minutes={app.prefs.afk} />
         <LimitWatch />
       </ActContext>
     </AppContext>
@@ -107,16 +97,6 @@ function LimitWatch() {
   return hit ? (
     <Suspense fallback={null}>
       <LimitDialog hit={hit} />
-    </Suspense>
-  ) : null
-}
-
-function AfkWatch({ minutes }: { minutes: number }) {
-  const shown = useAfkShown()
-  useAfkWait(minutes, shown)
-  return shown ? (
-    <Suspense fallback={null}>
-      <Afk />
     </Suspense>
   ) : null
 }
@@ -134,22 +114,16 @@ function useHistoryKeys(go: (go: Go) => void, modal: boolean) {
   }, [go, modal])
 }
 
-function usePaletteKey(toggle: () => void, afk: () => void) {
+function usePaletteKey(toggle: () => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return
-      const key = e.key.toLowerCase()
-      if (key === "k") {
-        e.preventDefault()
-        toggle()
-      } else if (key === "t" && !e.altKey && !e.shiftKey) {
-        e.preventDefault()
-        afk()
-      }
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "k") return
+      e.preventDefault()
+      toggle()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [toggle, afk])
+  }, [toggle])
 }
 
 function useTheme(app: App) {

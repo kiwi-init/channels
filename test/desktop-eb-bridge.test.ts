@@ -118,14 +118,15 @@ describe("Electrobun's internal RPC on our view", () => {
         webviewTagOpenDevTools: named("webviewTagOpenDevTools"),
         startWindowMove: named("startWindowMove"),
         stopWindowMove: named("stopWindowMove"),
+        titleBarDoubleClick: named("titleBarDoubleClick"),
       },
     };
     const dropped = lockInternalRpc(rpc);
     for (const table of [rpc.request, rpc.message]) for (const fn of Object.values(table)) fn();
-    expect(ran.sort()).toEqual(["restoreWindowFocusAfterExternalDrop", "startWindowMove", "stopWindowMove"]);
+    expect(ran.sort()).toEqual(["restoreWindowFocusAfterExternalDrop", "startWindowMove", "stopWindowMove", "titleBarDoubleClick"]);
     expect(dropped).toContain("webviewTagUpdateSrc");
     expect(dropped).toContain("webviewTagSetNavigationRules");
     expect(dropped).toContain("webviewTagExecuteJavascript");
-    expect([...PAGE_INTERNAL_RPC].sort()).toEqual(["restoreWindowFocusAfterExternalDrop", "startWindowMove", "stopWindowMove"]);
+    expect([...PAGE_INTERNAL_RPC].sort()).toEqual(["restoreWindowFocusAfterExternalDrop", "startWindowMove", "stopWindowMove", "titleBarDoubleClick"]);
   });
 });
