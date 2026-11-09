@@ -319,7 +319,7 @@ private fun ConversationRowView(row: ConversationRow) {
                 )
                 row.last?.let {
                     Text(
-                        When.list(it.millis),
+                        When.list(words(), it.millis),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = strong,
                         color = if (row.unread) MaterialTheme.colorScheme.onSurface else tone.ink3,

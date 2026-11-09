@@ -92,7 +92,7 @@ fun SettingsScreen(model: AppModel) {
                 Setting(Icons.Filled.Forum, tone.live, stringResource(R.string.channels), "${model.channels.size}")
                 Setting(Icons.Filled.Router, tone.doing, stringResource(R.string.relay), relayHost)
                 Setting(Icons.Filled.Lock, tone.ink3, stringResource(R.string.lock), guarded)
-                Setting(LanguageIcon, MaterialTheme.colorScheme.primary, stringResource(R.string.language), languageName) { picking = true }
+                Setting(Icons.Filled.LanguageIcon, MaterialTheme.colorScheme.primary, stringResource(R.string.language), languageName) { picking = true }
             }
             if (!model.enrolled) {
                 Spacer(Modifier.size(16.dp))
