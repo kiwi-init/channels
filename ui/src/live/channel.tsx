@@ -25,6 +25,7 @@ import { usePictures } from "~/live/pictures"
 import { isMuted } from "~/live/mute"
 import { usePrefs } from "~/live/prefs"
 import { busyOf, receiptsOf, withReceipts } from "~/live/receipts"
+import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
 import { firstMarks, lastIn, seenByThread, seenKeyOf } from "~/live/seen-place"
@@ -272,7 +273,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
 
   const post = useCallback(
     async (where: Where, text: string, opts: SendExtras): Promise<number> => {
-      if (where.kind === "theirs") throw new Error("Only the two of them write in their direct messages")
+      if (where.kind === "theirs") throw new Error(t("live.channel.theirs"))
       const key = nextUnsentKey()
       const body = text.trim()
       const imgs = opts.images?.length ? { imgs: opts.images } : {}
@@ -329,7 +330,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         }
         setPending((list) => list.filter((p) => p.key !== key))
         if (opts.block) {
-          announce(`Not sent: ${why}.`, "error")
+          announce(t("live.channel.not.sent", { why }), "error")
           throw err
         }
         const images = opts.images ?? []
@@ -352,7 +353,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const retry = useCallback(
     async (key: number): Promise<number> => {
       const p = pending.find((x) => x.key === key)
-      if (!p) throw new Error("that message is gone")
+      if (!p) throw new Error(t("live.channel.message.gone"))
       discard(key)
       try {
         return await post(p.where, p.text, resendOf(p))
@@ -396,7 +397,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     for (const { name, persona } of arrivals(code, people))
       void import("~/live/manage")
         .then((m) => m.setPersona(code, name, persona))
-        .catch((e: unknown) => announce(`Personality not set on ${name}: ${e instanceof Error ? e.message : String(e)}`, "error"))
+        .catch((e: unknown) => announce(t("live.channel.persona.not.set", { name, why: e instanceof Error ? e.message : String(e) }), "error"))
   }, [code, people])
 
   const where = view.where

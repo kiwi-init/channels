@@ -10,7 +10,9 @@ type Vars = Readonly<Record<string, string | number>>
 
 export const LANG_NAMES: Record<Lang, string> = { en: "English", "pt-BR": "Português (Brasil)", ja: "日本語", ko: "한국어", "zh-CN": "简体中文" }
 
-export const CATALOGS: Record<Exclude<Lang, "en">, () => Promise<{ default: Catalog }>> = {
+export type Loaded = { default: Catalog; covers: readonly string[] }
+
+export const CATALOGS: Record<Exclude<Lang, "en">, () => Promise<Loaded>> = {
   "pt-BR": () => import("~/i18n/pt-BR"),
   ja: () => import("~/i18n/ja"),
   ko: () => import("~/i18n/ko"),
@@ -22,6 +24,11 @@ const listeners = new Set<() => void>()
 let shown: { pref: LangPref; lang: Lang } = { pref: "system", lang: "en" }
 let catalog: Catalog = en
 let asked = 0
+const later = new Map<string, Msg>()
+
+export function addWords(words: Readonly<Record<string, Msg>>): void {
+  for (const [key, msg] of Object.entries(words)) later.set(key, msg)
+}
 
 export function langOf(tags: readonly string[]): Lang {
   for (const tag of tags) {
@@ -120,6 +127,6 @@ const fill = (text: string, vars: Vars): string =>
 
 export function t(key: Key, vars?: Vars): string {
   const own = catalog[key]
-  const text = own === undefined ? textOf(en[key], "en", vars?.count) : textOf(own, shown.lang, vars?.count)
+  const text = own === undefined ? textOf((en as Readonly<Record<string, Msg>>)[key] ?? later.get(key) ?? key, "en", vars?.count) : textOf(own, shown.lang, vars?.count)
   return vars ? fill(text, vars) : text
 }

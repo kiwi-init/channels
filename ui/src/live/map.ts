@@ -11,6 +11,8 @@ import { doneGate } from "@kiwi/core/done-gate.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf, sentTo } from "@kiwi/core/room-rules.ts"
 import { dmDocOf, dmRoomWith } from "~/live/dm"
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { canPost } from "@kiwi/core/scopes.ts"
 import { versionName } from "@kiwi/core/status.ts"
@@ -303,16 +305,16 @@ function eventText(m: Wire, state: ChannelState): string {
   const who = nameIn(state, m.from)
   if (!ev) return m.body
   const refused = state.rejected.get(m.seq)
-  if (refused !== undefined) return `${who}: refused: ${refused}`
+  if (refused !== undefined) return t("live.map.refused", { who, why: refused })
   switch (ev.op) {
     case "hold.set":
-      return ev.on ? `${who} paused the agents${ev.note ? `: ${ev.note}` : ""}` : `${who} let the agents carry on`
+      return ev.on ? (ev.note ? t("live.map.paused.note", { who, note: ev.note }) : t("live.map.paused", { who })) : t("live.map.resumed", { who })
     case "charter.set":
-      return ev.text ? `${who} set the goal` : `${who} cleared the goal`
+      return t(ev.text ? "live.map.goal.set" : "live.map.goal.cleared", { who })
     case "role.set":
-      return ev.role ? `${nameIn(state, ev.member)} is ${ev.role} now` : `${nameIn(state, ev.member)} has no role now`
+      return ev.role ? t("live.map.role", { name: nameIn(state, ev.member), role: ev.role }) : t("live.map.no.role", { name: nameIn(state, ev.member) })
     default:
-      return `${who} ${describeEvent(m, state, (handle) => nameIn(state, handle))}`
+      return t("live.map.event", { who, what: describeEvent(m, state, (handle) => nameIn(state, handle)) })
   }
 }
 
@@ -331,15 +333,21 @@ function eventTask(m: Wire): number | undefined {
   return "task" in ev && typeof ev.task === "number" ? ev.task : undefined
 }
 
-const FAIL_WORDS: Readonly<Record<string, string>> = { failure: "failed", timed_out: "timed out", cancelled: "cancelled", action_required: "needs action", startup_failure: "didn't start" }
+const FAIL_WORDS: Readonly<Record<string, Key>> = {
+  failure: "live.map.check.failed",
+  timed_out: "live.map.check.timed.out",
+  cancelled: "live.map.check.cancelled",
+  action_required: "live.map.check.needs.action",
+  startup_failure: "live.map.check.didnt.start",
+}
 const QUEUED = new Set(["queued", "waiting", "pending", "requested"])
 const CHECK_ORDER: Record<Check["state"], number> = { fail: 0, running: 1, waiting: 2, pass: 3, skipped: 4 }
 
 function checkOf(c: GithubCheck, required: boolean): Check {
   const base = { name: c.name, ...(required ? { required: true } : {}), ...(c.url ? { url: c.url } : {}) }
-  if (!c.conclusion) return QUEUED.has(c.status ?? "") ? { ...base, state: "waiting", word: "queued" } : { ...base, state: "running", word: "running" }
-  if (c.conclusion === "success") return { ...base, state: "pass", word: "passed" }
-  if (FAILED.has(c.conclusion)) return { ...base, state: "fail", word: FAIL_WORDS[c.conclusion] ?? "failed" }
+  if (!c.conclusion) return QUEUED.has(c.status ?? "") ? { ...base, state: "waiting", word: t("live.map.check.queued") } : { ...base, state: "running", word: t("live.map.check.running") }
+  if (c.conclusion === "success") return { ...base, state: "pass", word: t("live.map.check.passed") }
+  if (FAILED.has(c.conclusion)) return { ...base, state: "fail", word: t(FAIL_WORDS[c.conclusion] ?? "live.map.check.failed") }
   return { ...base, state: "skipped", word: c.conclusion.replace(/_/g, " ") }
 }
 
@@ -348,7 +356,7 @@ function checkList(state: ChannelState, pr: GithubPr): Check[] {
   const required = new Set(rulesOf(state.github, pr.repo)?.required ?? [])
   const list = ran.map((c) => checkOf(c, required.has(c.name)))
   const seen = new Set(ran.map((c) => c.name))
-  for (const name of required) if (!seen.has(name)) list.push({ name, state: "waiting", word: "not started", required: true })
+  for (const name of required) if (!seen.has(name)) list.push({ name, state: "waiting", word: t("live.map.check.not.started"), required: true })
   return list.sort((a, b) => CHECK_ORDER[a.state] - CHECK_ORDER[b.state] || a.name.localeCompare(b.name))
 }
 
@@ -558,7 +566,7 @@ export function leftOutOf(state: ChannelState, messages: readonly Wire[], me: st
         seq: m.seq,
         from: m.from,
         at: m.ts,
-        text: wrote(`${nameIn(state, m.from)} ${describeEvent(m, state, (handle) => nameIn(state, handle))}`),
+        text: wrote(t("live.map.event", { who: nameIn(state, m.from), what: describeEvent(m, state, (handle) => nameIn(state, handle)) })),
         where: { kind: "room", room: GENERAL_ROOM },
         system: true,
         leftOut,

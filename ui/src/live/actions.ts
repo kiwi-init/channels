@@ -7,6 +7,7 @@ import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { savePersonalities } from "@kiwi/app/personalities.ts"
 import { createPerson, bridge, secrets } from "@kiwi/secrets/secrets.ts"
+import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { loadPicture } from "~/live/pictures"
 import { appCan } from "~/live/app-can"
@@ -22,7 +23,6 @@ import { attempt, event, memberOf, need, owner, say } from "~/live/run"
 import { refusal } from "~/live/refused"
 
 const manage = () => import("~/live/manage")
-const UPDATE_FOR_MEDIA = "Update Channels to add images and files to a doc"
 const rare = () => import("~/live/rare")
 const account = () => import("~/live/account-rare")
 const joining = () => import("~/live/join-rare")
@@ -35,7 +35,7 @@ async function tried<T>(what: string, run: () => Promise<T>): Promise<T | null> 
     return await run()
   } catch (err) {
     // The person sees why in the announcement; the caller gets null and stays where it was.
-    announce(`${what}: ${say(err)}`, "error")
+    announce(t("live.run.failed", { what, why: say(err) }), "error")
     return null
   }
 }
@@ -44,7 +44,7 @@ function link(code: string): ChannelLink {
   const run = openedRun(code)
   if (run) return run.ch
   const m = loadMember(code)
-  if (!m) throw new Error("you're not in that channel")
+  if (!m) throw new Error(t("live.run.not.in.channel"))
   return linkOf(m)
 }
 
@@ -57,7 +57,7 @@ export function makeActions(): Actions {
     send: async (code, where, text, opts) => {
       const run = openedRun(code)
       if (!run) {
-        announce("Not sent: open the channel first", "error")
+        announce(t("live.actions.not.sent.open"), "error")
         return false
       }
       try {
@@ -69,7 +69,7 @@ export function makeActions(): Actions {
       return true
     },
     retry: (code, seq) =>
-      attempt("Not sent", async () => {
+      attempt(t("live.actions.not.sent"), async () => {
         const run = need(code)
         try {
           await run.retry(-seq)
@@ -78,11 +78,11 @@ export function makeActions(): Actions {
         }
       }),
     loadImage: (code, spot) => loadPicture(code, spot),
-    discard: (code, seq) => attempt("Couldn't remove it", async () => need(code).discard(-seq)),
+    discard: (code, seq) => attempt(t("live.actions.remove.failed"), async () => need(code).discard(-seq)),
     leaveRoom: (code, room) =>
-      attempt("Couldn't leave the room", async () => {
+      attempt(t("live.actions.leave.room.failed"), async () => {
         await (await manage()).leaveRoom(code, room)
-        announce("You've left. It's fully closed once someone else in the room is online.")
+        announce(t("live.actions.left.room"))
       }),
     markRead: (code, where) => {
       const run = need(code)
@@ -94,13 +94,13 @@ export function makeActions(): Actions {
     docVersions: async (code, th) => (await rare()).versionsOf(link(code), th),
     restoreDocVersion: async (code, ...a) => (await rare()).restoreOf(link(code), ...a),
     putDocImage: async (code, upload) => {
-      if (!(await appCan("putImage"))) throw new Error(UPDATE_FOR_MEDIA)
+      if (!(await appCan("putImage"))) throw new Error(t("live.actions.update.for.media"))
       const stored = await link(code).putImage(upload)
-      if (!stored.ref) throw new Error(`${upload.name} wasn't stored`)
+      if (!stored.ref) throw new Error(t("live.actions.not.stored", { name: upload.name }))
       return { name: stored.name, mime: stored.mime, ref: stored.ref }
     },
     putDocFile: async (code, upload) => {
-      if (!(await appCan("putFileData"))) throw new Error(UPDATE_FOR_MEDIA)
+      if (!(await appCan("putFileData"))) throw new Error(t("live.actions.update.for.media"))
       return link(code).putFileData(upload.name, upload.mime, upload.data)
     },
     docImage: (code, img) => link(code).image(img),
@@ -108,106 +108,108 @@ export function makeActions(): Actions {
     followThread: (code, root, on) => {
       const run = need(code)
       markSeenIn(run.roomId, { [followKey(root)]: followMark(seenIn(run.roomId)[followKey(root)], run.messages.at(-1)?.seq ?? 0, on) })
-      announce(on ? "Following this thread" : "Not following this thread")
+      announce(t(on ? "live.actions.following" : "live.actions.not.following"))
     },
     react: (code, seq, emoji) =>
-      attempt("Couldn't react", async () => {
+      attempt(t("live.actions.react.failed"), async () => {
         const run = need(code)
         const mine = run.state.reactions.get(seq)?.get(run.me)?.emoji === emoji
         await event(run, "reaction", { op: "react", seq, emoji: mine ? null : emoji })
       }),
-    editMessage: (code, seq, text) => attempt("Not edited", async () => (await rare()).change(code, seq, text)),
-    deleteMessage: (code, seq) => attempt("Not deleted", async () => (await rare()).change(code, seq, null)),
-    answerPermission: (code, id, allow) => attempt("Not answered", async () => (await rare()).answerPermission(code, id, allow)),
+    editMessage: (code, seq, text) => attempt(t("live.actions.not.edited"), async () => (await rare()).change(code, seq, text)),
+    deleteMessage: (code, seq) => attempt(t("live.actions.not.deleted"), async () => (await rare()).change(code, seq, null)),
+    answerPermission: (code, id, allow) => attempt(t("live.actions.not.answered"), async () => (await rare()).answerPermission(code, id, allow)),
     answerQuestion: (code, id, text) =>
-      attempt("Not answered", async () => {
+      attempt(t("live.actions.not.answered"), async () => {
         const run = need(code)
         const m = run.messages.find((x) => x.seq === Number(id))
-        if (!m) throw new Error("that question is gone")
+        if (!m) throw new Error(t("live.actions.question.gone"))
         await run.send(text, { to: [m.from], re: [m.seq], kind: "msg", side: true })
       }),
-    answerStep: (code, id, reply) => attempt("Not answered", async () => (await rare()).answerStep(code, id, reply)),
-    answerJoin: (code, id, yes, choice) => attempt(yes ? "Couldn't let them in" : "Couldn't turn them away", async () => (await manage()).answerJoin(code, id, yes, choice)),
-    approveTask: (code, id, approve, why) => attempt(approve ? "Not approved" : "Not sent back", async () => (await rare()).approveTask(code, id, approve, why)),
+    answerStep: (code, id, reply) => attempt(t("live.actions.not.answered"), async () => (await rare()).answerStep(code, id, reply)),
+    answerJoin: (code, id, yes, choice) => attempt(t(yes ? "live.actions.let.in.failed" : "live.actions.turn.away.failed"), async () => (await manage()).answerJoin(code, id, yes, choice)),
+    approveTask: (code, id, approve, why) => attempt(t(approve ? "live.actions.not.approved" : "live.actions.not.sent.back"), async () => (await rare()).approveTask(code, id, approve, why)),
     addTask: (code, ask, title) =>
-      attempt("Task not added", async () => {
+      attempt(t("live.actions.task.not.added"), async () => {
         const run = need(code)
         const clean = title.trim().slice(0, TASK_TITLE_MAX_LENGTH)
-        if (!clean) throw new Error("a task needs a title")
+        if (!clean) throw new Error(t("live.run.task.needs.title"))
         const why = taskSpecRefusal(run.state, { re: ask })
         if (why) throw new Error(why)
         await run.send(`task: ${clean}`, { kind: "event", ev: { op: "task.add", title: clean }, re: [ask] })
       }),
-    setSpecsOnly: (code, on) => attempt("Not changed", async () => (await manage()).setSpecsOnly(code, on)),
-    setTaskStatus: (code, id, status) => attempt("Status not changed", async () => (await rare()).setTaskStatus(code, id, status)),
-    cancelTask: (code, id, why) => attempt("Not cancelled", async () => (await rare()).cancelTask(code, id, why)),
-    closeTask: (code, id, why) => attempt("Not closed", async () => (await rare()).closeTask(code, id, why)),
-    editTask: (code, id, change) => attempt("Not saved", async () => (await rare()).editTask(code, id, change)),
-    deleteTask: (code, id) => attempt("Not deleted", async () => (await rare()).deleteTask(code, id)),
+    setSpecsOnly: (code, on) => attempt(t("live.actions.not.changed"), async () => (await manage()).setSpecsOnly(code, on)),
+    setTaskStatus: (code, id, status) => attempt(t("live.actions.status.not.changed"), async () => (await rare()).setTaskStatus(code, id, status)),
+    cancelTask: (code, id, why) => attempt(t("live.actions.not.cancelled"), async () => (await rare()).cancelTask(code, id, why)),
+    closeTask: (code, id, why) => attempt(t("live.actions.not.closed"), async () => (await rare()).closeTask(code, id, why)),
+    editTask: (code, id, change) => attempt(t("live.actions.not.saved"), async () => (await rare()).editTask(code, id, change)),
+    deleteTask: (code, id) => attempt(t("live.actions.not.deleted"), async () => (await rare()).deleteTask(code, id)),
     assignTask: (code, id, to, why) =>
-      attempt("Not assigned", async () => {
+      attempt(t("live.actions.not.assigned"), async () => {
         const run = need(code)
-        const t = run.state.tasks.get(id)
-        if (!t) throw new Error(`no task ${taskId(id)}`)
+        const task = run.state.tasks.get(id)
+        if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
         memberOf(run, to)
-        await sends(run, assignTask(t, to, why.trim() || (t.owner ? `was ${t.owner}'s` : "nobody had it")))
+        await sends(run, assignTask(task, to, why.trim() || (task.owner ? `was ${task.owner}'s` : "nobody had it")))
       }),
-    setReviewer: (code, id, reviewer) => attempt("Reviewer not changed", async () => (await rare()).setReviewer(code, id, reviewer)),
-    nameGoal: (code, ask, name) => attempt("Goal not named", async () => (await rare()).nameGoal(code, ask, name)),
+    setReviewer: (code, id, reviewer) => attempt(t("live.actions.reviewer.not.changed"), async () => (await rare()).setReviewer(code, id, reviewer)),
+    nameGoal: (code, ask, name) => attempt(t("live.actions.goal.not.named"), async () => (await rare()).nameGoal(code, ask, name)),
     newSpec: async (code, words, text) => {
       try {
         return await (await rare()).newSpec(code, words, text)
       } catch (err) {
-        announce(`Spec not started: ${say(err)}`)
+        announce(t("live.actions.spec.not.started", { why: say(err) }))
         return null
       }
     },
-    writeSpec: (code, ask, text) => attempt("Spec not saved", async () => (await rare()).writeSpec(code, ask, text)),
-    approveSpec: (code, ask, v) => attempt("Not approved", async () => (await rare()).approveSpec(code, ask, v)),
+    writeSpec: (code, ask, text) => attempt(t("live.actions.spec.not.saved"), async () => (await rare()).writeSpec(code, ask, text)),
+    approveSpec: (code, ask, v) => attempt(t("live.actions.not.approved"), async () => (await rare()).approveSpec(code, ask, v)),
     judgeSpec: (code, ask, verdict, note) =>
-      attempt(verdict === "accepted" ? "Not accepted" : verdict === "back" ? "Not sent back" : "Not dropped", async () => (await rare()).judgeSpec(code, ask, verdict, note)),
-    deleteSpec: (code, ask) => attempt("Not deleted", async () => (await rare()).deleteSpec(code, ask)),
-    setRole: (code, name, role) => attempt("Role not changed", async () => (await manage()).setRole(code, name, role)),
-    removeMember: (code, name) => attempt(`Couldn't remove ${name}`, async () => (await manage()).removeMember(code, name)),
-    setPersona: (code, name, id) => attempt("Personality not changed", async () => (await manage()).setPersona(code, name, id)),
-    setReadOnly: (code, name, on) => attempt("Not changed", async () => (await manage()).setReadOnly(code, name, on)),
-    setWake: (code, name, on) => attempt("Not changed", () => setWake(need(code).roomId, name, on)),
-    setAgentColor: (code, name, color) => attempt("Colour not changed", async () => (await manage()).setAgentColor(code, name, color)),
-    setNickname: (code, name, nickname) => attempt("Nickname not changed", async () => (await manage()).setNickname(code, name, nickname)),
-    setPowers: (code, name, powers) => attempt("Not changed", async () => (await manage()).setPowers(code, name, powers)),
-    addRoom: (code, typed, members) => tried("Room not made", async () => (await manage()).addRoom(code, typed, members)),
+      attempt(t(verdict === "accepted" ? "live.actions.not.accepted" : verdict === "back" ? "live.actions.not.sent.back" : "live.actions.not.dropped"), async () =>
+        (await rare()).judgeSpec(code, ask, verdict, note)
+      ),
+    deleteSpec: (code, ask) => attempt(t("live.actions.not.deleted"), async () => (await rare()).deleteSpec(code, ask)),
+    setRole: (code, name, role) => attempt(t("live.actions.role.not.changed"), async () => (await manage()).setRole(code, name, role)),
+    removeMember: (code, name) => attempt(t("live.actions.remove.member.failed", { name }), async () => (await manage()).removeMember(code, name)),
+    setPersona: (code, name, id) => attempt(t("live.actions.personality.not.changed"), async () => (await manage()).setPersona(code, name, id)),
+    setReadOnly: (code, name, on) => attempt(t("live.actions.not.changed"), async () => (await manage()).setReadOnly(code, name, on)),
+    setWake: (code, name, on) => attempt(t("live.actions.not.changed"), () => setWake(need(code).roomId, name, on)),
+    setAgentColor: (code, name, color) => attempt(t("live.actions.colour.not.changed"), async () => (await manage()).setAgentColor(code, name, color)),
+    setNickname: (code, name, nickname) => attempt(t("live.actions.nickname.not.changed"), async () => (await manage()).setNickname(code, name, nickname)),
+    setPowers: (code, name, powers) => attempt(t("live.actions.not.changed"), async () => (await manage()).setPowers(code, name, powers)),
+    addRoom: (code, typed, members) => tried(t("live.actions.room.not.made"), async () => (await manage()).addRoom(code, typed, members)),
     setRoomMembers: async (code, id, members) =>
-      (await tried("Who's in didn't change", async () => {
+      (await tried(t("live.actions.room.members.not.changed"), async () => {
         await (await manage()).setRoomMembers(code, id, members)
         return true
       })) ?? false,
-    setGithubWrite: (code, on) => attempt("Not changed", async () => (await manage()).setGithubWrite(code, on)),
-    setBranchPrefix: (code, typed) => attempt("Branch prefix not changed", async () => (await manage()).setBranchPrefix(code, typed)),
-    setLanding: (code, then) => attempt("How tasks land not changed", async () => (await manage()).setLanding(code, then)),
-    setPeopleMerge: (code, on) => attempt("Who merges not changed", async () => (await manage()).setPeopleMerge(code, on)),
-    renameRoom: (code, id, typed) => attempt("Room not renamed", async () => (await manage()).renameRoom(code, id, typed)),
+    setGithubWrite: (code, on) => attempt(t("live.actions.not.changed"), async () => (await manage()).setGithubWrite(code, on)),
+    setBranchPrefix: (code, typed) => attempt(t("live.actions.branch.prefix.not.changed"), async () => (await manage()).setBranchPrefix(code, typed)),
+    setLanding: (code, then) => attempt(t("live.actions.landing.not.changed"), async () => (await manage()).setLanding(code, then)),
+    setPeopleMerge: (code, on) => attempt(t("live.actions.merges.not.changed"), async () => (await manage()).setPeopleMerge(code, on)),
+    renameRoom: (code, id, typed) => attempt(t("live.actions.room.not.renamed"), async () => (await manage()).renameRoom(code, id, typed)),
     setIcon: (code, file) =>
-      attempt("Icon not changed", async () => {
+      attempt(t("live.actions.icon.not.changed"), async () => {
         const run = owner(code)
         await run.ch.setIcon(file ? await (await import("~/live/icon-file")).iconFromFile(file) : null)
       }),
     exportHistory: async (code, kind) => (await manage()).exportHistory(code, kind),
     clearFact: (code, key) =>
-      attempt("Note not cleared", async () => {
+      attempt(t("live.actions.note.not.cleared"), async () => {
         await event(need(code), `cleared ${key}`, { op: "fact.del", key })
-        announce(`Cleared ${key}`)
+        announce(t("live.actions.cleared", { key }))
       }),
     renameChannel: (code, title) =>
-      attempt("Not renamed", async () => {
+      attempt(t("live.actions.not.renamed"), async () => {
         const name = title.trim().slice(0, 80)
-        if (!name) throw new Error("a channel needs a name")
+        if (!name) throw new Error(t("live.actions.channel.needs.name"))
         await link(code).setTitle(name)
         if (loadMember(code)) await renameChannel(code, name)
       }),
-    setGoal: (code, goal) => attempt("Goal not set", async () => (await manage()).setGoal(code, goal)),
-    setHold: (code, on, note) => attempt(on ? "Agents not paused" : "Agents not resumed", async () => (await manage()).setHold(code, on, note)),
-    askCompact: (code) => attempt("Not asked", async () => (await rare()).askCompact(code)),
-    approveCompact: (code, proposal) => attempt("Not compacted", async () => (await rare()).approveCompact(code, proposal)),
+    setGoal: (code, goal) => attempt(t("live.actions.goal.not.set"), async () => (await manage()).setGoal(code, goal)),
+    setHold: (code, on, note) => attempt(t(on ? "live.actions.not.paused" : "live.actions.not.resumed"), async () => (await manage()).setHold(code, on, note)),
+    askCompact: (code) => attempt(t("live.actions.not.asked"), async () => (await rare()).askCompact(code)),
+    approveCompact: (code, proposal) => attempt(t("live.actions.not.compacted"), async () => (await rare()).approveCompact(code, proposal)),
     myUsage,
     myRepos: async () => {
       const b = bridge()
@@ -219,15 +221,15 @@ export function makeActions(): Actions {
         return []
       }
     },
-    addRepo: (code, repo) => attempt("Repo not added", async () => (await manage()).addRepo(code, repo)),
-    removeRepo: (code, repo) => attempt("Repo not removed", async () => (await manage()).removeRepo(code, repo)),
+    addRepo: (code, repo) => attempt(t("live.actions.repo.not.added"), async () => (await manage()).addRepo(code, repo)),
+    removeRepo: (code, repo) => attempt(t("live.actions.repo.not.removed"), async () => (await manage()).removeRepo(code, repo)),
     joinCommand: async (code, as) => (await manage()).joinCommand(code, as),
     inviteLink: async (code) => {
-      if (!loadMember(code)) throw new Error("you're not in that channel")
+      if (!loadMember(code)) throw new Error(t("live.run.not.in.channel"))
       return `${relayUrl()}/#${code}`
     },
     leaveChannel: (code) =>
-      attempt("Couldn't leave", async () => {
+      attempt(t("live.actions.leave.failed"), async () => {
         leavingOnPurpose(code)
         if (loadPending(code) && !loadMember(code)) {
           closeOpened(code)
@@ -238,7 +240,7 @@ export function makeActions(): Actions {
         await forgetChannel(code)
       }),
     closeChannel: (code) =>
-      attempt("Couldn't delete it", async () => {
+      attempt(t("live.actions.delete.failed"), async () => {
         const run = owner(code)
         leavingOnPurpose(code)
         await run.ch.close()
@@ -249,8 +251,8 @@ export function makeActions(): Actions {
     inviteInfo: async (typed) => (await joining()).lookUpInvite(typed),
     joinChannel: async (typed, name) => (await joining()).joinChannel(typed, name),
     setName: (name) =>
-      attempt("Name not saved", async () => {
-        if (secrets().person) throw new Error("your name stays the one your key was made with")
+      attempt(t("live.actions.name.not.saved"), async () => {
+        if (secrets().person) throw new Error(t("live.actions.name.stays"))
         await createPerson(name.trim())
       }),
     setPrefs,
@@ -262,52 +264,52 @@ export function makeActions(): Actions {
     earlierTo: (code, seq) => (openedRun(code)?.older.to(seq) ?? Promise.resolve(false)).catch(() => false),
     holdEarlier: (code, key, seq) => openedRun(code)?.older.keep(key, seq),
     forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
-    linkGithub: () => attempt("GitHub not linked", async () => (await account()).linkGithub()),
-    signInWithGithub: () => attempt("Not signed in with GitHub", async () => (await account()).linkGithub()),
-    unlinkGithub: () => attempt("GitHub not unlinked", async () => (await account()).unlinkGithub()),
+    linkGithub: () => attempt(t("live.actions.github.not.linked"), async () => (await account()).linkGithub()),
+    signInWithGithub: () => attempt(t("live.actions.github.not.signed.in"), async () => (await account()).linkGithub()),
+    unlinkGithub: () => attempt(t("live.actions.github.not.unlinked"), async () => (await account()).unlinkGithub()),
     windowControl: (action) =>
       void bridge()
         ?.windowControl(action)
         .catch(() => {}),
     checkUpdate: async () => (await rare()).checkUpdate(),
     setRelay: async (url) => (await account()).setRelay(url),
-    installUpdate: () => attempt("Couldn't update", async () => (await account()).installUpdate()),
-    applyUi: () => attempt("Couldn't switch to the new look", async () => (await account()).applyUi()),
-    dismissMoved: () => attempt("Couldn't put the note away", async () => (await account()).dismissMoved()),
-    signOut: () => attempt("Couldn't sign out", async () => (await account()).signOut()),
+    installUpdate: () => attempt(t("live.actions.update.failed"), async () => (await account()).installUpdate()),
+    applyUi: () => attempt(t("live.actions.new.look.failed"), async () => (await account()).applyUi()),
+    dismissMoved: () => attempt(t("live.actions.note.away.failed"), async () => (await account()).dismissMoved()),
+    signOut: () => attempt(t("live.actions.sign.out.failed"), async () => (await account()).signOut()),
     setNewMembers: (code, can) =>
-      attempt("Not changed", async () => {
+      attempt(t("live.actions.not.changed"), async () => {
         const m = loadMember(code)
-        if (!m) throw new Error("you're not in that channel")
+        if (!m) throw new Error(t("live.run.not.in.channel"))
         setNewMemberScopes(m.access.roomId, can)
       }),
     setNewPowers: (code, powers) =>
-      attempt("Not changed", async () => {
+      attempt(t("live.actions.not.changed"), async () => {
         const m = loadMember(code)
-        if (!m) throw new Error("you're not in that channel")
+        if (!m) throw new Error(t("live.run.not.in.channel"))
         setNewMemberPowers(m.access.roomId, powers)
       }),
-    enrollAnswer: (id) => attempt("Couldn't answer the device", async () => (await account()).enrollAnswer(id)),
+    enrollAnswer: (id) => attempt(t("live.actions.device.answer.failed"), async () => (await account()).enrollAnswer(id)),
     enrollConfirm: async (id, digits) => (await account()).enrollConfirm(id, digits),
-    enrollDeny: (id) => attempt("Couldn't turn the device away", async () => (await account()).enrollDeny(id)),
-    forgetDevice: (ids, keep) => attempt("Couldn't forget the device", async () => (await account()).forgetDevice(ids, keep)),
-    renewDevice: (...ids) => attempt("Couldn't renew the device", async () => (await account()).renewDevice(...ids)),
+    enrollDeny: (id) => attempt(t("live.actions.device.deny.failed"), async () => (await account()).enrollDeny(id)),
+    forgetDevice: (ids, keep) => attempt(t("live.actions.device.forget.failed"), async () => (await account()).forgetDevice(ids, keep)),
+    renewDevice: (...ids) => attempt(t("live.actions.device.renew.failed"), async () => (await account()).renewDevice(...ids)),
     enrollBegin: () =>
-      attempt("Couldn't sign in as one of your devices", async () =>
+      attempt(t("live.actions.enroll.failed"), async () =>
         (await account()).enrollBegin(
           () => tokenForCreate(),
-          (d) => attempt("Couldn't join your channels", async () => (await joining()).joinGranted(d))
+          (d) => attempt(t("live.actions.join.channels.failed"), async () => (await joining()).joinGranted(d))
         )
       ),
-    enrollKeep: () => attempt("Couldn't join as one of your devices", async () => (await account()).enrollKeep()),
-    enrollCancel: () => attempt("Couldn't take the ask back", async () => (await account()).enrollCancel()),
+    enrollKeep: () => attempt(t("live.actions.enroll.keep.failed"), async () => (await account()).enrollKeep()),
+    enrollCancel: () => attempt(t("live.actions.enroll.cancel.failed"), async () => (await account()).enrollCancel()),
     saveTheme,
     deleteTheme,
-    savePersonalities: (list) => attempt("Not saved", () => savePersonalities(list)),
-    setHooks: (harness, on) => attempt("Couldn't change the hooks", () => setHooks(harness, on)),
+    savePersonalities: (list) => attempt(t("live.actions.not.saved"), () => savePersonalities(list)),
+    setHooks: (harness, on) => attempt(t("live.actions.hooks.failed"), () => setHooks(harness, on)),
     checkComputer,
     computerSettings,
     launchedFrom: async (ids) => (await account()).launchedFrom(ids),
-    setContextLine: (on) => attempt("Couldn't change it", () => setContextLine(on)),
+    setContextLine: (on) => attempt(t("live.actions.change.failed"), () => setContextLine(on)),
   }
 }

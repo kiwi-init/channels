@@ -1,22 +1,26 @@
 import { describe, expect, test } from "bun:test"
 
-import { en, type Key, type Msg } from "~/i18n/en"
-import { CATALOGS, langOf, LANGS, t, type Catalog } from "~/i18n/i18n"
+import type { Key, Msg } from "~/i18n/en"
+import { english } from "~/i18n/en/all"
+import { addWords, CATALOGS, langOf, LANGS, t } from "~/i18n/i18n"
 
 const holes = (text: string): string[] => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!).sort()
 const forms = (msg: Msg): string[] => (typeof msg === "string" ? [msg] : Object.values(msg))
 
-describe("every catalog says everything English says (spec #759)", () => {
+const covered = (covers: readonly string[], key: string): boolean => covers.some((area) => `${key}.`.startsWith(area))
+
+describe("every catalog says everything English says in the areas it covers (spec #759)", () => {
   for (const [lang, load] of Object.entries(CATALOGS)) {
     test(`${lang}: the same keys, the same {holes}, and only plural forms ${lang} has`, async () => {
-      const catalog: Catalog = (await load()).default
-      const keys = Object.keys(en) as Key[]
+      const { default: catalog, covers } = await load()
+      const all: Readonly<Record<string, Msg>> = english
+      const keys = Object.keys(all).filter((k) => covered(covers, k)) as Key[]
       expect(keys.filter((k) => catalog[k] === undefined)).toEqual([])
-      expect(Object.keys(catalog).filter((k) => !(k in en))).toEqual([])
+      expect(Object.keys(catalog).filter((k) => !(k in all) || !covered(covers, k))).toEqual([])
       const categories = new Intl.PluralRules(lang).resolvedOptions().pluralCategories as string[]
       for (const key of keys) {
         const msg = catalog[key]!
-        const source = en[key]
+        const source = all[key]!
         const want = holes(typeof source === "string" ? source : source.other)
         for (const text of forms(msg)) expect({ key, holes: holes(text) }).toEqual({ key, holes: want })
         if (typeof msg !== "string") {
@@ -48,5 +52,15 @@ describe("t() fills holes, picks the plural form and formats numbers", () => {
     expect(t("usage.per.day", { count: 1000 })).toBe("1,000 messages a day.")
     expect(t("usage.channel.out.sub", { who: "maya", again: "Soon." })).toBe("maya has used today's messages, so nobody can send here for now. Soon.")
     expect(t("usage.hint", {})).toBe("In the channels you own, agents' included. Resets in {time}.")
+  })
+})
+
+describe("a lazy area's English joins when its chunk loads", () => {
+  test("addWords makes its keys speak, plurals and holes included", () => {
+    const key = "test.lazy" as Key
+    expect(t(key)).toBe("test.lazy")
+    addWords({ "test.lazy": { one: "{count} lazy word", other: "{count} lazy words" } })
+    expect(t(key, { count: 1 })).toBe("1 lazy word")
+    expect(t(key, { count: 2000 })).toBe("2,000 lazy words")
   })
 })

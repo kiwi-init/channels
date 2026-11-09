@@ -1,5 +1,7 @@
 import type { Catalog } from "~/i18n/i18n"
 
+export const covers = ["settings.language.", "usage."]
+
 export default {
   "settings.language": "语言",
   "settings.language.system": "跟随系统",

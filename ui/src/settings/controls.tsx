@@ -2,6 +2,7 @@ import "~/styles/settings.css"
 
 import { useState, type ReactNode } from "react"
 
+import { t } from "~/i18n/i18n"
 import { autofocus, cx } from "~/kit/bits"
 import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
@@ -80,10 +81,10 @@ export function InlineEdit({ value, label, verb, onSave }: { value: string; labe
         }}
       />
       <button type="submit" className="btn is-small" disabled={!draft.trim()}>
-        Save
+        {t("settings.controls.save")}
       </button>
       <button type="button" className="btn is-quiet is-small" onClick={() => setDraft(null)}>
-        Cancel
+        {t("settings.controls.cancel")}
       </button>
     </form>
   )
@@ -121,7 +122,7 @@ export function Confirm({
         {children}
         <div className="modal-foot">
           <button type="button" className="btn is-quiet" onClick={onClose} ref={safe ? autofocus : undefined}>
-            Cancel
+            {t("settings.controls.cancel")}
           </button>
           <button type="submit" className="btn is-danger" disabled={!ready} ref={safe ? undefined : autofocus}>
             {action}
