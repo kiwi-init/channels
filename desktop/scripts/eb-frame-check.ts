@@ -56,6 +56,15 @@ const doubleClickTop = (): string | null => {
 const zoomed = async (d: Driver): Promise<boolean> => ((await d.main("window")) as { maximized?: unknown }).maximized === true;
 
 try {
+  const first = await run(async (d) => (await d.main("frame")) as Frame);
+  console.log(`first start: ${JSON.stringify(first)}`);
+  if (first.width > 1200 || first.height > 800 || first.width < 768) problems.push(`a first start opens at ${first.width}x${first.height}, not 1200x800 or the screen's size`);
+  const placed = await run(async (d) => (await d.main("placeForTest")) as Frame);
+  console.log(`moved and resized to: ${JSON.stringify(placed)}, then quit`);
+  const back = await run(async (d) => (await d.main("frame")) as Frame);
+  console.log(`after a restart: ${JSON.stringify(back)}`);
+  if (!same(placed, back)) problems.push(`after a restart the window is at ${JSON.stringify(back)}, not where it was left (${JSON.stringify(placed)})`);
+  if (same(first, back)) problems.push("after a restart the window is back where a first start puts it");
   await run(async (d) => {
     await d.main("placeForTest");
     if (await zoomed(d)) return void problems.push("the window is still zoomed after it was made smaller, so a double click can't show it zooms");
@@ -71,16 +80,6 @@ try {
       problems.push("a second double click on the top bar doesn't bring the window back"),
     );
   });
-  spawnSync("defaults", ["delete", TEST_ID, "NSWindow Frame Channels"], { stdio: "ignore" });
-  const first = await run(async (d) => (await d.main("frame")) as Frame);
-  console.log(`first start: ${JSON.stringify(first)}`);
-  if (first.width > 1200 || first.height > 800 || first.width < 768) problems.push(`a first start opens at ${first.width}x${first.height}, not 1200x800 or the screen's size`);
-  const placed = await run(async (d) => (await d.main("placeForTest")) as Frame);
-  console.log(`moved and resized to: ${JSON.stringify(placed)}, then quit`);
-  const back = await run(async (d) => (await d.main("frame")) as Frame);
-  console.log(`after a restart: ${JSON.stringify(back)}`);
-  if (!same(placed, back)) problems.push(`after a restart the window is at ${JSON.stringify(back)}, not where it was left (${JSON.stringify(placed)})`);
-  if (same(first, back)) problems.push("after a restart the window is back where a first start puts it");
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
 } finally {
