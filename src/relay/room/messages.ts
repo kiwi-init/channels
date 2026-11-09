@@ -142,7 +142,8 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   const store = (): Envelope | Repeat => {
     const prior = cid ? db.priorSend(sender, cid, ts - SEND_MEMORY_MS) : null;
     if (prior) return { repeat: true, seq: prior.seq, ts: prior.ts } satisfies Repeat;
-    let bytes = db.storedBytes();
+    const was = db.storedBytes();
+    let bytes = was;
     if (bytes + ct.length > cap) bytes -= db.dropOldest(bytes + ct.length - cap) + db.pruneBlobs();
     if (bytes + ct.length > cap) bytes -= db.dropOldestBlobs(bytes + ct.length - cap);
     if (bytes + ct.length > cap) bytes -= db.dropSnapshot();
@@ -152,7 +153,8 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
     if (slots.free?.length) db.freeSlots(slots.free, sender);
     if (slots.take) db.takeSlot(slots.take.id, sender, seq, ts + slots.take.ttl, ts);
     bytes += ct.length;
-    db.setCounters({ bytes, day, n: today + 1, head: seq });
+    if (bytes === was + ct.length) db.countMessage({ bytes, day, n: today + 1 });
+    else db.setCounters({ bytes, day, n: today + 1 });
     return { seq, ts, iv, ct, e };
   };
   return tickets.length ? db.atomically(store) : store();

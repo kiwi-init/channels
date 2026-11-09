@@ -18,7 +18,7 @@ setDefaultTimeout(60_000);
 
 const BUDGET = {
   sendReads: 0,
-  sendWrites: 2,
+  sendWrites: 1.05,
   markReads: 0,
   markWrites: 1,
   welcomeReads: 2,
@@ -199,6 +199,35 @@ describe("a warm room stays right", () => {
     expect(cold.since(0)).toEqual([]);
     cold.insert(seq, 0, "iv", "new", 0);
     expect(cold.since(0).map((m) => m.seq)).toEqual([8]);
+    scratch.close();
+  });
+
+  test("counters saved every 50 messages come back whole on a fresh handle", () => {
+    const sql = counted(file!).sql;
+    for (let i = 0; i < 7; i++) send(sql, members[0]!);
+    const seen = (db: RoomDb) => ({ bytes: db.storedBytes(), today: db.messagesOn(Date.now()), head: db.head() });
+    const want = seen(new RoomDb(sql, roomId));
+    expect(seen(new RoomDb(counted(file!).sql, roomId))).toEqual(want);
+  });
+
+  test("counters rebuilt across midnight UTC count only the new day's messages", () => {
+    const scratch = new Database(":memory:");
+    const { sql } = counted(scratch);
+    const db = new RoomDb(sql, "g".repeat(32));
+    db.init();
+    db.setCounters({ bytes: 0, day: "2026-11-08", n: 0 });
+    const late = Date.UTC(2026, 10, 8, 23, 59);
+    const early = Date.UTC(2026, 10, 9, 0, 1);
+    [late, late, late, early, early].forEach((ts, i) => {
+      db.insert(i + 1, ts, "iv", "abcd", 0);
+      db.countMessage({ bytes: (i + 1) * 4, day: ts === late ? "2026-11-08" : "2026-11-09", n: ts === late ? i + 1 : i - 2 });
+    });
+    forgetRoom(sql);
+    const fresh = new RoomDb(sql, "g".repeat(32));
+    expect(fresh.messagesOn(early)).toBe(2);
+    expect(fresh.messagesOn(late)).toBe(0);
+    expect(fresh.storedBytes()).toBe(20);
+    expect(fresh.head()).toBe(5);
     scratch.close();
   });
 

@@ -152,7 +152,7 @@ describe("messages per person per day", () => {
 });
 
 describe("over a socket", () => {
-  test("sends spend the channel's lease without waiting or writing (the message and its counters only), refills come after, and the limit holds exactly", async () => {
+  test("sends spend the channel's lease without waiting or writing (the message row only; the counters are saved every 50), refills come after, and the limit holds exactly", async () => {
     const { relay, dataDir } = relayWith({});
     const id = await generateIdentity("alice");
     const { access } = await Channel.create(relay, id, { name: "alice", kind: "human" }, [], undefined, token("alice"));
@@ -179,14 +179,18 @@ describe("over a socket", () => {
       ),
     );
     const writes: string[] = [];
-    const counted: Sql = { run: (q, ...p) => (writes.push(q), sql.run(q, ...p)), all: sql.all };
+    const counted: Sql = { run: (q, ...p) => (writes.push(`${q} ${String(p[0])}`), sql.run(q, ...p)), all: sql.all };
     const room = () => new RoomDb(counted, roomId);
     let acks = 0;
+    let saves = 0;
     let refused = "";
     for (let i = 0; i < 40; i++) {
       writes.length = 0;
       const fx = runRoomSync(ctx, room(), onClientFrame(JSON.stringify({ t: "send", id: `f${i}`, iv: "aXZpdml2aXZpdml2", ct: "Y3Z2", e: 0 }), owner));
-      if (i > 0 && !fx.lease && JSON.parse(String(fx.reply)).t === "ack") expect(writes.filter((q) => !q.startsWith("CREATE") && !q.startsWith("ALTER"))).toHaveLength(2);
+      if (JSON.parse(String(fx.reply)).t === "ack") {
+        expect(writes.filter((q) => q.startsWith("INSERT INTO msgs"))).toHaveLength(1);
+        saves += writes.filter((q) => q.startsWith("INSERT INTO meta") && q.endsWith(" usage")).length;
+      }
       const reply = JSON.parse(String(fx.reply)) as { t: string; error?: string };
       if (reply.t === "ack") acks++;
       else refused = reply.error ?? "";
@@ -194,6 +198,7 @@ describe("over a socket", () => {
     }
     file.close();
     expect(acks).toBe(30);
+    expect(saves).toBeLessThanOrEqual(2);
     expect(refused).toContain("used today's 30 messages");
   });
 });

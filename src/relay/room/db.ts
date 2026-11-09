@@ -117,6 +117,7 @@ interface Warm {
   notes: boolean | null;
   push: boolean | null;
   sends: Map<string, Sent> | null;
+  counters: Counters | null | undefined;
 }
 
 interface Sent {
@@ -126,13 +127,15 @@ interface Sent {
 
 const SEND_SCAN = 256;
 
+const COUNTERS_EVERY = 50;
+
 const sendKey = (sender: string, cid: string): string => `${sender} ${cid}`;
 
 const warmRooms = new WeakMap<Sql, Warm>();
 
 type Revised = "roster" | "info";
 
-const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map(), blobs: null, notes: null, push: null, sends: null });
+const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map(), blobs: null, notes: null, push: null, sends: null, counters: undefined });
 
 export function forgetRoom(sql: Sql): void {
   warmRooms.delete(sql);
@@ -281,7 +284,8 @@ export class RoomDb {
 
   insert(seq: number, ts: number, iv: string, ct: string, e: number, send?: { sender: string; cid: string; since: number }): void {
     const sent = send ? sendKey(send.sender, send.cid) : null;
-    this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e, sent) VALUES (?, ?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e, sent);
+    if (sent) this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e, sent) VALUES (?, ?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e, sent);
+    else this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e) VALUES (?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e);
     this.warm.head = seq;
     if (!send || !sent) return;
     const sends = this.recentSends(send.since);
@@ -362,17 +366,41 @@ export class RoomDb {
   }
 
   counters(): Counters | null {
+    const w = this.warm;
+    if (w.counters !== undefined) return w.counters;
     const raw = this.get("usage");
-    if (!raw) return null;
+    let saved: Counters | null = null;
     try {
-      return JSON.parse(raw) as Counters;
+      saved = raw ? (JSON.parse(raw) as Counters) : null;
     } catch {
-      return null;
+      // A damaged copy: storedBytes counts the channel again from its messages.
+      saved = null;
     }
+    w.counters = saved && saved.head !== undefined ? this.withLater(saved) : saved;
+    return w.counters;
+  }
+
+  private withLater(saved: Counters): Counters {
+    const u = { ...saved };
+    for (const r of this.sql.all<{ seq: number; ts: number; n: number }>(`SELECT seq, ts, ${CT_CHARS} AS n FROM msgs WHERE seq > ? ORDER BY seq`, saved.head ?? 0)) {
+      const day = utcDay(r.ts);
+      u.n = day === u.day ? u.n + 1 : 1;
+      u.day = day;
+      u.bytes += r.n;
+      u.head = r.seq;
+    }
+    return u;
   }
 
   setCounters(u: Counters): void {
-    this.set("usage", JSON.stringify(u));
+    const full = { ...u, head: this.head() };
+    this.set("usage", JSON.stringify(full));
+    this.warm.counters = full;
+  }
+
+  countMessage(u: Counters): void {
+    if (!this.get("usage") || this.head() % COUNTERS_EVERY === 0) return this.setCounters(u);
+    this.warm.counters = { ...u, head: this.head() };
   }
 
   messagesOn(now: number): number {
