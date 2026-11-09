@@ -59,9 +59,21 @@ export function proofPr(github: GithubState, t: Pick<Task, "proof">): GithubPr |
   return undefined;
 }
 
-export function prOfTask(github: GithubState, prefix: string | null, t: Pick<Task, "id" | "proof">): GithubPr | undefined {
+type Filed = Pick<Task, "id" | "createdAt">;
+
+const openedAfter = (pr: Pick<GithubPr, "seq" | "mergedAt">, t: Filed): boolean => pr.seq > t.id && !(pr.mergedAt !== undefined && pr.mergedAt < t.createdAt);
+
+export const branchLinks = (pr: Pick<GithubPr, "branch" | "seq" | "mergedAt">, prefix: string | null, t: Filed): boolean => taskOfBranch(pr.branch, prefix) === t.id && openedAfter(pr, t);
+
+export function taskOfPr(pr: Pick<GithubPr, "branch" | "seq" | "mergedAt">, state: { branchPrefix: string | null; tasks: ReadonlyMap<number, Filed> }): number | null {
+  const id = taskOfBranch(pr.branch, state.branchPrefix);
+  const t = id === null ? undefined : state.tasks.get(id);
+  return t && openedAfter(pr, t) ? t.id : null;
+}
+
+export function prOfTask(github: GithubState, prefix: string | null, t: Pick<Task, "id" | "createdAt" | "proof">): GithubPr | undefined {
   let best: GithubPr | undefined;
-  for (const p of github.prs.values()) if (taskOfBranch(p.branch, prefix) === t.id && betterPr(p, best)) best = p;
+  for (const p of github.prs.values()) if (branchLinks(p, prefix, t) && betterPr(p, best)) best = p;
   return best ?? proofPr(github, t);
 }
 
@@ -70,7 +82,7 @@ function taskPrIndex(state: ChannelState): Map<number, TaskPr> {
   if (known) return known;
   const best = new Map<number, GithubPr>();
   for (const p of state.github.prs.values()) {
-    const id = taskOfBranch(p.branch, state.branchPrefix);
+    const id = taskOfPr(p, state);
     if (id === null) continue;
     if (betterPr(p, best.get(id))) best.set(id, p);
   }

@@ -89,10 +89,11 @@ describe("a PR finds its task by its branch", () => {
 });
 
 describe("a task's PR, looked up from one index per fold", () => {
-  const pr = (number: number, branch: string, state: "open" | "closed" | "merged", at: number) => ({ repo: "o/r", number, branch, state, at, seq: number });
+  const pr = (number: number, branch: string, state: "open" | "closed" | "merged", at: number) => ({ repo: "o/r", number, branch, state, at, seq: 100 + number });
   const stateWith = (prs: ReturnType<typeof pr>[]) =>
     ({
       branchPrefix: "T",
+      tasks: new Map([7, 8, 9, 10].map((id) => [id, { id, createdAt: 0 }])),
       github: { prs: new Map(prs.map((p) => [`o/r#${p.number}`, p])), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map(), runs: new Map(), runsSince: null, runsForgotten: 0 },
     }) as unknown as Parameters<typeof taskPr>[0];
 

@@ -18,7 +18,7 @@ import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
 import { addRelease, applyGithub, dropRelease, prKey, repoKey, runStart, runsUnknownSince, type GithubState } from "./github.ts";
-import { prLinks, prOfTask, taskOfBranch } from "../prs.ts";
+import { branchLinks, prLinks, prOfTask } from "../prs.ts";
 import { recordedRuns } from "../review-check.ts";
 import { sameHead } from "../stage.ts";
 import { reposOf } from "./repos.ts";
@@ -326,7 +326,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         for (const t of tasks.values()) {
           const last = t.rounds.at(-1);
           if (t.state !== "landing" || last?.result.kind !== "approved" || !last.at || sameHead(last.at, pr.sha)) continue;
-          const linked = taskOfBranch(pr.branch, c.branchPrefix) === t.id || !!t.proof?.some((p) => prLinks(p.url).some((l) => prKey(l.repo, l.number) === key));
+          const linked = branchLinks(pr, c.branchPrefix, t) || !!t.proof?.some((p) => prLinks(p.url).some((l) => prKey(l.repo, l.number) === key));
           if (!linked) continue;
           last.stale = m.seq;
           t.state = "review";

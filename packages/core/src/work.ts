@@ -8,7 +8,7 @@ import { inlineText } from "./membership.ts";
 import { ignored, type IssueRef, type Message } from "./protocol.ts";
 import type { OldTaskState, TaskState } from "./protocol.ts";
 import { currentState, holdsWork, isPerson, issueOf, prKey, taskId, type ChannelState, type GithubPr, type Task } from "./state.ts";
-import { checksOf, prLinks, taskOfBranch, type PrChecks } from "./prs.ts";
+import { checksOf, prLinks, taskOfPr, type PrChecks } from "./prs.ts";
 
 export { prLinks, taskOfBranch, taskPr } from "./prs.ts";
 
@@ -227,7 +227,7 @@ export function taskFeed(state: ChannelState, messages: Message[], id: number): 
     items.push({ type: "pr", seq: pr.seq, at: at(m), actor: m.from, pr });
   }
   for (const [key, gh] of state.github.prs) {
-    if (shown.has(key) || taskOfBranch(gh.branch, state.branchPrefix) !== id) continue;
+    if (shown.has(key) || taskOfPr(gh, state) !== id) continue;
     const m = messages.find((x) => x.seq === gh.seq);
     if (!m) continue;
     const pr = fromGithub(state, { url: gh.url ?? `https://github.com/${gh.repo}/pull/${gh.number}`, repo: gh.repo, number: gh.number, state: gh.state, seq: gh.seq });
@@ -331,7 +331,7 @@ export function prsByTask(state: ChannelState, messages: Message[], ids: Iterabl
     }
   const byBranch = new Map<number, [string, GithubPr][]>();
   for (const [key, gh] of state.github.prs) {
-    const id = taskOfBranch(gh.branch, state.branchPrefix);
+    const id = taskOfPr(gh, state);
     if (id === null) continue;
     let list = byBranch.get(id);
     if (!list) byBranch.set(id, (list = []));
@@ -371,7 +371,7 @@ function ownPrs(state: ChannelState, messages: Message[], id: number): PrRef[] {
   const prs = prsIn(state, messages, own);
   const shown = new Set(prs.map((p) => prKey(p.repo, p.number)));
   for (const [key, gh] of state.github.prs) {
-    if (shown.has(key) || taskOfBranch(gh.branch, state.branchPrefix) !== id || !messages.some((m) => m.seq === gh.seq)) continue;
+    if (shown.has(key) || taskOfPr(gh, state) !== id || !messages.some((m) => m.seq === gh.seq)) continue;
     prs.push(fromGithub(state, { url: gh.url ?? `https://github.com/${gh.repo}/pull/${gh.number}`, repo: gh.repo, number: gh.number, state: gh.state, seq: gh.seq }));
   }
   return prs;
@@ -398,7 +398,7 @@ export function prsToLinkBack(state: ChannelState, after: number): { repo: strin
   if (state.githubWrite === null) return out;
   const since = Math.max(after, state.githubWrite);
   for (const pr of state.github.prs.values()) {
-    const id = taskOfBranch(pr.branch, state.branchPrefix);
+    const id = taskOfPr(pr, state);
     const t = id === null ? undefined : state.tasks.get(id);
     if (!t || pr.seq <= since || pr.state !== "open") continue;
     out.push({ repo: pr.repo, number: pr.number, task: t.id, seq: pr.seq, body: `Linked to Kiwi task ${taskId(t.id)}` });
