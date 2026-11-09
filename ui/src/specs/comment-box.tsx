@@ -1,12 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type SyntheticEvent } from "react"
 
 import { AttachedFiles, DropHint, IMAGE_TYPES, useAttach } from "~/chat/attach"
+import { preview } from "~/chat/preview"
+import { withExcerpt } from "~/chat/quote"
 import { composing, sendsOn, sendTitle, type SendKey } from "~/chat/send-keys"
 import { listId, Suggestions, useSuggest } from "~/chat/suggest"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import type { Channel, SendExtras, Spec, Upload, Where } from "~/model"
+import type { Channel, Message, SendExtras, Spec, Upload, Where } from "~/model"
+import { nickname } from "~/names"
 import { useAct, useApp } from "~/nav"
+import { splitQuote } from "~/specs/read"
+import { wordsRaw } from "~/words"
 
 function whereOf(channel: Channel, ask: number): Where {
   return channel.messages.find((m) => m.seq === ask)?.where ?? { kind: "room", room: "general" }
@@ -19,9 +24,15 @@ function quoted(quote: string, text: string): string {
     .join("\n")}\n\n${text.trim()}`
 }
 
-export function commentOf(ask: number, text: string, files: readonly Upload[], quote?: string): { text: string; extras: SendExtras } | null {
+export interface CommentReply {
+  to: Message
+  excerpt: string | null
+}
+
+export function commentOf(ask: number, text: string, files: readonly Upload[], quote?: string, reply?: CommentReply | null): { text: string; extras: SendExtras } | null {
   if (!text.trim() && !files.length) return null
-  return { text: quote ? quoted(quote, text) : text.trim(), extras: { inThread: ask, ...(files.length ? { images: [...files] } : {}) } }
+  const said = reply?.excerpt ? withExcerpt(reply.excerpt, text) : quote ? quoted(quote, text) : text.trim()
+  return { text: said, extras: { inThread: ask, ...(reply ? { replyTo: reply.to.seq } : {}), ...(files.length ? { images: [...files] } : {}) } }
 }
 
 type Key = SendKey & { preventDefault(): void }
@@ -40,7 +51,21 @@ export function commentKeys(enterSends: boolean, send: () => void, cancel?: () =
   }
 }
 
-export function CommentBox({ channel, spec, quote, onDone }: { channel: Channel; spec: Spec; quote?: string; onDone?: () => void }) {
+export function CommentBox({
+  channel,
+  spec,
+  quote,
+  reply,
+  onUnreply,
+  onDone,
+}: {
+  channel: Channel
+  spec: Spec
+  quote?: string
+  reply?: CommentReply | null
+  onUnreply?: () => void
+  onDone?: () => void
+}) {
   const { actions, toast } = useAct()
   const enterSends = useApp().app.prefs.enterSends
   const [text, setText] = useState("")
@@ -55,8 +80,8 @@ export function CommentBox({ channel, spec, quote, onDone }: { channel: Channel;
   const s = useSuggest({ channel, id: `spec:${channel.code}:${spec.ask}${quote ? ":quote" : ""}`, text, area: box, onText: typed })
   const { attach, paste, reading, dropping, dropZone } = useAttach({ files, setFiles, zone, toast })
   useEffect(() => {
-    if (quote) box.current?.focus()
-  }, [quote])
+    if (quote || reply) box.current?.focus()
+  }, [quote, reply])
   useLayoutEffect(() => {
     const el = box.current
     if (!el) return
@@ -65,20 +90,35 @@ export function CommentBox({ channel, spec, quote, onDone }: { channel: Channel;
   }, [text])
   const ready = !reading && !!commentOf(spec.ask, text, files)
   const send = () => {
-    const comment = reading ? null : commentOf(spec.ask, s.sent(text.trim()), files, quote)
+    const comment = reading ? null : commentOf(spec.ask, s.sent(text.trim()), files, quote, reply)
     if (!comment) return
     actions.send(channel.code, whereOf(channel, spec.ask), comment.text, comment.extras)
     s.forget()
     typed("", 0)
     setFiles([])
+    if (reply) onUnreply?.()
     onDone?.()
   }
-  const sendKeys = commentKeys(enterSends, send, onDone)
+  const sendKeys = commentKeys(enterSends, send, reply ? onUnreply : onDone)
   const title = sendTitle(enterSends)
+  const who = reply ? nickname(channel, reply.to.from) : ""
+  const line = reply ? (reply.excerpt ?? preview(splitQuote(wordsRaw(reply.to.text)).text)).replace(/\s+/g, " ") : ""
   return (
     <div ref={zone} className={cx("spec-box-new", quote && "is-anchored", dropping && "is-dropping")} {...dropZone}>
       {dropping && <DropHint />}
       {quote && <p className="spec-comment-quote">{quote}</p>}
+      {reply && !quote && (
+        <div className={cx("compose-reply", reply.excerpt && "is-excerpt")}>
+          <Icon name="reply" size={13} />
+          <span className="compose-reply-text">
+            {reply.excerpt ? "Quoting" : "Replying to"} <b>{who}</b>{" "}
+            <span className={reply.excerpt ? "compose-reply-excerpt" : "dim"}>{reply.excerpt ? `“${line.slice(0, 160)}${line.length > 160 ? "…" : ""}”` : line.slice(0, 160)}</span>
+          </span>
+          <button type="button" className="compose-reply-x" aria-label="Cancel reply" title="Cancel reply (Esc)" onClick={onUnreply}>
+            <Icon name="close" size={13} />
+          </button>
+        </div>
+      )}
       <Suggestions channel={channel} s={s} />
       <div className="spec-box-field">
         <textarea
@@ -86,9 +126,9 @@ export function CommentBox({ channel, spec, quote, onDone }: { channel: Channel;
           className="textarea spec-box-text"
           rows={quote ? 3 : 1}
           value={text}
-          placeholder={quote ? "Say what's off, or ask about it" : "Comment"}
+          placeholder={quote ? "Say what's off, or ask about it" : reply ? (reply.excerpt ? "Say something about it" : `Reply to ${who}`) : "Comment"}
           title={quote ? undefined : "Or select words in the spec to comment on them"}
-          aria-label={quote ? "Comment on the selected words" : "Comment on the spec"}
+          aria-label={quote ? "Comment on the selected words" : reply ? `Reply to ${who}` : "Comment on the spec"}
           aria-autocomplete="list"
           aria-expanded={s.count > 0}
           aria-controls={listId(s)}
@@ -124,7 +164,7 @@ export function CommentBox({ channel, spec, quote, onDone }: { channel: Channel;
             </button>
           )}
           <button type="button" className={cx("btn", quote && "is-small")} title={title} disabled={!ready} onClick={send}>
-            Comment
+            {reply && !quote ? "Reply" : "Comment"}
           </button>
         </div>
       )}

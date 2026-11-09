@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import { sendsOn, sendTitle, type SendKey } from "~/chat/send-keys"
-import type { Channel, Spec } from "~/model"
+import type { Channel, Message, Spec } from "~/model"
 import { ActContext, AppContext, type Act, type Ctx } from "~/nav"
 import { pastedFiles } from "~/chat/attach"
-import { CommentBox, commentKeys, commentOf } from "~/specs/comment-box"
+import { CommentBox, commentKeys, commentOf, type CommentReply } from "~/specs/comment-box"
 import { wrote } from "~/words"
 
 const key = (more: Partial<SendKey>): SendKey & { preventDefault(): void } => ({
@@ -38,11 +38,11 @@ const spec: Spec = {
 
 const channel = { code: "c", you: "jow", people: [], former: [], messages: [], tasks: [], nicknames: new Map() } as unknown as Channel
 
-const render = (enterSends: boolean, quote?: string): string =>
+const render = (enterSends: boolean, quote?: string, reply?: CommentReply): string =>
   renderToStaticMarkup(
     <AppContext.Provider value={{ app: { channel, prefs: { enterSends } }, go: () => {} } as unknown as Ctx}>
       <ActContext.Provider value={{ actions: {}, go: () => {}, toast: () => {} } as unknown as Act}>
-        <CommentBox channel={channel} spec={spec} quote={quote} onDone={() => {}} />
+        <CommentBox channel={channel} spec={spec} quote={quote} reply={reply ?? null} onUnreply={() => {}} onDone={() => {}} />
       </ActContext.Provider>
     </AppContext.Provider>
   )
@@ -96,6 +96,18 @@ describe("one send rule for the chat composer and spec comments (#1842)", () => 
     expect(sendTitle(true)).toBe("Send (Enter)")
     expect(sendTitle(false)).toBe("Send (⌘ Enter)")
   })
+
+  test("replying to a comment shows who and what it quotes, like the chat composer (#1840)", () => {
+    const to = { seq: 12, from: "win", at: 0, text: wrote("subtasks should nest"), where: { kind: "room", room: "general" }, inThread: 10 } as Message
+    const quoting = render(true, undefined, { to, excerpt: "should nest" })
+    expect(quoting).toContain("Quoting <b>win</b>")
+    expect(quoting).toContain("“should nest”")
+    expect(quoting).toContain('placeholder="Say something about it"')
+    const replying = render(true, undefined, { to, excerpt: null })
+    expect(replying).toContain("Replying to <b>win</b>")
+    expect(replying).toContain('placeholder="Reply to win"')
+    expect(render(true)).not.toContain("compose-reply")
+  })
 })
 
 const shot = { name: "shot.png", mime: "image/png", data: "iVBORw0KGgo=" }
@@ -123,5 +135,11 @@ describe("spec comments take images like the chat composer (#1838)", () => {
     expect(commentOf(10, " looks off ", [shot])).toEqual({ text: "looks off", extras: { inThread: 10, images: [shot] } })
     expect(commentOf(10, "here", [shot], "a line")).toEqual({ text: "> a line\n\nhere", extras: { inThread: 10, images: [shot] } })
     expect(commentOf(10, "words", [])).toEqual({ text: "words", extras: { inThread: 10 } })
+  })
+
+  test("a reply to a comment carries replyTo, and quotes its excerpt when there is one (#1840)", () => {
+    const to = { seq: 12, from: "win", at: 0, text: wrote("subtasks should nest"), where: { kind: "room", room: "general" }, inThread: 10 } as Message
+    expect(commentOf(10, "only one level", [], undefined, { to, excerpt: "should nest" })).toEqual({ text: "> should nest\n\nonly one level", extras: { inThread: 10, replyTo: 12 } })
+    expect(commentOf(10, "agreed", [shot], undefined, { to, excerpt: null })).toEqual({ text: "agreed", extras: { inThread: 10, replyTo: 12, images: [shot] } })
   })
 })

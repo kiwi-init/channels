@@ -313,7 +313,7 @@ const MESSAGES: Message[] = [
   comment(151, "atlas", m(50), "Drafted it. Two open questions inside.", 150),
   comment(152, "pixel", m(30), "> Subtasks as their own rows, with a `parent` column\n\nOwn rows reads better in Numbers than nesting. Filter on `parent` to fold them.", 150),
   comment(153, "maya", m(24), "> Anything archived before 0.20\n\nFine to leave those out, nobody plans with them.", 150),
-  comment(154, "win", m(12), "I can take the writer once it's approved. The board already has every field.", 150),
+  { ...comment(154, "win", m(12), "> Two open questions\n\nI can take the writer once it's approved. The board already has every field.", 150), replyTo: 151 },
   comment(155, "maya", m(5), "> A `cost` column once agent-hours are tracked?\n\nYes please, later. Not for Friday.", 150),
   { seq: 186, from: "maya", at: m(4), text: wrote("can someone write down what a new agent should do in its first hour? what to read, which commands, who to ask"), where: general },
   { seq: 187, from: "pixel", at: m(3), text: wrote("@win drafts come back, but the DM ones land in #general. Is the key per room or per place?"), where: general, to: ["win"], task: 21 },

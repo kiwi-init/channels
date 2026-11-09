@@ -14,22 +14,23 @@ interface Picked {
 }
 
 const ROOM_ABOVE = 64
+const MESSAGE_TEXT = ".msg-body .md"
 
-function seqOf(node: Node, root: HTMLElement): number | null {
+function seqOf(node: Node, root: HTMLElement, body: string): number | null {
   const el = node instanceof Element ? node : node.parentElement
   if (!el || !root.contains(el)) return null
-  const row = el.closest(".msg-body .md")?.closest<HTMLElement>("[data-seq]")
+  const row = el.closest(body)?.closest<HTMLElement>("[data-seq]")
   const seq = row ? Number(row.dataset.seq) : NaN
   return Number.isInteger(seq) ? seq : null
 }
 
-function pickedIn(root: HTMLElement): Picked | null {
+function pickedIn(root: HTMLElement, body: string): Picked | null {
   const sel = document.getSelection()
   if (!sel || sel.isCollapsed || !sel.rangeCount) return null
   const range = sel.getRangeAt(0)
-  const seq = seqOf(range.startContainer, root)
+  const seq = seqOf(range.startContainer, root, body)
   if (seq === null) return null
-  const end = seqOf(range.endContainer, root)
+  const end = seqOf(range.endContainer, root, body)
   if (end !== seq && !(range.endOffset === 0 && range.endContainer !== range.startContainer)) return null
   const excerpt = cleanExcerpt(sel.toString())
   if (!excerpt) return null
@@ -42,7 +43,7 @@ function pickedIn(root: HTMLElement): Picked | null {
   return { seq, excerpt, x, y: below ? rect.bottom : rect.top, below }
 }
 
-export function QuotePick({ root, onQuote }: { root: RefObject<HTMLElement | null>; onQuote: (seq: number, excerpt: string) => void }) {
+export function QuotePick({ root, onQuote, body = MESSAGE_TEXT }: { root: RefObject<HTMLElement | null>; onQuote: (seq: number, excerpt: string) => void; body?: string }) {
   const [picked, setPicked] = useState<Picked | null>(null)
   const showing = useRef(false)
   useEffect(() => {
@@ -54,7 +55,7 @@ export function QuotePick({ root, onQuote }: { root: RefObject<HTMLElement | nul
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
         const el = root.current
-        setPicked(el ? pickedIn(el) : null)
+        setPicked(el ? pickedIn(el, body) : null)
       })
     }
     const up = (e: PointerEvent) => {
@@ -69,7 +70,7 @@ export function QuotePick({ root, onQuote }: { root: RefObject<HTMLElement | nul
       const sel = document.getSelection()
       if (!sel || sel.isCollapsed) setPicked(null)
     }
-    const moved = () => setPicked((was) => (was ? (root.current ? pickedIn(root.current) : null) : null))
+    const moved = () => setPicked((was) => (was ? (root.current ? pickedIn(root.current, body) : null) : null))
     const away = () => setPicked(null)
     document.addEventListener("pointerup", up)
     document.addEventListener("keyup", key)
@@ -86,7 +87,7 @@ export function QuotePick({ root, onQuote }: { root: RefObject<HTMLElement | nul
       window.removeEventListener("scroll", moved, true)
       window.removeEventListener("resize", away)
     }
-  }, [root])
+  }, [root, body])
   if (!picked) return null
   return createPortal(
     <button

@@ -112,6 +112,20 @@ describe("comments sit on the line they quote", () => {
     expect(commentsOf(channel, reply).map((c) => c.m.seq)).toEqual([13])
   })
 
+  test("a reply to a comment quotes that comment, not a line of the spec (#1840)", () => {
+    const messages: Message[] = [
+      { seq: 10, from: "maya", at: NOW, text: wrote("board please"), where: general },
+      { seq: 12, from: "win", at: NOW, text: wrote("subtasks should nest"), where: general, inThread: 10 },
+      { seq: 13, from: "maya", at: NOW, text: wrote("> should nest\n\nonly one level"), where: general, inThread: 10, replyTo: 12 },
+      { seq: 14, from: "jow", at: NOW, text: wrote("agreed"), where: general, inThread: 10, replyTo: 12 },
+    ]
+    expect(commentsOf({ messages }, { ask: 10, comments: [] }).map((c) => [c.m.seq, c.re ?? null, c.excerpt ?? null, c.quote ?? null, c.text])).toEqual([
+      [12, null, null, null, "subtasks should nest"],
+      [13, 12, "should nest", null, "only one level"],
+      [14, 12, null, null, "agreed"],
+    ])
+  })
+
   test("a quote finds its line whatever the markdown around it", () => {
     expect(quoteIn("The Tasks view has an Export button that saves board.csv", "an **Export** button")).toBe(true)
     expect(quoteIn("Subtasks as their own rows", "subtasks as their OWN rows")).toBe(true)

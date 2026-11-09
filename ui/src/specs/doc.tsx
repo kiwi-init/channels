@@ -3,19 +3,24 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { useNames, useTaskIds } from "~/chat/conversation"
 import { Body } from "~/chat/body"
 import { MessageImages } from "~/chat/message"
+import { preview } from "~/chat/preview"
+import { QuotePick } from "~/chat/quote-pick"
+import { jumpTo } from "~/chat/reply"
 import { type Words, wordsPlain, wordsRaw, wrote } from "~/words"
 import { Avatar, cx } from "~/kit/bits"
+import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import type { Channel, Spec } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
-import { commentsOf, faceOf, lineDiff, quoteIn, type Comment } from "~/specs/read"
-import { CommentBox } from "~/specs/comment-box"
+import { commentsOf, faceOf, lineDiff, quoteIn, splitQuote, type Comment } from "~/specs/read"
+import { CommentBox, type CommentReply } from "~/specs/comment-box"
 
 const WIDE_PX = 940
 const TALK_SHOWN = 3
 const DIFF_CONTEXT = 1
 const BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, td, th, pre"
+const COMMENT_TEXT = ".spec-comment .md"
 
 const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
 
@@ -55,6 +60,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
   const [hot, setHot] = useState<number | null>(null)
   const [pop, setPop] = useState<{ text: string; top: number } | null>(null)
   const [draft, setDraft] = useState<{ quote: string } | null>(null)
+  const [reply, setReply] = useState<CommentReply | null>(null)
   const [diff, setDiff] = useState(!!spec.changed)
   const [allTalk, setAllTalk] = useState(false)
   const anchored = comments.filter((c) => c.quote && tops.has(c.m.seq)).sort((a, b) => (tops.get(a.m.seq) ?? 0) - (tops.get(b.m.seq) ?? 0))
@@ -78,7 +84,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
       const base = el.getBoundingClientRect().top
       const next = new Map<number, number>()
       for (const c of commentsOf(channel, spec)) {
-        if (!c.quote) continue
+        if (!c.quote || c.re !== undefined) continue
         const hit = anchorOf(blocks, c.quote)
         if (!hit) continue
         hit.dataset.anchor = hit.dataset.anchor ? `${hit.dataset.anchor} ${c.m.seq}` : String(c.m.seq)
@@ -131,12 +137,31 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
     setHot(seq)
   }
 
+  const replyTo = useCallback(
+    (seq: number, excerpt: string | null = null) => {
+      const to = channel.messages.find((m) => m.seq === seq)
+      if (to) setReply({ to, excerpt })
+    },
+    [channel.messages]
+  )
+
+  const toComment = (seq: number): void => {
+    if (jumpTo(wrap.current, seq)) return
+    setAllTalk(true)
+    requestAnimationFrame(() => jumpTo(wrap.current, seq))
+  }
+
   if (editing) return <Editor channel={channel} spec={spec} onDone={() => onEditing(false)} />
+
+  const said = (c: Comment) => {
+    const re = c.re
+    return <CommentItem key={c.m.seq} channel={channel} c={c} names={names} tasks={tasks} showQuote onReply={() => replyTo(c.m.seq)} {...(re === undefined ? {} : { onRe: () => toComment(re) })} />
+  }
 
   const boxes = (
     <>
       {draft && <CommentBox channel={channel} spec={spec} quote={draft.quote} onDone={() => setDraft(null)} />}
-      <CommentBox channel={channel} spec={spec} />
+      <CommentBox channel={channel} spec={spec} reply={reply} onUnreply={() => setReply(null)} />
     </>
   )
 
@@ -150,19 +175,14 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
           </button>
         )}
       </h2>
-      {loose.length > 0 && (
-        <ul className="spec-comments">
-          {(allTalk ? loose : loose.slice(-TALK_SHOWN)).map((c) => (
-            <CommentItem key={c.m.seq} channel={channel} c={c} names={names} tasks={tasks} showQuote />
-          ))}
-        </ul>
-      )}
+      {loose.length > 0 && <ul className="spec-comments">{(allTalk ? loose : loose.slice(-TALK_SHOWN)).map(said)}</ul>}
       {!wide && boxes}
     </section>
   )
 
   return (
     <div ref={wrap} className={cx("spec-doc-wrap", wide && "is-wide")}>
+      <QuotePick root={wrap} body={COMMENT_TEXT} onQuote={replyTo} />
       <div className="spec-doc-col">
         {spec.changed && spec.approved && (
           <div className="spec-diff-bar">
@@ -206,7 +226,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
               <ul className="spec-rail-lines" aria-label="Comments on lines of the spec">
                 {anchored.map((c) => (
                   <li key={c.m.seq} className={cx("spec-rail-item", hot === c.m.seq && "is-hot")} onMouseEnter={() => setHot(c.m.seq)} onMouseLeave={() => setHot(null)}>
-                    <CommentItem channel={channel} c={c} names={names} tasks={tasks} onQuote={() => toLine(c.m.seq)} />
+                    <CommentItem channel={channel} c={c} names={names} tasks={tasks} onQuote={() => toLine(c.m.seq)} onReply={() => replyTo(c.m.seq)} />
                   </li>
                 ))}
               </ul>
@@ -227,6 +247,8 @@ function CommentItem({
   tasks,
   showQuote,
   onQuote,
+  onReply,
+  onRe,
 }: {
   channel: Channel
   c: Comment
@@ -234,14 +256,29 @@ function CommentItem({
   tasks: ReadonlySet<number>
   showQuote?: boolean
   onQuote?: () => void
+  onReply?: () => void
+  onRe?: () => void
 }) {
+  const to = c.re === undefined ? undefined : channel.messages.find((m) => m.seq === c.re)
   return (
-    <article className={cx("spec-comment", c.m.pending && "is-pending")}>
+    <article className={cx("spec-comment", c.m.pending && "is-pending")} data-seq={c.m.seq}>
       <header className="spec-comment-head">
         <Avatar person={faceOf(channel, c.m.from)} size="sm" />
         <span className="spec-comment-name">{nickname(channel, c.m.from)}</span>
         <time className="spec-comment-time">{clock(c.m.at)}</time>
+        {onReply && !c.m.pending && (
+          <button type="button" className="spec-comment-reply" aria-label="Reply" title="Reply" onClick={onReply}>
+            <Icon name="reply" size={13} />
+          </button>
+        )}
       </header>
+      {to && onRe && (
+        <button type="button" className="spec-comment-quote is-link" title="Show this comment" onClick={onRe}>
+          <span>
+            <b>{nickname(channel, to.from)}</b> {c.excerpt ? `“${preview(c.excerpt)}”` : preview(splitQuote(wordsRaw(to.text)).text)}
+          </span>
+        </button>
+      )}
       {showQuote && c.quote && <p className="spec-comment-quote">{c.quote}</p>}
       {onQuote && c.quote && (
         <button type="button" className="spec-comment-quote is-link" title="Show this line in the spec" onClick={onQuote}>
