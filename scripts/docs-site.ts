@@ -11,6 +11,7 @@ const SITE = join(ROOT, "site");
 const OUT = join(SITE, "docs");
 const UI = join(ROOT, "ui");
 const DEMO = join(SITE, "demo");
+const SCENE = join(SITE, "afk", "scene.html");
 const REPO = "https://github.com/kiwi-init/channels";
 
 type Node = {
@@ -117,6 +118,20 @@ function buildDemo(): boolean {
   if (run.exitCode !== 0) throw new Error(`the demo's build of ui/ failed:\n${run.stderr.toString()}${run.stdout.toString()}`);
   rmSync(join(DEMO, "_headers"), { force: true });
   return true;
+}
+
+async function buildScene(): Promise<string> {
+  const built = await Bun.build({ entrypoints: [join(UI, "src/afk/scene.page.ts")], minify: true, target: "browser" });
+  if (!built.success) throw new Error(`the AFK scene's build failed:\n${built.logs.join("\n")}`);
+  const [entry, ...rest] = built.outputs;
+  if (!entry || rest.length) throw new Error(`the AFK scene must build to one script, not ${built.outputs.length} files`);
+  const script = (await entry.text()).replace(/<\/(script)/gi, "<\\/$1");
+  mkdirSync(dirname(SCENE), { recursive: true });
+  writeFileSync(
+    SCENE,
+    `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;overflow:hidden;background:transparent}#box{position:fixed;inset:0}</style></head><body><div id="box"></div><script type="module">${script}</script></body></html>\n`,
+  );
+  return relative(ROOT, SCENE);
 }
 
 const demoHtml = (): string =>
@@ -345,6 +360,7 @@ async function build(): Promise<string[]> {
     }
   }
   written.push(...(await writeFigures()));
+  written.push(await buildScene());
   return written;
 }
 
