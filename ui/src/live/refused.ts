@@ -16,3 +16,5 @@ export function dailyLimit(err: unknown): boolean {
   if (typeof err !== "object" || err === null || !("_tag" in err) || err._tag !== "RelayError") return false
   return "tag" in err && err.tag === "TooMany" && "message" in err && typeof err.message === "string" && DAILY.test(err.message)
 }
+
+export const limitWords = (why: string): boolean => DAILY.test(why)
