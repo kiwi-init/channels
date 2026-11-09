@@ -8,7 +8,7 @@ import { needsPerson } from "@kiwi/core/work.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
-async function msg(from: string, kind: Kind, body: string, extra: { to?: string[]; ev?: Event } = {}): Promise<Message> {
+async function msg(from: string, kind: Kind, body: string, extra: { to?: string[]; ev?: Event; room?: string } = {}): Promise<Message> {
   seq++;
   const base = { v: 1 as const, id: crypto.randomUUID(), from, kind, body, ...extra, ts: seq };
   const p = await sign(ids[from]!, base);
@@ -94,5 +94,31 @@ describe("what each member is told", () => {
     const state = fold([await makeLead("lead")], roster);
     expect(agentPrompt("c", "dev", { lead: leadLine(state, "dev") })).toContain("lead: lead");
     expect(agentPrompt("c", "dev")).not.toContain("lead:");
+  });
+});
+
+describe("a person's message in an open room reaches the lead (#2030, T3255)", () => {
+  async function fresh() {
+    return [await makeLead("lead"), await ev("jon", { op: "room.create", id: "fresh", name: "fresh" }), await msg("ana", "msg", "anyone? I need help with the release plan", { room: "fresh" })];
+  }
+
+  test("a plain message from a person in a room no agent posted in is wanted by the lead", async () => {
+    const log = await fresh();
+    const s = fold(log, roster);
+    expect(s.rejected.size).toBe(0);
+    expect(wants("lead", log[2]!, s)).toBe(true);
+  });
+
+  test("the same message still doesn't wake a plain agent, keeping the push quiet", async () => {
+    const log = await fresh();
+    expect(wants("dev", log[2]!, fold(log, roster))).toBe(false);
+  });
+
+  test("an agent's message in that room doesn't wake the lead", async () => {
+    const log = await fresh();
+    const agent = await msg("dev2", "msg", "I'll look at it", { room: "fresh" });
+    const s = fold([...log, agent], roster);
+    expect(s.rejected.has(agent.seq)).toBe(false);
+    expect(wants("lead", agent, s)).toBe(false);
   });
 });
