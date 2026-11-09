@@ -68,16 +68,16 @@ describe("the site in five languages (#759)", () => {
 describe("the first visit picks the browser's language (site/lang.js)", () => {
   const run = (pathname: string, languages: string[], stored: string | null = null, hash = "") => {
     const kept = new Map<string, string>(stored ? [["kiwi.site-lang", stored]] : []);
-    let went: string | null = null;
+    const seen: { went: string | null } = { went: null };
     const context = {
-      location: { pathname, search: "", hash, replace: (to: string) => (went = to) },
+      location: { pathname, search: "", hash, replace: (to: string) => (seen.went = to) },
       navigator: { languages, language: languages[0] },
       localStorage: { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) },
       document: { addEventListener: () => {} },
       Element: class {},
     };
     new Function(...Object.keys(context), readFileSync(join(SITE, "lang.js"), "utf8"))(...Object.values(context));
-    return { went, kept: kept.get("kiwi.site-lang") ?? null };
+    return { went: seen.went, kept: kept.get("kiwi.site-lang") ?? null };
   };
 
   test("a Japanese browser on the English landing goes to /ja/, and the pick is kept", () => {
