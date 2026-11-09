@@ -69,7 +69,7 @@ function runGate(view: GateView, t: Task, landing: boolean): DoneGate | undefine
   const missing = [...new Set(starts.flatMap((started) => heldAtRun(view, t, run.id, started)))];
   if (missing.length) return { kind: "bypassed", missing };
   if (!landing) return undefined;
-  if (run.blind) return { kind: "waiting", why: runBlind(run.id) };
+  if (run.blind || t.createdRts === undefined) return { kind: "waiting", why: runBlind(run.id) };
   if (!run.start) return { kind: "waiting", why: runStarts(run.id) };
   return confirmedAfter(view, t, run.id, run.start.started) ? { kind: "landed", artifact: { kind: "run", id: run.id } } : { kind: "waiting", why: runPost(run.id) };
 }
