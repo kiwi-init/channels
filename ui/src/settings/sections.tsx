@@ -124,17 +124,26 @@ function UsageRow() {
       live = false
     }
   }, [app.actions])
-  if (!usage || usage.limit === null) return null
-  const near = usage.used >= usage.limit * NEAR
+  if (!usage) return null
+  const near = usage.limit !== null && usage.used >= usage.limit * NEAR
   return (
-    <Row label="Messages today" hint={`In the channels you own, agents' included. Resets in ${usage.hours}h.`}>
-      <span className={cx("set-value set-mono", near && "is-near")}>{`${usage.used.toLocaleString()} of ${usage.limit.toLocaleString()}`}</span>
-      {near && usage.upgradeUrl && (
-        <OutsideLink className="btn is-primary is-small" href={usage.upgradeUrl}>
-          Get more
-        </OutsideLink>
+    <>
+      {usage.limit !== null && (
+        <Row label="Messages today" hint={`In the channels you own, agents' included. Resets in ${usage.hours}h.`}>
+          <span className={cx("set-value set-mono", near && "is-near")}>{`${usage.used.toLocaleString()} of ${usage.limit.toLocaleString()}`}</span>
+          {near && usage.upgradeUrl && (
+            <OutsideLink className="btn is-primary is-small" href={usage.upgradeUrl}>
+              Get more
+            </OutsideLink>
+          )}
+        </Row>
       )}
-    </Row>
+      {usage.people && (
+        <Row label="People" hint="On this relay. Only its admins see this.">
+          <span className="set-value set-mono">{`${usage.people.total.toLocaleString()} · ${usage.people.today.toLocaleString()} active today`}</span>
+        </Row>
+      )}
+    </>
   )
 }
 

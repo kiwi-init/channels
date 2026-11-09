@@ -247,6 +247,19 @@ describe("today's use", () => {
     expect((await fetch(`${relay}/v1/me/usage`)).status).toBe(401);
   });
 
+  test("an admin also reads how many people use the relay and how many were on it today; nobody else does (spec #131)", async () => {
+    const clock = { now: Date.UTC(2026, 10, 8, 21, 0) };
+    const { relay } = relayWith({ personMessagesPerDay: 5, admins: ["github_1"] }, clock);
+    const read = async (login: string) => (await (await fetch(`${relay}/v1/me/usage`, { headers: { "x-human-token": token(login) } })).json()) as { people?: { total: number; today: number } };
+    await (await channelOf(relay, "bob")).send("hi");
+    clock.now = Date.UTC(2026, 10, 9, 9, 0);
+    await (await channelOf(relay, "carol")).send("hi");
+    expect((await read("alice")).people).toEqual({ total: 2, today: 1 });
+    expect((await read("bob")).people).toBeUndefined();
+    clock.now = Date.UTC(2026, 10, 10, 9, 0);
+    expect((await read("alice")).people).toEqual({ total: 2, today: 0 });
+  });
+
   test("with no quota configured there's no limit to show", async () => {
     const { relay } = relayWith({});
     await channelOf(relay, "bob");
