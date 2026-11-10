@@ -60,7 +60,7 @@ export function docFeed(blocks: readonly Block[], rich: ReadonlyMap<string, Rich
   return { lines: lines.reverse(), hidden, media }
 }
 
-const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>): boolean => a.size === b.size && [...a].every((x) => b.has(x))
+export const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>): boolean => a.size === b.size && [...a].every((x) => b.has(x))
 const filesKey = (f: BlockFiles | undefined): string => (f ? [...f.imgs.map((i) => i.ref.id), ...f.files.map((x) => x.pieces.map((p) => p.id).join("+"))].join(",") : "")
 const sameMedia = (a: ReadonlyMap<string, BlockFiles>, b: ReadonlyMap<string, BlockFiles>): boolean => a.size === b.size && [...a].every(([id, f]) => filesKey(f) === filesKey(b.get(id)))
 const same = (a: DocFeed | undefined, b: DocFeed): boolean =>

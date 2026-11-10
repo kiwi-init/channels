@@ -20,7 +20,7 @@ import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { fileView, filesIn, imageView, putAll, type DocMedia } from "~/chat/doc/media"
 import { blocksOf, mediaOfBlock, richBlocks } from "@kiwi/core/doc/blocks.ts"
-import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/finished"
+import { docFeed, oldestAt, sameSet, setDocFeed } from "~/chat/doc/finished"
 import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, isBack, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
@@ -678,9 +678,12 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
   const since = useMemo(() => oldestAt(channel.messages), [channel.messages])
 
   useLayoutEffect(() => {
+    let hidden: ReadonlySet<string> | null = null
     const publish = () => {
       const feed = docFeed(blocksOf(shared.doc), richBlocks(shared.doc), sent, since, (block) => filesOf(shared.doc, block))
       setDocFeed(feedKey, feed)
+      if (hidden && sameSet(hidden, feed.hidden)) return
+      hidden = feed.hidden
       drafts.current = {
         posted: (block) => sent.has(block),
         inFeed: (block) => feed.hidden.has(block),
