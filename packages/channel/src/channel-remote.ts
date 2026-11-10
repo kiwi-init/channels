@@ -1,5 +1,5 @@
 import { ChannelGone, RelayError } from "@kiwi/core/client/relay-errors.ts";
-import type { CachedKept, Unread } from "@kiwi/core/cache-row.ts";
+import type { CachedKept, Reopened, Unread } from "@kiwi/core/cache-row.ts";
 import { DOC_LEVEL } from "@kiwi/core/doc/level.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 
@@ -100,6 +100,10 @@ export function remoteOps(port: KeysPort): ChannelOps {
     forget: async (code) => void (await ask({ op: "forget", code })),
     presence: async (code, p) => void (await ask({ op: "presence", code, p: toWire(p) })),
     openRows: (code, rows) => ask({ op: "openRows", code, rows: toWire(rows) }) as Promise<(Message | Unread | null)[]>,
+    reopenRows: async (code, rows) => {
+      const out = (await ask({ op: "openRows", code, rows: toWire(rows), keep: true })) as Reopened | (Message | Unread | null)[];
+      return Array.isArray(out) ? { opened: out, rows: [] } : out;
+    },
     olderRows: (code, before, limit) => ask({ op: "olderRows", code, before, limit }) as Promise<OlderRows>,
     indexRows: (code, rows, inputs, from) => ask({ op: "indexRows", code, rows: toWire(rows), inputs: toWire(inputs), from }) as Promise<number | null>,
     searchHistory: (code, search) => ask({ op: "searchHistory", code, ask: toWire(search) }) as Promise<Searched | null>,

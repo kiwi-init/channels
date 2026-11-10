@@ -18,6 +18,7 @@ import type { Channel, QuestionAsk } from "~/model"
 import { openMessage } from "~/live/open-message"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
+import { viewImage } from "~/chat/image-view"
 
 type Handoff = NonNullable<QuestionAsk["handoff"]>
 
@@ -56,7 +57,7 @@ function seeAsk(code: string, seq: number): void {
   if (!jumpTo(document.body, seq)) openMessage(code, seq)
 }
 
-const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
+const openImage = viewImage
 
 function ClosedAsk({ channel, closed }: { channel: Channel; closed: Closed }) {
   const who = closed.by === channel.you ? t("chat.question.card.you") : nickname(channel, closed.by)

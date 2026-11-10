@@ -127,30 +127,6 @@ export function Sidebar({ channel }: { channel: Channel }) {
             <Former key={d.with} channel={channel} direct={d} />
           ))}
           {hiddenAgents > 0 && <HiddenRows count={hiddenAgents} open={showHidden} toggle={toggleHidden} />}
-          {theirsShown &&
-            channel.theirs.map((pair) => {
-              const where = { kind: "theirs", between: pair.between } as const
-              const on = onChat && sameWhere(nav.where, where)
-              return (
-                <li key={pair.between.join("&")}>
-                  <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "where", where })}>
-                    <span className="side-pair">
-                      <Avatar person={memberOf(channel, pair.between[0])} size="sm" />
-                      <Avatar person={memberOf(channel, pair.between[1])} size="sm" />
-                    </span>
-                    <span className="side-label">{between(channel, pair.between)}</span>
-                  </button>
-                </li>
-              )
-            })}
-          {channel.theirs.length > 0 && !onTheirs && (
-            <li>
-              <button type="button" className="side-row is-add" aria-expanded={openTheirs} onClick={() => setOpenTheirs(!openTheirs)}>
-                <Icon name={openTheirs ? "down" : "chevron"} size={14} />
-                <span className="side-label">{openTheirs ? t("shell.sidebar.show.less") : t("shell.sidebar.between.others", { count: channel.theirs.length })}</span>
-              </button>
-            </li>
-          )}
           {agents.length === 0 && (
             <li>
               <button type="button" className={cx("side-row is-add", nav.modal?.kind === "add-agent" && "is-on")} onClick={() => go({ to: "modal", modal: { kind: "add-agent" } })}>
@@ -161,6 +137,38 @@ export function Sidebar({ channel }: { channel: Channel }) {
           )}
         </ul>
       </section>
+
+      {channel.theirs.length > 0 && (
+        <section aria-label={t("shell.sidebar.others")}>
+          <Heading>{t("shell.sidebar.others")}</Heading>
+          <ul>
+            {theirsShown &&
+              channel.theirs.map((pair) => {
+                const where = { kind: "theirs", between: pair.between } as const
+                const on = onChat && sameWhere(nav.where, where)
+                return (
+                  <li key={pair.between.join("&")}>
+                    <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "where", where })}>
+                      <span className="side-pair">
+                        <Avatar person={memberOf(channel, pair.between[0])} size="sm" />
+                        <Avatar person={memberOf(channel, pair.between[1])} size="sm" />
+                      </span>
+                      <span className="side-label">{between(channel, pair.between)}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            {channel.theirs.length > 0 && !onTheirs && (
+              <li>
+                <button type="button" className="side-row is-add" aria-expanded={openTheirs} onClick={() => setOpenTheirs(!openTheirs)}>
+                  <Icon name={openTheirs ? "down" : "chevron"} size={14} />
+                  <span className="side-label">{openTheirs ? t("shell.sidebar.show.less") : t("shell.sidebar.others.count", { count: channel.theirs.length })}</span>
+                </button>
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
 
       <div className="side-foot">
         <Suspense fallback={null}>

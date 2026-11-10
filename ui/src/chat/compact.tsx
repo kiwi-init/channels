@@ -8,8 +8,9 @@ import { wrote } from "~/words"
 import type { Channel, Compacted } from "~/model"
 import { useAct } from "~/nav"
 import { nickname, shown } from "~/names"
+import { viewImage } from "~/chat/image-view"
 
-const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
+const openImage = viewImage
 
 interface Props {
   channel: Channel

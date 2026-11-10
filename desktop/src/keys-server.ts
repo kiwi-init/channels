@@ -53,7 +53,7 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
       }
       case "openRows": {
         const rows = fromWire(r.rows);
-        return k.openRows(text(r.code), Array.isArray(rows) ? rows : []);
+        return r.keep === true ? k.reopenRows(text(r.code), Array.isArray(rows) ? rows : []) : k.openRows(text(r.code), Array.isArray(rows) ? rows : []);
       }
       case "indexRows": {
         const rows = fromWire(r.rows);

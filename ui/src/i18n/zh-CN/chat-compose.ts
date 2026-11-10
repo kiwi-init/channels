@@ -22,6 +22,7 @@ export default {
   "chat.annotator.sent.to": "已发送给 {name}",
   "chat.annotator.not.sent": "未发送：{why}",
   "chat.annotator.mark.up": "标注 {name}",
+  "chat.annotator.annotate": "标注",
   "chat.annotator.fit.window": "适应窗口",
   "chat.annotator.actual.size": "实际大小",
   "chat.annotator.fit.percent": "适应 · {percent}%",

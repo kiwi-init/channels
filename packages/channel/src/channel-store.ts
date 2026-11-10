@@ -10,7 +10,7 @@ import { reviewCheckOf, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/prot
 import { fold, nextExpiry, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
 import type { Reach } from "./history-fill.ts";
-import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
+import { planCached, reopenCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
 import { markOnce } from "./marks.ts";
 import { ICON_LIVE } from "./icon-event.ts";
 import { addMarks, type Marks } from "./receipts.ts";
@@ -600,7 +600,7 @@ export class ChannelStore {
       requests: this.refreshRequests,
       rotate: () => (ch.isOwner ? ch.rotateIfDue().catch((err: unknown) => (this.onGone(err), false)) : Promise.resolve(false)),
       cache: () =>
-        openCached(ch.roomId, ch.pk, ch.openRows, REACH)
+        reopenCached(ch.roomId, ch.pk, ch.reopenRows, REACH)
           .then((opened) => (markOnce("kiwi:cache-open"), opened))
           .catch(() => null),
       plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, REACH).catch(() => null),
