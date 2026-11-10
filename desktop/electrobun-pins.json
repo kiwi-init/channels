@@ -1,5 +1,5 @@
 {
-  "electrobun": "2026.11.3",
+  "electrobun": "2026.11.4",
   "releasesBaseUrl": "https://github.com/kiwi-init/electrobun-livewire/releases/download",
   "hutch": {
     "version": "0.28.2-canary.8",
@@ -37,48 +37,48 @@
     }
   },
   "devkit": {
-    "macos-arm64": "db27c9725c62bba153f2ef0d8bc2edabd26f1d16c266280e65be3c4bd9e4e76c",
-    "linux-x64": "db27c9725c62bba153f2ef0d8bc2edabd26f1d16c266280e65be3c4bd9e4e76c",
-    "linux-arm64": "db27c9725c62bba153f2ef0d8bc2edabd26f1d16c266280e65be3c4bd9e4e76c"
+    "macos-arm64": "a383ef126c49105359912c73c7bf040d7967f9b881ee63f6b95dc6116be21446",
+    "linux-x64": "a383ef126c49105359912c73c7bf040d7967f9b881ee63f6b95dc6116be21446",
+    "linux-arm64": "a383ef126c49105359912c73c7bf040d7967f9b881ee63f6b95dc6116be21446"
   },
   "app": {
     "macos-arm64": {
       "Contents/MacOS/launcher": "2a15159252beea2f49844ff1f55752f36f502ef127849509d1e863143eb185ca",
       "Contents/MacOS/bun": "0a2237cdcfa0d16ef501d9acca9f0026309ef348bea7393a64e8d1e3609565cc",
-      "Contents/MacOS/libElectrobunCore.dylib": "ed2f4908fb0228f8473c07e39393f3be2ece417fd11eac82e15e50d6ed00cc7a",
-      "Contents/MacOS/libNativeWrapper.dylib": "e25e4e01b0f0d9978a76341b520935e67ec8761c51cfecba39b16eef68c1a86a",
+      "Contents/MacOS/libElectrobunCore.dylib": "4702042729265176a6bae4ec162f4336331ab249cc08cb282a4c06e0e793271b",
+      "Contents/MacOS/libNativeWrapper.dylib": "ed48ad1bf78f95a4c4db11953799f757384dc4f9b63ce13be8fa5a0387297dbc",
       "Contents/MacOS/libasar.dylib": "775e92fed7238ea1da09ec5ae54a72a19baaccf602a4467f16bb2e36cff9cfbc",
       "Contents/MacOS/zig-zstd": "581944e9e8cac153581cf17109f1f58b5b87202524909d11803bfce2402c2548",
       "Contents/MacOS/bspatch": "a722fd1cf674012f25eb192c84b154bb753ec62422eb5d568907c44405cc81dd",
       "Contents/Resources/main.js": "db3593eeb506247d154a0c868bf05fb6c0a1dad82b7c7885c891d8b8a45b9755",
       "Contents/Resources/preload-full.js": "0de49cdec806dfc7f7e55da5ad02ce69a7211be6e9d656b2b10c06af691d6a3c",
       "Contents/Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Contents/Resources/uninstall": "55cf0c096dc6b913d276439d922220a8c2f418931065611f6bc405b01c9c3c3e"
+      "Contents/Resources/uninstall": "2abe110fa77e490200f427e80c25f1d283556e3a3c5678eb04d138a96c7726b0"
     },
     "linux-x64": {
       "bin/launcher": "3e5ac50d79450102cf7a7ca94ce3042b0d493d6d0cd2c184c8e283f0a95bbe4a",
       "bin/bun": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235",
-      "bin/libElectrobunCore.so": "ca8ddce49cc0ef8af402d06e6ee362e3bf234819c7c08a12833e52d8309a44df",
-      "bin/libNativeWrapper.so": "914f8273f0d3a377e1582d82e25bf8cca364157784de9dbd845bedc9977e1325",
+      "bin/libElectrobunCore.so": "c35c93c31b16d38a3434ec69890e55ea7ad10703b2edfffc21bf07ba69f9421d",
+      "bin/libNativeWrapper.so": "97a4d78289e6ebb3ff73061c1c0010f791b6f4cef7c0a3520e18f23e9df29ed8",
       "bin/libasar.so": "2b3363eab51436f8df6077d99f4663ce5c6eb7be184d8df53561f4117a49654c",
       "bin/zig-zstd": "552b4211e699232c4983c223b94be3b7c74a8e58f41b647d014ebc25aca7ec7e",
       "bin/bspatch": "21a4678c0c8f90926438c6cd5626b46fb8e6b95eac41a1461dae2ec55d82ea70",
       "Resources/main.js": "db3593eeb506247d154a0c868bf05fb6c0a1dad82b7c7885c891d8b8a45b9755",
       "Resources/preload-full.js": "0de49cdec806dfc7f7e55da5ad02ce69a7211be6e9d656b2b10c06af691d6a3c",
       "Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Resources/uninstall": "d724a951c26fc0cb7068e7b008e3bb0eba7e51f3d647cd8ef985426676cb2301"
+      "Resources/uninstall": "c2126cb5aa477352f9c47028f7cdfa229a0e9fc1a582f041b896cae66ff30b3d"
     },
     "linux-arm64": {
       "bin/launcher": "efb6953345c1160403826e4f161c4a8103c51d08befb0eb6e1d7756c6ed18f5e",
-      "bin/libElectrobunCore.so": "31410c2427dc285c6d891b1278d22a1b1c3128b76ff43cd831da5b317dfe7896",
-      "bin/libNativeWrapper.so": "4c1695a1f5155c59dcf9741ed23f1abf20a86b941b4435ed93c1218a927cd56f",
+      "bin/libElectrobunCore.so": "da618ab3923941c3c14efc3ae8a863daa52f6b4f46efbebcf1a19f8e14b16227",
+      "bin/libNativeWrapper.so": "4ab7bce22d4e59d8de8581c869a6c83639158e77550f30bd9d325f1d74ee0651",
       "bin/libasar.so": "b2290cc159d7c85768de1fdc48bc90782042ed6b5cf59c11c462db61557f989c",
       "bin/zig-zstd": "03e661e3fd8f2c8715d0d6b7c7a009d7b2f00b5591bc070e3ccf3b9987599de6",
       "bin/bspatch": "0cc582dbf94b5a11cd416f147a8631997e439cfa2536af72b8692a03266b993b",
       "Resources/main.js": "db3593eeb506247d154a0c868bf05fb6c0a1dad82b7c7885c891d8b8a45b9755",
       "Resources/preload-full.js": "0de49cdec806dfc7f7e55da5ad02ce69a7211be6e9d656b2b10c06af691d6a3c",
       "Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Resources/uninstall": "c5671f4d184fec5cc316be9390820b91008fa3ae212a0114be34633b25185e4b"
+      "Resources/uninstall": "ad5dbe76d900be28fe661c1b18527c2b95cf202f18cd2671ffabfec800aa7cb3"
     }
   }
 }
