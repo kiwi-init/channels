@@ -31,6 +31,7 @@ export default {
   "settings.enroll.digits": "{device}显示的 6 位数字",
   "settings.enroll.no.match": { other: "数字不匹配。还剩 {count} 次机会。" },
   "settings.enroll.then.key": "然后它会显示你的密钥：{key}",
+  "settings.enroll.failed": "没有成功：{why}。请再试一次。",
   "settings.enroll.not.mine": "不是我的",
   "settings.enroll.continue": "继续",
   "settings.enroll.approve": "批准",

@@ -45,7 +45,7 @@ export async function enrollBegin(signIn: () => Promise<unknown>, done: (d: Enro
     if (!next || next.stage === "gone" || next.stage === "done") {
       enrollRun = null
       selfEnroll.set(null)
-      if (next?.stage === "gone") announce(t("live.account.enroll.gone"))
+      if (next?.stage === "gone") announce(t("live.account.enroll.gone"), "error")
       if (next?.stage === "done") done(next)
       return
     }
@@ -71,7 +71,7 @@ export async function enrollCancel(): Promise<void> {
   const shown = selfEnroll.get()
   selfEnroll.set(null)
   await enrollBridge().enrollCancel()
-  if (shown?.stage === "check") announce(t("live.account.kept.nothing", { fingerprint: shown.person.fingerprint }))
+  if (shown?.stage === "check") announce(t("live.account.kept.nothing", { fingerprint: shown.person.fingerprint }), "error")
 }
 
 export async function launchedFrom(ids: readonly string[]): Promise<LaunchedAgent[]> {

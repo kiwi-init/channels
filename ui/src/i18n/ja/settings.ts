@@ -31,6 +31,7 @@ export default {
   "settings.enroll.digits": "{device} に表示された6桁の数字",
   "settings.enroll.no.match": { other: "一致しません。残り {count} 回です。" },
   "settings.enroll.then.key": "続いてあなたの鍵が表示されます: {key}",
+  "settings.enroll.failed": "うまくいきませんでした: {why}。もう一度お試しください。",
   "settings.enroll.not.mine": "自分のではない",
   "settings.enroll.continue": "続ける",
   "settings.enroll.approve": "承認",

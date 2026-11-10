@@ -4,6 +4,7 @@ import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
 import { cx, Count, IconButton, useLate } from "~/kit/bits"
 import { useGlide } from "~/kit/glide"
+import { dialogOpen, mod } from "~/kit/keys"
 import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
@@ -102,11 +103,11 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         e.preventDefault()
         toggleSide()
       }
-      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("dialog[open]")) {
+      if (e.key === "Escape" && !e.defaultPrevented && !dialogOpen()) {
         if (drawer) setDrawer(false)
         else if (nav.panel) go({ to: "panel", panel: null })
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+      if (mod(e) && !e.altKey && e.key.toLowerCase() === "f" && !dialogOpen()) {
         e.preventDefault()
         setSearching(true)
         setFocusAsk((n) => n + 1)

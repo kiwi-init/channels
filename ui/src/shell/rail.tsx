@@ -5,6 +5,7 @@ import { cx } from "~/kit/bits"
 import { later } from "~/kit/later"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
+import { inText } from "~/kit/keys"
 import { useNav, useGo, useActions, useTiles, useAppPrefs } from "~/nav"
 import type { Menu } from "~/shell/rail-menu"
 import { railItems, type DropTarget } from "~/shell/rail-items"
@@ -50,6 +51,7 @@ export function Rail() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return
+      if (inText(e.target)) return
       e.preventDefault()
       e.stopPropagation()
       step(e.key === "ArrowDown" ? 1 : -1)

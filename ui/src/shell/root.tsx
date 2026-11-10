@@ -6,6 +6,7 @@ import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
 import { ActContext, AppContext, historyStep, type Ctx, type Go, type Nav, AccountContext, NamesContext, NavContext, OpenContext, PrefsContext, TilesContext } from "~/nav"
+import { mod } from "~/kit/keys"
 import { ContextMenus } from "~/kit/menu-open"
 import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
@@ -167,7 +168,7 @@ function useHistoryKeys(go: (go: Go) => void, modal: boolean) {
 function usePaletteKey(toggle: () => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "k") return
+      if (!mod(e) || e.key.toLowerCase() !== "k") return
       e.preventDefault()
       toggle()
     }
