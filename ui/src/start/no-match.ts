@@ -8,4 +8,4 @@ export const sawNoMatch = (fingerprint: string): void => missed.set(fingerprint)
 
 export const clearNoMatch = (): void => missed.set(null)
 
-export const useNoMatch = (): string | null => useSyncExternalStore(missed.subscribe, missed.get)
+export const useNoMatch = (): string | null => useSyncExternalStore(missed.subscribe, missed.get, missed.get)
