@@ -8,7 +8,7 @@ import { store } from "~/live/value"
 export interface MenuItem {
   label: string
   run: () => void
-  confirm?: { title: string; sub: string; yes: string }
+  confirm?: { title: string; sub: string; yes: string; no?: string }
 }
 
 interface MenuField {

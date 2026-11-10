@@ -10,6 +10,7 @@ export function Confirm({
   title,
   sub,
   action,
+  keep,
   ready = true,
   onConfirm,
   onClose,
@@ -19,6 +20,7 @@ export function Confirm({
   title: string
   sub: string
   action: string
+  keep?: string | undefined
   ready?: boolean
   onConfirm: () => void
   onClose: () => void
@@ -36,7 +38,7 @@ export function Confirm({
         {children}
         <div className="modal-foot">
           <button type="button" className="btn is-quiet" onClick={onClose} ref={autofocus}>
-            {t("kit.context.menu.cancel")}
+            {keep ?? t("kit.context.menu.cancel")}
           </button>
           <button type="submit" className="btn is-danger" disabled={!ready}>
             {action}

@@ -17,6 +17,7 @@ import { SpecDoc } from "~/specs/doc"
 import { Inside } from "~/specs/inside"
 import { Result } from "~/specs/result"
 import { alarmsOf, boxesOf, commentsOf, freeCount, insideOf, stageLine } from "~/specs/read"
+import { cancelConfirm, openTasks, withTasks } from "~/specs/cancel"
 
 export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
   const nav = useNav()
@@ -101,8 +102,7 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
 function SpecMenu({ channel, spec, onEdit }: { channel: Channel; spec: Spec; onEdit: () => void }) {
   const { actions } = useAct()
   const label = t("specs.page.menu.label", { ask: String(spec.ask) })
-  const open = spec.tasks.filter((id) => channel.tasks.some((task) => task.id === id && task.status !== "done")).length
-  const withTasks = (first: string): string => (open ? t("specs.page.two.sentences", { first, second: open === 1 ? t("specs.page.open.task") : t("specs.page.open.tasks", { count: open }) }) : first)
+  const withOpen = (first: string): string => withTasks(first, openTasks(channel, spec))
   if (spec.result && !spec.canJudge) return null
   return (
     <MoreButton
@@ -116,7 +116,7 @@ function SpecMenu({ channel, spec, onEdit }: { channel: Channel; spec: Spec; onE
                 {
                   label: t("specs.page.cancel"),
                   run: () => actions.judgeSpec(channel.code, spec.ask, "dropped"),
-                  confirm: { title: t("specs.page.cancel.title", { spec: label }), sub: withTasks(t("specs.page.cancel.sub")), yes: t("specs.page.cancel.yes") },
+                  confirm: cancelConfirm(channel, spec),
                 },
               ]),
         ],
@@ -125,7 +125,7 @@ function SpecMenu({ channel, spec, onEdit }: { channel: Channel; spec: Spec; onE
               {
                 label: t("specs.page.delete"),
                 run: () => actions.deleteSpec(channel.code, spec.ask),
-                confirm: { title: t("specs.page.delete.title", { spec: label }), sub: withTasks(t("specs.page.delete.sub")), yes: t("specs.page.delete.yes") },
+                confirm: { title: t("specs.page.delete.title", { spec: label }), sub: withOpen(t("specs.page.delete.sub")), yes: t("specs.page.delete.yes") },
               },
             ]
           : [],
