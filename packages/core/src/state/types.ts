@@ -1,7 +1,7 @@
 import type { Authors } from "./authors.ts";
 import type { Member as MemberRecord, Runs } from "../membership.ts";
 import type { LandingStep, StepSpec } from "../steps.ts";
-import type { Card, Color, IssueRef, KeptHow, Landing, MemberPicture, Merger, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
+import type { Card, Color, IssueRef, KeptHow, Landing, MemberPicture, Merger, Message, NudgeStep, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubRun, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
 import type { Power } from "../protocol.ts";
@@ -164,6 +164,9 @@ export interface Task {
   from?: number;
   areas?: string[];
   touched?: Record<string, number>;
+  movedAt?: number;
+  released?: number;
+  nudged?: { mover: string; since: number; step: NudgeStep; seq: number; by: string; at: number }[];
   workedBy: string[];
   rounds: ReviewRound[];
   source?: number;

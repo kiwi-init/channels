@@ -87,6 +87,8 @@ function earlierParent(m: Message): number | undefined {
   return parent !== undefined && parent < m.seq ? parent : undefined;
 }
 
+const standing = (t: Task): string => [t.state, t.owner ?? "", t.review ?? "", t.lander ?? "", t.rounds.length, t.rounds.at(-1)?.result.kind ?? ""].join("|");
+
 function touch(task: Task | undefined, name: string, at: number): void {
   if (task && (task.touched?.[name] ?? 0) < at) task.touched = { ...task.touched, [name]: at };
 }
@@ -318,6 +320,13 @@ function folding(
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
   const closedAsks = new Set<number>();
   const askers = new Map([...(from?.asks ?? []), ...messages].flatMap((a): [number, string][] => ((a.kind === "ask" || a.kind === "blocking") && !a.permission ? [[a.seq, a.from]] : [])));
+  const holders = new Map([...(from?.asks ?? []), ...messages].flatMap((a): [number, number[]][] => (a.holds?.length ? [[a.seq, a.holds]] : [])));
+  const release = (ask: number, at: number): void => {
+    for (const id of holders.get(ask) ?? []) {
+      const held = tasks.get(id);
+      if (held) held.released = at;
+    }
+  };
   const settledBy = new Map<number, Set<string>>();
   const permReplies = new Map<number, Message[]>();
   const permBySeq = new Map<number, Message>();
@@ -583,6 +592,7 @@ function folding(
         let set = answered.get(r);
         if (!set) answered.set(r, (set = new Set()));
         set.add(m.from);
+        if (askers.get(r) !== m.from) release(r, at);
         if (m.perm) {
           let replies = permReplies.get(r);
           if (!replies) permReplies.set(r, (replies = []));
@@ -654,6 +664,7 @@ function folding(
           if (lateClose) reject(lateClose);
           else {
             closedAsks.add(ev.ask);
+            release(ev.ask, at);
             questions.delete(ev.ask);
             const closing = checks.get(ev.ask);
             if (closing && closing.closed === undefined) checkClosed(tasks, closing, { seq: m.seq, by: m.from, at });
@@ -703,13 +714,16 @@ function folding(
         m.seq,
         ev.op === "task.add"
           ? { kind: "task", task: m.seq }
-          : (ev.op === "task.update" || ev.op === "task.claim" || ev.op === "task.first" || ev.op === "task.landed") && tasks.has(ev.task)
+          : (ev.op === "task.update" || ev.op === "task.claim" || ev.op === "task.first" || ev.op === "task.landed" || ev.op === "task.nudge") && tasks.has(ev.task)
             ? { kind: "task", task: ev.task }
             : MAIN,
       );
 
       const taskAsk = ev.op === "task.update" || ev.op === "task.delete" ? tasks.get(ev.task)?.ask : undefined;
+      const subject = "task" in ev ? tasks.get(ev.task) : undefined;
+      const stood = subject ? standing(subject) : undefined;
       applyEvent(ctx, m, ev, member, at, reject);
+      if (subject && !rejected.has(m.seq) && standing(subject) !== stood) subject.movedAt = at;
       if (taskAsk !== undefined && !rejected.has(m.seq)) closeOnItsOwn(taskAsk, m, at);
       const added = ev.op === "task.add" && !rejected.has(m.seq) ? tasks.get(m.seq) : undefined;
       if (added) {

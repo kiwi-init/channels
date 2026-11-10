@@ -24,6 +24,7 @@ import { recordedRuns } from "../review-check.ts";
 import { approvedAt, sameHead } from "../stage.ts";
 import { reposOf } from "./repos.ts";
 import { trustedAt } from "./times.ts";
+import { nudgeRefusal, recordNudge } from "./nudges.ts";
 import { artifactKey, artifactText, doneGate } from "../done-gate.ts";
 import { runPin, type CheckArtifact } from "../checks.ts";
 import type { CheckState } from "./checks.ts";
@@ -129,6 +130,7 @@ function approvalHoldsAgain(t: Task, head: string, mark: { seq: number; by: stri
   t.approvedBy = last.result.by;
   t.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `head ${head.slice(0, 7)} is the approved code: the approval holds again` });
   t.updatedAt = mark.at;
+  t.movedAt = mark.at;
   if (t.steps || !t.then) advance(t, mark);
 }
 
@@ -142,6 +144,7 @@ function headMoved(t: Task, pr: GithubPr & { sha: string }, mark: { seq: number;
   t.approvedBy = undefined;
   t.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `new head ${pr.sha.slice(0, 7)} on ${pr.repo}#${pr.number} after the approval: back to review` });
   t.updatedAt = mark.at;
+  t.movedAt = mark.at;
 }
 
 function keptRefusal(task: Task, kept: KeptEvidence, from: string, lead: boolean): string | null {
@@ -626,6 +629,14 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (!task) reject(`no task ${taskId(ev.task)}`);
       else if (!isPerson(member) && !c.leads(member)) reject(`only a person or the lead deletes ${taskId(task.id)}`);
       else tasks.delete(task.id);
+      break;
+    }
+
+    case "task.nudge": {
+      const task = tasks.get(ev.task);
+      const wrong = task ? nudgeRefusal(task, ev, at) : `no task ${taskId(ev.task)}`;
+      if (wrong) reject(wrong);
+      else if (task) recordNudge(task, ev, { seq: m.seq, by: m.from, at });
       break;
     }
 

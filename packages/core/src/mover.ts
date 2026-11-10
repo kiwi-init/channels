@@ -18,7 +18,7 @@ type Board = Pick<ChannelState, "tasks" | "members" | "lead" | "openAsks" | "git
 
 const here = (state: Board, name: string | undefined | null): name is string => !!name && state.members.get(name)?.active === true;
 
-function channelOwner(state: Board): string | undefined {
+export function channelOwner(state: Pick<ChannelState, "members">): string | undefined {
   return [...state.members.values()].find((m) => m.owner && m.active)?.name;
 }
 

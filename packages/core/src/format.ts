@@ -38,6 +38,9 @@ import { currentStep, spanText, stepById, stepMove, type LandingStep, type StepE
 import { runSight } from "./state/landing-steps.ts";
 import { sayEvent, type EventKey, type EventSay } from "./event-words.ts";
 import { moverOf, moverTag, moverText } from "./mover.ts";
+import { clockOf, quietText } from "./clock.ts";
+
+const NUDGE_KEYS = ["task.nudge.queue", "task.nudge.wake", "task.nudge.lead", "task.nudge.owner"] as const;
 import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 export function tokensWord(n: number): string {
@@ -190,6 +193,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return say("task.claim", { task: task(ev.task) });
     case "task.first":
       return say("task.first", { task: task(ev.task) });
+    case "task.nudge":
+      return say(NUDGE_KEYS[ev.step], { task: task(ev.task), name: inlineText(ev.mover, 40) });
     case "task.landed":
       if (!("step" in ev)) return say("task.landed", { task: task(ev.task), at: artifactText(ev.artifact) });
       return ev.artifact
@@ -525,13 +530,19 @@ function stepTail(state: ChannelState, t: Task, step: LandingStep, current: bool
   }
 }
 
-function taskLine(state: ChannelState, t: Task): string {
+function taskLine(state: ChannelState, t: Task, now?: number): string {
   const owner = t.owner ? ` @${inlineText(t.owner, 40)}` : t.leftBy ? ` (${inlineText(t.leftBy, 40)} left)` : "";
   const review = t.review && t.state !== "done" && t.state !== "landing" ? ` [${reviewPhrase(t.review)}]` : "";
   const stage = stageOf(state, t);
   const evidence = stage.pr || stage.declared ? ` · ${stageText(state, stage)}` : "";
   const waits = landingWaits(state, t);
-  return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}${waits ? ` · ${waits}` : ""}${moverTag(t, moverOf(state, t))}`;
+  return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}${waits ? ` · ${waits}` : ""}${moverTag(t, moverOf(state, t, now))}${quietTag(state, t, now)}`;
+}
+
+function quietTag(state: ChannelState, t: Task, now: number | undefined): string {
+  const clock = now === undefined ? undefined : clockOf(state, t, now);
+  const quiet = clock ? quietText(t, clock) : undefined;
+  return quiet ? ` · ${quiet}` : "";
 }
 
 export function reviewRuleWarning(state: ChannelState, check: string): string | null {
@@ -548,8 +559,8 @@ export function askLine(head: AskHead | null): string {
   return head.goal ? `${inlineText(head.goal, 80)} (from ${said})` : said;
 }
 
-function groupedLines(state: ChannelState, tasks: Task[], indent: string): string[] {
-  return askGroups(state, tasks).flatMap((g) => [`${indent}${askLine(g.head)}`, ...g.tasks.map((t) => `${indent}${taskLine(state, t)}`)]);
+function groupedLines(state: ChannelState, tasks: Task[], indent: string, now?: number): string[] {
+  return askGroups(state, tasks).flatMap((g) => [`${indent}${askLine(g.head)}`, ...g.tasks.map((t) => `${indent}${taskLine(state, t, now)}`)]);
 }
 
 /** `build.cmd = cargo test  (win, 2h ago, 5h left)`. A value with several lines keeps its tail marked. */
@@ -784,7 +795,7 @@ export function formatStatus({ alias, check, me, state, online, unread, now = Da
   if (!active.length) out.push('  none — add one with: kiwi task add "…" --ask N');
   const order = ["doing", "review", "landing", "todo"];
   active.sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state) || a.id - b.id);
-  out.push(...groupedLines(state, active, "  "));
+  out.push(...groupedLines(state, active, "  ", now));
   if (state.leases.size) {
     out.push("", "leases:");
     for (const l of [...state.leases.values()].sort((a, b) => a.name.localeCompare(b.name))) out.push(`  ${leaseLine(l, me, now)}`);
@@ -800,13 +811,13 @@ export function formatStatus({ alias, check, me, state, online, unread, now = Da
   return out.join("\n");
 }
 
-export function formatTasks(state: ChannelState, check: string, opts: { all?: boolean; owner?: string } = {}): string {
+export function formatTasks(state: ChannelState, check: string, opts: { all?: boolean; owner?: string; now?: number } = {}): string {
   let tasks = [...state.tasks.values()];
   if (!opts.all) tasks = tasks.filter((t) => t.state !== "done" && !t.archived);
   if (opts.owner) tasks = tasks.filter((t) => t.owner === opts.owner);
   const warning = reviewRuleWarning(state, check);
   if (!tasks.length) return warning ? `${warning}\nno tasks` : "no tasks";
-  return [...(warning ? [warning] : []), ...groupedLines(state, tasks, "")].join("\n");
+  return [...(warning ? [warning] : []), ...groupedLines(state, tasks, "", opts.now)].join("\n");
 }
 
 export function roundTag(t: Task | undefined, seq: number, named: number | undefined, say: EventSay = sayEvent): string {
@@ -843,6 +854,9 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
   ];
   const mover = moverOf(state, t, now);
   if (mover) out.push(`  move: ${moverText(mover)}`);
+  const clock = clockOf(state, t, now);
+  const quiet = clock ? quietText(t, clock) : undefined;
+  if (quiet) out.push(`  ${quiet}`);
   const stage = stageOf(state, t);
   out.push(`  stage: ${stageText(state, stage)}`);
   if (stage.pr) out.push(...prLines(state, stage.pr));
