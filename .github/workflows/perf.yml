@@ -75,6 +75,9 @@ jobs:
       - name: test build (the test driver in, its own bundle id)
         working-directory: desktop
         run: bun scripts/eb.ts build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          DASH_RELEASE_OFFLINE: "1"
       - name: cold start, nine launches, and memory after an idle minute; numbers only, no gate
         env:
           PERF_RUNS: "9"
