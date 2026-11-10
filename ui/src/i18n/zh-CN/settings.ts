@@ -52,7 +52,7 @@ export default {
   "settings.sections.key.copy": "复制你的密钥",
   "settings.sections.key.copied": "密钥已复制",
   "settings.sections.sign.out": "退出登录",
-  "settings.sections.sign.out.title": "退出中继？",
+  "settings.sections.sign.out.title": "退出登录？",
   "settings.sections.sign.out.sub": "你的密钥、频道及其历史记录仍保留在这台电脑上。",
   "settings.sections.plan": "方案",
   "settings.sections.manage": "管理",
@@ -107,7 +107,7 @@ export default {
   "settings.sections.checking": "正在检查…",
   "settings.sections.check.now": "立即检查",
   "settings.sections.check.failed": "无法检查更新。",
-  "settings.sections.login.key": "用于新设备的密钥",
+  "settings.sections.login.key": "设备登录密钥",
   "settings.sections.login.key.hint": "你添加的设备必须显示这个密钥。显示其他内容的都不是你。",
 
   "settings.themes.dark": "深色",

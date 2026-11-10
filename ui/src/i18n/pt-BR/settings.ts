@@ -52,7 +52,7 @@ export default {
   "settings.sections.key.copy": "Copiar sua chave",
   "settings.sections.key.copied": "Chave copiada",
   "settings.sections.sign.out": "Sair",
-  "settings.sections.sign.out.title": "Sair do relay?",
+  "settings.sections.sign.out.title": "Sair?",
   "settings.sections.sign.out.sub": "Suas chaves, seus canais e o histórico deles continuam neste computador.",
   "settings.sections.plan": "Plano",
   "settings.sections.manage": "Gerenciar",
@@ -107,7 +107,7 @@ export default {
   "settings.sections.checking": "Verificando…",
   "settings.sections.check.now": "Verificar agora",
   "settings.sections.check.failed": "Não foi possível buscar atualizações.",
-  "settings.sections.login.key": "Sua chave para novos dispositivos",
+  "settings.sections.login.key": "Chave de entrada de dispositivos",
   "settings.sections.login.key.hint": "Um dispositivo que você adicionar precisa mostrar isso. Qualquer outra coisa não é você.",
 
   "settings.themes.dark": "Escuro",

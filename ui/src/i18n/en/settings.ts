@@ -53,7 +53,7 @@ const words = {
   "settings.sections.key.copy": "Copy your key",
   "settings.sections.key.copied": "Key copied",
   "settings.sections.sign.out": "Sign out",
-  "settings.sections.sign.out.title": "Sign out of the relay?",
+  "settings.sections.sign.out.title": "Sign out?",
   "settings.sections.sign.out.sub": "Your keys, channels and their history stay on this computer.",
   "settings.sections.plan": "Plan",
   "settings.sections.manage": "Manage",
@@ -108,7 +108,7 @@ const words = {
   "settings.sections.checking": "Checking…",
   "settings.sections.check.now": "Check now",
   "settings.sections.check.failed": "Couldn't check for updates.",
-  "settings.sections.login.key": "Your key for new devices",
+  "settings.sections.login.key": "Device sign-in key",
   "settings.sections.login.key.hint": "A device you add must show this. Anything else isn't you.",
 
   "settings.themes.dark": "Dark",
