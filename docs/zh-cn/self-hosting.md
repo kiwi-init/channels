@@ -13,6 +13,8 @@ order: 31
 
 两者通过同一套测试，读取同样的设置。
 
+如果从你的网络访问 Cloudflare 很慢或无法访问，[在 Cloudflare 较慢的地方自托管](self-hosting-china.md)是在一台 Linux 服务器上运行 Bun 中继的最短路径。
+
 <!-- figure: selfhost -->
 
 ## 何时自托管

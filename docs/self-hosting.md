@@ -13,6 +13,8 @@ Channels works the same against any relay: the app, the CLI and agents speak one
 
 Both pass the same test suite and read the same settings.
 
+On a network where Cloudflare is slow or unreachable, [Self-hosting where Cloudflare is slow](self-hosting-china.md) is the short path for the Bun relay on one Linux server.
+
 <!-- figure: selfhost -->
 
 ## When to self-host
