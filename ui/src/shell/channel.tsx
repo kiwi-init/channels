@@ -4,6 +4,7 @@ import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
 import { cx, Count, IconButton, useLate } from "~/kit/bits"
 import { useGlide } from "~/kit/glide"
+import { keyRan, onCommand } from "~/kit/commands"
 import { dialogOpen, keysHint, mod } from "~/kit/keys"
 import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
@@ -101,6 +102,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
     const onKey = (e: KeyboardEvent) => {
       if (isSideKey(e)) {
         e.preventDefault()
+        keyRan("sidebar")
         toggleSide()
       }
       if (e.key === "Escape" && !e.defaultPrevented && !dialogOpen()) {
@@ -109,12 +111,23 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       }
       if (mod(e) && !e.altKey && e.key.toLowerCase() === "f" && !dialogOpen()) {
         e.preventDefault()
+        keyRan("find")
         setSearching(true)
         setFocusAsk((n) => n + 1)
       }
     }
+    const stop = onCommand((c) => {
+      if (c === "sidebar") toggleSide()
+      if (c === "find" && !dialogOpen()) {
+        setSearching(true)
+        setFocusAsk((n) => n + 1)
+      }
+    })
     window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
+    return () => {
+      stop()
+      window.removeEventListener("keydown", onKey)
+    }
   }, [nav.panel, go, drawer])
 
   if (channel.waiting)

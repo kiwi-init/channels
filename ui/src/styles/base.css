@@ -820,6 +820,11 @@ kbd {
   padding-top: 20px;
 }
 
+.modal-form {
+  display: grid;
+  gap: 20px;
+}
+
 .modal-foot {
   display: flex;
   justify-content: flex-end;
@@ -971,6 +976,14 @@ kbd {
   color: inherit;
   cursor: pointer;
   pointer-events: auto;
+}
+
+.discard-ask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font: var(--t-ui) var(--ui);
 }
 
 .toast-close:hover {

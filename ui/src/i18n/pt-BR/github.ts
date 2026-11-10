@@ -185,5 +185,8 @@ export default {
   "kit.time.yesterday": "Ontem",
   "kit.toasts.not.copied": "Não deu para copiar. Selecione e copie à mão.",
   "kit.toasts.copied": "Copiado",
+  "kit.discard.ask": "Descartar suas alterações?",
+  "kit.discard.discard": "Descartar",
+  "kit.discard.keep": "Continuar editando",
   "kit.toasts.dismiss": "Dispensar",
 } satisfies Catalog

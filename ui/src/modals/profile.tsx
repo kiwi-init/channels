@@ -19,7 +19,7 @@ import { ALL_POWERS, memberOf, NO_POWERS, trusted, type App, type Channel, type 
 import { useApp, useGo } from "~/nav"
 import { devicesOf, nickname, roleWord, seatRoot, shown, Shown } from "~/names"
 import { contextOf, liveOf, restOf } from "~/doing"
-import { Group, InlineEdit, Row } from "~/settings/controls"
+import { Confirm, Group, InlineEdit, Row } from "~/settings/controls"
 
 const since = (at: number): string => {
   const age = ageOf(at)
@@ -352,23 +352,13 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
           </button>
         </div>
       )}
-      <Modal
-        dismiss="outside"
+      <Confirm
         open={confirm}
         onClose={() => setConfirm(false)}
-        label={t("modals.profile.remove.label", { name: shown(person) })}
         title={t("modals.profile.remove.title", { name: shown(person) })}
         sub={agent ? t("modals.profile.remove.sub.agent") : t("modals.profile.remove.sub.person")}
-        foot={
-          <>
-            <button type="button" className="btn" onClick={() => setConfirm(false)}>
-              {t("modals.profile.cancel")}
-            </button>
-            <button type="button" className="btn is-danger" onClick={remove}>
-              {t("modals.profile.remove")}
-            </button>
-          </>
-        }
+        action={t("modals.profile.remove")}
+        onConfirm={remove}
       />
     </>
   )

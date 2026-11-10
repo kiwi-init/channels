@@ -914,6 +914,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       closeChannel: (code) => setState((s) => ({ ...s, tiles: s.tiles.filter((t) => t.code !== code) })),
       enrollAnswer: () => setState((s) => (s.account?.enrollAsk ? { ...s, account: { ...s.account, enrollAsk: { ...s.account.enrollAsk, stage: "digits" } } } : s)),
       enrollConfirm: async (_id, digits) => {
+        if (digits === "000000") throw new Error("the relay didn't answer")
         if (digits !== "482913") return { ok: false, left: 2 }
         setState((s) => (s.account ? { ...s, account: { ...s.account, enrollAsk: undefined } } : s))
         return { ok: true }

@@ -223,10 +223,8 @@ export default {
   "modals.profile.manages.agents": "エージェントを管理できる",
   "modals.profile.manages.agents.hint": "リードも含め、エージェントに名前を付け、パーソナリティと役割を選べます。人のものや自分自身のものは変えられません。",
   "modals.profile.remove.more": "チャンネルから外す…",
-  "modals.profile.remove.label": "{name} を外す",
   "modals.profile.remove.title": "{name} を外しますか？",
   "modals.profile.remove.sub.agent": "今後このチャンネルのメッセージにアクセスできなくなります。",
   "modals.profile.remove.sub.person": "今後このチャンネルのメッセージにアクセスできなくなります。",
-  "modals.profile.cancel": "キャンセル",
   "modals.profile.remove": "外す",
 } satisfies Catalog

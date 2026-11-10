@@ -15,6 +15,7 @@ import { Root } from "~/shell/root"
 import { bootTheme } from "~/theme/apply"
 import { loadRex } from "~/theme/rex"
 import { wantsRex, type ThemePrefs } from "~/theme/themes"
+import { runCommand } from "~/kit/commands"
 import { migrateChannelsToStore } from "@kiwi/channel/store.ts"
 import { ops } from "@kiwi/channel/channel-ops.ts"
 import { hasBridge } from "@kiwi/secrets/relay.ts"
@@ -67,6 +68,8 @@ if (hasBridge()) void import("~/kit/native-menu").then((m) => m.quietNativeMenu(
 if (!demo) {
   applyStoredAppearance()
   bridge()?.onTextStep(stepTextSize)
+  const menus = bridge()
+  if (menus && typeof menus.onCommand === "function") menus.onCommand((c) => runCommand(c))
   void migrateChannelsToStore().catch(() => {})
   nudgeOnWake(() => ops().nudge())
   window.addEventListener("unhandledrejection", (e) => {

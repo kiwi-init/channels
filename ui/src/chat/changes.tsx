@@ -5,7 +5,7 @@ import { createPortal } from "react-dom"
 
 import { askDelete, EditHere, startEditing, stopAskingDelete, stopEditing, useAskingDelete } from "~/chat/editing"
 import { t } from "~/i18n/i18n"
-import { Modal } from "~/kit/modal"
+import { Confirm } from "~/kit/confirm"
 import { GlyphIcon } from "~/kit/icons"
 import type { Channel, Message } from "~/model"
 import { useAct } from "~/nav"
@@ -30,30 +30,16 @@ function Tools({ channel, m }: { channel: Channel; m: Message }) {
         <GlyphIcon glyph={Delete02Icon} size={14} />
       </button>
       {createPortal(
-        <Modal
-          dismiss="outside"
+        <Confirm
           open={asking}
           onClose={stopAskingDelete}
-          label={t("chat.changes.delete.ask")}
           title={t("chat.changes.delete.ask")}
           sub={t("chat.changes.delete.sub")}
-          foot={
-            <>
-              <button type="button" className="btn" onClick={() => stopAskingDelete()}>
-                {t("chat.changes.cancel")}
-              </button>
-              <button
-                type="button"
-                className="btn is-danger"
-                onClick={() => {
-                  stopAskingDelete()
-                  actions.deleteMessage(channel.code, m.seq)
-                }}
-              >
-                {t("chat.changes.delete")}
-              </button>
-            </>
-          }
+          action={t("chat.changes.delete")}
+          onConfirm={() => {
+            stopAskingDelete()
+            actions.deleteMessage(channel.code, m.seq)
+          }}
         />,
         document.body
       )}

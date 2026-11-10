@@ -1,4 +1,5 @@
 import type { KeysPort, KiwiBridge, StoreSnapshot, UiUpdateView, UpdateView } from "./bridge.ts";
+import type { UiCommand } from "./ui-command.ts";
 import type { TextStep } from "./text-size.ts";
 
 export type Call = { [K in keyof KiwiBridge]: KiwiBridge[K] extends (...args: never[]) => Promise<unknown> ? K : never }[keyof KiwiBridge];
@@ -14,6 +15,7 @@ export interface Pushes {
   githubCode: { code: string; url: string };
   deepLink: string;
   textStep: TextStep;
+  command: UiCommand;
   frost: boolean;
   accent: string | null;
   uiUpdate: UiUpdateView | null;
@@ -103,6 +105,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     applyUi: () => t.call("applyUi"),
     onDeepLink: (cb) => t.listen("deepLink", cb),
     onTextStep: (cb) => t.listen("textStep", cb),
+    onCommand: (cb) => t.listen("command", cb),
     onFrost: (cb) => t.listen("frost", cb),
     getAccentColor: () => t.call("getAccentColor"),
     capabilities: () => t.call("capabilities"),
