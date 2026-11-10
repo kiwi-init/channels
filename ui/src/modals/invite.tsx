@@ -8,7 +8,7 @@ import { Toggle } from "~/kit/form"
 import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
-import { ALL_POWERS, NO_POWERS, trusted, type Channel } from "~/model"
+import { NO_POWERS, trusted, type Channel } from "~/model"
 import { useActions } from "~/nav"
 import { Group, Row } from "~/settings/controls"
 import { copyText } from "~/kit/toasts"
@@ -112,21 +112,16 @@ export function Invite({ channel, onClose }: { channel: Channel; onClose: () => 
               ))}
             </Track>
           </div>
-          <Row label={t("modals.invite.full.trust")} hint={t("modals.invite.full.trust.hint")}>
-            <Toggle
-              label={t("modals.invite.full.trust")}
-              on={trust}
-              onChange={(on) => {
-                if (on) actions.setNewMembers(channel.code, "write")
-                actions.setNewPowers(channel.code, on ? ALL_POWERS : NO_POWERS)
-              }}
-            />
-          </Row>
           {POWERS.map((power) => (
             <Row key={power.id} label={t(power.label)} hint={t(powers[power.id] ? power.on : power.off)}>
               <Toggle label={t(power.label)} on={powers[power.id]} onChange={(on) => actions.setNewPowers(channel.code, { ...powers, [power.id]: on })} />
             </Row>
           ))}
+          {trust && (
+            <p className="trust-note tone-decide" role="status">
+              {t("modals.invite.trusted.note")}
+            </p>
+          )}
         </Group>
       )}
     </Modal>
