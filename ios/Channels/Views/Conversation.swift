@@ -114,6 +114,7 @@ struct Conversation: View {
                             sendBack(review)
                         }
                         .id(line.id)
+                        .feedLogged()
                         .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
                     }
                     if let worker, worker.working {
@@ -128,6 +129,11 @@ struct Conversation: View {
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
             .softBars()
+            .onScrollGeometryChange(for: String.self) { geo in
+                "off \(Int(geo.contentOffset.y)) content \(Int(geo.contentSize.height)) box \(Int(geo.containerSize.height)) insets \(Int(geo.contentInsets.top))/\(Int(geo.contentInsets.bottom)) visible \(Int(geo.visibleRect.minY))-\(Int(geo.visibleRect.maxY))"
+            } action: { _, now in
+                FeedLog.note("geo \(now) msgs \(room.messages.count)")
+            }
             .onScrollGeometryChange(for: Bool.self) { geo in
                 geo.visibleRect.maxY >= geo.contentSize.height - 60
             } action: { _, near in
@@ -137,14 +143,19 @@ struct Conversation: View {
             .onScrollGeometryChange(for: Bool.self) { geo in
                 geo.contentSize.height > 0 && geo.visibleRect.minY > geo.contentSize.height - 24
             } action: { _, past in
-                if past { position.scrollTo(edge: .bottom) }
+                if past {
+                    FeedLog.note("snap back")
+                    position.scrollTo(edge: .bottom)
+                }
             }
             .onChange(of: model.pending["\(room.code)|\(room.place)"]?.count ?? 0) { old, now in
                 guard now > old else { return }
+                FeedLog.note("scroll: pending \(now)")
                 withAnimation(Motion.sent) { proxy.scrollTo("bottom", anchor: .bottom) }
             }
             .onChange(of: room.messages.last?.seq) { old, _ in
                 guard old != nil, let last = room.messages.last else { return }
+                FeedLog.note("message \(last.seq) atBottom \(follow.atBottom)")
                 if follow.atBottom || last.mine {
                     withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
                 } else if !last.event {
@@ -163,6 +174,7 @@ struct Conversation: View {
                 guard now else { return }
                 Task {
                     try? await Task.sleep(for: .milliseconds(250))
+                    FeedLog.note("scroll: typing began")
                     withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
             }

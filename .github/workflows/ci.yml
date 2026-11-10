@@ -992,6 +992,9 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           sim=$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
+          xcrun simctl boot "$sim" || true
+          mkdir -p "$RUNNER_TEMP/ios-feed-shots"
+          nohup xcrun simctl spawn "$sim" log stream --level debug --style compact --predicate 'eventMessage CONTAINS "FEEDLOG"' > "$RUNNER_TEMP/ios-feed-shots/feedlog.txt" 2>&1 &
           xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/feed.xcresult" -only-testing:ChannelsUITests/BlankFeedTests/testTheFeedStaysWhileTypingInABusyChannel -test-iterations 8 CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/feed-test.log" | grep -E "FEED |error:|Test Case|passed|failed" || true
       - name: feed shots
         if: ${{ !cancelled() }}

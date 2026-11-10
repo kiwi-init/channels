@@ -12,7 +12,7 @@ final class BlankFeedTests: XCTestCase {
 
     @MainActor
     func testTheFeedStaysWhileTypingInABusyChannel() async throws {
-        try await typeAndWatch(["-busy", "YES"])
+        try await typeAndWatch(["-busy", "YES", "-feedlog", "YES"])
     }
 
     @MainActor
@@ -56,6 +56,7 @@ final class BlankFeedTests: XCTestCase {
         let top = screen.app.navigationBars.firstMatch.frame.maxY
         let bottom = field.frame.minY - 8
         let feed = try screen.texts().filter { $0.label.count > 12 && $0.frame.midY > top && $0.frame.midY < bottom }
+        NSLog("FEEDLOG look %@ texts %d", moment, feed.count)
         print(
             "FEED \(moment): \(feed.count) texts between y \(Int(top)) and \(Int(bottom)), composer focused \(field.hasFocus) at \(Date.now.formatted(.iso8601.time(includingFractionalSeconds: true)))"
         )
