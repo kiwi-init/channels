@@ -106,6 +106,15 @@ describe("the rail's menus are the app's one context menu (T1826)", () => {
     })
   })
 
+  test("a channel with news offers Mark as read first; one without doesn't (T3487)", () => {
+    const read: string[] = []
+    const withNews = railMenu({ kind: "channel", code: "a" }, at, { ...rail([]), read: (code: string) => void read.push(code) })
+    expect(withNews?.groups[0]?.map((i) => i.label)).toEqual(["Mark as read", "Mute channel", "New folder"])
+    withNews?.groups[0]?.[0]?.run()
+    expect(read).toEqual(["a"])
+    expect(railMenu({ kind: "channel", code: "a" }, at, { ...rail([]), read: null })?.groups[0]?.map((i) => i.label)).toEqual(["Mute channel", "New folder"])
+  })
+
   test("a folder that is gone opens nothing", () => {
     expect(railMenu({ kind: "folder", id: "x" }, at, rail([]))).toBeNull()
   })

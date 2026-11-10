@@ -4,6 +4,7 @@ import { rootOf } from "@kiwi/core/room-rules.ts"
 import { dmPlace, placeKey, type ChannelState } from "@kiwi/core/state.ts"
 import { dmOther, dmRoomWith } from "~/live/dm"
 import type { Where } from "~/model"
+import { seenAt } from "@kiwi/app/threads.ts"
 
 export function seenKeyOf(state: Pick<ChannelState, "members">, where: Where, me: string): string {
   if (where.kind === "room") return roomSeenKey(where.room)
@@ -59,7 +60,7 @@ export function seenByThread(messages: readonly Wire[], state: ChannelState, me:
   const mine = rootOf(me, state.members)
   const marks: Record<string, number> = {}
   for (const key of keys) {
-    const from = seen[key] ?? 0
+    const from = seenAt(seen, key)
     let mark = from
     let next = from + 1
     for (const m of messages) {

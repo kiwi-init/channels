@@ -81,6 +81,7 @@ import type {
 import { mentions } from "~/live/mention"
 import { phraseOf } from "~/live/said"
 import { type Words, wrote } from "~/words"
+import { seenAt } from "@kiwi/app/threads.ts"
 
 type Seen = Readonly<Record<string, number>>
 
@@ -226,7 +227,7 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
     const id = roomOfMessage(state, m)
     const room = state.rooms.get(id)
     if (room?.dm || room?.self) continue
-    if (m.seq <= (seen[roomSeenKey(id)] ?? (id === GENERAL_ROOM ? 0 : from))) continue
+    if (m.seq <= seenAt(seen, roomSeenKey(id), id === GENERAL_ROOM ? 0 : from)) continue
     unread.set(id, (unread.get(id) ?? 0) + 1)
     if (mentionsYou(m, me)) mentions.set(id, (mentions.get(id) ?? 0) + 1)
   }
@@ -237,7 +238,7 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
     name: r.name,
     unread: unread.get(r.id) ?? 0,
     mentions: mentions.get(r.id) ?? 0,
-    seen: seen[roomSeenKey(r.id)] ?? (r.id === GENERAL_ROOM ? 0 : from),
+    seen: seenAt(seen, roomSeenKey(r.id), r.id === GENERAL_ROOM ? 0 : from),
     ...("members" in r && r.members ? { members: r.members.map((m) => m.name) } : {}),
   }))
 }
@@ -253,17 +254,17 @@ export function directsOf(state: ChannelState, messages: readonly Wire[], seat: 
     if (place?.kind !== "dm" || !place.with.includes(me) || ignored(state.trust.get(m.seq))) continue
     const other = place.with[0] === me ? place.with[1] : place.with[0]
     at.set(other, m.ts)
-    marks.set(other, seen[placeKey(place)] ?? 0)
-    if (rootOf(m.from, state.members) !== me && m.kind !== "event" && m.seq > (seen[placeKey(place)] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
+    marks.set(other, seenAt(seen, placeKey(place)))
+    if (rootOf(m.from, state.members) !== me && m.kind !== "event" && m.seq > seenAt(seen, placeKey(place))) unread.set(other, (unread.get(other) ?? 0) + 1)
   }
   for (const m of messages) {
     const other = dmRoomWith(state, seat, m)
     if (!other || ignored(state.trust.get(m.seq))) continue
     const key = placeKey(dmPlace(me, other))
     at.set(other, Math.max(at.get(other) ?? 0, m.ts))
-    marks.set(other, seen[key] ?? 0)
+    marks.set(other, seenAt(seen, key))
     membersOnly.add(other)
-    if (rootOf(m.from, state.members) !== me && m.kind !== "event" && m.seq > (seen[key] ?? 0)) unread.set(other, (unread.get(other) ?? 0) + 1)
+    if (rootOf(m.from, state.members) !== me && m.kind !== "event" && m.seq > seenAt(seen, key)) unread.set(other, (unread.get(other) ?? 0) + 1)
   }
   for (const s of state.places.values()) {
     if (s.place.kind !== "dm" || !s.place.with.includes(me)) continue

@@ -146,6 +146,8 @@ export function Rail() {
                       }
                     : null,
                 own: target.kind === "channel" ? tiles.find((c) => c.code === target.code)?.own : undefined,
+                read:
+                  target.kind === "channel" && (tiles.find((c) => c.code === target.code)?.unread ?? 0) > 0 ? (code) => actions.markChannelRead(code, tiles.find((c) => c.code === code)?.head) : null,
                 invite: (code) => {
                   go({ to: "channel", code })
                   go({ to: "modal", modal: { kind: "invite" } })
