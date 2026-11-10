@@ -528,6 +528,10 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 10
         run: bun desktop/scripts/eb-ui-check.ts desktop/release-eb/build/dev-macos-*/*.app
+      - name: a store the app can't read gets its own page instead of first-run, and is never written over (T1772)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: bun desktop/scripts/eb-unreadable-check.ts desktop/release-eb/build/dev-macos-*/*.app
 
   desktop-linux:
     name: desktop / linux, ${{ matrix.os }}

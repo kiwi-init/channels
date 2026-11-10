@@ -66,14 +66,16 @@ export function openStore(v: StoreVault): void {
   if (read.ok && read.file && (staleVoice || read.resave)) saveStore();
 }
 
-const brokenError = () =>
-  new Error(
-    `Channels can't read its saved keys (${storeBroken}), so it saves nothing over them. ${brokenAdvice ?? "Unlock your keychain, then quit and reopen Channels."} The file is ${vault?.where()}.`,
-  );
+const brokenError = () => new Error(`Channels can't read its saved keys (${storeBroken}), so it saves nothing over them. ${brokenAdvice ?? DEFAULT_ADVICE} The file is ${vault?.where()}.`);
 
 export const keysAtRest = (): KeysAtRest => vault?.atRest?.() ?? { sealed: true, why: null };
 
 export const brokenStore = (): Error | null => (storeBroken === null ? null : brokenError());
+
+const DEFAULT_ADVICE = "Unlock your keychain, then quit and reopen Channels.";
+
+export const unreadableStore = (): { why: string; advice: string; file: string } | null =>
+  storeBroken === null ? null : { why: storeBroken, advice: brokenAdvice ?? DEFAULT_ADVICE, file: vault?.where() ?? "" };
 
 function saveStore(): void {
   if (storeBroken !== null) throw brokenError();

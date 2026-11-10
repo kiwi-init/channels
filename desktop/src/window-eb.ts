@@ -22,6 +22,7 @@ import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts"
 import { ownAppImage } from "./update-asset.ts";
 import { channelUi, uiFromChannel, uiViewsRoot } from "./ui-engine-eb.ts";
 import { showWithin } from "./show-guard.ts";
+import { unreadablePage, type Unreadable } from "./unreadable-store.ts";
 import { minWindowWidth } from "./window-size.ts";
 
 const SHOW_WITHIN_MS = 8_000;
@@ -43,6 +44,10 @@ let showNote: (state: KeyringState) => void = () => {};
 
 export const showKeyringNote = (state: KeyringState): void => showNote(state);
 
+let showCantRead: (u: Unreadable) => void = () => {};
+
+export const showUnreadable = (u: Unreadable): void => showCantRead(u);
+
 function askAgain(): void {
   ebHost.app.relaunch(ownAppImage(process.env["APPIMAGE"], process.env["APPDIR"], process.execPath) ?? path.join(path.dirname(process.execPath), "launcher"));
   Utils.quit();
@@ -63,12 +68,13 @@ function rulesHold(view: BrowserView): Promise<boolean> {
   );
 }
 
-export async function createWindow(keyring: KeyringState | null = null): Promise<BrowserWindow | null> {
+export async function createWindow(keyring: KeyringState | null = null, unreadable: Unreadable | null = null): Promise<BrowserWindow | null> {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8");
   let current = index;
   const page = (): Uint8Array<ArrayBuffer> => cString(pageWithCsp(current, store.relayUrl));
   const note = (state: KeyringState): Uint8Array<ArrayBuffer> => cString(pageWithCsp(keyringPage(index, process.platform, state), store.relayUrl));
-  const first = keyring ? note(keyring) : page();
+  const cantRead = (u: Unreadable): Uint8Array<ArrayBuffer> => cString(pageWithCsp(unreadablePage(index, u), store.relayUrl));
+  const first = keyring ? note(keyring) : unreadable ? cantRead(unreadable) : page();
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
   const table = handlers(ebHost);
   let view: BrowserView | null = null;
@@ -171,6 +177,7 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
     },
   });
   showNote = (state) => load(note(state));
+  showCantRead = (u) => load(cantRead(u));
   webview.on("dom-ready", () => {
     mark("domReady");
     const stayHidden = quiet;
@@ -188,7 +195,7 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
     },
     late: (waited) => logMainError(new Error(`the page wasn't ready ${waited / 1000} s after the window was made, so the window shows without waiting for it`)),
   });
-  if (ui && !keyring) await Promise.race([startUi(), guard.waited]);
+  if (ui && !keyring && !unreadable) await Promise.race([startUi(), guard.waited]);
   else {
     ui?.placeBuiltIn();
     load(first);
