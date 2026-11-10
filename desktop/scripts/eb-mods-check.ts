@@ -400,6 +400,8 @@ async function probe() {
       event(id, "will-navigate", JSON.stringify({ url: "https://example.com/?forged-refused", allowed: false }))
       event(id, "will-navigate", JSON.stringify({ url: ${JSON.stringify(ASK_AGAIN_URL)}, allowed: false }))
       event(id, "will-navigate", JSON.stringify({ url: "https://example.com/?forged-breach", allowed: true }))
+      event(id, "dom-ready", "https://example.com/?forged-dom-ready")
+      event(id, "host-message", JSON.stringify({ forged: "host-message" }))
     }
     for (const name of ["bunBridge", "internalBridge"])
       await attempt(() => h[name]?.postMessage(JSON.stringify({ session: "mod", doc: "mod", packet: { id: 1, method: "kiwi.getSnapshot", params: [] } })))
@@ -671,6 +673,33 @@ function front(): string {
   const info = asn ? (spawnSync("lsappinfo", ["info", "-only", "name", asn], { encoding: "utf8" }).stdout ?? "") : "";
   return `; in front: ${/"LSDisplayName"="([^"]*)"/.exec(info)?.[1] ?? (asn || "nothing")}`;
 }
+
+type BridgeEvent = { name: string; detail: string };
+const bridgeEvents = async (d: Driver): Promise<BridgeEvent[]> => {
+  const got = await d.main("bridgeEvents");
+  return Array.isArray(got) ? got.flatMap((e: unknown) => (typeof e === "object" && e !== null && "name" in e && "detail" in e ? [{ name: String(e.name), detail: String(e.detail) }] : [])) : [];
+};
+
+const PAGE_EVENTS = ["host-message", "dom-ready"];
+const postFromPage = (d: Driver): Promise<{ posted: boolean; webviewId: unknown; sendToHost: boolean }> =>
+  d.evaluate(
+    (names) => {
+      const w = window as unknown as {
+        webkit?: { messageHandlers?: Record<string, { postMessage(s: string): void } | undefined> };
+        __electrobunWebviewId?: number;
+        __electrobunEventBridge?: { postMessage(s: string): void };
+        __electrobunSendToHost?: (m: unknown) => void;
+      };
+      const bridge = w.__electrobunEventBridge ?? w.webkit?.messageHandlers?.["eventBridge"];
+      const sendToHost = typeof w.__electrobunSendToHost === "function";
+      if (!bridge || w.__electrobunWebviewId === undefined) return { posted: false, webviewId: w.__electrobunWebviewId ?? null, sendToHost };
+      for (const eventName of names) bridge.postMessage(JSON.stringify({ id: "webviewEvent", type: "message", payload: { id: w.__electrobunWebviewId, eventName, detail: `page-${eventName}` } }));
+      w.__electrobunSendToHost?.({ page: "send-to-host" });
+      return { posted: true, webviewId: w.__electrobunWebviewId, sendToHost };
+    },
+    PAGE_EVENTS,
+    2_000,
+  );
 
 type Said = Record<string, unknown>;
 const heard = (d: Driver): Promise<Said[]> =>
@@ -1219,6 +1248,7 @@ try {
     throw e;
   });
   await shot("mod-asks");
+  const bridgeAt = (await bridgeEvents(d)).length;
   await step("Allow", 10_000, () => d.evaluate(clickText, { selector: "dialog[open] .modal-foot button", text: "Allow" }, 2_000));
   const first = await until("the mod's report", 60_000, async () => (await heard(d)).find((m) => m["version"] === 1) ?? null);
   console.log(`the mod saw: ${JSON.stringify(first, null, 1)}`);
@@ -1262,6 +1292,26 @@ try {
   const still = await until("the mod's frame after it tried to leave", 15_000, async () => (await heard(d)).find((m) => m["stillHere"] === true) ?? null).catch(() => null);
   if (!still) await howHeard(d, "no stillHere");
   check(!!still, "the mod's frame stays where it is when it navigates itself");
+  const whileMod = (await bridgeEvents(d)).slice(bridgeAt);
+  console.log(`events the app heard from its web view while the mod forged its own: ${JSON.stringify(whileMod)}`);
+  check(
+    !whileMod.some((e) => e.detail.includes("forged") || e.detail.includes(ASK_AGAIN_URL)),
+    "none of the mod's forged new-window-open, will-navigate, dom-ready or host-message events reached the app",
+  );
+  check(!whileMod.some((e) => e.name !== "will-navigate"), "no dom-ready, host-message or new-window-open reached the app while the mod ran");
+  const all = await bridgeEvents(d);
+  console.log(`everything the app heard from its web view since it started: ${JSON.stringify(all.slice(0, bridgeAt))}`);
+  const pageAt = all.length;
+  const page = await postFromPage(d);
+  const fromPage = await until("the page's own events", 10_000, async () => {
+    const got = (await bridgeEvents(d)).slice(pageAt);
+    return PAGE_EVENTS.every((n) => got.some((e) => e.name === n && e.detail.includes(`page-${n}`))) ? got : null;
+  }).catch(async () => (await bridgeEvents(d)).slice(pageAt));
+  console.log(`the page posted its own ${PAGE_EVENTS.join(" and ")}: ${JSON.stringify(page)}; the app heard: ${JSON.stringify(fromPage)}`);
+  check(
+    page.posted && PAGE_EVENTS.every((n) => fromPage.some((e) => e.name === n && e.detail.includes(`page-${n}`))),
+    "the top page's own dom-ready and host-message, posted the same way, reach the app",
+  );
   await step("⌘K again", 10_000, palette);
   await step("the mod's command, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
   await step("the mod's command in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));

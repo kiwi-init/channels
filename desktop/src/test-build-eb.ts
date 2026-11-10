@@ -1,4 +1,4 @@
-import type { BrowserWindow } from "electrobun/main";
+import Electrobun, { type BrowserWindow } from "electrobun/main";
 
 import { linksOpened } from "./deep-links.ts";
 import { drive } from "./eb-driver.ts";
@@ -28,11 +28,26 @@ export function openTestStore(first: () => void): boolean {
   return false;
 }
 
+const BRIDGE_EVENTS = ["dom-ready", "host-message", "will-navigate", "new-window-open"];
+
+function hearBridgeEvents(win: BrowserWindow): () => { name: string; detail: string }[] {
+  const heard: { name: string; detail: string }[] = [];
+  const detailOf = (e: unknown): string => {
+    const data = typeof e === "object" && e !== null && "data" in e ? e.data : null;
+    const detail = typeof data === "object" && data !== null && "detail" in data ? data.detail : "";
+    return (typeof detail === "string" ? detail : JSON.stringify(detail)).slice(0, 300);
+  };
+  for (const name of BRIDGE_EVENTS) Electrobun.events.on(`${name}-${win.webview.id}`, (e: unknown) => void heard.push({ name, detail: detailOf(e) }));
+  return () => [...heard];
+}
+
 export function driveForTests(win: BrowserWindow): void {
   if (KIWI_EB_TEST) {
     const socket = process.env.KIWI_EB_DRIVER;
+    const bridgeEvents = hearBridgeEvents(win);
     if (socket)
       drive(win.webview, socket, {
+        bridgeEvents,
         startup: startupMarks,
         linksOpened,
         browserOpens,
