@@ -3,7 +3,21 @@ import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readd
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { APP_FOLDER, APP_RUN, appImageName, archOfArtifact, desktopEntry, ELECTROBUN_LAUNCHER, EXECUTABLE, LEFT_OUT, MAX_DOWNLOAD, RUNTIME_SHA256, runtimeUrl, type LinuxArch } from "./linux-files.ts";
+import {
+  APP_FOLDER,
+  APP_RUN,
+  appImageName,
+  archOfArtifact,
+  BREEZE_DARK_APPS,
+  desktopEntry,
+  ELECTROBUN_LAUNCHER,
+  EXECUTABLE,
+  LEFT_OUT,
+  MAX_DOWNLOAD,
+  RUNTIME_SHA256,
+  runtimeUrl,
+  type LinuxArch,
+} from "./linux-files.ts";
 
 const desktop = resolve(import.meta.dirname, "..");
 const dir = resolve(process.argv[2] ?? join(desktop, "release-eb"));
@@ -47,6 +61,13 @@ function icons(root: string, share: string): void {
     const at = join(root, share, "icons", "hicolor", name.replace(/\.png$/, ""), "apps");
     mkdirSync(at, { recursive: true });
     cpSync(join(from, name), join(at, `${EXECUTABLE}.png`));
+  }
+  const dark = join(desktop, "build", "icons-dark");
+  if (!existsSync(dark)) throw new Error("package-linux: no build/icons-dark: run bun desktop/scripts/icons.ts on a Mac and commit what it writes");
+  for (const [size, dir] of Object.entries(BREEZE_DARK_APPS)) {
+    const at = join(root, share, "icons", "breeze-dark", "apps", dir);
+    mkdirSync(at, { recursive: true });
+    cpSync(join(dark, `${size}.png`), join(at, `${EXECUTABLE}.png`));
   }
 }
 

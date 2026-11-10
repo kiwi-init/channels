@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { RELEASE_ID } from "../scripts/bundle-ids.ts";
-import { desktopEntry, EXECUTABLE } from "../scripts/linux-files.ts";
+import { BREEZE_DARK_APPS, desktopEntry, EXECUTABLE } from "../scripts/linux-files.ts";
 
 export const ENTRY_FILE = `${EXECUTABLE}.desktop`;
 const KIWI_HANDLER = "x-scheme-handler/kiwi";
@@ -153,6 +153,10 @@ export function keepEntry(place: EntryPlace): EntryOutcome {
   for (const size of sizes) {
     const icon = readIfThere(path.join(icons, size, "apps", `${EXECUTABLE}.png`));
     if (icon) writeIfChanged(path.join(place.dataHome, "icons", "hicolor", size, "apps", `${EXECUTABLE}.png`), icon, wrote);
+  }
+  for (const dir of Object.values(BREEZE_DARK_APPS)) {
+    const icon = readIfThere(path.join(place.appDir, "usr", "share", "icons", "breeze-dark", "apps", dir, `${EXECUTABLE}.png`));
+    if (icon) writeIfChanged(path.join(place.dataHome, "icons", "breeze-dark", "apps", dir, `${EXECUTABLE}.png`), icon, wrote);
   }
   writeIfChanged(path.join(applications, ENTRY_FILE), Buffer.from(text), wrote);
   const mimeapps = path.join(place.configHome, "mimeapps.list");

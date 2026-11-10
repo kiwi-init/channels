@@ -1,6 +1,8 @@
 export type LinuxArch = "x64" | "arm64";
 
 export const EXECUTABLE = "channels-desktop";
+
+export const BREEZE_DARK_APPS: Readonly<Record<string, string>> = { "16x16": "16", "22x22": "22", "32x32": "32", "256x256": "48" };
 export const APP_FOLDER = "Channels";
 export const ELECTROBUN_LAUNCHER = "electrobun-launcher";
 export const MAX_DOWNLOAD = 60 * 1024 ** 2;

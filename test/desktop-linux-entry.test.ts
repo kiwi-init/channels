@@ -74,6 +74,19 @@ describe("the AppImage keeps its own desktop entry (#1284)", () => {
     expect(statSync(entry).mtimeMs).toBe(mtime);
   });
 
+  test("the dark icons go to the breeze-dark theme in its own layout, so Breeze Dark's taskbar picks them (#2015)", () => {
+    const p = place();
+    for (const dir of ["16", "22", "32", "48"]) {
+      mkdirSync(join(p.appDir, "usr", "share", "icons", "breeze-dark", "apps", dir), { recursive: true });
+      writeFileSync(join(p.appDir, "usr", "share", "icons", "breeze-dark", "apps", dir, "channels-desktop.png"), `dark ${dir}`);
+    }
+    const kept = keepEntry(p);
+    const wrote = kept.kind === "kept" ? kept.wrote : [];
+    for (const dir of ["16", "22", "32", "48"]) expect(wrote).toContain(join(p.dataHome, "icons", "breeze-dark", "apps", dir, "channels-desktop.png"));
+    expect(readFileSync(join(p.dataHome, "icons", "breeze-dark", "apps", "48", "channels-desktop.png"), "utf8")).toBe("dark 48");
+    expect(readFileSync(join(p.dataHome, "icons", "hicolor", "64x64", "apps", "channels-desktop.png"), "utf8")).toBe("png 64x64");
+  });
+
   test("a moved AppImage, or one that lost FUSE, rewrites only the entry", () => {
     const p = place();
     keepEntry(p);
