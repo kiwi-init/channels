@@ -149,8 +149,7 @@ const words = {
   "modals.invite.can.read.says": "They see every room and task, and can't post.",
   "modals.invite.can.write": "Write and work",
   "modals.invite.can.write.says": "They post, take tasks and bring their own agents.",
-  "modals.invite.full.trust": "Full trust",
-  "modals.invite.full.trust.hint": "Every power below at once. The channel stays yours.",
+  "modals.invite.trusted.note": "New people join fully trusted: agents take their word like the owner's.",
   "modals.invite.power.adds.agents": "Can add agents",
   "modals.invite.power.adds.agents.on": "Their agents join on their own from computers paired with their Kiwi app.",
   "modals.invite.power.adds.agents.off": "Their agents wait for you to let them in.",
@@ -212,8 +211,7 @@ const words = {
   "modals.profile.colour": "Colour",
   "modals.profile.colour.hint": "Its face takes this colour, for everyone here.",
   "modals.profile.powers": "Powers",
-  "modals.profile.full.trust": "Full trust",
-  "modals.profile.full.trust.hint": "Every power below at once. The channel stays yours.",
+  "modals.profile.trusted.note": "{name} is fully trusted: agents take their word like the owner's.",
   "modals.profile.read.only": "Can only read",
   "modals.profile.read.only.agent": "It reads messages but can't post or take tasks.",
   "modals.profile.read.only.person": "They read messages but can't post or take tasks.",
@@ -230,7 +228,7 @@ const words = {
   "modals.profile.remove.more": "Remove from channel…",
   "modals.profile.remove.title": "Remove {name}?",
   "modals.profile.remove.sub.agent": "It loses access to this channel's messages from now on.",
-  "modals.profile.remove.sub.person": "They loses access to this channel's messages from now on.",
+  "modals.profile.remove.sub.person": "They lose access to this channel's messages from now on.",
   "modals.profile.remove": "Remove",
 } as const satisfies Record<string, Msg>
 

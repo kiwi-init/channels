@@ -18,7 +18,7 @@ import { Empty } from "~/kit/empty"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
-import { ALL_POWERS, NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type Message, type PermissionAsk, type Person, type Powers, type QuestionAsk, type ReviewAsk } from "~/model"
+import { NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type Message, type PermissionAsk, type Person, type Powers, type QuestionAsk, type ReviewAsk } from "~/model"
 import { useApp, useGo, useChannelHere } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { SendBack } from "~/tasks/send-back"
@@ -469,20 +469,6 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
               )}
             </Opt>
           )}
-          {!agent && (
-            <Opt label={t("needs.join.full.trust")} hint={!only && trusted(can) ? t("needs.join.full.trust.on") : t("needs.join.full.trust.off")}>
-              {(id) => (
-                <Toggle
-                  id={id}
-                  on={!only && trusted(can)}
-                  onChange={(on) => {
-                    if (on) setReadOnly(false)
-                    setPowers(on ? ALL_POWERS : NO_POWERS)
-                  }}
-                />
-              )}
-            </Opt>
-          )}
           {!chosen && (
             <Opt
               label={t("needs.join.read.only")}
@@ -497,6 +483,11 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
                 {(id) => <Toggle id={id} on={can[power]} onChange={(on) => setPowers({ ...can, [power]: on })} />}
               </Opt>
             ))}
+          {!agent && !only && trusted(can) && (
+            <p className="trust-note tone-decide" role="status">
+              {t("needs.join.trusted.note", { name: ask.freeName ?? ask.name })}
+            </p>
+          )}
         </div>
       )}
     </Shell>

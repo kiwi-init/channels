@@ -153,27 +153,7 @@ function AskRow({ tile, ask, now }: { tile: ChannelTile; ask: HomeAsk; now: numb
               {o.shown}
             </button>
           ))}
-        {act.kind === "allow" && (
-          <>
-            <button type="button" className="calm-opt" onClick={() => actions.answerPermission(code, ask.id, false)}>
-              {t("start.welcome.deny")}
-            </button>
-            <button type="button" className="calm-opt" onClick={() => actions.answerPermission(code, ask.id, true)}>
-              {t("start.welcome.allow")}
-            </button>
-          </>
-        )}
-        {act.kind === "approve-spec" && (
-          <button type="button" className="calm-opt" onClick={() => actions.approveSpec(code, act.ask, act.v)}>
-            {t("start.welcome.approve")}
-          </button>
-        )}
-        {act.kind === "approve-task" && (
-          <button type="button" className="calm-opt" onClick={() => actions.approveTask(code, act.task, true)}>
-            {t("start.welcome.approve")}
-          </button>
-        )}
-        {act.kind === "open" && (
+        {act.kind !== "options" && (
           <button type="button" className="calm-opt" onClick={open}>
             {t("start.welcome.open")}
           </button>

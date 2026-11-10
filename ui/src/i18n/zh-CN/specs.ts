@@ -89,7 +89,7 @@ export default {
   "specs.page.all.specs": "全部规格",
   "specs.page.parts": "规格、内部或结果",
   "specs.page.spec": "规格",
-  "specs.page.inside": "内部",
+  "specs.page.inside": "工作",
   "specs.page.result": "结果",
   "specs.page.to.look.at": "{count} 项待查看",
   "specs.page.asked.by": "{who} 提出 {when}",

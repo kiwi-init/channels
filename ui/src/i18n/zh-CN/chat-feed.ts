@@ -133,7 +133,7 @@ export default {
   "chat.suggest.people": "人员",
   "chat.suggest.person": "人",
   "chat.suggest.agent": "智能体",
-  "chat.updates.panel.label": "更新",
+  "chat.updates.panel.label": "动态",
   "chat.updates.panel.show.older": "显示更早的",
   "chat.updates.panel.fewer": "收起",
   "chat.updates.panel.more": { other: "还有 {count} 条" },

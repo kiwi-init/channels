@@ -90,7 +90,7 @@ const words = {
   "specs.page.all.specs": "All specs",
   "specs.page.parts": "Spec, inside or result",
   "specs.page.spec": "Spec",
-  "specs.page.inside": "Inside",
+  "specs.page.inside": "Work",
   "specs.page.result": "Result",
   "specs.page.to.look.at": "{count} to look at",
   "specs.page.asked.by": "asked by {who} {when}",

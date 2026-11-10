@@ -89,7 +89,7 @@ export default {
   "specs.page.all.specs": "Todas as especificações",
   "specs.page.parts": "Especificação, por dentro ou resultado",
   "specs.page.spec": "Especificação",
-  "specs.page.inside": "Por dentro",
+  "specs.page.inside": "Trabalho",
   "specs.page.result": "Resultado",
   "specs.page.to.look.at": "{count} para olhar",
   "specs.page.asked.by": "pedida por {who} {when}",

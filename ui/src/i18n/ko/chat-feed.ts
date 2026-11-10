@@ -133,7 +133,7 @@ export default {
   "chat.suggest.people": "사람",
   "chat.suggest.person": "사람",
   "chat.suggest.agent": "에이전트",
-  "chat.updates.panel.label": "업데이트",
+  "chat.updates.panel.label": "활동",
   "chat.updates.panel.show.older": "이전 항목 보기",
   "chat.updates.panel.fewer": "접기",
   "chat.updates.panel.more": { other: "{count}개 더" },

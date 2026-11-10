@@ -68,7 +68,7 @@ try {
   await passOnboarding(page);
   await page.getByRole("textbox", { name: "Your name" }).fill("smoke");
   await page.getByRole("button", { name: "Continue" }).click();
-  const addChannel = page.getByRole("button", { name: "New channel or join one" });
+  const addChannel = page.locator(".rail .tile.is-add");
   await addChannel.waitFor({ timeout: 15000 });
   step(at);
 
@@ -164,10 +164,10 @@ try {
   const task = /\bT(\d+)\b/.exec(added)?.[1];
   if (task === undefined) throw new Error(`kiwi task add printed no task id: ${added.trim()}`);
   await row("hello from bot").first().waitFor({ timeout: 30000 });
-  const updates = page.getByRole("button", { name: "Updates" });
+  const updates = page.getByRole("button", { name: "Activity" });
   await updates.click();
   await page
-    .getByRole("dialog", { name: "Updates" })
+    .getByRole("dialog", { name: "Activity" })
     .getByText(/added task T\d+ “Smoke task”/)
     .first()
     .waitFor({ timeout: 30000 });

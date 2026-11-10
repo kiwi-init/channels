@@ -154,7 +154,7 @@ export default {
   "chat.drafts.back.stash": "Não enviada: {why}. Ela está nos guardados: {keys} traz de volta{lost}.",
   "chat.drafts.lost.image": "; a imagem não coube nos guardados",
   "chat.drafts.lost.images": "; as {count} imagens não couberam nos guardados",
-  "chat.events.updates": "Atualizações",
+  "chat.events.updates": "Atividade",
   "chat.feed.image.loading": "Carregando imagem…",
   "chat.feed.notes.hold.you": "Eles leem, mas não agem até você retomá-los.",
   "chat.feed.notes.hold.owner": "Eles leem, mas não agem até {name} retomá-los.",
