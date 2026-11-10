@@ -143,10 +143,7 @@ struct Conversation: View {
             .onScrollGeometryChange(for: Bool.self) { geo in
                 geo.contentSize.height > 0 && geo.visibleRect.minY > geo.contentSize.height - 24
             } action: { _, past in
-                if past {
-                    FeedLog.note("snap back")
-                    position.scrollTo(edge: .bottom)
-                }
+                if past { FeedLog.note("snap back (off)") }
             }
             .onChange(of: model.pending["\(room.code)|\(room.place)"]?.count ?? 0) { old, now in
                 guard now > old else { return }
