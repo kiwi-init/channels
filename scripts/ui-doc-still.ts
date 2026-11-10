@@ -160,7 +160,8 @@ const TRACE = (): void => {
       watched.add(l);
       new MutationObserver((records) => {
         const rows = records.flatMap((r) => [...r.addedNodes]).filter((n) => n instanceof HTMLElement && n.dataset.seq).length;
-        if (rows) push(`rows +${rows} committed: ${snap()}`);
+        const gone = records.flatMap((r) => [...r.removedNodes]).flatMap((n) => (n instanceof HTMLElement && n.dataset.seq ? [n.dataset.seq] : []));
+        if (rows || gone.length) push(`rows +${rows}${gone.length ? ` −${gone.length} (seq ${gone.join(", ")})` : ""} committed: ${snap()}`);
       }).observe(l, { childList: true });
     }
     const doc = box && l?.querySelector(".thread-doc");
@@ -276,6 +277,7 @@ async function watching(browser: Browser): Promise<string | null> {
   for (let loop = 1; loop <= LOOPS; loop++) {
     const why = await watchOnce(browser, loop);
     if (why) return LOOPS > 1 ? `${why} (loop ${loop} of ${LOOPS})` : why;
+    if (LOOPS > 1 && loop % 10 === 0) console.log(`  ${loop} of ${LOOPS} loops still`);
   }
   if (LOOPS > 1) console.log(`  the doc stayed still in all ${LOOPS} loops`);
   return null;
