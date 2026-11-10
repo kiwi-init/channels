@@ -16,7 +16,7 @@ import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/thre
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { withReach } from "~/live/reach"
-import { capUnsent, changeUnsent, nextUnsentKey, resendDue, retryUnsent, unsentBlock, unsentIn } from "~/live/unsent"
+import { capUnsent, changeUnsent, landedOut, newSendId, nextUnsentKey, resendDue, retryUnsent, unsentBlock, unsentIn } from "~/live/unsent"
 import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
@@ -53,6 +53,7 @@ export interface View {
 }
 
 const PENDING_MAX = 50
+const RESEND_EVERY_MS = 15_000
 
 const LEADING = /^(?:\s*@([\p{L}\p{N}_.-]+)[\s,]*)+/u
 
@@ -73,6 +74,7 @@ export function sendOptions(state: ChannelState, messages: readonly Wire[], me: 
     ...(re !== undefined && opts.side ? { side: true } : {}),
     ...(to ? { to } : {}),
     ...(opts.block ? { block: opts.block } : {}),
+    ...(opts.id ? { id: opts.id, cid: opts.id } : {}),
   }
   if (where.kind === "dm") return { ...base, ...sendFrom(state, dmPlace(me, where.with), me) }
   if (where.kind === "task") return { ...base, ...sendFrom(state, { kind: "task", task: where.task }, me) }
@@ -140,7 +142,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const nicknames = useMemo(() => nicknamesOf(nicknameKey ? nicknameKey.split("\n").map((line) => ({ name: line.split("\u0000")[0] ?? "", display: line.split("\u0000")[1] })) : []), [nicknameKey])
   const pins = usePinsHere(requests)
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
-  const rows = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, pending), [state, messages, me, asks.askOf, pictures, pending])
+  const mine = useMemo(() => new Set(pending.some((p) => p.failed !== undefined && p.id) ? messages.flatMap((m) => (m.from === me ? [m.id] : [])) : []), [pending, messages, me])
+  const unsent = useMemo(() => landedOut(pending, mine), [pending, mine])
+  const rows = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, unsent), [state, messages, me, asks.askOf, pictures, unsent])
   const busy = useMemo(() => busyOf(people), [people])
   const receipts = useMemo(() => receiptsOf(state, shownWire, me, marks, pkOf, clock, busy), [state, shownWire, me, marks, pkOf, busy])
   const mapped = useMemo(() => kept(code, withReceipts(rows, receipts)), [code, rows, receipts])
@@ -279,7 +283,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       const key = nextUnsentKey()
       const body = text.trim()
       const imgs = opts.images?.length ? { imgs: opts.images } : {}
-      const plain = { ...sendOptions(state, messages, me, where, body, opts), ...imgs }
+      const id = opts.id ?? newSendId()
+      const plain = { ...sendOptions(state, messages, me, where, body, { ...opts, id }), ...imgs }
       const sealedIn = async (other: string): Promise<string | undefined> => {
         const had = dmRoomOf(state, me, other)
         if (had || !dmInRoom(channel, other)) return had
@@ -301,6 +306,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         where,
         text: body,
         at: Date.now(),
+        id,
+        ...(opts.first !== undefined ? { first: opts.first } : {}),
         ...(opts.inThread !== undefined ? { inThread: opts.inThread } : {}),
         ...(opts.side ? { side: true as const } : {}),
         ...(opts.replyTo !== undefined ? { replyTo: opts.replyTo } : {}),
@@ -314,7 +321,16 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
           return send(
             body,
             room
-              ? { kind: "msg", room, ...(re !== undefined ? { re: [re] } : {}), ...(re !== undefined && opts.side ? { side: true } : {}), ...(opts.block ? { block: opts.block } : {}), ...imgs }
+              ? {
+                  kind: "msg",
+                  room,
+                  id,
+                  cid: id,
+                  ...(re !== undefined ? { re: [re] } : {}),
+                  ...(re !== undefined && opts.side ? { side: true } : {}),
+                  ...(opts.block ? { block: opts.block } : {}),
+                  ...imgs,
+                }
               : plain
           )
         })
@@ -364,11 +380,14 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     },
     [pending, discard, post]
   )
-  const resend = useEffectEvent(() => void resendDue(roomId, Date.now(), retry))
-  const up = connection === "live" && caughtUp
+  const resend = useEffectEvent(() => void resendDue(roomId, Date.now(), retry, mine))
+  const owed = connection === "live" && pending.some((p) => p.failed !== undefined)
   useEffect(() => {
-    if (up) resend()
-  }, [up])
+    if (!owed) return
+    resend()
+    const timer = setInterval(resend, RESEND_EVERY_MS)
+    return () => clearInterval(timer)
+  }, [owed])
 
   const run = useMemo(
     (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard: toDraft, refreshRequests, refreshRoster, foldFrom, older }),

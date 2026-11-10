@@ -258,6 +258,9 @@ jobs:
       - name: doc image order, a line sent with an image from the composer stays above the lines sent after it
         if: ${{ !cancelled() && matrix.part == 'send' }}
         run: bun scripts/ui-doc-image-order.ts
+      - name: send once, a message whose answer was lost or that was written with the relay away survives a reload and is delivered once
+        if: ${{ !cancelled() && matrix.part == 'send' }}
+        run: bun scripts/ui-send-once.ts
       - name: image copies, a Retina shot in the feed and the doc shows from a copy sized to its box, while the viewer, Save image and a drag get the original, in Chromium and WebKit
         if: ${{ !cancelled() && matrix.part == 'view' }}
         run: |

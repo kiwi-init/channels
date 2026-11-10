@@ -1,0 +1,124 @@
+#!/usr/bin/env bun
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, normalize } from "node:path";
+import { chromium, webkit, type Page } from "playwright-core";
+import { startLocalRelay } from "./local-relay.ts";
+import { harnessDist } from "./ui-harness.ts";
+import { docOpen, firstRun, newChannel, say } from "./perf-ui.ts";
+
+const DIST = harnessDist(process.argv.find((a) => a.startsWith("--dist="))?.slice(7));
+const ENGINE = process.argv.includes("--webkit") ? "webkit" : "chromium";
+const OFFLINE = "written while the relay was away";
+const AGAIN = "written in a second outage";
+
+const data = mkdtempSync(join(tmpdir(), "kiwi-send-once-"));
+mkdirSync(join(data, "relay"));
+const first = await startLocalRelay(join(data, "relay"), DIST, { rateLimits: false });
+const port = first.port;
+let relay = first.relay;
+const BASE = `http://127.0.0.1:${port}/`;
+const browser = await (ENGINE === "webkit" ? webkit.launch() : chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined })).catch((err: unknown) => {
+  relay.kill();
+  throw err;
+});
+
+const failures: string[] = [];
+const check = (what: string, why: string | null): void => {
+  if (why) failures.push(`${what}: ${why}`);
+  console.log(`${why ? "✗" : "✓"} ${what}${why ? `: ${why}` : ""}`);
+};
+
+const rows = (page: Page, text: string) => page.locator(".main article.msg", { hasText: text });
+const failed = (page: Page, text: string) => rows(page, text).locator(".msg-failed");
+
+async function settled(page: Page, text: string, ms: number): Promise<{ rows: number; failed: number }> {
+  const end = Date.now() + ms;
+  let last = { rows: -1, failed: -1 };
+  let since = Date.now();
+  while (Date.now() < end) {
+    const now = { rows: await rows(page, text).count(), failed: await failed(page, text).count() };
+    if (now.rows !== last.rows || now.failed !== last.failed) since = Date.now();
+    last = now;
+    if (now.rows === 1 && now.failed === 0 && Date.now() - since > 3000) return now;
+    await page.waitForTimeout(250);
+  }
+  return last;
+}
+
+function fromDisk(path: string): string | null {
+  const file = join(DIST, normalize(path === "/" || !path.includes(".") ? "index.html" : path));
+  return file.startsWith(DIST) && existsSync(file) && statSync(file).isFile() ? file : null;
+}
+
+try {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  let down = false;
+  await context.route("**/*", async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const file = down && req.method() === "GET" ? fromDisk(decodeURIComponent(url.pathname)) : null;
+    if (file) return route.fulfill({ path: file });
+    return route.continue();
+  });
+  const page = await context.newPage();
+  const threw: string[] = [];
+  page.on("pageerror", (e) => threw.push(e.message));
+  await page.goto(BASE);
+  await firstRun(page, "owner");
+  await newChannel(page, "send once");
+  await say(page, "sent while all was well");
+  await rows(page, "sent while all was well").first().waitFor({ timeout: 30000 });
+
+  await settled(page, "sent while all was well", 30_000);
+  down = true;
+  relay.kill();
+  await new Promise((done) => relay.once("exit", done));
+  await say(page, OFFLINE);
+  await failed(page, OFFLINE).first().waitFor({ timeout: 90_000 });
+  check("with the relay away the message says Couldn't send", (await rows(page, OFFLINE).count()) === 1 ? null : `${await rows(page, OFFLINE).count()} rows`);
+
+  await page.reload();
+  await docOpen(page);
+  const kept = await failed(page, OFFLINE)
+    .first()
+    .waitFor({ timeout: 30_000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  check("after a reload with the relay still away the failed message is still there", kept ? null : "it was gone");
+
+  ({ relay } = await startLocalRelay(join(data, "relay"), DIST, { rateLimits: false, port }));
+  down = false;
+  const back = await settled(page, OFFLINE, 60_000);
+  check("when the relay is back the message sends itself, once", back.rows === 1 && back.failed === 0 ? null : `${back.rows} rows, ${back.failed} failed`);
+
+  down = true;
+  relay.kill();
+  await new Promise((done) => relay.once("exit", done));
+  await say(page, AGAIN);
+  await failed(page, AGAIN).first().waitFor({ timeout: 90_000 });
+  ({ relay } = await startLocalRelay(join(data, "relay"), DIST, { rateLimits: false, port }));
+  down = false;
+  const open = await settled(page, AGAIN, 60_000);
+  check("with the app left open through a second outage, that message sends itself too, once", open.rows === 1 && open.failed === 0 ? null : `${open.rows} rows, ${open.failed} failed`);
+
+  await page.reload();
+  await docOpen(page);
+  await rows(page, "sent while all was well").first().waitFor({ timeout: 30000 });
+  for (const text of ["sent while all was well", OFFLINE, AGAIN]) {
+    const after = await settled(page, text, 15_000);
+    check(`the relay holds "${text}" once`, after.rows === 1 && after.failed === 0 ? null : `${after.rows} rows, ${after.failed} failed`);
+  }
+  check("the page never threw", threw.length ? threw.join("; ") : null);
+} finally {
+  await browser.close();
+  relay.kill();
+  rmSync(data, { recursive: true, force: true });
+}
+if (failures.length) {
+  console.error(`\n${failures.length} failed`);
+  process.exit(1);
+}
+console.log("\nsend once: ok");

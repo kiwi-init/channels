@@ -23,6 +23,7 @@ import {
   wellFormedChoices,
   wellFormedHandoff,
   wellFormedHolds,
+  wellFormedSendId,
   type DecisionKind,
   type DocBlockRef,
   type Event,
@@ -65,6 +66,7 @@ export interface SendOptions {
   stepReply?: StepReply;
   check?: CheckAsk;
   id?: string;
+  cid?: string;
   permission?: PermissionShown;
   perm?: PermissionReply;
   settled?: PermissionSettled;
@@ -144,6 +146,7 @@ export class ChannelSending {
         return yield* new Rejected("a step goes only on an escalation, without a decision kind, options or browser handoff");
       if (opts.stepReply && (!opts.re?.length || opts.ev)) return yield* new Rejected("a step answer goes on a reply to its step");
       if (opts.id !== undefined && opts.id.length > 100) return yield* new Rejected("a message id is at most 100 characters");
+      if (opts.cid !== undefined && !wellFormedSendId(opts.cid)) return yield* new Rejected("a send id is 16 to 64 letters, digits, - or _");
       const attached = imgs?.length ? yield* this.images.stored(imgs) : undefined;
       const payload: Payload = {
         v: PROTOCOL_VERSION,
@@ -201,7 +204,7 @@ export class ChannelSending {
       const own = yield* downgrade;
       let tickets = [...given, ...own];
       const signed = yield* Effect.promise(() => sign(this.ch.identity, payload));
-      const cid = b64url(crypto.getRandomValues(new Uint8Array(16)));
+      const cid = opts.cid ?? b64url(crypto.getRandomValues(new Uint8Array(16)));
       const inside = named ? (this.ch.memberRooms.get(named)?.members ?? this.ch.roomNow.get(named)?.meta?.members) : undefined;
       const wake = opts.ev ? [] : (opts.wake ?? []).filter((w) => !inside || inside.some((m) => m.name === w)).slice(0, MAX_WAKE);
       const sealNow = Effect.gen({ self: this }, function* () {

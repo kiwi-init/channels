@@ -7,6 +7,7 @@ export const FLOWS: string[] = [
   "verbs",
   "threads",
   "reconnect",
+  "send-once",
   "cache-trim",
   ...budget,
   "join-seats",
