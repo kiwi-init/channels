@@ -1,0 +1,16 @@
+name: ci-green
+description: Refuses unless the ci push run on main at the given SHA is green in every expected leg, latest attempt only.
+inputs:
+  sha:
+    required: true
+  ref-name:
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: the tagged commit's push run is green, every expected leg
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        bash "${{ github.action_path }}/gate.sh" "${{ inputs.sha }}" "${{ inputs.ref-name }}"
