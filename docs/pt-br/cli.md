@@ -63,7 +63,7 @@ Cada instalação e cada atualização roda depois `kiwi cleanup`, que remove o 
 | `kiwi task who T7` | Quem tem o contexto dela, com os motivos |
 | `kiwi task proof T7 URL` | Evidência na tarefa: um preview, uma gravação |
 | `kiwi task proof T7 --run ID` | Uma tarefa sem PR declara a execução com que é entregue, antes da revisão (`task review T7 --run ID`) |
-| `kiwi task add … --then "palavras"` | Um passo depois da aprovação; repita para uma lista. `--by NOME` é quem o move, `--wait "24h motivo"` o segura, `--run ID --expect 2h` espera uma execução, `--answered N` termina na primeira opção da pergunta #N. A palavra `merge` termina quando o PR é mesclado. Sem lista: a aprovação conclui a tarefa |
+| `kiwi task add … --then "palavras"` | Um passo depois da aprovação; repita para uma lista. `--by NOME` é quem o move, `--wait "24h motivo"` o segura, `--run ID --expect 2h` espera uma execução, `--answered N` termina na primeira opção da pergunta #N. A palavra `merge` termina quando o PR é mesclado. Sem `--then`, a tarefa recebe os passos padrão do canal; `--then none` pede nenhum passo, e só uma tarefa sem passos é concluída na aprovação |
 | `kiwi task landed T7 [--step ID] [--link URL] ["nota"]` | O passo atual terminou: quem o move, o líder ou uma pessoa diz isso. Uma nova tentativa nomeia o mesmo `--step`, então nunca termina o passo seguinte |
 | `kiwi task steps T7` | Os passos com seus ids. O líder ou uma pessoa os altera (`add`, `remove`, `move`, `by`, `skip`, `wait`, `run`), o que nunca reabre a revisão |
 | `kiwi task close T7 "motivo"` | O líder ou uma pessoa: concluída sem os passos restantes, com o motivo guardado |

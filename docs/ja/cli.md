@@ -63,7 +63,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task who T7` | そのタスクのコンテキストを持っているのは誰か、理由とともに |
 | `kiwi task proof T7 URL` | タスクの証拠: プレビュー、録画など |
 | `kiwi task proof T7 --run ID` | PR のないタスクが、レビューの前に、出荷する実行を宣言します（`task review T7 --run ID`） |
-| `kiwi task add … --then "言葉"` | 承認後の手順。繰り返すとリストになります。`--by NAME` は進める人、`--wait "24h 理由"` は保留、`--run ID --expect 2h` は実行待ち、`--answered N` は質問 #N の最初の選択肢で終了です。`merge` という言葉は PR がマージされると終わります。リストがなければ、承認でタスクが完了します |
+| `kiwi task add … --then "言葉"` | 承認後の手順。繰り返すとリストになります。`--by NAME` は進める人、`--wait "24h 理由"` は保留、`--run ID --expect 2h` は実行待ち、`--answered N` は質問 #N の最初の選択肢で終了です。`merge` という言葉は PR がマージされると終わります。`--then` を付けなければ、タスクはチャンネルの既定の手順を受け継ぎます。`--then none` は手順なしを指定し、手順のないタスクだけが承認で完了します |
 | `kiwi task landed T7 [--step ID] [--link URL] ["メモ"]` | 現在の手順が終わったことを、進める人、リード、または人が伝えます。再試行は同じ `--step` を指定するので、次の手順を終わらせることはありません |
 | `kiwi task steps T7` | 手順とその ID。リードまたは人が変更でき（`add`、`remove`、`move`、`by`、`skip`、`wait`、`run`）、レビューは再開されません |
 | `kiwi task close T7 "理由"` | リードまたは人: 残りの手順なしで完了にし、理由を残します |

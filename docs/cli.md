@@ -63,7 +63,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi task who T7` | Who has the context for it, with the reasons |
 | `kiwi task proof T7 URL` | Evidence on the task: a preview, a recording |
 | `kiwi task proof T7 --run ID` | A task with no pull request declares the run it ships as, before its review (`task review T7 --run ID`) |
-| `kiwi task add … --then "words"` | A step after approval; repeat it for a list. `--by NAME` is who moves it, `--wait "24h why"` holds it, `--run ID --expect 2h` waits on a run, `--answered N` ends on question #N's first option. The word `merge` ends when the pull request merges. No list: approval finishes the task |
+| `kiwi task add … --then "words"` | A step after approval; repeat it for a list. `--by NAME` is who moves it, `--wait "24h why"` holds it, `--run ID --expect 2h` waits on a run, `--answered N` ends on question #N's first option. The word `merge` ends when the pull request merges. Without `--then`, the task takes the channel's default steps; `--then none` asks for no steps, and only a task with no steps is done on approval |
 | `kiwi task landed T7 [--step ID] [--link URL] ["note"]` | The current step is done: its mover, the lead or a person says so. A retry names the same `--step`, so it never ends the next one |
 | `kiwi task steps T7` | Its steps with their ids. The lead or a person changes them (`add`, `remove`, `move`, `by`, `skip`, `wait`, `run`), which never reopens review |
 | `kiwi task close T7 "why"` | The lead or a person: done without its remaining steps, with the reason kept |

@@ -64,7 +64,7 @@ kiwi ask-human --holds T7 --option "A: keep clearing" --option "B: rebuild dedup
 2. 리뷰어는 자신이 읽은 라운드를 지정해 `kiwi task approve T7 --round N` 또는 `kiwi task reject T7 --round N`으로 답합니다.
 3. 반려하면 작업이 작업 소유자에게 돌아갑니다. 열려 있는 라운드가 아닌 라운드에 대한 판정은 어디서든 거부되므로, 늦게 도착한 리뷰가 더 새로운 작업에 반영되는 일은 없습니다.
 
-판정은 Kiwi의 라운드와 작업 스레드에 남습니다. 리뷰어가 PR에 옮겨 적지 않으며, Kiwi는 GitHub에서 병합을 막지 않습니다.
+판정은 Kiwi의 라운드와 작업 스레드에 남습니다. 리뷰어가 PR에 옮겨 적지 않으며, Kiwi는 GitHub에서 병합을 막지 않습니다. 이는 판정에만 해당합니다. 프로젝트 자체 규칙이 PR에 요구하는 댓글은 그대로 PR에 남깁니다. 예를 들어 Channels 저장소에서는 격리된 PR의 `/vouch`가 그렇습니다.
 
 ### 리뷰어가 자리에 없을 때
 
@@ -72,7 +72,7 @@ kiwi ask-human --holds T7 --option "A: keep clearing" --option "B: rebuild dedup
 
 ## 승인 뒤: 반영 단계
 
-단계가 없는 작업은 승인되면 끝납니다. 단계가 있는 작업은 마지막 단계가 끝날 때까지 **반영 중**입니다.
+`--then` 없이 추가한 작업은 소유자가 정한 채널의 기본 단계를 물려받습니다. `--then none`은 단계 없음을 지정합니다. 단계가 없는 작업은 승인되면 끝납니다. 단계가 있는 작업은 마지막 단계가 끝날 때까지 **반영 중**입니다.
 
 ```bash
 kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to staging" --by gentle-otter --then "check staging" --by jow
@@ -86,7 +86,7 @@ kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to st
 
 ## 누구 차례인가
 
-열린 작업에는 항상 **차례**인 사람이나 에이전트가 하나 있습니다. 작업의 상태에서 정해지며, 손으로 지정하는 사람은 없습니다. `kiwi status`와 앱이 보여 줍니다.
+열린 작업이 누구 **차례**인지는 Kiwi가 작업의 상태에서 정합니다. 손으로 지정하는 사람은 없습니다. `kiwi status`와 `kiwi task`가 보여 줍니다.
 
 | 작업 상태 | 누구 차례 |
 | --- | --- |
@@ -99,7 +99,7 @@ kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to st
 | 열린 질문에 묶여 있음 | 상태와 관계없이, 처음 질문받은 사람 |
 | 반영 중 | 현재 단계를 진행하는 사람 |
 
-차례인 구성원이 채널을 떠났거나 채널에 리드가 없으면, 차례는 채널 소유자에게 넘어갑니다.
+실행을 기다리거나 정해진 시각까지 보류 중인 단계는, 기다리는 동안 누구의 차례도 아닙니다. 차례인 구성원이 채널을 떠났거나 채널에 리드가 없으면, 차례는 채널 소유자에게 넘어갑니다.
 
 ## 더 읽어 보기
 

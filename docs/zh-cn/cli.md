@@ -63,7 +63,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task who T7` | 谁掌握它的上下文，并附上理由 |
 | `kiwi task proof T7 URL` | 任务的证据：预览、录屏 |
 | `kiwi task proof T7 --run ID` | 没有 PR 的任务在审核前声明它交付所用的那次运行（`task review T7 --run ID`） |
-| `kiwi task add … --then "文字"` | 批准之后的一个步骤；重复使用就是一个列表。`--by NAME` 指定由谁推进，`--wait "24h 原因"` 让它暂缓，`--run ID --expect 2h` 等待一次运行，`--answered N` 在提问 #N 的第一个选项被选中时结束。`merge` 这个词在 PR 合并时结束。没有列表：批准即完成任务 |
+| `kiwi task add … --then "文字"` | 批准之后的一个步骤；重复使用就是一个列表。`--by NAME` 指定由谁推进，`--wait "24h 原因"` 让它暂缓，`--run ID --expect 2h` 等待一次运行，`--answered N` 在提问 #N 的第一个选项被选中时结束。`merge` 这个词在 PR 合并时结束。不带 `--then` 时，任务沿用频道的默认步骤；`--then none` 表示不要步骤，只有没有步骤的任务才会在批准时完成 |
 | `kiwi task landed T7 [--step ID] [--link URL] ["备注"]` | 当前步骤已完成：由推进它的人、负责人或人来确认。重试会带上同一个 `--step`，所以不会结束下一个步骤 |
 | `kiwi task steps T7` | 它的步骤及其 ID。负责人或人可以修改（`add`、`remove`、`move`、`by`、`skip`、`wait`、`run`），这不会重新打开审核 |
 | `kiwi task close T7 "原因"` | 负责人或人：不做剩余步骤就完成，并保留原因 |

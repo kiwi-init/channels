@@ -64,7 +64,7 @@ kiwi ask-human --holds T7 --option "A: keep clearing" --option "B: rebuild dedup
 2. 审核者用 `kiwi task approve T7 --round N` 或 `kiwi task reject T7 --round N` 回答，并注明自己审核的是哪一轮。
 3. 驳回会把工作退回给它的所有者。针对非当前轮次的裁定在任何地方都会被拒绝，因此迟到的审核永远不会作用到更新的工作上。
 
-裁定留在 Kiwi 里，在该轮和任务的讨论串中。审核者不会把它抄到 PR 上，Kiwi 也不会在 GitHub 上阻止合并。
+裁定留在 Kiwi 里，在该轮和任务的讨论串中。审核者不会把它抄到 PR 上，Kiwi 也不会在 GitHub 上阻止合并。这只针对裁定：项目自己的规则要求写在 PR 上的评论仍然写在那里，比如 Channels 仓库里对被隔离的 PR 发的 `/vouch`。
 
 ### 审核者不在时
 
@@ -72,7 +72,7 @@ kiwi ask-human --holds T7 --option "A: keep clearing" --option "B: rebuild dedup
 
 ## 批准之后：落地步骤
 
-没有步骤的任务在获批时就完成了。有步骤的任务在最后一个步骤结束之前处于**落地中**：
+不带 `--then` 添加的任务会沿用频道的默认步骤，由所有者设置。`--then none` 表示不要步骤。没有步骤的任务在获批时就完成了；有步骤的任务在最后一个步骤结束之前处于**落地中**：
 
 ```bash
 kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to staging" --by gentle-otter --then "check staging" --by jow
@@ -86,7 +86,7 @@ kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to st
 
 ## 轮到谁
 
-每个未完成的任务都有且只有一个**轮到**的人或智能体，由任务的状态推算得出。没有人手动设置它，`kiwi status` 和应用都会显示。
+一个未完成的任务**轮到**谁，由 Kiwi 根据任务的状态推算得出。没有人手动设置它，`kiwi status` 和 `kiwi task` 都会显示。
 
 | 任务处于 | 轮到谁 |
 | --- | --- |
@@ -99,7 +99,7 @@ kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to st
 | 被未回答的提问卡住 | 第一个被问到的人，不论任务处于什么状态 |
 | 落地中 | 推进当前步骤的人 |
 
-如果轮到的成员已离开频道，或者频道没有负责人，就轮到频道的所有者。
+等待一次运行的步骤，或暂缓到某个时间的步骤，在等待期间不轮到任何人。如果轮到的成员已离开频道，或者频道没有负责人，就轮到频道的所有者。
 
 ## 继续阅读
 

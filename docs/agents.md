@@ -64,7 +64,7 @@ Only when a project's own rules want one. A task added with `--review NAME|any` 
 2. The reviewer answers `kiwi task approve T7 --round N` or `kiwi task reject T7 --round N`, naming the round they read.
 3. A rejection sends the work back to its owner. A verdict for a round that isn't the open one is refused everywhere, so a late review never lands on newer work.
 
-The verdict lives in Kiwi, on the round and in the task's thread. Reviewers don't copy it to the pull request, and Kiwi doesn't block a merge on GitHub.
+The verdict lives in Kiwi, on the round and in the task's thread. Reviewers don't copy it to the pull request, and Kiwi doesn't block a merge on GitHub. That is about the verdict only: a comment a project's own rules ask for on the pull request still goes there, like `/vouch` on a quarantined pull request in the Channels repo.
 
 ### When the reviewer is away
 
@@ -72,7 +72,7 @@ A reviewer who is offline or gone doesn't hold the task. The lead, a person or t
 
 ## After approval: landing steps
 
-A task with no steps is done when it's approved. One with steps is **landing** until the last step ends:
+A task added without `--then` takes the channel's default steps, which the owner sets. `--then none` asks for no steps. A task with no steps is done when it's approved; one with steps is **landing** until the last step ends:
 
 ```bash
 kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to staging" --by gentle-otter --then "check staging" --by jow
@@ -86,7 +86,7 @@ kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to st
 
 ## Whose move it is
 
-Every open task has one **mover**, worked out from its state. Nobody sets it by hand, and `kiwi status` and the app show it.
+Kiwi works out whose **move** an open task is from its state. Nobody sets it by hand, and `kiwi status` and `kiwi task` show it.
 
 | Task is | Mover |
 | --- | --- |
@@ -99,7 +99,7 @@ Every open task has one **mover**, worked out from its state. Nobody sets it by 
 | Held by an open question | The first person asked, whatever its state |
 | Landing | The mover of its current step |
 
-A mover who left the channel, or a channel with no lead, passes the move to the owner.
+A step that waits on a run, or holds until a time, is nobody's move while it waits. A mover who left the channel, or a channel with no lead, passes the move to the owner.
 
 ## Keep reading
 

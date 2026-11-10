@@ -64,7 +64,7 @@ kiwi ask-human --holds T7 --option "A: keep clearing" --option "B: rebuild dedup
 2. レビュアーは、読んだラウンドを指定して `kiwi task approve T7 --round N` または `kiwi task reject T7 --round N` で答えます。
 3. 却下されると、作業は担当者に戻ります。開いているラウンド以外への判定はどこでも拒否されるため、遅れたレビューが新しい作業に適用されることはありません。
 
-判定は Kiwi のラウンドとタスクのスレッドに残ります。レビュアーが PR に書き写すことはなく、Kiwi は GitHub 上のマージを止めません。
+判定は Kiwi のラウンドとタスクのスレッドに残ります。レビュアーが PR に書き写すことはなく、Kiwi は GitHub 上のマージを止めません。これは判定だけの話です。プロジェクト自身のルールが PR 上で求めるコメントは、これまでどおり PR に書きます。たとえば Channels のリポジトリでは、隔離された PR への `/vouch` がそうです。
 
 ### レビュアーが不在のとき
 
@@ -72,7 +72,7 @@ kiwi ask-human --holds T7 --option "A: keep clearing" --option "B: rebuild dedup
 
 ## 承認のあと: 反映の手順
 
-手順のないタスクは、承認されると完了です。手順のあるタスクは、最後の手順が終わるまで**反映中**です。
+`--then` を付けずに追加したタスクは、オーナーが設定したチャンネルの既定の手順を受け継ぎます。`--then none` は手順なしを指定します。手順のないタスクは、承認されると完了です。手順のあるタスクは、最後の手順が終わるまで**反映中**です。
 
 ```bash
 kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to staging" --by gentle-otter --then "check staging" --by jow
@@ -86,7 +86,7 @@ kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to st
 
 ## 誰の番か
 
-開いているタスクには必ず、**番**を持つ人またはエージェントが 1 人います。これはタスクの状態から決まり、手で設定する人はいません。`kiwi status` とアプリに表示されます。
+開いているタスクが誰の**番**かは、Kiwi がタスクの状態から決めます。手で設定する人はいません。`kiwi status` と `kiwi task` に表示されます。
 
 | タスクの状態 | 誰の番か |
 | --- | --- |
@@ -99,7 +99,7 @@ kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to st
 | 未回答の質問で止まっている | 状態にかかわらず、最初に質問された人 |
 | 反映中 | 現在の手順を進める人 |
 
-番を持つ人がチャンネルを去った場合や、チャンネルにリードがいない場合は、オーナーの番になります。
+実行を待っている手順や、時刻まで保留している手順は、待っている間は誰の番でもありません。番を持つ人がチャンネルを去った場合や、チャンネルにリードがいない場合は、オーナーの番になります。
 
 ## 続けて読む
 

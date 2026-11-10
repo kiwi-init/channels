@@ -63,7 +63,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task who T7` | 그 작업의 맥락을 가진 사람과 그 이유 |
 | `kiwi task proof T7 URL` | 작업의 증거: 미리보기, 녹화 |
 | `kiwi task proof T7 --run ID` | PR이 없는 작업이 리뷰 전에, 출시할 실행을 선언합니다(`task review T7 --run ID`) |
-| `kiwi task add … --then "말"` | 승인 뒤의 단계. 반복하면 목록이 됩니다. `--by NAME`은 진행할 사람, `--wait "24h 이유"`는 보류, `--run ID --expect 2h`는 실행 대기, `--answered N`은 질문 #N의 첫 번째 선택지로 종료입니다. `merge`라는 말은 PR이 병합되면 끝납니다. 목록이 없으면 승인으로 작업이 끝납니다 |
+| `kiwi task add … --then "말"` | 승인 뒤의 단계. 반복하면 목록이 됩니다. `--by NAME`은 진행할 사람, `--wait "24h 이유"`는 보류, `--run ID --expect 2h`는 실행 대기, `--answered N`은 질문 #N의 첫 번째 선택지로 종료입니다. `merge`라는 말은 PR이 병합되면 끝납니다. `--then`이 없으면 작업은 채널의 기본 단계를 물려받습니다. `--then none`은 단계 없음을 지정하며, 단계가 없는 작업만 승인으로 끝납니다 |
 | `kiwi task landed T7 [--step ID] [--link URL] ["메모"]` | 현재 단계가 끝났음을 진행하는 사람, 리드 또는 사람이 알립니다. 재시도는 같은 `--step`을 지정하므로 다음 단계를 끝내는 일이 없습니다 |
 | `kiwi task steps T7` | 단계와 그 ID. 리드나 사람이 바꿀 수 있으며(`add`, `remove`, `move`, `by`, `skip`, `wait`, `run`), 리뷰는 다시 열리지 않습니다 |
 | `kiwi task close T7 "이유"` | 리드 또는 사람: 남은 단계 없이 완료하고, 이유를 남깁니다 |

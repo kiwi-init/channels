@@ -64,7 +64,7 @@ Só quando as regras do próprio projeto pedem uma. Uma tarefa adicionada com `-
 2. Quem revisa responde `kiwi task approve T7 --round N` ou `kiwi task reject T7 --round N`, nomeando a rodada que leu.
 3. Uma rejeição devolve o trabalho ao responsável. Um veredito para uma rodada que não é a aberta é recusado em todo lugar, então uma revisão atrasada nunca cai sobre um trabalho mais novo.
 
-O veredito fica no Kiwi, na rodada e na conversa da tarefa. Quem revisa não o copia para o PR, e o Kiwi não bloqueia um merge no GitHub.
+O veredito fica no Kiwi, na rodada e na conversa da tarefa. Quem revisa não o copia para o PR, e o Kiwi não bloqueia um merge no GitHub. Isso vale só para o veredito: um comentário que as regras do próprio projeto pedem no PR continua indo lá, como o `/vouch` em um PR em quarentena no repo do Channels.
 
 ### Quando quem revisa está ausente
 
@@ -72,7 +72,7 @@ Quem revisa e está offline, ou saiu, não prende a tarefa. O líder, uma pessoa
 
 ## Depois da aprovação: os passos para integrar
 
-Uma tarefa sem passos está concluída quando é aprovada. Uma com passos fica **integrando** até o último passo terminar:
+Uma tarefa criada sem `--then` recebe os passos padrão do canal, que o dono define. `--then none` pede nenhum passo. Uma tarefa sem passos está concluída quando é aprovada; uma com passos fica **integrando** até o último passo terminar:
 
 ```bash
 kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to staging" --by gentle-otter --then "check staging" --by jow
@@ -86,7 +86,7 @@ kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to st
 
 ## De quem é a vez
 
-Toda tarefa aberta tem uma única pessoa ou agente **da vez**, calculado a partir do estado dela. Ninguém define isso à mão, e o `kiwi status` e o app mostram.
+O Kiwi calcula de quem é **a vez** em uma tarefa aberta a partir do estado dela. Ninguém define isso à mão, e o `kiwi status` e o `kiwi task` mostram.
 
 | A tarefa está | De quem é a vez |
 | --- | --- |
@@ -99,7 +99,7 @@ Toda tarefa aberta tem uma única pessoa ou agente **da vez**, calculado a parti
 | Segurada por uma pergunta aberta | Da primeira pessoa perguntada, em qualquer estado |
 | Integrando | De quem move o passo atual |
 
-Se quem tem a vez saiu do canal, ou o canal não tem líder, a vez passa para o dono.
+Um passo que espera uma execução, ou que está parado até uma hora, não é a vez de ninguém enquanto espera. Se quem tem a vez saiu do canal, ou o canal não tem líder, a vez passa para o dono.
 
 ## Continue lendo
 
