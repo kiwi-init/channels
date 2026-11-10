@@ -178,6 +178,7 @@ async function staysInPane(page: Page): Promise<string | null> {
 }
 
 const TALL_H = 1500;
+const NARROW_WRAP_PX = 940;
 const SPLIT = Math.round(TALL_H * 0.42);
 const CHAT_MAX_PX = 420;
 
@@ -248,6 +249,29 @@ try {
     if (why) failed++;
     console.log(`${why ? "✗" : "✓"} spec-draft at 1400x480: ${what}${why ? `: ${why}` : ""}`);
   }
+  const narrow = await browser.newPage({ viewport: { width: 900, height: 1400 } });
+  await narrow.addInitScript((wide: number) => {
+    const seen = { frames: 0, wide: 0 };
+    Object.assign(window, { narrowSeen: seen });
+    const look = () => {
+      const wrap = document.querySelector<HTMLElement>(".spec-doc-wrap");
+      if (wrap) {
+        seen.frames++;
+        if (wrap.classList.contains("is-wide") && wrap.clientWidth < wide) seen.wide++;
+      }
+      if (seen.frames < 60) requestAnimationFrame(look);
+    };
+    requestAnimationFrame(look);
+  }, NARROW_WRAP_PX);
+  await narrow.goto(`http://127.0.0.1:${server.port}/?shot=spec-draft`);
+  await narrow.waitForSelector(".spec-doc-wrap", { timeout: 15_000 });
+  await narrow.waitForTimeout(1500);
+  const flash = await narrow.evaluate(() => (window as unknown as { narrowSeen: { frames: number; wide: number } }).narrowSeen);
+  const flashed =
+    flash.frames === 0 ? "no frame showed the spec" : flash.wide > 0 ? `${flash.wide} of ${flash.frames} frames drew the two-column layout in a ${NARROW_WRAP_PX - 1} px or narrower column` : null;
+  if (flashed) failed++;
+  console.log(`${flashed ? "✗" : "✓"} spec-draft at 900x1400: a narrow window draws the spec in one column from its first frame${flashed ? `: ${flashed}` : ""}`);
+  await narrow.close();
   const tall = await browser.newPage({ viewport: { width: 1100, height: TALL_H } });
   await tall.goto(`http://127.0.0.1:${server.port}/?shot=spec-draft`);
   await tall.waitForSelector(".tall-work .spec-doc-wrap", { timeout: 15_000 });

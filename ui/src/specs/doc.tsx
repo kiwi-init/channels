@@ -76,7 +76,9 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
   useLayoutEffect(() => {
     const el = wrap.current
     if (!el) return
-    const watch = new ResizeObserver(() => setWide(el.clientWidth >= WIDE_PX))
+    const fit = () => setWide(el.clientWidth >= WIDE_PX)
+    fit()
+    const watch = new ResizeObserver(fit)
     watch.observe(el)
     return () => watch.disconnect()
   }, [])
