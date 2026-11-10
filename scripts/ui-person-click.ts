@@ -63,14 +63,21 @@ try {
   }
   expect(opened !== "", `a click on a mention of someone else opens the direct conversation with them (from ${room} to ${opened || "nowhere"})`);
   expect(!(await profile(page)), "and no profile opens on the way");
-  if (opened) {
-    const theirs = page.locator("article.msg .msg-name").filter({ hasText: opened }).first();
-    const inside = (await theirs.count()) ? theirs : page.locator("article.msg .msg-name").first();
-    await inside.click();
+  await page.goto(`http://127.0.0.1:${server.port}/?shot=dm`);
+  await page.locator("article.msg").first().waitFor();
+  await page.waitForTimeout(1200);
+  const dm = await place(page);
+  const names = page.locator("article.msg .msg-name").filter({ visible: true });
+  const shown = await names.allInnerTexts();
+  const at = shown.findIndex((n) => n.trim() === dm);
+  expect(at >= 0, `the demo direct conversation with ${dm} shows their name on a message (${shown.join(", ")})`);
+  if (at >= 0) {
+    await names.nth(at).click({ timeout: 5000 });
     await settle(page);
-    const stayed = (await place(page)) === opened;
-    expect(stayed, `inside that conversation a click on a name stays there (${await place(page)})`);
-    expect((await theirs.count()) === 0 || (await profile(page)), "and a click on their own name opens their profile");
+    expect(await profile(page), "inside the conversation with someone, a click on their name opens their profile");
+    await page.keyboard.press("Escape");
+    await settle(page);
+    expect((await place(page)) === dm, `and the conversation stays where it was (${await place(page)})`);
   }
 } finally {
   await browser.close();
