@@ -39,8 +39,6 @@ import {
 import type { PermissionReply, PermissionSettled, PermissionShown } from "../permission.ts";
 import { MissingKey, Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
-import { downgradeRefusal, type Outgoing } from "../ship-gate.ts";
-import type { ReviewCheck } from "./github.ts";
 import { RelayError, Unreachable, type Refused } from "./errors.ts";
 import { received } from "./history.ts";
 import { MAX_WAKE } from "../push.ts";
@@ -77,7 +75,6 @@ export interface SendOptions {
   slot?: { name: string; ttl: number };
   wake?: readonly string[];
   free?: string[];
-  tickets?: readonly string[];
 }
 
 export interface SendFx {
@@ -115,7 +112,6 @@ const patient = <A, E, R>(attempt: Effect.Effect<A, E, R>, left: number): Effect
 
 export class ChannelSending {
   onSent: ((seq: number, message: Message | null) => void) | null = null;
-  downgradesFor: ((m: Outgoing) => ReviewCheck[]) | null = null;
 
   constructor(
     private readonly ch: ChannelCore,
@@ -192,17 +188,6 @@ export class ChannelSending {
         if (!known(named)) yield* this.ch.fx.history(listed?.since ?? 0).pipe(Effect.catchCause(() => Effect.succeed(null)));
       }
       if (named && !known(named)) return yield* new Rejected(`this app doesn't know a room ${named} yet, so it won't send there: fetch the channel and try again`);
-      const given = opts.tickets ?? [];
-      const downgrade = Effect.gen({ self: this }, function* () {
-        const own: string[] = [];
-        for (const c of this.downgradesFor?.(payload) ?? []) {
-          const r = yield* this.ch.fx.postReviewCheck(c).pipe(Effect.mapError((err) => new Rejected(downgradeRefusal(c, err))));
-          if (r.ticket) own.push(r.ticket);
-        }
-        return own;
-      });
-      const own = yield* downgrade;
-      let tickets = [...given, ...own];
       const signed = yield* Effect.promise(() => sign(this.ch.identity, payload));
       const cid = opts.cid ?? b64url(crypto.getRandomValues(new Uint8Array(16)));
       const inside = named ? (this.ch.memberRooms.get(named)?.members ?? this.ch.roomNow.get(named)?.meta?.members) : undefined;
@@ -224,7 +209,7 @@ export class ChannelSending {
         const free = freeing.length ? { free: yield* Effect.promise(() => Promise.all(freeing.map((n) => slotId(key, roomId, n)))) } : {};
         const stored = yield* this.ch.request<{ seq: number; ts?: number }>("/messages", {
           method: "POST",
-          body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}), ...(tickets.length ? { tickets } : {}) }),
+          body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}) }),
         });
         if (!Number.isSafeInteger(stored.seq) || stored.seq < 1) return yield* notTheRelay(this.ch.relay);
         return stored;
@@ -246,7 +231,7 @@ export class ChannelSending {
         return stored.seq;
       });
       const once = Effect.gen({ self: this }, function* () {
-        const wire = slotted || tickets.length ? undefined : [...this.live.wires].at(-1);
+        const wire = slotted ? undefined : [...this.live.wires].at(-1);
         if (!wire) return yield* posted;
         const { e, sealed } = yield* sealNow;
         const acked = yield* wire.send(sealed, e, signed, cid, wake).pipe(
@@ -259,16 +244,7 @@ export class ChannelSending {
         this.onSent?.(acked, null);
         return acked;
       });
-      return yield* patient(once, RATE_RETRIES).pipe(
-        Effect.catchIf(
-          (err) => own.length > 0 && !given.length && err instanceof RelayError && err.tag === "Fenced",
-          () =>
-            Effect.gen(function* () {
-              tickets = yield* downgrade;
-              return yield* patient(once, RATE_RETRIES);
-            }),
-        ),
-      );
+      return yield* patient(once, RATE_RETRIES);
     }),
   };
 }

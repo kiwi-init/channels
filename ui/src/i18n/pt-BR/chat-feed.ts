@@ -133,7 +133,7 @@ export default {
   "chat.suggest.people": "Pessoas",
   "chat.suggest.person": "pessoa",
   "chat.suggest.agent": "agente",
-  "chat.updates.panel.label": "Atualizações",
+  "chat.updates.panel.label": "Atividade",
   "chat.updates.panel.show.older": "Mostrar anteriores",
   "chat.updates.panel.fewer": "menos",
   "chat.updates.panel.more": { one: "mais {count}", other: "mais {count}" },

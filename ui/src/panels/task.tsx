@@ -177,7 +177,7 @@ function Props({ channel, task, may }: { channel: Channel; task: Task; may: bool
               <span className="cset-mono">{task.lands.then}</span>
               {task.lands.by && tr("panels.task.lands.by", { who: <Who channel={channel} name={task.lands.by} /> })}
               {task.status === "landing" && <span className="dimmer">{t("panels.task.lands.approved")}</span>}
-              {task.lands.waits && <span className={task.lands.bypassed ? "tone-alert" : "dimmer"}> · {task.lands.waits}</span>}
+              {task.lands.waits && <span className="dimmer"> · {task.lands.waits}</span>}
             </dd>
           </>
         )}

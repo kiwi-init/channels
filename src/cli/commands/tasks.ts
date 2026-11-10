@@ -4,7 +4,7 @@ import { contextLineOn, Keystore, loadConfig } from "../../config.ts";
 import { runPin, wellFormedRunId } from "@kiwi/core/checks.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, issueLinkText, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
-import { isLanding, reviewCheckOf, type Landing, type TaskState } from "@kiwi/core/protocol.ts";
+import { reviewCheckOf, type TaskState } from "@kiwi/core/protocol.ts";
 import { linkedPr } from "@kiwi/core/stage.ts";
 import { compareHeads, gitIn, repoOf, targetOf } from "../../approval-kept.ts";
 import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
@@ -20,15 +20,9 @@ import { LOOP_ENV } from "../../hooks/loop-wait.ts";
 import { askFresh, LOOP_TASK_ENV } from "../../loop/fresh.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
-const LANDING_USAGE = "task edit --then takes merge, release:tag, release:npm:PKG@RANGE, run or none; a list of steps changes with kiwi task steps T7";
+const EDIT_THEN_GONE = "task edit no longer takes --then: a task lands by its steps, and the lead or a person changes them with kiwi task steps T7 (add, remove, move, by, skip)";
+const STARTED_GONE = "--started is gone: Kiwi no longer orders a run's start against its approval, so task proof T7 --run ID is enough";
 const ANCHORS = "--ask N (the person's message #N it answers), --from T… (the task it comes from) or --issue N (a GitHub issue)";
-
-const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
-
-const startedAt = (said: string): number | undefined => {
-  const ms = ISO_TIME.test(said.trim()) ? Date.parse(said.trim()) : Number.NaN;
-  return Number.isSafeInteger(ms) && ms > 0 ? ms : undefined;
-};
 
 const board = () =>
   offlineOk(
@@ -88,7 +82,7 @@ export const taskCommands: Record<string, Command> = {
           const lands = landingFromOptions();
           if (lands.kind === "bad") return yield* die(lands.why);
           const landing = {
-            ...(lands.kind === "then" ? { then: lands.then } : lands.kind === "steps" ? { steps: lands.steps } : {}),
+            ...(lands.kind === "none" ? { noSteps: true as const } : lands.kind === "steps" ? { steps: lands.steps } : {}),
             ...(opt.lander?.trim() ? { lander: opt.lander.trim() } : {}),
           };
           if (opt.issue !== undefined) {
@@ -153,22 +147,18 @@ export const taskCommands: Record<string, Command> = {
           if (opt.body !== undefined && opt.file !== undefined) return yield* die('give the new body once: --body "…" or --file spec.md');
           const detail = opt.file !== undefined ? (yield* readText(opt.file)).trim() || (yield* die(`${opt.file} is empty`)) : opt.body?.trim();
           const title = opt.title?.trim();
-          const said = opt.then?.map((x) => x.trim());
-          const then: Landing | undefined = said === undefined ? undefined : said.length === 1 && isLanding(said[0]) ? said[0] : yield* die(LANDING_USAGE);
+          if (opt.then !== undefined) return yield* die(EDIT_THEN_GONE);
           const stays = opt.review !== undefined ? openRound(t) : undefined;
           const staysNote = stays ? `round ${stays.n} stays open ${stays.at ? `at ${stays.at}` : "at no commit"}` : "";
           const change = {
             ...(title ? { title } : {}),
             ...(detail !== undefined ? { detail } : {}),
             ...(opt.owner !== undefined ? { owner: opt.owner.trim() || null } : {}),
-            ...(then ? { then } : {}),
             ...(opt.lander !== undefined ? { lander: opt.lander.trim() || null } : {}),
             ...(opt.review !== undefined ? { review: opt.review, ...(staysNote ? { note: staysNote } : {}) } : {}),
           };
           if (!Object.keys(change).length && opt.goal === undefined)
-            return yield* die(
-              'usage: kiwi task edit T7 [--title "…"] [--body "…" | --file spec.md] [--owner NAME] [--then merge|release:tag|release:npm:PKG@RANGE|run|none] [--lander NAME] [--review NAME|any] [--goal "…"]',
-            );
+            return yield* die('usage: kiwi task edit T7 [--title "…"] [--body "…" | --file spec.md] [--owner NAME] [--lander NAME] [--review NAME|any] [--goal "…"]');
           const lines: string[] = [];
           if (Object.keys(change).length) {
             const after = (yield* s.taskUpdate(id, change)).tasks.get(id)!;
@@ -176,7 +166,6 @@ export const taskCommands: Record<string, Command> = {
               title ? "title" : null,
               detail !== undefined ? "body" : null,
               opt.owner !== undefined ? `owner (${after.owner ?? "nobody"})` : null,
-              then ? `landing step (${after.then ?? "none"})` : null,
               opt.lander !== undefined ? `lander (${after.lander ?? after.owner ?? "its owner"})` : null,
               opt.review !== undefined ? `reviewer (${after.review === "*" ? "anyone who hasn't worked on it" : (after.review ?? "nobody")}${staysNote ? `; ${staysNote}` : ""})` : null,
             ]
@@ -243,7 +232,7 @@ export const taskCommands: Record<string, Command> = {
         if (runId !== undefined && opt.at?.trim()) return yield* die("--at pins a round to a commit and --run to a run: give one");
         if (runId !== undefined && opt.runs !== undefined) return yield* die("--runs names the CI runs at a PR's head, and a run task has no head: leave it out");
         const pinned = runId !== undefined && sub !== "proof" ? runPin(runId) : opt.at?.trim() || undefined;
-        if (opt.started !== undefined && (sub !== "proof" || runId === undefined)) return yield* die("--started goes on task proof T7 --run ID: the run's own start time");
+        if (opt.started !== undefined) return yield* die(STARTED_GONE);
         const judged = { ...(roundNo !== undefined ? { round: roundNo } : {}), ...(pinned ? { at: pinned } : {}) };
         const runList = opt.runs?.replace(/\s/g, "");
         if (runList !== undefined && sub !== "approve") return yield* die("--runs goes on task approve: the CI runs the PASS relies on");
@@ -301,14 +290,10 @@ export const taskCommands: Record<string, Command> = {
           if (opt.fresh) askFresh(s.alias, s.me, id);
         } else if (sub === "proof") {
           const url = args[3];
-          if (url === undefined && runId === undefined) return yield* die('usage: kiwi task proof T7 https://… [--label "preview"] [--note "…"], or kiwi task proof T7 --run ID [--started TIME]');
-          const started =
-            opt.started === undefined
-              ? undefined
-              : (startedAt(opt.started) ?? (yield* die(`"${opt.started}" isn't a start time: give the run's own, like 2026-11-06T10:00:00Z (a Job's status.startTime)`)));
+          if (url === undefined && runId === undefined) return yield* die('usage: kiwi task proof T7 https://… [--label "preview"] [--note "…"], or kiwi task proof T7 --run ID');
           state = yield* s.taskUpdate(id, {
             ...(url !== undefined ? { proof: { url, ...(opt.label ? { label: opt.label } : {}) } } : {}),
-            ...(runId !== undefined ? { run: { id: runId, ...(started !== undefined ? { started } : {}) } } : {}),
+            ...(runId !== undefined ? { run: { id: runId } } : {}),
             ...(opt.note ? { note: opt.note } : {}),
           });
         } else return yield* die(`unknown task command "${sub}"`);

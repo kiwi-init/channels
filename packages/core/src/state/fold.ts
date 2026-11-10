@@ -20,7 +20,7 @@ import { inlineText } from "../membership.ts";
 import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
-import { answerChecks, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
+import { answerChecks, checkFrom, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
 import { checkAnswered, checkClosed, checkStep, migrateChecks, questionAnswered, questionWatched, seedSteps } from "./landing-steps.ts";
 import { choiceIn } from "../checks.ts";
 import { stepsOfThen } from "../steps.ts";
@@ -91,7 +91,15 @@ const STALE_MS = 24 * 3_600_000;
 const SENT_WINDOW_MS = 2 * STALE_MS;
 const KEEP_SEQS = 5_000;
 const SENT_CAP = 3_000;
+const STEP_RULES = 27;
 const closedLongAgo = (at: number, hw: number) => hw - at > GITHUB_CLOSED_KEEP_MS;
+
+function taskFromOlder(t: FoldBase["tasks"][number], stepless: boolean): Task {
+  const rest = omit(t, "then", "landed");
+  const task: Task = rest.run ? { ...rest, run: { id: rest.run.id, seq: rest.run.seq, by: rest.run.by } } : rest;
+  if (stepless && t.then && !task.steps && task.state !== "done") seedSteps(task, stepsOfThen(t.then), "then");
+  return task;
+}
 
 function idHash(id: string): number {
   let a = 0xdeadbeef;
@@ -309,10 +317,10 @@ function folding(
       if (target?.pk === f.pk) setRole(target, f.role, f.about);
     }
   };
-  const runsKept = !!from && !olderRules(from);
-  const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, runsKept || !t.run ? t : { ...t, run: { ...omit(t.run, "start"), blind: true } }]));
-  const stepless = !!from && olderRules(from);
-  if (stepless) for (const t of tasks.values()) if (t.then && !t.steps && t.state !== "done") seedSteps(t, stepsOfThen(t.then), "then");
+  const older = !!from && olderRules(from);
+  const runsKept = !!from && !older;
+  const stepless = older && (from.rules ?? 0) < STEP_RULES;
+  const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, older ? taskFromOlder(t, stepless) : t]));
   const facts = new Map<string, Fact>(from?.facts.map((f) => [f.key, f]));
   const docs = new Map<string, string>(from?.docs);
   const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
@@ -354,8 +362,8 @@ function folding(
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
   const askHeads = new Map<number, AskHead>(from?.askHeads?.map((h) => [h.id, h]));
   const specs = new Map<number, Spec>(from?.specs?.map((sp) => [sp.ask, sp]));
-  const checks = new Map<number, CheckState>(from?.checks?.map((c) => [c.seq, { ...c, ...(c.answers ? { answers: [...c.answers] } : {}) }]));
-  if (stepless) migrateChecks(tasks, checks);
+  if (stepless) migrateChecks(tasks, new Map(from?.checks?.map((c) => [c.seq, c])));
+  const checks = new Map<number, CheckState>(from?.checks?.map((c) => [c.seq, checkFrom(c)]));
   const questions = new Map<number, StepQuestion>(from?.stepQuestions?.map((q) => [q.seq, q]));
   const passedAsks = new Map<number, string>(from?.passedAsks);
   const closeOnItsOwn = (ask: number, m: Pick<Message, "seq" | "from">, at: number): void => {
@@ -394,7 +402,6 @@ function folding(
     nicknames,
     setRole,
     tasks,
-    checks,
     facts,
     docs,
     leases,
@@ -422,7 +429,6 @@ function folding(
     landing: from?.landing ?? null,
     landingSteps: from?.landingSteps ?? null,
     passedAsks,
-    merges: from?.merges ?? "agents",
   };
 
   const seen = new Set<number>();
@@ -594,7 +600,8 @@ function folding(
           continue;
         }
         roomOf.set(m.seq, room);
-        openCheck(checks, m);
+        const superseded = openCheck(checks, m);
+        if (superseded !== undefined) closedAsks.add(superseded);
         const opened = checks.get(m.seq);
         if (opened?.seq === m.seq && m.check)
           for (const held of opened.holds) {
@@ -725,7 +732,7 @@ function folding(
             questions.delete(ev.ask);
             const closing = checks.get(ev.ask);
             if (closing && closing.closed === undefined) checkClosed(tasks, closing, { seq: m.seq, by: m.from, at });
-            closeCheck(checks, ev.ask, m);
+            closeCheck(checks, ev.ask, m.seq);
             for (const t of reopens) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, `pre-ship check #${ev.ask} closed after the approval`);
           }
         }
@@ -861,7 +868,6 @@ function folding(
       ...(ctx.landingSteps ? { landingSteps: ctx.landingSteps } : {}),
       ...(passedAsks.size ? { passedAsks: [...passedAsks] } : {}),
       ...(questions.size ? { stepQuestions: [...questions.values()] } : {}),
-      merges: ctx.merges,
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],
       roleSets: [...roleSets],
@@ -973,7 +979,6 @@ function folding(
     branchPrefix: ctx.branchPrefix,
     landing: ctx.landing,
     landingSteps: ctx.landingSteps,
-    merges: ctx.merges,
     reactions,
     edits,
     deleted,

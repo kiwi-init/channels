@@ -3,10 +3,8 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { doneGate } from "@kiwi/core/done-gate.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormed, type Event, type GithubNote, type KeptEvidence, type Message } from "@kiwi/core/protocol.ts";
-import { shipGate } from "@kiwi/core/ship-gate.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { compareHeads, gitIn, type Git } from "../src/approval-kept.ts";
 
@@ -69,10 +67,11 @@ describe("an approval survives a new head on recorded evidence (#3930 §4)", () 
     expect(t.rounds[0]!.stale).toBeUndefined();
     expect(t.rounds[0]!.kept).toEqual([{ ...kept(), seq: evidence.seq, by: "win", rts: evidence.seq }]);
     expect(t.notes.at(-1)!.text).toBe("bbbbbbb is a clean merge of origin/main into the approved aaaaaaa: the approval holds");
-    expect(shipGate(s, t)).toEqual({ open: true });
     const merged = await ev("jon", { op: "github", items: [pr(B, "closed", true)(id)] });
-    const after = fold([...log, evidence, pushed, merged], roster);
-    expect(doneGate({ github: after.github, checks: after.checks, branchPrefix: after.branchPrefix }, after.tasks.get(id)!)?.kind).toBe("landed");
+    const landed = await ev("jon", { op: "task.landed", task: id, artifact: { kind: "pr", repo: "o/r", pr: 7, sha: B } });
+    const after = fold([...log, evidence, pushed, merged, landed], roster);
+    expect(after.rejected.has(landed.seq)).toBe(false);
+    expect(after.tasks.get(id)).toMatchObject({ state: "done", closedSeq: landed.seq });
   });
 
   test("evidence after the push: the task went back to review and returns to landing", async () => {

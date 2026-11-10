@@ -154,7 +154,7 @@ export default {
   "chat.drafts.back.stash": "보내지 못함: {why}. 보관함에 있습니다: {keys}로 다시 불러옵니다{lost}.",
   "chat.drafts.lost.image": "; 이미지는 보관함에 넣지 못했습니다",
   "chat.drafts.lost.images": "; 이미지 {count}개는 보관함에 넣지 못했습니다",
-  "chat.events.updates": "업데이트",
+  "chat.events.updates": "활동",
   "chat.feed.image.loading": "이미지 불러오는 중…",
   "chat.feed.notes.hold.you": "읽기만 하고, 내가 재개할 때까지 행동하지 않습니다.",
   "chat.feed.notes.hold.owner": "읽기만 하고, {name}이(가) 재개할 때까지 행동하지 않습니다.",

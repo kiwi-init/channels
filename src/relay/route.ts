@@ -11,18 +11,17 @@
 // (test/error-texts.test.ts).
 
 import * as Context from "effect/Context";
-import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
 import { verifyRequest } from "@kiwi/core/auth.ts";
-import { b64url, ownerFingerprint } from "@kiwi/core/crypto.ts";
+import { ownerFingerprint } from "@kiwi/core/crypto.ts";
 import { GITHUB_SYNC_LISTS, MAX_BLOB_BYTES, PAGE_LIMIT, reviewCheckOf, wellFormedFreed, wellFormedSendId, wellFormedSlot } from "@kiwi/core/protocol.ts";
 import { PUSH_PATH } from "@kiwi/core/push.ts";
-import { ChannelGone, BadRequest, Fenced, Forbidden, NotFound, NotOwner, Refused, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
+import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, Refused, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
 import { githubLinks, githubRepos, type GithubItem } from "./github.ts";
 import { GithubApp, GithubPush, type GithubReply } from "./github-app.ts";
-import { githubReviewHost, reviewStatus } from "./review-host.ts";
+import { githubReviewHost } from "./review-host.ts";
 import { Human, HUMAN_HEADER, profileOf } from "./human.ts";
 import { betaMessage, BLOCKED_CREATE, inBeta, Policy } from "./policy.ts";
 import { offerPages, PAGE_PATH, servePage } from "./pages.ts";
@@ -93,9 +92,6 @@ import {
   type RequestBody,
   type RoomDb,
   type RoomServices,
-  MAX_TICKETS,
-  TICKET_RE,
-  TICKET_TTL_MS,
 } from "./room.ts";
 
 // ---------- the relay's services ----------
@@ -237,30 +233,6 @@ const connectedCommit = (repo: unknown, sha: unknown) =>
     if (typeof sha !== "string" || !/^[0-9a-f]{7,40}$/i.test(sha)) return yield* new BadRequest({ message: "sha: a commit id" });
     if (typeof repo !== "string" || !db.githubRepos().includes(repo.toLowerCase())) return yield* new BadRequest({ message: "repo: one of the channel's connected repos" });
     return { repo: repo.toLowerCase(), sha: sha.toLowerCase() };
-  });
-
-const MAX_CHECK_TASKS = 50;
-
-const ticketsOf = (x: unknown): string[] | null =>
-  x === undefined ? [] : Array.isArray(x) && x.length <= MAX_TICKETS && x.every((t): t is string => typeof t === "string" && TICKET_RE.test(t)) ? x : null;
-
-const hostWrites = new Map<string, Promise<void>>();
-
-const inOrder = <A, E, R>(key: string, work: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
-  Effect.suspend(() => {
-    const before = hostWrites.get(key) ?? Promise.resolve();
-    const done = Promise.withResolvers<void>();
-    const turn = before.then(() => done.promise);
-    hostWrites.set(key, turn);
-    return Effect.promise(() => before).pipe(
-      Effect.andThen(work),
-      Effect.ensuring(
-        Effect.sync(() => {
-          done.resolve();
-          if (hostWrites.get(key) === turn) hostWrites.delete(key);
-        }),
-      ),
-    );
   });
 
 const replied = <T>(r: GithubReply<T>) =>
@@ -420,16 +392,12 @@ const routes: RoomRoute[] = [
         const { noRateLimits } = yield* Policy;
         const counted = take(`${db.roomId}:${me}`, noRateLimits ? Infinity : MESSAGES_PER_MINUTE);
         if ("retryAfter" in counted) return yield* new TooMany({ message: "too many messages; wait a minute", retryAfter: counted.retryAfter });
-        const b = yield* json<{ iv?: string; ct?: string; e?: number; slot?: unknown; free?: unknown; cid?: unknown; wake?: unknown; tickets?: unknown }>().pipe(
-          Effect.tapError(() => Effect.sync(counted.refund)),
-        );
-        const tickets = ticketsOf(b.tickets);
-        if (!tickets) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: `bad tickets: up to ${MAX_TICKETS} kiwi/review tickets` }));
+        const b = yield* json<{ iv?: string; ct?: string; e?: number; slot?: unknown; free?: unknown; cid?: unknown; wake?: unknown }>().pipe(Effect.tapError(() => Effect.sync(counted.refund)));
         if (b.slot !== undefined && !wellFormedSlot(b.slot)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slot" }));
         if (b.free !== undefined && !wellFormedFreed(b.free)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slots to free" }));
         if (b.cid !== undefined && !wellFormedSendId(b.cid)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad send id" }));
         yield* leaseNow;
-        const e = yield* append(b.iv as string, b.ct as string, Number(b.e ?? 0), me, { ...(b.slot ? { take: b.slot } : {}), ...(b.free ? { free: b.free } : {}) }, b.cid, tickets).pipe(
+        const e = yield* append(b.iv as string, b.ct as string, Number(b.e ?? 0), me, { ...(b.slot ? { take: b.slot } : {}), ...(b.free ? { free: b.free } : {}) }, b.cid).pipe(
           Effect.tapError(() => Effect.sync(counted.refund)),
         );
         if ("repeat" in e) {
@@ -615,37 +583,11 @@ const routes: RoomRoute[] = [
     guard: "member",
     run: ({ me }) =>
       Effect.gen(function* () {
-        const b = yield* json<{ repo?: unknown; sha?: unknown; verdict?: unknown; tasks?: unknown; task?: unknown; note?: unknown; upTo?: unknown }>();
+        const b = yield* json<{ repo?: unknown; sha?: unknown }>();
         const { repo, sha } = yield* connectedCommit(b.repo, b.sha);
-        const verdict = b.verdict;
-        if (verdict !== "approved" && verdict !== "waiting" && verdict !== "rejected") return yield* new BadRequest({ message: "verdict: approved, waiting or rejected" });
-        const tasks = b.tasks ?? (b.task === undefined ? undefined : [b.task]);
-        if (!Array.isArray(tasks) || tasks.length > MAX_CHECK_TASKS || !tasks.every((t): t is number => typeof t === "number" && Number.isSafeInteger(t) && t > 0))
-          return yield* new BadRequest({ message: `tasks: up to ${MAX_CHECK_TASKS} task numbers` });
-        if (!tasks.length && verdict !== "approved") return yield* new BadRequest({ message: "tasks: a PR no task claims only passes; waiting or rejected names its tasks" });
-        const owned = me === (yield* readMeta).ownerPk;
-        if (verdict === "approved" && !owned) return yield* new NotOwner({ message: "only the owner's app turns kiwi/review green; a member posts waiting or rejected" });
-        if (!owned && !allow(`ghcheck:${(yield* RoomStore).roomId}:${me}`, GITHUB_READS_PER_MINUTE)) return yield* new TooMany({ message: "too many kiwi/review posts; wait a minute" });
-        const upTo = b.upTo;
-        if (upTo !== undefined && !(typeof upTo === "number" && Number.isSafeInteger(upTo) && upTo >= 0)) return yield* new BadRequest({ message: "upTo: the last seq the app has folded" });
-        const note = typeof b.note === "string" ? b.note.slice(0, 1000) : "";
-        const db = yield* RoomStore;
-        const host = githubReviewHost(yield* githubApp, reviewCheckOf(db.roomId));
-        const key = `${repo}@${sha}`;
-        const write = Effect.gen(function* () {
-          if (verdict === "approved") {
-            const fence = db.fenceAt(key, (yield* Clock.currentTimeMillis) - TICKET_TTL_MS);
-            if (fence.pending) return yield* new Fenced({ message: "a change at this commit is still on its way, so kiwi/review stays as it is until it lands" });
-            if (fence.known && (typeof upTo !== "number" || (fence.delivered ?? 0) > upTo))
-              return yield* new Fenced({ message: "a change at this commit landed after the state this success was computed from: fold it, then post again" });
-          }
-          const data = yield* replied(yield* Effect.promise(() => host.post(repo, sha, reviewStatus(verdict, tasks, note))));
-          if (verdict === "approved") return data;
-          const ticket = b64url(crypto.getRandomValues(new Uint8Array(16)));
-          db.issueTicket(ticket, key, me, yield* Clock.currentTimeMillis);
-          return { ...data, ticket };
-        });
-        return { data: yield* inOrder(`${db.roomId}:${key}`, write) };
+        if (me !== (yield* readMeta).ownerPk) return { data: { url: null } };
+        const host = githubReviewHost(yield* githubApp, reviewCheckOf((yield* RoomStore).roomId));
+        return { data: yield* replied(yield* Effect.promise(() => host.retire(repo, sha))) };
       }),
   },
   {

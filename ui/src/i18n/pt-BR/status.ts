@@ -41,8 +41,6 @@ export default {
   "live.ask.irreversible.you": "Passo irreversível para você",
   "live.ask.scope": "Questão de escopo",
   "live.ask.scope.you": "Questão de escopo para você",
-  "now.gate.shut": "entregue com a trava fechada",
-  "now.ready.to.merge": "pronta para uma pessoa mesclar",
   "now.check.failed": "{check} falhou",
   "now.checks.failed.count": "{count} verificações falharam",
   "now.checks.failed": "verificações falharam",

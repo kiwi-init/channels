@@ -6,7 +6,7 @@ import { ChannelGone } from "@kiwi/core/client/relay-errors.ts";
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts";
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import type { GithubChore, GithubHealth } from "@kiwi/core/github-health.ts";
-import { reviewCheckOf, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
+import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
 import { fold, nextExpiry, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
 import type { Reach } from "./history-fill.ts";
@@ -161,12 +161,6 @@ export class ChannelStore {
 
   constructor(member: StoredMember, human?: HumanSession | null, deps?: ChannelStoreDeps, light = false) {
     this.ch = deps?.link ?? linkOf(member);
-    this.ch.beforeSend = async (body, opts) => {
-      const state = this.state.value;
-      const from = [...state.members.values()].find((m) => m.pk === member.identity.pk)?.name;
-      const may = opts.ev?.op === "task.update" || opts.ev?.op === "ask.close" || !!opts.check || !!opts.re?.some((id) => state.checks.has(id));
-      return from && may ? (await import("@kiwi/core/ship-gate.ts")).postDowngrades(state, reviewCheckOf(this.ch.roomId), { ...opts, from, body }, (c) => this.ch.postReviewCheck(c)) : [];
-    };
     this.lend = deps?.lend ?? ((code) => watches().lend(code));
     this.code = member.code;
     this.human = human;

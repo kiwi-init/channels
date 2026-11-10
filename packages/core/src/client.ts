@@ -21,7 +21,8 @@ import type { GithubStatus } from "./github-health.ts";
 import type { FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
 import { ChannelDelegations, type Computer, type Tended } from "./client/delegations.ts";
-import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck, type ReviewPosted } from "./client/github.ts";
+import { ChannelGithub, type GithubDiff, type GithubIssueInfo } from "./client/github.ts";
+import type { RetiredHead } from "./review-check.ts";
 import { ChannelHistory } from "./client/history.ts";
 import { ChannelFiles } from "./client/files.ts";
 import { ChannelImages } from "./client/images.ts";
@@ -37,7 +38,6 @@ import { ChannelRequests, type RequestsOptions } from "./client/requests.ts";
 import type { Delegation } from "./delegation.ts";
 import type { DeviceList } from "./devices.ts";
 import { ChannelSending, type SendOptions } from "./client/send.ts";
-import type { Outgoing } from "./ship-gate.ts";
 import { ChannelSettings, type RoomsSetting } from "./client/settings.ts";
 import { ChannelSnapshots, type DocsPruned, type DocStat, type DocVersionStat } from "./client/snapshots.ts";
 
@@ -56,7 +56,7 @@ export type { RoomsSetting } from "./client/settings.ts";
 export type { JoinStatus, JoinWatch } from "./client/join.ts";
 export type { SendOptions } from "./client/send.ts";
 export type { ChannelFx } from "./client/core.ts";
-export type { GithubDiff, GithubIssueInfo, ReviewCheck } from "./client/github.ts";
+export type { GithubDiff, GithubIssueInfo } from "./client/github.ts";
 
 export interface RoomPick {
   name: string;
@@ -139,10 +139,6 @@ export class Channel {
 
   set onSent(onSent: ((seq: number, message: Message | null) => void) | null) {
     this.sending.onSent = onSent;
-  }
-
-  set downgradesFor(f: ((m: Outgoing) => ReviewCheck[]) | null) {
-    this.sending.downgradesFor = f;
   }
 
   forgetInfo(): void {
@@ -491,8 +487,8 @@ export class Channel {
     return run(this.fx.githubDiff(repo, sha));
   }
 
-  postReviewCheck(c: ReviewCheck): Promise<ReviewPosted> {
-    return run(this.fx.postReviewCheck(c));
+  retireReview(head: RetiredHead): Promise<{ url: string | null }> {
+    return run(this.fx.retireReview(head));
   }
 
   commentOnPr(repo: string, number: number, body: string): Promise<{ url: string | null }> {

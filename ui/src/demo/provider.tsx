@@ -700,7 +700,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         edit(code, (c) => ({
           ...c,
           tasks: c.tasks.map((t) => (t.id === id ? { ...t, status: "done", closedWith: wrote(why), updatedAt: Date.now() } : t)),
-          asks: c.asks.filter((a) => !(a.kind === "bypass" && a.task === id)),
         })),
       cancelTask: (code, id, why) =>
         edit(code, (c, seq) => ({
@@ -850,7 +849,6 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setGithubWrite: (code, on) => edit(code, (c) => ({ ...c, githubWrite: on || undefined })),
       setBranchPrefix: (code, prefix) => edit(code, (c) => ({ ...c, branchPrefix: prefix?.trim() || undefined })),
       setLanding: (code, then) => edit(code, (c) => ({ ...c, landing: then?.trim() && then.trim() !== "none" ? then.trim() : undefined })),
-      setPeopleMerge: (code, on) => edit(code, (c) => ({ ...c, peopleMerge: on ? true : undefined })),
       setRoomMembers: async (code, id, members) => {
         edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => (r.id === id ? { ...r, members } : r)) }))
         return true

@@ -61,7 +61,7 @@ export default {
   "chat.drafts.back.stash": "Not sent: {why}. It's in the stash: {keys} brings it back{lost}.",
   "chat.drafts.lost.image": "; its image didn't fit in the stash",
   "chat.drafts.lost.images": "; its {count} images didn't fit in the stash",
-  "chat.events.updates": "Updates",
+  "chat.events.updates": "Activity",
   "chat.feed.image.loading": "Loading image…",
   "chat.left.out.fold": { one: "{count} message left out: {why}", other: "{count} messages left out: {why}" },
   "chat.left.out.bad.signature": "bad signature",

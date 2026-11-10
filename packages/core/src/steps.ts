@@ -16,7 +16,7 @@ type StepEnd =
   | { how: "skipped"; by: string; seq: number; ts: number; why: string }
   | { how: "landed"; by: string; seq: number; ts: number };
 
-type StepSeen = { seq: number; by: string; saw: string };
+type StepSeen = { seq: number; by: string; saw: string; merged?: number };
 
 type StepProgress = { kind: "open"; seen?: StepSeen } | { kind: "ended"; end: StepEnd };
 
@@ -121,6 +121,12 @@ export function stepsOfThen(then: string): StepSpec[] {
 export interface StepHolder {
   steps?: LandingStep[];
   stepCount?: number;
+}
+
+export function thenChanged(t: StepHolder, then: string): boolean {
+  const have = (t.steps ?? []).filter((s) => s.from === "then").map((s) => s.words);
+  const want = stepsOfThen(then).map((s) => s.words);
+  return have.length !== want.length || have.some((words, i) => words !== want[i]);
 }
 
 export const currentStep = (t: StepHolder): LandingStep | undefined => t.steps?.find((s) => s.progress.kind === "open");

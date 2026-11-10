@@ -221,7 +221,7 @@ const words = {
   "chat.step.why.cant": "Why can't you do it?",
   "chat.step.why.not.needed": "Why isn't it needed?",
   "chat.step.send": "Send",
-  "chat.updates.panel.label": "Updates",
+  "chat.updates.panel.label": "Activity",
   "chat.updates.panel.show.older": "Show older",
   "chat.updates.panel.fewer": "fewer",
   "chat.updates.panel.more": { one: "{count} more", other: "{count} more" },

@@ -699,6 +699,12 @@ kbd {
   color: var(--review);
 }
 
+.trust-note {
+  margin: 0;
+  padding: 10px 0 2px;
+  font: var(--t-meta) var(--ui);
+}
+
 .tone-decide {
   color: var(--decide);
 }
