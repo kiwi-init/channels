@@ -12,7 +12,13 @@ const locales = (): string[] => {
   return lang && lang !== "en" ? [lang] : []
 }
 
-export const clock = (at: number): string => new Date(at).toLocaleTimeString(locales(), { hour: "2-digit", minute: "2-digit" })
+let clocks: { lang: string; format: Intl.DateTimeFormat } | null = null
+
+export function clock(at: number): string {
+  const lang = locales().join()
+  if (clocks?.lang !== lang) clocks = { lang, format: new Intl.DateTimeFormat(locales(), { hour: "2-digit", minute: "2-digit" }) }
+  return clocks.format.format(at)
+}
 
 export function ageOf(at: number, now = Date.now()): "now" | "recent" | "date" {
   const d = now - at
