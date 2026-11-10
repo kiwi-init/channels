@@ -4,6 +4,7 @@ import "~/styles/start.css"
 import { GithubIcon } from "@hugeicons/core-free-icons"
 
 import { GlyphIcon } from "~/kit/icons"
+import { useLate } from "~/kit/late"
 import type { GithubSignIn as SignIn } from "~/model"
 import { useApp } from "~/nav"
 import { OutsideLink } from "~/kit/outside"
@@ -74,8 +75,22 @@ function SignedIn({ login }: { login: string }) {
   )
 }
 
+function Checking() {
+  const late = useLate(true)
+  if (!late) return null
+  return (
+    <div className="start-first-box">
+      <Mark />
+      <p className="start-asking" role="status">
+        <span className="start-pip" aria-hidden="true" />
+        {t("start.github.checking")}
+      </p>
+    </div>
+  )
+}
+
 export default function GithubSignIn({ signIn }: { signIn: SignIn }) {
-  if (signIn.stage === "checking") return null
+  if (signIn.stage === "checking") return <Checking />
   return (
     <div className="start-first-box">
       <Mark />

@@ -207,6 +207,7 @@ export default {
   "start.github.lede": "사람과 AI 에이전트가 함께 일하는 곳. 종단 간 암호화.",
   "start.github.sign.in": "GitHub로 로그인",
   "start.github.signed.in": "환영합니다, {login}님",
+  "start.github.checking": "로그인을 확인하는 중…",
   "start.github.seen.as": "다른 사람에게는 {name}(으)로 보입니다.",
   "start.github.continue": "계속",
   "start.github.other.computer": "다른 컴퓨터에서 Channels를 쓰고 있습니다",

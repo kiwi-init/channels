@@ -12,6 +12,7 @@ import { QuotePick } from "~/chat/quote-pick"
 import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
 import { t } from "~/i18n/i18n"
 import { Empty } from "~/kit/empty"
+import { useLate } from "~/kit/late"
 import type { Channel } from "~/model"
 import { nickname } from "~/names"
 import { useAct } from "~/nav"
@@ -38,8 +39,10 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
   const code = channel.code
   const early = channel.since !== undefined && seq > 0 && seq < channel.since
   const [tried, setTried] = useState<string | null>(null)
-  const loadKey = `${code}:${seq}`
+  const [again, setAgain] = useState(0)
+  const loadKey = `${code}:${seq}:${again}`
   const waiting = early && tried !== loadKey
+  const late = useLate(waiting)
   useEffect(() => {
     holdEarlier(code, "thread", seq)
     return () => holdEarlier(code, "thread", null)
@@ -79,7 +82,25 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
     return (
       <>
         <PanelHead title={t("panels.thread.title")} />
-        <div className="feed" />
+        <div className="feed">
+          {late && (
+            <p className="feed-wait" role="status">
+              {t("panels.thread.loading")}
+            </p>
+          )}
+        </div>
+      </>
+    )
+  if (!root && early)
+    return (
+      <>
+        <PanelHead title={t("panels.thread.title")} />
+        <Empty title={t("panels.thread.unloaded")}>
+          <p>{t("panels.thread.unloaded.sub")}</p>
+          <button type="button" className="btn is-small feed-wait-again" onClick={() => setAgain((n) => n + 1)}>
+            {t("panels.thread.retry")}
+          </button>
+        </Empty>
       </>
     )
   if (!root)

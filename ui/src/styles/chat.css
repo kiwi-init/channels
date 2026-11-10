@@ -14,6 +14,17 @@
   overflow-anchor: none;
 }
 
+.feed-wait {
+  padding: 24px var(--gutter);
+  color: var(--ink-3);
+  font: var(--t-ui) var(--ui);
+  text-align: center;
+}
+
+.feed-wait-again {
+  margin-top: 12px;
+}
+
 .feed-jump {
   position: absolute;
   bottom: calc(var(--compose-h, 0px) + 12px);

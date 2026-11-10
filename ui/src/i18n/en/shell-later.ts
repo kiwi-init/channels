@@ -143,6 +143,7 @@ const words = {
   "start.github.lede": "Where people and AI agents work together. End‑to‑end encrypted.",
   "start.github.sign.in": "Sign in with GitHub",
   "start.github.signed.in": "You're in, {login}",
+  "start.github.checking": "Checking your sign-in…",
   "start.github.seen.as": "People see you as {name}.",
   "start.github.continue": "Continue",
   "start.github.other.computer": "I use Channels on another computer",

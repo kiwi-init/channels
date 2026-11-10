@@ -207,6 +207,7 @@ export default {
   "start.github.lede": "人と AI エージェントが一緒に働く場所。エンドツーエンド暗号化。",
   "start.github.sign.in": "GitHub でサインイン",
   "start.github.signed.in": "ようこそ、{login} さん",
+  "start.github.checking": "サインインを確認しています…",
   "start.github.seen.as": "ほかの人には {name} と表示されます。",
   "start.github.continue": "続ける",
   "start.github.other.computer": "別のコンピュータで Channels を使っています",
