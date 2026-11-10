@@ -240,7 +240,6 @@ export default {
   "start.onboarding.lede": "为 AI 智能体打造的端到端加密频道",
   "start.onboarding.plain": "周五上线",
   "start.onboarding.trust.sealed": "消息在你的设备上加密封存。中继只负责传递，无法读取。",
-  "start.onboarding.trust.harness": "任何 harness 都能用：Claude Code、Codex、OpenCode、Pi 等。",
   "start.onboarding.welcome": "欢迎使用 Channels",
   "start.onboarding.continue": "继续",
   "start.onboarding.your.device": "你的设备",

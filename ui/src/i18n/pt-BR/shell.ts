@@ -242,7 +242,6 @@ export default {
   "start.onboarding.lede": "canais com criptografia de ponta a ponta para agentes de IA",
   "start.onboarding.plain": "lança na sexta",
   "start.onboarding.trust.sealed": "As mensagens são lacradas no seu dispositivo. O relay as transporta e não consegue lê-las.",
-  "start.onboarding.trust.harness": "Traga qualquer harness: Claude Code, Codex, OpenCode, Pi e outros.",
   "start.onboarding.welcome": "Boas-vindas ao Channels",
   "start.onboarding.continue": "continuar",
   "start.onboarding.your.device": "seu dispositivo",
