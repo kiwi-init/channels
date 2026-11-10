@@ -14,14 +14,16 @@ a message that fails. Then the relay comes back on the same address serving this
 signed in, the channel's messages there from the cache before the relay answers, none missing, the draft and the failed message
 still there; a second reload opens the same again (the cache rows this build rewrote), and nothing throws. Chromium only.
 
-  bun scripts/ui-upgrade.ts --old=/path/to/old/checkout [--lines=60] [--dist=ui/dist-harness]`);
+--control reopens with the old release's own build instead: what the old release itself keeps across a restart, to read a failure against.
+
+  bun scripts/ui-upgrade.ts --old=/path/to/old/checkout [--control] [--lines=60] [--dist=ui/dist-harness]`);
   process.exit(process.argv.includes("--help") ? 0 : 2);
 }
 
 const flag = (name: string): string | undefined => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 const OLD = resolve(flag("old")!);
 const OLD_DIST = join(OLD, "ui/dist-harness");
-const NEW_DIST = harnessDist(flag("dist"));
+const NEW_DIST = process.argv.includes("--control") ? OLD_DIST : harnessDist(flag("dist"));
 const LINES = Number(flag("lines") ?? 60);
 if (!existsSync(join(OLD_DIST, "index.html"))) throw new Error(`no harness build in ${OLD_DIST}: run bun scripts/ui-harness.ts in ${OLD}`);
 
@@ -61,6 +63,12 @@ const shows = (page: Page, text: string, timeout = 30000): Promise<boolean> =>
       () => true,
       () => false,
     );
+const kept = (page: Page): Promise<string> =>
+  page.evaluate(() =>
+    Object.keys(localStorage)
+      .map((k) => `${k}=${(localStorage.getItem(k) ?? "").length}`)
+      .join(" "),
+  );
 const marks = (page: Page): Promise<Record<string, number>> =>
   page.evaluate(() =>
     Object.fromEntries(
@@ -98,6 +106,7 @@ try {
   expect(failed, "with the relay down, the old release marks a message as not sent");
   await old.composer(page).fill(DRAFT);
   await page.waitForTimeout(2500);
+  console.log(`local storage as the old release leaves it: ${await kept(page)}`);
   await context.close();
 
   relay = await startLocalRelay(join(data, "relay"), NEW_DIST, { rateLimits: false, port });
@@ -105,6 +114,7 @@ try {
   await page.goto(BASE);
   const back = await shows(page, last, 30000);
   expect(back, "this build opens the old release's channel with its last line there");
+  console.log(`local storage as this build finds it: ${await kept(page)}`);
   const first = await marks(page);
   console.log(`marks on the first open: ${JSON.stringify(first)}`);
   expect((await page.locator("dialog.onb, .onb").count()) === 0, "still signed in: no onboarding, no sign-in screen");

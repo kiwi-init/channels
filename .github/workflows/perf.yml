@@ -108,6 +108,9 @@ jobs:
         run: bun install --frozen-lockfile && bun scripts/ui-harness.ts
       - name: its data, opened by this build
         run: bun scripts/ui-upgrade.ts --old=old-release
+      - name: the control, its data reopened by itself
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-upgrade.ts --old=old-release --control
 
   desktop:
     name: perf / desktop cold start and idle memory
