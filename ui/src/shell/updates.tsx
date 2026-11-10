@@ -1,6 +1,7 @@
 import "~/i18n/en/shell-later"
-import { Fragment, useEffect, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 
+import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { copyText } from "~/kit/toasts"
 import { useGo, useActions, useAppAccount } from "~/nav"
@@ -110,5 +111,54 @@ export function SideCards() {
         <SideCard key={c.key} card={c} />
       ))}
     </ul>
+  )
+}
+
+export function RailCards() {
+  const cards = useCards()
+  const [at, setAt] = useState<DOMRect | null>(null)
+  const button = useRef<HTMLButtonElement>(null)
+  const pop = useRef<HTMLDivElement>(null)
+  const open = at !== null
+  useEffect(() => {
+    if (!open) return
+    const away = (e: PointerEvent) => {
+      const to = e.target as Node
+      if (!pop.current?.contains(to) && !button.current?.contains(to)) setAt(null)
+    }
+    const key = (e: KeyboardEvent) => e.key === "Escape" && setAt(null)
+    window.addEventListener("pointerdown", away, true)
+    window.addEventListener("keydown", key)
+    return () => {
+      window.removeEventListener("pointerdown", away, true)
+      window.removeEventListener("keydown", key)
+    }
+  }, [open])
+  if (!cards.length) return null
+  const label = t("shell.updates.waiting.on.you")
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        className={cx("rail-cards", open && "is-on")}
+        aria-label={label}
+        title={label}
+        aria-expanded={open}
+        onClick={() => setAt(open ? null : (button.current?.getBoundingClientRect() ?? null))}
+      >
+        <Icon name="updates" size={18} />
+        <span className="rail-cards-dot" aria-hidden="true" />
+      </button>
+      {at && (
+        <div ref={pop} className="rail-cards-pop" style={{ left: at.right + 8, bottom: window.innerHeight - at.bottom }}>
+          <ul className="side-cards" aria-label={label}>
+            {cards.map((c) => (
+              <SideCard key={c.key} card={c} />
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
   )
 }

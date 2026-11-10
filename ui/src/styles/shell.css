@@ -1153,6 +1153,51 @@
   justify-items: center;
 }
 
+.rail-cards {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--ctl);
+  height: var(--ctl);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-row);
+  background: none;
+  box-shadow: none;
+  color: var(--ink-2);
+  -webkit-app-region: no-drag;
+}
+
+.rail-cards:hover,
+.rail-cards.is-on {
+  background: var(--wash);
+  color: var(--ink);
+}
+
+.rail-cards-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--decide);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.rail-cards-pop {
+  position: fixed;
+  z-index: 40;
+  width: 264px;
+  animation: rise var(--fast) var(--ease);
+}
+
+.rail-cards-pop .side-card {
+  border-color: transparent;
+  box-shadow: var(--shadow-pop);
+  animation: none;
+}
+
 .rail-gear {
   display: grid;
   place-items: center;
