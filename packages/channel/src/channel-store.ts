@@ -664,6 +664,11 @@ export class ChannelStore {
     )
       .then((opened) => {
         if (closed) return;
+        if (opened.fresh)
+          batch(() => {
+            this.messages.value = [];
+            this.base.value = null;
+          });
         this.start.value = { head: opened.head, whole: opened.whole };
         stopLive = ch.follow(opened.since, onEvent);
       })
