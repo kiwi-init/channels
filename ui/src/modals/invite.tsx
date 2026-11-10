@@ -9,26 +9,26 @@ import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ALL_POWERS, NO_POWERS, trusted, type Channel } from "~/model"
-import { useApp } from "~/nav"
+import { useActions } from "~/nav"
 import { Group, Row } from "~/settings/controls"
 import { copyText } from "~/kit/toasts"
 
 type Link = { code: string; link: string } | { code: string; failed: true }
 
 function useInviteLink(code: string): { link: string | null; failed: boolean; retry: () => void } {
-  const { app } = useApp()
+  const actions = useActions()
   const [got, setGot] = useState<Link | null>(null)
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let live = true
-    app.actions
+    actions
       .inviteLink(code)
       .then((link) => live && setGot({ code, link }))
       .catch(() => live && setGot({ code, failed: true }))
     return () => {
       live = false
     }
-  }, [app.actions, code, attempt])
+  }, [actions, code, attempt])
   const mine = got?.code === code ? got : null
   return {
     link: mine && "link" in mine ? mine.link : null,
@@ -84,7 +84,7 @@ const CAN = [
 ] as const
 
 export function Invite({ channel, onClose }: { channel: Channel; onClose: () => void }) {
-  const { app } = useApp()
+  const actions = useActions()
   const { link, failed, retry } = useInviteLink(channel.code)
   const can = channel.newMembers ?? "write"
   const powers = channel.newPowers ?? NO_POWERS
@@ -106,7 +106,7 @@ export function Invite({ channel, onClose }: { channel: Channel; onClose: () => 
           <div className="invite-can">
             <Track className="seg invite-seg" role="group" aria-label={t("modals.invite.new.people.can")}>
               {CAN.map((c) => (
-                <button key={c.id} type="button" title={t(c.says)} aria-pressed={can === c.id} onClick={() => app.actions.setNewMembers(channel.code, c.id)}>
+                <button key={c.id} type="button" title={t(c.says)} aria-pressed={can === c.id} onClick={() => actions.setNewMembers(channel.code, c.id)}>
                   {t(c.label)}
                 </button>
               ))}
@@ -117,14 +117,14 @@ export function Invite({ channel, onClose }: { channel: Channel; onClose: () => 
               label={t("modals.invite.full.trust")}
               on={trust}
               onChange={(on) => {
-                if (on) app.actions.setNewMembers(channel.code, "write")
-                app.actions.setNewPowers(channel.code, on ? ALL_POWERS : NO_POWERS)
+                if (on) actions.setNewMembers(channel.code, "write")
+                actions.setNewPowers(channel.code, on ? ALL_POWERS : NO_POWERS)
               }}
             />
           </Row>
           {POWERS.map((power) => (
             <Row key={power.id} label={t(power.label)} hint={t(powers[power.id] ? power.on : power.off)}>
-              <Toggle label={t(power.label)} on={powers[power.id]} onChange={(on) => app.actions.setNewPowers(channel.code, { ...powers, [power.id]: on })} />
+              <Toggle label={t(power.label)} on={powers[power.id]} onChange={(on) => actions.setNewPowers(channel.code, { ...powers, [power.id]: on })} />
             </Row>
           ))}
         </Group>

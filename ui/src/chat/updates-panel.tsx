@@ -7,7 +7,7 @@ import { cx, Dot, statusWord } from "~/kit/bits"
 import { OutsideLink } from "~/kit/outside"
 import { clock, day, sameDay } from "~/kit/time"
 import type { Channel, Message, Task } from "~/model"
-import { useApp } from "~/nav"
+import { useGo, useNicknames } from "~/nav"
 import { wordsPlain } from "~/words"
 import { nickname, Shown } from "~/names"
 
@@ -103,11 +103,12 @@ function Line({ channel, line, tasks, here, forced }: { channel: Channel; line: 
 }
 
 function Row({ m, here, yours, more }: { m: Message; here: number | null; yours?: boolean; more?: ReactNode }) {
-  const { app, go } = useApp()
+  const go = useGo()
+  const names = useNicknames()
   return (
     <p className={cx("sys", yours && "is-yours")} data-seq={m.seq}>
       <span className="sys-line" />
-      <span className="sys-text">{wordsPlain(m.text, app.channel?.nicknames ?? new Map())}</span>
+      <span className="sys-text">{wordsPlain(m.text, names)}</span>
       <time>{clock(m.at)}</time>
       {m.task !== undefined && m.task !== here && (
         <button type="button" className="fold-act" onClick={() => go({ to: "panel", panel: { kind: "task", task: m.task! } })}>
@@ -120,11 +121,12 @@ function Row({ m, here, yours, more }: { m: Message; here: number | null; yours?
 }
 
 function TasksRow({ line, tasks, more }: { line: Extract<EventLine, { kind: "tasks" }>; tasks: ReadonlyMap<number, Task>; more: ReactNode }) {
-  const { app, go } = useApp()
+  const go = useGo()
+  const names = useNicknames()
   const named = line.tasks.slice(0, 3)
   const last = line.list[line.list.length - 1]!
   return (
-    <p className="sys" data-seq={line.list[0]!.seq} title={line.list.map((m) => wordsPlain(m.text, app.channel?.nicknames ?? new Map())).join("\n")}>
+    <p className="sys" data-seq={line.list[0]!.seq} title={line.list.map((m) => wordsPlain(m.text, names)).join("\n")}>
       <span className="sys-line" />
       <span className="sys-text">
         {named.map((t, i) => {
@@ -132,12 +134,7 @@ function TasksRow({ line, tasks, more }: { line: Extract<EventLine, { kind: "tas
           return (
             <Fragment key={t.id}>
               {i > 0 && ", "}
-              <button
-                type="button"
-                className="sys-task"
-                title={task ? wordsPlain(task.title, app.channel?.nicknames ?? new Map()) : undefined}
-                onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}
-              >
+              <button type="button" className="sys-task" title={task ? wordsPlain(task.title, names) : undefined} onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
                 T{t.id}
               </button>
               {task && <span className={cx("sys-state", `is-${task.cancelled ? "cancelled" : task.status}`)}> {statusWord(task)}</span>}
@@ -153,7 +150,7 @@ function TasksRow({ line, tasks, more }: { line: Extract<EventLine, { kind: "tas
 }
 
 function TaskRow({ channel, run, task }: { channel: Channel; run: TaskRun; task: Task | undefined }) {
-  const { go } = useApp()
+  const go = useGo()
   const last = run.list[run.list.length - 1]!
   if (!task) return <Row m={last} here={null} />
   return (
@@ -177,10 +174,10 @@ function TaskRow({ channel, run, task }: { channel: Channel; run: TaskRun; task:
 }
 
 function GithubRow({ line }: { line: Extract<EventLine, { kind: "github" }> }) {
-  const { app } = useApp()
+  const names = useNicknames()
   const last = line.list[line.list.length - 1]!
   return (
-    <p className="sys" data-seq={line.list[0]!.seq} title={line.list.map((m) => wordsPlain(m.text, app.channel?.nicknames ?? new Map())).join("\n")}>
+    <p className="sys" data-seq={line.list[0]!.seq} title={line.list.map((m) => wordsPlain(m.text, names)).join("\n")}>
       <span className="sys-line" />
       <span className="sys-text">
         GitHub

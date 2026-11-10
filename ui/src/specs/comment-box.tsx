@@ -12,7 +12,7 @@ import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel, Message, SendExtras, Spec, Upload, Where } from "~/model"
 import { nickname } from "~/names"
-import { useAct, useApp } from "~/nav"
+import { useAct, useAppPrefs } from "~/nav"
 import { splitQuote } from "~/specs/read"
 import { wordsRaw } from "~/words"
 
@@ -70,7 +70,7 @@ export function CommentBox({
   onDone?: () => void
 }) {
   const { actions, toast } = useAct()
-  const enterSends = useApp().app.prefs.enterSends
+  const enterSends = useAppPrefs().enterSends
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Upload[]>([])
   const box = useRef<HTMLTextAreaElement>(null)

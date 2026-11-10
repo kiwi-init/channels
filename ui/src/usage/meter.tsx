@@ -6,7 +6,7 @@ import { cx } from "~/kit/bits"
 import { OutsideLink } from "~/kit/outside"
 import type { Usage } from "~/model"
 import { t } from "~/i18n/i18n"
-import { useApp } from "~/nav"
+import { useActions, useGo } from "~/nav"
 import { showLimit, useUsage } from "~/usage/store"
 import { canUpgrade, levelOf, planName, resetsIn, seemsUnlimited, shareOf, upgradeLabel, usageHint, usedOf, utcDay } from "~/usage/words"
 
@@ -42,8 +42,9 @@ function shownToday(day: string): boolean {
 }
 
 export function UsageMeter() {
-  const { app, go } = useApp()
-  const usage = useUsage(app.actions.myUsage)
+  const actions = useActions()
+  const go = useGo()
+  const usage = useUsage(actions.myUsage)
   const [at, setAt] = useState<DOMRect | null>(null)
   const open = at !== null
   const setOpen = (on: boolean) => setAt(on ? (button.current?.getBoundingClientRect() ?? null) : null)

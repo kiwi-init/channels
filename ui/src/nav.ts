@@ -1,7 +1,7 @@
 import type { Tone } from "~/kit/toasts"
-import { createContext, useContext, useEffect } from "react"
+import { createContext, use, useContext, useEffect } from "react"
 
-import type { Actions, App, Where } from "~/model"
+import type { Account, Actions, App, Channel, ChannelTile, Prefs, Where } from "~/model"
 import { keepPlace, keptPlace, spotAt, spotKey, whereKey, type Spot, type Tab } from "~/places"
 
 export type SpecPart = "spec" | "inside" | "result"
@@ -181,6 +181,60 @@ export function useApp(): Ctx {
   const ctx = useContext(AppContext)
   if (!ctx) throw new Error("useApp outside the app")
   return ctx
+}
+
+const whole = (ctx: Ctx | null): Ctx => {
+  if (!ctx) throw new Error("useApp outside the app")
+  return ctx
+}
+
+export const NavContext = createContext<Nav | undefined>(undefined)
+export const TilesContext = createContext<ChannelTile[] | undefined>(undefined)
+export const PrefsContext = createContext<Prefs | undefined>(undefined)
+export const AccountContext = createContext<Account | null | undefined>(undefined)
+export const NamesContext = createContext<ReadonlyMap<string, string> | null | undefined>(undefined)
+export const OpenContext = createContext<Channel | null | undefined>(undefined)
+
+export function useNav(): Nav {
+  return use(NavContext) ?? whole(use(AppContext)).nav
+}
+
+export function useTiles(): ChannelTile[] {
+  return use(TilesContext) ?? whole(use(AppContext)).app.channels
+}
+
+export function useAppPrefs(): Prefs {
+  return use(PrefsContext) ?? whole(use(AppContext)).app.prefs
+}
+
+export function useAppAccount(): Account | null {
+  const account = use(AccountContext)
+  return account === undefined ? whole(use(AppContext)).app.account : account
+}
+
+const NO_NICKNAMES: ReadonlyMap<string, string> = new Map()
+
+export function useNicknames(): ReadonlyMap<string, string> {
+  const names = use(NamesContext)
+  return (names === undefined ? use(AppContext)?.app.channel?.nicknames : names) ?? NO_NICKNAMES
+}
+
+export function useOpenChannel(): Channel | null {
+  const channel = use(OpenContext)
+  return channel === undefined ? whole(use(AppContext)).app.channel : channel
+}
+
+export function useActions(): Actions {
+  const act = use(ActContext)
+  return act ? act.actions : whole(use(AppContext)).app.actions
+}
+
+export function useGo(): (go: Go) => void {
+  return (use(ActContext) ?? whole(use(AppContext))).go
+}
+
+export function useToast(): (text: string, tone?: Tone) => void {
+  return (use(ActContext) ?? whole(use(AppContext))).toast
 }
 
 export interface Act {

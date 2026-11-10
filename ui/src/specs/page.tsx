@@ -10,7 +10,7 @@ import { Icon } from "~/kit/icons"
 import { MoreButton } from "~/kit/menu-open"
 import { ago } from "~/kit/time"
 import type { Channel, Spec } from "~/model"
-import { useAct, useApp, type SpecPart } from "~/nav"
+import { useAct, type SpecPart, useGo, useNav } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { wordsPlain } from "~/words"
 import { SpecDoc } from "~/specs/doc"
@@ -19,7 +19,8 @@ import { Result } from "~/specs/result"
 import { alarmsOf, boxesOf, commentsOf, freeCount, insideOf, stageLine } from "~/specs/read"
 
 export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const part: SpecPart = nav.part ?? "spec"
   const [editing, setEditing] = useState(false)
   const line = stageLine(channel, spec)

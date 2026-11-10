@@ -17,7 +17,7 @@ import { choreLine } from "~/github/health"
 import { ageOf, ago } from "~/kit/time"
 import type { Channel, Room } from "~/model"
 import { nickname, roomPeople, seatRoot, shown } from "~/names"
-import { useApp, type ChannelTab } from "~/nav"
+import { useApp, type ChannelTab, useGo } from "~/nav"
 import { repoOffers } from "~/modals/repo-offers"
 import { LandingPick } from "~/modals/landing-pick"
 import { Confirm, Group, InlineEdit, Row } from "~/settings/controls"
@@ -308,7 +308,7 @@ function Hold({ channel }: { channel: Channel }) {
 }
 
 function Rooms({ channel }: { channel: Channel }) {
-  const { go } = useApp()
+  const go = useGo()
   const sets = channel.youOwn || !!channel.youTrusted
   const rooms = channel.rooms.filter((r) => r.name.trim())
   return (

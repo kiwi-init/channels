@@ -3,10 +3,10 @@ import type { ReactNode } from "react"
 
 import { t } from "~/i18n/i18n"
 import { IconButton } from "~/kit/bits"
-import { useApp } from "~/nav"
+import { useGo } from "~/nav"
 
 export function PanelHead({ title, sub, children }: { title: ReactNode; sub?: ReactNode; children?: ReactNode }) {
-  const { go } = useApp()
+  const go = useGo()
   return (
     <header className="panel-head">
       <h2 className="panel-title">

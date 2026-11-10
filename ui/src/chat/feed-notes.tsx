@@ -5,12 +5,12 @@ import { t } from "~/i18n/i18n"
 import { dmInRoom } from "~/live/dm"
 import type { Channel, Where } from "~/model"
 import { between, nickname, shown } from "~/names"
-import { useApp } from "~/nav"
+import { useActions } from "~/nav"
 
 const AddAgentCard = lazy(() => import("~/modals/add-agent").then((m) => ({ default: m.AddAgentCard })))
 
 export function HoldBanner({ channel, hold }: { channel: Channel; hold: NonNullable<Channel["hold"]> }) {
-  const { app } = useApp()
+  const actions = useActions()
   const owner = channel.people.find((p) => p.owner && !p.you)
   const until = channel.youOwn ? t("chat.feed.notes.hold.you") : owner ? t("chat.feed.notes.hold.owner", { name: shown(owner) }) : t("chat.feed.notes.hold.the.owner")
   const note = hold.note?.replace(/[.\s]+$/, "")
@@ -21,7 +21,7 @@ export function HoldBanner({ channel, hold }: { channel: Channel; hold: NonNulla
         {note && <span className="dim">{note}</span>}
       </p>
       {channel.youOwn && (
-        <button type="button" className="btn is-small" onClick={() => app.actions.setHold(channel.code, false)}>
+        <button type="button" className="btn is-small" onClick={() => actions.setHold(channel.code, false)}>
           {t("chat.feed.notes.resume")}
         </button>
       )}

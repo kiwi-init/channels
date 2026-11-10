@@ -9,7 +9,7 @@ import { autofocus, Avatar, cx } from "~/kit/bits"
 import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
 import type { Channel } from "~/model"
-import { useApp } from "~/nav"
+import { useGo, useActions } from "~/nav"
 import { roleWord, roomPeople, shown } from "~/names"
 import { useAppCan } from "~/live/app-can"
 import { t } from "~/i18n/i18n"
@@ -17,12 +17,13 @@ import { t } from "~/i18n/i18n"
 const roomName = (typed: string): string => typed.trim().replace(/^#/, "").trim().toLowerCase().replace(/\s+/g, "-")
 
 export function NewRoomDialog({ channel }: { channel: Channel }) {
-  const { go } = useApp()
+  const go = useGo()
   return <NewRoomForm channel={channel} onClose={() => go({ to: "dialog", dialog: null })} />
 }
 
 function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => void }) {
-  const { app, go } = useApp()
+  const actions = useActions()
+  const go = useGo()
   const [typed, setTyped] = useState("")
   const [wantsOnly, setOnly] = useState(false)
   const canPick = useAppCan("makeRoom")
@@ -50,7 +51,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
           e.preventDefault()
           if (!ready) return
           setBusy(true)
-          const id = await app.actions.addRoom(channel.code, name, only ? [...picked] : undefined)
+          const id = await actions.addRoom(channel.code, name, only ? [...picked] : undefined)
           if (!id) return setBusy(false)
           onClose()
           go({ to: "where", where: { kind: "room", room: id } })

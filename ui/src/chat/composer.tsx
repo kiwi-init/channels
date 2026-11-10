@@ -17,7 +17,7 @@ import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { openMenu } from "~/kit/menu-open"
 import type { Channel, Upload, Where } from "~/model"
-import { useApp } from "~/nav"
+import { useActions, useAppPrefs, useToast } from "~/nav"
 import { nickname } from "~/names"
 import { withNames } from "~/chat/linked"
 import { listId, Suggestions, useSuggest } from "~/chat/suggest"
@@ -43,7 +43,9 @@ export function Composer(props: ComposerProps) {
 }
 
 function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProps) {
-  const { app, toast } = useApp()
+  const actions = useActions()
+  const prefs = useAppPrefs()
+  const toast = useToast()
   const replying = useReplying()
   const replyTo = replying?.to ?? null
   const excerpt = replyTo ? (replying?.excerpt ?? null) : null
@@ -82,7 +84,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     if (kept) setFilesNow(kept)
   }
   const [alsoRoom, setAlsoRoom] = useState(false)
-  const enterSends = app.prefs.enterSends
+  const enterSends = prefs.enterSends
   const stash = useStash(key)
   const [cueOf, setCue] = useState<Cue | null>(() => (STASH_SHOT === "stash" ? { key, back: false, left: stash.list.length } : null))
   const cue = cueOf?.key === key ? cueOf : null
@@ -151,7 +153,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   const found = editingSeq === null ? undefined : channel.messages.find((m) => m.seq === editingSeq)
   const editing = found?.partial ? undefined : found
   const partialSeq = found?.partial ? found.seq : null
-  const { holdEarlier, earlierTo } = app.actions
+  const { holdEarlier, earlierTo } = actions
   useEffect(() => {
     if (partialSeq === null) return
     let live = true
@@ -194,7 +196,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   const send = (value = text) => {
     if (edit) {
       const next = value.trim()
-      if (next && (!editing || next !== wordsRaw(editing.text).trim())) app.actions.editMessage(channel.code, edit.seq, next)
+      if (next && (!editing || next !== wordsRaw(editing.text).trim())) actions.editMessage(channel.code, edit.seq, next)
       return stopEditing()
     }
     if (running && value === text) {
@@ -223,7 +225,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
       ...(files.length ? { images: files } : {}),
     }
     const back = (t: string, f: readonly Upload[]) => giveBack(key, t, f, stashText) === "stash" && setCue({ key, back: false, left: 0, lost: f.length })
-    if (!say?.(said, replyTo ? { re: replyTo.seq, quote: excerpt } : null, back, files)) app.actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
+    if (!say?.(said, replyTo ? { re: replyTo.seq, quote: excerpt } : null, back, files)) actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
     s.forget()
     replying?.set(null)
     setAlsoRoom(false)

@@ -1,11 +1,11 @@
-import { Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
+import { Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, type ReactNode } from "react"
 
 import { t, useLanguage } from "~/i18n/i18n"
 import { Boundary, Crashed } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
-import { ActContext, AppContext, historyStep, type Go, type Nav } from "~/nav"
+import { ActContext, AppContext, historyStep, type Ctx, type Go, type Nav, AccountContext, NamesContext, NavContext, OpenContext, PrefsContext, TilesContext } from "~/nav"
 import { ContextMenus } from "~/kit/menu-open"
 import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
@@ -49,7 +49,7 @@ function Shown({ app, nav, go, broken }: RootProps) {
 
   if (!app.account || app.signIn?.stage === "sign-in")
     return (
-      <AppContext value={ctx}>
+      <Parts ctx={ctx}>
         <ActContext value={act}>
           <Boundary>
             <Suspense fallback={null}>
@@ -58,11 +58,11 @@ function Shown({ app, nav, go, broken }: RootProps) {
           </Boundary>
           <Toasts toasts={toasts} onDismiss={dismissToast} />
         </ActContext>
-      </AppContext>
+      </Parts>
     )
 
   return (
-    <AppContext value={ctx}>
+    <Parts ctx={ctx}>
       <ActContext value={act}>
         <div className="app">
           <Rail />
@@ -114,6 +114,25 @@ function Shown({ app, nav, go, broken }: RootProps) {
         <Toasts toasts={toasts} onDismiss={dismissToast} />
         <LimitWatch />
       </ActContext>
+    </Parts>
+  )
+}
+
+function Parts({ ctx, children }: { ctx: Ctx; children: ReactNode }) {
+  const { app, nav } = ctx
+  return (
+    <AppContext value={ctx}>
+      <NavContext value={nav}>
+        <TilesContext value={app.channels}>
+          <PrefsContext value={app.prefs}>
+            <AccountContext value={app.account}>
+              <OpenContext value={app.channel}>
+                <NamesContext value={app.channel?.nicknames ?? null}>{children}</NamesContext>
+              </OpenContext>
+            </AccountContext>
+          </PrefsContext>
+        </TilesContext>
+      </NavContext>
     </AppContext>
   )
 }

@@ -3,14 +3,15 @@ import { Fragment, useEffect, useState } from "react"
 
 import { Icon } from "~/kit/icons"
 import { copyText } from "~/kit/toasts"
-import { useApp } from "~/nav"
+import { useGo, useActions, useAppAccount } from "~/nav"
 import { t } from "~/i18n/i18n"
 
 type Card = { key: string; text: string; detail?: string; path?: string; act?: string; busy?: string; onAct?: () => void; progress?: number }
 
 function useCards(): Card[] {
-  const { app, go } = useApp()
-  const account = app.account
+  const go = useGo()
+  const actions = useActions()
+  const account = useAppAccount()
   const cards: Card[] = []
   const ask = account?.enrollAsk
   if (ask && ask.stage !== "elsewhere")
@@ -22,13 +23,13 @@ function useCards(): Card[] {
       text: t("shell.updates.moved", { path: moved.to.slice(0, moved.to.lastIndexOf("/")) || moved.to }),
       ...(moved.from ? { detail: t("shell.updates.moved.old.copy"), path: moved.from } : { detail: t("shell.updates.moved.delete.copy") }),
       act: t("shell.updates.ok"),
-      onAct: () => app.actions.dismissMoved(),
+      onAct: () => actions.dismissMoved(),
     })
-  if (account?.uiUpdate) cards.push({ key: "look", text: t("shell.updates.look.ready"), act: t("shell.updates.switch"), onAct: () => app.actions.applyUi() })
+  if (account?.uiUpdate) cards.push({ key: "look", text: t("shell.updates.look.ready"), act: t("shell.updates.switch"), onAct: () => actions.applyUi() })
   const update = account?.update
   if (update) {
     const state = update.state ?? (update.ready ? "ready" : "downloading")
-    const install = () => app.actions.installUpdate()
+    const install = () => actions.installUpdate()
     const key = `update ${update.version} ${state}`
     cards.push(
       state === "ready"

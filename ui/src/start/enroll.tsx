@@ -2,7 +2,7 @@ import "~/i18n/en/shell-later"
 import "~/styles/start.css"
 
 import type { Enrolling } from "~/model"
-import { useApp } from "~/nav"
+import { useActions } from "~/nav"
 import { t } from "~/i18n/i18n"
 
 function Asking() {
@@ -31,7 +31,7 @@ function Digits({ digits }: { digits: string }) {
 }
 
 function Check({ person }: { person: { name: string; fingerprint: string } }) {
-  const { app } = useApp()
+  const actions = useActions()
   return (
     <>
       <h1 className="start-word">{t("start.enroll.your.key", { name: person.name })}</h1>
@@ -40,10 +40,10 @@ function Check({ person }: { person: { name: string; fingerprint: string } }) {
       </p>
       <p className="start-hint">{t("start.enroll.compare")}</p>
       <div className="start-row start-check">
-        <button type="button" className="btn is-primary" autoFocus onClick={() => app.actions.enrollKeep()}>
+        <button type="button" className="btn is-primary" autoFocus onClick={() => actions.enrollKeep()}>
           {t("start.enroll.matches")}
         </button>
-        <button type="button" className="btn is-quiet" onClick={() => app.actions.enrollCancel()}>
+        <button type="button" className="btn is-quiet" onClick={() => actions.enrollCancel()}>
           {t("start.enroll.no.match")}
         </button>
       </div>
@@ -52,7 +52,7 @@ function Check({ person }: { person: { name: string; fingerprint: string } }) {
 }
 
 export default function Enroll({ enrolling }: { enrolling: Extract<Enrolling, { stage: "asking" | "digits" | "check" }> }) {
-  const { app } = useApp()
+  const actions = useActions()
   return (
     <div className="start-first-box">
       <span className="start-mark">
@@ -63,7 +63,7 @@ export default function Enroll({ enrolling }: { enrolling: Extract<Enrolling, { 
       {enrolling.stage === "check" && <Check person={enrolling.person} />}
       {enrolling.stage !== "check" && (
         <div className="start-others">
-          <button type="button" className="btn is-quiet" onClick={() => app.actions.enrollCancel()}>
+          <button type="button" className="btn is-quiet" onClick={() => actions.enrollCancel()}>
             {t("start.enroll.cancel")}
           </button>
         </div>

@@ -7,7 +7,7 @@ import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
 import type { ChannelTile, HomeAgent, HomeAsk, HomeChannel } from "~/model"
-import { useApp } from "~/nav"
+import { useApp, useGo } from "~/nav"
 import { onboarded } from "~/start/onboarded"
 import { Onboarding } from "~/start/onboarding"
 import type { Key } from "~/i18n/en"
@@ -38,7 +38,7 @@ function Empty() {
 }
 
 function Starts({ quiet }: { quiet?: true }) {
-  const { go } = useApp()
+  const go = useGo()
   return (
     <>
       <button type="button" className={quiet ? undefined : "btn is-primary"} onClick={() => go({ to: "dialog", dialog: "new-channel" })}>
@@ -222,7 +222,7 @@ function MessageLead({ tile, summary, writing, onWriting }: { tile: ChannelTile;
 }
 
 function ChannelPart({ tile, summary }: { tile: ChannelTile; summary: HomeChannel | undefined }) {
-  const { go } = useApp()
+  const go = useGo()
   const needs = summary ? summary.asks.length : tile.needsYou
   const open = () => go({ to: "channel", code: tile.code })
   const agents = summary?.agents ?? []
@@ -253,7 +253,7 @@ function ChannelPart({ tile, summary }: { tile: ChannelTile; summary: HomeChanne
 }
 
 function QuietRow({ tile, summary }: { tile: ChannelTile; summary: HomeChannel | undefined }) {
-  const { go } = useApp()
+  const go = useGo()
   const needs = summary ? summary.asks.length : tile.needsYou
   const [writing, setWriting] = useState(false)
   const status = stateOf(tile, summary) || restLine(summary?.agents ?? [])
@@ -279,7 +279,7 @@ function stateWords(agent: HomeAgent): string {
 }
 
 function AgentLine({ tile, agent }: { tile: ChannelTile; agent: HomeAgent }) {
-  const { go } = useApp()
+  const go = useGo()
   const open = () => {
     go({ to: "channel", code: tile.code })
     if (agent.task) go({ to: "panel", panel: { kind: "task", task: agent.task.id } })

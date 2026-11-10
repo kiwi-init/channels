@@ -17,7 +17,7 @@ import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Issue, type PullRequest } from "~/model"
-import { useApp, type GithubView as Kind } from "~/nav"
+import { type GithubView as Kind, useGo, useNav } from "~/nav"
 import { wordsPlain } from "~/words"
 import { OutsideLink } from "~/kit/outside"
 
@@ -37,7 +37,8 @@ function reposOf(channel: Channel): string[] {
 }
 
 export function GithubView({ channel }: { channel: Channel }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const kind: Kind = nav.github ?? "prs"
   const [shown, setShown] = useState<Shown>("open")
   const [repo, setRepo] = useState<string | null>(null)
@@ -231,7 +232,7 @@ function Nothing({ query, clear, shown, icon, trouble }: { query: string; clear:
 }
 
 function NoRepo() {
-  const { go } = useApp()
+  const go = useGo()
   return (
     <div className="board">
       <div className="board-list gh-list">
@@ -278,7 +279,8 @@ function ciWord(pr: PullRequest): string {
 }
 
 function PrRow({ channel, pr, repos }: { channel: Channel; pr: PullRequest; repos: string[] | null }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const on = nav.panel?.kind === "pr" && nav.panel.repo === pr.repo && nav.panel.number === pr.number
   const line = checksLine(pr)
   const ci = ciOf(pr)
@@ -323,7 +325,8 @@ function PrRow({ channel, pr, repos }: { channel: Channel; pr: PullRequest; repo
 }
 
 function IssueRow({ channel, issue, repos }: { channel: Channel; issue: Issue; repos: string[] | null }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const on = nav.panel?.kind === "issue" && nav.panel.repo === issue.repo && nav.panel.number === issue.number
   return (
     <Item

@@ -5,16 +5,17 @@ import "~/styles/start.css"
 import { autofocus, cx } from "~/kit/bits"
 import { Field } from "~/kit/form"
 import { Modal } from "~/kit/modal"
-import { useApp } from "~/nav"
+import { useGo, useActions } from "~/nav"
 import { t } from "~/i18n/i18n"
 
 export function NewChannelDialog() {
-  const { go } = useApp()
+  const go = useGo()
   return <NewChannelForm onClose={() => go({ to: "dialog", dialog: null })} />
 }
 
 function NewChannelForm({ onClose }: { onClose: () => void }) {
-  const { app, go } = useApp()
+  const actions = useActions()
+  const go = useGo()
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -29,7 +30,7 @@ function NewChannelForm({ onClose }: { onClose: () => void }) {
           setBusy(true)
           setFailed(false)
           try {
-            const code = await app.actions.newChannel(title)
+            const code = await actions.newChannel(title)
             go({ to: "channel", code })
           } catch {
             // The dialog stays open with the name kept, so trying again is one click.

@@ -9,7 +9,7 @@ import { announce } from "~/kit/toasts"
 import { ago, clock, day } from "~/kit/time"
 import { useAppCan } from "~/live/app-can"
 import type { Channel, DocVersion } from "~/model"
-import { useApp } from "~/nav"
+import { useActions } from "~/nav"
 import { Group, Row } from "~/settings/controls"
 
 type Listed = { th: string; versions: DocVersion[] } | { th: string; failed: true }
@@ -17,7 +17,7 @@ type Listed = { th: string; versions: DocVersion[] } | { th: string; failed: tru
 const size = (bytes: number): string => (bytes < 1024 ? `${bytes} B` : `${Math.max(1, Math.round(bytes / 1024))} KB`)
 
 export function DocVersions({ channel, thread, name, onClose }: { channel: Channel; thread: string; name: string; onClose: () => void }) {
-  const { app } = useApp()
+  const actions = useActions()
   const can = useAppCan("docVersions")
   const th = channel.docs?.[thread] ?? null
   const [listed, setListed] = useState<Listed | null>(null)
@@ -26,19 +26,19 @@ export function DocVersions({ channel, thread, name, onClose }: { channel: Chann
   useEffect(() => {
     if (!th || !can) return
     let live = true
-    app.actions
+    actions
       .docVersions(channel.code, th)
       .then((versions) => live && setListed({ th, versions: [...versions].sort((a, b) => b.ts - a.ts) }))
       .catch(() => live && setListed({ th, failed: true }))
     return () => {
       live = false
     }
-  }, [app.actions, channel.code, th, can])
+  }, [actions, channel.code, th, can])
   const mine = listed?.th === th ? listed : null
   const restore = async (v: DocVersion): Promise<void> => {
     if (!th) return
     setBusy(true)
-    const done = await app.actions.restoreDocVersion(channel.code, thread, th, v.upto).catch(() => false)
+    const done = await actions.restoreDocVersion(channel.code, thread, th, v.upto).catch(() => false)
     setBusy(false)
     if (!done) return void announce(t("modals.doc.versions.restore.failed"))
     announce(t("modals.doc.versions.restored", { day: day(v.ts).toLowerCase(), time: clock(v.ts) }))
