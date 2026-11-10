@@ -2,36 +2,36 @@
   "electrobun": "2026.11.4",
   "releasesBaseUrl": "https://github.com/kiwi-init/electrobun-livewire/releases/download",
   "hutch": {
-    "version": "0.28.2-canary.8",
+    "version": "0.29.0",
     "platforms": {
       "macos-arm64": {
-        "url": "https://hutch.blackboard.sh/hutch/builds/c2ede316742ecc6734e8f86c92d87abcae609b69/macos-arm64/hutch.tar.gz",
-        "size": 1247422,
-        "sha256": "4b3b99c30155ebfd263791931573763cf5353514cddbac35c960c3bfa1642118",
+        "url": "https://hutch.blackboard.sh/hutch/builds/a2c9255ed54f93225814d7d7cf04ad5a613e44eb/macos-arm64/hutch.tar.gz",
+        "size": 1249476,
+        "sha256": "f081abca6d08d9d862577e77365f3cb5437e65858ca45a27173505e4e2345994",
         "files": {
-          "bin/hutch": "c6fcede0ddbab8c775bafa5942ba485213d51227fcdb4ef3734b01c08829d3b3",
-          "bin/hutch-engine": "327c4669adad755fe4d30bff6211510eae3600f2d6dd0a18baadf13ee9ddbefc",
-          "hutch-release.json": "644854183fe53a5c7803507dbe240162553823027b494e989a7e4fdaaa760f8e"
+          "bin/hutch": "2b1ea6505e2eda224e2e87f3571151d42375f240aea79ef76d8b2c53d3278493",
+          "bin/hutch-engine": "232a0d5eb9ff8508c500b11b9eb7c92d73f118af9449d29ca37e0868ff22ccdf",
+          "hutch-release.json": "db4314ae37bda93ed56c2988576fe616e0bc62229b253eb131c4c98c32162551"
         }
       },
       "linux-x64": {
-        "url": "https://hutch.blackboard.sh/hutch/builds/c2ede316742ecc6734e8f86c92d87abcae609b69/linux-x64/hutch.tar.gz",
-        "size": 1237081,
-        "sha256": "84a60bd3fc5933d94bcb836892de8cac60a1830f9660054f04043a286e69d10c",
+        "url": "https://hutch.blackboard.sh/hutch/builds/a2c9255ed54f93225814d7d7cf04ad5a613e44eb/linux-x64/hutch.tar.gz",
+        "size": 1238436,
+        "sha256": "4aa3c5c7fa24898d8227b087dd393eb2a1463658f0d87e23a72cfe611af83b75",
         "files": {
-          "bin/hutch": "d2b03d9c26d594b3755683bf63db9b740369015e8e755f1a983c441141f3f2ad",
-          "bin/hutch-engine": "83d9d11dc84950160ae4aa47c68e372fdb84bb83f71c53614c0cbc045a0cf1f4",
-          "hutch-release.json": "7c438b18bcfdc58145d8aac6ae5e77e362524cbd18e17d8f259e82434e4877e3"
+          "bin/hutch": "bcec6c53b0a099d388a7b3e638767f932409c5cc4cad57e0437fd4cec7a540e4",
+          "bin/hutch-engine": "c576d461525e875b6000064bd3a6eef061620d19e27e3bed0c08314ef340ce91",
+          "hutch-release.json": "001b5ce8b12d9a42d5b9f4f24b2c821c1024d67d7b766b1c2ddba461b348fbbb"
         }
       },
       "linux-arm64": {
-        "url": "https://hutch.blackboard.sh/hutch/builds/c2ede316742ecc6734e8f86c92d87abcae609b69/linux-arm64/hutch.tar.gz",
-        "size": 1294983,
-        "sha256": "f5e724fe8cf5eebececf7610b1209889624dc85665253cf777afd5bae06a311a",
+        "url": "https://hutch.blackboard.sh/hutch/builds/a2c9255ed54f93225814d7d7cf04ad5a613e44eb/linux-arm64/hutch.tar.gz",
+        "size": 1296514,
+        "sha256": "9897e36548ef25c40cd8038ab1c5e35b561c603a6d8864b6563ad78d507e42db",
         "files": {
-          "bin/hutch": "9e6cfdd7a9b4d0b5a2d5fbbd4d5f029e63fee6623f16d662b4aeba0a410d3305",
-          "bin/hutch-engine": "0cadcbd0c27aced6e9c22c7ff5e39280c1fe8099569d6bccfcf849522f75402f",
-          "hutch-release.json": "39d968d1b387c9520b8c139e2288bf0f10f8f069dd8a3831a824b6d5b9982a94"
+          "bin/hutch": "73e24837498f3e102cd95285d11348e2ca770acdff1a21b126eab3b407b9adae",
+          "bin/hutch-engine": "b5aa0bc00329f2e14beef18fba541b3225d2d781c5c734cf738e8c516f70957a",
+          "hutch-release.json": "f6c483f2e84756cfd04b8a1dbeac56c4936c019618da482813dea830bc8282ff"
         }
       }
     }
