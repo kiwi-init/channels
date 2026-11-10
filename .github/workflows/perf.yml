@@ -12,7 +12,7 @@ on:
         type: string
         default: ""
       jobs:
-        description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), or all"
+        description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a keystroke in a thread doc costs, at a short and a long thread, no gate), or all"
         type: string
         default: "scale"
       desktop_messages:
@@ -30,7 +30,7 @@ permissions:
 jobs:
   perf:
     name: perf / scale and soak
-    if: ${{ inputs.jobs != 'desktop' }}
+    if: ${{ inputs.jobs != 'desktop' && inputs.jobs != 'doc' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -60,6 +60,24 @@ jobs:
           path: ${{ runner.temp }}/perf-*.json
           if-no-files-found: ignore
           overwrite: true
+
+  doc:
+    name: perf / a keystroke in a thread doc
+    if: ${{ inputs.jobs == 'doc' || inputs.jobs == 'all' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/browser
+      - run: bun scripts/ui-harness.ts
+      - name: a short thread, then a long one; numbers only, no gate
+        shell: bash
+        run: |
+          for lines in 40 400; do
+            bun scripts/perf-doc-updates.ts --lines=$lines --json="$RUNNER_TEMP/perf-doc-$lines.json"
+          done
+          { echo '```json'; jq -s . "$RUNNER_TEMP"/perf-doc-*.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
   desktop:
     name: perf / desktop cold start and idle memory
