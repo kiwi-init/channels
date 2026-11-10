@@ -6,12 +6,15 @@ import { railMenu } from "~/shell/rail-menu"
 const at = { x: 60, y: 120 }
 const games: Folder = { id: "f", name: "games", codes: ["b"], open: true }
 
-function rail(folders: Folder[], muted: string[] = []) {
+function rail(folders: Folder[], muted: string[] = [], member = false) {
+  const opened: string[] = []
   const saved: Folder[][] = []
   const mutes: [string, boolean][] = []
   return {
     saved,
     mutes,
+    opened,
+    settings: member ? (code: string) => void opened.push(code) : null,
     folders,
     title: (code: string) => `#${code}`,
     muted: (code: string) => muted.includes(code),
@@ -56,6 +59,18 @@ describe("the rail's menus are the app's one context menu (T1826)", () => {
     expect(r.saved[0]?.[0]?.name).toBe("arcade")
     menu?.groups[0]?.[0]?.run()
     expect(r.saved[1]).toEqual([])
+  })
+
+  test("a channel you are in also offers Channel settings, last and in its own group", () => {
+    const r = rail([games], [], true)
+    const menu = railMenu({ kind: "channel", code: "a" }, at, r)
+    expect(menu?.groups.map((g) => g.map((i) => i.label))).toEqual([["Mute channel", "Add to games", "New folder"], ["Channel settings"]])
+    menu?.groups[1]?.[0]?.run()
+    expect(r.opened).toEqual(["a"])
+  })
+
+  test("a channel you are waiting to join has no settings to offer, and no empty group", () => {
+    expect(railMenu({ kind: "channel", code: "a" }, at, rail([games]))?.groups).toHaveLength(1)
   })
 
   test("a folder that is gone opens nothing", () => {
