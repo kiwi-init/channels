@@ -104,7 +104,6 @@ export class SessionMessaging extends SessionListen {
     { self: this },
     function* (this: SessionMessaging, text: string, at: DocPlace, opts: SendOptions = {}) {
       yield* this.mayI({ kind: "msg", to: yield* this.resolveTo(opts.to) });
-      const { state } = yield* this.state();
       const body = opts.re?.length ? text : addressed(text, opts.to);
       const id = yield* this.postedBlock(body, at, opts.imgs, opts.files);
       return yield* this.send(body, { ...opts, block: { th: at.th, id } }).pipe(Effect.tapError(() => this.unwrite(at, id)));

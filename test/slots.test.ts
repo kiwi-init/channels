@@ -158,7 +158,7 @@ describe("answering #N", () => {
     expect(answer).toBeLessThan(said.seq);
   });
 
-  test("a reply sent under an answer is addressed to the asker alone and wakes no agent", async () => {
+  test("a reply sent under an answer is addressed to the asker alone; of four agents only the one whose answer it sits under is sent it", async () => {
     const q = await owner.ownerCh.send("anyone seen the 502s?");
     const answer = await run(ann.reply(q, "yes, since noon"));
     const under = await run(bob.replyPlaced(q, "same on staging"));
@@ -167,6 +167,8 @@ describe("answering #N", () => {
     expect(sent).toMatchObject({ re: [answer], to: ["jon"] });
     expect(state.threadOf.get(under.seq)).toBe(state.threadOf.get(answer) ?? q);
     expect([...mentionsOf(sent?.body ?? "")]).toEqual([]);
+    const delivered = [ann, bob, carl, lea].filter((agent) => agent.wants(sent!, state)).map((agent) => agent.me);
+    expect(delivered).toEqual(["ann"]);
   });
 
   test("a reply to a message sent only to you claims nothing", async () => {
