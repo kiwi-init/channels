@@ -615,7 +615,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bison bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols sway swaybg grim gsettings-desktop-schemas libglib2.0-bin libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bison bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols libkf6iconthemes-dev qt6-base-dev qt6-svg-plugins breeze-icon-theme sway swaybg grim gsettings-desktop-schemas libglib2.0-bin libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -689,6 +689,18 @@ jobs:
         with:
           name: start-failure-${{ matrix.os }}
           path: ${{ runner.temp }}/start-failure
+          if-no-files-found: warn
+          retention-days: 3
+          overwrite: true
+      - name: under Breeze Dark, KDE's icon loader (as Plasma's taskbar and Alt+Tab use it) draws the dark icon the AppImage installs, and the light one again under Breeze, live in one running process
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 5
+        run: bash desktop/scripts/icon-theme-check/check.sh "$RUNNER_TEMP/appimage/squashfs-root" "$RUNNER_TEMP/icon-theme-check"
+      - if: ${{ !cancelled() && matrix.drive }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: icon-theme-check-${{ matrix.os }}
+          path: ${{ runner.temp }}/icon-theme-check/shots
           if-no-files-found: warn
           retention-days: 3
           overwrite: true

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import { APP_RUN, appImageName, archOfArtifact, desktopEntry, LEFT_OUT, runtimeUrl } from "../desktop/scripts/linux-files.ts";
+import { APP_RUN, appImageName, archOfArtifact, BREEZE_DARK_APPS, desktopEntry, LEFT_OUT, pngInSvg, runtimeUrl } from "../desktop/scripts/linux-files.ts";
 
 describe("the Linux AppImage made from Electrobun's bundle (T444)", () => {
   test("keeps today's asset name, which the site's downloads and the updater look for, and no .deb is offered", () => {
@@ -34,6 +34,15 @@ describe("the Linux AppImage made from Electrobun's bundle (T444)", () => {
 
   test("leaves out Electrobun's updater tools, its uninstall tool and its own .desktop entry: the AppImage updates and integrates as a whole", () => {
     expect([...LEFT_OUT]).toEqual(["bin/bspatch", "bin/zig-zstd", "Resources/uninstall", "Channels.desktop"]);
+  });
+
+  test("the dark icons are SVGs that carry the PNG, in breeze-dark's own app folders: Breeze themes look up .svg only (#2015)", () => {
+    expect(BREEZE_DARK_APPS.map((a) => a.dir)).toEqual(["16", "22", "32", "48"]);
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const svg = pngInSvg(png, 22);
+    expect(svg).toStartWith('<svg xmlns="http://www.w3.org/2000/svg"');
+    expect(svg).toContain('width="22" height="22" viewBox="0 0 22 22"');
+    expect(svg).toContain(`xlink:href="data:image/png;base64,${Buffer.from(png).toString("base64")}"`);
   });
 
   test("the AppImage starts Electrobun's launcher from wherever it's mounted, with a pinned runtime", () => {
