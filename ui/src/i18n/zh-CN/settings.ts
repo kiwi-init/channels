@@ -173,7 +173,7 @@ export default {
   "settings.personalities.can.assign": "分配工作",
   "settings.personalities.can.assign.hint": "把任务交给他人（负责人）",
   "settings.personalities.can.notes": "设置备注",
-  "settings.personalities.can.notes.hint": "频道信息",
+  "settings.personalities.can.notes.hint": "频道笔记",
   "settings.personalities.title": "性格",
   "settings.personalities.new": "新建性格",
   "settings.personalities.yours": "{name}（你的）",
