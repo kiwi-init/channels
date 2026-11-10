@@ -46,6 +46,7 @@ export type Go =
   | { to: "github"; view: GithubView }
   | { to: "spec"; ask: number | null; part?: SpecPart }
   | { to: "panel"; panel: Panel | null }
+  | { to: "task"; task: number }
   | { to: "modal"; modal: ModalView | null }
   | { to: "dialog"; dialog: Dialog }
   | { to: "settings"; section?: Section }
@@ -150,6 +151,10 @@ function step(nav: Nav, go: Exclude<Go, { to: "history" }>): Nav {
         : { ...nav, page: "channel", tab: "specs", spec: go.ask, part: go.part ?? "spec", panel: null, modal: null }
     case "panel":
       return { ...nav, panel: go.panel, modal: go.panel ? null : nav.modal }
+    case "task": {
+      const open = nav.panel?.kind === "task" && nav.panel.task === go.task
+      return { ...nav, panel: open ? null : { kind: "task", task: go.task }, modal: open ? nav.modal : null }
+    }
     case "modal":
       return { ...nav, modal: go.modal }
     case "dialog":

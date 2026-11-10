@@ -12,7 +12,7 @@ export function TaskChip({ channel, id }: { channel: Channel; id: number }) {
   const task = channel.tasks.find((x) => x.id === id)
   if (!task) return null
   return (
-    <button type="button" className={cx("chip", `is-${task.status}`)} title={STATUS_WORDS[task.status]} onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+    <button type="button" className={cx("chip", `is-${task.status}`)} title={STATUS_WORDS[task.status]} onClick={() => go({ to: "task", task: task.id })}>
       <Dot status={task.status} />
       <span className="chip-id">T{task.id}</span>
       <span className="chip-title">

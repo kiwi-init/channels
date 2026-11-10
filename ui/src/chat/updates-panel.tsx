@@ -111,7 +111,7 @@ function Row({ m, here, yours, more }: { m: Message; here: number | null; yours?
       <span className="sys-text">{wordsPlain(m.text, names)}</span>
       <time>{clock(m.at)}</time>
       {m.task !== undefined && m.task !== here && (
-        <button type="button" className="fold-act" onClick={() => go({ to: "panel", panel: { kind: "task", task: m.task! } })}>
+        <button type="button" className="fold-act" onClick={() => go({ to: "task", task: m.task! })}>
           {t("chat.updates.panel.open")}
         </button>
       )}
@@ -134,7 +134,7 @@ function TasksRow({ line, tasks, more }: { line: Extract<EventLine, { kind: "tas
           return (
             <Fragment key={t.id}>
               {i > 0 && ", "}
-              <button type="button" className="sys-task" title={task ? wordsPlain(task.title, names) : undefined} onClick={() => go({ to: "panel", panel: { kind: "task", task: t.id } })}>
+              <button type="button" className="sys-task" title={task ? wordsPlain(task.title, names) : undefined} onClick={() => go({ to: "task", task: t.id })}>
                 T{t.id}
               </button>
               {task && <span className={cx("sys-state", `is-${task.cancelled ? "cancelled" : task.status}`)}> {statusWord(task)}</span>}
@@ -156,7 +156,7 @@ function TaskRow({ channel, run, task }: { channel: Channel; run: TaskRun; task:
   return (
     <p className="sys is-task-row" data-seq={last.seq}>
       <Dot status={task.status} />
-      <button type="button" className="sys-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+      <button type="button" className="sys-task" onClick={() => go({ to: "task", task: task.id })}>
         T{task.id}
       </button>
       <span className="sys-text">

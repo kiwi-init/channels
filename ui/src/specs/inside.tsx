@@ -56,7 +56,7 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
               <span className="inside-alarm-kind">{t(ALARM_WORDS[a.kind])}</span>
               <span>{a.text}</span>
               {a.task !== undefined && (
-                <button type="button" className="btn is-quiet is-small" onClick={() => go({ to: "panel", panel: { kind: "task", task: a.task! } })}>
+                <button type="button" className="btn is-quiet is-small" onClick={() => go({ to: "task", task: a.task! })}>
                   {t("specs.inside.open.task", { task: String(a.task) })}
                 </button>
               )}
@@ -91,7 +91,7 @@ export function Inside({ channel, spec }: { channel: Channel; spec: Spec }) {
             <ul className="inside-tasks">
               {tasks.map((task) => (
                 <li key={task.id}>
-                  <button type="button" className={cx("inside-task", task.cancelled && "is-cancelled")} onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+                  <button type="button" className={cx("inside-task", task.cancelled && "is-cancelled")} onClick={() => go({ to: "task", task: task.id })}>
                     <Dot status={task.cancelled ? "todo" : task.status} />
                     <span className="inside-task-title">
                       <Shown value={task.title} />

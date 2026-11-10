@@ -216,7 +216,7 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
             <ul className="inside-tasks">
               {kept.map((task) => (
                 <li key={task.id}>
-                  <button type="button" className="inside-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+                  <button type="button" className="inside-task" onClick={() => go({ to: "task", task: task.id })}>
                     <Dot status={task.status} />
                     <span className="inside-task-title">
                       <Shown value={task.title} />

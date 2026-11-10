@@ -153,6 +153,31 @@ describe("every place you can go to is a step back (T1848)", () => {
   })
 })
 
+describe("every task link does what a board row does (T1849)", () => {
+  test("a task link opens the task's panel, and the same link again closes it", () => {
+    const open = navigate(startNav("a"), { to: "task", task: 7 })
+    expect(open.panel).toEqual({ kind: "task", task: 7 })
+    expect(navigate(open, { to: "task", task: 7 }).panel).toBeNull()
+  })
+
+  test("a link to another task swaps the panel instead of closing it", () => {
+    const nav = run(startNav("a"), { to: "task", task: 7 }, { to: "task", task: 8 })
+    expect(nav.panel).toEqual({ kind: "task", task: 8 })
+  })
+
+  test("opening closes a modal, as any work panel does; closing leaves the place alone", () => {
+    const nav = run(startNav("a"), { to: "modal", modal: { kind: "invite" } }, { to: "task", task: 7 })
+    expect(nav.modal).toBeNull()
+    const closed = navigate(nav, { to: "task", task: 7 })
+    expect([closed.channel, closed.tab, closed.back.length]).toEqual(["a", "chat", 0])
+  })
+
+  test("a command that opens a task (the palette, search) still only opens it", () => {
+    const nav = run(startNav("a"), { to: "panel", panel: { kind: "task", task: 7 } }, { to: "panel", panel: { kind: "task", task: 7 } })
+    expect(nav.panel).toEqual({ kind: "task", task: 7 })
+  })
+})
+
 describe("a channel opens where you left it (T978)", () => {
   test("its room and tab come back", () => {
     keepPlace("d", { where: room("design"), tab: "specs" })
