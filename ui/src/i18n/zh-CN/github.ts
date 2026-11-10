@@ -185,5 +185,8 @@ export default {
   "kit.time.yesterday": "昨天",
   "kit.toasts.not.copied": "无法复制。请选中后手动复制。",
   "kit.toasts.copied": "已复制",
+  "kit.discard.ask": "放弃你的更改？",
+  "kit.discard.discard": "放弃",
+  "kit.discard.keep": "继续编辑",
   "kit.toasts.dismiss": "关闭",
 } satisfies Catalog

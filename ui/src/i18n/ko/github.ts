@@ -185,5 +185,8 @@ export default {
   "kit.time.yesterday": "어제",
   "kit.toasts.not.copied": "복사하지 못했습니다. 선택해서 직접 복사하십시오.",
   "kit.toasts.copied": "복사했습니다",
+  "kit.discard.ask": "변경 사항을 버릴까요?",
+  "kit.discard.discard": "버리기",
+  "kit.discard.keep": "계속 편집",
   "kit.toasts.dismiss": "닫기",
 } satisfies Catalog

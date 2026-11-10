@@ -12,6 +12,7 @@ import { setPreview, useSystemDark } from "~/theme/apply"
 import { hex, isHex, TOKENS, type ColorTheme, type Colors } from "~/theme/derive"
 import { loadRex } from "~/theme/rex"
 import { allThemes, baseOf, customColors, resolveMode } from "~/theme/themes"
+import { DiscardAsk, useDiscard } from "~/kit/discard"
 
 const SHOT = new URLSearchParams(location.search).get("shot")
 
@@ -158,6 +159,7 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
   const [more, setMore] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const ref = useRef<HTMLFormElement>(null)
+  const discard = useDiscard(JSON.stringify(draft) !== JSON.stringify(start), onDone)
   const colors = useMemo(() => customColors(draft), [draft])
 
   useEffect(() => {
@@ -184,7 +186,7 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
       onKeyDown={(e) => {
         if (e.key !== "Escape" || deleting) return
         e.preventDefault()
-        onDone()
+        discard.leave()
       }}
     >
       <h3 className="theme-title">{draft.id ? t("settings.themes.edit.title") : t("settings.themes.new")}</h3>
@@ -259,6 +261,7 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
           </button>
         )}
         <span className="theme-foot-gap" />
+        {discard.asking && <DiscardAsk onKeep={discard.keep} onDiscard={onDone} />}
         <button type="button" className="btn is-quiet" onClick={onDone}>
           {t("settings.controls.cancel")}
         </button>
