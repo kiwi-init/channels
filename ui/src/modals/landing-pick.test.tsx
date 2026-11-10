@@ -20,14 +20,14 @@ function selectIn(node: ReactNode): ReactElement<SelectProps> | undefined {
 }
 
 describe("Tasks land on is a dropdown (T1368)", () => {
-  test("it offers Approval, merge, release:tag and run, with the channel's current one selected", () => {
+  test("it offers Approval, a merged pull request, a release tag and a finished run, in words (T3548), with the channel's current one selected", () => {
     expect(optionsIn(renderToStaticMarkup(<LandingPick value={undefined} onPick={() => {}} />))).toEqual([
       { value: "", label: "Approval", selected: true },
-      { value: "merge", label: "merge", selected: false },
-      { value: "release:tag", label: "release:tag", selected: false },
-      { value: "run", label: "run", selected: false },
+      { value: "merge", label: "A merged pull request", selected: false },
+      { value: "release:tag", label: "A release tag", selected: false },
+      { value: "run", label: "A finished run", selected: false },
     ])
-    expect(optionsIn(renderToStaticMarkup(<LandingPick value="release:tag" onPick={() => {}} />)).filter((o) => o.selected)).toEqual([{ value: "release:tag", label: "release:tag", selected: true }])
+    expect(optionsIn(renderToStaticMarkup(<LandingPick value="release:tag" onPick={() => {}} />)).filter((o) => o.selected)).toEqual([{ value: "release:tag", label: "A release tag", selected: true }])
   })
 
   test("a channel that already lands on an npm release keeps it, shown as the selected option", () => {

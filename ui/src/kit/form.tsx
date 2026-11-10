@@ -12,9 +12,19 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
   )
 }
 
-export function Toggle({ on, onChange, label, id, disabled }: { on: boolean; onChange?: (on: boolean) => void; label?: string; id?: string; disabled?: boolean }) {
+export function Toggle({ on, onChange, label, id, disabled, why }: { on: boolean; onChange?: (on: boolean) => void; label?: string; id?: string; disabled?: boolean; why?: string }) {
   return (
-    <button id={id} type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} className={cx("toggle", on && "is-on")} onClick={() => onChange?.(!on)}>
+    <button
+      id={id}
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      title={disabled ? why : undefined}
+      disabled={disabled}
+      className={cx("toggle", on && "is-on")}
+      onClick={() => onChange?.(!on)}
+    >
       <span className="toggle-track" aria-hidden="true">
         <span className="toggle-knob" />
       </span>

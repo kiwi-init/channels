@@ -15,7 +15,7 @@ export function useCommands(channel: Channel, off = false): Command[] {
     if (off) return []
     return [
       { name: "compact", summary: t("chat.use.commands.compact"), run: () => actions.askCompact(code) },
-      { name: "tasks", summary: t("chat.use.commands.tasks"), run: () => go({ to: "tab", tab: "tasks" }) },
+      { name: "tasks", summary: t("chat.use.commands.tasks"), run: () => go({ to: "spec", ask: null }) },
       { name: "prs", summary: t("chat.use.commands.prs"), run: () => go({ to: "github", view: "prs" }) },
       { name: "issues", summary: t("chat.use.commands.issues"), run: () => go({ to: "github", view: "issues" }) },
       ...(owner && !held
