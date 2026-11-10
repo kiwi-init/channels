@@ -140,7 +140,6 @@ export function backToReview(task: Task, mark: { seq: number; by: string; ts: nu
   task.state = "review";
   task.approvedBy = undefined;
   task.updatedAt = mark.ts;
-  task.movedAt = mark.ts;
   task.notes.push({ seq: mark.seq, by: mark.by, ts: mark.ts, text: `${why}: back to review` });
 }
 

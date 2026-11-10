@@ -1,5 +1,7 @@
 import { inlineText } from "./membership.ts";
-import { isPerson, landerOf, openRound, type ChannelState, type Task } from "./state.ts";
+import { isPerson } from "./state/people.ts";
+import { landerOf, openRound } from "./state/tasks.ts";
+import type { ChannelState, Task } from "./state/types.ts";
 import { runSight } from "./state/landing-steps.ts";
 import { currentStep, spanText, stepMove, stepText, type LandingStep } from "./steps.ts";
 

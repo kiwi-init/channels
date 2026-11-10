@@ -541,7 +541,7 @@ function taskLine(state: ChannelState, t: Task, now?: number): string {
 
 function quietTag(state: ChannelState, t: Task, now: number | undefined): string {
   const clock = now === undefined ? undefined : clockOf(state, t, now);
-  const quiet = clock ? quietText(t, clock) : undefined;
+  const quiet = clock ? quietText(clock) : undefined;
   return quiet ? ` · ${quiet}` : "";
 }
 
@@ -855,7 +855,7 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
   const mover = moverOf(state, t, now);
   if (mover) out.push(`  move: ${moverText(mover)}`);
   const clock = clockOf(state, t, now);
-  const quiet = clock ? quietText(t, clock) : undefined;
+  const quiet = clock ? quietText(clock) : undefined;
   if (quiet) out.push(`  ${quiet}`);
   const stage = stageOf(state, t);
   out.push(`  stage: ${stageText(state, stage)}`);

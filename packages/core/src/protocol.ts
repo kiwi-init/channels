@@ -294,7 +294,7 @@ export type Event =
       kept?: KeptEvidence;
     }
   | { op: "task.first"; task: number }
-  | { op: "task.nudge"; task: number; mover: string; since: number; step: NudgeStep }
+  | { op: "task.nudge"; task: number; mover: string; since: number; step: NudgeStep; day?: number }
   | { op: "task.landed"; task: number; artifact: CheckArtifact }
   | ({ op: "task.landed"; task: number } & StepLanded)
   | { op: "task.steps"; task: number; edit: StepEdit }
@@ -1118,7 +1118,7 @@ function eventCheck(ev: unknown): boolean | null {
     case "task.first":
       return n(e.task);
     case "task.nudge":
-      return n(e.task) && str(e.mover, 64) && e.mover.length > 0 && Number.isSafeInteger(e.since) && (e.since as number) > 0 && (e.step === 0 || e.step === 1 || e.step === 2 || e.step === 3);
+      return n(e.task) && str(e.mover, 64) && e.mover.length > 0 && n(e.since) && (e.step === 0 ? n(e.day) : (e.step === 1 || e.step === 2 || e.step === 3) && e.day === undefined);
     case "task.landed":
       return n(e.task) && (e.step === undefined ? wellFormedArtifact(e.artifact) : wellFormedStepLanded(e));
     case "task.steps":

@@ -34,6 +34,32 @@ import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
+import { nudge, roll, tick, timedStep, type ClockView } from "./clocks.ts";
+
+const CLOCK_BLIND_OPS: ReadonlySet<string> = new Set([
+  "hello",
+  "card",
+  "picture.set",
+  "react",
+  "msg.edit",
+  "msg.delete",
+  "fact.set",
+  "fact.del",
+  "lease.take",
+  "lease.free",
+  "doc.open",
+  "spec.set",
+  "spec.ready",
+  "spec.approve",
+  "spec.result",
+  "spec.delete",
+  "ask.name",
+  "ask.close",
+  "github.rules",
+  "github.release",
+  "compact",
+  "compact.propose",
+]);
 import { carriedPersona } from "../personality.ts";
 import { permissionAnswer } from "../permission.ts";
 import type {
@@ -86,8 +112,6 @@ function earlierParent(m: Message): number | undefined {
   const parent = m.re?.[0];
   return parent !== undefined && parent < m.seq ? parent : undefined;
 }
-
-const standing = (t: Task): string => [t.state, t.owner ?? "", t.review ?? "", t.lander ?? "", t.rounds.length, t.rounds.at(-1)?.result.kind ?? ""].join("|");
 
 function touch(task: Task | undefined, name: string, at: number): void {
   if (task && (task.touched?.[name] ?? 0) < at) task.touched = { ...task.touched, [name]: at };
@@ -320,14 +344,10 @@ function folding(
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
   const closedAsks = new Set<number>();
   const askers = new Map([...(from?.asks ?? []), ...messages].flatMap((a): [number, string][] => ((a.kind === "ask" || a.kind === "blocking") && !a.permission ? [[a.seq, a.from]] : [])));
-  const holders = new Map([...(from?.asks ?? []), ...messages].flatMap((a): [number, number[]][] => (a.holds?.length ? [[a.seq, a.holds]] : [])));
-  const release = (ask: number, at: number): void => {
-    for (const id of holders.get(ask) ?? []) {
-      const held = tasks.get(id);
-      if (held) held.released = at;
-    }
-  };
   const settledBy = new Map<number, Set<string>>();
+  const holding: Message[] = (from?.asks ?? []).filter((a) => !!a.holds?.length && !a.permission);
+  const holdsOf = new Map(holding.map((a): [number, number[]] => [a.seq, a.holds ?? []]));
+  const timed = new Set<number>();
   const permReplies = new Map<number, Message[]>();
   const permBySeq = new Map<number, Message>();
   const threadOf = new Map<number, number>(from?.threadOf);
@@ -409,6 +429,31 @@ function folding(
   const doubled = new Set<number>();
   for (const m of messages) if (m.seq > after) (seen.has(m.seq) ? doubled : seen).add(m.seq);
 
+  const stillOpen = (m: Message): boolean => {
+    if (m.kind !== "ask" && m.kind !== "blocking") return false;
+    if (ignored(trust.get(m.seq)) || closedAsks.has(m.seq)) return false;
+    if (m.permission)
+      return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members, bySeq: permBySeq }) !== null));
+    const by = answered.get(m.seq);
+    return !by || ![...by].some((n) => answersAsk(members, m, n));
+  };
+  const clockView = (): ClockView => ({ tasks, github: ctx.github, branchPrefix: ctx.branchPrefix, openAsks: holding.filter(stillOpen) });
+  const timeTask = (t: Task): void => void (timedStep(t) ? timed.add(t.id) : timed.delete(t.id));
+  const tickTask = (t: Task | undefined, seq: number, at: number, by?: string): void => {
+    if (!t) return;
+    tick(clockView(), t, { seq, at, ...(by !== undefined ? { by } : {}) });
+    timeTask(t);
+  };
+  const rollTimed = (at: number): void => {
+    if (!timed.size) return;
+    const view = clockView();
+    for (const id of timed) {
+      const t = tasks.get(id);
+      if (t) roll(view, t, at);
+    }
+  };
+  for (const t of tasks.values()) timeTask(t);
+
   for (const m of messages) {
     if (m.seq <= after) continue;
     passFloors(m.seq);
@@ -417,6 +462,7 @@ function folding(
     try {
       head = Math.max(head, m.seq);
       const at = m.rts ?? m.ts;
+      rollTimed(at);
       if (doubled.has(m.seq)) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, `two messages at #${m.seq}`);
@@ -583,6 +629,12 @@ function folding(
         const posted = place.kind === "task" ? tasks.get(place.task) : place.kind === "main" && room !== GENERAL_ROOM ? rooms.get(room) : undefined;
         if (posted && !posted.posters?.includes(m.from)) posted.posters = [...(posted.posters ?? []), m.from];
         if (place.kind === "task") touch(tasks.get(place.task), m.from, at);
+        if (place.kind === "task") tickTask(tasks.get(place.task), m.seq, at, m.from);
+        if (m.holds?.length && (m.kind === "ask" || m.kind === "blocking") && !m.permission) {
+          holding.push(m);
+          holdsOf.set(m.seq, m.holds);
+          for (const id of m.holds) tickTask(tasks.get(id), m.seq, at);
+        }
       }
       member.lastSeen = Math.max(member.lastSeen, at);
       if (!isOverlay(m)) member.messages++;
@@ -592,7 +644,7 @@ function folding(
         let set = answered.get(r);
         if (!set) answered.set(r, (set = new Set()));
         set.add(m.from);
-        if (askers.get(r) !== m.from) release(r, at);
+        for (const id of holdsOf.get(r) ?? []) tickTask(tasks.get(id), m.seq, at);
         if (m.perm) {
           let replies = permReplies.get(r);
           if (!replies) permReplies.set(r, (replies = []));
@@ -664,7 +716,7 @@ function folding(
           if (lateClose) reject(lateClose);
           else {
             closedAsks.add(ev.ask);
-            release(ev.ask, at);
+            for (const id of holdsOf.get(ev.ask) ?? []) tickTask(tasks.get(id), m.seq, at);
             questions.delete(ev.ask);
             const closing = checks.get(ev.ask);
             if (closing && closing.closed === undefined) checkClosed(tasks, closing, { seq: m.seq, by: m.from, at });
@@ -720,10 +772,26 @@ function folding(
       );
 
       const taskAsk = ev.op === "task.update" || ev.op === "task.delete" ? tasks.get(ev.task)?.ask : undefined;
-      const subject = "task" in ev ? tasks.get(ev.task) : undefined;
-      const stood = subject ? standing(subject) : undefined;
+      const before = "task" in ev ? tasks.get(ev.task) : undefined;
+      const ownedBy = before?.owner;
+      if (ev.op === "task.nudge") {
+        const wrong = before ? nudge(clockView(), before, ev, at) : `no task ${taskId(ev.task)}`;
+        if (wrong) reject(wrong);
+        else if (before) timeTask(before);
+      }
       applyEvent(ctx, m, ev, member, at, reject);
-      if (subject && !rejected.has(m.seq) && standing(subject) !== stood) subject.movedAt = at;
+      if (!rejected.has(m.seq) && ev.op !== "task.nudge") {
+        const subject = ev.op === "task.add" ? tasks.get(m.seq) : before && tasks.has(before.id) ? before : undefined;
+        if (subject) {
+          tickTask(subject, m.seq, at, m.from);
+          for (const other of tasks.values())
+            if (other !== subject && other.state === "todo" && other.owner !== undefined && (other.owner === subject.owner || other.owner === ownedBy)) tickTask(other, m.seq, at);
+        } else if (ev.op === "github") {
+          for (const t of tasks.values()) if (t.state === "doing" || t.state === "review" || t.state === "landing") tickTask(t, m.seq, at);
+        } else if (!CLOCK_BLIND_OPS.has(ev.op)) {
+          for (const t of tasks.values()) tickTask(t, m.seq, at);
+        }
+      }
       if (taskAsk !== undefined && !rejected.has(m.seq)) closeOnItsOwn(taskAsk, m, at);
       const added = ev.op === "task.add" && !rejected.has(m.seq) ? tasks.get(m.seq) : undefined;
       if (added) {
@@ -740,14 +808,7 @@ function folding(
     }
   }
 
-  const openAsks = [...(from?.asks ?? []), ...messages.filter((m) => m.seq > after)].filter((m) => {
-    if (m.kind !== "ask" && m.kind !== "blocking") return false;
-    if (ignored(trust.get(m.seq)) || closedAsks.has(m.seq)) return false;
-    if (m.permission)
-      return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members, bySeq: permBySeq }) !== null));
-    const by = answered.get(m.seq);
-    return !by || ![...by].some((n) => answersAsk(members, m, n));
-  });
+  const openAsks = [...(from?.asks ?? []), ...messages.filter((m) => m.seq > after)].filter(stillOpen);
 
   const cut = head - KEEP_SEQS;
   const keyIndex = new Map<string, number>();
