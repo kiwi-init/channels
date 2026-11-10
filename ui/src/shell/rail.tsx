@@ -11,10 +11,12 @@ import { useNav, useGo, useActions, useTiles, useAppPrefs } from "~/nav"
 import type { Menu } from "~/shell/rail-menu"
 import { railItems, type DropTarget } from "~/shell/rail-items"
 import { t } from "~/i18n/i18n"
+import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 
 const RailMenu = later(() => import("~/shell/rail-menu").then((m) => m.default))
 const FolderTile = later(() => import("~/shell/rail-folder").then((m) => m.default))
 const UsageMeter = later(() => import("~/usage/meter").then((m) => m.UsageMeter))
+const RailCards = later(() => import("~/shell/updates").then((m) => m.RailCards))
 
 const DRAG = "application/x-kiwi-channel"
 
@@ -34,6 +36,8 @@ export function Rail() {
   const prefs = useAppPrefs()
   const onChannel = nav.page === "channel"
   const home = onChannel && nav.channel === null
+  const sidebarHidden = useSidebarHidden()
+  const cardsHere = onChannel && (home || sidebarHidden)
   const on = onChannel ? nav.channel : null
   const folders = prefs.folders
   const items = railItems(tiles, folders)
@@ -166,6 +170,11 @@ export function Rail() {
         </li>
       </ul>
       <div className="rail-foot">
+        {cardsHere && (
+          <Suspense fallback={null}>
+            <RailCards />
+          </Suspense>
+        )}
         <Suspense fallback={null}>
           <UsageMeter />
         </Suspense>

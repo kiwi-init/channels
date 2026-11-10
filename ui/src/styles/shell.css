@@ -1153,6 +1153,22 @@
   justify-items: center;
 }
 
+.rail-cards {
+  position: fixed;
+  --room: calc(var(--compose-left, 100vw) - var(--rail-w) - 16px);
+  bottom: calc(12px + min(var(--compose-lift, 0px), max(0px, (164px - var(--room)) * 9999)));
+  left: calc(var(--rail-w) + 8px);
+  z-index: 40;
+  width: clamp(164px, var(--room), 240px);
+  transition: bottom var(--fast) var(--ease);
+  -webkit-app-region: no-drag;
+}
+
+.rail-cards .side-card {
+  border-color: transparent;
+  box-shadow: var(--shadow-pop);
+}
+
 .rail-gear {
   display: grid;
   place-items: center;

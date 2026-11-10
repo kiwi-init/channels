@@ -111,3 +111,17 @@ export function SideCards() {
     </ul>
   )
 }
+
+export function RailCards() {
+  const cards = useCards()
+  if (!cards.length) return null
+  return (
+    <div className="rail-cards">
+      <ul className="side-cards" aria-label={t("shell.updates.waiting.on.you")}>
+        {cards.map((c) => (
+          <SideCard key={c.key} card={c} />
+        ))}
+      </ul>
+    </div>
+  )
+}

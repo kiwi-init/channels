@@ -119,15 +119,26 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     const el = box.current
     const host = el?.parentElement
     if (!el || !host) return
-    const measure = () => host.style.setProperty("--compose-h", `${el.offsetHeight}px`)
+    const main = inThread === undefined && where.kind !== "task"
+    const measure = () => {
+      host.style.setProperty("--compose-h", `${el.offsetHeight}px`)
+      if (!main) return
+      const at = el.getBoundingClientRect()
+      document.documentElement.style.setProperty("--compose-lift", `${Math.max(0, Math.round(window.innerHeight - at.top))}px`)
+      document.documentElement.style.setProperty("--compose-left", `${Math.round(at.left)}px`)
+    }
     measure()
     const watch = new ResizeObserver(measure)
     watch.observe(el)
+    if (main) watch.observe(host)
     return () => {
       watch.disconnect()
       host.style.removeProperty("--compose-h")
+      if (!main) return
+      document.documentElement.style.removeProperty("--compose-lift")
+      document.documentElement.style.removeProperty("--compose-left")
     }
-  }, [])
+  }, [inThread, where.kind])
 
   const commands = useCommands(channel, inThread !== undefined)
   const listed = s.quiet ? [] : matchCommands(commands, text)
