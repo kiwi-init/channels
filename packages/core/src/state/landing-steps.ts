@@ -135,6 +135,9 @@ export function migrateChecks(tasks: ReadonlyMap<number, Task>, checks: Readonly
   }
 }
 
+export const questionWatched = (tasks: ReadonlyMap<number, Task>, ask: number): boolean =>
+  [...tasks.values()].some((t) => t.state !== "done" && !!t.steps?.some((s) => s.progress.kind === "open" && asks(s, ask)));
+
 export function questionAnswered(tasks: ReadonlyMap<number, Task>, ask: number, choice: string, mark: StepMark): void {
   for (const task of tasks.values()) {
     if (task.state === "done") continue;

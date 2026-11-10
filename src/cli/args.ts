@@ -91,6 +91,7 @@ function parse() {
         undo: { type: "boolean" },
         file: { type: "string" },
         at: { type: "string" },
+        onto: { type: "string" },
         round: { type: "string" },
         runs: { type: "string" },
         started: { type: "string" },

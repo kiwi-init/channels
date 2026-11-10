@@ -19,6 +19,10 @@ const SHA_MIN = 7;
 
 export const sameHead = (at: string, head: string): boolean => at === head || (at.length >= SHA_MIN && head.length >= SHA_MIN && (head.startsWith(at) || at.startsWith(head)));
 
+export const judgedHead = (round: Pick<ReviewRound, "kept">, head: string): string => round.kept?.find((k) => sameHead(k.head, head))?.approved ?? head;
+
+export const approvedAt = (round: Pick<ReviewRound, "at" | "kept">, head: string): boolean => !!round.at && sameHead(round.at, judgedHead(round, head));
+
 const short = (sha: string): string => sha.slice(0, SHA_MIN);
 
 function lastVerdict(t: Task): ReviewRound | undefined {
@@ -37,7 +41,7 @@ export function stageOf(state: ChannelState, t: Task): TaskStage {
   const head = pr?.state === "open" ? pr.sha : undefined;
   const owed = t.review ? { waitingOn: t.review } : {};
   const verdict = lastVerdict(t);
-  const moved = (r: ReviewRound | undefined): r is ReviewRound & { at: string } => !!r?.at && !!head && !sameHead(r.at, head);
+  const moved = (r: ReviewRound | undefined): r is ReviewRound & { at: string } => !!r?.at && !!head && !approvedAt(r, head);
   if (t.state === "done" && t.cancelled) return { stage: "dropped", ...withPr };
   if (pr?.state === "merged" && !failedAt(state, pr).length) return { stage: "done", pr };
   if ((t.state === "done" || t.state === "landing") && verdict?.result.kind === "approved" && moved(verdict)) return { stage: "yours", ...withPr, ...owed, judgedAt: verdict.at };

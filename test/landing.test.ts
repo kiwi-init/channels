@@ -111,19 +111,18 @@ describe("a task with a landing step isn't done on approval (#623)", () => {
     expect(s.tasks.get(t)!.state).toBe("landing");
   });
 
-  test("a PR replaced after the PASS sends the task back to review, and only a person or the lead may replace it", async () => {
+  test("linking a PR after the PASS keeps the approval, from the builder too (#3930 §4, case 13)", async () => {
     const { t, log } = await approved({ then: "merge" });
-    const first = await ev("win", { op: "task.update", task: t, proof: { url: "https://github.com/o/r/pull/1" } });
-    const s0 = fold([log[0]!, log[1]!, first, log[2]!], roster);
-    expect(s0.tasks.get(t)!.state).toBe("landing");
     const builder = await ev("win", { op: "task.update", task: t, proof: { url: "https://github.com/o/r/pull/2" } });
     const lead = await ev("owl", { op: "task.update", task: t, proof: { url: "https://github.com/o/r/pull/3" } });
-    const s = fold([log[0]!, log[1]!, first, log[2]!, builder, lead], roster);
-    expect(s.rejected.get(builder.seq)).toBe(`only a person or the lead links another PR to T${t} once it's approved`);
-    expect(s.tasks.get(t)!.state).toBe("review");
     const run = await ev("win", { op: "task.update", task: t, proof: { url: "https://ci.example.com/runs/9" } });
-    const s2 = fold([...log, run], roster);
-    expect(s2.tasks.get(t)!.state).toBe("landing");
+    const s = fold([...log, builder, lead, run], roster);
+    expect(s.rejected.size).toBe(0);
+    const task = s.tasks.get(t)!;
+    expect(task.state).toBe("landing");
+    expect(task.approvedBy).toBe("mac");
+    expect(task.rounds.length).toBe(1);
+    expect(task.proof!.map((p) => p.url)).toEqual(["https://github.com/o/r/pull/2", "https://github.com/o/r/pull/3", "https://ci.example.com/runs/9"]);
   });
 
   test("a close with a reason is the way out of landing, for a person or the lead only", async () => {

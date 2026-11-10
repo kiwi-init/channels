@@ -21,7 +21,7 @@ import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
 import { answerChecks, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
-import { checkAnswered, checkClosed, checkStep, migrateChecks, questionAnswered, seedSteps } from "./landing-steps.ts";
+import { checkAnswered, checkClosed, checkStep, migrateChecks, questionAnswered, questionWatched, seedSteps } from "./landing-steps.ts";
 import { choiceIn } from "../checks.ts";
 import { stepsOfThen } from "../steps.ts";
 import { omit } from "../omit.ts";
@@ -56,6 +56,7 @@ import type {
   SecretRoom,
   Spec,
   Task,
+  StepQuestion,
 } from "./types.ts";
 import { inRoom } from "../room-rules.ts";
 import { packAuthors, unpackAuthors } from "./authors.ts";
@@ -326,7 +327,7 @@ function folding(
   const specs = new Map<number, Spec>(from?.specs?.map((sp) => [sp.ask, sp]));
   const checks = new Map<number, CheckState>(from?.checks?.map((c) => [c.seq, { ...c, ...(c.answers ? { answers: [...c.answers] } : {}) }]));
   if (stepless) migrateChecks(tasks, checks);
-  const questions = new Map<number, Message>((from?.asks ?? []).flatMap((a): [number, Message][] => (a.choices?.length && !a.check ? [[a.seq, a]] : [])));
+  const questions = new Map<number, StepQuestion>(from?.stepQuestions?.map((q) => [q.seq, q]));
   const passedAsks = new Map<number, string>(from?.passedAsks);
   const closeOnItsOwn = (ask: number, m: Pick<Message, "seq" | "from">, at: number): void => {
     const spec = specs.get(ask);
@@ -544,15 +545,23 @@ function folding(
         const changed = replaced === undefined ? `pre-ship check #${m.seq} added after the approval` : `pre-ship check #${replaced} replaced by #${m.seq} after the approval`;
         for (const t of reopened) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, changed);
         answerChecks(checks, m, [...members.values()].find((x) => x.owner)?.name);
-        if (m.choices?.length && !m.check) questions.set(m.seq, m);
+        if (m.choices?.length && !m.check && !m.permission)
+          questions.set(m.seq, { seq: m.seq, from: m.from, ...(m.esc ? { esc: true as const } : {}), ...(m.to?.length ? { to: m.to } : {}), choices: m.choices });
         for (const r of m.re ?? []) {
           const answeredCheck = checks.get(r);
           if (answeredCheck?.answer?.seq === m.seq) checkAnswered(tasks, answeredCheck, { seq: m.seq, by: m.from, at });
           const question = questions.get(r);
-          const first = question?.choices?.[0];
-          if (!question || first === undefined || closedAsks.has(r) || passedAsks.has(r) || !answersAsk(members, question, m.from)) continue;
-          if (choiceIn(m.body, question.choices ?? []) !== first) continue;
+          const first = question?.choices[0];
+          if (!question || first === undefined || !answersAsk(members, question, m.from)) continue;
+          const choice = choiceIn(m.body, question.choices);
+          if (choice === undefined) continue;
+          if (choice !== first) {
+            if (!questionWatched(tasks, r)) questions.delete(r);
+            continue;
+          }
+          questions.delete(r);
           passedAsks.set(r, first);
+          for (const old of [...passedAsks.keys()].slice(0, Math.max(0, passedAsks.size - PASSED_ASKS_KEPT))) passedAsks.delete(old);
           questionAnswered(tasks, r, first, { seq: m.seq, by: m.from, at });
         }
         const parentPlace = parent !== undefined ? placeOf.get(parent) : undefined;
@@ -645,6 +654,7 @@ function folding(
           if (lateClose) reject(lateClose);
           else {
             closedAsks.add(ev.ask);
+            questions.delete(ev.ask);
             const closing = checks.get(ev.ask);
             if (closing && closing.closed === undefined) checkClosed(tasks, closing, { seq: m.seq, by: m.from, at });
             closeCheck(checks, ev.ask, m);
@@ -768,8 +778,9 @@ function folding(
       githubWrite: ctx.githubWrite,
       branchPrefix: ctx.branchPrefix,
       landing: ctx.landing,
-      landingSteps: ctx.landingSteps,
-      passedAsks: [...passedAsks].slice(-PASSED_ASKS_KEPT),
+      ...(ctx.landingSteps ? { landingSteps: ctx.landingSteps } : {}),
+      ...(passedAsks.size ? { passedAsks: [...passedAsks] } : {}),
+      ...(questions.size ? { stepQuestions: [...questions.values()] } : {}),
       merges: ctx.merges,
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],

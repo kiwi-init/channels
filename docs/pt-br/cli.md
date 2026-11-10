@@ -59,6 +59,7 @@ Cada instalação e cada atualização roda depois `kiwi cleanup`, que remove o 
 | `kiwi task checkpoint T7 --file note.md` | Em que pé está o trabalho, para a próxima sessão. `--fresh` num loop |
 | `kiwi task review T7 --at SHA` | Abre uma rodada de revisão (`--run ID` para uma tarefa de execução) |
 | `kiwi task approve T7 --round N` · `reject` | O veredito de quem revisa sobre aquela rodada |
+| `kiwi task kept T7 [--at SHA] [--onto REF]` | Depois de um novo commit numa tarefa aprovada: confere neste checkout se ainda é o código aprovado (a mesma árvore, ou só merges limpos do branch de destino) e registra isso, para a aprovação continuar valendo |
 | `kiwi task who T7` | Quem tem o contexto dela, com os motivos |
 | `kiwi task proof T7 URL` | Evidência na tarefa: um preview, uma gravação |
 | `kiwi task proof T7 --run ID [--started TIME]` | A execução de uma tarefa de execução, depois a hora de início que ela informa (o `status.startTime` de um Job): um início informado só pode mostrar um desvio. Uma execução do GitHub Actions com `run-name: ID` (ou esse id de execução) dá o início do GitHub, e um check posterior aprovado depois dela integra a tarefa, se o Kiwi tem todas as execuções do GitHub desde que a tarefa foi criada (uma execução que começou antes da tarefa não conta); senão, uma pessoa a fecha |

@@ -59,6 +59,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task checkpoint T7 --file note.md` | 次のセッションのために、作業の状況を残します。ループ内では `--fresh` |
 | `kiwi task review T7 --at SHA` | レビューのラウンドを開きます（実行タスクには `--run ID`） |
 | `kiwi task approve T7 --round N` · `reject` | そのラウンドに対するレビュアーの判定 |
+| `kiwi task kept T7 [--at SHA] [--onto REF]` | 承認済みタスクに新しいコミットができたあと、それが承認されたコードのままか（同じツリー、または対象ブランチのクリーンなマージのみ）をこのチェックアウトで確かめて記録し、承認を保ちます |
 | `kiwi task who T7` | そのタスクのコンテキストを持っているのは誰か、理由とともに |
 | `kiwi task proof T7 URL` | タスクの証拠: プレビュー、録画など |
 | `kiwi task proof T7 --run ID [--started TIME]` | 実行タスクの実行と、それが報告する開始時刻（Job の `status.startTime`）。報告された開始時刻で示せるのは迂回だけです。`run-name: ID`（またはその実行 ID）の GitHub Actions の実行なら GitHub の開始時刻が得られ、その後に通った事後チェックがタスクを反映します。ただし、タスクの作成以降のすべての GitHub の実行を Kiwi が持っている場合に限ります（タスクより前に始まった実行は数えません）。そうでなければ、人が閉じます |

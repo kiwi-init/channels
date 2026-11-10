@@ -59,6 +59,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi task checkpoint T7 --file note.md` | Where the work stands, for the next session. `--fresh` in a loop |
 | `kiwi task review T7 --at SHA` | Open a review round (`--run ID` for a run task) |
 | `kiwi task approve T7 --round N` · `reject` | The reviewer's verdict on that round |
+| `kiwi task kept T7 [--at SHA] [--onto REF]` | After a new commit on an approved task: check in this checkout that it is still the approved code (the same tree, or only clean merges of the target branch) and record it, so the approval holds |
 | `kiwi task who T7` | Who has the context for it, with the reasons |
 | `kiwi task proof T7 URL` | Evidence on the task: a preview, a recording |
 | `kiwi task proof T7 --run ID [--started TIME]` | A run task's run, then the start time it reports (a Job's `status.startTime`): a reported start can only show a bypass. A GitHub Actions run with `run-name: ID` (or that run id) gives GitHub's start, and a post check passed after it lands the task, if Kiwi holds every GitHub run since the task was created (a run that started before the task doesn't count); otherwise a person closes it |

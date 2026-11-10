@@ -348,6 +348,49 @@ describe("what a detector saw is tied to what it watches (#3930 §3)", () => {
     expect(ended(closed.state(), v)).toEqual(["s1:open"]);
   });
 
+  test("a question's second option, a snapshot, then its first option: the whole log and the tail from the snapshot agree", async () => {
+    const through = (c: Awaited<ReturnType<typeof channel>>, base: FoldBase) => fold(c.log.slice(base.n), roster, at(10_000), null, null, base);
+    const cut = (c: Awaited<ReturnType<typeof channel>>): FoldBase => {
+      const kept: { base?: FoldBase } = {};
+      fold(c.log, roster, at(10_000), null, null, null, (b) => (kept.base = b));
+      if (!kept.base) throw new Error("the fold kept no base");
+      return kept.base;
+    };
+    const c = await channel();
+    const ask = await c.say("ann", "blocking", "Ship to prd?", { to: ["jow"], esc: true, choices: ["A: yes", "B: hold"] });
+    const t = await c.task([{ words: "owner says ship", by: "jow", detector: { kind: "answered", ask: ask.seq } }]);
+    await c.approve(t);
+    await c.say("jow", "msg", "B: hold", { re: [ask.seq] });
+    const base = cut(c);
+    await c.say("jow", "msg", "A: yes", { re: [ask.seq] });
+    expect(c.state().tasks.get(t)!.state).toBe("done");
+    expect(through(c, base).tasks.get(t)!.state).toBe("done");
+    expect(ended(through(c, base), t)).toEqual(ended(c.state(), t));
+
+    const late = await channel();
+    const q = await late.say("ann", "blocking", "Ship to prd?", { to: ["jow"], esc: true, choices: ["A: yes", "B: hold"] });
+    await late.say("jow", "msg", "B: hold", { re: [q.seq] });
+    const before = cut(late);
+    const u = await late.task([{ words: "owner says ship", by: "jow", detector: { kind: "answered", ask: q.seq } }]);
+    await late.approve(u);
+    const attached = cut(late);
+    await late.say("jow", "msg", "A: yes", { re: [q.seq] });
+    const whole = late.state();
+    expect(ended(whole, u)).toEqual(["s1:open"]);
+    expect(whole.tasks.get(u)!.state).toBe("landing");
+    expect(ended(through(late, before), u)).toEqual(ended(whole, u));
+    expect(ended(through(late, attached), u)).toEqual(ended(whole, u));
+
+    const open = await channel();
+    const o = await open.say("ann", "blocking", "Ship to prd?", { to: ["jow"], esc: true, choices: ["A: yes", "B: hold"] });
+    const unanswered = cut(open);
+    const v = await open.task([{ words: "owner says ship", by: "jow", detector: { kind: "answered", ask: o.seq } }]);
+    await open.approve(v);
+    await open.say("jow", "msg", "A: yes", { re: [o.seq] });
+    expect(open.state().tasks.get(v)!.state).toBe("done");
+    expect(through(open, unanswered).tasks.get(v)!.state).toBe("done");
+  });
+
   test("a snapshot from before steps turns its open pre-ship question into a step once, and one answer ends it", async () => {
     const c = await channel();
     const t = await c.task(undefined, "merge");
