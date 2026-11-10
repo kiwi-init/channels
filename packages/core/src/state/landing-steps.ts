@@ -3,7 +3,7 @@ import { arm, currentStep, mintSteps, STEPS_MAX, stepById, stepsOfThen, stepText
 import type { CheckState } from "./checks.ts";
 import { isReviewCheck } from "../protocol.ts";
 import { approvedAt, judgedHead } from "../stage.ts";
-import { runStart, runsUnknownSince, shaKey, succeededBy, type GithubPr, type GithubState } from "./github.ts";
+import { releaseOf, runStart, runsUnknownSince, shaKey, succeededBy, type GithubPr, type GithubState } from "./github.ts";
 import type { Task } from "./types.ts";
 
 export type StepMark = { seq: number; by: string; at: number };
@@ -117,7 +117,11 @@ export function landedRefusal(view: StepView, task: Task, artifact: CheckArtifac
   if (missing) return `${id(task)}'s PR #${pr.number} merged without ${missing}: a person closes it with a reason`;
   if (artifact.kind === "npm") return task.steps?.some((s) => s.from === "then" && s.words.startsWith(`publish ${artifact.pkg}@`)) ? null : `${id(task)} doesn't publish ${artifact.pkg}`;
   const own = pr.repo.toLowerCase() === artifact.repo.toLowerCase() && pr.number === artifact.pr && pr.sha === artifact.sha;
-  return own ? null : `${id(task)} lands at ${pr.repo}#${pr.number} at ${pr.sha.slice(0, 7)}, not ${artifactWords(artifact)}`;
+  if (!own) return `${id(task)} lands at ${pr.repo}#${pr.number} at ${pr.sha.slice(0, 7)}, not ${artifactWords(artifact)}`;
+  const old = (task.steps ?? []).filter((s) => s.from === "then").map((s) => s.words);
+  if (old.some((words) => words.startsWith("publish "))) return `${id(task)} hasn't landed: it waits for its package on npm`;
+  if (old.includes("release") && !releaseOf(view.github, pr)) return `${id(task)} hasn't landed: it waits for a release that contains PR #${pr.number}`;
+  return null;
 }
 
 export interface StepObservation {

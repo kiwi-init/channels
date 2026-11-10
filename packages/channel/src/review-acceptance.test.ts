@@ -141,6 +141,28 @@ describe("the owner's app after the gate (#3930 §5)", () => {
     expect(app.posts).toEqual([{ repo: "o/r", sha: S }]);
   });
 
+  test("a failure that shows at a head after its green is answered again, once, and a ruleset still requiring the check keeps it so", async () => {
+    const c = await channel();
+    const app = ownerApp(`room-${crypto.randomUUID()}`);
+    const check = reviewCheckOf(app.link.roomId);
+    const shown = (run: number, conclusion: string) => c.github([{ event: "check_run", sha: S, name: check, run, status: "completed", conclusion }]);
+    await c.ev("jow", { op: "github.rules", repo: "o/r", branch: "main", required: [check], merge: ["squash"] });
+    await postReviewChores(app.link, c.state());
+    await postReviewChores(app.link, c.state());
+    expect(app.posts).toHaveLength(1);
+    await shown(1, "success");
+    await shown(2, "failure");
+    await postReviewChores(app.link, c.state());
+    await postReviewChores(app.link, c.state());
+    expect(app.posts).toEqual([
+      { repo: "o/r", sha: S },
+      { repo: "o/r", sha: S },
+    ]);
+    await shown(3, "success");
+    await postReviewChores(app.link, c.state());
+    expect(app.posts).toHaveLength(2);
+  });
+
   test("a pull request in a repo the channel doesn't hold is left alone", async () => {
     const c = await channel();
     await c.ev("jow", { op: "repos.set", repos: [] });

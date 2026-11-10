@@ -54,12 +54,18 @@ export const stepPosted = (roomId: string, key: string): void => {
   seen.add(`${roomId}:${key}`);
 };
 
-const retired = new Set<string>();
+const retired = new Map<string, string>();
 
 const retiredKey = (roomId: string, head: RetiredHead) => `${roomId}:${shaKey(head.repo, head.sha)}`;
 
-export const headsToRetire = (roomId: string, state: ChannelState): RetiredHead[] => retiredHeads(state, reviewCheckOf(roomId)).filter((h) => !retired.has(retiredKey(roomId, h)));
+const shownAt = (roomId: string, state: ChannelState, head: RetiredHead): string => {
+  const check = state.github.checks.get(shaKey(head.repo, head.sha))?.get(reviewCheckOf(roomId));
+  return check ? `${check.run ?? ""}:${check.status ?? ""}:${check.conclusion ?? ""}` : "";
+};
 
-export const headRetired = (roomId: string, head: RetiredHead): void => {
-  retired.add(retiredKey(roomId, head));
+export const headsToRetire = (roomId: string, state: ChannelState): RetiredHead[] =>
+  retiredHeads(state, reviewCheckOf(roomId)).filter((h) => retired.get(retiredKey(roomId, h)) !== shownAt(roomId, state, h));
+
+export const headRetired = (roomId: string, state: ChannelState, head: RetiredHead): void => {
+  retired.set(retiredKey(roomId, head), shownAt(roomId, state, head));
 };

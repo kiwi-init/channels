@@ -30,7 +30,7 @@ export async function postReviewChores(ch: ChannelLink, state: ChannelState): Pr
       },
       (seq) => {
         const head = heads[seq];
-        if (head && answered.has(seq)) headRetired(ch.roomId, head);
+        if (head && answered.has(seq)) headRetired(ch.roomId, state, head);
       },
     ))
   )

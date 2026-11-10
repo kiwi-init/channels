@@ -194,6 +194,10 @@ describe("a log written under the ship gate folds to the same end (#3930 §6)", 
     await tag.opened(a, S1);
     await tag.approve(a, S1);
     await tag.merged(a, S1);
+    const unreleased = await tag.land("jow", a, prAt(S1));
+    expect(tag.state().rejected.get(unreleased.seq)).toBe(`T${a} hasn't landed: it waits for a release that contains PR #7`);
+    expect(tag.state().tasks.get(a)!.state).toBe("landing");
+    await tag.ev("jow", { op: "github.release", repo: R, tag: "v1.0.0", at: at(tag.log.length + 1), shas: [M1], prs: [] });
     const released = await tag.land("jow", a, prAt(S1));
     expect(tag.state().tasks.get(a)).toMatchObject({ state: "done", closedSeq: released.seq });
     expect(
