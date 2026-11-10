@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import * as Effect from "effect/Effect";
 import { chromium, type CDPSession, type Page } from "playwright-core";
-import { chooseThread } from "@kiwi/core/state.ts";
 import { AgentSession, oneLook, runAgent } from "../src/agent.ts";
 import { loadConfig } from "../src/config.ts";
 import { daemonSock } from "../src/daemon/protocol.ts";
@@ -63,14 +62,13 @@ const mb = (b: number) => Math.round((b / 1048576) * 10) / 10;
 const { relay, port } = await startLocalRelay(join(data, "relay"), DIST, { rateLimits: false });
 const BASE = `http://127.0.0.1:${port}/`;
 const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
-const browserPid = browser.process?.()?.pid;
 
 function browserConnections(): number {
   const ss = spawnSync("ss", ["-Htnp", "state", "established", `( dport = :${port} )`], { encoding: "utf8" });
   return ss.stdout
     .split("\n")
     .filter((l) => l.trim())
-    .filter((l) => /chrom|headless/i.test(l) || (browserPid !== undefined && l.includes(`pid=${browserPid},`))).length;
+    .filter((l) => /chrom|headless/i.test(l)).length;
 }
 
 async function sample(cdp: CDPSession, page: Page, phase: string): Promise<Record<string, number | string>> {
@@ -142,18 +140,32 @@ try {
   await switchTo(page, a);
   samples.push(await sample(cdp, page, `in ${a}, after Home`));
 
+  const head = await runAgent(oneLook(Effect.map(asker.state(), ({ state }) => Math.max(...state.askHeads.keys()))));
+  if (!Number.isFinite(head)) throw new Error(`no message of Jonatas's in ${b} for the ask to hold`);
   const ask = await runAgent(
-    oneLook(
-      Effect.gen(function* () {
-        const { state } = yield* asker.state();
-        const chosen = chooseThread(state, asker.me, {});
-        if (typeof chosen === "string") return yield* Effect.fail(new Error(chosen));
-        return yield* asker.send("Which colour for the button, blue or green?", { kind: "ask", ...(chosen.to ? { to: chosen.to } : {}) });
-      }),
-    ),
+    oneLook(Effect.map(asker.escalate("Which colour for the button, blue or green?", undefined, undefined, { choices: ["A: blue", "B: green"], holds: [head] }), (sent) => sent.seq)),
   );
   const arrivedMs = await until(page, b!, (l) => l.includes("need you"), 30000);
   log(`an ask in ${b} while ${a} is open: ${arrivedMs === null ? "no badge after 30 s" : `badge after ${arrivedMs} ms`}`);
+  if (arrivedMs === null) {
+    const seen = await runAgent(
+      oneLook(
+        Effect.gen(function* () {
+          const { state } = yield* asker.state();
+          const m = state.openAsks.find((x) => x.seq === ask);
+          return { open: !!m, to: m?.to ?? null, trust: state.trust.get(ask) ?? null, openAsks: state.openAsks.length };
+        }),
+      ),
+    );
+    log(`the ask #${ask} as the asker sees it: ${JSON.stringify(seen)}`);
+    log(`${b}'s tile in ${a}: ${await tileLabel(page, b!)}`);
+    await page.getByRole("button", { name: "Home", exact: true }).click();
+    await page.waitForTimeout(5000);
+    const listed = await page.evaluate(() => document.body.innerText.includes("Which colour for the button"));
+    log(`on Home: the ask is ${listed ? "listed" : "not listed"}; ${b}'s tile: ${await tileLabel(page, b!)}`);
+    report.diagnosis = { homeListsAsk: listed, tileOnHome: await tileLabel(page, b!) };
+    await switchTo(page, a);
+  }
   await runAgent(asker.closeAsk(ask, "settled elsewhere"));
   const clearedMs = arrivedMs === null ? null : await until(page, b!, (l) => !l.includes("need you"), 30000);
   log(`the ask closed: ${arrivedMs === null ? "nothing to clear" : clearedMs === null ? "badge still there after 30 s" : `badge gone after ${clearedMs} ms`}`);
