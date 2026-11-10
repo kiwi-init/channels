@@ -116,9 +116,21 @@ export interface FoldCtx {
   compactProposal: Compact | null;
 }
 
+function approvalHoldsAgain(t: Task, head: string, mark: { seq: number; by: string; at: number }): void {
+  const last = t.rounds.at(-1);
+  if (t.state !== "review" || last?.result.kind !== "approved" || last.stale === undefined || !approvedAt(last, head)) return;
+  last.stale = undefined;
+  t.state = "landing";
+  t.approvedBy = last.result.by;
+  t.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `head ${head.slice(0, 7)} is the approved code: the approval holds again` });
+  t.updatedAt = mark.at;
+}
+
 function headMoved(t: Task, pr: GithubPr & { sha: string }, mark: { seq: number; by: string; at: number }): void {
   const last = t.rounds.at(-1);
-  if (t.state !== "landing" || last?.result.kind !== "approved" || !last.at || approvedAt(last, pr.sha)) return;
+  if (last?.result.kind !== "approved" || !last.at) return;
+  if (approvedAt(last, pr.sha)) return approvalHoldsAgain(t, pr.sha, mark);
+  if (t.state !== "landing") return;
   last.stale = mark.seq;
   t.state = "review";
   t.approvedBy = undefined;
@@ -137,16 +149,15 @@ function keptRefusal(task: Task, kept: KeptEvidence, from: string, lead: boolean
 
 function keepApproval(c: FoldCtx, task: Task, kept: KeptEvidence, mark: { seq: number; by: string; at: number; rts?: number }): void {
   const last = task.rounds.at(-1);
-  if (!last || last.kept?.some((k) => k.head === kept.head)) return;
-  last.kept = [...(last.kept ?? []), { ...kept, seq: mark.seq, by: mark.by, ...(mark.rts !== undefined ? { rts: mark.rts } : {}) }];
-  const words = kept.how === "same-tree" ? "the same tree as" : `a clean merge of ${kept.ref} into`;
-  task.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `${kept.head.slice(0, 7)} is ${words} the approved ${kept.approved.slice(0, 7)}: the approval holds` });
-  task.updatedAt = mark.at;
-  const head = prOfTask(c.github, c.branchPrefix, task)?.sha;
-  if (last.stale === undefined || task.state !== "review" || openRound(task) || last.result.kind !== "approved" || !head || !approvedAt(last, head)) return;
-  last.stale = undefined;
-  task.state = "landing";
-  task.approvedBy = last.result.by;
+  if (!last) return;
+  if (!last.kept?.some((k) => k.head === kept.head)) {
+    last.kept = [...(last.kept ?? []), { ...kept, seq: mark.seq, by: mark.by, ...(mark.rts !== undefined ? { rts: mark.rts } : {}) }];
+    const words = kept.how === "same-tree" ? "the same tree as" : `a clean merge of ${kept.ref} into`;
+    task.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `${kept.head.slice(0, 7)} is ${words} the approved ${kept.approved.slice(0, 7)}: the approval holds` });
+    task.updatedAt = mark.at;
+  }
+  const pr = prOfTask(c.github, c.branchPrefix, task);
+  if (pr?.sha && pr.state === "open") approvalHoldsAgain(task, pr.sha, mark);
 }
 
 function landedRefusal(c: FoldCtx, task: Task, artifact: CheckArtifact, member: FoldMember, from: string): string | null {

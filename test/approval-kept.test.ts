@@ -87,7 +87,7 @@ describe("an approval survives a new head on recorded evidence (#3930 §4)", () 
     expect(t.approvedBy).toBe("mac");
     expect(t.rounds.length).toBe(1);
     expect(t.rounds[0]!.stale).toBeUndefined();
-    expect(t.notes.at(-1)!.text).toBe("bbbbbbb is the same tree as the approved aaaaaaa: the approval holds");
+    expect(t.notes.slice(-2).map((n) => n.text)).toEqual(["bbbbbbb is the same tree as the approved aaaaaaa: the approval holds", "head bbbbbbb is the approved code: the approval holds again"]);
   });
 
   test("a new head with no evidence isn't kept, and the approved head needs none (case 24)", async () => {
@@ -100,6 +100,58 @@ describe("an approval survives a new head on recorded evidence (#3930 §4)", () 
     expect(t.approvedBy).toBeUndefined();
     expect(t.rounds.at(-1)!.result.kind).toBe("approved");
     expect(t.notes.at(-1)!.text).toBe("new head bbbbbbb on o/r#7 after the approval: back to review");
+  });
+
+  test("a head that returns to kept code holds the approval again, on the push or on evidence sent again", async () => {
+    const { id, log } = await approvedAtA();
+    const evidence = await keep("win", id, kept());
+    const toB = await push(id, B);
+    const toC = await push(id, C);
+    const away = fold([...log, evidence, toB, toC], roster).tasks.get(id)!;
+    expect(away.state).toBe("review");
+    const back = await push(id, B);
+    const t = fold([...log, evidence, toB, toC, back], roster).tasks.get(id)!;
+    expect(t.state).toBe("landing");
+    expect(t.approvedBy).toBe("mac");
+    expect(t.rounds.length).toBe(1);
+    expect(t.rounds[0]!.stale).toBeUndefined();
+    expect(t.rounds[0]!.kept).toEqual([{ ...kept(), seq: evidence.seq, by: "win", rts: evidence.seq }]);
+    expect(t.notes.at(-1)!.text).toBe("head bbbbbbb is the approved code: the approval holds again");
+    const resent = await keep("win", id, kept({ tip: TIP2 }));
+    const again = fold([...log, evidence, toB, toC, back, resent], roster).tasks.get(id)!;
+    expect(again.state).toBe("landing");
+    expect(again.rounds[0]!.kept).toEqual(t.rounds[0]!.kept);
+  });
+
+  test("a head that returns to the approved commit holds the approval again, with no evidence", async () => {
+    const { id, log } = await approvedAtA();
+    const toC = await push(id, C);
+    const back = await push(id, A);
+    const t = fold([...log, toC, back], roster).tasks.get(id)!;
+    expect(t.state).toBe("landing");
+    expect(t.approvedBy).toBe("mac");
+    expect(t.rounds[0]!.stale).toBeUndefined();
+    expect(t.rounds[0]!.kept).toBeUndefined();
+  });
+
+  test("evidence sent again doesn't revive an approval that a new round, or a rejection, replaced", async () => {
+    const { id, log } = await approvedAtA();
+    const evidence = await keep("win", id, kept());
+    const toC = await push(id, C);
+    const round = await ev("win", { op: "task.update", task: id, state: "review", at: C });
+    const back = await push(id, B);
+    const open = fold([...log, evidence, toC, round, back], roster);
+    expect(open.tasks.get(id)!.state).toBe("review");
+    expect(open.tasks.get(id)!.rounds.at(-1)).toMatchObject({ n: 2, at: C, result: { kind: "open" } });
+    const resent = await keep("win", id, kept());
+    const s = fold([...log, evidence, toC, round, back, resent], roster);
+    expect(s.rejected.get(resent.seq)).toBe(`T${id} has no approval pinned to a commit`);
+    expect(s.tasks.get(id)!.state).toBe("review");
+    const reject = await ev("mac", { op: "task.update", task: id, state: "doing", verdict: "rejected", round: 2, at: C, note: "no" });
+    const late = await keep("win", id, kept());
+    const after = fold([...log, evidence, toC, round, back, reject, late], roster);
+    expect(after.rejected.has(late.seq)).toBe(true);
+    expect(after.tasks.get(id)!.state).toBe("doing");
   });
 
   test("evidence for one head doesn't cover a later one", async () => {
