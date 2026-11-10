@@ -11,8 +11,8 @@ if (process.argv.includes("--help") || !process.argv.some((a) => a.startsWith("-
 (bun scripts/ui-harness.ts there) and its own scripts/perf-ui.ts, which drives its first run. In one browser profile on one local
 relay: the old build signs in, makes a channel, sends --lines lines (60), leaves a draft in the composer and, with the relay down,
 a message that fails. Then the relay comes back on the same address serving this build, and the same profile opens it: still
-signed in, the channel's messages there from the cache before the relay answers, none missing, the draft and the failed message
-still there; a second reload opens the same again (the cache rows this build rewrote), and nothing throws. Chromium only.
+signed in, the channel's messages there from the cache, none missing, and the draft and the failed message still there when
+the old release kept them across a restart at all (one that didn't is reported as n/a); a second reload opens the same again (the cache rows this build rewrote), and nothing throws. Chromium only.
 
 --control reopens with the old release's own build instead: what the old release itself keeps across a restart, to read a failure against.
 
@@ -106,7 +106,12 @@ try {
   expect(failed, "with the relay down, the old release marks a message as not sent");
   await old.composer(page).fill(DRAFT);
   await page.waitForTimeout(2500);
-  console.log(`local storage as the old release leaves it: ${await kept(page)}`);
+  const left = await kept(page);
+  console.log(`local storage as the old release leaves it: ${left}`);
+  const keepsDrafts = left.includes("kiwi:drafts=");
+  const keepsUnsent = left.includes("kiwi:unsent=");
+  const control = process.argv.includes("--control");
+  const skipped = (what: string, why: string) => console.log(`n/a  ${what}: ${why}`);
   await context.close();
 
   relay = await startLocalRelay(join(data, "relay"), NEW_DIST, { rateLimits: false, port });
@@ -118,19 +123,22 @@ try {
   const first = await marks(page);
   console.log(`marks on the first open: ${JSON.stringify(first)}`);
   expect((await page.locator("dialog.onb, .onb").count()) === 0, "still signed in: no onboarding, no sign-in screen");
-  expect(first["cache-open"] !== undefined && first["first-message"] !== undefined, "the old cache opened and painted (no blank first open)");
+  if (control) skipped("the cache marks", "the old release's own build is not asked for this build's marks");
+  else expect(first["cache-open"] !== undefined && first["first-message"] !== undefined, "the old cache opened and painted (no blank first open)");
   await page.waitForTimeout(6000);
   const after = await rows(page);
   expect(after >= before, `no message is missing (${before} rows before, ${after} now)`);
-  expect(await shows(page, FAILED, 5000), "the message that failed is still there");
-  expect((await page.locator("article.msg.is-failed, .msg-failed").count()) > 0, "and still marked as not sent");
-  expect(
-    (await old
-      .composer(page)
-      .inputValue()
-      .catch(() => "")) === DRAFT,
-    "the draft is still in the composer",
-  );
+  if (keepsUnsent) expect(await shows(page, FAILED, 5000), "the message that failed is still there: marked not sent, or sent by itself now the relay is back");
+  else skipped("the message that failed", "the old release kept no unsent messages across a restart");
+  if (keepsDrafts)
+    expect(
+      (await old
+        .composer(page)
+        .inputValue()
+        .catch(() => "")) === DRAFT,
+      "the draft is still in the composer",
+    );
+  else skipped("the draft", "the old release kept no drafts across a restart");
 
   await page.reload();
   expect(await shows(page, last, 30000), "a second open, from the cache rows this build rewrote, shows the same");
