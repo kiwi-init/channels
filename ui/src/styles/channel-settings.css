@@ -22,6 +22,30 @@
   scale: 0.96;
 }
 
+.modal-lead:has(.cset-tile-off) {
+  position: relative;
+}
+
+.cset-tile-off {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.cset-tile-off:hover {
+  color: var(--ink);
+}
+
 .cset-tile img {
   width: 100%;
   height: 100%;

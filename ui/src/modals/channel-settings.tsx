@@ -24,7 +24,6 @@ import { LandingPick, landingWord } from "~/modals/landing-pick"
 import { Confirm, Group, InlineEdit, Row } from "~/settings/controls"
 import { useAppCan } from "~/live/app-can"
 import { isMuted } from "~/live/mute"
-import { openMenu } from "~/kit/menu-open"
 import { copyText } from "~/kit/toasts"
 import { OutsideLink } from "~/kit/outside"
 
@@ -182,24 +181,21 @@ function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
         className="cset-tile is-button"
         aria-label={channel.icon ? t("modals.channel.settings.image.change") : t("modals.channel.settings.image.choose")}
         title={channel.icon ? t("modals.channel.settings.image.change") : t("modals.channel.settings.image.choose")}
-        onClick={(e) => {
-          if (!channel.icon) return input.current?.click()
-          const at = e.currentTarget.getBoundingClientRect()
-          openMenu.set({
-            x: at.left,
-            y: at.bottom + 4,
-            label: t("modals.channel.settings.image.change"),
-            groups: [
-              [
-                { label: t("modals.channel.settings.image.change"), run: () => input.current?.click() },
-                { label: t("modals.channel.settings.icon.remove"), run: () => void app.actions.setIcon(channel.code, null) },
-              ],
-            ],
-          })
-        }}
+        onClick={() => input.current?.click()}
       >
         {tile}
       </button>
+      {channel.icon && (
+        <button
+          type="button"
+          className="cset-tile-off"
+          aria-label={t("modals.channel.settings.image.remove")}
+          title={t("modals.channel.settings.image.remove")}
+          onClick={() => void app.actions.setIcon(channel.code, null)}
+        >
+          <Icon name="close" size={10} />
+        </button>
+      )}
       <input
         ref={input}
         type="file"
