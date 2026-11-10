@@ -73,6 +73,39 @@ describe("the rail's menus are the app's one context menu (T1826)", () => {
     expect(railMenu({ kind: "channel", code: "a" }, at, rail([games]))?.groups).toHaveLength(1)
   })
 
+  describe("Invite, Leave and Delete need to know if you own the channel (T3486)", () => {
+    const groups = (own: boolean | undefined) => {
+      const went: string[] = []
+      const r = { ...rail([], [], true), own, invite: (code: string) => void went.push(`invite ${code}`), end: (code: string) => void went.push(`end ${code}`) }
+      const menu = railMenu({ kind: "channel", code: "a" }, at, r)
+      return { went, menu, labels: menu?.groups.map((g) => g.map((i) => i.label)) }
+    }
+
+    test("a channel you own offers Invite people, and Delete last behind its own separator", () => {
+      const { labels, menu, went } = groups(true)
+      expect(labels).toEqual([["Mute channel", "New folder"], ["Channel settings", "Invite people"], ["Delete channel…"]])
+      menu?.groups[1]?.[1]?.run()
+      menu?.groups[2]?.[0]?.run()
+      expect(went).toEqual(["invite a", "end a"])
+    })
+
+    test("a channel you are a member of offers Leave, and no Invite", () => {
+      const { labels, menu, went } = groups(false)
+      expect(labels).toEqual([["Mute channel", "New folder"], ["Channel settings"], ["Leave this channel…"]])
+      menu?.groups[2]?.[0]?.run()
+      expect(went).toEqual(["end a"])
+    })
+
+    test("a channel that hasn't loaded since this was stored offers neither", () => {
+      expect(groups(undefined).labels).toEqual([["Mute channel", "New folder"], ["Channel settings"]])
+    })
+
+    test("a tile you are waiting to join offers none of them, whatever is stored", () => {
+      const r = { ...rail([]), own: true, invite: () => {}, end: () => {} }
+      expect(railMenu({ kind: "channel", code: "a" }, at, r)?.groups).toHaveLength(1)
+    })
+  })
+
   test("a folder that is gone opens nothing", () => {
     expect(railMenu({ kind: "folder", id: "x" }, at, rail([]))).toBeNull()
   })

@@ -335,7 +335,7 @@ function ModalView({ channel }: { channel: Channel }) {
         {modal.kind === "person" ? (
           <Profile key={modal.name} channel={channel} name={modal.name} onClose={close} />
         ) : modal.kind === "channel" ? (
-          <ChannelSettings channel={channel} tab={modal.tab} onClose={close} />
+          <ChannelSettings channel={channel} tab={modal.tab} end={modal.end} onClose={close} />
         ) : modal.kind === "invite" ? (
           <Invite channel={channel} onClose={close} />
         ) : modal.kind === "versions" ? (

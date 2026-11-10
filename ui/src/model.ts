@@ -535,6 +535,7 @@ export interface ChannelTile {
   needsYou: number
   last: number
   muted?: true
+  own?: boolean
 }
 
 export interface InviteInfo {

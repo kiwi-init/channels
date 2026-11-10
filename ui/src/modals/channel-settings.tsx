@@ -36,11 +36,11 @@ const TABS: readonly (readonly [ChannelTab, Key])[] = [
   ["notes", "modals.channel.settings.tab.notes"],
 ]
 
-export function ChannelSettings({ channel, tab: first, onClose }: { channel: Channel; tab?: ChannelTab; onClose: () => void }) {
+export function ChannelSettings({ channel, tab: first, end, onClose }: { channel: Channel; tab?: ChannelTab; end?: true | undefined; onClose: () => void }) {
   const { app, go, toast } = useApp()
   const own = channel.youOwn
   const owner = channel.people.find((p) => p.owner)
-  const [ending, setEnding] = useState(false)
+  const [ending, setEnding] = useState(!!end)
   const tabs = TABS.filter(([id]) => id !== "notes" || (channel.facts?.length ?? 0) > 0)
   const [picked, setTab] = useState<ChannelTab>(first ?? "general")
   const tab = tabs.some(([id]) => id === picked) ? picked : "general"
