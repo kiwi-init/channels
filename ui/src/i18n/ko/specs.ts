@@ -89,7 +89,7 @@ export default {
   "specs.page.all.specs": "모든 스펙",
   "specs.page.parts": "스펙, 내부, 결과",
   "specs.page.spec": "스펙",
-  "specs.page.inside": "내부",
+  "specs.page.inside": "작업",
   "specs.page.result": "결과",
   "specs.page.to.look.at": "확인할 것 {count}개",
   "specs.page.asked.by": "{who} 요청 {when}",
