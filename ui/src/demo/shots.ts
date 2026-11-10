@@ -11,6 +11,7 @@ export interface Shot {
   streams?: boolean
   onboarding?: true
   usage?: Partial<Usage>
+  broken?: true
 }
 
 const PAID: Partial<Usage> = { plan: "paid", used: 3_120, limit: 100_000, paidLimit: 100_000, upgradeUrl: null, billingUrl: "https://billing.stripe.com/demo" }
@@ -19,6 +20,7 @@ const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "ki
 
 export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
+  "channel-broken": { ...kiwi(), broken: true },
   home: { scenario: "full", channel: null },
   "home-calm": { scenario: "home-calm", channel: null },
   "long-feed": { scenario: "long", channel: "kiwi" },

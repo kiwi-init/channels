@@ -40,6 +40,7 @@ export function DemoApp() {
   const [nav, setNav] = useState<Nav>(() => ({ ...(shot?.channel ? navigate(startNav(null), { to: "channel", code: shot.channel }) : startNav(null)), ...shot?.nav }))
   const app = useDemo(shot?.scenario ?? "full", nav.channel, look, shot?.usage)
   const go = useCallback((g: Go) => setNav((n) => navigate(n, g)), [])
+  const [mended, setMended] = useState(false)
   useEffect(uiBooted, [])
   useKeepPlace(nav)
   useEffect(() => {
@@ -62,5 +63,7 @@ export function DemoApp() {
   useEffect(() => {
     if (DEMO_HANDLES) document.documentElement.dataset.demoHandles = String(renamedAgents(shown))
   }, [shown])
-  return <Root app={shown} nav={DEMO_HANDLES ? navWithDemoHandles(nav, app) : nav} go={go} />
+  const inChannel = !!nav.channel
+  const broken = useMemo(() => (shot?.broken && !mended ? { channel: inChannel, retry: () => setMended(true) } : undefined), [inChannel, mended])
+  return <Root app={shown} nav={DEMO_HANDLES ? navWithDemoHandles(nav, app) : nav} go={go} broken={broken} />
 }
