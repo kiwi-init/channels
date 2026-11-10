@@ -41,3 +41,17 @@ export const reactionsOn =
   (base: string) =>
   (url: URL): boolean =>
     url.origin === new URL(base).origin && url.pathname.startsWith("/reactions/");
+
+const LEAVING = "shots:leaving";
+
+export async function stopFetchOnLeave(page: Page): Promise<() => Promise<void>> {
+  await page.addInitScript((leaving) => {
+    const ask = window.fetch;
+    let left = false;
+    addEventListener(leaving, () => {
+      left = true;
+    });
+    window.fetch = Object.assign((...args: Parameters<typeof ask>) => (left ? new Promise<Response>(() => {}) : ask(...args)), ask);
+  }, LEAVING);
+  return () => page.evaluate((leaving) => void dispatchEvent(new Event(leaving)), LEAVING);
+}
