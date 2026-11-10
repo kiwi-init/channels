@@ -20,7 +20,7 @@ import type { Channel, Room } from "~/model"
 import { nickname, roomPeople, seatRoot, shown } from "~/names"
 import { useApp, type ChannelTab, useGo } from "~/nav"
 import { repoOffers } from "~/modals/repo-offers"
-import { LandingPick } from "~/modals/landing-pick"
+import { LandingPick, landingWord } from "~/modals/landing-pick"
 import { Confirm, Group, InlineEdit, Row } from "~/settings/controls"
 import { useAppCan } from "~/live/app-can"
 import { isMuted } from "~/live/mute"
@@ -431,6 +431,8 @@ function GitHub({ channel }: { channel: Channel }) {
         <Row label={t("modals.channel.settings.github.write")} hint={write ? t("modals.channel.settings.github.write.on") : t("modals.channel.settings.github.write.off")}>
           <Toggle on={write} label={t("modals.channel.settings.github.write")} disabled={!own} onChange={(on) => app.actions.setGithubWrite(channel.code, on)} />
         </Row>
+      </Group>
+      <Group title={t("modals.channel.settings.tasks.prs")}>
         <Row label={t("modals.channel.settings.branch.prefix")} hint={prefix ? t("modals.channel.settings.branch.prefix.set", { prefix }) : t("modals.channel.settings.branch.prefix.none")}>
           {sets ? (
             <span className="cset-prefix">
@@ -450,12 +452,8 @@ function GitHub({ channel }: { channel: Channel }) {
             <span className="cset-mono">{prefix ?? t("modals.channel.settings.none")}</span>
           )}
         </Row>
-        <Row label={t("modals.channel.settings.landing")} hint={landing ? t("modals.channel.settings.landing.set", { landing }) : t("modals.channel.settings.landing.none")}>
-          {sets ? (
-            <LandingPick value={landing} onPick={(then) => app.actions.setLanding(channel.code, then)} />
-          ) : (
-            <span className="cset-mono">{landing ?? t("modals.channel.settings.landing.approval")}</span>
-          )}
+        <Row label={t("modals.channel.settings.landing")} hint={landing ? t("modals.channel.settings.landing.set") : t("modals.channel.settings.landing.none")}>
+          {sets ? <LandingPick value={landing} onPick={(then) => app.actions.setLanding(channel.code, then)} /> : <span>{landingWord(landing)}</span>}
         </Row>
         <Row label={t("modals.channel.settings.people.merge")} hint={channel.peopleMerge ? t("modals.channel.settings.people.merge.on") : t("modals.channel.settings.people.merge.off")}>
           <Toggle on={!!channel.peopleMerge} label={t("modals.channel.settings.people.merge")} disabled={!sets} onChange={(on) => app.actions.setPeopleMerge(channel.code, on)} />
