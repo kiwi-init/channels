@@ -16,7 +16,7 @@ import { harnessDist } from "./ui-harness.ts";
 if (process.argv.includes("--help")) {
   console.log(`A channel's needs-you badge on the rail moves while you sit in another channel. Three channels; an agent in alpha.
 With gamma open, the agent asks Jonatas in alpha: alpha's tile shows 1 need you. Into alpha and back to gamma, it still shows
-exactly 1. The agent closes the ask: the badge goes. --shot PATH saves the rail as it is once the ask has arrived.
+exactly 1, and only alpha and gamma open sockets (beta keeps its follower). The agent closes the ask: the badge goes. --shot PATH saves the rail as it is once the ask has arrived.
 
   bun scripts/ui-harness.ts && bun scripts/ui-rail-needs.ts [--dist=ui/dist-harness] [--shot rail.png]`);
   process.exit(0);
@@ -119,9 +119,14 @@ try {
   check("an ask in alpha shows 1 need you on alpha's tile while gamma is open", arrived.ms === null ? `after ${WAIT_MS / 1000} s the tile reads "${arrived.label}"` : null);
   if (SHOT) await page.locator('nav[aria-label="Channels"]').screenshot({ path: SHOT });
 
+  const opened: string[] = [];
+  page.on("websocket", (ws) => void opened.push(ws.url()));
   await switchTo(page, "alpha");
   await switchTo(page, "gamma");
   const back = await until(page, "alpha", (l) => l.includes("1 need you"));
+  await page.waitForTimeout(2000);
+  const rooms = new Set(opened.map((u) => /\/rooms\/([^/]+)\/ws/.exec(u)?.[1] ?? u));
+  check("into alpha and back to gamma, only those two channels open sockets: beta keeps its follower", rooms.size > 2 ? `${rooms.size} rooms reconnected: ${opened.join(", ")}` : null);
   check("into alpha and back to gamma, alpha's tile still shows exactly 1 need you", back.ms === null ? `after ${WAIT_MS / 1000} s the tile reads "${back.label}"` : null);
 
   await runAgent(asker.closeAsk(ask, "settled elsewhere"));
