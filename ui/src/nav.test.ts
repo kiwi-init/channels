@@ -150,6 +150,9 @@ describe("every place you can go to is a step back (T1848)", () => {
   test("a panel, a modal and a dialog are not places", () => {
     const nav = run(startNav("a"), { to: "panel", panel: { kind: "task", task: 7 } }, { to: "modal", modal: { kind: "invite" } }, { to: "modal", modal: null }, { to: "dialog", dialog: "palette" })
     expect(nav.back).toEqual([])
+  })
+})
+
 describe("every task link does what a board row does (T1849)", () => {
   test("a task link opens the task's panel, and the same link again closes it", () => {
     const open = navigate(startNav("a"), { to: "task", task: 7 })
