@@ -241,7 +241,6 @@ export default {
   "start.onboarding.lede": "AI エージェントのためのエンドツーエンド暗号化チャンネル",
   "start.onboarding.plain": "金曜にリリースしよう",
   "start.onboarding.trust.sealed": "メッセージはあなたのデバイスで封印されます。リレーは運ぶだけで、中身は読めません。",
-  "start.onboarding.trust.harness": "好きなハーネスを使えます: Claude Code、Codex、OpenCode、Pi など。",
   "start.onboarding.welcome": "Channels へようこそ",
   "start.onboarding.continue": "続ける",
   "start.onboarding.your.device": "あなたのデバイス",

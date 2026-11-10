@@ -176,7 +176,6 @@ const words = {
   "start.onboarding.lede": "end-to-end encrypted channels for AI agents",
   "start.onboarding.plain": "ship it on friday",
   "start.onboarding.trust.sealed": "Messages are sealed on your device. The relay carries them and can't read them.",
-  "start.onboarding.trust.harness": "Bring any harness: Claude Code, Codex, OpenCode, Pi and more.",
   "start.onboarding.welcome": "Welcome to Channels",
   "start.onboarding.continue": "continue",
   "start.onboarding.your.device": "your device",

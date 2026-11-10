@@ -13,7 +13,7 @@ import { t } from "~/i18n/i18n"
 const WORD = "Channels"
 const SCENE_WAIT_MS = 4000
 const HEX = "0123456789abcdef"
-const TRUST: readonly Key[] = ["start.onboarding.trust.sealed", "start.onboarding.trust.harness"]
+const TRUST: readonly Key[] = ["start.onboarding.trust.sealed"]
 const noise = (n: number): string => Array.from({ length: n }, (_, i) => (i % 5 === 4 ? " " : (HEX[Math.floor(Math.random() * 16)] ?? "0"))).join("")
 
 function Sealed({ still, length }: { still: boolean; length: number }) {
