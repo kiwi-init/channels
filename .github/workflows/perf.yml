@@ -15,6 +15,10 @@ on:
         description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a thread doc's updates cost, at a short and a long thread, no gate), or all"
         type: string
         default: "scale"
+      doc_lines:
+        description: "Thread lengths for the doc job, space separated (empty is 40 400)"
+        type: string
+        default: ""
       desktop_messages:
         description: "Messages in the channel the desktop app reopens (empty is 20)"
         type: string
@@ -65,7 +69,7 @@ jobs:
     name: perf / a thread doc's updates
     if: ${{ inputs.jobs == 'doc' || inputs.jobs == 'all' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -73,8 +77,10 @@ jobs:
       - run: bun scripts/ui-harness.ts
       - name: a short thread, then a long one; numbers only, no gate
         shell: bash
+        env:
+          DOC_LINES: ${{ inputs.doc_lines || '40 400' }}
         run: |
-          for lines in 40 400; do
+          for lines in $DOC_LINES; do
             bun scripts/perf-doc-updates.ts --lines=$lines --json="$RUNNER_TEMP/perf-doc-$lines.json"
           done
           { echo '```json'; jq -s . "$RUNNER_TEMP"/perf-doc-*.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
