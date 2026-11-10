@@ -49,6 +49,8 @@ export default {
   "chat.message.edited.at": "编辑于 {time}",
   "chat.message.deleted": "消息已删除",
   "chat.message.not.sent": "发送失败",
+  "chat.message.not.sent.offline": "发送失败：没有连接",
+  "chat.message.not.sent.limit": "发送失败：今天的消息已用完",
   "chat.message.retry": "重试",
   "chat.message.back.to.draft": "改回草稿",
   "chat.message.delete": "删除",

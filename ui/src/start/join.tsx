@@ -5,6 +5,7 @@ import { handleFor, NAME_RE, RESERVED_NAMES } from "@kiwi/core/membership.ts"
 
 import "~/styles/start.css"
 import { autofocus, cx } from "~/kit/bits"
+import { Failed, failure, type Failure } from "~/kit/failed"
 import { Modal } from "~/kit/modal"
 import type { InviteInfo } from "~/model"
 import { useApp, useGo } from "~/nav"
@@ -40,6 +41,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState(nav.invite ?? "")
   const [busy, setBusy] = useState(!!nav.invite)
   const [error, setError] = useState<string | null>(null)
+  const [failed, setFailed] = useState<Failure | null>(null)
   const [invite, setInvite] = useState<InviteInfo | null>(null)
   const [name, setName] = useState(() => (app.account ? handleFor(app.account.name) : ""))
   const inputId = useId()
@@ -56,7 +58,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
       if (info.state === "gone") setError(t("start.join.gone"))
       else setInvite(info)
     } catch (err) {
-      setError(t("start.join.check.failed", { why: err instanceof Error ? err.message : String(err) }))
+      setFailed(failure(t("start.join.check.failed"), err))
     } finally {
       setBusy(false)
     }
@@ -84,11 +86,12 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             if (busy || nameProblem) return
             setBusy(true)
             setError(null)
+            setFailed(null)
             try {
               const joined = await app.actions.joinChannel(invite.code, name.trim())
               go({ to: "channel", code: joined })
             } catch (err) {
-              setError(t("start.join.send.failed", { why: err instanceof Error ? err.message : String(err) }))
+              setFailed(failure(t("start.join.send.failed"), err))
               setBusy(false)
             }
           }}
@@ -110,8 +113,9 @@ function JoinForm({ onClose }: { onClose: () => void }) {
           <p className={cx("start-hint", (nameProblem || error) && "is-error")} aria-live="polite">
             {error ?? nameProblem}
           </p>
+          {failed && <Failed failure={failed} />}
           <div className="modal-foot start-foot">
-            <button type="button" className="btn is-quiet" onClick={() => (setInvite(null), setError(null))}>
+            <button type="button" className="btn is-quiet" onClick={() => (setInvite(null), setError(null), setFailed(null))}>
               {t("start.join.back")}
             </button>
             <button type="submit" className="btn is-primary" disabled={busy || !!nameProblem}>
@@ -133,6 +137,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
           if (!code || busy) return
           setBusy(true)
           setError(null)
+          setFailed(null)
           await inspect(code)
         }}
       >
@@ -150,6 +155,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             onChange={(e) => {
               setText(e.target.value)
               setError(null)
+              setFailed(null)
             }}
             aria-invalid={bad || error ? true : undefined}
             aria-describedby={hintId}
@@ -158,6 +164,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
         <p id={hintId} className={cx("start-hint", (bad || error) && "is-error")} aria-live="polite">
           {hint}
         </p>
+        {failed && <Failed failure={failed} />}
         <div className="modal-foot start-foot">
           <button type="submit" className="btn is-primary" disabled={!code || busy}>
             {busy ? t("start.join.checking") : t("start.join.continue")}

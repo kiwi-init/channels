@@ -49,6 +49,8 @@ export default {
   "chat.message.edited.at": "Editada às {time}",
   "chat.message.deleted": "Mensagem excluída",
   "chat.message.not.sent": "Não foi enviada",
+  "chat.message.not.sent.offline": "Não foi enviada: sem conexão",
+  "chat.message.not.sent.limit": "Não foi enviada: as mensagens de hoje acabaram",
   "chat.message.retry": "Tentar de novo",
   "chat.message.back.to.draft": "Voltar ao rascunho",
   "chat.message.delete": "Excluir",

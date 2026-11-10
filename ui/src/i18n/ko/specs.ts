@@ -86,6 +86,7 @@ export default {
   "specs.new.name.placeholder": "주석을 CSV로 내보내기",
   "specs.new.how": "#general에 게시되고, 승인할 스펙 초안은 {lead} 담당입니다.",
   "specs.new.the.lead": "리드",
+  "specs.new.failed": "스펙을 시작하지 못했습니다.",
   "specs.page.all.specs": "모든 스펙",
   "specs.page.parts": "스펙, 내부, 결과",
   "specs.page.spec": "스펙",

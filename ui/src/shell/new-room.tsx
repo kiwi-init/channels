@@ -6,6 +6,7 @@ import { useState } from "react"
 import { roomProblem } from "@kiwi/app/rooms.ts"
 import { roomProblemWords } from "~/live/room-problem"
 import { autofocus, Avatar, cx } from "~/kit/bits"
+import { Failed, failure, type Failure } from "~/kit/failed"
 import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
 import type { Channel } from "~/model"
@@ -30,6 +31,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
   const only = wantsOnly && canPick
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState<Failure | null>(null)
   const name = roomName(typed)
   const problem = name ? roomProblem(channel.rooms, name) : null
   const others = roomPeople(channel)
@@ -51,8 +53,15 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
           e.preventDefault()
           if (!ready) return
           setBusy(true)
-          const id = await actions.addRoom(channel.code, name, only ? [...picked] : undefined)
-          if (!id) return setBusy(false)
+          setFailed(null)
+          let id: string
+          try {
+            id = await actions.addRoom(channel.code, name, only ? [...picked] : undefined)
+          } catch (err) {
+            // The form stays open with what went wrong under it, so the person can try again.
+            setFailed(failure(t("shell.new.room.failed"), err))
+            return setBusy(false)
+          }
           onClose()
           go({ to: "where", where: { kind: "room", room: id } })
         }}
@@ -110,6 +119,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
             )}
           </div>
         )}
+        {failed && <Failed failure={failed} />}
         <div className="modal-foot">
           <button type="submit" className="btn is-primary" disabled={!ready || (only && picked.size === 0)}>
             {busy

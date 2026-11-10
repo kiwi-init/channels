@@ -89,6 +89,8 @@ export default {
   "chat.message.edited.at": "Edited {time}",
   "chat.message.deleted": "Message deleted",
   "chat.message.not.sent": "Couldn't send",
+  "chat.message.not.sent.offline": "Couldn't send: no connection",
+  "chat.message.not.sent.limit": "Couldn't send: today's messages are used up",
   "chat.message.retry": "Retry",
   "chat.message.back.to.draft": "Back to draft",
   "chat.message.delete": "Delete",

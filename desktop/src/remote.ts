@@ -86,7 +86,7 @@ export async function machineOnline(asker: Asker, machinePk: string): Promise<bo
 }
 
 function fromMachine<T>(asked: Asked, read: (result: Record<string, unknown>) => T | null): FromMachine<T> {
-  if (!asked.ok) return { ok: false, detail: asked.detail };
+  if (!asked.ok) return { ok: false, detail: asked.detail, why: asked.why };
   const result = asked.result && typeof asked.result === "object" ? (asked.result as Record<string, unknown>) : null;
   const value = result?.["ok"] === true ? read(result) : null;
   return value === null ? { ok: false, detail: typeof result?.["detail"] === "string" ? result["detail"] : "that computer answered in a shape this app doesn't know" } : { ok: true, value };

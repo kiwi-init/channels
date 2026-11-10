@@ -86,6 +86,7 @@ export default {
   "specs.new.name.placeholder": "アノテーションを CSV で書き出す",
   "specs.new.how": "#general に投稿され、{lead} があなたの承認用に仕様の下書きを書きます。",
   "specs.new.the.lead": "リード",
+  "specs.new.failed": "仕様を開始できませんでした。",
   "specs.page.all.specs": "すべての仕様",
   "specs.page.parts": "仕様・内部・結果",
   "specs.page.spec": "仕様",

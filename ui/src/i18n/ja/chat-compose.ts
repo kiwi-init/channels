@@ -88,6 +88,8 @@ export default {
   "chat.compact.you.propose": "あなたは履歴の圧縮を提案しています",
   "chat.compact.proposes": "{name} が履歴の圧縮を提案しています",
   "chat.compact.approve": "承認して圧縮",
+  "chat.compact.approving": "圧縮しています…",
+  "chat.compact.failed": "履歴を圧縮できませんでした。",
   "chat.compact.waiting.owner": "オーナーの承認待ち",
   "chat.compact.waiting.for": "{name} の承認待ち",
   "chat.compact.nothing.deleted": "何も削除されません。以前のメッセージはこの要約の後ろに折りたたまれ、完了したタスクはアーカイブされます。",

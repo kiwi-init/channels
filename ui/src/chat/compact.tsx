@@ -3,6 +3,7 @@ import { useState } from "react"
 
 import { Body } from "~/chat/body"
 import { t } from "~/i18n/i18n"
+import { Failed, failure, type Failure } from "~/kit/failed"
 import { wrote } from "~/words"
 import type { Channel, Compacted } from "~/model"
 import { useAct } from "~/nav"
@@ -39,6 +40,7 @@ export function HistoryFold({ channel, compact, earlier, onToggle, names, tasks,
 export function ProposalCard({ channel, proposal, names, tasks, onQuote }: Props & { proposal: Compacted }) {
   const { actions } = useAct()
   const [sent, setSent] = useState(false)
+  const [failed, setFailed] = useState<Failure | null>(null)
   const owner = channel.people.find((p) => p.owner)
   return (
     <section className="compact-card" aria-label={t("chat.compact.proposed")} data-seq={proposal.seq}>
@@ -55,17 +57,21 @@ export function ProposalCard({ channel, proposal, names, tasks, onQuote }: Props
               disabled={sent}
               onClick={() => {
                 setSent(true)
-                actions.approveCompact(channel.code, proposal.seq)
-                window.setTimeout(() => setSent(false), 5_000)
+                setFailed(null)
+                void actions.approveCompact(channel.code, proposal.seq).catch((err: unknown) => {
+                  setFailed(failure(t("chat.compact.failed"), err))
+                  setSent(false)
+                })
               }}
             >
-              {t("chat.compact.approve")}
+              {sent ? t("chat.compact.approving") : t("chat.compact.approve")}
             </button>
           ) : (
             <p className="ask-state">{owner ? t("chat.compact.waiting.for", { name: shown(owner) }) : t("chat.compact.waiting.owner")}</p>
           )}
           <p className="ask-state">{t("chat.compact.nothing.deleted")}</p>
         </div>
+        {failed && <Failed failure={failed} />}
       </div>
     </section>
   )

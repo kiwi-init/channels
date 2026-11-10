@@ -87,6 +87,7 @@ const words = {
   "specs.new.name.placeholder": "Export annotations as CSV",
   "specs.new.how": "It posts in #general, and {lead} drafts the spec for you to approve.",
   "specs.new.the.lead": "the lead",
+  "specs.new.failed": "Couldn't start the spec.",
   "specs.page.all.specs": "All specs",
   "specs.page.parts": "Spec, inside or result",
   "specs.page.spec": "Spec",

@@ -3,6 +3,7 @@ import "~/i18n/en/settings"
 import { useEffect, useState, type ReactNode } from "react"
 
 import { cx, IconButton } from "~/kit/bits"
+import { Failed, failedToast, failure, type Failure } from "~/kit/failed"
 import { Toggle } from "~/kit/form"
 import { setDebugOptions, useDebugOptions } from "~/kit/debug"
 import { Icon } from "~/kit/icons"
@@ -354,11 +355,18 @@ function CheckUpdates({ version }: { version: string }) {
     setBusy(true)
     void app.actions
       .checkUpdate()
-      .then(setResult)
+      .then(setResult, (err: unknown) => failedToast(t("settings.sections.check.failed"), err))
       .finally(() => setBusy(false))
   }
   return (
-    <Row label={<UpToDate />} hint={<span role="status">{busy ? t("settings.sections.checking") : result ? updateFound(result) : <span className="set-mono">{version}</span>}</span>}>
+    <Row
+      label={<UpToDate />}
+      hint={
+        <span role="status" className={cx(!busy && result?.state === "failed" && "tone-alert")}>
+          {busy ? t("settings.sections.checking") : result ? updateFound(result) : <span className="set-mono">{version}</span>}
+        </span>
+      }
+    >
       <button type="button" className="btn is-quiet is-small" disabled={busy} onClick={check}>
         {t("settings.sections.check.now")}
       </button>
@@ -368,21 +376,10 @@ function CheckUpdates({ version }: { version: string }) {
 
 function RelayRow({ relay }: { relay: string }) {
   const { app } = useApp()
-  const [error, setError] = useState<string | null>(null)
+  const [failed, setFailed] = useState<Failure | null>(null)
   const [moving, setMoving] = useState<string | null>(null)
   return (
-    <Row
-      label={t("settings.sections.relay")}
-      hint={
-        error ? (
-          <span role="alert" className="tone-alert">
-            {error.slice(0, 1).toUpperCase() + error.slice(1)}
-          </span>
-        ) : (
-          t("settings.sections.relay.hint")
-        )
-      }
-    >
+    <Row label={t("settings.sections.relay")} hint={failed ? <Failed failure={failed} /> : t("settings.sections.relay.hint")}>
       <InlineEdit value={relay} label={t("settings.sections.relay")} verb={t("settings.sections.relay.change")} onSave={(url) => (url.trim() === relay ? undefined : setMoving(url))} />
       <Confirm
         open={moving !== null}
@@ -393,8 +390,8 @@ function RelayRow({ relay }: { relay: string }) {
         onConfirm={() => {
           const url = moving
           setMoving(null)
-          setError(null)
-          if (url) void app.actions.setRelay(url).then(setError)
+          setFailed(null)
+          if (url) void app.actions.setRelay(url).catch((err: unknown) => setFailed(failure(t("settings.sections.relay.failed"), err)))
         }}
       />
     </Row>

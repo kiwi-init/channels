@@ -88,6 +88,8 @@ export default {
   "chat.compact.you.propose": "你提议压缩历史",
   "chat.compact.proposes": "{name} 提议压缩历史",
   "chat.compact.approve": "批准并压缩",
+  "chat.compact.approving": "正在压缩…",
+  "chat.compact.failed": "无法压缩历史记录。",
   "chat.compact.waiting.owner": "等待所有者批准",
   "chat.compact.waiting.for": "等待 {name} 批准",
   "chat.compact.nothing.deleted": "不会删除任何内容：更早的消息会折叠到此摘要之后，已完成的任务会归档。",

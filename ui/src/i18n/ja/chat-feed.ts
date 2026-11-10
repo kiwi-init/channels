@@ -49,6 +49,8 @@ export default {
   "chat.message.edited.at": "{time} に編集",
   "chat.message.deleted": "メッセージは削除されました",
   "chat.message.not.sent": "送信できませんでした",
+  "chat.message.not.sent.offline": "送信できませんでした: 接続がありません",
+  "chat.message.not.sent.limit": "送信できませんでした: 今日のメッセージを使い切りました",
   "chat.message.retry": "再試行",
   "chat.message.back.to.draft": "下書きに戻す",
   "chat.message.delete": "削除",

@@ -15,7 +15,14 @@ const CHORES: Record<GithubChore, readonly [Key, Key]> = {
 
 export const choreTitle = (what: GithubChore, repo?: string): string => (repo ? t(CHORES[what][1], { repo }) : t(CHORES[what][0]))
 
-export const choreLine = (e: GithubChoreError): string => t("github.health.line", { title: choreTitle(e.what, e.repo), when: since(e.at), message: e.message })
+export function choreNext(message: string): string {
+  if (/rate limit|\b429\b|too many/i.test(message)) return t("github.health.why.limit")
+  if (/\b40[13]\b|bad credentials|not accessible|permission|forbidden|unauthori[sz]ed|installation/i.test(message)) return t("github.health.why.access")
+  if (/failed to fetch|fetch failed|network|ECONN|ENOTFOUND|ETIMEDOUT|couldn't reach|unreachable/i.test(message)) return t("github.health.why.offline")
+  return t("github.health.why.other")
+}
+
+export const choreLine = (e: GithubChoreError): string => t("github.health.line", { title: choreTitle(e.what, e.repo), when: since(e.at), next: choreNext(e.message) })
 
 export function since(at: number): string {
   const age = ageOf(at)
