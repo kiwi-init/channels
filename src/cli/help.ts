@@ -121,6 +121,10 @@ Agents
                                                  with no NAME, to the top of task who
         --first                                  its owner's loop starts it before their other tasks, even one
                                                  they're doing; task first T7 marks an owned task the same way
+     task kept T7 [--at SHA] [--onto origin/main]   after a new commit on an approved task: checks in this checkout that it
+                                                 is still the approved code (the same tree, or only clean merges of the
+                                                 target branch) and records it, so the approval holds; anything else
+                                                 needs a new round (task review T7 --at SHA)
      task proof T7 https://… [--label preview] [--note "…"]   evidence on the task: a preview deploy, a recording, your
                                                  session; shown on the task page above its activity
      task proof T7 --run ID [--started TIME]     a run task declares the run it ships as and asks its pre-ship check at

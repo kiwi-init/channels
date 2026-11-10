@@ -1,7 +1,7 @@
 import { runPin, type CheckArtifact } from "./checks.ts";
 import { hasLanding, isReviewCheck, type Landing } from "./protocol.ts";
 import { prOfTask } from "./prs.ts";
-import { sameHead } from "./stage.ts";
+import { approvedAt, judgedHead, sameHead } from "./stage.ts";
 import { askedBefore, atRun, checkPassed, passedAt, replacedBefore, type CheckState } from "./state/checks.ts";
 import { releaseOf, shaKey, succeededBy, type GithubPr, type GithubState } from "./state/github.ts";
 import { heldBefore } from "./state/times.ts";
@@ -29,12 +29,14 @@ function heldAtShipping(view: GateView, t: Task, pr: GithubPr, head: string, shi
   const missing: string[] = [];
   const round = approvalAt(t, shipped);
   if (!round) missing.push("an approval before the merge");
-  else if (!round.at || !sameHead(round.at, head)) missing.push(`an approval at ${head.slice(0, 7)}`);
+  const held = round ? { at: round.at, kept: round.kept?.filter((k) => heldBefore(k.rts, shipped)) } : undefined;
+  if (held && !approvedAt(held, head)) missing.push(`an approval at ${head.slice(0, 7)}`);
+  const judged = held ? judgedHead(held, head) : head;
   for (const c of view.checks.values()) {
     if (!c.holds.includes(t.id) || c.phase !== "pre-ship" || !askedBefore(c, shipped) || replacedBefore(c, shipped)) continue;
-    if (!atPr(c, pr, head) || !passedAt(c, shipped)) missing.push(`check #${c.seq} passed before the merge`);
+    if (!(atPr(c, pr, head) || atPr(c, pr, judged)) || !passedAt(c, shipped)) missing.push(`check #${c.seq} passed before the merge`);
   }
-  const runs = [...(view.github.checks.get(shaKey(pr.repo, head))?.values() ?? [])].filter((c) => !isReviewCheck(c.name));
+  const runs = [...(view.github.checks.get(shaKey(pr.repo, judged))?.values() ?? [])].filter((c) => !isReviewCheck(c.name));
   for (const id of round?.result.kind === "approved" ? (round.result.runs ?? []) : []) if (!runs.some((c) => succeededBy(c, id, shipped))) missing.push(`CI run ${id} green before the merge`);
   return missing;
 }

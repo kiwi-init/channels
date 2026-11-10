@@ -2,7 +2,7 @@ import { choiceIn, runPin, type CheckAsk } from "./checks.ts";
 import type { ReviewCheck } from "./client/github.ts";
 import { hasLanding, isReviewCheck, type Event } from "./protocol.ts";
 import { prLinks, taskOfPr } from "./prs.ts";
-import { linkedPr, sameHead } from "./stage.ts";
+import { approvedAt, judgedHead, linkedPr, sameHead } from "./stage.ts";
 import { atRun, checkPassed } from "./state/checks.ts";
 import { landingReopens, landingTouchedByClose } from "./state/tasks.ts";
 import { prKey, shaKey, type GithubCheck, type GithubPr, type GithubState } from "./state/github.ts";
@@ -40,14 +40,16 @@ export function shipGate(state: ChannelState, t: Task, pr: GithubPr | undefined 
   const missing: string[] = [];
   const round = approvedRound(t);
   if (!round) missing.push("an approval");
-  else if (!round.at || !sameHead(round.at, head)) missing.push(`an approval at ${head.slice(0, 7)}`);
+  else if (!approvedAt(round, head)) missing.push(`an approval at ${head.slice(0, 7)}`);
+  const judged = round ? judgedHead(round, head) : head;
   for (const c of state.checks.values()) {
     if (!c.holds.includes(t.id) || c.phase !== "pre-ship" || c.supersededBy !== undefined) continue;
-    const here = c.artifact.kind === "pr" && c.artifact.repo.toLowerCase() === pr.repo.toLowerCase() && c.artifact.pr === pr.number && sameHead(c.artifact.sha, head);
+    const here =
+      c.artifact.kind === "pr" && c.artifact.repo.toLowerCase() === pr.repo.toLowerCase() && c.artifact.pr === pr.number && (sameHead(c.artifact.sha, head) || sameHead(c.artifact.sha, judged));
     if (!here || !checkPassed(c)) missing.push(`check #${c.seq}`);
   }
   if (round?.result.kind === "approved") {
-    const runs = runsAt(state.github, pr.repo, head);
+    const runs = runsAt(state.github, pr.repo, judged);
     for (const id of round.result.runs ?? []) {
       const run = runs.find((c) => c.run === id);
       if (run?.conclusion !== "success") missing.push(`CI run ${id}${run ? ` (${run.conclusion ?? "pending"})` : " (not at this head)"}`);
@@ -58,7 +60,7 @@ export function shipGate(state: ChannelState, t: Task, pr: GithubPr | undefined 
 
 function verdictOnly(t: Task, head: string): Gate | undefined {
   const last = t.rounds.at(-1);
-  if (!last?.at || last.stale !== undefined || !sameHead(last.at, head)) return undefined;
+  if (!last || last.stale !== undefined || !approvedAt(last, head)) return undefined;
   if (last.result.kind === "approved") return { open: true };
   if (last.result.kind === "rejected") return { open: false, rejected: true, missing: ["changes requested"] };
   return undefined;

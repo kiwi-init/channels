@@ -54,15 +54,9 @@ export function verdictRefusal(task: Task, verdict: Verdict, ev: { state?: strin
   return null;
 }
 
-const PR_URL_RE = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+(?:[/?#]\S*)?$/;
-
-const isPrUrl = (url: string): boolean => PR_URL_RE.test(url);
-
-type LandingChange = { state?: string; verdict?: Verdict; close?: string; then?: Landing; lander?: string | null; owner?: string | null; proof?: { url: string }; run?: { id: string } };
+type LandingChange = { state?: string; verdict?: Verdict; close?: string; then?: Landing; lander?: string | null; owner?: string | null; run?: { id: string } };
 
 export const landerOf = (task: Pick<Task, "lander" | "owner">): string | undefined => task.lander ?? task.owner;
-
-const newPr = (task: Task, proof: { url: string } | undefined): boolean => !!proof && isPrUrl(proof.url) && !task.proof?.some((p) => p.url === proof.url);
 
 export const newRun = (task: Task, run: { id: string } | undefined): boolean => !!run && !!task.run && task.run.id !== run.id;
 
@@ -87,14 +81,13 @@ export function landingRefusal(task: Task, ev: LandingChange, from: { person: bo
   if (task.state === "landing" && landerAfter(task, ev) !== landerOf(task) && !trusted) return `only a person or the lead changes who lands ${id}`;
   if (ev.state === "landing" && !hasLanding(task.then)) return `${id} has no landing step: it finishes on approval`;
   if (ev.state === "done" && ev.verdict !== "approved" && hasLanding(task.then) && task.state !== "done") return `${id} lands by its step (${task.then}): approve it, or close it with a reason`;
-  if (task.state === "landing" && newPr(task, ev.proof) && !trusted) return `only a person or the lead links another PR to ${id} once it's approved`;
   if (task.state === "landing" && newRun(task, ev.run) && !trusted) return `only a person or the lead declares another run for ${id} once it's approved`;
   return null;
 }
 
 export function landingReopens(task: Task, ev: LandingChange): boolean {
   if (task.state !== "landing") return false;
-  return (ev.then !== undefined && ev.then !== (task.then ?? "none")) || landerAfter(task, ev) !== landerOf(task) || newPr(task, ev.proof) || newRun(task, ev.run);
+  return (ev.then !== undefined && ev.then !== (task.then ?? "none")) || landerAfter(task, ev) !== landerOf(task) || newRun(task, ev.run);
 }
 
 const landingHeld = (tasks: ReadonlyMap<number, Task>, phase: CheckPhase, holds: readonly number[]): Task[] =>
