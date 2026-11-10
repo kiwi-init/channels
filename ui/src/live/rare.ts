@@ -7,6 +7,7 @@ import { changeTo } from "@kiwi/core/changes.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
 import { GENERAL_ROOM, MAX_GOAL_NAME, MAX_SPEC, MAX_SPEC_NOTE, TASK_BODY_MAX_LENGTH, TASK_TITLE_MAX_LENGTH, type Event, type StepReply } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
+import { landedStepRefusal } from "@kiwi/core/steps.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { changeBlock } from "~/chat/doc/change-block"
 export { restoreOf, versionsOf } from "~/chat/doc/restore-version"
@@ -192,6 +193,16 @@ export async function approveTask(code: string, id: number, approve: boolean, wh
   if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
   if (approve) await sends(run, approving(task), closedDigest(run.state, [...run.messages], task, { by: run.me }))
   else await sends(run, sendBackTask(task, why?.trim() || SENT.sentBack))
+}
+
+export async function endStep(code: string, id: number, step: string): Promise<void> {
+  const run = need(code)
+  const task = run.state.tasks.get(id)
+  if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
+  const wrong = landedStepRefusal(task, step)
+  if (wrong) throw new Error(wrong)
+  const to = [...new Set([task.owner, task.lander, ...(task.steps ?? []).map((x) => x.by)].filter((n): n is string => !!n && n !== run.me))]
+  await run.send(`${taskId(id)} step ${step} done`, { kind: "event", ev: { op: "task.landed", task: id, step }, ...(to.length ? { to } : {}) })
 }
 
 export async function setTaskStatus(code: string, id: number, status: TaskStatus): Promise<void> {

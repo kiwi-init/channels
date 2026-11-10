@@ -137,6 +137,7 @@ export function makeActions(): Actions {
       }),
     answerStep: (code, id, reply) => attempt(t("live.actions.not.answered"), async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(t(yes ? "live.actions.let.in.failed" : "live.actions.turn.away.failed"), async () => (await manage()).answerJoin(code, id, yes, choice)),
+    endStep: (code, id, step) => attempt(t("live.actions.step.not.ended"), async () => (await rare()).endStep(code, id, step)),
     approveTask: (code, id, approve, why) => attempt(t(approve ? "live.actions.not.approved" : "live.actions.not.sent.back"), async () => (await rare()).approveTask(code, id, approve, why)),
     addTask: (code, ask, title) =>
       attempt(t("live.actions.task.not.added"), async () => {

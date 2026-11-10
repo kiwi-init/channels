@@ -67,3 +67,40 @@
 .tp-review {
   gap: 12px;
 }
+
+.task-props dd.tp-move {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.tp-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tp-step {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.tp-step.is-done .tp-step-words,
+.tp-step.is-skipped .tp-step-words {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+
+.tp-step.is-current .tp-step-words {
+  font-weight: 600;
+}
+
+.tp-step-meta {
+  color: var(--ink-3);
+  font-size: var(--t-meta);
+}

@@ -28,6 +28,7 @@ export default {
   "live.actions.let.in.failed": "Couldn't let them in",
   "live.actions.turn.away.failed": "Couldn't turn them away",
   "live.actions.not.approved": "Not approved",
+  "live.actions.step.not.ended": "Step not marked done",
   "live.actions.not.sent.back": "Not sent back",
   "live.actions.task.not.added": "Task not added",
   "live.actions.not.changed": "Not changed",
