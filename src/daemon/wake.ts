@@ -111,6 +111,7 @@ interface WakeContext {
 export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stopped, current }: WakeContext): {
   scheduleWake: (seat: Seat, delay?: number) => void;
   stateOf: (seat: Seat) => Promise<ChannelState | null>;
+  sessionOf: (seat: Seat) => Promise<Session | null>;
   wakeable: (seat: Seat) => Promise<boolean>;
 } {
   const sessions = new Map<string, { fp: string; session: Session }>();
@@ -129,6 +130,8 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
     return kept.session;
   };
 
+  const wakingDocs = (seat: Seat): number => pendingDocWakes(seat.alias, seat.agent).filter((w) => !seat.clock?.holds(w.block)).length;
+
   const stateOf = async (seat: Seat): Promise<ChannelState | null> => {
     const session = await sessionOf(seat);
     if (!session) return null;
@@ -143,7 +146,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
     const { messages, state } = await runAgent(session.state());
     const looped = !!seatRecordFor(loadConfig(), seat.alias, seat.agent)?.loop;
     const counted = await runAgent(session.unreadAt(state, messages, looped ? { loop: true } : {}));
-    const docs = pendingDocWakes(seat.alias, seat.agent).length;
+    const docs = wakingDocs(seat);
     return docs ? { ...counted, unread: counted.unread + docs } : counted;
   };
 
@@ -216,7 +219,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
     if (!(await commandPath(seat))) return;
     const since = Date.now() - (seat.lastWake?.at ?? 0);
     if (since < wakeGapMs) return scheduleWake(seat, wakeGapMs - since);
-    if (nothingAt.get(seat.key) === seat.head && !pendingDocWakes(seat.alias, seat.agent).length) return;
+    if (nothingAt.get(seat.key) === seat.head && !wakingDocs(seat)) return;
     seat.waking = true;
     try {
       const head = seat.head;
@@ -257,7 +260,10 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
         return scheduleWake(seat, Math.min(wakeGapMs, TYPE_RETRY_MS));
       }
       seat.lastWake = { at: Date.now(), via: path.via, unread, ok: why === null };
-      if (why === null) seat.outstanding = { seqs, to, at: seat.lastWake.at };
+      if (why === null) {
+        seat.outstanding = { seqs, to, at: seat.lastWake.at };
+        seat.clock?.delivered();
+      }
       logWake(seat, seat.lastWake, why, cursor);
     } finally {
       seat.waking = false;
@@ -268,5 +274,5 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
     }
   };
 
-  return { scheduleWake, stateOf, wakeable: async (seat) => (await commandPath(seat)) !== null };
+  return { scheduleWake, stateOf, sessionOf, wakeable: async (seat) => (await commandPath(seat)) !== null };
 }
