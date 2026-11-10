@@ -4,6 +4,7 @@ import { useState } from "react"
 import "~/styles/start.css"
 import { autofocus, cx } from "~/kit/bits"
 import { Field } from "~/kit/form"
+import { Failed, failure, type Failure } from "~/kit/failed"
 import { Modal } from "~/kit/modal"
 import { useGo, useActions } from "~/nav"
 import { t } from "~/i18n/i18n"
@@ -18,7 +19,7 @@ function NewChannelForm({ onClose }: { onClose: () => void }) {
   const go = useGo()
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState<Failure | null>(null)
   const title = name.trim()
   return (
     <Modal onClose={onClose} label={t("start.new.channel.title")} title={t("start.new.channel.title")}>
@@ -28,13 +29,13 @@ function NewChannelForm({ onClose }: { onClose: () => void }) {
           e.preventDefault()
           if (!title || busy) return
           setBusy(true)
-          setFailed(false)
+          setFailed(null)
           try {
             const code = await actions.newChannel(title)
             go({ to: "channel", code })
-          } catch {
+          } catch (err) {
             // The dialog stays open with the name kept, so trying again is one click.
-            setFailed(true)
+            setFailed(failure(t("start.new.channel.failed"), err))
             setBusy(false)
           }
         }}
@@ -56,9 +57,7 @@ function NewChannelForm({ onClose }: { onClose: () => void }) {
             />
           </span>
         </Field>
-        <p className={cx("start-hint", failed && "is-error")} aria-live="polite">
-          {failed ? t("start.new.channel.failed") : null}
-        </p>
+        {failed && <Failed failure={failed} />}
         <div className="modal-foot start-foot">
           <button type="button" className="btn is-quiet is-small" onClick={() => go({ to: "dialog", dialog: "join" })}>
             {t("start.new.channel.join.instead")}

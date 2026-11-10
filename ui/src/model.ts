@@ -809,6 +809,7 @@ export interface Actions {
   forgetComputer(id: string): void
   linkGithub(): void
   signInWithGithub(): void
+  cancelGithubSignIn(): void
   unlinkGithub(): void
   installUpdate(): void
   checkUpdate(): Promise<UpdateCheck | null>

@@ -36,9 +36,14 @@ function Ask({ code, problem }: { code: { code: string; url: string } | null; pr
           <span className="start-pip" aria-hidden="true" />
           {t("start.github.waiting")}
         </p>
-        <OutsideLink className="btn is-quiet start-other" href={code.url}>
-          {t("start.github.open.again")}
-        </OutsideLink>
+        <div className="start-others">
+          <OutsideLink className="btn is-quiet" href={code.url}>
+            {t("start.github.open.again")}
+          </OutsideLink>
+          <button type="button" className="btn is-quiet" onClick={() => app.actions.cancelGithubSignIn()}>
+            {t("start.enroll.cancel")}
+          </button>
+        </div>
       </>
     )
   return (
