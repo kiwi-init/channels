@@ -120,6 +120,18 @@ try {
     await page.waitForTimeout(200);
     expect((await modal.count()) === 0, `a click outside ${name} closes it while nothing is typed`);
   }
+
+  await page.goto(`http://127.0.0.1:${server.port}/?shot=specs`);
+  await page.getByRole("button", { name: "New spec" }).click();
+  const spec = page.getByRole("dialog", { name: "New spec" });
+  await spec.waitFor();
+  await page.keyboard.type("Posts from the keyboard");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(200);
+  expect((await modal.count()) === 1, "Enter in New spec is a new line");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await modal.waitFor({ state: "detached", timeout: 5000 }).catch(() => {});
+  expect((await modal.count()) === 0, "Cmd/Ctrl+Enter posts it");
 } finally {
   await browser.close();
   await server.stop(true);
