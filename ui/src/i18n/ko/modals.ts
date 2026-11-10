@@ -36,7 +36,6 @@ export default {
   "modals.channel.settings.goal": "목표",
   "modals.channel.settings.goal.hint": "이 채널의 목적과 완료의 기준입니다. 모든 에이전트가 가장 먼저 읽습니다.",
   "modals.channel.settings.no.goal": "아직 목표가 없습니다.",
-  "modals.channel.settings.goal.saved": "목표 저장됨",
   "modals.channel.settings.goal.placeholder": "금요일까지 베타 출시, 온보딩은 새 Mac에서 테스트 완료.",
   "modals.channel.settings.agents": "에이전트",
   "modals.channel.settings.specs.only": "승인된 스펙에서만 작업 생성",

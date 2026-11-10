@@ -224,7 +224,7 @@ function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
 }
 
 function GoalEditor({ channel }: { channel: Channel }) {
-  const { app, toast } = useApp()
+  const { app } = useApp()
   const [draft, setDraft] = useState(channel.goal ?? "")
   const changed = draft.trim() !== (channel.goal ?? "")
   return (
@@ -234,7 +234,6 @@ function GoalEditor({ channel }: { channel: Channel }) {
         e.preventDefault()
         if (!changed) return
         app.actions.setGoal(channel.code, draft.trim())
-        toast(t("modals.channel.settings.goal.saved"))
       }}
     >
       <textarea
@@ -303,6 +302,16 @@ function Hold({ channel }: { channel: Channel }) {
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
+          {note.trim() !== (hold.note ?? "") && (
+            <div className="cset-save">
+              <button type="button" className="btn is-quiet is-small" onClick={() => setNote(hold.note ?? "")}>
+                {t("modals.channel.settings.cancel")}
+              </button>
+              <button type="submit" className="btn is-small">
+                {t("modals.channel.settings.save")}
+              </button>
+            </div>
+          )}
         </form>
       )}
       {hold && !own && hold.note && <p className="cset-note">{hold.note}</p>}

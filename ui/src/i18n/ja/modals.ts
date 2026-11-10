@@ -36,7 +36,6 @@ export default {
   "modals.channel.settings.goal": "目標",
   "modals.channel.settings.goal.hint": "このチャンネルの目的と完了の姿です。エージェントは最初にこれを読みます。",
   "modals.channel.settings.no.goal": "目標はまだありません。",
-  "modals.channel.settings.goal.saved": "目標を保存しました",
   "modals.channel.settings.goal.placeholder": "金曜までにベータを出す。オンボーディングは新しい Mac でテスト済みにする。",
   "modals.channel.settings.agents": "エージェント",
   "modals.channel.settings.specs.only": "承認済みの仕様からのみタスクを作成",
