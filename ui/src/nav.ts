@@ -18,12 +18,7 @@ type Dialog = "new-channel" | "new-room" | "join" | "palette" | null
 
 export type Section = "account" | "appearance" | "computers" | "agents" | "about"
 
-interface Place {
-  channel: string
-  where: Where
-  tab: Tab
-  spot: Spot | null
-}
+type Place = { at: "home" } | { at: "settings"; section: Section } | { at: "channel"; channel: string; where: Where; tab: Tab; spot: Spot | null; spec?: number; part?: SpecPart }
 
 export interface Nav {
   page: "channel" | "settings"
@@ -79,21 +74,27 @@ export const startNav = (channel: string | null): Nav => ({
 
 export const sameWhere = (a: Where, b: Where): boolean => whereKey(a) === whereKey(b)
 
-function placeOf(nav: Nav): Place | null {
-  if (nav.page !== "channel" || !nav.channel) return null
-  return { channel: nav.channel, where: nav.where, tab: nav.tab, spot: spotAt(spotKey(nav.channel, nav.where)) }
+function placeOf(nav: Nav): Place {
+  if (nav.page === "settings") return { at: "settings", section: nav.section }
+  if (!nav.channel) return { at: "home" }
+  const spec = nav.tab === "specs" && nav.spec !== undefined ? { spec: nav.spec, ...(nav.part ? { part: nav.part } : {}) } : {}
+  return { at: "channel", channel: nav.channel, where: nav.where, tab: nav.tab, spot: spotAt(spotKey(nav.channel, nav.where)), ...spec }
 }
 
-const samePlace = (a: Place, b: Nav): boolean => b.page === "channel" && a.channel === b.channel && a.tab === b.tab && sameWhere(a.where, b.where)
+function samePlace(a: Place, b: Place): boolean {
+  if (a.at === "home") return b.at === "home"
+  if (a.at === "settings") return b.at === "settings" && a.section === b.section
+  return b.at === "channel" && a.channel === b.channel && a.tab === b.tab && sameWhere(a.where, b.where) && a.spec === b.spec
+}
 
 export function navigate(nav: Nav, go: Go): Nav {
   if (go.to === "history") return nav.modal ? { ...nav, modal: null } : travel(nav, go.step)
   const next = step(nav, go)
   const was = placeOf(nav)
   const restore = next.restore === undefined ? next : { ...next, restore: undefined }
-  if (!was || next.page !== "channel" || (go.to === "where" && go.replace)) return restore
+  if (go.to === "where" && go.replace) return restore
   const jumped = (go.to === "where" || go.to === "channel") && !!go.jump
-  if (!jumped && samePlace(was, next)) return restore
+  if (!jumped && samePlace(was, placeOf(next))) return restore
   return { ...restore, back: [...nav.back, was].slice(-HISTORY), ahead: [] }
 }
 
@@ -104,28 +105,31 @@ export function historyStep(e: Pick<KeyboardEvent, "metaKey" | "ctrlKey" | "altK
   return null
 }
 
+function arrive(nav: Nav, to: Place): Nav {
+  const shut = { modal: null, dialog: null, spec: undefined, part: undefined, visit: nav.visit + 1 }
+  if (to.at === "settings") return { ...nav, ...shut, page: "settings", section: to.section, restore: undefined }
+  if (to.at === "home") return { ...nav, ...shut, page: "channel", channel: null, where: GENERAL, tab: "chat", panel: null, restore: undefined }
+  return {
+    ...nav,
+    ...shut,
+    page: "channel",
+    channel: to.channel,
+    where: to.where,
+    tab: to.tab,
+    panel: nav.channel !== to.channel || nav.panel?.kind === "thread" ? null : nav.panel,
+    ...(to.spec !== undefined ? { spec: to.spec, part: to.part ?? "spec" } : {}),
+    restore: to.spot,
+  }
+}
+
 function travel(nav: Nav, way: "back" | "forward"): Nav {
   const from = way === "back" ? nav.back : nav.ahead
   const to = from.at(-1)
   if (!to) return nav
   const here = placeOf(nav)
   const rest = from.slice(0, -1)
-  const moved: Nav = {
-    ...nav,
-    page: "channel",
-    channel: to.channel,
-    where: to.where,
-    tab: to.tab,
-    panel: nav.channel !== to.channel || nav.panel?.kind === "thread" ? null : nav.panel,
-    modal: null,
-    dialog: null,
-    spec: undefined,
-    part: undefined,
-    visit: nav.visit + 1,
-    restore: to.spot,
-  }
-  const kept = here ? [here] : []
-  return way === "back" ? { ...moved, back: rest, ahead: [...nav.ahead, ...kept] } : { ...moved, ahead: rest, back: [...nav.back, ...kept] }
+  const moved = arrive(nav, to)
+  return way === "back" ? { ...moved, back: rest, ahead: [...nav.ahead, here] } : { ...moved, ahead: rest, back: [...nav.back, here] }
 }
 
 function step(nav: Nav, go: Exclude<Go, { to: "history" }>): Nav {
