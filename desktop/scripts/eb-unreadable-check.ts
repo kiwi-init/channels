@@ -19,13 +19,13 @@ const env = testEnv(root, join(root, "driver.sock"), `http://127.0.0.1:${port}`)
 const problems: string[] = [];
 const JUNK = "{ this was a store, and is not JSON any more";
 
-function storeFile(dir: string): string | null {
+function find(dir: string, name: string): string | null {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
-      const found = storeFile(path);
+      const found = find(path, name);
       if (found) return found;
-    } else if (entry.name === TEST_STORE_FILE) return path;
+    } else if (entry.name === name) return path;
   }
   return null;
 }
@@ -50,7 +50,8 @@ const pageSays = (d: Driver): Promise<string> => d.evaluate(() => document.body.
 
 try {
   await run((d) => firstChannel(d, 0));
-  const file = storeFile(join(root, "home"));
+  console.log("first run: a person and a channel, saved in the store");
+  const file = find(join(root, "home"), TEST_STORE_FILE);
   if (!file) throw new Error(`no ${TEST_STORE_FILE} after the first run`);
   writeFileSync(file, JUNK);
   await run(async (d) => {
@@ -67,6 +68,8 @@ try {
   else console.log("the unreadable store was left as it was");
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
+  const log = find(join(root, "home"), "main.log");
+  console.error(`main.log: ${log ? readFileSync(log, "utf8").slice(-3000) : "none"}`);
 } finally {
   relay.kill();
   rmSync(root, { recursive: true, force: true });
