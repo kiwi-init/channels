@@ -33,6 +33,7 @@ import { later } from "~/kit/later"
 import type { Go } from "~/nav"
 
 const HomeMembers = later(() => import("~/live/home").then((m) => m.HomeMembers))
+const Recount = later(() => import("~/live/recount").then((m) => m.Recount))
 
 const STATE: Record<ChannelRow["state"], ChannelTile["state"]> = { member: "member", pending: "waiting", agents: "gone", elsewhere: "gone" }
 
@@ -202,7 +203,15 @@ export function LiveDuties({ open, view, go }: { open: string | null; view: View
   useEffect(() => {
     if (member) rememberChannel(member.code)
   }, [member])
-  if (member && !member.relay) return <OpenMember key={member.code} member={member} view={view} />
+  if (member && !member.relay)
+    return (
+      <>
+        <OpenMember key={member.code} member={member} view={view} />
+        <Suspense fallback={null}>
+          <Recount open={member.code} />
+        </Suspense>
+      </>
+    )
   if (pending) return <OpenPending key={pending.code} pending={pending} />
   if (!open && person)
     return (
