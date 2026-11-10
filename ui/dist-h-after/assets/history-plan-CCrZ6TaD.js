@@ -1,1 +1,0 @@
-function e(e,t,n){return e>t?!1:n===void 0||n<=1}function t(e,t,n){let r=Math.max(0,t-n),i=[...new Set(e.filter(e=>Number.isSafeInteger(e)&&e>0&&e<=t))].sort((e,t)=>e-t),a=i.some((e,t)=>t>0&&e!==i[t-1]+1);if(!i.length||a||i[i.length-1]<=r)return{keep:[],since:r};let o=i.filter(e=>e>r);return{keep:o,since:o[o.length-1]}}export{e as n,t};

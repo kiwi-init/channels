@@ -1,1 +1,0 @@
-.doc-versions-ask{color:var(--ink-2);font-size:var(--t-meta);flex:1;align-self:center}.doc-versions .set-row{transition:opacity var(--fast)}.doc-versions.is-picking .set-row:not(:has([aria-pressed=true])){opacity:.4}.doc-versions .btn[aria-pressed=true]{background:var(--wash-2);box-shadow:inset 0 0 0 1px var(--line-3)}

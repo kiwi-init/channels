@@ -1,1 +1,0 @@
-import{t as e}from"./react-DlmbjZJV.js";import{t}from"./value-D8TdvMPT.js";var n=e(),r=`mc.debug-options`;function i(){try{return localStorage.getItem(r)===`1`}catch{return!1}}var a=t(i());function o(e){a.set(e);try{e?localStorage.setItem(r,`1`):localStorage.removeItem(r)}catch{}}var s=()=>(0,n.useSyncExternalStore)(a.subscribe,a.get);export{s as n,o as t};
