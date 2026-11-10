@@ -62,6 +62,7 @@ export interface ClockSeat {
 export interface ClockWatcher {
   look: () => Promise<void>;
   refresh: (delay?: number) => void;
+  invoked: () => void;
   delivered: () => void;
   holds: (block: string) => boolean;
   stop: () => void;
@@ -98,12 +99,25 @@ function evaluates(state: ChannelState, me: string, mover: string): boolean {
   return parties.some((n) => human(state.members.get(n)) === sponsor);
 }
 
+export interface HostedSeat {
+  agent: string;
+  key: string;
+  watched: boolean;
+}
+
+export const watchedPeers = (hosted: readonly HostedSeat[]): string[] =>
+  hosted
+    .filter((s) => s.watched)
+    .sort((a, b) => (a.key < b.key ? -1 : 1))
+    .map((s) => s.agent);
+
 export function watchClock(seat: ClockSeat, now: () => number = Date.now, every: number = EVERY_MS): ClockWatcher {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let busy = false;
   let again = false;
   let ended = false;
   let armed: Armed | null = null;
+  let fired: Armed | null = null;
   let reached: Armed | null = null;
   const tried = new Set<string>();
   const sent = new Map<string, number>();
@@ -129,6 +143,7 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
       .map((w) => w.block);
     if (!stale.length) return;
     if (armed && stale.includes(armed.block)) armed = null;
+    if (fired && stale.includes(fired.block)) fired = null;
     if (reached && stale.includes(reached.block)) reached = null;
     seat.drop(stale);
   };
@@ -245,10 +260,15 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
       }
       schedule(delay);
     },
-    delivered: () => {
+    invoked: () => {
       if (!armed) return;
-      reached = armed;
+      fired = armed;
       armed = null;
+    },
+    delivered: () => {
+      if (!fired) return;
+      reached = fired;
+      fired = null;
       if (timer) clearTimeout(timer);
       timer = null;
       schedule(0);

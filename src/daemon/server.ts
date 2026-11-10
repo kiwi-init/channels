@@ -27,7 +27,7 @@ import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./se
 import { throttled } from "./throttle.ts";
 import { readAdmitRoom, startAdmitter } from "./admit.ts";
 import { addDocWake, docWakeTold, pendingDocWakes, tellDocWakes } from "../config/doc-wakes.ts";
-import { watchClock, type ClockWatcher } from "./clock-watch.ts";
+import { watchClock, watchedPeers, type ClockWatcher } from "./clock-watch.ts";
 import { followDocs } from "./doc-follow.ts";
 import { pathOf, seatWakes } from "./wake.ts";
 
@@ -205,9 +205,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     return watchClock({
       agent: seat.agent,
       peers: async () => {
-        const here = [...seats.values()].filter((s) => s.alias === seat.alias).sort((a, b) => (a.key < b.key ? -1 : 1));
-        const watched = await Promise.all(here.map(async (s) => s === seat || s.subs.size > 0 || (await wakeable(s))));
-        return here.filter((_, i) => watched[i]).map((s) => s.agent);
+        const here = [...seats.values()].filter((s) => s.alias === seat.alias);
+        return watchedPeers(await Promise.all(here.map(async (s) => ({ agent: s.agent, key: s.key, watched: s === seat || s.subs.size > 0 || (await wakeable(s)) }))));
       },
       hosts: (name) => [...seats.values()].some((s) => s.alias === seat.alias && s.agent === name),
       wanted: async () => seat.subs.size > 0 || (await wakeable(seat)),

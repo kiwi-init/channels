@@ -4,7 +4,7 @@ import { PROTOCOL_VERSION, type Event, type Kind, type Message, type Payload } f
 import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts";
 import { QUIET_MS, UNREAD_MS } from "@kiwi/core/state/clocks.ts";
 import type { DocWakeItem } from "../src/config/doc-wakes.ts";
-import { clockBlock, watchClock, type ClockWatcher } from "../src/daemon/clock-watch.ts";
+import { clockBlock, watchClock, watchedPeers, type ClockWatcher } from "../src/daemon/clock-watch.ts";
 
 const NAMES = ["jon", "owl", "win", "mac", "zed"] as const;
 type Name = (typeof NAMES)[number];
@@ -186,8 +186,9 @@ describe("one waker (#3930 §2, cases 2 and 22)", () => {
     const host = seat(c, "mac");
     c.wait(N);
     await host.w.look();
-    host.w.delivered();
+    host.w.invoked();
     expect(host.w.holds(clockBlock(id, epoch))).toBe(true);
+    host.w.delivered();
     await host.w.look();
     await host.w.look();
     expect(c.events("task.wake").map((m) => m.ev)).toEqual([{ op: "task.wake", task: id, mover: "mac", since: epoch, got: "delivered" }]);
@@ -202,6 +203,37 @@ describe("one waker (#3930 §2, cases 2 and 22)", () => {
     const lead = seat(c, "owl");
     await lead.w.look();
     expect(c.events("task.nudge")).toHaveLength(1);
+  });
+
+  test("a wake command that failed, or whose outcome is unknown, used up the attempt: the item no longer invokes the harness, nothing is said delivered, and the lead hears it after 5 min", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    const host = seat(c, "mac");
+    const lead = seat(c, "owl");
+    c.wait(N);
+    await host.w.look();
+    expect(host.w.holds(clockBlock(id, epoch))).toBe(false);
+    host.w.invoked();
+    expect(host.w.holds(clockBlock(id, epoch))).toBe(true);
+    await host.w.look();
+    await host.w.look();
+    expect(c.events("task.wake")).toEqual([]);
+    expect(host.did.wakes).toBe(1);
+    expect(host.pending().map((p) => p.block)).toEqual([clockBlock(id, epoch)]);
+    c.wait(UNREAD_MS);
+    await lead.w.look();
+    expect(c.events("task.nudge").at(-1)!.ev).toEqual({ op: "task.nudge", task: id, mover: "mac", since: epoch, step: 2, wake: "attempted" });
+    expect(host.did.wakes).toBe(1);
+  });
+
+  test("the seats a daemon chooses its posting seat from are the watched ones, in a fixed order: a dormant seat is never chosen", () => {
+    expect(
+      watchedPeers([
+        { agent: "win", key: "test\u0000a", watched: false },
+        { agent: "zed", key: "test\u0000c", watched: true },
+        { agent: "owl", key: "test\u0000b", watched: true },
+      ]),
+    ).toEqual(["owl", "zed"]);
   });
 
   test("a session shown the item before any wake path answered is recorded as delivered and read", async () => {
@@ -330,6 +362,7 @@ describe("one waker (#3930 §2, cases 2 and 22)", () => {
     c.wait(N);
     await host.w.look();
     expect(host.did.wakes).toBe(1);
+    host.w.invoked();
     host.w.delivered();
     host.shown(clockBlock(id, epoch));
     await host.w.look();

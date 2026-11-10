@@ -244,6 +244,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
       seat.outstanding = null;
       const prompt = wakePrompt(seat.alias, seat.agent);
       let retry = false;
+      if (path.via !== "tmux-typing") seat.clock?.invoked();
       const why =
         path.via === "webhook"
           ? hook
@@ -259,6 +260,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
         seat.wakeAgain = false;
         return scheduleWake(seat, Math.min(wakeGapMs, TYPE_RETRY_MS));
       }
+      seat.clock?.invoked();
       seat.lastWake = { at: Date.now(), via: path.via, unread, ok: why === null };
       if (why === null) {
         seat.outstanding = { seqs, to, at: seat.lastWake.at };
