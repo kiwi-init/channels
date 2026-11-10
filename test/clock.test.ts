@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { clockOf, nudgesDue } from "@kiwi/core/clock.ts";
+import { clockOf, nudgesDue, skipsDue } from "@kiwi/core/clock.ts";
 import { describeEvent, formatTask, formatTasks } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type NudgeStep, type Payload } from "@kiwi/core/protocol.ts";
+import { PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type NudgeStep, type Payload, type WakeGot, type WakeSeen } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
-import { QUEUE_MS, QUIET_MS } from "@kiwi/core/state/clocks.ts";
+import { QUEUE_MS, QUIET_MS, UNREAD_MS } from "@kiwi/core/state/clocks.ts";
 import type { StepSpec } from "@kiwi/core/steps.ts";
 
 const NAMES = ["jon", "owl", "win", "mac", "zed"] as const;
@@ -44,6 +44,8 @@ function channel() {
   const add = async (more: Partial<Extract<Event, { op: "task.add" }>> = {}): Promise<number> => (await ev("owl", { op: "task.add", title: "ship", ...more })).seq;
   const update = (from: Name, task: number, change: Omit<Extract<Event, { op: "task.update" }>, "op" | "task">) => ev(from, { op: "task.update", task, ...change });
   const nudge = (from: Name, task: number, mover: string, since: number, step: 1 | 2 | 3) => ev(from, { op: "task.nudge", task, mover, since, step });
+  const told = (from: Name, task: number, mover: string, since: number, wake: WakeSeen) => ev(from, { op: "task.nudge", task, mover, since, step: 2, wake });
+  const got = (from: Name, task: number, mover: string, since: number, what: WakeGot) => ev(from, { op: "task.wake", task, mover, since, got: what });
   const queued = (from: Name, task: number, mover: string, since: number, day: number) => ev(from, { op: "task.nudge", task, mover, since, step: 0, day });
   return {
     log,
@@ -52,6 +54,8 @@ function channel() {
     add,
     update,
     nudge,
+    told,
+    got,
     queued,
     wait: (ms: number) => void (time += ms),
     sameInstant: () => void (still = true),
@@ -500,5 +504,227 @@ describe("round 3: on a task the lead holds, each member's act keeps its own epo
     expect(s.rejected.has(first.seq)).toBe(false);
     expect(s.rejected.has(again.seq)).toBe(false);
     expect(s.tasks.get(id)!.clock!.acts).toEqual([["owl", owls.seq, owls.rts!, 1]]);
+  });
+});
+
+describe("one waker: the attempt, what came of it, and when the lead is told early (#3930 §2, cases 2 and 22)", () => {
+  const skips = (c: Channel, now = c.now()) => skipsDue(c.state(), now);
+
+  test("only the mover's own seat records the attempt, and a second record of it changes nothing", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(N);
+    const other = await c.nudge("owl", id, "mac", epoch, 1);
+    const first = await c.nudge("mac", id, "mac", epoch, 1);
+    c.wait(30_000);
+    const again = await c.nudge("mac", id, "mac", epoch, 1);
+    const s = c.state();
+    expect(s.rejected.get(other.seq)).toBe(`only the daemon hosting T${id}'s mover records its wake, as that seat`);
+    expect(s.rejected.has(first.seq)).toBe(false);
+    expect(s.rejected.has(again.seq)).toBe(false);
+    expect(s.tasks.get(id)!.clock!.woke).toEqual({ since: epoch, seq: first.seq, by: "mac", at: first.rts! });
+    expect(due(c)).toEqual([]);
+  });
+
+  test("case 22: two evaluators reach N, one attempt is recorded, and a restart finds it and has nothing to wake", async () => {
+    const c = channel();
+    const { id, epoch, since } = await inReview(c);
+    expect(due(c, since + N)).toEqual([{ task: id, mover: "mac", since: epoch, step: 1, to: "mac" }]);
+    c.wait(N);
+    const attempt = await c.nudge("mac", id, "mac", epoch, 1);
+    expect(due(c)).toEqual([]);
+    expect(read(c, id)!.woke).toEqual({ since: epoch, seq: attempt.seq, by: "mac", at: attempt.rts! });
+    expect(fold(c.log, roster, c.now()).tasks.get(id)!.clock!.woke!.seq).toBe(attempt.seq);
+  });
+
+  test("case 22: the crash came before the wake itself: nothing is delivered or read, and the lead is due after 5 min", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(N);
+    const attempt = await c.nudge("mac", id, "mac", epoch, 1);
+    expect(skips(c, attempt.rts! + UNREAD_MS - 1)).toEqual([]);
+    expect(skips(c, attempt.rts! + UNREAD_MS)).toEqual([{ task: id, mover: "mac", since: epoch, step: 2, to: "owl", wake: "attempted" }]);
+    const early = await c.told("owl", id, "mac", epoch, "attempted");
+    c.wait(UNREAD_MS);
+    const wrong = await c.told("owl", id, "mac", epoch, "none");
+    const told = await c.told("owl", id, "mac", epoch, "attempted");
+    const repeat = await c.told("jon", id, "mac", epoch, "attempted");
+    const s = c.state();
+    expect(s.rejected.get(early.seq)).toBe(`T${id} hasn't been quiet long enough for step 2 of its clock`);
+    expect(s.rejected.get(wrong.seq)).toBe(`T${id}'s wake stands as attempted, not none`);
+    expect(s.rejected.has(told.seq)).toBe(false);
+    expect(s.rejected.has(repeat.seq)).toBe(false);
+    expect(s.tasks.get(id)!.clock).toMatchObject({ step: 2, woke: { seq: attempt.seq } });
+    expect(skips(c)).toEqual([]);
+    expect(due(c)).toEqual([]);
+  });
+
+  test("case 2: a seat nobody attempted to wake is the lead's at N, said as no wake attempted", async () => {
+    const c = channel();
+    const { id, epoch, since } = await inReview(c);
+    expect(skips(c, since + N - 1)).toEqual([]);
+    expect(skips(c, since + N)).toEqual([{ task: id, mover: "mac", since: epoch, step: 2, to: "owl", wake: "none" }]);
+    c.wait(N - 2_000);
+    const early = await c.told("owl", id, "mac", epoch, "none");
+    c.wait(2_000);
+    const plain = await c.nudge("owl", id, "mac", epoch, 2);
+    const told = await c.told("owl", id, "mac", epoch, "none");
+    const s = c.state();
+    expect(s.rejected.get(early.seq)).toBe(`T${id} hasn't been quiet long enough for step 2 of its clock`);
+    expect(s.rejected.get(plain.seq)).toBe(`T${id} hasn't been quiet long enough for step 2 of its clock`);
+    expect(s.rejected.has(told.seq)).toBe(false);
+    expect(describeEvent(told, s)).toBe(`marked T${id} “ship” quiet with mac, with no wake attempted: due to the lead`);
+    expect(s.tasks.get(id)!.clock!.step).toBe(2);
+    expect(due(c)).toEqual([]);
+    expect(formatTask(s, s.tasks.get(id)!, c.now()).split("\n")).toContain("  quiet 20m with mac (told to the lead; no wake attempted)");
+  });
+
+  test("an attempt that lands after the lead was told is still recorded as that seat's, and wakes nobody twice", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(N);
+    await c.told("owl", id, "mac", epoch, "none");
+    const attempt = await c.nudge("mac", id, "mac", epoch, 1);
+    const s = c.state();
+    expect(s.rejected.size).toBe(0);
+    expect(s.tasks.get(id)!.clock).toMatchObject({ step: 2, woke: { since: epoch, seq: attempt.seq, by: "mac" } });
+    expect(due(c)).toEqual([]);
+  });
+
+  test("delivered and read are said by the woken seat only, for that attempt, in either order, and the first time stands", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(N);
+    const before = await c.got("mac", id, "mac", epoch, "delivered");
+    const attempt = await c.nudge("mac", id, "mac", epoch, 1);
+    const forged = await c.got("owl", id, "mac", epoch, "read");
+    const stale = await c.got("mac", id, "mac", epoch - 1, "read");
+    c.wait(10_000);
+    const shown = await c.got("mac", id, "mac", epoch, "read");
+    c.wait(10_000);
+    const reached = await c.got("mac", id, "mac", epoch, "delivered");
+    c.wait(10_000);
+    const again = await c.got("mac", id, "mac", epoch, "read");
+    const s = c.state();
+    expect(s.rejected.get(before.seq)).toBe(`T${id} has no wake attempt for that clock`);
+    expect(s.rejected.get(forged.seq)).toBe(`only mac, the seat that was woken, says what came of T${id}'s wake`);
+    expect(s.rejected.get(stale.seq)).toBe(`T${id} has no wake attempt for that clock`);
+    expect(s.rejected.has(again.seq)).toBe(false);
+    expect(s.tasks.get(id)!.clock!.woke).toEqual({ since: epoch, seq: attempt.seq, by: "mac", at: attempt.rts!, read: shown.rts!, delivered: reached.rts! });
+    expect(read(c, id)).toMatchObject({ epoch, step: 1 });
+    expect(describeEvent(shown, s)).toBe(`noted that mac's session was shown the wake for T${id} “ship”`);
+    expect(describeEvent(reached, s)).toBe(`noted that the wake for T${id} “ship” reached mac's session`);
+    expect(formatTask(s, s.tasks.get(id)!, c.now()).split("\n")).toContain("  quiet 21m with mac (wake attempted 1m ago, delivered, read)");
+  });
+
+  test("a wake that was read is not unread: the lead waits for 2N, and is told what was seen", async () => {
+    const c = channel();
+    const { id, epoch, since } = await inReview(c);
+    c.wait(N);
+    await c.nudge("mac", id, "mac", epoch, 1);
+    await c.got("mac", id, "mac", epoch, "delivered");
+    await c.got("mac", id, "mac", epoch, "read");
+    c.wait(UNREAD_MS);
+    expect(skips(c)).toEqual([]);
+    const early = await c.told("owl", id, "mac", epoch, "read");
+    expect(c.state().rejected.get(early.seq)).toBe(`T${id} hasn't been quiet long enough for step 2 of its clock`);
+    expect(due(c, since + 2 * N)).toEqual([{ task: id, mover: "mac", since: epoch, step: 2, to: "owl" }]);
+    c.wait(N);
+    const told = await c.told("owl", id, "mac", epoch, "read");
+    expect(c.state().rejected.has(told.seq)).toBe(false);
+    expect(describeEvent(told, c.state())).toBe(`marked T${id} “ship” still quiet with mac, who was shown the wake: due to the lead`);
+  });
+
+  test("a delivered wake nobody read goes to the lead after 5 min, once", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(N);
+    const attempt = await c.nudge("mac", id, "mac", epoch, 1);
+    await c.got("mac", id, "mac", epoch, "delivered");
+    expect(skips(c, attempt.rts! + UNREAD_MS)).toEqual([{ task: id, mover: "mac", since: epoch, step: 2, to: "owl", wake: "delivered" }]);
+    c.wait(UNREAD_MS);
+    const told = await c.told("owl", id, "mac", epoch, "delivered");
+    expect(c.state().rejected.has(told.seq)).toBe(false);
+    expect(skips(c)).toEqual([]);
+    expect(due(c)).toEqual([]);
+    expect(describeEvent(told, c.state())).toBe(`marked T${id} “ship” quiet with mac, whose wake was delivered and not read: due to the lead`);
+  });
+
+  test("progress or a new mover ends the attempt: its receipts are refused and the new clock has none", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(N);
+    await c.nudge("mac", id, "mac", epoch, 1);
+    const spoke = await c.say("mac", "msg", "reading it now", { task: id });
+    const late = await c.got("mac", id, "mac", epoch, "read");
+    expect(c.state().rejected.get(late.seq)).toBe(`T${id} has no wake attempt for that clock`);
+    expect(read(c, id)).toEqual({ mover: "mac", party: "mac", epoch: spoke.seq, since: spoke.rts!, quiet: 1_000, paged: true, step: 0 });
+    await c.update("owl", id, { review: "zed" });
+    const other = await c.got("mac", id, "zed", c.state().tasks.get(id)!.clock!.seq, "read");
+    expect(c.state().rejected.get(other.seq)).toBe(`T${id} has no wake attempt for that clock`);
+    expect(c.state().tasks.get(id)!.clock!.woke).toBeUndefined();
+  });
+
+  test("with N shorter than 5 min the plain step at 2N comes first, and the unread skip adds no second step", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(N);
+    await c.nudge("mac", id, "mac", epoch, 1);
+    expect(skipsDue(c.state(), c.now() + UNREAD_MS, 60_000)).toEqual([]);
+    c.wait(N);
+    await c.nudge("owl", id, "mac", epoch, 2);
+    expect(skips(c, c.now() + UNREAD_MS)).toEqual([]);
+  });
+
+  test("on a task the lead holds, the attempt belongs to the lead's own act", async () => {
+    const c = channel();
+    const id = await c.add({ owner: "win", review: "*" });
+    await c.update("win", id, { state: "review", at: A });
+    const owls = await c.say("owl", "msg", "routing it now", { task: id });
+    c.wait(N);
+    const other = await c.nudge("zed", id, "@lead", owls.seq, 1);
+    const attempt = await c.nudge("owl", id, "@lead", owls.seq, 1);
+    const shown = await c.got("owl", id, "@lead", owls.seq, "read");
+    const s = c.state();
+    expect(s.rejected.get(other.seq)).toBe(`only the daemon hosting T${id}'s mover records its wake, as that seat`);
+    expect(s.rejected.has(shown.seq)).toBe(false);
+    expect(read(c, id)).toMatchObject({ mover: "owl", epoch: owls.seq, step: 1, woke: { since: owls.seq, seq: attempt.seq, by: "owl", read: shown.rts! } });
+  });
+
+  test("a fold from a snapshot holds the same attempt and receipts at every cut", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(N);
+    await c.nudge("mac", id, "mac", epoch, 1);
+    await c.got("mac", id, "mac", epoch, "delivered");
+    c.wait(UNREAD_MS);
+    await c.told("owl", id, "mac", epoch, "delivered");
+    await c.got("mac", id, "mac", epoch, "read");
+    const now = c.now();
+    const whole = fold(c.log, roster, now);
+    const baseAt = (cut: number): FoldBase => {
+      const made: FoldBase[] = [];
+      fold(c.log.slice(0, cut), roster, now, null, null, null, (b) => void made.push(b));
+      return made.at(-1)!;
+    };
+    for (let cut = 2; cut <= c.log.length; cut++) {
+      const resumed = fold(c.log.slice(cut), roster, now, null, null, baseAt(cut));
+      expect({ cut, clock: resumed.tasks.get(id)!.clock, rejected: [...resumed.rejected] }).toEqual({ cut, clock: whole.tasks.get(id)!.clock, rejected: [...whole.rejected] });
+      expect(skipsDue(resumed, now)).toEqual(skipsDue(whole, now));
+    }
+    expect(whole.tasks.get(id)!.clock).toMatchObject({ step: 2, woke: { by: "mac" } });
+    expect(whole.tasks.get(id)!.clock!.woke!.read).toBeDefined();
+  });
+
+  test("the new events are well formed only in their own shape", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    const m = await c.got("mac", id, "mac", epoch, "read");
+    expect(wellFormed(m)).toBe(true);
+    expect(wellFormed({ ...m, ev: { op: "task.wake", task: id, mover: "mac", since: epoch, got: "attempted" } })).toBe(false);
+    expect(wellFormed({ ...m, ev: { op: "task.wake", task: id, mover: "", since: epoch, got: "read" } })).toBe(false);
+    expect(wellFormed({ ...m, ev: { op: "task.nudge", task: id, mover: "mac", since: epoch, step: 2, wake: "delivered" } })).toBe(true);
+    expect(wellFormed({ ...m, ev: { op: "task.nudge", task: id, mover: "mac", since: epoch, step: 3, wake: "none" } })).toBe(false);
+    expect(wellFormed({ ...m, ev: { op: "task.nudge", task: id, mover: "mac", since: epoch, step: 2, wake: "woken" } })).toBe(false);
   });
 });
