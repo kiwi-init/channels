@@ -972,7 +972,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         ...shownUsage,
       }),
     }
-  }, [shownUsage])
+  }, [shownUsage, scenario])
 
   const home = useMemo(() => [...state.channels.values()].map((c) => homeOf(c, saidIn(c.messages))), [state.channels])
 

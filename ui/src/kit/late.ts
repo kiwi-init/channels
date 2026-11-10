@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 
-export const LATE_MS = 400
+const LATE_MS = 400
 
 export function useLate(waiting: boolean, ms: number = LATE_MS): boolean {
   const [late, setLate] = useState(false)
