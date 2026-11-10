@@ -4,7 +4,6 @@ import { watches } from "@kiwi/channel/channel-ops.ts"
 import { markNeeds } from "@kiwi/channel/news.ts"
 import { loadMember, type StoredMember } from "@kiwi/channel/store.ts"
 import { useChannel } from "@kiwi/channel/use-channel.ts"
-import { HEADS_SAFETY_MS } from "@kiwi/channel/watch.ts"
 import { useSecrets } from "@kiwi/secrets/secrets.ts"
 import { asksOf } from "~/live/map"
 import { usePinsHere } from "~/live/pins"
@@ -12,11 +11,14 @@ import { withReach } from "~/live/reach"
 import { specAsksOf, specsOf } from "~/live/specs"
 
 const SETTLE_MS = 3_000
-const GAP_MS = 60_000
+const GAP_MS = 30_000
+const ECHO_MS = 5_000
 const TICK_MS = 60_000
+const SAFETY_MS = 900_000
 const GIVE_UP_MS = 30_000
 
 const counted = new Map<string, number>()
+const heads = new Map<string, number>()
 
 export function Recount({ open }: { open: string }) {
   const { channels } = useSecrets()
@@ -30,11 +32,12 @@ export function Recount({ open }: { open: string }) {
     const t = Date.now()
     const next = members.find((m) => {
       const at = counted.get(m.code)
-      return at === undefined || t - at >= HEADS_SAFETY_MS || (dirty.current.has(m.code) && t - at >= GAP_MS)
+      return at === undefined || t - at >= SAFETY_MS || (dirty.current.has(m.code) && t - at >= GAP_MS)
     })
     if (next) setNow(next.code)
   })
-  const done = useCallback((code: string) => {
+  const done = useCallback((code: string, head = 0) => {
+    heads.set(code, Math.max(heads.get(code) ?? 0, head))
     counted.set(code, Date.now())
     dirty.current.delete(code)
     setNow((c) => (c === code ? null : c))
@@ -48,9 +51,14 @@ export function Recount({ open }: { open: string }) {
     const stops = members.map((m) =>
       watches().watch(m.code, (ev) => {
         if (ev._tag === "Open") return
+        const at = counted.get(m.code) ?? 0
+        if (ev._tag === "Head") {
+          if (ev.seq <= (heads.get(m.code) ?? 0)) return
+          heads.set(m.code, ev.seq)
+        } else if (Date.now() - at < ECHO_MS) return
         dirty.current.add(m.code)
         clearTimeout(soon)
-        soon = window.setTimeout(pump, SETTLE_MS)
+        soon = window.setTimeout(pump, Math.max(SETTLE_MS, at + GAP_MS - Date.now()))
       })
     )
     const tick = window.setInterval(pump, TICK_MS)
@@ -72,8 +80,8 @@ export function Recount({ open }: { open: string }) {
   return member ? <RecountMember key={member.code} member={member} done={done} /> : null
 }
 
-const RecountMember = memo(function RecountMember({ member, done }: { member: StoredMember; done: (code: string) => void }) {
-  const { state, messages: shown, reach, roster, requests, isOwner, caughtUp, gone, refreshRequests } = useChannel(member, undefined, true)
+const RecountMember = memo(function RecountMember({ member, done }: { member: StoredMember; done: (code: string, head?: number) => void }) {
+  const { state, messages: shown, reach, roster, requests, isOwner, caughtUp, gone, head, refreshRequests } = useChannel(member, undefined, true)
   const me = member.identity.name
   const code = member.code
   const room = member.access.roomId
@@ -96,7 +104,7 @@ const RecountMember = memo(function RecountMember({ member, done }: { member: St
     if (gone) return done(code)
     if (!settled || !fresh) return
     markNeeds(room, needs)
-    done(code)
-  }, [gone, settled, fresh, needs, room, code, done])
+    done(code, Math.max(head, shown.at(-1)?.seq ?? 0))
+  }, [gone, settled, fresh, needs, room, code, head, shown, done])
   return null
 })
