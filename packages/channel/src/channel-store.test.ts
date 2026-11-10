@@ -9,7 +9,7 @@ import { APP_BEACON_MS, ChannelStore, PAGE, REACH, WINDOW } from "./channel-stor
 import { PRESENCE_TTL } from "./online.ts";
 import { REFOLLOW_MS } from "./refollow.ts";
 import type { StoredMember } from "./store.ts";
-import { dropWarm, foldedFor, LEAN, LIGHT, warmOf, type Warm } from "./warm.ts";
+import { dropWarm, foldedFor, keepWarm, LEAN, LIGHT, warmOf, type Warm } from "./warm.ts";
 import { useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts";
 
 const CODE = "mc2-store-test";
@@ -524,6 +524,25 @@ describe("history from the relay is fetched only when asked (T977, #1944)", () =
     };
   }
 
+  test("a disk tail at head with no base under it is replayed from the first message, and an old task survives it (#2288)", async () => {
+    const head = REACH + 1_000;
+    useHistoryDb(archive(head - REACH + 1, head));
+    try {
+      const r = relay(head);
+      const { store, close } = await opened(r);
+      expect(r.follows[0]!.since).toBe(0);
+      expect(store.handle.value.caughtUp).toBe(false);
+      await sleep(150);
+      r.say({ _tag: "Message", message: { ...msg(1), pk: "pk-atlas", kind: "event", ev: { op: "task.add", title: "old unfinished task", owner: "atlas" } } as Message, row: null });
+      for (let seq = 2; seq <= head; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
+      await until(() => store.handle.value.caughtUp);
+      expect(store.handle.value.state.tasks.has(1)).toBe(true);
+      close();
+    } finally {
+      useHistoryDb(null);
+    }
+  });
+
   test("opening a channel and receiving live messages never reads older history from the relay", async () => {
     useHistoryDb(archive(50, 60));
     try {
@@ -678,6 +697,55 @@ describe("a channel longer than the window, opened with no base under it (T1759)
     hearWindow(r);
     await until(() => store.handle.value.caughtUp);
     expect(store.handle.value.state.head).toBe(HEAD);
+    close();
+  });
+
+  const oldTask = (): Message => ({ ...msg(1), pk: "pk-atlas", kind: "event", ev: { op: "task.add", title: "old unfinished task", owner: "atlas" } }) as Message;
+  const warmTail = () =>
+    keepWarm(CODE, {
+      messages: Array.from({ length: REACH }, (_, i) => msg(HEAD - REACH + 1 + i)),
+      reach: [],
+      unread: [],
+      roster: [person("atlas", "pk-atlas")],
+      requests: [],
+      marks: new Map(),
+      guardFloor: null,
+      roomsFloor: null,
+      base: null,
+      partial: true,
+    });
+  const replay = (r: ReturnType<typeof relay>, last: number) => {
+    r.say({ _tag: "Message", message: oldTask(), row: null });
+    for (let seq = 2; seq <= last; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
+  };
+
+  test("a warm tail at head with no base under it isn't caught up until the replay from the first message is, and an old task survives it (#2288)", async () => {
+    warmTail();
+    const r = relay(HEAD);
+    const { store, close } = await opened(r);
+    expect(r.follows[0]!.since).toBe(0);
+    expect(store.handle.value.caughtUp).toBe(false);
+    await sleep(150);
+    expect(store.handle.value.caughtUp).toBe(false);
+    replay(r, HEAD);
+    await until(() => store.handle.value.caughtUp);
+    expect(store.handle.value.state.tasks.has(1)).toBe(true);
+    await until(() => store.handle.value.messages.length <= WINDOW);
+    close();
+    const again = relay(HEAD);
+    const two = await opened(again);
+    expect(two.store.handle.value.state.tasks.has(1)).toBe(true);
+    two.close();
+  });
+
+  test("a replay from the first message that stops short over a warm tail stays behind", async () => {
+    warmTail();
+    const r = relay(HEAD);
+    const { store, close } = await opened(r);
+    replay(r, 500);
+    await sleep(150);
+    expect(store.handle.value.caughtUp).toBe(false);
+    expect(store.handle.value.state.tasks.has(1)).toBe(true);
     close();
   });
 

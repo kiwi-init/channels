@@ -132,7 +132,7 @@ describe("opening a channel", () => {
     const opened = openChannel(none, undefined, 2000);
     await r.settle();
     await r.roundTrip();
-    expect(await opened).toEqual({ head: 5114, since: 0, whole: true });
+    expect(await opened).toEqual({ head: 5114, since: 0, whole: true, fresh: true });
     expect(r.painted).toEqual([{ at: 1, seqs: [], base: null }]);
     const s = relay();
     const stale = s.make(5114, range(3200, 5114), 1000);
@@ -140,7 +140,7 @@ describe("opening a channel", () => {
     const later = openChannel(stale, undefined, 2000);
     await s.settle();
     await s.roundTrip();
-    expect(await later).toEqual({ head: 5114, since: 0, whole: true });
+    expect(await later).toEqual({ head: 5114, since: 0, whole: true, fresh: true });
     expect(s.painted.at(-1)!.base).toBeNull();
   });
 

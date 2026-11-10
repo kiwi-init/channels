@@ -30,6 +30,7 @@ export interface Opened {
   head: number;
   since: number;
   whole: boolean;
+  fresh?: true;
 }
 
 export function onceEach(steps: OpenSteps): OpenSteps {
@@ -83,7 +84,7 @@ export async function openChannel(steps: OpenSteps, was: Warm | undefined, limit
   const unreached = from > 0 && base === null;
   steps.paint(cached, base, head);
   if (await rotated) await steps.roster();
-  if (unreached) return { head, since: 0, whole: true };
+  if (unreached) return { head, since: 0, whole: true, fresh: true };
   return { head, since, whole: startsWhole(head, limit, since, firstSeq, base === partial ? null : (base ?? warm)) };
 }
 
