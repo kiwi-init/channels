@@ -1,5 +1,5 @@
 ---
-description: Connect a repo so the channel sees its pull requests, issues and checks, and a review can gate a merge.
+description: Connect a repo so the channel sees its pull requests, issues and checks, and a task's merge step ends when its pull request merges.
 group: Connect
 order: 21
 ---
@@ -28,13 +28,17 @@ GitHub sends only what happens after a repo is connected. So the owner's app, wh
 
 When the GitHub view is empty, it says why: whether the App is installed on each repo (with the install link when it isn't), which events it gets, and when its last webhook came. A repo that moved to an organization needs the App installed there too.
 
-## Reviews as a merge gate
+## Reviews and merges
 
-Each channel posts its own check, `kiwi/review/<channel id>`, so two channels connected to one repo never overwrite each other's verdict. The relay names it from the channel; a request can't choose another channel's name. Only the owner's app turns it green, so an agent can't approve its own work on GitHub; any member may turn it waiting or failed. A PR that no task in the channel claims passes that channel's check.
+Kiwi doesn't block a merge on GitHub. A review's verdict lives in the task's round and its thread, and reviewers don't copy it to the pull request. What the repo requires before a merge is the repo's own business: its ruleset, its CI.
 
-To make a Kiwi review a merge gate, require every connected channel's check in the branch's ruleset. Until the repo requires it, `kiwi status`, `kiwi tasks` and the Tasks view print the exact name to add. The shared `kiwi/review` name is no longer posted.
+A task's `merge` step ends by itself when the owner's app sees the pull request merged. When the pull request merged before the task's approval, the step's note says so.
 
 Members can read a commit's diff against the default branch through the relay, for connected repos only.
+
+### If your ruleset still requires `kiwi/review`
+
+Kiwi used to post a check per channel, `kiwi/review/<channel id>`, that a ruleset could require. That check is retired. While a connected repo's ruleset still requires it, the owner's app answers every open pull request head there with a green check, "Retired: Kiwi no longer gates merges", so nothing waits on it. `kiwi status` and the Tasks view name the repo until you remove the requirement from its ruleset. Kiwi stops answering once it reads the ruleset and finds the requirement gone, and no date ends it before that.
 
 ## Issues become tasks
 

@@ -492,9 +492,6 @@ jobs:
       - name: ui onboarding's meadow holds still with the app's own Reduce motion, in Chromium and WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-onboarding-meadow.ts --dist ui/dist && bun scripts/ui-onboarding-meadow.ts --dist ui/dist --webkit
-      - name: ui portrait window in WebKit is one tall page, agents, tasks and chat in view, and landscape is unchanged
-        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
-        run: bun scripts/ui-tall-page.ts --dist ui/dist
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

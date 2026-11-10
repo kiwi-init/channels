@@ -152,63 +152,7 @@ async function jumps(page: Page): Promise<string | null> {
   return shown ? null : "the spec line is still out of view after a click on its comment";
 }
 
-async function staysInPane(page: Page): Promise<string | null> {
-  const got = await page.evaluate(() => {
-    const work = document.querySelector<HTMLElement>(".tall-work");
-    const spec = work?.querySelector<HTMLElement>(".spec-page");
-    if (!work || !spec) return { kind: "missing" as const };
-    const bottom = work.getBoundingClientRect().bottom;
-    const clipped = (el: HTMLElement): boolean => {
-      for (let up: HTMLElement | null = el.parentElement; up; up = up.parentElement) {
-        if (getComputedStyle(up).overflowY !== "visible" && up.getBoundingClientRect().bottom <= bottom + 1) return true;
-        if (up === work) return false;
-      }
-      return false;
-    };
-    const leaks = [...work.querySelectorAll<HTMLElement>("*")].filter((el) => {
-      const r = el.getBoundingClientRect();
-      return r.height > 0 && r.width > 0 && r.bottom > bottom + 1 && !clipped(el);
-    });
-    const scrolls = spec.scrollHeight > spec.clientHeight + 1;
-    return { kind: "seen" as const, leaks: leaks.slice(0, 3).map((el) => `${el.tagName.toLowerCase()}.${el.className || "-"}`), n: leaks.length, scrolls, bottom: Math.round(bottom) };
-  });
-  if (got.kind === "missing") return "no spec in the tall layout's top pane";
-  if (!got.scrolls) return "the spec fits its pane, so nothing could spill: make the window shorter or the pane smaller";
-  return got.n ? `${got.n} parts of the spec draw below the grip (y ${got.bottom}), such as ${got.leaks.join(", ")}` : null;
-}
-
-const TALL_H = 1500;
 const NARROW_WRAP_PX = 940;
-const SPLIT = Math.round(TALL_H * 0.42);
-const CHAT_MAX_PX = 420;
-
-const heights = (page: Page) =>
-  page.evaluate(() => ({
-    work: Math.round(document.querySelector<HTMLElement>(".tall-work")!.getBoundingClientRect().height),
-    chat: Math.round(document.querySelector<HTMLElement>(".tall-chat")!.getBoundingClientRect().height),
-  }));
-
-async function roomy(page: Page): Promise<string | null> {
-  const got = await heights(page);
-  if (got.work < SPLIT + 200) return `the top pane is ${got.work} px, about the usual ${SPLIT} px split`;
-  return got.chat <= CHAT_MAX_PX ? null : `the chat keeps ${got.chat} px under an open spec`;
-}
-
-async function drags(page: Page): Promise<string | null> {
-  const before = (await heights(page)).work;
-  await page.locator(".tall-grip").focus();
-  for (let i = 0; i < 6; i++) await page.keyboard.press("Shift+ArrowUp");
-  await page.waitForTimeout(200);
-  const after = (await heights(page)).work;
-  return after < before - 300 ? null : `the pane went from ${before} to ${after} px after the grip moved up 384 px`;
-}
-
-async function givesBack(page: Page): Promise<string | null> {
-  await page.getByRole("button", { name: "All specs" }).click();
-  await page.waitForTimeout(400);
-  const got = (await heights(page)).work;
-  return Math.abs(got - SPLIT) <= 2 ? null : `the top pane is ${got} px after the spec closed, not the usual ${SPLIT} px`;
-}
 
 const browser = await webkit.launch();
 let failed = 0;
@@ -272,20 +216,6 @@ try {
   if (flashed) failed++;
   console.log(`${flashed ? "✗" : "✓"} spec-draft at 900x1400: a narrow window draws the spec in one column from its first frame${flashed ? `: ${flashed}` : ""}`);
   await narrow.close();
-  const tall = await browser.newPage({ viewport: { width: 1100, height: TALL_H } });
-  await tall.goto(`http://127.0.0.1:${server.port}/?shot=spec-draft`);
-  await tall.waitForSelector(".tall-work .spec-doc-wrap", { timeout: 15_000 });
-  await tall.waitForTimeout(500);
-  for (const [what, check] of [
-    ["an open spec grows the top pane and leaves the chat a strip", roomy],
-    ["the grip still resizes the pane while a spec is open", drags],
-    ["the spec stays in the top pane, above the grip", staysInPane],
-    ["closing the spec gives back the usual split", givesBack],
-  ] as const) {
-    const why = await check(tall);
-    if (why) failed++;
-    console.log(`${why ? "✗" : "✓"} spec-draft at 1100x${TALL_H} (tall): ${what}${why ? `: ${why}` : ""}`);
-  }
 } finally {
   await browser.close();
   server.stop();

@@ -13,6 +13,8 @@ order: 31
 
 两者通过同一套测试，读取同样的设置。
 
+如果从你的网络访问 Cloudflare 很慢或无法访问，[在 Cloudflare 较慢的地方自托管](self-hosting-china.md)是在一台 Linux 服务器上运行 Bun 中继的最短路径。
+
 <!-- figure: selfhost -->
 
 ## 何时自托管
@@ -155,7 +157,7 @@ curl -s https://relay.example.com/v1/config
 | `GITHUB_WEBHOOK_SECRET` | secret | 没有 GitHub 事件：`/v1/github/webhook` 返回 404 |
 | `GITHUB_APP_CLIENT_ID` | `vars` | 无法关联账户，也无法登录 |
 | `GITHUB_APP_CLIENT_SECRET` | secret | 无法登录 |
-| `GITHUB_APP_ID`、`GITHUB_APP_PRIVATE_KEY`（`.pem` 文件） | secret | 没有 diff，没有 `kiwi/review` 检查，也无法补齐未关闭的 PR |
+| `GITHUB_APP_ID`、`GITHUB_APP_PRIVATE_KEY`（`.pem` 文件） | secret | 没有 diff，无法对规则仍然要求的已停用 `kiwi/review` 检查回以绿色，也无法补齐未关闭的 PR |
 
 在 Bun 中继上，每一项都是一个环境变量。
 
