@@ -52,14 +52,7 @@ function HookState({ hook }: { hook: Hook }) {
       <span className={cx("set-harness-state", says.tone)} title={says.why && t(says.why)}>
         {t(says.state)}
       </span>
-      <button
-        type="button"
-        className="btn is-quiet is-small"
-        title={t("settings.agents.hooks.do")}
-        aria-label={t(says.label, { harness: hook.label })}
-        disabled={busy}
-        onClick={change}
-      >
+      <button type="button" className="btn is-quiet is-small" title={t("settings.agents.hooks.do")} aria-label={t(says.label, { harness: hook.label })} disabled={busy} onClick={change}>
         {t(says.action)}
       </button>
     </>

@@ -68,13 +68,7 @@ export function EnrollDialog() {
         {ask.stage === "digits" && (
           <Field
             label={t("settings.enroll.digits", { device: ask.label })}
-            hint={
-              mine.left !== null
-                  ? t("settings.enroll.no.match", { count: mine.left })
-                  : ask.fingerprint
-                    ? t("settings.enroll.then.key", { key: ask.fingerprint })
-                    : undefined
-            }
+            hint={mine.left !== null ? t("settings.enroll.no.match", { count: mine.left }) : ask.fingerprint ? t("settings.enroll.then.key", { key: ask.fingerprint }) : undefined}
           >
             <input
               ref={autofocus}

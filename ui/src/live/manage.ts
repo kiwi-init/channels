@@ -243,7 +243,12 @@ export async function addRoom(code: string, typed: string, members?: string[]): 
   if (problem) throw new Plain(roomProblemWords(problem))
   const name = cleanRoomName(typed)
   if (members?.length) {
-    const id = await run.ch.makeRoom(name, plainly(() => picks(run, members))).catch(updateFirst)
+    const id = await run.ch
+      .makeRoom(
+        name,
+        plainly(() => picks(run, members))
+      )
+      .catch(updateFirst)
     await roomFolded(() => openedRun(code), { id, name })
     return id
   }

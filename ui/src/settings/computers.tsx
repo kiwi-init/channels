@@ -40,7 +40,7 @@ function TheirSettings({ computer }: { computer: Computer }) {
     return () => {
       live = false
     }
-  }, [computerSettings, computer.id, round])
+  }, [computerSettings, computer.id, computer.label, round])
   const again = () => {
     setGot(null)
     setRound((r) => r + 1)

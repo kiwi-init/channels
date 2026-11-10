@@ -338,7 +338,14 @@ function CheckUpdates({ version }: { version: string }) {
       .finally(() => setBusy(false))
   }
   return (
-    <Row label={<UpToDate />} hint={<span role="status" className={cx(!busy && result?.state === "failed" && "tone-alert")}>{busy ? t("settings.sections.checking") : result ? updateFound(result) : <span className="set-mono">{version}</span>}</span>}>
+    <Row
+      label={<UpToDate />}
+      hint={
+        <span role="status" className={cx(!busy && result?.state === "failed" && "tone-alert")}>
+          {busy ? t("settings.sections.checking") : result ? updateFound(result) : <span className="set-mono">{version}</span>}
+        </span>
+      }
+    >
       <button type="button" className="btn is-quiet is-small" disabled={busy} onClick={check}>
         {t("settings.sections.check.now")}
       </button>

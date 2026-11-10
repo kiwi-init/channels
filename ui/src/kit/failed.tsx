@@ -51,7 +51,7 @@ function tagOf(err: unknown): unknown {
   return "_tag" in err ? err._tag : undefined
 }
 
-export function whyOf(err: unknown): Why {
+function whyOf(err: unknown): Why {
   if (err instanceof Plain) return "plain"
   const tag = tagOf(err)
   const known = typeof tag === "string" ? TAGS[tag] : undefined
