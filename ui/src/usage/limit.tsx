@@ -2,15 +2,16 @@ import { t } from "~/i18n/i18n"
 import { Modal } from "~/kit/modal"
 import { openOutside } from "~/kit/outside"
 import type { Usage } from "~/model"
-import { useApp } from "~/nav"
+import { useActions, useOpenChannel } from "~/nav"
 import { UsageBar } from "~/usage/meter"
 import { closeLimit, useUsage, type LimitHit } from "~/usage/store"
 import { canUpgrade, fairUse, paidPlanLine, resetsIn, upgradeLabel } from "~/usage/words"
 
 export function LimitDialog({ hit }: { hit: LimitHit }) {
-  const { app } = useApp()
-  const usage = useUsage(app.actions.myUsage)
-  const channel = hit.code !== null && app.channel?.code === hit.code ? app.channel : null
+  const actions = useActions()
+  const open = useOpenChannel()
+  const usage = useUsage(actions.myUsage)
+  const channel = hit.code !== null && open?.code === hit.code ? open : null
   const owner = channel?.people.find((p) => p.owner) ?? null
   const full = usage !== null && usage.limit !== null && usage.used >= usage.limit
   const mine = hit.code === null || owner?.you === true || (owner === null && full)
