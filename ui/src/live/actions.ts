@@ -262,6 +262,7 @@ export function makeActions(): Actions {
     forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
     linkGithub: () => attempt(t("live.actions.github.not.linked"), async () => (await account()).linkGithub()),
     signInWithGithub: () => attempt(t("live.actions.github.not.signed.in"), async () => (await account()).linkGithub()),
+    cancelGithubSignIn: () => attempt(t("live.actions.github.not.signed.in"), async () => (await account()).dropGithubCode()),
     unlinkGithub: () => attempt(t("live.actions.github.not.unlinked"), async () => (await account()).unlinkGithub()),
     windowControl: (action) =>
       void bridge()

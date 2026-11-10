@@ -116,7 +116,7 @@ const words = {
   "start.new.channel.title": "New channel",
   "start.new.channel.name": "Name",
   "start.new.channel.placeholder": "e.g. kiwi",
-  "start.new.channel.failed": "Couldn't make the channel. Try again.",
+  "start.new.channel.failed": "Couldn't make the channel.",
   "start.new.channel.join.instead": "Have a code? Join instead",
   "start.new.channel.making": "Making it…",
   "start.new.channel.create": "Create channel",

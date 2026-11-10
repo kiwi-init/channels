@@ -180,7 +180,7 @@ export default {
   "start.new.channel.title": "Novo canal",
   "start.new.channel.name": "Nome",
   "start.new.channel.placeholder": "ex.: kiwi",
-  "start.new.channel.failed": "Não foi possível criar o canal. Tente de novo.",
+  "start.new.channel.failed": "Não foi possível criar o canal.",
   "start.new.channel.join.instead": "Tem um código? Entre com ele",
   "start.new.channel.making": "Criando…",
   "start.new.channel.create": "Criar canal",

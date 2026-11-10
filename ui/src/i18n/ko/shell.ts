@@ -180,7 +180,7 @@ export default {
   "start.new.channel.title": "새 채널",
   "start.new.channel.name": "이름",
   "start.new.channel.placeholder": "예: kiwi",
-  "start.new.channel.failed": "채널을 만들지 못했습니다. 다시 시도하세요.",
+  "start.new.channel.failed": "채널을 만들지 못했습니다.",
   "start.new.channel.join.instead": "코드가 있나요? 참여하기",
   "start.new.channel.making": "만드는 중…",
   "start.new.channel.create": "채널 만들기",

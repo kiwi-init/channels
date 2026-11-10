@@ -180,7 +180,7 @@ export default {
   "start.new.channel.title": "新しいチャンネル",
   "start.new.channel.name": "名前",
   "start.new.channel.placeholder": "例: kiwi",
-  "start.new.channel.failed": "チャンネルを作成できませんでした。もう一度お試しください。",
+  "start.new.channel.failed": "チャンネルを作成できませんでした。",
   "start.new.channel.join.instead": "コードをお持ちですか？参加する",
   "start.new.channel.making": "作成中…",
   "start.new.channel.create": "チャンネルを作成",

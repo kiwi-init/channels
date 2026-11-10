@@ -884,6 +884,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       inviteLink: async (code) => `https://channels.kiwiinit.com/#${code}-x7Qp2LmR`,
       leaveChannel: (code) => setState((s) => ({ ...s, tiles: s.tiles.filter((t) => t.code !== code) })),
       newChannel: async (title) => {
+        if (title.toLowerCase() === "offline") throw new Error("the relay returned 503")
         const code = title.toLowerCase().replace(/[^a-z0-9]+/g, "-")
         setState((s) => {
           const channels = new Map(s.channels)
@@ -957,8 +958,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         setState((s) => (s.account ? { ...s, account: { ...s.account, devices: s.account.devices?.map((d) => (ids.includes(d.id) ? { ...d, until: Date.now() + 90 * 86_400_000 } : d)) } } : s)),
       signInWithGithub: () => {
         setState((s) => ({ ...s, signIn: { stage: "sign-in", code: { code: "8F3A-29KD", url: "https://github.com/login/device" }, problem: null } }))
-        setTimeout(() => setState((s) => (s.signIn ? { ...s, signIn: s.account ? null : { stage: "signed-in", login: "ojowwalker77" } } : s)), 1500)
+        setTimeout(() => setState((s) => (s.signIn?.stage === "sign-in" && s.signIn.code ? { ...s, signIn: s.account ? null : { stage: "signed-in", login: "ojowwalker77" } } : s)), 1500)
       },
+      cancelGithubSignIn: () => setState((s) => (s.signIn?.stage === "sign-in" ? { ...s, signIn: { stage: "sign-in", code: null, problem: null } } : s)),
       enrollBegin: () => {
         setState((s) => ({ ...s, enrolling: { stage: "asking" } }))
         setTimeout(() => setState((s) => (s.enrolling ? { ...s, enrolling: { stage: "digits", digits: "482915" } } : s)), 1500)

@@ -180,7 +180,7 @@ export default {
   "start.new.channel.title": "新建频道",
   "start.new.channel.name": "名称",
   "start.new.channel.placeholder": "例如 kiwi",
-  "start.new.channel.failed": "无法创建频道。请重试。",
+  "start.new.channel.failed": "无法创建频道。",
   "start.new.channel.join.instead": "有邀请码？改为加入",
   "start.new.channel.making": "正在创建…",
   "start.new.channel.create": "创建频道",

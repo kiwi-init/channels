@@ -144,21 +144,31 @@ export async function enrollDeny(id: string): Promise<void> {
   await enrollAsk.check()
 }
 
+let linkDropped = false
+
+export function dropGithubCode(): void {
+  linkDropped = true
+  githubCode.set(null)
+  githubBusy.set(null)
+}
+
 export async function linkGithub(): Promise<void> {
   const b = bridge()
   if (!b) throw new Error(t("live.account.github.desktop"))
   listenForCodes()
   githubBusy.set(null)
+  linkDropped = false
   try {
     const s = await b.githubLink()
     github.set(s.account ? { login: s.account.login } : null)
     if (s.signIn) githubGate.set(s.account ? "signed-in" : "needed")
     if (s.account) announce(t("live.account.github.signed.in", { login: s.account.login }))
   } catch (err) {
+    if (linkDropped) return
     githubBusy.set(err instanceof Error ? err.message : String(err))
     throw err
   } finally {
-    githubCode.set(null)
+    if (!linkDropped) githubCode.set(null)
   }
 }
 
