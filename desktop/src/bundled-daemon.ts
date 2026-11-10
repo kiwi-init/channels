@@ -6,7 +6,7 @@ import { certifyMachine } from "@kiwi/core/person.ts";
 import type { ComputerView } from "./bridge.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { ensureOnPath, keepCli, place, type KeptCli } from "./cli.ts";
-import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, daemonUnpair, kiwiHome, noteDaemon, spawnDaemon, type HelloResult } from "./daemon-client.ts";
+import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, daemonUnpair, kiwiHome, noteDaemon, spawnDaemon, trimDaemonLog, type HelloResult } from "./daemon-client.ts";
 import { keepAlive } from "./daemon-keeper.ts";
 import { host } from "./host.ts";
 import { publicPerson } from "./guard.ts";
@@ -34,6 +34,8 @@ async function runnableKiwi(): Promise<string> {
   for (const old of await fs.promises.readdir(dir)) if (old.startsWith("kiwi-") && old !== name) await fs.promises.rm(path.join(dir, old), { force: true });
   return unpacked;
 }
+
+const LOG_TRIM_EVERY_MS = 10 * 60_000;
 
 let kiwiBin: { path: string; version: string } | null = null;
 
@@ -111,6 +113,8 @@ export async function keepDaemon(stopped: () => boolean): Promise<void> {
       );
     }
   }
+  trimDaemonLog();
+  const trimming = setInterval(() => trimDaemonLog(), LOG_TRIM_EVERY_MS);
   await ensureDaemon().catch(() => null);
   await keepAlive({
     hello: async () => (await daemonHello(kiwiHome(), 2_000)) !== null,
@@ -119,4 +123,5 @@ export async function keepDaemon(stopped: () => boolean): Promise<void> {
     stopped,
     wait: (ms) => new Promise((r) => setTimeout(r, ms)),
   });
+  clearInterval(trimming);
 }
