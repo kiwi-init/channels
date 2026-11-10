@@ -73,6 +73,16 @@ export function roll(view: ClockView, t: Task, now: number): void {
   t.clock = rolled(view, t, now);
 }
 
+const ACTS_KEPT = 8;
+
+const acted = (clock: TaskClock, by: string, seq: number, at: number): TaskClock["acts"] =>
+  [...(clock.acts ?? []).filter((a) => a[0] !== by), [by, seq, at] as [string, number, number]].slice(-ACTS_KEPT);
+
+export function actOf(clock: TaskClock, name: string): { seq: number; at: number } | undefined {
+  const act = clock.acts?.find((a) => a[0] === name);
+  return act && act[1] > clock.seq ? { seq: act[1], at: act[2] } : undefined;
+}
+
 export function tick(view: ClockView, t: Task, mark: { seq: number; at: number; by?: string }): void {
   if (t.state === "done" || t.archived) {
     t.clock = undefined;
@@ -85,7 +95,8 @@ export function tick(view: ClockView, t: Task, mark: { seq: number; at: number; 
   const pushed = theirs && was !== undefined && head !== undefined && head !== was.head && cur.mover === t.owner;
   const progressed = theirs && mark.by !== undefined && mark.by === cur.mover;
   if (was?.key === cur.key && !pushed && !progressed) {
-    if (head !== was.head) t.clock = { ...was, ...(head ? { head } : {}) };
+    const acts = cur.mover === LEAD && mark.by !== undefined ? acted(was, mark.by, mark.seq, mark.at) : was.acts;
+    if (head !== was.head || acts !== was.acts) t.clock = { ...was, ...(head ? { head } : {}), ...(acts ? { acts } : {}) };
     return;
   }
   t.clock = { key: cur.key, seq: mark.seq, at: mark.at, ...(head ? { head } : {}) };
@@ -93,23 +104,33 @@ export function tick(view: ClockView, t: Task, mark: { seq: number; at: number; 
 
 type Nudge = { mover: string; since: number; step: NudgeStep; day?: number };
 
-export function nudge(view: ClockView, t: Task, ev: Nudge, at: number): string | null {
+function atEpoch(clock: TaskClock, since: number): TaskClock | undefined {
+  if (clock.seq === since) return clock;
+  const act = clock.acts?.find((a) => a[1] === since && a[1] > clock.seq);
+  if (!act) return undefined;
+  const later = (clock.acts ?? []).filter((a) => a[1] > since);
+  return { key: clock.key, seq: act[1], at: act[2], ...(clock.head ? { head: clock.head } : {}), ...(later.length ? { acts: later } : {}) };
+}
+
+export function nudge(view: ClockView, t: Task, ev: Nudge, at: number, agentQueue: (owner: string) => boolean): string | null {
   const id = taskId(t.id);
   roll(view, t, at);
-  const clock = t.clock;
-  if (!clock) return `${id} is already done`;
-  if (ev.step > 0 && clock.key.startsWith("?")) return `${id} waits on an answer to #${clock.key.slice(1)}: that is in Needs you, not on the clock`;
-  const party = partyOfKey(clock.key);
-  if (party !== ev.mover || clock.seq !== ev.since) return `${id}'s clock moved on: it is ${party || "nobody"}'s since #${clock.seq}`;
+  const held = t.clock;
+  if (!held) return `${id} is already done`;
+  if (ev.step > 0 && held.key.startsWith("?")) return `${id} waits on an answer to #${held.key.slice(1)}: that is in Needs you, not on the clock`;
+  const party = partyOfKey(held.key);
+  const clock = party === ev.mover ? atEpoch(held, ev.since) : undefined;
+  if (!clock) return `${id}'s clock moved on: it is ${party || "nobody"}'s since #${held.seq}`;
   if (ev.step === 0) {
     const day = ev.day ?? 0;
     if (!queuedKey(clock.key)) return `${id} isn't waiting in a queue`;
+    if (!agentQueue(party)) return `${id} isn't in an agent's queue: ${party} is a person, or has left`;
     if (day < 1 || at - clock.at < day * QUEUE_MS) return `${id} hasn't waited that long in its queue`;
     if (day > (clock.day ?? 0)) t.clock = { ...clock, day };
     return null;
   }
   if (!memberKey(clock.key)) return `${id} has no member on the clock`;
   if (at - clock.at < ev.step * QUIET_MS) return `${id} hasn't been quiet long enough for step ${ev.step} of its clock`;
-  if (ev.step > (clock.step ?? 0)) t.clock = { ...clock, step: ev.step };
+  if (clock !== held || ev.step > (clock.step ?? 0)) t.clock = { ...clock, step: ev.step };
   return null;
 }

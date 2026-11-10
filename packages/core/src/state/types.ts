@@ -144,6 +144,7 @@ export interface TaskClock {
   step?: 1 | 2 | 3;
   day?: number;
   head?: string;
+  acts?: [name: string, seq: number, at: number][];
 }
 
 export interface Task {

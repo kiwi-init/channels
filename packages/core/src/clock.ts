@@ -1,7 +1,7 @@
 import { inlineText } from "./membership.ts";
 import { channelOwner, moverOf } from "./mover.ts";
 import type { NudgeStep } from "./protocol.ts";
-import { memberKey, partyOfKey, queuedKey, QUEUE_MS, QUIET_MS, rolled } from "./state/clocks.ts";
+import { actOf, memberKey, partyOfKey, queuedKey, QUEUE_MS, QUIET_MS, rolled } from "./state/clocks.ts";
 import { isPerson } from "./state/people.ts";
 import type { ChannelState, Task } from "./state/types.ts";
 import { spanText } from "./steps.ts";
@@ -24,7 +24,9 @@ export function clockOf(state: Board, t: Task, now: number): Clock | undefined {
   if (!c || mover?.kind !== "member") return undefined;
   const member = state.members.get(mover.name);
   const paged = memberKey(c.key) && !!member && !isPerson(member);
-  return { mover: mover.name, party: partyOfKey(c.key), epoch: c.seq, since: c.at, quiet: Math.max(0, now - c.at), paged, step: c.step ?? 0 };
+  const own = actOf(c, mover.name);
+  const start = own ?? { seq: c.seq, at: c.at };
+  return { mover: mover.name, party: partyOfKey(c.key), epoch: start.seq, since: start.at, quiet: Math.max(0, now - start.at), paged, step: own ? 0 : (c.step ?? 0) };
 }
 
 export interface NudgeDue {
@@ -60,6 +62,8 @@ function queueDue(state: Board, now: number): NudgeDue[] {
     const c = t.state === "todo" ? rolled(state, t, now) : undefined;
     if (!c || !queuedKey(c.key)) continue;
     const owner = partyOfKey(c.key);
+    const who = state.members.get(owner);
+    if (!who || !who.active || isPerson(who)) continue;
     const first = oldest.get(owner);
     if (!first || t.id < first.t.id) oldest.set(owner, { t, seq: c.seq, at: c.at, day: c.day ?? 0 });
   }

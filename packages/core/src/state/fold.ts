@@ -438,6 +438,10 @@ function folding(
     return !by || ![...by].some((n) => answersAsk(members, m, n));
   };
   const clockView = (): ClockView => ({ tasks, github: ctx.github, branchPrefix: ctx.branchPrefix, openAsks: holding.filter(stillOpen) });
+  const agentHere = (name: string): boolean => {
+    const who = members.get(name);
+    return !!who && who.active && !isPerson(who);
+  };
   const timeTask = (t: Task): void => void (timedStep(t) ? timed.add(t.id) : timed.delete(t.id));
   const tickTask = (t: Task | undefined, seq: number, at: number, by?: string): void => {
     if (!t) return;
@@ -775,7 +779,7 @@ function folding(
       const before = "task" in ev ? tasks.get(ev.task) : undefined;
       const ownedBy = before?.owner;
       if (ev.op === "task.nudge") {
-        const wrong = before ? nudge(clockView(), before, ev, at) : `no task ${taskId(ev.task)}`;
+        const wrong = before ? nudge(clockView(), before, ev, at, agentHere) : `no task ${taskId(ev.task)}`;
         if (wrong) reject(wrong);
         else if (before) timeTask(before);
       }

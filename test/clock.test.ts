@@ -372,3 +372,79 @@ describe("the board and the task page say when a task is quiet, and the words on
     ]);
   });
 });
+
+describe("round 2: the lead's own progress counts, and only an agent's queue gives a daily line (#3930 §2)", () => {
+  test("a review open to anyone is the lead's to route: the lead's message in its thread starts a new clock, another member's doesn't", async () => {
+    const c = channel();
+    const id = await c.add({ owner: "win", review: "*" });
+    const round = await c.update("win", id, { state: "review", at: A });
+    expect(read(c, id)).toMatchObject({ mover: "owl", party: "@lead", epoch: round.seq, since: round.rts! });
+    c.wait(2 * N);
+    await c.say("zed", "msg", "who takes this?", { task: id });
+    expect(read(c, id)).toMatchObject({ mover: "owl", epoch: round.seq, since: round.rts! });
+    const spoke = await c.say("owl", "msg", "routing it now", { task: id });
+    expect(read(c, id)).toEqual({ mover: "owl", party: "@lead", epoch: spoke.seq, since: spoke.rts!, quiet: 0, paged: true, step: 0 });
+    expect(due(c)).toEqual([]);
+    expect(due(c, spoke.rts! + N)).toEqual([{ task: id, mover: "@lead", since: spoke.seq, step: 1, to: "owl" }]);
+    c.wait(N);
+    const stale = await c.nudge("jon", id, "@lead", round.seq - 1, 1);
+    const good = await c.nudge("jon", id, "@lead", spoke.seq, 1);
+    const s = c.state();
+    expect(s.rejected.has(stale.seq)).toBe(true);
+    expect(s.rejected.has(good.seq)).toBe(false);
+    expect(read(c, id)).toMatchObject({ mover: "owl", epoch: spoke.seq, since: spoke.rts!, step: 1 });
+    expect(due(c, spoke.rts! + 2 * N)).toEqual([{ task: id, mover: "@lead", since: spoke.seq, step: 2, to: "jon" }]);
+  });
+
+  test("a task with no owner is the lead's to give out: the lead's note on it starts a new clock", async () => {
+    const c = channel();
+    const id = await c.add();
+    const created = c.state().tasks.get(id)!.createdAt;
+    expect(read(c, id)).toMatchObject({ mover: "owl", party: "@lead", epoch: id, since: created });
+    c.wait(2 * N);
+    const noted = await c.update("owl", id, { note: "looking for an owner" });
+    expect(read(c, id)).toMatchObject({ mover: "owl", party: "@lead", epoch: noted.seq, since: noted.rts!, step: 0 });
+    expect(due(c)).toEqual([]);
+  });
+
+  test("the lead's progress survives a snapshot", async () => {
+    const c = channel();
+    const id = await c.add({ owner: "win", review: "*" });
+    await c.update("win", id, { state: "review", at: A });
+    c.wait(2 * N);
+    await c.say("owl", "msg", "routing it now", { task: id });
+    await c.say("zed", "msg", "ok", { task: id });
+    const now = c.now();
+    const whole = fold(c.log, roster, now);
+    const baseAt = (cut: number): FoldBase => {
+      const made: FoldBase[] = [];
+      fold(c.log.slice(0, cut), roster, now, null, null, null, (b) => void made.push(b));
+      return made.at(-1)!;
+    };
+    for (const cut of [2, 3, 4]) {
+      const resumed = fold(c.log.slice(cut), roster, now, null, null, baseAt(cut));
+      expect(resumed.tasks.get(id)!.clock).toEqual(whole.tasks.get(id)!.clock);
+      expect(clockOf(resumed, resumed.tasks.get(id)!, now)).toEqual(clockOf(whole, whole.tasks.get(id)!, now));
+    }
+  });
+
+  test("a person's queue, and the queue of an agent who left, give no daily line, and one posted for them is refused", async () => {
+    const c = channel();
+    const doing = await c.add({ owner: "jon" });
+    await c.update("jon", doing, { state: "doing" });
+    const planned = await c.add({ owner: "jon" });
+    const agents = await c.add({ owner: "win" });
+    await c.update("win", agents, { state: "doing" });
+    const queued = await c.add({ owner: "win" });
+    c.wait(2 * QUEUE_MS + 5_000);
+    const lines = (s: ChannelState) => nudgesDue(s, c.now()).filter((d) => d.step === 0);
+    expect(lines(c.state())).toEqual([{ task: queued, mover: "win", since: queued, step: 0, day: 2, to: "owl" }]);
+    const gone = roster.map((m) => (m.name === "win" ? { ...m, active: false } : m));
+    expect(lines(fold(c.log, gone, c.now()))).toEqual([]);
+    const forPerson = await c.queued("owl", planned, "jon", planned, 1);
+    expect(c.state().rejected.get(forPerson.seq)).toBe(`T${planned} isn't in an agent's queue: jon is a person, or has left`);
+    const forAgent = await c.queued("owl", queued, "win", queued, 1);
+    expect(c.state().rejected.has(forAgent.seq)).toBe(false);
+    expect(fold(c.log, gone, c.now()).rejected.get(forAgent.seq)).toBe(`T${queued} isn't in an agent's queue: win is a person, or has left`);
+  });
+});
