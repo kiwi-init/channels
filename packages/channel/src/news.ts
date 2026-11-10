@@ -91,6 +91,12 @@ export function markSeenTo(room: string, seq: number) {
   writeMark(room, { seen: seq, needs: prev?.needs ?? 0 });
 }
 
+export function markNeeds(room: string, needs: number) {
+  const prev = readMarks()[room];
+  if (!prev || prev.needs === needs) return;
+  writeMark(room, { seen: prev.seen, needs });
+}
+
 /** A channel seen for the first time starts with nothing new: its first listing isn't a backlog. */
 export function startMarks(heads: { room: string; head?: number }[]) {
   const known = readMarks();
