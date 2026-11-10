@@ -9,6 +9,8 @@ import { cString, committedPage, mac, setPageHtml, setPreload, windowLook } from
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
 import { mark } from "./eb-startup.ts";
 import { logMainError } from "./main-log.ts";
+import { fail } from "./start-fail-eb.ts";
+import { heldWithin } from "./start-failure.ts";
 import { externalUrl } from "./guard.ts";
 import { attachWindow, ebHost } from "./host-eb.ts";
 import { handlers } from "./ipc/handlers.ts";
@@ -46,23 +48,19 @@ function askAgain(): void {
   Utils.quit();
 }
 
-export function fail(why: string): void {
-  console.error(`Channels: ${why}`);
-  Utils.quit(1);
-}
+const CANARY_WAITS_MS = [5_000, 15_000];
 
 function rulesHold(view: BrowserView): Promise<boolean> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(false), 5000);
-    view.on("will-navigate", (e) => {
-      const nav = navigation(detailOf(e));
-      if (nav.kind === "refused" && nav.url === RULES_CANARY) {
-        clearTimeout(timer);
-        resolve(true);
-      }
-    });
-    view.loadURL(RULES_CANARY);
-  });
+  return heldWithin(
+    CANARY_WAITS_MS,
+    () => view.loadURL(RULES_CANARY),
+    (seen) =>
+      view.on("will-navigate", (e) => {
+        const nav = navigation(detailOf(e));
+        if (nav.kind === "refused" && nav.url === RULES_CANARY) seen();
+      }),
+    (waited) => logMainError(new Error(`the navigation rules canary wasn't refused within ${waited / 1000} s`)),
+  );
 }
 
 export async function createWindow(keyring: KeyringState | null = null): Promise<BrowserWindow | null> {
@@ -115,13 +113,13 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
     if (nav.kind !== "breach") return;
     closing = true;
     win.hide();
-    fail(`a navigation the rules should have refused went through (${nav.url ?? "unreadable"}); closing`);
+    void fail(`a navigation the rules should have refused went through (${nav.url ?? "unreadable"}); closing`, { closing: true });
   });
   webview.setNavigationRules(PAGE_RULES);
   if (!(await rulesHold(webview))) {
     closing = true;
     win.hide();
-    fail("the window's navigation rules didn't take effect; not opening it");
+    await fail("the window's navigation rules didn't take effect; not opening it");
     return null;
   }
   let loaded = false;

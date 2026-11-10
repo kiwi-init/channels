@@ -13,14 +13,15 @@ import { KEYRING_GRACE_MS, openedWithin } from "./keyring-wait.ts";
 import { startKeys } from "./keys-start-eb.ts";
 import { startLife, startUpdateChecks } from "./life-updates-eb.ts";
 import { keepLinuxEntry } from "./linux-entry.ts";
-import { catchMainErrors, logMainError, windowFailure } from "./main-log.ts";
+import { catchMainErrors, logMainError } from "./main-log.ts";
 import { followColorScheme, missingGuard, sandboxOff, watchDrops, watchPaste } from "./native-eb.ts";
 import { watchCancels } from "./secret-service.ts";
 import { claimInstance, handoffFor, launchArgs, launchToken, type Instance } from "./single-instance.ts";
 import { keyringLocked, openStoreForThisBuild, warnIfStoreBroken } from "./store-open-eb.ts";
 import { driveForTests, wrongTestHome } from "./test-build-eb.ts";
 import { runningAppImage } from "./updater.ts";
-import { createWindow, fail, showKeyringNote } from "./window-eb.ts";
+import { fail, releaseFirst } from "./start-fail-eb.ts";
+import { createWindow, showKeyringNote } from "./window-eb.ts";
 
 declare const KIWI_EB_TEST: boolean;
 
@@ -76,13 +77,9 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   warnIfStoreBroken();
 }
 
-function refuse(instance: Extract<Instance, { kind: "first" }>, why: string): void {
-  instance.release();
-  fail(why);
-}
-
 BrowserView.on("created", (tag) => tag.remove());
 
+let lockError: unknown;
 const wrongHome = wrongTestHome();
 if (wrongHome) console.error(`Channels test build: ${wrongHome}; not starting, so nothing lands under the person's home`);
 const instance = wrongHome
@@ -97,16 +94,18 @@ const instance = wrongHome
         handleDeepLink(h.url, h.token);
       },
     }).catch((e: unknown) => {
-      logMainError(e);
-      console.error("Channels: couldn't take the single-instance lock in its data folder", e);
+      lockError = e;
       return null;
     });
 const missing = instance?.kind === "first" ? missingGuard() : null;
-if (!instance) Utils.quit(1);
-else if (instance.kind === "second") {
-  if (!instance.delivered) console.error("Channels: another Channels holds this data folder and didn't answer; quitting");
-  Utils.quit(0);
-} else if (missing) refuse(instance, missing);
+if (instance?.kind === "first") releaseFirst(instance.release);
+if (!instance) {
+  if (wrongHome) Utils.quit(1);
+  else await fail(`couldn't take the single-instance lock in its data folder ${dataDir} (${lockError instanceof Error ? lockError.message : String(lockError)})`, { cause: lockError });
+} else if (instance.kind === "second") {
+  if (instance.delivered) Utils.quit(0);
+  else await fail("another Channels holds this data folder and didn't answer. Quit it, or restart the computer", { code: 0 });
+} else if (missing) await fail(missing);
 else {
   const appImage = process.platform === "linux" && ebHost.app.packaged() ? runningAppImage() : undefined;
   if (appImage) {
@@ -128,10 +127,7 @@ else {
   try {
     await start(instance);
   } catch (e) {
-    // Nothing on screen can say what went wrong: main.log and the console carry it, and the app quits instead of running windowless.
-    logMainError(e);
-    console.error(`Channels: ${windowFailure(e)}`, e);
-    instance.release();
-    Utils.quit(1);
+    // No window can say what went wrong: a message box does, main.log keeps the stack, and the app quits instead of running windowless.
+    await fail(`the window couldn't start (${e instanceof Error ? e.message : String(e)})`, { cause: e });
   }
 }
