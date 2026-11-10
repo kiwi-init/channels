@@ -40,13 +40,22 @@ async function withTask(): Promise<{ task: Message; id: number }> {
 }
 
 describe("a check is an ask with a phase, a decider and the artifact it vouches for (#623 §3)", () => {
-  test("its first option is the pass, and the decider's pick is kept in state with the relay's time", async () => {
+  test("its first option is the pass, and the decider's pick is kept in state without the artifact or a time", async () => {
     const { task, id } = await withTask();
     const ask = await askCheck([id]);
     const yes = await reply("ana", ask, "A", 5_000);
     const s = fold([task, ask, yes], roster);
     const c = s.checks.get(ask.seq);
-    expect(c).toMatchObject({ phase: "pre-ship", decider: "ana", artifact: kde.artifact, holds: [id], answer: { choice: OPTIONS[0], pass: true, by: "ana", seq: yes.seq, at: 5_000 } });
+    expect(c).toEqual({
+      seq: ask.seq,
+      by: "win",
+      phase: "pre-ship",
+      decider: "ana",
+      choices: OPTIONS,
+      holds: [id],
+      answer: { choice: OPTIONS[0]!, pass: true, by: "ana", seq: yes.seq },
+      answers: [{ choice: OPTIONS[0]!, pass: true, by: "ana", seq: yes.seq }],
+    });
     expect(c && checkPassed(c)).toBe(true);
   });
 

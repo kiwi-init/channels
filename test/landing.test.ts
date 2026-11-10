@@ -38,7 +38,7 @@ describe("a task with a landing step isn't done on approval (#623)", () => {
     const { t, log } = await approved();
     const s = fold(log, roster);
     expect(s.tasks.get(t)!.state).toBe("done");
-    expect(s.tasks.get(t)!.then).toBeUndefined();
+    expect(s.tasks.get(t)!.steps).toBeUndefined();
   });
 
   test("the channel's landing setting is copied onto a task when it's created, and approval moves it to landing", async () => {
@@ -46,7 +46,7 @@ describe("a task with a landing step isn't done on approval (#623)", () => {
     const { t, log } = await approved();
     const s = fold([set, ...log], roster);
     const task = s.tasks.get(t)!;
-    expect(task.then).toBe("merge");
+    expect(task.steps?.map((x) => x.words)).toEqual(["merge"]);
     expect(task.state).toBe("landing");
     expect(task.approvedBy).toBe("mac");
     expect(task.closedSeq).toBeUndefined();
@@ -96,7 +96,7 @@ describe("a task with a landing step isn't done on approval (#623)", () => {
     const s = fold([...log, none], roster);
     const task = s.tasks.get(t)!;
     expect(task.state).toBe("review");
-    expect(task.then).toBeUndefined();
+    expect(task.steps).toBeUndefined();
     expect(task.approvedBy).toBeUndefined();
     expect(task.rounds.at(-1)).toMatchObject({ n: 2, at: HEAD, result: { kind: "open" } });
   });

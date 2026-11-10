@@ -57,7 +57,6 @@ export {
   currentState,
   landerOf,
   landingRefusal,
-  landingTouchedByAsk,
   landingTouchedByClose,
   openRound,
   parseTaskId,

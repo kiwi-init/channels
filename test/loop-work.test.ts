@@ -72,10 +72,10 @@ describe("a loop and a task that lands after approval (#623 §2)", () => {
     const s = fold(log, roster);
     const prompt = firstPrompt({ kind: "coding", task: id }, s, "bo", "contrib");
     expect(prompt).toContain(`This session is for landing T${id}`);
-    expect(prompt).toContain("Its review already approved it, and you land it: its landing step is merge.");
+    expect(prompt).toContain("Its review already approved it, and it lands step by step: the current one is s1 “merge”, yours.");
     expect(prompt).toContain(`Don't run \`kiwi task start T${id}\` or send another \`kiwi task review T${id}\``);
     expect(prompt).not.toContain("The session ends when the review approves");
-    expect(prompt).toContain(`The session ends when T${id} is done or another lander takes it.`);
+    expect(prompt).toContain(`say so with \`kiwi task landed T${id} --step s1\``);
     const waiting = waitingText({ kind: "reviewing", task: 5, round: 1 }, { kind: "coding", task: id }, 30, "kiwi", true);
     expect(waiting).toContain(`name another lander with \`kiwi task edit T${id} --lander NAME\``);
     expect(waiting).not.toContain("task assign");

@@ -341,6 +341,34 @@ describe("review rounds through the CLI", () => {
     want = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "review rounds that hold up"))![1]!;
   });
 
+  test("the check flags of ask-human are gone: each is refused with what replaces it, and nothing is posted (#3930 §5)", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "check before the merge", "--ask", want));
+    const head = async () => /head #(\d+)/.exec(await ok(dev, "status"))![1];
+    const before = await head();
+    const options = ["--holds", `T${t}`, "--option", "A: works on KDE", "--option", "B: not yet", "Does it work on KDE?"];
+    const flags: string[][] = [
+      ["--check", "pre-ship"],
+      ["--check", "post"],
+      ["--decider", "jon"],
+      ["--artifact", `pr:o/r#7@${"a".repeat(40)}`],
+      ["--replaces", "#12"],
+    ];
+    for (const flag of flags) {
+      const refused = await run(dev, "ask-human", ...flag, ...options);
+      expect(refused.code).not.toBe(0);
+      expect(refused.err).toContain(`${flag[0]} is gone, and nothing was posted`);
+      expect(refused.err).toContain("Kiwi no longer blocks a merge on the host");
+    }
+    const all = await run(dev, "ask-human", "--check", "pre-ship", "--artifact", `pr:o/r#7@${"a".repeat(40)}`, "--decider", "jon", "--replaces", "#12", ...options);
+    expect(all.code).not.toBe(0);
+    expect(all.err).toContain("--check, --decider, --artifact, --replaces are gone, and nothing was posted");
+    expect(all.err).toContain("--holds T7");
+    expect(all.err).toContain("the lead or a person makes it a step");
+    expect(all.err).toContain('kiwi task steps T7 add "words" --answered N --before ID');
+    expect(await head()).toBe(before);
+    expect(await ok(dev, "ask-human", ...options)).toMatch(/^escalated #\d+ to /);
+  });
+
   test("ask-human names another agent's open ask to the same person on the same work, and status lists it (#1580)", async () => {
     const t = taskNo(await ok(dev, "task", "add", "pick the avatar blur", "--ask", want));
     const first = seqOf(await ok(dev, "ask-human", "--holds", `T${t}`, "--option", "A: glass", "--option", "B: frosted", "Glass or frosted?"));
@@ -364,19 +392,20 @@ describe("review rounds through the CLI", () => {
     expect((await run(dev, "task", "proof", `T${t}`)).err).toContain("usage: kiwi task proof");
   });
 
-  test("a run task declares its run, is reviewed and approved at --run ID, then records the run's own start time (T1269)", async () => {
+  test("a run task declares its run and is reviewed and approved at --run ID; a start time is no longer taken (T1269, #3930 §5)", async () => {
     const t = taskNo(await ok(dev, "task", "add", "run the backfill", "--ask", want, "--then", "run", "--review", "rev"));
     await ok(dev, "task", "proof", `T${t}`, "--run", "backfill-1");
     await ok(dev, "task", "review", `T${t}`, "--run", "backfill-1");
     expect((await run(dev, "task", "review", `T${t}`, "--run", "backfill-1", "--at", "abc")).err).toContain("--at pins a round to a commit and --run to a run");
     await ok(rev, "task", "approve", `T${t}`, "--run", "backfill-1", "looks right");
-    expect((await run(dev, "task", "proof", `T${t}`, "--run", "backfill-1", "--started", "yesterday")).err).toContain("isn't a start time");
-    expect((await run(dev, "task", "proof", `T${t}`, "--started", "2020-01-01T00:00:00Z")).err).toContain("--started goes on task proof T7 --run ID");
-    await ok(dev, "task", "proof", `T${t}`, "--run", "backfill-1", "--started", "2020-01-01T00:00:00Z");
+    const started = await run(dev, "task", "proof", `T${t}`, "--run", "backfill-1", "--started", "2020-01-01T00:00:00Z");
+    expect(started.code).not.toBe(0);
+    expect(started.err).toContain("--started is gone: Kiwi no longer orders a run's start against its approval");
     const shown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"));
     expect(shown.state).toBe("landing");
     expect(shown.rounds.at(-1)).toMatchObject({ at: "run:backfill-1", result: { kind: "approved" } });
-    expect(shown.run).toMatchObject({ id: "backfill-1", reportedStart: Date.parse("2020-01-01T00:00:00Z") });
+    expect(Object.keys(shown.run).sort()).toEqual(["by", "id", "seq"]);
+    expect(shown.steps).toMatchObject([{ id: "s1", words: "run", progress: { kind: "open" } }]);
   });
 
   test("start is the one way to take a task: two racing for an unowned one get one winner, the other is told who has it, and on your own task it only starts it", async () => {
@@ -423,7 +452,17 @@ describe("review rounds through the CLI", () => {
     const asked = taskNo(await ok(dev, "task", "add", "waits on a question", "--ask", want, "--then", "owner says ship", "--answered", `#${want}`));
     expect(JSON.parse(await ok(dev, "task", "show", `T${asked}`, "--json"))).toMatchObject({ steps: [{ id: "s1", detector: { kind: "answered", ask: Number(want) } }] });
     const old = taskNo(await ok(dev, "task", "add", "one old value", "--ask", want, "--then", "merge"));
-    expect(JSON.parse(await ok(dev, "task", "show", `T${old}`, "--json"))).toMatchObject({ then: "merge", steps: [{ id: "s1", words: "merge", from: "then" }] });
+    const oldShown = JSON.parse(await ok(dev, "task", "show", `T${old}`, "--json"));
+    expect(oldShown.steps).toEqual([{ id: "s1", words: "merge", detector: { kind: "pr-merged" }, progress: { kind: "open" } }]);
+    expect(Object.keys(oldShown)).not.toContain("then");
+    const tagged = taskNo(await ok(dev, "task", "add", "an old release value", "--ask", want, "--then", "release:tag"));
+    expect(JSON.parse(await ok(dev, "task", "show", `T${tagged}`, "--json")).steps.map((x: { words: string }) => x.words)).toEqual(["merge", "release"]);
+    const none = taskNo(await ok(dev, "task", "add", "finishes on approval", "--ask", want, "--then", "none"));
+    expect(Object.keys(JSON.parse(await ok(dev, "task", "show", `T${none}`, "--json")))).not.toContain("steps");
+    const edited = await run(dev, "task", "edit", `T${old}`, "--then", "release:tag");
+    expect(edited.code).not.toBe(0);
+    expect(edited.err).toContain("task edit no longer takes --then");
+    expect(edited.err).toContain("kiwi task steps T7");
     const t = taskNo(
       await ok(
         dev,

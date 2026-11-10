@@ -7,7 +7,7 @@ export interface RetiredHead {
   sha: string;
 }
 
-export const stillRequired = (github: GithubState, repo: string, check: string): boolean | undefined => rulesOf(github, repo)?.required.includes(check);
+const stillRequired = (github: GithubState, repo: string, check: string): boolean | undefined => rulesOf(github, repo)?.required.includes(check);
 
 export function retiredHeads(state: { repos: readonly string[]; github: GithubState }, check: string): RetiredHead[] {
   const connected = new Set(state.repos.map((r) => r.toLowerCase()));

@@ -397,7 +397,7 @@ export const messageCommands: Record<string, Command> = {
 
 const CHECK_FLAGS = ["check", "decider", "artifact", "replaces"] as const;
 
-export function checkFlagsGone(given: Partial<Record<(typeof CHECK_FLAGS)[number], string>>): string | null {
+function checkFlagsGone(given: Partial<Record<(typeof CHECK_FLAGS)[number], string>>): string | null {
   const used = CHECK_FLAGS.filter((f) => given[f] !== undefined);
   if (!used.length) return null;
   return [
