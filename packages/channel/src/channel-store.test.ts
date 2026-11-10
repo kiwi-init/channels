@@ -738,6 +738,43 @@ describe("a channel longer than the window, opened with no base under it (T1759)
     two.close();
   });
 
+  test("a partial warm base doesn't stand in for the missing prefix: the store replays from the first message, and an old task survives it and a reopen (#2288)", async () => {
+    const made: { base?: FoldBase } = {};
+    fold(
+      Array.from({ length: 1_600 }, (_, i) => msg(1_001 + i)),
+      [{ name: "atlas", pk: "pk-atlas", owner: false, at: 0, active: true }],
+      Date.now(),
+      null,
+      null,
+      null,
+      (b) => void (made.base = b),
+    );
+    keepWarm(CODE, {
+      messages: Array.from({ length: HEAD - 2_600 }, (_, i) => msg(2_601 + i)),
+      reach: [],
+      unread: [],
+      roster: [person("atlas", "pk-atlas")],
+      requests: [],
+      marks: new Map(),
+      guardFloor: null,
+      roomsFloor: null,
+      base: made.base!,
+      partial: true,
+    });
+    const r = relay(HEAD);
+    const { store, close } = await opened(r);
+    expect(r.follows[0]!.since).toBe(0);
+    expect(store.handle.value.caughtUp).toBe(false);
+    replay(r, HEAD);
+    await until(() => store.handle.value.caughtUp);
+    expect(store.handle.value.state.tasks.has(1)).toBe(true);
+    await until(() => store.handle.value.messages.length <= WINDOW);
+    close();
+    const two = await opened(relay(HEAD));
+    expect(two.store.handle.value.state.tasks.has(1)).toBe(true);
+    two.close();
+  });
+
   test("a replay from the first message that stops short over a warm tail stays behind", async () => {
     warmTail();
     const r = relay(HEAD);
