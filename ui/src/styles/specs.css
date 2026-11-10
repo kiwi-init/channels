@@ -122,6 +122,12 @@
   color: var(--ink-3);
 }
 
+.specs-behind {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-meta);
+}
+
 .specs-list .gh-item {
   grid-template-columns: minmax(0, 1fr) minmax(96px, max-content);
 }

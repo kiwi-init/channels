@@ -648,7 +648,9 @@ describe("a channel longer than the window, opened with no base under it (T1759)
   const hearWindow = (r: ReturnType<typeof relay>) => {
     for (let seq = HEAD - REACH + 1; seq <= HEAD; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
   };
-  const sealedBase = (r: ReturnType<typeof relay>) => (r.kept.at(-1)?.state as { base: unknown } | undefined)?.base;
+  const hearUpTo = (r: ReturnType<typeof relay>, last: number) => {
+    for (let seq = 1; seq <= last; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
+  };
 
   test("a snapshot request that fails is asked again, and the channel opens on its whole history", async () => {
     let asked = 0;
@@ -666,36 +668,31 @@ describe("a channel longer than the window, opened with no base under it (T1759)
     close();
   });
 
-  test("with no snapshot to be had, the window still trims but its partial base is never sealed to disk", async () => {
+  test("with no snapshot to be had, the store follows from the first message and is caught up only once the whole log is in (#2288)", async () => {
     const r = relay(HEAD);
     const { store, close } = await opened(r);
-    hearWindow(r);
+    expect(r.follows[0]!.since).toBe(0);
+    hearUpTo(r, HEAD - REACH);
     await sleep(40);
-    await until(() => store.handle.value.messages.length === WINDOW);
     expect(store.handle.value.caughtUp).toBe(false);
-    await sleep(3_300);
-    expect(r.kept.length).toBeGreaterThan(0);
-    expect(sealedBase(r)).toBeNull();
+    hearWindow(r);
+    await until(() => store.handle.value.caughtUp);
+    expect(store.handle.value.state.head).toBe(HEAD);
     close();
-  }, 10_000);
+  });
 
-  test("the next store for that channel asks for the snapshot again and doesn't take the partial base for the whole history", async () => {
+  test("a whole-log read that stops short leaves the channel behind, and a later store with a snapshot at hand catches up", async () => {
     const first = relay(HEAD);
     const one = await opened(first);
-    hearWindow(first);
+    hearUpTo(first, HEAD - 500);
     await sleep(40);
-    await until(() => one.store.handle.value.messages.length === WINDOW);
+    expect(one.store.handle.value.caughtUp).toBe(false);
     one.close();
-    const again = relay(HEAD);
-    const two = await opened(again);
-    expect(again.called("snapshot")).toHaveLength(1);
-    expect(two.store.handle.value.messages).toHaveLength(WINDOW);
-    expect(two.store.handle.value.state.head).toBe(HEAD);
-    expect(two.store.handle.value.caughtUp).toBe(false);
-    two.close();
     const healed = relay(HEAD, { answers: { snapshot: () => baseAt(HEAD - 100) } });
     const three = await opened(healed);
-    expect(three.store.handle.value.caughtUp).toBe(true);
+    for (let seq = HEAD - 99; seq <= HEAD; seq++) healed.say({ _tag: "Message", message: msg(seq), row: null });
+    await until(() => three.store.handle.value.caughtUp);
+    expect(three.store.handle.value.state.head).toBe(HEAD);
     three.close();
   });
 });

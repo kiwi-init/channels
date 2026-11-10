@@ -236,6 +236,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       connection,
       docs,
       ...(ready ? {} : { loading: true }),
+      ...(ready && !caughtUp ? { behind: true as const } : {}),
     }),
     [
       code,
@@ -284,6 +285,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       connection,
       docs,
       ready,
+      caughtUp,
       trusted,
     ]
   )

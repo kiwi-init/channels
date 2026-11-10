@@ -81,7 +81,7 @@ export function NowCard({ channel }: { channel: Channel }) {
                 {now.more > 0 && <span className="now-more">{t("tasks.now.more", { count: now.more })}</span>}
               </>
             ) : (
-              <span className="now-quiet">{t("tasks.now.nothing")}</span>
+              <span className="now-quiet">{t(channel.behind ? "tasks.now.reading" : "tasks.now.nothing")}</span>
             )}
           </Line>
           {now.doneCount > 0 && (
