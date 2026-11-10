@@ -57,14 +57,14 @@ function groupsOf(channel: Channel, shown: Shown): Group[] {
   ].filter((g) => g.rows.length)
 }
 
-export function SpecsView({ channel, tall }: { channel: Channel; tall?: boolean }) {
+export function SpecsView({ channel }: { channel: Channel }) {
   const nav = useNav()
   const spec = nav.spec !== undefined ? channel.specs?.find((s) => s.ask === nav.spec) : undefined
   if (spec) return <SpecPage key={`${channel.code}:${spec.ask}`} channel={channel} spec={spec} />
-  return <SpecList channel={channel} tall={!!tall} />
+  return <SpecList channel={channel} />
 }
 
-function SpecList({ channel, tall }: { channel: Channel; tall: boolean }) {
+function SpecList({ channel }: { channel: Channel }) {
   const [shown, setShown] = useState<Shown>("open")
   const [making, setMaking] = useState(false)
   const specs = channel.specs ?? []
@@ -76,7 +76,7 @@ function SpecList({ channel, tall }: { channel: Channel; tall: boolean }) {
   return (
     <div className="board">
       <div className="board-list gh-list specs-list">
-        {live && !tall && <NowCard channel={channel} />}
+        {live && <NowCard channel={channel} />}
         <div className="gh-top">
           {specs.length > 0 && (
             <Track className="seg" role="group" aria-label={t("specs.view.open.or.done")}>

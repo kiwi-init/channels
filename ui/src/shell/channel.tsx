@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type CSSProperties } from "react"
+import { Suspense, useEffect, useState, type CSSProperties } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
@@ -18,7 +18,7 @@ import { openMenu } from "~/kit/menu-open"
 import { whereKey } from "~/places"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
-import { isSideKey, setDrawer, toggleSide, useDrawer, useTall } from "~/shell/side"
+import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
 import { setUpdatesSlot } from "~/chat/updates-slot"
 import { useSideways } from "~/kit/sideways"
@@ -27,7 +27,6 @@ import { headerLine } from "~/now"
 import { between, nickname } from "~/names"
 import { t } from "~/i18n/i18n"
 
-const TallPage = lazy(() => import("~/shell/tall"))
 const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const OlderView = later(() => import("~/chat/older-view").then((m) => m.OlderView))
@@ -96,7 +95,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   }, [gone, go])
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
-  const tall = useTall()
   const tabsRef = useGlide<HTMLElement>('[aria-pressed="true"]')
   useSideways(tabsRef, nav.tab, '[aria-pressed="true"]')
   const offline = useLate(channel.connection !== "live", 1000)
@@ -163,10 +161,9 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           : `T${nav.where.task}`
 
   const news = drawerNews(channel)
-  const paged = tall && nav.tab !== "needs" && nav.tab !== "github"
 
   return (
-    <div className={cx("chan", nav.panel && !paged && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
+    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
       <header className="top">
         <button
           type="button"
@@ -216,21 +213,19 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           </button>
         </div>
         <nav ref={tabsRef} className="tabs" aria-label={t("shell.channel.views")}>
-          <button type="button" aria-pressed={nav.tab === "chat" || paged} onClick={() => go({ to: "tab", tab: "chat" })}>
+          <button type="button" aria-pressed={nav.tab === "chat"} onClick={() => go({ to: "tab", tab: "chat" })}>
             {here}
           </button>
-          {!tall && (
-            <button
-              type="button"
-              aria-pressed={nav.tab === "specs" || nav.tab === "tasks"}
-              onClick={() => go({ to: "spec", ask: null })}
-              title={specsNeed ? t("shell.channel.specs.need", { count: specsNeed }) : t("shell.channel.specs.open", { specs: specs.length, tasks })}
-            >
-              {t("shell.channel.specs")}
-              {specsNeed > 0 && <span className="tab-red is-decide" role="img" aria-label={t("shell.channel.waiting.on.you")} />}
-            </button>
-          )}
-          {!tall && (agents || nav.tab === "agents") && (
+          <button
+            type="button"
+            aria-pressed={nav.tab === "specs" || nav.tab === "tasks"}
+            onClick={() => go({ to: "spec", ask: null })}
+            title={specsNeed ? t("shell.channel.specs.need", { count: specsNeed }) : t("shell.channel.specs.open", { specs: specs.length, tasks })}
+          >
+            {t("shell.channel.specs")}
+            {specsNeed > 0 && <span className="tab-red is-decide" role="img" aria-label={t("shell.channel.waiting.on.you")} />}
+          </button>
+          {(agents || nav.tab === "agents") && (
             <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} title={line.length ? line.join(" · ") : undefined} onClick={() => go({ to: "tab", tab: "agents" })}>
               {t("shell.channel.agents")}
             </button>
@@ -272,24 +267,11 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         </div>
       </header>
       <Sidebar channel={channel} />
-      <main className={cx("main", paged && "is-tall")}>
+      <main className="main">
         <Boundary resetKey={nav.tab}>
           <Suspense fallback={null}>
             {older ? (
               <OlderView channel={channel} older={older} onBack={() => setOlder(null)} />
-            ) : paged ? (
-              <TallPage
-                channel={channel}
-                jump={jump}
-                work={<SpecsView channel={channel} tall />}
-                open={
-                  nav.panel ? (
-                    <div className="panel">
-                      <PanelView channel={channel} />
-                    </div>
-                  ) : null
-                }
-              />
             ) : nav.tab === "agents" ? (
               <Lanes channel={channel} />
             ) : nav.tab === "github" ? (
@@ -310,7 +292,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           {channel.connection === "connecting" ? t("shell.channel.connecting") : t("shell.channel.reconnecting")}
         </p>
       )}
-      {nav.panel && !paged && (
+      {nav.panel && (
         <aside className="panel" aria-label={t("shell.channel.details")}>
           <div
             className="panel-grip"
