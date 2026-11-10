@@ -44,7 +44,7 @@ export function clockWakeItem(task: Task, mover: string, since: number, quiet: n
 
 export interface ClockSeat {
   agent: string;
-  posts: () => boolean;
+  peers: () => Promise<string[]>;
   hosts: (name: string) => boolean;
   wanted: () => Promise<boolean>;
   wakes: () => Promise<boolean>;
@@ -212,18 +212,20 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
       await receipts(state, at);
       const due = nudgesDue(state, at);
       const live = new Set<string>();
+      const peers = await seat.peers();
+      const posts = (mover: string): boolean => peers.find((name) => evaluates(state, name, mover)) === seat.agent;
       for (const d of due) {
         if (d.step === 1) {
           if (d.to === seat.agent) await attempt(state, d, at);
           continue;
         }
         live.add(keyOf(d));
-        if (seat.posts() && evaluates(state, seat.agent, moverOf(state, d, at))) await tell(state, d, at);
+        if (posts(moverOf(state, d, at))) await tell(state, d, at);
       }
       for (const d of skipsDue(state, at)) {
         live.add(keyOf(d));
         const mover = moverOf(state, d, at);
-        if (mover !== seat.agent && !(seat.posts() && evaluates(state, seat.agent, mover))) continue;
+        if (mover !== seat.agent && !posts(mover)) continue;
         if (await skipsNow(state, d, at)) await tell(state, d, at);
       }
       for (const key of sent.keys()) if (!live.has(key)) sent.delete(key);

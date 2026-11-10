@@ -58,7 +58,7 @@ async function inReview(c: Channel): Promise<{ id: number; epoch: number }> {
 interface Rig {
   wakes?: boolean;
   wanted?: boolean;
-  posts?: boolean;
+  peers?: Name[];
   hosts?: Name[];
   reachable?: boolean;
   lose?: "response" | "post";
@@ -72,7 +72,7 @@ function seat(c: Channel, agent: Name, rig: Rig = {}) {
   const w = watchClock(
     {
       agent,
-      posts: () => set.posts ?? true,
+      peers: async () => set.peers ?? [agent],
       hosts: (name) => (set.hosts ?? [agent]).some((n) => n === name),
       wanted: async () => set.wanted ?? true,
       wakes: async () => set.wakes ?? true,
@@ -219,7 +219,7 @@ describe("one waker (#3930 §2, cases 2 and 22)", () => {
   test("case 2: a seat with no way to wake it is the lead's at N, said by its own daemon as no wake attempted", async () => {
     const c = channel();
     const { id, epoch } = await inReview(c);
-    const host = seat(c, "mac", { wakes: false, posts: false });
+    const host = seat(c, "mac", { wakes: false, peers: ["owl", "mac"] });
     c.wait(N);
     await host.w.look();
     await host.w.look();
@@ -311,10 +311,22 @@ describe("one waker (#3930 §2, cases 2 and 22)", () => {
     expect(host.did.wakes).toBe(0);
   });
 
+  test("the posting seat is chosen per task among the seats that may evaluate it: a dormant or unrelated first seat silences nobody", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    const lead = seat(c, "owl", { peers: ["win", "owl"] });
+    const bystander = seat(c, "win", { peers: ["win", "owl"] });
+    c.wait(3 * N);
+    await bystander.w.look();
+    expect(c.events("task.nudge")).toEqual([]);
+    await lead.w.look();
+    expect(c.events("task.nudge").map((m) => [m.from, m.to, m.ev])).toEqual([["owl", ["jon"], { op: "task.nudge", task: id, mover: "mac", since: epoch, step: 3 }]]);
+  });
+
   test("a seat that isn't the channel's posting seat still records its own attempt, and leaves the lead's and owner's steps to the one that is", async () => {
     const c = channel();
     const { id, epoch } = await inReview(c);
-    const host = seat(c, "mac", { posts: false });
+    const host = seat(c, "mac", { peers: ["owl", "mac"] });
     c.wait(N);
     await host.w.look();
     expect(host.did.wakes).toBe(1);

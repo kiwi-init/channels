@@ -204,7 +204,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     };
     return watchClock({
       agent: seat.agent,
-      posts: () => [...seats.values()].filter((s) => s.alias === seat.alias).sort((a, b) => (a.key < b.key ? -1 : 1))[0] === seat,
+      peers: async () => {
+        const here = [...seats.values()].filter((s) => s.alias === seat.alias).sort((a, b) => (a.key < b.key ? -1 : 1));
+        const watched = await Promise.all(here.map(async (s) => s === seat || s.subs.size > 0 || (await wakeable(s))));
+        return here.filter((_, i) => watched[i]).map((s) => s.agent);
+      },
       hosts: (name) => [...seats.values()].some((s) => s.alias === seat.alias && s.agent === name),
       wanted: async () => seat.subs.size > 0 || (await wakeable(seat)),
       wakes: async () => {
