@@ -472,6 +472,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   })
   const onQuote = useCallback(
     (seq: number) => {
+      if (specAsks.has(seq)) return openMessage(channel.code, seq)
       if (jumpTo(content.current, seq)) return
       const { list, all } = known.current
       const at = list.findIndex((m) => m.seq === seq)
@@ -489,7 +490,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
       }
       openMessage(channel.code, seq)
     },
-    [content, channel.code]
+    [content, channel.code, specAsks]
   )
 
   useEffect(() => {
