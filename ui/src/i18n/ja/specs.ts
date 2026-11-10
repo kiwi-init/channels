@@ -45,7 +45,7 @@ export default {
   "specs.doc.show.line": "仕様でこの行を表示",
   "specs.doc.diff.label": "承認後の変更点",
   "specs.doc.unchanged": { other: "⋯ 変更のない {count} 行" },
-  "specs.doc.editor.hint": "⌘S で保存 · Esc でキャンセル",
+  "specs.doc.editor.hint": "{keys} で保存 · Esc でキャンセル",
   "specs.doc.editor.moved": "編集中に {who} が新しい版を保存しました。保存すると置き換わります。",
   "specs.doc.cancel": "キャンセル",
   "specs.doc.save": "保存",

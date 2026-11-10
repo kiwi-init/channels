@@ -14,6 +14,7 @@ import { nickname } from "~/names"
 import { commentsOf, lineDiff, quoteIn, type Comment } from "~/specs/read"
 import { CommentBox, type CommentReply } from "~/specs/comment-box"
 import { CommentItem, openImage } from "~/specs/comment-item"
+import { keysHint } from "~/kit/keys"
 import { DiscardAsk, useDiscard } from "~/kit/discard"
 
 const WIDE_PX = 940
@@ -299,7 +300,7 @@ function Editor({ channel, spec, onDone }: { channel: Channel; spec: Spec; onDon
   return (
     <div className="spec-editor">
       <div className="spec-editor-bar">
-        <span className="spec-editor-hint">{t("specs.doc.editor.hint")}</span>
+        <span className="spec-editor-hint">{t("specs.doc.editor.hint", { keys: keysHint("S") })}</span>
         {moved && <span className="tone-decide spec-editor-moved">{t("specs.doc.editor.moved", { who: nickname(channel, spec.edited.by) })}</span>}
         {discard.asking && <DiscardAsk onKeep={discard.keep} onDiscard={onDone} />}
         <button type="button" className="btn is-quiet" onClick={onDone}>

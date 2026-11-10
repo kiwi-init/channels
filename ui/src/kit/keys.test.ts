@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { mod, onMac } from "~/kit/keys"
+import { keysHint, mod, onMac } from "~/kit/keys"
 
 const key = (metaKey: boolean, ctrlKey: boolean) => ({ metaKey, ctrlKey })
 
@@ -21,5 +21,23 @@ describe("a shortcut's modifier is ⌘ on a Mac and Ctrl elsewhere, never both (
     expect(onMac("Linux x86_64")).toBe(false)
     expect(onMac("Win32")).toBe(false)
     expect(onMac("")).toBe(false)
+  })
+})
+
+describe("a shortcut hint names the modifier of the platform it is shown on (T1853)", () => {
+  test("a Mac reads its own symbols, exactly as before", () => {
+    expect(keysHint("F", false, true)).toBe("⌘F")
+    expect(keysHint("S", true, true)).toBe("⇧⌘S")
+    expect(keysHint("\\", false, true)).toBe("⌘\\")
+    expect(keysHint("↩", false, true)).toBe("⌘↩")
+    expect(keysHint("Enter", false, true)).toBe("⌘ Enter")
+  })
+
+  test("Linux and Windows read Ctrl, with words for Shift and Enter", () => {
+    expect(keysHint("F", false, false)).toBe("Ctrl+F")
+    expect(keysHint("S", true, false)).toBe("Ctrl+Shift+S")
+    expect(keysHint("\\", false, false)).toBe("Ctrl+\\")
+    expect(keysHint("↩", false, false)).toBe("Ctrl+Enter")
+    expect(keysHint("Enter", false, false)).toBe("Ctrl+Enter")
   })
 })

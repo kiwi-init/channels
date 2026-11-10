@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { MAX_BODY_LENGTH } from "@kiwi/core/protocol.ts"
 import { attached, backWords, composerKey, drafts, giveBack, keptAttached, keptDrafts, tooLong, type FileShelf } from "~/chat/drafts"
 import type { Upload } from "~/model"
+import { keysHint } from "~/kit/keys"
 
 const image: Upload = { name: "a.png", mime: "image/png", data: "AAAA" }
 
@@ -46,8 +47,8 @@ describe("tooLong", () => {
 describe("backWords", () => {
   test("says where the message went, and when images couldn't come along", () => {
     expect(backWords("too big", "composer", 2)).toBe("Not sent: too big. It's back in the composer.")
-    expect(backWords("too big", "stash", 0)).toBe("Not sent: too big. It's in the stash: ⇧⌘S brings it back.")
-    expect(backWords("too big", "stash", 1)).toBe("Not sent: too big. It's in the stash: ⇧⌘S brings it back; its image didn't fit in the stash.")
+    expect(backWords("too big", "stash", 0)).toBe(`Not sent: too big. It's in the stash: ${keysHint("S", true)} brings it back.`)
+    expect(backWords("too big", "stash", 1)).toBe(`Not sent: too big. It's in the stash: ${keysHint("S", true)} brings it back; its image didn't fit in the stash.`)
   })
 })
 

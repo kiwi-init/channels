@@ -104,7 +104,7 @@ export default {
   "chat.search.box.fetches": "Busca até {count} mensagens antigas no relay.",
   "chat.search.box.fetches.since": "Pesquisado até {date}. Busca até {count} mensagens antigas no relay.",
   "chat.send.keys.enter": "Enviar (Enter)",
-  "chat.send.keys.cmd.enter": "Enviar (⌘ Enter)",
+  "chat.send.keys.cmd.enter": "Enviar ({keys})",
   "chat.stash.list.label": "Rascunhos guardados",
   "chat.stash.list.drops.one": "{key} descarta um",
   "chat.step.copied": "Comando copiado",

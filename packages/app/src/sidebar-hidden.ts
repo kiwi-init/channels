@@ -37,5 +37,3 @@ function setSidebarHidden(hidden: boolean) {
 }
 
 export const toggleSidebar = () => setSidebarHidden(!read());
-
-export const SIDEBAR_KEYS = "⌘\\";
