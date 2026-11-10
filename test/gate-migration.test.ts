@@ -246,6 +246,43 @@ describe("a log written under the ship gate folds to the same end (#3930 §6)", 
     sameFromEverySnapshot(c);
   });
 
+  test("a changed outcome (owner #4529): an old landing event for a run whose start was never reported, once refused, is accepted now", async () => {
+    const c = await channel("run");
+    const t = await c.task();
+    await c.ev("ann", { op: "task.update", task: t, run: { id: "job-1" } });
+    await c.approve(t, "run:job-1");
+    const landed = await c.land("jow", t, { kind: "run", id: "job-1" });
+    expect(c.state().rejected.has(landed.seq)).toBe(false);
+    expect(c.state().tasks.get(t)).toMatchObject({ state: "done", closedSeq: landed.seq });
+    sameFromEverySnapshot(c);
+  });
+
+  test("a changed outcome (owner #4529): an old landing event for the task's package at a version outside its range and with no post check, once refused, is accepted now", async () => {
+    const c = await channel("release:npm:@scope/lib@^1.2.0");
+    const t = await c.task();
+    await c.opened(t, S1);
+    await c.approve(t, S1);
+    await c.merged(t, S1);
+    const early = await c.land("jow", t, prAt(S1));
+    expect(c.state().rejected.get(early.seq)).toBe(`T${t} hasn't landed: it waits for its package on npm`);
+    const landed = await c.land("jow", t, { kind: "npm", pkg: "@scope/lib", version: "9.0.0" });
+    expect(c.state().rejected.has(landed.seq)).toBe(false);
+    expect(c.state().tasks.get(t)).toMatchObject({ state: "done", closedSeq: landed.seq });
+    sameFromEverySnapshot(c);
+  });
+
+  test("an unchanged outcome: an old landing event for a release:tag task with no release that contains its PR stays refused", async () => {
+    const c = await channel("release:tag");
+    const t = await c.task();
+    await c.opened(t, S1);
+    await c.approve(t, S1);
+    await c.merged(t, S1);
+    const early = await c.land("jow", t, prAt(S1));
+    expect(c.state().rejected.get(early.seq)).toBe(`T${t} hasn't landed: it waits for a release that contains PR #7`);
+    expect(c.state().tasks.get(t)!.state).toBe("landing");
+    sameFromEverySnapshot(c);
+  });
+
   test("changing an old task's landing value while it lands still sends it back to review, and the same value changes nothing", async () => {
     const c = await channel();
     const t = await c.task();

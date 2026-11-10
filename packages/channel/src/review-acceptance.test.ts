@@ -6,6 +6,7 @@ import { PROTOCOL_VERSION, type Event, type Kind, type Message, type Payload } f
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { ChannelLink } from "./channel-ops.ts";
 import { reviewCheckOf } from "@kiwi/core/protocol.ts";
+import { retiredHeads } from "@kiwi/core/review-check.ts";
 import { headsToRetire, stepsToPost } from "./review-checks.ts";
 import { postReviewChores } from "./review-chores.ts";
 
@@ -161,6 +162,20 @@ describe("the owner's app after the gate (#3930 §5)", () => {
     await shown(3, "success");
     await postReviewChores(app.link, c.state());
     expect(app.posts).toHaveLength(2);
+  });
+
+  test("an app that just started remembers nothing: the log alone says a head showing a failure is due and one showing green isn't", async () => {
+    const c = await channel();
+    const check = reviewCheckOf(`room-${crypto.randomUUID()}`);
+    const shown = (run: number, conclusion: string) => c.github([{ event: "check_run", sha: S, name: check, run, status: "completed", conclusion }]);
+    await c.ev("jow", { op: "github.rules", repo: "o/r", branch: "main", required: [check], merge: ["squash"] });
+    expect(retiredHeads(c.state(), check)).toEqual([{ repo: "o/r", sha: S }]);
+    await shown(1, "success");
+    expect(retiredHeads(c.state(), check)).toEqual([]);
+    await shown(2, "failure");
+    expect(retiredHeads(c.state(), check)).toEqual([{ repo: "o/r", sha: S }]);
+    await shown(3, "success");
+    expect(retiredHeads(c.state(), check)).toEqual([]);
   });
 
   test("a pull request in a repo the channel doesn't hold is left alone", async () => {
