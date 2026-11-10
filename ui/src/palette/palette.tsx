@@ -2,13 +2,14 @@ import { Suspense, useEffect, useRef } from "react"
 
 import "~/styles/palette.css"
 import { later } from "~/kit/later"
-import { useApp } from "~/nav"
+import { useGo, useNav } from "~/nav"
 import { t } from "~/i18n/i18n"
 
 const Finder = later(() => import("~/palette/finder").then((m) => m.Finder))
 
 export function Palette() {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const open = nav.dialog === "palette"
   const ref = useRef<HTMLDialogElement>(null)
   const back = useRef<HTMLElement | null>(null)

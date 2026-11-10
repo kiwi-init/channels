@@ -6,7 +6,7 @@ import { t } from "~/i18n/i18n"
 import { Avatar, cx, Dot, statusWord } from "~/kit/bits"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type PullRequest, type Task, type TaskStatus } from "~/model"
-import { useApp } from "~/nav"
+import { useGo } from "~/nav"
 import { nickname, Shown } from "~/names"
 
 export const TONES: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", landing: "tone-review", done: "tone-live", waiting: "tone-decide" }
@@ -30,7 +30,7 @@ function failedOf(pr: PullRequest): string | null {
 }
 
 export function TaskRow({ channel, t: task, on }: { channel: Channel; t: Task; on: boolean }) {
-  const { go } = useApp()
+  const go = useGo()
   const owner = task.owner ? memberOf(channel, task.owner) : undefined
   const state = stateOf(channel, task)
   const failed = task.pr ? failedOf(task.pr) : null

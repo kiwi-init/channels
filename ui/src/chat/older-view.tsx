@@ -11,13 +11,13 @@ import { t } from "~/i18n/i18n"
 import { Loading } from "~/kit/bits"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, OlderHit } from "~/model"
-import { useApp } from "~/nav"
+import { useActions } from "~/nav"
 import { wrote } from "~/words"
 
 const asMessage = (o: OlderHit): Message => ({ seq: o.seq, from: o.from, at: o.at, text: wrote(o.text), where: o.where })
 
 export function OlderView({ channel, older, onBack }: { channel: Channel; older: Older; onBack: () => void }) {
-  const { app } = useApp()
+  const actions = useActions()
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
   const [loaded, setLoaded] = useState<{ seq: number; rows: OlderHit[] | null } | null>(null)
@@ -25,14 +25,14 @@ export function OlderView({ channel, older, onBack }: { channel: Channel; older:
 
   useEffect(() => {
     let gone = false
-    void app.actions.olderAround(channel.code, older.seq).then(
+    void actions.olderAround(channel.code, older.seq).then(
       (rows: OlderHit[] | null) => !gone && setLoaded({ seq: older.seq, rows }),
       () => !gone && setLoaded({ seq: older.seq, rows: null })
     )
     return () => {
       gone = true
     }
-  }, [app.actions, channel.code, older.seq])
+  }, [actions, channel.code, older.seq])
 
   const rows = loaded?.seq === older.seq ? loaded.rows : undefined
   const hitAt = rows?.find((o) => o.seq === older.seq)?.at

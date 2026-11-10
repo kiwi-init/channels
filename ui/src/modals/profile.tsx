@@ -16,7 +16,7 @@ import { Icon } from "~/kit/icons"
 import { ageOf, ago } from "~/kit/time"
 import { copyText } from "~/kit/toasts"
 import { ALL_POWERS, memberOf, NO_POWERS, trusted, type App, type Channel, type Person, type Task } from "~/model"
-import { useApp } from "~/nav"
+import { useApp, useGo } from "~/nav"
 import { devicesOf, nickname, roleWord, seatRoot, shown, Shown } from "~/names"
 import { contextOf, liveOf, restOf } from "~/doing"
 import { Group, InlineEdit, Row } from "~/settings/controls"
@@ -118,7 +118,7 @@ function Status({ person }: { person: Person }) {
 const LOAD_ORDER = ["doing", "waiting", "queued"] as const
 
 function Tasks({ channel, person }: { channel: Channel; person: Person }) {
-  const { go } = useApp()
+  const go = useGo()
   if (person.left) return null
   const ids = [...new Set(LOAD_ORDER.flatMap((key) => person.load?.[key] ?? []))]
   const tasks = ids.map((id) => channel.tasks.find((task) => task.id === id)).filter((task): task is Task => !!task)
@@ -139,7 +139,7 @@ function Tasks({ channel, person }: { channel: Channel; person: Person }) {
 }
 
 function Doors({ channel, person }: { channel: Channel; person: Person }) {
-  const { go } = useApp()
+  const go = useGo()
   if (person.you)
     return (
       <div className="actions">

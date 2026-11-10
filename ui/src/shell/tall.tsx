@@ -6,7 +6,7 @@ import type { Jump } from "~/chat/search-box"
 import { Avatar, cx, Dot } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
-import { useApp } from "~/nav"
+import { useGo, useNav } from "~/nav"
 import { shown, Shown } from "~/names"
 import { statusOf, taskOf } from "~/shell/sidebar"
 import { t } from "~/i18n/i18n"
@@ -88,7 +88,8 @@ function useSplit(roomy: boolean) {
 }
 
 function Crew({ channel }: { channel: Channel }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const agents = channel.people.filter((p) => p.kind === "agent" && !p.left)
   return (
     <nav className="crew" aria-label={t("shell.tall.agents")}>
@@ -133,7 +134,7 @@ function Crew({ channel }: { channel: Channel }) {
 }
 
 export default function TallPage({ channel, jump, work, open }: { channel: Channel; jump: Jump | null; work: ReactNode; open: ReactNode }) {
-  const { nav } = useApp()
+  const nav = useNav()
   const roomy = open == null && nav.spec !== undefined && !!channel.specs?.some((s) => s.ask === nav.spec)
   const split = useSplit(roomy)
   return (

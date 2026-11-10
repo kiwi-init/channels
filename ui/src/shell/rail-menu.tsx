@@ -2,7 +2,7 @@ import "~/i18n/en/shell-later"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 
 import type { Folder } from "~/model"
-import { useAct, useApp } from "~/nav"
+import { useAct, useAppPrefs } from "~/nav"
 import { dropOn, folderName, newFolderId, renamed, ungrouped } from "~/shell/folders"
 import { t } from "~/i18n/i18n"
 
@@ -11,8 +11,8 @@ export type Menu = { kind: "folder"; id: string; top: number } | { kind: "channe
 export default function RailMenu({ menu, folders, title, save, close }: { menu: Menu; folders: readonly Folder[]; title: (code: string) => string; save: (f: Folder[]) => void; close: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const { actions } = useAct()
-  const { app } = useApp()
-  const muted = menu.kind === "channel" && app.prefs.muted.includes(menu.code)
+  const prefs = useAppPrefs()
+  const muted = menu.kind === "channel" && prefs.muted.includes(menu.code)
   const folder = menu.kind === "folder" ? folders.find((f) => f.id === menu.id) : undefined
   const [name, setName] = useState(folder?.name ?? "")
   const leave = useEffectEvent((keep: boolean) => {

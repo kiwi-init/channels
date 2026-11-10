@@ -12,7 +12,7 @@ import { Empty } from "~/kit/empty"
 import { Icon } from "~/kit/icons"
 import { ageOf, ago } from "~/kit/time"
 import type { Channel } from "~/model"
-import { useApp } from "~/nav"
+import { useGo } from "~/nav"
 import { PanelHead } from "~/panels/frame"
 import { OutsideLink } from "~/kit/outside"
 
@@ -42,7 +42,7 @@ function Unknown({ title, gone }: { title: string; gone: string }) {
 }
 
 function TaskSection({ channel, id }: { channel: Channel; id: number | undefined }) {
-  const { go } = useApp()
+  const go = useGo()
   return (
     <section className="panel-section">
       <Heading>{t("github.panel.task")}</Heading>

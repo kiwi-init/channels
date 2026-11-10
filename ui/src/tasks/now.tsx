@@ -5,7 +5,7 @@ import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel, Task } from "~/model"
-import { useApp } from "~/nav"
+import { useGo } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { nowOf, stageWords } from "~/now"
 import { wordsPlain } from "~/words"
@@ -39,7 +39,7 @@ function Line({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function TaskLine({ channel, task }: { channel: Channel; task: Task }) {
-  const { go } = useApp()
+  const go = useGo()
   const stage = stageWords(task)
   return (
     <button type="button" className="now-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>

@@ -1,11 +1,11 @@
-import { Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
+import { Fragment, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, type ReactNode } from "react"
 
 import { t, useLanguage } from "~/i18n/i18n"
 import { Boundary, Crashed } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
-import { ActContext, AppContext, historyStep, type Go, type Nav } from "~/nav"
+import { ActContext, AppContext, historyStep, type Ctx, type Go, type Nav, AccountContext, NamesContext, NavContext, OpenContext, PrefsContext, TilesContext } from "~/nav"
 import { ContextMenus } from "~/kit/menu-open"
 import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
@@ -25,6 +25,11 @@ const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 const LimitDialog = later(() => import("~/usage/limit").then((m) => m.LimitDialog))
+
+const RailOnce = memo(Rail)
+const PaletteOnce = memo(Palette)
+const MenusOnce = memo(ContextMenus)
+const ScreenOnce = memo(ChannelScreen)
 
 type Broken = { channel: boolean; retry: () => void }
 
@@ -49,7 +54,7 @@ function Shown({ app, nav, go, broken }: RootProps) {
 
   if (!app.account || app.signIn?.stage === "sign-in")
     return (
-      <AppContext value={ctx}>
+      <Parts ctx={ctx}>
         <ActContext value={act}>
           <Boundary>
             <Suspense fallback={null}>
@@ -58,14 +63,14 @@ function Shown({ app, nav, go, broken }: RootProps) {
           </Boundary>
           <Toasts toasts={toasts} onDismiss={dismissToast} />
         </ActContext>
-      </AppContext>
+      </Parts>
     )
 
   return (
-    <AppContext value={ctx}>
+    <Parts ctx={ctx}>
       <ActContext value={act}>
         <div className="app">
-          <Rail />
+          <RailOnce />
           <Boundary resetKey={nav.page === "settings" ? "settings" : app.channel?.code}>
             {nav.page === "settings" ? (
               <Suspense fallback={null}>
@@ -83,7 +88,7 @@ function Shown({ app, nav, go, broken }: RootProps) {
                 )}
               </Crashed>
             ) : app.channel ? (
-              <ChannelScreen key={app.channel.code} channel={app.channel} />
+              <ScreenOnce key={app.channel.code} channel={app.channel} />
             ) : opening(app, nav) ? null : (
               <Suspense fallback={null}>{app.gone ? <Gone gone={app.gone} /> : <Welcome />}</Suspense>
             )}
@@ -109,11 +114,30 @@ function Shown({ app, nav, go, broken }: RootProps) {
             <EnrollDialog />
           </Suspense>
         )}
-        <Palette />
-        <ContextMenus />
+        <PaletteOnce />
+        <MenusOnce />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
         <LimitWatch />
       </ActContext>
+    </Parts>
+  )
+}
+
+function Parts({ ctx, children }: { ctx: Ctx; children: ReactNode }) {
+  const { app, nav } = ctx
+  return (
+    <AppContext value={ctx}>
+      <NavContext value={nav}>
+        <TilesContext value={app.channels}>
+          <PrefsContext value={app.prefs}>
+            <AccountContext value={app.account}>
+              <OpenContext value={app.channel}>
+                <NamesContext value={app.channel?.nicknames ?? null}>{children}</NamesContext>
+              </OpenContext>
+            </AccountContext>
+          </PrefsContext>
+        </TilesContext>
+      </NavContext>
     </AppContext>
   )
 }

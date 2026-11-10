@@ -1,11 +1,11 @@
 import "~/i18n/en/shell-later"
 import "~/styles/start.css"
 import type { GoneChannel } from "~/model"
-import { useApp } from "~/nav"
+import { useGo } from "~/nav"
 import { t } from "~/i18n/i18n"
 
 export function Gone({ gone }: { gone: GoneChannel }) {
-  const { go } = useApp()
+  const go = useGo()
   return (
     <main className="start-area">
       <div className="start-drag" />

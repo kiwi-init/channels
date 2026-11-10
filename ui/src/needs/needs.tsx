@@ -33,7 +33,7 @@ import {
   type ReviewAsk,
   type BypassAsk,
 } from "~/model"
-import { useApp } from "~/nav"
+import { useApp, useGo } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { SendBack } from "~/tasks/send-back"
 import { isIdle, isOpen, openAsks } from "~/needs/open"
@@ -130,7 +130,7 @@ function doneLine(channel: Channel, a: Ask): string {
 type Face = Pick<Person, "name" | "kind" | "harness" | "presence" | "color">
 
 function Card({ channel, ask, onJump }: { channel: Channel; ask: Ask; onJump: (jump: Jump) => void }) {
-  const { go } = useApp()
+  const go = useGo()
   const source = channel.messages.find((m) => m.ask === ask.id)
   const show = (m: Message) => {
     go({ to: "where", where: m.where, jump: true })
@@ -184,7 +184,7 @@ function Shell({
   until?: ReactNode
   link: ReactNode
 }) {
-  const { go } = useApp()
+  const go = useGo()
   return (
     <article className="needs-card is-open" aria-label={t("needs.card.label", { name, verb })}>
       <header className="needs-head">

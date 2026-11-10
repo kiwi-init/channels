@@ -1,8 +1,6 @@
-import { useContext } from "react"
-
 import type { Channel, Person } from "~/model"
 import { t } from "~/i18n/i18n"
-import { AppContext } from "~/nav"
+import { useNicknames } from "~/nav"
 import { wordsPlain, type Words } from "~/words"
 
 export const nicknamesOf = (members: Iterable<{ name: string; display?: string | undefined }>): ReadonlyMap<string, string> => new Map([...members].map((m) => [m.name, m.display || m.name]))
@@ -37,8 +35,6 @@ export const roomPeople = (channel: Pick<Channel, "people" | "you">): Person[] =
   return channel.people.filter((p) => !p.you && !p.left && !p.seatOf && p.name !== mine)
 }
 
-const NO_NICKNAMES: ReadonlyMap<string, string> = new Map()
-
 export function Shown({ value }: { value: Words }) {
-  return wordsPlain(value, useContext(AppContext)?.app.channel?.nicknames ?? NO_NICKNAMES)
+  return wordsPlain(value, useNicknames())
 }

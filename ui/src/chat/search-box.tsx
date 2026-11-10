@@ -9,7 +9,7 @@ import { cx, Dot } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel, Message, OlderSearch } from "~/model"
-import { useApp } from "~/nav"
+import { useActions, useGo } from "~/nav"
 import { nickname } from "~/names"
 import { wordsPlain, wrote } from "~/words"
 
@@ -68,8 +68,8 @@ export function SearchBox({
   onOlder: (older: Older) => void
   onClose: () => void
 }) {
-  const { go, app } = useApp()
-  const actions = app.actions
+  const go = useGo()
+  const actions = useActions()
   const [query, setQuery] = useState("")
   const [focused, setFocused] = useState(true)
   const [active, setActive] = useState(0)
