@@ -489,6 +489,7 @@ function Repos({ channel, sets }: { channel: Channel; sets: boolean }) {
       live = false
     }
   }, [app.actions, sets])
+  const [removing, setRemoving] = useState<string | null>(null)
   const offer = repoOffers(mine, channel.repos)
   return (
     <>
@@ -498,9 +499,20 @@ function Repos({ channel, sets }: { channel: Channel; sets: boolean }) {
           <OutsideLink className="cset-repo-name" href={`https://github.com/${r}`}>
             {r}
           </OutsideLink>
-          {sets && <IconButton icon="close" label={t("modals.channel.settings.repo.remove", { repo: r })} onClick={() => app.actions.removeRepo(channel.code, r)} />}
+          {sets && <IconButton icon="close" label={t("modals.channel.settings.repo.remove", { repo: r })} onClick={() => setRemoving(r)} />}
         </div>
       ))}
+      <Confirm
+        open={removing !== null}
+        title={t("modals.channel.settings.repo.remove.ask", { repo: removing ?? "", channel: channel.title })}
+        sub={t("modals.channel.settings.repo.remove.sub")}
+        action={t("modals.channel.settings.repo.remove.yes")}
+        onClose={() => setRemoving(null)}
+        onConfirm={() => {
+          if (removing) app.actions.removeRepo(channel.code, removing)
+          setRemoving(null)
+        }}
+      />
       {!sets && !channel.repos.length && <p className="set-none">{t("modals.channel.settings.no.repos")}</p>}
       {sets && (
         <form
