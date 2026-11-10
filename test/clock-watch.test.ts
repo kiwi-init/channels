@@ -269,6 +269,26 @@ describe("one waker (#3930 §2, cases 2 and 22)", () => {
     expect(host.w.invoked()).toEqual([]);
   });
 
+  test("a typing retry gives back only its own attempt while it is still current: after the mover's progress it restores nothing, and the new epoch's attempt is untouched", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    const host = seat(c, "mac");
+    c.wait(N);
+    await host.w.look();
+    const typing = host.w.invoked();
+    const spoke = await c.say("mac", "msg", "reading it now", { task: id });
+    c.wait(N);
+    await host.w.look();
+    expect(host.w.holds(clockBlock(id, spoke.seq))).toBe(false);
+    host.w.rearm(typing);
+    host.w.delivered(typing);
+    expect(host.w.holds(clockBlock(id, epoch))).toBe(true);
+    expect(host.w.holds(clockBlock(id, spoke.seq))).toBe(false);
+    await host.w.look();
+    expect(c.events("task.wake")).toEqual([]);
+    expect(host.w.invoked()).toEqual([clockBlock(id, spoke.seq)]);
+  });
+
   test("the seats a daemon chooses its posting seat from are the watched ones, in a fixed order: a dormant seat is never chosen", () => {
     expect(
       watchedPeers([
