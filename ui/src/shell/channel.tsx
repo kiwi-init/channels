@@ -13,7 +13,7 @@ import type { Channel } from "~/model"
 import { drawerNews } from "~/live/links"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { openAsks } from "~/needs/open"
-import { sameWhere, useGo, useNav, useActions, useAppPrefs, useTiles } from "~/nav"
+import { sameWhere, useAct, useGo, useNav, useActions } from "~/nav"
 import { openMenu } from "~/kit/menu-open"
 import { whereKey } from "~/places"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
@@ -49,8 +49,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const nav = useNav()
   const go = useGo()
   const actions = useActions()
-  const tiles = useTiles()
-  const prefs = useAppPrefs()
+  const { now } = useAct()
   const hidden = useSidebarHidden()
   const panel = usePanelWidth(hidden)
   const [jumpAt, setJumpAt] = useState<{ jump: Jump; visit: number } | null>(null)
@@ -188,7 +187,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             aria-label={t("shell.channel.menu.label", { name: channel.title })}
             onClick={(e) => {
               const at = e.currentTarget.getBoundingClientRect()
-              const tile = tiles.find((c) => c.code === channel.code)
+              const tile = now?.().channels.find((c) => c.code === channel.code)
               void import("~/shell/rail-menu").then((m) =>
                 openMenu.set(
                   m.railMenu(
@@ -199,7 +198,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
                       folders: [],
                       save: () => {},
                       title: () => channel.title,
-                      muted: (code) => prefs.muted.includes(code),
+                      muted: (code) => now?.().prefs.muted.includes(code) ?? false,
                       setMute: (code, on) => actions.setMute(code, null, on),
                       settings: () => go({ to: "modal", modal: { kind: "channel" } }),
                       own: channel.youOwn,
