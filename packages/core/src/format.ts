@@ -32,10 +32,9 @@ import {
 import { evidenceOf, prLines, refText, stageOf, stageText } from "./stage.ts";
 import { changedSinceApproval, changedAfterApproval, freeAgents, specOfComment, specPlanner, specStage, specTitleOf } from "./state/specs.ts";
 import { commentsLine, commentsWaiting, specLine } from "./spec-lines.ts";
-import { landingWaits, reviewNotRequired, rulesText } from "./prs.ts";
-import { artifactText } from "./done-gate.ts";
+import { landingWaits, reviewStillRequired, rulesText } from "./prs.ts";
 import { currentStep, spanText, stepById, stepMove, type LandingStep, type StepEdit } from "./steps.ts";
-import { runSight } from "./state/landing-steps.ts";
+import { artifactWords, runSight } from "./state/landing-steps.ts";
 import { sayEvent, type EventKey, type EventSay } from "./event-words.ts";
 import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
@@ -190,9 +189,9 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     case "task.first":
       return say("task.first", { task: task(ev.task) });
     case "task.landed":
-      if (!("step" in ev)) return say("task.landed", { task: task(ev.task), at: artifactText(ev.artifact) });
+      if (!("step" in ev)) return say("task.landed", { task: task(ev.task), at: artifactWords(ev.artifact) });
       return ev.artifact
-        ? say("task.step.seen", { step: stepName(state, ev.task, ev.step), task: task(ev.task), at: artifactText(ev.artifact) })
+        ? say("task.step.seen", { step: stepName(state, ev.task, ev.step), task: task(ev.task), at: artifactWords(ev.artifact) })
         : say("task.step.done", { step: stepName(state, ev.task, ev.step), task: task(ev.task), note: note([ev.note, ev.link].filter(Boolean).join(" ") || undefined) });
     case "task.steps":
       return say("task.steps", { task: task(ev.task), what: stepEditText(ev.edit) });
@@ -529,14 +528,14 @@ function taskLine(state: ChannelState, t: Task): string {
   const review = t.review && t.state !== "done" && t.state !== "landing" ? ` [${reviewPhrase(t.review)}]` : "";
   const stage = stageOf(state, t);
   const evidence = stage.pr || stage.declared ? ` · ${stageText(state, stage)}` : "";
-  const waits = landingWaits(state, t);
+  const waits = landingWaits(t);
   return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}${waits ? ` · ${waits}` : ""}`;
 }
 
 export function reviewRuleWarning(state: ChannelState, check: string): string | null {
-  const repos = reviewNotRequired(state, check);
+  const repos = reviewStillRequired(state, check);
   return repos.length
-    ? `warning: tasks here land on merge, but ${repos.join(", ")} doesn't require ${check}, so a PR can merge before its task's gate is open (an owner step: require it in the repo's ruleset)`
+    ? `warning: ${repos.join(", ")} still require${repos.length === 1 ? "s" : ""} ${check}, which Kiwi has retired: it answers every pull request there green until the requirement is gone (an owner step: remove it from the repo's ruleset)`
     : null;
 }
 
@@ -702,7 +701,6 @@ export function formatStatus({ alias, check, me, state, online, unread, now = Da
   const charter = charterLines(state);
   if (charter) out.push(charter);
   if (state.repos.length) out.push(`repos: ${state.repos.join(", ")}`);
-  if (state.merges === "people") out.push("who merges: people (agents leave pull requests for a person to merge)");
   const ruleWarning = reviewRuleWarning(state, check);
   if (ruleWarning) out.push(ruleWarning);
   const human = humanOf(state, me);
@@ -855,13 +853,10 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
     out.push(
       `  ${reviewPhrase(t.review)}${t.review !== "*" && state.members.get(t.review)?.active === false ? " (they left the channel)" : ""}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`,
     );
-  if (t.then) out.push(`  lands on: ${t.then}, landed by ${inlineText(t.lander ?? t.owner ?? "its owner", 40)}${t.state === "landing" ? " (approved, not landed yet)" : ""}`);
-  const waits = landingWaits(state, t);
+  const waits = landingWaits(t);
   if (waits) out.push(`  ${waits}`);
   out.push(...stepLines(state, t, now));
   if (t.closedWith) out.push(`  closed without landing: ${inlineText(t.closedWith, 200)}`);
-  if (t.landed) out.push(`  landed: ${artifactText(t.landed.artifact)}`);
-  if (t.landed) out.push(`  landed: ${artifactText(t.landed.artifact)}`);
   const open = openRound(t);
   if (open?.summary) out.push("", `round ${open.n} summary:`, markedText(open.summary));
   if (t.rounds.length) {

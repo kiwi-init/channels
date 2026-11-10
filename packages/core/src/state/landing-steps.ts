@@ -1,7 +1,9 @@
 import type { CheckArtifact } from "../checks.ts";
 import { arm, currentStep, mintSteps, STEPS_MAX, stepById, stepsOfThen, stepText, type LandingStep, type RunSight, type StepEdit, type StepSpec } from "../steps.ts";
 import type { CheckState } from "./checks.ts";
-import { runStart, runsUnknownSince, type GithubPr, type GithubState } from "./github.ts";
+import { isReviewCheck } from "../protocol.ts";
+import { approvedAt, judgedHead } from "../stage.ts";
+import { runStart, runsUnknownSince, shaKey, succeededBy, type GithubPr, type GithubState } from "./github.ts";
 import type { Task } from "./types.ts";
 
 export type StepMark = { seq: number; by: string; at: number };
@@ -60,10 +62,6 @@ export function seeThenSteps(task: Task, mark: StepMark, saw: string): void {
   for (const s of task.steps ?? []) if (s.from === "then" && s.progress.kind === "open" && !s.progress.seen) s.progress = { kind: "open", seen: { seq: mark.seq, by: mark.by, saw } };
 }
 
-export function reopenThenSteps(task: Task): void {
-  for (const s of task.steps ?? []) if (s.from === "then") s.progress = { kind: "open" };
-}
-
 export function say(task: Task, step: LandingStep, mark: StepMark, said: { link?: string; note?: string }): void {
   step.progress = { kind: "ended", end: { how: "said", by: mark.by, seq: mark.seq, ts: mark.at, ...(said.link ? { link: said.link } : {}), ...(said.note ? { note: said.note } : {}) } };
   task.updatedAt = mark.at;
@@ -80,7 +78,6 @@ export function runSight(github: GithubState, task: Task, step: LandingStep): Ru
 }
 
 export function observedRefusal(view: StepView, task: Task, step: LandingStep, artifact: CheckArtifact): string | null {
-  if (step.from === "then" && task.then) return `${id(task)}'s step ${stepText(step)} ends through its landing gate, not a step observation`;
   if (artifact.kind === "pr") {
     if (step.detector?.kind !== "pr-merged") return `step ${stepText(step)} of ${id(task)} doesn't end on a merged PR`;
     const pr = view.prOf(task);
@@ -92,6 +89,29 @@ export function observedRefusal(view: StepView, task: Task, step: LandingStep, a
     return runSight(view.github, task, step) === "succeeded" ? null : `run ${artifact.id} hasn't succeeded where Kiwi can see it`;
   }
   return `step ${stepText(step)} of ${id(task)} doesn't end on ${artifactWords(artifact)}`;
+}
+
+function missingAtMerge(github: GithubState, task: Task, pr: GithubPr & { sha: string }, merged: number): string | null {
+  const round = task.rounds.filter((r) => r.rts === undefined || r.rts <= merged).at(-1);
+  const result = round?.result;
+  if (!round || result?.kind !== "approved" || result.rts === undefined || result.rts > merged) return "an approval before the merge";
+  const held = { at: round.at, kept: round.kept?.filter((k) => k.rts !== undefined && k.rts <= merged) };
+  if (!approvedAt(held, pr.sha)) return `an approval at ${pr.sha.slice(0, 7)}`;
+  const runs = [...(github.checks.get(shaKey(pr.repo, judgedHead(held, pr.sha)))?.values() ?? [])].filter((c) => !isReviewCheck(c.name));
+  const late = (result.runs ?? []).find((run) => !runs.some((c) => succeededBy(c, run, merged)));
+  return late === undefined ? null : `CI run ${late} green before the merge`;
+}
+
+export function landedRefusal(view: StepView, task: Task, artifact: CheckArtifact): string | null {
+  if (task.state !== "landing") return `${id(task)} isn't approved and landing: it's ${task.state}`;
+  if (artifact.kind === "run") return task.run?.id === artifact.id ? null : `${artifactWords(artifact)} isn't ${id(task)}'s run`;
+  const pr = view.prOf(task);
+  if (pr?.state !== "merged" || !pr.sha) return `${id(task)} hasn't landed: its PR hasn't merged`;
+  const missing = pr.mergedAt === undefined ? `GitHub's time for the merge of PR #${pr.number}` : missingAtMerge(view.github, task, { ...pr, sha: pr.sha }, pr.mergedAt);
+  if (missing) return `${id(task)}'s PR #${pr.number} merged without ${missing}: a person closes it with a reason`;
+  if (artifact.kind === "npm") return task.steps?.some((s) => s.from === "then" && s.words.startsWith(`publish ${artifact.pkg}@`)) ? null : `${id(task)} doesn't publish ${artifact.pkg}`;
+  const own = pr.repo.toLowerCase() === artifact.repo.toLowerCase() && pr.number === artifact.pr && pr.sha === artifact.sha;
+  return own ? null : `${id(task)} lands at ${pr.repo}#${pr.number} at ${pr.sha.slice(0, 7)}, not ${artifactWords(artifact)}`;
 }
 
 export interface StepObservation {
@@ -106,7 +126,7 @@ export function stepObservations(view: StepView & { tasks: ReadonlyMap<number, T
   for (const t of view.tasks.values()) {
     if (t.state === "done" || t.archived) continue;
     for (const s of t.steps ?? []) {
-      if (s.progress.kind !== "open" || s.progress.seen || (s.from === "then" && t.then)) continue;
+      if (s.progress.kind !== "open" || s.progress.seen) continue;
       const pr = s.detector?.kind === "pr-merged" ? view.prOf(t) : undefined;
       const artifact: CheckArtifact | undefined =
         pr?.state === "merged" && pr.sha
@@ -131,7 +151,7 @@ export function migrateChecks(tasks: ReadonlyMap<number, Task>, checks: Readonly
       checkStep(task, { ...check, replaces: undefined });
     }
     const passed = (check.answers ?? (check.answer ? [check.answer] : [])).find((a) => a.pass);
-    if (passed) checkAnswered(tasks, { ...check, answer: passed }, { seq: passed.seq, by: passed.by, at: passed.at ?? 0 });
+    if (passed) checkAnswered(tasks, { ...check, answer: passed }, { seq: passed.seq, by: passed.by, at: "at" in passed && typeof passed.at === "number" ? passed.at : 0 });
   }
 }
 

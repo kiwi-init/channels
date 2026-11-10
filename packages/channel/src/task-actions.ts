@@ -1,5 +1,5 @@
 import type { SendOptions } from "@kiwi/core/client.ts";
-import { hasLanding } from "@kiwi/core/protocol.ts";
+import { currentStep } from "@kiwi/core/steps.ts";
 import { openRound, taskId, type Task } from "@kiwi/core/state.ts";
 
 export const ANYONE = "*";
@@ -72,7 +72,7 @@ export function closeLanding(t: Task, why: string): TaskSend {
 }
 
 export function closeFromGithub(t: Task, c: { cancelled: boolean; note: string }): TaskSend {
-  const state = c.cancelled ? "cancelled" : hasLanding(t.then) ? "landing" : "done";
+  const state = c.cancelled ? "cancelled" : currentStep(t) ? "landing" : "done";
   return {
     body: `${taskId(t.id)} ${state === "landing" ? "landing" : c.cancelled ? "cancelled" : "done"}: ${c.note}`,
     opts: { kind: "event", ev: { op: "task.update", task: t.id, state, note: c.note }, ...toOwner(t) },

@@ -1,7 +1,7 @@
-import { hasLanding, type Landing, type OldTaskState, type TaskState, type Verdict } from "../protocol.ts";
+import { type Landing, type OldTaskState, type TaskState, type Verdict } from "../protocol.ts";
 import type { CheckAsk, CheckPhase } from "../checks.ts";
 import type { CheckState } from "./checks.ts";
-import { currentStep } from "../steps.ts";
+import { currentStep, thenChanged } from "../steps.ts";
 import type { ChannelState, ReviewRound, Task } from "./types.ts";
 
 export function taskId(id: number): string {
@@ -61,11 +61,9 @@ export const landerOf = (task: Pick<Task, "lander" | "owner">): string | undefin
 
 export const newRun = (task: Task, run: { id: string } | undefined): boolean => !!run && !!task.run && task.run.id !== run.id;
 
-export function runRefusal(task: Task, run: { id: string; started?: number } | undefined, received: number | undefined): string | null {
+export function runRefusal(run: { id: string; started?: number } | undefined, received: number | undefined): string | null {
   if (run?.started === undefined) return null;
-  if (received === undefined || run.started > received) return `run ${run.id} can't have started after its proof arrived`;
-  const known = task.run?.id === run.id ? task.run.reportedStart : undefined;
-  return known !== undefined && known !== run.started ? `run ${run.id}'s start is already recorded` : null;
+  return received === undefined || run.started > received ? `run ${run.id} can't have started after its proof arrived` : null;
 }
 
 function landerAfter(task: Task, ev: LandingChange): string | undefined {
@@ -81,16 +79,15 @@ export function landingRefusal(task: Task, ev: LandingChange, from: { person: bo
   if ((ev.then !== undefined || ev.lander !== undefined) && !trusted) return `only a person or the lead changes how ${id} lands`;
   if (task.state === "landing" && landerAfter(task, ev) !== landerOf(task) && !trusted) return `only a person or the lead changes who lands ${id}`;
   const step = currentStep(task);
-  if (ev.state === "landing" && !hasLanding(task.then) && !step) return `${id} has no landing step: it finishes on approval`;
-  if (ev.state === "done" && ev.verdict !== "approved" && (hasLanding(task.then) || step) && task.state !== "done")
-    return `${id} lands by its step (${task.then ?? step?.words}): approve it, or close it with a reason`;
+  if (ev.state === "landing" && !step) return `${id} has no landing step: it finishes on approval`;
+  if (ev.state === "done" && ev.verdict !== "approved" && step && task.state !== "done") return `${id} lands by its step (${step.words}): approve it, or close it with a reason`;
   if (task.state === "landing" && newRun(task, ev.run) && !trusted) return `only a person or the lead declares another run for ${id} once it's approved`;
   return null;
 }
 
 export function landingReopens(task: Task, ev: LandingChange): boolean {
   if (task.state !== "landing") return false;
-  return (ev.then !== undefined && ev.then !== (task.then ?? "none")) || landerAfter(task, ev) !== landerOf(task) || newRun(task, ev.run);
+  return (ev.then !== undefined && thenChanged(task, ev.then)) || landerAfter(task, ev) !== landerOf(task) || newRun(task, ev.run);
 }
 
 const landingHeld = (tasks: ReadonlyMap<number, Task>, phase: CheckPhase, holds: readonly number[]): Task[] =>

@@ -123,6 +123,12 @@ export interface StepHolder {
   stepCount?: number;
 }
 
+export function thenChanged(t: StepHolder, then: string): boolean {
+  const have = (t.steps ?? []).filter((s) => s.from === "then").map((s) => s.words);
+  const want = stepsOfThen(then).map((s) => s.words);
+  return have.length !== want.length || have.some((words, i) => words !== want[i]);
+}
+
 export const currentStep = (t: StepHolder): LandingStep | undefined => t.steps?.find((s) => s.progress.kind === "open");
 
 export const stepById = (t: StepHolder, id: string): LandingStep | undefined => t.steps?.find((s) => s.id === id);
