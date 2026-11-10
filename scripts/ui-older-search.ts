@@ -102,9 +102,9 @@ try {
     console.log(`the older bar never showed after the click: ${JSON.stringify(state, null, 1)}`);
     throw err;
   });
-  expect((await bar.innerText()).includes("Viewing older messages around"), "the bar says this is older history, and when");
   const hit = page.locator("article.msg.is-flash");
   await hit.waitFor();
+  expect((await bar.innerText()).includes("Viewing older messages around"), "once its stretch is loaded, the bar says this is older history, and when");
   const shown = await hit.boundingBox();
   expect(!!shown && shown.y > 100 && shown.y < 700 && (await hit.innerText()).includes("Keep the relay dumb"), "the hit is scrolled into view and marked");
   expect((await page.locator("article.msg").count()) > 10, "the stretch around the hit is shown, not just the hit");
