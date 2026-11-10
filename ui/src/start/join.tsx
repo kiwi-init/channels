@@ -1,14 +1,13 @@
 import "~/i18n/en/shell-later"
 import { useEffect, useId, useRef, useState } from "react"
 
-import { handleFor, NAME_RE, RESERVED_NAMES } from "@kiwi/core/membership.ts"
-
 import "~/styles/start.css"
 import { autofocus, cx } from "~/kit/bits"
 import { Failed, failure, type Failure } from "~/kit/failed"
 import { Modal } from "~/kit/modal"
 import type { InviteInfo } from "~/model"
 import { useApp, useGo } from "~/nav"
+import { joinName, nameProblemOf } from "~/start/join-name"
 import { t } from "~/i18n/i18n"
 import { tr } from "~/i18n/rich"
 
@@ -44,14 +43,16 @@ function JoinForm({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [failed, setFailed] = useState<Failure | null>(null)
   const [invite, setInvite] = useState<InviteInfo | null>(null)
-  const [name, setName] = useState(() => (app.account ? handleFor(app.account.name) : ""))
+  const [mine] = useState(() => joinName(app.account?.name))
+  const [name, setName] = useState(mine.name)
   const inputId = useId()
   const hintId = useId()
   const nameId = useId()
   const code = inviteCode(text)
   const bad = text.trim() !== "" && !code
-  const nameProblem = !NAME_RE.test(name.trim()) ? t("start.join.name.allowed", { max: 32 }) : RESERVED_NAMES.has(name.trim().toLowerCase()) ? t("start.join.name.reserved") : null
-  const [naming, setNaming] = useState(nameProblem !== null)
+  const problem = nameProblemOf(name)
+  const nameProblem = problem === "allowed" ? t("start.join.name.allowed", { max: 32 }) : problem === "reserved" ? t("start.join.name.reserved") : null
+  const [naming, setNaming] = useState(mine.asks)
 
   const inspect = async (c: string) => {
     try {
