@@ -263,6 +263,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return ev.on ? say("github.write.on") : say("github.write.off");
     case "branch.prefix.set":
       return ev.prefix ? say("branch.prefix.set", { prefix: ev.prefix }) : say("branch.prefix.cleared");
+    case "quiet.set":
+      return say("quiet.set", { time: spanText(ev.minutes * 60_000) });
     case "merges.set":
       return ev.by === "people" ? say("merges.people") : say("merges.agents");
     case "landing.set":
@@ -540,7 +542,7 @@ function taskLine(state: ChannelState, t: Task, now?: number): string {
 
 function quietTag(state: ChannelState, t: Task, now: number | undefined): string {
   const clock = now === undefined ? undefined : clockOf(state, t, now);
-  const quiet = clock ? quietText(clock) : undefined;
+  const quiet = clock ? quietText(clock, state.quietMs) : undefined;
   return quiet ? ` · ${quiet}` : "";
 }
 
@@ -853,7 +855,7 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
   const mover = moverOf(state, t, now);
   if (mover) out.push(`  move: ${moverText(mover)}`);
   const clock = clockOf(state, t, now);
-  const quiet = clock ? quietText(clock) : undefined;
+  const quiet = clock ? quietText(clock, state.quietMs) : undefined;
   if (quiet) out.push(`  ${quiet}`);
   const stage = stageOf(state, t);
   out.push(`  stage: ${stageText(state, stage)}`);

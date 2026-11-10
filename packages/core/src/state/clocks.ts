@@ -1,14 +1,14 @@
-import type { NudgeStep } from "../protocol.ts";
+import { QUIET_MINUTES, type NudgeStep } from "../protocol.ts";
 import { prOfTask } from "../prs.ts";
 import { currentStep, stepMove } from "../steps.ts";
 import { runSight } from "./landing-steps.ts";
 import { landerOf, openRound, taskId } from "./tasks.ts";
 import type { ChannelState, Task, TaskClock } from "./types.ts";
 
-export const QUIET_MS = 20 * 60_000;
+export const QUIET_MS = QUIET_MINUTES * 60_000;
 export const QUEUE_MS = 24 * 60 * 60_000;
 
-export type ClockView = Pick<ChannelState, "tasks" | "openAsks" | "github" | "branchPrefix">;
+export type ClockView = Pick<ChannelState, "tasks" | "openAsks" | "github" | "branchPrefix" | "quietMs">;
 
 const WAITING = "~waiting|";
 const LEAD = "@lead";
@@ -103,10 +103,10 @@ export function tick(view: ClockView, t: Task, mark: { seq: number; at: number; 
 
 type Nudge = { mover: string; since: number; step: NudgeStep; day?: number };
 
-function stepOnAct(clock: TaskClock, since: number, step: 1 | 2 | 3, at: number, lead: string | undefined): TaskClock | string | undefined {
+function stepOnAct(clock: TaskClock, since: number, step: 1 | 2 | 3, at: number, every: number, lead: string | undefined): TaskClock | string | undefined {
   const act = clock.acts?.find((a) => a[1] === since && a[1] > clock.seq);
   if (!act || act[0] !== lead) return undefined;
-  if (at - act[2] < step * QUIET_MS) return "early";
+  if (at - act[2] < step * every) return "early";
   if (step <= (act[3] ?? 0)) return clock;
   return { ...clock, acts: (clock.acts ?? []).map((a): Act => (a === act ? [a[0], a[1], a[2], step] : a)) };
 }
@@ -125,7 +125,7 @@ export function nudge(view: ClockView, t: Task, ev: Nudge, at: number, who: Nudg
   const party = partyOfKey(held.key);
   const early = `${id} hasn't been quiet long enough for step ${ev.step} of its clock`;
   if (party === ev.mover && ev.step !== 0 && held.seq !== ev.since) {
-    const onAct = stepOnAct(held, ev.since, ev.step, at, party === LEAD ? who.lead() : undefined);
+    const onAct = stepOnAct(held, ev.since, ev.step, at, view.quietMs, party === LEAD ? who.lead() : undefined);
     if (onAct === "early") return early;
     if (typeof onAct === "object") {
       t.clock = onAct;
@@ -143,7 +143,7 @@ export function nudge(view: ClockView, t: Task, ev: Nudge, at: number, who: Nudg
     return null;
   }
   if (!memberKey(clock.key)) return `${id} has no member on the clock`;
-  if (at - clock.at < ev.step * QUIET_MS) return early;
+  if (at - clock.at < ev.step * view.quietMs) return early;
   if (ev.step > (clock.step ?? 0)) t.clock = { ...clock, step: ev.step };
   return null;
 }
