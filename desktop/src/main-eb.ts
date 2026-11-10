@@ -5,7 +5,7 @@ import Electrobun, { BrowserView, Utils } from "electrobun/main";
 import { internalRpcHandlers } from "../.hutch/devkit/api/sdks/main/proc/native.ts";
 import { handleDeepLink, JOIN_SCHEME } from "./deep-links.ts";
 import { lockInternalRpc } from "./eb-bridge.ts";
-import { mark } from "./eb-startup.ts";
+import { mark, startupLine, startupMarks } from "./eb-startup.ts";
 import { dataDir, ebHost } from "./host-eb.ts";
 import { useHost } from "./host.ts";
 import { keepDaemonAlive, watchPage } from "./keep-alive-eb.ts";
@@ -13,7 +13,7 @@ import { KEYRING_GRACE_MS, openedWithin } from "./keyring-wait.ts";
 import { startKeys } from "./keys-start-eb.ts";
 import { startLife, startUpdateChecks } from "./life-updates-eb.ts";
 import { keepLinuxEntry } from "./linux-entry.ts";
-import { catchMainErrors, logMainError } from "./main-log.ts";
+import { catchMainErrors, logMainError, logMainLine } from "./main-log.ts";
 import { followColorScheme, missingGuard, sandboxOff, watchDrops, watchPaste } from "./native-eb.ts";
 import { watchCancels } from "./secret-service.ts";
 import { claimInstance, handoffFor, launchArgs, launchToken, type Instance } from "./single-instance.ts";
@@ -24,6 +24,8 @@ import { fail, releaseFirst } from "./start-fail-eb.ts";
 import { createWindow, showKeyringNote, showUnreadable } from "./window-eb.ts";
 
 declare const KIWI_EB_TEST: boolean;
+
+const STARTUP_LINE_AFTER_MS = 15_000;
 
 mark("main");
 
@@ -48,6 +50,10 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
         })
       : () => {};
   const opening = openStoreForThisBuild().finally(stop);
+  void opening.then(
+    () => mark("store"),
+    () => {},
+  );
   const inTime = await openedWithin(opening, KEYRING_GRACE_MS);
   if (!inTime) console.error(`Channels: the keyring hasn't answered in ${KEYRING_GRACE_MS / 1000} s, so the window says it's waiting for it`);
   watchPage();
@@ -59,6 +65,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
     instance.release();
     return;
   }
+  setTimeout(() => logMainLine(startupLine(startupMarks())), STARTUP_LINE_AFTER_MS);
   startUpdateChecks();
   if (!inTime) {
     await opening;
