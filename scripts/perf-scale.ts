@@ -349,7 +349,7 @@ try {
     const switching = !GATED || throttle === 4;
     const views: Record<string, number[]> = { Agents: [], Conversation: [], Tasks: [] };
     const spent: Record<string, Record<string, number>[]> = { Agents: [], Conversation: [], Tasks: [] };
-    const markers: Record<string, string> = { Agents: agents.at(-1)!, Conversation: "M\\d+: ", Tasks: "Ship it at scale" };
+    const markers: Record<string, string> = { Agents: agents.at(-1)!, Conversation: SEEDED, Tasks: "Ship it at scale" };
     for (let i = 0; i < (switching ? 3 : 0); i++)
       for (const v of ["Agents", "Conversation", "Tasks"]) {
         const before = await work(cdp);
@@ -403,7 +403,7 @@ try {
   }
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 
-  await tab(page, "Conversation", "M\\d+: ");
+  await tab(page, "Conversation", SEEDED);
   await composer(page).click();
   await drain(page);
   const typing = (async () => {

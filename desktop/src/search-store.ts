@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv } from "node:crypto";
-import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { mkdir, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { fromB64url } from "@kiwi/core/crypto.ts";
@@ -77,7 +77,17 @@ export async function openIndex(file: Uint8Array, key: string, roomId: string): 
   return { index, fed: { base, from: stamp.from, through: stamp.through } };
 }
 
+async function sweepStaleSaves(file: string): Promise<void> {
+  const dir = path.dirname(file);
+  const stale = new RegExp(`^${path.basename(file).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.(\\d+)\\.tmp$`);
+  for (const name of await readdir(dir).catch(() => [])) {
+    const pid = stale.exec(name)?.[1];
+    if (pid && Number(pid) !== process.pid) await rm(path.join(dir, name), { force: true }).catch(() => null);
+  }
+}
+
 export async function readIndexFile(file: string, key: string, roomId: string): Promise<Loaded | null> {
+  await sweepStaleSaves(file);
   const bytes = await readFile(file).catch(() => null);
   return bytes ? openIndex(bytes, key, roomId) : null;
 }

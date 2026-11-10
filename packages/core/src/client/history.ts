@@ -9,7 +9,7 @@ import { fileAttachment, isEvent, PAGE_LIMIT, rasterAttachment, wellFormed, type
 import type { FoldBase } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import { RelayError, type MemberRefusal } from "./errors.ts";
-import type { Relay } from "./relay.ts";
+import { notTheRelay, type Relay } from "./relay.ts";
 
 interface PageOffer {
   cap: string;
@@ -53,7 +53,9 @@ export class ChannelHistory {
 
   readonly fx: HistoryFx = {
     head: Effect.fn("Channel.head")({ self: this }, function* (this: ChannelHistory) {
-      return (yield* this.ch.request<{ head: number }>("/")).head;
+      const { head } = yield* this.ch.request<{ head?: unknown }>("/");
+      if (typeof head !== "number" || !Number.isSafeInteger(head) || head < 0) return yield* notTheRelay(this.ch.relay);
+      return head;
     }),
 
     markRead: Effect.fn("Channel.markRead")({ self: this }, function* (this: ChannelHistory, seq: number) {

@@ -38,11 +38,29 @@ const inTime = <A, E>(url: URL, request: Effect.Effect<A, E>): Effect.Effect<A, 
     orElse: () => Effect.fail(new Unreachable({ cause: new Error(`no answer in ${REQUEST_MS / 1000}s`), url: url.origin })),
   });
 
+const NOT_THE_RELAY = "the answer didn't come from the relay: a sign-in page or a proxy may be in the way";
+
+export const notTheRelay = (url?: string): Unreachable => new Unreachable({ cause: new Error(NOT_THE_RELAY), ...(url ? { url } : {}) });
+
+function parsed(text: string): object | null {
+  if (!text.trim()) return {};
+  try {
+    const json: unknown = JSON.parse(text);
+    return typeof json === "object" && json !== null ? json : null;
+  } catch {
+    // Not JSON at all: a web page stood in for the relay.
+    return null;
+  }
+}
+
 const answered = <T>(res: Response) =>
   Effect.flatMap(
-    Effect.promise(() => res.json().catch(() => ({})) as Promise<T & { error?: string; tag?: string; retryAfter?: number }>),
-    (json): Effect.Effect<T, RelayError> =>
-      res.ok ? Effect.succeed(json) : Effect.fail(new RelayError(res.status, json.error ?? `the relay returned ${res.status}`, json.tag, res.headers.get("retry-after") ?? json.retryAfter)),
+    Effect.promise(() => res.text().catch(() => "")),
+    (text): Effect.Effect<T, Refusal> => {
+      const json = parsed(text) as (T & { error?: string; tag?: string; retryAfter?: number }) | null;
+      if (res.ok) return json ? Effect.succeed(json) : Effect.fail(notTheRelay(new URL(res.url || "http://unknown").origin));
+      return Effect.fail(new RelayError(res.status, json?.error ?? `the relay returned ${res.status}`, json?.tag, res.headers.get("retry-after") ?? json?.retryAfter));
+    },
   );
 
 const expired = (err: Refusal) => err instanceof RelayError && err.status === 401 && err.message === EXPIRED_SIGNATURE;

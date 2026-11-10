@@ -157,7 +157,18 @@ export async function daemonKeep(room: string, agents: readonly { pk: string; fr
  */
 export const daemonLogPath = (home: string = kiwiHome()): string => path.join(home, "daemon.log");
 
-const LOG_KEEP_BYTES = 1_000_000;
+export const LOG_KEEP_BYTES = 1_000_000;
+
+export function trimDaemonLog(home: string = kiwiHome()): void {
+  const file = daemonLogPath(home);
+  try {
+    if ((fs.statSync(file, { throwIfNoEntry: false })?.size ?? 0) <= LOG_KEEP_BYTES) return;
+    fs.copyFileSync(file, `${file}.1`);
+    fs.truncateSync(file, 0);
+  } catch {
+    // A log that can't be trimmed keeps growing; the daemon itself is untouched.
+  }
+}
 
 function openDaemonLog(home: string): number | "ignore" {
   const file = daemonLogPath(home);

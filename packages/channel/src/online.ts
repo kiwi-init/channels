@@ -30,6 +30,21 @@ export function hear(heard: ReadonlyMap<string, Online>, p: Presence & { sigOk: 
   });
 }
 
+const sameBut = (a: Online, b: Online): boolean =>
+  a.from === b.from && a.client === b.client && a.pk === b.pk && a.reach === b.reach && a.ops === b.ops && a.wakes === b.wakes && JSON.stringify(a.activity) === JSON.stringify(b.activity);
+
+export function sharedOnline(was: Map<string, Online>, next: Map<string, Online>): Map<string, Online> {
+  let same = was.size === next.size;
+  const out = new Map<string, Online>();
+  for (const [name, o] of next) {
+    const before = was.get(name);
+    const kept = before && sameBut(before, o) ? before : o;
+    if (kept !== before) same = false;
+    out.set(name, kept);
+  }
+  return same ? was : out;
+}
+
 export function onlineByName(heard: ReadonlyMap<string, Online>, keyOf: ReadonlyMap<string, string>, now: number): Map<string, Online> {
   return new Map([...heard].filter(([pk, o]) => keyOf.get(o.from) === pk && now - o.at < PRESENCE_TTL && howHere(o) !== null).map(([, o]) => [o.from, o]));
 }
