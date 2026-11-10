@@ -7,7 +7,7 @@ export default {
   "shell.channel.menu.label": "{name}: 채널 메뉴",
   "shell.channel.settings": "채널 설정",
   "shell.channel.views": "보기",
-  "shell.channel.specs.need": "{count}개가 내 확인 필요",
+  "shell.channel.specs.need": { other: "{count}개가 내 확인 필요" },
   "shell.channel.specs.open": "열린 스펙 {specs}개, 열린 작업 {tasks}개",
   "shell.channel.specs": "스펙",
   "shell.channel.waiting.on.you": "내 확인 필요",

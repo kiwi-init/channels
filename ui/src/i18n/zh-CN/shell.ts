@@ -7,7 +7,7 @@ export default {
   "shell.channel.menu.label": "{name}：频道菜单",
   "shell.channel.settings": "频道设置",
   "shell.channel.views": "视图",
-  "shell.channel.specs.need": "{count} 项待你处理",
+  "shell.channel.specs.need": { other: "{count} 项待你处理" },
   "shell.channel.specs.open": "{specs} 个进行中的规格，{tasks} 个进行中的任务",
   "shell.channel.specs": "规格",
   "shell.channel.waiting.on.you": "待你处理",

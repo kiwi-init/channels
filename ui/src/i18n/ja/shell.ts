@@ -7,7 +7,7 @@ export default {
   "shell.channel.menu.label": "{name}: チャンネルメニュー",
   "shell.channel.settings": "チャンネル設定",
   "shell.channel.views": "表示",
-  "shell.channel.specs.need": "{count} 件があなたの対応待ち",
+  "shell.channel.specs.need": { other: "{count} 件があなたの対応待ち" },
   "shell.channel.specs.open": "未完了の仕様 {specs} 件、未完了のタスク {tasks} 件",
   "shell.channel.specs": "仕様",
   "shell.channel.waiting.on.you": "あなたの対応待ち",
