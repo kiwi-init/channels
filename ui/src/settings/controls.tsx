@@ -3,8 +3,7 @@ import "~/styles/settings.css"
 import { useState, type ReactNode } from "react"
 
 import { t } from "~/i18n/i18n"
-import { autofocus, cx } from "~/kit/bits"
-import { Modal } from "~/kit/modal"
+import { cx } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 
 export function Seg<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: readonly (readonly [T, string])[]; onChange: (value: T) => void }) {
@@ -90,45 +89,4 @@ export function InlineEdit({ value, label, verb, onSave }: { value: string; labe
   )
 }
 
-export function Confirm({
-  open,
-  title,
-  sub,
-  action,
-  ready = true,
-  onConfirm,
-  onClose,
-  children,
-}: {
-  open: boolean
-  title: string
-  sub: string
-  action: string
-  ready?: boolean
-  onConfirm: () => void
-  onClose: () => void
-  children?: ReactNode
-}) {
-  const safe = children !== undefined || !ready
-  return (
-    <Modal dismiss={children === undefined ? "outside" : "x"} open={open} onClose={onClose} label={title} title={title} sub={sub}>
-      <form
-        className="set-confirm"
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (ready) onConfirm()
-        }}
-      >
-        {children}
-        <div className="modal-foot">
-          <button type="button" className="btn is-quiet" onClick={onClose} ref={safe ? autofocus : undefined}>
-            {t("settings.controls.cancel")}
-          </button>
-          <button type="submit" className="btn is-danger" disabled={!ready} ref={safe ? undefined : autofocus}>
-            {action}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
+export { Confirm } from "~/kit/confirm"

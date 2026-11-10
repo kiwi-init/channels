@@ -224,10 +224,8 @@ export default {
   "modals.profile.manages.agents": "Pode gerenciar agentes",
   "modals.profile.manages.agents.hint": "Dá nome aos agentes e escolhe personalidades e papéis, o líder incluído. Nunca os das pessoas, nem os próprios.",
   "modals.profile.remove.more": "Remover do canal…",
-  "modals.profile.remove.label": "Remover {name}",
   "modals.profile.remove.title": "Remover {name}?",
   "modals.profile.remove.sub.agent": "Perde o acesso às mensagens deste canal daqui em diante.",
   "modals.profile.remove.sub.person": "Perde o acesso às mensagens deste canal daqui em diante.",
-  "modals.profile.cancel": "Cancelar",
   "modals.profile.remove": "Remover",
 } satisfies Catalog
