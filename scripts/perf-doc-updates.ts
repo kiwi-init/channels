@@ -8,13 +8,14 @@ import { harnessDist } from "./ui-harness.ts";
 import { composer, docOpen, firstRun, newChannel, say } from "./perf-ui.ts";
 
 if (process.argv.includes("--help")) {
-  console.log(`What one keystroke in a thread doc costs the page, by the length of the thread. Two windows of jow in one channel
-with --lines lines already sent (40). The writer types --chars characters (200) into its composer and the reader, at the bottom
-of the same thread, is measured: main-thread script, style, layout and task time (CDP Performance.getMetrics), the React components
-rendered and the commits, the frames it received and its long tasks. Then the reader types the same itself and is measured again.
-Run it at two lengths to see whether the cost grows with the thread. Chromium only.
+  console.log(`What a thread doc's updates cost the page, by the length of the thread. Two windows of jow in one channel with
+--lines lines already sent (40). The writer sends --sends more lines (20), each one a block added to the shared doc, and the
+reader, at the bottom of the same thread, is measured: main-thread script, style, layout and task time (CDP Performance.getMetrics),
+the React components rendered and the commits, the frames it received and its long tasks, per line. Then the reader types
+--chars characters (200) in its own composer and is measured per key. Run it at two lengths to see whether the cost grows with
+the thread. Chromium only.
 
-  bun scripts/perf-doc-updates.ts [--lines=40] [--chars=200] [--json=out.json] [--dist=ui/dist-harness]
+  bun scripts/perf-doc-updates.ts [--lines=40] [--sends=20] [--chars=200] [--json=out.json] [--dist=ui/dist-harness]
 
 Needs bun scripts/ui-harness.ts first.`);
   process.exit(0);
@@ -24,6 +25,7 @@ const flag = (name: string): string | undefined => process.argv.find((a) => a.st
 const DIST = harnessDist(flag("dist"));
 const LINES = Number(flag("lines") ?? 40);
 const CHARS = Number(flag("chars") ?? 200);
+const SENDS = Number(flag("sends") ?? 20);
 const OUT = flag("json");
 
 const data = mkdtempSync(join(tmpdir(), "kiwi-perf-doc-updates-"));
@@ -124,29 +126,32 @@ try {
       frames,
     };
   };
-  const during = async (act: () => Promise<void>): Promise<Record<string, number>> => {
+  const during = async (per: number, act: () => Promise<void>): Promise<Record<string, number>> => {
     const from = await sample();
     await act();
     await a.waitForTimeout(1500);
     const to = await sample();
     return {
-      scriptMsPerKey: round((to.scriptMs - from.scriptMs) / CHARS),
-      styleMsPerKey: round((to.styleMs - from.styleMs) / CHARS),
-      layoutMsPerKey: round((to.layoutMs - from.layoutMs) / CHARS),
-      taskMsPerKey: round((to.taskMs - from.taskMs) / CHARS),
-      rendersPerKey: round((to.renders - from.renders) / CHARS),
-      commitsPerKey: round((to.commits - from.commits) / CHARS),
-      framesPerKey: round((to.frames - from.frames) / CHARS),
+      scriptMs: round((to.scriptMs - from.scriptMs) / per),
+      styleMs: round((to.styleMs - from.styleMs) / per),
+      layoutMs: round((to.layoutMs - from.layoutMs) / per),
+      taskMs: round((to.taskMs - from.taskMs) / per),
+      renders: round((to.renders - from.renders) / per),
+      commits: round((to.commits - from.commits) / per),
+      frames: round((to.frames - from.frames) / per),
       longTasks: to.long - from.long,
     };
   };
-  const idle = await during(() => a.waitForTimeout(CHARS * 30));
-  const remote = await during(() => composer(b).pressSequentially(typed(CHARS), { delay: 30 }));
-  const seen = await a.evaluate((want) => document.querySelector(".main")?.textContent?.includes(want) ?? false, typed(CHARS).slice(0, 40));
-  await composer(b).fill("");
-  await a.waitForTimeout(1000);
-  const own = await during(() => composer(a).pressSequentially(typed(CHARS), { delay: 30 }));
-  const result = { lines: LINES, chars: CHARS, readerSawTheDraft: seen, idle, remote, own };
+  const idlePerLine = await during(SENDS, () => a.waitForTimeout(SENDS * 400));
+  const perLineSent = await during(SENDS, async () => {
+    for (let n = 1; n <= SENDS; n++) {
+      await say(b, `measured line ${n} of ${SENDS}, sent by the other window`);
+      await b.waitForTimeout(400);
+    }
+    await a.waitForFunction((want) => document.querySelector(".main .feed-list")?.textContent?.includes(want), `measured line ${SENDS} of ${SENDS}`, { timeout: 30000 });
+  });
+  const perKeyTyped = await during(CHARS, () => composer(a).pressSequentially(typed(CHARS), { delay: 30 }));
+  const result = { lines: LINES, sends: SENDS, chars: CHARS, idlePerLine, perLineSent, perKeyTyped };
   console.log(JSON.stringify(result, null, 2));
   if (OUT) writeFileSync(OUT, `${JSON.stringify(result, null, 2)}\n`);
 } finally {

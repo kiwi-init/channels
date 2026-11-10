@@ -12,7 +12,7 @@ on:
         type: string
         default: ""
       jobs:
-        description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a keystroke in a thread doc costs, at a short and a long thread, no gate), or all"
+        description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a thread doc's updates cost, at a short and a long thread, no gate), or all"
         type: string
         default: "scale"
       desktop_messages:
@@ -62,7 +62,7 @@ jobs:
           overwrite: true
 
   doc:
-    name: perf / a keystroke in a thread doc
+    name: perf / a thread doc's updates
     if: ${{ inputs.jobs == 'doc' || inputs.jobs == 'all' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
