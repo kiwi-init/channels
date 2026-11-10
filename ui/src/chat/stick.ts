@@ -130,7 +130,7 @@ export function useStick(following = true, still = false) {
     if (!box || !list) return
     if (height.current && list.offsetHeight !== height.current) settle()
     if (reserve.current > 0 && Date.now() - wheeled.current >= WHEEL_MS) {
-      reserve.current = Math.max(0, reserve.current - Math.max(0, gapIn(box)))
+      reserve.current = 0
       pad()
     }
     const hidden = box.scrollHeight - box.scrollTop - box.clientHeight - reserve.current
@@ -170,6 +170,9 @@ export function useStick(following = true, still = false) {
       wheeled.current = Date.now()
       if (e.deltaY < 0 && reserve.current < box.clientHeight) {
         reserve.current = box.clientHeight
+        pad()
+      } else if (e.deltaY > 0 && reserve.current > 0) {
+        reserve.current = 0
         pad()
       }
       touch()
