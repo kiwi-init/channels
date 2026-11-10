@@ -952,7 +952,7 @@ jobs:
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['ios']
     runs-on: macos-latest
-    timeout-minutes: 40
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -995,7 +995,7 @@ jobs:
           xcrun simctl boot "$sim" || true
           mkdir -p "$RUNNER_TEMP/ios-feed-shots"
           nohup xcrun simctl spawn "$sim" log stream --level debug --style compact --predicate 'eventMessage CONTAINS "FEEDLOG"' > "$RUNNER_TEMP/ios-feed-shots/feedlog.txt" 2>&1 &
-          xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/feed.xcresult" -only-testing:ChannelsUITests/BlankFeedTests/testTheFeedStaysWhileTypingInABusyChannel -test-iterations 8 CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/feed-test.log" | grep -E "FEED |error:|Test Case|passed|failed" || true
+          xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/feed.xcresult" -only-testing:ChannelsUITests/BlankFeedTests/testTheFeedStaysWhileTypingInABusyChannel -only-testing:ChannelsUITests/BlankFeedTests/testTheFeedStaysWhileTyping -test-iterations 6 CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/feed-test.log" | grep -E "FEED |error:|Test Case|passed|failed" || true
       - name: feed shots
         if: ${{ !cancelled() }}
         run: |
