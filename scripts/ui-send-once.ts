@@ -18,7 +18,9 @@ const first = await startLocalRelay(join(data, "relay"), DIST, { rateLimits: fal
 const port = first.port;
 let relay = first.relay;
 const BASE = `http://127.0.0.1:${port}/`;
-const browser = await (ENGINE === "webkit" ? webkit.launch() : chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined })).catch((err: unknown) => {
+const browser = await (
+  ENGINE === "webkit" ? webkit.launch() : chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined, args: ["--disable-features=LocalNetworkAccessChecks"] })
+).catch((err: unknown) => {
   relay.kill();
   throw err;
 });
