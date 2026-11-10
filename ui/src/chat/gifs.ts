@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react"
 
-import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts"
+import { relayUrl } from "@kiwi/secrets/relay.ts"
 
 interface Packed {
   reaction: string
@@ -66,13 +66,16 @@ export function useCatalog(host: string): Catalog | null {
       listeners.add(l)
       return () => void listeners.delete(l)
     },
+    () => peekCatalog(host),
     () => peekCatalog(host)
   )
   useEffect(() => void loadCatalog(host), [host])
   return got
 }
 
-export const gifHost = (relay: string | undefined): string => (location.protocol.startsWith("http") ? location.origin : (relay ?? DEFAULT_RELAY).replace(/\/+$/, ""))
+export const gifHostOf = (page: { protocol: string; origin: string }, relay: () => string): string => (page.protocol.startsWith("http") ? page.origin : relay().replace(/\/+$/, ""))
+
+export const gifHost = (): string => gifHostOf(location, relayUrl)
 
 const blobs = new Map<string, Promise<Blob>>()
 
