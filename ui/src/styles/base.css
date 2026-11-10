@@ -801,7 +801,7 @@ kbd {
   margin-top: 4px;
 }
 
-.modal.has-tabs .modal-head {
+.modal.has-tabs > .modal-head {
   border-bottom: 1px solid var(--line);
 }
 
@@ -816,13 +816,18 @@ kbd {
   overscroll-behavior: contain;
 }
 
-.modal.has-tabs .modal-body {
+.modal.has-tabs > .modal-body {
   padding-top: 20px;
 }
 
 .modal-form {
   display: grid;
   gap: 20px;
+}
+
+.modal-body:has(> .modal-form) {
+  margin-top: -4px;
+  padding-top: 4px;
 }
 
 .modal-foot {
