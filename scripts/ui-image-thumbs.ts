@@ -213,7 +213,7 @@ try {
     check("the doc mounts no second copy of a shot that shows in the feed", inDoc ? `it holds ${inDoc}` : null);
 
     await button.click();
-    const viewer = page.getByRole("dialog", { name: /^Mark up/ });
+    const viewer = page.locator("dialog.annot");
     await viewer.waitFor({ timeout: 10000 });
     const inViewer = await viewer.locator(".annot-frame img").evaluate(async (el: HTMLImageElement) => {
       await el.decode().catch(() => undefined);

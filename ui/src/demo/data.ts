@@ -429,6 +429,7 @@ const tasks: Task[] = [
     detail: wrote("The first load is 412 KB. Get it under 300 KB without lazy-splitting shared modules."),
     status: "doing",
     owner: "win",
+    mentions: 1,
     createdBy: "atlas",
     createdAt: m(95),
     updatedAt: m(9),

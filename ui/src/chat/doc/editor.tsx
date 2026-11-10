@@ -47,6 +47,8 @@ import { nickname, Shown } from "~/names"
 import { wordsRaw } from "~/words"
 import { useAct, useGo, useActions, useAppAccount } from "~/nav"
 import { keysHint } from "~/kit/keys"
+import { personGo } from "~/person-go"
+import { viewImage } from "~/chat/image-view"
 
 const QuestionCard = lazy(() => import("~/chat/question-card"))
 
@@ -446,7 +448,7 @@ interface ViewOpts {
   refuse: (line: string) => boolean
 }
 
-const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
+const openImage = viewImage
 
 function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, feet: Heads, opts: ViewOpts): { view: EditorView; stop: () => void } {
   const seen = new Map<number, { key: string; at: number }>()
@@ -556,7 +558,7 @@ function Head({ channel, attrs, onUnreply }: { channel: Channel; attrs: BlockAtt
         <ReplyLine channel={channel} to={channel.messages.find((m) => m.seq === attrs.re)} quote={attrs.quote} onClose={attrs.author === channel.you ? () => onUnreply(attrs.id) : null} />
       )}
       <span className="blk-line">
-        <button type="button" className="msg-name" title={clock(attrs.at)} onClick={() => go({ to: "modal", modal: { kind: "person", name: attrs.author } })}>
+        <button type="button" className="msg-name" title={clock(attrs.at)} onClick={() => go(personGo(channel, attrs.author))}>
           {nickname(channel, attrs.author)}
         </button>
         {(attrs.kind === "tool" || attrs.kind === "comment") && <span className="blk-kind">{t(KINDS[attrs.kind])}</span>}

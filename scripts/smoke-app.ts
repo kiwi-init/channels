@@ -114,7 +114,8 @@ try {
 
   at = "a note the agent sets shows in channel settings, and the owner clears it";
   await kiwi(["-c", "smoke", "--as", "bot", "note", "smoke-url", "https://example.test"]);
-  await page.getByRole("button", { name: /: channel settings$/ }).click();
+  await page.getByRole("button", { name: /: channel menu$/ }).click();
+  await page.getByRole("menuitem", { name: "Channel settings", exact: true }).click();
   const notes = page.getByRole("dialog", { name: "Channel settings" });
   await notes.getByRole("button", { name: "Notes", exact: true }).click();
   await notes.getByText("smoke-url").waitFor({ timeout: 15000 });
@@ -181,7 +182,8 @@ try {
   step(at);
 
   at = "the owner turns on Write to GitHub and sets a branch prefix";
-  await page.getByRole("button", { name: /: channel settings$/ }).click();
+  await page.getByRole("button", { name: /: channel menu$/ }).click();
+  await page.getByRole("menuitem", { name: "Channel settings", exact: true }).click();
   const github = page.getByRole("dialog", { name: "Channel settings" });
   await github.getByRole("button", { name: "GitHub", exact: true }).click();
   await github.getByLabel("Add a repo").fill("kiwi-init/smoke");
@@ -279,7 +281,8 @@ try {
   step(at);
 
   at = "the owner renames a room and gives the channel an image";
-  await page.getByRole("button", { name: /: channel settings$/ }).click();
+  await page.getByRole("button", { name: /: channel menu$/ }).click();
+  await page.getByRole("menuitem", { name: "Channel settings", exact: true }).click();
   const details = page.getByRole("dialog", { name: "Channel settings" });
   await details.getByRole("button", { name: "Rooms", exact: true }).click();
   await details.getByRole("button", { name: "Rename" }).first().click();

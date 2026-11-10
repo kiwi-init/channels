@@ -33,11 +33,12 @@ import {
   type ReviewAsk,
   type BypassAsk,
 } from "~/model"
-import { useApp, useGo } from "~/nav"
+import { useApp, useGo, useChannelHere } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { SendBack } from "~/tasks/send-back"
 import { isIdle, isOpen, openAsks } from "~/needs/open"
 import { SpecNeedCard } from "~/specs/card"
+import { personGo } from "~/person-go"
 
 export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump: Jump) => void }) {
   const open = openAsks(channel).sort((a, b) => a.at - b.at)
@@ -185,12 +186,13 @@ function Shell({
   link: ReactNode
 }) {
   const go = useGo()
+  const open = useChannelHere()
   return (
     <article className="needs-card is-open" aria-label={t("needs.card.label", { name, verb })}>
       <header className="needs-head">
         <Avatar person={face} size="sm" />
         {member ? (
-          <button type="button" className="needs-name" onClick={() => go({ to: "modal", modal: { kind: "person", name } })}>
+          <button type="button" className="needs-name" onClick={() => go(open ? personGo(open, name) : { to: "modal", modal: { kind: "person", name } })}>
             {name}
           </button>
         ) : (

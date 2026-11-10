@@ -10,6 +10,7 @@ import { useGo, useNav } from "~/nav"
 import { shown, Shown } from "~/names"
 import { statusOf, taskOf } from "~/shell/sidebar"
 import { t } from "~/i18n/i18n"
+import { personGo } from "~/person-go"
 
 const KEY = "channels.tall.work"
 const SHARE = 0.42
@@ -103,7 +104,7 @@ function Crew({ channel }: { channel: Channel }) {
             className={cx("crew-agent", on && "is-on", p.presence === "offline" && "is-off")}
             aria-pressed={on}
             title={statusOf(p, channel)}
-            onClick={() => go({ to: "modal", modal: on ? null : { kind: "person", name: p.name } })}
+            onClick={() => go(personGo(channel, p.name))}
           >
             <Avatar person={p} size="sm" pip />
             <span className="crew-name">{shown(p)}</span>

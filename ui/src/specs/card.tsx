@@ -13,6 +13,7 @@ import { useAct } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { Inline } from "~/specs/inline"
 import { boxesOf, commentsOf, faceOf, stageLine, tasksOf, workersOf } from "~/specs/read"
+import { personGo } from "~/person-go"
 
 export function SpecMark({ spec }: { spec: Spec }) {
   const boxes = boxesOf(spec)
@@ -66,7 +67,7 @@ export function SpecNeedCard({ channel, ask }: { channel: Channel; ask: SpecAsk 
     <article className="needs-card is-open spec-need" aria-label={t("specs.card.need.label", { who: nickname(channel, by), verb: t(NEED_VERB[ask.why]) })}>
       <header className="needs-head">
         <Avatar person={faceOf(channel, by)} size="sm" />
-        <button type="button" className="needs-name" onClick={() => go({ to: "modal", modal: { kind: "person", name: by } })}>
+        <button type="button" className="needs-name" onClick={() => go(personGo(channel, by))}>
           {nickname(channel, by)}
         </button>
         <span className="needs-verb">{t(NEED_VERB[ask.why])}</span>

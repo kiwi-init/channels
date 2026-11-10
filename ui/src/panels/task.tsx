@@ -35,6 +35,8 @@ import { PanelHead } from "~/panels/frame"
 import { moveWords, someone } from "~/panels/task-moves"
 import { TONES } from "~/tasks/row"
 import { SendBack } from "~/tasks/send-back"
+import { personGo } from "~/person-go"
+import { viewImage } from "~/chat/image-view"
 
 function since(at: number): string {
   const age = ageOf(at)
@@ -45,7 +47,7 @@ function since(at: number): string {
 const holds = (a: Ask, id: number): a is PermissionAsk | QuestionAsk =>
   a.kind === "permission" ? a.task === id && !a.answer : a.kind === "question" ? (a.task === id || a.holds.includes(id)) && !a.answer && !a.closed : false
 
-const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
+const openImage = viewImage
 
 export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const task = channel.tasks.find((k) => k.id === id)
@@ -124,7 +126,7 @@ function Who({ channel, name }: { channel: Channel; name: string }) {
   const go = useGo()
   const person = memberOf(channel, name)
   return (
-    <button type="button" className="task-who" onClick={() => go({ to: "modal", modal: { kind: "person", name } })}>
+    <button type="button" className="task-who" onClick={() => go(personGo(channel, name))}>
       <Avatar person={person} size="sm" />
       <span className="task-who-name">{nickname(channel, name)}</span>
       {name === channel.you && <span className="dimmer">{t("panels.task.you")}</span>}

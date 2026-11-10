@@ -106,20 +106,25 @@ export function SearchBox({
     const olderHits = (olderNow?.hits ?? []).filter((o) => !seen.has(o.seq))
     return [...recent, ...olderHits.slice(0, OLDER_SHOWN).map((o): Hit => ({ kind: "older", o })), ...(more ? [FETCH_HIT] : [])]
   }, [recent, olderNow, more])
-  const found = hits.filter((h) => h.kind !== "fetch").length
+  const view = useMemo(() => ({ hits, older: olderNow, query: settled.trim() }), [hits, olderNow, settled])
+  const waiting = settled.trim() !== "" && olderNow === null && hits.length === 0
+  const [kept, setKept] = useState(view)
+  if (!waiting && kept !== view) setKept(view)
+  const shown = waiting ? kept : view
+  const found = shown.hits.filter((h) => h.kind !== "fetch").length
   const wanted = useMemo(() => terms(settled), [settled])
-  const [hitsWere, setHitsWere] = useState(hits)
-  if (hitsWere !== hits) {
-    setHitsWere(hits)
+  const [hitsWere, setHitsWere] = useState(shown.hits)
+  if (hitsWere !== shown.hits) {
+    setHitsWere(shown.hits)
     setActive(0)
   }
-  const current = Math.min(active, Math.max(0, hits.length - 1))
+  const current = Math.min(active, Math.max(0, shown.hits.length - 1))
   const open = focused && settled.trim() !== ""
   const optionId = (i: number) => `${listId}-${i}`
 
   useEffect(() => {
     listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" })
-  }, [current, hits])
+  }, [current, shown.hits])
 
   useEffect(() => {
     if (focusAsk) input.current?.focus()
@@ -178,21 +183,21 @@ export function SearchBox({
     } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault()
       setFocused(true)
-      if (hits.length) setActive((current + (e.key === "ArrowDown" ? 1 : -1) + hits.length) % hits.length)
+      if (shown.hits.length) setActive((current + (e.key === "ArrowDown" ? 1 : -1) + shown.hits.length) % shown.hits.length)
     } else if (e.key === "Enter") {
       e.preventDefault()
-      const hit = hits[current]
+      const hit = shown.hits[current]
       if (open && hit) pick(hit)
     }
   }
 
-  const firstMessage = hits.findIndex((h) => h.kind === "message")
-  const firstOlder = hits.findIndex((h) => h.kind === "older")
-  const olderMore = olderNow ? olderNow.hits.length - OLDER_SHOWN : 0
+  const firstMessage = shown.hits.findIndex((h) => h.kind === "message")
+  const firstOlder = shown.hits.findIndex((h) => h.kind === "older")
+  const olderMore = shown.older ? shown.older.hits.length - OLDER_SHOWN : 0
   const notes = (
     <>
       {olderMore > 0 && <p className="search-note">{t("chat.search.box.more.older", { count: olderMore })}</p>}
-      {olderNow?.state === "indexing" && <p className="search-note">{t("chat.search.box.indexing")}</p>}
+      {shown.older?.state === "indexing" && <p className="search-note">{t("chat.search.box.indexing")}</p>}
     </>
   )
   return (
@@ -223,7 +228,7 @@ export function SearchBox({
           aria-expanded={open}
           aria-controls={open ? listId : undefined}
           aria-autocomplete="list"
-          aria-activedescendant={open && hits.length ? optionId(current) : undefined}
+          aria-activedescendant={open && shown.hits.length ? optionId(current) : undefined}
         />
         {query !== "" && (
           <button
@@ -244,8 +249,8 @@ export function SearchBox({
       </div>
       {open && (
         <div ref={listRef} id={listId} className="search-pop" role="listbox" aria-label={t("chat.search.box.results")}>
-          {found === 0 && olderNow?.state !== "indexing" && <p className="search-none">{t("chat.search.box.nothing", { query: settled.trim() })}</p>}
-          {hits.map((hit, i) => (
+          {!waiting && found === 0 && shown.older?.state !== "indexing" && <p className="search-none">{t("chat.search.box.nothing", { query: shown.query })}</p>}
+          {shown.hits.map((hit, i) => (
             <div key={hitKey(hit)}>
               {i === 0 && hit.kind === "task" && (
                 <div className="search-heading" aria-hidden="true">
@@ -260,7 +265,7 @@ export function SearchBox({
               {hit.kind === "fetch" && notes}
               {i === firstOlder && (
                 <div className="search-heading" aria-hidden="true">
-                  {t("chat.search.box.older", { count: olderNow?.hits.length ?? 0 })}
+                  {t("chat.search.box.older", { count: shown.older?.hits.length ?? 0 })}
                 </div>
               )}
               <div

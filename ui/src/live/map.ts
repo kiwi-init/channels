@@ -243,6 +243,17 @@ export function roomsOf(state: ChannelState, messages: readonly Wire[], me: stri
   }))
 }
 
+export function taskMentionsOf(state: ChannelState, messages: readonly Wire[], me: string, seen: Seen, from: number): ReadonlyMap<number, number> {
+  const out = new Map<number, number>()
+  for (const m of messages) {
+    const place = state.placeOf.get(m.seq)
+    if (place?.kind !== "task" || m.kind === "event" || ignored(state.trust.get(m.seq)) || state.deleted.has(m.seq) || !mentionsYou(m, me)) continue
+    if (m.seq <= seenAt(seen, placeKey(place), from)) continue
+    out.set(place.task, (out.get(place.task) ?? 0) + 1)
+  }
+  return out
+}
+
 export function directsOf(state: ChannelState, messages: readonly Wire[], seat: string, seen: Seen): Direct[] {
   const me = rootOf(seat, state.members)
   const at = new Map<string, number>()

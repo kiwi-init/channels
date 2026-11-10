@@ -24,6 +24,7 @@ import { withNames } from "~/chat/linked"
 import { showMenu } from "~/kit/menu-open"
 import { later } from "~/kit/later"
 import { copyText } from "~/kit/toasts"
+import { personGo } from "~/person-go"
 
 const Annotator = lazy(() => import("~/chat/annotator"))
 const Gifs = lazy(() => import("~/chat/gif-picker"))
@@ -260,7 +261,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
               type="button"
               className="msg-name"
               title={who?.role && who.role.toLowerCase() !== nickname(channel, m.from).toLowerCase() ? roleWord(who.role) : undefined}
-              onClick={() => go({ to: "modal", modal: { kind: "person", name: m.from } })}
+              onClick={() => go(personGo(channel, m.from))}
               onContextMenu={(e) => who && showMenu(e, nickname(channel, m.from), (x) => [x.personItems({ channel, go }, who)])}
             >
               {nickname(channel, m.from)}

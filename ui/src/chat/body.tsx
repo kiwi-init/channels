@@ -2,8 +2,9 @@ import { lazy, Suspense, useCallback, useMemo, useState } from "react"
 
 import { linked, useMentionParser } from "~/chat/linked"
 import { parsedFor } from "~/chat/parsed"
-import { useAct } from "~/nav"
+import { useAct, useChannelHere } from "~/nav"
 import { type Words, wordsPlain, wordsRaw } from "~/words"
+import { personGo } from "~/person-go"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 
@@ -27,7 +28,8 @@ export function Body({
   const { markdown } = useMemo(() => ({ parser, markdown: linked(wordsRaw(text), names, tasks, seq) }), [parser, text, names, tasks, seq])
   const [shown, setShown] = useState(false)
   const onShown = useCallback(() => setShown(true), [])
-  const onMention = useCallback((name: string) => go({ to: "modal", modal: { kind: "person", name } }), [go])
+  const open = useChannelHere()
+  const onMention = useCallback((name: string) => go(open ? personGo(open, name) : { to: "modal", modal: { kind: "person", name } }), [go, open])
   const onTask = useCallback((task: number) => go({ to: "task", task }), [go])
   return (
     <div className="msg-text">
