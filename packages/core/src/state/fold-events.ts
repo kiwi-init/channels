@@ -612,7 +612,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         if (ev.artifact) {
           const unseen = observedRefusal({ github: c.github, prOf: (t) => prOfTask(c.github, c.branchPrefix, t) }, task, step, ev.artifact);
           if (unseen) reject(unseen);
-          else see(task, step, mark, artifactWords(ev.artifact));
+          else see(task, step, mark, artifactWords(ev.artifact), ev.artifact.kind === "pr" ? prOfTask(c.github, c.branchPrefix, task)?.mergedAt : undefined);
           break;
         }
         if (task.state !== "landing") {

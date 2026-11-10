@@ -16,7 +16,7 @@ type StepEnd =
   | { how: "skipped"; by: string; seq: number; ts: number; why: string }
   | { how: "landed"; by: string; seq: number; ts: number };
 
-type StepSeen = { seq: number; by: string; saw: string };
+type StepSeen = { seq: number; by: string; saw: string; merged?: number };
 
 type StepProgress = { kind: "open"; seen?: StepSeen } | { kind: "ended"; end: StepEnd };
 

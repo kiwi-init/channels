@@ -48,13 +48,19 @@ export function advance(task: Task, mark: StepMark): void {
     if (!seen) return;
     step.progress = { kind: "ended", end: { how: "detected", by: seen.by, seq: mark.seq, ts: mark.at, saw: seen.saw } };
     task.updatedAt = mark.at;
-    task.notes.push({ seq: mark.seq, by: seen.by, ts: mark.at, text: `step ${stepText(step)} ended: ${seen.saw}` });
+    task.notes.push({ seq: mark.seq, by: seen.by, ts: mark.at, text: `step ${stepText(step)} ended: ${seen.saw}${mergedUnapproved(task, seen.merged) ? ", which merged before its approval" : ""}` });
   }
 }
 
-export function see(task: Task, step: LandingStep, mark: StepMark, saw: string): void {
+function mergedUnapproved(task: Task, merged: number | undefined): boolean {
+  const result = task.rounds.at(-1)?.result;
+  const approved = result?.kind === "approved" ? result.rts : undefined;
+  return merged !== undefined && approved !== undefined && merged < approved;
+}
+
+export function see(task: Task, step: LandingStep, mark: StepMark, saw: string, merged?: number): void {
   if (step.progress.kind !== "open" || step.progress.seen) return;
-  step.progress = { kind: "open", seen: { seq: mark.seq, by: mark.by, saw } };
+  step.progress = { kind: "open", seen: { seq: mark.seq, by: mark.by, saw, ...(merged !== undefined ? { merged } : {}) } };
   advance(task, mark);
 }
 

@@ -298,6 +298,7 @@ describe("with the gate gone, an old merge step ends like any other (#3930 §5, 
     const seen = await c.ev("jow", { op: "task.landed", task: t, step: "s1", artifact: prAt(S1) });
     expect(c.state().rejected.has(seen.seq)).toBe(false);
     expect(c.state().tasks.get(t)).toMatchObject({ state: "done", closedSeq: seen.seq });
+    expect(c.state().tasks.get(t)!.notes.at(-1)!.text).toBe(`step s1 “merge” ended: o/r#7 at ${S1.slice(0, 7)}`);
     sameFromEverySnapshot(c);
   });
 
@@ -311,7 +312,46 @@ describe("with the gate gone, an old merge step ends like any other (#3930 §5, 
     expect(c.state().tasks.get(t)!.state).toBe("review");
     await c.verdict(t, S1);
     expect(c.state().tasks.get(t)!.state).toBe("done");
+    expect(c.state().tasks.get(t)!.notes.at(-1)!.text).toBe(`step s1 “merge” ended: o/r#7 at ${S1.slice(0, 7)}, which merged before its approval`);
     sameFromEverySnapshot(c);
+  });
+
+  test("a task that was a bypass, approved after its PR merged, is plain landing: the observation ends it and the note says the merge came first", async () => {
+    const c = await channel();
+    const t = await c.task();
+    await c.opened(t, S1);
+    await c.review(t, S1);
+    await c.merged(t, S1);
+    await c.verdict(t, S1);
+    expect(c.state().tasks.get(t)!.state).toBe("landing");
+    await c.ev("jow", { op: "task.landed", task: t, step: "s1", artifact: prAt(S1) });
+    expect(c.state().tasks.get(t)!.state).toBe("done");
+    expect(c.state().tasks.get(t)!.notes.at(-1)!.text).toBe(`step s1 “merge” ended: o/r#7 at ${S1.slice(0, 7)}, which merged before its approval`);
+    sameFromEverySnapshot(c);
+  });
+
+  test("with no merge time from GitHub, or no relay time on the approval, the note says nothing about the order", async () => {
+    const untimed = await channel();
+    const a = await untimed.task();
+    await untimed.opened(a, S1);
+    await untimed.review(a, S1);
+    await untimed.github([{ event: "pull_request", action: "closed", number: 7, state: "closed", merged: true, merge: M1, branch: `T${a}-x`, sha: S1 }]);
+    await untimed.verdict(a, S1);
+    await untimed.ev("jow", { op: "task.landed", task: a, step: "s1", artifact: prAt(S1) });
+    expect(untimed.state().tasks.get(a)!.notes.at(-1)!.text).toBe(`step s1 “merge” ended: o/r#7 at ${S1.slice(0, 7)}`);
+    sameFromEverySnapshot(untimed);
+
+    const unstamped = await channel();
+    const b = await unstamped.task();
+    await unstamped.opened(b, S1);
+    await unstamped.review(b, S1);
+    await unstamped.merged(b, S1);
+    await unstamped.verdict(b, S1);
+    const approval = unstamped.log.at(-1)!;
+    delete approval.rts;
+    await unstamped.ev("jow", { op: "task.landed", task: b, step: "s1", artifact: prAt(S1) });
+    expect(unstamped.state().tasks.get(b)).toMatchObject({ state: "done" });
+    expect(unstamped.state().tasks.get(b)!.notes.at(-1)!.text).toBe(`step s1 “merge” ended: o/r#7 at ${S1.slice(0, 7)}`);
   });
 
   test("its lander says it done, with no gate to refuse it", async () => {
