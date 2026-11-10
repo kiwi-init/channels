@@ -74,10 +74,10 @@ describe("a task shows whose move it is and how long it has been quiet (#3930 §
     expect(fresh.quiet).toEqual({ with: "mac", since: 3000, from: 3000 + 5 * MIN, every: 5 * MIN, step: 0 })
     expect(quietFor(fresh, 3000 + 4 * MIN)).toBeNull()
     expect(quietWords(channel([fresh]), fresh, 3000 + 6 * MIN)).toBe("quiet 6m with mac")
-    const nudged = { ...event(5, "jow", { op: "task.nudge", task: TASK, mover: "mac", since: 3, step: 1 }), ts: 3000 + 6 * MIN, rts: 3000 + 6 * MIN }
+    const nudged = { ...event(5, "mac", { op: "task.nudge", task: TASK, mover: "mac", since: 3, step: 1 }), ts: 3000 + 6 * MIN, rts: 3000 + 6 * MIN }
     const stepped = shown([...wires, nudged], 3000 + 7 * MIN)
     expect(stepped.quiet?.step).toBe(1)
-    expect(quietWords(channel([stepped]), stepped, 3000 + 7 * MIN)).toBe("quiet 7m with mac (a wake is due)")
+    expect(quietWords(channel([stepped]), stepped, 3000 + 7 * MIN)).toBe("quiet 7m with mac (a wake was attempted)")
   })
 
   test("a person with the move is never on the quiet list", () => {
