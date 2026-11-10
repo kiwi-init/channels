@@ -24,9 +24,9 @@ import { useWakes } from "~/live/wakes"
 import type { SendExtras, Where } from "~/model"
 import { nicknamesOf } from "~/names"
 
-export function HomeMembers() {
+export function HomeMembers({ except = null }: { except?: string | null }) {
   const { channels } = useSecrets()
-  const members = useMemo(() => channels.flatMap((c) => (c.code && c.access && !c.relay ? (loadMember(c.code) ?? []) : [])).filter((m) => !m.relay), [channels])
+  const members = useMemo(() => channels.flatMap((c) => (c.code && c.access && !c.relay && c.code !== except ? (loadMember(c.code) ?? []) : [])).filter((m) => !m.relay), [channels, except])
   return members.map((m) => <HomeMember key={m.code} member={m} />)
 }
 

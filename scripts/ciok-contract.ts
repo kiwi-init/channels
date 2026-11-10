@@ -9,6 +9,7 @@ const DOC_TESTS: [name: string, command: string][] = [
   ["doc replay, a line you send from the composer shows once, whole, in a second window of yours too", "bun scripts/ui-doc-replay.ts --chromium --second-window --rounds=2"],
   ["doc send, sending at the bottom, scrolled up or a long line keeps the view where it was", "bun scripts/ui-send-scroll.ts"],
   ["doc follow, at the bottom the view follows an agent's lines, also right after you send while it posts and edits, in Chromium and WebKit", "bun scripts/ui-doc-follow.ts"],
+  ["rail needs-you, an agent's ask in another channel shows on its tile, stays 1 through a visit, and goes when the ask closes, while you sit in a channel", "bun scripts/ui-rail-needs.ts"],
   [
     "meadow, the scene behind onboarding and the site draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer, in WebKit",
     "bun scripts/ui-meadow.ts",

@@ -202,13 +202,25 @@ export function LiveDuties({ open, view, go }: { open: string | null; view: View
   useEffect(() => {
     if (member) rememberChannel(member.code)
   }, [member])
-  if (member && !member.relay) return <OpenMember key={member.code} member={member} view={view} />
-  if (pending) return <OpenPending key={pending.code} pending={pending} />
-  if (!open && person)
+  const homes = person ? (
+    <Suspense fallback={null}>
+      <HomeMembers except={member && !member.relay ? member.code : null} />
+    </Suspense>
+  ) : null
+  if (member && !member.relay)
     return (
-      <Suspense fallback={null}>
-        <HomeMembers />
-      </Suspense>
+      <>
+        {homes}
+        <OpenMember key={member.code} member={member} view={view} />
+      </>
     )
+  if (pending)
+    return (
+      <>
+        {homes}
+        <OpenPending key={pending.code} pending={pending} />
+      </>
+    )
+  if (!open && person) return homes
   return null
 }
