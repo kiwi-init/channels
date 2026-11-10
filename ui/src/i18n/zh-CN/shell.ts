@@ -223,6 +223,8 @@ export default {
   "start.join.sub": "所有者会看到你的名字和一个验证码，核对后让你加入。",
   "start.join.send.failed": "无法发送请求。",
   "start.join.your.name": "你在此频道中的名字",
+  "start.join.as": "你将以 {name} 的名字申请加入。",
+  "start.join.change": "更改",
   "start.join.back": "返回",
   "start.join.asking": "正在请求…",
   "start.join.ask": "请求加入",

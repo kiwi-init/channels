@@ -223,6 +223,8 @@ export default {
   "start.join.sub": "オーナーがあなたの名前と確認用のコードを見てから、参加を承認します。",
   "start.join.send.failed": "リクエストを送信できませんでした。",
   "start.join.your.name": "このチャンネルでの名前",
+  "start.join.as": "{name} として参加を申請します。",
+  "start.join.change": "変更",
   "start.join.back": "戻る",
   "start.join.asking": "リクエスト中…",
   "start.join.ask": "参加をリクエスト",

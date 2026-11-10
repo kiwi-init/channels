@@ -10,6 +10,7 @@ import { Modal } from "~/kit/modal"
 import type { InviteInfo } from "~/model"
 import { useApp, useGo } from "~/nav"
 import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 
 const CODE = /^[A-Za-z0-9._~-]+$/
 
@@ -50,6 +51,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
   const code = inviteCode(text)
   const bad = text.trim() !== "" && !code
   const nameProblem = !NAME_RE.test(name.trim()) ? t("start.join.name.allowed", { max: 32 }) : RESERVED_NAMES.has(name.trim().toLowerCase()) ? t("start.join.name.reserved") : null
+  const [naming, setNaming] = useState(nameProblem !== null)
 
   const inspect = async (c: string) => {
     try {
@@ -95,20 +97,30 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             }
           }}
         >
-          <label className="field" htmlFor={nameId}>
-            <span className="field-label">{t("start.join.your.name")}</span>
-            <input
-              id={nameId}
-              ref={autofocus}
-              className="input is-mono"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              aria-invalid={nameProblem ? true : undefined}
-            />
-          </label>
+          {naming ? (
+            <label className="field" htmlFor={nameId}>
+              <span className="field-label">{t("start.join.your.name")}</span>
+              <input
+                id={nameId}
+                ref={autofocus}
+                autoFocus
+                className="input is-mono"
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                aria-invalid={nameProblem ? true : undefined}
+              />
+            </label>
+          ) : (
+            <p className="start-as">
+              <span>{tr("start.join.as", { name: <span className="start-as-name">{name.trim()}</span> })}</span>
+              <button type="button" className="btn is-quiet is-small" onClick={() => setNaming(true)}>
+                {t("start.join.change")}
+              </button>
+            </p>
+          )}
           <p className={cx("start-hint", (nameProblem || error) && "is-error")} aria-live="polite">
             {error ?? nameProblem}
           </p>
@@ -117,7 +129,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             <button type="button" className="btn is-quiet" onClick={() => (setInvite(null), setError(null), setFailed(null))}>
               {t("start.join.back")}
             </button>
-            <button type="submit" className="btn is-primary" disabled={busy || !!nameProblem}>
+            <button key="ask" type="submit" className="btn is-primary" disabled={busy || !!nameProblem} autoFocus={!naming}>
               {busy ? t("start.join.asking") : t("start.join.ask")}
             </button>
           </div>

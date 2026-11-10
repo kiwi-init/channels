@@ -159,6 +159,8 @@ const words = {
   "start.join.sub": "The owner sees your name and a code to check, then lets you in.",
   "start.join.send.failed": "Couldn't send the request.",
   "start.join.your.name": "Your name in this channel",
+  "start.join.as": "You'll ask to join as {name}.",
+  "start.join.change": "Change",
   "start.join.back": "Back",
   "start.join.asking": "Asking…",
   "start.join.ask": "Ask to join",
