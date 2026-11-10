@@ -60,7 +60,7 @@ export function PartView({ part, channel, go }: { part: Part; channel: Channel; 
   switch (hit.kind) {
     case "task":
       return channel.tasks.some((t) => t.id === hit.id) ? (
-        <button type="button" className="inline-ref" title={t("chat.inline.text.open.task")} onClick={quiet(() => go({ to: "panel", panel: { kind: "task", task: hit.id } }))}>
+        <button type="button" className="inline-ref" title={t("chat.inline.text.open.task")} onClick={quiet(() => go({ to: "task", task: hit.id }))}>
           T{hit.id}
         </button>
       ) : (

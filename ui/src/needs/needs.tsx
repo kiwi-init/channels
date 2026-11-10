@@ -548,7 +548,7 @@ function BypassAskCard({ channel, ask, link }: { channel: Channel; ask: BypassAs
       }
     >
       {task && (
-        <button type="button" className="needs-text needs-open" title={t("needs.open.task")} onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+        <button type="button" className="needs-text needs-open" title={t("needs.open.task")} onClick={() => go({ to: "task", task: task.id })}>
           <span className="needs-id">T{task.id}</span> <Shown value={task.title} />
         </button>
       )}
@@ -593,7 +593,7 @@ function ReviewAskCard({ channel, ask, link }: { channel: Channel; ask: ReviewAs
     >
       {task ? (
         <>
-          <button type="button" className="needs-text needs-open" title={t("needs.open.task")} onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+          <button type="button" className="needs-text needs-open" title={t("needs.open.task")} onClick={() => go({ to: "task", task: task.id })}>
             <span className="needs-id">T{task.id}</span> <Shown value={task.title} />
           </button>
           {note && (

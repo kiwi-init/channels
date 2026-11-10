@@ -54,7 +54,7 @@ function Current({ task }: { task: Task }) {
   const go = useGo()
   return (
     <li className="lane-task">
-      <button type="button" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+      <button type="button" onClick={() => go({ to: "task", task: task.id })}>
         <span className="lane-title">
           <Shown value={task.title} />
         </span>
@@ -106,7 +106,7 @@ function LaneCard({ channel, lane }: { channel: Channel; lane: Lane }) {
           <ul>
             {lane.next.map((task) => (
               <li key={task.id}>
-                <button type="button" className="lane-row" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+                <button type="button" className="lane-row" onClick={() => go({ to: "task", task: task.id })}>
                   <span className="lane-id num">T{task.id}</span>
                   <span className="lane-row-title">
                     <Shown value={task.title} />

@@ -28,7 +28,7 @@ export function Body({
   const [shown, setShown] = useState(false)
   const onShown = useCallback(() => setShown(true), [])
   const onMention = useCallback((name: string) => go({ to: "modal", modal: { kind: "person", name } }), [go])
-  const onTask = useCallback((task: number) => go({ to: "panel", panel: { kind: "task", task } }), [go])
+  const onTask = useCallback((task: number) => go({ to: "task", task }), [go])
   return (
     <div className="msg-text">
       {!shown && !parsedFor(markdown) && <p className="md-plain">{wordsPlain(text, names)}</p>}

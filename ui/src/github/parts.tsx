@@ -193,7 +193,7 @@ export function TaskLink({ channel, id }: { channel: Channel; id: number }) {
   const task = channel.tasks.find((task) => task.id === id)
   if (!task) return null
   return (
-    <button type="button" className="gh-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: id } })}>
+    <button type="button" className="gh-task" onClick={() => go({ to: "task", task: id })}>
       <Dot status={task.cancelled ? "todo" : task.status} />
       <span className="gh-task-id num">T{id}</span>
       <span className="gh-task-title">

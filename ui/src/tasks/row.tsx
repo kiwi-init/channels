@@ -35,12 +35,7 @@ export function TaskRow({ channel, t: task, on }: { channel: Channel; t: Task; o
   const state = stateOf(channel, task)
   const failed = task.pr ? failedOf(task.pr) : null
   return (
-    <button
-      type="button"
-      className={cx("board-row", `is-${task.status}`, on && "is-on")}
-      aria-current={on || undefined}
-      onClick={() => go({ to: "panel", panel: on ? null : { kind: "task", task: task.id } })}
-    >
+    <button type="button" className={cx("board-row", `is-${task.status}`, on && "is-on")} aria-current={on || undefined} onClick={() => go({ to: "task", task: task.id })}>
       <Dot status={task.cancelled ? "todo" : task.status} />
       <span className="board-title">
         <Shown value={task.title} />

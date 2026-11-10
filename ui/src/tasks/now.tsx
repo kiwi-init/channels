@@ -42,7 +42,7 @@ function TaskLine({ channel, task }: { channel: Channel; task: Task }) {
   const go = useGo()
   const stage = stageWords(task)
   return (
-    <button type="button" className="now-task" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>
+    <button type="button" className="now-task" onClick={() => go({ to: "task", task: task.id })}>
       <span className="now-id num">T{task.id}</span>
       <span className="now-title">
         <Shown value={task.title} />
