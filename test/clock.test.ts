@@ -448,3 +448,55 @@ describe("round 2: the lead's own progress counts, and only an agent's queue giv
     expect(fold(c.log, gone, c.now()).rejected.get(forAgent.seq)).toBe(`T${queued} isn't in an agent's queue: win is a person, or has left`);
   });
 });
+
+describe("round 3: on a task the lead holds, each member's act keeps its own epoch and steps (#3930 §2)", () => {
+  test("a step posted for another member's act is refused, and the lead's epoch, ladder and recorded steps stay as they were", async () => {
+    const c = channel();
+    const id = await c.add({ owner: "win", review: "*" });
+    await c.update("win", id, { state: "review", at: A });
+    const owls = await c.say("owl", "msg", "routing it now", { task: id });
+    const zeds = await c.say("zed", "msg", "I could take it", { task: id });
+    c.wait(3 * N);
+    const foreign = await c.nudge("zed", id, "@lead", zeds.seq, 3);
+    const s = c.state();
+    expect(s.rejected.get(foreign.seq)).toBe(`T${id}'s clock moved on: it is @lead's since #${s.tasks.get(id)!.clock!.seq}`);
+    expect(s.tasks.get(id)!.clock!.acts).toEqual([
+      ["owl", owls.seq, owls.rts!],
+      ["zed", zeds.seq, zeds.rts!],
+    ]);
+    expect(read(c, id)).toMatchObject({ mover: "owl", party: "@lead", epoch: owls.seq, since: owls.rts!, step: 0 });
+    expect(due(c)).toEqual([{ task: id, mover: "@lead", since: owls.seq, step: 3, to: "jon" }]);
+    const real = await c.nudge("jon", id, "@lead", owls.seq, 3);
+    expect(c.state().rejected.has(real.seq)).toBe(false);
+    expect(read(c, id)).toMatchObject({ mover: "owl", epoch: owls.seq, step: 3 });
+    expect(due(c)).toEqual([]);
+  });
+
+  test("many members acting on it never push the lead's own act out", async () => {
+    const c = channel();
+    const id = await c.add({ owner: "win", review: "*" });
+    await c.update("win", id, { state: "review", at: A });
+    const owls = await c.say("owl", "msg", "routing it now", { task: id });
+    const others: Name[] = ["zed", "mac", "win", "jon"];
+    for (let round = 0; round < 3; round++) for (const name of others) await c.say(name, "msg", `round ${round}`, { task: id });
+    const clock = c.state().tasks.get(id)!.clock!;
+    expect(clock.acts!.map((a) => a[0]).sort()).toEqual(["jon", "mac", "owl", "win", "zed"]);
+    expect(read(c, id)).toMatchObject({ mover: "owl", epoch: owls.seq, since: owls.rts! });
+  });
+
+  test("a step on an act is refused before its time and dropped when repeated", async () => {
+    const c = channel();
+    const id = await c.add({ owner: "win", review: "*" });
+    await c.update("win", id, { state: "review", at: A });
+    const owls = await c.say("owl", "msg", "routing it now", { task: id });
+    c.wait(N);
+    const early = await c.nudge("jon", id, "@lead", owls.seq, 2);
+    const first = await c.nudge("jon", id, "@lead", owls.seq, 1);
+    const again = await c.nudge("zed", id, "@lead", owls.seq, 1);
+    const s = c.state();
+    expect(s.rejected.get(early.seq)).toBe(`T${id} hasn't been quiet long enough for step 2 of its clock`);
+    expect(s.rejected.has(first.seq)).toBe(false);
+    expect(s.rejected.has(again.seq)).toBe(false);
+    expect(s.tasks.get(id)!.clock!.acts).toEqual([["owl", owls.seq, owls.rts!, 1]]);
+  });
+});

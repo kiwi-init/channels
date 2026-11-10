@@ -26,7 +26,7 @@ export function clockOf(state: Board, t: Task, now: number): Clock | undefined {
   const paged = memberKey(c.key) && !!member && !isPerson(member);
   const own = actOf(c, mover.name);
   const start = own ?? { seq: c.seq, at: c.at };
-  return { mover: mover.name, party: partyOfKey(c.key), epoch: start.seq, since: start.at, quiet: Math.max(0, now - start.at), paged, step: own ? 0 : (c.step ?? 0) };
+  return { mover: mover.name, party: partyOfKey(c.key), epoch: start.seq, since: start.at, quiet: Math.max(0, now - start.at), paged, step: own ? own.step : (c.step ?? 0) };
 }
 
 export interface NudgeDue {

@@ -73,14 +73,13 @@ export function roll(view: ClockView, t: Task, now: number): void {
   t.clock = rolled(view, t, now);
 }
 
-const ACTS_KEPT = 8;
+type Act = NonNullable<TaskClock["acts"]>[number];
 
-const acted = (clock: TaskClock, by: string, seq: number, at: number): TaskClock["acts"] =>
-  [...(clock.acts ?? []).filter((a) => a[0] !== by), [by, seq, at] as [string, number, number]].slice(-ACTS_KEPT);
+const acted = (clock: TaskClock, by: string, seq: number, at: number): Act[] => [...(clock.acts ?? []).filter((a) => a[0] !== by), [by, seq, at]];
 
-export function actOf(clock: TaskClock, name: string): { seq: number; at: number } | undefined {
+export function actOf(clock: TaskClock, name: string): { seq: number; at: number; step: 0 | 1 | 2 | 3 } | undefined {
   const act = clock.acts?.find((a) => a[0] === name);
-  return act && act[1] > clock.seq ? { seq: act[1], at: act[2] } : undefined;
+  return act && act[1] > clock.seq ? { seq: act[1], at: act[2], step: act[3] ?? 0 } : undefined;
 }
 
 export function tick(view: ClockView, t: Task, mark: { seq: number; at: number; by?: string }): void {
@@ -104,33 +103,47 @@ export function tick(view: ClockView, t: Task, mark: { seq: number; at: number; 
 
 type Nudge = { mover: string; since: number; step: NudgeStep; day?: number };
 
-function atEpoch(clock: TaskClock, since: number): TaskClock | undefined {
-  if (clock.seq === since) return clock;
+function stepOnAct(clock: TaskClock, since: number, step: 1 | 2 | 3, at: number, lead: string | undefined): TaskClock | string | undefined {
   const act = clock.acts?.find((a) => a[1] === since && a[1] > clock.seq);
-  if (!act) return undefined;
-  const later = (clock.acts ?? []).filter((a) => a[1] > since);
-  return { key: clock.key, seq: act[1], at: act[2], ...(clock.head ? { head: clock.head } : {}), ...(later.length ? { acts: later } : {}) };
+  if (!act || act[0] !== lead) return undefined;
+  if (at - act[2] < step * QUIET_MS) return "early";
+  if (step <= (act[3] ?? 0)) return clock;
+  return { ...clock, acts: (clock.acts ?? []).map((a): Act => (a === act ? [a[0], a[1], a[2], step] : a)) };
 }
 
-export function nudge(view: ClockView, t: Task, ev: Nudge, at: number, agentQueue: (owner: string) => boolean): string | null {
+export interface NudgeWho {
+  agentQueue: (owner: string) => boolean;
+  lead: () => string | undefined;
+}
+
+export function nudge(view: ClockView, t: Task, ev: Nudge, at: number, who: NudgeWho): string | null {
   const id = taskId(t.id);
   roll(view, t, at);
   const held = t.clock;
   if (!held) return `${id} is already done`;
   if (ev.step > 0 && held.key.startsWith("?")) return `${id} waits on an answer to #${held.key.slice(1)}: that is in Needs you, not on the clock`;
   const party = partyOfKey(held.key);
-  const clock = party === ev.mover ? atEpoch(held, ev.since) : undefined;
+  const early = `${id} hasn't been quiet long enough for step ${ev.step} of its clock`;
+  if (party === ev.mover && ev.step !== 0 && held.seq !== ev.since) {
+    const onAct = stepOnAct(held, ev.since, ev.step, at, party === LEAD ? who.lead() : undefined);
+    if (onAct === "early") return early;
+    if (typeof onAct === "object") {
+      t.clock = onAct;
+      return null;
+    }
+  }
+  const clock = party === ev.mover && held.seq === ev.since ? held : undefined;
   if (!clock) return `${id}'s clock moved on: it is ${party || "nobody"}'s since #${held.seq}`;
   if (ev.step === 0) {
     const day = ev.day ?? 0;
     if (!queuedKey(clock.key)) return `${id} isn't waiting in a queue`;
-    if (!agentQueue(party)) return `${id} isn't in an agent's queue: ${party} is a person, or has left`;
+    if (!who.agentQueue(party)) return `${id} isn't in an agent's queue: ${party} is a person, or has left`;
     if (day < 1 || at - clock.at < day * QUEUE_MS) return `${id} hasn't waited that long in its queue`;
     if (day > (clock.day ?? 0)) t.clock = { ...clock, day };
     return null;
   }
   if (!memberKey(clock.key)) return `${id} has no member on the clock`;
-  if (at - clock.at < ev.step * QUIET_MS) return `${id} hasn't been quiet long enough for step ${ev.step} of its clock`;
-  if (clock !== held || ev.step > (clock.step ?? 0)) t.clock = { ...clock, step: ev.step };
+  if (at - clock.at < ev.step * QUIET_MS) return early;
+  if (ev.step > (clock.step ?? 0)) t.clock = { ...clock, step: ev.step };
   return null;
 }
