@@ -649,3 +649,61 @@ describe("a channel longer than the window, opened with no base under it (T1759)
     three.close();
   });
 });
+
+describe("the channel is folded when something changed, not on a clock (T1787)", () => {
+  test("an open permission ask closes at its expiry with no new message, and until then the state is the very same object: nothing refolds", async () => {
+    const r = relay(0);
+    const { store, close } = await opened(r);
+    const permission = { tool: "Bash", command: "ls", cwd: "/", nonce: "n".repeat(22), expiresAt: Date.now() + 600, canAllow: true };
+    r.say({ _tag: "Message", message: { ...msg(1), pk: "pk-atlas", kind: "ask", permission } as Message, row: null });
+    await sleep(40);
+    const before = store.handle.value.state;
+    expect(before.openAsks.map((m) => m.seq)).toEqual([1]);
+    let notified = 0;
+    const stop = store.subscribe(() => notified++);
+    await sleep(300);
+    expect(store.handle.value.state).toBe(before);
+    expect(notified).toBe(0);
+    await sleep(permission.expiresAt - Date.now() + 100);
+    expect(store.handle.value.state.openAsks).toEqual([]);
+    expect(notified).toBe(1);
+    const after = store.handle.value.state;
+    await sleep(200);
+    expect(store.handle.value.state).toBe(after);
+    stop();
+    close();
+  });
+
+  test("across the 15 s presence tick an idle channel isn't folded again and its handle doesn't change, so nothing renders", async () => {
+    const r = relay(0);
+    const { store, close } = await opened(r);
+    r.say({ _tag: "Open" });
+    for (const seq of [1, 2, 3]) r.say({ _tag: "Message", message: msg(seq), row: null });
+    await sleep(40);
+    const before = store.handle.value;
+    let notified = 0;
+    const stop = store.subscribe(() => notified++);
+    await sleep(15_000 - (Date.now() % 15_000) + 200);
+    expect(store.handle.value.state).toBe(before.state);
+    expect(store.handle.value).toBe(before);
+    expect(notified).toBe(0);
+    stop();
+    close();
+  }, 20_000);
+
+  test("a closed store folds at no expiry", async () => {
+    const r = relay(0);
+    const { store, close } = await opened(r);
+    const permission = { tool: "Bash", command: "ls", cwd: "/", nonce: "n".repeat(22), expiresAt: Date.now() + 300, canAllow: true };
+    r.say({ _tag: "Message", message: { ...msg(1), pk: "pk-atlas", kind: "ask", permission } as Message, row: null });
+    await sleep(40);
+    const before = store.handle.value.state;
+    close();
+    let notified = 0;
+    const stop = store.subscribe(() => notified++);
+    await sleep(500);
+    expect(notified).toBe(0);
+    expect(store.handle.value.state).toBe(before);
+    stop();
+  });
+});

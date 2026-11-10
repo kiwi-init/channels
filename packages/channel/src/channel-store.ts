@@ -7,7 +7,7 @@ import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import type { GithubChore, GithubHealth } from "@kiwi/core/github-health.ts";
 import { reviewCheckOf, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
-import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
+import { fold, nextExpiry, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
 import type { Reach } from "./history-fill.ts";
 import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
@@ -21,7 +21,7 @@ import type { Watches } from "./watch.ts";
 import { subscribeTick, tickOf } from "./clock.ts";
 import { noteAgentWorked } from "./recent.ts";
 import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./store.ts";
-import { hear, onlineByName, type Online } from "./online.ts";
+import { hear, onlineByName, sharedOnline, type Online } from "./online.ts";
 import { trimmed } from "./trim.ts";
 import { foldRoster } from "./fold-roster.ts";
 import { asKept, toKept } from "./kept.ts";
@@ -41,6 +41,7 @@ export const OLDER_PER_CLICK = 5_000;
 const OLDER_GAP_MS = 250;
 const KEEP_DELAY_MS = 3_000;
 const CLOCK_MS = 15_000;
+const LONGEST_WAIT_MS = 24 * 3_600_000;
 const GITHUB_SYNC_MS = 6 * 3_600_000;
 const OLDER_APP = /no such call/;
 
@@ -121,6 +122,7 @@ export class ChannelStore {
   private readonly marks: Signal<Marks>;
   private readonly requests: Signal<JoinRequest[]>;
   private readonly now = signal(tickOf(Date.now(), CLOCK_MS));
+  private readonly expired = signal(0);
   private readonly infoAt = signal(0);
   private readonly guardFloor: Signal<GuardFloor | null>;
   private readonly roomsFloor: Signal<RoomsSetting | null>;
@@ -191,7 +193,10 @@ export class ChannelStore {
     const admitted = computed(() => this.roster.value.filter((m) => !m.unverified));
     this.keyOf = computed(() => new Map(admitted.value.filter((r) => r.active).map((r) => [r.name, r.pk])));
     this.rosterForFold = computed(() => foldRoster(admitted.value));
-    this.state = computed(() => fold(this.messages.value, this.rosterForFold.value, this.now.value, this.roomsFloor.value, this.guardFloor.value, this.base.value));
+    this.state = computed(() => {
+      void this.expired.value;
+      return fold(this.messages.value, this.rosterForFold.value, Date.now(), this.roomsFloor.value, this.guardFloor.value, this.base.value);
+    });
     this.caughtUp = computed(() => {
       const start = this.start.value;
       return !!start?.whole && (this.messages.value.at(-1)?.seq ?? 0) >= start.head;
@@ -220,7 +225,8 @@ export class ChannelStore {
       const guard = this.guardFloor.value;
       return (all: Message[], from: FoldBase | null) => fold(all, roster, Date.now(), rooms, guard, from);
     });
-    const live = computed(() => onlineByName(this.online.value, this.keyOf.value, this.now.value));
+    let shownOnline = new Map<string, Online>();
+    const live = computed(() => (shownOnline = sharedOnline(shownOnline, onlineByName(this.online.value, this.keyOf.value, this.now.value))));
     this.handle = computed(() => ({
       ch: this.ch,
       connection: this.connection.value,
@@ -315,12 +321,32 @@ export class ChannelStore {
       this.every(60_000, () => this.drainGithub()),
       this.every(60_000, () => this.postReviewChecks()),
       on(this.rulesDue, () => this.githubRules()),
-      subscribeTick(CLOCK_MS, () => {
-        this.now.value = tickOf(Date.now(), CLOCK_MS);
-      }),
+      on(this.state, (state) => this.foldAtNextExpiry(state)),
+      this.presenceClock(),
     ];
     return () => {
       for (const stop of stops) stop();
+    };
+  }
+
+  private foldAtNextExpiry(state: ChannelState): (() => void) | undefined {
+    const at = nextExpiry(state, Date.now());
+    if (at === null) return;
+    const t = setTimeout(() => this.expired.value++, Math.min(at - Date.now(), LONGEST_WAIT_MS));
+    return () => clearTimeout(t);
+  }
+
+  private presenceClock(): () => void {
+    const tick = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      this.now.value = tickOf(Date.now(), CLOCK_MS);
+    };
+    const stop = subscribeTick(CLOCK_MS, tick);
+    if (typeof document === "undefined") return stop;
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", tick);
     };
   }
 
@@ -658,7 +684,7 @@ export class ChannelStore {
   private trim(): void {
     if (!this.start.peek()) return;
     const messages = this.messages.peek();
-    const next = trimmed(messages, this.rosterForFold.peek(), this.now.peek(), this.roomsFloor.peek(), this.guardFloor.peek(), this.base.peek(), this.keep);
+    const next = trimmed(messages, this.rosterForFold.peek(), Date.now(), this.roomsFloor.peek(), this.guardFloor.peek(), this.base.peek(), this.keep);
     if (!next) return;
     const lean = leanNow();
     if (!lean) return void leanLoaded().then(() => this.trim());
