@@ -82,6 +82,7 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
         title={asking.confirm.title}
         sub={asking.confirm.sub}
         action={asking.confirm.yes}
+        keep={asking.confirm.no}
         onConfirm={() => {
           openMenu.set(null)
           asking.run()

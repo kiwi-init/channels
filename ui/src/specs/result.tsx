@@ -15,6 +15,7 @@ import { nickname, Shown } from "~/names"
 import { Inline } from "~/specs/inline"
 import { boxesOf, tasksOf } from "~/specs/read"
 import { wordsPlain, wordsRaw } from "~/words"
+import { cancelConfirm } from "~/specs/cancel"
 
 const whyCancelled = (task: Task, nicknames: ReadonlyMap<string, string>): string => {
   const note = task.notes.at(-1)
@@ -27,6 +28,7 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
   const [note, setNote] = useState("")
   const [asking, setAsking] = useState<"drop" | "early" | null>(null)
   const title = wordsPlain(spec.title, channel.nicknames)
+  const cancel = cancelConfirm(channel, spec)
   const boxes = boxesOf(spec)
   const tasks = tasksOf(channel, spec)
   const kept = tasks.filter((task) => !task.cancelled)
@@ -93,9 +95,10 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
         )}
         <Confirm
           open={asking === "drop"}
-          title={t("specs.result.drop.ask", { title })}
-          sub={t("specs.result.drop.sub")}
-          action={t("specs.result.drop")}
+          title={cancel.title}
+          sub={cancel.sub}
+          action={cancel.yes}
+          keep={cancel.no}
           onClose={() => setAsking(null)}
           onConfirm={() => {
             setAsking(null)
