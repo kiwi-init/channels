@@ -145,7 +145,6 @@ export default {
   "chat.doc.editor.kind.comment": "댓글",
   "chat.doc.editor.people": "사람",
   "chat.doc.editor.commands": "명령",
-  "chat.doc.editor.tasks": "작업",
   "chat.doc.editor.write.to": "{place}에게 쓰기",
   "chat.doc.editor.write.in": "{place}에 쓰기",
   "chat.doc.editor.placeholder": "{prompt} · {keys}로 보내기",

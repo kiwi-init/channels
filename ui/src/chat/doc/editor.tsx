@@ -29,7 +29,7 @@ import { frameOf, menuPlace, type Caret, type Place } from "~/chat/doc/menu-plac
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { tooLong } from "~/chat/drafts"
 import { withNames } from "~/chat/linked"
-import { peopleMatches, taskMatches } from "~/chat/matches"
+import { peopleMatches, specMatches, taskMatches } from "~/chat/matches"
 import { withExcerpt } from "~/chat/quote"
 import { preview } from "~/chat/reply"
 import { letSay } from "~/chat/doc/sayer"
@@ -42,7 +42,7 @@ import { Icon } from "~/kit/icons"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
-import type { BlockFiles, Channel, Message, Person, QuestionAsk, Task, Where } from "~/model"
+import type { BlockFiles, Channel, Message, Person, QuestionAsk, Spec, Task, Where } from "~/model"
 import { nickname, Shown } from "~/names"
 import { wordsRaw } from "~/words"
 import { useAct, useGo, useActions, useAppAccount } from "~/nav"
@@ -569,18 +569,20 @@ function Head({ channel, attrs, onUnreply }: { channel: Channel; attrs: BlockAtt
 
 const KINDS: Record<"tool" | "comment", Key> = { tool: "chat.doc.editor.kind.tool", comment: "chat.doc.editor.kind.comment" }
 
-type Option = { kind: "@"; person: Person } | { kind: "#"; task: Task } | { kind: "/"; command: Command }
+type Option = { kind: "@"; person: Person } | { kind: "#"; task: Task } | { kind: "spec"; spec: Spec } | { kind: "/"; command: Command }
 
 function optionsFor(channel: Channel, commands: readonly Command[], q: Query | null): Option[] {
   if (!q) return []
   if (q.kind === "/") return matchCommands(commands, `/${q.text}`).map((command) => ({ kind: "/", command }))
-  return q.kind === "@" ? peopleMatches(channel.people, q.text).map((person) => ({ kind: "@", person })) : taskMatches(channel.tasks, q.text).map((task) => ({ kind: "#", task }))
+  if (q.kind === "@") return peopleMatches(channel.people, q.text).map((person) => ({ kind: "@", person }))
+  return [...taskMatches(channel.tasks, q.text).map((task): Option => ({ kind: "#", task })), ...specMatches(channel.specs ?? [], q.text).map((spec): Option => ({ kind: "spec", spec }))]
 }
 
 function choose(view: EditorView, q: Query, o: Option): void {
   const tr = view.state.tr
   if (o.kind === "/") tr.insertText(`/${o.command.name} `, q.from, q.to)
   else if (o.kind === "@") tr.replaceWith(q.from, q.to, [schema.nodes.mention.create({ name: o.person.name }), schema.text(" ")])
+  else if (o.kind === "spec") tr.insertText(`#${o.spec.ask} `, q.from, q.to)
   else tr.insertText(`T${o.task.id} `, q.from, q.to)
   view.dispatch(tr.scrollIntoView())
   view.focus()
@@ -608,11 +610,11 @@ function Suggest({ channel, query, options, pick, at, onPick }: { channel: Chann
       ref={list}
       className="mentions doc-suggest"
       role="listbox"
-      aria-label={query.kind === "@" ? t("chat.doc.editor.people") : query.kind === "/" ? t("chat.doc.editor.commands") : t("chat.doc.editor.tasks")}
+      aria-label={query.kind === "@" ? t("chat.doc.editor.people") : query.kind === "/" ? t("chat.doc.editor.commands") : t("chat.suggest.tasks")}
       style={place}
     >
       {options.map((o, i) => (
-        <li key={o.kind === "@" ? o.person.name : o.kind === "/" ? o.command.name : o.task.id} role="option" aria-selected={i === pick}>
+        <li key={o.kind === "@" ? o.person.name : o.kind === "/" ? o.command.name : o.kind === "spec" ? `spec-${o.spec.ask}` : o.task.id} role="option" aria-selected={i === pick}>
           {o.kind === "/" ? (
             <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(i)}>
               <span className="command-name">/{o.command.name}</span>
@@ -624,6 +626,14 @@ function Suggest({ channel, query, options, pick, at, onPick }: { channel: Chann
               <Avatar person={o.person} size="sm" pip />
               <span className="mention-name">{nickname(channel, o.person.name)}</span>
               {nickname(channel, o.person.name) !== o.person.name && <span className="dim">@{o.person.name}</span>}
+            </button>
+          ) : o.kind === "spec" ? (
+            <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(i)}>
+              <span className="task-row-id">#{o.spec.ask}</span>
+              <span className="task-row-title">
+                <Shown value={o.spec.title} />
+              </span>
+              <span className="dim">{t("chat.suggest.spec")}</span>
             </button>
           ) : (
             <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(i)}>

@@ -1,5 +1,6 @@
 import { Plugin, PluginKey, type EditorState } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
+import { refDone } from "~/chat/matches"
 
 export interface Query {
   kind: "@" | "#" | "/"
@@ -35,7 +36,7 @@ function queryAt(state: EditorState): Query | null {
     return { kind: "@", text, from: $from.pos - text.length - 1, to: $from.pos }
   }
   const task = TASK_REF.exec(before)
-  if (task) {
+  if (task && !refDone(task[2] ?? "")) {
     const text = task[2] ?? ""
     return { kind: "#", text, from: $from.pos - text.length - 1, to: $from.pos }
   }

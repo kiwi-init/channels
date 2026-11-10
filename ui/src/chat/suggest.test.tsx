@@ -97,9 +97,26 @@ describe("one suggestion list for the chat composer and spec comments (#1888)", 
 
   test("# lists tasks, and a key with nothing listed is left to the box", () => {
     const { html } = probe("blocked by #exp")
-    expect(html).toContain('aria-label="Tasks"')
+    expect(html).toContain('aria-label="Tasks and specs"')
     expect(html).toContain("T7")
     expect(probe("plain words").s.keys(press("Enter"))).toBe(false)
+  })
+
+  test("# lists specs after the tasks, and picking one writes its number (T1875)", () => {
+    const withSpec = { ...channel, specs: [spec] } as Channel
+    const hooked: { s?: Suggest; text?: string } = {}
+    function Probe() {
+      const s = useSuggest({ channel: withSpec, id: "x", text: "see #exp", area: { current: null }, onText: (value) => void (hooked.text = value) })
+      hooked.s = s
+      return <Suggestions channel={withSpec} s={s} />
+    }
+    const html = renderToStaticMarkup(<Probe />)
+    expect(hooked.s?.tasks.map((t) => t.id)).toEqual([7])
+    expect(hooked.s?.specs.map((sp) => sp.ask)).toEqual([10])
+    expect(hooked.s?.count).toBe(2)
+    expect(html.indexOf("T7")).toBeLessThan(html.indexOf("#10"))
+    hooked.s?.completeSpec(10)
+    expect(hooked.text).toBe("see #10 ")
   })
 
   test("the spec comment box is wired to the list", () => {
