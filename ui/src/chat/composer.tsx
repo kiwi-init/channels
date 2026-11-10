@@ -30,14 +30,6 @@ const StashList = lazy(() => import("~/chat/stash-list"))
 
 type Cue = { key: string; back: boolean; left: number; lost?: number }
 
-function placeOf(channel: Channel, where: Where, inThread?: number): string {
-  if (inThread !== undefined) return t("chat.composer.this.thread")
-  if (where.kind === "room") return `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}`
-  if (where.kind === "task") return `T${where.task}`
-  if (where.kind === "dm") return t("chat.composer.your.chat.with", { name: nickname(channel, where.with) })
-  return t("chat.composer.here")
-}
-
 type ComposerProps = { channel: Channel; where: Where; placeholder: string; inThread?: number; doc?: string | null }
 
 export function Composer(props: ComposerProps) {
@@ -84,7 +76,6 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     const kept = files.length ? undefined : attached.get(key)
     if (kept) setFilesNow(kept)
   }
-  const [alsoRoom, setAlsoRoom] = useState(false)
   const stash = useStash(key)
   const [cueOf, setCue] = useState<Cue | null>(() => (STASH_SHOT === "stash" ? { key, back: false, left: stash.list.length } : null))
   const cue = cueOf?.key === key ? cueOf : null
@@ -180,7 +171,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     }
     const say = doc ? sayerAt(`${channel.code}\n${doc}`) : null
     const opts = {
-      ...(inThread !== undefined ? { inThread, ...(alsoRoom ? {} : { side: true as const }) } : {}),
+      ...(inThread !== undefined ? { inThread } : {}),
       ...(replyTo ? { replyTo: replyTo.seq } : {}),
       ...(files.length ? { images: files } : {}),
     }
@@ -188,7 +179,6 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     if (!say?.(said, replyTo ? { re: replyTo.seq, quote: excerpt } : null, back, files)) actions.send(channel.code, where, sent, Object.keys(opts).length ? opts : undefined)
     s.forget()
     replying?.set(null)
-    setAlsoRoom(false)
     setFiles([])
     setCue(null)
     update("")
@@ -390,12 +380,6 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
             <Icon name="send" />
           </button>
         </div>
-        {inThread !== undefined && (
-          <label className="compose-also">
-            <input type="checkbox" checked={alsoRoom} onChange={(e) => setAlsoRoom(e.target.checked)} />
-            {t("chat.composer.also.send.to", { place: placeOf(channel, where) })}
-          </label>
-        )}
       </form>
       {running && !cue && (
         <p className="compose-hint" role="status">
