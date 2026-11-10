@@ -2,11 +2,14 @@ import type { Msg } from "~/i18n/en"
 
 export default {
   "chat.attach.up.to": "Up to {count} images in one message",
+  "chat.attach.up.to.files": "Up to {count} files in one message",
   "chat.attach.not.image": "{name} isn't a PNG, JPEG, GIF or WebP",
   "chat.attach.too.big": "{name} is empty or too big to send",
   "chat.attach.unreadable": "{name} couldn't be read",
   "chat.attach.drop": "Drop images to attach",
+  "chat.attach.drop.files": "Drop files to attach",
   "chat.attach.attached": "Attached images",
+  "chat.attach.attached.files": "Attached files",
   "chat.attach.remove.name": "Remove {name}",
   "chat.attach.remove": "Remove",
   "chat.cards.needs.you": "needs you",

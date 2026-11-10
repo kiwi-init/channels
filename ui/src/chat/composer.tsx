@@ -324,8 +324,8 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
             </button>
           </div>
         )}
-        {dropping && <DropHint />}
-        <AttachedFiles files={files} onRemove={(i) => setFiles((now) => now.filter((_, j) => j !== i))} />
+        {dropping && <DropHint anyFile={!!doc} />}
+        <AttachedFiles files={files} anyFile={!!doc} onRemove={(i) => setFiles((now) => now.filter((_, j) => j !== i))} />
         {replyTo && (
           <div className={cx("compose-reply", excerpt && "is-excerpt")}>
             <Icon name="reply" size={13} />
