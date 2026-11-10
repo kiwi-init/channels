@@ -91,7 +91,7 @@ export async function adoptDaemon(listComputer: ListComputer): Promise<ComputerV
 async function keepOwnCli(): Promise<KeptCli> {
   const kept = await keepCli(bundledKiwi(), host().app.version());
   if (!kept.homebrew) ensureOnPath();
-  kiwiBin = !kept.homebrew || compareVersions(kept.version, host().app.version()) >= 0 ? kept : { path: await runnableKiwi(), version: host().app.version() };
+  kiwiBin = !kept.unsure && (!kept.homebrew || compareVersions(kept.version, host().app.version()) >= 0) ? kept : { path: await runnableKiwi(), version: host().app.version() };
   return kept;
 }
 
