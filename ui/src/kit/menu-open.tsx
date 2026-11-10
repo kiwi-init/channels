@@ -11,7 +11,7 @@ export interface MenuItem {
   confirm?: { title: string; sub: string; yes: string }
 }
 
-export interface MenuField {
+interface MenuField {
   label: string
   value: string
   max: number
