@@ -200,6 +200,55 @@ async function profile(cdp: CDPSession, run: () => Promise<unknown>): Promise<st
     .map(([k, v]) => `${(v / 1000).toFixed(1)}ms  ${k}`);
 }
 
+async function cryptoInPage(rows: number): Promise<Record<string, number>> {
+  const enc = new TextEncoder();
+  const aes = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  const pair = (await crypto.subtle.generateKey("Ed25519", false, ["sign", "verify"])) as CryptoKeyPair;
+  const body = (i: number): Uint8Array<ArrayBuffer> =>
+    Uint8Array.from(
+      enc.encode(JSON.stringify({ v: 1, id: `id-${i}`, from: "agent", kind: "msg", ts: i, body: "Merged #398. The rails are darker and the page is a round sheet beside them. ".repeat(1 + (i % 3)) })),
+    );
+  const seal = async (plain: Uint8Array<ArrayBuffer>) => {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    return { iv, ct: await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, plain) };
+  };
+  const plain = Array.from({ length: rows }, (_, i) => body(i));
+  const sealed = await Promise.all(plain.map(seal));
+  const sigs = await Promise.all(plain.map((p) => crypto.subtle.sign("Ed25519", pair.privateKey, p)));
+  const PAGE = 250;
+  const pages = await Promise.all(
+    Array.from({ length: Math.ceil(rows / PAGE) }, (_, k) => {
+      const part = plain.slice(k * PAGE, (k + 1) * PAGE);
+      const all = new Uint8Array(part.reduce((n, p) => n + p.length, 0));
+      let at = 0;
+      for (const p of part) {
+        all.set(p, at);
+        at += p.length;
+      }
+      return seal(all);
+    }),
+  );
+  const median = async (run: () => Promise<unknown>) => {
+    const took: number[] = [];
+    for (let k = 0; k < 5; k++) {
+      const t = performance.now();
+      await run();
+      took.push(performance.now() - t);
+    }
+    return Math.round(took.sort((a, b) => a - b)[2]! * 10) / 10;
+  };
+  const open = (s: { iv: Uint8Array<ArrayBuffer>; ct: ArrayBuffer }) => crypto.subtle.decrypt({ name: "AES-GCM", iv: s.iv }, aes, s.ct);
+  const verify = (i: number) => crypto.subtle.verify("Ed25519", pair.publicKey, sigs[i]!, plain[i]!);
+  return {
+    rows,
+    rowDecryptsMs: await median(() => Promise.all(sealed.map(open))),
+    verifiesMs: await median(() => Promise.all(plain.map((_, i) => verify(i)))),
+    rowDecryptsAndVerifiesMs: await median(() => Promise.all(sealed.map((s, i) => open(s).then(() => verify(i))))),
+    pageDecryptsMs: await median(() => Promise.all(pages.map(open))),
+    pageDecryptsAndVerifiesMs: await median(() => Promise.all(pages.map(open)).then(() => Promise.all(plain.map((_, i) => verify(i))))),
+  };
+}
+
 const TEXTS = [
   "Numbers are in:\n\n- p50 0.3ms, p95 1ms\n- no refusals in 800 rooms\n\nThe change is in `src/relay/route.ts`:\n\n```ts\nconst program = answer(dispatch(routes, guards, otherwise))\n```",
   "On it. I'll have win run the steady load first, then the cold runs.",
@@ -374,6 +423,10 @@ try {
         };
       });
       if (throttle === 1) report["reload, in page"] = inPage;
+      if (throttle === 1) {
+        report["crypto, in page"] = await page.evaluate(cryptoInPage, MESSAGES);
+        log("crypto in page", JSON.stringify(report["crypto, in page"]));
+      }
       log("reload in page", JSON.stringify(inPage));
       await page.waitForTimeout(2000);
       await drain(page);
