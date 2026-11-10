@@ -393,6 +393,10 @@
   min-height: 0;
 }
 
+.chan.has-panel {
+  grid-template-columns: var(--side-w) minmax(0, 1fr) var(--panel-w);
+}
+
 .top {
   container: top / inline-size;
   grid-column: 1 / -1;
@@ -933,17 +937,6 @@
   animation: panel-in var(--glide);
 }
 
-aside.panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
-  width: min(var(--panel-w), 100vw);
-  border-inline-start: 1px solid var(--line);
-  box-shadow: var(--shadow-pop);
-}
-
 @keyframes panel-in {
   from {
     opacity: 0;
@@ -1015,6 +1008,22 @@ aside.panel {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+@media (max-width: 1180px) {
+  .chan.has-panel {
+    grid-template-columns: var(--side-w) minmax(0, 1fr);
+  }
+
+  .chan.has-panel .panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    width: min(var(--panel-w), 100vw);
+    background: var(--bg);
+  }
 }
 
 @media (max-width: 760px) {
@@ -1130,6 +1139,12 @@ aside.panel {
 
   .chan.is-bare .top-title {
     padding: 0 10px;
+  }
+}
+
+@media (min-width: 1181px) {
+  .chan.is-bare.has-panel {
+    grid-template-columns: minmax(0, 1fr) var(--panel-w);
   }
 }
 
