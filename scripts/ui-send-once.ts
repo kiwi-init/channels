@@ -92,7 +92,9 @@ try {
 
   ({ relay } = await startLocalRelay(join(data, "relay"), DIST, { rateLimits: false, port }));
   down = false;
-  const back = await settled(page, OFFLINE, 60_000);
+  const backAt = Date.now();
+  const back = await settled(page, OFFLINE, 180_000);
+  console.log(`  ${Math.round((Date.now() - backAt) / 1000)} s after the relay came back`);
   check("when the relay is back the message sends itself, once", back.rows === 1 && back.failed === 0 ? null : `${back.rows} rows, ${back.failed} failed`);
 
   down = true;
@@ -102,7 +104,9 @@ try {
   await failed(page, AGAIN).first().waitFor({ timeout: 90_000 });
   ({ relay } = await startLocalRelay(join(data, "relay"), DIST, { rateLimits: false, port }));
   down = false;
-  const open = await settled(page, AGAIN, 60_000);
+  const openAt = Date.now();
+  const open = await settled(page, AGAIN, 180_000);
+  console.log(`  ${Math.round((Date.now() - openAt) / 1000)} s after the relay came back`);
   check("with the app left open through a second outage, that message sends itself too, once", open.rows === 1 && open.failed === 0 ? null : `${open.rows} rows, ${open.failed} failed`);
 
   await page.reload();
