@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { chromium, webkit, type Page } from "playwright-core";
+import { chromium, webkit, type Locator, type Page } from "playwright-core";
 
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
@@ -38,6 +38,46 @@ const open = async (shot: string, width = 1440, height = 900): Promise<Page> => 
   if (await all.count()) await all.first().click();
   return page;
 };
+async function hoverOrSay(page: Page, target: Locator): Promise<void> {
+  await target.hover().catch(async (err: unknown) => {
+    const seen = await page
+      .evaluate(() => {
+        const text = (el: Element) => (el.textContent ?? "").replace(/\s+/g, " ").slice(0, 50);
+        return {
+          url: location.href,
+          viewport: [innerWidth, innerHeight],
+          comments: [...document.querySelectorAll(".spec-comment")].map(text),
+          headings: [...document.querySelectorAll("h1, h2, h3")].map(text).slice(0, 8),
+          boxes: document.querySelectorAll(".spec-box-new").length,
+          files: document.querySelectorAll(".compose-file").length,
+          layout: document.querySelector(".spec-doc-wrap")?.classList.contains("is-wide") ? "wide" : "narrow",
+          toggle: [...document.querySelectorAll("button")].find((b) => /^All \d+$|Latest only/.test(b.textContent ?? ""))?.textContent ?? "no toggle",
+          dialogs: [...document.querySelectorAll("dialog[open]")].map((d) => d.className),
+          focus: `${document.activeElement?.tagName}.${document.activeElement?.className}`,
+          main: text(document.querySelector("main") ?? document.body),
+        };
+      })
+      .catch((e: unknown) => `no page state: ${String(e)}`);
+    const there = await target.count().catch(() => -1);
+    const covered =
+      there > 0
+        ? await target
+            .evaluate((el) => {
+              const r = el.getBoundingClientRect();
+              const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+              return {
+                rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)],
+                under: at ? `${at.tagName}.${at.className}` : "nothing",
+                covered: !!at && !el.contains(at),
+              };
+            })
+            .catch((e: unknown) => `no target state: ${String(e)}`)
+        : "the comment is not on the page";
+    console.log(`the hover never landed: ${JSON.stringify({ there, covered, seen }, null, 1)}`);
+    throw err;
+  });
+}
+
 const plainBox = (page: Page) => page.getByRole("textbox", { name: "Comment on the spec" });
 const anchoredBox = (page: Page) => page.getByRole("textbox", { name: "Comment on the selected words" });
 const comments = (page: Page) => page.locator(".spec-comment").count();
@@ -215,7 +255,7 @@ try {
     await page.locator(".spec-box-new input[type=file]").last().setInputFiles({ name: "board.png", mimeType: "image/png", buffer: PNG });
     await page.locator(".compose-file").first().waitFor();
     const drafted = page.locator(".spec-comment", { hasText: "Drafted it. Two open questions inside." }).first();
-    await drafted.hover();
+    await hoverOrSay(page, drafted);
     await drafted.getByRole("button", { name: "Reply" }).click();
     await page.locator(".compose-reply").first().waitFor();
     await page.getByRole("button", { name: "All specs" }).click();
@@ -232,11 +272,14 @@ try {
 
   {
     const page = await open("spec-draft", 900, 1400);
+    await page.locator(".spec-doc-wrap:not(.is-wide)").waitFor();
+    const all = page.getByRole("button", { name: /^All \d+$/ });
+    if (await all.count()) await all.first().click();
     await plainBox(page).fill("private draft for the export spec");
     await page.locator(".spec-box-new input[type=file]").last().setInputFiles({ name: "board.png", mimeType: "image/png", buffer: PNG });
     await page.locator(".compose-file").first().waitFor();
     const drafted = page.locator(".spec-comment", { hasText: "Drafted it. Two open questions inside." }).first();
-    await drafted.hover();
+    await hoverOrSay(page, drafted);
     await drafted.getByRole("button", { name: "Reply" }).click();
     await page.locator(".spec-box-new .compose-reply").first().waitFor();
     const card = page.locator(".spec-card", { hasText: "A first hour for new agents" }).first();
