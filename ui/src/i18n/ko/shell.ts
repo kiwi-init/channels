@@ -224,6 +224,8 @@ export default {
   "start.join.sub": "소유자가 내 이름과 확인용 코드를 보고 입장을 허락합니다.",
   "start.join.send.failed": "요청을 보내지 못했습니다.",
   "start.join.your.name": "이 채널에서 쓸 이름",
+  "start.join.as": "{name}(으)로 참여를 요청합니다.",
+  "start.join.change": "변경",
   "start.join.back": "뒤로",
   "start.join.asking": "요청하는 중…",
   "start.join.ask": "참여 요청",

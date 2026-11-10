@@ -224,6 +224,8 @@ export default {
   "start.join.sub": "O dono vê seu nome e um código para conferir, e então deixa você entrar.",
   "start.join.send.failed": "Não foi possível enviar o pedido.",
   "start.join.your.name": "Seu nome neste canal",
+  "start.join.as": "Você vai pedir para entrar como {name}.",
+  "start.join.change": "Alterar",
   "start.join.back": "Voltar",
   "start.join.asking": "Pedindo…",
   "start.join.ask": "Pedir para entrar",

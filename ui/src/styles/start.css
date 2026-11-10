@@ -258,6 +258,20 @@
   margin-top: 24px;
 }
 
+.start-as {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  color: var(--ink-2);
+  font: var(--t-body) / 1.5 var(--sans);
+}
+
+.start-as-name {
+  color: var(--ink);
+  font-family: var(--mono);
+}
+
 .start-foot {
   justify-content: space-between;
   align-items: center;

@@ -1,15 +1,15 @@
 import "~/i18n/en/shell-later"
 import { useEffect, useId, useRef, useState } from "react"
 
-import { handleFor, NAME_RE, RESERVED_NAMES } from "@kiwi/core/membership.ts"
-
 import "~/styles/start.css"
 import { autofocus, cx } from "~/kit/bits"
 import { Failed, failure, type Failure } from "~/kit/failed"
 import { Modal } from "~/kit/modal"
 import type { InviteInfo } from "~/model"
 import { useApp, useGo } from "~/nav"
+import { joinName, nameProblemOf } from "~/start/join-name"
 import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 
 const CODE = /^[A-Za-z0-9._~-]+$/
 
@@ -43,13 +43,16 @@ function JoinForm({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [failed, setFailed] = useState<Failure | null>(null)
   const [invite, setInvite] = useState<InviteInfo | null>(null)
-  const [name, setName] = useState(() => (app.account ? handleFor(app.account.name) : ""))
+  const [mine] = useState(() => joinName(app.account?.name))
+  const [name, setName] = useState(mine.name)
   const inputId = useId()
   const hintId = useId()
   const nameId = useId()
   const code = inviteCode(text)
   const bad = text.trim() !== "" && !code
-  const nameProblem = !NAME_RE.test(name.trim()) ? t("start.join.name.allowed", { max: 32 }) : RESERVED_NAMES.has(name.trim().toLowerCase()) ? t("start.join.name.reserved") : null
+  const problem = nameProblemOf(name)
+  const nameProblem = problem === "allowed" ? t("start.join.name.allowed", { max: 32 }) : problem === "reserved" ? t("start.join.name.reserved") : null
+  const [naming, setNaming] = useState(mine.asks)
 
   const inspect = async (c: string) => {
     try {
@@ -95,20 +98,30 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             }
           }}
         >
-          <label className="field" htmlFor={nameId}>
-            <span className="field-label">{t("start.join.your.name")}</span>
-            <input
-              id={nameId}
-              ref={autofocus}
-              className="input is-mono"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              aria-invalid={nameProblem ? true : undefined}
-            />
-          </label>
+          {naming ? (
+            <label className="field" htmlFor={nameId}>
+              <span className="field-label">{t("start.join.your.name")}</span>
+              <input
+                id={nameId}
+                ref={autofocus}
+                autoFocus
+                className="input is-mono"
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                aria-invalid={nameProblem ? true : undefined}
+              />
+            </label>
+          ) : (
+            <p className="start-as">
+              <span>{tr("start.join.as", { name: <span className="start-as-name">{name.trim()}</span> })}</span>
+              <button type="button" className="btn is-quiet is-small" onClick={() => setNaming(true)}>
+                {t("start.join.change")}
+              </button>
+            </p>
+          )}
           <p className={cx("start-hint", (nameProblem || error) && "is-error")} aria-live="polite">
             {error ?? nameProblem}
           </p>
@@ -117,7 +130,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             <button type="button" className="btn is-quiet" onClick={() => (setInvite(null), setError(null), setFailed(null))}>
               {t("start.join.back")}
             </button>
-            <button type="submit" className="btn is-primary" disabled={busy || !!nameProblem}>
+            <button key="ask" type="submit" className="btn is-primary" disabled={busy || !!nameProblem} autoFocus={!naming}>
               {busy ? t("start.join.asking") : t("start.join.ask")}
             </button>
           </div>
