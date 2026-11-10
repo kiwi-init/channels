@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react"
 import { MAX_BODY_LENGTH } from "@kiwi/core/protocol.ts"
 import { t } from "~/i18n/i18n"
 import type { Upload, Where } from "~/model"
+import { keysHint } from "~/kit/keys"
 
 export const composerKey = (code: string, where: Where, inThread?: number): string => `${code}:${JSON.stringify(where)}:${inThread ?? ""}`
 
@@ -279,5 +280,5 @@ export function tooLong(text: string): string | null {
 
 export function backWords(why: string, placed: Placed, images: number): string {
   const lost = placed === "stash" && images ? (images === 1 ? t("chat.drafts.lost.image") : t("chat.drafts.lost.images", { count: images })) : ""
-  return placed === "composer" ? t("chat.drafts.back.composer", { why }) : t("chat.drafts.back.stash", { why, lost })
+  return placed === "composer" ? t("chat.drafts.back.composer", { why }) : t("chat.drafts.back.stash", { why, lost, keys: keysHint("S", true) })
 }

@@ -18,7 +18,7 @@ export default {
   "shell.channel.checks.failed": "チェック失敗",
   "shell.channel.needs.you": "あなたの対応待ち",
   "shell.channel.paused": "一時停止中",
-  "shell.channel.search": "このチャンネルを検索（⌘F）",
+  "shell.channel.search": "このチャンネルを検索（{keys}）",
   "shell.channel.connecting": "接続中…",
   "shell.channel.reconnecting": "再接続中…",
   "shell.channel.details": "詳細",

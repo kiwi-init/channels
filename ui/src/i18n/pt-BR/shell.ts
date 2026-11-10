@@ -18,7 +18,7 @@ export default {
   "shell.channel.checks.failed": "verificações falharam",
   "shell.channel.needs.you": "Precisa de você",
   "shell.channel.paused": "pausado",
-  "shell.channel.search": "Buscar neste canal (⌘F)",
+  "shell.channel.search": "Buscar neste canal ({keys})",
   "shell.channel.connecting": "Conectando…",
   "shell.channel.reconnecting": "Reconectando…",
   "shell.channel.details": "Detalhes",

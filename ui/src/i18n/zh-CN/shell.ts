@@ -18,7 +18,7 @@ export default {
   "shell.channel.checks.failed": "检查失败",
   "shell.channel.needs.you": "待你处理",
   "shell.channel.paused": "已暂停",
-  "shell.channel.search": "搜索此频道（⌘F）",
+  "shell.channel.search": "搜索此频道（{keys}）",
   "shell.channel.connecting": "正在连接…",
   "shell.channel.reconnecting": "正在重新连接…",
   "shell.channel.details": "详情",

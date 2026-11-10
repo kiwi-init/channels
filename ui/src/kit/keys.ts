@@ -12,3 +12,8 @@ export function inText(el: EventTarget | null): boolean {
 }
 
 export const dialogOpen = (): boolean => !!document.querySelector("dialog[open]")
+
+export function keysHint(key: string, shift: boolean = false, mac: boolean = onMac()): string {
+  if (mac) return `${shift ? "⇧" : ""}⌘${key === "Enter" ? " Enter" : key}`
+  return `Ctrl+${shift ? "Shift+" : ""}${key === "↩" ? "Enter" : key}`
+}

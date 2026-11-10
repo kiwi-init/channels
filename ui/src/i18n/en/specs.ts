@@ -46,7 +46,7 @@ const words = {
   "specs.doc.show.line": "Show this line in the spec",
   "specs.doc.diff.label": "What changed since it was approved",
   "specs.doc.unchanged": { one: "⋯ {count} unchanged line", other: "⋯ {count} unchanged lines" },
-  "specs.doc.editor.hint": "⌘S saves · Esc cancels",
+  "specs.doc.editor.hint": "{keys} saves · Esc cancels",
   "specs.doc.editor.moved": "{who} saved a newer version while you edited: saving replaces it.",
   "specs.doc.cancel": "Cancel",
   "specs.doc.save": "Save",

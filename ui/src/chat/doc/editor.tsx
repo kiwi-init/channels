@@ -46,11 +46,11 @@ import type { BlockFiles, Channel, Message, Person, QuestionAsk, Task, Where } f
 import { nickname, Shown } from "~/names"
 import { wordsRaw } from "~/words"
 import { useAct, useGo, useActions, useAppAccount } from "~/nav"
+import { keysHint } from "~/kit/keys"
 
 const QuestionCard = lazy(() => import("~/chat/question-card"))
 
 const IDLE_MS = 4000
-const SEND_KEYS = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘↩" : "Ctrl+Enter"
 
 type HeadList = readonly (readonly [HTMLElement, number, BlockAttrs])[]
 
@@ -814,7 +814,7 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
   const prompt = where.kind === "dm" ? t("chat.doc.editor.write.to", { place }) : t("chat.doc.editor.write.in", { place })
 
   return (
-    <div ref={box} className="thread-doc is-read-only" style={{ "--place": JSON.stringify(t("chat.doc.editor.placeholder", { prompt, keys: SEND_KEYS })) } as CSSProperties}>
+    <div ref={box} className="thread-doc is-read-only" style={{ "--place": JSON.stringify(t("chat.doc.editor.placeholder", { prompt, keys: keysHint("↩") })) } as CSSProperties}>
       {tooOld && (
         <p className="doc-old">
           {t("chat.doc.editor.too.old")}

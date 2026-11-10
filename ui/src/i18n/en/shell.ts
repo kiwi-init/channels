@@ -18,7 +18,7 @@ export default {
   "shell.channel.checks.failed": "checks failed",
   "shell.channel.needs.you": "Needs you",
   "shell.channel.paused": "paused",
-  "shell.channel.search": "Search this channel (⌘F)",
+  "shell.channel.search": "Search this channel ({keys})",
   "shell.channel.connecting": "Connecting…",
   "shell.channel.reconnecting": "Reconnecting…",
   "shell.channel.details": "Details",
