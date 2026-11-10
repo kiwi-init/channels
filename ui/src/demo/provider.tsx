@@ -309,6 +309,9 @@ export type Scenario =
   | "github-code"
   | "github-signed-in"
   | "github-gate"
+  | "github-checking"
+  | "thread-fetching"
+  | "thread-unloaded"
   | "specs"
   | "spec-changed"
   | "forgotten-computer"
@@ -334,38 +337,40 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                   ? withTaskEvents(DEMO_CHANNEL)
                   : scenario === "handoff"
                     ? withHandoff(DEMO_CHANNEL)
-                    : scenario === "opening"
-                      ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-                      : scenario === "held"
-                        ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                        : scenario === "compact" || scenario === "compacted"
-                          ? withCompact(DEMO_CHANNEL, scenario === "compacted")
-                          : scenario === "specs" || scenario === "spec-changed"
-                            ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
-                            : scenario === "forgotten-computer"
-                              ? {
-                                  ...DEMO_CHANNEL,
-                                  asks: [
-                                    {
-                                      kind: "join" as const,
-                                      id: "join-dudu",
-                                      at: Date.now() - 30 * 60_000,
-                                      name: "dudu",
-                                      who: "agent" as const,
-                                      harness: "claude" as const,
-                                      runs: "Claude Code · claude-opus-5-5",
-                                      machine: "MacBook-Pro-de-Davi",
-                                      sponsor: "harry",
-                                      revoked: true as const,
-                                      said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
-                                      code: "604-218",
-                                    },
-                                    ...DEMO_CHANNEL.asks,
-                                  ],
-                                }
-                              : scenario === "event-runs"
-                                ? withEventRuns(DEMO_CHANNEL)
-                                : DEMO_CHANNEL,
+                    : scenario === "thread-fetching" || scenario === "thread-unloaded"
+                      ? { ...DEMO_CHANNEL, since: 1_000_000 }
+                      : scenario === "opening"
+                        ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+                        : scenario === "held"
+                          ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+                          : scenario === "compact" || scenario === "compacted"
+                            ? withCompact(DEMO_CHANNEL, scenario === "compacted")
+                            : scenario === "specs" || scenario === "spec-changed"
+                              ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
+                              : scenario === "forgotten-computer"
+                                ? {
+                                    ...DEMO_CHANNEL,
+                                    asks: [
+                                      {
+                                        kind: "join" as const,
+                                        id: "join-dudu",
+                                        at: Date.now() - 30 * 60_000,
+                                        name: "dudu",
+                                        who: "agent" as const,
+                                        harness: "claude" as const,
+                                        runs: "Claude Code · claude-opus-5-5",
+                                        machine: "MacBook-Pro-de-Davi",
+                                        sponsor: "harry",
+                                        revoked: true as const,
+                                        said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
+                                        code: "604-218",
+                                      },
+                                      ...DEMO_CHANNEL.asks,
+                                    ],
+                                  }
+                                : scenario === "event-runs"
+                                  ? withEventRuns(DEMO_CHANNEL)
+                                  : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,
@@ -413,6 +418,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "enroll-desktop-check")
     return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, enrolling: { stage: "check", person: { name: "Jow", fingerprint: "3f9a 0c41 77e2 b8d5 1a06" } } }
   if (scenario === "signed-out") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000 }
+  if (scenario === "github-checking") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, signIn: { stage: "checking" } }
   if (scenario === "github-sign-in") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, signIn: { stage: "sign-in", code: null, problem: null } }
   if (scenario === "github-code")
     return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, signIn: { stage: "sign-in", code: { code: "8F3A-29KD", url: "https://github.com/login/device" }, problem: null } }
@@ -883,7 +889,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       olderAround: async (...[, seq]: Parameters<Actions["olderAround"]>) => demoAround(seq),
       fetchOlder: (...[, got]: Parameters<Actions["fetchOlder"]>) => demoFetchOlder(got),
       earlier: async () => false,
-      earlierTo: async () => false,
+      earlierTo: scenario === "thread-fetching" ? () => new Promise<boolean>(() => {}) : async () => false,
       holdEarlier: () => {},
       setMute: (code, room, on) => {
         setState((s) => {
@@ -968,7 +974,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         ...shownUsage,
       }),
     }
-  }, [shownUsage])
+  }, [shownUsage, scenario])
 
   const home = useMemo(() => [...state.channels.values()].map((c) => homeOf(c, saidIn(c.messages))), [state.channels])
 

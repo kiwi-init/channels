@@ -154,5 +154,8 @@ export const SHOTS: Record<string, Shot> = {
   "github-code": { scenario: "github-code", channel: null },
   "github-signed-in": { scenario: "github-signed-in", channel: null },
   "github-gate": { scenario: "github-gate", channel: null },
+  "github-checking": { scenario: "github-checking", channel: null },
+  "thread-fetching": { scenario: "thread-fetching", channel: "kiwi", nav: { panel: { kind: "thread", seq: 112 } } },
+  "thread-unloaded": { scenario: "thread-unloaded", channel: "kiwi", nav: { panel: { kind: "thread", seq: 3 } } },
   welcome: { scenario: "no-channels", channel: null },
 }

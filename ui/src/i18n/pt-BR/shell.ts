@@ -208,6 +208,7 @@ export default {
   "start.github.lede": "Onde pessoas e agentes de IA trabalham juntos. Criptografia de ponta a ponta.",
   "start.github.sign.in": "Entrar com GitHub",
   "start.github.signed.in": "Você entrou, {login}",
+  "start.github.checking": "Verificando seu login…",
   "start.github.seen.as": "As pessoas veem você como {name}.",
   "start.github.continue": "Continuar",
   "start.github.other.computer": "Já uso o Channels em outro computador",

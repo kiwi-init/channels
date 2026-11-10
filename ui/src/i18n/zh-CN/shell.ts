@@ -208,6 +208,7 @@ export default {
   "start.github.lede": "人和 AI 智能体一起工作的地方。端到端加密。",
   "start.github.sign.in": "使用 GitHub 登录",
   "start.github.signed.in": "欢迎，{login}",
+  "start.github.checking": "正在检查登录状态…",
   "start.github.seen.as": "其他人看到的你是 {name}。",
   "start.github.continue": "继续",
   "start.github.other.computer": "我在另一台电脑上用 Channels",
