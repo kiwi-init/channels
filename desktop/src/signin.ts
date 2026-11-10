@@ -1,6 +1,7 @@
 import { linkedHere } from "./github-flow.ts";
 import { held } from "./held.ts";
 import { store } from "./store.ts";
+import { within } from "./within.ts";
 
 interface RelayConfig {
   githubClientId?: string;
@@ -9,7 +10,7 @@ interface RelayConfig {
 }
 
 export const relayConfig = held(10 * 60_000, async (relay: string): Promise<RelayConfig> => {
-  const res = await fetch(new URL("/v1/config", relay));
+  const res = await fetch(new URL("/v1/config", relay), within());
   if (!res.ok) throw new Error(`the relay returned ${res.status}`);
   return (await res.json()) as RelayConfig;
 });

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { KeysReply, KeysRequest } from "../desktop/src/bridge.ts";
-import { FLUSH_MS, keysController, RESTARTED, type KeysClock, type KeysDeps, type KeysFrame, type KeysWorker } from "../desktop/src/keys-eb.ts";
+import { FLUSH_MS, keysController, PULSE_MS, RESTARTED, SILENT_MS, type KeysClock, type KeysDeps, type KeysFrame, type KeysWorker } from "../desktop/src/keys-eb.ts";
 import type { KeysAnswer, KeysAsk } from "../desktop/src/keys-host.ts";
 import type { FromWorker, ToWorker } from "../desktop/src/keys-shim.ts";
 
@@ -67,6 +67,7 @@ function setup(answer: KeysDeps["answer"] = (_m, done) => done()) {
   const workers: FakeWorker[] = [];
   const frames: KeysFrame[] = [];
   const clock = fakeClock();
+  const pulse = fakeClock();
   const keys = keysController({
     spawn: () => {
       const w = fakeWorker();
@@ -77,9 +78,10 @@ function setup(answer: KeysDeps["answer"] = (_m, done) => done()) {
     answer,
     toPage: (f) => void frames.push(f),
     clock,
+    pulse,
   });
   const last = (): FakeWorker => workers.at(-1) as FakeWorker;
-  return { keys, workers, frames, clock, last };
+  return { keys, workers, frames, clock, pulse, last };
 }
 
 const settled = (p: Promise<unknown>, ms = 50): Promise<string> => Promise.race([p.then(() => "answered"), new Promise<string>((r) => setTimeout(() => r("unanswered"), ms))]);
@@ -247,6 +249,69 @@ describe("the keys Worker, from main", () => {
     for (const m of s.last().got) if (m.to === "port") follows.push(m.data as KeysRequest);
     expect(follows.map((f) => f.op)).toEqual(["follow"]);
   });
+  test("a Worker that hangs without exiting is pinged, ended after a minute of silence, and comes back: waiting requests get the restart error (T1765)", async () => {
+    const s = setup();
+    s.keys.start();
+    const hung = s.last();
+    const waiting = s.keys.request(SESSION, req(1));
+    const beat = () => {
+      s.pulse.at += PULSE_MS;
+      s.pulse.run();
+    };
+    beat();
+    expect(hung.got.at(-1)).toEqual({ to: "host", m: { type: "ping" } });
+    expect(hung.killed).toBe(false);
+    for (let at = PULSE_MS; at < SILENT_MS; at += PULSE_MS) beat();
+    expect(hung.killed).toBe(true);
+    expect(await waiting).toEqual({ id: 1, ok: false, error: { kind: "unreachable", message: RESTARTED } });
+    s.clock.run();
+    expect(s.workers.length).toBe(2);
+    expect(s.frames).toEqual([{ session: SESSION, restart: true }]);
+    expect(s.last().killed).toBe(false);
+  });
+
+  test("a Worker that answers its pings, or says anything at all, is left alone", () => {
+    const s = setup();
+    s.keys.start();
+    const w = s.last();
+    for (let i = 0; i < 20; i++) {
+      s.pulse.at += PULSE_MS;
+      s.pulse.run();
+      w.send(i % 2 ? { from: "host", m: { type: "pong", id: 0 } } : { from: "port", port: 99, data: ok(i) });
+    }
+    expect(w.killed).toBe(false);
+    expect(s.workers.length).toBe(1);
+  });
+
+  test("a computer that slept isn't taken for a hung Worker: the silence is counted from when it woke", () => {
+    const s = setup();
+    s.keys.start();
+    const w = s.last();
+    s.pulse.at += 8 * 60 * 60_000;
+    s.pulse.run();
+    expect(w.killed).toBe(false);
+    expect(w.got.at(-1)).toEqual({ to: "host", m: { type: "ping" } });
+    for (let at = 0; at < SILENT_MS; at += PULSE_MS) {
+      s.pulse.at += PULSE_MS;
+      s.pulse.run();
+    }
+    expect(w.killed).toBe(true);
+  });
+
+  test("quitting stops the pings", async () => {
+    const s = setup();
+    s.keys.start();
+    const w = s.last();
+    const done = s.keys.flush();
+    w.send({ from: "host", m: { type: "flushed", id: 0 } });
+    await done;
+    const sent = w.got.length;
+    s.pulse.at += SILENT_MS * 2;
+    s.pulse.run();
+    expect(w.got.length).toBe(sent);
+    expect(s.workers.length).toBe(1);
+  });
+
   test("tellKeys reaches the Worker that's up, and nothing while it's down", () => {
     const s = setup();
     s.keys.tell({ type: "nudge" });

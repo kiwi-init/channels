@@ -14,7 +14,7 @@ import { serveKeys, type HostToKeys, type KeysToHost } from "./keys-server.ts";
 import { keysParent, type PagePort } from "./keys-shim.ts";
 
 type Done = Extract<HostToKeys, { type: "done" }>;
-type Ask = Exclude<KeysToHost, { type: "flushed" }> extends infer T ? (T extends { id: number } ? Omit<T, "id"> : never) : never;
+type Ask = Exclude<KeysToHost, { type: "flushed" | "pong" }> extends infer T ? (T extends { id: number } ? Omit<T, "id"> : never) : never;
 
 interface Memory {
   records: Record<string, Member>;
@@ -156,6 +156,9 @@ parent.on("message", (e) => {
       return;
     case "nudge":
       keyring.nudge();
+      return;
+    case "ping":
+      parent.postMessage({ type: "pong", id: 0 });
       return;
     case "port": {
       const port = e.ports[0];
