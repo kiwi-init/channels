@@ -245,6 +245,7 @@ export default {
   "live.home.wants.to.join": "참여 요청",
   "live.home.asks": "{who}의 질문",
   "live.home.review": "T{id} 리뷰",
+  "live.home.quiet": "T{id}이(가) {who}에게서 멈춰 있습니다",
   "live.home.spec": "스펙 #{ask}",
   "live.home.spec.done": "스펙 #{ask} 완료: 확인하세요",
   "live.home.spec.changed": "스펙 #{ask} 변경됨",

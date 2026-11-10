@@ -248,6 +248,7 @@ export default {
   "live.home.wants.to.join": "Quer entrar",
   "live.home.asks": "{who} pergunta",
   "live.home.review": "Revisar T{id}",
+  "live.home.quiet": "T{id} está parada com {who}",
   "live.home.spec": "Especificação #{ask}",
   "live.home.spec.done": "A especificação #{ask} está pronta: confira",
   "live.home.spec.changed": "A especificação #{ask} mudou",

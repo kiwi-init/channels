@@ -512,7 +512,19 @@ export interface ReviewAsk {
   task: number
 }
 
-export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk
+export type WakeSeen = { kind: "none" } | { kind: "attempted" | "delivered" | "read"; attempted: number }
+
+export interface QuietAsk {
+  kind: "quiet"
+  id: string
+  at: number
+  from: string
+  task: number
+  since: number
+  wake: WakeSeen
+}
+
+export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk | QuietAsk
 
 export type HomeAct =
   | { kind: "options"; options: { shown: string; answer: string }[] }

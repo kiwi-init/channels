@@ -70,6 +70,8 @@ import type {
   Message,
   Person,
   PullRequest,
+  QuietAsk,
+  WakeSeen,
   Reaction,
   Room,
   Task,
@@ -829,7 +831,8 @@ export function asksOf(
   owner: boolean,
   requests: readonly JoinRequest[],
   roster: readonly RosterMember[],
-  pins: ReadonlyMap<string, string | null>
+  pins: ReadonlyMap<string, string | null>,
+  now = Date.now()
 ): AsksMap {
   const open = new Set(state.openAsks.filter((m) => holdsWork(state, m)).map((m) => m.seq))
   const pending = new Set(state.openAsks.map((m) => m.seq))
@@ -951,5 +954,21 @@ export function asksOf(
     }
   const me_ = state.members.get(me)
   for (const t of reviewsFor(state.tasks.values(), me, !!me_ && isPerson(me_))) asks.push({ kind: "review", id: `review-${t.id}`, at: t.updatedAt, from: t.owner ?? t.createdBy, task: t.id })
+  if (owner) asks.push(...quietAsks(state, now))
   return { asks, askOf, held }
+}
+
+const LADDER_TOP = 3
+
+function wakeOf(woke: NonNullable<ReturnType<typeof clockOf>>["woke"]): WakeSeen {
+  if (!woke) return { kind: "none" }
+  return { kind: woke.read !== undefined ? "read" : woke.delivered !== undefined ? "delivered" : "attempted", attempted: woke.at }
+}
+
+function quietAsks(state: ChannelState, now: number): QuietAsk[] {
+  return [...state.tasks.values()].flatMap((t): QuietAsk[] => {
+    const c = clockOf(state, t, now)
+    if (!c?.paged || c.step !== LADDER_TOP) return []
+    return [{ kind: "quiet", id: `quiet-${t.id}-${c.epoch}`, at: c.since + LADDER_TOP * state.quietMs, from: c.mover, task: t.id, since: c.since, wake: wakeOf(c.woke) }]
+  })
 }
