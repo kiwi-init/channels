@@ -3,7 +3,7 @@ import "~/styles/tasks.css"
 
 import { liveOf } from "~/doing"
 import { t } from "~/i18n/i18n"
-import { Avatar, cx, Dot, statusWord } from "~/kit/bits"
+import { Avatar, Count, cx, Dot, statusWord } from "~/kit/bits"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type PullRequest, type Task, type TaskStatus } from "~/model"
 import { useGo } from "~/nav"
@@ -60,6 +60,8 @@ export function TaskRow({ channel, t: task, on }: { channel: Channel; t: Task; o
         )}
         {" · "}
         {ago(task.updatedAt)}
+        {task.mentions ? " " : null}
+        <Count n={task.mentions ?? 0} loud />
       </span>
       {task.owner && (
         <span className="board-owner" title={nickname(channel, task.owner)}>

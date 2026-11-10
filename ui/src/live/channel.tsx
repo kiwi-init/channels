@@ -17,7 +17,7 @@ import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { withReach } from "~/live/reach"
 import { capUnsent, changeUnsent, landedOut, newSendId, nextUnsentKey, resendDue, retryUnsent, unsentBlock, unsentIn } from "~/live/unsent"
-import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
+import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, taskMentionsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
@@ -150,7 +150,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const receipts = useMemo(() => receiptsOf(state, shownWire, me, marks, pkOf, clock, busy), [state, shownWire, me, marks, pkOf, busy])
   const mapped = useMemo(() => kept(code, withReceipts(rows, receipts)), [code, rows, receipts])
   const leftOut = useMemo(() => (isOwner ? leftOutOf(state, shownWire, me) : []), [isOwner, state, shownWire, me])
-  const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
+  const listed = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
   const taskGroups = useMemo(() => groupsOf(state, me), [state, me])
   const specs = useMemo(() => specsOf(state, me), [state, me])
   const free = useMemo(() => freeOf(state), [state])
@@ -159,6 +159,15 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const { muted } = usePrefs()
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from).map((r) => (isMuted(muted, code, r.id) ? { ...r, muted: true as const } : r)), [state, messages, me, seen, from, muted, code])
   const directs = useMemo(() => directsOf(state, messages, me, seen), [state, messages, me, seen])
+  const taskMentions = useMemo(() => taskMentionsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
+  const tasks = useMemo(
+    () =>
+      listed.map((task) => {
+        const mentions = taskMentions.get(task.id)
+        return mentions ? { ...task, mentions } : task
+      }),
+    [listed, taskMentions]
+  )
   const threads = useMemo(() => threadsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
   const follows = useMemo(() => followsIn(seen), [seen])
   const theirs = useMemo(() => theirsOf(state, messages, me), [state, messages, me])
@@ -454,7 +463,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   useEffect(() => {
     if (top > 0 && shown) markSeen(roomId, top, needs)
   }, [roomId, top, needs, shown])
-  const mentionsHere = rooms.reduce((n, r) => n + r.mentions, 0) + directs.reduce((n, d) => n + d.unread, 0)
+  const mentionsHere = rooms.reduce((n, r) => n + r.mentions, 0) + directs.reduce((n, d) => n + d.unread, 0) + [...taskMentions.values()].reduce((n, k) => n + k, 0)
   useEffect(() => setOpenNews({ room: roomId, unread: unreadHere, needs, mentions: mentionsHere }), [roomId, unreadHere, needs, mentionsHere])
   useEffect(() => () => setOpenNews(null), [roomId])
 
