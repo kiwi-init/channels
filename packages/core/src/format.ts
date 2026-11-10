@@ -36,6 +36,7 @@ import { landingWaits, reviewStillRequired, rulesText } from "./prs.ts";
 import { currentStep, spanText, stepById, stepMove, type LandingStep, type StepEdit } from "./steps.ts";
 import { artifactWords, runSight } from "./state/landing-steps.ts";
 import { sayEvent, type EventKey, type EventSay } from "./event-words.ts";
+import { moverOf, moverTag, moverText } from "./mover.ts";
 import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 export function tokensWord(n: number): string {
@@ -529,7 +530,7 @@ function taskLine(state: ChannelState, t: Task): string {
   const stage = stageOf(state, t);
   const evidence = stage.pr || stage.declared ? ` · ${stageText(state, stage)}` : "";
   const waits = landingWaits(t);
-  return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}${waits ? ` · ${waits}` : ""}`;
+  return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}${waits ? ` · ${waits}` : ""}${moverTag(t, moverOf(state, t))}`;
 }
 
 export function reviewRuleWarning(state: ChannelState, check: string): string | null {
@@ -838,6 +839,8 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
     `  status: ${statusWord(statusOf(state, t))} (${stateWord(t.state)})${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : t.leftBy ? ` · unassigned: ${inlineText(t.leftBy, 40)} left the channel` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
   ];
+  const mover = moverOf(state, t, now);
+  if (mover) out.push(`  move: ${moverText(mover)}`);
   const stage = stageOf(state, t);
   out.push(`  stage: ${stageText(state, stage)}`);
   if (stage.pr) out.push(...prLines(state, stage.pr));
