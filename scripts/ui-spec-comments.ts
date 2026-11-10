@@ -50,6 +50,8 @@ async function hoverOrSay(page: Page, target: Locator): Promise<void> {
           headings: [...document.querySelectorAll("h1, h2, h3")].map(text).slice(0, 8),
           boxes: document.querySelectorAll(".spec-box-new").length,
           files: document.querySelectorAll(".compose-file").length,
+          layout: document.querySelector(".spec-doc-wrap")?.classList.contains("is-wide") ? "wide" : "narrow",
+          toggle: [...document.querySelectorAll("button")].find((b) => /^All \d+$|Latest only/.test(b.textContent ?? ""))?.textContent ?? "no toggle",
           dialogs: [...document.querySelectorAll("dialog[open]")].map((d) => d.className),
           focus: `${document.activeElement?.tagName}.${document.activeElement?.className}`,
           main: text(document.querySelector("main") ?? document.body),
@@ -270,6 +272,9 @@ try {
 
   {
     const page = await open("spec-draft", 900, 1400);
+    await page.locator(".spec-doc-wrap:not(.is-wide)").waitFor();
+    const all = page.getByRole("button", { name: /^All \d+$/ });
+    if (await all.count()) await all.first().click();
     await plainBox(page).fill("private draft for the export spec");
     await page.locator(".spec-box-new input[type=file]").last().setInputFiles({ name: "board.png", mimeType: "image/png", buffer: PNG });
     await page.locator(".compose-file").first().waitFor();
