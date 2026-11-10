@@ -70,9 +70,32 @@ try {
   await heading.waitFor();
   const older = page.locator(".search-item").filter({ hasText: "Keep the relay dumb" }).first();
   await older.waitFor();
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as unknown as { rowSeen: string[] }).rowSeen = seen;
+    const t0 = performance.now();
+    const note = (what: string) => seen.push(`${Math.round(performance.now() - t0)}ms ${what}`);
+    for (const type of ["pointerdown", "mousedown", "blur", "pointerup", "mouseup", "click"])
+      document.addEventListener(type, (e) => note(`${type} on ${(e.target as HTMLElement).className || (e.target as HTMLElement).tagName}`), true);
+    new MutationObserver(() => note(`list: ${document.querySelectorAll(".search-item").length} rows, bar ${document.querySelectorAll(".older-bar").length}`)).observe(document.body, {
+      subtree: true,
+      childList: true,
+    });
+  });
   await older.click();
   const bar = page.locator(".older-bar");
-  await bar.waitFor();
+  await bar.waitFor({ timeout: 8000 }).catch(async (err: unknown) => {
+    const state = await page.evaluate(() => ({
+      seen: (window as unknown as { rowSeen: string[] }).rowSeen,
+      rows: [...document.querySelectorAll(".search-item")].map((r) => (r.textContent ?? "").slice(0, 60)),
+      query: (document.querySelector('[role="combobox"]') as HTMLInputElement | null)?.value ?? "no box",
+      focus: document.activeElement?.className || document.activeElement?.tagName,
+      feed: document.querySelectorAll("article.msg").length,
+      flash: document.querySelectorAll("article.msg.is-flash").length,
+    }));
+    console.log(`the older bar never showed after the click: ${JSON.stringify(state, null, 1)}`);
+    throw err;
+  });
   expect((await bar.innerText()).includes("Viewing older messages around"), "the bar says this is older history, and when");
   const hit = page.locator("article.msg.is-flash");
   await hit.waitFor();

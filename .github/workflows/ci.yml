@@ -446,7 +446,12 @@ jobs:
         run: bun scripts/ui-edit-delete.ts --dist ui/dist
       - name: ui search reaches older history, Search older history fetches more only on a click, and an older hit opens its stretch (Back to latest, react and copy only), in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
-        run: bun scripts/ui-older-search.ts --dist ui/dist
+        run: |
+          for i in $(seq 1 60); do
+            echo "::group::run $i"
+            bun scripts/ui-older-search.ts --dist ui/dist > "$RUNNER_TEMP/older.log" 2>&1 || { echo "::endgroup::"; echo "FAILED on run $i"; cat "$RUNNER_TEMP/older.log"; exit 1; }
+            echo "::endgroup::"
+          done
       - name: ui a reload keeps the room, tab and scroll, and ⌘[ / ⌘] step back and forward after search jumps, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-restore-place.ts --dist ui/dist
