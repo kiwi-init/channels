@@ -45,7 +45,7 @@ import { received } from "./history.ts";
 import { MAX_WAKE } from "../push.ts";
 import type { ChannelImages } from "./images.ts";
 import type { ChannelLive } from "./live.ts";
-import type { Relay } from "./relay.ts";
+import { notTheRelay, type Relay } from "./relay.ts";
 import type { ChannelSettings } from "./settings.ts";
 
 export interface SendOptions {
@@ -219,10 +219,12 @@ export class ChannelSending {
         const roomId = this.ch.roomId;
         const slot = take ? { slot: { id: yield* Effect.promise(() => slotId(key, roomId, take.name)), ttl: take.ttl } } : {};
         const free = freeing.length ? { free: yield* Effect.promise(() => Promise.all(freeing.map((n) => slotId(key, roomId, n)))) } : {};
-        return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", {
+        const stored = yield* this.ch.request<{ seq: number; ts?: number }>("/messages", {
           method: "POST",
           body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}), ...(tickets.length ? { tickets } : {}) }),
         });
+        if (!Number.isSafeInteger(stored.seq) || stored.seq < 1) return yield* notTheRelay(this.ch.relay);
+        return stored;
       });
       const posted = Effect.gen({ self: this }, function* () {
         const stored = yield* again(post, UNSURE_RETRIES).pipe(
