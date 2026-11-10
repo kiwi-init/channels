@@ -36,7 +36,6 @@ export default {
   "modals.channel.settings.goal": "目标",
   "modals.channel.settings.goal.hint": "这个频道是做什么的，完成是什么样子。每个智能体都会先读它。",
   "modals.channel.settings.no.goal": "还没有目标。",
-  "modals.channel.settings.goal.saved": "目标已保存",
   "modals.channel.settings.goal.placeholder": "周五前发布测试版，引导流程在全新的 Mac 上测过。",
   "modals.channel.settings.agents": "智能体",
   "modals.channel.settings.specs.only": "只从已批准的规格创建任务",
