@@ -16,6 +16,7 @@ import { CommentBox, type CommentReply } from "~/specs/comment-box"
 import { CommentItem, openImage } from "~/specs/comment-item"
 import { keysHint } from "~/kit/keys"
 import { DiscardAsk, useDiscard } from "~/kit/discard"
+import { openMessage } from "~/live/open-message"
 
 const WIDE_PX = 940
 const TALK_SHOWN = 3
@@ -192,7 +193,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
         )}
         {diff && spec.approved && <Diff before={wordsPlain(spec.approved.text, channel.nicknames)} after={wordsPlain(spec.text, channel.nicknames)} />}
         <div ref={doc} className="spec-doc" onMouseUp={picked} onKeyUp={picked}>
-          <Body text={shownText(spec)} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
+          <Body text={shownText(spec)} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={(seq) => openMessage(channel.code, seq)} />
           {pop && (
             <button
               type="button"
@@ -313,7 +314,7 @@ function Editor({ channel, spec, onDone }: { channel: Channel; spec: Spec; onDon
       <div className="spec-editor-panes">
         <textarea className="textarea is-mono spec-source" value={text} spellCheck aria-label={t("specs.doc.source")} onChange={(e) => setText(e.target.value)} onKeyDown={keys} />
         <div className="spec-preview" aria-label={t("specs.doc.preview")}>
-          <Body text={wrote(text)} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
+          <Body text={wrote(text)} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={(seq) => openMessage(channel.code, seq)} />
         </div>
       </div>
     </div>

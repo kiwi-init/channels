@@ -79,7 +79,7 @@ export function CommentItem({
           <span>{c.quote}</span>
         </button>
       )}
-      {c.text.trim() && <Body text={wrote(c.text)} seq={c.m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />}
+      {c.text.trim() && <Body text={wrote(c.text)} seq={c.m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={(seq) => openMessage(channel.code, seq)} />}
       {c.m.images && <MessageImages code={channel.code} images={c.m.images} open={openImage} />}
       <Reacts channel={channel} m={c.m} />
       <Unsent channel={channel} m={c.m} />
