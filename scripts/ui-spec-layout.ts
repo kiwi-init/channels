@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { webkit, type Page } from "playwright-core";
+import { webkit, type Locator, type Page } from "playwright-core";
 
 const at = process.argv.indexOf("--dist");
 const dist = at > 0 ? (process.argv[at + 1] ?? "ui/dist") : "ui/dist";
@@ -35,17 +35,48 @@ async function layout(page: Page): Promise<string | null> {
   return null;
 }
 
+async function below(page: Page, what: string, el: Locator): Promise<string | null> {
+  const at = (await el.count()) ? await el.boundingBox() : null;
+  const view = page.viewportSize();
+  if (!at || !view) return `no ${what}`;
+  const bottom = at.y + at.height;
+  return bottom > view.height + 1 ? `${what} ends at y ${Math.round(bottom)}, below the ${view.height} px window` : null;
+}
+
 async function grows(page: Page): Promise<string | null> {
   const box = page.getByLabel("Comment on the spec");
+  const foot = page.locator(".spec-rail-foot");
+  const rest = await below(page, "the comment box", foot);
+  if (rest) return `${rest} before anything is typed`;
   await box.click();
-  const before = await box.boundingBox();
+  const [before, footBefore] = [await box.boundingBox(), await foot.boundingBox()];
   await page.keyboard.type(LONG);
   await page.waitForTimeout(400);
-  const after = await box.boundingBox();
-  if (!before || !after) return "no comment box on screen";
-  if (Math.abs(after.y - before.y) > 4) return `the comment box moved from y ${Math.round(before.y)} to ${Math.round(after.y)} while it grew`;
+  const [after, footAfter] = [await box.boundingBox(), await foot.boundingBox()];
+  if (!before || !after || !footBefore || !footAfter) return "no comment box on screen";
+  const grew = footAfter.height - footBefore.height;
+  if (after.y > before.y + 4 || after.y < before.y - grew - 4)
+    return `the comment box moved from y ${Math.round(before.y)} to ${Math.round(after.y)} while it and its buttons grew ${Math.round(grew)} px`;
+  const typed = await below(page, "the Comment button", page.locator(".spec-rail-foot").getByRole("button", { name: "Comment", exact: true }));
+  if (typed) return `${typed} after a long comment`;
+  const hidden = await page.locator(".spec-rail-scroll").evaluate((el) => Math.round(el.scrollHeight - el.scrollTop - el.clientHeight));
+  if (hidden > 1) return `the newest comment slid ${hidden} px out of view as the box grew`;
   return after.height > before.height * 2 ? null : `the comment box stayed ${Math.round(after.height)} px high (was ${Math.round(before.height)}) with a comment that wraps over several lines`;
 }
+
+async function growsFull(page: Page): Promise<string | null> {
+  const rest = await below(page, "the comment box", page.locator(".spec-rail-foot"));
+  if (rest) return `${rest} before anything is typed`;
+  const fill = await page.locator(".spec-rail-scroll").evaluate((el) => ({ content: el.scrollHeight, shown: el.clientHeight }));
+  if (fill.content <= fill.shown + 1) return `the comments fit (${fill.content} px in ${fill.shown}), so the rail isn't full: make the window shorter`;
+  return grows(page);
+}
+
+const FULL = [
+  [1900, 900, "with the comments nearly filling the rail", grows],
+  [1900, 680, "with the comments filling the rail", growsFull],
+  [1400, 480, "with the comments filling the rail", growsFull],
+] as const;
 
 const GAP_PX = 64;
 
@@ -187,11 +218,21 @@ try {
   await page.waitForTimeout(500);
   for (const [what, check] of [
     ["a wide window goes to the spec and its comments, not to empty margins", layout],
-    ["the comment box grows in place as a long comment wraps", grows],
+    ["the comment box grows as a long comment wraps, and its Comment button stays on screen", grows],
   ] as const) {
     const why = await check(page);
     if (why) failed++;
     console.log(`${why ? "✗" : "✓"} spec-draft at 1900x1000: ${what}${why ? `: ${why}` : ""}`);
+  }
+  for (const [width, height, rail, check] of FULL) {
+    const full = await browser.newPage({ viewport: { width, height } });
+    await full.goto(`http://127.0.0.1:${server.port}/?shot=spec-draft`);
+    await full.waitForSelector(".spec-doc-wrap.is-wide", { timeout: 15_000 });
+    await full.waitForTimeout(500);
+    const why = await check(full);
+    if (why) failed++;
+    console.log(`${why ? "✗" : "✓"} spec-draft at ${width}x${height}: ${rail}, the comment box grows and its Comment button stays on screen${why ? `: ${why}` : ""}`);
+    await full.close();
   }
   const short = await browser.newPage({ viewport: { width: 1400, height: 480 } });
   await short.goto(`http://127.0.0.1:${server.port}/?shot=spec-draft`);

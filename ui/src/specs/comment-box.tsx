@@ -74,6 +74,7 @@ export function CommentBox({
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Upload[]>([])
   const box = useRef<HTMLTextAreaElement>(null)
+  const field = useRef<HTMLDivElement>(null)
   const zone = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const typed = (value: string, at: number) => {
@@ -87,9 +88,12 @@ export function CommentBox({
   }, [quote, reply])
   useLayoutEffect(() => {
     const el = box.current
-    if (!el) return
+    const hold = field.current
+    if (!el || !hold) return
+    hold.style.minHeight = `${hold.offsetHeight}px`
     el.style.height = "auto"
     el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`
+    hold.style.minHeight = ""
   }, [text])
   const ready = !reading && !!commentOf(spec.ask, text, files)
   const send = () => {
@@ -123,7 +127,7 @@ export function CommentBox({
         </div>
       )}
       <Suggestions channel={channel} s={s} />
-      <div className="spec-box-field">
+      <div ref={field} className="spec-box-field">
         <textarea
           ref={box}
           className="textarea spec-box-text"

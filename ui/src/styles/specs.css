@@ -403,7 +403,7 @@
   flex-direction: column;
   align-self: start;
   min-width: 0;
-  max-height: calc(var(--page-h, 100vh) - 64px);
+  max-height: calc(var(--page-h, 100vh) - max(16px, var(--wrap-at, 0px) + 24px) - 48px);
   margin-top: 24px;
 }
 
