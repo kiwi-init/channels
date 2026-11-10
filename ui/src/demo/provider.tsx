@@ -12,7 +12,7 @@ import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf } from "~/home"
 import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
-import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, Usage } from "~/model"
+import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, TaskStep, Usage } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
@@ -647,6 +647,18 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             ],
           }
         }),
+      endStep: (code, id, step) =>
+        edit(code, (c) => ({
+          ...c,
+          tasks: c.tasks.map((task) => {
+            if (task.id !== id || !task.steps) return task
+            const at = task.steps.findIndex((s) => s.id === step)
+            const steps = task.steps.map((s, i): TaskStep =>
+              i === at ? { id: s.id, words: s.words, ...(s.by ? { by: s.by } : {}), state: "done" } : i === at + 1 ? { ...s, state: "current", ...(s.by === c.you ? { yours: true as const } : {}) } : s
+            )
+            return steps.every((s) => s.state === "done" || s.state === "skipped") ? { ...task, steps, status: "done" as const, mover: undefined, quiet: undefined } : { ...task, steps }
+          }),
+        })),
       approveTask: (code, id, approve, why) =>
         edit(code, (c) => ({
           ...c,

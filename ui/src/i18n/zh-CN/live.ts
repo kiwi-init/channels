@@ -28,6 +28,7 @@ export default {
   "live.actions.let.in.failed": "无法让对方加入",
   "live.actions.turn.away.failed": "无法拒绝对方",
   "live.actions.not.approved": "未批准",
+  "live.actions.step.not.ended": "步骤未标为完成",
   "live.actions.not.sent.back": "未退回",
   "live.actions.task.not.added": "任务未添加",
   "live.actions.not.changed": "未更改",

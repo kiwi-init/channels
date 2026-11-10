@@ -34,6 +34,13 @@ export function ago(at: number, now = Date.now()): string {
   return new Date(at).toLocaleDateString(locales(), { month: "short", day: "numeric" })
 }
 
+export function lasting(ms: number): string {
+  const d = Math.max(MIN, ms)
+  if (d < HOUR) return span(Math.round(d / MIN), "minute")
+  if (d < 2 * DAY) return span(Math.round(d / HOUR), "hour")
+  return span(Math.round(d / DAY), "day")
+}
+
 export function day(at: number, now = Date.now()): string {
   const start = new Date(now)
   start.setHours(0, 0, 0, 0)

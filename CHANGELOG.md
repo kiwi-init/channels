@@ -2,6 +2,31 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.17 — 2026-11-10
+
+- **Replies: a reply to a message sent to several is never dropped (T5088)** ([#2269](https://github.com/kiwi-init/channels/pull/2269))
+- **release: a ci-green gate refuses to build or publish unless the tagged commit's push run is green (T2017)** ([#2245](https://github.com/kiwi-init/channels/pull/2245))
+- **/tasks opens the task list, not the spec you last had open (T1819)** ([#2260](https://github.com/kiwi-init/channels/pull/2260))
+- **Right panel: it floats over the chat at every width, so the conversation never moves (T1839)** ([#2258](https://github.com/kiwi-init/channels/pull/2258))
+- **Channel settings: one icon control, a Tasks and pull requests group in words, and a reason on greyed settings (T3548)** ([#2262](https://github.com/kiwi-init/channels/pull/2262))
+- **Words: one name per concept: Needs you, Activity, Join with a code, Channel notes, Work (T1821)** ([#2254](https://github.com/kiwi-init/channels/pull/2254))
+- **Home: an ask row opens the ask; only plain questions keep their answer buttons (T1815)** ([#2266](https://github.com/kiwi-init/channels/pull/2266))
+- **Invite, Profile and Let in: the Full trust switch goes; with all three powers on, a line says the person is fully trusted and what that means (T5081)** ([#2265](https://github.com/kiwi-init/channels/pull/2265))
+- **Release check: an older release's data opened by this build (harness)** ([#2255](https://github.com/kiwi-init/channels/pull/2255))
+- **CI: desktop / distros runs after merge, behind the release gate (T2018)** ([#2263](https://github.com/kiwi-init/channels/pull/2263))
+- **Specs tab: Done lists the finished tasks that aren't in a spec, newest first, twenty at a time (T5079)** ([#2268](https://github.com/kiwi-init/channels/pull/2268))
+- **Gate: the ship gate, bypass and who-merges are gone; a task lands by its steps and kiwi/review answers green (T4164)** ([#2259](https://github.com/kiwi-init/channels/pull/2259))
+- **Slash commands: /tasks, /prs and /issues go, with the unused tasks tab id (T1819)** ([#2264](https://github.com/kiwi-init/channels/pull/2264))
+- **Test helper: the owner CLI takes a key that starts with a dash as the key (T5226)** ([#2271](https://github.com/kiwi-init/channels/pull/2271))
+- **Clock: each task carries one clock in the log; a quiet task is due a wake, then the lead, then the owner (T4170)** ([#2256](https://github.com/kiwi-init/channels/pull/2256))
+- **Docs: landing steps, whose move a task is, and no merge gate; kiwi/review's retirement note (T4174)** ([#2273](https://github.com/kiwi-init/channels/pull/2273))
+- **README in Simplified Chinese, and a language line on both (T5302)** ([#2276](https://github.com/kiwi-init/channels/pull/2276))
+- **Docs: self-hosting where Cloudflare is slow, in English and Chinese (T5304)** ([#2274](https://github.com/kiwi-init/channels/pull/2274))
+- **Tall mode goes: a portrait window is the same app (T1830)** ([#2267](https://github.com/kiwi-init/channels/pull/2267))
+- **Rail: on Home, a channel's needs-you count is Home's live one, and it stays on the tile after you leave Home (T5276)** ([#2275](https://github.com/kiwi-init/channels/pull/2275))
+- **Clock: how long a task may stay quiet is a channel setting (T4457)** ([#2277](https://github.com/kiwi-init/channels/pull/2277))
+- **Linux: Breeze Dark's taskbar and Alt+Tab show Channels' dark icon (T2997)** ([#2272](https://github.com/kiwi-init/channels/pull/2272))
+
 ## 2026.11.16 — 2026-11-10
 
 - **First run: one line on the encryption screen, and Enter goes on from anywhere in the intro (T4291)** ([#2250](https://github.com/kiwi-init/channels/pull/2250))

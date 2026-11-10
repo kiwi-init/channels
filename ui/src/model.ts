@@ -172,6 +172,36 @@ export interface TaskEvent {
   root?: number
 }
 
+export type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land"
+
+export type RunTrouble = "failed" | "unseen" | "overran"
+
+export type TaskMover =
+  | { kind: "member"; name: string; move: MoveFor; question?: number; trouble?: RunTrouble }
+  | { kind: "waiting"; owner: string; ahead: number }
+  | { kind: "run"; behind: string; due: number }
+  | { kind: "hold"; until: number; reason: Words }
+  | { kind: "nobody" }
+
+export interface TaskQuiet {
+  with: string
+  since: number
+  from: number
+  every: number
+  step: 0 | 1 | 2 | 3
+}
+
+export interface TaskStep {
+  id: string
+  words: Words
+  by?: string
+  state: "done" | "skipped" | "current" | "next"
+  wait?: { reason: Words; until: number }
+  run?: { due: number }
+  trouble?: RunTrouble
+  yours?: true
+}
+
 export interface Task {
   id: number
   title: Words
@@ -191,6 +221,9 @@ export interface Task {
   archived: boolean
   cancelled?: boolean
   lands?: { then: string; by?: string; waits?: string }
+  mover?: TaskMover
+  quiet?: TaskQuiet
+  steps?: TaskStep[]
   closedWith?: Words
   youReview?: "verdict" | "send-back"
   suggested?: { name: string; reason?: Reason }
@@ -741,6 +774,7 @@ export interface Actions {
   answerStep(code: string, id: string, reply: StepReply): void
   answerJoin(code: string, id: string, letIn: boolean, choice?: JoinChoice): void
   approveTask(code: string, task: number, approve: boolean, why?: string): void
+  endStep(code: string, task: number, step: string): void
   addTask(code: string, ask: number, title: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
   cancelTask(code: string, task: number, why: string): void

@@ -28,6 +28,7 @@ export default {
   "live.actions.let.in.failed": "参加を許可できませんでした",
   "live.actions.turn.away.failed": "参加を拒否できませんでした",
   "live.actions.not.approved": "承認できませんでした",
+  "live.actions.step.not.ended": "手順を完了にできませんでした",
   "live.actions.not.sent.back": "差し戻せませんでした",
   "live.actions.task.not.added": "タスクを追加できませんでした",
   "live.actions.not.changed": "変更できませんでした",
