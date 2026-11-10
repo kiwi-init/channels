@@ -1,0 +1,13 @@
+# Which CI jobs a change may skip: a job runs unless every changed file sits inside an area
+# allowed to skip it, and any file no area claims (or a diff base that cannot be resolved)
+# means every job runs. Mixed areas keep what none of them may skip, and a release input or
+# a stamp commit titled "kiwi YYYY.M.PATCH" runs every job.
+areas:
+  ui:
+    paths:
+      - ui/
+    skip: [cli-macos]
+  desktop:
+    paths:
+      - desktop/
+    skip: [test-flows, doc, fuzz, shots]
