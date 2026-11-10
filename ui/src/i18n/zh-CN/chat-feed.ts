@@ -105,7 +105,6 @@ export default {
   "chat.search.box.fetches": "从中继获取最多 {count} 条较早的消息。",
   "chat.search.box.fetches.since": "已搜索到 {date}。从中继获取最多 {count} 条较早的消息。",
   "chat.send.keys.enter": "发送（Enter）",
-  "chat.send.keys.cmd.enter": "发送（{keys}）",
   "chat.stash.list.label": "暂存的草稿",
   "chat.stash.list.drops.one": "{key} 删除一条",
   "chat.step.copied": "命令已复制",

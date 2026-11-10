@@ -6,7 +6,7 @@ import type { CustomTheme, Prefs } from "~/model"
 import { cleanFolders } from "~/shell/rail-items"
 import { cleanThemes, deletedTheme, movedDark, savedTheme, type ThemePrefs } from "~/theme/themes"
 
-type Own = Pick<Prefs, "muted" | "enterSends" | "darkTheme" | "lightTheme" | "customThemes" | "folders">
+type Own = Pick<Prefs, "muted" | "darkTheme" | "lightTheme" | "customThemes" | "folders">
 
 const KEY = "ui.prefs"
 const MOVED = "ui.prefs.oled"
@@ -14,7 +14,6 @@ const CINDER = "ui.prefs.cinder"
 const CHANNELS = "ui.prefs.channels-dark"
 const DEFAULTS: Own = {
   muted: [],
-  enterSends: true,
   darkTheme: "channels-dark",
   lightTheme: "channels-light",
   customThemes: [],
@@ -31,7 +30,6 @@ export function readPrefs(store: Store): Own {
   const moved = { oled: store.getItem(MOVED) === "1", cinder: store.getItem(CINDER) === "1", channels: store.getItem(CHANNELS) === "1" }
   const read: Own = {
     muted: Array.isArray(raw.muted) ? [...new Set(raw.muted.filter((k): k is string => typeof k === "string" && !!k))].slice(0, 500) : [],
-    enterSends: typeof raw.enterSends === "boolean" ? raw.enterSends : DEFAULTS.enterSends,
     darkTheme: typeof raw.darkTheme === "string" ? movedDark(raw.darkTheme, moved) : DEFAULTS.darkTheme,
     lightTheme: typeof raw.lightTheme === "string" ? raw.lightTheme : DEFAULTS.lightTheme,
     customThemes: cleanThemes(raw.customThemes),
@@ -99,7 +97,7 @@ export function setPrefs(p: Partial<Prefs>): void {
   if (Object.keys(changed).length) writeOwn({ ...readOwn(), ...changed })
 }
 
-const OWN_KEYS = ["muted", "enterSends", "darkTheme", "lightTheme", "customThemes", "folders"] as const satisfies readonly (keyof Own)[]
+const OWN_KEYS = ["muted", "darkTheme", "lightTheme", "customThemes", "folders"] as const satisfies readonly (keyof Own)[]
 
 export const saveTheme = (theme: CustomTheme): void => writeOwn({ ...readOwn(), ...savedTheme(readOwn(), theme) })
 

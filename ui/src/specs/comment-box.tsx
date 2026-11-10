@@ -12,7 +12,7 @@ import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel, Message, SendExtras, Spec, Upload, Where } from "~/model"
 import { nickname } from "~/names"
-import { useAct, useAppPrefs } from "~/nav"
+import { useAct } from "~/nav"
 import { splitQuote } from "~/specs/read"
 import { wordsRaw } from "~/words"
 
@@ -40,9 +40,9 @@ export function commentOf(ask: number, text: string, files: readonly Upload[], q
 
 type Key = SendKey & { preventDefault(): void }
 
-export function commentKeys(enterSends: boolean, send: () => void, cancel?: () => void): (e: Key) => void {
+export function commentKeys(send: () => void, cancel?: () => void): (e: Key) => void {
   return (e) => {
-    if (sendsOn(e, enterSends)) {
+    if (sendsOn(e)) {
       e.preventDefault()
       send()
       return
@@ -70,7 +70,6 @@ export function CommentBox({
   onDone?: () => void
 }) {
   const { actions, toast } = useAct()
-  const enterSends = useAppPrefs().enterSends
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Upload[]>([])
   const box = useRef<HTMLTextAreaElement>(null)
@@ -106,8 +105,8 @@ export function CommentBox({
     if (reply) onUnreply?.()
     onDone?.()
   }
-  const sendKeys = commentKeys(enterSends, send, reply ? onUnreply : onDone)
-  const title = sendTitle(enterSends)
+  const sendKeys = commentKeys(send, reply ? onUnreply : onDone)
+  const title = sendTitle()
   const who = reply ? nickname(channel, reply.to.from) : ""
   const line = reply ? (reply.excerpt ?? preview(splitQuote(wordsRaw(reply.to.text)).text)).replace(/\s+/g, " ") : ""
   return (

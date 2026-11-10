@@ -95,7 +95,6 @@ export default {
   "chat.message.reply": "Reply",
   "chat.message.copy.text": "Copy text",
   "chat.send.keys.enter": "Send (Enter)",
-  "chat.send.keys.cmd.enter": "Send ({keys})",
   "chat.suggest.tasks": "Tasks and specs",
   "chat.suggest.spec": "spec",
   "chat.suggest.people": "People",

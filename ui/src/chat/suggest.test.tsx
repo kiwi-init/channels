@@ -121,7 +121,7 @@ describe("one suggestion list for the chat composer and spec comments (#1888)", 
 
   test("the spec comment box is wired to the list", () => {
     const html = renderToStaticMarkup(
-      <AppContext.Provider value={{ app: { channel, prefs: { enterSends: true } }, go: () => {} } as unknown as Ctx}>
+      <AppContext.Provider value={{ app: { channel, prefs: {} }, go: () => {} } as unknown as Ctx}>
         <ActContext.Provider value={{ actions: {}, go: () => {}, toast: () => {} } as unknown as Act}>
           <CommentBox channel={channel} spec={spec} />
         </ActContext.Provider>
