@@ -38,7 +38,7 @@ describe("which jobs CI runs (T5174)", () => {
 
   test("a dispatch runs the jobs it names, a named distros takes its linux producer, an unnamed dispatch never takes distros, and a push runs all but the phones", () => {
     expect(picked(plan({ EVENT: "workflow_dispatch", JOBS: "cli-macos,build" }))).toEqual(["build", "cli-macos"]);
-    expect(picked(plan({ EVENT: "workflow_dispatch", JOBS: "desktop-distros" }))).toEqual(["desktop-distros", "desktop-linux"]);
+    expect(picked(plan({ EVENT: "workflow_dispatch", JOBS: "desktop-distros" }))).toEqual(["desktop-linux", "desktop-distros"]);
     const push = plan({ EVENT: "push" });
     expect(Object.keys(push).filter((k) => !push[k])).toEqual(["ios", "android"]);
     const unnamed = picked(plan({ EVENT: "workflow_dispatch", JOBS: "" }));
