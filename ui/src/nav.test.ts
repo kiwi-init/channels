@@ -39,7 +39,7 @@ describe("back and forward walk the places you were (T978)", () => {
   })
 
   test("a message link into another channel is one step: ⌘[ goes straight back, not through that channel's last room", () => {
-    keepPlace("b", { where: room("ops"), tab: "chat" })
+    keepPlace("b", { where: room("ops") })
     const nav = run(startNav("a"), { to: "channel", code: "b", jump: true }, { to: "where", where: room("alerts"), replace: true })
     expect(at(nav)).toEqual({ channel: "b", where: room("alerts"), tab: "chat" })
     expect(nav.back.map((p) => [p.channel, p.where])).toEqual([["a", general]])
@@ -178,10 +178,16 @@ describe("every task link does what a board row does (T1849)", () => {
   })
 })
 
-describe("a channel opens where you left it (T978)", () => {
-  test("its room and tab come back", () => {
-    keepPlace("d", { where: room("design"), tab: "specs" })
-    expect(at(navigate(startNav(null), { to: "channel", code: "d" }))).toEqual({ channel: "d", where: room("design"), tab: "specs" })
+describe("a channel opens in the room you left, on its chat (T978, T1833)", () => {
+  test("its room comes back", () => {
+    keepPlace("d", { where: room("design") })
+    expect(at(navigate(startNav(null), { to: "channel", code: "d" }))).toEqual({ channel: "d", where: room("design"), tab: "chat" })
+  })
+
+  test("the tab you left it on does not: a channel left on Specs opens on chat", () => {
+    const away = run(startNav("d"), { to: "where", where: room("design") }, { to: "tab", tab: "specs" })
+    keepPlace("d", { where: away.where })
+    expect(at(navigate(navigate(away, { to: "channel", code: "e" }), { to: "channel", code: "d" }))).toEqual({ channel: "d", where: room("design"), tab: "chat" })
   })
 
   test("a channel with nothing kept opens #general on chat", () => {

@@ -9,14 +9,12 @@ export interface Spot {
 
 export interface Kept {
   where: Where
-  tab: Tab
 }
 
 const SPOTS = "mc.spots"
 const PLACES = "mc.places"
 const KEEP = 200
 const WRITE_MS = 500
-const TABS: readonly Tab[] = ["chat", "specs", "tasks", "agents", "github"]
 
 const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x)
 
@@ -38,8 +36,7 @@ function spotOf(x: unknown): Spot | null {
 function keptOf(x: unknown): Kept | null {
   if (!isRecord(x)) return null
   const where = whereOf(x.where)
-  const tab = TABS.find((t) => t === x.tab) ?? "chat"
-  return where ? { where, tab } : null
+  return where ? { where } : null
 }
 
 function read<T>(key: string, parse: (x: unknown) => T | null): Map<string, T> {
