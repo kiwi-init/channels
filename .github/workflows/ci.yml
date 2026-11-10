@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, and the phone jobs ios, android); empty runs everything but the phone jobs"
+        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, and the phone jobs ios, android); empty picks from what the branch changed (.github/coverage.yml), everything when in doubt"
         required: false
         default: ""
       update_from:
