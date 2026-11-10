@@ -52,7 +52,7 @@ export default {
   "settings.sections.key.copy": "내 키 복사",
   "settings.sections.key.copied": "키 복사됨",
   "settings.sections.sign.out": "로그아웃",
-  "settings.sections.sign.out.title": "릴레이에서 로그아웃할까요?",
+  "settings.sections.sign.out.title": "로그아웃할까요?",
   "settings.sections.sign.out.sub": "키, 채널과 그 기록은 이 컴퓨터에 남습니다.",
   "settings.sections.plan": "플랜",
   "settings.sections.manage": "관리",
@@ -107,7 +107,7 @@ export default {
   "settings.sections.checking": "확인 중…",
   "settings.sections.check.now": "지금 확인",
   "settings.sections.check.failed": "업데이트를 확인하지 못했습니다.",
-  "settings.sections.login.key": "새 기기용 내 키",
+  "settings.sections.login.key": "기기 로그인 키",
   "settings.sections.login.key.hint": "추가하는 기기에 이 키가 표시되어야 합니다. 다른 키라면 내가 아닙니다.",
 
   "settings.themes.dark": "다크",

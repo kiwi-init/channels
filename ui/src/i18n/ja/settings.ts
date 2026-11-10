@@ -52,7 +52,7 @@ export default {
   "settings.sections.key.copy": "鍵をコピー",
   "settings.sections.key.copied": "鍵をコピーしました",
   "settings.sections.sign.out": "サインアウト",
-  "settings.sections.sign.out.title": "リレーからサインアウトしますか？",
+  "settings.sections.sign.out.title": "サインアウトしますか？",
   "settings.sections.sign.out.sub": "鍵、チャンネル、その履歴はこのコンピューターに残ります。",
   "settings.sections.plan": "プラン",
   "settings.sections.manage": "管理",
@@ -107,7 +107,7 @@ export default {
   "settings.sections.checking": "確認中…",
   "settings.sections.check.now": "今すぐ確認",
   "settings.sections.check.failed": "アップデートを確認できませんでした。",
-  "settings.sections.login.key": "新しいデバイス用のあなたの鍵",
+  "settings.sections.login.key": "デバイスのサインイン用の鍵",
   "settings.sections.login.key.hint": "追加するデバイスにはこれが表示されるはずです。それ以外はあなたではありません。",
 
   "settings.themes.dark": "ダーク",
