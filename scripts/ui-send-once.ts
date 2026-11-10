@@ -57,13 +57,14 @@ try {
   await context.route("**/*", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
-    const file = down && req.method() === "GET" ? fromDisk(decodeURIComponent(url.pathname)) : null;
+    const file = down && req.method() === "GET" && !url.pathname.startsWith("/v1/") ? fromDisk(decodeURIComponent(url.pathname)) : null;
     if (file) return route.fulfill({ path: file });
     return route.continue();
   });
   const page = await context.newPage();
   const threw: string[] = [];
   page.on("pageerror", (e) => threw.push(e.message));
+  if (process.argv.includes("--console")) page.on("console", (m) => console.log(`  [page ${m.type()}] ${m.text().slice(0, 200)}`));
   await page.goto(BASE);
   await firstRun(page, "owner");
   await newChannel(page, "send once");
