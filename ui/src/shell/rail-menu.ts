@@ -1,4 +1,5 @@
 import "~/i18n/en/shell-later"
+import "~/i18n/en/modals"
 
 import type { OpenMenu } from "~/kit/menu-open"
 import type { Folder } from "~/model"
@@ -14,6 +15,9 @@ interface Rail {
   setMute: (code: string, on: boolean) => void
   save: (folders: Folder[]) => void
   settings: ((code: string) => void) | null
+  own?: boolean | undefined
+  invite?: (code: string) => void
+  end?: (code: string) => void
 }
 
 export function railMenu(target: RailTarget, at: { x: number; y: number }, rail: Rail): OpenMenu | null {
@@ -44,7 +48,17 @@ export function railMenu(target: RailTarget, at: { x: number; y: number }, rail:
               { label: t("shell.rail.menu.new.folder"), run: () => save([...folders, { id: newFolderId(), name: folderName(), codes: [code], open: true }]) },
             ]),
       ],
-      ...(rail.settings ? [[{ label: t("shell.channel.settings"), run: () => rail.settings?.(code) }]] : []),
+      ...(rail.settings
+        ? [
+            [
+              { label: t("shell.channel.settings"), run: () => rail.settings?.(code) },
+              ...(rail.own && rail.invite ? [{ label: t("shell.sidebar.invite.people"), run: () => rail.invite?.(code) }] : []),
+            ],
+          ]
+        : []),
+      ...(rail.settings && rail.own !== undefined && rail.end
+        ? [[{ label: t(rail.own ? "modals.channel.settings.delete.channel.more" : "modals.channel.settings.leave.channel.more"), run: () => rail.end?.(code) }]]
+        : []),
     ],
   }
 }

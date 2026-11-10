@@ -998,10 +998,11 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   }, [shownUsage, scenario])
 
   const home = useMemo(() => [...state.channels.values()].map((c) => homeOf(c)), [state.channels])
+  const tiles = useMemo(() => state.tiles.map((t) => (state.channels.has(t.code) ? { ...t, own: !!state.channels.get(t.code)?.youOwn } : t)), [state.tiles, state.channels])
 
   return {
     account: state.account,
-    channels: state.tiles,
+    channels: tiles,
     home,
     channel: open && state.gone?.code !== open ? (state.channels.get(open) ?? null) : null,
     ...(state.gone && state.gone.code === open ? { gone: state.gone } : {}),

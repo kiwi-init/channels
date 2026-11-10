@@ -145,6 +145,15 @@ export function Rail() {
                         go({ to: "modal", modal: { kind: "channel" } })
                       }
                     : null,
+                own: target.kind === "channel" ? tiles.find((c) => c.code === target.code)?.own : undefined,
+                invite: (code) => {
+                  go({ to: "channel", code })
+                  go({ to: "modal", modal: { kind: "invite" } })
+                },
+                end: (code) => {
+                  go({ to: "channel", code })
+                  go({ to: "modal", modal: { kind: "channel", end: true } })
+                },
                 save,
               })
             )

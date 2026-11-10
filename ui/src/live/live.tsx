@@ -28,6 +28,7 @@ import { useComputer } from "~/live/computer"
 import { useDeviceLists } from "~/live/devices"
 import { useGone, useHome, useOpened } from "~/live/store"
 import type { App, ChannelTile } from "~/model"
+import { useOwned } from "~/live/owned"
 import { later } from "~/kit/later"
 import type { Go } from "~/nav"
 
@@ -39,6 +40,7 @@ function useTiles(rows: ChannelRow[], muted: readonly string[]): ChannelTile[] {
   const marks = useMarks()
   const openNews = useOpenNews()
   const icons = useIcons()
+  const owned = useOwned()
   const news = useMemo(
     () =>
       rows.map((r) => {
@@ -63,9 +65,10 @@ function useTiles(rows: ChannelRow[], muted: readonly string[]): ChannelTile[] {
           needsYou: n?.needs ?? 0,
           last: r.ts,
           ...(n && "muted" in n ? { muted: true as const } : {}),
+          ...(owned[r.code] === undefined ? {} : { own: owned[r.code] }),
         }
       }),
-    [rows, news, icons]
+    [rows, news, icons, owned]
   )
 }
 
