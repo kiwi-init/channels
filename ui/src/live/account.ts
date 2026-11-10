@@ -8,7 +8,9 @@ import { useUpdate } from "@kiwi/app/update.ts"
 import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { deviceNews } from "~/live/devices"
+import { paced } from "~/live/paced"
 import { store, type Listener } from "~/live/value"
+import { useOwnAgents } from "~/live/wakes"
 import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn } from "~/model"
 import { version } from "../../../package.json"
 
@@ -183,11 +185,10 @@ function useMachines(): ReadonlyMap<string, boolean | null> {
     const b = bridge()
     if (!b) return
     let live = true
-    const load = () =>
-      void b.machines().then(
-        (ms) => live && setOnline(new Map(ms.map((m) => [m.machinePk, m.online]))),
-        () => {}
-      )
+    const load = paced(
+      () => b.machines(),
+      (ms) => void (live && setOnline(new Map(ms.map((m) => [m.machinePk, m.online]))))
+    )
     load()
     window.addEventListener("focus", load)
     return () => {
@@ -196,27 +197,6 @@ function useMachines(): ReadonlyMap<string, boolean | null> {
     }
   }, [])
   return online
-}
-
-function useOwnAgents(): number {
-  const [n, setN] = useState(0)
-  useEffect(() => {
-    const b = bridge()
-    if (!b) return
-    let live = true
-    const load = () =>
-      void b.wakeSeats().then(
-        (s) => live && setN(s.length),
-        () => {}
-      )
-    load()
-    window.addEventListener("focus", load)
-    return () => {
-      live = false
-      window.removeEventListener("focus", load)
-    }
-  }, [])
-  return n
 }
 
 const uiUpdate = (() => {

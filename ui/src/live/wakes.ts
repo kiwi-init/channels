@@ -3,9 +3,9 @@ import { useMemo, useSyncExternalStore } from "react"
 import type { WakeSeat } from "@kiwi/core/wake.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { t } from "~/i18n/i18n"
+import { paced } from "~/live/paced"
 
 let seats: readonly WakeSeat[] = []
-let asking = false
 const listeners = new Set<() => void>()
 
 function tell(next: readonly WakeSeat[]): void {
@@ -13,15 +13,7 @@ function tell(next: readonly WakeSeat[]): void {
   for (const l of listeners) l()
 }
 
-function load(): void {
-  const b = bridge()
-  if (!b || asking) return
-  asking = true
-  void b
-    .wakeSeats()
-    .then(tell, () => {})
-    .finally(() => (asking = false))
-}
+const load = paced(() => bridge()?.wakeSeats() ?? Promise.reject(new Error(t("live.wakes.desktop.only"))), tell)
 
 function subscribe(l: () => void): () => void {
   listeners.add(l)
@@ -40,6 +32,10 @@ const read = (): readonly WakeSeat[] => seats
 export function useWakes(room: string): ReadonlyMap<string, boolean> {
   const all = useSyncExternalStore(subscribe, read, read)
   return useMemo(() => new Map(all.filter((s) => s.room === room).map((s) => [s.agent, s.wake === "on"])), [all, room])
+}
+
+export function useOwnAgents(): number {
+  return useSyncExternalStore(subscribe, read, read).length
 }
 
 export async function setWake(room: string, agent: string, on: boolean): Promise<void> {
