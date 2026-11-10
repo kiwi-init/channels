@@ -31,7 +31,7 @@ function waitingOnPrompt(): Promise<{ inTime: boolean; ticks: number; key: strin
   });
 }
 
-describe("waiting for the launcher's keychain answer (T1762)", () => {
+describe.skipIf(process.platform !== "darwin")("waiting for the launcher's keychain answer, on a Mac (T1762)", () => {
   test("the main thread keeps running while the launcher waits on a keychain prompt, so the 2 s grace can fire and the window can say it's waiting", async () => {
     const got = await waitingOnPrompt();
     expect(got.key).toBe("the store key");
