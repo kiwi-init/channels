@@ -12,11 +12,15 @@ on:
         type: string
         default: ""
       jobs:
-        description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a thread doc's updates cost, at a short and a long thread, no gate), or all"
+        description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a thread doc's updates cost, at a short and a long thread, no gate), upgrade (an older release's data opened by this build), or all"
         type: string
         default: "scale"
       doc_lines:
         description: "Thread lengths for the doc job, space separated (empty is 40 400)"
+        type: string
+        default: ""
+      upgrade_from:
+        description: "The release tag the upgrade job starts from (empty is v2026.11.15)"
         type: string
         default: ""
       desktop_messages:
@@ -34,7 +38,7 @@ permissions:
 jobs:
   perf:
     name: perf / scale and soak
-    if: ${{ inputs.jobs != 'desktop' && inputs.jobs != 'doc' }}
+    if: ${{ inputs.jobs != 'desktop' && inputs.jobs != 'doc' && inputs.jobs != 'upgrade' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -84,6 +88,26 @@ jobs:
             bun scripts/perf-doc-updates.ts --lines=$lines --json="$RUNNER_TEMP/perf-doc-$lines.json"
           done
           { echo '```json'; jq -s . "$RUNNER_TEMP"/perf-doc-*.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  upgrade:
+    name: perf / an older release's data opens in this build
+    if: ${{ inputs.jobs == 'upgrade' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/browser
+      - run: bun scripts/ui-harness.ts
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.upgrade_from || 'v2026.11.15' }}
+          path: old-release
+      - name: the older release's own harness build
+        working-directory: old-release
+        run: bun install --frozen-lockfile && bun scripts/ui-harness.ts
+      - name: its data, opened by this build
+        run: bun scripts/ui-upgrade.ts --old=old-release
 
   desktop:
     name: perf / desktop cold start and idle memory
