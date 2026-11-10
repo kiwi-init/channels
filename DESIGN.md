@@ -233,7 +233,12 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   lead (an avatar or a tile), the title, an optional sub line and close;
   tabs, when it has them, sit under the title in the head. The body scrolls
   and an optional foot holds the actions. Esc, a click outside and Back or
-  Forward close it, and focus stays inside. Settings-like screens (channel
+  Forward close it, and focus stays inside. Once something is typed in it,
+  a click outside no longer closes it: only Esc, Cancel or the X do. The
+  same holds from the start for a dialog that shows something to copy
+  (Invite, Add an agent). Cancel
+  is quiet and sits left of the action; a dialog that throws something away
+  opens with the focus on Cancel. Settings-like screens (channel
   settings, profiles, Invite, Add an agent) open in it, built from Settings'
   `Group` and `Row` with real headings; the side panel is only for work: a
   thread, a task, a PR or an issue.

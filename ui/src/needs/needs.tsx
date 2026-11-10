@@ -257,14 +257,14 @@ function PermissionAskCard({ channel, ask, link }: { channel: Channel; ask: Perm
       actions={
         open && (ask.canAllow || ask.canDeny || ask.allower) ? (
           <>
-            {ask.canAllow && (
-              <button type="button" className="btn is-primary" onClick={() => app.actions.answerPermission(channel.code, ask.id, true)}>
-                {t("needs.permission.allow")}
-              </button>
-            )}
             {ask.canDeny && (
               <button type="button" className="btn" onClick={() => app.actions.answerPermission(channel.code, ask.id, false)}>
                 {t("needs.permission.deny")}
+              </button>
+            )}
+            {ask.canAllow && (
+              <button type="button" className="btn is-primary" onClick={() => app.actions.answerPermission(channel.code, ask.id, true)}>
+                {t("needs.permission.allow")}
               </button>
             )}
             {!ask.canAllow && ask.allower && <span className="needs-why">{t("needs.permission.only", { name: nickname(channel, ask.allower) })}</span>}
@@ -399,6 +399,9 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       link={link}
       actions={
         <>
+          <button type="button" className="btn is-danger" onClick={() => app.actions.answerJoin(channel.code, ask.id, false)}>
+            {t("needs.join.turn.away")}
+          </button>
           {ask.revoked ? null : unchecked ? (
             <button type="button" className="btn is-primary" onClick={() => app.actions.answerJoin(channel.code, ask.id, true)}>
               {agent ? t("needs.join.show.its.code") : t("needs.join.show.their.code")}
@@ -414,9 +417,6 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
                     : t("needs.join.let.in", { name: ask.freeName ?? ask.name })}
             </button>
           )}
-          <button type="button" className="btn is-danger" onClick={() => app.actions.answerJoin(channel.code, ask.id, false)}>
-            {t("needs.join.turn.away")}
-          </button>
         </>
       }
     >

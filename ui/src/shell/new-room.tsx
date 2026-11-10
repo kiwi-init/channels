@@ -46,7 +46,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
     })
   const ready = !!name && !problem && !busy
   return (
-    <Modal dismiss="x" onClose={onClose} label={t("shell.new.room.title")} title={t("shell.new.room.title")}>
+    <Modal onClose={onClose} label={t("shell.new.room.title")} title={t("shell.new.room.title")}>
       <form
         className="room-form"
         onSubmit={async (e) => {
@@ -121,6 +121,9 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
         )}
         {failed && <Failed failure={failed} />}
         <div className="modal-foot">
+          <button type="button" className="btn is-quiet" onClick={onClose}>
+            {t("kit.context.menu.cancel")}
+          </button>
           <button type="submit" className="btn is-primary" disabled={!ready || (only && picked.size === 0)}>
             {busy
               ? t("shell.new.room.making")

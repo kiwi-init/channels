@@ -39,7 +39,7 @@ export function Profile({ channel, name, onClose }: { channel: Channel; name: st
   const person = memberOf(channel, name)
   if (!person)
     return (
-      <Modal dismiss="outside" onClose={onClose} label={t("modals.profile.title")} title={t("modals.profile.title")}>
+      <Modal onClose={onClose} label={t("modals.profile.title")} title={t("modals.profile.title")}>
         <Empty title={t("modals.profile.missing", { name: nickname(channel, name) })}>{t("modals.profile.missing.why")}</Empty>
       </Modal>
     )
@@ -53,7 +53,6 @@ export function Profile({ channel, name, onClose }: { channel: Channel; name: st
   const manages = (channel.youOwn || (channel.youManageAgents && person.kind === "agent") || person.yours) && !person.you && !person.owner && !person.left
   return (
     <Modal
-      dismiss="outside"
       onClose={onClose}
       label={t("modals.profile.of", { name: shown(person) })}
       className="person"

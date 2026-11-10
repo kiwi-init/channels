@@ -40,11 +40,11 @@ function Check({ person }: { person: { name: string; fingerprint: string } }) {
       </p>
       <p className="start-hint">{t("start.enroll.compare")}</p>
       <div className="start-row start-check">
-        <button type="button" className="btn is-primary" autoFocus onClick={() => actions.enrollKeep()}>
-          {t("start.enroll.matches")}
-        </button>
         <button type="button" className="btn is-quiet" onClick={() => actions.enrollCancel()}>
           {t("start.enroll.no.match")}
+        </button>
+        <button type="button" className="btn is-primary" autoFocus onClick={() => actions.enrollKeep()}>
+          {t("start.enroll.matches")}
         </button>
       </div>
     </>

@@ -90,7 +90,7 @@ export function Invite({ channel, onClose }: { channel: Channel; onClose: () => 
   const powers = channel.newPowers ?? NO_POWERS
   const trust = can === "write" && trusted(powers)
   return (
-    <Modal dismiss="x" onClose={onClose} label={t("modals.invite.title")} title={t("modals.invite.title")} sub={t("modals.invite.sub")} size="narrow" className="invite">
+    <Modal stays onClose={onClose} label={t("modals.invite.title")} title={t("modals.invite.title")} sub={t("modals.invite.sub")} size="narrow" className="invite">
       {failed ? (
         <div className="invite-failed">
           <span>{t("modals.invite.link.failed")}</span>

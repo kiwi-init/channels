@@ -47,7 +47,7 @@ export function DocVersions({ channel, thread, name, onClose }: { channel: Chann
   const foot = picked ? (
     <>
       <span className="doc-versions-ask">{t("modals.doc.versions.replace.ask", { time: ago(picked.ts) })}</span>
-      <button type="button" className="btn is-small" disabled={busy} onClick={() => setPicked(null)}>
+      <button type="button" className="btn is-small is-quiet" disabled={busy} onClick={() => setPicked(null)}>
         {t("modals.doc.versions.cancel")}
       </button>
       <button type="button" className="btn is-small is-primary" disabled={busy} onClick={() => void restore(picked)}>
@@ -79,7 +79,7 @@ export function DocVersions({ channel, thread, name, onClose }: { channel: Chann
     </div>
   )
   return (
-    <Modal dismiss="outside" onClose={onClose} label={t("modals.doc.versions.title")} title={t("modals.doc.versions.title")} sub={name} size="narrow" foot={foot}>
+    <Modal onClose={onClose} label={t("modals.doc.versions.title")} title={t("modals.doc.versions.title")} sub={name} size="narrow" foot={foot}>
       {body}
     </Modal>
   )

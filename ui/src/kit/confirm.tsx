@@ -25,7 +25,7 @@ export function Confirm({
   children?: ReactNode
 }) {
   return (
-    <Modal dismiss={children === undefined ? "outside" : "x"} open={open} onClose={onClose} label={title} title={title} sub={sub}>
+    <Modal open={open} onClose={onClose} label={title} title={title} sub={sub}>
       <form
         className="modal-form"
         onSubmit={(e) => {

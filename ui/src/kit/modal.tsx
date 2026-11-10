@@ -8,12 +8,15 @@ type ModalSize = "narrow" | "wide"
 
 const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
 
-export type ModalDismiss = "x" | "outside"
+const typedIn = (el: EventTarget | null): boolean =>
+  el instanceof HTMLTextAreaElement ||
+  (el instanceof HTMLInputElement && !["checkbox", "radio", "range", "file", "color", "button", "submit"].includes(el.type)) ||
+  (el instanceof HTMLElement && el.isContentEditable)
 
 export function Modal({
   open = true,
   onClose,
-  dismiss,
+  stays,
   label,
   title,
   sub,
@@ -26,7 +29,7 @@ export function Modal({
 }: {
   open?: boolean
   onClose: () => void
-  dismiss: ModalDismiss
+  stays?: boolean
   label: string
   title: ReactNode
   sub?: ReactNode
@@ -40,11 +43,13 @@ export function Modal({
   const ref = useRef<HTMLDialogElement>(null)
   const wanted = useRef(open)
   const pressed = useRef<EventTarget | null>(null)
+  const typed = useRef(false)
   useEffect(() => {
     wanted.current = open
     const el = ref.current
     if (!el) return
     if (open && !el.open) {
+      typed.current = false
       el.showModal()
       ;(el.querySelector<HTMLElement>("[autofocus]") ?? el).focus()
     }
@@ -67,7 +72,10 @@ export function Modal({
       onClick={(e) => {
         const started = pressed.current
         pressed.current = null
-        if (dismiss === "outside" && e.target === e.currentTarget && started === e.currentTarget) onClose()
+        if (!stays && !typed.current && e.target === e.currentTarget && started === e.currentTarget) onClose()
+      }}
+      onInput={(e) => {
+        if (typedIn(e.target) && (e.target as HTMLElement).closest("dialog") === e.currentTarget) typed.current = true
       }}
       onKeyDown={(e) => {
         if (e.key !== "Tab" || e.defaultPrevented) return
