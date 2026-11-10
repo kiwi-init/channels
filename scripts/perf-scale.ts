@@ -138,6 +138,35 @@ async function sample(cdp: CDPSession): Promise<{ heapMB: number; nodes: number;
   return { heapMB: mb(m.JSHeapUsedSize ?? 0), nodes: m.Nodes ?? 0, listeners: m.JSEventListeners ?? 0, documents: m.Documents ?? 0, attached: result.value[0], rows: result.value[1] };
 }
 
+interface HeapSite {
+  callFrame: { functionName: string; url: string; lineNumber: number };
+  selfSize: number;
+  children?: HeapSite[];
+}
+
+function liveByChunk(head: HeapSite): { totalMB: number; byChunk: Record<string, number>; sites: string[] } {
+  const chunks = new Map<string, number>();
+  const sites = new Map<string, number>();
+  let total = 0;
+  const walk = (n: HeapSite): void => {
+    const file =
+      n.callFrame.url
+        .replace(/^.*\//, "")
+        .replace(/-[A-Za-z0-9_-]{8}\./, ".")
+        .replace(/\?.*$/, "") || "(engine)";
+    chunks.set(file, (chunks.get(file) ?? 0) + n.selfSize);
+    const site = `${n.callFrame.functionName || "(anon)"} ${file}:${n.callFrame.lineNumber}`;
+    sites.set(site, (sites.get(site) ?? 0) + n.selfSize);
+    total += n.selfSize;
+    for (const child of n.children ?? []) walk(child);
+  };
+  walk(head);
+  const top = (by: Map<string, number>, count: number) => [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, count);
+  return { totalMB: mb(total), byChunk: Object.fromEntries(top(chunks, 12).map(([k, v]) => [k, mb(v)])), sites: top(sites, 20).map(([k, v]) => `${mb(v)}MB  ${k}`) };
+}
+
+const docBlocks = (page: Page): Promise<number> => page.evaluate(() => document.querySelectorAll(".thread-doc section.blk").length);
+
 async function census(page: Page): Promise<Record<string, number>> {
   return page.evaluate(() => {
     const counts = new Map<string, number>();
@@ -466,6 +495,9 @@ try {
   log("typing", JSON.stringify(report[`typing while ${AGENTS} agents post`]));
 
   log(`soak: ${SOAK_MIN} minutes`);
+  const blocksAtStart = await docBlocks(page);
+  await cdp.send("HeapProfiler.collectGarbage");
+  await cdp.send("HeapProfiler.startSampling", { samplingInterval: 8192 });
   const soakEnd = Date.now() + SOAK_MIN * 60000;
   let soakSent = 0;
   const posting = Promise.all(
@@ -493,6 +525,11 @@ try {
     if (minute === 1 || minute % 5 === 0 || Date.now() >= soakEnd) log(`census at soak minute ${minute}`, JSON.stringify(await census(page)));
   }
   await posting;
+  await cdp.send("HeapProfiler.collectGarbage");
+  const { profile: sampled } = (await cdp.send("HeapProfiler.getSamplingProfile")) as unknown as { profile: { head: HeapSite } };
+  await cdp.send("HeapProfiler.stopSampling");
+  report["soak: what was allocated in it and is still held, by file (sampled)"] = { docBlocksAtStart: blocksAtStart, docBlocksAtEnd: await docBlocks(page), ...liveByChunk(sampled.head) };
+  log("soak held", JSON.stringify(report["soak: what was allocated in it and is still held, by file (sampled)"]));
   const soak = idle;
   const soakHeap = heap.filter((h) => h.phase.startsWith("soak"));
   const first = soakHeap[0];

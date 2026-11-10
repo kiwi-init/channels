@@ -13,7 +13,8 @@ if (process.argv.includes("--help")) {
 reader, at the bottom of the same thread, is measured: main-thread script, style, layout and task time (CDP Performance.getMetrics),
 the React components rendered and the commits, the frames it received and its long tasks, per line. Then the reader types
 --chars characters (200) in its own composer and is measured per key. Run it at two lengths to see whether the cost grows with
-the thread. Chromium only.
+the thread. Last, the reader reloads: how long until the thread's last line and its doc are back, the long tasks on the
+way, the blocks the doc holds and the heap after. Chromium only.
 
   bun scripts/perf-doc-updates.ts [--lines=40] [--sends=20] [--chars=200] [--json=out.json] [--dist=ui/dist-harness]
 
@@ -144,8 +145,8 @@ try {
   await switchTo(b, "long");
   await docOpen(b);
   for (let n = 1; n <= LINES; n++) await say(a, `line ${n} of ${LINES}: a sent line, so the thread has a past`);
-  await a.waitForFunction((want) => document.querySelector(".main .feed-list")?.textContent?.includes(want), `line ${LINES} of ${LINES}`, { timeout: 60000 });
-  await b.waitForFunction((want) => document.querySelector(".main .feed-list")?.textContent?.includes(want), `line ${LINES} of ${LINES}`, { timeout: 60000 });
+  await a.waitForFunction((want) => document.querySelector(".main .feed-list")?.textContent?.includes(want), `line ${LINES} of ${LINES}`, { timeout: 600000 });
+  await b.waitForFunction((want) => document.querySelector(".main .feed-list")?.textContent?.includes(want), `line ${LINES} of ${LINES}`, { timeout: 600000 });
   await a.waitForTimeout(4000);
 
   const cdp: CDPSession = await reader.newCDPSession(a);
@@ -198,7 +199,31 @@ try {
   });
   console.log(`per line sent, self time:\n${profiled.self.join("\n")}\nper line sent, with what it calls:\n${profiled.whole.join("\n")}`);
   const perKeyTyped = await during(CHARS, () => composer(a).pressSequentially(typed(CHARS), { delay: 30 }));
-  const result = { lines: LINES, sends: SENDS, chars: CHARS, idlePerLine, perLineSent, perKeyTyped };
+  await a.waitForTimeout(3000);
+  const last = `profiled line ${SENDS} of ${SENDS}`;
+  const from = performance.now();
+  await a.reload();
+  await a.waitForFunction((want) => document.querySelector(".main .feed-list")?.textContent?.includes(want), last, { timeout: 120000 });
+  const feedMs = Math.round(performance.now() - from);
+  await docOpen(a);
+  const docMs = Math.round(performance.now() - from);
+  await a.waitForTimeout(3000);
+  const opened = await a.evaluate(() => {
+    const long = (window as unknown as { __counted: { long: number[] } }).__counted.long;
+    const mark = (name: string) => Math.round(performance.getEntriesByName(name, "mark")[0]?.startTime ?? -1);
+    return {
+      firstMessageMarkMs: mark("kiwi:first-message"),
+      liveMarkMs: mark("kiwi:live"),
+      longTasks: long.length,
+      longMs: long.reduce((n, d) => n + d, 0),
+      worstLongMs: Math.max(0, ...long),
+      docBlocks: document.querySelectorAll(".thread-doc section.blk").length,
+    };
+  });
+  await cdp.send("HeapProfiler.collectGarbage");
+  const heapMB = Math.round((((await cdp.send("Performance.getMetrics")).metrics.find((m) => m.name === "JSHeapUsedSize")?.value ?? 0) / 1048576) * 10) / 10;
+  const reopen = { lastLineShownMs: feedMs, docAttachedMs: docMs, ...opened, heapMBAfter: heapMB };
+  const result = { lines: LINES, sends: SENDS, chars: CHARS, idlePerLine, perLineSent, perKeyTyped, reopen };
   console.log(JSON.stringify(result, null, 2));
   if (OUT) writeFileSync(OUT, `${JSON.stringify(result, null, 2)}\n`);
 } finally {
