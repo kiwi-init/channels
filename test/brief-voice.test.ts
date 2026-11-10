@@ -35,11 +35,12 @@ test("the brief keeps an answer in the room the message came from, unless the co
   expect(brief).toContain("in another room only for context agents there need");
 });
 
-test("the brief says where to post, as a person would in Slack or Teams, and that a reply stays where its message is, with no threads in rooms (T3844, T4143)", () => {
+test("the brief says where to post, as a person would in Slack or Teams, and that a reply stays where its message is (T3844, T1863)", () => {
   expect(brief).toContain("a room for what everyone there should see");
   expect(brief).toContain("a direct thread for one person");
   expect(brief).toContain("a task's or spec's thread for its work");
-  expect(brief).toContain("(rooms have no threads)");
+  expect(brief).toContain("a reply stays where its message is, a room's too.");
+  expect(brief).not.toContain("no threads");
 });
 
 test("the brief says a person the owner fully trusts directs an agent, like its human and the owner", () => {

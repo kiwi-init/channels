@@ -42,7 +42,12 @@ export function personItems({ channel, go }: MenuContext, person: Person): MenuI
   ]
 }
 
-export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget, more: { openImage: (url: string, alt: string) => void; reply: (() => void) | null; at: EditAt }): MenuGroups {
+export function messageGroups(
+  ctx: MenuContext,
+  m: Message,
+  target: EventTarget,
+  more: { openImage: (url: string, alt: string) => void; reply: (() => void) | null; thread: (() => void) | null; at: EditAt }
+): MenuGroups {
   const { channel } = ctx
   const link = webLinkAt(target)
   const picture = (target as Partial<Element>).closest?.<HTMLImageElement>(".msg-image img, .msg-text img") ?? null
@@ -59,7 +64,7 @@ export function messageGroups(ctx: MenuContext, m: Message, target: EventTarget,
           { label: t("chat.menus.save.image"), run: () => saveImage(picture.src, picture.alt) },
         ]
       : [],
-    more.reply ? [{ label: t("chat.menus.reply"), run: more.reply }] : [],
+    [...(more.reply ? [{ label: t("chat.menus.reply"), run: more.reply }] : []), ...(more.thread ? [{ label: t("chat.menus.reply.thread"), run: more.thread }] : [])],
     m.canChange
       ? [
           { label: t("chat.menus.edit"), run: () => startEditing(channel.code, m.seq, more.at) },
