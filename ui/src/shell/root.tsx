@@ -1,4 +1,4 @@
-import { Fragment, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, type ReactNode } from "react"
+import { Fragment, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react"
 
 import { t, useLanguage } from "~/i18n/i18n"
 import { Boundary, Crashed } from "~/kit/boundary"
@@ -51,7 +51,12 @@ export function Root(props: RootProps) {
 function Shown({ app, nav, go, broken }: RootProps) {
   const [toasts, toast, dismissToast] = useToasts()
   const ctx = useMemo(() => ({ app, nav, go, toast }), [app, nav, go, toast])
-  const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])
+  const latest = useRef(app)
+  useLayoutEffect(() => {
+    latest.current = app
+  }, [app])
+  const now = useCallback(() => latest.current, [])
+  const act = useMemo(() => ({ actions: app.actions, go, toast, now }), [app.actions, go, toast, now])
   const togglePalette = useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog])
   usePaletteKey(togglePalette)
   useEffect(
