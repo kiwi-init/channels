@@ -64,7 +64,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const found = findWanted(wanted, channel.code, channel.messages, channel.since)
   const target = found.kind === "found" ? found.m : null
   const root = target?.inThread !== undefined && (channel.specs ?? []).some((s) => s.ask === target.inThread) ? target.inThread : undefined
-  const anchor = root === undefined ? target : (channel.messages.find((m) => m.seq === root) ?? target)
+  const anchor = root === undefined ? target : null
   const atAnchor = !!anchor && nav.tab === "chat" && sameWhere(anchor.where, nav.where)
   if (anchor && atAnchor && jump?.m.seq !== anchor.seq) setJump({ m: anchor, terms: [] })
   const earlierTo = actions.earlierTo
@@ -77,10 +77,13 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   useEffect(() => {
     if (!wanted) return
     if (found.kind === "missing") return dropMessage(wanted)
+    if (root !== undefined) {
+      go({ to: "spec", ask: root, part: "spec" })
+      return dropMessage(wanted)
+    }
     if (!anchor) return
     if (!atAnchor) return go({ to: "where", where: anchor.where, replace: true })
     if (jump?.m.seq !== anchor.seq) return
-    if (root !== undefined) go({ to: "panel", panel: { kind: "thread", seq: root, focus: wanted.seq } })
     dropMessage(wanted)
   }, [wanted, found.kind, anchor, root, atAnchor, jump, go])
   const room = nav.where.kind === "room" ? nav.where.room : null

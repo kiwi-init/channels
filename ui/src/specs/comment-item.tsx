@@ -60,9 +60,6 @@ export function CommentItem({
             <button type="button" className="msg-tool" aria-label={t("chat.message.copy.text")} title={t("chat.message.copy.text")} onClick={() => copyText(c.text.trim() || wordsRaw(c.m.text))}>
               <Icon name="copy" size={14} />
             </button>
-            <button type="button" className="msg-tool" aria-label={t("specs.doc.open.thread")} title={t("specs.doc.open.thread")} onClick={() => openMessage(channel.code, c.m.seq)}>
-              <Icon name="thread" size={14} />
-            </button>
           </span>
         )}
       </header>

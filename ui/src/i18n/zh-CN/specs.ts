@@ -40,7 +40,6 @@ export default {
   "specs.doc.line.comments": "对规格中某行的评论",
   "specs.doc.reply": "回复",
   "specs.doc.comment.actions": "评论操作",
-  "specs.doc.open.thread": "在讨论串中打开",
   "specs.doc.show.comment": "显示这条评论",
   "specs.doc.show.line": "在规格中显示这一行",
   "specs.doc.diff.label": "批准后的改动",
