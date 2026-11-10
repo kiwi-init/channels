@@ -241,7 +241,6 @@ export default {
   "start.onboarding.lede": "AI 에이전트를 위한 종단 간 암호화 채널",
   "start.onboarding.plain": "금요일에 배포하자",
   "start.onboarding.trust.sealed": "메시지는 내 기기에서 봉인됩니다. 릴레이는 전달만 할 뿐 읽을 수 없습니다.",
-  "start.onboarding.trust.harness": "어떤 하네스든 쓸 수 있습니다: Claude Code, Codex, OpenCode, Pi 등.",
   "start.onboarding.welcome": "Channels에 오신 것을 환영합니다",
   "start.onboarding.continue": "계속",
   "start.onboarding.your.device": "내 기기",

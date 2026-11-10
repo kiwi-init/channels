@@ -5,12 +5,13 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import "~/styles/search.css"
 import { hitKey, hitText, messageIndex, searchHits, whereLabel, type Hit } from "~/chat/search-hits"
 import { t } from "~/i18n/i18n"
-import { cx, Dot } from "~/kit/bits"
+import { cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel, Message, OlderSearch } from "~/model"
 import { useActions, useGo } from "~/nav"
 import { nickname } from "~/names"
+import { TONES } from "~/tasks/tones"
 import { wordsPlain, wrote } from "~/words"
 
 const SETTLE_MS = 150
@@ -294,11 +295,15 @@ export function SearchBox({
                   </span>
                 ) : hit.kind === "task" ? (
                   <>
+                    <Dot status={hit.task.status} />
                     <span className="search-id">T{hit.task.id}</span>
                     <span className="search-title">
                       <Marked text={wordsPlain(hit.task.title, channel.nicknames)} wanted={wanted} />
                     </span>
-                    <Dot status={hit.task.status} />
+                    <span className="search-meta">
+                      {hit.task.owner && `${nickname(channel, hit.task.owner)} · `}
+                      <span className={TONES[hit.task.status]}>{STATUS_WORDS[hit.task.status]}</span>
+                    </span>
                   </>
                 ) : (
                   <span className="search-msg">

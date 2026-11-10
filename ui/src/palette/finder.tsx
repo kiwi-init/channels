@@ -5,7 +5,7 @@ import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { useDebugOptions } from "~/kit/debug"
 import { Icon } from "~/kit/icons"
 import { docOf } from "~/chat/doc-of"
-import type { App, Channel, Task, TaskStatus, Where } from "~/model"
+import type { App, Channel, Task, Where } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
 import { nickname, onePerPerson, roleWord, shown } from "~/names"
 import { statusOf } from "~/shell/sidebar"
@@ -14,6 +14,8 @@ import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { runCommand } from "~/kit/commands"
 import { keysHint } from "~/kit/keys"
+import { matchAt, SEP } from "~/tasks/title-rank"
+import { TONES } from "~/tasks/tones"
 import { personGo } from "~/person-go"
 
 type Group = "channels" | "rooms" | "people" | "tasks" | "actions"
@@ -29,10 +31,6 @@ const GROUP_KEYS: Record<Group, Key> = {
 }
 
 const LIMIT = 8
-
-const SEP = /[\s#@/._:-]/
-
-const TONE: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", landing: "tone-review", done: "tone-live", waiting: "tone-decide" }
 
 interface Item {
   id: string
@@ -177,15 +175,6 @@ function Marked({ text, q }: { text: string; q: string }) {
   )
 }
 
-function matchAt(text: string, q: string): number {
-  let first = -1
-  for (let i = text.indexOf(q); i >= 0; i = text.indexOf(q, i + 1)) {
-    if (i === 0 || SEP.test(text.charAt(i - 1))) return i
-    if (first < 0) first = i
-  }
-  return first
-}
-
 function score(item: Item, q: string): number {
   if (!q) return 0
   const text = item.label.toLowerCase()
@@ -292,7 +281,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
         meta: (
           <>
             {task.owner && `${nickname(channel, task.owner)} · `}
-            <span className={TONE[task.status]}>{STATUS_WORDS[task.status]}</span>
+            <span className={TONES[task.status]}>{STATUS_WORDS[task.status]}</span>
           </>
         ),
         run: () => toPanel({ kind: "task", task: task.id }),
