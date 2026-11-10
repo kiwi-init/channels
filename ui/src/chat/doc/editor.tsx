@@ -5,7 +5,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useReducer, useRef
 import { createPortal } from "react-dom"
 import type { Node } from "prosemirror-model"
 import { EditorState, Plugin, type Transaction } from "prosemirror-state"
-import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirror-view"
+import { Decoration, DecorationSet, EditorView, type DecorationSource, type NodeView } from "prosemirror-view"
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
 import * as Y from "yjs"
 
@@ -99,7 +99,47 @@ class Heads {
   }
 }
 
-class BlockView implements NodeView {
+interface Painted {
+  node: Node
+  hide(hidden: boolean): void
+}
+
+const isBare = (decorations: readonly Decoration[]): boolean => decorations.some((d) => (d.spec as { bare?: boolean } | undefined)?.bare === true)
+
+class BareBlockView implements NodeView, Painted {
+  dom: HTMLElement
+
+  constructor(
+    public node: Node,
+    private shown: Map<HTMLElement, Painted>
+  ) {
+    this.dom = document.createElement("section")
+    this.dom.className = "blk is-hidden"
+    this.dom.dataset.kind = attrsOf(node).kind
+    this.dom.dataset.block = attrsOf(node).id
+    this.shown.set(this.dom, this)
+  }
+
+  hide(): void {}
+
+  update(node: Node, decorations: readonly Decoration[]): boolean {
+    if (node.type !== this.node.type || !isBare(decorations)) return false
+    this.node = node
+    this.dom.dataset.kind = attrsOf(node).kind
+    this.dom.dataset.block = attrsOf(node).id
+    return true
+  }
+
+  ignoreMutation(): boolean {
+    return true
+  }
+
+  destroy(): void {
+    this.shown.delete(this.dom)
+  }
+}
+
+class BlockView implements NodeView, Painted {
   dom: HTMLElement
   contentDOM: HTMLElement
   private head: HTMLElement
@@ -110,7 +150,7 @@ class BlockView implements NodeView {
     public node: Node,
     private heads: Heads,
     private feet: Heads,
-    private shown: Map<HTMLElement, BlockView>
+    private shown: Map<HTMLElement, Painted>
   ) {
     this.dom = document.createElement("section")
     this.dom.className = "blk"
@@ -145,8 +185,8 @@ class BlockView implements NodeView {
     this.feet.drop(this.foot)
   }
 
-  update(node: Node): boolean {
-    if (node.type !== this.node.type) return false
+  update(node: Node, decorations: readonly Decoration[]): boolean {
+    if (node.type !== this.node.type || isBare(decorations)) return false
     this.node = node
     this.paint()
     return true
@@ -175,7 +215,7 @@ interface Drafts {
   version: number
 }
 
-function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: string, here: string | null, drafts: Drafts): void {
+function paintRuns(root: HTMLElement, shown: Map<HTMLElement, Painted>, me: string, here: string | null, drafts: Drafts): void {
   let prev: Node | undefined
   const last = new Map<string, HTMLElement>()
   for (const el of root.children) {
@@ -207,7 +247,26 @@ function hereOf(state: EditorState): string | null {
   return at ? attrsOf(at.node).id : null
 }
 
-function runsPlugin(shown: Map<HTMLElement, BlockView>, me: string, drafts: RefObject<Drafts>): Plugin {
+function barePlugin(drafts: RefObject<Drafts>): Plugin {
+  let made: { doc: Node; version: number; set: DecorationSet } | null = null
+  return new Plugin({
+    props: {
+      decorations: (state): DecorationSource => {
+        const d = drafts.current
+        if (made && made.doc === state.doc && made.version === d.version) return made.set
+        const bare: Decoration[] = []
+        state.doc.forEach((node, pos) => {
+          const id = attrsOf(node).id
+          if (d.posted(id) || d.inFeed(id)) bare.push(Decoration.node(pos, pos + node.nodeSize, {}, { bare: true }))
+        })
+        made = { doc: state.doc, version: d.version, set: DecorationSet.create(state.doc, bare) }
+        return made.set
+      },
+    },
+  })
+}
+
+function runsPlugin(shown: Map<HTMLElement, Painted>, me: string, drafts: RefObject<Drafts>): Plugin {
   return new Plugin({
     view: (view) => {
       let here = hereOf(view.state)
@@ -391,7 +450,7 @@ const openImage = (url: string) => void window.open(url, "_blank", "noopener,nor
 
 function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, feet: Heads, opts: ViewOpts): { view: EditorView; stop: () => void } {
   const seen = new Map<number, { key: string; at: number }>()
-  const shown = new Map<HTMLElement, BlockView>()
+  const shown = new Map<HTMLElement, Painted>()
   const watch = ({ added, updated }: { added: number[]; updated: number[] }) => {
     const states = shared.awareness.getStates()
     for (const id of [...added, ...updated]) {
@@ -427,6 +486,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       ),
       linksPlugin(),
       herePlugin(),
+      barePlugin(opts.drafts),
       runsPlugin(shown, me, opts.drafts),
       tidyPlugin(me, opts.drafts),
       steadyPlugin(opts.scroller, opts.hold, me, opts.drafts),
@@ -438,7 +498,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
     editable: () => false,
     attributes: { class: "doc", role: "textbox", "aria-multiline": "true", "aria-label": t("chat.doc.editor.thread") },
     nodeViews: {
-      block: (node) => new BlockView(node, heads, feet, shown),
+      block: (node, _view, _getPos, decorations) => (isBare(decorations) ? new BareBlockView(node, shown) : new BlockView(node, heads, feet, shown)),
       mention: mentionView(opts.name),
       image: imageView(opts.media, openImage),
       file: fileView(opts.media),
