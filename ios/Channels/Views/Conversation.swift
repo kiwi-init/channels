@@ -87,7 +87,7 @@ struct Conversation: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 0) {
+                VStack(spacing: 0) {
                     if !room.whole && !room.messages.isEmpty {
                         Text("Earlier messages aren't on this phone")
                             .type(.meta)
