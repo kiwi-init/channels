@@ -188,7 +188,6 @@ export function makeActions(): Actions {
     setGithubWrite: (code, on) => attempt(t("live.actions.not.changed"), async () => (await manage()).setGithubWrite(code, on)),
     setBranchPrefix: (code, typed) => attempt(t("live.actions.branch.prefix.not.changed"), async () => (await manage()).setBranchPrefix(code, typed)),
     setLanding: (code, then) => attempt(t("live.actions.landing.not.changed"), async () => (await manage()).setLanding(code, then)),
-    setPeopleMerge: (code, on) => attempt(t("live.actions.merges.not.changed"), async () => (await manage()).setPeopleMerge(code, on)),
     renameRoom: (code, id, typed) => attempt(t("live.actions.room.not.renamed"), async () => (await manage()).renameRoom(code, id, typed)),
     setIcon: (code, file) =>
       attempt(t("live.actions.icon.not.changed"), async () => {

@@ -464,15 +464,6 @@ function GitHub({ channel }: { channel: Channel }) {
         <Row label={t("modals.channel.settings.landing")} hint={landing ? t("modals.channel.settings.landing.set") : t("modals.channel.settings.landing.none")}>
           {sets ? <LandingPick value={landing} onPick={(then) => app.actions.setLanding(channel.code, then)} /> : <span>{landingWord(landing)}</span>}
         </Row>
-        <Row label={t("modals.channel.settings.people.merge")} hint={channel.peopleMerge ? t("modals.channel.settings.people.merge.on") : t("modals.channel.settings.people.merge.off")}>
-          <Toggle
-            on={!!channel.peopleMerge}
-            label={t("modals.channel.settings.people.merge")}
-            disabled={!sets}
-            why={t("modals.channel.settings.trusted.only")}
-            onChange={(on) => app.actions.setPeopleMerge(channel.code, on)}
-          />
-        </Row>
       </Group>
     </>
   )

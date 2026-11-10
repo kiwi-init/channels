@@ -41,8 +41,6 @@ export default {
   "live.ask.irreversible.you": "あなたの取り消せない操作",
   "live.ask.scope": "範囲の判断",
   "live.ask.scope.you": "あなたの範囲の判断",
-  "now.gate.shut": "ゲートが閉じたまま出荷",
-  "now.ready.to.merge": "人によるマージの準備完了",
   "now.check.failed": "{check} が失敗",
   "now.checks.failed.count": "{count} 件のチェックが失敗",
   "now.checks.failed": "チェックが失敗",

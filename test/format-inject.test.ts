@@ -42,7 +42,6 @@ function blank(): ChannelState {
     branchPrefix: null,
     landing: null,
     landingSteps: null,
-    merges: "agents",
     reactions: new Map(),
     edits: new Map(),
     deleted: new Map(),

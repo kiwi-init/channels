@@ -41,8 +41,6 @@ export default {
   "live.ask.irreversible.you": "내 되돌릴 수 없는 단계",
   "live.ask.scope": "범위 판단",
   "live.ask.scope.you": "내 범위 판단 필요",
-  "now.gate.shut": "게이트가 닫힌 채 출시됨",
-  "now.ready.to.merge": "사람이 병합할 준비 완료",
   "now.check.failed": "{check} 실패",
   "now.checks.failed.count": "검사 {count}개 실패",
   "now.checks.failed": "검사 실패",

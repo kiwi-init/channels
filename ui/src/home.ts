@@ -37,8 +37,6 @@ function lineOf(c: Source, a: Ask): { what: string; text: string; act: HomeAct }
         act: task ? { kind: "approve-task", task: a.task } : { kind: "open" },
       }
     }
-    case "bypass":
-      return { what: t("live.home.bypass", { id: String(a.task) }), text: clip(a.missing.join(", ")), act: { kind: "open" } }
     case "spec": {
       const spec = c.specs?.find((s) => s.ask === a.ask)
       const ask = String(a.ask)

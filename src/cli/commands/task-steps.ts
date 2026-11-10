@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import { wellFormedRunId } from "@kiwi/core/checks.ts";
 import { stepLines } from "@kiwi/core/format.ts";
-import { isLanding, type Landing } from "@kiwi/core/protocol.ts";
+import { isLanding } from "@kiwi/core/protocol.ts";
 import { taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { parseSpan, STEP_WORDS_MAX, STEPS_MAX, stepsOfThen, wellFormedStepId, wellFormedStepSpec, type StepEdit, type StepSpec } from "@kiwi/core/steps.ts";
 import { args, opt, optionsInOrder } from "../args.ts";
@@ -12,7 +12,7 @@ type Session = Effect.Success<ReturnType<typeof session>>;
 const STEPS_USAGE =
   '--then takes merge, release:tag, release:npm:PKG@RANGE, run or none, or the words of a step: repeat it for a list, each with its own --by NAME, --wait "24h why", --run ID --expect 2h or --answered N (the number of a question)';
 
-export type Landed = { kind: "none" } | { kind: "then"; then: Landing } | { kind: "steps"; steps: StepSpec[] } | { kind: "bad"; why: string };
+export type Landed = { kind: "default" } | { kind: "none" } | { kind: "steps"; steps: StepSpec[] } | { kind: "bad"; why: string };
 
 type Group = { words: string; by?: string; wait?: string; run?: string; expect?: string; answered?: string };
 
@@ -61,9 +61,9 @@ export function landingFromOptions(): Landed {
     last[name] = said;
   }
   const [only] = groups;
-  if (!only) return { kind: "none" };
+  if (!only) return { kind: "default" };
   const bare = only.by === undefined && only.wait === undefined && only.run === undefined && only.expect === undefined && only.answered === undefined;
-  if (groups.length === 1 && isLanding(only.words) && bare) return { kind: "then", then: only.words };
+  if (groups.length === 1 && only.words === "none" && bare) return { kind: "none" };
   const steps: StepSpec[] = [];
   for (const g of groups) {
     const made = specOf(g);

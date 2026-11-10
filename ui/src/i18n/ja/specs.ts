@@ -248,7 +248,7 @@ export default {
   "tasks.lanes.empty.hint": "サイドバーから追加できます。",
   "tasks.lanes.label": "エージェントのレーン",
   "tasks.lanes.review.warning":
-    "ここのタスクはマージで完了しますが、{branches} は {check} を必須にしていないため、タスクのゲートが開く前に PR がマージされることがあります。オーナーはリポジトリの ruleset で必須にできます。",
+    "{branches} はまだ {check} を必須にしていますが、Kiwi はこのチェックを廃止しました。オーナーがリポジトリの ruleset から外すまで、Kiwi はすべてのプルリクエストで成功を返します。",
   "tasks.now.needs.you": "あなたの対応待ち",
   "tasks.now.in.progress.count": "{count} 件進行中",
   "tasks.now.done.today.count": "今日 {count} 件完了",
