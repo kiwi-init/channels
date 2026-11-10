@@ -122,7 +122,10 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
     void fail(`a navigation the rules should have refused went through (${nav.url ?? "unreadable"}); closing`, { closing: true });
   });
   webview.setNavigationRules(PAGE_RULES);
-  if (!(await rulesHold(webview))) {
+  mark("rules");
+  const held = await rulesHold(webview);
+  mark("canary");
+  if (!held) {
     closing = true;
     win.hide();
     await fail("the window's navigation rules didn't take effect; not opening it");
