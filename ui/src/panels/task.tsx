@@ -17,8 +17,8 @@ import { Empty } from "~/kit/empty"
 import { Modal } from "~/kit/modal"
 import { Icon } from "~/kit/icons"
 import { MoreButton } from "~/kit/menu-open"
-import { ageOf, ago } from "~/kit/time"
-import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
+import { ageOf, ago, lasting } from "~/kit/time"
+import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent, type TaskStep } from "~/model"
 import { openMessage } from "~/live/open-message"
 import { useGo, useActions, useToast } from "~/nav"
 import { Body } from "~/chat/body"
@@ -33,6 +33,7 @@ import { reasonWords } from "~/live/reason-words"
 import { reasonText } from "@kiwi/core/routing-text.ts"
 import { PanelHead } from "~/panels/frame"
 import { moveWords, someone } from "~/panels/task-moves"
+import { moverWords, quietWords, TROUBLES, useTaskNow } from "~/tasks/mover"
 import { TONES } from "~/tasks/tones"
 import { SendBack } from "~/tasks/send-back"
 import { personGo } from "~/person-go"
@@ -134,9 +135,54 @@ function Who({ channel, name }: { channel: Channel; name: string }) {
   )
 }
 
+function stepState(step: TaskStep, now: number): string | null {
+  if (step.state === "done") return t("panels.task.step.done")
+  if (step.state === "skipped") return t("panels.task.step.skipped")
+  if (step.state !== "current") return null
+  if (step.wait) return t("panels.task.step.waits", { time: lasting(step.wait.until - now) })
+  if (step.run) return t("panels.task.step.run", { time: lasting(step.run.due - now) })
+  return step.trouble ? t(TROUBLES[step.trouble]) : t("panels.task.step.current")
+}
+
+function Steps({ channel, task, steps, now }: { channel: Channel; task: Task; steps: TaskStep[]; now: number }) {
+  const actions = useActions()
+  return (
+    <ol className="tp-steps">
+      {steps.map((step) => {
+        const state = stepState(step, now)
+        const waiting = step.wait
+        return (
+          <li key={step.id} className={cx("tp-step", `is-${step.state}`)} aria-current={step.state === "current" ? "step" : undefined}>
+            <span className="tp-step-words">
+              <Shown value={step.words} />
+            </span>
+            <span className="tp-step-meta">
+              {[step.by ? nickname(channel, step.by) : null, state].filter(Boolean).join(" · ")}
+              {waiting && (
+                <>
+                  {": "}
+                  <Shown value={waiting.reason} />
+                </>
+              )}
+            </span>
+            {step.yours && (
+              <button type="button" className="btn is-small" onClick={() => actions.endStep(channel.code, task.id, step.id)}>
+                {t("panels.task.step.end")}
+              </button>
+            )}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 function Props({ channel, task, may }: { channel: Channel; task: Task; may: boolean }) {
   const [picking, setPicking] = useState<"owner" | "reviewer" | null>(null)
   const open = may && task.status !== "done"
+  const now = useTaskNow()
+  const move = moverWords(channel, task, now)
+  const quiet = quietWords(channel, task, now)
   return (
     <>
       <dl className="props task-props tp-props">
@@ -170,14 +216,20 @@ function Props({ channel, task, may }: { channel: Channel; task: Task; may: bool
             </dd>
           </>
         )}
-        {task.lands && (
+        {move && (
           <>
-            <dt>{t("panels.task.lands.on")}</dt>
+            <dt>{t("panels.task.move")}</dt>
+            <dd className="tp-move">
+              <span>{move}</span>
+              {quiet && <span className="tone-alert">{quiet}</span>}
+            </dd>
+          </>
+        )}
+        {task.steps && (
+          <>
+            <dt>{t("panels.task.steps")}</dt>
             <dd>
-              <span className="cset-mono">{task.lands.then}</span>
-              {task.lands.by && tr("panels.task.lands.by", { who: <Who channel={channel} name={task.lands.by} /> })}
-              {task.status === "landing" && <span className="dimmer">{t("panels.task.lands.approved")}</span>}
-              {task.lands.waits && <span className="dimmer"> · {task.lands.waits}</span>}
+              <Steps channel={channel} task={task} steps={task.steps} now={now} />
             </dd>
           </>
         )}

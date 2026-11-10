@@ -28,6 +28,7 @@ export default {
   "live.actions.let.in.failed": "Não deu para deixar entrar",
   "live.actions.turn.away.failed": "Não deu para recusar",
   "live.actions.not.approved": "Não aprovado",
+  "live.actions.step.not.ended": "Etapa não marcada como feita",
   "live.actions.not.sent.back": "Não devolvido",
   "live.actions.task.not.added": "Tarefa não adicionada",
   "live.actions.not.changed": "Não alterado",

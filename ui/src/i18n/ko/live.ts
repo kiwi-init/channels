@@ -28,6 +28,7 @@ export default {
   "live.actions.let.in.failed": "들여보내지 못했습니다",
   "live.actions.turn.away.failed": "거절하지 못했습니다",
   "live.actions.not.approved": "승인하지 못했습니다",
+  "live.actions.step.not.ended": "단계를 완료로 표시하지 못했습니다",
   "live.actions.not.sent.back": "반려하지 못했습니다",
   "live.actions.task.not.added": "작업을 추가하지 못했습니다",
   "live.actions.not.changed": "변경하지 못했습니다",

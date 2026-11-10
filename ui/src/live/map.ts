@@ -8,6 +8,10 @@ import type { EventSay } from "@kiwi/core/event-words.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
 import { checksOf, FAILED, landingWaits, prLinks, taskOfPr, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
+import { clockOf } from "@kiwi/core/clock.ts"
+import { moverOf, type Mover } from "@kiwi/core/mover.ts"
+import { currentStep, stepMove, type LandingStep } from "@kiwi/core/steps.ts"
+import { runSight } from "@kiwi/core/state/landing-steps.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf, sentTo } from "@kiwi/core/room-rules.ts"
 import { dmDocOf, dmRoomWith } from "~/live/dm"
@@ -72,6 +76,10 @@ import type {
   TaskEvent,
   TaskGroup,
   TaskMove,
+  TaskMover,
+  TaskQuiet,
+  TaskStep,
+  RunTrouble,
   TaskStatus,
   TheirDirect,
   Upload,
@@ -684,7 +692,43 @@ function landsOf(t: CoreTask): Task["lands"] {
   return { then: t.steps.map((s) => s.words).join(" → "), ...(by ? { by } : {}), ...(waits ? { waits } : {}) }
 }
 
-export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string, messages: readonly Wire[]): Task[] {
+const TROUBLE: Record<NonNullable<Extract<Mover, { kind: "member" }>["why"]>, RunTrouble> = { "run failed": "failed", "run can't be seen": "unseen", "run overran": "overran" }
+
+function moverFor(state: ChannelState, t: CoreTask, now: number): TaskMover | undefined {
+  const m = moverOf(state, t, now)
+  if (!m) return undefined
+  if (m.kind === "member") return { kind: "member", name: m.name, move: m.move, ...(m.question !== undefined ? { question: m.question } : {}), ...(m.why ? { trouble: TROUBLE[m.why] } : {}) }
+  if (m.kind === "waiting") return { kind: "waiting", owner: m.owner, ahead: m.ahead }
+  if (m.kind === "run") return { kind: "run", behind: m.behind, due: m.due }
+  if (m.kind === "nobody") return { kind: "nobody" }
+  return { kind: "hold", until: m.until, reason: wrote(m.reason) }
+}
+
+function quietFor(state: ChannelState, t: CoreTask, now: number): TaskQuiet | undefined {
+  const c = clockOf(state, t, now)
+  return c?.paged ? { with: c.mover, since: c.since, from: c.since + state.quietMs, every: state.quietMs, step: c.step } : undefined
+}
+
+function stepNow(state: ChannelState, t: CoreTask, s: LandingStep, me: string, now: number): Pick<TaskStep, "wait" | "run" | "trouble" | "yours"> {
+  const move = stepMove(s, landerOf(t), now, s.run ? runSight(state.github, t, s) : "blind")
+  if (move.kind === "waiting") return { wait: { reason: wrote(move.reason), until: move.until } }
+  if (move.kind === "run") return { run: { due: move.due } }
+  if (move.kind === "nobody") return {}
+  return { ...(move.why ? { trouble: TROUBLE[move.why] } : {}), ...(move.name === me ? { yours: true as const } : {}) }
+}
+
+function stepsFor(state: ChannelState, t: CoreTask, me: string, now: number): TaskStep[] | undefined {
+  if (!t.steps?.length) return undefined
+  const current = currentStep(t)
+  const lander = landerOf(t)
+  return t.steps.map((s): TaskStep => {
+    const by = s.by ?? lander
+    const stage = s.progress.kind === "ended" ? (s.progress.end.how === "skipped" ? "skipped" : "done") : s === current && t.state === "landing" ? "current" : "next"
+    return { id: s.id, words: wrote(s.words), ...(by ? { by } : {}), state: stage, ...(stage === "current" ? stepNow(state, t, s, me, now) : {}) }
+  })
+}
+
+export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string, messages: readonly Wire[], now = Date.now()): Task[] {
   const waiting = tasksAwaitingPeople(state)
   const you = state.members.get(me)
   const person = !!you && isPerson(you)
@@ -697,6 +741,9 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
     const review = can.kind === "open" && can.review !== "none" ? can.review : undefined
     const suggested = person ? suggestionFor(state, t) : undefined
     const lands = landsOf(t)
+    const mover = moverFor(state, t, now)
+    const quiet = quietFor(state, t, now)
+    const steps = stepsFor(state, t, me, now)
     return {
       id: t.id,
       title: wrote(t.title),
@@ -722,6 +769,9 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       archived: !!t.archived,
       ...(t.cancelled ? { cancelled: true } : {}),
       ...(lands ? { lands } : {}),
+      ...(mover ? { mover } : {}),
+      ...(quiet ? { quiet } : {}),
+      ...(steps ? { steps } : {}),
       ...(t.closedWith ? { closedWith: wrote(t.closedWith) } : {}),
       ...(review ? { youReview: review } : {}),
       ...(suggested ? { suggested } : {}),

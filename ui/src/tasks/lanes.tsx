@@ -8,6 +8,7 @@ import { ago, clock } from "~/kit/time"
 import { contextOf, liveOf, restOf } from "~/doing"
 import type { Channel, PullRequest, Task } from "~/model"
 import { useApp, useGo } from "~/nav"
+import { QuietList } from "~/tasks/mover"
 import { TONES } from "~/tasks/tones"
 import { nickname, shown, Shown } from "~/names"
 import { lanesOf, type Lane } from "~/now"
@@ -163,6 +164,7 @@ export function Lanes({ channel }: { channel: Channel }) {
           {t("tasks.lanes.review.warning", { branches: channel.reviewStillRequired.repos.join(", "), check: channel.reviewStillRequired.check })}
         </p>
       )}
+      <QuietList channel={channel} />
       {lanes.map((lane) => (
         <LaneCard key={lane.person.name} channel={channel} lane={lane} />
       ))}
