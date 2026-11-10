@@ -2,7 +2,7 @@ import { clockOf, nudgesDue, skipsDue, type NudgeDue } from "@kiwi/core/clock.ts
 import { channelOwner } from "@kiwi/core/mover.ts";
 import type { Event } from "@kiwi/core/protocol.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
-import { QUIET_MS, UNREAD_MS, wakeSeen } from "@kiwi/core/state/clocks.ts";
+import { UNREAD_MS, wakeSeen } from "@kiwi/core/state/clocks.ts";
 import type { Member, Task, Woke } from "@kiwi/core/state/types.ts";
 import { spanText } from "@kiwi/core/steps.ts";
 import type { DocWakeItem } from "../config/doc-wakes.ts";
@@ -171,7 +171,7 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
     const clock = t ? clockOf(state, t, at) : undefined;
     if (!clock) return false;
     if (clock.mover === seat.agent) return !(await seat.wakes());
-    if (clock.quiet >= QUIET_MS + UNREAD_MS) return true;
+    if (clock.quiet >= state.quietMs + UNREAD_MS) return true;
     return !seat.hosts(clock.mover) && !seat.reachable(clock.mover);
   };
 

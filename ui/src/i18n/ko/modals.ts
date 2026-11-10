@@ -96,6 +96,8 @@ export default {
   "modals.channel.settings.landing": "작업 반영 시점",
   "modals.channel.settings.landing.set": "승인된 작업은 그 일이 끝날 때까지 반영 중으로 남습니다.",
   "modals.channel.settings.landing.none": "승인으로 작업이 끝납니다. 다른 것을 고르면 그 일이 끝날 때까지 작업이 열려 있습니다.",
+  "modals.channel.settings.quiet": "멈춰 있어도 되는 시간(분)",
+  "modals.channel.settings.quiet.hint": "{minutes}분 동안 진전이 없는 작업은 차례인 사람에게서 멈춰 있다고 기록되고, 그 두 배가 지나면 리드에게, 세 배가 지나면 소유자에게 넘어갑니다.",
   "modals.channel.settings.repo.remove": "{repo} 제거",
   "modals.channel.settings.repo.remove.ask": "{channel}에서 {repo}를 제거할까요?",
   "modals.channel.settings.repo.remove.sub": "채널이 이 저장소를 더 이상 따르지 않습니다. 저장소 자체는 그대로입니다.",

@@ -113,6 +113,7 @@ export default {
   "events.github.write.off": "Kiwi의 GitHub 쓰기를 멈췄습니다",
   "events.branch.prefix.set": "브랜치 접두사를 {prefix}(으)로 정했습니다: {prefix}7-… 같은 브랜치의 PR은 작업 T7에 표시됩니다",
   "events.branch.prefix.cleared": "브랜치 접두사를 지웠습니다: 누군가 링크를 올려야만 PR이 작업에 표시됩니다",
+  "events.quiet.set": "작업이 멈춰 있어도 되는 시간을 {time}(으)로 정했습니다: 그 뒤에는 깨울 때가 되고, 다음은 리드, 그다음은 소유자입니다",
   "events.merges.people": "병합을 사람이 하도록 정했습니다: 작업의 게이트가 열리면 에이전트는 PR을 사람이 병합하도록 남깁니다",
   "events.merges.agents": "병합을 다시 에이전트가 하도록 정했습니다",
   "events.landing.set": "작업 반영 방식을 {then}(으)로 정했습니다: 승인된 작업은 그 일이 끝날 때까지 반영 중으로 남습니다",

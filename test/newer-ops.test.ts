@@ -91,6 +91,7 @@ const OPS: Record<Event["op"], true> = {
   "github.release": true,
   "github.write.set": true,
   "branch.prefix.set": true,
+  "quiet.set": true,
   "landing.set": true,
   "merges.set": true,
   "ask.name": true,
@@ -470,7 +471,8 @@ const OPS_AT: Record<number, readonly string[]> = {
   ],
 };
 OPS_AT[24] = [...(OPS_AT[23] ?? []), "task.nudge"];
-OPS_AT[25] = [...(OPS_AT[24] ?? []), "task.wake"];
+OPS_AT[25] = [...(OPS_AT[24] ?? []), "quiet.set"];
+OPS_AT[26] = [...(OPS_AT[25] ?? []), "task.wake"];
 
 describe("events from a newer client", () => {
   test("every op the Event type has is known, and a new op needs EVENT_OPS_VERSION raised with it", () => {

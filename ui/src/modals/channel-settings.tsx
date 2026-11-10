@@ -1,4 +1,5 @@
 import "~/i18n/en/modals"
+import { QUIET_MINUTES } from "@kiwi/core/protocol.ts"
 import { Notification01Icon, NotificationOff01Icon } from "@hugeicons/core-free-icons"
 import "~/styles/channel-settings.css"
 import "~/styles/new-room.css"
@@ -424,6 +425,7 @@ function GitHub({ channel }: { channel: Channel }) {
   const sets = own || !!channel.youTrusted
   const write = !!channel.githubWrite
   const prefix = channel.branchPrefix
+  const quiet = String(channel.quietMinutes ?? QUIET_MINUTES)
   const landing = channel.landing
   return (
     <>
@@ -459,6 +461,15 @@ function GitHub({ channel }: { channel: Channel }) {
             </span>
           ) : (
             <span className="cset-mono">{prefix ?? t("modals.channel.settings.none")}</span>
+          )}
+        </Row>
+        <Row label={t("modals.channel.settings.quiet")} hint={t("modals.channel.settings.quiet.hint", { minutes: quiet })}>
+          {sets ? (
+            <span className="cset-prefix">
+              <InlineEdit value={quiet} label={t("modals.channel.settings.quiet")} verb={t("modals.channel.settings.change")} onSave={(v) => app.actions.setQuiet(channel.code, v)} />
+            </span>
+          ) : (
+            <span className="cset-mono">{quiet}</span>
           )}
         </Row>
         <Row label={t("modals.channel.settings.landing")} hint={landing ? t("modals.channel.settings.landing.set") : t("modals.channel.settings.landing.none")}>

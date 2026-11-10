@@ -96,6 +96,8 @@ export default {
   "modals.channel.settings.landing": "タスクの反映タイミング",
   "modals.channel.settings.landing.set": "承認済みのタスクは、それが済むまで反映中のままです。",
   "modals.channel.settings.landing.none": "承認でタスクは完了します。ほかを選ぶと、それが済むまでタスクは開いたままになります。",
+  "modals.channel.settings.quiet": "止まっていてよい時間（分）",
+  "modals.channel.settings.quiet.hint": "{minutes} 分のあいだ進みのないタスクは、番の人のもとで止まっていると記録され、その 2 倍でリード、3 倍でオーナーに回ります。",
   "modals.channel.settings.repo.remove": "{repo} を削除",
   "modals.channel.settings.repo.remove.ask": "{channel} から {repo} を外しますか?",
   "modals.channel.settings.repo.remove.sub": "チャンネルはこのリポジトリを追わなくなります。リポジトリ自体は変更されません。",

@@ -357,6 +357,7 @@ export type Event =
   | { op: "voice.set"; on: boolean }
   | { op: "github.write.set"; on: boolean }
   | { op: "branch.prefix.set"; prefix: string | null }
+  | { op: "quiet.set"; minutes: number }
   | { op: "landing.set"; then: Landing | null; steps?: StepSpec[] }
   | { op: "merges.set"; by: Merger }
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
@@ -548,6 +549,11 @@ export const MAX_REQUIRED_CHECKS = 50;
 export const MAX_RELEASE_COMMITS = 250;
 const SHA_RE = /^[0-9a-f]{7,40}$/;
 const FULL_SHA_RE = /^[0-9a-f]{40}$/;
+
+export const QUIET_MINUTES = 20;
+export const MAX_QUIET_MINUTES = 24 * 60;
+
+export const quietMinutes = (x: unknown): x is number => typeof x === "number" && Number.isSafeInteger(x) && x >= 1 && x <= MAX_QUIET_MINUTES;
 
 export type NudgeStep = 0 | 1 | 2 | 3;
 
@@ -935,7 +941,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 25;
+export const EVENT_OPS_VERSION = 26;
 
 export const REVIEW_CHECK = "kiwi/review";
 
@@ -1303,6 +1309,8 @@ function eventCheck(ev: unknown): boolean | null {
       return typeof e.on === "boolean";
     case "branch.prefix.set":
       return e.prefix === null || (typeof e.prefix === "string" && BRANCH_PREFIX_RE.test(e.prefix));
+    case "quiet.set":
+      return quietMinutes(e.minutes);
     case "landing.set":
       return (e.then === null || isLanding(e.then)) && (e.steps === undefined || (e.then === null && wellFormedStepSpecs(e.steps)));
     case "merges.set":

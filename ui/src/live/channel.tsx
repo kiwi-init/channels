@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
-import { GENERAL_ROOM, reviewCheckOf, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { GENERAL_ROOM, QUIET_MINUTES, reviewCheckOf, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { reviewStillRequired } from "@kiwi/core/prs.ts"
 import { dmPlace, fullyTrusted, placeKey, type ChannelState } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, saveRecent } from "@kiwi/channel/recent.ts"
@@ -212,6 +212,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(github ? { github } : {}),
       ...(state.githubWrite !== null ? { githubWrite: true } : {}),
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
+      ...(state.quietMs !== QUIET_MINUTES * 60_000 ? { quietMinutes: state.quietMs / 60_000 } : {}),
       ...(state.landing && state.landing !== "none" ? { landing: state.landing } : {}),
       ...(required.length ? { reviewStillRequired: { repos: required, check: reviewCheck } } : {}),
       rooms,
@@ -257,6 +258,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       github,
       state.githubWrite,
       state.branchPrefix,
+      state.quietMs,
       state.landing,
       required,
       reviewCheck,

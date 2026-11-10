@@ -1,15 +1,15 @@
-import type { NudgeStep, WakeGot, WakeSeen } from "../protocol.ts";
+import { QUIET_MINUTES, type NudgeStep, type WakeGot, type WakeSeen } from "../protocol.ts";
 import { prOfTask } from "../prs.ts";
 import { currentStep, stepMove } from "../steps.ts";
 import { runSight } from "./landing-steps.ts";
 import { landerOf, openRound, taskId } from "./tasks.ts";
 import type { ChannelState, Task, TaskClock, Woke } from "./types.ts";
 
-export const QUIET_MS = 20 * 60_000;
+export const QUIET_MS = QUIET_MINUTES * 60_000;
 export const QUEUE_MS = 24 * 60 * 60_000;
 export const UNREAD_MS = 5 * 60_000;
 
-export type ClockView = Pick<ChannelState, "tasks" | "openAsks" | "github" | "branchPrefix">;
+export type ClockView = Pick<ChannelState, "tasks" | "openAsks" | "github" | "branchPrefix" | "quietMs">;
 
 const WAITING = "~waiting|";
 const LEAD = "@lead";
@@ -109,17 +109,17 @@ export const wokeFor = (clock: TaskClock, since: number): Woke | undefined => (c
 
 export const wakeSeen = (woke: Woke | undefined): WakeSeen => (!woke ? "none" : woke.read !== undefined ? "read" : woke.delivered !== undefined ? "delivered" : "attempted");
 
-function reached(clock: TaskClock, ev: Rung, quietFrom: number, at: number): boolean {
-  if (at - quietFrom >= ev.step * QUIET_MS) return true;
-  if (ev.step !== 2 || at - quietFrom < QUIET_MS) return false;
+function reached(clock: TaskClock, ev: Rung, quietFrom: number, at: number, every: number): boolean {
+  if (at - quietFrom >= ev.step * every) return true;
+  if (ev.step !== 2 || at - quietFrom < every) return false;
   const woke = wokeFor(clock, ev.since);
   return woke ? woke.read === undefined && at - woke.at >= UNREAD_MS : ev.wake === "none";
 }
 
-function stepOnAct(clock: TaskClock, ev: Rung, mark: Mark, lead: string | undefined): TaskClock | string | undefined {
+function stepOnAct(clock: TaskClock, ev: Rung, mark: Mark, every: number, lead: string | undefined): TaskClock | string | undefined {
   const act = clock.acts?.find((a) => a[1] === ev.since && a[1] > clock.seq);
   if (!act || act[0] !== lead) return undefined;
-  if (!reached(clock, ev, act[2], mark.at)) return "early";
+  if (!reached(clock, ev, act[2], mark.at, every)) return "early";
   const stepped = ev.step <= (act[3] ?? 0) ? clock : { ...clock, acts: (clock.acts ?? []).map((a): Act => (a === act ? [a[0], a[1], a[2], ev.step] : a)) };
   return attempted(stepped, ev, mark);
 }
@@ -157,7 +157,7 @@ export function nudge(view: ClockView, t: Task, ev: Nudge, mark: Mark, who: Nudg
     return rung?.wake !== undefined && rung.wake !== stands ? `${id}'s wake stands as ${stands}, not ${rung.wake}` : null;
   };
   if (rung && party === ev.mover && held.seq !== ev.since) {
-    const onAct = stepOnAct(held, rung, mark, party === LEAD ? who.lead() : undefined);
+    const onAct = stepOnAct(held, rung, mark, view.quietMs, party === LEAD ? who.lead() : undefined);
     if (onAct !== undefined && unfit()) return unfit();
     if (onAct === "early") return early;
     if (typeof onAct === "object") {
@@ -177,7 +177,7 @@ export function nudge(view: ClockView, t: Task, ev: Nudge, mark: Mark, who: Nudg
     return null;
   }
   if (!memberKey(clock.key)) return `${id} has no member on the clock`;
-  if (!reached(clock, rung, clock.at, at)) return early;
+  if (!reached(clock, rung, clock.at, at, view.quietMs)) return early;
   t.clock = attempted(rung.step > (clock.step ?? 0) ? { ...clock, step: rung.step } : clock, rung, mark);
   return null;
 }

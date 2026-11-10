@@ -1,12 +1,12 @@
 import { inlineText } from "./membership.ts";
 import { channelOwner, moverOf } from "./mover.ts";
 import type { NudgeStep, WakeSeen } from "./protocol.ts";
-import { actOf, memberKey, partyOfKey, queuedKey, QUEUE_MS, QUIET_MS, rolled, UNREAD_MS, wakeSeen, wokeFor } from "./state/clocks.ts";
+import { actOf, memberKey, partyOfKey, queuedKey, QUEUE_MS, rolled, UNREAD_MS, wakeSeen, wokeFor } from "./state/clocks.ts";
 import { isPerson } from "./state/people.ts";
 import type { ChannelState, Task, Woke } from "./state/types.ts";
 import { spanText } from "./steps.ts";
 
-type Board = Pick<ChannelState, "tasks" | "members" | "lead" | "openAsks" | "github" | "branchPrefix">;
+type Board = Pick<ChannelState, "tasks" | "members" | "lead" | "openAsks" | "github" | "branchPrefix" | "quietMs">;
 
 export interface Clock {
   mover: string;
@@ -68,8 +68,8 @@ function skipDue(state: Board, t: Task, now: number, every: number): NudgeDue[] 
   return [{ task: t.id, mover: clock.party, since: clock.epoch, step: 2, to: target(state, clock.mover, 2), wake: wakeSeen(woke) }];
 }
 
-export function skipsDue(state: Board, now: number, every: number = QUIET_MS): NudgeDue[] {
-  return [...state.tasks.values()].filter((t) => t.state !== "done" && !t.archived).flatMap((t) => skipDue(state, t, now, every));
+export function skipsDue(state: Board, now: number): NudgeDue[] {
+  return [...state.tasks.values()].filter((t) => t.state !== "done" && !t.archived).flatMap((t) => skipDue(state, t, now, state.quietMs));
 }
 
 function queueDue(state: Board, now: number): NudgeDue[] {
@@ -89,9 +89,9 @@ function queueDue(state: Board, now: number): NudgeDue[] {
   });
 }
 
-export function nudgesDue(state: Board, now: number, every: number = QUIET_MS): NudgeDue[] {
+export function nudgesDue(state: Board, now: number): NudgeDue[] {
   const open = [...state.tasks.values()].filter((t) => t.state !== "done" && !t.archived);
-  return [...open.flatMap((t) => quietDue(state, t, now, every)), ...queueDue(state, now)];
+  return [...open.flatMap((t) => quietDue(state, t, now, state.quietMs)), ...queueDue(state, now)];
 }
 
 const DUE_WORDS = ["a wake is due", "", "told to the lead", "in the owner's Needs you"] as const;
@@ -102,7 +102,7 @@ function wakeText(woke: Woke | undefined, now: number): string {
   return `${ago}, ${woke.delivered === undefined ? "not delivered" : "delivered"}, ${woke.read === undefined ? "not read" : "read"}`;
 }
 
-export function quietText(clock: Clock, every: number = QUIET_MS): string | undefined {
+export function quietText(clock: Clock, every: number): string | undefined {
   if (!clock.paged || clock.quiet < every) return undefined;
   const told = clock.step === 0 && !clock.woke ? DUE_WORDS[0] : [DUE_WORDS[clock.step], wakeText(clock.woke, clock.since + clock.quiet)].filter(Boolean).join("; ");
   return `quiet ${spanText(clock.quiet)} with ${inlineText(clock.mover, 40)} (${told})`;

@@ -14,6 +14,7 @@ const words = {
   "live.manage.removed": "Removed {name}",
   "live.manage.bad.landing": "tasks land on merge, release:tag, release:npm:PKG@RANGE, run or none",
   "live.manage.bad.branch.prefix": "a branch prefix is up to 32 letters, digits, dots, dashes, underscores or slashes",
+  "live.manage.bad.quiet": "quiet time is a whole number of minutes, from 1 to {max}",
   "live.manage.room.not.back": "#{room} was sent but hasn't come back from the relay yet: look again in a moment",
   "live.manage.update.for.rooms": "update Channels to make members-only rooms",
   "live.manage.room.missing": "that room isn't in this channel",

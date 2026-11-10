@@ -2,12 +2,12 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { clockOf, nudgesDue, skipsDue } from "@kiwi/core/clock.ts";
 import { describeEvent, formatTask, formatTasks } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type NudgeStep, type Payload, type WakeGot, type WakeSeen } from "@kiwi/core/protocol.ts";
+import { MAX_QUIET_MINUTES, PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type NudgeStep, type Payload, type WakeGot, type WakeSeen } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { QUEUE_MS, QUIET_MS, UNREAD_MS } from "@kiwi/core/state/clocks.ts";
 import type { StepSpec } from "@kiwi/core/steps.ts";
 
-const NAMES = ["jon", "owl", "win", "mac", "zed"] as const;
+const NAMES = ["jon", "owl", "win", "mac", "zed", "ann", "bob", "cal", "dee", "eve"] as const;
 type Name = (typeof NAMES)[number];
 const ids: Record<string, Identity> = {};
 let roster: Roster;
@@ -19,6 +19,7 @@ beforeAll(async () => {
     { name: "win", pk: ids.win!.pk, owner: false, at: 2, active: true, kind: "agent" },
     { name: "mac", pk: ids.mac!.pk, owner: false, at: 3, active: true, kind: "agent" },
     { name: "zed", pk: ids.zed!.pk, owner: false, at: 4, active: true, kind: "agent" },
+    ...(["ann", "bob", "cal", "dee", "eve"] as const).map((name, i) => ({ name, pk: ids[name]!.pk, owner: false, at: 5 + i, active: true, kind: "agent" as const })),
   ];
 });
 
@@ -483,10 +484,10 @@ describe("round 3: on a task the lead holds, each member's act keeps its own epo
     const id = await c.add({ owner: "win", review: "*" });
     await c.update("win", id, { state: "review", at: A });
     const owls = await c.say("owl", "msg", "routing it now", { task: id });
-    const others: Name[] = ["zed", "mac", "win", "jon"];
+    const others: Name[] = ["zed", "mac", "win", "jon", "ann", "bob", "cal", "dee", "eve"];
     for (let round = 0; round < 3; round++) for (const name of others) await c.say(name, "msg", `round ${round}`, { task: id });
     const clock = c.state().tasks.get(id)!.clock!;
-    expect(clock.acts!.map((a) => a[0]).sort()).toEqual(["jon", "mac", "owl", "win", "zed"]);
+    expect(clock.acts!.map((a) => a[0]).sort()).toEqual(["ann", "bob", "cal", "dee", "eve", "jon", "mac", "owl", "win", "zed"]);
     expect(read(c, id)).toMatchObject({ mover: "owl", epoch: owls.seq, since: owls.rts! });
   });
 
@@ -667,13 +668,15 @@ describe("one waker: the attempt, what came of it, and when the lead is told ear
 
   test("with N shorter than 5 min the plain step at 2N comes first, and the unread skip adds no second step", async () => {
     const c = channel();
+    await c.ev("jon", { op: "quiet.set", minutes: 2 });
     const { id, epoch } = await inReview(c);
-    c.wait(N);
+    c.wait(2 * 60_000);
     await c.nudge("mac", id, "mac", epoch, 1);
-    expect(skipsDue(c.state(), c.now() + UNREAD_MS, 60_000)).toEqual([]);
-    c.wait(N);
+    expect(skips(c, c.now() + UNREAD_MS)).toEqual([]);
+    c.wait(2 * 60_000);
     await c.nudge("owl", id, "mac", epoch, 2);
     expect(skips(c, c.now() + UNREAD_MS)).toEqual([]);
+    expect(c.state().rejected.size).toBe(0);
   });
 
   test("on a task the lead holds, the attempt belongs to the lead's own act", async () => {
@@ -726,5 +729,117 @@ describe("one waker: the attempt, what came of it, and when the lead is told ear
     expect(wellFormed({ ...m, ev: { op: "task.nudge", task: id, mover: "mac", since: epoch, step: 2, wake: "delivered" } })).toBe(true);
     expect(wellFormed({ ...m, ev: { op: "task.nudge", task: id, mover: "mac", since: epoch, step: 3, wake: "none" } })).toBe(false);
     expect(wellFormed({ ...m, ev: { op: "task.nudge", task: id, mover: "mac", since: epoch, step: 2, wake: "woken" } })).toBe(false);
+  });
+});
+
+describe("N is a channel setting the owner can change (#3930 §2)", () => {
+  const MIN = 60_000;
+  const quiet = (c: Channel, from: Name, minutes: number) => c.ev(from, { op: "quiet.set", minutes });
+
+  test("with N set to 5 minutes, the ladder steps at 5, 10 and 15 minutes", async () => {
+    const c = channel();
+    await quiet(c, "jon", 5);
+    const { id, epoch, since } = await inReview(c);
+    expect(c.state().quietMs).toBe(5 * MIN);
+    const stepAt = (minutes: number) => due(c, since + minutes * MIN).map((d) => [d.step, d.to]);
+    expect(stepAt(4)).toEqual([]);
+    expect(stepAt(5)).toEqual([[1, "mac"]]);
+    expect(stepAt(9)).toEqual([[1, "mac"]]);
+    expect(stepAt(10)).toEqual([[2, "owl"]]);
+    expect(stepAt(15)).toEqual([[3, "jon"]]);
+    c.wait(5 * MIN);
+    const first = await c.nudge("mac", id, "mac", epoch, 1);
+    const early = await c.nudge("jon", id, "mac", epoch, 2);
+    c.wait(10 * MIN);
+    const third = await c.nudge("jon", id, "mac", epoch, 3);
+    const s = c.state();
+    expect(s.rejected.has(first.seq)).toBe(false);
+    expect(s.rejected.get(early.seq)).toBe(`T${id} hasn't been quiet long enough for step 2 of its clock`);
+    expect(s.rejected.has(third.seq)).toBe(false);
+    expect(read(c, id)).toMatchObject({ mover: "mac", step: 3 });
+    expect(due(c)).toEqual([]);
+  });
+
+  test("a step is judged by the setting in force when it was posted, whatever the setting became later", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(6 * MIN);
+    const under20 = await c.nudge("mac", id, "mac", epoch, 1);
+    const set = await quiet(c, "jon", 5);
+    expect(c.state().rejected.get(under20.seq)).toBe(`T${id} hasn't been quiet long enough for step 1 of its clock`);
+    expect(read(c, id)).toMatchObject({ epoch, step: 0 });
+    expect(due(c).map((d) => d.step)).toEqual([1]);
+    const under5 = await c.nudge("mac", id, "mac", epoch, 1);
+    await quiet(c, "jon", 20);
+    const s = c.state();
+    expect(s.rejected.has(set.seq)).toBe(false);
+    expect(s.rejected.has(under5.seq)).toBe(false);
+    expect(s.quietMs).toBe(20 * MIN);
+    expect(read(c, id)).toMatchObject({ epoch, step: 1 });
+    expect(due(c)).toEqual([]);
+  });
+
+  test("a step on the lead's own act follows the setting too", async () => {
+    const c = channel();
+    await quiet(c, "jon", 5);
+    const id = await c.add({ owner: "win", review: "*" });
+    await c.update("win", id, { state: "review", at: A });
+    const owls = await c.say("owl", "msg", "routing it now", { task: id });
+    c.wait(4 * MIN);
+    const early = await c.nudge("owl", id, "@lead", owls.seq, 1);
+    c.wait(MIN);
+    const onTime = await c.nudge("owl", id, "@lead", owls.seq, 1);
+    const s = c.state();
+    expect(s.rejected.get(early.seq)).toBe(`T${id} hasn't been quiet long enough for step 1 of its clock`);
+    expect(s.rejected.has(onTime.seq)).toBe(false);
+    expect(s.tasks.get(id)!.clock!.acts).toEqual([["owl", owls.seq, owls.rts!, 1]]);
+  });
+
+  test("the task list and the task's own page go by the setting", async () => {
+    const c = channel();
+    await quiet(c, "jon", 5);
+    const { id, since } = await inReview(c);
+    const s = c.state();
+    const at = since + 6 * MIN;
+    const row = (text: string) => text.split("\n").find((l) => l.includes(`T${id} `))!;
+    expect(row(formatTasks(s, "kiwi", { now: at }))).toEndWith(" · move: mac to review it · quiet 6m with mac (a wake is due)");
+    expect(row(formatTasks(s, "kiwi", { now: since + 4 * MIN }))).toEndWith(" · move: mac to review it");
+    expect(formatTask(s, s.tasks.get(id)!, at).split("\n")).toContain("  quiet 6m with mac (a wake is due)");
+  });
+
+  test("only the owner sets it; a setting out of range isn't an event at all", async () => {
+    const c = channel();
+    const forged = await quiet(c, "win", 1);
+    expect(c.state().rejected.get(forged.seq)).toBe("only the owner, or a person they fully trust, sets how long a task may stay quiet");
+    expect(c.state().quietMs).toBe(N);
+    const set = await quiet(c, "jon", 45);
+    expect(c.state().rejected.has(set.seq)).toBe(false);
+    expect(c.state().quietMs).toBe(45 * MIN);
+    expect(describeEvent(set, c.state())).toBe("set how long a task may stay quiet to 45m: after that a wake is due, then the lead, then the owner");
+    for (const minutes of [0, -5, 1.5, MAX_QUIET_MINUTES + 1, "5", null]) expect(wellFormed({ ...set, ev: { op: "quiet.set", minutes } })).toBe(false);
+    for (const minutes of [1, 20, MAX_QUIET_MINUTES]) expect(wellFormed({ ...set, ev: { op: "quiet.set", minutes } })).toBe(true);
+  });
+
+  test("the setting survives a snapshot, and a channel that never set it stores nothing", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    const baseOf = (log: Message[]): FoldBase => {
+      const made: FoldBase[] = [];
+      fold(log, roster, c.now(), null, null, null, (b) => void made.push(b));
+      return made.at(-1)!;
+    };
+    expect("quietMs" in baseOf(c.log)).toBe(false);
+    await quiet(c, "jon", 5);
+    const cut = c.log.length;
+    const base = baseOf(c.log);
+    expect(base.quietMs).toBe(5 * MIN);
+    c.wait(5 * MIN);
+    const step = await c.nudge("mac", id, "mac", epoch, 1);
+    const whole = c.state();
+    const resumed = fold(c.log.slice(cut), roster, c.now(), null, null, base);
+    expect(resumed.quietMs).toBe(5 * MIN);
+    expect(resumed.rejected.has(step.seq)).toBe(false);
+    expect(resumed.tasks.get(id)!.clock).toEqual(whole.tasks.get(id)!.clock);
+    expect(nudgesDue(resumed, c.now() + 5 * MIN)).toEqual(nudgesDue(whole, c.now() + 5 * MIN));
   });
 });
