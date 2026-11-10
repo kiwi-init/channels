@@ -1,4 +1,5 @@
 import type { Landing } from "@kiwi/core/protocol.ts";
+import { currentStep, type LandingStep } from "@kiwi/core/steps.ts";
 import { landingWaits, taskPr } from "@kiwi/core/prs.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { reentryText } from "@kiwi/core/reentry.ts";
@@ -181,9 +182,21 @@ function landingDo(state: ChannelState, t: Task, step: Landing): string {
   return `Its ${step} step is yours: do it at the approved artifact. People merge pull requests here, so if it comes to need one merged, don't merge it yourself: ${ready}.`;
 }
 
+function stepFocus(t: Task, step: LandingStep, me: string, mc: string): string {
+  const id = taskId(t.id);
+  const mover = step.by ?? landerOf(t);
+  return [
+    `This session is for landing ${id} “${inlineText(t.title, 160)}”. Its review already approved it, and it lands step by step: the current one is ${step.id} “${inlineText(step.words, 160)}”, ${mover === me ? "yours" : `${inlineText(mover ?? "its owner", 40)}'s`}.`,
+    `Don't run \`${mc} task start ${id}\` or send another \`${mc} task review ${id}\`: that reopens approved work. When the step is done, say so with \`${mc} task landed ${id} --step ${step.id}\`, with a note or \`--link\` to where it shows; \`${mc} task steps ${id}\` lists them all. ${id} is done when its last step ends.`,
+    `If a step can't be done, say why in ${id}'s thread, and ask the lead or a person to change its steps (\`${mc} task steps ${id}\`) or close it with a reason. Answer messages for you as they come.`,
+  ].join(" ");
+}
+
 function landingFocus(state: ChannelState, t: Task, me: string, mc: string): string {
   const id = taskId(t.id);
   const lander = landerOf(t);
+  const current = t.then ? undefined : currentStep(t);
+  if (current) return stepFocus(t, current, me, mc);
   const step = t.then ?? "merge";
   const waits = landingWaits(state, t);
   return [

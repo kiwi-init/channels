@@ -27,6 +27,8 @@ import { trustedAt } from "./times.ts";
 import { artifactKey, artifactText, doneGate } from "../done-gate.ts";
 import { runPin, type CheckArtifact } from "../checks.ts";
 import type { CheckState } from "./checks.ts";
+import { advance, artifactWords, editSteps, hasOpenSteps, observedRefusal, reopenThenSteps, reseedThen, say, see, seeAnswered, seedSteps, seeThenSteps, stepEditRefusal } from "./landing-steps.ts";
+import { landedStepRefusal, stepById, stepsOfThen, stepText, type StepSpec } from "../steps.ts";
 import { omit } from "../omit.ts";
 import { inlineText } from "../membership.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
@@ -60,6 +62,7 @@ function unlandShaken(c: GateCtx, t: Task, mark: Mark, why: string): void {
   if (doneGate(c, { ...omit(t, "archived"), state: "landing" })?.kind === "landed") return;
   t.state = "landing";
   t.landed = undefined;
+  reopenThenSteps(t);
   t.closedSeq = undefined;
   t.archived = undefined;
   t.updatedAt = mark.at;
@@ -111,6 +114,8 @@ export interface FoldCtx {
   githubWrite: number | null;
   branchPrefix: string | null;
   landing: Landing | null;
+  landingSteps: StepSpec[] | null;
+  passedAsks: Map<number, string>;
   merges: Merger;
   compact: Compact | null;
   compactProposal: Compact | null;
@@ -124,6 +129,7 @@ function approvalHoldsAgain(t: Task, head: string, mark: { seq: number; by: stri
   t.approvedBy = last.result.by;
   t.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `head ${head.slice(0, 7)} is the approved code: the approval holds again` });
   t.updatedAt = mark.at;
+  if (t.steps || !t.then) advance(t, mark);
 }
 
 function headMoved(t: Task, pr: GithubPr & { sha: string }, mark: { seq: number; by: string; at: number }): void {
@@ -466,6 +472,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         break;
       }
       c.landing = ev.then;
+      c.landingSteps = ev.steps ?? null;
       break;
     }
 
@@ -563,8 +570,9 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
-    case "task.add":
-      tasks.set(m.seq, {
+    case "task.add": {
+      const then = ev.steps ? undefined : (ev.then ?? (c.landingSteps ? undefined : (c.landing ?? undefined)));
+      const added: Task = {
         id: m.seq,
         title: String(ev.title).slice(0, TASK_TITLE_MAX_LENGTH),
         detail: ev.detail,
@@ -581,10 +589,16 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         workedBy: ev.owner ? [ev.owner] : [],
         rounds: [],
         ...(m.re?.length ? { source: m.re[0] } : {}),
-        ...(hasLanding(ev.then ?? c.landing ?? undefined) ? { then: ev.then ?? c.landing ?? undefined } : {}),
+        ...(hasLanding(then) ? { then } : {}),
         ...(ev.lander?.trim() ? { lander: ev.lander.trim() } : {}),
-      });
+      };
+      if (ev.steps) seedSteps(added, ev.steps);
+      else if (then && hasLanding(then)) seedSteps(added, stepsOfThen(then), "then");
+      else if (ev.then === undefined && c.landingSteps) seedSteps(added, c.landingSteps);
+      seeAnswered(added, c.passedAsks, { seq: m.seq, by: m.from, at });
+      tasks.set(m.seq, added);
       break;
+    }
 
     case "card": {
       const card = omit(ev, "op");
@@ -626,22 +640,70 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
 
     case "task.landed": {
       const task = tasks.get(ev.task);
-      const key = artifactKey(ev.task, ev.artifact);
       if (!task) {
         reject(`no task ${taskId(ev.task)}`);
         break;
       }
+      const mark = { seq: m.seq, by: m.from, at };
+      if ("step" in ev) {
+        const step = stepById(task, ev.step);
+        const wrong = step && ev.artifact ? null : landedStepRefusal(task, ev.step);
+        if (wrong || !step) {
+          reject(wrong ?? `${taskId(task.id)} has no step ${ev.step}`);
+          break;
+        }
+        if (step.progress.kind === "ended") break;
+        const trusted = isPerson(member) || c.leads(member);
+        const mover = step.by ?? landerOf(task);
+        if (!trusted && m.from !== mover) {
+          reject(`only ${mover ?? "its lander"}, the lead or a person ends step ${stepText(step)} of ${taskId(task.id)}`);
+          break;
+        }
+        if (ev.artifact) {
+          const unseen = observedRefusal({ github: c.github, prOf: (t) => prOfTask(c.github, c.branchPrefix, t) }, task, step, ev.artifact);
+          if (unseen) reject(unseen);
+          else see(task, step, mark, artifactWords(ev.artifact));
+          break;
+        }
+        if (task.state !== "landing") {
+          reject(`${taskId(task.id)} isn't approved and landing: it's ${task.state}`);
+          break;
+        }
+        if (step.from === "then" && task.then && !trusted) {
+          reject(`step ${stepText(step)} of ${taskId(task.id)} ends through its landing gate: a person or the lead can end it by hand`);
+          break;
+        }
+        say(task, step, mark, { ...(ev.link ? { link: ev.link } : {}), ...(ev.note ? { note: ev.note.trim() } : {}) });
+        break;
+      }
+      const key = artifactKey(ev.task, ev.artifact);
       if (task.landed?.key === key) break;
       const why = landedRefusal(c, task, ev.artifact, member, m.from);
       if (why) {
         reject(why);
         break;
       }
-      task.state = "done";
       task.landed = { key, artifact: ev.artifact, seq: m.seq, by: m.from };
-      task.closedSeq = m.seq;
       task.updatedAt = at;
       task.notes.push({ seq: m.seq, by: m.from, ts: at, text: `landed: ${artifactText(ev.artifact)}` });
+      if (!task.steps) seedSteps(task, stepsOfThen(task.then ?? "merge"), "then");
+      seeThenSteps(task, mark, artifactText(ev.artifact));
+      advance(task, mark);
+      break;
+    }
+
+    case "task.steps": {
+      const task = tasks.get(ev.task);
+      if (!task) {
+        reject(`no task ${taskId(ev.task)}`);
+        break;
+      }
+      const refused = stepEditRefusal(task, ev.edit, { name: m.from, person: isPerson(member), lead: c.leads(member) });
+      if (refused) reject(refused);
+      else {
+        editSteps(task, ev.edit, { seq: m.seq, by: m.from, at });
+        seeAnswered(task, c.passedAsks, { seq: m.seq, by: m.from, at });
+      }
       break;
     }
 
@@ -702,7 +764,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const reopens = landingReopens(task, ev);
       const cancel = ev.state === "cancelled" && task.state !== "done";
-      const lands = ev.verdict === "approved" && hasLanding(task.then);
+      const lands = ev.verdict === "approved" && (hasLanding(task.then) || hasOpenSteps(task));
       const asked =
         ev.state === "cancelled" ? (cancel && (mayFinish || lead || (ev.round !== undefined && revisedOut(task, m.from, open) === ev.round)) ? "done" : undefined) : ev.state && currentState(ev.state);
       const state = reopens ? "review" : lands && asked === "done" ? "landing" : asked;
@@ -746,7 +808,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const note = ev.note || ev.close?.trim() || (ev.state === "blocked" ? "blocked" : ev.state === "cancelled" ? "cancelled" : reopens ? "changed how it lands: back to review" : undefined);
       const settled = (s: string) => s === "done" || s === "landing";
       if (ev.review !== undefined) task.review = review;
-      if (ev.then !== undefined) task.then = hasLanding(ev.then) ? ev.then : undefined;
+      if (ev.then !== undefined && ev.then !== (task.then ?? "none")) {
+        task.then = hasLanding(ev.then) ? ev.then : undefined;
+        reseedThen(task, task.then);
+      }
       if (ev.lander !== undefined) task.lander = ev.lander?.trim() || undefined;
       if (ev.verdict === "approved" && state && settled(state) && task.review) task.approvedBy = m.from;
       if (ev.state === "done" && ev.verdict === undefined && ev.close === undefined && task.state !== "done" && task.review) task.approvedBy = m.from;
@@ -802,6 +867,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (ev.areas?.length) task.areas = [...new Set(ev.areas)];
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;
+      if (task.state === "landing" && (task.steps || !task.then)) advance(task, { seq: m.seq, by: m.from, at });
       break;
     }
 
