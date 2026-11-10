@@ -35,6 +35,26 @@ test("the app's kiwi.js becomes a working kiwi in the install folder, built with
   expect(await keepCli(bundle, "9.9.9", [])).toEqual({ path: kept.path, version: "9.9.9", updated: false, homebrew: false });
 }, 30_000);
 
+test.skipIf(process.platform === "win32")(
+  "a kiwi too slow to say its version is left alone and marked unsure, while one that won't run is replaced (T1767)",
+  async () => {
+    const dir = folder();
+    const bundle = join(dir, "kiwi.js");
+    writeFileSync(bundle, 'if (process.argv.includes("--version")) console.log("kiwi 9.9.9");\n');
+    process.env["KIWI_INSTALL"] = join(dir, "bin");
+    mkdirSync(join(dir, "bin"));
+    const dest = join(dir, "bin", "kiwi");
+    const newer = "#!/bin/sh\nsleep 3\necho kiwi 99.0.0\n";
+    writeFileSync(dest, newer, { mode: 0o755 });
+    expect(await keepCli(bundle, "9.9.9", [], 300)).toEqual({ path: dest, version: "9.9.9", updated: false, homebrew: false, unsure: true });
+    expect(readFileSync(dest, "utf8")).toBe(newer);
+    writeFileSync(dest, "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    expect(await keepCli(bundle, "9.9.9", [])).toEqual({ path: dest, version: "9.9.9", updated: true, homebrew: false });
+    expect(execFileSync(dest, ["--version"], { encoding: "utf8" }).trim()).toBe("kiwi 9.9.9");
+  },
+  30_000,
+);
+
 test("a kiwi.js that doesn't build leaves nothing in the install folder", async () => {
   const dir = folder();
   const bundle = join(dir, "kiwi.js");

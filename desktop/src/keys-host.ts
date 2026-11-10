@@ -6,7 +6,7 @@ import { acceptSeat, withAccess } from "./guard.ts";
 import type { KeysToHost } from "./keys-server.ts";
 import { mutate, store } from "./store.ts";
 
-export type KeysAsk = Exclude<KeysToHost, { type: "flushed" }>;
+export type KeysAsk = Exclude<KeysToHost, { type: "flushed" | "pong" }>;
 
 export interface KeysAnswer {
   error?: string;

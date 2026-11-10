@@ -135,7 +135,7 @@ export class SessionState {
     const holed = first !== undefined && first > (this.base?.n ?? 0) + 1;
     const current = !holed && seen !== null && seen.head <= lastSeq(this.log) && lastSeq(this.log) >= this.owed;
     if (!current && (holed || !look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
-      const offered = !this.base && (first === undefined || first > 1) ? yield* this.ch.fx.snapshot() : null;
+      const offered = !this.base && (first === undefined || first > 1) ? yield* Effect.orElseSucceed(this.ch.fx.snapshot(), () => null) : null;
       const whole = offered && olderRules(offered) ? yield* this.wholeLog() : null;
       const fetched = whole ? null : offered;
       const floor = this.base?.n ?? fetched?.n ?? 0;

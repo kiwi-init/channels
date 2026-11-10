@@ -9,6 +9,7 @@ import type { Host } from "../host.ts";
 import { openInBrowser } from "../open.ts";
 import { githubSignsIn, relayConfig } from "../signin.ts";
 import { mutate, store } from "../store.ts";
+import { timedFetch } from "../within.ts";
 
 async function status(): Promise<GithubStatus> {
   const link = linkedHere(store.github, store.relayUrl) ? store.github : undefined;
@@ -42,13 +43,13 @@ async function link(host: Host): Promise<GithubStatus> {
   const relay = store.relayUrl;
   const clientId = (await relayConfig(relay)).githubClientId;
   if (!clientId) throw new Error("this relay has no GitHub App");
-  const start = await startDevice(clientId);
+  const start = await startDevice(clientId, timedFetch);
   const page = externalUrl(start.url);
   if (!page) throw new Error("GitHub sent a sign-in page that isn't a web link");
   pending = { code: start.userCode, url: start.url };
   host.push("githubCode", pending);
   await openInBrowser(page, (u) => host.openExternal(u));
-  const found = await finishDevice(clientId, start, { fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: Date.now });
+  const found = await finishDevice(clientId, start, { fetch: timedFetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: Date.now });
   mutate((s) => (s.github = { ...found, at: Date.now(), relay, clientId }));
   return status();
 }

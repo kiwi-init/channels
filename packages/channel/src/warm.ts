@@ -15,6 +15,7 @@ export interface Warm {
   guardFloor: GuardFloor | null;
   roomsFloor: RoomsSetting | null;
   base: FoldBase | null;
+  partial: boolean;
 }
 
 export const WARM_FULL = 2;

@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import type { Member } from "@kiwi/core/membership.ts";
-import { PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
+import { FOLD_RULES, PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
+import { fold, type FoldBase } from "@kiwi/core/state.ts";
 import type { ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts";
 import { ChannelLink } from "./channel-ops.ts";
 import { APP_BEACON_MS, ChannelStore, PAGE, REACH, WINDOW } from "./channel-store.ts";
 import { PRESENCE_TTL } from "./online.ts";
+import { REFOLLOW_MS } from "./refollow.ts";
 import type { StoredMember } from "./store.ts";
 import { dropWarm, LEAN, LIGHT, warmOf } from "./warm.ts";
 import { useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts";
@@ -250,6 +252,38 @@ describe("a channel store", () => {
     expect(store.handle.value.reach.map((m) => m.seq)).toEqual(Array.from({ length: 250 }, (_, i) => i + 1));
     expect(warmOf(CODE)?.messages).toHaveLength(LIGHT);
     close();
+  });
+});
+
+describe("a live stream that dies without the channel being gone (T1784)", () => {
+  test("is followed again from the last message heard, and the channel goes live once it opens", async () => {
+    const r = relay(0);
+    const { store, close } = await opened(r);
+    r.say({ _tag: "Open" });
+    for (const seq of [1, 2, 3]) r.say({ _tag: "Message", message: msg(seq), row: null });
+    const dead = r.live();
+    dead.on({ _tag: "Failed", error: { kind: "other", message: "the stream broke" } });
+    expect(store.handle.value.connection).toBe("reconnecting");
+    await sleep(REFOLLOW_MS + 200);
+    expect(r.follows).toHaveLength(2);
+    expect(dead.stopped).toBe(true);
+    expect(r.live().since).toBe(3);
+    r.say({ _tag: "Open" });
+    expect(store.handle.value.connection).toBe("live");
+    dead.on({ _tag: "Message", message: msg(9), row: null });
+    await sleep(40);
+    expect(store.handle.value.messages.map((m) => m.seq)).toEqual([1, 2, 3]);
+    close();
+    expect(r.live().stopped).toBe(true);
+  });
+
+  test("closing while it waits to follow again follows nothing", async () => {
+    const r = relay(0);
+    const { close } = await opened(r);
+    r.say({ _tag: "Failed", error: { kind: "unreachable", message: "no route" } });
+    close();
+    await sleep(REFOLLOW_MS + 200);
+    expect(r.follows).toHaveLength(1);
   });
 });
 
@@ -551,5 +585,125 @@ describe("history from the relay is fetched only when asked (T977, #1944)", () =
     } finally {
       useHistoryDb(null);
     }
+  });
+});
+
+describe("a channel longer than the window, opened with no base under it (T1759)", () => {
+  const HEAD = REACH + 1_000;
+  const baseAt = (n: number): FoldBase => {
+    const made: { base?: FoldBase } = {};
+    fold([], [], 0, null, null, null, (b) => void (made.base = b));
+    return { ...made.base!, n, rules: FOLD_RULES };
+  };
+  const hearWindow = (r: ReturnType<typeof relay>) => {
+    for (let seq = HEAD - REACH + 1; seq <= HEAD; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
+  };
+  const sealedBase = (r: ReturnType<typeof relay>) => (r.kept.at(-1)?.state as { base: unknown } | undefined)?.base;
+
+  test("a snapshot request that fails is asked again, and the channel opens on its whole history", async () => {
+    let asked = 0;
+    const r = relay(HEAD, { answers: { snapshot: () => (++asked === 1 ? Promise.reject(new Error("the wifi dropped")) : baseAt(HEAD - REACH)) } });
+    const store = new ChannelStore(member, undefined, { link: r.link, lend: r.lend });
+    const close = store.open();
+    await sleep(100);
+    expect(r.follows).toHaveLength(0);
+    expect(store.handle.value.connection).toBe("reconnecting");
+    await sleep(700);
+    expect(r.follows).toHaveLength(1);
+    expect(r.called("snapshot")).toHaveLength(2);
+    hearWindow(r);
+    await until(() => store.handle.value.caughtUp);
+    close();
+  });
+
+  test("with no snapshot to be had, the window still trims but its partial base is never sealed to disk", async () => {
+    const r = relay(HEAD);
+    const { store, close } = await opened(r);
+    hearWindow(r);
+    await sleep(40);
+    await until(() => store.handle.value.messages.length === WINDOW);
+    expect(store.handle.value.caughtUp).toBe(false);
+    await sleep(3_300);
+    expect(r.kept.length).toBeGreaterThan(0);
+    expect(sealedBase(r)).toBeNull();
+    close();
+  }, 10_000);
+
+  test("the next store for that channel asks for the snapshot again and doesn't take the partial base for the whole history", async () => {
+    const first = relay(HEAD);
+    const one = await opened(first);
+    hearWindow(first);
+    await sleep(40);
+    await until(() => one.store.handle.value.messages.length === WINDOW);
+    one.close();
+    const again = relay(HEAD);
+    const two = await opened(again);
+    expect(again.called("snapshot")).toHaveLength(1);
+    expect(two.store.handle.value.messages).toHaveLength(WINDOW);
+    expect(two.store.handle.value.state.head).toBe(HEAD);
+    expect(two.store.handle.value.caughtUp).toBe(false);
+    two.close();
+    const healed = relay(HEAD, { answers: { snapshot: () => baseAt(HEAD - 100) } });
+    const three = await opened(healed);
+    expect(three.store.handle.value.caughtUp).toBe(true);
+    three.close();
+  });
+});
+
+describe("the channel is folded when something changed, not on a clock (T1787)", () => {
+  test("an open permission ask closes at its expiry with no new message, and until then the state is the very same object: nothing refolds", async () => {
+    const r = relay(0);
+    const { store, close } = await opened(r);
+    const permission = { tool: "Bash", command: "ls", cwd: "/", nonce: "n".repeat(22), expiresAt: Date.now() + 600, canAllow: true };
+    r.say({ _tag: "Message", message: { ...msg(1), pk: "pk-atlas", kind: "ask", permission } as Message, row: null });
+    await sleep(40);
+    const before = store.handle.value.state;
+    expect(before.openAsks.map((m) => m.seq)).toEqual([1]);
+    let notified = 0;
+    const stop = store.subscribe(() => notified++);
+    await sleep(300);
+    expect(store.handle.value.state).toBe(before);
+    expect(notified).toBe(0);
+    await sleep(permission.expiresAt - Date.now() + 100);
+    expect(store.handle.value.state.openAsks).toEqual([]);
+    expect(notified).toBe(1);
+    const after = store.handle.value.state;
+    await sleep(200);
+    expect(store.handle.value.state).toBe(after);
+    stop();
+    close();
+  });
+
+  test("across the 15 s presence tick an idle channel isn't folded again and its handle doesn't change, so nothing renders", async () => {
+    const r = relay(0);
+    const { store, close } = await opened(r);
+    r.say({ _tag: "Open" });
+    for (const seq of [1, 2, 3]) r.say({ _tag: "Message", message: msg(seq), row: null });
+    await sleep(40);
+    const before = store.handle.value;
+    let notified = 0;
+    const stop = store.subscribe(() => notified++);
+    await sleep(15_000 - (Date.now() % 15_000) + 200);
+    expect(store.handle.value.state).toBe(before.state);
+    expect(store.handle.value).toBe(before);
+    expect(notified).toBe(0);
+    stop();
+    close();
+  }, 20_000);
+
+  test("a closed store folds at no expiry", async () => {
+    const r = relay(0);
+    const { store, close } = await opened(r);
+    const permission = { tool: "Bash", command: "ls", cwd: "/", nonce: "n".repeat(22), expiresAt: Date.now() + 300, canAllow: true };
+    r.say({ _tag: "Message", message: { ...msg(1), pk: "pk-atlas", kind: "ask", permission } as Message, row: null });
+    await sleep(40);
+    const before = store.handle.value.state;
+    close();
+    let notified = 0;
+    const stop = store.subscribe(() => notified++);
+    await sleep(500);
+    expect(notified).toBe(0);
+    expect(store.handle.value.state).toBe(before);
+    stop();
   });
 });

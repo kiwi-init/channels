@@ -8,7 +8,7 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-function launch(running: string, install: "works" | "blocked"): { stops: number; spawned: string | null; dir: string } {
+function launch(running: string, install: "works" | "blocked", stubborn = false): { stops: number; spawned: string | null; log: string; dir: string } {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "kiwi-up-")));
   dirs.push(dir);
   const marker = join(dir, "spawned");
@@ -24,7 +24,7 @@ function launch(running: string, install: "works" | "blocked"): { stops: number;
     script,
     `import { existsSync, readFileSync } from "node:fs";
 import { keepDaemon } from ${JSON.stringify(join(root, "desktop/src/bundled-daemon.ts"))};
-import { daemonSocketPath } from ${JSON.stringify(join(root, "desktop/src/daemon-client.ts"))};
+import { daemonLogPath, daemonSocketPath, kiwiHome } from ${JSON.stringify(join(root, "desktop/src/daemon-client.ts"))};
 import { useHost } from ${JSON.stringify(join(root, "desktop/src/host.ts"))};
 import { fakeHost } from ${JSON.stringify(join(root, "test/fake-host.ts"))};
 useHost(fakeHost({ packaged: true, version: "9.9.9", paths: { resources: ${JSON.stringify(join(dir, "resources"))}, data: ${JSON.stringify(join(dir, "data"))} } }).host);
@@ -44,6 +44,7 @@ function serve(version: string): void {
           stops += 1;
           socket.write(JSON.stringify({ id: req.id, ok: true }) + "\\n");
           socket.flush();
+          if (${JSON.stringify(stubborn)}) continue;
           server.stop(true);
           const reopen = setInterval(() => {
             if (!existsSync(${JSON.stringify(marker)})) return;
@@ -57,7 +58,8 @@ function serve(version: string): void {
 }
 serve(${JSON.stringify(running)});
 await keepDaemon(() => true);
-console.log(JSON.stringify({ stops, spawned: existsSync(${JSON.stringify(marker)}) ? readFileSync(${JSON.stringify(marker)}, "utf8").trim() : null }));
+const logFile = daemonLogPath(kiwiHome());
+console.log(JSON.stringify({ stops, spawned: existsSync(${JSON.stringify(marker)}) ? readFileSync(${JSON.stringify(marker)}, "utf8").trim() : null, log: existsSync(logFile) ? readFileSync(logFile, "utf8") : "" }));
 process.exit(0);
 `,
   );
@@ -74,7 +76,7 @@ process.exit(0);
     },
   });
   expect(r.exitCode, r.stderr.toString()).toBe(0);
-  return { ...(JSON.parse(r.stdout.toString()) as { stops: number; spawned: string | null }), dir };
+  return { ...(JSON.parse(r.stdout.toString()) as { stops: number; spawned: string | null; log: string }), dir };
 }
 
 describe.skipIf(process.platform === "win32")("an updated app replaces the daemon serving it", () => {
@@ -89,6 +91,13 @@ describe.skipIf(process.platform === "win32")("an updated app replaces the daemo
     expect(seen.stops).toBe(1);
     expect(seen.spawned).toBe(join(seen.dir, "resources", "kiwi"));
   }, 30_000);
+
+  test("an older daemon that says it will stop and keeps answering is not taken for the new one, and the daemon log says so (T1770)", () => {
+    const seen = launch("1.0.0", "works", true);
+    expect(seen.stops).toBe(1);
+    expect(seen.spawned).toBe(join(seen.dir, "install", "kiwi"));
+    expect(seen.log).toContain("an older daemon (1.0.0) was asked to stop and still answers");
+  }, 60_000);
 
   test("a daemon as new as the app keeps running", () => {
     const seen = launch("9.9.9", "blocked");

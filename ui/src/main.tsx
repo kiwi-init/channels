@@ -21,6 +21,7 @@ import { hasBridge } from "@kiwi/secrets/relay.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { noteSignInGone } from "@kiwi/channel/session.ts"
 import { applyStoredAppearance, stepTextSize } from "@kiwi/app/theme.ts"
+import { rememberChannel } from "@kiwi/app/last-channel.ts"
 import { uiBooted, watchUiBoot } from "@kiwi/app/ui-boot.ts"
 import { nudgeOnWake } from "@kiwi/app/wake.ts"
 
@@ -40,12 +41,23 @@ function LiveApp() {
   const task = nav.panel?.kind === "task" ? nav.panel.task : null
   const thread = nav.panel?.kind === "thread" ? nav.panel.seq : null
   const view = useMemo(() => ({ where, task, thread }), [where, task, thread])
+  const [turn, setTurn] = useState(0)
+  const [failed, setFailed] = useState(false)
+  const crashed = useCallback(() => {
+    rememberChannel(null)
+    setFailed(true)
+  }, [])
+  const mended = useCallback(() => setFailed(false), [])
+  const inChannel = !!nav.channel
+  const broken = useMemo(() => (failed ? { channel: inChannel, retry: () => setTurn((n) => n + 1) } : undefined), [failed, inChannel])
   useEffect(uiBooted, [])
   useKeepPlace(nav)
   return (
     <>
-      <LiveDuties open={nav.channel} view={view} go={go} />
-      <Root app={app} nav={nav} go={go} />
+      <Boundary quiet resetKey={`${nav.channel ?? ""} ${turn}`} onCrash={crashed} onMend={mended}>
+        <LiveDuties open={nav.channel} view={view} go={go} />
+      </Boundary>
+      <Root app={app} nav={nav} go={go} broken={broken} />
     </>
   )
 }

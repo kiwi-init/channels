@@ -4,6 +4,7 @@ import type { Identity } from "@kiwi/core/identity.ts";
 import { makeAsk, readAnswer, type MachineVerb } from "@kiwi/core/machine-ask.ts";
 import { newSecret, openMailbox } from "@kiwi/core/mailbox.ts";
 import type { FromMachine } from "./bridge.ts";
+import { within } from "./within.ts";
 
 const MACHINE_PK = /^[A-Za-z0-9_-]{20,128}$/;
 
@@ -45,7 +46,7 @@ export async function askMachine(asker: Asker, machine: { pk: string; xpk: strin
   const auth = await signRequest(asker.signer, `machine:${machine.pk}`, "POST", path, body);
   let sent: Response;
   try {
-    sent = await fetchImpl(new URL(path, asker.relay), { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${auth}` }, body });
+    sent = await fetchImpl(new URL(path, asker.relay), within({ method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${auth}` }, body }));
   } catch (err) {
     return { ok: false, why: "failed", detail: `couldn't reach the relay: ${err instanceof Error ? err.message : String(err)}` };
   }
@@ -74,7 +75,7 @@ export async function machineOnline(asker: Asker, machinePk: string): Promise<bo
   const path = `/v1/machine/${machinePk}`;
   const auth = await signRequest(asker.signer, `machine:${machinePk}`, "GET", path);
   try {
-    const res = await (asker.fetch ?? fetch)(new URL(path, asker.relay), { headers: { authorization: `Bearer ${auth}` } });
+    const res = await (asker.fetch ?? fetch)(new URL(path, asker.relay), within({ headers: { authorization: `Bearer ${auth}` } }));
     if (!res.ok) return null;
     const got = (await res.json()) as { online?: unknown };
     return typeof got.online === "boolean" ? got.online : null;
@@ -108,7 +109,7 @@ export async function unpairAt(asker: Asker, machinePk: string): Promise<boolean
   const path = `/v1/machine/${machinePk}`;
   const auth = await signRequest(asker.signer, `machine:${machinePk}`, "DELETE", path);
   try {
-    const res = await (asker.fetch ?? fetch)(new URL(path, asker.relay), { method: "DELETE", headers: { authorization: `Bearer ${auth}` } });
+    const res = await (asker.fetch ?? fetch)(new URL(path, asker.relay), within({ method: "DELETE", headers: { authorization: `Bearer ${auth}` } }));
     return res.ok || res.status === 404;
   } catch {
     // An unreachable relay keeps the binding for now; the computer is already gone from this app's list.
@@ -121,7 +122,7 @@ export async function personMachines(asker: Asker): Promise<FromMachine<PairedCo
   const auth = await signRequest(asker.signer, `person:${asker.person}`, "GET", path);
   let res: Response;
   try {
-    res = await (asker.fetch ?? fetch)(new URL(path, asker.relay), { headers: { authorization: `Bearer ${auth}` } });
+    res = await (asker.fetch ?? fetch)(new URL(path, asker.relay), within({ headers: { authorization: `Bearer ${auth}` } }));
   } catch (err) {
     return { ok: false, detail: `couldn't reach the relay: ${err instanceof Error ? err.message : String(err)}` };
   }

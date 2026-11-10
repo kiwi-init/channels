@@ -2,6 +2,7 @@ import { pollToken, startDevice, type DeviceStart, type PollDeps } from "@kiwi/c
 import { isRasterMime, wellFormedPicture, type MemberPicture } from "@kiwi/core/protocol.ts";
 
 import type { GithubRepoView } from "./bridge.ts";
+import { within } from "./within.ts";
 
 const USER_URL = "https://api.github.com/user";
 
@@ -20,7 +21,7 @@ export async function finishDevice(clientId: string, start: DeviceStart, deps: F
 }
 
 async function account(token: string, f: typeof fetch): Promise<GithubAccount> {
-  const res = await f(USER_URL, { headers: { accept: "application/vnd.github+json", authorization: `Bearer ${token}`, "user-agent": "channels-desktop" } });
+  const res = await f(USER_URL, within({ headers: { accept: "application/vnd.github+json", authorization: `Bearer ${token}`, "user-agent": "channels-desktop" } }));
   const body = (await res.json().catch(() => ({}))) as { login?: string; id?: number };
   if (!res.ok || typeof body.login !== "string" || typeof body.id !== "number") throw new Error("GitHub didn’t say who this is");
   return { login: body.login, id: body.id, token };
@@ -42,7 +43,7 @@ export function linkedHere(link: GithubLinkFor | null | undefined, relay: string
 
 export async function tokenForRelay(relay: string, link: GithubLinkFor | null | undefined, f: typeof fetch = fetch): Promise<string | null> {
   if (!link || !linkedHere(link, relay)) return null;
-  const config = await f(new URL("/v1/config", relay)).then(
+  const config = await f(new URL("/v1/config", relay), within()).then(
     (res) => (res.ok ? (res.json() as Promise<{ githubClientId?: unknown }>) : null),
     () => null,
   );
@@ -52,9 +53,10 @@ export async function tokenForRelay(relay: string, link: GithubLinkFor | null | 
 export async function listRepos(token: string, f: typeof fetch = fetch): Promise<GithubRepoView[]> {
   const out: GithubRepoView[] = [];
   for (let page = 1; page <= REPO_PAGES; page++) {
-    const res = await f(`${REPOS_URL}?per_page=100&sort=pushed&page=${page}`, {
-      headers: { accept: "application/vnd.github+json", authorization: `Bearer ${token}`, "user-agent": "channels-desktop" },
-    });
+    const res = await f(
+      `${REPOS_URL}?per_page=100&sort=pushed&page=${page}`,
+      within({ headers: { accept: "application/vnd.github+json", authorization: `Bearer ${token}`, "user-agent": "channels-desktop" } }),
+    );
     if (res.status === 401) throw new Error("the GitHub link has expired: link it again in Settings");
     if (!res.ok) throw new Error("GitHub didn’t list the repos");
     const body = (await res.json().catch(() => null)) as unknown;
@@ -73,7 +75,7 @@ const AVATAR_SIZES = [96, 64, 48, 32];
 /** The account's GitHub avatar as a small picture the person can publish: fetched here, so no page loads from GitHub. */
 export async function avatar(id: number, f: typeof fetch = fetch): Promise<MemberPicture | null> {
   for (const size of AVATAR_SIZES) {
-    const res = await f(`https://avatars.githubusercontent.com/u/${id}?s=${size}&v=4`, { headers: { "user-agent": "channels-desktop" } });
+    const res = await f(`https://avatars.githubusercontent.com/u/${id}?s=${size}&v=4`, within({ headers: { "user-agent": "channels-desktop" } }));
     if (!res.ok) return null;
     const mime = (res.headers.get("content-type") ?? "").split(";")[0]!.trim();
     const bytes = new Uint8Array(await res.arrayBuffer());
