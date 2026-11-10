@@ -34,6 +34,7 @@ export function lighter(w: Warm, now = Date.now()): Warm {
   if (!base) return w;
   return {
     ...w,
+    folded: undefined,
     base,
     messages: w.messages.filter((m) => m.seq > base.n),
     unread: w.unread.filter((seq) => seq > base.n),

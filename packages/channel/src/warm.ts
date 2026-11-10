@@ -1,9 +1,26 @@
 import type { RoomsSetting } from "@kiwi/core/client.ts";
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
-import type { FoldBase, GuardFloor } from "@kiwi/core/state.ts";
+import type { ChannelState, FoldBase, GuardFloor } from "@kiwi/core/state.ts";
 import { planReload } from "./history-plan.ts";
 import type { Marks } from "./receipts.ts";
+
+export interface Folded {
+  state: ChannelState;
+  messages: Message[];
+  roster: Member[];
+  guardFloor: GuardFloor | null;
+  roomsFloor: RoomsSetting | null;
+  base: FoldBase | null;
+  until: number | null;
+}
+
+export const foldedFor = (w: Warm | undefined, now: number): Folded | null => {
+  const f = w?.folded;
+  if (!w || !f) return null;
+  const same = f.messages === w.messages && f.roster === w.roster && f.guardFloor === w.guardFloor && f.roomsFloor === w.roomsFloor && f.base === w.base;
+  return same && (f.until === null || now < f.until) ? f : null;
+};
 
 export interface Warm {
   messages: Message[];
@@ -16,6 +33,7 @@ export interface Warm {
   roomsFloor: RoomsSetting | null;
   base: FoldBase | null;
   partial: boolean;
+  folded?: Folded | undefined;
 }
 
 export const WARM_FULL = 2;

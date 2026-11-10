@@ -27,7 +27,7 @@ import { foldRoster } from "./fold-roster.ts";
 import { asKept, toKept } from "./kept.ts";
 import { handOver, onceEach, openChannel, warmUp } from "./open.ts";
 import type { Scrollback } from "./back.ts";
-import { dropWarm, keepWarm, LEAN, leanLoaded, leanNow, LIGHT, warmOf, type Warm } from "./warm.ts";
+import { dropWarm, foldedFor, keepWarm, LEAN, leanLoaded, leanNow, LIGHT, warmOf, type Warm } from "./warm.ts";
 
 let images: typeof import("./image-bytes.ts") | null = null;
 void import("./image-bytes.ts").then((m) => (images = m)).catch(() => {});
@@ -193,9 +193,13 @@ export class ChannelStore {
     const admitted = computed(() => this.roster.value.filter((m) => !m.unverified));
     this.keyOf = computed(() => new Map(admitted.value.filter((r) => r.active).map((r) => [r.name, r.pk])));
     this.rosterForFold = computed(() => foldRoster(admitted.value));
+    let held = foldedFor(was, Date.now());
     this.state = computed(() => {
-      void this.expired.value;
-      return fold(this.messages.value, this.rosterForFold.value, Date.now(), this.roomsFloor.value, this.guardFloor.value, this.base.value);
+      const refolds = this.expired.value;
+      const [messages, roster, rooms, guard, base] = [this.messages.value, this.roster.value, this.roomsFloor.value, this.guardFloor.value, this.base.value];
+      if (held && refolds === 0 && held.messages === messages && held.roster === roster && held.roomsFloor === rooms && held.guardFloor === guard && held.base === base) return held.state;
+      held = null;
+      return fold(messages, this.rosterForFold.value, Date.now(), rooms, guard, base);
     });
     this.caughtUp = computed(() => {
       const start = this.start.value;
@@ -289,9 +293,9 @@ export class ChannelStore {
 
   refreshRoster = async (): Promise<void> => {
     try {
-      this.roster.value = await this.ch.members();
+      this.takeRoster(await this.ch.members());
       this.rosterIn = true;
-      if (this.ch.isOwner && (await this.ch.rotateIfDue())) this.roster.value = await this.ch.members();
+      if (this.ch.isOwner && (await this.ch.rotateIfDue())) this.takeRoster(await this.ch.members());
     } catch (err) {
       this.onGone(err);
     }
@@ -358,9 +362,13 @@ export class ChannelStore {
     return true;
   }
 
+  private takeRoster(next: Member[]): void {
+    if (JSON.stringify(next) !== JSON.stringify(this.roster.peek())) this.roster.value = next;
+  }
+
   private async loadRoster(): Promise<void> {
     try {
-      this.roster.value = await this.ch.members();
+      this.takeRoster(await this.ch.members());
       this.rosterIn = true;
     } catch (err) {
       this.onGone(err);
@@ -369,19 +377,22 @@ export class ChannelStore {
 
   private keepWarm(): void {
     if (this.gone.value) return dropWarm(this.code);
+    const state = this.state.value;
+    const [messages, roster, guardFloor, roomsFloor, base] = [this.messages.value, this.roster.value, this.guardFloor.value, this.roomsFloor.value, this.base.value];
     keepWarm(
       this.code,
       {
-        messages: this.messages.value,
+        messages,
         reach: this.reach.value,
         unread: this.unread.value,
-        roster: this.roster.value,
+        roster,
         requests: this.requests.value,
         marks: this.marks.value,
-        guardFloor: this.guardFloor.value,
-        roomsFloor: this.roomsFloor.value,
-        base: this.base.value,
+        guardFloor,
+        roomsFloor,
+        base,
         partial: this.partial.value,
+        folded: { state, messages, roster, guardFloor, roomsFloor, base, until: nextExpiry(state, Date.now()) },
       },
       this.light ? "light" : "full",
     );
