@@ -4,8 +4,9 @@ import "~/styles/tasks.css"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { lasting, useNow } from "~/kit/time"
-import type { Channel, MoveFor, RunTrouble, Task, TaskMover } from "~/model"
+import type { Channel, MoveFor, RunTrouble, Task } from "~/model"
 import { useGo } from "~/nav"
+import { TASK_TICK_MS } from "~/tasks/tick"
 import { nickname, Shown } from "~/names"
 import { wordsPlain } from "~/words"
 
@@ -20,21 +21,13 @@ const MOVES: Readonly<Record<MoveFor, Key>> = {
   land: "tasks.move.land",
 }
 
-const TROUBLES: Readonly<Record<RunTrouble, Key>> = { failed: "tasks.move.trouble.failed", unseen: "tasks.move.trouble.unseen", overran: "tasks.move.trouble.overran" }
+export const TROUBLES: Readonly<Record<RunTrouble, Key>> = { failed: "tasks.move.trouble.failed", unseen: "tasks.move.trouble.unseen", overran: "tasks.move.trouble.overran" }
 
 const DUE: readonly (Key | null)[] = [null, "tasks.quiet.step.1", "tasks.quiet.step.2", "tasks.quiet.step.3"]
 
-const TICK_MS = 30_000
-
-function settled(mover: TaskMover, now: number): TaskMover {
-  if (mover.kind === "run" && now >= mover.due) return { kind: "member", name: mover.behind, move: "land", trouble: "overran" }
-  if (mover.kind === "hold" && now >= mover.until) return mover.then ? { kind: "member", name: mover.then, move: "land" } : { kind: "nobody" }
-  return mover
-}
-
 export function moverWords(channel: Channel, task: Task, now: number): string | null {
-  if (!task.mover) return null
-  const mover = settled(task.mover, now)
+  const mover = task.mover
+  if (!mover) return null
   if (mover.kind === "waiting") return t("tasks.move.waiting", { count: mover.ahead, who: nickname(channel, mover.owner) })
   if (mover.kind === "nobody") return t("tasks.move.nobody")
   if (mover.kind === "run") return t("tasks.move.run", { time: lasting(mover.due - now), who: nickname(channel, mover.behind) })
@@ -44,8 +37,8 @@ export function moverWords(channel: Channel, task: Task, now: number): string | 
 }
 
 export function moverTag(channel: Channel, task: Task, now: number): string | null {
-  if (!task.mover) return null
-  const mover = settled(task.mover, now)
+  const mover = task.mover
+  if (!mover) return null
   if (mover.kind === "nobody") return null
   if (mover.kind === "member" && mover.name === task.owner && mover.move !== "revise" && !mover.trouble) return null
   return mover.kind === "waiting" ? t("tasks.row.waiting", { count: mover.ahead }) : moverWords(channel, task, now)
@@ -65,7 +58,7 @@ export function quietWords(channel: Channel, task: Task, now: number): string | 
   return quiet.due ? t("tasks.quiet.due", { quiet: words, due: quiet.due }) : words
 }
 
-export const useTaskNow = (): number => useNow(TICK_MS)
+export const useTaskNow = (): number => useNow(TASK_TICK_MS)
 
 export const seesQuiet = (channel: Channel): boolean => channel.youOwn || channel.lead === channel.you
 

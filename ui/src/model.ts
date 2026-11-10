@@ -180,7 +180,7 @@ export type TaskMover =
   | { kind: "member"; name: string; move: MoveFor; question?: number; trouble?: RunTrouble }
   | { kind: "waiting"; owner: string; ahead: number }
   | { kind: "run"; behind: string; due: number }
-  | { kind: "hold"; until: number; reason: Words; then?: string }
+  | { kind: "hold"; until: number; reason: Words }
   | { kind: "nobody" }
 
 export interface TaskQuiet {
@@ -198,6 +198,7 @@ export interface TaskStep {
   state: "done" | "skipped" | "current" | "next"
   wait?: { reason: Words; until: number }
   run?: { due: number }
+  trouble?: RunTrouble
   yours?: true
 }
 
