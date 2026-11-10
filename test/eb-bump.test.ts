@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { bumped, changes, coreName, coreUrl } from "../desktop/scripts/eb-bump.ts";
+import { bumped, changes, coreName, coreUrl, hutchNote, pairedHutch } from "../desktop/scripts/eb-bump.ts";
 import type { Pins } from "../desktop/scripts/eb-pins.ts";
 
 const pins: Pins = {
@@ -61,6 +61,19 @@ describe("eb-bump", () => {
   test("a file the release no longer ships keeps its pin, so the build's own check catches it", () => {
     const next = bumped(pins, "2026.11.0", { "macos-arm64": "d", "linux-x64": "d" }, { "macos-arm64": new Map() });
     expect(next.app["macos-arm64"]).toEqual(pins.app["macos-arm64"]);
+  });
+
+  test("the Hutch a Livewire release pairs with is the cli= of its hutch.config.ts's @hutch line", () => {
+    expect(pairedHutch('// @hutch cli=0.29.0 cottontail=0.7.3\nimport { defineConfig } from "hutch";\n')).toBe("0.29.0");
+    expect(pairedHutch("// @hutch cli=0.28.2-canary.8\n")).toBe("0.28.2-canary.8");
+    expect(pairedHutch('import { defineConfig } from "hutch";\n// hutch cli=0.29.0\n')).toBeNull();
+  });
+
+  test("a bump whose Livewire pairs a Hutch other than the pinned one says so and isn't paired (2026.11.4 on Hutch 0.29.0)", () => {
+    expect(hutchNote("0.29.0", "0.29.0")).toBeNull();
+    expect(hutchNote("0.29.0", "0.28.2-canary.8")).toBe(
+      "Livewire pairs Hutch 0.29.0, and Channels pins Hutch 0.28.2-canary.8. eb-bump.ts moves only the Livewire pins, so this bump stays open for a person or an agent to move Hutch with it.",
+    );
   });
 
   test("a platform with no devkit or core in the release fails the bump", () => {
