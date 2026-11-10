@@ -4,7 +4,7 @@ export default {
   "shell.channel.drawer.label": "房间和人（{keys}）",
   "shell.channel.drawer.label.news": "房间和人，有新消息（{keys}）",
   "shell.channel.drawer.title": "显示或隐藏房间和人（{keys}）",
-  "shell.channel.settings.label": "{name}：频道设置",
+  "shell.channel.menu.label": "{name}：频道菜单",
   "shell.channel.settings": "频道设置",
   "shell.channel.views": "视图",
   "shell.channel.specs.need": "{count} 项待你处理",

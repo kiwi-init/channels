@@ -33,7 +33,8 @@ try {
   const modal = page.locator("dialog.modal[open]");
 
   await page.goto(`http://127.0.0.1:${server.port}/?shot=general`);
-  await page.getByRole("button", { name: /: channel settings$/ }).click();
+  await page.getByRole("button", { name: /: channel menu$/ }).click();
+  await page.getByRole("menuitem", { name: "Channel settings", exact: true }).click();
   const settings = page.getByRole("dialog", { name: "Channel settings" });
   await settings.waitFor();
   expect((await panel.count()) === 0, "channel settings open in a modal, not the side panel");

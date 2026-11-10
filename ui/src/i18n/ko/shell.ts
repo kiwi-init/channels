@@ -4,7 +4,7 @@ export default {
   "shell.channel.drawer.label": "방과 사람({keys})",
   "shell.channel.drawer.label.news": "방과 사람, 새 메시지 있음({keys})",
   "shell.channel.drawer.title": "방과 사람 보기/숨기기({keys})",
-  "shell.channel.settings.label": "{name}: 채널 설정",
+  "shell.channel.menu.label": "{name}: 채널 메뉴",
   "shell.channel.settings": "채널 설정",
   "shell.channel.views": "보기",
   "shell.channel.specs.need": "{count}개가 내 확인 필요",

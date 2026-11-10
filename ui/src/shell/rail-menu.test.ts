@@ -115,6 +115,23 @@ describe("the rail's menus are the app's one context menu (T1826)", () => {
     expect(railMenu({ kind: "channel", code: "a" }, at, { ...rail([]), read: null })?.groups[0]?.map((i) => i.label)).toEqual(["Mute channel", "New folder"])
   })
 
+  test("the channel's own name opens the same items without the folder ones (T1845)", () => {
+    const went: string[] = []
+    const r = {
+      ...rail([games], [], true),
+      noFolders: true as const,
+      own: false,
+      invite: () => {},
+      end: (code: string) => void went.push(`end ${code}`),
+      read: (code: string) => void went.push(`read ${code}`),
+    }
+    const menu = railMenu({ kind: "channel", code: "a" }, at, r)
+    expect(menu?.groups.map((g) => g.map((i) => i.label))).toEqual([["Mark as read", "Mute channel"], ["Channel settings"], ["Leave this channel…"]])
+    menu?.groups[0]?.[0]?.run()
+    menu?.groups[2]?.[0]?.run()
+    expect(went).toEqual(["read a", "end a"])
+  })
+
   test("a folder that is gone opens nothing", () => {
     expect(railMenu({ kind: "folder", id: "x" }, at, rail([]))).toBeNull()
   })

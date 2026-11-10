@@ -4,7 +4,7 @@ export default {
   "shell.channel.drawer.label": "ルームと人（{keys}）",
   "shell.channel.drawer.label.news": "ルームと人、新しいメッセージあり（{keys}）",
   "shell.channel.drawer.title": "ルームと人を表示/非表示（{keys}）",
-  "shell.channel.settings.label": "{name}: チャンネル設定",
+  "shell.channel.menu.label": "{name}: チャンネルメニュー",
   "shell.channel.settings": "チャンネル設定",
   "shell.channel.views": "表示",
   "shell.channel.specs.need": "{count} 件があなたの対応待ち",

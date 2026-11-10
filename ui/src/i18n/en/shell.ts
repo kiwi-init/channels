@@ -4,7 +4,7 @@ export default {
   "shell.channel.drawer.label": "Rooms and people ({keys})",
   "shell.channel.drawer.label.news": "Rooms and people, new messages ({keys})",
   "shell.channel.drawer.title": "Show or hide rooms and people ({keys})",
-  "shell.channel.settings.label": "{name}: channel settings",
+  "shell.channel.menu.label": "{name}: channel menu",
   "shell.channel.settings": "Channel settings",
   "shell.channel.views": "Views",
   "shell.channel.specs.need": "{count} waiting on you",
