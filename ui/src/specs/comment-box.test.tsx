@@ -7,7 +7,6 @@ import { ActContext, AppContext, type Act, type Ctx } from "~/nav"
 import { pastedFiles } from "~/chat/attach"
 import { CommentBox, commentKeys, commentOf, type CommentReply } from "~/specs/comment-box"
 import { wrote } from "~/words"
-import { keysHint } from "~/kit/keys"
 
 const key = (more: Partial<SendKey>): SendKey & { preventDefault(): void } => ({
   key: "Enter",
@@ -39,75 +38,68 @@ const spec: Spec = {
 
 const channel = { code: "c", you: "jow", people: [], former: [], messages: [], tasks: [], nicknames: new Map() } as unknown as Channel
 
-const render = (enterSends: boolean, quote?: string, reply?: CommentReply): string =>
+const render = (quote?: string, reply?: CommentReply): string =>
   renderToStaticMarkup(
-    <AppContext.Provider value={{ app: { channel, prefs: { enterSends } }, go: () => {} } as unknown as Ctx}>
+    <AppContext.Provider value={{ app: { channel, prefs: {} }, go: () => {} } as unknown as Ctx}>
       <ActContext.Provider value={{ actions: {}, go: () => {}, toast: () => {} } as unknown as Act}>
         <CommentBox channel={channel} spec={spec} quote={quote} reply={reply ?? null} onUnreply={() => {}} onDone={() => {}} />
       </ActContext.Provider>
     </AppContext.Provider>
   )
 
-describe("one send rule for the chat composer and spec comments (#1842)", () => {
-  test("with Enter-sends on, Enter sends and Shift+Enter or Alt+Enter adds a line", () => {
-    expect(sendsOn(key({}), true)).toBe(true)
-    expect(sendsOn(key({ shiftKey: true }), true)).toBe(false)
-    expect(sendsOn(key({ altKey: true }), true)).toBe(false)
+describe("one send rule for the chat composer and spec comments (#1842, T1829)", () => {
+  test("Enter sends, and Shift+Enter or Alt+Enter adds a line", () => {
+    expect(sendsOn(key({}))).toBe(true)
+    expect(sendsOn(key({ shiftKey: true }))).toBe(false)
+    expect(sendsOn(key({ altKey: true }))).toBe(false)
   })
 
-  test("with Enter-sends off, only Ctrl or ⌘ with Enter sends", () => {
-    expect(sendsOn(key({}), false)).toBe(false)
-    expect(sendsOn(key({ ctrlKey: true }), false)).toBe(true)
-    expect(sendsOn(key({ metaKey: true }), false)).toBe(true)
+  test("Ctrl or ⌘ with Enter still sends, for hands that learned it", () => {
+    expect(sendsOn(key({ ctrlKey: true }))).toBe(true)
+    expect(sendsOn(key({ metaKey: true }))).toBe(true)
   })
 
   test("an Enter that confirms an IME composition never sends", () => {
-    expect(sendsOn(key({ nativeEvent: { isComposing: true } }), true)).toBe(false)
-    expect(sendsOn(key({ keyCode: 229 }), true)).toBe(false)
-    expect(sendsOn(key({ ctrlKey: true, nativeEvent: { isComposing: true } }), false)).toBe(false)
+    expect(sendsOn(key({ nativeEvent: { isComposing: true } }))).toBe(false)
+    expect(sendsOn(key({ keyCode: 229 }))).toBe(false)
+    expect(sendsOn(key({ ctrlKey: true, nativeEvent: { isComposing: true } }))).toBe(false)
   })
 
-  test("a spec comment box sends on Enter, or on Ctrl+Enter with the setting off, and Escape cancels", () => {
+  test("a spec comment box sends on Enter, and Escape cancels", () => {
     const sent: string[] = []
-    const keys = (enterSends: boolean) =>
-      commentKeys(
-        enterSends,
-        () => sent.push(`send ${enterSends}`),
-        () => sent.push("cancel")
-      )
-    keys(true)(key({}))
-    keys(true)(key({ shiftKey: true }))
-    keys(false)(key({}))
-    keys(false)(key({ ctrlKey: true }))
-    keys(true)(key({ key: "Escape" }))
-    keys(true)(key({ keyCode: 229 }))
-    expect(sent).toEqual(["send true", "send false", "cancel"])
+    const keys = commentKeys(
+      () => sent.push("send"),
+      () => sent.push("cancel")
+    )
+    keys(key({}))
+    keys(key({ shiftKey: true }))
+    keys(key({ key: "Escape" }))
+    keys(key({ keyCode: 229 }))
+    expect(sent).toEqual(["send", "cancel"])
   })
 
   test("the preventDefault keeps a sending Enter from adding a line", () => {
     let stopped = 0
-    commentKeys(true, () => {})(key({ preventDefault: () => void stopped++ }))
-    commentKeys(true, () => {})(key({ shiftKey: true, preventDefault: () => void stopped++ }))
+    commentKeys(() => {})(key({ preventDefault: () => void stopped++ }))
+    commentKeys(() => {})(key({ shiftKey: true, preventDefault: () => void stopped++ }))
     expect(stopped).toBe(1)
   })
 
-  test("the anchored box shows the send hint that matches the setting", () => {
-    expect(render(true, "a quoted line")).toContain(`title="${sendTitle(true)}"`)
-    expect(render(false, "a quoted line")).toContain(`title="${sendTitle(false)}"`)
-    expect(sendTitle(true)).toBe("Send (Enter)")
-    expect(sendTitle(false)).toBe(`Send (${keysHint("Enter")})`)
+  test("the anchored box shows the one send hint", () => {
+    expect(render("a quoted line")).toContain(`title="${sendTitle()}"`)
+    expect(sendTitle()).toBe("Send (Enter)")
   })
 
   test("replying to a comment shows who and what it quotes, like the chat composer (#1840)", () => {
     const to = { seq: 12, from: "win", at: 0, text: wrote("subtasks should nest"), where: { kind: "room", room: "general" }, inThread: 10 } as Message
-    const quoting = render(true, undefined, { to, excerpt: "should nest" })
+    const quoting = render(undefined, { to, excerpt: "should nest" })
     expect(quoting).toContain("Quoting <b>win</b>")
     expect(quoting).toContain("“should nest”")
     expect(quoting).toContain('placeholder="Say something about it"')
-    const replying = render(true, undefined, { to, excerpt: null })
+    const replying = render(undefined, { to, excerpt: null })
     expect(replying).toContain("Replying to <b>win</b>")
     expect(replying).toContain('placeholder="Reply to win"')
-    expect(render(true)).not.toContain("compose-reply")
+    expect(render()).not.toContain("compose-reply")
   })
 })
 
@@ -118,8 +110,8 @@ const clip = (files: File[], items: File[] = []) =>
 
 describe("spec comments take images like the chat composer (#1838)", () => {
   test("both comment boxes offer an image button", () => {
-    expect(render(true)).toContain('aria-label="Add an image"')
-    expect(render(true, "a quoted line")).toContain('aria-label="Add an image"')
+    expect(render()).toContain('aria-label="Add an image"')
+    expect(render("a quoted line")).toContain('aria-label="Add an image"')
   })
 
   test("a pasted screenshot is taken from the clipboard's files or its items, and only images", () => {

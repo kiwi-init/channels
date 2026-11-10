@@ -702,7 +702,6 @@ export interface Prefs {
   font: TextFont
   reduceMotion: boolean
   muted: string[]
-  enterSends: boolean
   darkTheme: string
   lightTheme: string
   customThemes: CustomTheme[]

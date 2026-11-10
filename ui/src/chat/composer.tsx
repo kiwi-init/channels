@@ -18,7 +18,7 @@ import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { openMenu } from "~/kit/menu-open"
 import type { Channel, Upload, Where } from "~/model"
-import { useActions, useAppPrefs, useToast } from "~/nav"
+import { useActions, useToast } from "~/nav"
 import { nickname } from "~/names"
 import { withNames } from "~/chat/linked"
 import { listId, Suggestions, useSuggest } from "~/chat/suggest"
@@ -46,7 +46,6 @@ export function Composer(props: ComposerProps) {
 
 function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProps) {
   const actions = useActions()
-  const prefs = useAppPrefs()
   const toast = useToast()
   const replying = useReplying()
   const replyTo = replying?.to ?? null
@@ -86,7 +85,6 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     if (kept) setFilesNow(kept)
   }
   const [alsoRoom, setAlsoRoom] = useState(false)
-  const enterSends = prefs.enterSends
   const stash = useStash(key)
   const [cueOf, setCue] = useState<Cue | null>(() => (STASH_SHOT === "stash" ? { key, back: false, left: stash.list.length } : null))
   const cue = cueOf?.key === key ? cueOf : null
@@ -382,13 +380,13 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
                 replying?.set(null)
                 return
               }
-              if (sendsOn(e, enterSends)) {
+              if (sendsOn(e)) {
                 e.preventDefault()
                 send()
               }
             }}
           />
-          <button type="submit" className={cx("send", ready && "is-ready")} aria-label={t("chat.composer.send")} title={sendTitle(enterSends)} disabled={!ready}>
+          <button type="submit" className={cx("send", ready && "is-ready")} aria-label={t("chat.composer.send")} title={sendTitle()} disabled={!ready}>
             <Icon name="send" />
           </button>
         </div>
@@ -401,7 +399,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
       </form>
       {running && !cue && (
         <p className="compose-hint" role="status">
-          <b>/{running.command.name}</b> <span>·</span> {running.command.summary} <span>·</span> {tr("chat.composer.key.runs.it", { key: <kbd>{enterSends ? "↩" : keysHint("↩")}</kbd> })}
+          <b>/{running.command.name}</b> <span>·</span> {running.command.summary} <span>·</span> {tr("chat.composer.key.runs.it", { key: <kbd>↩</kbd> })}
           {running.command.args && !running.args ? ` · ${running.command.args}` : ""}
         </p>
       )}

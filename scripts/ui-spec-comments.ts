@@ -119,7 +119,7 @@ try {
     await page.close();
   }
 
-  for (const shot of ["spec-draft", "spec-ctrl-enter"]) {
+  for (const shot of ["spec-draft"]) {
     const on = shot === "spec-draft";
     for (const which of ["plain", "anchored"] as const) {
       const page = await open(shot);

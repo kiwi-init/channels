@@ -50,7 +50,6 @@ export const SHOTS: Record<string, Shot> = {
   specs: { scenario: "specs", channel: "kiwi", nav: { tab: "specs" } },
   "specs-general": { scenario: "specs", channel: "kiwi" },
   "spec-draft": { scenario: "specs", channel: "kiwi", nav: { tab: "specs", spec: 150, part: "spec" } },
-  "spec-ctrl-enter": { scenario: "specs", channel: "kiwi", nav: { tab: "specs", spec: 150, part: "spec" }, prefs: { enterSends: false } },
   "spec-queued": { scenario: "specs", channel: "kiwi", nav: { tab: "specs", spec: 186, part: "spec" } },
   "spec-inside": { scenario: "specs", channel: "kiwi", nav: { tab: "specs", spec: 160, part: "inside" } },
   "spec-result": { scenario: "specs", channel: "kiwi", nav: { tab: "specs", spec: 170, part: "result" } },

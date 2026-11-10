@@ -434,8 +434,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 - In a thread with a doc, the composer is where you write: sending adds your
   block to the doc and posts it, and the doc itself takes no typing.
 - Send is a round button a little under `--ctl`: `ink` with `on-ink` when
-  there is something to send, `line-2` when not. Enter sends (or ⌘Enter, per
-  Settings).
+  there is something to send, `line-2` when not. Enter sends and
+  Shift+Enter is a new line.
 - Typing `@name` or a task id (`T12`) opens a list of people or tasks just
   above the composer; arrows move, Enter or Tab picks.
 - Drag-and-drop and pasted images attach in the composer; a drop shows

@@ -106,7 +106,6 @@ export default {
   "chat.search.box.fetches": "릴레이에서 이전 메시지를 최대 {count}개 가져옵니다.",
   "chat.search.box.fetches.since": "{date}까지 검색했습니다. 릴레이에서 이전 메시지를 최대 {count}개 가져옵니다.",
   "chat.send.keys.enter": "보내기 (Enter)",
-  "chat.send.keys.cmd.enter": "보내기 ({keys})",
   "chat.stash.list.label": "보관한 초안",
   "chat.stash.list.drops.one": "{key} 하나 삭제",
   "chat.step.copied": "명령을 복사했습니다",
