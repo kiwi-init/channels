@@ -72,6 +72,17 @@ describe("cards", () => {
 });
 
 describe("review", () => {
+  test("with a round open, the done refusal names the reviewer's answer, the move and the close (#2032)", async () => {
+    const add = await ev("jon", { op: "task.add", title: "absent reviewer", owner: "win", review: "mac" });
+    const t = add.seq;
+    const toReview = await ev("win", { op: "task.update", task: t, state: "review" });
+    const done = await ev("win", { op: "task.update", task: t, state: "done" });
+    const s = fold([add, toReview, done], roster);
+    expect(s.rejected.get(done.seq)).toBe(
+      `T${t} needs review by mac before it's done: mac answers kiwi task approve T${t} --round 1; the lead or a person can move the review (kiwi task review T${t} --review OTHER) or close the task (kiwi task close T${t} "why")`,
+    );
+  });
+
   test("the doer can't mark reviewed work done; the reviewer approves; a person always may", async () => {
     const add = await ev("jon", { op: "task.add", title: "driver", owner: "win", review: "mac" });
     const t = add.seq;

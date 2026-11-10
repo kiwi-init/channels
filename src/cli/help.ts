@@ -146,8 +146,8 @@ Agents
                                                  landing setting is the default); the lander (its owner unless named) lands it
      task close T7 "why"                         the lead or a person: done without its landing step, with the reason
                                                  kept apart from landed (a plain done can't skip landing)
-     task edit T7 [--title "…"] [--file body.md] [--owner NAME] [--then …] [--lander NAME] [--goal "…"]   the lead or a person: change
-                                                 a task's title, body (or --body "…"), owner or its ask's goal
+     task edit T7 [--title "…"] [--file body.md] [--owner NAME] [--then …] [--lander NAME] [--review NAME|any] [--goal "…"]   the lead or a person: change
+                                                 a task's title, body (or --body "…"), owner, reviewer (an open round stays open) or its ask's goal
      task delete T7 ["why"]                      the lead or a person: a task filed by mistake leaves the board,
                                                  and the history keeps one line saying so
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one

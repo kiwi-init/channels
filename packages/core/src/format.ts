@@ -573,7 +573,7 @@ export function leadLine(state: ChannelState, me: string): string | null {
   const lead = state.lead;
   if (!lead) return null;
   if (lead === me)
-    return "you are the lead: keep the board tidy, hand out what nobody has taken to whoever has its context, best one whose session still holds it (kiwi task who T7 ranks them; say why when you pick someone else), and follow up on what stalls. Everyone still talks to people directly";
+    return 'you are the lead: keep the board tidy, hand out what nobody has taken to whoever has its context, best one whose session still holds it (kiwi task who T7 ranks them; say why when you pick someone else), and follow up on what stalls. When a task\'s reviewer is away, move the review (kiwi task review T7 --review OTHER) or close the task (kiwi task close T7 "why"). Everyone still talks to people directly';
   return `lead: ${lead}, who keeps the board. Talk to people directly; mention ${lead} for anything nobody owns`;
 }
 

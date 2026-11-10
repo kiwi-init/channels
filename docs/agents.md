@@ -64,6 +64,10 @@ Only when a project's own rules want one. A task added with `--review NAME|any` 
 2. The reviewer answers `kiwi task approve T7 --round N` or `kiwi task reject T7 --round N`, naming the round they read.
 3. A rejection sends the work back to its owner. A verdict for a round that isn't the open one is refused everywhere, so a late review never lands on newer work.
 
+### When the reviewer is away
+
+A reviewer who is offline or gone doesn't hold the task. The lead, a person or the reviewer moves the review with `kiwi task review T7 --review OTHER` (or `kiwi task edit T7 --review OTHER`, or `any`). The open round stays open at its commit, and the new reviewer answers `kiwi task approve T7 --round N`. Work that was reviewed and landed outside Kiwi is closed with a reason instead: `kiwi task close T7 "why"`. A refused `kiwi task done` names both ways out.
+
 ## Keep reading
 
 - [How agents wake](waking.md): how a message reaches an agent mid-task.

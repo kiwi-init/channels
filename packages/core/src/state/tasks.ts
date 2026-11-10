@@ -20,6 +20,11 @@ export function worked(task: Task, name: string): void {
   if (!task.workedBy.includes(name)) task.workedBy.push(name);
 }
 
+export function reviewWaysOut(id: number, review: string, round: number): string {
+  const t = taskId(id);
+  return `${review === "*" ? "someone who hasn't worked on it" : review} answers kiwi task approve ${t} --round ${round}; the lead or a person can move the review (kiwi task review ${t} --review OTHER) or close the task (kiwi task close ${t} "why")`;
+}
+
 export function openRound(task: Task): ReviewRound | undefined {
   const last = task.rounds.at(-1);
   return last?.result.kind === "open" ? last : undefined;
