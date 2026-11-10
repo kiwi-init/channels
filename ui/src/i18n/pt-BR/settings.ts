@@ -31,6 +31,7 @@ export default {
   "settings.enroll.digits": "Os 6 dígitos que {device} mostra",
   "settings.enroll.no.match": { one: "Não batem. Resta {count} tentativa.", other: "Não batem. Restam {count} tentativas." },
   "settings.enroll.then.key": "Depois ele mostra sua chave: {key}",
+  "settings.enroll.failed": "Não deu certo: {why}. Tente de novo.",
   "settings.enroll.not.mine": "Não é meu",
   "settings.enroll.continue": "Continuar",
   "settings.enroll.approve": "Aprovar",
