@@ -19,10 +19,14 @@ function cliPath(): string {
   return path.join(process.env["KIWI_INSTALL"] || path.join(os.homedir(), ".kiwi", "bin"), process.platform === "win32" ? "kiwi.exe" : "kiwi");
 }
 
-/** What a kiwi binary says it is, or null when it won't run. */
-function versionOf(bin: string): Promise<string | null> {
+const PROBE_MS = 5_000;
+
+const SLOW = Symbol("slow");
+
+/** What a kiwi binary says it is, null when it won't run, or SLOW when it was ended before it answered. */
+function versionOf(bin: string, ms: number): Promise<string | null | typeof SLOW> {
   return new Promise((resolve) => {
-    execFile(bin, ["--version"], { timeout: 5_000, env: childEnv() }, (err, stdout) => resolve(err ? null : stdout.trim().split(/\s+/).pop() || null));
+    execFile(bin, ["--version"], { timeout: ms, env: childEnv() }, (err, stdout) => resolve(err ? (err.killed || err.signal ? SLOW : null) : stdout.trim().split(/\s+/).pop() || null));
   });
 }
 
@@ -47,19 +51,22 @@ export interface KeptCli {
   version: string;
   updated: boolean;
   homebrew: boolean;
+  unsure?: true;
 }
 
 /**
  * The CLI here at least as new as the app's: copies the bundled one into place (a new file renamed
  * over the old, so a daemon running the old one keeps running until it's restarted) when it's missing,
- * broken or older. Returns where it is and what version it is now.
+ * broken or older. Returns where it is and what version it is now. One too slow to say its version
+ * (a loaded computer at login) may be newer, so it stays, marked unsure: the caller runs its own copy.
  */
-export async function keepCli(bundled: string, bundledVersion: string, prefixes: readonly string[] = brewPrefixes()): Promise<KeptCli> {
+export async function keepCli(bundled: string, bundledVersion: string, prefixes: readonly string[] = brewPrefixes(), probeMs: number = PROBE_MS): Promise<KeptCli> {
   const brew = homebrewKiwi(prefixes);
-  const brewVersion = brew ? await versionOf(brew) : null;
-  if (brew && brewVersion) return { path: brew, version: brewVersion, updated: false, homebrew: true };
+  const brewVersion = brew ? await versionOf(brew, probeMs) : null;
+  if (brew && typeof brewVersion === "string") return { path: brew, version: brewVersion, updated: false, homebrew: true };
   const dest = cliPath();
-  const was = fs.existsSync(dest) ? await versionOf(dest) : null;
+  const was = fs.existsSync(dest) ? await versionOf(dest, probeMs) : null;
+  if (was === SLOW) return { path: dest, version: bundledVersion, updated: false, homebrew: false, unsure: true };
   if (was && compareVersions(was, bundledVersion) >= 0) return { path: dest, version: was, updated: false, homebrew: false };
   await place(bundled, dest);
   void tidy(dest);
