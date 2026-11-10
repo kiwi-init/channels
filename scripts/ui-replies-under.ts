@@ -69,9 +69,17 @@ try {
   await docOpen(page);
   const QUESTION = "who can look at the flaky upload test?";
   await say(page, QUESTION);
-  const asked = page.locator("article.msg").filter({ hasText: QUESTION }).first();
-  await asked.waitFor({ timeout: 30000 });
-  const seq = Number(await asked.getAttribute("data-seq"));
+  const sent = await page.waitForFunction(
+    (q) => {
+      const row = [...document.querySelectorAll<HTMLElement>("article.msg")].find((m) => m.textContent?.includes(q));
+      const at = Number(row?.dataset.seq);
+      return Number.isSafeInteger(at) && at > 0 ? at : null;
+    },
+    QUESTION,
+    { timeout: 30000 },
+  );
+  const seq = Number(await sent.jsonValue());
+  const asked = page.locator(`article.msg[data-seq="${seq}"]`);
   expect(Number.isSafeInteger(seq) && seq > 0, `the owner's question is in the feed as #${seq}`);
 
   const replies: { agent: string; code: number | null; out: string }[] = [];
