@@ -63,6 +63,8 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
   )
 }
 
+const SHOWN_WIDTH = 360
+
 function Spot({ code, img }: { code: string; img: ImageSpot }) {
   const { actions } = useAct()
   const at = useRef<HTMLSpanElement>(null)
@@ -87,8 +89,9 @@ function Spot({ code, img }: { code: string; img: ImageSpot }) {
         {t("chat.message.image.failed")}
       </button>
     )
+  const box = img.width && img.height ? { width: Math.min(SHOWN_WIDTH, img.width), height: "auto", aspectRatio: `${img.width} / ${img.height}`, maxWidth: "100%" } : undefined
   return (
-    <span ref={at} className="msg-image-spot" title={img.alt} role="status">
+    <span ref={at} className="msg-image-spot" style={box} title={img.alt} role="status">
       {img.state === "gone" ? t("chat.message.image.gone") : t("chat.message.image.loading")}
     </span>
   )

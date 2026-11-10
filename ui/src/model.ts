@@ -331,6 +331,8 @@ export interface ImageSpot {
   spot: string
   alt: string
   state: "waiting" | "failed" | "gone"
+  width?: number
+  height?: number
 }
 
 export interface Reaction {

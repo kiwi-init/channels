@@ -3,7 +3,7 @@ import { generateIdentity, sign, verify } from "@kiwi/core/identity.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { messagesOf } from "~/live/map"
-import { showsAnew, spotOf, type Entry } from "~/live/pictures"
+import { Shelf, showsAnew, spotOf, type Entry } from "~/live/pictures"
 
 const jow = await generateIdentity("jow")
 const roster: Roster = [{ name: "jow", pk: jow.pk, owner: true, at: 0, active: true, kind: "human" }]
@@ -61,5 +61,51 @@ describe("a picture's load recomputes the feed once, when it shows something new
       [{ state: "loading" }, picture],
     ]
     expect(steps.filter(([was, next]) => showsAnew(was, next)).length).toBe(1)
+  })
+})
+
+describe("the pictures a channel holds are bounded (T2472)", () => {
+  test("past the limit, the picture seen longest ago that is off screen is shed", () => {
+    const shelf = new Shelf(3)
+    expect(shelf.put("1:0", false)).toEqual([])
+    expect(shelf.put("2:0", false)).toEqual([])
+    expect(shelf.put("3:0", false)).toEqual([])
+    expect(shelf.put("4:0", false)).toEqual(["1:0"])
+    expect(shelf.put("5:0", false)).toEqual(["2:0"])
+  })
+
+  test("a picture on screen is never shed, however old, and neither is the one just loaded", () => {
+    const shelf = new Shelf(2)
+    shelf.put("1:0", true)
+    shelf.put("2:0", true)
+    expect(shelf.put("3:0", true)).toEqual([])
+    expect(shelf.put("4:0", false)).toEqual([])
+    expect(shelf.put("1:0", false)).toEqual(["4:0"])
+  })
+
+  test("scrolling a picture back into view makes it the newest", () => {
+    const shelf = new Shelf(2)
+    shelf.put("1:0", false)
+    shelf.put("2:0", false)
+    shelf.put("1:0", true)
+    shelf.put("1:0", false)
+    expect(shelf.put("3:0", false)).toEqual(["2:0"])
+  })
+
+  test("a failed or gone picture leaves the shelf", () => {
+    const shelf = new Shelf(1)
+    shelf.put("1:0", false)
+    shelf.drop("1:0")
+    expect(shelf.put("2:0", false)).toEqual([])
+  })
+
+  test("a shed picture shows a waiting spot of its own size, and reloading it shows something new", () => {
+    const shed: Entry = { state: "shed", width: 3232, height: 2148 }
+    expect(spotOf(shed, "1:2", "light.png")).toEqual({ spot: "1:2", alt: "light.png", state: "waiting", width: 3232, height: 2148 })
+    expect(showsAnew({ state: "ready", picture: ready }, shed)).toBe(true)
+    const again: Entry = { state: "loading", width: 3232, height: 2148 }
+    expect(showsAnew(shed, again)).toBe(false)
+    expect(spotOf(again, "1:2", "light.png")).toEqual({ spot: "1:2", alt: "light.png", state: "waiting", width: 3232, height: 2148 })
+    expect(showsAnew(again, { state: "ready", picture: ready })).toBe(true)
   })
 })
