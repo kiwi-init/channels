@@ -973,6 +973,14 @@ kbd {
   pointer-events: auto;
 }
 
+.discard-ask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font: var(--t-ui) var(--ui);
+}
+
 .toast-close:hover {
   background: color-mix(in srgb, var(--on-ink) 16%, transparent);
 }
