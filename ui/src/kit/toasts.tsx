@@ -20,6 +20,11 @@ export function announce(text: string, tone: Tone = "info"): void {
   for (const l of heard) l(text, tone)
 }
 
+export function onAnnounce(l: (text: string, tone: Tone) => void): () => void {
+  heard.add(l)
+  return () => void heard.delete(l)
+}
+
 export function copyText(text: string, done = t("kit.toasts.copied")): void {
   if (!navigator.clipboard) return announce(t("kit.toasts.not.copied"), "error")
   void navigator.clipboard.writeText(text).then(
@@ -49,10 +54,7 @@ export function useToasts(): [Toast[], (text: string, tone?: Tone) => void, (id:
     },
     [dismiss]
   )
-  useEffect(() => {
-    heard.add(push)
-    return () => void heard.delete(push)
-  }, [push])
+  useEffect(() => onAnnounce(push), [push])
   return [toasts, push, dismiss]
 }
 

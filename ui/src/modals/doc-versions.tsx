@@ -40,7 +40,7 @@ export function DocVersions({ channel, thread, name, onClose }: { channel: Chann
     setBusy(true)
     const done = await actions.restoreDocVersion(channel.code, thread, th, v.upto).catch(() => false)
     setBusy(false)
-    if (!done) return void announce(t("modals.doc.versions.restore.failed"))
+    if (!done) return void announce(t("modals.doc.versions.restore.failed"), "error")
     announce(t("modals.doc.versions.restored", { day: day(v.ts).toLowerCase(), time: clock(v.ts) }))
     onClose()
   }
