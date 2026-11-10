@@ -346,7 +346,8 @@ try {
       const inPage = await page.evaluate(() => {
         const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
         return {
-          firstScreenMs: Math.round((window as unknown as { __firstScreen?: number }).__firstScreen ?? -1),
+          firstScreenMs: Math.round(performance.getEntriesByName("kiwi:first-message", "mark")[0]?.startTime ?? (window as unknown as { __firstScreen?: number }).__firstScreen ?? -1),
+          markerTextMs: Math.round((window as unknown as { __firstScreen?: number }).__firstScreen ?? -1),
           domContentLoadedMs: Math.round(nav.domContentLoadedEventEnd),
           fcpMs: Math.round(performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? -1),
           responseEndMs: Math.round(nav.responseEnd),
