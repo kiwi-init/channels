@@ -105,6 +105,7 @@ export const EVENT_WORDS = {
   "github.write.off": "stopped Kiwi writing to GitHub",
   "branch.prefix.set": "set the branch prefix to {prefix}: a PR from a branch like {prefix}7-… shows on task T7",
   "branch.prefix.cleared": "cleared the branch prefix: a PR shows on a task only when someone posts its link",
+  "quiet.set": "set how long a task may stay quiet to {time}: after that a wake is due, then the lead, then the owner",
   "merges.people": "set who merges to people (a setting Kiwi has since retired)",
   "merges.agents": "set who merges to agents again (a setting Kiwi has since retired)",
   "landing.set": "set how tasks land to {then}: an approved task stays landing until that has happened",

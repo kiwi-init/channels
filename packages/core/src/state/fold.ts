@@ -34,7 +34,7 @@ import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
-import { nudge, roll, tick, timedStep, type ClockView } from "./clocks.ts";
+import { nudge, QUIET_MS, roll, tick, timedStep, type ClockView } from "./clocks.ts";
 
 const CLOCK_BLIND_OPS: ReadonlySet<string> = new Set([
   "hello",
@@ -426,6 +426,7 @@ function folding(
     hold: from?.hold ?? null,
     githubWrite: from?.githubWrite ?? null,
     branchPrefix: from?.branchPrefix ?? null,
+    quietMs: from?.quietMs ?? QUIET_MS,
     landing: from?.landing ?? null,
     landingSteps: from?.landingSteps ?? null,
     passedAsks,
@@ -443,7 +444,7 @@ function folding(
     const by = answered.get(m.seq);
     return !by || ![...by].some((n) => answersAsk(members, m, n));
   };
-  const clockView = (): ClockView => ({ tasks, github: ctx.github, branchPrefix: ctx.branchPrefix, openAsks: holding.filter(stillOpen) });
+  const clockView = (): ClockView => ({ tasks, github: ctx.github, branchPrefix: ctx.branchPrefix, quietMs: ctx.quietMs, openAsks: holding.filter(stillOpen) });
   const agentHere = (name: string): boolean => {
     const who = members.get(name);
     return !!who && who.active && !isPerson(who);
@@ -864,6 +865,7 @@ function folding(
       hold: ctx.hold,
       githubWrite: ctx.githubWrite,
       branchPrefix: ctx.branchPrefix,
+      ...(ctx.quietMs !== QUIET_MS ? { quietMs: ctx.quietMs } : {}),
       landing: ctx.landing,
       ...(ctx.landingSteps ? { landingSteps: ctx.landingSteps } : {}),
       ...(passedAsks.size ? { passedAsks: [...passedAsks] } : {}),
@@ -977,6 +979,7 @@ function folding(
     hold: ctx.hold,
     githubWrite: ctx.githubWrite,
     branchPrefix: ctx.branchPrefix,
+    quietMs: ctx.quietMs,
     landing: ctx.landing,
     landingSteps: ctx.landingSteps,
     reactions,

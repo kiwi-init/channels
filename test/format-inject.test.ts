@@ -40,6 +40,7 @@ function blank(): ChannelState {
     hold: null,
     githubWrite: null,
     branchPrefix: null,
+    quietMs: 20 * 60_000,
     landing: null,
     landingSteps: null,
     reactions: new Map(),

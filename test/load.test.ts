@@ -47,6 +47,7 @@ const board = (tasks: Task[]): ChannelState =>
     hold: null,
     githubWrite: null,
     branchPrefix: null,
+    quietMs: 20 * 60_000,
     landing: null,
     landingSteps: null,
     merges: "agents",

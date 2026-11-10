@@ -1,12 +1,12 @@
 import { inlineText } from "./membership.ts";
 import { channelOwner, moverOf } from "./mover.ts";
 import type { NudgeStep } from "./protocol.ts";
-import { actOf, memberKey, partyOfKey, queuedKey, QUEUE_MS, QUIET_MS, rolled } from "./state/clocks.ts";
+import { actOf, memberKey, partyOfKey, queuedKey, QUEUE_MS, rolled } from "./state/clocks.ts";
 import { isPerson } from "./state/people.ts";
 import type { ChannelState, Task } from "./state/types.ts";
 import { spanText } from "./steps.ts";
 
-type Board = Pick<ChannelState, "tasks" | "members" | "lead" | "openAsks" | "github" | "branchPrefix">;
+type Board = Pick<ChannelState, "tasks" | "members" | "lead" | "openAsks" | "github" | "branchPrefix" | "quietMs">;
 
 export interface Clock {
   mover: string;
@@ -73,14 +73,14 @@ function queueDue(state: Board, now: number): NudgeDue[] {
   });
 }
 
-export function nudgesDue(state: Board, now: number, every: number = QUIET_MS): NudgeDue[] {
+export function nudgesDue(state: Board, now: number): NudgeDue[] {
   const open = [...state.tasks.values()].filter((t) => t.state !== "done" && !t.archived);
-  return [...open.flatMap((t) => quietDue(state, t, now, every)), ...queueDue(state, now)];
+  return [...open.flatMap((t) => quietDue(state, t, now, state.quietMs)), ...queueDue(state, now)];
 }
 
 const DUE_WORDS = ["", "a wake is due", "due to the lead", "due in the owner's Needs you"] as const;
 
-export function quietText(clock: Clock, every: number = QUIET_MS): string | undefined {
+export function quietText(clock: Clock, every: number): string | undefined {
   if (!clock.paged || clock.quiet < every) return undefined;
   return `quiet ${spanText(clock.quiet)} with ${inlineText(clock.mover, 40)}${clock.step ? ` (${DUE_WORDS[clock.step]})` : ""}`;
 }

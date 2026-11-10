@@ -49,6 +49,7 @@ export default {
   "live.actions.room.members.not.changed": "Who's in didn't change",
   "live.actions.branch.prefix.not.changed": "Branch prefix not changed",
   "live.actions.landing.not.changed": "How tasks land not changed",
+  "live.actions.quiet.not.changed": "Quiet time not changed",
   "live.actions.room.not.renamed": "Room not renamed",
   "live.actions.icon.not.changed": "Icon not changed",
   "live.actions.note.not.cleared": "Note not cleared",

@@ -107,6 +107,7 @@ export default {
   "events.github.write.off": "Kiwi の GitHub への書き込みを止めました",
   "events.branch.prefix.set": "ブランチの接頭辞を {prefix} にしました: {prefix}7-… のようなブランチの PR はタスク T7 に表示されます",
   "events.branch.prefix.cleared": "ブランチの接頭辞を消しました: PR は誰かがリンクを投稿したときだけタスクに表示されます",
+  "events.quiet.set": "タスクが止まっていてよい時間を {time} にしました: それを過ぎると起こす時期になり、次にリード、次にオーナーに回ります",
   "events.merges.people": "マージする人を「人」にしました: タスクのゲートが開いたら、エージェントは PR のマージを人に任せます",
   "events.merges.agents": "マージする人を再びエージェントにしました",
   "events.landing.set": "タスクの反映方法を {then} にしました: 承認されたタスクは、それが済むまで反映中のままです",

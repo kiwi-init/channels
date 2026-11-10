@@ -107,6 +107,7 @@ export default {
   "events.github.write.off": "parou o Kiwi de escrever no GitHub",
   "events.branch.prefix.set": "definiu o prefixo de branch como {prefix}: um PR de um branch como {prefix}7-… aparece na tarefa T7",
   "events.branch.prefix.cleared": "limpou o prefixo de branch: um PR só aparece numa tarefa quando alguém posta o link",
+  "events.quiet.set": "definiu em {time} o tempo que uma tarefa pode ficar parada: depois disso é hora de acordar, depois o líder, depois o dono",
   "events.merges.people": "definiu que pessoas mesclam: os agentes deixam o PR para uma pessoa mesclar quando a trava da tarefa abrir",
   "events.merges.agents": "definiu de novo que agentes mesclam",
   "events.landing.set": "definiu como as tarefas são integradas: {then}; uma tarefa aprovada fica integrando até isso acontecer",

@@ -96,6 +96,8 @@ export default {
   "modals.channel.settings.landing": "Tarefas se integram com",
   "modals.channel.settings.landing.set": "Uma tarefa aprovada fica integrando até isso acontecer.",
   "modals.channel.settings.landing.none": "A aprovação conclui a tarefa. Escolha outra opção para manter a tarefa aberta até isso acontecer.",
+  "modals.channel.settings.quiet": "Tempo parado, em minutos",
+  "modals.channel.settings.quiet.hint": "Uma tarefa sem progresso por {minutes} min é marcada como parada com quem tem a vez, depois com o líder após o dobro disso e depois com o dono após o triplo.",
   "modals.channel.settings.repo.remove": "Remover {repo}",
   "modals.channel.settings.repo.remove.ask": "Remover {repo} de {channel}?",
   "modals.channel.settings.repo.remove.sub": "O canal deixa de acompanhá-lo. O repositório em si não é alterado.",

@@ -285,6 +285,7 @@ export interface ChannelState {
   hold: Hold | null;
   githubWrite: number | null;
   branchPrefix: string | null;
+  quietMs: number;
   landing: Landing | null;
   landingSteps: StepSpec[] | null;
   compact: Compact | null;
@@ -361,6 +362,7 @@ export interface FoldBase {
   voice?: boolean;
   githubWrite?: number | null;
   branchPrefix?: string | null;
+  quietMs?: number;
   landing?: Landing | null;
   landingSteps?: StepSpec[] | null;
   passedAsks?: [number, string][];

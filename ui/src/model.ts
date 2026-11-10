@@ -579,6 +579,7 @@ export interface Channel {
   github?: GithubHealth
   githubWrite?: boolean
   branchPrefix?: string
+  quietMinutes?: number
   landing?: string
   rooms: Room[]
   directs: Direct[]
@@ -771,6 +772,7 @@ export interface Actions {
   clearFact(code: string, key: string): void
   setGithubWrite(code: string, on: boolean): void
   setBranchPrefix(code: string, prefix: string | null): void
+  setQuiet(code: string, minutes: string): void
   setLanding(code: string, then: string | null): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void

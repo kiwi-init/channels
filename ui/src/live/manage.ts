@@ -19,7 +19,7 @@ import { inviteLine } from "@kiwi/app/join-line.ts"
 import type { Color } from "@kiwi/core/protocol.ts"
 import { openedChannel, openedRun, type Run } from "~/live/store"
 import type { Actions, JoinChoice, Powers } from "~/model"
-import { BRANCH_PREFIX_RE, isLanding, POWERS, ROOM_ID_RE } from "@kiwi/core/protocol.ts"
+import { BRANCH_PREFIX_RE, isLanding, MAX_QUIET_MINUTES, POWERS, quietMinutes, ROOM_ID_RE } from "@kiwi/core/protocol.ts"
 import { newRoomId, sponsorsAgent } from "@kiwi/core/state.ts"
 import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
 import { roomProblemWords } from "~/live/room-problem"
@@ -187,6 +187,12 @@ export async function setBranchPrefix(code: string, typed: string | null): Promi
   const prefix = typed?.trim() || null
   if (prefix && !BRANCH_PREFIX_RE.test(prefix)) throw new Error(t("live.manage.bad.branch.prefix"))
   await event(setup(code), prefix ? `branch prefix: ${prefix}` : "cleared the branch prefix", { op: "branch.prefix.set", prefix })
+}
+
+export async function setQuiet(code: string, typed: string): Promise<void> {
+  const minutes = Number(typed.trim())
+  if (!quietMinutes(minutes)) throw new Error(t("live.manage.bad.quiet", { max: String(MAX_QUIET_MINUTES) }))
+  await event(setup(code), `quiet time: ${minutes} min`, { op: "quiet.set", minutes })
 }
 
 export async function setGoal(code: string, goal: string): Promise<void> {

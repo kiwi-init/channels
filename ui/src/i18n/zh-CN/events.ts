@@ -107,6 +107,7 @@ export default {
   "events.github.write.off": "停止了 Kiwi 写入 GitHub",
   "events.branch.prefix.set": "把分支前缀设为 {prefix}：像 {prefix}7-… 这样的分支发出的 PR 会显示在任务 T7 上",
   "events.branch.prefix.cleared": "清除了分支前缀：只有有人发出链接时，PR 才会显示在任务上",
+  "events.quiet.set": "把任务可停滞的时间设为 {time}：超过后该唤醒了，然后是负责人，再然后是所有者",
   "events.merges.people": "把合并者设为人：任务的门禁打开后，智能体会把 PR 留给人合并",
   "events.merges.agents": "把合并者重新设为智能体",
   "events.landing.set": "把任务的落地方式设为 {then}：已批准的任务会保持落地中，直到完成",

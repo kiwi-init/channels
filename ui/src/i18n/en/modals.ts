@@ -97,6 +97,9 @@ const words = {
   "modals.channel.settings.landing": "Tasks land on",
   "modals.channel.settings.landing.set": "An approved task stays landing until that has happened.",
   "modals.channel.settings.landing.none": "Approval finishes a task. Pick another to keep a task open until it has happened.",
+  "modals.channel.settings.quiet": "Quiet time, in minutes",
+  "modals.channel.settings.quiet.hint":
+    "A task with no progress for {minutes} min is marked quiet with whoever has the move, then with the lead after twice that, then with the owner after three times.",
   "modals.channel.settings.repo.remove": "Remove {repo}",
   "modals.channel.settings.repo.remove.ask": "Remove {repo} from {channel}?",
   "modals.channel.settings.repo.remove.sub": "The channel stops following it. The repository itself isn't touched.",

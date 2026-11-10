@@ -85,6 +85,7 @@ export interface FoldCtx {
   hold: Hold | null;
   githubWrite: number | null;
   branchPrefix: string | null;
+  quietMs: number;
   landing: Landing | null;
   landingSteps: StepSpec[] | null;
   passedAsks: Map<number, string>;
@@ -411,6 +412,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         break;
       }
       c.branchPrefix = ev.prefix;
+      break;
+    }
+
+    case "quiet.set": {
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("sets how long a task may stay quiet"));
+        break;
+      }
+      c.quietMs = ev.minutes * 60_000;
       break;
     }
 

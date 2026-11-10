@@ -96,6 +96,8 @@ export default {
   "modals.channel.settings.landing": "任务落地于",
   "modals.channel.settings.landing.set": "已批准的任务会保持落地中，直到该事项完成。",
   "modals.channel.settings.landing.none": "批准即完成任务。选择其他选项，任务会保持打开直到该事项完成。",
+  "modals.channel.settings.quiet": "可停滞时间（分钟）",
+  "modals.channel.settings.quiet.hint": "任务 {minutes} 分钟没有进展，就会记为在该行动的人手上停滞；两倍时间后轮到负责人，三倍时间后轮到所有者。",
   "modals.channel.settings.repo.remove": "移除 {repo}",
   "modals.channel.settings.repo.remove.ask": "从 {channel} 移除 {repo} 吗？",
   "modals.channel.settings.repo.remove.sub": "频道将不再跟随它。仓库本身不受影响。",
