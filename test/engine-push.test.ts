@@ -28,13 +28,13 @@ describe("the phone registers its push token", () => {
       ["code-two", "#two", true],
     ]);
     expect(new Set(got.map((g) => g.tag)).size).toBe(2);
-    expect(seen.map((s) => s.url)).toEqual(["https://relay.example/v1/rooms/room-one/push", "https://relay.example/v1/rooms/room-two/push"]);
-    for (const [i, s] of seen.entries()) {
-      const body = JSON.parse(s.body) as unknown;
+    expect(seen.map((s) => s.url).sort()).toEqual(["https://relay.example/v1/rooms/room-one/push", "https://relay.example/v1/rooms/room-two/push"]);
+    for (const [i, roomId] of ["room-one", "room-two"].entries()) {
+      const sent = seen.find((s) => s.url.endsWith(`/rooms/${roomId}/push`))!;
+      const body = JSON.parse(sent.body) as unknown;
       expect(wellFormedPush(body)).toBe(true);
       expect(body).toEqual({ platform: "apns", token: TOKEN, tag: got[i]!.tag, sandbox: true });
-      const roomId = i === 0 ? "room-one" : "room-two";
-      expect(await verifyRequest(s.auth.replace(/^Bearer /, ""), roomId, "PUT", "/push", s.body)).toBe(seats[i]!.pk);
+      expect(await verifyRequest(sent.auth.replace(/^Bearer /, ""), roomId, "PUT", "/push", sent.body)).toBe(seats[i]!.pk);
     }
   });
 
