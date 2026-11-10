@@ -128,7 +128,13 @@ function General({ channel, onEnd }: { channel: Channel; onEnd: () => void }) {
       <Group title={t("modals.channel.settings.agents")}>
         <Hold channel={channel} />
         <Row label={t("modals.channel.settings.specs.only")} hint={channel.specsOnly ? t("modals.channel.settings.specs.only.on") : t("modals.channel.settings.specs.only.off")}>
-          <Toggle on={!!channel.specsOnly} label={t("modals.channel.settings.specs.only")} disabled={!own} onChange={(next) => app.actions.setSpecsOnly(channel.code, next)} />
+          <Toggle
+            on={!!channel.specsOnly}
+            label={t("modals.channel.settings.specs.only")}
+            disabled={!own}
+            why={t("modals.channel.settings.owner.only")}
+            onChange={(next) => app.actions.setSpecsOnly(channel.code, next)}
+          />
         </Row>
       </Group>
       <Group title={t("modals.channel.settings.notifications")}>
@@ -266,6 +272,7 @@ function Hold({ channel }: { channel: Channel }) {
           label={t("modals.channel.settings.pause")}
           on={!!hold}
           disabled={!own}
+          why={t("modals.channel.settings.owner.only")}
           onChange={(on) => {
             app.actions.setHold(channel.code, on, on ? note.trim() || undefined : undefined)
             if (!on) setNote("")
@@ -429,7 +436,13 @@ function GitHub({ channel }: { channel: Channel }) {
       </Group>
       <Group title={t("modals.channel.settings.access")}>
         <Row label={t("modals.channel.settings.github.write")} hint={write ? t("modals.channel.settings.github.write.on") : t("modals.channel.settings.github.write.off")}>
-          <Toggle on={write} label={t("modals.channel.settings.github.write")} disabled={!own} onChange={(on) => app.actions.setGithubWrite(channel.code, on)} />
+          <Toggle
+            on={write}
+            label={t("modals.channel.settings.github.write")}
+            disabled={!own}
+            why={t("modals.channel.settings.owner.only")}
+            onChange={(on) => app.actions.setGithubWrite(channel.code, on)}
+          />
         </Row>
       </Group>
       <Group title={t("modals.channel.settings.tasks.prs")}>
@@ -456,7 +469,13 @@ function GitHub({ channel }: { channel: Channel }) {
           {sets ? <LandingPick value={landing} onPick={(then) => app.actions.setLanding(channel.code, then)} /> : <span>{landingWord(landing)}</span>}
         </Row>
         <Row label={t("modals.channel.settings.people.merge")} hint={channel.peopleMerge ? t("modals.channel.settings.people.merge.on") : t("modals.channel.settings.people.merge.off")}>
-          <Toggle on={!!channel.peopleMerge} label={t("modals.channel.settings.people.merge")} disabled={!sets} onChange={(on) => app.actions.setPeopleMerge(channel.code, on)} />
+          <Toggle
+            on={!!channel.peopleMerge}
+            label={t("modals.channel.settings.people.merge")}
+            disabled={!sets}
+            why={t("modals.channel.settings.trusted.only")}
+            onChange={(on) => app.actions.setPeopleMerge(channel.code, on)}
+          />
         </Row>
       </Group>
     </>
