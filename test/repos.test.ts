@@ -49,7 +49,7 @@ describe("the channel's repos", () => {
     expect(outsideRepos(s, s.members.get("win")!.card)).toBe(true);
     expect(outsideRepos(s, { os: "linux" })).toBe(false);
     expect(outsideRepos({ repos: [] }, { repo: "someone/else" })).toBe(false);
-    const status = formatStatus({ alias: "c", me: "jon", state: s, online: new Map(), unread: 0 });
+    const status = formatStatus({ check: "kiwi/review/test", alias: "c", me: "jon", state: s, online: new Map(), unread: 0 });
     expect(status).toContain("repos: ojow/channels");
     expect(status).toContain("someone/else@main · not one of this channel's repos");
     expect(status).not.toContain("Ojow/Channels@T39 · not one");

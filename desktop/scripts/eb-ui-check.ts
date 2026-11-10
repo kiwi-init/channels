@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, sep } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { buildUipack, generateSigningKey, signManifest, uipackFileName, type UiManifest } from "../.hutch/devkit/api/sdks/main/appengine/format.ts";
@@ -79,7 +79,7 @@ const showing = (d: Driver): Promise<string> => d.evaluate(() => document.queryS
 const shows = (d: Driver, mark: string, ms = 60_000): Promise<string> => until(`the window showing ${mark}`, ms, async () => ((await showing(d)) === mark ? mark : null));
 const visible = async (d: Driver): Promise<boolean> => ((await d.main("window")) as { visible?: unknown }).visible === true;
 
-function engineState(): { current: UiManifest | null; good: UiManifest[]; bad: Record<string, string> } | null {
+function engineFile(): string | null {
   const find = (dir: string): string | null => {
     for (const name of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, name.name);
@@ -90,7 +90,11 @@ function engineState(): { current: UiManifest | null; good: UiManifest[]; bad: R
     }
     return null;
   };
-  const file = find(join(root, "home"));
+  return find(join(root, "home"));
+}
+
+function engineState(): { current: UiManifest | null; good: UiManifest[]; bad: Record<string, string> } | null {
+  const file = engineFile();
   return file && existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
 }
 
@@ -165,6 +169,20 @@ try {
     await shows(d, "a", 20_000);
     console.log("restarted: a, b never booted again");
   });
+
+  const file = engineFile();
+  if (!file) throw new Error("no engine.json to find the served UI folder by");
+  const views = join(dirname(file), "views");
+  renameSync(views, `${views}.kept`);
+  writeFileSync(views, "not a folder, so no UI can be placed");
+  try {
+    await run(async () => console.log("the UI folder can't be written: the window still opens (T1764)"));
+  } catch (e) {
+    problems.push(`with a UI folder that can't be written, ${e instanceof Error ? e.message : String(e)}`);
+  } finally {
+    rmSync(views, { force: true });
+    renameSync(`${views}.kept`, views);
+  }
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
 } finally {

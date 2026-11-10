@@ -1,4 +1,5 @@
-import { isLanding, outgrown, type Trust } from "./protocol.ts";
+import { isLanding, outgrown, quietMinutes, type Trust } from "./protocol.ts";
+import { wellFormedStepSpecs } from "./steps.ts";
 import type { FoldBase, Place } from "./state.ts";
 
 export const BASE_WIRE_VERSION = 7;
@@ -91,7 +92,9 @@ export function wellFormedWire(x: unknown, n: number): x is Wire {
     (b.rules === undefined || typeof b.rules === "number") &&
     (b.githubWrite === undefined || b.githubWrite === null || typeof b.githubWrite === "number") &&
     (b.branchPrefix === undefined || b.branchPrefix === null || typeof b.branchPrefix === "string") &&
-    (b.landing === undefined || b.landing === null || isLanding(b.landing))
+    (b.quietMs === undefined || (typeof b.quietMs === "number" && quietMinutes(b.quietMs / 60_000))) &&
+    (b.landing === undefined || b.landing === null || isLanding(b.landing)) &&
+    (b.landingSteps === undefined || b.landingSteps === null || wellFormedStepSpecs(b.landingSteps))
   );
 }
 

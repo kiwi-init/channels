@@ -14,6 +14,17 @@
   overflow-anchor: none;
 }
 
+.feed-wait {
+  padding: 24px var(--gutter);
+  color: var(--ink-3);
+  font: var(--t-ui) var(--ui);
+  text-align: center;
+}
+
+.feed-wait-again {
+  margin-top: 12px;
+}
+
 .feed-jump {
   position: absolute;
   bottom: calc(var(--compose-h, 0px) + 12px);
@@ -1173,6 +1184,28 @@ button.msg-image-spot:hover {
   text-overflow: ellipsis;
 }
 
+.msg-thread {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: var(--t-meta) var(--ui);
+}
+
+.msg-thread-n {
+  flex: none;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.msg-thread:hover .msg-thread-n {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .msg-tools {
   position: absolute;
   top: -0.875rem;
@@ -1553,25 +1586,6 @@ button.msg-image-spot:hover {
   color: var(--ink-2);
   font: var(--t-stamp) var(--ui);
   pointer-events: none;
-}
-
-.compose-also {
-  display: flex;
-  align-items: center;
-  align-self: flex-start;
-  gap: 6px;
-  margin: 6px 0 0 calc(var(--ctl) + 8px);
-  color: var(--ink-2);
-  font: var(--t-stamp) var(--ui);
-  cursor: pointer;
-}
-
-.compose-also input {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  margin: 0;
-  accent-color: var(--ink);
 }
 
 .compose-hint b {

@@ -65,7 +65,7 @@ describe("a task outlives the agent who leaves", () => {
       [6, "hedgehog", null, "done"],
       [8, "wren", null, "todo"],
     ]);
-    expect(formatTasks(s, {})).toContain("T2    planned   (hedgehog left) Start without the tray library");
+    expect(formatTasks(s, "kiwi/review/test", {})).toContain("T2    planned   (hedgehog left) Start without the tray library");
     expect(formatTask(s, s.tasks.get(2)!)).toContain("unassigned: hedgehog left the channel");
     expect(s.tasks.get(2)?.notes.at(-1)?.text).toBe("branch T2-ayatana, commit 92838aa4, next: open the PR");
   });

@@ -1,31 +1,37 @@
+import "~/i18n/en/shell-later"
 import "~/styles/new-room.css"
 
 import { useState } from "react"
 
 import { roomProblem } from "@kiwi/app/rooms.ts"
+import { roomProblemWords } from "~/live/room-problem"
 import { autofocus, Avatar, cx } from "~/kit/bits"
+import { Failed, failure, type Failure } from "~/kit/failed"
 import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
 import type { Channel } from "~/model"
-import { useApp } from "~/nav"
-import { roomPeople, shown } from "~/names"
+import { useGo, useActions } from "~/nav"
+import { roleWord, roomPeople, shown } from "~/names"
 import { useAppCan } from "~/live/app-can"
+import { t } from "~/i18n/i18n"
 
 const roomName = (typed: string): string => typed.trim().replace(/^#/, "").trim().toLowerCase().replace(/\s+/g, "-")
 
 export function NewRoomDialog({ channel }: { channel: Channel }) {
-  const { go } = useApp()
+  const go = useGo()
   return <NewRoomForm channel={channel} onClose={() => go({ to: "dialog", dialog: null })} />
 }
 
 function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => void }) {
-  const { app, go } = useApp()
+  const actions = useActions()
+  const go = useGo()
   const [typed, setTyped] = useState("")
   const [wantsOnly, setOnly] = useState(false)
   const canPick = useAppCan("makeRoom")
   const only = wantsOnly && canPick
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState<Failure | null>(null)
   const name = roomName(typed)
   const problem = name ? roomProblem(channel.rooms, name) : null
   const others = roomPeople(channel)
@@ -40,15 +46,22 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
     })
   const ready = !!name && !problem && !busy
   return (
-    <Modal dismiss="x" onClose={onClose} label="New room" title="New room">
+    <Modal onClose={onClose} label={t("shell.new.room.title")} title={t("shell.new.room.title")}>
       <form
         className="room-form"
         onSubmit={async (e) => {
           e.preventDefault()
           if (!ready) return
           setBusy(true)
-          const id = await app.actions.addRoom(channel.code, name, only ? [...picked] : undefined)
-          if (!id) return setBusy(false)
+          setFailed(null)
+          let id: string
+          try {
+            id = await actions.addRoom(channel.code, name, only ? [...picked] : undefined)
+          } catch (err) {
+            // The form stays open with what went wrong under it, so the person can try again.
+            setFailed(failure(t("shell.new.room.failed"), err))
+            return setBusy(false)
+          }
           onClose()
           go({ to: "where", where: { kind: "room", room: id } })
         }}
@@ -63,8 +76,8 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
             autoComplete="off"
             spellCheck={false}
             maxLength={40}
-            placeholder="room-name"
-            aria-label="Room name"
+            placeholder={t("shell.new.room.placeholder")}
+            aria-label={t("shell.new.room.name")}
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             aria-invalid={problem ? true : undefined}
@@ -72,23 +85,23 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
         </span>
         {problem && (
           <p className="room-hint is-error" role="alert">
-            {problem}
+            {roomProblemWords(problem)}
           </p>
         )}
-        <Track className="seg room-who" role="group" aria-label="Who's in">
+        <Track className="seg room-who" role="group" aria-label={t("shell.new.room.who")}>
           <button type="button" aria-pressed={!only} onClick={() => setOnly(false)}>
-            Everyone
+            {t("shell.new.room.everyone")}
           </button>
-          <button type="button" aria-pressed={only} disabled={!canPick} title={canPick ? undefined : "Update Channels to make members-only rooms"} onClick={() => setOnly(true)}>
-            Members only
+          <button type="button" aria-pressed={only} disabled={!canPick} title={canPick ? undefined : t("shell.new.room.update.to.pick")} onClick={() => setOnly(true)}>
+            {t("shell.new.room.members.only")}
           </button>
         </Track>
-        {only && <p className="room-hint">Only its members are sent what's said here. Anyone in the channel can still open it.</p>}
+        {only && <p className="room-hint">{t("shell.new.room.members.hint")}</p>}
         {only && (
           <div className="room-pick">
             {[
-              ["People", people],
-              ["Agents", agents],
+              [t("shell.new.room.people"), people],
+              [t("shell.new.room.agents"), agents],
             ].map(([title, list]) =>
               typeof title === "string" && Array.isArray(list) && list.length ? (
                 <fieldset key={title} className="room-group">
@@ -98,7 +111,7 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
                       <input type="checkbox" checked={picked.has(p.name)} onChange={(e) => pick(p.name, e.target.checked)} />
                       <Avatar person={p} size="sm" />
                       <span className="room-member-name">{shown(p)}</span>
-                      {p.role && <span className="room-member-role">{p.role}</span>}
+                      {p.role && <span className="room-member-role">{roleWord(p.role)}</span>}
                     </label>
                   ))}
                 </fieldset>
@@ -106,9 +119,19 @@ function NewRoomForm({ channel, onClose }: { channel: Channel; onClose: () => vo
             )}
           </div>
         )}
+        {failed && <Failed failure={failed} />}
         <div className="modal-foot">
+          <button type="button" className="btn is-quiet" onClick={onClose}>
+            {t("kit.context.menu.cancel")}
+          </button>
           <button type="submit" className="btn is-primary" disabled={!ready || (only && picked.size === 0)}>
-            {busy ? "Making it…" : only ? `Create members-only room${picked.size ? ` for ${picked.size + 1}` : ""}` : "Create room"}
+            {busy
+              ? t("shell.new.room.making")
+              : only
+                ? picked.size
+                  ? t("shell.new.room.create.members.for", { count: picked.size + 1 })
+                  : t("shell.new.room.create.members")
+                : t("shell.new.room.create")}
           </button>
         </div>
       </form>

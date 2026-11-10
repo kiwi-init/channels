@@ -11,6 +11,7 @@ export interface Shot {
   streams?: boolean
   onboarding?: true
   usage?: Partial<Usage>
+  broken?: true
 }
 
 const PAID: Partial<Usage> = { plan: "paid", used: 3_120, limit: 100_000, paidLimit: 100_000, upgradeUrl: null, billingUrl: "https://billing.stripe.com/demo" }
@@ -19,11 +20,12 @@ const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "ki
 
 export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
+  "channel-broken": { ...kiwi(), broken: true },
   home: { scenario: "full", channel: null },
   "home-calm": { scenario: "home-calm", channel: null },
   "long-feed": { scenario: "long", channel: "kiwi" },
   opening: { scenario: "opening", channel: "kiwi" },
-  "opening-tasks": { scenario: "opening", channel: "kiwi", nav: { tab: "tasks" } },
+  "opening-tasks": { scenario: "opening", channel: "kiwi", nav: { tab: "specs" } },
   "opening-needs": { scenario: "opening", channel: "kiwi", nav: { tab: "needs" } },
   dm: kiwi({ where: { kind: "dm", with: "atlas" } }),
   "dm-private": kiwi({ where: { kind: "dm", with: "maya" } }),
@@ -37,7 +39,7 @@ export const SHOTS: Record<string, Shot> = {
   "room-private": kiwi({ where: { kind: "room", room: "launch-plan" } }),
   "room-doc": { ...kiwi({ where: { kind: "room", room: "releases" } }), docs: 0 },
   "doc-versions": { ...kiwi({ where: { kind: "room", room: "releases" }, modal: { kind: "versions", thread: "room:releases", name: "#releases" } }), docs: 0 },
-  tasks: kiwi({ tab: "tasks" }),
+  tasks: kiwi({ tab: "specs" }),
   agents: kiwi({ tab: "agents" }),
   github: kiwi({ tab: "github" }),
   "github-pr": kiwi({ tab: "github", panel: { kind: "pr", repo: "kiwi-init/channels", number: 45 } }),
@@ -53,12 +55,13 @@ export const SHOTS: Record<string, Shot> = {
   "spec-result": { scenario: "specs", channel: "kiwi", nav: { tab: "specs", spec: 170, part: "result" } },
   "specs-needs": { scenario: "specs", channel: "kiwi", nav: { tab: "needs" } },
   "spec-changed": { scenario: "spec-changed", channel: "kiwi", nav: { tab: "specs", spec: 160, part: "spec" } },
-  task: kiwi({ tab: "tasks", panel: { kind: "task", task: 12 } }),
+  task: kiwi({ tab: "specs", panel: { kind: "task", task: 12 } }),
   "task-working": kiwi({ panel: { kind: "task", task: 10 } }),
-  "task-review": kiwi({ tab: "tasks", panel: { kind: "task", task: 14 } }),
-  "task-waiting": kiwi({ tab: "tasks", panel: { kind: "task", task: 13 } }),
-  "task-done": kiwi({ tab: "tasks", panel: { kind: "task", task: 9 } }),
-  "tasks-empty": { scenario: "full", channel: "landing", nav: { tab: "tasks" } },
+  "task-body": { scenario: "task-body", channel: "kiwi", nav: { tab: "specs", panel: { kind: "task", task: 12 } } },
+  "task-review": kiwi({ tab: "specs", panel: { kind: "task", task: 14 } }),
+  "task-waiting": kiwi({ tab: "specs", panel: { kind: "task", task: 13 } }),
+  "task-done": kiwi({ tab: "specs", panel: { kind: "task", task: 9 } }),
+  "tasks-empty": { scenario: "full", channel: "landing", nav: { tab: "specs" } },
   needs: kiwi({ tab: "needs" }),
   "needs-forgotten-computer": { scenario: "forgotten-computer", channel: "kiwi", nav: { tab: "needs" } },
   "needs-asked-of": { scenario: "asked-of", channel: "kiwi", nav: { tab: "needs" } },
@@ -151,5 +154,8 @@ export const SHOTS: Record<string, Shot> = {
   "github-code": { scenario: "github-code", channel: null },
   "github-signed-in": { scenario: "github-signed-in", channel: null },
   "github-gate": { scenario: "github-gate", channel: null },
+  "github-checking": { scenario: "github-checking", channel: null },
+  "thread-fetching": { scenario: "thread-fetching", channel: "kiwi", nav: { panel: { kind: "thread", seq: 112 } } },
+  "thread-unloaded": { scenario: "thread-unloaded", channel: "kiwi", nav: { panel: { kind: "thread", seq: 3 } } },
   welcome: { scenario: "no-channels", channel: null },
 }

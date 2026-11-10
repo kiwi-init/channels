@@ -43,6 +43,31 @@ alone at `/preview/<name>`.
   else gets the release page), fills in the `curl … | sh -s -- join <code>`
   line, and the copy buttons. There is no inline script, so the CSP stays
   `script-src 'self'`.
+- The landing in pt-BR, ja, ko and zh-CN: `i18n/<dir>.json` maps each piece of
+  the English `index.html` (a text between tags, or an `alt`, `title`,
+  `aria-label` or description) to its translation, with the app's glossary
+  words. `scripts/docs-site.ts` writes `<dir>/index.html` from them (ignored
+  by git), and `test/site-langs.test.ts` fails when a
+  translated landing keeps an English sentence, so new English copy needs its
+  four translations. `bun scripts/docs-site.ts --landing` refreshes the
+  `<!-- alternates -->` and `<!-- langs -->` marks in `index.html`. `lang.js`
+  sends a first visit to `/` to the browser's language and keeps a pick in
+  `localStorage` (`kiwi.site-lang`); it never redirects a docs page.
+- Translated docs: `docs/<dir>/<file>.md` (the same file name as the English
+  `docs/<file>.md`) is built at `/<dir>/docs/<slug>`, into `<dir>/docs/` here
+  (ignored by git). Its front matter has a translated `description` and
+  `group` (every page of one English group uses the same translated name) and
+  the English page's `order`. It keeps every heading of the English page, in the
+  same order and depth: each heading takes the English heading's `id`, so
+  `#anchor` links stay English and shared, and the build fails when the outline
+  differs. Links stay as the English page writes them (`cli.md`, `cli.md#x`,
+  `/docs/cli`, `../SECURITY.md`): the build points them at the translation when
+  there is one and at the English page when not. A page with no translation is
+  not built in that language, and a language with none has no docs. The
+  sidebar, pager and switcher list a language's own pages, the chrome's words
+  (`chrome` in `LANGS`) are in its language, and hreflang links name the
+  languages a page exists in. Without a translation the switcher sends that
+  language to its landing, with a note that the docs are English for now.
 - The landing's background is the AFK scene, `/afk/scene` (`afk/scene.html`, which
   `scripts/docs-site.ts` builds from `ui/src/meadow/scene.page.ts` as one inline file), in an
   `<iframe sandbox="allow-scripts">`. `app.js` paints a sky for the hour behind
@@ -71,11 +96,11 @@ alone at `/preview/<name>`.
 
 ## Download links
 
-`app.js` lists the desktop app files the v2026.11.15 release publishes, under the app's
+`app.js` lists the desktop app files the v2026.11.17 release publishes, under the app's
 name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 
-- `Channels-2026.11.15-mac-arm64.dmg` (Apple silicon only: Intel Macs get the CLI)
-- `Channels-2026.11.15-linux-x86_64.AppImage` (Linux: Arch is the supported distribution)
+- `Channels-2026.11.17-mac-arm64.dmg` (Apple silicon only: Intel Macs get the CLI)
+- `Channels-2026.11.17-linux-x86_64.AppImage` (Linux: Arch is the supported distribution)
 
 A tag's release stamps its version into these names (`scripts/stamp.ts`) and commits
 them to main; the site deploys only from a tag, after its GitHub release exists. The names

@@ -1,7 +1,7 @@
 import { personaAnswers } from "@kiwi/core/personality.ts";
 import { isDirectedAt, isForAgent } from "@kiwi/core/client.ts";
 import { GENERAL_ROOM, ignored, type Message } from "@kiwi/core/protocol.ts";
-import { changedAfterApproval, freeAgents, onSpec, openRound, specOfComment, threadMembers, type ChannelState, type Task } from "@kiwi/core/state.ts";
+import { changedAfterApproval, freeAgents, isPerson, onSpec, openRound, specOfComment, threadMembers, type ChannelState, type Task } from "@kiwi/core/state.ts";
 import type { Delivery } from "./shared.ts";
 
 import { mentionsOf } from "@kiwi/core/changes.ts";
@@ -72,6 +72,8 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   if (d.forMe) return addressed || asking;
   const room = state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM;
   const here = state?.rooms.get(room);
-  const mine = room === GENERAL_ROOM || !!here?.posters?.includes(me) || (!!here?.members && !!state && sentTo(here, me, state.members));
+  const sender = state?.members.get(m.from);
+  const leadHears = !!here && !here.members && state?.lead === me && !!sender && isPerson(sender);
+  const mine = room === GENERAL_ROOM || !!here?.posters?.includes(me) || (!!here?.members && !!state && sentTo(here, me, state.members)) || leadHears;
   return addressed || asking || inMyThread || (mine && !m.to?.length);
 }

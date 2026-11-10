@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 
 type Step = { name?: string; if?: string; run?: string };
 
@@ -11,8 +14,13 @@ const DOC_TESTS: [name: string, command: string][] = [
     "bun scripts/ui-meadow.ts",
   ],
   ["doc image order, a line sent with an image from the composer stays above the lines sent after it", "bun scripts/ui-doc-image-order.ts"],
+  ["send once, a message whose answer was lost or that was written with the relay away survives a reload and is delivered once", "bun scripts/ui-send-once.ts"],
   [
-    "image copies, a Retina shot in the feed and the doc shows from a copy sized to its box, while the viewer, Save image and a drag get the original, in Chromium and WebKit",
+    "hidden blocks, a line in the feed is one bare node in the doc, selecting takes it once, and Back to draft gives a failed line back, in Chromium and WebKit",
+    "bun scripts/ui-doc-hidden.ts && bun scripts/ui-doc-hidden.ts --webkit",
+  ],
+  [
+    "image copies, a Retina shot in the feed shows from a copy sized to its box and the doc mounts no second one, while the viewer, Save image and a drag get the original, in Chromium and WebKit",
     "bun scripts/ui-image-thumbs.ts || status=1\nbun scripts/ui-image-thumbs.ts --webkit || status=1",
   ],
   [
@@ -219,6 +227,69 @@ for (const part of assignments.values()) perPart.set(part, (perPart.get(part) ??
 check(
   `all three legs carry tests (${[...perPart.entries()].map(([p, n]) => `${p}:${n}`).join(" ")})`,
   parts.every((p) => (perPart.get(p) ?? 0) > 0),
+);
+
+function fixture(files: Record<string, string>, opts: { stamp?: boolean; withBase?: boolean } = {}): string {
+  const dir = mkdtempSync(join(tmpdir(), "cov-"));
+  const run = (cmd: string[]) => spawnSync(cmd[0] ?? "", cmd.slice(1), { cwd: dir });
+  const git = (...a: string[]) => run(["git", ...a]);
+  git("init", "-q", "-b", "main", ".");
+  git("config", "user.email", "t@t");
+  git("config", "user.name", "t");
+  mkdirSync(join(dir, ".github"), { recursive: true });
+  copyFileSync(".github/coverage.yml", join(dir, ".github/coverage.yml"));
+  mkdirSync(join(dir, "scripts"), { recursive: true });
+  copyFileSync("scripts/coverage-pick.sh", join(dir, "scripts/coverage-pick.sh"));
+  mkdirSync(join(dir, "ui"), { recursive: true });
+  writeFileSync(join(dir, "ui/a.ts"), "a");
+  run(["touch", join(dir, "ui/a.ts")]);
+  git("add", "-A");
+  git("commit", "-qm", "base");
+  if (opts.withBase !== false) git("update-ref", "refs/remotes/origin/main", "main");
+  git("checkout", "-qb", "feature");
+  for (const [name, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, name)), { recursive: true });
+    writeFileSync(join(dir, name), content);
+  }
+  git("add", "-A");
+  git("commit", "-qm", "change");
+  if (opts.stamp) git("commit", "-q", "--allow-empty", "-m", "kiwi 2026.11.16");
+  return dir;
+}
+
+function pickWith(files: Record<string, string>, args: string[] = [], stamp = false): string {
+  const dir = fixture(files, { stamp });
+  const r = spawnSync("bash", [join(dir, "scripts/coverage-pick.sh"), ...args], { cwd: dir });
+  rmSync(dir, { recursive: true, force: true });
+  return `${r.stdout}`.trim();
+}
+
+function pickWithoutBase(): string {
+  const dir = fixture({ "ui/b.ts": "b" }, { withBase: false });
+  const r = spawnSync("bash", [join(dir, "scripts/coverage-pick.sh")], { cwd: dir });
+  rmSync(dir, { recursive: true, force: true });
+  return `${r.stdout}`.trim();
+}
+
+const ALL_JOBS = "static test-unit test-flows build doc fuzz shots desktop-mac desktop-linux desktop-distros cli-macos";
+check("ui-only diff drops cli-macos and distros", pickWith({ "ui/b.ts": "b" }) === ALL_JOBS.replace(" cli-macos", "").replace(" desktop-distros", ""));
+check("ui and desktop diff runs everything but distros", pickWith({ "ui/b.ts": "b", "desktop/b.ts": "b" }) === ALL_JOBS.replace(" desktop-distros", ""));
+check(
+  "desktop-only diff drops doc, fuzz, shots and distros, keeping test-flows",
+  pickWith({ "desktop/b.ts": "b" }) === ALL_JOBS.replace(" doc", "").replace(" fuzz", "").replace(" shots", "").replace(" desktop-distros", ""),
+);
+check(
+  "a desktop source that flows tests import keeps test-flows",
+  pickWith({ "desktop/src/keyring.ts": "k" }) === ALL_JOBS.replace(" doc", "").replace(" fuzz", "").replace(" shots", "").replace(" desktop-distros", ""),
+);
+check("an unclaimed file runs everything but distros", pickWith({ "README2.md": "b" }) === ALL_JOBS.replace(" desktop-distros", ""));
+check("a release input runs everything", pickWith({ "ui/b.ts": "b" }, ["2026.11.15"]) === ALL_JOBS.replace(" desktop-distros", ""));
+check("a stamp commit over a narrowed diff runs everything", pickWith({ "ui/b.ts": "b" }, [], true) === ALL_JOBS.replace(" desktop-distros", ""));
+check("an unavailable main ref runs everything but distros", pickWithoutBase() === ALL_JOBS.replace(" desktop-distros", ""));
+const covTable = Bun.YAML.parse(await Bun.file(".github/coverage.yml").text()) as { areas?: Record<string, { paths?: string[]; skip?: string[] }> };
+check(
+  "coverage table areas parse with paths and skips",
+  covTable.areas !== undefined && Object.values(covTable.areas).every((a) => Array.isArray(a.paths) && Array.isArray(a.skip) && a.paths.length > 0),
 );
 
 if (failures.length > 0) {

@@ -1,14 +1,18 @@
-import { Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useMemo } from "react"
+import { Fragment, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react"
 
-import { useLanguage } from "~/i18n/i18n"
-import { Boundary } from "~/kit/boundary"
+import { t, useLanguage } from "~/i18n/i18n"
+import { Boundary, Crashed } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
-import { ActContext, AppContext, historyStep, type Go, type Nav } from "~/nav"
+import { ActContext, AppContext, historyStep, type Ctx, type Go, type Nav, AccountContext, NamesContext, NavContext, OpenContext, PrefsContext, TilesContext } from "~/nav"
+import { keyRan, onCommand } from "~/kit/commands"
+import { mod } from "~/kit/keys"
 import { ContextMenus } from "~/kit/menu-open"
+import { ImageViews } from "~/chat/image-view"
 import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
+import { opening } from "~/shell/opening"
 import { Rail } from "~/shell/rail"
 import { useLimitHit } from "~/usage/store"
 import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
@@ -25,7 +29,17 @@ const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRo
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 const LimitDialog = later(() => import("~/usage/limit").then((m) => m.LimitDialog))
 
-export function Root(props: { app: App; nav: Nav; go: (go: Go) => void }) {
+const RailOnce = memo(Rail)
+const PaletteOnce = memo(Palette)
+const MenusOnce = memo(ContextMenus)
+const ImageViewsOnce = memo(ImageViews)
+const ScreenOnce = memo(ChannelScreen)
+
+type Broken = { channel: boolean; retry: () => void }
+
+type RootProps = { app: App; nav: Nav; go: (go: Go) => void; broken?: Broken }
+
+export function Root(props: RootProps) {
   const { lang } = useLanguage()
   return (
     <Fragment key={lang}>
@@ -34,17 +48,33 @@ export function Root(props: { app: App; nav: Nav; go: (go: Go) => void }) {
   )
 }
 
-function Shown({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
+function Shown({ app, nav, go, broken }: RootProps) {
   const [toasts, toast, dismissToast] = useToasts()
   const ctx = useMemo(() => ({ app, nav, go, toast }), [app, nav, go, toast])
-  const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])
-  usePaletteKey(useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]))
+  const latest = useRef(app)
+  useLayoutEffect(() => {
+    latest.current = app
+  }, [app])
+  const now = useCallback(() => latest.current, [])
+  const act = useMemo(() => ({ actions: app.actions, go, toast, now }), [app.actions, go, toast, now])
+  const togglePalette = useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog])
+  usePaletteKey(togglePalette)
+  useEffect(
+    () =>
+      onCommand((c) => {
+        if (c === "settings") go({ to: "settings" })
+        else if (c === "new-channel") go({ to: "dialog", dialog: "new-channel" })
+        else if (c === "jump") togglePalette()
+        else if (c === "back" || c === "forward") go({ to: "history", step: c })
+      }),
+    [go, togglePalette]
+  )
   useHistoryKeys(go, !!nav.modal)
   useTheme(app)
 
   if (!app.account || app.signIn?.stage === "sign-in")
     return (
-      <AppContext value={ctx}>
+      <Parts ctx={ctx}>
         <ActContext value={act}>
           <Boundary>
             <Suspense fallback={null}>
@@ -53,22 +83,33 @@ function Shown({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
           </Boundary>
           <Toasts toasts={toasts} onDismiss={dismissToast} />
         </ActContext>
-      </AppContext>
+      </Parts>
     )
 
   return (
-    <AppContext value={ctx}>
+    <Parts ctx={ctx}>
       <ActContext value={act}>
         <div className="app">
-          <Rail />
+          <RailOnce />
           <Boundary resetKey={nav.page === "settings" ? "settings" : app.channel?.code}>
             {nav.page === "settings" ? (
               <Suspense fallback={null}>
                 <Settings />
               </Suspense>
+            ) : broken ? (
+              <Crashed title={t(broken.channel ? "kit.boundary.channel.title" : "kit.boundary.view.title")} sub={t("kit.boundary.retry.sub")}>
+                <button type="button" className="btn is-primary" onClick={broken.retry}>
+                  {t("kit.boundary.retry")}
+                </button>
+                {broken.channel && (
+                  <button type="button" className="btn" onClick={() => go({ to: "home" })}>
+                    {t("kit.boundary.home")}
+                  </button>
+                )}
+              </Crashed>
             ) : app.channel ? (
-              <ChannelScreen key={app.channel.code} channel={app.channel} />
-            ) : (
+              <ScreenOnce key={app.channel.code} channel={app.channel} />
+            ) : opening(app, nav) ? null : (
               <Suspense fallback={null}>{app.gone ? <Gone gone={app.gone} /> : <Welcome />}</Suspense>
             )}
           </Boundary>
@@ -93,11 +134,31 @@ function Shown({ app, nav, go }: { app: App; nav: Nav; go: (go: Go) => void }) {
             <EnrollDialog />
           </Suspense>
         )}
-        <Palette />
-        <ContextMenus />
+        <PaletteOnce />
+        <MenusOnce />
+        <ImageViewsOnce />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
         <LimitWatch />
       </ActContext>
+    </Parts>
+  )
+}
+
+function Parts({ ctx, children }: { ctx: Ctx; children: ReactNode }) {
+  const { app, nav } = ctx
+  return (
+    <AppContext value={ctx}>
+      <NavContext value={nav}>
+        <TilesContext value={app.channels}>
+          <PrefsContext value={app.prefs}>
+            <AccountContext value={app.account}>
+              <OpenContext value={app.channel}>
+                <NamesContext value={app.channel?.nicknames ?? null}>{children}</NamesContext>
+              </OpenContext>
+            </AccountContext>
+          </PrefsContext>
+        </TilesContext>
+      </NavContext>
     </AppContext>
   )
 }
@@ -117,6 +178,7 @@ function useHistoryKeys(go: (go: Go) => void, modal: boolean) {
       const step = historyStep(e)
       if (!step || e.defaultPrevented || document.querySelectorAll("dialog[open]").length > (modal ? 1 : 0)) return
       e.preventDefault()
+      keyRan(step)
       go({ to: "history", step })
     }
     window.addEventListener("keydown", onKey)
@@ -127,8 +189,9 @@ function useHistoryKeys(go: (go: Go) => void, modal: boolean) {
 function usePaletteKey(toggle: () => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "k") return
+      if (!mod(e) || e.key.toLowerCase() !== "k") return
       e.preventDefault()
+      keyRan("jump")
       toggle()
     }
     window.addEventListener("keydown", onKey)

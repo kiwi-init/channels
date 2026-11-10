@@ -4,9 +4,17 @@ const INSTALL = `${location.origin}/install`;
 const IOS_BETA = "https://testflight.apple.com/join/qvKqgRNJ";
 
 const DOWNLOADS = [
-  { id: "mac-arm64", os: "macOS", detail: "Apple silicon", file: "Channels-2026.11.15-mac-arm64.dmg" },
-  { id: "linux-appimage", os: "Linux", detail: "AppImage", file: "Channels-2026.11.15-linux-x86_64.AppImage" },
+  { id: "mac-arm64", os: "macOS", detail: "Apple silicon", file: "Channels-2026.11.17-mac-arm64.dmg" },
+  { id: "linux-appimage", os: "Linux", detail: "AppImage", file: "Channels-2026.11.17-linux-x86_64.AppImage" },
 ];
+
+const WORDS = {
+  "pt-BR": { ios: "Baixar beta para iOS", copied: "copiado" },
+  ja: { ios: "iOS ベータ版を入手", copied: "コピーしました" },
+  ko: { ios: "iOS 베타 받기", copied: "복사됨" },
+  "zh-CN": { ios: "获取 iOS 测试版", copied: "已复制" },
+};
+const words = WORDS[document.documentElement?.lang] ?? { ios: "Get iOS Beta", copied: "copied" };
 
 const fileUrl = (d) => `${RELEASE}/${encodeURIComponent(d.file)}`;
 
@@ -36,7 +44,7 @@ function renderPrimary(mine) {
   const button = document.getElementById("download");
   if (button && mine === "ios") {
     button.href = IOS_BETA;
-    button.textContent = "Get iOS Beta";
+    button.textContent = words.ios;
     button.title = "TestFlight";
     document.getElementById("ios-beta")?.remove();
     return;
@@ -124,7 +132,7 @@ function wireCopy() {
       const done = button.textContent;
       try {
         await navigator.clipboard.writeText(text);
-        button.textContent = "copied";
+        button.textContent = words.copied;
       } catch {
         // Clipboard needs a secure context and permission; select the text instead.
         const range = document.createRange();
@@ -132,7 +140,7 @@ function wireCopy() {
         const sel = getSelection();
         sel.removeAllRanges();
         sel.addRange(range);
-        button.textContent = "copy";
+        button.textContent = done;
       }
       setTimeout(() => (button.textContent = done), 1500);
     });

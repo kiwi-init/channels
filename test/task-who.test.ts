@@ -7,10 +7,13 @@ import { AgentLive, AgentSession } from "../src/agent.ts";
 import { describeEvent, formatTask } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormedEvent, type Event, type Message } from "@kiwi/core/protocol.ts";
-import { formatCandidates, pickFor, taskCandidates } from "@kiwi/core/routing.ts";
+import { pickFor, taskCandidates, type Candidate } from "@kiwi/core/routing.ts";
+import { formatCandidates, reasonText } from "@kiwi/core/routing-text.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, pairComputer, setupChannel } from "./owner.ts";
+
+const withText = (cs: readonly Candidate[]) => cs.map(({ whys, ...c }) => ({ ...c, reasons: whys.map(reasonText) }));
 
 setDefaultTimeout(60_000);
 
@@ -58,14 +61,15 @@ describe("who has a task's context", () => {
     const busy = await ev("jon", { op: "task.add", title: "Unrelated", owner: "cy" });
     const s = fold([parent, sibling, next, busy], roster);
     const ranked = taskCandidates(s, next.seq);
-    expect(ranked).toEqual([
+    expect(ranked[1]?.whys).toEqual([{ kind: "sibling", task: sibling.seq, parent: parent.seq, warm: false }]);
+    expect(withText(ranked)).toEqual([
       { name: "ana", score: 3, queue: 1, reasons: [`worked T${parent.seq}, where it came from`], warm: false },
       { name: "bo", score: 2, queue: 1, reasons: [`worked T${sibling.seq}, also from T${parent.seq}`], warm: false },
       { name: "cy", score: 0, queue: 1, reasons: [], warm: false },
     ]);
     expect(pickFor(ranked)?.name).toBe("ana");
-    expect(taskCandidates(s, parent.seq)[0]).toMatchObject({ name: "ana", reasons: [`worked T${parent.seq} before`] });
-    expect(taskCandidates(s, parent.seq)[1]).toMatchObject({ name: "bo", reasons: [`worked T${sibling.seq}, a follow-up of it`] });
+    expect(withText(taskCandidates(s, parent.seq))[0]).toMatchObject({ name: "ana", reasons: [`worked T${parent.seq} before`] });
+    expect(withText(taskCandidates(s, parent.seq))[1]).toMatchObject({ name: "bo", reasons: [`worked T${sibling.seq}, a follow-up of it`] });
     expect(taskCandidates(s, 424242)).toEqual([]);
   });
 
@@ -131,7 +135,7 @@ describe("warm: work this session still holds", () => {
     expect(s.tasks.get(parent.seq)?.touched).toEqual({ ana: anaWorks.ts, bo: boWorks.ts });
     expect(s.members.get("ana")?.card?.fresh).toBe(anaWorks.ts + 1);
     const ranked = taskCandidates(s, next.seq);
-    expect(ranked.slice(0, 2)).toEqual([
+    expect(withText(ranked.slice(0, 2))).toEqual([
       { name: "bo", score: 7, queue: 0, reasons: [`worked T${parent.seq}, where it came from (this session)`], warm: true },
       { name: "ana", score: 3, queue: 1, reasons: [`worked T${parent.seq}, where it came from`], warm: false },
     ]);

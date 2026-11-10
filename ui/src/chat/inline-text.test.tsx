@@ -67,7 +67,7 @@ describe("task ids, #refs, URLs and mentions in cards are links (#1828)", () => 
     if (typeof onClick !== "function") throw new Error("T7 has no click handler")
     let stopped = false
     onClick({ stopPropagation: () => (stopped = true) })
-    expect(went).toEqual([{ to: "panel", panel: { kind: "task", task: 7 } }])
+    expect(went).toEqual([{ to: "task", task: 7 }])
     expect(stopped).toBe(true)
   })
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { PROTOCOL_VERSION, type Presence } from "@kiwi/core/protocol.ts";
 
-import { hear, onlineByName, PRESENCE_TTL, type Online } from "./online.ts";
+import { hear, onlineByName, PRESENCE_TTL, sharedOnline, type Online } from "./online.ts";
 
 const keyOf = new Map([
   ["win", "pk-win"],
@@ -58,5 +58,34 @@ describe("presence by key", () => {
     expect(onlineByName(old, keyOf, PRESENCE_TTL).has("win")).toBe(false);
     const next = hear(old, beacon("mac", "pk-mac"), PRESENCE_TTL);
     expect([...next.keys()]).toEqual(["pk-mac"]);
+  });
+});
+
+describe("the people shown as here keep their identity while nothing about them changed (T1787)", () => {
+  const shown = (beacons: (Presence & { sigOk: boolean })[], at: number) => onlineByName(heardAll(beacons, at), keyOf, at);
+
+  test("the same people heard again a moment later are the same map, so nothing downstream runs again", () => {
+    const first = shown([beacon("win", "pk-win"), beacon("mac", "pk-mac")], 1_000);
+    const again = shown([beacon("win", "pk-win"), beacon("mac", "pk-mac")], 16_000);
+    expect(again.get("win")?.at).toBe(16_000);
+    expect(sharedOnline(first, again)).toBe(first);
+  });
+
+  test("someone whose activity changed is new, the others are kept, and the map is a new one", () => {
+    const first = shown([beacon("win", "pk-win"), beacon("mac", "pk-mac")], 1_000);
+    const next = shown([beacon("win", "pk-win", { activity: { state: "working", tool: "Bash" } }), beacon("mac", "pk-mac")], 16_000);
+    const out = sharedOnline(first, next);
+    expect(out).not.toBe(first);
+    expect(out.get("mac")).toBe(first.get("mac")!);
+    expect(out.get("win")?.activity).toEqual({ state: "working", tool: "Bash" });
+    expect(sharedOnline(out, shown([beacon("win", "pk-win", { activity: { state: "working", tool: "Bash" } }), beacon("mac", "pk-mac")], 31_000))).toBe(out);
+  });
+
+  test("someone arriving or going makes a new map", () => {
+    const one = shown([beacon("win", "pk-win")], 1_000);
+    const two = shown([beacon("win", "pk-win"), beacon("mac", "pk-mac")], 2_000);
+    expect(sharedOnline(one, two)).not.toBe(one);
+    expect(sharedOnline(two, one)).not.toBe(two);
+    expect(sharedOnline(two, one).size).toBe(1);
   });
 });

@@ -699,6 +699,12 @@ kbd {
   color: var(--review);
 }
 
+.trust-note {
+  margin: 0;
+  padding: 10px 0 2px;
+  font: var(--t-meta) var(--ui);
+}
+
 .tone-decide {
   color: var(--decide);
 }
@@ -801,7 +807,7 @@ kbd {
   margin-top: 4px;
 }
 
-.modal.has-tabs .modal-head {
+.modal.has-tabs > .modal-head {
   border-bottom: 1px solid var(--line);
 }
 
@@ -816,8 +822,18 @@ kbd {
   overscroll-behavior: contain;
 }
 
-.modal.has-tabs .modal-body {
+.modal.has-tabs > .modal-body {
   padding-top: 20px;
+}
+
+.modal-form {
+  display: grid;
+  gap: 20px;
+}
+
+.modal-body:has(> .modal-form) {
+  margin-top: -4px;
+  padding-top: 4px;
 }
 
 .modal-foot {
@@ -971,6 +987,14 @@ kbd {
   color: inherit;
   cursor: pointer;
   pointer-events: auto;
+}
+
+.discard-ask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font: var(--t-ui) var(--ui);
 }
 
 .toast-close:hover {
@@ -1230,6 +1254,12 @@ html .md {
   margin: 4px 0 16px;
   color: var(--ink-2);
   font: var(--t-ui) / 1.6 var(--ui);
+}
+
+.crash-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 @keyframes dialog-in {

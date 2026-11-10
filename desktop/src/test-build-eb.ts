@@ -9,7 +9,7 @@ import { normalizeRelay } from "./guard.ts";
 import { launchArgs } from "./single-instance.ts";
 import { dataDir } from "./host-eb.ts";
 import { forceFrostForTest, frostAllowed, windowLooks } from "./native-eb.ts";
-import { mutate, openStore } from "./store.ts";
+import { brokenStore, mutate, openStore } from "./store.ts";
 
 declare const KIWI_EB_TEST: boolean;
 
@@ -20,7 +20,7 @@ export function openTestStore(first: () => void): boolean {
     first();
     openStore(testVault(dataDir));
     const relay = normalizeRelay(process.env.KIWI_EB_RELAY ?? "");
-    if (relay) mutate((s) => void (s.relayUrl = relay));
+    if (relay && !brokenStore()) mutate((s) => void (s.relayUrl = relay));
     return true;
   }
   return false;

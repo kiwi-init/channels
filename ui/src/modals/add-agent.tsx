@@ -1,5 +1,7 @@
+import "~/i18n/en/modals"
 import { useEffect, useId, useState } from "react"
 
+import { t } from "~/i18n/i18n"
 import { wantPersona } from "~/live/persona-later"
 import { Icon } from "~/kit/icons"
 import type { Channel } from "~/model"
@@ -27,12 +29,12 @@ function freeName(taken: Taken): string {
 }
 
 function nameProblem(name: string, taken: Taken): string | null {
-  if (!name) return "Give it a name."
-  if (name.length > 32) return "32 characters at most."
-  if (!/^[A-Za-z0-9._-]+$/.test(name)) return "Letters, numbers, dots, dashes and underscores only."
+  if (!name) return t("modals.add.agent.name.empty")
+  if (name.length > 32) return t("modals.add.agent.name.too.long")
+  if (!/^[A-Za-z0-9._-]+$/.test(name)) return t("modals.add.agent.name.chars")
   const why = taken.get(name.toLowerCase())
-  if (why === "in") return `${name} is already in this channel.`
-  if (why === "asking") return `${name} is already asking to join.`
+  if (why === "in") return t("modals.add.agent.name.in", { name })
+  if (why === "asking") return t("modals.add.agent.name.asking", { name })
   return null
 }
 
@@ -40,14 +42,7 @@ export function AddAgent({ channel, onClose }: { channel: Channel; onClose: () =
   const taken = takenNames(channel)
   const [name, setName] = useState(() => freeName(taken))
   return (
-    <Modal
-      dismiss="x"
-      onClose={onClose}
-      label="Add an agent"
-      title="Add an agent"
-      sub="Run the command in the folder it should work in. It installs kiwi if that computer has none, then asks to join; you check its code in Needs you."
-      className="add-body"
-    >
+    <Modal stays onClose={onClose} label={t("modals.add.agent.title")} title={t("modals.add.agent.title")} sub={t("modals.add.agent.sub")} className="add-body">
       <RunCommand channel={channel} name={name} setName={setName} taken={taken} />
     </Modal>
   )
@@ -65,7 +60,7 @@ function NameField({ name, setName, problem }: { name: string; setName: (name: s
   return (
     <div className="field">
       <label className="field-label" htmlFor={`${id}-name`}>
-        Name
+        {t("modals.add.agent.name")}
       </label>
       <input
         id={`${id}-name`}
@@ -94,11 +89,11 @@ function PersonaPick({ value, onPick, none }: { value: string; onPick: (id: stri
   return (
     <div className="field">
       <label className="field-label" htmlFor={id}>
-        Personality
+        {t("modals.add.agent.personality")}
       </label>
       <span className="add-select">
         <select id={id} className="input" value={value} onChange={(e) => onPick(e.target.value)}>
-          <option value="">None</option>
+          <option value="">{t("modals.add.agent.personality.none")}</option>
           {app.personas.map((p) => (
             <option key={p.id} value={p.id}>
               {p.label}
@@ -150,21 +145,21 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
     <>
       <NameField name={name} setName={setName} problem={problem} />
       {channel.youOwn || channel.youManageAgents ? (
-        <PersonaPick value={persona} onPick={setPersona} none={channel.youOwn ? "You can still pick one when you let it in." : "You can still pick one from its profile."} />
+        <PersonaPick value={persona} onPick={setPersona} none={channel.youOwn ? t("modals.add.agent.personality.later.owner") : t("modals.add.agent.personality.later.profile")} />
       ) : (
-        <p className="add-note">The owner picks its personality when they let it in.</p>
+        <p className="add-note">{t("modals.add.agent.personality.owner.picks")}</p>
       )}
       <div className="field">
-        <span className="field-label">Command</span>
+        <span className="field-label">{t("modals.add.agent.command")}</span>
         {failed ? (
           <div className="invite-failed">
-            <span>Couldn't make the command.</span>
+            <span>{t("modals.add.agent.command.failed")}</span>
             <button type="button" className="btn is-small" onClick={retry}>
-              Try again
+              {t("modals.add.agent.try.again")}
             </button>
           </div>
         ) : (
-          <CopyBox text={line} label="Copy command" disabled={!!problem} wrap />
+          <CopyBox text={line} label={t("modals.add.agent.copy.command")} disabled={!!problem} wrap />
         )}
       </div>
     </>
@@ -175,18 +170,18 @@ export function AddAgentCard({ channel }: { channel: Channel }) {
   const [name] = useState(() => freeName(takenNames(channel)))
   const { line, failed, retry } = useJoinCommand(channel.code, name, "")
   return (
-    <section className="add-card" aria-label="Add an agent">
-      <p className="add-card-title">Add an agent</p>
-      <p className="dim">Give this line to an agent you already run.</p>
+    <section className="add-card" aria-label={t("modals.add.agent.title")}>
+      <p className="add-card-title">{t("modals.add.agent.title")}</p>
+      <p className="dim">{t("modals.add.agent.card.hint")}</p>
       {failed ? (
         <div className="invite-failed">
-          <span>Couldn't make the command.</span>
+          <span>{t("modals.add.agent.command.failed")}</span>
           <button type="button" className="btn is-small" onClick={retry}>
-            Try again
+            {t("modals.add.agent.try.again")}
           </button>
         </div>
       ) : (
-        <CopyBox text={line} label="Copy command" wrap />
+        <CopyBox text={line} label={t("modals.add.agent.copy.command")} wrap />
       )}
     </section>
   )

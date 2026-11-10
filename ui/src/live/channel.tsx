@@ -1,8 +1,8 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
+import { memo, useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
-import { GENERAL_ROOM, type Message as Wire } from "@kiwi/core/protocol.ts"
-import { reviewNotRequired } from "@kiwi/core/prs.ts"
+import { GENERAL_ROOM, QUIET_MINUTES, reviewCheckOf, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { reviewStillRequired } from "@kiwi/core/prs.ts"
 import { dmPlace, fullyTrusted, placeKey, type ChannelState } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, saveRecent } from "@kiwi/channel/recent.ts"
 import { useChannel } from "@kiwi/channel/use-channel.ts"
@@ -16,13 +16,15 @@ import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/thre
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { withReach } from "~/live/reach"
-import { changeUnsent, nextUnsentKey, resendOf, unsentBlock, unsentIn } from "~/live/unsent"
-import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, tasksOf, theirsOf, type Pending } from "~/live/map"
+import { capUnsent, changeUnsent, landedOut, newSendId, nextUnsentKey, resendDue, retryUnsent, unsentBlock, unsentIn } from "~/live/unsent"
+import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, taskMentionsOf, theirsOf, type Pending } from "~/live/map"
+import { useTasksNow } from "~/live/tasks-now"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
 import { isMuted } from "~/live/mute"
+import { noteOwned } from "~/live/owned"
 import { usePrefs } from "~/live/prefs"
 import { busyOf, receiptsOf, withReceipts } from "~/live/receipts"
 import { t } from "~/i18n/i18n"
@@ -53,6 +55,7 @@ export interface View {
 }
 
 const PENDING_MAX = 50
+const RESEND_EVERY_MS = 15_000
 
 const LEADING = /^(?:\s*@([\p{L}\p{N}_.-]+)[\s,]*)+/u
 
@@ -73,6 +76,7 @@ export function sendOptions(state: ChannelState, messages: readonly Wire[], me: 
     ...(re !== undefined && opts.side ? { side: true } : {}),
     ...(to ? { to } : {}),
     ...(opts.block ? { block: opts.block } : {}),
+    ...(opts.id ? { id: opts.id, cid: opts.id } : {}),
   }
   if (where.kind === "dm") return { ...base, ...sendFrom(state, dmPlace(me, where.with), me) }
   if (where.kind === "task") return { ...base, ...sendFrom(state, { kind: "task", task: where.task }, me) }
@@ -140,12 +144,14 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const nicknames = useMemo(() => nicknamesOf(nicknameKey ? nicknameKey.split("\n").map((line) => ({ name: line.split("\u0000")[0] ?? "", display: line.split("\u0000")[1] })) : []), [nicknameKey])
   const pins = usePinsHere(requests)
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
-  const rows = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, pending), [state, messages, me, asks.askOf, pictures, pending])
+  const mine = useMemo(() => new Set(pending.some((p) => p.failed !== undefined && p.id) ? messages.flatMap((m) => (m.from === me ? [m.id] : [])) : []), [pending, messages, me])
+  const unsent = useMemo(() => landedOut(pending, mine), [pending, mine])
+  const rows = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, unsent), [state, messages, me, asks.askOf, pictures, unsent])
   const busy = useMemo(() => busyOf(people), [people])
   const receipts = useMemo(() => receiptsOf(state, shownWire, me, marks, pkOf, clock, busy), [state, shownWire, me, marks, pkOf, busy])
   const mapped = useMemo(() => kept(code, withReceipts(rows, receipts)), [code, rows, receipts])
   const leftOut = useMemo(() => (isOwner ? leftOutOf(state, shownWire, me) : []), [isOwner, state, shownWire, me])
-  const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
+  const listed = useTasksNow(state, asks.held, me, messages)
   const taskGroups = useMemo(() => groupsOf(state, me), [state, me])
   const specs = useMemo(() => specsOf(state, me), [state, me])
   const free = useMemo(() => freeOf(state), [state])
@@ -154,6 +160,15 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const { muted } = usePrefs()
   const rooms = useMemo(() => roomsOf(state, messages, me, seen, from).map((r) => (isMuted(muted, code, r.id) ? { ...r, muted: true as const } : r)), [state, messages, me, seen, from, muted, code])
   const directs = useMemo(() => directsOf(state, messages, me, seen), [state, messages, me, seen])
+  const taskMentions = useMemo(() => taskMentionsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
+  const tasks = useMemo(
+    () =>
+      listed.map((task) => {
+        const mentions = taskMentions.get(task.id)
+        return mentions ? { ...task, mentions } : task
+      }),
+    [listed, taskMentions]
+  )
   const threads = useMemo(() => threadsOf(state, messages, me, seen, from), [state, messages, me, seen, from])
   const follows = useMemo(() => followsIn(seen), [seen])
   const theirs = useMemo(() => theirsOf(state, messages, me), [state, messages, me])
@@ -167,7 +182,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const next = nextOf(state)
   const prs = useMemo(() => prsOf(state), [state])
   const issues = useMemo(() => issuesOf(state), [state])
-  const unguarded = useMemo(() => reviewNotRequired(state), [state])
+  const reviewCheck = reviewCheckOf(roomId)
+  const required = useMemo(() => reviewStillRequired(state, reviewCheck), [state, reviewCheck])
   const docs = useMemo(() => Object.fromEntries(state.docs), [state.docs])
   const mergedAt = useMemo(() => [...state.github.prs.values()].flatMap((p) => (p.state === "merged" ? [p.at] : [])), [state.github.prs])
 
@@ -197,9 +213,9 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(github ? { github } : {}),
       ...(state.githubWrite !== null ? { githubWrite: true } : {}),
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
+      ...(state.quietMs !== QUIET_MINUTES * 60_000 ? { quietMinutes: state.quietMs / 60_000 } : {}),
       ...(state.landing && state.landing !== "none" ? { landing: state.landing } : {}),
-      ...(state.merges === "people" ? { peopleMerge: true as const } : {}),
-      ...(unguarded.length ? { reviewNotRequired: unguarded } : {}),
+      ...(required.length ? { reviewStillRequired: { repos: required, check: reviewCheck } } : {}),
       rooms,
       directs,
       threads,
@@ -243,9 +259,10 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       github,
       state.githubWrite,
       state.branchPrefix,
+      state.quietMs,
       state.landing,
-      state.merges,
-      unguarded,
+      required,
+      reviewCheck,
       rooms,
       directs,
       threads,
@@ -277,7 +294,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       const key = nextUnsentKey()
       const body = text.trim()
       const imgs = opts.images?.length ? { imgs: opts.images } : {}
-      const plain = { ...sendOptions(state, messages, me, where, body, opts), ...imgs }
+      const id = opts.id ?? newSendId()
+      const plain = { ...sendOptions(state, messages, me, where, body, { ...opts, id }), ...imgs }
       const sealedIn = async (other: string): Promise<string | undefined> => {
         const had = dmRoomOf(state, me, other)
         if (had || !dmInRoom(channel, other)) return had
@@ -299,20 +317,31 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         where,
         text: body,
         at: Date.now(),
+        id,
+        ...(opts.first !== undefined ? { first: opts.first } : {}),
         ...(opts.inThread !== undefined ? { inThread: opts.inThread } : {}),
         ...(opts.side ? { side: true as const } : {}),
         ...(opts.replyTo !== undefined ? { replyTo: opts.replyTo } : {}),
         ...(opts.images?.length ? { images: opts.images } : {}),
         ...(opts.block ? { block: opts.block } : {}),
       }
-      setPending((list) => [...list.filter((p) => p.seq === undefined || !landed.has(p.seq)), next].slice(-PENDING_MAX))
+      setPending((list) => capUnsent([...list.filter((p) => p.seq === undefined || !landed.has(p.seq)), next], PENDING_MAX))
       try {
         const seq = await inTurn(async () => {
           const room = where.kind === "dm" ? await sealedIn(where.with) : undefined
           return send(
             body,
             room
-              ? { kind: "msg", room, ...(re !== undefined ? { re: [re] } : {}), ...(re !== undefined && opts.side ? { side: true } : {}), ...(opts.block ? { block: opts.block } : {}), ...imgs }
+              ? {
+                  kind: "msg",
+                  room,
+                  id,
+                  cid: id,
+                  ...(re !== undefined ? { re: [re] } : {}),
+                  ...(re !== undefined && opts.side ? { side: true } : {}),
+                  ...(opts.block ? { block: opts.block } : {}),
+                  ...imgs,
+                }
               : plain
           )
         })
@@ -352,18 +381,24 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   )
   const retry = useCallback(
     async (key: number): Promise<number> => {
-      const p = pending.find((x) => x.key === key)
-      if (!p) throw new Error(t("live.channel.message.gone"))
-      discard(key)
+      const block = unsentBlock(pending, key)
       try {
-        return await post(p.where, p.text, resendOf(p))
+        return await retryUnsent(pending, key, discard, post)
       } catch (err) {
-        if (p.block && refusal(err) !== null) giveBackBlock(p.block.id)
+        if (block && refusal(err) !== null) giveBackBlock(block)
         throw err
       }
     },
     [pending, discard, post]
   )
+  const resend = useEffectEvent(() => void resendDue(roomId, Date.now(), retry, mine))
+  const owed = connection === "live" && pending.some((p) => p.failed !== undefined)
+  useEffect(() => {
+    if (!owed) return
+    resend()
+    const timer = setInterval(resend, RESEND_EVERY_MS)
+    return () => clearInterval(timer)
+  }, [owed])
 
   const run = useMemo(
     (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard: toDraft, refreshRequests, refreshRoster, foldFrom, older }),
@@ -376,6 +411,10 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     closeOpened(code)
   }, [code, channel, run, gone, title])
   useLayoutEffect(() => () => closeOpened(code), [code])
+
+  useEffect(() => {
+    if (ready) noteOwned(code, isOwner)
+  }, [ready, code, isOwner])
 
   useEffect(() => {
     if (!isOwner || !ready || connection !== "live" || state.specsOnly !== null) return
@@ -425,7 +464,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   useEffect(() => {
     if (top > 0 && shown) markSeen(roomId, top, needs)
   }, [roomId, top, needs, shown])
-  const mentionsHere = rooms.reduce((n, r) => n + r.mentions, 0) + directs.reduce((n, d) => n + d.unread, 0)
+  const mentionsHere = rooms.reduce((n, r) => n + r.mentions, 0) + directs.reduce((n, d) => n + d.unread, 0) + [...taskMentions.values()].reduce((n, k) => n + k, 0)
   useEffect(() => setOpenNews({ room: roomId, unread: unreadHere, needs, mentions: mentionsHere }), [roomId, unreadHere, needs, mentionsHere])
   useEffect(() => () => setOpenNews(null), [roomId])
 
@@ -435,7 +474,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     if (!last && !others.length) return
     const lead = last ? state.lead : prior?.lead
     saveRecent(code, {
-      from: last ? (last.from === me ? "You" : last.from) : (prior?.from ?? ""),
+      from: last ? (last.from === me ? t("live.channel.recent.you") : last.from) : (prior?.from ?? ""),
       text: last ? last.body.slice(0, 120) : (prior?.text ?? ""),
       ts: last?.ts ?? prior?.ts ?? member.at,
       people: others.length ? others.map((p) => p.display ?? p.name) : (prior?.people ?? []),

@@ -6,6 +6,7 @@ import { pinned } from "@kiwi/core/pin.ts"
 import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scopes.ts"
 import { secrets } from "@kiwi/secrets/secrets.ts"
 import { t } from "~/i18n/i18n"
+import { Plain, plainly } from "~/kit/failed"
 import { announce } from "~/kit/toasts"
 import { newMemberPowers, newMemberScopes } from "~/live/defaults"
 import { attempt, event, memberOf, need, owner, personalities, say, setup } from "~/live/run"
@@ -18,13 +19,13 @@ import { inviteLine } from "@kiwi/app/join-line.ts"
 import type { Color } from "@kiwi/core/protocol.ts"
 import { openedChannel, openedRun, type Run } from "~/live/store"
 import type { Actions, JoinChoice, Powers } from "~/model"
-import { BRANCH_PREFIX_RE, isLanding, POWERS, ROOM_ID_RE, type Power } from "@kiwi/core/protocol.ts"
+import { BRANCH_PREFIX_RE, isLanding, MAX_QUIET_MINUTES, POWERS, quietMinutes, ROOM_ID_RE } from "@kiwi/core/protocol.ts"
 import { newRoomId, sponsorsAgent } from "@kiwi/core/state.ts"
 import { cleanRoomName, roomProblem, roomsAfter } from "@kiwi/app/rooms.ts"
+import { roomProblemWords } from "~/live/room-problem"
+import { SENT } from "~/sent"
 import { revokedComputer } from "@kiwi/app/forgotten-computers.ts"
 import { forgottenComputer } from "@kiwi/core/client/requests.ts"
-
-const POWER_WORDS: Record<Power, string> = { addsAgents: "add agents", answersDecisions: "answer decisions", managesAgents: "manage agents" }
 
 function agentManager(code: string, name: string): { run: Run; m: RosterMember } {
   const run = need(code)
@@ -142,7 +143,7 @@ export async function setPowers(code: string, name: string, powers: Partial<Powe
   for (const power of POWERS) {
     const on = powers[power]
     if (on === undefined || on === !!m[power]) continue
-    await event(run, `${on ? "gave" : "took"} ${name} ${on ? "" : "back "}the power to ${POWER_WORDS[power]}`, { op: "power.set", member: name, pk: m.pk, power, on, was: !!m[power] })
+    await event(run, `${on ? "gave" : "took"} ${name} ${on ? "" : "back "}the power to ${SENT.power[power]}`, { op: "power.set", member: name, pk: m.pk, power, on, was: !!m[power] })
   }
   await run.ch.updatePowers(m, {
     addsAgents: powers.addsAgents ?? !!m.addsAgents,
@@ -182,14 +183,16 @@ export async function setLanding(code: string, typed: string | null): Promise<vo
   await event(setup(code), then && then !== "none" ? `tasks land on: ${then}` : "tasks finish on approval", { op: "landing.set", then })
 }
 
-export async function setPeopleMerge(code: string, on: boolean): Promise<void> {
-  await event(setup(code), on ? "people merge pull requests" : "agents merge pull requests again", { op: "merges.set", by: on ? "people" : "agents" })
-}
-
 export async function setBranchPrefix(code: string, typed: string | null): Promise<void> {
   const prefix = typed?.trim() || null
   if (prefix && !BRANCH_PREFIX_RE.test(prefix)) throw new Error(t("live.manage.bad.branch.prefix"))
   await event(setup(code), prefix ? `branch prefix: ${prefix}` : "cleared the branch prefix", { op: "branch.prefix.set", prefix })
+}
+
+export async function setQuiet(code: string, typed: string): Promise<void> {
+  const minutes = Number(typed.trim())
+  if (!quietMinutes(minutes)) throw new Error(t("live.manage.bad.quiet", { max: String(MAX_QUIET_MINUTES) }))
+  await event(setup(code), `quiet time: ${minutes} min`, { op: "quiet.set", minutes })
 }
 
 export async function setGoal(code: string, goal: string): Promise<void> {
@@ -216,7 +219,7 @@ export const removeRepo = (code: string, repo: string): Promise<void> =>
 
 async function roomFolded(run: () => Run | null, room: { id: string; name: string }): Promise<void> {
   for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (run()?.state.rooms.get(room.id)?.name === room.name) return
-  throw new Error(t("live.manage.room.not.back", { room: room.name }))
+  throw new Plain(t("live.manage.room.not.back", { room: room.name }))
 }
 
 const picks = (run: Run, names: readonly string[]) =>
@@ -228,7 +231,8 @@ const picks = (run: Run, names: readonly string[]) =>
 const open = (rooms: Iterable<{ id: string; name: string; members?: unknown }>) => [...rooms].filter((r) => !r.members)
 
 const updateFirst = (err: unknown): never => {
-  throw new Error(/no such call|not a call|unknown call|makeRoom|changeRoom|leaveRoom/i.test(say(err)) ? t("live.manage.update.for.rooms") : say(err))
+  if (/no such call|not a call|unknown call|makeRoom|changeRoom|leaveRoom/i.test(say(err))) throw new Plain(t("live.manage.update.for.rooms"))
+  throw err
 }
 
 export async function leaveRoom(code: string, id: string): Promise<void> {
@@ -236,12 +240,17 @@ export async function leaveRoom(code: string, id: string): Promise<void> {
 }
 
 export async function addRoom(code: string, typed: string, members?: string[]): Promise<string> {
-  const run = setup(code)
+  const run = plainly(() => setup(code))
   const problem = roomProblem(run.state.rooms.values(), typed)
-  if (problem) throw new Error(problem)
+  if (problem) throw new Plain(roomProblemWords(problem))
   const name = cleanRoomName(typed)
   if (members?.length) {
-    const id = await run.ch.makeRoom(name, picks(run, members)).catch(updateFirst)
+    const id = await run.ch
+      .makeRoom(
+        name,
+        plainly(() => picks(run, members))
+      )
+      .catch(updateFirst)
     await roomFolded(() => openedRun(code), { id, name })
     return id
   }
@@ -257,7 +266,7 @@ export async function renameRoom(code: string, id: string, typed: string): Promi
   const run = setup(code)
   if (!run.state.rooms.has(id)) throw new Error(t("live.manage.room.missing"))
   const problem = roomProblem(run.state.rooms.values(), typed, id)
-  if (problem) throw new Error(problem)
+  if (problem) throw new Error(roomProblemWords(problem))
   const room = { id, name: cleanRoomName(typed) }
   if (run.state.rooms.get(id)?.members) {
     await run.ch.changeRoom(id, { name: room.name }).catch(updateFirst)
@@ -294,33 +303,29 @@ export async function answerJoin(code: string, id: string, yes: boolean, choice?
 }
 
 export const exportHistory: Actions["exportHistory"] = async (code, kind) => {
-  try {
-    const run = need(code)
-    const b = bridge()
-    if (b && !("saveFile" in b)) return announce(t("live.manage.save.needs.update"))
-    const [{ checkedState, exportNote, logExport, logFileName, transcript }, history] = await Promise.all([import("@kiwi/app/log-export.ts"), run.ch.history(0)])
-    const log = logExport(history)
-    const state = await checkedState(history, run.foldFrom, () => run.ch.snapshot().catch(() => null), run.state)
-    const at = new Date()
-    const title = openedChannel(code)?.title
-    const text = kind === "log" ? log.text : transcript({ title, log, state, nameOf: (from) => memberName(state.members.get(from), from), at })
-    const name = logFileName(title, at, kind)
-    if (b) {
-      const saved = await b.saveFile(name, text)
-      announce(t("live.manage.saved.downloads", { file: saved }))
-    } else {
-      const url = URL.createObjectURL(new Blob([text], { type: kind === "log" ? "application/jsonl" : "text/markdown" }))
-      const a = document.createElement("a")
-      a.href = url
-      a.download = name
-      a.click()
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    }
-    const note = exportNote(log)
-    if (!note.complete) announce(note.text)
-  } catch (err) {
-    announce(t("live.manage.not.saved", { why: err instanceof Error ? err.message : String(err) }), "error")
+  const run = plainly(() => need(code))
+  const b = bridge()
+  if (b && !("saveFile" in b)) throw new Plain(t("live.manage.save.needs.update"))
+  const [{ checkedState, exportNote, logExport, logFileName, transcript }, history] = await Promise.all([import("@kiwi/app/log-export.ts"), run.ch.history(0)])
+  const log = logExport(history)
+  const state = await checkedState(history, run.foldFrom, () => run.ch.snapshot().catch(() => null), run.state)
+  const at = new Date()
+  const title = openedChannel(code)?.title
+  const text = kind === "log" ? log.text : transcript({ title, log, state, nameOf: (from) => memberName(state.members.get(from), from), at })
+  const name = logFileName(title, at, kind)
+  if (b) {
+    const saved = await b.saveFile(name, text)
+    announce(t("live.manage.saved.downloads", { file: saved }))
+  } else {
+    const url = URL.createObjectURL(new Blob([text], { type: kind === "log" ? "application/jsonl" : "text/markdown" }))
+    const a = document.createElement("a")
+    a.href = url
+    a.download = name
+    a.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
   }
+  const note = exportNote(log)
+  if (!note.complete) announce(note.text)
 }
 
 export const forgetComputer: Actions["forgetComputer"] = (id) =>

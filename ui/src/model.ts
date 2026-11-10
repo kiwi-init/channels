@@ -3,6 +3,7 @@ import type { TextFont } from "@kiwi/app/theme.ts"
 import type { GithubHealth } from "@kiwi/core/github-health.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
+import type { Reason } from "@kiwi/core/routing.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import type { DocBlockRef, GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
 import type { DocEvent } from "../../desktop/src/bridge.ts"
@@ -171,6 +172,36 @@ export interface TaskEvent {
   root?: number
 }
 
+export type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land"
+
+export type RunTrouble = "failed" | "unseen" | "overran"
+
+export type TaskMover =
+  | { kind: "member"; name: string; move: MoveFor; question?: number; trouble?: RunTrouble }
+  | { kind: "waiting"; owner: string; ahead: number }
+  | { kind: "run"; behind: string; due: number }
+  | { kind: "hold"; until: number; reason: Words }
+  | { kind: "nobody" }
+
+export interface TaskQuiet {
+  with: string
+  since: number
+  from: number
+  every: number
+  step: 0 | 1 | 2 | 3
+}
+
+export interface TaskStep {
+  id: string
+  words: Words
+  by?: string
+  state: "done" | "skipped" | "current" | "next"
+  wait?: { reason: Words; until: number }
+  run?: { due: number }
+  trouble?: RunTrouble
+  yours?: true
+}
+
 export interface Task {
   id: number
   title: Words
@@ -189,11 +220,15 @@ export interface Task {
   history: TaskEvent[]
   archived: boolean
   cancelled?: boolean
-  lands?: { then: string; by?: string; waits?: string; bypassed?: string[]; ready?: true }
+  lands?: { then: string; by?: string; waits?: string }
+  mover?: TaskMover
+  quiet?: TaskQuiet
+  steps?: TaskStep[]
   closedWith?: Words
   youReview?: "verdict" | "send-back"
-  suggested?: { name: string; why: Words }
+  suggested?: { name: string; reason?: Reason }
   leftBy?: string
+  mentions?: number
 }
 
 type SpecStage = "draft" | "queued" | "working" | "delivered" | "accepted" | "dropped"
@@ -380,6 +415,7 @@ export interface Message {
   failed?: string
   mentionsYou?: boolean
   leftOut?: string
+  forged?: true
   fromDoc?: true
   receipt?: string
   edited?: number
@@ -416,6 +452,7 @@ export interface QuestionAsk {
   at: number
   text: Words
   label: string
+  plain?: true
   irreversible?: true
   options: Words[]
   holds: number[]
@@ -475,16 +512,7 @@ export interface ReviewAsk {
   task: number
 }
 
-export interface BypassAsk {
-  kind: "bypass"
-  id: string
-  at: number
-  from: string
-  task: number
-  missing: string[]
-}
-
-export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk | BypassAsk
+export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk
 
 export type HomeAct =
   | { kind: "options"; options: { shown: string; answer: string }[] }
@@ -501,15 +529,6 @@ export interface HomeAsk {
   act: HomeAct
 }
 
-export interface HomeTask {
-  id: number
-  title: string
-  who: string | null
-  state: string
-  busy: boolean
-  red: boolean
-}
-
 export interface HomeAgent {
   name: string
   nick: string
@@ -520,25 +539,15 @@ export interface HomeAgent {
   task: { id: number; title: string } | null
 }
 
-export interface HomeLine {
-  from: string
-  at: number
-  text: string
-}
-
 export interface HomeChannel {
   code: string
   title: string
   lead: string | null
   leadName: string | null
-  working: number
   asks: HomeAsk[]
-  moving: HomeTask[]
-  more: number
   doneToday: number
   red: number
   agents: HomeAgent[]
-  said: HomeLine | null
   loading?: true
 }
 
@@ -551,6 +560,8 @@ export interface ChannelTile {
   needsYou: number
   last: number
   muted?: true
+  own?: boolean
+  head?: number
 }
 
 export interface InviteInfo {
@@ -595,14 +606,14 @@ export interface Channel {
   newMembers?: "read" | "write"
   newPowers?: Powers
   repos: string[]
-  reviewNotRequired?: string[]
+  reviewStillRequired?: { repos: string[]; check: string }
   prs?: PullRequest[]
   issues?: Issue[]
   github?: GithubHealth
   githubWrite?: boolean
   branchPrefix?: string
+  quietMinutes?: number
   landing?: string
-  peopleMerge?: true
   rooms: Room[]
   directs: Direct[]
   threads?: ThreadItem[]
@@ -715,7 +726,6 @@ export interface Prefs {
   font: TextFont
   reduceMotion: boolean
   muted: string[]
-  enterSends: boolean
   darkTheme: string
   lightTheme: string
   customThemes: CustomTheme[]
@@ -728,6 +738,8 @@ export interface SendExtras {
   side?: true
   images?: Upload[]
   block?: DocBlockRef
+  id?: string
+  first?: number
 }
 
 export interface Folder {
@@ -743,6 +755,7 @@ export interface Actions {
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
   markRead(code: string, where: Where): void
+  markChannelRead(code: string, head?: number): void
   followThread(code: string, root: number, on: boolean): void
   openDoc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void): PipeIn
   findDoc(code: string, thread: string): Promise<string | null>
@@ -761,6 +774,7 @@ export interface Actions {
   answerStep(code: string, id: string, reply: StepReply): void
   answerJoin(code: string, id: string, letIn: boolean, choice?: JoinChoice): void
   approveTask(code: string, task: number, approve: boolean, why?: string): void
+  endStep(code: string, task: number, step: string): void
   addTask(code: string, ask: number, title: string): void
   setTaskStatus(code: string, task: number, status: TaskStatus): void
   cancelTask(code: string, task: number, why: string): void
@@ -770,7 +784,7 @@ export interface Actions {
   assignTask(code: string, task: number, to: string, why: string): void
   setReviewer(code: string, task: number, reviewer: string): void
   nameGoal(code: string, ask: number, name: string | null): void
-  newSpec(code: string, words: string, text: string): Promise<number | null>
+  newSpec(code: string, words: string, text: string): Promise<number>
   writeSpec(code: string, ask: number, text: string): void
   approveSpec(code: string, ask: number, v: number): void
   judgeSpec(code: string, ask: number, verdict: "accepted" | "back" | "dropped", note?: string): void
@@ -784,7 +798,7 @@ export interface Actions {
   setNickname(code: string, name: string, nickname: string | null): void
   setAgentColor(code: string, name: string, color: Color | null): void
   setPowers(code: string, name: string, powers: Partial<Powers>): void
-  addRoom(code: string, name: string, members?: string[]): Promise<string | null>
+  addRoom(code: string, name: string, members?: string[]): Promise<string>
   renameRoom(code: string, id: string, name: string): void
   setRoomMembers(code: string, id: string, members: string[]): Promise<boolean>
   setIcon(code: string, file: File | null): void
@@ -792,13 +806,13 @@ export interface Actions {
   clearFact(code: string, key: string): void
   setGithubWrite(code: string, on: boolean): void
   setBranchPrefix(code: string, prefix: string | null): void
+  setQuiet(code: string, minutes: string): void
   setLanding(code: string, then: string | null): void
-  setPeopleMerge(code: string, on: boolean): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void
   askCompact(code: string): void
-  approveCompact(code: string, proposal: number): void
+  approveCompact(code: string, proposal: number): Promise<void>
   addRepo(code: string, repo: string): void
   myRepos(): Promise<string[]>
   removeRepo(code: string, repo: string): void
@@ -820,10 +834,11 @@ export interface Actions {
   forgetComputer(id: string): void
   linkGithub(): void
   signInWithGithub(): void
+  cancelGithubSignIn(): void
   unlinkGithub(): void
   installUpdate(): void
   checkUpdate(): Promise<UpdateCheck | null>
-  setRelay(url: string): Promise<string | null>
+  setRelay(url: string): Promise<void>
   windowControl(action: "minimize" | "maximize" | "close"): void
   applyUi(): void
   dismissMoved(): void
@@ -842,7 +857,7 @@ export interface Actions {
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void
   savePersonalities(list: Personality[]): void
-  setHooks(harness: HookHarness, on: boolean): void
+  setHooks(harness: HookHarness, on: boolean): Promise<void>
   checkComputer(): Promise<Finding[] | null>
   setContextLine(on: boolean): void
   computerSettings(id: string): Promise<[string, string[]][]>

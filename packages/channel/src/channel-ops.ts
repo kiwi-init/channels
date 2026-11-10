@@ -1,13 +1,12 @@
 import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts";
 import type { PresenceFields } from "@kiwi/core/client.ts";
-import { RelayError } from "@kiwi/core/client/relay-errors.ts";
-import type { Outgoing } from "@kiwi/core/ship-gate.ts";
 
 import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, DocEvent, FollowEvent, HistoryAround, HistorySearch } from "../../../desktop/src/bridge.ts";
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts";
 import type { FoldInputs } from "../../../desktop/src/search-types.ts";
 import { errorOf, remoteOps } from "./channel-remote.ts";
 import { bridge } from "@kiwi/secrets/secrets.ts";
+import { refollowing } from "./refollow.ts";
 import { makeWatches, type Watches } from "./watch.ts";
 
 export { errorOf };
@@ -17,7 +16,7 @@ let picked: ChannelOps | null = null;
 let watching: Watches | null = null;
 
 export function watches(): Watches {
-  watching ??= makeWatches(ops());
+  watching ??= makeWatches({ follow: refollowing(ops().follow) });
   return watching;
 }
 
@@ -32,6 +31,7 @@ function lazyLocalOps(): ChannelOps {
     forget: (code) => local().then((o) => o.forget(code)),
     presence: (code, p) => local().then((o) => o.presence(code, p)),
     openRows: (code, rows) => local().then((o) => o.openRows(code, rows)),
+    reopenRows: (code, rows) => local().then((o) => o.reopenRows(code, rows)),
     olderRows: (code, before, limit) => local().then((o) => o.olderRows(code, before, limit)),
     indexRows: (code, rows, inputs, from) => local().then((o) => o.indexRows(code, rows, inputs, from)),
     searchHistory: (code, search) => local().then((o) => o.searchHistory(code, search)),
@@ -75,7 +75,6 @@ type Args<K extends ChannelCallName> = Parameters<ChannelCalls[K]>;
 
 export class ChannelLink {
   readonly isOwner: boolean;
-  beforeSend: ((body: string, opts: Omit<Outgoing, "from" | "body">) => Promise<string[]>) | null = null;
 
   constructor(
     readonly code: string,
@@ -123,7 +122,7 @@ export class ChannelLink {
   syncGithub = (...a: Args<"syncGithub">) => this.c("syncGithub", ...a);
   githubStatus = () => this.c("githubStatus");
   githubDiff = (...a: Args<"githubDiff">) => this.c("githubDiff", ...a);
-  postReviewCheck = (...a: Args<"postReviewCheck">) => this.c("postReviewCheck", ...a);
+  retireReview = (...a: Args<"retireReview">) => this.c("retireReview", ...a);
   commentOnPr = (...a: Args<"commentOnPr">) => this.c("commentOnPr", ...a);
   githubIssue = (...a: Args<"githubIssue">) => this.c("githubIssue", ...a);
   closeIssue = (...a: Args<"closeIssue">) => this.c("closeIssue", ...a);
@@ -148,18 +147,7 @@ export class ChannelLink {
   setIcon = (...a: Args<"setIcon">) => this.c("setIcon", ...a);
   close = () => this.c("close");
   leave = () => this.c("leave");
-  send = async (...[body, opts = {}]: Args<"send">) => {
-    const once = async () => {
-      const tickets = (await this.beforeSend?.(body, opts)) ?? [];
-      return this.c("send", body, tickets.length ? { ...opts, tickets } : opts);
-    };
-    try {
-      return await once();
-    } catch (err) {
-      if (!(err instanceof RelayError && err.tag === "Fenced")) throw err;
-      return once();
-    }
-  };
+  send = (...a: Args<"send">) => this.c("send", ...a);
   image = (...a: Args<"image">) => import("./image-bytes.ts").then((m) => m.heldImage(a[0]) ?? this.c("image", ...a));
   putImage = (...a: Args<"putImage">) => this.c("putImage", ...a);
   putFileData = (...a: Args<"putFileData">) => this.c("putFileData", ...a);
@@ -167,13 +155,14 @@ export class ChannelLink {
   history = (...a: Args<"history">) => this.c("history", ...a);
   presence = (p: PresenceFields) => this.via.presence(this.code, p);
   openRows = (rows: CachedRow[]) => this.via.openRows(this.code, rows);
+  reopenRows = (rows: CachedRow[]) => this.via.reopenRows(this.code, rows);
   olderRows = (before: number, limit: number) => this.via.olderRows(this.code, before, limit);
   indexRows = (rows: CachedRow[], inputs: FoldInputs, from: number) => this.via.indexRows(this.code, rows, inputs, from);
   searchHistory = (search: HistorySearch) => this.via.searchHistory(this.code, search);
   historyAround = (around: HistoryAround) => this.via.historyAround(this.code, around);
   keep = (state: object) => this.via.keep(this.code, state);
   openKept = (sealed: CachedKept) => this.via.openKept(this.code, sealed);
-  follow = (since: number, on: (e: FollowEvent) => void) => this.via.follow(this.code, since, on);
+  follow = (since: number, on: (e: FollowEvent) => void) => refollowing(this.via.follow)(this.code, since, on);
   doc = (thread: string, th: string | null, on: (e: DocEvent) => void) => this.via.doc(this.code, thread, th, on);
 }
 

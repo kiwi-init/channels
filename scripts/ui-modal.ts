@@ -33,7 +33,8 @@ try {
   const modal = page.locator("dialog.modal[open]");
 
   await page.goto(`http://127.0.0.1:${server.port}/?shot=general`);
-  await page.getByRole("button", { name: /: channel settings$/ }).click();
+  await page.getByRole("button", { name: /: channel menu$/ }).click();
+  await page.getByRole("menuitem", { name: "Channel settings", exact: true }).click();
   const settings = page.getByRole("dialog", { name: "Channel settings" });
   await settings.waitFor();
   expect((await panel.count()) === 0, "channel settings open in a modal, not the side panel");
@@ -99,7 +100,7 @@ try {
   for (const [shot, name, field] of [
     ["new-room", "New room", "Room name"],
     ["new-channel", "New channel", "Name"],
-    ["join", "Join a channel", "Invite link or code"],
+    ["join", "Join with a code", "Invite link or code"],
   ] as const) {
     await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
     await page.getByRole("dialog", { name }).waitFor();
@@ -109,10 +110,29 @@ try {
       return el instanceof HTMLInputElement ? (el.getAttribute("aria-label") ?? el.labels?.[0]?.textContent ?? "") : "";
     });
     expect(label.trim() === field, `${name} opens with its field focused`);
+    if (shot !== "new-channel") expect((await page.getByRole("dialog", { name }).getByRole("button", { name: "Cancel", exact: true }).count()) === 1, `${name} has a Cancel`);
+    await page.keyboard.type("x");
     await page.mouse.click(8, 400);
     await page.waitForTimeout(200);
-    expect((await modal.count()) === 1, `a click outside ${name} keeps its form`);
+    expect((await modal.count()) === 1, `a click outside ${name} keeps what was typed`);
+    await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
+    await page.getByRole("dialog", { name }).waitFor();
+    await page.mouse.click(8, 400);
+    await page.waitForTimeout(200);
+    expect((await modal.count()) === 0, `a click outside ${name} closes it while nothing is typed`);
   }
+
+  await page.goto(`http://127.0.0.1:${server.port}/?shot=specs`);
+  await page.getByRole("button", { name: "New spec" }).click();
+  const spec = page.getByRole("dialog", { name: "New spec" });
+  await spec.waitFor();
+  await page.keyboard.type("Posts from the keyboard");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(200);
+  expect((await modal.count()) === 1, "Enter in New spec is a new line");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await modal.waitFor({ state: "detached", timeout: 5000 }).catch(() => {});
+  expect((await modal.count()) === 0, "Cmd/Ctrl+Enter posts it");
 } finally {
   await browser.close();
   await server.stop(true);

@@ -31,10 +31,6 @@ Agents
                                                  digest) · intent, taste, irreversible, scope or choice
      --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click; don't use
                                                  Done / Not yet when you need the person to act: use --step
-     --check pre-ship|post --artifact pr:owner/repo#N@SHA|run:ID|npm:pkg@ver [--decider NAME]
-                                                 a check that gates the work it --holds: its first --option is the pass,
-                                                 and only the decider (your person by default) or the owner passes it;
-                                                 --replaces #N retires your own earlier check; others stay required
      --step --holds T7 --why "…" --needs-person "…"  a step only a person can do, with what it unblocks and why
                                                  an agent can't do it; both are required, as is what it holds
      --do "…" · --run "command" · --link URL    ordered instructions · copyable commands · where to go; repeat
@@ -47,10 +43,11 @@ Agents
                                                  chat, or no longer needed): it leaves Needs you, the feed says why
   kiwi reply N "text"                            answer message #N: to its sender, in #N's thread (rooms show
                                                  #N with its reply count); kiwi send --re N posts in the room too.
-                                                 A reply to a message sent to several claims it: the others stay quiet
-                                                 (10 minutes), and "X is answering #N" means someone else has it
-  kiwi answering N                               claim a message sent to several before a long answer, so nobody
-                                                 else starts on it
+                                                 The first reply to a message sent to several is its answer; a later
+                                                 agent's reply still goes out, under that answer (one each), and the
+                                                 Lead and anyone the message names always answer it directly
+  kiwi answering N                               say you're on a long answer to a message sent to several; a note
+                                                 for the others, it stops nobody
   kiwi react N ok/trailer [--clear]              react to message #N with one emoji, or a GIF (kiwi react --list shows them)
                                                  for a real moment: a win, a blocker, a thanks; never in place of an answer
   kiwi edit N "text" · kiwi delete N             change or remove your own message #N; whoever it reached hears of it
@@ -110,7 +107,9 @@ Agents
                                                  opens one with the author's TL;DR; its reviewer answers with task approve|reject T7 --round N|--at SHA
                                                  ["note"] [--file review.md], refused unless it's still the open round;
                                                  approve --runs 123,456 names the CI runs the PASS relies on (default:
-                                                 every run at that head), and the ship gate waits for them to succeed;
+                                                 every run at that head); the verdict stays here, on the round and in
+                                                 the task's thread: don't copy it to the pull request (a comment the
+                                                 project's own rules ask for there, like /vouch, still goes on the PR);
                                                  a run task (--then run) pins its rounds with --run ID instead of --at SHA
      task who T7                                 who has its context: agents ranked by the task it came from, its follow-ups,
                                                  who worked it, the folders they changed lately and their queue, with the reasons
@@ -119,16 +118,14 @@ Agents
                                                  with no NAME, to the top of task who
         --first                                  its owner's loop starts it before their other tasks, even one
                                                  they're doing; task first T7 marks an owned task the same way
+     task kept T7 [--at SHA] [--onto origin/main]   after a new commit on an approved task: checks in this checkout that it
+                                                 is still the approved code (the same tree, or only clean merges of the
+                                                 target branch) and records it, so the approval holds; anything else
+                                                 needs a new round (task review T7 --at SHA)
      task proof T7 https://… [--label preview] [--note "…"]   evidence on the task: a preview deploy, a recording, your
                                                  session; shown on the task page above its activity
-     task proof T7 --run ID [--started TIME]     a run task declares the run it ships as (before its review), then reports
-                                                 the run's own start time from its system, like a Job's status.startTime
-                                                 (2026-11-06T10:00:00Z); Kiwi can't verify a reported start, so it only
-                                                 shows a bypass. A GitHub Actions run whose run-name is the ID (or whose
-                                                 run id it is) gives a start Kiwi trusts: after a post check passed at
-                                                 that run, the task lands, if Kiwi holds every GitHub run since the
-                                                 task was created. A run that started before the task doesn't count.
-                                                 Otherwise a person or the lead closes it
+     task proof T7 --run ID                      a task with no PR declares the run it ships as, before its review:
+                                                 the round is pinned to that run (task review T7 --run ID)
      task checkpoint T7 --file note.md           where your work on it stands (branch, last commit, done, next, traps):
                                                  a new session of yours starts from it
         --fresh                                  in a kiwi loop session: end your turn after, and the loop starts a
@@ -137,13 +134,24 @@ Agents
                                                  question by its id; a new session of the lead starts from it
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it or you're the lead
                                                  (else it's only a note)
-     task add … --then merge|release:tag|release:npm:PKG@RANGE|run|none [--lander NAME]   what has to happen
-                                                 after its approval: the task stays landing until then (the channel's
-                                                 landing setting is the default); the lander (its owner unless named) lands it
+     task add … --then merge|release:tag|release:npm:PKG@RANGE|run|none [--lander NAME]   the steps after its
+                                                 approval, by a short name: merge is one step that ends when the PR
+                                                 merges, release:tag and release:npm add a release or publish step, run
+                                                 is one run step, none means approval finishes it (the channel's landing
+                                                 setting is the default); the lander (its owner unless named) moves them
+     task add … --then "words" [--by NAME] [--wait "24h why"] [--run ID --expect 2h] [--answered N]   repeat --then
+                                                 for a list of steps, each with its own mover (--by), a wait with its
+                                                 reason, a run it waits on with who is behind it, or a question whose
+                                                 first option ends it; the word merge ends when the PR merges
+     task landed T7 [--step ID] [--link URL] ["note"]   the current step is done (its mover, the lead or a person);
+                                                 a retry names the same --step, so it never ends the next one
+     task steps T7 [add "words" | remove ID | move ID [--before ID] | by ID NAME | skip ID "why" | wait ID 24h "why" | run ID RUN]
+                                                 its steps with their ids; the lead or a person changes them, and that
+                                                 never reopens review
      task close T7 "why"                         the lead or a person: done without its landing step, with the reason
                                                  kept apart from landed (a plain done can't skip landing)
-     task edit T7 [--title "…"] [--file body.md] [--owner NAME] [--then …] [--lander NAME] [--goal "…"]   the lead or a person: change
-                                                 a task's title, body (or --body "…"), owner or its ask's goal
+     task edit T7 [--title "…"] [--file body.md] [--owner NAME] [--lander NAME] [--review NAME|any] [--goal "…"]   the lead or a person: change
+                                                 a task's title, body (or --body "…"), owner, reviewer (an open round stays open) or its ask's goal
      task delete T7 ["why"]                      the lead or a person: a task filed by mistake leaves the board,
                                                  and the history keeps one line saying so
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
@@ -201,7 +209,7 @@ export const SHORT_HELP = `kiwi ${VERSION} — Channels: real-time coordination 
   kiwi reply N "text"                  answer message #N (one sent to several: yours alone)
   kiwi send "text" [--to WHERE]        post; WHERE: #general, #room, T7, @name or #123
   kiwi send <<'EOF' … EOF              text with backticks or $ (or --file PATH)
-  kiwi answering N                     claim a message sent to several before a long answer
+  kiwi answering N                     say you're on a long answer to a message sent to several
   kiwi react N 👍                      instead of repeating what someone said
   kiwi show N · kiwi log [--task T7]   one message in full · recent history
   kiwi task add "title" --ask N        a task for the person's message #N (--start: take it too)

@@ -3,7 +3,7 @@
 import { ROLE_LABEL } from "./personality.ts";
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
-import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange, REVIEW_CHECK } from "./protocol.ts";
+import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import { sentTo } from "./room-rules.ts";
@@ -32,8 +32,14 @@ import {
 import { evidenceOf, prLines, refText, stageOf, stageText } from "./stage.ts";
 import { changedSinceApproval, changedAfterApproval, freeAgents, specOfComment, specPlanner, specStage, specTitleOf } from "./state/specs.ts";
 import { commentsLine, commentsWaiting, specLine } from "./spec-lines.ts";
-import { landingWaits, reviewNotRequired, rulesText } from "./prs.ts";
-import { artifactText } from "./done-gate.ts";
+import { landingWaits, reviewStillRequired, rulesText } from "./prs.ts";
+import { currentStep, spanText, stepById, stepMove, type LandingStep, type StepEdit } from "./steps.ts";
+import { artifactWords, runSight } from "./state/landing-steps.ts";
+import { sayEvent, type EventKey, type EventSay } from "./event-words.ts";
+import { moverOf, moverTag, moverText } from "./mover.ts";
+import { clockOf, quietText } from "./clock.ts";
+
+const NUDGE_KEYS = ["task.nudge.queue", "task.nudge.wake", "task.nudge.lead", "task.nudge.owner"] as const;
 import { statusOf, statusWord } from "./status.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 export function tokensWord(n: number): string {
@@ -73,15 +79,14 @@ export function parseDuration(s: string): number {
   return Math.round(total);
 }
 
-const STATE_VERB: Record<TaskState | OldTaskState, string> = {
-  todo: "reopened",
-  doing: "started",
-  review: "sent for review",
-  landing: "approved, landing",
-  done: "finished",
-  // Older clients' states.
-  blocked: "is blocked on",
-  cancelled: "cancelled",
+const STATE_SAY: Record<TaskState | OldTaskState, EventKey> = {
+  todo: "task.reopened",
+  doing: "task.started",
+  review: "task.review",
+  landing: "task.landing",
+  done: "task.finished",
+  blocked: "task.blocked",
+  cancelled: "task.cancelled",
 };
 
 /** A task's state as people read it: "todo" on the wire is open. */
@@ -113,175 +118,191 @@ export function proofLabel(p: { url: string; label?: string }): string {
  */
 /** " via mac-mini": the computer that let an agent in, as its join reads. */
 
-export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle: string) => string = (handle) => handle): string {
+export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle: string) => string = (handle) => handle, say: EventSay = sayEvent): string {
   const ev = m.ev;
   if (!ev) return m.body;
   const task = (id: number) => {
     const title = state?.tasks.get(id)?.title;
     return title ? `${taskId(id)} “${title}”` : taskId(id);
   };
-  const note = (n?: string) => (n ? `: ${n}` : "");
-  const round = ev.op === "task.update" ? roundTag(state?.tasks.get(ev.task), m.seq, ev.round) : "";
+  const note = (n?: string) => (n ? say("note", { note: n }) : "");
+  const review = (r: string) => (r === "*" ? say("review.anyone") : say("review.by", { name: inlineText(nameOf(r), 40) }));
+  const round = ev.op === "task.update" ? roundTag(state?.tasks.get(ev.task), m.seq, ev.round, say) : "";
   switch (ev.op) {
     case "hello": {
       const who = state?.members.get(m.from);
       const role = ev.role && (who?.owner || who?.persona?.name === ev.role) ? ev.role : undefined;
       const about = ev.about && (who?.owner || who?.persona?.instructions === ev.about) ? ev.about : undefined;
-      return `joined${role ? ` as ${role}` : ""}${about ? ` (${about})` : ""}`;
+      if (role && about) return say("joined.as.about", { role, about });
+      if (role) return say("joined.as", { role });
+      return about ? say("joined.about", { about }) : say("joined");
     }
     case "role.set":
-      return ev.role ? `made ${nameOf(ev.member)} ${ev.role}${ev.about ? ` (${ev.about})` : ""}` : `cleared ${nameOf(ev.member)}'s role`;
+      return ev.role
+        ? ev.about
+          ? say("role.set.about", { name: nameOf(ev.member), role: ev.role, about: ev.about })
+          : say("role.set", { name: nameOf(ev.member), role: ev.role })
+        : say("role.cleared", { name: nameOf(ev.member) });
     case "role.refuse":
-      return `kept ${nameOf(ev.member)}'s role as it was`;
+      return say("role.kept", { name: nameOf(ev.member) });
     case "power.set": {
       const { power, on } = powerChange(ev);
-      return `${nameOf(ev.member)} ${on ? "now" : "no longer"} ${power.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`)}`;
+      return say(on ? "power.on" : "power.off", { name: nameOf(ev.member), power: say(`power.${power}`) });
     }
     case "picture.set":
-      return ev.picture ? "set their picture" : "cleared their picture";
+      return ev.picture ? say("picture.set") : say("picture.cleared");
     case "color.set":
-      return ev.color ? `${ev.member === m.from ? "picked" : `gave ${nameOf(ev.member)}`} the colour ${ev.color}` : `cleared ${ev.member === m.from ? "their" : `${nameOf(ev.member)}'s`} colour`;
+      if (ev.color) return ev.member === m.from ? say("color.picked", { color: ev.color }) : say("color.gave", { name: nameOf(ev.member), color: ev.color });
+      return ev.member === m.from ? say("color.cleared.own") : say("color.cleared", { name: nameOf(ev.member) });
     case "scope.set":
-      return `set what ${nameOf(ev.member)} may do: ${ev.scopes === null ? "full" : describeScopes(readScopes(ev.scopes) ?? [])}`;
+      return say("scope.set", { name: nameOf(ev.member), scopes: ev.scopes === null ? say("scope.full") : describeScopes(readScopes(ev.scopes) ?? []) });
     case "mode.set":
-      return `${ev.coordinatorOnly ? "turned on" : "turned off"} coordinator-only (gone: it no longer gates anything)`;
+      return ev.coordinatorOnly ? say("mode.on") : say("mode.off");
     case "room.seal":
-      return "changed a members-only room";
+      return say("room.seal");
     case "room.msg":
-      return "wrote in a members-only room";
+      return say("room.msg");
     case "room.create":
-      return ev.dm
-        ? "started a direct conversation"
-        : ev.self
-          ? "keeps their own notes"
-          : ev.members
-            ? `made the members-only room #${inlineText(ev.name, 40)}`
-            : `made the room #${inlineText(ev.name, 40)}`;
+      return ev.dm ? say("room.dm") : ev.self ? say("room.self") : say(ev.members ? "room.create.members" : "room.create", { room: inlineText(ev.name, 40) });
     case "room.members":
-      return "changed who a room is for";
+      return say("room.members");
     case "room.leave":
-      return "left a room";
+      return say("room.leave");
     case "doc.open":
-      return `started the shared doc of ${inlineText(ev.thread, 60)}`;
+      return say("doc.open", { thread: inlineText(ev.thread, 60) });
     case "room.rename": {
       // Rooms are named by id in the event; say which one it was, by its name now if it has another.
       const now = state?.rooms.get(ev.id)?.name;
       const name = inlineText(ev.name, 40);
-      return now && now !== name ? `renamed a room to #${name} (now #${now})` : `renamed a room to #${name}`;
+      return now && now !== name ? say("room.rename.now", { room: name, now }) : say("room.rename", { room: name });
     }
     case "seat.reclaim":
-      return `moved ${nameOf(ev.member)}'s seat to a new key (${ev.from} → ${ev.to}): the old key is out`;
+      return say("seat.reclaim", { name: nameOf(ev.member), from: ev.from, to: ev.to });
     case "task.add":
-      return `added task ${taskId(m.seq)} “${ev.title}”${ev.from !== undefined ? ` (from ${taskId(ev.from)})` : ""}${ev.issue ? ` from ${ev.issue.repo}#${ev.issue.number}` : ""}${ev.owner ? ` for ${nameOf(ev.owner)}` : ""}${ev.review ? `; ${reviewPhrase(ev.review === "*" ? "*" : nameOf(ev.review))}` : ""}`;
+      return say("task.add", {
+        task: `${taskId(m.seq)} “${ev.title}”`,
+        from: ev.from !== undefined ? say("task.add.from", { task: taskId(ev.from) }) : "",
+        issue: ev.issue ? say("task.add.issue", { issue: `${ev.issue.repo}#${ev.issue.number}` }) : "",
+        owner: ev.owner ? say("task.add.for", { name: nameOf(ev.owner) }) : "",
+        review: ev.review ? say("task.add.review", { review: review(ev.review) }) : "",
+      });
     case "card":
-      return `described itself: ${cardLine(ev) || "nothing"}`;
+      return say("card", { card: cardLine(ev) || say("card.nothing") });
     case "task.claim":
-      return `claimed ${task(ev.task)}`;
+      return say("task.claim", { task: task(ev.task) });
     case "task.first":
-      return `put ${task(ev.task)} before its owner's other tasks`;
+      return say("task.first", { task: task(ev.task) });
+    case "task.nudge":
+      return say(NUDGE_KEYS[ev.step], { task: task(ev.task), name: inlineText(ev.mover, 40) });
     case "task.landed":
-      return `landed ${task(ev.task)}: ${artifactText(ev.artifact)}`;
+      if (!("step" in ev)) return say("task.landed", { task: task(ev.task), at: artifactWords(ev.artifact) });
+      return ev.artifact
+        ? say("task.step.seen", { step: stepName(state, ev.task, ev.step), task: task(ev.task), at: artifactWords(ev.artifact) })
+        : say("task.step.done", { step: stepName(state, ev.task, ev.step), task: task(ev.task), note: note([ev.note, ev.link].filter(Boolean).join(" ") || undefined) });
+    case "task.steps":
+      return say("task.steps", { task: task(ev.task), what: stepEditText(ev.edit) });
     case "task.delete":
-      return `deleted ${taskId(ev.task)}${note(ev.why)}`;
+      return say("task.delete", { task: taskId(ev.task), note: note(ev.why) });
     case "task.update": {
-      if (ev.verdict === "approved" && ev.state === "done") return `approved ${task(ev.task)}${round}${note(ev.note)}`;
-      if (ev.verdict === "rejected" && ev.state === "doing") return `rejected ${task(ev.task)}${round}${note(ev.note)}`;
-      if (ev.state === "review") return `${STATE_VERB.review} ${task(ev.task)}${round}${note(ev.note)}`;
-      if (ev.state === "done" && state?.tasks.get(ev.task)?.review && state.tasks.get(ev.task)?.approvedBy === m.from) return `approved ${task(ev.task)}${note(ev.note)}`;
-      if (ev.review !== undefined && !ev.state)
-        return ev.review ? `asked for ${task(ev.task)} to be reviewed: ${reviewPhrase(ev.review === "*" ? "*" : nameOf(ev.review))}${note(ev.note)}` : `dropped the review on ${task(ev.task)}`;
-      if (ev.state === "blocked") return `is blocked on ${task(ev.task)}${note(ev.note)}`;
+      const t = task(ev.task);
+      if (ev.verdict === "approved" && ev.state === "done") return say("task.approved", { task: t, round, note: note(ev.note) });
+      if (ev.verdict === "rejected" && ev.state === "doing") return say("task.rejected", { task: t, round, note: note(ev.note) });
+      if (ev.state === "review") return say("task.review", { task: t, round, note: note(ev.note) });
+      if (ev.state === "done" && state?.tasks.get(ev.task)?.review && state.tasks.get(ev.task)?.approvedBy === m.from) return say("task.approved", { task: t, round: "", note: note(ev.note) });
+      if (ev.review !== undefined && !ev.state) return ev.review ? say("task.review.asked", { task: t, review: review(ev.review), note: note(ev.note) }) : say("task.review.dropped", { task: t });
+      if (ev.state === "blocked") return say("task.blocked", { task: t, note: note(ev.note) });
       // Handed over: given to someone, back to open for them to start.
-      if (ev.owner && (!ev.state || ev.state === "todo")) return `assigned ${task(ev.task)} to ${nameOf(ev.owner)}${note(ev.note)}`;
-      if (ev.state) return `${STATE_VERB[ev.state]} ${task(ev.task)}${note(ev.note)}`;
-      if (ev.owner) return `assigned ${task(ev.task)} to ${nameOf(ev.owner)}${note(ev.note)}`;
-      if (ev.owner === null) return `unassigned ${task(ev.task)}${note(ev.note)}`;
-      if (ev.title && ev.detail !== undefined) return `renamed ${taskId(ev.task)} to “${ev.title}” and rewrote its body`;
-      if (ev.title) return `renamed ${taskId(ev.task)} to “${ev.title}”`;
-      if (ev.detail !== undefined) return `rewrote ${task(ev.task)}'s body`;
-      if (ev.proof) return `added proof to ${task(ev.task)}: ${proofLabel(ev.proof)} ${ev.proof.url}${note(ev.note)}`;
-      return `noted on ${task(ev.task)}${note(ev.note)}`;
+      if (ev.owner && (!ev.state || ev.state === "todo")) return say("task.assigned", { task: t, name: nameOf(ev.owner), note: note(ev.note) });
+      if (ev.state) return say(STATE_SAY[ev.state], { task: t, round: "", note: note(ev.note) });
+      if (ev.owner) return say("task.assigned", { task: t, name: nameOf(ev.owner), note: note(ev.note) });
+      if (ev.owner === null) return say("task.unassigned", { task: t, note: note(ev.note) });
+      if (ev.title && ev.detail !== undefined) return say("task.renamed.rewrote", { task: taskId(ev.task), title: ev.title });
+      if (ev.title) return say("task.renamed", { task: taskId(ev.task), title: ev.title });
+      if (ev.detail !== undefined) return say("task.rewrote", { task: t });
+      if (ev.proof) return say("task.proof", { task: t, proof: proofLabel(ev.proof), url: ev.proof.url, note: note(ev.note) });
+      return say("task.noted", { task: t, note: note(ev.note) });
     }
     // Older clients' claims: still said, though they hold nothing now.
     case "claim":
-      return `claimed ${ev.paths.join(", ")} (claims are gone; this holds nothing)${note(ev.note)}`;
+      return say("claim", { paths: ev.paths.join(", "), note: note(ev.note) });
     case "release":
-      return ev.paths?.length ? `released ${ev.paths.join(", ")}` : "released all claims";
+      return ev.paths?.length ? say("release", { paths: ev.paths.join(", ") }) : say("release.all");
     case "fact.set":
-      if (/^answering #\d+$/.test(ev.key) && ev.value === m.from) return `is ${ev.key}`;
-      return `set ${ev.key} = ${ev.value}`;
+      if (/^answering #\d+$/.test(ev.key) && ev.value === m.from) return say("answering", { seq: ev.key.slice(11) });
+      return say("fact.set", { key: ev.key, value: ev.value });
     case "fact.del":
-      return `unset ${ev.key}`;
+      return say("fact.del", { key: ev.key });
     case "lease.take":
-      return `asked for ${ev.name} for ${span(ev.ttl)}${note(ev.note)}`;
+      return say("lease.take", { name: ev.name, ttl: span(ev.ttl), note: note(ev.note) });
     case "lease.free":
-      return `let go of ${ev.name}`;
+      return say("lease.free", { name: ev.name });
     case "charter.set":
-      return ev.text ? `set the goal: ${ev.text}` : "cleared the goal";
+      return ev.text ? say("charter.set", { text: ev.text }) : say("charter.cleared");
     case "compact.propose":
-      return `proposed compacting the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
+      return say("compact.propose", { through: String(ev.through), summary: inlineText(ev.summary, 200) });
     case "compact":
-      return `compacted the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
+      return say("compact", { through: String(ev.through), summary: inlineText(ev.summary, 200) });
     case "github":
       return githubLine(ev.items);
-    case "github.release":
-      if (ev.gone) return `${ev.repo} withdrew ${inlineText(ev.tag, 60)}: GitHub lists it as a prerelease or a draft now, not a release`;
-      return `${ev.repo} released ${inlineText(ev.tag, 60)}: ${ev.prs.length ? `${ev.prs.length} PR${ev.prs.length === 1 ? "" : "s"}, ` : ""}${ev.shas.length} commit${ev.shas.length === 1 ? "" : "s"}`;
+    case "github.release": {
+      const tag = inlineText(ev.tag, 60);
+      if (ev.gone) return say("github.gone", { repo: ev.repo, tag });
+      const commits = say(ev.shas.length === 1 ? "github.commit" : "github.commits", { count: String(ev.shas.length) });
+      if (!ev.prs.length) return say("github.release", { repo: ev.repo, tag, commits });
+      return say("github.release.prs", { repo: ev.repo, tag, prs: say(ev.prs.length === 1 ? "github.pr" : "github.prs", { count: String(ev.prs.length) }), commits });
+    }
     case "github.rules":
-      return `read ${ev.repo}'s rules for ${inlineText(ev.branch, 60)}: ${rulesText(ev)}`;
+      return say("github.rules", { repo: ev.repo, branch: inlineText(ev.branch, 60), rules: rulesText(ev) });
     case "repos.set":
-      return ev.repos.length ? `set the channel's repos: ${ev.repos.join(", ")}` : "cleared the channel's repos";
+      return ev.repos.length ? say("repos.set", { repos: ev.repos.join(", ") }) : say("repos.cleared");
     case "hold.set":
-      return ev.on ? `put the channel ON HOLD${note(ev.note)}. Agents: stop all work now and change nothing; only answer people until it's lifted` : "lifted the hold: agents may carry on";
+      return ev.on ? say("hold.on", { note: note(ev.note) }) : say("hold.off");
     case "voice.set":
-      return `${ev.on ? "allowed voice in" : "turned voice off for"} the channel (gone: Channels no longer has voice)`;
+      return ev.on ? say("voice.on") : say("voice.off");
     case "github.write.set":
-      return ev.on ? "let Kiwi write to GitHub: a comment links each new PR and issue to its task, and a task closing closes its issue" : "stopped Kiwi writing to GitHub";
+      return ev.on ? say("github.write.on") : say("github.write.off");
     case "branch.prefix.set":
-      return ev.prefix
-        ? `set the branch prefix to ${ev.prefix}: a PR from a branch like ${ev.prefix}7-… shows on task T7`
-        : "cleared the branch prefix: a PR shows on a task only when someone posts its link";
+      return ev.prefix ? say("branch.prefix.set", { prefix: ev.prefix }) : say("branch.prefix.cleared");
+    case "quiet.set":
+      return say("quiet.set", { time: spanText(ev.minutes * 60_000) });
     case "merges.set":
-      return ev.by === "people" ? "set who merges to people: agents leave a PR for a person to merge once its task's gate is open" : "set who merges to agents again";
+      return ev.by === "people" ? say("merges.people") : say("merges.agents");
     case "landing.set":
-      return ev.then && ev.then !== "none" ? `set how tasks land to ${ev.then}: an approved task stays landing until that has happened` : "set tasks to finish on approval again";
+      if (ev.steps) return say("landing.steps", { steps: ev.steps.map((x) => `“${inlineText(x.words, 80)}”`).join(", ") });
+      return ev.then && ev.then !== "none" ? say("landing.set", { then: ev.then }) : say("landing.approval");
     case "react":
-      return ev.emoji ? `reacted ${ev.emoji} to #${ev.seq}` : `took back the reaction on #${ev.seq}`;
+      return ev.emoji ? say("react", { emoji: ev.emoji, seq: String(ev.seq) }) : say("react.back", { seq: String(ev.seq) });
     case "msg.edit":
-      return `edited #${ev.seq}: ${ev.body}`;
+      return say("msg.edit", { seq: String(ev.seq), body: ev.body });
     case "msg.delete":
-      return `deleted #${ev.seq}`;
+      return say("msg.delete", { seq: String(ev.seq) });
     case "member.gone":
-      return `removed ${ev.member}'s key ${ev.pk.slice(0, 8)}${ev.why ? `: ${inlineText(ev.why, 200)}` : ""}`;
+      return say("member.gone", { name: ev.member, key: ev.pk.slice(0, 8), why: ev.why ? note(inlineText(ev.why, 200)) : "" });
     case "member.back":
-      return `let ${ev.member}'s key ${ev.pk.slice(0, 8)} back in`;
+      return say("member.back", { name: ev.member, key: ev.pk.slice(0, 8) });
     case "nickname.set":
-      return ev.nickname ? `called ${nameOf(ev.member)} ${inlineText(ev.nickname, 40)}` : `took ${nameOf(ev.member)}'s nickname away`;
+      return ev.nickname ? say("nickname.set", { name: nameOf(ev.member), nickname: inlineText(ev.nickname, 40) }) : say("nickname.cleared", { name: nameOf(ev.member) });
     case "ask.name":
-      return ev.name ? `named the goal of #${ev.ask}: ${inlineText(ev.name, 80)}` : `took back the goal's name of #${ev.ask}`;
+      return ev.name ? say("ask.name", { ask: String(ev.ask), name: inlineText(ev.name, 80) }) : say("ask.name.cleared", { ask: String(ev.ask) });
     case "ask.close":
-      return ev.why ? `closed #${ev.ask}: ${inlineText(ev.why, 160)}` : `closed #${ev.ask}`;
+      return ev.why ? say("ask.close", { ask: String(ev.ask), why: inlineText(ev.why, 160) }) : say("ask.closed", { ask: String(ev.ask) });
     case "devices":
-      return "updated their list of devices";
+      return say("devices");
     case "spec.set": {
       const spec = state?.specs.get(ev.ask);
-      const after = spec && changedAfterApproval(spec, m.seq) ? `changed #${ev.ask}'s spec after it was approved` : `wrote the spec of #${ev.ask}`;
-      return `${after}: ${inlineText(specTitleOf(ev.text) ?? ev.text, 120)}`;
+      const title = inlineText(specTitleOf(ev.text) ?? ev.text, 120);
+      return say(spec && changedAfterApproval(spec, m.seq) ? "spec.changed" : "spec.set", { ask: String(ev.ask), title });
     }
     case "spec.ready":
-      return `marked the spec of #${ev.ask} ready for approval`;
+      return say("spec.ready", { ask: String(ev.ask) });
     case "spec.approve":
-      return `approved the spec of #${ev.ask}: agents start it as soon as one is free`;
+      return say("spec.approve", { ask: String(ev.ask) });
     case "specs.only.set":
-      return ev.on ? "turned on Tasks only from approved specs: from now on a task is filed under a spec a person approved" : "turned off Tasks only from approved specs";
+      return ev.on ? say("specs.only.on") : say("specs.only.off");
     case "spec.result":
-      return ev.verdict === "accepted"
-        ? `accepted what #${ev.ask}'s spec delivered${note(ev.note)}`
-        : ev.verdict === "back"
-          ? `sent #${ev.ask}'s spec back${note(ev.note)}`
-          : `dropped #${ev.ask}'s spec${note(ev.note)}`;
+      return say(ev.verdict === "accepted" ? "spec.accepted" : ev.verdict === "back" ? "spec.back" : "spec.dropped", { ask: String(ev.ask), note: note(ev.note) });
     case "spec.delete":
-      return `deleted #${ev.ask}'s spec${note(ev.why)}`;
+      return say("spec.delete", { ask: String(ev.ask), note: note(ev.why) });
   }
 }
 
@@ -436,19 +457,99 @@ function takeSpec(m: Message, state?: ChannelState, me?: string): string {
   return state.lead === me || freeAgents(state).includes(me) ? `; it waits for an agent, so take it now: kiwi spec start ${ev.ask}` : "";
 }
 
-function taskLine(state: ChannelState, t: Task): string {
+function stepName(state: ChannelState | undefined, task: number, id: string): string {
+  const t = state?.tasks.get(task);
+  const step = t ? stepById(t, id) : undefined;
+  return step ? `${id} “${inlineText(step.words, 80)}”` : id;
+}
+
+export function stepEditText(edit: StepEdit): string {
+  switch (edit.kind) {
+    case "add":
+      return `+ “${inlineText(edit.step.words, 80)}”${edit.before ? ` < ${edit.before}` : ""}`;
+    case "remove":
+      return `− ${edit.id}`;
+    case "move":
+      return `${edit.id} ${edit.before ? `< ${edit.before}` : "→ ∎"}`;
+    case "by":
+      return `${edit.id} → ${edit.by ? `@${inlineText(edit.by, 40)}` : "∅"}`;
+    case "skip":
+      return `⤼ ${edit.id}: ${inlineText(edit.why, 200)}`;
+    case "wait":
+      return `${edit.id} ⏸ ${spanText(edit.ms)}: ${inlineText(edit.reason, 200)}`;
+    case "run":
+      return `${edit.id} ⏵ ${inlineText(edit.run, 80)}${edit.expected === undefined ? "" : ` ≤ ${spanText(edit.expected)}`}`;
+    default: {
+      const never: never = edit;
+      return never;
+    }
+  }
+}
+
+export function stepLines(state: ChannelState, t: Task, now: number): string[] {
+  const steps = t.steps ?? [];
+  if (!steps.length) return [];
+  const current = t.state === "landing" ? currentStep(t) : undefined;
+  const ended = steps.filter((x) => x.progress.kind === "ended").length;
+  const wide = Math.min(48, Math.max(...steps.map((x) => inlineText(x.words, 80).length)));
+  const rows = steps.map((step) => {
+    const who = inlineText(step.by ?? t.lander ?? t.owner ?? "nobody", 40);
+    const mark = step.progress.kind === "ended" ? (step.progress.end.how === "skipped" ? "–" : "✓") : step === current ? "→" : " ";
+    return `    ${mark} ${step.id.padEnd(3)} ${inlineText(step.words, 80).padEnd(wide)}  ${who}${stepTail(state, t, step, step === current, now)}`;
+  });
+  return [`  steps (${ended} of ${steps.length} ended${current ? `, ${current.id} is current` : ""}):`, ...rows];
+}
+
+function stepTail(state: ChannelState, t: Task, step: LandingStep, current: boolean, now: number): string {
+  if (step.progress.kind === "ended") {
+    const end = step.progress.end;
+    if (end.how === "skipped") return `  skipped ${ago(end.ts, now)} by ${inlineText(end.by, 40)}: ${inlineText(end.why, 200)}`;
+    if (end.how === "said")
+      return `  done ${ago(end.ts, now)}${end.by !== (step.by ?? t.lander ?? t.owner) ? ` by ${inlineText(end.by, 40)}` : ""}${end.note ? `: ${inlineText(end.note, 200)}` : ""}${end.link ? ` ${end.link}` : ""}`;
+    return `  done ${ago(end.ts, now)}${end.how === "detected" ? `: ${inlineText(end.saw, 120)}` : ""}`;
+  }
+  const seen = step.progress.seen ? `  seen early: ${inlineText(step.progress.seen.saw, 120)}` : "";
+  if (!current) {
+    const wait = step.wait ? `  not before +${spanText(step.wait.ms)}: ${inlineText(step.wait.reason, 120)}` : "";
+    const run = step.run ? `  waits on ${step.run.id ? `run ${inlineText(step.run.id, 60)}` : "a run"}, expected in ${spanText(step.run.expected)}` : "";
+    return `${wait}${run}${seen}`;
+  }
+  const move = stepMove(step, t.lander ?? t.owner, now, runSight(state.github, t, step));
+  switch (move.kind) {
+    case "waiting":
+      return `  not before ${spanText(Math.max(60_000, move.until - now))} from now: ${inlineText(move.reason, 120)}`;
+    case "run":
+      return `  run ${inlineText(step.run?.id ?? "", 60)} is expected within ${spanText(Math.max(60_000, move.due - now))}; nobody is paged meanwhile`;
+    case "member":
+      return move.why ? `  ${move.why}: ${inlineText(move.name, 40)} has the move` : "  current";
+    case "nobody":
+      return "  current, with nobody to move it";
+    default: {
+      const never: never = move;
+      return never;
+    }
+  }
+}
+
+function taskLine(state: ChannelState, t: Task, now?: number): string {
   const owner = t.owner ? ` @${inlineText(t.owner, 40)}` : t.leftBy ? ` (${inlineText(t.leftBy, 40)} left)` : "";
   const review = t.review && t.state !== "done" && t.state !== "landing" ? ` [${reviewPhrase(t.review)}]` : "";
   const stage = stageOf(state, t);
   const evidence = stage.pr || stage.declared ? ` · ${stageText(state, stage)}` : "";
-  const waits = landingWaits(state, t);
-  return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}${waits ? ` · ${waits}` : ""}`;
+  const waits = landingWaits(t);
+  return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}${waits ? ` · ${waits}` : ""}${moverTag(t, moverOf(state, t, now))}${quietTag(state, t, now)}`;
 }
 
-export function reviewRuleWarning(state: ChannelState): string | null {
-  const repos = reviewNotRequired(state);
+function quietTag(state: ChannelState, t: Task, now: number | undefined): string {
+  const clock = now === undefined ? undefined : clockOf(state, t, now);
+  const quiet = clock ? quietText(clock, state.quietMs) : undefined;
+  return quiet ? ` · ${quiet}` : "";
+}
+
+export function reviewRuleWarning(state: ChannelState, check: string): string | null {
+  const repos = reviewStillRequired(state, check);
   return repos.length
-    ? `warning: tasks here land on merge, but ${repos.join(", ")} doesn't require ${REVIEW_CHECK}, so a PR can merge before its task's gate is open (an owner step: require it in the repo's ruleset)`
+    ? `warning: ${repos.join(", ")} still require${repos.length === 1 ? "s" : ""} ${check}, which Kiwi has retired: it answers every pull request there green until the requirement is gone (an owner step: remove it from the repo's ruleset)`
     : null;
 }
 
@@ -459,8 +560,8 @@ export function askLine(head: AskHead | null): string {
   return head.goal ? `${inlineText(head.goal, 80)} (from ${said})` : said;
 }
 
-function groupedLines(state: ChannelState, tasks: Task[], indent: string): string[] {
-  return askGroups(state, tasks).flatMap((g) => [`${indent}${askLine(g.head)}`, ...g.tasks.map((t) => `${indent}${taskLine(state, t)}`)]);
+function groupedLines(state: ChannelState, tasks: Task[], indent: string, now?: number): string[] {
+  return askGroups(state, tasks).flatMap((g) => [`${indent}${askLine(g.head)}`, ...g.tasks.map((t) => `${indent}${taskLine(state, t, now)}`)]);
 }
 
 /** `build.cmd = cargo test  (win, 2h ago, 5h left)`. A value with several lines keeps its tail marked. */
@@ -489,6 +590,7 @@ export function presenceWords(on: { client: string; reach?: Reach; readAt?: numb
 
 export interface Snapshot {
   alias: string;
+  check: string;
   me: string;
   state: ChannelState;
   online: Map<string, { client: string; role?: string; reach?: Reach; readAt?: number; wake?: WakeVia }>;
@@ -544,7 +646,7 @@ export function issueLinkText(state: Pick<ChannelState, "githubWrite">): string 
 }
 
 /** `kiwi status --json`: the members a lead routes work between, by role and load. */
-export function statusJson({ alias, me, state, online, unread }: Snapshot) {
+export function statusJson({ alias, me, state, online, unread }: Omit<Snapshot, "check">) {
   const names = [...state.members.values()].filter((m) => m.active).map((m) => m.name);
   return {
     channel: alias,
@@ -566,7 +668,7 @@ export function leadLine(state: ChannelState, me: string): string | null {
   const lead = state.lead;
   if (!lead) return null;
   if (lead === me)
-    return "you are the lead: keep the board tidy, hand out what nobody has taken to whoever has its context, best one whose session still holds it (kiwi task who T7 ranks them; say why when you pick someone else), and follow up on what stalls. Everyone still talks to people directly";
+    return 'you are the lead: keep the board tidy, hand out what nobody has taken to whoever has its context, best one whose session still holds it (kiwi task who T7 ranks them; say why when you pick someone else), and follow up on what stalls. When a task\'s reviewer is away, move the review (kiwi task review T7 --review OTHER) or close the task (kiwi task close T7 "why"). Everyone still talks to people directly';
   return `lead: ${lead}, who keeps the board. Talk to people directly; mention ${lead} for anything nobody owns`;
 }
 
@@ -600,7 +702,7 @@ function heldLine(state: ChannelState, a: Message): string {
   return `${a.step ? " [step]" : a.decision ? ` [${a.decision}]` : ""}${held.length ? ` · holds ${held.join(", ")}` : ""}`;
 }
 
-export function formatStatus({ alias, me, state, online, unread, now = Date.now(), all = false }: Snapshot): string {
+export function formatStatus({ alias, check, me, state, online, unread, now = Date.now(), all = false }: Snapshot): string {
   const out: string[] = [];
   const meM = state.members.get(me);
   out.push(`channel ${alias} · you are ${me}${meM?.persona ? ` (${inlineText(meM.persona?.name, 80)})` : ""} · head #${state.head}${unread ? ` · ${unread} unread` : ""}`);
@@ -613,8 +715,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   const charter = charterLines(state);
   if (charter) out.push(charter);
   if (state.repos.length) out.push(`repos: ${state.repos.join(", ")}`);
-  if (state.merges === "people") out.push("who merges: people (agents leave pull requests for a person to merge)");
-  const ruleWarning = reviewRuleWarning(state);
+  const ruleWarning = reviewRuleWarning(state, check);
   if (ruleWarning) out.push(ruleWarning);
   const human = humanOf(state, me);
   const trusted = meM && !isPerson(meM) ? trustedOf(state).filter((x) => x !== human) : [];
@@ -694,7 +795,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   if (!active.length) out.push('  none — add one with: kiwi task add "…" --ask N');
   const order = ["doing", "review", "landing", "todo"];
   active.sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state) || a.id - b.id);
-  out.push(...groupedLines(state, active, "  "));
+  out.push(...groupedLines(state, active, "  ", now));
   if (state.leases.size) {
     out.push("", "leases:");
     for (const l of [...state.leases.values()].sort((a, b) => a.name.localeCompare(b.name))) out.push(`  ${leaseLine(l, me, now)}`);
@@ -710,19 +811,19 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   return out.join("\n");
 }
 
-export function formatTasks(state: ChannelState, opts: { all?: boolean; owner?: string } = {}): string {
+export function formatTasks(state: ChannelState, check: string, opts: { all?: boolean; owner?: string; now?: number } = {}): string {
   let tasks = [...state.tasks.values()];
   if (!opts.all) tasks = tasks.filter((t) => t.state !== "done" && !t.archived);
   if (opts.owner) tasks = tasks.filter((t) => t.owner === opts.owner);
-  const warning = reviewRuleWarning(state);
+  const warning = reviewRuleWarning(state, check);
   if (!tasks.length) return warning ? `${warning}\nno tasks` : "no tasks";
-  return [...(warning ? [warning] : []), ...groupedLines(state, tasks, "")].join("\n");
+  return [...(warning ? [warning] : []), ...groupedLines(state, tasks, "", opts.now)].join("\n");
 }
 
-export function roundTag(t: Task | undefined, seq: number, named: number | undefined): string {
+export function roundTag(t: Task | undefined, seq: number, named: number | undefined, say: EventSay = sayEvent): string {
   const r = t?.rounds.find((x) => x.seq === seq) ?? t?.rounds.find((x) => x.result.kind !== "open" && x.result.seq === seq) ?? (named !== undefined ? t?.rounds.find((x) => x.n === named) : undefined);
-  if (!r) return named !== undefined ? ` (round ${named})` : "";
-  return ` (round ${r.n}${r.at ? ` @ ${shortArtifact(r.at)}` : ""})`;
+  if (!r) return named !== undefined ? say("round", { n: String(named) }) : "";
+  return r.at ? say("round.at", { n: String(r.n), at: shortArtifact(r.at) }) : say("round", { n: String(r.n) });
 }
 
 function shortArtifact(at: string): string {
@@ -751,6 +852,11 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
     `  status: ${statusWord(statusOf(state, t))} (${stateWord(t.state)})${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : t.leftBy ? ` · unassigned: ${inlineText(t.leftBy, 40)} left the channel` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
   ];
+  const mover = moverOf(state, t, now);
+  if (mover) out.push(`  move: ${moverText(mover)}`);
+  const clock = clockOf(state, t, now);
+  const quiet = clock ? quietText(clock, state.quietMs) : undefined;
+  if (quiet) out.push(`  ${quiet}`);
   const stage = stageOf(state, t);
   out.push(`  stage: ${stageText(state, stage)}`);
   if (stage.pr) out.push(...prLines(state, stage.pr));
@@ -766,12 +872,10 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
     out.push(
       `  ${reviewPhrase(t.review)}${t.review !== "*" && state.members.get(t.review)?.active === false ? " (they left the channel)" : ""}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`,
     );
-  if (t.then) out.push(`  lands on: ${t.then}, landed by ${inlineText(t.lander ?? t.owner ?? "its owner", 40)}${t.state === "landing" ? " (approved, not landed yet)" : ""}`);
-  const waits = landingWaits(state, t);
+  const waits = landingWaits(t);
   if (waits) out.push(`  ${waits}`);
+  out.push(...stepLines(state, t, now));
   if (t.closedWith) out.push(`  closed without landing: ${inlineText(t.closedWith, 200)}`);
-  if (t.landed) out.push(`  landed: ${artifactText(t.landed.artifact)}`);
-  if (t.landed) out.push(`  landed: ${artifactText(t.landed.artifact)}`);
   const open = openRound(t);
   if (open?.summary) out.push("", `round ${open.n} summary:`, markedText(open.summary));
   if (t.rounds.length) {

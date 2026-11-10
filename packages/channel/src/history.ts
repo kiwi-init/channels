@@ -12,13 +12,14 @@
 // page loads the usual window. The cache does not fill a gap or sort ahead of
 // the relay. See history-plan.ts.
 
-import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
+import type { CachedKept, CachedRow, Reopened, Unread } from "@kiwi/core/cache-row.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { planReload } from "./history-plan.ts";
 import { markOnce } from "./marks.ts";
 
 export type { CachedKept, CachedRow };
 export type OpenRows = (rows: CachedRow[]) => Promise<(Message | Unread | null)[]>;
+export type ReopenRows = (rows: CachedRow[]) => Promise<Reopened>;
 
 export interface HistoryDb {
   put(roomId: string, memberPk: string, row: CachedRow): Promise<void>;
@@ -91,15 +92,26 @@ function idb(): HistoryDb {
   const newestIn = async (keys: IDBKeyRange, count: number): Promise<CachedRow[]> => {
     const db = await openDb();
     return new Promise<CachedRow[]>((resolve, reject) => {
-      const out: CachedRow[] = [];
-      const req = db.transaction(STORE, "readonly").objectStore(STORE).openCursor(keys, "prev");
-      req.onsuccess = () => {
-        const cursor = req.result;
-        if (!cursor || out.length >= count) return resolve(out.reverse());
-        out.push(cursor.value as CachedRow);
-        cursor.continue();
+      if (count <= 0) return resolve([]);
+      const store = db.transaction(STORE, "readonly").objectStore(STORE);
+      const walk = store.openKeyCursor(keys, "prev");
+      let newest: IDBValidKey | null = null;
+      const read = (oldest: IDBValidKey) => {
+        const all = store.getAll(IDBKeyRange.bound(oldest, newest), count);
+        all.onsuccess = () => resolve(all.result as CachedRow[]);
+        all.onerror = () => reject(all.error);
       };
-      req.onerror = () => reject(req.error);
+      walk.onsuccess = () => {
+        const cursor = walk.result;
+        if (newest === null) {
+          if (!cursor) return resolve([]);
+          newest = cursor.key;
+          if (count === 1) return read(newest);
+          return cursor.advance(count - 1);
+        }
+        read(cursor ? cursor.key : keys.lower);
+      };
+      walk.onerror = () => reject(walk.error);
     });
   };
   const run = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | void, name: string = STORE): Promise<T> => {
@@ -178,6 +190,17 @@ export const rememberRow = (roomId: string, memberPk: string, row: CachedRow): P
 export interface OpenedCache {
   stored: number;
   opened: (Message | Unread)[];
+}
+
+export async function reopenCached(roomId: string, memberPk: string, reopenRows: ReopenRows, limit: number): Promise<OpenedCache> {
+  const stored = await db().newest(roomId, memberPk, limit);
+  markOnce("kiwi:cache-read");
+  const { opened, rows } = await reopenRows(stored);
+  if (rows.length)
+    void db()
+      .putRows(roomId, memberPk, rows)
+      .catch(() => {});
+  return { stored: stored.length, opened: opened.filter((m): m is Message | Unread => m !== null) };
 }
 
 export async function openCached(roomId: string, memberPk: string, openRows: OpenRows, limit: number): Promise<OpenedCache> {

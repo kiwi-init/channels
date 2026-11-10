@@ -1,3 +1,4 @@
+import "~/i18n/en/specs"
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type SyntheticEvent } from "react"
 
 import { AttachedFiles, DropHint, IMAGE_TYPES, useAttach } from "~/chat/attach"
@@ -5,11 +6,13 @@ import { preview } from "~/chat/preview"
 import { withExcerpt } from "~/chat/quote"
 import { composing, sendsOn, sendTitle, type SendKey } from "~/chat/send-keys"
 import { listId, Suggestions, useSuggest } from "~/chat/suggest"
+import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel, Message, SendExtras, Spec, Upload, Where } from "~/model"
 import { nickname } from "~/names"
-import { useAct, useApp } from "~/nav"
+import { useAct } from "~/nav"
 import { splitQuote } from "~/specs/read"
 import { wordsRaw } from "~/words"
 
@@ -37,9 +40,9 @@ export function commentOf(ask: number, text: string, files: readonly Upload[], q
 
 type Key = SendKey & { preventDefault(): void }
 
-export function commentKeys(enterSends: boolean, send: () => void, cancel?: () => void): (e: Key) => void {
+export function commentKeys(send: () => void, cancel?: () => void): (e: Key) => void {
   return (e) => {
-    if (sendsOn(e, enterSends)) {
+    if (sendsOn(e)) {
       e.preventDefault()
       send()
       return
@@ -67,26 +70,29 @@ export function CommentBox({
   onDone?: () => void
 }) {
   const { actions, toast } = useAct()
-  const enterSends = useApp().app.prefs.enterSends
   const [text, setText] = useState("")
   const [files, setFiles] = useState<Upload[]>([])
   const box = useRef<HTMLTextAreaElement>(null)
+  const field = useRef<HTMLDivElement>(null)
   const zone = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
   const typed = (value: string, at: number) => {
     setText(value)
     s.moved(at)
   }
-  const s = useSuggest({ channel, id: `spec:${channel.code}:${spec.ask}${quote ? ":quote" : ""}`, text, area: box, onText: typed })
+  const s = useSuggest({ channel, id: `spec:${channel.code}:${spec.ask}${quote ? ":quote" : ""}`, text, area: box, onText: typed, withFormer: true })
   const { attach, paste, reading, dropping, dropZone } = useAttach({ files, setFiles, zone, toast })
   useEffect(() => {
     if (quote || reply) box.current?.focus()
   }, [quote, reply])
   useLayoutEffect(() => {
     const el = box.current
-    if (!el) return
+    const hold = field.current
+    if (!el || !hold) return
+    hold.style.minHeight = `${hold.offsetHeight}px`
     el.style.height = "auto"
     el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`
+    hold.style.minHeight = ""
   }, [text])
   const ready = !reading && !!commentOf(spec.ask, text, files)
   const send = () => {
@@ -99,8 +105,8 @@ export function CommentBox({
     if (reply) onUnreply?.()
     onDone?.()
   }
-  const sendKeys = commentKeys(enterSends, send, reply ? onUnreply : onDone)
-  const title = sendTitle(enterSends)
+  const sendKeys = commentKeys(send, reply ? onUnreply : onDone)
+  const title = sendTitle()
   const who = reply ? nickname(channel, reply.to.from) : ""
   const line = reply ? (reply.excerpt ?? preview(splitQuote(wordsRaw(reply.to.text)).text)).replace(/\s+/g, " ") : ""
   return (
@@ -111,24 +117,26 @@ export function CommentBox({
         <div className={cx("compose-reply", reply.excerpt && "is-excerpt")}>
           <Icon name="reply" size={13} />
           <span className="compose-reply-text">
-            {reply.excerpt ? "Quoting" : "Replying to"} <b>{who}</b>{" "}
+            {tr(reply.excerpt ? "specs.comment.quoting" : "specs.comment.replying.to", { who: <b>{who}</b> })}{" "}
             <span className={reply.excerpt ? "compose-reply-excerpt" : "dim"}>{reply.excerpt ? `“${line.slice(0, 160)}${line.length > 160 ? "…" : ""}”` : line.slice(0, 160)}</span>
           </span>
-          <button type="button" className="compose-reply-x" aria-label="Cancel reply" title="Cancel reply (Esc)" onClick={onUnreply}>
+          <button type="button" className="compose-reply-x" aria-label={t("specs.comment.cancel.reply")} title={t("specs.comment.cancel.reply.title")} onClick={onUnreply}>
             <Icon name="close" size={13} />
           </button>
         </div>
       )}
       <Suggestions channel={channel} s={s} />
-      <div className="spec-box-field">
+      <div ref={field} className="spec-box-field">
         <textarea
           ref={box}
           className="textarea spec-box-text"
           rows={quote ? 3 : 1}
           value={text}
-          placeholder={quote ? "Say what's off, or ask about it" : reply ? (reply.excerpt ? "Say something about it" : `Reply to ${who}`) : "Comment"}
-          title={quote ? undefined : "Or select words in the spec to comment on them"}
-          aria-label={quote ? "Comment on the selected words" : reply ? `Reply to ${who}` : "Comment on the spec"}
+          placeholder={
+            quote ? t("specs.comment.placeholder.quote") : reply ? (reply.excerpt ? t("specs.comment.placeholder.excerpt") : t("specs.comment.reply.to", { who })) : t("specs.comment.placeholder")
+          }
+          title={quote ? undefined : t("specs.comment.select.hint")}
+          aria-label={quote ? t("specs.comment.label.quote") : reply ? t("specs.comment.reply.to", { who }) : t("specs.comment.label.spec")}
           aria-autocomplete="list"
           aria-expanded={s.count > 0}
           aria-controls={listId(s)}
@@ -140,7 +148,7 @@ export function CommentBox({
           }}
           onPaste={paste}
         />
-        <button type="button" className="spec-box-attach" aria-label="Add an image" title="Add an image" onClick={() => picker.current?.click()}>
+        <button type="button" className="spec-box-attach" aria-label={t("specs.comment.add.image")} title={t("specs.comment.add.image")} onClick={() => picker.current?.click()}>
           <Icon name="image" size={16} />
         </button>
         <input
@@ -160,11 +168,11 @@ export function CommentBox({
         <div className="spec-box-foot">
           {onDone && quote && (
             <button type="button" className="btn is-quiet is-small" onClick={onDone}>
-              Cancel
+              {t("specs.comment.cancel")}
             </button>
           )}
           <button type="button" className={cx("btn", quote && "is-small")} title={title} disabled={!ready} onClick={send}>
-            {reply && !quote ? "Reply" : "Comment"}
+            {reply && !quote ? t("specs.comment.reply") : t("specs.comment.comment")}
           </button>
         </div>
       )}

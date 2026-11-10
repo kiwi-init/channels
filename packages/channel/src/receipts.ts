@@ -58,20 +58,40 @@ const nickOf = (state: Pick<ChannelState, "members">, name: string): string => s
  * Only recipients that have ever sent a mark count (an older kiwi never does, and would read as unread for
  * good); none of them: nothing. A time only when this view heard it happen.
  */
-export function receipt(m: Message, state: Pick<ChannelState, "members" | "tasks" | "lead">, marks: Marks, pkOf: (name: string) => string | undefined, time: (ts: number) => string): string | null {
+export type Receipt = { kind: "delivered" } | { kind: "read"; at?: number } | { kind: "everyone"; at?: number } | { kind: "some"; names: string[] } | { kind: "count"; read: number; of: number };
+
+export function receiptOf(m: Message, state: Pick<ChannelState, "members" | "tasks" | "lead">, marks: Marks, pkOf: (name: string) => string | undefined): Receipt | null {
   const to = recipients(m, state).filter((n) => {
     const pk = pkOf(n);
     return !!pk && marks.has(pk);
   });
   if (!to.length) return null;
   const read = to.map((n) => ({ n, r: readAt(marks, pkOf(n), m.seq) })).filter((x): x is { n: string; r: { at: number | null } } => x.r !== null);
-  if (!read.length) return "Delivered";
+  if (!read.length) return { kind: "delivered" };
   const times = read.map((x) => x.r.at);
   // Only when every one of them was heard live: otherwise the newest time could be off.
-  const when = times.every((t): t is number => t !== null) ? ` ${time(Math.max(...times))}` : "";
-  if (to.length === 1) return `Read${when}`;
-  if (read.length === to.length) return `Read by everyone${when}`;
-  return read.length <= 3 ? `Read by ${read.map((x) => nickOf(state, x.n)).join(", ")}` : `Read by ${read.length} of ${to.length}`;
+  const at = times.every((t): t is number => t !== null) ? { at: Math.max(...times) } : {};
+  if (to.length === 1) return { kind: "read", ...at };
+  if (read.length === to.length) return { kind: "everyone", ...at };
+  return read.length <= 3 ? { kind: "some", names: read.map((x) => nickOf(state, x.n)) } : { kind: "count", read: read.length, of: to.length };
+}
+
+export function receipt(m: Message, state: Pick<ChannelState, "members" | "tasks" | "lead">, marks: Marks, pkOf: (name: string) => string | undefined, time: (ts: number) => string): string | null {
+  const r = receiptOf(m, state, marks, pkOf);
+  if (!r) return null;
+  const when = "at" in r && r.at !== undefined ? ` ${time(r.at)}` : "";
+  switch (r.kind) {
+    case "delivered":
+      return "Delivered";
+    case "read":
+      return `Read${when}`;
+    case "everyone":
+      return `Read by everyone${when}`;
+    case "some":
+      return `Read by ${r.names.join(", ")}`;
+    case "count":
+      return `Read by ${r.read} of ${r.of}`;
+  }
 }
 
 /** What an agent is doing now, as the app shows it: "thinking", "running Bash", and since when. */
@@ -82,16 +102,21 @@ export interface Busy {
 
 const ANSWERING = (seq: number): string => `answering #${seq}`;
 
-function lasted(ms: number): string {
-  const m = Math.floor(ms / 60_000);
-  return m < 1 ? "" : m < 60 ? ` ${m}m` : ` ${Math.floor(m / 60)}h`;
+export interface OnIt {
+  name: string;
+  busy: Busy | null;
+  minutes: number;
+}
+
+function lasted(minutes: number): string {
+  return minutes < 1 ? "" : minutes < 60 ? ` ${minutes}m` : ` ${Math.floor(minutes / 60)}h`;
 }
 
 /**
  * Who has a message: the agent holding its `kiwi answering` claim, while it lasts, else a recipient that
  * was handed it (a read mark past it) and is busy now. Null once a recipient has replied in its thread.
  */
-export function onIt(
+export function onItOf(
   m: Message,
   state: Pick<ChannelState, "members" | "tasks" | "lead" | "facts">,
   marks: Marks,
@@ -99,7 +124,7 @@ export function onIt(
   busy: (name: string) => Busy | null,
   replied: (from: readonly string[]) => boolean,
   now: number,
-): string | null {
+): OnIt | null {
   const to = recipients(m, state);
   if (!to.length || replied(to)) return null;
   const claim = state.facts.get(ANSWERING(m.seq));
@@ -107,6 +132,11 @@ export function onIt(
   const who = held ?? to.find((n) => readAt(marks, pkOf(n), m.seq) !== null && busy(n) !== null);
   if (!who) return null;
   const b = busy(who);
-  const name = nickOf(state, who);
-  return b ? `${name} is on it · ${b.text}${b.since ? lasted(now - b.since) : ""}` : `${name} is on it`;
+  return { name: nickOf(state, who), busy: b, minutes: b?.since ? Math.floor((now - b.since) / 60_000) : 0 };
+}
+
+export function onIt(...args: Parameters<typeof onItOf>): string | null {
+  const o = onItOf(...args);
+  if (!o) return null;
+  return o.busy ? `${o.name} is on it · ${o.busy.text}${lasted(o.minutes)}` : `${o.name} is on it`;
 }

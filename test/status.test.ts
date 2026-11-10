@@ -69,7 +69,7 @@ describe("a task's status, in the words people use", () => {
     expect(word(t)).toBe("shipped in 1.1.0");
     const s = state();
     expect(formatTask(s, s.tasks.get(t)!, T0)).toContain("  status: shipped in 1.1.0 (doing) · owner: ann");
-    expect(formatTasks(s)).toContain(`  T${t}    shipped in 1.1.0 @ann Write the docs`);
+    expect(formatTasks(s, "kiwi/review/test")).toContain(`  T${t}    shipped in 1.1.0 @ann Write the docs`);
   });
 
   test("a release names a squashed or merged PR by number when its merge commit is unknown; a cancelled task says cancelled", async () => {

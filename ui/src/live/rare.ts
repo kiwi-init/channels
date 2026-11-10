@@ -7,29 +7,29 @@ import { changeTo } from "@kiwi/core/changes.ts"
 import { permissionReply } from "@kiwi/core/permission.ts"
 import { GENERAL_ROOM, MAX_GOAL_NAME, MAX_SPEC, MAX_SPEC_NOTE, TASK_BODY_MAX_LENGTH, TASK_TITLE_MAX_LENGTH, type Event, type StepReply } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
+import { landedStepRefusal } from "@kiwi/core/steps.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { changeBlock } from "~/chat/doc/change-block"
 export { restoreOf, versionsOf } from "~/chat/doc/restore-version"
 import { stepReplyText } from "~/chat/step"
 import { t } from "~/i18n/i18n"
+import { Plain, plainly } from "~/kit/failed"
 import { announce } from "~/kit/toasts"
 import { ownPrefs, setPrefs } from "~/live/prefs"
 import { muteKey } from "~/live/mute"
 import { event, memberOf, need, owner } from "~/live/run"
 import type { Run } from "~/live/store"
 import type { TaskStatus, UpdateCheck } from "~/model"
-
-const COMPACT_ASK =
-  "Please draft a /compact summary of the history so far: name every open task (T7) and open question (#123) by its id, then run `kiwi compact --file summary.md`. I'll approve it in the app."
+import { SENT } from "~/sent"
 
 async function sends(run: Run, ...all: TaskSend[]): Promise<void> {
   for (const { body, opts } of all) await run.send(body, opts)
 }
 
 export async function approveCompact(code: string, proposal: number): Promise<void> {
-  const run = owner(code)
+  const run = plainly(() => owner(code))
   const p = run.state.compactProposal
-  if (p?.seq !== proposal) throw new Error(t("live.rare.proposal.replaced"))
+  if (p?.seq !== proposal) throw new Plain(t("live.rare.proposal.replaced"))
   await event(run, `compacted the history through #${p.through}`, { op: "compact", summary: p.summary, through: p.through, proposal: p.seq })
   announce(t("live.rare.compacted", { through: String(p.through) }))
 }
@@ -37,7 +37,7 @@ export async function approveCompact(code: string, proposal: number): Promise<vo
 export async function askCompact(code: string): Promise<void> {
   const run = need(code)
   const lead = run.state.lead && run.state.lead !== run.me ? run.state.lead : null
-  await run.send(COMPACT_ASK, lead ? { to: [lead], kind: "ask" } : { kind: "ask" })
+  await run.send(SENT.compactAsk, lead ? { to: [lead], kind: "ask" } : { kind: "ask" })
   announce(lead ? t("live.rare.asked.summary", { name: memberName(run.state.members.get(lead), lead) }) : t("live.rare.asked.agents.summary"))
 }
 
@@ -105,9 +105,9 @@ export async function nameGoal(code: string, ask: number, name: string | null): 
 }
 
 export async function newSpec(code: string, words: string, text: string): Promise<number> {
-  const run = need(code)
+  const run = plainly(() => need(code))
   const said = words.trim()
-  if (!said) throw new Error(t("live.rare.say.what"))
+  if (!said) throw new Plain(t("live.rare.say.what"))
   const ask = await run.post({ kind: "room", room: GENERAL_ROOM }, said, {})
   await writeSpec(code, ask, text.trim() || `# ${said.split("\n")[0]!.slice(0, 120)}`)
   return ask
@@ -192,7 +192,17 @@ export async function approveTask(code: string, id: number, approve: boolean, wh
   const task = run.state.tasks.get(id)
   if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
   if (approve) await sends(run, approving(task), closedDigest(run.state, [...run.messages], task, { by: run.me }))
-  else await sends(run, sendBackTask(task, why?.trim() || "sent back for another look"))
+  else await sends(run, sendBackTask(task, why?.trim() || SENT.sentBack))
+}
+
+export async function endStep(code: string, id: number, step: string): Promise<void> {
+  const run = need(code)
+  const task = run.state.tasks.get(id)
+  if (!task) throw new Error(t("live.run.no.task", { id: taskId(id) }))
+  const wrong = landedStepRefusal(task, step)
+  if (wrong) throw new Error(wrong)
+  const to = [...new Set([task.owner, task.lander, ...(task.steps ?? []).map((x) => x.by)].filter((n): n is string => !!n && n !== run.me))]
+  await run.send(`${taskId(id)} step ${step} done`, { kind: "event", ev: { op: "task.landed", task: id, step }, ...(to.length ? { to } : {}) })
 }
 
 export async function setTaskStatus(code: string, id: number, status: TaskStatus): Promise<void> {

@@ -1,6 +1,8 @@
+import "~/i18n/en/chat-later"
 import { useEffect, useState } from "react"
 
 import { FEED_BOX, keyOf, scaleFor, thumbs, warmFor, type Shot } from "~/chat/thumbs"
+import { t } from "~/i18n/i18n"
 import type { Image } from "~/model"
 
 export const warmFeed = (id: string, url: string): Promise<Shot> => warmFor(id, url, FEED_BOX)
@@ -39,7 +41,12 @@ export function ImageButton({ image, onOpen }: { image: Image; onOpen: (url: str
   const width = image.width || undefined
   const height = image.height || undefined
   return (
-    <button type="button" className="msg-image" aria-label={`Open ${image.alt || "image"}`} onClick={() => onOpen(image.url, image.alt)}>
+    <button
+      type="button"
+      className="msg-image"
+      aria-label={image.alt ? t("chat.image.button.open", { name: image.alt }) : t("chat.image.button.open.image")}
+      onClick={() => onOpen(image.url, image.alt)}
+    >
       <img src={src} alt={image.alt} width={width} height={height} draggable={src === image.url ? undefined : false} />
       {src !== image.url && <img className="msg-image-full" src={image.url} alt={image.alt} width={width} height={height} />}
     </button>

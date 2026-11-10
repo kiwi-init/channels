@@ -138,6 +138,47 @@ async function sample(cdp: CDPSession): Promise<{ heapMB: number; nodes: number;
   return { heapMB: mb(m.JSHeapUsedSize ?? 0), nodes: m.Nodes ?? 0, listeners: m.JSEventListeners ?? 0, documents: m.Documents ?? 0, attached: result.value[0], rows: result.value[1] };
 }
 
+interface HeapSite {
+  callFrame: { functionName: string; url: string; lineNumber: number };
+  selfSize: number;
+  children?: HeapSite[];
+}
+
+function liveByChunk(head: HeapSite): { totalMB: number; byChunk: Record<string, number>; sites: string[] } {
+  const chunks = new Map<string, number>();
+  const sites = new Map<string, number>();
+  let total = 0;
+  const walk = (n: HeapSite): void => {
+    const file =
+      n.callFrame.url
+        .replace(/^.*\//, "")
+        .replace(/-[A-Za-z0-9_-]{8}\./, ".")
+        .replace(/\?.*$/, "") || "(engine)";
+    chunks.set(file, (chunks.get(file) ?? 0) + n.selfSize);
+    const site = `${n.callFrame.functionName || "(anon)"} ${file}:${n.callFrame.lineNumber}`;
+    sites.set(site, (sites.get(site) ?? 0) + n.selfSize);
+    total += n.selfSize;
+    for (const child of n.children ?? []) walk(child);
+  };
+  walk(head);
+  const top = (by: Map<string, number>, count: number) => [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, count);
+  return { totalMB: mb(total), byChunk: Object.fromEntries(top(chunks, 12).map(([k, v]) => [k, mb(v)])), sites: top(sites, 20).map(([k, v]) => `${mb(v)}MB  ${k}`) };
+}
+
+const docBlocks = (page: Page): Promise<number> => page.evaluate(() => document.querySelectorAll(".thread-doc section.blk").length);
+
+async function census(page: Page): Promise<Record<string, number>> {
+  return page.evaluate(() => {
+    const counts = new Map<string, number>();
+    for (const el of document.querySelectorAll("*")) {
+      const cls = typeof el.className === "string" ? el.className.split(/\s+/).filter(Boolean)[0] : undefined;
+      const key = `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ""}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return Object.fromEntries([...counts].sort((a, b) => b[1] - a[1]).slice(0, 14));
+  });
+}
+
 async function drain(page: Page): Promise<{ longTasks: number; longMs: number; worstMs: number; events: { name: string; duration: number; delay: number }[]; keys: number }> {
   return page.evaluate(() => {
     const w = window as unknown as { __long: number[]; __events: { name: string; duration: number; delay: number }[]; __keys: number };
@@ -334,9 +375,31 @@ try {
       const inPage = await page.evaluate(() => {
         const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
         return {
-          firstScreenMs: Math.round((window as unknown as { __firstScreen?: number }).__firstScreen ?? -1),
+          firstScreenMs: Math.round(performance.getEntriesByName("kiwi:first-message", "mark")[0]?.startTime ?? (window as unknown as { __firstScreen?: number }).__firstScreen ?? -1),
+          markerTextMs: Math.round((window as unknown as { __firstScreen?: number }).__firstScreen ?? -1),
           domContentLoadedMs: Math.round(nav.domContentLoadedEventEnd),
           fcpMs: Math.round(performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? -1),
+          responseEndMs: Math.round(nav.responseEnd),
+          marks: Object.fromEntries(
+            performance
+              .getEntriesByType("mark")
+              .filter((m) => m.name.startsWith("kiwi:"))
+              .map((m) => [m.name.slice(5), Math.round(m.startTime)]),
+          ),
+          files: (performance.getEntriesByType("resource") as PerformanceResourceTiming[])
+            .filter((r) => r.initiatorType === "script" || r.initiatorType === "link" || r.initiatorType === "css" || /\.(js|css|woff2?)(\?|$)/.test(r.name))
+            .map((r) => ({
+              file:
+                r.name
+                  .split("/")
+                  .pop()
+                  ?.replace(/-[A-Za-z0-9_-]{8}\./, ".") ?? r.name,
+              startMs: Math.round(r.startTime),
+              endMs: Math.round(r.responseEnd),
+              kb: Math.round(r.encodedBodySize / 1024),
+            }))
+            .sort((x, y) => x.endMs - y.endMs),
+          longTasks: ((window as unknown as { __long?: number[] }).__long ?? []).map((d) => Math.round(d)),
         };
       });
       if (throttle === 1) report["reload, in page"] = inPage;
@@ -349,7 +412,7 @@ try {
     const switching = !GATED || throttle === 4;
     const views: Record<string, number[]> = { Agents: [], Conversation: [], Tasks: [] };
     const spent: Record<string, Record<string, number>[]> = { Agents: [], Conversation: [], Tasks: [] };
-    const markers: Record<string, string> = { Agents: agents.at(-1)!, Conversation: "M\\d+: ", Tasks: "Ship it at scale" };
+    const markers: Record<string, string> = { Agents: agents.at(-1)!, Conversation: SEEDED, Tasks: "Ship it at scale" };
     for (let i = 0; i < (switching ? 3 : 0); i++)
       for (const v of ["Agents", "Conversation", "Tasks"]) {
         const before = await work(cdp);
@@ -403,7 +466,7 @@ try {
   }
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 
-  await tab(page, "Conversation", "M\\d+: ");
+  await tab(page, "Conversation", SEEDED);
   await composer(page).click();
   await drain(page);
   const typing = (async () => {
@@ -432,6 +495,9 @@ try {
   log("typing", JSON.stringify(report[`typing while ${AGENTS} agents post`]));
 
   log(`soak: ${SOAK_MIN} minutes`);
+  const blocksAtStart = await docBlocks(page);
+  await cdp.send("HeapProfiler.collectGarbage");
+  await cdp.send("HeapProfiler.startSampling", { samplingInterval: 8192 });
   const soakEnd = Date.now() + SOAK_MIN * 60000;
   let soakSent = 0;
   const posting = Promise.all(
@@ -456,8 +522,14 @@ try {
     if (process.env.PERF_SOAK_TABS !== "0") for (const v of ["Tasks", "Agents", "Conversation"]) await tab(page, v, "");
     await drain(page);
     await mark(`soak minute ${minute}`);
+    if (minute === 1 || minute % 5 === 0 || Date.now() >= soakEnd) log(`census at soak minute ${minute}`, JSON.stringify(await census(page)));
   }
   await posting;
+  await cdp.send("HeapProfiler.collectGarbage");
+  const { profile: sampled } = (await cdp.send("HeapProfiler.getSamplingProfile")) as unknown as { profile: { head: HeapSite } };
+  await cdp.send("HeapProfiler.stopSampling");
+  report["soak: what was allocated in it and is still held, by file (sampled)"] = { docBlocksAtStart: blocksAtStart, docBlocksAtEnd: await docBlocks(page), ...liveByChunk(sampled.head) };
+  log("soak held", JSON.stringify(report["soak: what was allocated in it and is still held, by file (sampled)"]));
   const soak = idle;
   const soakHeap = heap.filter((h) => h.phase.startsWith("soak"));
   const first = soakHeap[0];

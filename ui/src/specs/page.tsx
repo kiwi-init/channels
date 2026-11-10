@@ -1,23 +1,27 @@
+import "~/i18n/en/specs"
 import "~/styles/specs.css"
 
 import { useState } from "react"
 
+import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { MoreButton } from "~/kit/menu-open"
 import { ago } from "~/kit/time"
 import type { Channel, Spec } from "~/model"
-import { useAct, useApp, type SpecPart } from "~/nav"
+import { useAct, type SpecPart, useGo, useNav } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { wordsPlain } from "~/words"
 import { SpecDoc } from "~/specs/doc"
 import { Inside } from "~/specs/inside"
 import { Result } from "~/specs/result"
 import { alarmsOf, boxesOf, commentsOf, freeCount, insideOf, stageLine } from "~/specs/read"
+import { cancelConfirm, openTasks, withTasks } from "~/specs/cancel"
 
 export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const part: SpecPart = nav.part ?? "spec"
   const [editing, setEditing] = useState(false)
   const line = stageLine(channel, spec)
@@ -34,7 +38,7 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
     <div className="spec-page">
       <div className="spec-top">
         <div className="spec-head">
-          <button type="button" className="icon-btn spec-back" aria-label="All specs" title="All specs" onClick={() => go({ to: "spec", ask: null })}>
+          <button type="button" className="icon-btn spec-back" aria-label={t("specs.page.all.specs")} title={t("specs.page.all.specs")} onClick={() => go({ to: "spec", ask: null })}>
             <Icon name="back" />
           </button>
           <h1 className="spec-title">
@@ -42,17 +46,17 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
           </h1>
           <span className={cx("spec-chip", line.tone)}>{line.word}</span>
           <div className="spec-head-end">
-            <Track className="seg spec-parts" role="group" aria-label="Spec, inside or result">
+            <Track className="seg spec-parts" role="group" aria-label={t("specs.page.parts")}>
               <button type="button" aria-pressed={part === "spec"} onClick={() => go({ to: "spec", ask: spec.ask, part: "spec" })}>
-                Spec
+                {t("specs.page.spec")}
                 {comments.length > 0 && <span className="gh-n num">{comments.length}</span>}
               </button>
               <button type="button" aria-pressed={part === "inside"} onClick={() => go({ to: "spec", ask: spec.ask, part: "inside" })}>
-                Inside
-                {alarms.length > 0 ? <span className="spec-part-dot" aria-label={`${alarms.length} to look at`} /> : inside > 1 && <span className="gh-n num">{inside}</span>}
+                {t("specs.page.inside")}
+                {alarms.length > 0 ? <span className="spec-part-dot" aria-label={t("specs.page.to.look.at", { count: alarms.length })} /> : inside > 1 && <span className="gh-n num">{inside}</span>}
               </button>
               <button type="button" aria-pressed={part === "result"} onClick={() => go({ to: "spec", ask: spec.ask, part: "result" })}>
-                Result
+                {t("specs.page.result")}
                 {boxes.length > 0 && (
                   <span className="gh-n num">
                     {boxes.filter((b) => b.done).length}/{boxes.length}
@@ -65,22 +69,19 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
         </div>
         <p className="spec-sub">
           <span className="num">#{spec.ask}</span>
-          <span>
-            asked by {nickname(channel, spec.by)} {ago(spec.at)}
-          </span>
-          {spec.approved && !spec.changed && (
-            <span>
-              approved by {nickname(channel, spec.approved.by)} {ago(spec.approved.at)}
-            </span>
-          )}
+          <span>{t("specs.page.asked.by", { who: nickname(channel, spec.by), when: ago(spec.at) })}</span>
+          {spec.approved && !spec.changed && <span>{t("specs.page.approved.by", { who: nickname(channel, spec.approved.by), when: ago(spec.approved.at) })}</span>}
           {(spec.stage === "queued" || spec.stage === "working") && !spec.changed && <span>{line.line}</span>}
           {spec.result && (
             <span className={line.tone}>
-              {spec.result.auto ? "closed by itself" : `${spec.result.verdict} by ${nickname(channel, spec.result.by)}`} {ago(spec.result.at)}
-              {spec.result.note ? `: “${wordsPlain(spec.result.note, channel.nicknames)}”` : ""}
+              {spec.result.auto
+                ? t("specs.page.closed.by.itself")
+                : t(spec.result.verdict === "accepted" ? "specs.page.accepted.by" : "specs.page.dropped.by", { who: nickname(channel, spec.result.by) })}{" "}
+              {ago(spec.result.at)}
+              {spec.result.note ? t("specs.page.result.note", { note: wordsPlain(spec.result.note, channel.nicknames) }) : ""}
             </span>
           )}
-          {spec.backs.length > 0 && <span>sent back {spec.backs.length === 1 ? "once" : `${spec.backs.length} times`}</span>}
+          {spec.backs.length > 0 && <span>{spec.backs.length === 1 ? t("specs.page.sent.back.once") : t("specs.page.sent.back.times", { count: spec.backs.length })}</span>}
         </p>
         <blockquote className="spec-words">
           “<Shown value={spec.words} />”
@@ -100,32 +101,31 @@ export function SpecPage({ channel, spec }: { channel: Channel; spec: Spec }) {
 
 function SpecMenu({ channel, spec, onEdit }: { channel: Channel; spec: Spec; onEdit: () => void }) {
   const { actions } = useAct()
-  const label = `#${spec.ask}'s spec`
-  const open = spec.tasks.filter((id) => channel.tasks.some((t) => t.id === id && t.status !== "done")).length
-  const withTasks = open ? ` Its ${open === 1 ? "open task is" : `${open} open tasks are`} cancelled with it.` : ""
+  const label = t("specs.page.menu.label", { ask: String(spec.ask) })
+  const withOpen = (first: string): string => withTasks(first, openTasks(channel, spec))
   if (spec.result && !spec.canJudge) return null
   return (
     <MoreButton
       label={label}
       groups={() => [
         [
-          ...(spec.result ? [] : [{ label: "Edit", run: onEdit }]),
+          ...(spec.result ? [] : [{ label: t("specs.page.edit"), run: onEdit }]),
           ...(spec.result || !spec.canJudge
             ? []
             : [
                 {
-                  label: "Cancel…",
+                  label: t("specs.page.cancel"),
                   run: () => actions.judgeSpec(channel.code, spec.ask, "dropped"),
-                  confirm: { title: `Cancel ${label}?`, sub: `It moves under Dropped, and no new work goes under it.${withTasks}`, yes: "Cancel spec" },
+                  confirm: cancelConfirm(channel, spec),
                 },
               ]),
         ],
         spec.canJudge
           ? [
               {
-                label: "Delete…",
+                label: t("specs.page.delete"),
                 run: () => actions.deleteSpec(channel.code, spec.ask),
-                confirm: { title: `Delete ${label}?`, sub: `It leaves the specs list. The history keeps one line saying you deleted it.${withTasks}`, yes: "Delete spec" },
+                confirm: { title: t("specs.page.delete.title", { spec: label }), sub: withOpen(t("specs.page.delete.sub")), yes: t("specs.page.delete.yes") },
               },
             ]
           : [],
@@ -141,12 +141,12 @@ function Gate({ channel, spec, editing, part }: { channel: Channel; spec: Spec; 
     return (
       <div className="spec-gate is-draft">
         <div className="spec-gate-text">
-          <p className="spec-gate-head">{spec.canJudge ? "Approve it and it starts when an agent is free." : `Waiting for ${nickname(channel, spec.by)} to approve it.`}</p>
-          {free > 0 && <p className="spec-gate-sub num">{free} free now</p>}
+          <p className="spec-gate-head">{spec.canJudge ? t("specs.page.gate.approve") : t("specs.page.gate.waiting", { who: nickname(channel, spec.by) })}</p>
+          {free > 0 && <p className="spec-gate-sub num">{t("specs.page.gate.free", { count: free })}</p>}
         </div>
         {spec.canJudge && !editing && (
           <button type="button" className="btn is-primary" onClick={() => actions.approveSpec(channel.code, spec.ask, spec.v)}>
-            Approve
+            {t("specs.page.approve")}
           </button>
         )}
       </div>
@@ -155,14 +155,12 @@ function Gate({ channel, spec, editing, part }: { channel: Channel; spec: Spec; 
     return (
       <div className="spec-gate is-changed">
         <div className="spec-gate-text">
-          <p className="spec-gate-head tone-decide">
-            {nickname(channel, spec.edited.by)} changed it after {nickname(channel, spec.approved?.by ?? spec.by)} approved it.
-          </p>
-          <p className="spec-gate-sub">New work waits for this approval.</p>
+          <p className="spec-gate-head tone-decide">{t("specs.page.gate.changed", { who: nickname(channel, spec.edited.by), approver: nickname(channel, spec.approved?.by ?? spec.by) })}</p>
+          <p className="spec-gate-sub">{t("specs.page.gate.changed.sub")}</p>
         </div>
         {spec.canJudge && !editing && (
           <button type="button" className="btn is-primary" onClick={() => actions.approveSpec(channel.code, spec.ask, spec.v)}>
-            Approve the change
+            {t("specs.page.approve.change")}
           </button>
         )}
       </div>
@@ -170,12 +168,12 @@ function Gate({ channel, spec, editing, part }: { channel: Channel; spec: Spec; 
   return (
     <div className="spec-gate is-delivered">
       <div className="spec-gate-text">
-        <p className="spec-gate-head tone-decide">Delivered: every task done, every box ticked.</p>
-        {!spec.canJudge && <p className="spec-gate-sub">Waiting for {nickname(channel, spec.by)}'s verdict.</p>}
+        <p className="spec-gate-head tone-decide">{t("specs.page.gate.delivered")}</p>
+        {!spec.canJudge && <p className="spec-gate-sub">{t("specs.page.gate.verdict", { who: nickname(channel, spec.by) })}</p>}
       </div>
       {spec.canJudge && part !== "result" && (
         <button type="button" className="btn is-primary" onClick={() => go({ to: "spec", ask: spec.ask, part: "result" })}>
-          Open the result
+          {t("specs.page.open.result")}
         </button>
       )}
     </div>

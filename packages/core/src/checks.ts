@@ -1,4 +1,4 @@
-export const CHECK_PHASES = ["pre-ship", "post"] as const;
+const CHECK_PHASES = ["pre-ship", "post"] as const;
 export type CheckPhase = (typeof CHECK_PHASES)[number];
 
 export type CheckArtifact = { kind: "pr"; repo: string; pr: number; sha: string } | { kind: "run"; id: string } | { kind: "npm"; pkg: string; version: string };
@@ -54,7 +54,7 @@ export function wellFormedCheck(x: unknown): x is CheckAsk {
   );
 }
 
-export const ARTIFACT_USAGE = "--artifact pr:owner/repo#N@SHA (the full 40-character head), run:ID or npm:package@version";
+const ARTIFACT_USAGE = "--artifact pr:owner/repo#N@SHA (the full 40-character head), run:ID or npm:package@version";
 
 export function parseArtifact(spec: string): CheckArtifact | string {
   const said = spec.trim();

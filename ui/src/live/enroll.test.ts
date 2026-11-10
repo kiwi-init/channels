@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test"
 
+import { onAnnounce, type Tone } from "~/kit/toasts"
 import { enrollingNow } from "~/live/account"
 import { enrollBegin, enrollCancel, enrollKeep, type EnrollDone } from "~/live/account-rare"
 
-type Status = { stage: "asking" } | { stage: "check"; person: { name: string; fingerprint: string } }
+type Status = { stage: "asking" } | { stage: "gone" } | { stage: "check"; person: { name: string; fingerprint: string } }
 
 const check: Status = { stage: "check", person: { name: "Jow", fingerprint: "3f9a 0c41 77e2 b8d5 1a06" } }
 
@@ -80,6 +81,45 @@ describe("the enrolling screen follows only the ask it started (#1323)", () => {
     expect(b.calls.keep).toBe(1)
     expect(first).toEqual([])
     expect(second).toHaveLength(1)
+    expect(enrollingNow()).toBeNull()
+  })
+})
+
+describe("how an enrolment ended stays on screen until dismissed (T1866)", () => {
+  const said = () => {
+    const got: [string, Tone][] = []
+    const stop = onAnnounce((text, tone) => void got.push([text, tone]))
+    return { got, stop }
+  }
+
+  test("backing out at the key check leaves the words to the screen: no toast", async () => {
+    const b = fakeBridge()
+    const heard = said()
+    await enrollBegin(
+      async () => {},
+      () => {}
+    )
+    await b.polled(1)
+    b.asked[0]!(check)
+    await Bun.sleep(10)
+    await enrollCancel()
+    heard.stop()
+    expect(heard.got).toEqual([])
+    expect(enrollingNow()).toBeNull()
+  })
+
+  test("being turned away by the other computer stays too", async () => {
+    const b = fakeBridge()
+    const heard = said()
+    await enrollBegin(
+      async () => {},
+      () => {}
+    )
+    await b.polled(1)
+    b.asked[0]!({ stage: "gone" })
+    await Bun.sleep(10)
+    heard.stop()
+    expect(heard.got).toEqual([["Your other computer turned this one away, or the ask ran out", "error"]])
     expect(enrollingNow()).toBeNull()
   })
 })

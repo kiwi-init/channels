@@ -1,10 +1,13 @@
+import "~/i18n/en/chat-later"
 import { Delete02Icon, PencilEdit02Icon } from "@hugeicons/core-free-icons"
 import { useContext, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { askDelete, EditHere, startEditing, stopAskingDelete, stopEditing, useAskingDelete } from "~/chat/editing"
-import { Modal } from "~/kit/modal"
+import { t } from "~/i18n/i18n"
+import { Confirm } from "~/kit/confirm"
 import { GlyphIcon } from "~/kit/icons"
+import { announce } from "~/kit/toasts"
 import type { Channel, Message } from "~/model"
 import { useAct } from "~/nav"
 import { wordsRaw } from "~/words"
@@ -12,7 +15,7 @@ import { wordsRaw } from "~/words"
 type Props = { kind: "tools" | "editor"; channel: Channel; m: Message }
 
 export default function Changes({ kind, channel, m }: Props) {
-  return kind === "tools" ? <Tools channel={channel} m={m} /> : <Editor channel={channel} m={m} />
+  return kind === "tools" ? <Tools channel={channel} m={m} /> : <Whole channel={channel} m={m} />
 }
 
 function Tools({ channel, m }: { channel: Channel; m: Message }) {
@@ -21,42 +24,51 @@ function Tools({ channel, m }: { channel: Channel; m: Message }) {
   const at = useContext(EditHere)
   return (
     <>
-      <button type="button" className="msg-tool" aria-label="Edit" title="Edit" onClick={() => startEditing(channel.code, m.seq, at)}>
+      <button type="button" className="msg-tool" aria-label={t("chat.changes.edit")} title={t("chat.changes.edit")} onClick={() => startEditing(channel.code, m.seq, at)}>
         <GlyphIcon glyph={PencilEdit02Icon} size={14} />
       </button>
-      <button type="button" className="msg-tool" aria-label="Delete" title="Delete" onClick={() => askDelete(channel.code, m.seq)}>
+      <button type="button" className="msg-tool" aria-label={t("chat.changes.delete")} title={t("chat.changes.delete")} onClick={() => askDelete(channel.code, m.seq)}>
         <GlyphIcon glyph={Delete02Icon} size={14} />
       </button>
       {createPortal(
-        <Modal
-          dismiss="outside"
+        <Confirm
           open={asking}
           onClose={stopAskingDelete}
-          label="Delete this message?"
-          title="Delete this message?"
-          sub="It's removed from Channels for everyone. Anyone who already read it may still have it, and the relay keeps its encrypted copy until it ages out."
-          foot={
-            <>
-              <button type="button" className="btn" onClick={() => stopAskingDelete()}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn is-danger"
-                onClick={() => {
-                  stopAskingDelete()
-                  actions.deleteMessage(channel.code, m.seq)
-                }}
-              >
-                Delete
-              </button>
-            </>
-          }
+          title={t("chat.changes.delete.ask")}
+          sub={t("chat.changes.delete.sub")}
+          action={t("chat.changes.delete")}
+          onConfirm={() => {
+            stopAskingDelete()
+            actions.deleteMessage(channel.code, m.seq)
+          }}
         />,
         document.body
       )}
     </>
   )
+}
+
+function Whole({ channel, m }: { channel: Channel; m: Message }) {
+  const { actions } = useAct()
+  const { holdEarlier, earlierTo } = actions
+  const code = channel.code
+  const seq = m.seq
+  const partial = !!m.partial
+  useEffect(() => {
+    if (!partial) return
+    let live = true
+    holdEarlier(code, "edit", seq)
+    void earlierTo(code, seq).then((ok) => {
+      if (!live || ok) return
+      announce(t("chat.composer.edit.not.loaded"), "error")
+      stopEditing()
+    })
+    return () => {
+      live = false
+      holdEarlier(code, "edit", null)
+    }
+  }, [code, seq, partial, holdEarlier, earlierTo])
+  return partial ? null : <Editor channel={channel} m={m} />
 }
 
 function Editor({ channel, m }: { channel: Channel; m: Message }) {
@@ -66,6 +78,7 @@ function Editor({ channel, m }: { channel: Channel; m: Message }) {
   useEffect(() => {
     const el = area.current
     if (!el) return
+    el.scrollIntoView({ block: "nearest" })
     el.focus()
     el.setSelectionRange(el.value.length, el.value.length)
   }, [])
@@ -79,7 +92,7 @@ function Editor({ channel, m }: { channel: Channel; m: Message }) {
       <textarea
         ref={area}
         className="input msg-edit-text"
-        aria-label="Edit message"
+        aria-label={t("chat.changes.edit.message")}
         rows={Math.min(8, Math.max(2, text.split("\n").length))}
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -95,12 +108,12 @@ function Editor({ channel, m }: { channel: Channel; m: Message }) {
         }}
       />
       <p className="msg-edit-foot">
-        <span className="dim">Enter to save · Esc to cancel</span>
+        <span className="dim">{t("chat.changes.edit.keys")}</span>
         <button type="button" className="btn is-quiet is-small" onClick={stopEditing}>
-          Cancel
+          {t("chat.changes.cancel")}
         </button>
         <button type="button" className="btn is-primary is-small" disabled={!text.trim()} onClick={save}>
-          Save
+          {t("chat.changes.save")}
         </button>
       </p>
     </div>

@@ -28,6 +28,7 @@ export { githubNews, issueOf, prChecks, prKey, releaseOf, rulesOf, type GithubPr
 export { outsideRepos, reposOf } from "./state/repos.ts";
 export { checkPassed } from "./state/checks.ts";
 export { LEASE_WAIT_MS, nextIn, placeIn } from "./state/leases.ts";
+export { nextExpiry } from "./state/expiry.ts";
 export { unnamedAsks, unnamedTasks } from "./state/compact.ts";
 export { leadCheckpointKey } from "./state/lead.ts";
 export {
@@ -51,7 +52,22 @@ export {
 } from "./state/specs.ts";
 export { findRoom, newRoomId } from "./state/rooms.ts";
 export { bareAt, memberNamed, readsAsHandle } from "./state/mentions.ts";
-export { currentState, landerOf, landingRefusal, openRound, parseTaskId, reviewClaimRefusal, reviewMoveRefusal, revisedOut, similarOpenTasks, taskId, titlesLookAlike } from "./state/tasks.ts";
+export {
+  checkChangeRefusal,
+  currentState,
+  landerOf,
+  landingRefusal,
+  landingTouchedByClose,
+  openRound,
+  parseTaskId,
+  reviewClaimRefusal,
+  reviewMoveRefusal,
+  reviewWaysOut,
+  revisedOut,
+  similarOpenTasks,
+  taskId,
+  titlesLookAlike,
+} from "./state/tasks.ts";
 export {
   rosterOf,
   toRoster,

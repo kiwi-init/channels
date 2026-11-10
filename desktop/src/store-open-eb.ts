@@ -1,21 +1,25 @@
 import { dataDir } from "./host-eb.ts";
 import { launcherKeys } from "./launcher-channel-eb.ts";
-import { logMainError } from "./main-log.ts";
+import { logFile, logMainError } from "./main-log.ts";
 import { messageBox } from "./message-box-eb.ts";
 import { openEbStore, plainNote, unmarkedNote, v2Vault } from "./store-eb.ts";
 import type { OpenStore } from "./store-v2.ts";
-import { brokenStore, openStore } from "./store.ts";
+import { openStore, unreadableStore } from "./store.ts";
 import { openTestStore } from "./test-build-eb.ts";
+import type { Unreadable } from "./unreadable-store.ts";
 
 let opened: OpenStore | null = null;
 
 function endKeySession(): void {
   if (launcherKeys instanceof Error) return;
-  try {
-    launcherKeys.done();
-  } catch {
-    // A test build may start without the launcher in front, and then there's no session to end.
-  }
+  const keys = launcherKeys;
+  void (async () => {
+    try {
+      await keys.done();
+    } catch {
+      // A test build may start without the launcher in front, and then there's no session to end.
+    }
+  })();
 }
 
 export async function openStoreForThisBuild(): Promise<void> {
@@ -26,9 +30,12 @@ export async function openStoreForThisBuild(): Promise<void> {
 
 export const keyringLocked = (): boolean => opened?.kind === "unreadable" && opened.cause === "locked";
 
-export function warnIfStoreBroken(): void {
-  const broken = brokenStore();
-  if (broken) void messageBox({ type: "error", message: "Channels can't read its saved keys", detail: broken.message });
+export function unreadable(): Unreadable | null {
+  const broken = keyringLocked() ? null : unreadableStore();
+  return broken ? { ...broken, log: logFile() } : null;
+}
+
+export function warnAboutStore(): void {
   const plain = opened ? plainNote(opened) : null;
   if (plain) logMainError(new Error(plain));
   const unmarked = opened ? unmarkedNote(opened) : null;

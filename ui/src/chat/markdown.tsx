@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react"
 import type { MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
 import { normalizeMarkdownStyle } from "react-native-enriched-markdown/lib/module/normalizeMarkdownStyle.web.js"
@@ -9,6 +10,7 @@ import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown
 import type { ASTNode, RendererCallbacks } from "react-native-enriched-markdown/lib/typescript/src/web/types"
 import { compareCells, nextSort, sanitizeMarkdownUrl, type SortDir } from "@kiwi/app/markdown.ts"
 import { messageAt, messageHash } from "@kiwi/core/message-link.ts"
+import { t } from "~/i18n/i18n"
 import { openOutside } from "~/kit/outside"
 
 import { MermaidBlock } from "~/chat/mermaid"
@@ -278,7 +280,12 @@ function Table({ node, style, styles, callbacks }: { node: ASTNode; style: Style
                   style={styles.tableHeaderCell[cell.attributes?.align ?? "default"]}
                   aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : "none"}
                 >
-                  <button type="button" className="md-sort" aria-label={`Sort by ${textOf(cell) || `column ${i + 1}`}`} onClick={() => setSort((was) => nextSort(was, i))}>
+                  <button
+                    type="button"
+                    className="md-sort"
+                    aria-label={t("chat.markdown.sort.by", { name: textOf(cell) || t("chat.markdown.column", { n: i + 1 }) })}
+                    onClick={() => setSort((was) => nextSort(was, i))}
+                  >
                     {inside(cell)}
                     <span aria-hidden="true">{direction === "asc" ? "↑" : direction === "desc" ? "↓" : ""}</span>
                   </button>
@@ -350,14 +357,20 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       const href = a.getAttribute("href") ?? ""
       if (!a.title && a.textContent?.trim() !== href) a.title = href
     }
+    for (const pre of box.current?.querySelectorAll<HTMLElement>("pre[aria-label]") ?? []) {
+      const lang = /^Code block(?:: (.+))?$/.exec(pre.getAttribute("aria-label") ?? "")
+      if (lang) pre.setAttribute("aria-label", lang[1] ? t("chat.markdown.code.block.lang", { lang: lang[1] }) : t("chat.markdown.code.block"))
+    }
+    for (const check of box.current?.querySelectorAll<HTMLInputElement>('input[type="checkbox"][aria-label^="Task: "]') ?? [])
+      check.setAttribute("aria-label", t("chat.markdown.task", { text: (check.getAttribute("aria-label") ?? "").slice(6) }))
     for (const code of box.current?.querySelectorAll<HTMLElement>("code") ?? []) {
       const text = code.textContent ?? ""
       if (code.closest("pre, a") || text.length < COPYABLE || text.includes("\n")) continue
       code.dataset.copy = ""
       code.setAttribute("role", "button")
       code.tabIndex = 0
-      code.title = "Copy"
-      code.setAttribute("aria-label", `Copy ${text}`)
+      code.title = t("chat.markdown.copy")
+      code.setAttribute("aria-label", t("chat.markdown.copy.text", { text }))
     }
   }, [ast])
 

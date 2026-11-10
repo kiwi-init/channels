@@ -1,13 +1,13 @@
 import type { Authors } from "./authors.ts";
 import type { Member as MemberRecord, Runs } from "../membership.ts";
-import type { Card, Color, IssueRef, Landing, MemberPicture, Merger, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
+import type { LandingStep, StepSpec } from "../steps.ts";
+import type { Card, Color, IssueRef, KeptHow, Landing, MemberPicture, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubRun, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
 import type { Power } from "../protocol.ts";
 import type { RoomMember, RoomMeta, RoomSeal } from "../room-rules.ts";
 import type { Scope } from "../scopes.ts";
 import type { CheckState } from "./checks.ts";
-import type { CheckArtifact } from "../checks.ts";
 export interface Member {
   name: string;
   kind?: "human" | "agent" | "computer";
@@ -103,6 +103,18 @@ interface TaskProof {
 
 type RoundResult = { kind: "open" } | { kind: Verdict; by: string; seq: number; ts: number; rts?: number; runs?: number[] } | { kind: "withdrawn"; seq: number };
 
+interface KeptHead {
+  head: string;
+  approved: string;
+  how: KeptHow;
+  repo: string;
+  ref: string;
+  tip: string;
+  seq: number;
+  by: string;
+  rts?: number;
+}
+
 export interface ReviewRound {
   n: number;
   at?: string;
@@ -113,6 +125,25 @@ export interface ReviewRound {
   rts?: number;
   result: RoundResult;
   stale?: number;
+  kept?: KeptHead[];
+}
+
+export interface StepQuestion {
+  seq: number;
+  from: string;
+  esc?: true;
+  to?: string[];
+  choices: string[];
+}
+
+export interface TaskClock {
+  key: string;
+  seq: number;
+  at: number;
+  step?: 1 | 2 | 3;
+  day?: number;
+  head?: string;
+  acts?: [name: string, seq: number, at: number, step?: 1 | 2 | 3][];
 }
 
 export interface Task {
@@ -127,19 +158,20 @@ export interface Task {
   updatedAt: number;
   notes: TaskNote[];
   proof?: TaskProof[];
-  run?: { id: string; seq: number; by: string; reportedStart?: number; start?: GithubRun; blind?: true };
+  run?: { id: string; seq: number; by: string };
   review?: string;
   approvedBy?: string;
   cancelled?: boolean;
   closedWith?: string;
   closedSeq?: number;
-  landed?: { key: string; artifact: CheckArtifact; seq: number; by: string };
-  then?: Landing;
+  steps?: LandingStep[];
+  stepCount?: number;
   lander?: string;
   issue?: IssueRef;
   from?: number;
   areas?: string[];
   touched?: Record<string, number>;
+  clock?: TaskClock;
   workedBy: string[];
   rounds: ReviewRound[];
   source?: number;
@@ -253,8 +285,9 @@ export interface ChannelState {
   hold: Hold | null;
   githubWrite: number | null;
   branchPrefix: string | null;
+  quietMs: number;
   landing: Landing | null;
-  merges: Merger;
+  landingSteps: StepSpec[] | null;
   compact: Compact | null;
   compactProposal: Compact | null;
   reactions: Map<number, Map<string, Reaction>>;
@@ -329,8 +362,11 @@ export interface FoldBase {
   voice?: boolean;
   githubWrite?: number | null;
   branchPrefix?: string | null;
+  quietMs?: number;
   landing?: Landing | null;
-  merges?: Merger;
+  landingSteps?: StepSpec[] | null;
+  passedAsks?: [number, string][];
+  stepQuestions?: StepQuestion[];
   compact: Compact | null;
   compactProposal: Compact | null;
   scopesByKey: [string, Scope[]][];
@@ -338,7 +374,7 @@ export interface FoldBase {
   roleSets: [string, { seq: number; role: string | null; about?: string | null }][];
   gone?: [string, number][];
   nicknames?: [string, Nickname][];
-  tasks: Task[];
+  tasks: (Task & { then?: Landing; landed?: object })[];
   facts: Fact[];
   docs?: [string, string][];
   leases: Lease[];

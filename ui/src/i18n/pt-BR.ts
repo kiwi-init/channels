@@ -1,8 +1,28 @@
 import type { Catalog } from "~/i18n/i18n"
-
-export const covers = ["settings.language.", "usage."]
+import chatCompose from "~/i18n/pt-BR/chat-compose"
+import chatFeed from "~/i18n/pt-BR/chat-feed"
+import live from "~/i18n/pt-BR/live"
+import settings from "~/i18n/pt-BR/settings"
+import specs from "~/i18n/pt-BR/specs"
+import modals from "~/i18n/pt-BR/modals"
+import needs from "~/i18n/pt-BR/needs"
+import shell from "~/i18n/pt-BR/shell"
+import status from "~/i18n/pt-BR/status"
+import events from "~/i18n/pt-BR/events"
+import github from "~/i18n/pt-BR/github"
 
 export default {
+  ...events,
+  ...status,
+  ...chatCompose,
+  ...chatFeed,
+  ...live,
+  ...settings,
+  ...specs,
+  ...modals,
+  ...needs,
+  ...shell,
+  ...github,
   "settings.language": "Idioma",
   "settings.language.system": "Sistema",
   "usage.today": "Mensagens hoje",

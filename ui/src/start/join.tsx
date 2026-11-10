@@ -1,12 +1,15 @@
+import "~/i18n/en/shell-later"
 import { useEffect, useId, useRef, useState } from "react"
-
-import { handleFor, NAME_RE, RESERVED_NAMES } from "@kiwi/core/membership.ts"
 
 import "~/styles/start.css"
 import { autofocus, cx } from "~/kit/bits"
+import { Failed, failure, type Failure } from "~/kit/failed"
 import { Modal } from "~/kit/modal"
 import type { InviteInfo } from "~/model"
-import { useApp } from "~/nav"
+import { useApp, useGo } from "~/nav"
+import { joinName, nameProblemOf } from "~/start/join-name"
+import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 
 const CODE = /^[A-Za-z0-9._~-]+$/
 
@@ -20,16 +23,16 @@ function decode(text: string): string {
 }
 
 function inviteCode(text: string): string | null {
-  const t = text.trim()
-  if (!t) return null
-  const link = /^kiwi:\/\/join\/([^?#\s]+)/i.exec(t)
-  const raw = link ? link[1] : /^https?:\/\/\S*#/i.test(t) ? t.slice(t.lastIndexOf("#") + 1) : t
+  const trimmed = text.trim()
+  if (!trimmed) return null
+  const link = /^kiwi:\/\/join\/([^?#\s]+)/i.exec(trimmed)
+  const raw = link ? link[1] : /^https?:\/\/\S*#/i.test(trimmed) ? trimmed.slice(trimmed.lastIndexOf("#") + 1) : trimmed
   const code = decode(raw ?? "").replace(/\/+$/, "")
   return CODE.test(code) ? code : null
 }
 
 export function JoinDialog() {
-  const { go } = useApp()
+  const go = useGo()
   return <JoinForm onClose={() => go({ to: "dialog", dialog: null })} />
 }
 
@@ -38,27 +41,27 @@ function JoinForm({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState(nav.invite ?? "")
   const [busy, setBusy] = useState(!!nav.invite)
   const [error, setError] = useState<string | null>(null)
+  const [failed, setFailed] = useState<Failure | null>(null)
   const [invite, setInvite] = useState<InviteInfo | null>(null)
-  const [name, setName] = useState(() => (app.account ? handleFor(app.account.name) : ""))
+  const [mine] = useState(() => joinName(app.account?.name))
+  const [name, setName] = useState(mine.name)
   const inputId = useId()
   const hintId = useId()
   const nameId = useId()
   const code = inviteCode(text)
   const bad = text.trim() !== "" && !code
-  const nameProblem = !NAME_RE.test(name.trim())
-    ? "Letters, numbers, dots, dashes or underscores, up to 32"
-    : RESERVED_NAMES.has(name.trim().toLowerCase())
-      ? "That name is kept for Channels itself"
-      : null
+  const problem = nameProblemOf(name)
+  const nameProblem = problem === "allowed" ? t("start.join.name.allowed", { max: 32 }) : problem === "reserved" ? t("start.join.name.reserved") : null
+  const [naming, setNaming] = useState(mine.asks)
 
   const inspect = async (c: string) => {
     try {
       const info = await app.actions.inviteInfo(c)
       if (info.state === "member") return go({ to: "channel", code: info.code })
-      if (info.state === "gone") setError("This invite no longer works: the channel was deleted, or the code is wrong. Ask whoever sent it for a new one.")
+      if (info.state === "gone") setError(t("start.join.gone"))
       else setInvite(info)
     } catch (err) {
-      setError(`Couldn't check the invite: ${err instanceof Error ? err.message : String(err)}`)
+      setFailed(failure(t("start.join.check.failed"), err))
     } finally {
       setBusy(false)
     }
@@ -73,11 +76,10 @@ function JoinForm({ onClose }: { onClose: () => void }) {
     const owner = invite.owner
     return (
       <Modal
-        dismiss="x"
         onClose={onClose}
-        label="Join a channel"
-        title={owner ? `${owner} invited you to a channel` : "You're invited to a channel"}
-        sub={`${owner ?? "The owner"} sees your name and a code to check, then lets you in.`}
+        label={t("start.join.title")}
+        title={owner ? t("start.join.invited.by", { owner }) : t("start.join.invited")}
+        sub={owner ? t("start.join.sub.named", { owner }) : t("start.join.sub")}
       >
         <form
           className="start-form"
@@ -86,38 +88,50 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             if (busy || nameProblem) return
             setBusy(true)
             setError(null)
+            setFailed(null)
             try {
               const joined = await app.actions.joinChannel(invite.code, name.trim())
               go({ to: "channel", code: joined })
             } catch (err) {
-              setError(`Couldn't send the request: ${err instanceof Error ? err.message : String(err)}`)
+              setFailed(failure(t("start.join.send.failed"), err))
               setBusy(false)
             }
           }}
         >
-          <label className="field" htmlFor={nameId}>
-            <span className="field-label">Your name in this channel</span>
-            <input
-              id={nameId}
-              ref={autofocus}
-              className="input is-mono"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              aria-invalid={nameProblem ? true : undefined}
-            />
-          </label>
+          {naming ? (
+            <label className="field" htmlFor={nameId}>
+              <span className="field-label">{t("start.join.your.name")}</span>
+              <input
+                id={nameId}
+                ref={autofocus}
+                autoFocus
+                className="input is-mono"
+                autoComplete="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                aria-invalid={nameProblem ? true : undefined}
+              />
+            </label>
+          ) : (
+            <p className="start-as">
+              <span>{tr("start.join.as", { name: <span className="start-as-name">{name.trim()}</span> })}</span>
+              <button type="button" className="btn is-quiet is-small" onClick={() => setNaming(true)}>
+                {t("start.join.change")}
+              </button>
+            </p>
+          )}
           <p className={cx("start-hint", (nameProblem || error) && "is-error")} aria-live="polite">
             {error ?? nameProblem}
           </p>
+          {failed && <Failed failure={failed} />}
           <div className="modal-foot start-foot">
-            <button type="button" className="btn is-quiet" onClick={() => (setInvite(null), setError(null))}>
-              Back
+            <button type="button" className="btn is-quiet" onClick={() => (setInvite(null), setError(null), setFailed(null))}>
+              {t("start.join.back")}
             </button>
-            <button type="submit" className="btn is-primary" disabled={busy || !!nameProblem}>
-              {busy ? "Asking…" : "Ask to join"}
+            <button key="ask" type="submit" className="btn is-primary" disabled={busy || !!nameProblem} autoFocus={!naming}>
+              {busy ? t("start.join.asking") : t("start.join.ask")}
             </button>
           </div>
         </form>
@@ -125,9 +139,9 @@ function JoinForm({ onClose }: { onClose: () => void }) {
     )
   }
 
-  const hint = error ?? (bad ? "That isn't an invite. It looks like kiwi://join/…, a link with #mc2-…, or a code." : null)
+  const hint = error ?? (bad ? t("start.join.not.invite") : null)
   return (
-    <Modal dismiss="x" onClose={onClose} label="Join a channel" title="Join a channel">
+    <Modal onClose={onClose} label={t("start.join.title")} title={t("start.join.title")}>
       <form
         className="start-form"
         onSubmit={async (e) => {
@@ -135,11 +149,12 @@ function JoinForm({ onClose }: { onClose: () => void }) {
           if (!code || busy) return
           setBusy(true)
           setError(null)
+          setFailed(null)
           await inspect(code)
         }}
       >
         <label className="field" htmlFor={inputId}>
-          <span className="field-label">Invite link or code</span>
+          <span className="field-label">{t("start.join.invite.label")}</span>
           <input
             id={inputId}
             ref={autofocus}
@@ -147,11 +162,12 @@ function JoinForm({ onClose }: { onClose: () => void }) {
             autoComplete="off"
             autoCapitalize="off"
             spellCheck={false}
-            placeholder="kiwi://join/… or a code"
+            placeholder={t("start.join.placeholder")}
             value={text}
             onChange={(e) => {
               setText(e.target.value)
               setError(null)
+              setFailed(null)
             }}
             aria-invalid={bad || error ? true : undefined}
             aria-describedby={hintId}
@@ -160,9 +176,13 @@ function JoinForm({ onClose }: { onClose: () => void }) {
         <p id={hintId} className={cx("start-hint", (bad || error) && "is-error")} aria-live="polite">
           {hint}
         </p>
-        <div className="modal-foot start-foot">
+        {failed && <Failed failure={failed} />}
+        <div className="modal-foot">
+          <button type="button" className="btn is-quiet" onClick={onClose}>
+            {t("kit.context.menu.cancel")}
+          </button>
           <button type="submit" className="btn is-primary" disabled={!code || busy}>
-            {busy ? "Checking…" : "Continue"}
+            {busy ? t("start.join.checking") : t("start.join.continue")}
           </button>
         </div>
       </form>

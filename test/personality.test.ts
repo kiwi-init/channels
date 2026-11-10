@@ -60,8 +60,8 @@ describe("the personality on the member record", () => {
     const seat = state.members.get("claude");
     expect(seat?.persona?.name).toBe("Web only");
     expect(presetOf(seat!.scopes)).toBe("full");
-    expect(formatStatus({ alias: "c", me: "claude", state, online: new Map(), unread: 0 })).toContain("claude (you) — Web only (Builder)");
-    expect(formatStatus({ alias: "c", me: "claude", state, online: new Map(), unread: 0 })).toContain("works in web/");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "c", me: "claude", state, online: new Map(), unread: 0 })).toContain("claude (you) — Web only (Builder)");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "c", me: "claude", state, online: new Map(), unread: 0 })).toContain("works in web/");
   });
 
   test("the agent's brief says who it joins as, what it may do, where it works, and its instructions, instead of a role", () => {

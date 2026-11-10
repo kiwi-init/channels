@@ -7,7 +7,7 @@ import { AgentLive, AgentSession, wants } from "../src/agent.ts";
 import { formatStatus, leaseLine, statusJson } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormedEvent, type Event, type Message } from "@kiwi/core/protocol.ts";
-import { fold, LEASE_WAIT_MS, type FoldBase, type Roster } from "@kiwi/core/state.ts";
+import { fold, LEASE_WAIT_MS, nextExpiry, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
 
@@ -86,6 +86,37 @@ describe("a lease in fold", () => {
     expect(fold(ms, roster, T0 + 4 * MIN, null, null, base).leases).toEqual(fold(ms, roster, T0 + 4 * MIN).leases);
   });
 
+  test("the next moment a fold changes by time alone: the holder's lease ending, then each wait giving up, and nothing once all is settled (T1787)", async () => {
+    const ms = [await take("ann", T0, 30), await take("bob", T0 + 1000, 10)];
+    const at = (t: number) => fold(ms, roster, t);
+    const first = nextExpiry(at(T0 + MIN), T0 + MIN);
+    expect(first).toBe(T0 + 30 * MIN);
+    expect(at(first! - 1).leases).toEqual(at(T0 + MIN).leases);
+    expect(at(first!).leases.get("build")!.holder).toBe("bob");
+    const second = nextExpiry(at(first!), first!);
+    expect(second).toBe(T0 + 40 * MIN);
+    expect(at(second! - 1).leases).toEqual(at(first!).leases);
+    expect(at(second!).leases.size).toBe(0);
+    expect(nextExpiry(at(second!), second!)).toBeNull();
+    const waiting = [await take("ann", T0, 24 * 60), await take("bob", T0 + 1000)];
+    expect(nextExpiry(fold(waiting, roster, T0 + MIN), T0 + MIN)).toBe(T0 + 1000 + LEASE_WAIT_MS);
+    expect(fold(waiting, roster, T0 + 1000 + LEASE_WAIT_MS - 1).leases.get("build")!.queue).toHaveLength(1);
+    expect(fold(waiting, roster, T0 + 1000 + LEASE_WAIT_MS).leases.get("build")!.queue).toEqual([]);
+  });
+
+  test("a fact with a time to live and an open permission ask each count toward the next change (T1787)", async () => {
+    const fact = await ev("ann", { op: "fact.set", key: "deploy", value: "frozen", ttl: 600 }, T0);
+    const kept = fold([fact], roster, T0 + MIN);
+    const expires = kept.facts.get("deploy")!.expires!;
+    expect(nextExpiry(kept, T0 + MIN)).toBe(expires);
+    expect(fold([fact], roster, expires - 1).facts.size).toBe(1);
+    expect(fold([fact], roster, expires).facts.size).toBe(0);
+    const ask = { permission: { expiresAt: T0 + 5 * MIN } } as Message;
+    expect(nextExpiry({ openAsks: [ask], facts: new Map(), leases: new Map() }, T0)).toBe(T0 + 5 * MIN + 1);
+    expect(nextExpiry({ openAsks: [ask], facts: kept.facts, leases: new Map() }, T0)).toBe(T0 + 5 * MIN + 1);
+    expect(nextExpiry({ openAsks: [ask], facts: new Map(), leases: new Map() }, T0 + 5 * MIN + 1)).toBeNull();
+  });
+
   test("names and times are checked on the wire", () => {
     expect(wellFormedEvent({ op: "lease.take", name: "build", ttl: 600 })).toBe(true);
     expect(wellFormedEvent({ op: "lease.take", name: "Build Lock", ttl: 600 })).toBe(false);
@@ -99,7 +130,7 @@ describe("a lease in fold", () => {
     const s = fold(ms, roster, T0 + 10 * MIN);
     const l = s.leases.get("build")!;
     expect(leaseLine(l, "bob", T0 + 10 * MIN)).toBe("build: ann, 20m left: release 0.18 · next: you");
-    expect(formatStatus({ alias: "c", me: "bob", state: s, online: new Map(), unread: 0, now: T0 + 10 * MIN })).toContain("leases:\n  build: ann, 20m left");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "c", me: "bob", state: s, online: new Map(), unread: 0, now: T0 + 10 * MIN })).toContain("leases:\n  build: ann, 20m left");
     expect(statusJson({ alias: "c", me: "bob", state: s, online: new Map(), unread: 0 }).leases).toEqual([
       { name: "build", holder: "ann", until: T0 + 30 * MIN, note: "release 0.18", queue: ["bob"] },
     ]);

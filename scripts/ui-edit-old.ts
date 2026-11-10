@@ -48,13 +48,14 @@ const awake = async (p: Page): Promise<void> => {
   await p.keyboard.press("Shift");
   await p.locator(".rest").waitFor({ state: "detached", timeout: 5000 });
 };
+const rowEditor = (p: Page) => p.locator(".main").getByRole("textbox", { name: "Edit message" });
 const editOpens = async (p: Page): Promise<string> => {
   await awake(p);
   const a = composer(p);
   await a.click();
   await a.press("ArrowUp");
-  await p.waitForFunction((want) => (document.querySelector<HTMLTextAreaElement>(".main .composer textarea")?.value ?? "").length >= want, LONG.length, { timeout: 20000 }).catch(() => {});
-  return a.inputValue();
+  await p.waitForFunction((want) => (document.querySelector<HTMLTextAreaElement>(".main .msg-edit-text")?.value ?? "").length >= want, LONG.length, { timeout: 20000 }).catch(() => {});
+  return (await rowEditor(p).count()) === 1 ? rowEditor(p).inputValue() : "";
 };
 
 try {
@@ -98,7 +99,7 @@ try {
     `↑ opens the whole line from ${FILLERS} messages back (${LONG.length} characters)`,
     first === LONG ? null : `it opened ${first.length} characters${first.includes("END-OF-LONG-MESSAGE") ? "" : ", without its end"}`,
   );
-  await composer(ana).press("Enter");
+  await rowEditor(ana).press("Enter");
   await ana.waitForTimeout(2500);
   const kept = await seen();
   check(
@@ -110,8 +111,8 @@ try {
 
   const second = await editOpens(ana);
   if (second === LONG) {
-    await composer(ana).fill(second.replace("START", "STARTED"));
-    await composer(ana).press("Enter");
+    await rowEditor(ana).fill(second.replace("START", "STARTED"));
+    await rowEditor(ana).press("Enter");
     await ana.waitForTimeout(2500);
   }
   const changed = await seen();

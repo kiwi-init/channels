@@ -45,11 +45,11 @@ describe("cards", () => {
     const s = fold(await cards(), roster);
     expect(s.members.get("mac")!.card).toMatchObject({ os: "macos", tools: ["git", "xcode", "docker"], repo: "ojow/channels" });
     expect(cardLine(s.members.get("linux")!.card)).toBe("linux x64 · tools: git, docker, gpu · the CI box");
-    const status = formatStatus({ alias: "c", me: "mac", state: s, online: new Map(), unread: 0 });
+    const status = formatStatus({ check: "kiwi/review/test", alias: "c", me: "mac", state: s, online: new Map(), unread: 0 });
     expect(status).toContain("codex · ojow/channels\n");
     expect(status).not.toContain("tools:");
     expect(status).not.toContain(" · key ");
-    const all = formatStatus({ alias: "c", me: "mac", state: s, online: new Map(), unread: 0, all: true });
+    const all = formatStatus({ check: "kiwi/review/test", alias: "c", me: "mac", state: s, online: new Map(), unread: 0, all: true });
     expect(all).toContain("codex · windows x64 · ojow/channels · tools: git, dotnet");
     expect(all).toContain(" · key ");
   });
@@ -72,6 +72,17 @@ describe("cards", () => {
 });
 
 describe("review", () => {
+  test("with a round open, the done refusal names the reviewer's answer, the move and the close (#2032)", async () => {
+    const add = await ev("jon", { op: "task.add", title: "absent reviewer", owner: "win", review: "mac" });
+    const t = add.seq;
+    const toReview = await ev("win", { op: "task.update", task: t, state: "review" });
+    const done = await ev("win", { op: "task.update", task: t, state: "done" });
+    const s = fold([add, toReview, done], roster);
+    expect(s.rejected.get(done.seq)).toBe(
+      `T${t} needs review by mac before it's done: mac answers kiwi task approve T${t} --round 1; the lead or a person can move the review (kiwi task review T${t} --review OTHER) or close the task (kiwi task close T${t} "why")`,
+    );
+  });
+
   test("the doer can't mark reviewed work done; the reviewer approves; a person always may", async () => {
     const add = await ev("jon", { op: "task.add", title: "driver", owner: "win", review: "mac" });
     const t = add.seq;
@@ -219,7 +230,7 @@ describe("review", () => {
     expect(s.rejected.get(selfDone.seq)).toContain("someone who hasn't worked on it");
     expect(s.tasks.get(t)!.notes.map((n) => n.text)).toEqual(["missing the Windows steps"]);
     expect(s.tasks.get(t)!.approvedBy).toBe("linux");
-    expect(formatTasks(fold([add, claim], roster))).toContain("[review by anyone who hasn't worked on it]");
+    expect(formatTasks(fold([add, claim], roster), "kiwi/review/test")).toContain("[review by anyone who hasn't worked on it]");
   });
 
   test("handing it to someone first doesn't make the doer its reviewer", async () => {

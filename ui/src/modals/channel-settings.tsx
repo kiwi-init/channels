@@ -1,21 +1,27 @@
+import "~/i18n/en/modals"
+import { QUIET_MINUTES } from "@kiwi/core/protocol.ts"
 import { Notification01Icon, NotificationOff01Icon } from "@hugeicons/core-free-icons"
 import "~/styles/channel-settings.css"
 import "~/styles/new-room.css"
 
 import { useEffect, useId, useRef, useState } from "react"
 
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 import { autofocus, Avatar, cx, IconButton } from "~/kit/bits"
 import { Field, Toggle } from "~/kit/form"
+import { Details, Failed, failedToast, failure, rawOf, type Failure } from "~/kit/failed"
 import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
 import { GlyphIcon, Icon } from "~/kit/icons"
 import { choreLine } from "~/github/health"
-import { ago } from "~/kit/time"
+import { ageOf, ago } from "~/kit/time"
 import type { Channel, Room } from "~/model"
 import { nickname, roomPeople, seatRoot, shown } from "~/names"
-import { useApp, type ChannelTab } from "~/nav"
+import { useApp, type ChannelTab, useGo } from "~/nav"
 import { repoOffers } from "~/modals/repo-offers"
-import { LandingPick } from "~/modals/landing-pick"
+import { LandingPick, landingWord } from "~/modals/landing-pick"
 import { Confirm, Group, InlineEdit, Row } from "~/settings/controls"
 import { useAppCan } from "~/live/app-can"
 import { isMuted } from "~/live/mute"
@@ -24,39 +30,38 @@ import { OutsideLink } from "~/kit/outside"
 
 const REPO = /^[\w.-]+\/[\w.-]+$/
 
-const TABS: readonly (readonly [ChannelTab, string])[] = [
-  ["general", "General"],
-  ["rooms", "Rooms"],
-  ["github", "GitHub"],
-  ["notes", "Notes"],
+const TABS: readonly (readonly [ChannelTab, Key])[] = [
+  ["general", "modals.channel.settings.tab.general"],
+  ["rooms", "modals.channel.settings.tab.rooms"],
+  ["github", "modals.channel.settings.tab.github"],
+  ["notes", "modals.channel.settings.tab.notes"],
 ]
 
-export function ChannelSettings({ channel, tab: first, onClose }: { channel: Channel; tab?: ChannelTab; onClose: () => void }) {
+export function ChannelSettings({ channel, tab: first, end, onClose }: { channel: Channel; tab?: ChannelTab; end?: true | undefined; onClose: () => void }) {
   const { app, go, toast } = useApp()
   const own = channel.youOwn
   const owner = channel.people.find((p) => p.owner)
-  const [ending, setEnding] = useState(false)
+  const [ending, setEnding] = useState(!!end)
   const tabs = TABS.filter(([id]) => id !== "notes" || (channel.facts?.length ?? 0) > 0)
   const [picked, setTab] = useState<ChannelTab>(first ?? "general")
   const tab = tabs.some(([id]) => id === picked) ? picked : "general"
-  const sub = own ? "You own this channel" : owner ? `${shown(owner)} owns it` : undefined
+  const sub = own ? t("modals.channel.settings.you.own") : owner ? t("modals.channel.settings.owns.it", { name: shown(owner) }) : undefined
 
   return (
     <>
       <Modal
-        dismiss="x"
         onClose={onClose}
-        label="Channel settings"
+        label={t("modals.channel.settings.label")}
         size="wide"
         className="cset"
         lead={<ChannelIcon channel={channel} own={own} />}
         title={channel.title}
         sub={sub}
         tabs={
-          <Track className="seg modal-seg" role="group" aria-label="Sections">
+          <Track className="seg modal-seg" role="group" aria-label={t("modals.channel.settings.sections")}>
             {tabs.map(([id, label]) => (
               <button key={id} type="button" aria-pressed={tab === id} onClick={() => setTab(id)}>
-                {label}
+                {t(label)}
               </button>
             ))}
           </Track>
@@ -83,7 +88,7 @@ export function ChannelSettings({ channel, tab: first, onClose }: { channel: Cha
           const next = app.channels.find((c) => c.code !== channel.code && c.state === "member")
           if (next) go({ to: "channel", code: next.code })
           else onClose()
-          toast(own ? `Deleted ${channel.title}` : `Left ${channel.title}`)
+          toast(own ? t("modals.channel.settings.deleted", { title: channel.title }) : t("modals.channel.settings.left", { title: channel.title }))
         }}
       />
     </>
@@ -98,83 +103,65 @@ function General({ channel, onEnd }: { channel: Channel; onEnd: () => void }) {
   const [saving, setSaving] = useState<"transcript" | "log" | null>(null)
   const save = (kind: "transcript" | "log") => {
     setSaving(kind)
-    void app.actions.exportHistory(channel.code, kind).finally(() => setSaving(null))
+    void app.actions
+      .exportHistory(channel.code, kind)
+      .catch((err: unknown) => failedToast(t("modals.channel.settings.history.failed"), err))
+      .finally(() => setSaving(null))
   }
   return (
     <>
       {own && (
-        <Group title="Channel">
-          <Row label="Name">
-            <InlineEdit value={channel.title} label="Channel name" verb="Rename" onSave={(title) => app.actions.renameChannel(channel.code, title)} />
+        <Group title={t("modals.channel.settings.channel")}>
+          <Row label={t("modals.channel.settings.name")}>
+            <InlineEdit
+              value={channel.title}
+              label={t("modals.channel.settings.channel.name")}
+              verb={t("modals.channel.settings.rename")}
+              onSave={(title) => app.actions.renameChannel(channel.code, title)}
+            />
           </Row>
-          <IconRow channel={channel} />
         </Group>
       )}
-      <Group title="Goal" hint="What this channel is for and what done looks like. Every agent reads it first.">
-        {sets ? <GoalEditor channel={channel} /> : <p className="cset-goal">{channel.goal || "No goal yet."}</p>}
+      <Group title={t("modals.channel.settings.goal")} hint={t("modals.channel.settings.goal.hint")}>
+        {sets ? <GoalEditor channel={channel} /> : <p className="cset-goal">{channel.goal || t("modals.channel.settings.no.goal")}</p>}
       </Group>
-      <Group title="Agents">
+      <Group title={t("modals.channel.settings.agents")}>
         <Hold channel={channel} />
-        <Row
-          label="Tasks only from approved specs"
-          hint={channel.specsOnly ? "Every task is a step of a spec a person approved; the first free agent starts it." : "Agents may file tasks under any person's message."}
-        >
-          <Toggle on={!!channel.specsOnly} label="Tasks only from approved specs" disabled={!own} onChange={(next) => app.actions.setSpecsOnly(channel.code, next)} />
+        <Row label={t("modals.channel.settings.specs.only")} hint={channel.specsOnly ? t("modals.channel.settings.specs.only.on") : t("modals.channel.settings.specs.only.off")}>
+          <Toggle
+            on={!!channel.specsOnly}
+            label={t("modals.channel.settings.specs.only")}
+            disabled={!own}
+            why={t("modals.channel.settings.owner.only")}
+            onChange={(next) => app.actions.setSpecsOnly(channel.code, next)}
+          />
         </Row>
       </Group>
-      <Group title="Notifications">
-        <Row label="Mute on this computer" hint={muted ? "Its unread count shows only mentions of you." : undefined}>
-          <Toggle label="Mute this channel" on={muted} onChange={(on) => app.actions.setMute(channel.code, null, on)} />
+      <Group title={t("modals.channel.settings.notifications")}>
+        <Row label={t("modals.channel.settings.mute.here")} hint={muted ? t("modals.channel.settings.mute.here.hint") : undefined}>
+          <Toggle label={t("modals.channel.settings.mute.channel")} on={muted} onChange={(on) => app.actions.setMute(channel.code, null, on)} />
         </Row>
       </Group>
-      <Group title="History">
-        <Row label="Transcript" hint="Markdown, readable anywhere">
+      <Group title={t("modals.channel.settings.history")}>
+        <Row label={t("modals.channel.settings.transcript")} hint={t("modals.channel.settings.transcript.hint")}>
           <button type="button" className="btn is-small" disabled={saving !== null} onClick={() => save("transcript")}>
             <Icon name="download" size={14} />
-            {saving === "transcript" ? "Saving…" : "Download"}
+            {saving === "transcript" ? t("modals.channel.settings.saving") : t("modals.channel.settings.download")}
           </button>
         </Row>
-        <Row label="Signed log" hint="JSON lines, every message signed">
+        <Row label={t("modals.channel.settings.signed.log")} hint={t("modals.channel.settings.signed.log.hint")}>
           <button type="button" className="btn is-small" disabled={saving !== null} onClick={() => save("log")}>
             <Icon name="download" size={14} />
-            {saving === "log" ? "Saving…" : "Download"}
+            {saving === "log" ? t("modals.channel.settings.saving") : t("modals.channel.settings.download")}
           </button>
         </Row>
       </Group>
       <div className="modal-end">
         <button type="button" className="btn is-quiet is-small" onClick={onEnd}>
-          {own ? "Delete channel…" : "Leave this channel…"}
+          {own ? t("modals.channel.settings.delete.channel.more") : t("modals.channel.settings.leave.channel.more")}
         </button>
       </div>
     </>
-  )
-}
-
-function IconRow({ channel }: { channel: Channel }) {
-  const { app } = useApp()
-  const input = useRef<HTMLInputElement>(null)
-  return (
-    <Row label="Icon" hint="Shown on its tile in the rail.">
-      {channel.icon && (
-        <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setIcon(channel.code, null)}>
-          Remove
-        </button>
-      )}
-      <button type="button" className="btn is-small" onClick={() => input.current?.click()}>
-        {channel.icon ? "Change…" : "Choose…"}
-      </button>
-      <input
-        ref={input}
-        type="file"
-        accept="image/png,image/jpeg,image/gif,image/webp"
-        hidden
-        onChange={(e) => {
-          const file = e.currentTarget.files?.[0]
-          e.currentTarget.value = ""
-          if (file) app.actions.setIcon(channel.code, file)
-        }}
-      />
-    </Row>
   )
 }
 
@@ -193,12 +180,23 @@ function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
       <button
         type="button"
         className="cset-tile is-button"
-        aria-label={channel.icon ? "Change image…" : "Choose an image…"}
-        title={channel.icon ? "Change image…" : "Choose an image…"}
+        aria-label={channel.icon ? t("modals.channel.settings.image.change") : t("modals.channel.settings.image.choose")}
+        title={channel.icon ? t("modals.channel.settings.image.change") : t("modals.channel.settings.image.choose")}
         onClick={() => input.current?.click()}
       >
         {tile}
       </button>
+      {channel.icon && (
+        <button
+          type="button"
+          className="cset-tile-off"
+          aria-label={t("modals.channel.settings.image.remove")}
+          title={t("modals.channel.settings.image.remove")}
+          onClick={() => void app.actions.setIcon(channel.code, null)}
+        >
+          <Icon name="close" size={10} />
+        </button>
+      )}
       <input
         ref={input}
         type="file"
@@ -215,7 +213,7 @@ function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
 }
 
 function GoalEditor({ channel }: { channel: Channel }) {
-  const { app, toast } = useApp()
+  const { app } = useApp()
   const [draft, setDraft] = useState(channel.goal ?? "")
   const changed = draft.trim() !== (channel.goal ?? "")
   return (
@@ -225,13 +223,12 @@ function GoalEditor({ channel }: { channel: Channel }) {
         e.preventDefault()
         if (!changed) return
         app.actions.setGoal(channel.code, draft.trim())
-        toast("Goal saved")
       }}
     >
       <textarea
         className="textarea"
-        aria-label="Goal"
-        placeholder="Ship the beta by Friday, with the onboarding flow tested on a fresh Mac."
+        aria-label={t("modals.channel.settings.goal")}
+        placeholder={t("modals.channel.settings.goal.placeholder")}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
@@ -244,10 +241,10 @@ function GoalEditor({ channel }: { channel: Channel }) {
       {changed && (
         <div className="cset-save">
           <button type="button" className="btn is-quiet is-small" onClick={() => setDraft(channel.goal ?? "")}>
-            Cancel
+            {t("modals.channel.settings.cancel")}
           </button>
           <button type="submit" className="btn is-small">
-            Save
+            {t("modals.channel.settings.save")}
           </button>
         </div>
       )}
@@ -260,15 +257,19 @@ function Hold({ channel }: { channel: Channel }) {
   const hold = channel.hold
   const own = channel.youOwn
   const [note, setNote] = useState(hold?.note ?? "")
-  const by = hold ? (hold.by === channel.you ? "you" : nickname(channel, hold.by)) : ""
-  const line = hold ? `Paused by ${by} · ${ago(hold.at)}` : "Agents keep reading but don't act until you resume."
+  const line = !hold
+    ? t("modals.channel.settings.pause.hint")
+    : hold.by === channel.you
+      ? t("modals.channel.settings.paused.by.you", { when: ago(hold.at) })
+      : t("modals.channel.settings.paused.by", { who: nickname(channel, hold.by), when: ago(hold.at) })
   return (
     <div className="cset-hold">
-      <Row label="Pause agents" hint={<span className={hold ? "tone-decide" : undefined}>{line}</span>}>
+      <Row label={t("modals.channel.settings.pause")} hint={<span className={hold ? "tone-decide" : undefined}>{line}</span>}>
         <Toggle
-          label="Pause agents"
+          label={t("modals.channel.settings.pause")}
           on={!!hold}
           disabled={!own}
+          why={t("modals.channel.settings.owner.only")}
           onChange={(on) => {
             app.actions.setHold(channel.code, on, on ? note.trim() || undefined : undefined)
             if (!on) setNote("")
@@ -284,7 +285,23 @@ function Hold({ channel }: { channel: Channel }) {
             e.currentTarget.querySelector("input")?.blur()
           }}
         >
-          <input className="input" aria-label="Note for the agents" placeholder="A note for the agents, Enter to save" value={note} onChange={(e) => setNote(e.target.value)} />
+          <input
+            className="input"
+            aria-label={t("modals.channel.settings.pause.note")}
+            placeholder={t("modals.channel.settings.pause.note.placeholder")}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          {note.trim() !== (hold.note ?? "") && (
+            <div className="cset-save">
+              <button type="button" className="btn is-quiet is-small" onClick={() => setNote(hold.note ?? "")}>
+                {t("modals.channel.settings.cancel")}
+              </button>
+              <button type="submit" className="btn is-small">
+                {t("modals.channel.settings.save")}
+              </button>
+            </div>
+          )}
         </form>
       )}
       {hold && !own && hold.note && <p className="cset-note">{hold.note}</p>}
@@ -293,11 +310,11 @@ function Hold({ channel }: { channel: Channel }) {
 }
 
 function Rooms({ channel }: { channel: Channel }) {
-  const { go } = useApp()
+  const go = useGo()
   const sets = channel.youOwn || !!channel.youTrusted
   const rooms = channel.rooms.filter((r) => r.name.trim())
   return (
-    <Group title="Rooms" hint="Muting a room keeps it out of your unread counts on this computer.">
+    <Group title={t("modals.channel.settings.tab.rooms")} hint={t("modals.channel.settings.rooms.hint")}>
       {rooms.map((r) => (
         <RoomRow key={r.id} channel={channel} room={r} sets={sets} />
       ))}
@@ -305,7 +322,7 @@ function Rooms({ channel }: { channel: Channel }) {
         <div className="cset-add-row">
           <button type="button" className="btn is-quiet is-small" onClick={() => go({ to: "dialog", dialog: "new-room" })}>
             <Icon name="plus" size={14} />
-            New room
+            {t("modals.channel.settings.new.room")}
           </button>
         </div>
       )}
@@ -319,7 +336,9 @@ function RoomRow({ channel, room, sets }: { channel: Channel; room: Room; sets: 
   const canChange = useAppCan("changeRoom")
   const mine = seatRoot(channel, channel.you)
   const roots = room.members ? [...new Set(room.members.map((m) => seatRoot(channel, m)))].filter((m) => m !== mine) : []
-  const who = room.members ? ["you", ...roots.map((m) => nickname(channel, m))].join(", ") : "Everyone"
+  const who = room.members
+    ? [t("modals.channel.settings.room.you"), ...roots.map((m) => nickname(channel, m))].join(t("modals.channel.settings.room.list.sep"))
+    : t("modals.channel.settings.room.everyone")
   return (
     <div className={cx("cset-room", room.muted && "is-muted")}>
       <div className="cset-room-line">
@@ -328,7 +347,12 @@ function RoomRow({ channel, room, sets }: { channel: Channel; room: Room; sets: 
         </span>
         <div className="cset-room-text">
           {sets ? (
-            <InlineEdit value={room.name} label={`Name of #${room.name}`} verb="Rename" onSave={(name) => app.actions.renameRoom(channel.code, room.id, name)} />
+            <InlineEdit
+              value={room.name}
+              label={t("modals.channel.settings.room.name", { room: room.name })}
+              verb={t("modals.channel.settings.rename")}
+              onSave={(name) => app.actions.renameRoom(channel.code, room.id, name)}
+            />
           ) : (
             <span className="set-inline-value">{room.name}</span>
           )}
@@ -338,14 +362,14 @@ function RoomRow({ channel, room, sets }: { channel: Channel; room: Room; sets: 
         </div>
         {room.members && sets && canChange && !editing && (
           <button type="button" className="btn is-quiet is-small cset-on-hover" onClick={() => setEditing(new Set(roots))}>
-            Change who's in
+            {t("modals.channel.settings.room.change.members")}
           </button>
         )}
         <button
           type="button"
           className="icon-btn cset-bell"
-          aria-label={room.muted ? `Unmute #${room.name}` : `Mute #${room.name}`}
-          title={room.muted ? `Unmute #${room.name}` : `Mute #${room.name}`}
+          aria-label={room.muted ? t("modals.channel.settings.room.unmute", { room: room.name }) : t("modals.channel.settings.room.mute", { room: room.name })}
+          title={room.muted ? t("modals.channel.settings.room.unmute", { room: room.name }) : t("modals.channel.settings.room.mute", { room: room.name })}
           aria-pressed={!!room.muted}
           onClick={() => app.actions.setMute(channel.code, room.id, !room.muted)}
         >
@@ -375,10 +399,10 @@ function PickMembers({ channel, id, roots, picked, setPicked }: { channel: Chann
           <span className="room-member-name">{shown(p)}</span>
         </label>
       ))}
-      <p className="cset-hint">{out ? "Whoever you take out keeps what they could read, and nothing after: the room moves to a new key." : "Whoever you add reads the room's history."}</p>
+      <p className="cset-hint">{out ? t("modals.channel.settings.room.take.out") : t("modals.channel.settings.room.add")}</p>
       <div className="room-edit-foot">
         <button type="button" className="btn is-quiet is-small" onClick={() => setPicked(null)}>
-          Cancel
+          {t("modals.channel.settings.cancel")}
         </button>
         <button
           type="button"
@@ -388,7 +412,7 @@ function PickMembers({ channel, id, roots, picked, setPicked }: { channel: Chann
             setPicked(null)
           }}
         >
-          Save
+          {t("modals.channel.settings.save")}
         </button>
       </div>
     </div>
@@ -401,52 +425,55 @@ function GitHub({ channel }: { channel: Channel }) {
   const sets = own || !!channel.youTrusted
   const write = !!channel.githubWrite
   const prefix = channel.branchPrefix
+  const quiet = String(channel.quietMinutes ?? QUIET_MINUTES)
   const landing = channel.landing
   return (
     <>
-      <Group title="Repos" hint="Pull requests and issues from these show on the channel's GitHub tab and on their tasks.">
+      <Group title={t("modals.channel.settings.repos")} hint={t("modals.channel.settings.repos.hint")}>
         <Repos channel={channel} sets={sets} />
       </Group>
-      <Group title="Access">
-        <Row label="Write to GitHub" hint={write ? "Kiwi links new PRs and issues to their tasks, and a task closing closes its issue." : "Kiwi doesn't comment on or close anything in your repos."}>
-          <Toggle on={write} label="Write to GitHub" disabled={!own} onChange={(on) => app.actions.setGithubWrite(channel.code, on)} />
+      <Group title={t("modals.channel.settings.access")}>
+        <Row label={t("modals.channel.settings.github.write")} hint={write ? t("modals.channel.settings.github.write.on") : t("modals.channel.settings.github.write.off")}>
+          <Toggle
+            on={write}
+            label={t("modals.channel.settings.github.write")}
+            disabled={!own}
+            why={t("modals.channel.settings.owner.only")}
+            onChange={(on) => app.actions.setGithubWrite(channel.code, on)}
+          />
         </Row>
-        <Row
-          label="Branch prefix"
-          hint={prefix ? `A branch named ${prefix}7-… shows its pull request on T7.` : "With one, a branch named with it and a task's number shows its pull request on that task."}
-        >
+      </Group>
+      <Group title={t("modals.channel.settings.tasks.prs")}>
+        <Row label={t("modals.channel.settings.branch.prefix")} hint={prefix ? t("modals.channel.settings.branch.prefix.set", { prefix }) : t("modals.channel.settings.branch.prefix.none")}>
           {sets ? (
             <span className="cset-prefix">
               {prefix && (
                 <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setBranchPrefix(channel.code, null)}>
-                  Clear
+                  {t("modals.channel.settings.clear")}
                 </button>
               )}
-              <InlineEdit value={prefix ?? ""} label="Branch prefix" verb={prefix ? "Change" : "Set"} onSave={(v) => app.actions.setBranchPrefix(channel.code, v)} />
+              <InlineEdit
+                value={prefix ?? ""}
+                label={t("modals.channel.settings.branch.prefix")}
+                verb={prefix ? t("modals.channel.settings.change") : t("modals.channel.settings.set")}
+                onSave={(v) => app.actions.setBranchPrefix(channel.code, v)}
+              />
             </span>
           ) : (
-            <span className="cset-mono">{prefix ?? "None"}</span>
+            <span className="cset-mono">{prefix ?? t("modals.channel.settings.none")}</span>
           )}
         </Row>
-        <Row
-          label="Tasks land on"
-          hint={
-            landing
-              ? `An approved task stays landing until its ${landing} has happened; a task can set its own with --then.`
-              : "Approval finishes a task. Pick merge, release:tag or run to keep it open until that has happened; a task can wait for an npm release with --then."
-          }
-        >
-          {sets ? <LandingPick value={landing} onPick={(then) => app.actions.setLanding(channel.code, then)} /> : <span className="cset-mono">{landing ?? "Approval"}</span>}
+        <Row label={t("modals.channel.settings.quiet")} hint={t("modals.channel.settings.quiet.hint", { minutes: quiet })}>
+          {sets ? (
+            <span className="cset-prefix">
+              <InlineEdit value={quiet} label={t("modals.channel.settings.quiet")} verb={t("modals.channel.settings.change")} onSave={(v) => app.actions.setQuiet(channel.code, v)} />
+            </span>
+          ) : (
+            <span className="cset-mono">{quiet}</span>
+          )}
         </Row>
-        <Row
-          label="People merge"
-          hint={
-            channel.peopleMerge
-              ? "Agents leave pull requests for a person to merge once the task is approved and its checks are green."
-              : "Agents merge their own pull requests once the task is approved and its checks are green."
-          }
-        >
-          <Toggle on={!!channel.peopleMerge} label="People merge" disabled={!sets} onChange={(on) => app.actions.setPeopleMerge(channel.code, on)} />
+        <Row label={t("modals.channel.settings.landing")} hint={landing ? t("modals.channel.settings.landing.set") : t("modals.channel.settings.landing.none")}>
+          {sets ? <LandingPick value={landing} onPick={(then) => app.actions.setLanding(channel.code, then)} /> : <span>{landingWord(landing)}</span>}
         </Row>
       </Group>
     </>
@@ -457,16 +484,21 @@ function Repos({ channel, sets }: { channel: Channel; sets: boolean }) {
   const { app } = useApp()
   const [draft, setDraft] = useState("")
   const [mine, setMine] = useState<string[]>([])
+  const [offers, setOffers] = useState<Failure | null>(null)
   const valid = REPO.test(draft.trim())
   const listId = useId()
   useEffect(() => {
     if (!sets) return
     let live = true
-    void app.actions.myRepos().then((r) => live && setMine(r))
+    void app.actions.myRepos().then(
+      (r) => live && setMine(r),
+      (err: unknown) => live && setOffers(repoFailure(err))
+    )
     return () => {
       live = false
     }
   }, [app.actions, sets])
+  const [removing, setRemoving] = useState<string | null>(null)
   const offer = repoOffers(mine, channel.repos)
   return (
     <>
@@ -476,10 +508,21 @@ function Repos({ channel, sets }: { channel: Channel; sets: boolean }) {
           <OutsideLink className="cset-repo-name" href={`https://github.com/${r}`}>
             {r}
           </OutsideLink>
-          {sets && <IconButton icon="close" label={`Remove ${r}`} onClick={() => app.actions.removeRepo(channel.code, r)} />}
+          {sets && <IconButton icon="close" label={t("modals.channel.settings.repo.remove", { repo: r })} onClick={() => setRemoving(r)} />}
         </div>
       ))}
-      {!sets && !channel.repos.length && <p className="set-none">No repos yet.</p>}
+      <Confirm
+        open={removing !== null}
+        title={t("modals.channel.settings.repo.remove.ask", { repo: removing ?? "", channel: channel.title })}
+        sub={t("modals.channel.settings.repo.remove.sub")}
+        action={t("modals.channel.settings.repo.remove.yes")}
+        onClose={() => setRemoving(null)}
+        onConfirm={() => {
+          if (removing) app.actions.removeRepo(channel.code, removing)
+          setRemoving(null)
+        }}
+      />
+      {!sets && !channel.repos.length && <p className="set-none">{t("modals.channel.settings.no.repos")}</p>}
       {sets && (
         <form
           className="cset-repo cset-repo-add"
@@ -490,20 +533,34 @@ function Repos({ channel, sets }: { channel: Channel; sets: boolean }) {
             setDraft("")
           }}
         >
-          <input className="input is-mono" placeholder="owner/repo" aria-label="Add a repo" list={listId} value={draft} onChange={(e) => setDraft(e.target.value)} />
+          <input
+            className="input is-mono"
+            placeholder={t("modals.channel.settings.repo.placeholder")}
+            aria-label={t("modals.channel.settings.repo.add.label")}
+            list={listId}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
           <datalist id={listId}>
             {offer.map((r) => (
               <option key={r} value={r} />
             ))}
           </datalist>
           <button type="submit" className="btn is-small" disabled={!valid}>
-            Add
+            {t("modals.channel.settings.repo.add")}
           </button>
         </form>
       )}
+      {sets && offers && <Failed failure={offers} />}
       <GithubTrouble channel={channel} />
     </>
   )
+}
+
+function repoFailure(err: unknown): Failure | null {
+  if (/link GitHub/i.test(rawOf(err))) return null
+  const expired = /expired/i.test(rawOf(err))
+  return failure(t("modals.channel.settings.repos.failed"), err, { other: t(expired ? "modals.channel.settings.repos.expired" : "modals.channel.settings.repos.type") })
 }
 
 function GithubTrouble({ channel }: { channel: Channel }) {
@@ -515,11 +572,18 @@ function GithubTrouble({ channel }: { channel: Channel }) {
     <ul className="cset-trouble">
       {missing.map((r) => (
         <li key={`install:${r.repo}`}>
-          Kiwi Channels isn't installed on {r.repo.split("/")[0]}, so GitHub sends {r.repo} nothing. {r.install && <OutsideLink href={r.install}>Install it</OutsideLink>}
+          {tr("modals.channel.settings.app.missing", {
+            account: r.repo.split("/")[0],
+            repo: r.repo,
+            install: r.install ? <OutsideLink href={r.install}>{t("modals.channel.settings.app.install")}</OutsideLink> : null,
+          })}
         </li>
       ))}
       {health.errors.map((e) => (
-        <li key={`${e.what}:${e.repo ?? ""}`}>{choreLine(e)}</li>
+        <li key={`${e.what}:${e.repo ?? ""}`}>
+          {choreLine(e)}
+          <Details raw={e.message} />
+        </li>
       ))}
     </ul>
   )
@@ -529,30 +593,34 @@ function Facts({ channel }: { channel: Channel }) {
   const { app } = useApp()
   const [clearing, setClearing] = useState<string | null>(null)
   return (
-    <Group title="Notes" hint="What agents noted for everyone here. Click one to copy its value.">
+    <Group title={t("modals.channel.settings.tab.notes")} hint={t("modals.channel.settings.notes.hint")}>
       {(channel.facts ?? []).map((f) => (
         <div key={f.key} className="cset-fact">
           <button
             type="button"
             className="cset-fact-body"
-            title={`Copy the value. Noted by ${nickname(channel, f.by)} ${ago(f.at) === "now" ? "just now" : `${ago(f.at)} ago`}.`}
-            onClick={() => copyText(f.value, `Copied ${f.key}`)}
+            title={
+              ageOf(f.at) === "now"
+                ? t("modals.channel.settings.note.copy.now", { who: nickname(channel, f.by) })
+                : t("modals.channel.settings.note.copy.ago", { who: nickname(channel, f.by), time: ago(f.at) })
+            }
+            onClick={() => copyText(f.value, t("modals.channel.settings.note.copied", { key: f.key }))}
           >
             <span className="cset-fact-key">{f.key}</span>
             <span className="cset-fact-value">{f.value}</span>
           </button>
           {clearing === f.key ? (
             <span className="cset-fact-confirm">
-              <button type="button" className="btn is-quiet is-small" onClick={() => setClearing(null)}>
-                Keep
+              <button type="button" className="btn is-quiet is-small" autoFocus onClick={() => setClearing(null)}>
+                {t("modals.channel.settings.note.keep")}
               </button>
               <button type="button" className="btn is-danger is-small" onClick={() => (app.actions.clearFact(channel.code, f.key), setClearing(null))}>
-                Clear
+                {t("modals.channel.settings.clear")}
               </button>
             </span>
           ) : (
             <span className="cset-on-hover">
-              <IconButton icon="close" label={`Clear ${f.key}`} onClick={() => setClearing(f.key)} />
+              <IconButton icon="close" label={t("modals.channel.settings.note.clear", { key: f.key })} onClick={() => setClearing(f.key)} />
             </span>
           )}
         </div>
@@ -569,19 +637,26 @@ function End({ channel, open, onClose, onDone }: { channel: Channel; open: boole
   }
   if (!channel.youOwn)
     return (
-      <Confirm open={open} title={`Leave ${channel.title}?`} sub="You stop getting its messages. To come back, someone has to let you in again." action="Leave" onClose={close} onConfirm={onDone} />
+      <Confirm
+        open={open}
+        title={t("modals.channel.settings.leave.title", { title: channel.title })}
+        sub={t("modals.channel.settings.leave.sub")}
+        action={t("modals.channel.settings.leave")}
+        onClose={close}
+        onConfirm={onDone}
+      />
     )
   return (
     <Confirm
       open={open}
-      title={`Delete ${channel.title}?`}
-      sub="Every message, room, DM, task, spec and note is deleted for everyone, every person and agent is removed, and its invites stop working. This can't be undone: download the history first if you want a copy."
-      action="Delete channel"
+      title={t("modals.channel.settings.delete.title", { title: channel.title })}
+      sub={t("modals.channel.settings.delete.sub")}
+      action={t("modals.channel.settings.delete.channel")}
       ready={typed.trim() === channel.title}
       onClose={close}
       onConfirm={onDone}
     >
-      <Field label={`Type ${channel.title} to confirm`}>
+      <Field label={t("modals.channel.settings.delete.type", { title: channel.title })}>
         <input ref={autofocus} className="input is-mono" value={typed} onChange={(e) => setTyped(e.target.value)} />
       </Field>
     </Confirm>

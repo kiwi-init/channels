@@ -5,6 +5,7 @@
 // coordination events, signatures) lives inside the encrypted payload.
 
 import { wellFormedArtifact, wellFormedCheck, wellFormedRunId, type CheckArtifact, type CheckAsk } from "./checks.ts";
+import { wellFormedStepEdit, wellFormedStepLanded, wellFormedStepSpecs, type StepEdit, type StepLanded, type StepSpec } from "./steps.ts";
 import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
@@ -265,7 +266,7 @@ export type Event =
    * A task. `review`: who must approve it before it's done (a member's name, or "*" for anyone who hasn't
    * worked on it). Logs from older clients may also carry `after`, `needs` and `handoff`: they're ignored.
    */
-  | { op: "task.add"; title: string; detail?: string; owner?: string; review?: string; issue?: IssueRef; from?: number; then?: Landing; lander?: string }
+  | { op: "task.add"; title: string; detail?: string; owner?: string; review?: string; issue?: IssueRef; from?: number; then?: Landing; steps?: StepSpec[]; lander?: string }
   | { op: "task.claim"; task: number }
   | {
       op: "task.update";
@@ -290,9 +291,13 @@ export type Event =
       lander?: string | null;
       close?: string;
       runs?: number[];
+      kept?: KeptEvidence;
     }
   | { op: "task.first"; task: number }
+  | { op: "task.nudge"; task: number; mover: string; since: number; step: NudgeStep; day?: number }
   | { op: "task.landed"; task: number; artifact: CheckArtifact }
+  | ({ op: "task.landed"; task: number } & StepLanded)
+  | { op: "task.steps"; task: number; edit: StepEdit }
   | { op: "task.delete"; task: number; why?: string }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
@@ -351,7 +356,8 @@ export type Event =
   | { op: "voice.set"; on: boolean }
   | { op: "github.write.set"; on: boolean }
   | { op: "branch.prefix.set"; prefix: string | null }
-  | { op: "landing.set"; then: Landing | null }
+  | { op: "quiet.set"; minutes: number }
+  | { op: "landing.set"; then: Landing | null; steps?: StepSpec[] }
   | { op: "merges.set"; by: Merger }
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
@@ -541,6 +547,45 @@ export type MergeMethod = (typeof MERGE_METHODS)[number];
 export const MAX_REQUIRED_CHECKS = 50;
 export const MAX_RELEASE_COMMITS = 250;
 const SHA_RE = /^[0-9a-f]{7,40}$/;
+const FULL_SHA_RE = /^[0-9a-f]{40}$/;
+
+export const QUIET_MINUTES = 20;
+export const MAX_QUIET_MINUTES = 24 * 60;
+
+export const quietMinutes = (x: unknown): x is number => typeof x === "number" && Number.isSafeInteger(x) && x >= 1 && x <= MAX_QUIET_MINUTES;
+
+export type NudgeStep = 0 | 1 | 2 | 3;
+
+const KEPT_HOWS = ["same-tree", "clean-merge"] as const;
+export type KeptHow = (typeof KEPT_HOWS)[number];
+
+export interface KeptEvidence {
+  head: string;
+  approved: string;
+  how: KeptHow;
+  repo: string;
+  ref: string;
+  tip: string;
+}
+
+const KEPT_KEYS: readonly string[] = ["head", "approved", "how", "repo", "ref", "tip"];
+
+function isKeptEvidence(x: unknown): x is KeptEvidence {
+  if (!x || typeof x !== "object") return false;
+  const k = x as Record<string, unknown>;
+  const sha = (v: unknown): boolean => typeof v === "string" && FULL_SHA_RE.test(v);
+  const line = (v: unknown): boolean => typeof v === "string" && v.length > 0 && v.length <= 200 && !/\s/.test(v);
+  return (
+    Object.keys(k).every((key) => KEPT_KEYS.includes(key)) &&
+    sha(k.head) &&
+    sha(k.approved) &&
+    sha(k.tip) &&
+    k.head !== k.approved &&
+    (KEPT_HOWS as readonly unknown[]).includes(k.how) &&
+    line(k.repo) &&
+    line(k.ref)
+  );
+}
 
 export interface IssueRef {
   repo: string;
@@ -890,9 +935,13 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 22;
+export const EVENT_OPS_VERSION = 25;
 
 export const REVIEW_CHECK = "kiwi/review";
+
+export const reviewCheckOf = (roomId: string): string => `${REVIEW_CHECK}/${roomId}`;
+
+export const isReviewCheck = (name: string): boolean => name === REVIEW_CHECK || name.startsWith(`${REVIEW_CHECK}/`);
 
 export const opsVersion = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 1 && (x as number) <= 10_000;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
@@ -914,7 +963,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 25;
+export const FOLD_RULES = 29;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1067,13 +1116,19 @@ function eventCheck(ev: unknown): boolean | null {
         opt(e.issue, isIssueRef) &&
         opt(e.from, (x): x is number => Number.isSafeInteger(x) && (x as number) > 0) &&
         opt(e.then, isLanding) &&
+        opt(e.steps, wellFormedStepSpecs) &&
+        (e.then === undefined || e.steps === undefined) &&
         opt(e.lander, (x): x is string => str(x, 64))
       );
     case "task.claim":
     case "task.first":
       return n(e.task);
+    case "task.nudge":
+      return n(e.task) && str(e.mover, 64) && e.mover.length > 0 && n(e.since) && (e.step === 0 ? n(e.day) : (e.step === 1 || e.step === 2 || e.step === 3) && e.day === undefined);
     case "task.landed":
-      return n(e.task) && wellFormedArtifact(e.artifact);
+      return n(e.task) && (e.step === undefined ? wellFormedArtifact(e.artifact) : wellFormedStepLanded(e));
+    case "task.steps":
+      return n(e.task) && wellFormedStepEdit(e.edit);
     case "task.delete":
       return n(e.task) && opt(e.why, (x): x is string => str(x, 500));
     case "task.update":
@@ -1107,6 +1162,7 @@ function eventCheck(ev: unknown): boolean | null {
         (e.lander === undefined || e.lander === null || str(e.lander, 64)) &&
         (e.runs === undefined || (e.verdict === "approved" && Array.isArray(e.runs) && e.runs.length <= 50 && e.runs.every((r) => Number.isSafeInteger(r) && (r as number) > 0))) &&
         (e.close === undefined || (e.state === "done" && e.verdict === undefined && str(e.close, 500) && e.close.trim().length > 0)) &&
+        opt(e.kept, isKeptEvidence) &&
         opt(e.proof, (x): x is { url: string; label?: string } => {
           const p = x as { url?: unknown; label?: unknown } | null;
           return (
@@ -1238,8 +1294,10 @@ function eventCheck(ev: unknown): boolean | null {
       return typeof e.on === "boolean";
     case "branch.prefix.set":
       return e.prefix === null || (typeof e.prefix === "string" && BRANCH_PREFIX_RE.test(e.prefix));
+    case "quiet.set":
+      return quietMinutes(e.minutes);
     case "landing.set":
-      return e.then === null || isLanding(e.then);
+      return (e.then === null || isLanding(e.then)) && (e.steps === undefined || (e.then === null && wellFormedStepSpecs(e.steps)));
     case "merges.set":
       return (MERGERS as readonly unknown[]).includes(e.by);
     case "react":

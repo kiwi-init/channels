@@ -9,11 +9,15 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, and the phone jobs ios, android); empty runs everything but the phone jobs"
+        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, and the phone jobs ios, android); empty picks from what the branch changed (.github/coverage.yml), everything when in doubt"
         required: false
         default: ""
       update_from:
         description: "desktop / distros also updates this released version's AppImage to the latest release (update.sh)"
+        required: false
+        default: ""
+      doc_still_loops:
+        description: "build / doc's busy-doc stillness check in WebKit runs this many loops with --trace, and keeps its log as the doc-still-trace artifact; empty runs it once"
         required: false
         default: ""
       release:
@@ -26,12 +30,16 @@ on:
 # finishes, one run waits, and a newer push replaces the waiting one, so main's full run keeps
 # finishing while merges come every few minutes. Each merge group has a ref of its own, so groups
 # never cancel each other. A dispatched run replaces an older dispatched run on the same ref only
-# when it asks for exactly the same thing: the group carries a hash of the jobs, release and
-# update_from inputs, so a jobs=doc run never replaces a jobs=desktop-linux validation on the same
-# head, a release check never replaces a plain one, and dispatches never share a group with a push
-# to main, which stays uncancellable by anything but itself.
+# when it asks for exactly the same thing: the group carries each of the jobs, release and
+# update_from inputs as its JSON string (toJSON quotes and escapes, so a tuple's encoding
+# is unique and no delimiter inside an input can impersonate another tuple), so a jobs=doc
+# run never replaces a jobs=desktop-linux validation on the same head, a release check
+# never replaces a plain one, and dispatches never share a group with a push to main,
+# which stays uncancellable by anything but itself. GitHub compares group names without
+# letter case, so identity here ignores case too, exactly as far as the host's own
+# comparison collapses it (the spec's choice, #3101).
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || (github.event_name == 'workflow_dispatch' && format('{0}-dispatch-j{1}-r{2}-u{3}', github.ref, inputs.jobs, inputs.release, inputs.update_from)) || github.run_id }}
+  group: ci-${{ github.event.pull_request.number || github.event.merge_group.head_ref || (github.event_name == 'push' && github.ref) || (github.event_name == 'workflow_dispatch' && format('{0}-dispatch-{1}{2}{3}', github.ref, toJSON(inputs.jobs), toJSON(inputs.release), toJSON(inputs.update_from))) || github.run_id }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:
@@ -46,26 +54,50 @@ jobs:
   # android) are retired for now: they run only when a dispatch names them.
   plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     outputs:
       run: ${{ steps.plan.outputs.run }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 50
+        if: github.event_name == 'workflow_dispatch' && inputs.jobs == ''
+      - run: git fetch --depth=50 origin main || true
+        if: github.event_name == 'workflow_dispatch' && inputs.jobs == ''
       - id: plan
         env:
           EVENT: ${{ github.event_name }}
           JOBS: ${{ inputs.jobs }}
           TITLE: ${{ github.event.pull_request.title }}
+          RELEASE: ${{ inputs.release }}
         run: |
           all="static test-unit test-flows build doc fuzz shots desktop-mac desktop-linux desktop-distros cli-macos"
           phones="ios android"
           case "$EVENT" in
             pull_request) pick="static test-unit"; if echo "$TITLE" | grep -qE '^kiwi [0-9]{4}\.[0-9]{1,2}\.[0-9]+(-rc\.[0-9]+)?$'; then pick="$pick cli-macos"; fi ;;
-            workflow_dispatch) pick=$(echo "${JOBS:-$all}" | tr ',' ' ') ;;
+            workflow_dispatch)
+              if [ -n "$JOBS" ]; then
+                pick=$(echo "$JOBS" | tr ',' ' ')
+                case " $pick " in *" desktop-distros "*) case " $pick " in *" desktop-linux "*) ;; *) pick="$pick desktop-linux" ;; esac ;; esac
+              else
+                pick=$(bash scripts/coverage-pick.sh "$RELEASE")
+              fi ;;
             *) pick="$all" ;;
           esac
           for j in $pick; do case " $all $phones " in *" $j "*) ;; *) echo "no job named $j; the jobs are: $all $phones"; exit 1 ;; esac; done
           json=$(for j in $all $phones; do case " $pick " in *" $j "*) v=true ;; *) v=false ;; esac; printf '"%s":%s,' "$j" "$v"; done)
           echo "run={${json%,}}" >> "$GITHUB_OUTPUT"
+      - run: |
+          legs='["repo / static","test / unit","test / flows","build / bundles, app","build / bundles, ui-a","build / bundles, ui-b","build / doc, send","build / doc, edit","build / doc, view","build / fuzz","build / shots, chromium","build / shots, webkit","desktop / mac","desktop / linux, ubuntu-24.04","desktop / linux, ubuntu-26.04","desktop / distros, arch","cli / macos","ci-ok"]'
+          printf '%s' "$legs" > ci-legs.json
+        if: github.event_name == 'push'
+      - name: upload the expected legs manifest
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ci-legs
+          path: ci-legs.json
+          retention-days: 90
 
   # Types, lint, format, unused code and action pins.
   static:
@@ -153,11 +185,15 @@ jobs:
 
   # The app, the CLI binary and the worker, each built and smoke-tested.
   build:
-    name: build / bundles
+    name: build / bundles, ${{ matrix.part }}
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['build']
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [app, ui-a, ui-b]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -167,12 +203,13 @@ jobs:
       - name: ui build
         run: bun run ui:build
       - name: ui bundle budget
+        if: ${{ !cancelled() && matrix.part == 'app' }}
         run: bun scripts/ui-bundle.ts
       - name: ui harness build, with the plain-browser key store
         if: ${{ !cancelled() }}
         run: bun scripts/ui-harness.ts
       - name: app smoke
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'app' }}
         timeout-minutes: 5
         run: bun scripts/smoke-app.ts
       - if: failure()
@@ -184,19 +221,19 @@ jobs:
           overwrite: true
       # The new UI's long-feed demo in WebKit: it renders the latest rows, and nothing jumps while it scrolls. It scrolls once and gates on rows and jumps; the timed runs are by hand.
       - name: ui scroll in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-scroll-fps.ts --check --dist ui/dist
       - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-still.ts --dist ui/dist
       - name: ui a remote edit landing between your keys never undoes your caret or selection (⇧← and ←), in Chromium and WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-doc-select-race.ts
       - name: ui people see agents by nickname, never by handle, on the main screens (demo agents get real-looking handles)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'ui-b' }}
         run: bun scripts/ui-handles.ts --dist ui/dist
       - name: cli build
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'app' }}
         run: |
           bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
           probe="$RUNNER_TEMP/kiwi-autoload"
@@ -206,10 +243,10 @@ jobs:
           (cd "$probe" && "$GITHUB_WORKSPACE/dist/kiwi" --version)
           test ! -e "$probe/preload-ran" || { echo "the kiwi CLI ran a bunfig.toml preload from the folder it was started in"; exit 1; }
       - name: cli smoke
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'app' }}
         run: bun scripts/smoke-cli.ts dist/kiwi
       - name: relay worker
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.part == 'app' }}
         run: bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
 
   # The thread doc in Chromium and WebKit, written from the composer: replay, send, follow, image order, image copies, steady, a busy doc holding still and what the composer keeps from writing in the doc. Three legs balanced on the 2026-11-06 step medians (note gates/baseline): send ~2.2, edit ~2.4, view ~2.4 min of tests, every test exactly one leg; ci-ok fails unless every leg that ran passed.
@@ -218,7 +255,7 @@ jobs:
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['doc']
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: ${{ inputs.doc_still_loops != '' && 60 || 15 }}
     strategy:
       fail-fast: false
       matrix:
@@ -249,7 +286,13 @@ jobs:
       - name: doc image order, a line sent with an image from the composer stays above the lines sent after it
         if: ${{ !cancelled() && matrix.part == 'send' }}
         run: bun scripts/ui-doc-image-order.ts
-      - name: image copies, a Retina shot in the feed and the doc shows from a copy sized to its box, while the viewer, Save image and a drag get the original, in Chromium and WebKit
+      - name: send once, a message whose answer was lost or that was written with the relay away survives a reload and is delivered once
+        if: ${{ !cancelled() && matrix.part == 'send' }}
+        run: bun scripts/ui-send-once.ts
+      - name: hidden blocks, a line in the feed is one bare node in the doc, selecting takes it once, and Back to draft gives a failed line back, in Chromium and WebKit
+        if: ${{ !cancelled() && matrix.part == 'send' }}
+        run: bun scripts/ui-doc-hidden.ts && bun scripts/ui-doc-hidden.ts --webkit
+      - name: image copies, a Retina shot in the feed shows from a copy sized to its box and the doc mounts no second one, while the viewer, Save image and a drag get the original, in Chromium and WebKit
         if: ${{ !cancelled() && matrix.part == 'view' }}
         run: |
           status=0
@@ -272,7 +315,21 @@ jobs:
           exit "$status"
       - name: ui a busy thread doc never scrolls on its own, under the composer or while you read, in WebKit
         if: ${{ !cancelled() && matrix.part == 'view' }}
-        run: bun scripts/ui-doc-still.ts --dist ui/dist
+        env:
+          LOOPS: ${{ inputs.doc_still_loops }}
+        run: |
+          if [ -z "$LOOPS" ]; then exec bun scripts/ui-doc-still.ts --dist ui/dist; fi
+          case "$LOOPS" in *[!0-9]*) echo "doc_still_loops: a number of loops"; exit 1 ;; esac
+          mkdir -p "$RUNNER_TEMP/doc-still"
+          set -o pipefail
+          bun scripts/ui-doc-still.ts --dist ui/dist --trace --loops "$LOOPS" 2>&1 | tee "$RUNNER_TEMP/doc-still/doc-still.log"
+      - if: ${{ !cancelled() && matrix.part == 'view' && inputs.doc_still_loops != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: doc-still-trace
+          path: ${{ runner.temp }}/doc-still
+          if-no-files-found: ignore
+          overwrite: true
       - name: composer in a doc, late refusals keep the draft, PDFs, Edit in the composer, slow pasted images, the / menu and ⌘Enter, in Chromium and WebKit
         if: ${{ !cancelled() && matrix.part == 'send' }}
         run: |
@@ -345,11 +402,15 @@ jobs:
           exit "$status"
 
   shots:
-    name: build / shots
+    name: build / shots, ${{ matrix.engine }}
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['shots']
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -357,75 +418,80 @@ jobs:
         with:
           webkit: "true"
       - run: bun run ui:build
-      - name: ui shots in Chromium and WebKit
+      - name: ui shots in Chromium and WebKit, ${{ matrix.engine }}
         run: |
           pids=""
           for shard in 1/2 2/2; do
-            bun scripts/shoot-app.ts --dist ui/dist --theme dark --shard "$shard" "$RUNNER_TEMP/shots" &
-            pids="$pids $!"
-            bun scripts/shoot-app.ts --dist ui/dist --browser webkit --theme light --shard "$shard" "$RUNNER_TEMP/shots-webkit" &
+            if [ "${{ matrix.engine }}" = chromium ]; then
+              bun scripts/shoot-app.ts --dist ui/dist --theme dark --shard "$shard" "$RUNNER_TEMP/shots" &
+            else
+              bun scripts/shoot-app.ts --dist ui/dist --browser webkit --theme light --shard "$shard" "$RUNNER_TEMP/shots-webkit" &
+            fi
             pids="$pids $!"
           done
           status=0
-          bun scripts/shoot-app.ts --dist ui/dist --size 390x844 --only channel,tasks --theme dark "$RUNNER_TEMP/shots/phone" || status=1
+          if [ "${{ matrix.engine }}" = chromium ]; then
+            bun scripts/shoot-app.ts --dist ui/dist --size 390x844 --only channel,tasks --theme dark "$RUNNER_TEMP/shots/phone" || status=1
+          fi
           for pid in $pids; do wait "$pid" || status=1; done
           exit "$status"
       - name: ui stash clicks in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-stash-click.ts --dist ui/dist
-      - name: shots wait for reaction requests in Chromium and WebKit
+      - name: shots wait for reaction requests in ${{ matrix.engine }}
         if: ${{ !cancelled() }}
-        run: |
-          bun scripts/shots-settle.ts --browser chromium --dist ui/dist
-          bun scripts/shots-settle.ts --browser webkit --dist ui/dist
+        run: bun scripts/shots-settle.ts --browser ${{ matrix.engine }} --dist ui/dist
       - name: ui scrolling up a feed of event runs keeps loading to its first row, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-scroll-up.ts --dist ui/dist
       - name: ui the spec page uses a wide window and its comment box grows, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-spec-layout.ts --dist ui/dist
+      - name: ui spec comments take keyboard focus, jump reply to reply, keep each spec's draft, and retry a failed send once, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-spec-comments.ts --dist ui/dist
       - name: ui Esc in search keeps the panel, and Settings doesn't offer a name change, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-esc-and-name.ts --dist ui/dist
       - name: ui the composer keeps each room's draft and images to itself, and an image sends without a file name as text, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-composer-rooms.ts --dist ui/dist
       - name: ui muting a room dims it in the sidebar, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
       - name: ui People lists you first, and your row opens your profile, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-people-you.ts --dist ui/dist
       - name: ui settings, profiles, Invite and Add an agent open in one modal that Esc, a click outside and Back close, with focus kept inside, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-modal.ts --dist ui/dist
       - name: ui edit and delete your own message (toolbar, Enter, ↑, Esc, the delete confirm), in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-edit-delete.ts --dist ui/dist
       - name: ui search reaches older history, Search older history fetches more only on a click, and an older hit opens its stretch (Back to latest, react and copy only), in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-older-search.ts --dist ui/dist
       - name: ui a reload keeps the room, tab and scroll, and ⌘[ / ⌘] step back and forward after search jumps, in WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-restore-place.ts --dist ui/dist
-      - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
+      - name: ui a click on a mention opens the direct conversation with that person, and their name inside it opens the profile
         if: ${{ !cancelled() }}
+        run: bun scripts/ui-person-click.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist
       - name: ui history archive (newest window on reload, rows kept below it, backfill, leave), on WebKit's IndexedDB
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-history-archive.ts
       - name: ui top bar in Chromium moves the window only from its background
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-drag-regions.ts --dist ui/dist
-      - name: ui rooms are flat in Chromium and WebKit, a reply shows inline with its quote and nothing opens a thread
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-flat-rooms.ts --dist ui/dist && bun scripts/ui-flat-rooms.ts --dist ui/dist --webkit
+      - name: ui room replies in Chromium and WebKit, a reply shows inline with its quote and a message opens its thread
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-room-replies.ts --dist ui/dist && bun scripts/ui-room-replies.ts --dist ui/dist --webkit
       - name: ui onboarding's meadow holds still with the app's own Reduce motion, in Chromium and WebKit
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-onboarding-meadow.ts --dist ui/dist && bun scripts/ui-onboarding-meadow.ts --dist ui/dist --webkit
-      - name: ui portrait window in WebKit is one tall page, agents, tasks and chat in view, and landscape is unchanged
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-tall-page.ts --dist ui/dist
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -471,6 +537,9 @@ jobs:
       - name: history search on macOS's own SQLite (FTS5, the sealed index, the worker)
         if: ${{ !cancelled() }}
         run: bun test test/search-index.test.ts test/history-search.test.ts
+      - name: the launcher's key channel leaves the main thread free (a real socket, macOS only)
+        if: ${{ !cancelled() }}
+        run: bun test test/desktop-launcher-wait.test.ts
       - working-directory: desktop
         if: ${{ !cancelled() }}
         env:
@@ -507,6 +576,10 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 10
         run: bun desktop/scripts/eb-ui-check.ts desktop/release-eb/build/dev-macos-*/*.app
+      - name: a store the app can't read gets its own page instead of first-run, and is never written over (T1772)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: bun desktop/scripts/eb-unreadable-check.ts desktop/release-eb/build/dev-macos-*/*.app
 
   desktop-linux:
     name: desktop / linux, ${{ matrix.os }}
@@ -542,7 +615,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bison bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols sway swaybg grim gsettings-desktop-schemas libglib2.0-bin libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bison bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols libkf6iconthemes-dev qt6-base-dev qt6-svg-plugins breeze-icon-theme sway swaybg grim gsettings-desktop-schemas libglib2.0-bin libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -604,6 +677,33 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$APP/bin/launcher" ${{ matrix.sandbox }}
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
+      - name: a start that fails says why in a message box and in main.log, then quits (T1763), with a screenshot
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: |
+          export XVFB_FBDIR="$RUNNER_TEMP/start-failure-fb"
+          mkdir -p "$XVFB_FBDIR"
+          xvfb-run -a -s "-screen 0 1280x800x24 -fbdir $XVFB_FBDIR" bun desktop/scripts/start-failure-check.ts "$APP" "$RUNNER_TEMP/start-failure"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: start-failure-${{ matrix.os }}
+          path: ${{ runner.temp }}/start-failure
+          if-no-files-found: warn
+          retention-days: 3
+          overwrite: true
+      - name: under Breeze Dark, KDE's icon loader (as Plasma's taskbar and Alt+Tab use it) draws the dark icon the AppImage installs, and the light one again under Breeze, live in one running process
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 5
+        run: bash desktop/scripts/icon-theme-check/check.sh "$RUNNER_TEMP/appimage/squashfs-root" "$RUNNER_TEMP/icon-theme-check"
+      - if: ${{ !cancelled() && matrix.drive }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: icon-theme-check-${{ matrix.os }}
+          path: ${{ runner.temp }}/icon-theme-check/shots
+          if-no-files-found: warn
+          retention-days: 3
+          overwrite: true
       - name: the tray uses Channels' symbolic icon and title where a tray host runs
         if: ${{ !cancelled() }}
         run: |
@@ -786,6 +886,10 @@ jobs:
           retention-days: 3
           overwrite: true
 
+  # desktop / distros runs after merge: on every push to main and when a dispatch names it (naming
+  # it also selects desktop-linux, the leg that builds its AppImage), not on default dispatches.
+  # This is safe because release.yml's ci-green gate refuses to build or publish a tag whose exact
+  # commit lacks a green push run — distros included — so a broken AppImage cannot ship.
   desktop-distros:
     name: desktop / distros, ${{ matrix.distro }}
     needs: [plan, desktop-linux]
@@ -892,11 +996,11 @@ jobs:
       - name: every word the app shows is in its String Catalog
         if: ${{ !cancelled() }}
         run: bun ios/scripts/catalog-check.ts ios/Channels/Localizable.xcstrings "$RUNNER_TEMP/ios"
-      - name: languages in the simulator (a Language pick changes the app at once, and the phone's language is followed)
+      - name: UI tests in the simulator (a Language pick changes the app at once, the phone's language is followed, updates sit behind an icon)
         if: ${{ !cancelled() }}
         run: |
           sim=$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
-          xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/languages.xcresult" -only-testing:ChannelsUITests/LanguageTests CODE_SIGNING_ALLOWED=NO test
+          xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/languages.xcresult" -only-testing:ChannelsUITests/LanguageTests -only-testing:ChannelsUITests/UpdatesTests -only-testing:ChannelsUITests/DemoTests CODE_SIGNING_ALLOWED=NO test
       - name: language shots
         if: ${{ !cancelled() }}
         run: |
@@ -907,6 +1011,23 @@ jobs:
         with:
           name: ios-language-shots
           path: ${{ runner.temp }}/ios-language-shots
+          if-no-files-found: ignore
+          overwrite: true
+      - name: the feed never goes blank while you type in a short channel, in the simulator
+        if: ${{ !cancelled() }}
+        run: |
+          sim=$(xcrun simctl list devices available -j | jq -r '[.devices | to_entries[] | select(.key | test("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
+          xcodebuild -project ios/Channels.xcodeproj -scheme Channels -destination "id=$sim" -derivedDataPath "$RUNNER_TEMP/ios-sim" -resultBundlePath "$RUNNER_TEMP/feed.xcresult" -only-testing:ChannelsUITests/BlankFeedTests/testTheFeedStaysWhileTyping CODE_SIGNING_ALLOWED=NO test
+      - name: feed shots
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/ios-feed-shots"
+          [ -d "$RUNNER_TEMP/feed.xcresult" ] && xcrun xcresulttool export attachments --path "$RUNNER_TEMP/feed.xcresult" --output-path "$RUNNER_TEMP/ios-feed-shots" || true
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-feed-shots
+          path: ${{ runner.temp }}/ios-feed-shots
           if-no-files-found: ignore
           overwrite: true
 

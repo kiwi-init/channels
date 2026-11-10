@@ -5,13 +5,17 @@ import { cx } from "~/kit/bits"
 import { later } from "~/kit/later"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
-import { useApp } from "~/nav"
-import type { Menu } from "~/shell/rail-menu"
+import { channelOf, onCommand } from "~/kit/commands"
+import { inText } from "~/kit/keys"
+import { useNav, useGo, useActions, useTiles, useAppPrefs } from "~/nav"
+import { openMenu } from "~/kit/menu-open"
 import { railItems, type DropTarget } from "~/shell/rail-items"
+import { t } from "~/i18n/i18n"
+import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 
-const RailMenu = later(() => import("~/shell/rail-menu").then((m) => m.default))
 const FolderTile = later(() => import("~/shell/rail-folder").then((m) => m.default))
 const UsageMeter = later(() => import("~/usage/meter").then((m) => m.UsageMeter))
+const RailCards = later(() => import("~/shell/updates").then((m) => m.RailCards))
 
 const DRAG = "application/x-kiwi-channel"
 
@@ -21,92 +25,141 @@ const spot = (e: { target: EventTarget }): DropTarget => {
   const folder = el?.dataset["folder"]
   return code ? { kind: "channel", code } : folder ? { kind: "folder", id: folder } : { kind: "rail" }
 }
-const keyOf = (t: DropTarget): string => (t.kind === "channel" ? `c:${t.code}` : t.kind === "folder" ? `f:${t.id}` : "rail")
+const keyOf = (target: DropTarget): string => (target.kind === "channel" ? `c:${target.code}` : target.kind === "folder" ? `f:${target.id}` : "rail")
 
 export function Rail() {
-  const { app, nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
+  const actions = useActions()
+  const tiles = useTiles()
+  const prefs = useAppPrefs()
   const onChannel = nav.page === "channel"
   const home = onChannel && nav.channel === null
+  const sidebarHidden = useSidebarHidden()
+  const cardsHere = onChannel && (home || sidebarHidden)
   const on = onChannel ? nav.channel : null
-  const folders = app.prefs.folders
-  const items = railItems(app.channels, folders)
+  const folders = prefs.folders
+  const items = railItems(tiles, folders)
   const ordered = items.flatMap((i) => (i.kind === "channel" ? [i.tile] : i.tiles))
   const [over, setOver] = useState<string | null>(null)
   const [moving, setMoving] = useState<string | null>(null)
-  const [menu, setMenu] = useState<Menu | null>(null)
   const [fresh, setFresh] = useState<string | null>(null)
-  const save = (next: typeof folders) => app.actions.setPrefs({ folders: next })
+  const save = (next: typeof folders) => actions.setPrefs({ folders: next })
   const step = useEffectEvent((dir: 1 | -1) => {
     const from = ordered.findIndex((c) => c.code === on)
     const news = ordered.map((c, i) => ({ open: i === from, fresh: c.unread > 0, needs: c.needsYou, count: c.unread }))
     const next = nextWithNews(ordered, news, from, dir)
     if (next) go({ to: "channel", code: next.code })
   })
+  const pick = useEffectEvent((n: number | null) => {
+    const tile = n === null ? undefined : ordered[n - 1]
+    if (tile) go({ to: "channel", code: tile.code })
+  })
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return
+      if (inText(e.target)) return
       e.preventDefault()
       e.stopPropagation()
       step(e.key === "ArrowDown" ? 1 : -1)
     }
+    const stop = onCommand((c) => pick(channelOf(c)))
     window.addEventListener("keydown", onKey, true)
-    return () => window.removeEventListener("keydown", onKey, true)
+    return () => {
+      stop()
+      window.removeEventListener("keydown", onKey, true)
+    }
   }, [])
   const dragOver = (e: DragEvent) => {
     if (!moving) return
     e.preventDefault()
-    const t = spot(e)
-    setOver(t.kind === "channel" && t.code === moving ? null : keyOf(t))
+    const target = spot(e)
+    setOver(target.kind === "channel" && target.code === moving ? null : keyOf(target))
   }
   const tile = (c: ChannelTile) => <Tile key={c.code} tile={c} on={on === c.code} drop={over === `c:${c.code}`} moving={moving === c.code} onClick={() => go({ to: "channel", code: c.code })} />
   return (
-    <nav className="rail" aria-label="Channels">
+    <nav className="rail" aria-label={t("shell.rail.channels")}>
       {document.documentElement.dataset["wm"] === "floating" && (
         <div className="wm-controls">
-          <button type="button" className="wm-btn is-close" aria-label="Close window" title="Close" onClick={() => app.actions.windowControl("close")}>
+          <button type="button" className="wm-btn is-close" aria-label={t("shell.rail.close.window")} title={t("shell.rail.close")} onClick={() => actions.windowControl("close")}>
             <Icon name="close" size={10} />
           </button>
-          <button type="button" className="wm-btn" aria-label="Minimize window" title="Minimize" onClick={() => app.actions.windowControl("minimize")}>
+          <button type="button" className="wm-btn" aria-label={t("shell.rail.minimize.window")} title={t("shell.rail.minimize")} onClick={() => actions.windowControl("minimize")}>
             <Icon name="minus" size={10} />
           </button>
-          <button type="button" className="wm-btn" aria-label="Maximize window" title="Maximize" onClick={() => app.actions.windowControl("maximize")}>
+          <button type="button" className="wm-btn" aria-label={t("shell.rail.maximize.window")} title={t("shell.rail.maximize")} onClick={() => actions.windowControl("maximize")}>
             <Icon name="expand" size={10} />
           </button>
         </div>
       )}
-      <button type="button" className={cx("tile is-home", home && "is-on")} aria-label="Home" aria-current={home ? "page" : undefined} title="Home" onClick={() => go({ to: "home" })}>
+      <button
+        type="button"
+        className={cx("tile is-home", home && "is-on")}
+        aria-label={t("shell.rail.home")}
+        aria-current={home ? "page" : undefined}
+        title={t("shell.rail.home")}
+        onClick={() => go({ to: "home" })}
+      >
         <Icon name="home" size={18} />
       </button>
       <ul
         className={cx("rail-list", moving && "is-moving", over === "rail" && "is-drop")}
         onDragStart={(e) => {
-          const t = spot(e)
-          if (t.kind !== "channel") return
-          e.dataTransfer.setData(DRAG, t.code)
+          const target = spot(e)
+          if (target.kind !== "channel") return
+          e.dataTransfer.setData(DRAG, target.code)
           e.dataTransfer.effectAllowed = "move"
-          setMoving(t.code)
+          setMoving(target.code)
         }}
         onDragEnd={() => (setMoving(null), setOver(null))}
         onDragOver={dragOver}
         onDrop={(e) => {
           const code = e.dataTransfer.getData(DRAG)
-          const t = spot(e)
+          const target = spot(e)
           setMoving(null)
           setOver(null)
           if (!code) return
           e.preventDefault()
           void import("~/shell/folders").then((f) => {
-            const next = f.dropOn(folders, code, t, f.newFolderId)
+            const next = f.dropOn(folders, code, target, f.newFolderId)
             setFresh(next.find((x) => !folders.some((y) => y.id === x.id))?.id ?? null)
             save(next)
           })
         }}
         onContextMenu={(e) => {
-          const t = spot(e)
-          if (t.kind === "rail") return
+          const target = spot(e)
+          if (target.kind === "rail") return
           e.preventDefault()
-          const top = (e.target as Element).closest("[data-code],[data-folder]")?.getBoundingClientRect().top ?? e.clientY
-          setMenu(t.kind === "channel" ? { kind: "channel", code: t.code, top } : { kind: "folder", id: t.id, top })
+          const at = { x: e.currentTarget.getBoundingClientRect().right - 4, y: (e.target as Element).closest("[data-code],[data-folder]")?.getBoundingClientRect().top ?? e.clientY }
+          void import("~/shell/rail-menu").then((m) =>
+            openMenu.set(
+              m.railMenu(target, at, {
+                folders,
+                title: (code) => tiles.find((c) => c.code === code)?.title ?? code,
+                muted: (code) => prefs.muted.includes(code),
+                setMute: (code, on) => actions.setMute(code, null, on),
+                settings:
+                  target.kind === "channel" && tiles.find((c) => c.code === target.code)?.state === "member"
+                    ? (code) => {
+                        go({ to: "channel", code })
+                        go({ to: "modal", modal: { kind: "channel" } })
+                      }
+                    : null,
+                own: target.kind === "channel" ? tiles.find((c) => c.code === target.code)?.own : undefined,
+                read:
+                  target.kind === "channel" && (tiles.find((c) => c.code === target.code)?.unread ?? 0) > 0 ? (code) => actions.markChannelRead(code, tiles.find((c) => c.code === code)?.head) : null,
+                invite: (code) => {
+                  go({ to: "channel", code })
+                  go({ to: "modal", modal: { kind: "invite" } })
+                },
+                end: (code) => {
+                  go({ to: "channel", code })
+                  go({ to: "modal", modal: { kind: "channel", end: true } })
+                },
+                save,
+              })
+            )
+          )
         }}
       >
         {items.map((item) =>
@@ -137,38 +190,44 @@ export function Rail() {
           )
         )}
         <li>
-          <button type="button" className="tile is-add" aria-label="New channel or join one" title="New channel or join one" onClick={() => go({ to: "dialog", dialog: "new-channel" })}>
+          <button type="button" className="tile is-add" aria-label={t("shell.rail.new.channel")} title={t("shell.rail.new.channel")} onClick={() => go({ to: "dialog", dialog: "new-channel" })}>
             <Icon name="plus" />
           </button>
         </li>
       </ul>
       <div className="rail-foot">
+        {cardsHere && (
+          <Suspense fallback={null}>
+            <RailCards />
+          </Suspense>
+        )}
         <Suspense fallback={null}>
           <UsageMeter />
         </Suspense>
         <button
           type="button"
           className={cx("rail-gear", nav.page === "settings" && "is-on")}
-          aria-label="Settings"
-          title="Settings"
+          aria-label={t("shell.rail.settings")}
+          title={t("shell.rail.settings")}
           onClick={() => (nav.page === "settings" ? go({ to: "back" }) : go({ to: "settings" }))}
         >
           <Icon name="gear" size={18} />
         </button>
       </div>
-      {menu && (
-        <Suspense fallback={null}>
-          <RailMenu menu={menu} folders={folders} title={(code) => app.channels.find((c) => c.code === code)?.title ?? code} save={save} close={() => setMenu(null)} />
-        </Suspense>
-      )}
     </nav>
   )
 }
 
 function Tile({ tile, on, drop, moving, onClick }: { tile: ChannelTile; on: boolean; drop: boolean; moving: boolean; onClick: () => void }) {
-  const label = [tile.title, tile.muted ? "muted" : "", tile.needsYou ? `${tile.needsYou} need you` : "", tile.unread ? "new messages" : "", tile.state === "waiting" ? "waiting to be let in" : ""]
+  const label = [
+    tile.title,
+    tile.muted ? t("shell.rail.tile.muted") : "",
+    tile.needsYou ? t("shell.rail.tile.need.you", { count: tile.needsYou }) : "",
+    tile.unread ? t("shell.rail.tile.new.messages") : "",
+    tile.state === "waiting" ? t("shell.rail.tile.waiting") : "",
+  ]
     .filter(Boolean)
-    .join(", ")
+    .join(t("shell.rail.tile.sep"))
   return (
     <button
       type="button"

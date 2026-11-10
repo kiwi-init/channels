@@ -62,7 +62,7 @@ describe("a spec on a reply takes its own tasks, next to its thread root's own s
     expect(s.tasks.get(7)?.ask).toBe(4);
     expect(s.tasks.get(9)?.ask).toBe(4);
     expect(s.tasks.get(11)?.ask).toBe(1);
-    const board = formatTasks(s, {});
+    const board = formatTasks(s, "kiwi/review/test", {});
     expect(board).toContain("#4 jow: “and fix the bug where a reply's spec can't take tasks”");
     expect(board.indexOf("file under the reply")).toBeGreaterThan(board.indexOf("#4 jow"));
     expect(board.indexOf("remove the old map")).toBeLessThan(board.indexOf("#4 jow"));

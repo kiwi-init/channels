@@ -1,32 +1,34 @@
+import "~/i18n/en/modals"
 import { Fragment, useEffect, useState } from "react"
 
 import "~/styles/people-add.css"
+import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
 import { Toggle } from "~/kit/form"
 import { Modal } from "~/kit/modal"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
-import { ALL_POWERS, NO_POWERS, trusted, type Channel } from "~/model"
-import { useApp } from "~/nav"
+import { NO_POWERS, trusted, type Channel } from "~/model"
+import { useActions } from "~/nav"
 import { Group, Row } from "~/settings/controls"
 import { copyText } from "~/kit/toasts"
 
 type Link = { code: string; link: string } | { code: string; failed: true }
 
 function useInviteLink(code: string): { link: string | null; failed: boolean; retry: () => void } {
-  const { app } = useApp()
+  const actions = useActions()
   const [got, setGot] = useState<Link | null>(null)
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let live = true
-    app.actions
+    actions
       .inviteLink(code)
       .then((link) => live && setGot({ code, link }))
       .catch(() => live && setGot({ code, failed: true }))
     return () => {
       live = false
     }
-  }, [app.actions, code, attempt])
+  }, [actions, code, attempt])
   const mine = got?.code === code ? got : null
   return {
     link: mine && "link" in mine ? mine.link : null,
@@ -71,73 +73,55 @@ export function CopyBox({ text, label, disabled, wrap }: { text: string | null; 
 }
 
 const POWERS = [
-  { id: "addsAgents", label: "Can add agents", on: "Their agents join on their own from computers paired with their Kiwi app.", off: "Their agents wait for you to let them in." },
-  { id: "answersDecisions", label: "Can answer decisions", on: "They answer agents' decisions in Needs you, as you do.", off: "Agents' decisions go to you and each agent's own person." },
-  {
-    id: "managesAgents",
-    label: "Can manage agents",
-    on: "They pick agents' personalities and roles, the lead included. Never people's, and never their own.",
-    off: "Only you change agents' personalities and roles.",
-  },
+  { id: "addsAgents", label: "modals.invite.power.adds.agents", on: "modals.invite.power.adds.agents.on", off: "modals.invite.power.adds.agents.off" },
+  { id: "answersDecisions", label: "modals.invite.power.answers.decisions", on: "modals.invite.power.answers.decisions.on", off: "modals.invite.power.answers.decisions.off" },
+  { id: "managesAgents", label: "modals.invite.power.manages.agents", on: "modals.invite.power.manages.agents.on", off: "modals.invite.power.manages.agents.off" },
 ] as const
 
 const CAN = [
-  { id: "read", label: "Only read", says: "They see every room and task, and can't post." },
-  { id: "write", label: "Write and work", says: "They post, take tasks and bring their own agents." },
+  { id: "read", label: "modals.invite.can.read", says: "modals.invite.can.read.says" },
+  { id: "write", label: "modals.invite.can.write", says: "modals.invite.can.write.says" },
 ] as const
 
 export function Invite({ channel, onClose }: { channel: Channel; onClose: () => void }) {
-  const { app } = useApp()
+  const actions = useActions()
   const { link, failed, retry } = useInviteLink(channel.code)
   const can = channel.newMembers ?? "write"
   const powers = channel.newPowers ?? NO_POWERS
   const trust = can === "write" && trusted(powers)
   return (
-    <Modal
-      dismiss="x"
-      onClose={onClose}
-      label="Invite people"
-      title="Invite people"
-      sub="Anyone with the link can ask to join. You let them in after checking their code."
-      size="narrow"
-      className="invite"
-    >
+    <Modal stays onClose={onClose} label={t("modals.invite.title")} title={t("modals.invite.title")} sub={t("modals.invite.sub")} size="narrow" className="invite">
       {failed ? (
         <div className="invite-failed">
-          <span>Couldn't get a link.</span>
+          <span>{t("modals.invite.link.failed")}</span>
           <button type="button" className="btn is-small" onClick={retry}>
-            Try again
+            {t("modals.invite.try.again")}
           </button>
         </div>
       ) : (
-        <CopyBox text={link} label="Copy link" />
+        <CopyBox text={link} label={t("modals.invite.copy.link")} />
       )}
       {channel.youOwn && (
-        <Group title="New people can" hint="You can change it for each person when you let them in.">
+        <Group title={t("modals.invite.new.people.can")} hint={t("modals.invite.new.people.can.hint")}>
           <div className="invite-can">
-            <Track className="seg invite-seg" role="group" aria-label="New people can">
+            <Track className="seg invite-seg" role="group" aria-label={t("modals.invite.new.people.can")}>
               {CAN.map((c) => (
-                <button key={c.id} type="button" title={c.says} aria-pressed={can === c.id} onClick={() => app.actions.setNewMembers(channel.code, c.id)}>
-                  {c.label}
+                <button key={c.id} type="button" title={t(c.says)} aria-pressed={can === c.id} onClick={() => actions.setNewMembers(channel.code, c.id)}>
+                  {t(c.label)}
                 </button>
               ))}
             </Track>
           </div>
-          <Row label="Full trust" hint="Every power below at once. The channel stays yours.">
-            <Toggle
-              label="Full trust"
-              on={trust}
-              onChange={(on) => {
-                if (on) app.actions.setNewMembers(channel.code, "write")
-                app.actions.setNewPowers(channel.code, on ? ALL_POWERS : NO_POWERS)
-              }}
-            />
-          </Row>
           {POWERS.map((power) => (
-            <Row key={power.id} label={power.label} hint={powers[power.id] ? power.on : power.off}>
-              <Toggle label={power.label} on={powers[power.id]} onChange={(on) => app.actions.setNewPowers(channel.code, { ...powers, [power.id]: on })} />
+            <Row key={power.id} label={t(power.label)} hint={t(powers[power.id] ? power.on : power.off)}>
+              <Toggle label={t(power.label)} on={powers[power.id]} onChange={(on) => actions.setNewPowers(channel.code, { ...powers, [power.id]: on })} />
             </Row>
           ))}
+          {trust && (
+            <p className="trust-note tone-decide" role="status">
+              {t("modals.invite.trusted.note")}
+            </p>
+          )}
         </Group>
       )}
     </Modal>

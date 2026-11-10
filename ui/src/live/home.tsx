@@ -10,12 +10,13 @@ import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { sendOptions } from "~/live/channel"
 import { dmRoomOf } from "~/live/dm"
-import { asksOf, lastSaidOf, peopleOf, tasksOf } from "~/live/map"
+import { asksOf, peopleOf } from "~/live/map"
+import { useTasksNow } from "~/live/tasks-now"
 import { usePinsHere } from "~/live/pins"
 import { specAsksOf, specsOf } from "~/live/specs"
 import { withReach } from "~/live/reach"
 import { publishHome, type Run } from "~/live/store"
-import { changeUnsent, nextUnsentKey } from "~/live/unsent"
+import { changeUnsent, newSendId, nextUnsentKey } from "~/live/unsent"
 import { refusal } from "~/live/refused"
 import { backWords, composerKey, giveBack } from "~/chat/drafts"
 import { stashText } from "~/chat/stash"
@@ -44,28 +45,24 @@ const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }
   const title = known.find((c) => c.code === code)?.name ?? member.name ?? code
   const people = useMemo(() => peopleOf(state, roster, online, me, wakes), [state, roster, online, me, wakes])
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
-  const tasks = useMemo(() => tasksOf(state, asks.held, me, messages), [state, asks.held, me, messages])
+  const tasks = useTasksNow(state, asks.held, me, messages)
   const specs = useMemo(() => specsOf(state, me), [state, me])
   const nicknames = useMemo(() => nicknamesOf(state.members.values()), [state.members])
   const lead = state.lead
-  const said = useMemo(() => lastSaidOf(state, messages, me), [state, messages, me])
   const summary = useMemo(
     () =>
-      homeOf(
-        {
-          code,
-          title,
-          ...(lead ? { lead } : {}),
-          people,
-          asks: [...asks.asks, ...specAsksOf(specs)],
-          specs,
-          tasks,
-          nicknames,
-          ...(ready ? {} : { loading: true as const }),
-        },
-        said
-      ),
-    [code, title, lead, people, asks.asks, specs, tasks, nicknames, ready, said]
+      homeOf({
+        code,
+        title,
+        ...(lead ? { lead } : {}),
+        people,
+        asks: [...asks.asks, ...specAsksOf(specs)],
+        specs,
+        tasks,
+        nicknames,
+        ...(ready ? {} : { loading: true as const }),
+      }),
+    [code, title, lead, people, asks.asks, specs, tasks, nicknames, ready]
   )
 
   const post = useCallback(
@@ -73,8 +70,9 @@ const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }
       if (where.kind === "theirs") throw new Error(t("live.channel.theirs"))
       const body = text.trim()
       const room = where.kind === "dm" ? dmRoomOf(state, me, where.with) : undefined
+      const id = opts.id ?? newSendId()
       try {
-        return await send(body, room ? { kind: "msg", room } : sendOptions(state, messages, me, where, body, opts))
+        return await send(body, room ? { kind: "msg", room, id, cid: id } : sendOptions(state, messages, me, where, body, { ...opts, id }))
       } catch (err) {
         const refused = refusal(err)
         if (refused !== null) {
@@ -83,7 +81,7 @@ const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }
           throw err
         }
         const why = err instanceof Error ? err.message : String(err)
-        changeUnsent(roomId, (list) => [...list, { key: nextUnsentKey(), where, text: body, at: Date.now(), failed: why }])
+        changeUnsent(roomId, (list) => [...list, { key: nextUnsentKey(), where, text: body, at: Date.now(), id, failed: why }])
         announce(t("live.home.not.sent", { title, why }), "error")
         throw err
       }

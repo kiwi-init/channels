@@ -1,28 +1,30 @@
+import "~/i18n/en/specs"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 
 import { useNames, useTaskIds } from "~/chat/conversation"
 import { Body } from "~/chat/body"
-import { MessageImages } from "~/chat/message"
-import { preview } from "~/chat/preview"
 import { QuotePick } from "~/chat/quote-pick"
 import { jumpTo } from "~/chat/reply"
 import { type Words, wordsPlain, wordsRaw, wrote } from "~/words"
-import { Avatar, cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
-import { clock } from "~/kit/time"
+import { t } from "~/i18n/i18n"
+import { cx } from "~/kit/bits"
 import type { Channel, Spec } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
-import { commentsOf, faceOf, lineDiff, quoteIn, splitQuote, type Comment } from "~/specs/read"
+import { commentsOf, lineDiff, quoteIn, type Comment } from "~/specs/read"
 import { CommentBox, type CommentReply } from "~/specs/comment-box"
+import { CommentItem, openImage } from "~/specs/comment-item"
+import { keysHint } from "~/kit/keys"
+import { DiscardAsk, useDiscard } from "~/kit/discard"
+import { openMessage } from "~/live/open-message"
 
 const WIDE_PX = 940
 const TALK_SHOWN = 3
 const DIFF_CONTEXT = 1
+const RAIL_LIST_MIN_PX = 120
+const USER_SCROLL_MS = 600
 const BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, td, th, pre"
 const COMMENT_TEXT = ".spec-comment .md"
-
-const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
 
 function shownText(spec: Spec): Words {
   const lines = wordsRaw(spec.text).split("\n")
@@ -53,7 +55,11 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
   const wrap = useRef<HTMLDivElement>(null)
   const doc = useRef<HTMLDivElement>(null)
   const scroll = useRef<HTMLDivElement>(null)
+  const foot = useRef<HTMLDivElement>(null)
   const readUp = useRef(false)
+  const listTop = useRef(0)
+  const nudged = useRef(Number.NEGATIVE_INFINITY)
+  const grabbed = useRef(false)
   const opened = useRef<number | null>(null)
   const [wide, setWide] = useState(true)
   const [tops, setTops] = useState<ReadonlyMap<number, number>>(new Map())
@@ -70,7 +76,9 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
   useLayoutEffect(() => {
     const el = wrap.current
     if (!el) return
-    const watch = new ResizeObserver(() => setWide(el.clientWidth >= WIDE_PX))
+    const fit = () => setWide(el.clientWidth >= WIDE_PX)
+    fit()
+    const watch = new ResizeObserver(fit)
     watch.observe(el)
     return () => watch.disconnect()
   }, [])
@@ -102,16 +110,62 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
     const el = wrap.current
     const page = el?.closest<HTMLElement>(".spec-page")
     if (!el || !page) return
-    const fit = new ResizeObserver(() => el.style.setProperty("--page-h", `${page.clientHeight}px`))
-    fit.observe(page)
-    return () => fit.disconnect()
+    const fit = () => {
+      el.style.setProperty("--page-h", `${page.clientHeight}px`)
+      el.style.setProperty("--wrap-at", `${Math.round(el.getBoundingClientRect().top - page.getBoundingClientRect().top)}px`)
+    }
+    fit()
+    const watch = new ResizeObserver(fit)
+    watch.observe(page)
+    const top = page.querySelector(":scope > .spec-top")
+    if (top) watch.observe(top)
+    page.addEventListener("scroll", fit, { passive: true })
+    return () => {
+      watch.disconnect()
+      page.removeEventListener("scroll", fit)
+    }
   }, [])
+
+  useEffect(() => {
+    const release = () => {
+      grabbed.current = false
+      nudged.current = Date.now()
+    }
+    window.addEventListener("pointerup", release)
+    window.addEventListener("pointercancel", release)
+    return () => {
+      window.removeEventListener("pointerup", release)
+      window.removeEventListener("pointercancel", release)
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    const el = foot.current
+    const list = scroll.current
+    const rail = el?.parentElement
+    const page = el?.closest<HTMLElement>(".spec-page")
+    if (!el || !list || !rail || !page) return
+    let was = el.offsetHeight
+    const keep = new ResizeObserver(() => {
+      const grew = el.offsetHeight > was
+      was = el.offsetHeight
+      const room = rail.getBoundingClientRect().top - page.getBoundingClientRect().top - parseFloat(getComputedStyle(rail).top)
+      const over = Math.max(0, el.getBoundingClientRect().bottom - rail.getBoundingClientRect().bottom)
+      const squeezed = Math.max(0, Math.min(RAIL_LIST_MIN_PX, list.scrollHeight) - list.clientHeight)
+      if (grew && room > 0.5 && over + squeezed > 0.5) page.scrollTop += Math.min(room, over + squeezed)
+      if (!readUp.current) list.scrollTop = list.scrollHeight
+    })
+    keep.observe(el)
+    keep.observe(list)
+    return () => keep.disconnect()
+  }, [wide])
 
   useLayoutEffect(() => {
     const el = scroll.current
     if (opened.current !== spec.ask) {
       opened.current = spec.ask
       readUp.current = false
+      listTop.current = 0
     }
     if (el && !readUp.current) el.scrollTop = el.scrollHeight
   })
@@ -166,12 +220,12 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
   )
 
   const talk = (
-    <section className="spec-talk" aria-label="Comments on the whole spec">
+    <section className="spec-talk" aria-label={t("specs.doc.talk.label")}>
       <h2 className="spec-talk-h">
-        {loose.length ? `${loose.length} ${loose.length === 1 ? "comment" : "comments"}` : "Comments"}
+        {loose.length ? t("specs.doc.comments.count", { count: loose.length }) : t("specs.doc.comments")}
         {loose.length > TALK_SHOWN && (
           <button type="button" className="btn is-quiet is-small" aria-expanded={allTalk} onClick={() => setAllTalk(!allTalk)}>
-            {allTalk ? "Latest only" : `All ${loose.length}`}
+            {allTalk ? t("specs.doc.latest.only") : t("specs.doc.all", { count: loose.length })}
           </button>
         )}
       </h2>
@@ -187,13 +241,13 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
         {spec.changed && spec.approved && (
           <div className="spec-diff-bar">
             <button type="button" className="btn is-quiet is-small" aria-expanded={diff} onClick={() => setDiff(!diff)}>
-              {diff ? "Hide the changes" : "Show the changes"}
+              {diff ? t("specs.doc.hide.changes") : t("specs.doc.show.changes")}
             </button>
           </div>
         )}
         {diff && spec.approved && <Diff before={wordsPlain(spec.approved.text, channel.nicknames)} after={wordsPlain(spec.text, channel.nicknames)} />}
         <div ref={doc} className="spec-doc" onMouseUp={picked} onKeyUp={picked}>
-          <Body text={shownText(spec)} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
+          <Body text={shownText(spec)} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={(seq) => openMessage(channel.code, seq)} />
           {pop && (
             <button
               type="button"
@@ -206,24 +260,32 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
                 window.getSelection()?.removeAllRanges()
               }}
             >
-              Comment
+              {t("specs.doc.comment")}
             </button>
           )}
         </div>
         {!wide && talk}
       </div>
       {wide && (
-        <aside className="spec-rail" aria-label="Comments">
+        <aside className="spec-rail" aria-label={t("specs.doc.comments")}>
           <div
             ref={scroll}
             className="spec-rail-scroll"
+            onWheel={() => (nudged.current = Date.now())}
+            onTouchMove={() => (nudged.current = Date.now())}
+            onKeyDown={() => (nudged.current = Date.now())}
+            onPointerDown={() => (grabbed.current = true)}
             onScroll={(e) => {
               const el = e.currentTarget
-              readUp.current = el.scrollTop + el.clientHeight < el.scrollHeight - 4
+              const user = grabbed.current || Date.now() - nudged.current < USER_SCROLL_MS
+              const up = el.scrollTop < listTop.current
+              listTop.current = el.scrollTop
+              if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) readUp.current = false
+              else if (user && up) readUp.current = true
             }}
           >
             {anchored.length > 0 && (
-              <ul className="spec-rail-lines" aria-label="Comments on lines of the spec">
+              <ul className="spec-rail-lines" aria-label={t("specs.doc.line.comments")}>
                 {anchored.map((c) => (
                   <li key={c.m.seq} className={cx("spec-rail-item", hot === c.m.seq && "is-hot")} onMouseEnter={() => setHot(c.m.seq)} onMouseLeave={() => setHot(null)}>
                     <CommentItem channel={channel} c={c} names={names} tasks={tasks} onQuote={() => toLine(c.m.seq)} onReply={() => replyTo(c.m.seq)} />
@@ -233,61 +295,12 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
             )}
             {talk}
           </div>
-          <div className="spec-rail-foot">{boxes}</div>
+          <div ref={foot} className="spec-rail-foot">
+            {boxes}
+          </div>
         </aside>
       )}
     </div>
-  )
-}
-
-function CommentItem({
-  channel,
-  c,
-  names,
-  tasks,
-  showQuote,
-  onQuote,
-  onReply,
-  onRe,
-}: {
-  channel: Channel
-  c: Comment
-  names: ReadonlyMap<string, string>
-  tasks: ReadonlySet<number>
-  showQuote?: boolean
-  onQuote?: () => void
-  onReply?: () => void
-  onRe?: () => void
-}) {
-  const to = c.re === undefined ? undefined : channel.messages.find((m) => m.seq === c.re)
-  return (
-    <article className={cx("spec-comment", c.m.pending && "is-pending")} data-seq={c.m.seq}>
-      <header className="spec-comment-head">
-        <Avatar person={faceOf(channel, c.m.from)} size="sm" />
-        <span className="spec-comment-name">{nickname(channel, c.m.from)}</span>
-        <time className="spec-comment-time">{clock(c.m.at)}</time>
-        {onReply && !c.m.pending && (
-          <button type="button" className="spec-comment-reply" aria-label="Reply" title="Reply" onClick={onReply}>
-            <Icon name="reply" size={13} />
-          </button>
-        )}
-      </header>
-      {to && onRe && (
-        <button type="button" className="spec-comment-quote is-link" title="Show this comment" onClick={onRe}>
-          <span>
-            <b>{nickname(channel, to.from)}</b> {c.excerpt ? `“${preview(c.excerpt)}”` : preview(splitQuote(wordsRaw(to.text)).text)}
-          </span>
-        </button>
-      )}
-      {showQuote && c.quote && <p className="spec-comment-quote">{c.quote}</p>}
-      {onQuote && c.quote && (
-        <button type="button" className="spec-comment-quote is-link" title="Show this line in the spec" onClick={onQuote}>
-          <span>{c.quote}</span>
-        </button>
-      )}
-      {c.text.trim() && <Body text={wrote(c.text)} seq={c.m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />}
-      {c.m.images && <MessageImages code={channel.code} images={c.m.images} open={openImage} />}
-    </article>
   )
 }
 
@@ -303,13 +316,13 @@ function Diff({ before, after }: { before: string; after: string }) {
     else rows.push({ kind: "gap", from: i, n: 1 })
   })
   return (
-    <ol className="spec-diff" aria-label="What changed since it was approved">
+    <ol className="spec-diff" aria-label={t("specs.doc.diff.label")}>
       {rows.map((r) => {
         if (r.kind === "gap")
           return (
             <li key={`gap-${r.from}`} className="spec-diff-line is-gap">
               <button type="button" className="spec-diff-gap" onClick={() => setWhole(true)}>
-                ⋯ {r.n} unchanged {r.n === 1 ? "line" : "lines"}
+                {t("specs.doc.unchanged", { count: r.n })}
               </button>
             </li>
           )
@@ -338,6 +351,7 @@ function Editor({ channel, spec, onDone }: { channel: Channel; spec: Spec; onDon
     if (text.trim() && text.trim() !== wordsRaw(spec.text).trim()) actions.writeSpec(channel.code, spec.ask, text)
     onDone()
   }
+  const discard = useDiscard(text.trim() !== wordsRaw(spec.text).trim(), onDone)
   const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key.toLowerCase() === "s" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
@@ -345,25 +359,26 @@ function Editor({ channel, spec, onDone }: { channel: Channel; spec: Spec; onDon
     }
     if (e.key === "Escape") {
       e.preventDefault()
-      onDone()
+      discard.leave()
     }
   }
   return (
     <div className="spec-editor">
       <div className="spec-editor-bar">
-        <span className="spec-editor-hint">⌘S saves · Esc cancels</span>
-        {moved && <span className="tone-decide spec-editor-moved">{nickname(channel, spec.edited.by)} saved a newer version while you edited: saving replaces it.</span>}
+        <span className="spec-editor-hint">{t("specs.doc.editor.hint", { keys: keysHint("S") })}</span>
+        {moved && <span className="tone-decide spec-editor-moved">{t("specs.doc.editor.moved", { who: nickname(channel, spec.edited.by) })}</span>}
+        {discard.asking && <DiscardAsk onKeep={discard.keep} onDiscard={onDone} />}
         <button type="button" className="btn is-quiet" onClick={onDone}>
-          Cancel
+          {t("specs.doc.cancel")}
         </button>
         <button type="button" className="btn is-primary" disabled={!text.trim()} onClick={save}>
-          Save
+          {t("specs.doc.save")}
         </button>
       </div>
       <div className="spec-editor-panes">
-        <textarea className="textarea is-mono spec-source" value={text} spellCheck aria-label="The spec, in markdown" onChange={(e) => setText(e.target.value)} onKeyDown={keys} />
-        <div className="spec-preview" aria-label="Preview">
-          <Body text={wrote(text)} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />
+        <textarea className="textarea is-mono spec-source" value={text} spellCheck aria-label={t("specs.doc.source")} onChange={(e) => setText(e.target.value)} onKeyDown={keys} />
+        <div className="spec-preview" aria-label={t("specs.doc.preview")}>
+          <Body text={wrote(text)} seq={spec.ask} names={names} tasks={tasks} onImage={openImage} onMessage={(seq) => openMessage(channel.code, seq)} />
         </div>
       </div>
     </div>

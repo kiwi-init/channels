@@ -48,3 +48,7 @@ export function gone<E>(err: E): E | ChannelGone {
   if (err.tag === "ChannelGone" || (err.status === 404 && /no such channel/.test(err.message))) return new ChannelGone("closed");
   return err;
 }
+
+export function isUnreachable(err: unknown): boolean {
+  return typeof err === "object" && err !== null && "_tag" in err && err._tag === "Unreachable";
+}

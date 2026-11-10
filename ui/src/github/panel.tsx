@@ -1,24 +1,26 @@
+import "~/i18n/en/github-later"
 import "~/styles/tasks.css"
 import "~/styles/github.css"
 
 import type { ReactNode } from "react"
 
 import { checksSummary } from "~/github/groups"
+import { t } from "~/i18n/i18n"
 import { Branch, Checks, checksLine, IssueMark, issueTone, issueWord, PR_TONES, PR_WORDS, PrMark, Size, TaskLink, Ticks } from "~/github/parts"
 import { cx, Heading } from "~/kit/bits"
 import { Empty } from "~/kit/empty"
 import { Icon } from "~/kit/icons"
-import { ago } from "~/kit/time"
+import { ageOf, ago } from "~/kit/time"
 import type { Channel } from "~/model"
-import { useApp } from "~/nav"
+import { useGo } from "~/nav"
 import { PanelHead } from "~/panels/frame"
 import { OutsideLink } from "~/kit/outside"
 
 const same = (a: { repo: string; number: number }, repo: string, number: number): boolean => a.number === number && a.repo.toLowerCase() === repo.toLowerCase()
 
 const since = (at: number): string => {
-  const a = ago(at)
-  return a === "now" ? "just now" : /^\d+[mhd]$/.test(a) ? `${a} ago` : a
+  const age = ageOf(at)
+  return age === "now" ? t("github.panel.just.now") : age === "recent" ? t("github.panel.ago", { time: ago(at) }) : ago(at)
 }
 
 function Out({ href, children, primary }: { href: string; children: ReactNode; primary?: boolean }) {
@@ -30,27 +32,27 @@ function Out({ href, children, primary }: { href: string; children: ReactNode; p
   )
 }
 
-function Unknown({ title, what }: { title: string; what: string }) {
+function Unknown({ title, gone }: { title: string; gone: string }) {
   return (
     <>
       <PanelHead title={title} />
-      <Empty title={`This ${what} isn't here any more.`} />
+      <Empty title={gone} />
     </>
   )
 }
 
 function TaskSection({ channel, id }: { channel: Channel; id: number | undefined }) {
-  const { go } = useApp()
+  const go = useGo()
   return (
     <section className="panel-section">
-      <Heading>Task</Heading>
+      <Heading>{t("github.panel.task")}</Heading>
       {id !== undefined ? (
         <TaskLink channel={channel} id={id} />
       ) : (
         <p className="gh-none">
-          None yet.{" "}
+          {t("github.panel.none.yet")}{" "}
           <button type="button" className="gh-inline" onClick={() => go({ to: "tab", tab: "chat" })}>
-            Ask for one in the conversation
+            {t("github.panel.ask.for.one")}
           </button>
         </p>
       )}
@@ -60,29 +62,29 @@ function TaskSection({ channel, id }: { channel: Channel; id: number | undefined
 
 export function PrPanel({ channel, repo, number }: { channel: Channel; repo: string; number: number }) {
   const pr = channel.prs?.find((p) => same(p, repo, number))
-  if (!pr) return <Unknown title={`PR #${number}`} what="pull request" />
+  if (!pr) return <Unknown title={t("github.panel.pr.title", { number: String(number) })} gone={t("github.panel.pr.gone")} />
   const line = checksLine(pr)
   const closed = pr.state === "merged" || pr.state === "closed"
   return (
     <>
-      <PanelHead title={`PR #${pr.number}`} />
+      <PanelHead title={t("github.panel.pr.title", { number: String(pr.number) })} />
       <div className="panel-body">
         <section className="panel-section">
           <h3 className="task-title gh-panel-title">{pr.title}</h3>
           <p className="gh-state">
             <PrMark pr={pr} size={14} />
-            <span className={PR_TONES[pr.state]}>{PR_WORDS[pr.state]}</span>
+            <span className={PR_TONES[pr.state]}>{t(PR_WORDS[pr.state])}</span>
             {line && !closed && <span className={cx("gh-state-ci", line.tone)}>· {line.text}</span>}
-            {pr.release && <span className="dim">· shipped in {pr.release}</span>}
+            {pr.release && <span className="dim">· {t("github.panel.shipped.in", { release: pr.release })}</span>}
           </p>
         </section>
         <section className="panel-section">
           <dl className="props task-props">
-            <dt>Repo</dt>
+            <dt>{t("github.panel.repo")}</dt>
             <dd className="gh-dd-mono">{pr.repo}</dd>
             {pr.branch && (
               <>
-                <dt>Branch</dt>
+                <dt>{t("github.panel.branch")}</dt>
                 <dd>
                   <Branch name={pr.branch} copy />
                 </dd>
@@ -90,13 +92,13 @@ export function PrPanel({ channel, repo, number }: { channel: Channel; repo: str
             )}
             {pr.by && (
               <>
-                <dt>Author</dt>
+                <dt>{t("github.panel.author")}</dt>
                 <dd>{pr.by}</dd>
               </>
             )}
             {pr.additions !== undefined && (
               <>
-                <dt>Size</dt>
+                <dt>{t("github.panel.size")}</dt>
                 <dd>
                   <Size pr={pr} />
                 </dd>
@@ -104,7 +106,7 @@ export function PrPanel({ channel, repo, number }: { channel: Channel; repo: str
             )}
             {pr.at !== undefined && (
               <>
-                <dt>{pr.state === "merged" ? "Merged" : pr.state === "closed" ? "Closed" : "Updated"}</dt>
+                <dt>{t(pr.state === "merged" ? "github.panel.merged" : pr.state === "closed" ? "github.panel.closed" : "github.panel.updated")}</dt>
                 <dd>{since(pr.at)}</dd>
               </>
             )}
@@ -122,7 +124,7 @@ export function PrPanel({ channel, repo, number }: { channel: Channel; repo: str
                 ) : undefined
               }
             >
-              Checks
+              {t("github.panel.checks")}
             </Heading>
             <Checks list={pr.list} fold={pr.list.length > 8} />
           </section>
@@ -130,10 +132,10 @@ export function PrPanel({ channel, repo, number }: { channel: Channel; repo: str
         <TaskSection channel={channel} id={pr.task} />
         <section className="panel-section gh-actions">
           <Out href={pr.url} primary>
-            Open on GitHub
+            {t("github.panel.open.on.github")}
           </Out>
-          <Out href={`${pr.url}/files`}>Files changed</Out>
-          {!closed && <Out href={`${pr.url}/checks`}>Checks</Out>}
+          <Out href={`${pr.url}/files`}>{t("github.panel.files.changed")}</Out>
+          {!closed && <Out href={`${pr.url}/checks`}>{t("github.panel.checks")}</Out>}
         </section>
       </div>
     </>
@@ -142,10 +144,10 @@ export function PrPanel({ channel, repo, number }: { channel: Channel; repo: str
 
 export function IssuePanel({ channel, repo, number }: { channel: Channel; repo: string; number: number }) {
   const issue = channel.issues?.find((i) => same(i, repo, number))
-  if (!issue) return <Unknown title={`Issue #${number}`} what="issue" />
+  if (!issue) return <Unknown title={t("github.panel.issue.title", { number: String(number) })} gone={t("github.panel.issue.gone")} />
   return (
     <>
-      <PanelHead title={`Issue #${issue.number}`} />
+      <PanelHead title={t("github.panel.issue.title", { number: String(issue.number) })} />
       <div className="panel-body">
         <section className="panel-section">
           <h3 className="task-title gh-panel-title">{issue.title}</h3>
@@ -156,22 +158,22 @@ export function IssuePanel({ channel, repo, number }: { channel: Channel; repo: 
         </section>
         <section className="panel-section">
           <dl className="props task-props">
-            <dt>Repo</dt>
+            <dt>{t("github.panel.repo")}</dt>
             <dd className="gh-dd-mono">{issue.repo}</dd>
             {issue.by && (
               <>
-                <dt>{issue.state === "open" ? "Opened by" : "Closed by"}</dt>
+                <dt>{t(issue.state === "open" ? "github.panel.opened.by" : "github.panel.closed.by")}</dt>
                 <dd>{issue.by}</dd>
               </>
             )}
-            <dt>{issue.state === "open" ? "Updated" : "Closed"}</dt>
+            <dt>{t(issue.state === "open" ? "github.panel.updated" : "github.panel.closed")}</dt>
             <dd>{since(issue.at)}</dd>
           </dl>
         </section>
         <TaskSection channel={channel} id={issue.task} />
         <section className="panel-section gh-actions">
           <Out href={issue.url} primary>
-            Open on GitHub
+            {t("github.panel.open.on.github")}
           </Out>
         </section>
       </div>

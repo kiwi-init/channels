@@ -1,7 +1,11 @@
+import "~/i18n/en/chat-later"
 import { useEffect, useRef, useState } from "react"
 
 import type { Stashed } from "~/chat/stash"
+import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 import { ago } from "~/kit/time"
+import { keysHint } from "~/kit/keys"
 
 export default function StashList({ list, onTake, onDrop, onClose }: { list: readonly Stashed[]; onTake: (i: number) => void; onDrop: (i: number) => void; onClose: () => void }) {
   const [on, setOn] = useState(0)
@@ -28,19 +32,17 @@ export default function StashList({ list, onTake, onDrop, onClose }: { list: rea
         }
       }}
     >
-      <ul ref={rows} aria-label="Stashed drafts">
+      <ul ref={rows} aria-label={t("chat.stash.list.label")}>
         {list.map((s, i) => (
           <li key={`${s.at}-${i}`}>
             <button type="button" className="stash-row" onFocus={() => setOn(i)} onMouseEnter={() => setOn(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => onTake(i)}>
               <span className="stash-text">{s.text}</span>
-              {i === 0 ? <kbd>⇧⌘S</kbd> : <span className="stash-age">{ago(s.at)}</span>}
+              {i === 0 ? <kbd>{keysHint("S", true)}</kbd> : <span className="stash-age">{ago(s.at)}</span>}
             </button>
           </li>
         ))}
       </ul>
-      <p className="stash-foot">
-        <kbd>⌫</kbd> drops one
-      </p>
+      <p className="stash-foot">{tr("chat.stash.list.drops.one", { key: <kbd>⌫</kbd> })}</p>
     </div>
   )
 }

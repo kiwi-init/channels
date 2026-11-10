@@ -8,11 +8,11 @@ const storeOf = (saved: Record<string, string>) => {
 }
 
 test("the old default Cinder Peak moves to Channels Dark once, and a later pick of Cinder Peak stays", () => {
-  const store = storeOf({ "ui.prefs": JSON.stringify({ enterSends: false, darkTheme: "cinder-peak", lightTheme: "channels-light" }), "ui.prefs.oled": "1", "ui.prefs.cinder": "1" })
-  expect(readPrefs(store)).toMatchObject({ enterSends: false, darkTheme: "channels-dark" })
-  expect(JSON.parse(store.m.get("ui.prefs") ?? "{}")).toMatchObject({ enterSends: false, darkTheme: "channels-dark" })
+  const store = storeOf({ "ui.prefs": JSON.stringify({ darkTheme: "cinder-peak", lightTheme: "channels-light" }), "ui.prefs.oled": "1", "ui.prefs.cinder": "1" })
+  expect(readPrefs(store)).toMatchObject({ darkTheme: "channels-dark" })
+  expect(JSON.parse(store.m.get("ui.prefs") ?? "{}")).toMatchObject({ darkTheme: "channels-dark" })
   expect(store.m.get("ui.prefs.channels-dark")).toBe("1")
-  store.setItem("ui.prefs", JSON.stringify({ enterSends: false, darkTheme: "cinder-peak", lightTheme: "channels-light" }))
+  store.setItem("ui.prefs", JSON.stringify({ darkTheme: "cinder-peak", lightTheme: "channels-light" }))
   expect(readPrefs(store).darkTheme).toBe("cinder-peak")
 })
 
@@ -33,9 +33,10 @@ test("every other saved theme stays, and a new install starts on Channels Dark w
   expect([fresh.m.get("ui.prefs.oled"), fresh.m.get("ui.prefs.cinder"), fresh.m.get("ui.prefs.channels-dark")]).toEqual(["1", "1", "1"])
 })
 
-test("an AFK or Calm choice kept from before AFK went is dropped without error", () => {
-  const kept = readPrefs(storeOf({ "ui.prefs": JSON.stringify({ afk: 10, calm: 5, enterSends: false }) }))
-  expect(kept.enterSends).toBe(false)
+test("a choice kept from before it went (AFK, Calm, ⌘Enter to send) is dropped without error", () => {
+  const kept = readPrefs(storeOf({ "ui.prefs": JSON.stringify({ afk: 10, calm: 5, enterSends: false, muted: ["a"] }) }))
+  expect(kept.muted).toEqual(["a"])
   expect(Object.keys(kept)).not.toContain("afk")
   expect(Object.keys(kept)).not.toContain("calm")
+  expect(Object.keys(kept)).not.toContain("enterSends")
 })

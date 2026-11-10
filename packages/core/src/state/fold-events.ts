@@ -8,8 +8,8 @@ import {
   TASK_TITLE_MAX_LENGTH,
   type Event,
   hasLanding,
+  type KeptEvidence,
   type Landing,
-  type Merger,
   type Message,
   type Power,
   powerChange,
@@ -17,47 +17,39 @@ import {
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
-import { addRelease, applyGithub, dropRelease, prKey, repoKey, runStart, runsUnknownSince, type GithubState } from "./github.ts";
+import { addRelease, applyGithub, dropRelease, prKey, repoKey, type GithubPr, type GithubState } from "./github.ts";
 import { branchLinks, prLinks, prOfTask } from "../prs.ts";
 import { recordedRuns } from "../review-check.ts";
-import { sameHead } from "../stage.ts";
+import { approvedAt, sameHead } from "../stage.ts";
 import { reposOf } from "./repos.ts";
 import { trustedAt } from "./times.ts";
-import { artifactKey, artifactText, doneGate } from "../done-gate.ts";
-import { runPin, type CheckArtifact } from "../checks.ts";
-import type { CheckState } from "./checks.ts";
+import { runPin } from "../checks.ts";
+import { advance, artifactWords, editSteps, hasOpenSteps, landedRefusal, observedRefusal, reseedThen, say, see, seeAnswered, seedSteps, seeThenSteps, stepEditRefusal } from "./landing-steps.ts";
+import { landedStepRefusal, stepById, stepsOfThen, stepText, thenChanged, type StepSpec } from "../steps.ts";
 import { omit } from "../omit.ts";
 import { inlineText } from "../membership.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { cleanPersona } from "../personality.ts";
 import { isPerson, ownSeat, sponsorsAgent } from "./people.ts";
 import { roomName } from "./rooms.ts";
-import { currentState, landerOf, landingRefusal, landingReopens, newRun, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, runRefusal, taskId, verdictRefusal, worked } from "./tasks.ts";
+import {
+  currentState,
+  landerOf,
+  landingRefusal,
+  landingReopens,
+  newRun,
+  openRound,
+  reviewClaimRefusal,
+  reviewMoveRefusal,
+  reviewWaysOut,
+  revisedOut,
+  runRefusal,
+  taskId,
+  verdictRefusal,
+  worked,
+} from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
-
-type GateCtx = { github: GithubState; checks: ReadonlyMap<number, CheckState>; branchPrefix: string | null };
-type Mark = { seq: number; by: string; at: number };
-
-function unlandShaken(c: GateCtx, t: Task, mark: Mark, why: string): void {
-  if (t.state !== "done" || t.landed?.artifact.kind !== "run" || t.landed.artifact.id !== t.run?.id) return;
-  if (doneGate(c, { ...omit(t, "archived"), state: "landing" })?.kind === "landed") return;
-  t.state = "landing";
-  t.landed = undefined;
-  t.closedSeq = undefined;
-  t.archived = undefined;
-  t.updatedAt = mark.at;
-  t.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `${why}: its landing at run ${t.run.id} no longer holds, so it's back to landing` });
-}
-
-function startRuns(c: GateCtx, tasks: ReadonlyMap<number, Task>, mark: Mark): void {
-  for (const t of tasks.values()) {
-    const start = t.run ? runStart(c.github, t.run.id, t.createdRts ?? Number.NEGATIVE_INFINITY) : undefined;
-    if (!t.run || !start || (t.run.start && start.started >= t.run.start.started)) continue;
-    t.run.start = start;
-    unlandShaken(c, t, mark, `GitHub reports run ${start.run} for ${t.run.id}, started earlier`);
-  }
-}
 
 const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
 
@@ -80,7 +72,6 @@ export interface FoldCtx {
   nicknames: Map<string, Nickname>;
   setRole: (target: FoldMember, role: string | null, about: string | null | undefined) => void;
   tasks: Map<number, Task>;
-  checks: ReadonlyMap<number, CheckState>;
   facts: Map<string, Fact>;
   docs: Map<string, string>;
   leases: Map<string, Lease>;
@@ -94,23 +85,57 @@ export interface FoldCtx {
   hold: Hold | null;
   githubWrite: number | null;
   branchPrefix: string | null;
+  quietMs: number;
   landing: Landing | null;
-  merges: Merger;
+  landingSteps: StepSpec[] | null;
+  passedAsks: Map<number, string>;
   compact: Compact | null;
   compactProposal: Compact | null;
 }
 
-function landedRefusal(c: FoldCtx, task: Task, artifact: CheckArtifact, member: FoldMember, from: string): string | null {
+function approvalHoldsAgain(t: Task, head: string, mark: { seq: number; by: string; at: number }): void {
+  const last = t.rounds.at(-1);
+  if (t.state !== "review" || last?.result.kind !== "approved" || last.stale === undefined || !approvedAt(last, head)) return;
+  last.stale = undefined;
+  t.state = "landing";
+  t.approvedBy = last.result.by;
+  t.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `head ${head.slice(0, 7)} is the approved code: the approval holds again` });
+  t.updatedAt = mark.at;
+  advance(t, mark);
+}
+
+function headMoved(t: Task, pr: GithubPr & { sha: string }, mark: { seq: number; by: string; at: number }): void {
+  const last = t.rounds.at(-1);
+  if (last?.result.kind !== "approved" || !last.at) return;
+  if (approvedAt(last, pr.sha)) return approvalHoldsAgain(t, pr.sha, mark);
+  if (t.state !== "landing") return;
+  last.stale = mark.seq;
+  t.state = "review";
+  t.approvedBy = undefined;
+  t.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `new head ${pr.sha.slice(0, 7)} on ${pr.repo}#${pr.number} after the approval: back to review` });
+  t.updatedAt = mark.at;
+}
+
+function keptRefusal(task: Task, kept: KeptEvidence, from: string, lead: boolean): string | null {
   const id = taskId(task.id);
-  const lander = landerOf(task);
-  if (!member.owner && !c.leads(member) && from !== lander) return `only the owner's app, the lead or ${lander ?? "its lander"} lands ${id}`;
-  if (task.state !== "landing") return task.state === "done" ? `${id} is already done` : `${id} isn't approved and landing: it's ${task.state}`;
-  const gate = doneGate({ github: c.github, checks: c.checks, branchPrefix: c.branchPrefix }, task);
-  if (!gate) return `${id} has no landing step`;
-  if (gate.kind === "waiting") return `${id} hasn't landed: it waits for ${gate.why}`;
-  if (gate.kind === "bypassed") return `${id} shipped while its ship gate was shut (missing ${gate.missing.join(", ")}): a person closes it with a reason`;
-  if (artifactKey(task.id, gate.artifact) !== artifactKey(task.id, artifact)) return `${id} lands at ${artifactText(gate.artifact)}, not ${artifactText(artifact)}`;
+  const last = task.rounds.at(-1);
+  if (from !== task.owner && !lead) return `only ${task.owner ?? "its owner"} or the lead records that ${id}'s approval holds at a new head`;
+  if (last?.result.kind !== "approved" || !last.at) return `${id} has no approval pinned to a commit`;
+  if (!sameHead(last.at, kept.approved)) return `${id} is approved at ${last.at.slice(0, 7)}, not at ${kept.approved.slice(0, 7)}`;
   return null;
+}
+
+function keepApproval(c: FoldCtx, task: Task, kept: KeptEvidence, mark: { seq: number; by: string; at: number; rts?: number }): void {
+  const last = task.rounds.at(-1);
+  if (!last) return;
+  if (!last.kept?.some((k) => k.head === kept.head)) {
+    last.kept = [...(last.kept ?? []), { ...kept, seq: mark.seq, by: mark.by, ...(mark.rts !== undefined ? { rts: mark.rts } : {}) }];
+    const words = kept.how === "same-tree" ? "the same tree as" : `a clean merge of ${kept.ref} into`;
+    task.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `${kept.head.slice(0, 7)} is ${words} the approved ${kept.approved.slice(0, 7)}: the approval holds` });
+    task.updatedAt = mark.at;
+  }
+  const pr = prOfTask(c.github, c.branchPrefix, task);
+  if (pr?.sha && pr.state === "open") approvalHoldsAgain(task, pr.sha, mark);
 }
 
 function membersOnly(c: FoldCtx, member: FoldMember, m: Message, ev: { members: RoomMember[]; dm?: true; self?: true }, known: Room | undefined): string | null {
@@ -320,19 +345,12 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const heads = new Map([...c.github.prs].map(([key, pr]) => [key, pr.sha]));
       applyGithub(c.github, ev.items, m.seq);
-      if (ev.items.some((i) => i.event === "workflow_run" && i.started !== undefined)) startRuns(c, tasks, { seq: m.seq, by: m.from, at });
       for (const [key, pr] of c.github.prs) {
         if (!pr.sha || pr.state !== "open" || heads.get(key) === pr.sha) continue;
+        const moved = { ...pr, sha: pr.sha };
         for (const t of tasks.values()) {
-          const last = t.rounds.at(-1);
-          if (t.state !== "landing" || last?.result.kind !== "approved" || !last.at || sameHead(last.at, pr.sha)) continue;
           const linked = branchLinks(pr, c.branchPrefix, t) || !!t.proof?.some((p) => prLinks(p.url).some((l) => prKey(l.repo, l.number) === key));
-          if (!linked) continue;
-          last.stale = m.seq;
-          t.state = "review";
-          t.approvedBy = undefined;
-          t.notes.push({ seq: m.seq, by: m.from, ts: at, text: `new head ${pr.sha.slice(0, 7)} on ${pr.repo}#${pr.number} after the approval: back to review` });
-          t.updatedAt = at;
+          if (linked) headMoved(t, moved, { seq: m.seq, by: m.from, at });
         }
       }
       break;
@@ -397,14 +415,17 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
-    case "merges.set": {
+    case "quiet.set": {
       if (!member.owner && !c.trusted(m.pk ?? "", member)) {
-        reject(trustOnly("sets who merges"));
+        reject(trustOnly("sets how long a task may stay quiet"));
         break;
       }
-      c.merges = ev.by;
+      c.quietMs = ev.minutes * 60_000;
       break;
     }
+
+    case "merges.set":
+      break;
 
     case "landing.set": {
       if (!member.owner && !c.trusted(m.pk ?? "", member)) {
@@ -412,6 +433,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         break;
       }
       c.landing = ev.then;
+      c.landingSteps = ev.steps ?? null;
       break;
     }
 
@@ -509,8 +531,9 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
-    case "task.add":
-      tasks.set(m.seq, {
+    case "task.add": {
+      const then = ev.steps ? undefined : (ev.then ?? (c.landingSteps ? undefined : (c.landing ?? undefined)));
+      const added: Task = {
         id: m.seq,
         title: String(ev.title).slice(0, TASK_TITLE_MAX_LENGTH),
         detail: ev.detail,
@@ -527,10 +550,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         workedBy: ev.owner ? [ev.owner] : [],
         rounds: [],
         ...(m.re?.length ? { source: m.re[0] } : {}),
-        ...(hasLanding(ev.then ?? c.landing ?? undefined) ? { then: ev.then ?? c.landing ?? undefined } : {}),
         ...(ev.lander?.trim() ? { lander: ev.lander.trim() } : {}),
-      });
+      };
+      if (ev.steps) seedSteps(added, ev.steps);
+      else if (then && hasLanding(then)) seedSteps(added, stepsOfThen(then), "then");
+      else if (ev.then === undefined && c.landingSteps) seedSteps(added, c.landingSteps);
+      seeAnswered(added, c.passedAsks, { seq: m.seq, by: m.from, at });
+      tasks.set(m.seq, added);
       break;
+    }
 
     case "card": {
       const card = omit(ev, "op");
@@ -561,6 +589,9 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
+    case "task.nudge":
+      break;
+
     case "task.first": {
       const task = tasks.get(ev.task);
       if (!task) reject(`no task ${taskId(ev.task)}`);
@@ -572,22 +603,67 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
 
     case "task.landed": {
       const task = tasks.get(ev.task);
-      const key = artifactKey(ev.task, ev.artifact);
       if (!task) {
         reject(`no task ${taskId(ev.task)}`);
         break;
       }
-      if (task.landed?.key === key) break;
-      const why = landedRefusal(c, task, ev.artifact, member, m.from);
+      const mark = { seq: m.seq, by: m.from, at };
+      if ("step" in ev) {
+        const step = stepById(task, ev.step);
+        const wrong = step && ev.artifact ? null : landedStepRefusal(task, ev.step);
+        if (wrong || !step) {
+          reject(wrong ?? `${taskId(task.id)} has no step ${ev.step}`);
+          break;
+        }
+        if (step.progress.kind === "ended") break;
+        const trusted = isPerson(member) || c.leads(member);
+        const mover = step.by ?? landerOf(task);
+        if (!trusted && m.from !== mover) {
+          reject(`only ${mover ?? "its lander"}, the lead or a person ends step ${stepText(step)} of ${taskId(task.id)}`);
+          break;
+        }
+        if (ev.artifact) {
+          const unseen = observedRefusal({ github: c.github, prOf: (t) => prOfTask(c.github, c.branchPrefix, t) }, task, step, ev.artifact);
+          if (unseen) reject(unseen);
+          else see(task, step, mark, artifactWords(ev.artifact), ev.artifact.kind === "pr" ? prOfTask(c.github, c.branchPrefix, task)?.mergedAt : undefined);
+          break;
+        }
+        if (task.state !== "landing") {
+          reject(`${taskId(task.id)} isn't approved and landing: it's ${task.state}`);
+          break;
+        }
+        say(task, step, mark, { ...(ev.link ? { link: ev.link } : {}), ...(ev.note ? { note: ev.note.trim() } : {}) });
+        break;
+      }
+      if (task.state === "done") break;
+      const lander = landerOf(task);
+      const why =
+        !member.owner && !c.leads(member) && m.from !== lander
+          ? `only the owner's app, the lead or ${lander ?? "its lander"} lands ${taskId(task.id)}`
+          : landedRefusal({ github: c.github, prOf: (t) => prOfTask(c.github, c.branchPrefix, t) }, task, ev.artifact);
       if (why) {
         reject(why);
         break;
       }
-      task.state = "done";
-      task.landed = { key, artifact: ev.artifact, seq: m.seq, by: m.from };
-      task.closedSeq = m.seq;
       task.updatedAt = at;
-      task.notes.push({ seq: m.seq, by: m.from, ts: at, text: `landed: ${artifactText(ev.artifact)}` });
+      task.notes.push({ seq: m.seq, by: m.from, ts: at, text: `landed: ${artifactWords(ev.artifact)}` });
+      seeThenSteps(task, mark, artifactWords(ev.artifact));
+      advance(task, mark);
+      break;
+    }
+
+    case "task.steps": {
+      const task = tasks.get(ev.task);
+      if (!task) {
+        reject(`no task ${taskId(ev.task)}`);
+        break;
+      }
+      const refused = stepEditRefusal(task, ev.edit, { name: m.from, person: isPerson(member), lead: c.leads(member) });
+      if (refused) reject(refused);
+      else {
+        editSteps(task, ev.edit, { seq: m.seq, by: m.from, at });
+        seeAnswered(task, c.passedAsks, { seq: m.seq, by: m.from, at });
+      }
       break;
     }
 
@@ -611,16 +687,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const owner = ev.owner === undefined ? task.owner : ev.owner || undefined;
       const mayFinish = !review || isPerson(member) || (review === "*" ? m.from !== owner && !task.workedBy.includes(m.from) : m.from === review);
       if (ev.state === "done" && ev.close === undefined && task.state !== "done" && !mayFinish) {
-        reject(`${taskId(task.id)} needs review by ${review === "*" ? "someone who hasn't worked on it" : review} before it's done (send it for review)`);
+        const open = openRound(task);
+        reject(
+          `${taskId(task.id)} needs review by ${review === "*" ? "someone who hasn't worked on it" : review} before it's done${open ? `: ${reviewWaysOut(task.id, review, open.n)}` : " (send it for review)"}`,
+        );
         break;
       }
       const landingWrong = landingRefusal(task, ev, { person: isPerson(member), lead });
       if (landingWrong) {
         reject(landingWrong);
-        break;
-      }
-      if (ev.state === "cancelled" && doneGate({ github: c.github, checks: c.checks, branchPrefix: c.branchPrefix }, task)?.kind === "bypassed") {
-        reject(`${taskId(task.id)} shipped while its ship gate was shut: only a person or the lead closes it, with a reason`);
         break;
       }
       const open = openRound(task);
@@ -629,7 +704,12 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         reject(verdictWrong);
         break;
       }
-      const runWrong = runRefusal(task, ev.run, trustedAt(m));
+      const keptWrong = ev.kept ? keptRefusal(task, ev.kept, m.from, lead) : null;
+      if (keptWrong) {
+        reject(keptWrong);
+        break;
+      }
+      const runWrong = runRefusal(ev.run, trustedAt(m));
       if (runWrong) {
         reject(runWrong);
         break;
@@ -640,7 +720,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const reopens = landingReopens(task, ev);
       const cancel = ev.state === "cancelled" && task.state !== "done";
-      const lands = ev.verdict === "approved" && hasLanding(task.then);
+      const lands = ev.verdict === "approved" && hasOpenSteps(task);
       const asked =
         ev.state === "cancelled" ? (cancel && (mayFinish || lead || (ev.round !== undefined && revisedOut(task, m.from, open) === ev.round)) ? "done" : undefined) : ev.state && currentState(ev.state);
       const state = reopens ? "review" : lands && asked === "done" ? "landing" : asked;
@@ -653,6 +733,20 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
             : state === "done" && !cancel && ev.close === undefined
               ? { kind: "approved", by: m.from, seq: m.seq, ts: at, ...rts }
               : { kind: "withdrawn", seq: m.seq };
+      const judge = review ? mayFinish : isPerson(member) || lead;
+      if (!open && lands && state === "landing" && judge) {
+        const linked = prOfTask(c.github, c.branchPrefix, task);
+        const head = ev.at?.trim() || (linked?.state === "open" ? linked.sha : undefined);
+        task.rounds.push({
+          n: (task.rounds.at(-1)?.n ?? 0) + 1,
+          ...(head ? { at: head } : {}),
+          by: m.from,
+          seq: m.seq,
+          ts: at,
+          ...rts,
+          result: { kind: "approved", by: m.from, seq: m.seq, ts: at, ...rts, ...(head ? runsOf(ev.runs ?? runsAtHead(c, task, head)) : {}) },
+        });
+      }
       if (state === "review") {
         if (open) open.result = { kind: "withdrawn", seq: m.seq };
         const head = reopens ? (ev.run && newRun(task, ev.run) ? runPin(ev.run.id) : task.rounds.at(-1)?.at) : ev.at?.trim();
@@ -670,7 +764,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const note = ev.note || ev.close?.trim() || (ev.state === "blocked" ? "blocked" : ev.state === "cancelled" ? "cancelled" : reopens ? "changed how it lands: back to review" : undefined);
       const settled = (s: string) => s === "done" || s === "landing";
       if (ev.review !== undefined) task.review = review;
-      if (ev.then !== undefined) task.then = hasLanding(ev.then) ? ev.then : undefined;
+      if (ev.then !== undefined && thenChanged(task, ev.then)) reseedThen(task, ev.then);
       if (ev.lander !== undefined) task.lander = ev.lander?.trim() || undefined;
       if (ev.verdict === "approved" && state && settled(state) && task.review) task.approvedBy = m.from;
       if (ev.state === "done" && ev.verdict === undefined && ev.close === undefined && task.state !== "done" && task.review) task.approvedBy = m.from;
@@ -701,25 +795,19 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
           ...(ev.checkpoint && ev.note ? { checkpoint: true as const } : {}),
           ...(ev.owner && ev.owner !== m.from && ev.note ? { assign: true as const } : {}),
         });
-      if (ev.proof && !task.proof?.some((p) => p.url === ev.proof!.url) && (task.proof?.length ?? 0) < PROOF_MAX)
+      if (ev.proof && !task.proof?.some((p) => p.url === ev.proof!.url) && (task.proof?.length ?? 0) < PROOF_MAX) {
         task.proof = [...(task.proof ?? []), { seq: m.seq, by: m.from, ts: at, url: ev.proof.url, ...(ev.proof.label ? { label: ev.proof.label } : {}) }];
-      if (ev.run && task.run?.id !== ev.run.id) {
-        const start = runStart(c.github, ev.run.id, task.createdRts ?? Number.NEGATIVE_INFINITY);
-        task.run = {
-          id: ev.run.id,
-          seq: m.seq,
-          by: m.from,
-          ...(ev.run.started !== undefined ? { reportedStart: ev.run.started } : {}),
-          ...(start ? { start } : {}),
-          ...(runsUnknownSince(c.github, task) ? { blind: true as const } : {}),
-        };
-      } else if (ev.run?.started !== undefined && task.run && task.run.reportedStart === undefined) {
-        task.run.reportedStart = ev.run.started;
-        unlandShaken(c, task, { seq: m.seq, by: m.from, at }, `${m.from} reports run ${task.run.id} started earlier`);
+        for (const l of prLinks(ev.proof.url)) {
+          const pr = c.github.prs.get(prKey(l.repo, l.number));
+          if (pr?.sha && pr.state === "open") headMoved(task, { ...pr, sha: pr.sha }, { seq: m.seq, by: m.from, at });
+        }
       }
+      if (ev.kept) keepApproval(c, task, ev.kept, { seq: m.seq, by: m.from, at, ...rts });
+      if (ev.run && task.run?.id !== ev.run.id) task.run = { id: ev.run.id, seq: m.seq, by: m.from };
       if (ev.areas?.length) task.areas = [...new Set(ev.areas)];
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;
+      if (task.state === "landing") advance(task, { seq: m.seq, by: m.from, at });
       break;
     }
 

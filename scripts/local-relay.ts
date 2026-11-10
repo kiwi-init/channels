@@ -14,9 +14,9 @@ export function relayPort(stdout: string): number | null {
   return Number.isInteger(port) && port > 0 ? port : null;
 }
 
-export function startLocalRelay(data: string, web: string | null, opts: { rateLimits?: boolean } = {}): Promise<LocalRelay> {
+export function startLocalRelay(data: string, web: string | null, opts: { rateLimits?: boolean; port?: number } = {}): Promise<LocalRelay> {
   const flags = [...(web ? ["--web", web] : ["--no-web"]), "--dev-sign-in", ...(opts.rateLimits === false ? ["--dev-no-rate-limits"] : [])];
-  const relay = spawn("bun", ["src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", "0", "--data", data, ...flags], {
+  const relay = spawn("bun", ["src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", String(opts.port ?? 0), "--data", data, ...flags], {
     cwd: ROOT,
     stdio: ["ignore", "pipe", "inherit"],
   });

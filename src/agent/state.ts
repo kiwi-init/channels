@@ -9,7 +9,6 @@ import { seatHolds, seatRefusal } from "../hold.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
 import { decodedWhole, GENERAL_ROOM, knownOp, olderRules, outgrown, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
-import { downgrades } from "@kiwi/core/ship-gate.ts";
 import { findRoom, fold, rosterOf, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
 import { narrows, wants } from "./wants.ts";
@@ -64,7 +63,6 @@ export class SessionState {
       if (m && this.log && seq === lastSeq(this.log) + 1) this.log = [...this.log, m];
       else this.owed = Math.max(this.owed, seq);
     };
-    this.ch.downgradesFor = (m) => (this.folded ? downgrades(this.folded, m) : []);
   }
 
   get me(): string {
@@ -135,7 +133,7 @@ export class SessionState {
     const holed = first !== undefined && first > (this.base?.n ?? 0) + 1;
     const current = !holed && seen !== null && seen.head <= lastSeq(this.log) && lastSeq(this.log) >= this.owed;
     if (!current && (holed || !look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
-      const offered = !this.base && (first === undefined || first > 1) ? yield* this.ch.fx.snapshot() : null;
+      const offered = !this.base && (first === undefined || first > 1) ? yield* Effect.orElseSucceed(this.ch.fx.snapshot(), () => null) : null;
       const whole = offered && olderRules(offered) ? yield* this.wholeLog() : null;
       const fetched = whole ? null : offered;
       const floor = this.base?.n ?? fetched?.n ?? 0;

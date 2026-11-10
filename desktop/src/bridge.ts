@@ -2,13 +2,14 @@
 // main-eb.ts and preload-eb.ts; renderer-neutral on purpose (no node imports),
 // so ui/ can type against it without touching this process.
 
+import type { UiCommand } from "./ui-command.ts";
 import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { HarnessRow, HookHarness, HookRow } from "@kiwi/core/harnesses.ts";
 import type { WakeSeat } from "@kiwi/core/wake.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
-import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
+import type { CachedKept, CachedRow, Reopened, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
 import type { PipeIn, PipeOut } from "@kiwi/core/doc/held-pipe.ts";
 import type { DeviceKeep, MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
@@ -105,7 +106,7 @@ export const CHANNEL_CALLS = [
   "syncGithub",
   "githubStatus",
   "githubDiff",
-  "postReviewCheck",
+  "retireReview",
   "commentOnPr",
   "githubIssue",
   "closeIssue",
@@ -171,6 +172,7 @@ export interface ChannelOps {
   forget(code: string): Promise<void>;
   presence(code: string, p: PresenceFields): Promise<void>;
   openRows(code: string, rows: CachedRow[]): Promise<(Message | Unread | null)[]>;
+  reopenRows(code: string, rows: CachedRow[]): Promise<Reopened>;
   olderRows(code: string, before: number, limit: number): Promise<OlderRows>;
   indexRows(code: string, rows: CachedRow[], inputs: FoldInputs, from: number): Promise<number | null>;
   searchHistory(code: string, ask: HistorySearch): Promise<Searched | null>;
@@ -219,7 +221,7 @@ export type KeysAsk =
   | { op: "joinStatus"; code: string }
   | { op: "forget"; code: string }
   | { op: "presence"; code: string; p: Wire }
-  | { op: "openRows"; code: string; rows: Wire }
+  | { op: "openRows"; code: string; rows: Wire; keep?: true }
   | { op: "olderRows"; code: string; before: number; limit: number }
   | { op: "indexRows"; code: string; rows: Wire; inputs: Wire; from: number }
   | { op: "searchHistory"; code: string; ask: Wire }
@@ -368,7 +370,7 @@ export interface MachineView {
   online: boolean | null;
 }
 
-export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
+export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string; why?: "not-registered" | "busy" | "no-answer" | "failed" };
 
 export interface KiwiBridge {
   /** The relay URL injected at load (query param, else the default). */
@@ -460,6 +462,7 @@ export interface KiwiBridge {
   /** A link came in while the app runs (it waits for getDeepLink too, so it's opened once). */
   onDeepLink(cb: (url: string) => void): () => void;
   onTextStep(cb: (step: TextStep) => void): () => void;
+  onCommand(cb: (command: UiCommand) => void): () => void;
   onFrost(cb: (on: boolean) => void): () => void;
   getAccentColor(): Promise<string | null>;
   /** What this app can run: its UI contract version and the channel calls it serves, so a newer UI hides what it can't do. */

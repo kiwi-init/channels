@@ -7,10 +7,10 @@ import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import type { GithubChore, GithubHealth } from "@kiwi/core/github-health.ts";
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
-import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
+import { fold, nextExpiry, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
 import type { Reach } from "./history-fill.ts";
-import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
+import { planCached, reopenCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
 import { markOnce } from "./marks.ts";
 import { ICON_LIVE } from "./icon-event.ts";
 import { addMarks, type Marks } from "./receipts.ts";
@@ -21,13 +21,13 @@ import type { Watches } from "./watch.ts";
 import { subscribeTick, tickOf } from "./clock.ts";
 import { noteAgentWorked } from "./recent.ts";
 import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./store.ts";
-import { hear, onlineByName, type Online } from "./online.ts";
+import { hear, onlineByName, sharedOnline, type Online } from "./online.ts";
 import { trimmed } from "./trim.ts";
 import { foldRoster } from "./fold-roster.ts";
 import { asKept, toKept } from "./kept.ts";
 import { handOver, onceEach, openChannel, warmUp } from "./open.ts";
 import type { Scrollback } from "./back.ts";
-import { dropWarm, keepWarm, LEAN, leanLoaded, leanNow, LIGHT, warmOf, type Warm } from "./warm.ts";
+import { dropWarm, foldedFor, keepWarm, LEAN, leanLoaded, leanNow, LIGHT, warmOf, type Warm } from "./warm.ts";
 
 let images: typeof import("./image-bytes.ts") | null = null;
 void import("./image-bytes.ts").then((m) => (images = m)).catch(() => {});
@@ -41,6 +41,7 @@ export const OLDER_PER_CLICK = 5_000;
 const OLDER_GAP_MS = 250;
 const KEEP_DELAY_MS = 3_000;
 const CLOCK_MS = 15_000;
+const LONGEST_WAIT_MS = 24 * 3_600_000;
 const GITHUB_SYNC_MS = 6 * 3_600_000;
 const OLDER_APP = /no such call/;
 
@@ -121,6 +122,7 @@ export class ChannelStore {
   private readonly marks: Signal<Marks>;
   private readonly requests: Signal<JoinRequest[]>;
   private readonly now = signal(tickOf(Date.now(), CLOCK_MS));
+  private readonly expired = signal(0);
   private readonly infoAt = signal(0);
   private readonly guardFloor: Signal<GuardFloor | null>;
   private readonly roomsFloor: Signal<RoomsSetting | null>;
@@ -131,6 +133,7 @@ export class ChannelStore {
   private readonly keyOf: ReadonlySignal<Map<string, string>>;
   private readonly state: ReadonlySignal<ChannelState>;
   private readonly caughtUp: ReadonlySignal<boolean>;
+  private readonly partial: ReadonlySignal<boolean>;
   private readonly head: ReadonlySignal<number>;
   private readonly trimDue: ReadonlySignal<number>;
   private readonly reconcileDue: ReadonlySignal<string>;
@@ -158,12 +161,6 @@ export class ChannelStore {
 
   constructor(member: StoredMember, human?: HumanSession | null, deps?: ChannelStoreDeps, light = false) {
     this.ch = deps?.link ?? linkOf(member);
-    this.ch.beforeSend = async (body, opts) => {
-      const state = this.state.value;
-      const from = [...state.members.values()].find((m) => m.pk === member.identity.pk)?.name;
-      const may = opts.ev?.op === "task.update" || !!opts.check || !!opts.re?.some((id) => state.checks.has(id));
-      return from && may ? (await import("@kiwi/core/ship-gate.ts")).postDowngrades(state, { ...opts, from, body }, (c) => this.ch.postReviewCheck(c)) : [];
-    };
     this.lend = deps?.lend ?? ((code) => watches().lend(code));
     this.code = member.code;
     this.human = human;
@@ -190,10 +187,21 @@ export class ChannelStore {
     const admitted = computed(() => this.roster.value.filter((m) => !m.unverified));
     this.keyOf = computed(() => new Map(admitted.value.filter((r) => r.active).map((r) => [r.name, r.pk])));
     this.rosterForFold = computed(() => foldRoster(admitted.value));
-    this.state = computed(() => fold(this.messages.value, this.rosterForFold.value, this.now.value, this.roomsFloor.value, this.guardFloor.value, this.base.value));
+    let held = foldedFor(was, Date.now());
+    this.state = computed(() => {
+      const refolds = this.expired.value;
+      const [messages, roster, rooms, guard, base] = [this.messages.value, this.roster.value, this.roomsFloor.value, this.guardFloor.value, this.base.value];
+      if (held && refolds === 0 && held.messages === messages && held.roster === roster && held.roomsFloor === rooms && held.guardFloor === guard && held.base === base) return held.state;
+      held = null;
+      return fold(messages, this.rosterForFold.value, Date.now(), rooms, guard, base);
+    });
     this.caughtUp = computed(() => {
       const start = this.start.value;
       return !!start?.whole && (this.messages.value.at(-1)?.seq ?? 0) >= start.head;
+    });
+    this.partial = computed(() => {
+      const start = this.start.value;
+      return start ? !start.whole : !!was?.partial;
     });
     this.head = computed(() => this.state.value.head);
     this.trimDue = computed(() => (this.start.value ? this.messages.value.length : -1));
@@ -215,7 +223,8 @@ export class ChannelStore {
       const guard = this.guardFloor.value;
       return (all: Message[], from: FoldBase | null) => fold(all, roster, Date.now(), rooms, guard, from);
     });
-    const live = computed(() => onlineByName(this.online.value, this.keyOf.value, this.now.value));
+    let shownOnline = new Map<string, Online>();
+    const live = computed(() => (shownOnline = sharedOnline(shownOnline, onlineByName(this.online.value, this.keyOf.value, this.now.value))));
     this.handle = computed(() => ({
       ch: this.ch,
       connection: this.connection.value,
@@ -278,9 +287,9 @@ export class ChannelStore {
 
   refreshRoster = async (): Promise<void> => {
     try {
-      this.roster.value = await this.ch.members();
+      this.takeRoster(await this.ch.members());
       this.rosterIn = true;
-      if (this.ch.isOwner && (await this.ch.rotateIfDue())) this.roster.value = await this.ch.members();
+      if (this.ch.isOwner && (await this.ch.rotateIfDue())) this.takeRoster(await this.ch.members());
     } catch (err) {
       this.onGone(err);
     }
@@ -310,12 +319,32 @@ export class ChannelStore {
       this.every(60_000, () => this.drainGithub()),
       this.every(60_000, () => this.postReviewChecks()),
       on(this.rulesDue, () => this.githubRules()),
-      subscribeTick(CLOCK_MS, () => {
-        this.now.value = tickOf(Date.now(), CLOCK_MS);
-      }),
+      on(this.state, (state) => this.foldAtNextExpiry(state)),
+      this.presenceClock(),
     ];
     return () => {
       for (const stop of stops) stop();
+    };
+  }
+
+  private foldAtNextExpiry(state: ChannelState): (() => void) | undefined {
+    const at = nextExpiry(state, Date.now());
+    if (at === null) return;
+    const t = setTimeout(() => this.expired.value++, Math.min(at - Date.now(), LONGEST_WAIT_MS));
+    return () => clearTimeout(t);
+  }
+
+  private presenceClock(): () => void {
+    const tick = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      this.now.value = tickOf(Date.now(), CLOCK_MS);
+    };
+    const stop = subscribeTick(CLOCK_MS, tick);
+    if (typeof document === "undefined") return stop;
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", tick);
     };
   }
 
@@ -327,9 +356,13 @@ export class ChannelStore {
     return true;
   }
 
+  private takeRoster(next: Member[]): void {
+    if (JSON.stringify(next) !== JSON.stringify(this.roster.peek())) this.roster.value = next;
+  }
+
   private async loadRoster(): Promise<void> {
     try {
-      this.roster.value = await this.ch.members();
+      this.takeRoster(await this.ch.members());
       this.rosterIn = true;
     } catch (err) {
       this.onGone(err);
@@ -338,18 +371,22 @@ export class ChannelStore {
 
   private keepWarm(): void {
     if (this.gone.value) return dropWarm(this.code);
+    const state = this.state.value;
+    const [messages, roster, guardFloor, roomsFloor, base] = [this.messages.value, this.roster.value, this.guardFloor.value, this.roomsFloor.value, this.base.value];
     keepWarm(
       this.code,
       {
-        messages: this.messages.value,
+        messages,
         reach: this.reach.value,
         unread: this.unread.value,
-        roster: this.roster.value,
+        roster,
         requests: this.requests.value,
         marks: this.marks.value,
-        guardFloor: this.guardFloor.value,
-        roomsFloor: this.roomsFloor.value,
-        base: this.base.value,
+        guardFloor,
+        roomsFloor,
+        base,
+        partial: this.partial.value,
+        folded: { state, messages, roster, guardFloor, roomsFloor, base, until: nextExpiry(state, Date.now()) },
       },
       this.light ? "light" : "full",
     );
@@ -357,7 +394,7 @@ export class ChannelStore {
 
   private keepSealed(): (() => void) | undefined {
     if (!this.start.value || this.gone.value) return;
-    const kept = toKept({ roster: this.roster.value, base: this.base.value, guardFloor: this.guardFloor.value, roomsFloor: this.roomsFloor.value });
+    const kept = toKept({ roster: this.roster.value, base: this.partial.value ? null : this.base.value, guardFloor: this.guardFloor.value, roomsFloor: this.roomsFloor.value });
     const t = setTimeout(() => {
       void this.ch
         .keep(kept)
@@ -557,11 +594,11 @@ export class ChannelStore {
       requests: this.refreshRequests,
       rotate: () => (ch.isOwner ? ch.rotateIfDue().catch((err: unknown) => (this.onGone(err), false)) : Promise.resolve(false)),
       cache: () =>
-        openCached(ch.roomId, ch.pk, ch.openRows, REACH)
+        reopenCached(ch.roomId, ch.pk, ch.reopenRows, REACH)
           .then((opened) => (markOnce("kiwi:cache-open"), opened))
           .catch(() => null),
       plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, REACH).catch(() => null),
-      snapshot: () => ch.snapshot().catch(() => null),
+      snapshot: () => ch.snapshot(),
       kept: async () => {
         const sealed = await readKept(ch.roomId, ch.pk).catch(() => null);
         markOnce("kiwi:kept-read");
@@ -652,7 +689,7 @@ export class ChannelStore {
   private trim(): void {
     if (!this.start.peek()) return;
     const messages = this.messages.peek();
-    const next = trimmed(messages, this.rosterForFold.peek(), this.now.peek(), this.roomsFloor.peek(), this.guardFloor.peek(), this.base.peek(), this.keep);
+    const next = trimmed(messages, this.rosterForFold.peek(), Date.now(), this.roomsFloor.peek(), this.guardFloor.peek(), this.base.peek(), this.keep);
     if (!next) return;
     const lean = leanNow();
     if (!lean) return void leanLoaded().then(() => this.trim());

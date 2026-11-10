@@ -107,7 +107,7 @@ describe("a task's stage is read off the signed log, never typed", () => {
     await github([{ event: "pull_request", action: "opened", number: 5, state: "open", branch: `T${t}-s`, sha: "q1" }]);
     const s = state();
     expect(formatTask(s, s.tasks.get(t)!, T0 + 3_600_000)).toContain("  stage: proving: #5 no checks yet");
-    expect(formatTasks(s)).toContain("Shown · proving: #5 no checks yet");
+    expect(formatTasks(s, "kiwi/review/test")).toContain("Shown · proving: #5 no checks yet");
   });
 });
 

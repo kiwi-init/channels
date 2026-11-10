@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { wrote } from "~/words"
 
 import type { Channel, Message, Person, Spec, Task } from "~/model"
-import { alarmsOf, commentsOf, lineDiff, needsYou, quoteIn, splitQuote, stageLine, storyOf } from "~/specs/read"
+import { alarmsOf, commentsOf, insideOf, lineDiff, needsYou, quoteIn, splitQuote, stageLine, storyOf } from "~/specs/read"
 
 const NOW = 1_800_000_000_000
 const person = (name: string, kind: Person["kind"] = "human"): Person => ({ name, kind, owner: false, you: false, presence: "online", lastSeen: NOW, joined: NOW, messages: 0 })
@@ -201,5 +201,15 @@ describe("what changed since approval, and what happened inside", () => {
     const c = channel({ nicknames: new Map([["gentle-otter", "opus-coder"]]) })
     const line = stageLine(c, spec({ stage: "dropped", result: { verdict: "dropped", by: "maya", at: NOW, note: wrote("@gentle-otter shipped it elsewhere") } }))
     expect(line.line).toBe("@opus-coder shipped it elsewhere")
+  })
+})
+
+describe("a spec's comments have one home, the Spec tab (T1877)", () => {
+  test("Inside lists what was said in the spec's tasks, not the spec's own comments or its first message", () => {
+    const msg = (seq: number, more: Partial<Message>): Message => ({ seq, from: "atlas", at: NOW + seq, text: wrote(`m${seq}`), where: general, ...more })
+    const messages = [msg(10, {}), msg(12, { inThread: 10 }), msg(13, { where: { kind: "task", task: 7 } }), msg(14, { where: { kind: "task", task: 8 } })]
+    const inside = insideOf({ messages }, { ask: 10, tasks: [7], comments: [] })
+    expect(inside.map((m) => m.seq)).toEqual([13])
+    expect(commentsOf({ messages }, { ask: 10, comments: [] }).map((c) => c.m.seq)).toEqual([12])
   })
 })

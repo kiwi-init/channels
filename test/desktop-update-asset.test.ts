@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -161,6 +161,46 @@ test("a swap that goes in replaces the app, clears an old marker and leaves no c
     rmSync(f.root, { recursive: true, force: true });
   }
 });
+
+test("a swap never pulls the app from under a Channels that was opened again from it: the app stays, nothing is marked failed, and the download is kept for it (T1770)", async () => {
+  const f = swapFixture();
+  const exe = join(f.target, "Contents", "MacOS", "Channels");
+  mkdirSync(join(f.target, "Contents", "MacOS"), { recursive: true });
+  copyFileSync(process.execPath, exe, constants.COPYFILE_FICLONE);
+  const reopened = Bun.spawn([exe, "-e", "setTimeout(() => {}, 60000)"], { stdio: ["ignore", "ignore", "ignore"] });
+  try {
+    await Bun.sleep(500);
+    const script = swapScript({ ...f, version: "0.20.0", relaunch: true });
+    expect(Bun.spawnSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
+    expect(readFileSync(join(f.target, "v"), "utf8")).toBe("old");
+    expect(readFileSync(join(f.next, "v"), "utf8")).toBe("new");
+    expect(existsSync(f.marker)).toBe(false);
+    expect(readdirSync(f.parent)).toEqual(["Channels.app"]);
+  } finally {
+    reopened.kill();
+    await reopened.exited;
+    rmSync(f.root, { recursive: true, force: true });
+  }
+}, 20_000);
+
+test("a Channels still closing when the swap starts doesn't stop it: the swap waits for it to go", async () => {
+  const f = swapFixture();
+  const exe = join(f.target, "Contents", "MacOS", "Channels");
+  mkdirSync(join(f.target, "Contents", "MacOS"), { recursive: true });
+  copyFileSync(process.execPath, exe, constants.COPYFILE_FICLONE);
+  const closing = Bun.spawn([exe, "-e", "setTimeout(() => {}, 1500)"], { stdio: ["ignore", "ignore", "ignore"] });
+  try {
+    await Bun.sleep(500);
+    const script = swapScript({ ...f, version: "0.20.0", relaunch: false });
+    expect(Bun.spawnSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
+    expect(readFileSync(join(f.target, "v"), "utf8")).toBe("new");
+    expect(existsSync(f.dir)).toBe(false);
+  } finally {
+    closing.kill();
+    await closing.exited;
+    rmSync(f.root, { recursive: true, force: true });
+  }
+}, 20_000);
 
 test("a swap into a new home makes its folder, moves the app in, leaves the old one, and says where it went (T2366)", () => {
   const f = swapFixture();

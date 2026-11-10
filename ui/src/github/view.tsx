@@ -1,3 +1,4 @@
+import "~/i18n/en/github-later"
 import "~/styles/tasks.css"
 import "~/styles/github.css"
 
@@ -5,16 +6,19 @@ import { useState, type ReactNode } from "react"
 
 import { githubTrouble, type GithubTrouble } from "@kiwi/core/github-health.ts"
 
-import { choreTitle, since } from "~/github/health"
+import { choreNext, choreTitle, since } from "~/github/health"
+import { Details } from "~/kit/failed"
 import { ciOf, isOpen, issueGroups, matches, prGroups, type Group, type GroupKey, type Shown } from "~/github/groups"
-import { checksLine, DiffBar, IssueMark, issueWord, PrMark, Ticks } from "~/github/parts"
+import { checksLine, DiffBar, IssueMark, PrMark, Ticks } from "~/github/parts"
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
 import { Avatar, Count, cx, Dot } from "~/kit/bits"
 import { Empty } from "~/kit/empty"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Issue, type PullRequest } from "~/model"
-import { useApp, type GithubView as Kind } from "~/nav"
+import { type GithubView as Kind, useGo, useNav } from "~/nav"
 import { wordsPlain } from "~/words"
 import { OutsideLink } from "~/kit/outside"
 
@@ -34,7 +38,8 @@ function reposOf(channel: Channel): string[] {
 }
 
 export function GithubView({ channel }: { channel: Channel }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const kind: Kind = nav.github ?? "prs"
   const [shown, setShown] = useState<Shown>("open")
   const [repo, setRepo] = useState<string | null>(null)
@@ -52,29 +57,29 @@ export function GithubView({ channel }: { channel: Channel }) {
     <div className="board">
       <div className="board-list gh-list">
         <div className="gh-top">
-          <Track className="seg gh-kind" role="group" aria-label="Pull requests or issues">
+          <Track className="seg gh-kind" role="group" aria-label={t("github.view.kind.label")}>
             <button type="button" aria-pressed={kind === "prs"} onClick={() => go({ to: "github", view: "prs" })}>
               <Icon name="pr" size={14} />
-              Pull requests <Count n={prs.filter(isOpen).length} />
+              {t("github.view.prs")} <Count n={prs.filter(isOpen).length} />
             </button>
             <button type="button" aria-pressed={kind === "issues"} onClick={() => go({ to: "github", view: "issues" })}>
               <Icon name="issue" size={14} />
-              Issues <Count n={issues.filter(isOpen).length} />
+              {t("github.view.issues")} <Count n={issues.filter(isOpen).length} />
             </button>
           </Track>
-          <Track className="seg" role="group" aria-label="Open or closed">
+          <Track className="seg" role="group" aria-label={t("github.view.shown.label")}>
             <button type="button" aria-pressed={shown === "open"} onClick={() => setShown("open")}>
-              Open <span className="gh-n num">{open}</span>
+              {t("github.view.open")} <span className="gh-n num">{open}</span>
             </button>
             <button type="button" aria-pressed={shown === "closed"} onClick={() => setShown("closed")}>
-              Closed <span className="gh-n num">{items.length - open}</span>
+              {t("github.view.closed")} <span className="gh-n num">{items.length - open}</span>
             </button>
           </Track>
           <div className="gh-end">
             {many && (
-              <Track className="seg gh-repos" role="group" aria-label="Repo">
+              <Track className="seg gh-repos" role="group" aria-label={t("github.view.repo.label")}>
                 <button type="button" aria-pressed={repo === null} onClick={() => setRepo(null)}>
-                  All repos
+                  {t("github.view.all.repos")}
                 </button>
                 {repos.map((r) => (
                   <button key={r} type="button" aria-pressed={repo?.toLowerCase() === r.toLowerCase()} title={r} onClick={() => setRepo(r)}>
@@ -87,9 +92,9 @@ export function GithubView({ channel }: { channel: Channel }) {
               <Icon name="search" size={14} />
               <input
                 value={query}
-                aria-label={kind === "prs" ? "Filter pull requests" : "Filter issues"}
-                placeholder="Filter"
-                title={kind === "prs" ? "Title, #number, author or branch" : "Title, #number or author"}
+                aria-label={t(kind === "prs" ? "github.view.filter.prs" : "github.view.filter.issues")}
+                placeholder={t("github.view.filter")}
+                title={t(kind === "prs" ? "github.view.filter.prs.hint" : "github.view.filter.issues.hint")}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Escape" && query) {
@@ -99,7 +104,7 @@ export function GithubView({ channel }: { channel: Channel }) {
                 }}
               />
               {query && (
-                <button type="button" className="gh-find-clear" aria-label="Clear the filter" onClick={() => setQuery("")}>
+                <button type="button" className="gh-find-clear" aria-label={t("github.view.clear.filter")} onClick={() => setQuery("")}>
                   <Icon name="close" size={12} />
                 </button>
               )}
@@ -109,13 +114,13 @@ export function GithubView({ channel }: { channel: Channel }) {
         {kind === "prs" ? (
           <Groups
             groups={prGroups(prs, shown)}
-            empty={<Nothing query={query} clear={() => setQuery("")} what={shown === "open" ? "open pull requests" : "closed pull requests"} icon="pr" trouble={trouble} />}
+            empty={<Nothing query={query} clear={() => setQuery("")} shown={shown} icon="pr" trouble={trouble} />}
             row={(pr: PullRequest) => <PrRow key={`${pr.repo}#${pr.number}`} channel={channel} pr={pr} repos={many ? repos : null} />}
           />
         ) : (
           <Groups
             groups={issueGroups(issues, shown)}
-            empty={<Nothing query={query} clear={() => setQuery("")} what={shown === "open" ? "open issues" : "closed issues"} icon="issue" trouble={trouble} />}
+            empty={<Nothing query={query} clear={() => setQuery("")} shown={shown} icon="issue" trouble={trouble} />}
             row={(i: Issue) => <IssueRow key={`${i.repo}#${i.number}`} channel={channel} issue={i} repos={many ? repos : null} />}
           />
         )}
@@ -149,76 +154,101 @@ function GroupCard<T>({ group, row }: { group: Group<T>; row: (x: T) => ReactNod
       <ul className="gh-rows">{rows.map(row)}</ul>
       {group.rows.length > SHOWN && (
         <button type="button" className="board-more" onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `Show ${group.rows.length - SHOWN} more`}
+          {all ? t("github.view.show.fewer") : t("github.view.show.more", { count: group.rows.length - SHOWN })}
         </button>
       )}
     </section>
   )
 }
 
-const EVENT_NAMES: Record<string, string> = { pull_request: "Pull request", check_run: "Check run", issues: "Issues" }
+const EVENT_NAMES: Partial<Record<string, Key>> = { pull_request: "github.view.event.pull.request", check_run: "github.view.event.check.run", issues: "github.view.event.issues" }
 
-const listed = (xs: readonly string[]): string => (xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`)
+const eventName = (e: string): string => {
+  const key = EVENT_NAMES[e]
+  return key ? t(key) : e
+}
 
-function Nothing({ query, clear, what, icon, trouble }: { query: string; clear: () => void; what: string; icon: "pr" | "issue"; trouble: GithubTrouble | null }) {
+const listed = (xs: readonly string[]): string =>
+  xs.length < 2 ? (xs[0] ?? "") : t("github.view.list.last", { first: xs.slice(1, -1).reduce((all, next) => t("github.view.list.next", { first: all, next }), xs[0] ?? ""), last: xs.at(-1) ?? "" })
+
+const NO_MATCH: Record<"pr" | "issue", Record<Shown, Key>> = {
+  pr: { open: "github.view.no.match.open.prs", closed: "github.view.no.match.closed.prs" },
+  issue: { open: "github.view.no.match.open.issues", closed: "github.view.no.match.closed.issues" },
+}
+
+const NONE: Record<"pr" | "issue", Record<Shown, Key>> = {
+  pr: { open: "github.view.none.open.prs", closed: "github.view.none.closed.prs" },
+  issue: { open: "github.view.none.open.issues", closed: "github.view.none.closed.issues" },
+}
+
+function appDocs(): string {
+  const lang = document.documentElement.lang.toLowerCase()
+  return `https://channels.kiwiinit.com${lang && lang !== "en" ? `/${lang}` : ""}/docs/github-app`
+}
+
+function Nothing({ query, clear, shown, icon, trouble }: { query: string; clear: () => void; shown: Shown; icon: "pr" | "issue"; trouble: GithubTrouble | null }) {
   if (query.trim())
     return (
-      <Empty title={`No ${what} match “${query.trim()}”.`} icon="search">
+      <Empty title={t(NO_MATCH[icon][shown], { query: query.trim() })} icon="search">
         <button type="button" className="btn is-small" onClick={clear}>
-          Clear the filter
+          {t("github.view.clear.filter")}
         </button>
       </Empty>
     )
   if (trouble?.kind === "no-app")
     return (
-      <Empty title="GitHub can't reach this channel." icon="github">
-        <p>This relay has no GitHub App, so GitHub has nowhere to send a repo's pull requests and issues. Whoever runs the relay sets one up, as docs/github-app.md says.</p>
+      <Empty title={t("github.view.no.app")} icon="github">
+        <p>{t("github.view.no.app.why")}</p>
+        <OutsideLink className="btn is-small gh-empty-btn" href={appDocs()}>
+          {t("github.view.no.app.how")}
+        </OutsideLink>
       </Empty>
     )
   if (trouble?.kind === "not-installed")
     return (
-      <Empty title={`Kiwi Channels isn't installed on ${trouble.owner}.`} icon="github">
-        <p>GitHub tells only the Apps installed on a repo about its pull requests, checks and issues.</p>
+      <Empty title={t("github.view.not.installed", { owner: trouble.owner })} icon="github">
+        <p>{t("github.view.not.installed.why")}</p>
         {trouble.install && (
           <OutsideLink className="btn is-small gh-empty-btn" href={trouble.install}>
-            Install Kiwi Channels on {trouble.owner}
+            {t("github.view.install", { owner: trouble.owner })}
           </OutsideLink>
         )}
       </Empty>
     )
   if (trouble?.kind === "events")
     return (
-      <Empty title={`Kiwi Channels doesn't get ${listed(trouble.missing.map((e) => EVENT_NAMES[e] ?? e))} events.`} icon="github">
-        <p>Turn them on under Permissions & events in the App's settings, then accept the new permissions on {trouble.owner}.</p>
+      <Empty title={t("github.view.no.events", { events: listed(trouble.missing.map(eventName)) })} icon="github">
+        <p>{t("github.view.no.events.fix", { owner: trouble.owner })}</p>
       </Empty>
     )
   if (trouble?.kind === "syncing")
     return (
-      <Empty title={`Fetching ${trouble.repo}'s ${icon === "pr" ? "pull requests" : "issues"}…`} icon={icon}>
-        <p>The open ones, and the ones closed in the last 30 days.</p>
+      <Empty title={t(icon === "pr" ? "github.view.fetching.prs" : "github.view.fetching.issues", { repo: trouble.repo })} icon={icon}>
+        <p>{t("github.view.fetching.which")}</p>
       </Empty>
     )
   if (trouble?.kind === "failed")
     return (
-      <Empty title={`${choreTitle(trouble.what, trouble.repo)}.`} icon="github">
-        <p>{trouble.message}</p>
+      <Empty title={t("github.view.failed", { title: choreTitle(trouble.what, trouble.repo) })} icon="github">
+        <p>{choreNext(trouble.message)}</p>
+        <Details raw={trouble.message} />
       </Empty>
     )
   return (
-    <Empty title={`No ${what}.`} icon={icon}>
-      {trouble?.kind === "quiet" && (trouble.last === null ? "GitHub hasn't sent this channel anything yet." : `GitHub's last news came ${since(trouble.last)}.`)}
+    <Empty title={t(NONE[icon][shown])} icon={icon}>
+      {trouble?.kind === "quiet" && (trouble.last === null ? t("github.view.quiet.never") : t("github.view.quiet.last", { when: since(trouble.last) }))}
     </Empty>
   )
 }
 
 function NoRepo() {
-  const { go } = useApp()
+  const go = useGo()
   return (
     <div className="board">
       <div className="board-list gh-list">
-        <Empty title="No GitHub repo linked yet." icon="github">
+        <Empty title={t("github.view.no.repo")} icon="github">
           <button type="button" className="btn is-small gh-empty-btn" onClick={() => go({ to: "modal", modal: { kind: "channel" } })}>
-            Open channel settings
+            {t("github.view.open.settings")}
           </button>
         </Empty>
       </div>
@@ -227,7 +257,7 @@ function NoRepo() {
 }
 
 function Owner({ channel, id }: { channel: Channel; id: number | undefined }) {
-  const task = id !== undefined ? channel.tasks.find((t) => t.id === id) : undefined
+  const task = id !== undefined ? channel.tasks.find((task) => task.id === id) : undefined
   if (!task) return <span className="gh-col-task" />
   return (
     <span className="gh-col-task num" title={`T${task.id} ${wordsPlain(task.title, channel.nicknames)}`}>
@@ -243,7 +273,7 @@ function Item({ on, url, label, open, issue, children }: { on: boolean; url: str
       <button type="button" className={cx("gh-row", issue && "is-issue")} aria-current={on || undefined} onClick={open}>
         {children}
       </button>
-      <OutsideLink className="gh-out" href={url} aria-label={`${label} on GitHub`} title="Open on GitHub">
+      <OutsideLink className="gh-out" href={url} aria-label={label} title={t("github.view.open.on.github")}>
         <Icon name="external" size={14} />
       </OutsideLink>
     </li>
@@ -251,35 +281,41 @@ function Item({ on, url, label, open, issue, children }: { on: boolean; url: str
 }
 
 function ciWord(pr: PullRequest): string {
-  const t = pr.ticks
+  const ticks = pr.ticks
   const ci = ciOf(pr)
-  if (t && ci === "fail") return t.failed.length === 1 ? (t.failed[0] ?? "1 failed") : `${t.failed.length} failed`
-  if (t && ci === "running") return `${t.passed} of ${t.passed + t.running + t.failed.length}`
-  return ci === "fail" ? "failed" : "running"
+  if (ticks && ci === "fail") return ticks.failed.length === 1 ? (ticks.failed[0] ?? t("github.view.ci.count.failed", { count: 1 })) : t("github.view.ci.count.failed", { count: ticks.failed.length })
+  if (ticks && ci === "running") return t("github.view.ci.of", { passed: ticks.passed, total: ticks.passed + ticks.running + ticks.failed.length })
+  return t(ci === "fail" ? "github.view.ci.failed" : "github.view.ci.running")
 }
 
 function PrRow({ channel, pr, repos }: { channel: Channel; pr: PullRequest; repos: string[] | null }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const on = nav.panel?.kind === "pr" && nav.panel.repo === pr.repo && nav.panel.number === pr.number
   const line = checksLine(pr)
   const ci = ciOf(pr)
   const closed = pr.state === "merged" || pr.state === "closed"
   return (
-    <Item on={on} url={pr.url} label={`PR #${pr.number}`} open={() => go({ to: "panel", panel: on ? null : { kind: "pr", repo: pr.repo, number: pr.number } })}>
+    <Item
+      on={on}
+      url={pr.url}
+      label={t("github.view.pr.on.github", { number: String(pr.number) })}
+      open={() => go({ to: "panel", panel: on ? null : { kind: "pr", repo: pr.repo, number: pr.number } })}
+    >
       <PrMark pr={pr} />
       <span className="gh-title">{pr.title}</span>
       <span className="gh-meta">
         <span className="num">#{pr.number}</span>
         {repos && <span>{shortRepo(pr.repo, repos)}</span>}
         {pr.by && <span>{pr.by}</span>}
-        {closed ? <span>{`${pr.state} ${ago(pr.at ?? 0)}`}</span> : pr.at !== undefined && <span>{ago(pr.at)}</span>}
-        {pr.release && <span>shipped in {pr.release}</span>}
+        {closed ? <span>{t(pr.state === "merged" ? "github.view.merged.ago" : "github.view.closed.ago", { time: ago(pr.at ?? 0) })}</span> : pr.at !== undefined && <span>{ago(pr.at)}</span>}
+        {pr.release && <span>{t("github.view.shipped.in", { release: pr.release })}</span>}
         {line && (ci === "fail" || ci === "running") && <span className={cx("gh-meta-ci", line.tone)}>{line.text}</span>}
       </span>
       <span className={cx("gh-col-ci", closed && "is-quiet")}>
         {!closed && pr.list?.length ? <Ticks list={pr.list} /> : null}
         {!closed && (ci === "fail" || ci === "running") && (
-          <span className={cx("gh-ci-word", line?.tone)} title={pr.ticks?.failed.length ? `Failed: ${pr.ticks.failed.join(", ")}` : undefined}>
+          <span className={cx("gh-ci-word", line?.tone)} title={pr.ticks?.failed.length ? t("github.view.failed.checks", { names: pr.ticks.failed.join(", ") }) : undefined}>
             {ciWord(pr)}
           </span>
         )}
@@ -299,17 +335,24 @@ function PrRow({ channel, pr, repos }: { channel: Channel; pr: PullRequest; repo
 }
 
 function IssueRow({ channel, issue, repos }: { channel: Channel; issue: Issue; repos: string[] | null }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const on = nav.panel?.kind === "issue" && nav.panel.repo === issue.repo && nav.panel.number === issue.number
   return (
-    <Item issue on={on} url={issue.url} label={`Issue #${issue.number}`} open={() => go({ to: "panel", panel: on ? null : { kind: "issue", repo: issue.repo, number: issue.number } })}>
+    <Item
+      issue
+      on={on}
+      url={issue.url}
+      label={t("github.view.issue.on.github", { number: String(issue.number) })}
+      open={() => go({ to: "panel", panel: on ? null : { kind: "issue", repo: issue.repo, number: issue.number } })}
+    >
       <IssueMark issue={issue} />
       <span className="gh-title">{issue.title}</span>
       <span className="gh-meta">
         <span className="num">#{issue.number}</span>
         {repos && <span>{shortRepo(issue.repo, repos)}</span>}
         {issue.by && <span>{issue.by}</span>}
-        <span>{issue.state === "open" ? ago(issue.at) : `${issueWord(issue)} ${ago(issue.at)}`}</span>
+        <span>{issue.state === "open" ? ago(issue.at) : t(issue.reason === "not_planned" ? "github.view.issue.not.planned.ago" : "github.view.issue.closed.ago", { time: ago(issue.at) })}</span>
       </span>
       <Owner channel={channel} id={issue.task} />
     </Item>

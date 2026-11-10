@@ -80,7 +80,7 @@ describe("tasks are filed under the ask they serve", () => {
     for (const cut of [2, 5, 7, 10, 13]) {
       const resumed = fold(log.slice(cut), roster, T0 + 60_000, null, null, baseOf(log.slice(0, cut)));
       expect(asks(resumed)).toEqual(asks(whole));
-      expect(formatTasks(resumed, { all: true })).toBe(formatTasks(whole, { all: true }));
+      expect(formatTasks(resumed, "kiwi/review/test", { all: true })).toBe(formatTasks(whole, "kiwi/review/test", { all: true }));
     }
   });
 
@@ -93,21 +93,21 @@ describe("tasks are filed under the ask they serve", () => {
       [13, [13]],
       [null, [12, 14]],
     ]);
-    expect(formatTasks(s).split("\n")).toEqual([
+    expect(formatTasks(s, "kiwi/review/test").split("\n")).toEqual([
       "#1 jow: “UI ideas so we can keep up”",
-      "  T6    planned   compare the two",
-      "  T8    planned   trim the board",
+      "  T6    planned   compare the two · move: jow to give it an owner",
+      "  T8    planned   trim the board · move: jow to give it an owner",
       "#2 jow: “Screenshot 1.png”",
-      "  T4    planned   explore a delegate board",
-      "  T9    planned   a follow-up",
-      "  T11   planned   fix task who",
+      "  T4    planned   explore a delegate board · move: jow to give it an owner",
+      "  T9    planned   a follow-up · move: jow to give it an owner",
+      "  T11   planned   fix task who · move: jow to give it an owner",
       "#13 jow: “jow's own task”",
-      "  T13   planned   jow's own task",
+      "  T13   planned   jow's own task · move: jow to give it an owner",
       "unfiled (no person's message holds these)",
-      "  T12   planned   an agent's own finding",
-      "  T14   planned   from an older client",
+      "  T12   planned   an agent's own finding · move: jow to give it an owner",
+      "  T14   planned   from an older client · move: jow to give it an owner",
     ]);
-    const status = formatStatus({ alias: "dev", me: "lead", state: s, online: new Map(), unread: 0, now: T0 + 60_000 });
+    const status = formatStatus({ check: "kiwi/review/test", alias: "dev", me: "lead", state: s, online: new Map(), unread: 0, now: T0 + 60_000 });
     expect(status).toContain("tasks (8 open, 1 done), by the ask each serves:\n  #1 jow: “UI ideas so we can keep up”\n    T6    planned   compare the two");
   });
 });
@@ -159,7 +159,7 @@ describe("decisions name the work they hold", () => {
     expect(holdsWork(s, { from: "jow" })).toBe(true);
     expect([...tasksAwaitingPeople(s)]).toEqual([2]);
 
-    const status = formatStatus({ alias: "c", me: "jow", state: s, online: new Map(), unread: 0 });
+    const status = formatStatus({ check: "kiwi/review/test", alias: "c", me: "jow", state: s, online: new Map(), unread: 0 });
     expect(status).toContain("waiting on you (3)");
     expect(status).toContain("#3 dev [blocking] [taste] · holds T2: Glass or frosted?");
     expect(status).toContain("#4 dev [blocking] · holds #1: Ship before the release?");
@@ -174,7 +174,7 @@ describe("decisions name the work they hold", () => {
       [1, false],
       [2, false],
     ]);
-    const status = formatStatus({ alias: "c", me: "jow", state: s, online: new Map(), unread: 0 });
+    const status = formatStatus({ check: "kiwi/review/test", alias: "c", me: "jow", state: s, online: new Map(), unread: 0 });
     expect(status).toContain("also asked, holding nothing up (2): #1, #2");
     expect(status).not.toContain("waiting on you");
   });
@@ -199,11 +199,11 @@ describe("agents see each other's open asks to a person, so a decision is asked 
   test("status lists another agent's open ask to a person, with its holds, for every other agent", async () => {
     const log = await signedLog([say("jow", "Make the avatars glass"), add("Glass avatars", {}, 1), esc("Glass or frosted?", { holds: [2] })]);
     const s = fold(log, roster, T0);
-    const lead = formatStatus({ alias: "c", me: "lead", state: s, online: new Map(), unread: 0 });
+    const lead = formatStatus({ check: "kiwi/review/test", alias: "c", me: "lead", state: s, online: new Map(), unread: 0 });
     expect(lead).toContain("asked of people by others (1)");
     expect(lead).toContain("#3 dev → jow · holds T2: Glass or frosted?");
-    expect(formatStatus({ alias: "c", me: "dev", state: s, online: new Map(), unread: 0 })).not.toContain("asked of people by others");
-    expect(formatStatus({ alias: "c", me: "jow", state: s, online: new Map(), unread: 0 })).not.toContain("asked of people by others");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "c", me: "dev", state: s, online: new Map(), unread: 0 })).not.toContain("asked of people by others");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "c", me: "jow", state: s, online: new Map(), unread: 0 })).not.toContain("asked of people by others");
   });
 
   test("an ask to the same person holding the same task or ask is found; other work or another person isn't", async () => {

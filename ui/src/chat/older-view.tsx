@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import "~/styles/search.css"
@@ -6,16 +7,17 @@ import { MessageRow } from "~/chat/message"
 import type { Older } from "~/chat/search-box"
 import { whereLabel } from "~/chat/search-hits"
 import { paintHits } from "~/chat/search-paint"
+import { t } from "~/i18n/i18n"
 import { Loading } from "~/kit/bits"
 import { day, sameDay } from "~/kit/time"
 import type { Channel, Message, OlderHit } from "~/model"
-import { useApp } from "~/nav"
+import { useActions } from "~/nav"
 import { wrote } from "~/words"
 
 const asMessage = (o: OlderHit): Message => ({ seq: o.seq, from: o.from, at: o.at, text: wrote(o.text), where: o.where })
 
 export function OlderView({ channel, older, onBack }: { channel: Channel; older: Older; onBack: () => void }) {
-  const { app } = useApp()
+  const actions = useActions()
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
   const [loaded, setLoaded] = useState<{ seq: number; rows: OlderHit[] | null } | null>(null)
@@ -23,14 +25,14 @@ export function OlderView({ channel, older, onBack }: { channel: Channel; older:
 
   useEffect(() => {
     let gone = false
-    void app.actions.olderAround(channel.code, older.seq).then(
+    void actions.olderAround(channel.code, older.seq).then(
       (rows: OlderHit[] | null) => !gone && setLoaded({ seq: older.seq, rows }),
       () => !gone && setLoaded({ seq: older.seq, rows: null })
     )
     return () => {
       gone = true
     }
-  }, [app.actions, channel.code, older.seq])
+  }, [actions, channel.code, older.seq])
 
   const rows = loaded?.seq === older.seq ? loaded.rows : undefined
   const hitAt = rows?.find((o) => o.seq === older.seq)?.at
@@ -45,9 +47,9 @@ export function OlderView({ channel, older, onBack }: { channel: Channel; older:
   return (
     <div className="feed-wrap older">
       <div className="older-bar" role="status">
-        <span>Viewing older messages{hitAt ? ` around ${day(hitAt)}` : ""}</span>
+        <span>{hitAt ? t("chat.older.view.viewing.around", { day: day(hitAt) }) : t("chat.older.view.viewing")}</span>
         <button type="button" className="btn is-small" onClick={onBack}>
-          Back to latest
+          {t("chat.older.view.back")}
         </button>
       </div>
       <div className="feed">
@@ -55,7 +57,7 @@ export function OlderView({ channel, older, onBack }: { channel: Channel; older:
           {rows === undefined ? (
             <Loading />
           ) : rows === null || rows.length === 0 ? (
-            <p className="search-none">That part of the history isn't on this device yet.</p>
+            <p className="search-none">{t("chat.older.view.missing")}</p>
           ) : (
             rows.map((o, i) => (
               <Fragment key={o.seq}>

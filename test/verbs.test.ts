@@ -341,6 +341,34 @@ describe("review rounds through the CLI", () => {
     want = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "review rounds that hold up"))![1]!;
   });
 
+  test("the check flags of ask-human are gone: each is refused with what replaces it, and nothing is posted (#3930 §5)", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "check before the merge", "--ask", want));
+    const head = async () => /head #(\d+)/.exec(await ok(dev, "status"))![1];
+    const before = await head();
+    const options = ["--holds", `T${t}`, "--option", "A: works on KDE", "--option", "B: not yet", "Does it work on KDE?"];
+    const flags: string[][] = [
+      ["--check", "pre-ship"],
+      ["--check", "post"],
+      ["--decider", "jon"],
+      ["--artifact", `pr:o/r#7@${"a".repeat(40)}`],
+      ["--replaces", "#12"],
+    ];
+    for (const flag of flags) {
+      const refused = await run(dev, "ask-human", ...flag, ...options);
+      expect(refused.code).not.toBe(0);
+      expect(refused.err).toContain(`${flag[0]} is gone, and nothing was posted`);
+      expect(refused.err).toContain("Kiwi no longer blocks a merge on the host");
+    }
+    const all = await run(dev, "ask-human", "--check", "pre-ship", "--artifact", `pr:o/r#7@${"a".repeat(40)}`, "--decider", "jon", "--replaces", "#12", ...options);
+    expect(all.code).not.toBe(0);
+    expect(all.err).toContain("--check, --decider, --artifact, --replaces are gone, and nothing was posted");
+    expect(all.err).toContain("--holds T7");
+    expect(all.err).toContain("the lead or a person makes it a step");
+    expect(all.err).toContain('kiwi task steps T7 add "words" --answered N --before ID');
+    expect(await head()).toBe(before);
+    expect(await ok(dev, "ask-human", ...options)).toMatch(/^escalated #\d+ to /);
+  });
+
   test("ask-human names another agent's open ask to the same person on the same work, and status lists it (#1580)", async () => {
     const t = taskNo(await ok(dev, "task", "add", "pick the avatar blur", "--ask", want));
     const first = seqOf(await ok(dev, "ask-human", "--holds", `T${t}`, "--option", "A: glass", "--option", "B: frosted", "Glass or frosted?"));
@@ -364,19 +392,20 @@ describe("review rounds through the CLI", () => {
     expect((await run(dev, "task", "proof", `T${t}`)).err).toContain("usage: kiwi task proof");
   });
 
-  test("a run task declares its run, is reviewed and approved at --run ID, then records the run's own start time (T1269)", async () => {
+  test("a run task declares its run and is reviewed and approved at --run ID; a start time is no longer taken (T1269, #3930 §5)", async () => {
     const t = taskNo(await ok(dev, "task", "add", "run the backfill", "--ask", want, "--then", "run", "--review", "rev"));
     await ok(dev, "task", "proof", `T${t}`, "--run", "backfill-1");
     await ok(dev, "task", "review", `T${t}`, "--run", "backfill-1");
     expect((await run(dev, "task", "review", `T${t}`, "--run", "backfill-1", "--at", "abc")).err).toContain("--at pins a round to a commit and --run to a run");
     await ok(rev, "task", "approve", `T${t}`, "--run", "backfill-1", "looks right");
-    expect((await run(dev, "task", "proof", `T${t}`, "--run", "backfill-1", "--started", "yesterday")).err).toContain("isn't a start time");
-    expect((await run(dev, "task", "proof", `T${t}`, "--started", "2020-01-01T00:00:00Z")).err).toContain("--started goes on task proof T7 --run ID");
-    await ok(dev, "task", "proof", `T${t}`, "--run", "backfill-1", "--started", "2020-01-01T00:00:00Z");
+    const started = await run(dev, "task", "proof", `T${t}`, "--run", "backfill-1", "--started", "2020-01-01T00:00:00Z");
+    expect(started.code).not.toBe(0);
+    expect(started.err).toContain("--started is gone: Kiwi no longer orders a run's start against its approval");
     const shown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"));
     expect(shown.state).toBe("landing");
     expect(shown.rounds.at(-1)).toMatchObject({ at: "run:backfill-1", result: { kind: "approved" } });
-    expect(shown.run).toMatchObject({ id: "backfill-1", reportedStart: Date.parse("2020-01-01T00:00:00Z") });
+    expect(Object.keys(shown.run).sort()).toEqual(["by", "id", "seq"]);
+    expect(shown.steps).toMatchObject([{ id: "s1", words: "run", progress: { kind: "open" } }]);
   });
 
   test("start is the one way to take a task: two racing for an unowned one get one winner, the other is told who has it, and on your own task it only starts it", async () => {
@@ -413,6 +442,80 @@ describe("review rounds through the CLI", () => {
     expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ review: "rev" });
   });
 
+  test("a task lands by a list of steps: --then repeats, task landed ends the current one, and task steps changes them (#3930)", async () => {
+    const at = "4444444444444444444444444444444444444444";
+    const orphan = await run(dev, "task", "add", "no step to bind", "--ask", want, "--by", "rev");
+    expect(orphan.code).not.toBe(0);
+    expect(orphan.err).toContain("--by goes after the --then it belongs to");
+    const faceless = await run(dev, "task", "add", "a run nobody is behind", "--ask", want, "--then", "prd pipeline", "--expect", "2h");
+    expect(faceless.err).toContain("a step that waits on a run names who is behind it: --by NAME");
+    const asked = taskNo(await ok(dev, "task", "add", "waits on a question", "--ask", want, "--then", "owner says ship", "--answered", `#${want}`));
+    expect(JSON.parse(await ok(dev, "task", "show", `T${asked}`, "--json"))).toMatchObject({ steps: [{ id: "s1", detector: { kind: "answered", ask: Number(want) } }] });
+    const old = taskNo(await ok(dev, "task", "add", "one old value", "--ask", want, "--then", "merge"));
+    const oldShown = JSON.parse(await ok(dev, "task", "show", `T${old}`, "--json"));
+    expect(oldShown.steps).toEqual([{ id: "s1", words: "merge", detector: { kind: "pr-merged" }, progress: { kind: "open" } }]);
+    expect(Object.keys(oldShown)).not.toContain("then");
+    const tagged = taskNo(await ok(dev, "task", "add", "an old release value", "--ask", want, "--then", "release:tag"));
+    expect(JSON.parse(await ok(dev, "task", "show", `T${tagged}`, "--json")).steps.map((x: { words: string }) => x.words)).toEqual(["merge", "release"]);
+    const none = taskNo(await ok(dev, "task", "add", "finishes on approval", "--ask", want, "--then", "none"));
+    expect(Object.keys(JSON.parse(await ok(dev, "task", "show", `T${none}`, "--json")))).not.toContain("steps");
+    const edited = await run(dev, "task", "edit", `T${old}`, "--then", "release:tag");
+    expect(edited.code).not.toBe(0);
+    expect(edited.err).toContain("task edit no longer takes --then");
+    expect(edited.err).toContain("kiwi task steps T7");
+    const t = taskNo(
+      await ok(
+        dev,
+        "task",
+        "add",
+        "ship the exporter",
+        "--ask",
+        want,
+        "--start",
+        "--review",
+        "rev",
+        "--then",
+        "tag the build",
+        "--then",
+        "soak in staging",
+        "--by",
+        "rev",
+        "--wait",
+        "2h let the cache warm",
+        "--then",
+        "tell the list",
+      ),
+    );
+    const listed = await ok(dev, "task", "steps", `T${t}`);
+    expect(listed).toContain("steps (0 of 3 ended):");
+    expect(listed).toMatch(/s1 {2}tag the build {4}dev\n/);
+    expect(listed).toMatch(/s2 {2}soak in staging {2}rev {2}not before \+2h: let the cache warm\n/);
+    const early = await run(dev, "task", "landed", `T${t}`);
+    expect(early.code).not.toBe(0);
+    expect(early.err).toContain(`T${t} isn't approved and landing: it's doing`);
+    await ok(dev, "task", "review", `T${t}`, "--at", at);
+    expect(await ok(rev, "task", "approve", `T${t}`, "--round", "1")).toContain("approved, landing");
+    const first = await ok(dev, "task", "landed", `T${t}`, "v1.2.0 tagged", "--link", "https://example.test/releases/1");
+    expect(first).toContain(`ended step s1 of T${t}: T${t} is still landing`);
+    expect(first).toContain("steps (1 of 3 ended, s2 is current):");
+    expect(await ok(dev, "task", "landed", `T${t}`, "--step", "s1")).toContain("steps (1 of 3 ended, s2 is current):");
+    const ahead = await run(dev, "task", "landed", `T${t}`, "--step", "s3");
+    expect(ahead.code).not.toBe(0);
+    expect(ahead.err).toContain(`step s3 “tell the list” of T${t} isn't the current one: its current step is s2 “soak in staging”. A retry resends the step id it first carried`);
+    const notMine = await run(dev, "task", "landed", `T${t}`);
+    expect(notMine.err).toContain(`only rev, the lead or a person ends step s2 “soak in staging” of T${t}`);
+    const byAgent = await run(dev, "task", "steps", `T${t}`, "skip", "s3", "not needed");
+    expect(byAgent.err).toContain(`only a person or the lead changes T${t}'s steps`);
+    const added = await ok(owner, "--as", "human", "task", "steps", `T${t}`, "add", "smoke test", "--by", "dev", "--before", "s3");
+    expect(added).toMatch(/s4 {2}smoke test\s+dev\n(.*\n)*.*s3 {2}tell the list/);
+    await ok(rev, "task", "landed", `T${t}`);
+    await ok(dev, "task", "landed", `T${t}`, "--step", "s4", "smoke run 12 is green");
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ state: "landing", approvedBy: "rev", rounds: [{ n: 1, result: { kind: "approved" } }] });
+    expect(await ok(owner, "--as", "human", "task", "steps", `T${t}`, "skip", "s3", "the list is retired")).toContain(`T${t} is done`);
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ state: "done" });
+    expect(await ok(dev, "log", "--task", `T${t}`, "-n", "40")).toContain(`ended step s1 “tag the build” of T${t}`);
+  });
+
   test("review --review NAME hands the open round on with its commit, and tells both reviewers", async () => {
     const at = "3333333333333333333333333333333333333333";
     const t = taskNo(await ok(dev, "task", "add", "hand the review on", "--review", "rev", "--ask", want));
@@ -432,6 +535,20 @@ describe("review rounds through the CLI", () => {
         { n: 2, result: { kind: "open" } },
       ],
     });
+  });
+
+  test("with its reviewer away, task done names both ways out and task edit --review moves the open round (#2032)", async () => {
+    const at = "4444444444444444444444444444444444444444";
+    const t = taskNo(await ok(dev, "task", "add", "an absent reviewer", "--review", "rev", "--ask", want));
+    await ok(dev, "task", "claim", `T${t}`);
+    await ok(dev, "task", "review", `T${t}`, "--at", at);
+    const done = await run(dev, "task", "done", `T${t}`);
+    expect(done.code).not.toBe(0);
+    expect(done.err).toContain(
+      `T${t} needs review by rev before it's done: rev answers kiwi task approve T${t} --round 1; the lead or a person can move the review (kiwi task review T${t} --review OTHER) or close the task (kiwi task close T${t} "why")`,
+    );
+    expect(await ok(owner, "--as", "human", "task", "edit", `T${t}`, "--review", "other")).toContain(`edited T${t}'s reviewer (other; round 1 stays open at ${at})`);
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ review: "other", rounds: [{ n: 1, at, result: { kind: "open" } }] });
   });
 
   test("review takes the author's inline or file summary, keeps it out of notes, and caps its length", async () => {

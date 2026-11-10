@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import * as Y from "yjs"
 import { Awareness } from "y-protocols/awareness"
 
@@ -12,6 +13,7 @@ import { giveBackBlock } from "~/chat/doc/give-back"
 import { madeHere, thisWindow, type MadeLines } from "~/chat/doc/made"
 import { afterUploads, startUpload, uploading } from "~/chat/doc/uploads"
 import { postFinished, type Finished, type Posting } from "~/chat/doc/post"
+import { t } from "~/i18n/i18n"
 import { noteTyping, tracingTyping } from "~/kit/typing-hook"
 
 export interface Shared {
@@ -49,7 +51,7 @@ function originOf(origin: unknown, phase: string): string | null {
 
 const said = (doc: Y.Doc): boolean => blocksOf(doc).some((b) => b.text.trim() !== "")
 
-const whyNot = (e: WireError): string => (e.kind === "gone" ? `the channel was ${e.why}` : e.message)
+const whyNot = (e: WireError): string => (e.kind !== "gone" ? e.message : e.why === "removed" ? t("chat.doc.channel.removed") : t("chat.doc.channel.closed"))
 
 export class LiveDoc implements Shared {
   readonly doc = new Y.Doc()

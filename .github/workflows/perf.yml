@@ -2,6 +2,35 @@ name: perf
 
 on:
   workflow_dispatch:
+    inputs:
+      soak_only:
+        description: "Minutes of soak for one diagnosis run, with no gates (empty runs the usual four runs and the 20-minute soak)"
+        type: string
+        default: ""
+      soak_tabs:
+        description: "0 keeps the soak on the conversation, with no tour of the views each minute"
+        type: string
+        default: ""
+      jobs:
+        description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a thread doc's updates cost, at a short and a long thread, no gate), upgrade (an older release's data opened by this build), replies (three agents answer one message, in the app), or all"
+        type: string
+        default: "scale"
+      doc_lines:
+        description: "Thread lengths for the doc job, space separated (empty is 40 400)"
+        type: string
+        default: ""
+      upgrade_from:
+        description: "The release tag the upgrade job starts from (empty is v2026.11.15)"
+        type: string
+        default: ""
+      desktop_messages:
+        description: "Messages in the channel the desktop app reopens (empty is 20)"
+        type: string
+        default: ""
+      desktop_idle:
+        description: "Seconds the desktop app idles before its memory is read (empty is 60, 0 skips it)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -9,6 +38,7 @@ permissions:
 jobs:
   perf:
     name: perf / scale and soak
+    if: ${{ inputs.jobs != 'desktop' && inputs.jobs != 'doc' && inputs.jobs != 'upgrade' && inputs.jobs != 'replies' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -16,11 +46,19 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/browser
       - run: bun scripts/ui-harness.ts
+      - name: perf-scale, one soak for a diagnosis
+        if: ${{ inputs.soak_only != '' }}
+        env:
+          PERF_SOAK_MIN: ${{ inputs.soak_only }}
+          PERF_SOAK_TABS: ${{ inputs.soak_tabs }}
+        run: bun scripts/perf-scale.ts --gated --json "$RUNNER_TEMP/perf-soak.json"
       - name: perf-scale, four runs and one with the 20-minute soak
+        if: ${{ inputs.soak_only == '' }}
         run: |
           for i in 1 2 3 4; do PERF_SOAK_MIN=0 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-$i.json"; done
           PERF_SOAK_MIN=20 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-5.json"
       - name: medians against the gates
+        if: ${{ inputs.soak_only == '' }}
         shell: bash
         run: bun scripts/perf-check.ts --nightly "$RUNNER_TEMP"/perf-*.json | tee -a "$GITHUB_STEP_SUMMARY"
       - if: ${{ !cancelled() }}
@@ -28,5 +66,116 @@ jobs:
         with:
           name: perf
           path: ${{ runner.temp }}/perf-*.json
+          if-no-files-found: ignore
+          overwrite: true
+
+  doc:
+    name: perf / a thread doc's updates
+    if: ${{ inputs.jobs == 'doc' || inputs.jobs == 'all' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/browser
+      - run: bun scripts/ui-harness.ts
+      - name: a short thread, then a long one; numbers only, no gate
+        shell: bash
+        env:
+          DOC_LINES: ${{ inputs.doc_lines || '40 400' }}
+        run: |
+          for lines in $DOC_LINES; do
+            bun scripts/perf-doc-updates.ts --lines=$lines --json="$RUNNER_TEMP/perf-doc-$lines.json"
+          done
+          { echo '```json'; jq -s . "$RUNNER_TEMP"/perf-doc-*.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  upgrade:
+    name: perf / an older release's data opens in this build
+    if: ${{ inputs.jobs == 'upgrade' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/browser
+      - run: bun scripts/ui-harness.ts
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.upgrade_from || 'v2026.11.15' }}
+          path: old-release
+      - name: the older release's own harness build
+        working-directory: old-release
+        run: bun install --frozen-lockfile && bun scripts/ui-harness.ts
+      - name: its data, opened by this build
+        run: bun scripts/ui-upgrade.ts --old=old-release
+      - name: this build's own data, reopened by itself
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-upgrade.ts --old=.
+      - name: the control, its data reopened by itself
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-upgrade.ts --old=old-release --control
+
+  replies:
+    name: perf / three agents answer one message, in the app
+    if: ${{ inputs.jobs == 'replies' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/browser
+      - run: bun scripts/ui-harness.ts
+      - name: one answer, two under it, none dropped
+        run: bun scripts/ui-replies-under.ts --shot="$RUNNER_TEMP/replies-under.png"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: replies-under
+          path: ${{ runner.temp }}/replies-under.png
+          if-no-files-found: ignore
+          overwrite: true
+
+  desktop:
+    name: perf / desktop cold start and idle memory
+    if: ${{ inputs.jobs == 'desktop' || inputs.jobs == 'all' }}
+    runs-on: macos-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: bun run ui:build
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/electrobun-pins.json') }}
+      - name: electrobun toolchain
+        working-directory: desktop
+        timeout-minutes: 5
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
+      - name: the kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+      - name: test build (the test driver in, its own bundle id)
+        working-directory: desktop
+        run: bun scripts/eb.ts build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          DASH_RELEASE_OFFLINE: "1"
+      - name: cold start, nine launches, and memory after an idle minute; numbers only, no gate
+        env:
+          PERF_RUNS: "9"
+          PERF_MESSAGES: ${{ inputs.desktop_messages || '20' }}
+          PERF_IDLE_SEC: ${{ inputs.desktop_idle || '60' }}
+        run: bun scripts/perf-desktop.ts desktop/release-eb/build/dev-macos-*/*.app --no-gate --json "$RUNNER_TEMP/perf-desktop.json"
+      - name: the report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          [ -f "$RUNNER_TEMP/perf-desktop.json" ] || { echo "no report was written"; exit 1; }
+          { echo '```json'; jq '{runs, calibrationMs, measured, scaled, memory, startup}' "$RUNNER_TEMP/perf-desktop.json"; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf-desktop
+          path: ${{ runner.temp }}/perf-desktop.json
           if-no-files-found: ignore
           overwrite: true

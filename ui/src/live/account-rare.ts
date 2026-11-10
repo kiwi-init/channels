@@ -2,6 +2,7 @@ import "~/i18n/en/live-later"
 import { bridge, secrets } from "@kiwi/secrets/secrets.ts"
 import { launchedBy } from "@kiwi/app/forgotten-computers.ts"
 import { t } from "~/i18n/i18n"
+import { Plain } from "~/kit/failed"
 import { announce } from "~/kit/toasts"
 import { devices, enrollAsk, github, githubBusy, githubCode, githubGate, listenForCodes, moved, selfEnroll } from "~/live/account"
 import { postDevicesNow } from "~/live/devices"
@@ -45,7 +46,7 @@ export async function enrollBegin(signIn: () => Promise<unknown>, done: (d: Enro
     if (!next || next.stage === "gone" || next.stage === "done") {
       enrollRun = null
       selfEnroll.set(null)
-      if (next?.stage === "gone") announce(t("live.account.enroll.gone"))
+      if (next?.stage === "gone") announce(t("live.account.enroll.gone"), "error")
       if (next?.stage === "done") done(next)
       return
     }
@@ -68,10 +69,8 @@ export async function enrollCancel(): Promise<void> {
   if (enrollTimer) clearTimeout(enrollTimer)
   enrollTimer = null
   enrollRun = null
-  const shown = selfEnroll.get()
   selfEnroll.set(null)
   await enrollBridge().enrollCancel()
-  if (shown?.stage === "check") announce(t("live.account.kept.nothing", { fingerprint: shown.person.fingerprint }))
 }
 
 export async function launchedFrom(ids: readonly string[]): Promise<LaunchedAgent[]> {
@@ -143,21 +142,31 @@ export async function enrollDeny(id: string): Promise<void> {
   await enrollAsk.check()
 }
 
+let linkDropped = false
+
+export function dropGithubCode(): void {
+  linkDropped = true
+  githubCode.set(null)
+  githubBusy.set(null)
+}
+
 export async function linkGithub(): Promise<void> {
   const b = bridge()
   if (!b) throw new Error(t("live.account.github.desktop"))
   listenForCodes()
   githubBusy.set(null)
+  linkDropped = false
   try {
     const s = await b.githubLink()
     github.set(s.account ? { login: s.account.login } : null)
     if (s.signIn) githubGate.set(s.account ? "signed-in" : "needed")
     if (s.account) announce(t("live.account.github.signed.in", { login: s.account.login }))
   } catch (err) {
+    if (linkDropped) return
     githubBusy.set(err instanceof Error ? err.message : String(err))
     throw err
   } finally {
-    githubCode.set(null)
+    if (!linkDropped) githubCode.set(null)
   }
 }
 
@@ -174,14 +183,15 @@ export async function dismissMoved(): Promise<void> {
   if (b && typeof b.dismissMovedApp === "function") await b.dismissMovedApp()
 }
 
-export async function setRelay(url: string): Promise<string | null> {
+export async function setRelay(url: string): Promise<void> {
   const b = bridge()
-  if (!b) return t("live.account.relay.desktop")
+  if (!b) throw new Plain(t("live.account.relay.desktop"))
   try {
     await b.setRelayUrl(url.trim())
-    return null
   } catch (err) {
-    return err instanceof Error ? err.message.replace(/^.*?Error: /, "") : String(err)
+    // The app's own refusal of the address is said in words; anything else keeps its raw text for Details.
+    if (/isn't a relay URL/i.test(err instanceof Error ? err.message : String(err))) throw new Plain(t("live.account.relay.not.url"))
+    throw err
   }
 }
 

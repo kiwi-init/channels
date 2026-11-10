@@ -23,6 +23,7 @@ import {
   wellFormedChoices,
   wellFormedHandoff,
   wellFormedHolds,
+  wellFormedSendId,
   type DecisionKind,
   type DocBlockRef,
   type Event,
@@ -38,14 +39,12 @@ import {
 import type { PermissionReply, PermissionSettled, PermissionShown } from "../permission.ts";
 import { MissingKey, Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
-import { downgradeRefusal, type Outgoing } from "../ship-gate.ts";
-import type { ReviewCheck } from "./github.ts";
 import { RelayError, Unreachable, type Refused } from "./errors.ts";
 import { received } from "./history.ts";
 import { MAX_WAKE } from "../push.ts";
 import type { ChannelImages } from "./images.ts";
 import type { ChannelLive } from "./live.ts";
-import type { Relay } from "./relay.ts";
+import { notTheRelay, type Relay } from "./relay.ts";
 import type { ChannelSettings } from "./settings.ts";
 
 export interface SendOptions {
@@ -65,6 +64,7 @@ export interface SendOptions {
   stepReply?: StepReply;
   check?: CheckAsk;
   id?: string;
+  cid?: string;
   permission?: PermissionShown;
   perm?: PermissionReply;
   settled?: PermissionSettled;
@@ -75,7 +75,6 @@ export interface SendOptions {
   slot?: { name: string; ttl: number };
   wake?: readonly string[];
   free?: string[];
-  tickets?: readonly string[];
 }
 
 export interface SendFx {
@@ -113,7 +112,6 @@ const patient = <A, E, R>(attempt: Effect.Effect<A, E, R>, left: number): Effect
 
 export class ChannelSending {
   onSent: ((seq: number, message: Message | null) => void) | null = null;
-  downgradesFor: ((m: Outgoing) => ReviewCheck[]) | null = null;
 
   constructor(
     private readonly ch: ChannelCore,
@@ -144,6 +142,7 @@ export class ChannelSending {
         return yield* new Rejected("a step goes only on an escalation, without a decision kind, options or browser handoff");
       if (opts.stepReply && (!opts.re?.length || opts.ev)) return yield* new Rejected("a step answer goes on a reply to its step");
       if (opts.id !== undefined && opts.id.length > 100) return yield* new Rejected("a message id is at most 100 characters");
+      if (opts.cid !== undefined && !wellFormedSendId(opts.cid)) return yield* new Rejected("a send id is 16 to 64 letters, digits, - or _");
       const attached = imgs?.length ? yield* this.images.stored(imgs) : undefined;
       const payload: Payload = {
         v: PROTOCOL_VERSION,
@@ -189,19 +188,8 @@ export class ChannelSending {
         if (!known(named)) yield* this.ch.fx.history(listed?.since ?? 0).pipe(Effect.catchCause(() => Effect.succeed(null)));
       }
       if (named && !known(named)) return yield* new Rejected(`this app doesn't know a room ${named} yet, so it won't send there: fetch the channel and try again`);
-      const given = opts.tickets ?? [];
-      const downgrade = Effect.gen({ self: this }, function* () {
-        const own: string[] = [];
-        for (const c of this.downgradesFor?.(payload) ?? []) {
-          const r = yield* this.ch.fx.postReviewCheck(c).pipe(Effect.mapError((err) => new Rejected(downgradeRefusal(c, err))));
-          if (r.ticket) own.push(r.ticket);
-        }
-        return own;
-      });
-      const own = yield* downgrade;
-      let tickets = [...given, ...own];
       const signed = yield* Effect.promise(() => sign(this.ch.identity, payload));
-      const cid = b64url(crypto.getRandomValues(new Uint8Array(16)));
+      const cid = opts.cid ?? b64url(crypto.getRandomValues(new Uint8Array(16)));
       const inside = named ? (this.ch.memberRooms.get(named)?.members ?? this.ch.roomNow.get(named)?.meta?.members) : undefined;
       const wake = opts.ev ? [] : (opts.wake ?? []).filter((w) => !inside || inside.some((m) => m.name === w)).slice(0, MAX_WAKE);
       const sealNow = Effect.gen({ self: this }, function* () {
@@ -219,10 +207,12 @@ export class ChannelSending {
         const roomId = this.ch.roomId;
         const slot = take ? { slot: { id: yield* Effect.promise(() => slotId(key, roomId, take.name)), ttl: take.ttl } } : {};
         const free = freeing.length ? { free: yield* Effect.promise(() => Promise.all(freeing.map((n) => slotId(key, roomId, n)))) } : {};
-        return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", {
+        const stored = yield* this.ch.request<{ seq: number; ts?: number }>("/messages", {
           method: "POST",
-          body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}), ...(tickets.length ? { tickets } : {}) }),
+          body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}) }),
         });
+        if (!Number.isSafeInteger(stored.seq) || stored.seq < 1) return yield* notTheRelay(this.ch.relay);
+        return stored;
       });
       const posted = Effect.gen({ self: this }, function* () {
         const stored = yield* again(post, UNSURE_RETRIES).pipe(
@@ -241,7 +231,7 @@ export class ChannelSending {
         return stored.seq;
       });
       const once = Effect.gen({ self: this }, function* () {
-        const wire = slotted || tickets.length ? undefined : [...this.live.wires].at(-1);
+        const wire = slotted ? undefined : [...this.live.wires].at(-1);
         if (!wire) return yield* posted;
         const { e, sealed } = yield* sealNow;
         const acked = yield* wire.send(sealed, e, signed, cid, wake).pipe(
@@ -254,16 +244,7 @@ export class ChannelSending {
         this.onSent?.(acked, null);
         return acked;
       });
-      return yield* patient(once, RATE_RETRIES).pipe(
-        Effect.catchIf(
-          (err) => own.length > 0 && !given.length && err instanceof RelayError && err.tag === "Fenced",
-          () =>
-            Effect.gen(function* () {
-              tickets = yield* downgrade;
-              return yield* patient(once, RATE_RETRIES);
-            }),
-        ),
-      );
+      return yield* patient(once, RATE_RETRIES);
     }),
   };
 }

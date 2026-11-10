@@ -1,10 +1,11 @@
+import "~/i18n/en/chat-later"
 import "~/styles/thread-doc.css"
 
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type CSSProperties, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import type { Node } from "prosemirror-model"
 import { EditorState, Plugin, type Transaction } from "prosemirror-state"
-import { Decoration, DecorationSet, EditorView, type NodeView } from "prosemirror-view"
+import { Decoration, DecorationSet, EditorView, type DecorationSource, type NodeView } from "prosemirror-view"
 import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prosemirror"
 import * as Y from "yjs"
 
@@ -28,25 +29,30 @@ import { frameOf, menuPlace, type Caret, type Place } from "~/chat/doc/menu-plac
 import { matchCommands, parseCommand, type Command } from "~/chat/commands"
 import { tooLong } from "~/chat/drafts"
 import { withNames } from "~/chat/linked"
-import { peopleMatches, taskMatches } from "~/chat/matches"
+import { peopleMatches, specMatches, taskMatches } from "~/chat/matches"
 import { withExcerpt } from "~/chat/quote"
 import { preview } from "~/chat/reply"
 import { letSay } from "~/chat/doc/sayer"
 import { DOC_LEVEL, onWriterFloor, writerFloor } from "@kiwi/core/doc/level.ts"
 import { useCommands } from "~/chat/use-commands"
+import type { Key } from "~/i18n/en"
+import { t } from "~/i18n/i18n"
+import { tr } from "~/i18n/rich"
 import { Icon } from "~/kit/icons"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
-import type { BlockFiles, Channel, Message, Person, QuestionAsk, Task, Where } from "~/model"
+import type { BlockFiles, Channel, Message, Person, QuestionAsk, Spec, Task, Where } from "~/model"
 import { nickname, Shown } from "~/names"
 import { wordsRaw } from "~/words"
-import { useAct, useApp } from "~/nav"
+import { useAct, useGo, useActions, useAppAccount } from "~/nav"
+import { keysHint } from "~/kit/keys"
+import { personGo } from "~/person-go"
+import { viewImage } from "~/chat/image-view"
 
 const QuestionCard = lazy(() => import("~/chat/question-card"))
 
 const IDLE_MS = 4000
-const SEND_KEYS = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘↩" : "Ctrl+Enter"
 
 type HeadList = readonly (readonly [HTMLElement, number, BlockAttrs])[]
 
@@ -95,17 +101,58 @@ class Heads {
   }
 }
 
-class BlockView implements NodeView {
+interface Painted {
+  node: Node
+  hide(hidden: boolean): void
+}
+
+const isBare = (decorations: readonly Decoration[]): boolean => decorations.some((d) => (d.spec as { bare?: boolean } | undefined)?.bare === true)
+
+class BareBlockView implements NodeView, Painted {
+  dom: HTMLElement
+
+  constructor(
+    public node: Node,
+    private shown: Map<HTMLElement, Painted>
+  ) {
+    this.dom = document.createElement("section")
+    this.dom.className = "blk is-hidden"
+    this.dom.dataset.kind = attrsOf(node).kind
+    this.dom.dataset.block = attrsOf(node).id
+    this.shown.set(this.dom, this)
+  }
+
+  hide(): void {}
+
+  update(node: Node, decorations: readonly Decoration[]): boolean {
+    if (node.type !== this.node.type || !isBare(decorations)) return false
+    this.node = node
+    this.dom.dataset.kind = attrsOf(node).kind
+    this.dom.dataset.block = attrsOf(node).id
+    return true
+  }
+
+  ignoreMutation(): boolean {
+    return true
+  }
+
+  destroy(): void {
+    this.shown.delete(this.dom)
+  }
+}
+
+class BlockView implements NodeView, Painted {
   dom: HTMLElement
   contentDOM: HTMLElement
   private head: HTMLElement
   private foot: HTMLElement
+  private hidden = false
 
   constructor(
     public node: Node,
     private heads: Heads,
     private feet: Heads,
-    private shown: Map<HTMLElement, BlockView>
+    private shown: Map<HTMLElement, Painted>
   ) {
     this.dom = document.createElement("section")
     this.dom.className = "blk"
@@ -127,12 +174,21 @@ class BlockView implements NodeView {
     const a = attrsOf(this.node)
     this.dom.dataset.kind = a.kind
     this.dom.dataset.block = a.id
+    if (this.hidden) return
     this.heads.set(this.head, a)
     this.feet.set(this.foot, a)
   }
 
-  update(node: Node): boolean {
-    if (node.type !== this.node.type) return false
+  hide(hidden: boolean): void {
+    if (this.hidden === hidden) return
+    this.hidden = hidden
+    if (!hidden) return this.paint()
+    this.heads.drop(this.head)
+    this.feet.drop(this.foot)
+  }
+
+  update(node: Node, decorations: readonly Decoration[]): boolean {
+    if (node.type !== this.node.type || isBare(decorations)) return false
     this.node = node
     this.paint()
     return true
@@ -161,17 +217,19 @@ interface Drafts {
   version: number
 }
 
-function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: string, here: string | null, drafts: Drafts): void {
+function paintRuns(root: HTMLElement, shown: Map<HTMLElement, Painted>, me: string, here: string | null, drafts: Drafts): void {
   let prev: Node | undefined
   const last = new Map<string, HTMLElement>()
   for (const el of root.children) {
     if (!(el instanceof HTMLElement)) continue
-    const node = shown.get(el)?.node
-    if (!node) continue
+    const view = shown.get(el)
+    const node = view?.node
+    if (!view || !node) continue
     const a = attrsOf(node)
     const empty = isEmpty(node)
     const mine = a.author === me
     const hidden = emptyHidden(node, me, here, drafts.made) || drafts.posted(a.id) || drafts.inFeed(a.id)
+    view.hide(hidden)
     el.classList.toggle("is-cont", !hidden && continues(prev, node))
     el.classList.toggle("is-empty", empty)
     el.classList.toggle("is-mine", mine)
@@ -191,7 +249,26 @@ function hereOf(state: EditorState): string | null {
   return at ? attrsOf(at.node).id : null
 }
 
-function runsPlugin(shown: Map<HTMLElement, BlockView>, me: string, drafts: RefObject<Drafts>): Plugin {
+function barePlugin(drafts: RefObject<Drafts>): Plugin {
+  let made: { doc: Node; version: number; set: DecorationSet } | null = null
+  return new Plugin({
+    props: {
+      decorations: (state): DecorationSource => {
+        const d = drafts.current
+        if (made && made.doc === state.doc && made.version === d.version) return made.set
+        const bare: Decoration[] = []
+        state.doc.forEach((node, pos) => {
+          const id = attrsOf(node).id
+          if (d.posted(id) || d.inFeed(id)) bare.push(Decoration.node(pos, pos + node.nodeSize, {}, { bare: true }))
+        })
+        made = { doc: state.doc, version: d.version, set: DecorationSet.create(state.doc, bare) }
+        return made.set
+      },
+    },
+  })
+}
+
+function runsPlugin(shown: Map<HTMLElement, Painted>, me: string, drafts: RefObject<Drafts>): Plugin {
   return new Plugin({
     view: (view) => {
       let here = hereOf(view.state)
@@ -371,11 +448,11 @@ interface ViewOpts {
   refuse: (line: string) => boolean
 }
 
-const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
+const openImage = viewImage
 
 function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, feet: Heads, opts: ViewOpts): { view: EditorView; stop: () => void } {
   const seen = new Map<number, { key: string; at: number }>()
-  const shown = new Map<HTMLElement, BlockView>()
+  const shown = new Map<HTMLElement, Painted>()
   const watch = ({ added, updated }: { added: number[]; updated: number[] }) => {
     const states = shared.awareness.getStates()
     for (const id of [...added, ...updated]) {
@@ -411,6 +488,7 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
       ),
       linksPlugin(),
       herePlugin(),
+      barePlugin(opts.drafts),
       runsPlugin(shown, me, opts.drafts),
       tidyPlugin(me, opts.drafts),
       steadyPlugin(opts.scroller, opts.hold, me, opts.drafts),
@@ -420,9 +498,9 @@ function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, 
   const view: EditorView = new EditorView(mount, {
     state,
     editable: () => false,
-    attributes: { class: "doc", role: "textbox", "aria-multiline": "true", "aria-label": "Thread" },
+    attributes: { class: "doc", role: "textbox", "aria-multiline": "true", "aria-label": t("chat.doc.editor.thread") },
     nodeViews: {
-      block: (node) => new BlockView(node, heads, feet, shown),
+      block: (node, _view, _getPos, decorations) => (isBare(decorations) ? new BareBlockView(node, shown) : new BlockView(node, heads, feet, shown)),
       mention: mentionView(opts.name),
       image: imageView(opts.media, openImage),
       file: fileView(opts.media),
@@ -459,11 +537,11 @@ function ReplyLine({ channel, to, quote, onClose }: { channel: Channel; to: Mess
     <div className={cx("compose-reply", "blk-re", quote && "is-excerpt")}>
       <Icon name="reply" size={13} />
       <span className="compose-reply-text">
-        {quote ? "Quoting" : "Replying to"} {to && <b>{nickname(channel, to.from)}</b>}{" "}
+        {tr(quote ? "chat.doc.editor.quoting" : "chat.doc.editor.replying.to", { name: to && <b>{nickname(channel, to.from)}</b> })}{" "}
         <span className={quote ? "compose-reply-excerpt" : "dim"}>{quote ? `“${line.slice(0, 160)}${line.length > 160 ? "…" : ""}”` : line.slice(0, 160)}</span>
       </span>
       {onClose && (
-        <button type="button" className="compose-reply-x" aria-label="Cancel reply" title="Cancel reply (Esc)" onClick={onClose}>
+        <button type="button" className="compose-reply-x" aria-label={t("chat.doc.editor.cancel.reply")} title={t("chat.doc.editor.cancel.reply.esc")} onClick={onClose}>
           <Icon name="close" size={13} />
         </button>
       )}
@@ -472,7 +550,7 @@ function ReplyLine({ channel, to, quote, onClose }: { channel: Channel; to: Mess
 }
 
 function Head({ channel, attrs, onUnreply }: { channel: Channel; attrs: BlockAttrs; onUnreply: (id: string) => void }) {
-  const { go } = useApp()
+  const go = useGo()
   if (!attrs.author) return null
   return (
     <>
@@ -480,27 +558,31 @@ function Head({ channel, attrs, onUnreply }: { channel: Channel; attrs: BlockAtt
         <ReplyLine channel={channel} to={channel.messages.find((m) => m.seq === attrs.re)} quote={attrs.quote} onClose={attrs.author === channel.you ? () => onUnreply(attrs.id) : null} />
       )}
       <span className="blk-line">
-        <button type="button" className="msg-name" title={clock(attrs.at)} onClick={() => go({ to: "modal", modal: { kind: "person", name: attrs.author } })}>
+        <button type="button" className="msg-name" title={clock(attrs.at)} onClick={() => go(personGo(channel, attrs.author))}>
           {nickname(channel, attrs.author)}
         </button>
-        {(attrs.kind === "tool" || attrs.kind === "comment") && <span className="blk-kind">{attrs.kind}</span>}
+        {(attrs.kind === "tool" || attrs.kind === "comment") && <span className="blk-kind">{t(KINDS[attrs.kind])}</span>}
       </span>
     </>
   )
 }
 
-type Option = { kind: "@"; person: Person } | { kind: "#"; task: Task } | { kind: "/"; command: Command }
+const KINDS: Record<"tool" | "comment", Key> = { tool: "chat.doc.editor.kind.tool", comment: "chat.doc.editor.kind.comment" }
+
+type Option = { kind: "@"; person: Person } | { kind: "#"; task: Task } | { kind: "spec"; spec: Spec } | { kind: "/"; command: Command }
 
 function optionsFor(channel: Channel, commands: readonly Command[], q: Query | null): Option[] {
   if (!q) return []
   if (q.kind === "/") return matchCommands(commands, `/${q.text}`).map((command) => ({ kind: "/", command }))
-  return q.kind === "@" ? peopleMatches(channel.people, q.text).map((person) => ({ kind: "@", person })) : taskMatches(channel.tasks, q.text).map((task) => ({ kind: "#", task }))
+  if (q.kind === "@") return peopleMatches(channel.people, q.text).map((person) => ({ kind: "@", person }))
+  return [...taskMatches(channel.tasks, q.text).map((task): Option => ({ kind: "#", task })), ...specMatches(channel.specs ?? [], q.text).map((spec): Option => ({ kind: "spec", spec }))]
 }
 
 function choose(view: EditorView, q: Query, o: Option): void {
   const tr = view.state.tr
   if (o.kind === "/") tr.insertText(`/${o.command.name} `, q.from, q.to)
   else if (o.kind === "@") tr.replaceWith(q.from, q.to, [schema.nodes.mention.create({ name: o.person.name }), schema.text(" ")])
+  else if (o.kind === "spec") tr.insertText(`#${o.spec.ask} `, q.from, q.to)
   else tr.insertText(`T${o.task.id} `, q.from, q.to)
   view.dispatch(tr.scrollIntoView())
   view.focus()
@@ -524,9 +606,15 @@ function Suggest({ channel, query, options, pick, at, onPick }: { channel: Chann
   }, [pick, place])
   if (options.length === 0) return null
   return (
-    <ul ref={list} className="mentions doc-suggest" role="listbox" aria-label={query.kind === "@" ? "People" : query.kind === "/" ? "Commands" : "Tasks"} style={place}>
+    <ul
+      ref={list}
+      className="mentions doc-suggest"
+      role="listbox"
+      aria-label={query.kind === "@" ? t("chat.doc.editor.people") : query.kind === "/" ? t("chat.doc.editor.commands") : t("chat.suggest.tasks")}
+      style={place}
+    >
       {options.map((o, i) => (
-        <li key={o.kind === "@" ? o.person.name : o.kind === "/" ? o.command.name : o.task.id} role="option" aria-selected={i === pick}>
+        <li key={o.kind === "@" ? o.person.name : o.kind === "/" ? o.command.name : o.kind === "spec" ? `spec-${o.spec.ask}` : o.task.id} role="option" aria-selected={i === pick}>
           {o.kind === "/" ? (
             <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(i)}>
               <span className="command-name">/{o.command.name}</span>
@@ -538,6 +626,14 @@ function Suggest({ channel, query, options, pick, at, onPick }: { channel: Chann
               <Avatar person={o.person} size="sm" pip />
               <span className="mention-name">{nickname(channel, o.person.name)}</span>
               {nickname(channel, o.person.name) !== o.person.name && <span className="dim">@{o.person.name}</span>}
+            </button>
+          ) : o.kind === "spec" ? (
+            <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(i)}>
+              <span className="task-row-id">#{o.spec.ask}</span>
+              <span className="task-row-title">
+                <Shown value={o.spec.title} />
+              </span>
+              <span className="dim">{t("chat.suggest.spec")}</span>
             </button>
           ) : (
             <button type="button" tabIndex={-1} className={cx("mention-row task-row", i === pick && "is-on")} onMouseDown={(e) => e.preventDefault()} onClick={() => onPick(i)}>
@@ -580,7 +676,8 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
   }, [channel.messages, channel.asks])
   const me = channel.you
   const you = channel.people.find((p) => p.you)
-  const { app } = useApp()
+  const actions = useActions()
+  const account = useAppAccount()
   const tooOld = useSyncExternalStore(
     (on) => onWriterFloor(shared.doc, on),
     () => writerFloor(shared.doc) > DOC_LEVEL
@@ -726,16 +823,16 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
         : where.kind === "dm"
           ? nickname(channel, where.with)
           : ""
-  const prompt = where.kind === "dm" ? `Write to ${place}` : `Write in ${place}`
+  const prompt = where.kind === "dm" ? t("chat.doc.editor.write.to", { place }) : t("chat.doc.editor.write.in", { place })
 
   return (
-    <div ref={box} className="thread-doc is-read-only" style={{ "--place": JSON.stringify(`${prompt} · ${SEND_KEYS} sends`) } as CSSProperties}>
+    <div ref={box} className="thread-doc is-read-only" style={{ "--place": JSON.stringify(t("chat.doc.editor.placeholder", { prompt, keys: keysHint("↩") })) } as CSSProperties}>
       {tooOld && (
         <p className="doc-old">
-          A newer Channels writes here. You can read; typing comes back with the new look.
-          {app.account?.uiUpdate && (
-            <button type="button" onClick={() => app.actions.applyUi()}>
-              Switch
+          {t("chat.doc.editor.too.old")}
+          {account?.uiUpdate && (
+            <button type="button" onClick={() => actions.applyUi()}>
+              {t("chat.doc.editor.switch")}
             </button>
           )}
         </p>
@@ -806,7 +903,7 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
         new LiveDoc(
           (at, on) => actions.openDoc(code, thread, at, on),
           first.current,
-          (why) => announce(`The shared doc didn't open: ${why}`, "error"),
+          (why) => announce(t("chat.doc.editor.didnt.open", { why }), "error"),
           {
             me,
             post: (text, block, reply) => actions.send(code, here.current, reply?.quote ? withExcerpt(reply.quote, text) : text, { block, ...(reply ? { replyTo: reply.re } : {}) }),
@@ -836,7 +933,7 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
               (t) => back(t, files),
               files.length
                 ? putAll(files, media).catch((e: unknown) => {
-                    announce(`Not sent: ${e instanceof Error && e.message ? e.message : "a file couldn't be uploaded"}`, "error")
+                    announce(t("chat.doc.editor.not.sent", { why: e instanceof Error && e.message ? e.message : t("chat.doc.editor.upload.failed") }), "error")
                     throw e
                   })
                 : undefined

@@ -44,7 +44,6 @@ export const DEMO_PREFS: Prefs = {
   font: "system",
   reduceMotion: false,
   muted: ["interlinked", "kiwi/releases"],
-  enterSends: true,
   darkTheme: "channels-dark",
   lightTheme: "channels-light",
   customThemes: [],
@@ -429,6 +428,7 @@ const tasks: Task[] = [
     detail: wrote("The first load is 412 KB. Get it under 300 KB without lazy-splitting shared modules."),
     status: "doing",
     owner: "win",
+    mentions: 1,
     createdBy: "atlas",
     createdAt: m(95),
     updatedAt: m(9),
@@ -475,6 +475,7 @@ const tasks: Task[] = [
   {
     id: 12,
     title: wrote("Add a dark mode toggle"),
+    mover: { kind: "member", name: "atlas", move: "review" },
     detail: wrote("A three-way switch in Settings: System, Dark, Light. Applied before first paint."),
     status: "review",
     owner: "win",
@@ -508,6 +509,12 @@ const tasks: Task[] = [
   {
     id: 13,
     title: wrote("Tag and push v1.0.0"),
+    mover: { kind: "member", name: "jow", move: "land" },
+    steps: [
+      { id: "s1", words: wrote("merge"), by: "win", state: "done" },
+      { id: "s2", words: wrote("tag v1.0.0"), by: "jow", state: "current", yours: true },
+      { id: "s3", words: wrote("post the release notes"), by: "sumi", state: "next" },
+    ],
     status: "waiting",
     owner: "win",
     createdBy: "jow",
@@ -524,6 +531,7 @@ const tasks: Task[] = [
   {
     id: 14,
     title: wrote("Redraw the channel icons"),
+    mover: { kind: "member", name: "jow", move: "review" },
     detail: wrote("Monochrome, one stroke weight, readable at 20px."),
     status: "review",
     owner: "pixel",
@@ -568,7 +576,7 @@ const tasks: Task[] = [
     id: 15,
     title: wrote("Rotate the relay's signing key"),
     status: "todo",
-    suggested: { name: "atlas", why: wrote("worked T9 before") },
+    suggested: { name: "atlas", reason: { kind: "worked", task: 9, warm: false } },
     leftBy: "scout",
     createdBy: "maya",
     createdAt: m(200),
@@ -581,6 +589,8 @@ const tasks: Task[] = [
   {
     id: 17,
     title: wrote("Find why the relay drops sockets at 10k"),
+    mover: { kind: "member", name: "orbit", move: "work" },
+    quiet: { with: "orbit", since: m(41), from: m(21), every: 20 * 60_000, step: 1 },
     detail: wrote("Under load, the relay closes about 2% of sockets with 1006. Reproduce it, then fix it."),
     status: "doing",
     owner: "orbit",
@@ -603,6 +613,7 @@ const tasks: Task[] = [
   {
     id: 18,
     title: wrote("Group the board by goal"),
+    mover: { kind: "member", name: "nova", move: "review" },
     detail: wrote("Lena's sketch: one row per goal, its tasks in order, done ones folded."),
     status: "review",
     owner: "cobalt",
@@ -628,6 +639,7 @@ const tasks: Task[] = [
   {
     id: 19,
     title: wrote("Write the 1.0 release notes"),
+    mover: { kind: "waiting", owner: "sumi", ahead: 1 },
     status: "todo",
     owner: "sumi",
     createdBy: "atlas",

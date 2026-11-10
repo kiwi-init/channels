@@ -1,6 +1,8 @@
+import { BASE_WIRE_VERSION, baseFromWire, toWire } from "@kiwi/core/base-wire.ts";
+import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts";
 import { ChannelGone, type RoomsSetting, type SendOptions } from "@kiwi/core/client.ts";
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
-import type { ChannelIcon, Message } from "@kiwi/core/protocol.ts";
+import { olderRules, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
 import { permissionReply } from "@kiwi/core/permission.ts";
 import { wakeList } from "@kiwi/core/phone-wake.ts";
 import { rootOf } from "@kiwi/core/room-rules.ts";
@@ -24,6 +26,7 @@ const KEEP = 1_500;
 const EMIT_MS = 60;
 const RETRY_FIRST_MS = 500;
 const RETRY_MOST_MS = 30_000;
+const RESUME_VERSION = 1;
 
 const merged = (prev: readonly Message[], more: readonly Message[]): Message[] => {
   const seen = new Set(prev.map((p) => p.seq));
@@ -31,6 +34,35 @@ const merged = (prev: readonly Message[], more: readonly Message[]): Message[] =
 };
 
 const errorText = (e: WireError): string => (e.kind === "gone" ? `the channel was ${e.why}` : e.message);
+
+const seqOk = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 0;
+
+interface Resume {
+  since: number;
+  last: number;
+  base: FoldBase | null;
+}
+
+export interface Held {
+  resume: CachedKept;
+  rows: CachedRow[];
+}
+
+function resumeOf(x: unknown): Resume | null {
+  if (!x || typeof x !== "object") return null;
+  const r = x as Record<string, unknown>;
+  const { since, last } = r;
+  if (r.v !== RESUME_VERSION || r.bv !== BASE_WIRE_VERSION || !seqOk(since) || !seqOk(last) || since > last) return null;
+  if (r.base === null) return { since, last, base: null };
+  const base = baseFromWire(r.base);
+  return base && !olderRules(base) && base.n <= last ? { since, last, base } : null;
+}
+
+function heldOf(x: unknown): { resume: unknown; rows: unknown[] } | null {
+  if (!x || typeof x !== "object") return null;
+  const h = x as { resume?: unknown; rows?: unknown };
+  return h.resume && Array.isArray(h.rows) ? { resume: h.resume, rows: h.rows } : null;
+}
 
 type NeedsOf = (state: ChannelState, messages: readonly Message[], me: string, owner: boolean, requests: readonly JoinRequest[], roster: readonly Member[], now: number) => NeedView[];
 
@@ -56,6 +88,11 @@ export class Room {
   private error: string | null = null;
   private head = 0;
   private since = 0;
+  private last = 0;
+  private kept: unknown = null;
+  private resumed = false;
+  private readonly rows = new Map<number, CachedRow>();
+  private sealed: { last: number; since: number; base: FoldBase | null; held: Held } | null = null;
   private title: string;
   private icon: ChannelIcon | null = null;
   private stopLive: (() => void) | null = null;
@@ -92,7 +129,8 @@ export class Room {
     return access?.ownerPk === this.seat.pk;
   }
 
-  async start(): Promise<void> {
+  async start(kept?: unknown): Promise<void> {
+    this.kept = kept ?? null;
     this.schedule();
     this.clock = setInterval(() => {
       this.schedule();
@@ -111,14 +149,13 @@ export class Room {
 
   private async connect(): Promise<void> {
     try {
-      await this.refreshRoster();
+      await Promise.all([this.refreshRoster(), this.kept !== null ? this.resume() : null]);
       const head = await this.keyring.call(this.code, "head");
       this.head = head;
-      this.since = Math.max(0, head - WINDOW);
-      if (this.since > 0) this.base = usableBase(await this.keyring.call(this.code, "snapshot").catch(() => null), this.since);
+      if (!this.resumed || this.last > head || head - this.last > WINDOW) await this.fresh(head);
       void this.refreshInfo();
       if (this.closed) return;
-      this.stopLive = this.keyring.follow(this.code, this.since, (ev) => this.on(ev));
+      this.stopLive = this.keyring.follow(this.code, this.last, (ev) => this.on(ev));
       this.error = null;
       this.schedule();
     } catch (e) {
@@ -133,6 +170,55 @@ export class Room {
       }, this.retryMs);
       this.retryMs = Math.min(this.retryMs * 2, RETRY_MOST_MS);
     }
+  }
+
+  private async fresh(head: number): Promise<void> {
+    this.resumed = false;
+    this.messages = [];
+    this.rows.clear();
+    this.base = null;
+    this.since = Math.max(0, head - WINDOW);
+    this.last = this.since;
+    if (this.since > 0) this.base = usableBase(await this.keyring.call(this.code, "snapshot").catch(() => null), this.since);
+  }
+
+  private async resume(): Promise<void> {
+    const held = heldOf(this.kept);
+    this.kept = null;
+    if (!held) return;
+    const at = resumeOf(await this.keyring.openKept(this.code, held.resume as CachedKept).catch(() => null));
+    const opened = at ? await this.keyring.openRows(this.code, held.rows as CachedRow[]).catch(() => null) : null;
+    if (!at || !opened || opened.some((m) => !m || m.seq <= at.since || m.seq > at.last)) {
+      this.hooks.log("a channel's kept history didn't open, so it loads from the relay again");
+      return;
+    }
+    this.messages = merged(
+      [],
+      opened.filter((m): m is Message => !!m && !("unread" in m) && !(m.ev?.op === "room.msg" && !m.sealed)),
+    );
+    this.rows.clear();
+    for (const row of held.rows as CachedRow[]) this.rows.set(row.seq, row);
+    this.base = at.base;
+    this.since = at.since;
+    this.last = at.last;
+    this.head = Math.max(this.head, at.last);
+    this.resumed = true;
+  }
+
+  async held(): Promise<Held | null> {
+    const { last, since, base } = this;
+    if (this.sealed && this.sealed.last === last && this.sealed.since === since && this.sealed.base === base) return this.sealed.held;
+    const over = this.messages.length > WINDOW;
+    const cut = over ? trimmed(this.messages, foldRoster(this.roster.filter((m) => !m.unverified)), Date.now(), this.rooms, this.guard, base, WINDOW, 0) : base;
+    if (over && !cut) return null;
+    const from = over ? (cut?.n ?? 0) : -1;
+    if (this.messages.some((m) => m.seq > from && !this.rows.has(m.seq))) return null;
+    const rows = [...this.rows.values()].filter((r) => r.seq > from && r.seq <= last).sort((a, b) => a.seq - b.seq);
+    const resume = await this.keyring.keep(this.code, { v: RESUME_VERSION, bv: BASE_WIRE_VERSION, since, last, base: cut ? toWire(cut) : null });
+    if (!resume) return null;
+    const held = { resume, rows };
+    this.sealed = { last, since, base, held };
+    return held;
   }
 
   stop(): void {
@@ -352,8 +438,12 @@ export class Room {
       case "Message":
         if (ev.message.sigOk && ev.message.kind === "event" && ev.message.ev?.op === "devices") this.hooks.devices(ev.message.ev.links);
         this.messages = merged(this.messages, [ev.message]);
+        this.took(ev.message.seq, ev.row);
         this.head = Math.max(this.head, ev.message.seq);
         break;
+      case "Unread":
+        this.took(ev.seq, ev.row);
+        return;
       case "Head":
         this.head = Math.max(this.head, ev.seq);
         break;
@@ -386,6 +476,13 @@ export class Room {
     this.schedule();
   }
 
+  private took(seq: number, row: CachedRow | null): void {
+    if (!Number.isSafeInteger(seq) || seq <= 0) return;
+    if (row?.seq === seq) this.rows.set(seq, row);
+    else this.rows.delete(seq);
+    this.last = Math.max(this.last, seq);
+  }
+
   private schedule(): void {
     if (this.timer || this.closed) return;
     this.timer = setTimeout(() => {
@@ -403,6 +500,8 @@ export class Room {
       this.base = next;
       this.messages = this.messages.filter((m) => m.seq > next.n);
     }
+    const floor = this.messages.at(-WINDOW - 1)?.seq;
+    if (floor !== undefined) for (const seq of this.rows.keys()) if (seq <= floor) this.rows.delete(seq);
     this.state = fold(this.messages, roster, now, this.rooms, this.guard, this.base);
     const keyOf = new Map(admitted.filter((m) => m.active).map((m) => [m.name, m.pk]));
     this.hooks.emit(

@@ -56,8 +56,8 @@ describe("whose words direct an agent", () => {
 
   test("status tells an agent who its human is", () => {
     const s = fold([], roster);
-    expect(formatStatus({ alias: "c", me: "win", state: s, online: new Map(), unread: 0 })).toContain("your human: ana.");
-    expect(formatStatus({ alias: "c", me: "bot", state: s, online: new Map(), unread: 0 })).not.toContain("your human:");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "c", me: "win", state: s, online: new Map(), unread: 0 })).toContain("your human: ana.");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "c", me: "bot", state: s, online: new Map(), unread: 0 })).not.toContain("your human:");
   });
 });
 
@@ -190,7 +190,7 @@ describe("escalations", () => {
     expect(decidersOf(s, { esc: true, to: ["ana", "jon"] })).toEqual([]);
     expect(decidersOf(s, { esc: true, to: ["jon"], handoff })).toEqual([]);
     expect(who("ana", s, "mac")).toBe("ana (human, answers decisions)");
-    expect(formatStatus({ alias: "c", me: "mac", state: s, online: new Map(), unread: 0 })).toContain("ana may answer your ask-human decisions too");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "c", me: "mac", state: s, online: new Map(), unread: 0 })).toContain("ana may answer your ask-human decisions too");
     const claimed = fold(
       [],
       roster.map((r) => (r.name === "win" || r.name === "jon" ? { ...r, answersDecisions: true } : r)),
@@ -211,16 +211,16 @@ describe("escalations", () => {
     expect(who("ana", s, "mac")).toBe("ana (human, fully trusted)");
     expect(who("ana", s, "win")).toBe("ana (your human)");
     expect(who("ana", s)).toBe("ana (human)");
-    const status = formatStatus({ alias: "c", me: "mac", state: s, online: new Map(), unread: 0 });
+    const status = formatStatus({ check: "kiwi/review/test", alias: "c", me: "mac", state: s, online: new Map(), unread: 0 });
     expect(status).toContain("fully trusted: ana. Their word directs you too, like your human's and the owner's");
     expect(status).not.toContain("ana may answer your ask-human decisions too");
     expect(status).toContain("  ana · human, fully trusted");
-    expect(formatStatus({ alias: "c", me: "win", state: s, online: new Map(), unread: 0 })).not.toContain("fully trusted: ana");
+    expect(formatStatus({ check: "kiwi/review/test", alias: "c", me: "win", state: s, online: new Map(), unread: 0 })).not.toContain("fully trusted: ana");
     for (const power of ["addsAgents", "answersDecisions", "managesAgents"] as const) {
       const less = trusting({ ...all, [power]: false });
       expect(fullyTrusted(less.members.get("ana"))).toBe(false);
       expect(who("ana", less, "mac")).not.toContain("fully trusted");
-      expect(formatStatus({ alias: "c", me: "mac", state: less, online: new Map(), unread: 0 })).not.toContain("fully trusted");
+      expect(formatStatus({ check: "kiwi/review/test", alias: "c", me: "mac", state: less, online: new Map(), unread: 0 })).not.toContain("fully trusted");
     }
     expect(fullyTrusted(trusting({ ...all, scopes: [] }).members.get("ana"))).toBe(false);
     const gone = fold(

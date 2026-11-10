@@ -1,3 +1,4 @@
+import { t } from "~/i18n/i18n"
 import type { ChannelTile, Folder } from "~/model"
 
 export type RailItem = { kind: "channel"; tile: ChannelTile } | { kind: "folder"; folder: Folder; tiles: ChannelTile[] }
@@ -40,7 +41,7 @@ export function cleanFolders(raw: unknown): Folder[] {
       codes.push(c)
     }
     if (!codes.length) continue
-    const name = typeof f["name"] === "string" && f["name"].trim() ? f["name"].trim().slice(0, MAX_NAME) : "Folder"
+    const name = typeof f["name"] === "string" && f["name"].trim() ? f["name"].trim().slice(0, MAX_NAME) : t("shell.folders.default")
     out.push({ id: f["id"], name, codes, open: f["open"] === true })
   }
   return out

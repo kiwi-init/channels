@@ -1,9 +1,10 @@
 import "~/i18n/en/settings"
 
-import { useEffect, useState } from "react"
+import { useEffect, useId, useState } from "react"
 
 import { t } from "~/i18n/i18n"
 import { cx, IconButton } from "~/kit/bits"
+import { Details, failure, type Failure } from "~/kit/failed"
 import { Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
 import type { Account, Computer, Device, LaunchedAgent } from "~/model"
@@ -19,21 +20,27 @@ const PRESET: Kind | null = SHOT === "settings-link-phone" || SHOT === "settings
 
 const isPhone = (c: Computer): boolean => c.os === "iphone" || c.os === "android"
 
+function theirFailure(device: string, err: unknown): Failure {
+  const why = err instanceof Error && "why" in err ? err.why : null
+  const said = why === "no-answer" ? t("settings.computers.no.answer") : why === "not-registered" ? t("settings.computers.not.registered") : why === "busy" ? t("kit.failed.busy") : null
+  return failure(t("settings.computers.settings.failed", { device }), err, said ? { other: said } : {})
+}
+
 function TheirSettings({ computer }: { computer: Computer }) {
   const { app } = useApp()
-  const [got, setGot] = useState<{ ok: true; lines: [string, string[]][] } | { ok: false; why: string } | null>(null)
+  const [got, setGot] = useState<{ ok: true; lines: [string, string[]][] } | { ok: false; failed: Failure } | null>(null)
   const [round, setRound] = useState(0)
   const { computerSettings } = app.actions
   useEffect(() => {
     let live = true
     computerSettings(computer.id).then(
       (lines) => live && setGot({ ok: true, lines }),
-      (err: unknown) => live && setGot({ ok: false, why: err instanceof Error ? err.message : String(err) })
+      (err: unknown) => live && setGot({ ok: false, failed: theirFailure(computer.label, err) })
     )
     return () => {
       live = false
     }
-  }, [computerSettings, computer.id, round])
+  }, [computerSettings, computer.id, computer.label, round])
   const again = () => {
     setGot(null)
     setRound((r) => r + 1)
@@ -43,12 +50,15 @@ function TheirSettings({ computer }: { computer: Computer }) {
       {got === null ? (
         <p className="set-device-meta">{t("settings.computers.asking", { device: computer.label })}</p>
       ) : !got.ok ? (
-        <p className="set-device-meta">
-          {got.why}
-          <button type="button" className="btn is-quiet is-small" onClick={again}>
-            {t("settings.computers.try.again")}
-          </button>
-        </p>
+        <div className="failed" role="alert">
+          <p className="set-device-meta">
+            <span className="tone-alert">{got.failed.said}</span>
+            <button type="button" className="btn is-quiet is-small" onClick={again}>
+              {t("settings.computers.try.again")}
+            </button>
+          </p>
+          {got.failed.raw && <Details raw={got.failed.raw} />}
+        </div>
       ) : (
         <>
           <dl className="set-their">
@@ -270,6 +280,7 @@ export function ComputersSection() {
   const [linking, setLinking] = useState<Kind | null>(PRESET)
   const [forget, setForget] = useState<Computer | null>(null)
   const [shown, setShown] = useState<string | null>(null)
+  const pairedId = useId()
   const asked = app.account?.enrollAsk?.id
   const [seen, setSeen] = useState(asked)
   if (asked !== seen) {
@@ -286,14 +297,14 @@ export function ComputersSection() {
       {account.devices && account.devices.length > 0 && (
         <>
           <SignedDevices devices={account.devices} />
-          <section className="set-group" aria-label={t("settings.computers.paired")}>
+          <div className="set-group">
             <div className="heading">
-              <h3>{t("settings.computers.paired")}</h3>
+              <h3 id={pairedId}>{t("settings.computers.paired")}</h3>
             </div>
-          </section>
+          </div>
         </>
       )}
-      <ul className="set-devices">
+      <ul className="set-devices" aria-labelledby={account.devices?.length ? pairedId : undefined}>
         {computers.map((c) => (
           <li key={c.id} className="set-device">
             <span className="set-device-icon" aria-hidden="true">

@@ -406,6 +406,12 @@ describe("the relay keeps one snapshot per channel", () => {
       expect(await put(ok)).toBe(200);
       expect(bytes()).toBe(before + 1);
       expect(await runAgent(s.ownerCh.fx.snapshot())).toBeNull();
+      server.stop(true);
+      const failed = await runAgent(s.ownerCh.fx.snapshot()).then(
+        () => "answered",
+        (err: unknown) => (err instanceof Error ? err.name : String(err)),
+      );
+      expect(failed).not.toBe("answered");
     } finally {
       server.stop(true);
       rmSync(dir, { recursive: true, force: true });
@@ -726,10 +732,15 @@ describe("a base folded under older fold rules is set aside wherever the log can
     const { s, done, olderBase, cold } = await scene({ bytesPerChannel: 8000 });
     try {
       const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "as the log says" } });
-      await runAgent(s.ownerCh.fx.putSnapshot(await olderBase()));
+      await s.ownerCh.send("one");
+      await s.ownerCh.send("two");
+      const older = await olderBase();
+      await runAgent(s.ownerCh.fx.putSnapshot(older));
       let sent = 0;
       while (sent < 40 && (await s.ownerCh.history(0)).first === 1) await s.ownerCh.send(`m${sent++} ${"x".repeat(300)}`);
-      expect((await s.ownerCh.history(0)).first).toBeGreaterThan(1);
+      const first = (await s.ownerCh.history(0)).first ?? 0;
+      expect(first).toBeGreaterThan(1);
+      expect(first).toBeLessThanOrEqual(older.n + 1);
       expect(await runAgent(s.ownerCh.fx.snapshotAt())).not.toBeNull();
       const { state } = await runAgent(cold("pruned").state());
       expect(state.tasks.get(task)?.title).toBe("as older rules folded it");

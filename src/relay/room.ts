@@ -30,7 +30,7 @@ export { allow, take, ASKS_PER_MINUTE, BLOBS_PER_MINUTE, GITHUB_READS_PER_MINUTE
 export { getNote, putNote } from "./room/notes.ts";
 export { registerPush, unregisterPush, wakesFor } from "./room/push.ts";
 export { authenticate, authenticateSocket, gone, missingFingerprint, readMeta, requestToken, UPDATE_KIWI, wsHeaders } from "./room/auth.ts";
-export { append, expire, idleExpired, leaseNow, leaseTake, markRead, MAX_TICKETS, storeBlob, TICKET_RE, TICKET_TTL_MS, touch } from "./room/messages.ts";
+export { append, expire, idleExpired, leaseNow, leaseTake, markRead, storeBlob, touch } from "./room/messages.ts";
 export { create, directory, setIcon, setSettings, setSnapshot, setTitle, type CreateBody } from "./room/lifecycle.ts";
 export { docsListed, docsPrune, docVersion, docVersions } from "./room/docs.ts";
 export { approve, keysFor, remove, rotate, setCanPost, setRecord, type MemberBody } from "./room/members.ts";

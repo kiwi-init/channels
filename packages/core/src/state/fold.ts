@@ -20,17 +20,46 @@ import { inlineText } from "../membership.ts";
 import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
-import { answerChecks, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
+import { answerChecks, checkFrom, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
+import { checkAnswered, checkClosed, checkStep, migrateChecks, questionAnswered, questionWatched, seedSteps } from "./landing-steps.ts";
+import { choiceIn } from "../checks.ts";
+import { stepsOfThen } from "../steps.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf, sentTo } from "../room-rules.ts";
 import { askHeadOf, askOfMessage, fileTask } from "./asks.ts";
 import { cancelledWithSpec, closesOnItsOwn, foldSpec, noteSpecComment, specGate } from "./specs.ts";
-import { closeCancelled, taskId } from "./tasks.ts";
+import { backToReview, checkChangeRefusal, closeCancelled, landingTouchedByAsk, landingTouchedByClose, taskId } from "./tasks.ts";
 import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
+import { nudge, QUIET_MS, roll, tick, timedStep, type ClockView } from "./clocks.ts";
+
+const CLOCK_BLIND_OPS: ReadonlySet<string> = new Set([
+  "hello",
+  "card",
+  "picture.set",
+  "react",
+  "msg.edit",
+  "msg.delete",
+  "fact.set",
+  "fact.del",
+  "lease.take",
+  "lease.free",
+  "doc.open",
+  "spec.set",
+  "spec.ready",
+  "spec.approve",
+  "spec.result",
+  "spec.delete",
+  "ask.name",
+  "ask.close",
+  "github.rules",
+  "github.release",
+  "compact",
+  "compact.propose",
+]);
 import { carriedPersona } from "../personality.ts";
 import { permissionAnswer } from "../permission.ts";
 import type {
@@ -53,6 +82,7 @@ import type {
   SecretRoom,
   Spec,
   Task,
+  StepQuestion,
 } from "./types.ts";
 import { inRoom } from "../room-rules.ts";
 import { packAuthors, unpackAuthors } from "./authors.ts";
@@ -61,7 +91,15 @@ const STALE_MS = 24 * 3_600_000;
 const SENT_WINDOW_MS = 2 * STALE_MS;
 const KEEP_SEQS = 5_000;
 const SENT_CAP = 3_000;
+const STEP_RULES = 27;
 const closedLongAgo = (at: number, hw: number) => hw - at > GITHUB_CLOSED_KEEP_MS;
+
+function taskFromOlder(t: FoldBase["tasks"][number], stepless: boolean): Task {
+  const rest = omit(t, "then", "landed");
+  const task: Task = rest.run ? { ...rest, run: { id: rest.run.id, seq: rest.run.seq, by: rest.run.by } } : rest;
+  if (stepless && t.then && !task.steps && task.state !== "done") seedSteps(task, stepsOfThen(t.then), "then");
+  return task;
+}
 
 function idHash(id: string): number {
   let a = 0xdeadbeef;
@@ -86,6 +124,8 @@ function earlierParent(m: Message): number | undefined {
 function touch(task: Task | undefined, name: string, at: number): void {
   if (task && (task.touched?.[name] ?? 0) < at) task.touched = { ...task.touched, [name]: at };
 }
+
+const PASSED_ASKS_KEPT = 500;
 
 export function fold(
   messages: Message[],
@@ -277,8 +317,10 @@ function folding(
       if (target?.pk === f.pk) setRole(target, f.role, f.about);
     }
   };
-  const runsKept = !!from && !olderRules(from);
-  const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, runsKept || !t.run ? t : { ...t, run: { ...omit(t.run, "start"), blind: true } }]));
+  const older = !!from && olderRules(from);
+  const runsKept = !!from && !older;
+  const stepless = older && (from.rules ?? 0) < STEP_RULES;
+  const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, older ? taskFromOlder(t, stepless) : t]));
   const facts = new Map<string, Fact>(from?.facts.map((f) => [f.key, f]));
   const docs = new Map<string, string>(from?.docs);
   const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
@@ -311,13 +353,19 @@ function folding(
   const closedAsks = new Set<number>();
   const askers = new Map([...(from?.asks ?? []), ...messages].flatMap((a): [number, string][] => ((a.kind === "ask" || a.kind === "blocking") && !a.permission ? [[a.seq, a.from]] : [])));
   const settledBy = new Map<number, Set<string>>();
+  const holding: Message[] = (from?.asks ?? []).filter((a) => !!a.holds?.length && !a.permission);
+  const holdsOf = new Map(holding.map((a): [number, number[]] => [a.seq, a.holds ?? []]));
+  const timed = new Set<number>();
   const permReplies = new Map<number, Message[]>();
   const permBySeq = new Map<number, Message>();
   const threadOf = new Map<number, number>(from?.threadOf);
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
   const askHeads = new Map<number, AskHead>(from?.askHeads?.map((h) => [h.id, h]));
   const specs = new Map<number, Spec>(from?.specs?.map((sp) => [sp.ask, sp]));
-  const checks = new Map<number, CheckState>(from?.checks?.map((c) => [c.seq, { ...c, ...(c.answers ? { answers: [...c.answers] } : {}) }]));
+  if (stepless) migrateChecks(tasks, new Map(from?.checks?.map((c) => [c.seq, c])));
+  const checks = new Map<number, CheckState>(from?.checks?.map((c) => [c.seq, checkFrom(c)]));
+  const questions = new Map<number, StepQuestion>(from?.stepQuestions?.map((q) => [q.seq, q]));
+  const passedAsks = new Map<number, string>(from?.passedAsks);
   const closeOnItsOwn = (ask: number, m: Pick<Message, "seq" | "from">, at: number): void => {
     const spec = specs.get(ask);
     if (spec && closesOnItsOwn({ tasks }, spec)) specs.set(ask, { ...spec, result: { seq: m.seq, by: m.from, at, verdict: "accepted", auto: true } });
@@ -354,7 +402,6 @@ function folding(
     nicknames,
     setRole,
     tasks,
-    checks,
     facts,
     docs,
     leases,
@@ -379,13 +426,45 @@ function folding(
     hold: from?.hold ?? null,
     githubWrite: from?.githubWrite ?? null,
     branchPrefix: from?.branchPrefix ?? null,
+    quietMs: from?.quietMs ?? QUIET_MS,
     landing: from?.landing ?? null,
-    merges: from?.merges ?? "agents",
+    landingSteps: from?.landingSteps ?? null,
+    passedAsks,
   };
 
   const seen = new Set<number>();
   const doubled = new Set<number>();
   for (const m of messages) if (m.seq > after) (seen.has(m.seq) ? doubled : seen).add(m.seq);
+
+  const stillOpen = (m: Message): boolean => {
+    if (m.kind !== "ask" && m.kind !== "blocking") return false;
+    if (ignored(trust.get(m.seq)) || closedAsks.has(m.seq)) return false;
+    if (m.permission)
+      return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members, bySeq: permBySeq }) !== null));
+    const by = answered.get(m.seq);
+    return !by || ![...by].some((n) => answersAsk(members, m, n));
+  };
+  const clockView = (): ClockView => ({ tasks, github: ctx.github, branchPrefix: ctx.branchPrefix, quietMs: ctx.quietMs, openAsks: holding.filter(stillOpen) });
+  const agentHere = (name: string): boolean => {
+    const who = members.get(name);
+    return !!who && who.active && !isPerson(who);
+  };
+  const leadHere = (): string | undefined => (lead && members.get(lead)?.active ? lead : [...members.values()].find((x) => x.owner && x.active)?.name);
+  const timeTask = (t: Task): void => void (timedStep(t) ? timed.add(t.id) : timed.delete(t.id));
+  const tickTask = (t: Task | undefined, seq: number, at: number, by?: string): void => {
+    if (!t) return;
+    tick(clockView(), t, { seq, at, ...(by !== undefined ? { by } : {}) });
+    timeTask(t);
+  };
+  const rollTimed = (at: number): void => {
+    if (!timed.size) return;
+    const view = clockView();
+    for (const id of timed) {
+      const t = tasks.get(id);
+      if (t) roll(view, t, at);
+    }
+  };
+  for (const t of tasks.values()) timeTask(t);
 
   for (const m of messages) {
     if (m.seq <= after) continue;
@@ -395,6 +474,7 @@ function folding(
     try {
       head = Math.max(head, m.seq);
       const at = m.rts ?? m.ts;
+      rollTimed(at);
       if (doubled.has(m.seq)) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, `two messages at #${m.seq}`);
@@ -483,6 +563,13 @@ function folding(
           continue;
         }
       }
+      const reopened = m.kind === "event" ? [] : landingTouchedByAsk(tasks, checks, m);
+      const lateCheck = checkChangeRefusal(reopened, { person: isPerson(member), lead: leads(member) }, m.check?.replaces === undefined ? "adds a check to" : "replaces a check on");
+      if (lateCheck) {
+        trust.set(m.seq, "refused");
+        rejected.set(m.seq, lateCheck);
+        continue;
+      }
       if (
         ctx.hold &&
         !isPerson(member) &&
@@ -514,8 +601,37 @@ function folding(
           continue;
         }
         roomOf.set(m.seq, room);
-        openCheck(checks, m);
+        const superseded = openCheck(checks, m);
+        if (superseded !== undefined) closedAsks.add(superseded);
+        const opened = checks.get(m.seq);
+        if (opened?.seq === m.seq && m.check)
+          for (const held of opened.holds) {
+            const holder = tasks.get(held);
+            if (holder) checkStep(holder, opened);
+          }
+        const replaced = m.check?.replaces;
+        const changed = replaced === undefined ? `pre-ship check #${m.seq} added after the approval` : `pre-ship check #${replaced} replaced by #${m.seq} after the approval`;
+        for (const t of reopened) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, changed);
         answerChecks(checks, m, [...members.values()].find((x) => x.owner)?.name);
+        if (m.choices?.length && !m.check && !m.permission)
+          questions.set(m.seq, { seq: m.seq, from: m.from, ...(m.esc ? { esc: true as const } : {}), ...(m.to?.length ? { to: m.to } : {}), choices: m.choices });
+        for (const r of m.re ?? []) {
+          const answeredCheck = checks.get(r);
+          if (answeredCheck?.answer?.seq === m.seq) checkAnswered(tasks, answeredCheck, { seq: m.seq, by: m.from, at });
+          const question = questions.get(r);
+          const first = question?.choices[0];
+          if (!question || first === undefined || !answersAsk(members, question, m.from)) continue;
+          const choice = choiceIn(m.body, question.choices);
+          if (choice === undefined) continue;
+          if (choice !== first) {
+            if (!questionWatched(tasks, r)) questions.delete(r);
+            continue;
+          }
+          questions.delete(r);
+          passedAsks.set(r, first);
+          for (const old of [...passedAsks.keys()].slice(0, Math.max(0, passedAsks.size - PASSED_ASKS_KEPT))) passedAsks.delete(old);
+          questionAnswered(tasks, r, first, { seq: m.seq, by: m.from, at });
+        }
         const parentPlace = parent !== undefined ? placeOf.get(parent) : undefined;
         const to = m.to?.length === 1 ? m.to[0]! : undefined;
         const pair = m.dm && to && members.has(to) ? ([rootOf(m.from, members), rootOf(to, members)] as const) : null;
@@ -526,6 +642,12 @@ function folding(
         const posted = place.kind === "task" ? tasks.get(place.task) : place.kind === "main" && room !== GENERAL_ROOM ? rooms.get(room) : undefined;
         if (posted && !posted.posters?.includes(m.from)) posted.posters = [...(posted.posters ?? []), m.from];
         if (place.kind === "task") touch(tasks.get(place.task), m.from, at);
+        if (place.kind === "task") tickTask(tasks.get(place.task), m.seq, at, m.from);
+        if (m.holds?.length && (m.kind === "ask" || m.kind === "blocking") && !m.permission) {
+          holding.push(m);
+          holdsOf.set(m.seq, m.holds);
+          for (const id of m.holds) tickTask(tasks.get(id), m.seq, at);
+        }
       }
       member.lastSeen = Math.max(member.lastSeen, at);
       if (!isOverlay(m)) member.messages++;
@@ -535,6 +657,7 @@ function folding(
         let set = answered.get(r);
         if (!set) answered.set(r, (set = new Set()));
         set.add(m.from);
+        for (const id of holdsOf.get(r) ?? []) tickTask(tasks.get(id), m.seq, at);
         if (m.perm) {
           let replies = permReplies.get(r);
           if (!replies) permReplies.set(r, (replies = []));
@@ -601,8 +724,18 @@ function folding(
         if (asker === undefined || !(ev.ask < m.seq)) reject(`#${ev.ask} isn't a question or a step waiting on someone`);
         else if (asker !== m.from && !isPerson(member)) reject("only who asked, or a person, closes an ask");
         else {
-          closedAsks.add(ev.ask);
-          closeCheck(checks, ev.ask, m);
+          const reopens = landingTouchedByClose(tasks, checks, ev.ask);
+          const lateClose = checkChangeRefusal(reopens, { person: isPerson(member), lead: leads(member) }, "closes a check on");
+          if (lateClose) reject(lateClose);
+          else {
+            closedAsks.add(ev.ask);
+            for (const id of holdsOf.get(ev.ask) ?? []) tickTask(tasks.get(id), m.seq, at);
+            questions.delete(ev.ask);
+            const closing = checks.get(ev.ask);
+            if (closing && closing.closed === undefined) checkClosed(tasks, closing, { seq: m.seq, by: m.from, at });
+            closeCheck(checks, ev.ask, m.seq);
+            for (const t of reopens) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, `pre-ship check #${ev.ask} closed after the approval`);
+          }
         }
         continue;
       }
@@ -646,13 +779,32 @@ function folding(
         m.seq,
         ev.op === "task.add"
           ? { kind: "task", task: m.seq }
-          : (ev.op === "task.update" || ev.op === "task.claim" || ev.op === "task.first" || ev.op === "task.landed") && tasks.has(ev.task)
+          : (ev.op === "task.update" || ev.op === "task.claim" || ev.op === "task.first" || ev.op === "task.landed" || ev.op === "task.nudge") && tasks.has(ev.task)
             ? { kind: "task", task: ev.task }
             : MAIN,
       );
 
       const taskAsk = ev.op === "task.update" || ev.op === "task.delete" ? tasks.get(ev.task)?.ask : undefined;
+      const before = "task" in ev ? tasks.get(ev.task) : undefined;
+      const ownedBy = before?.owner;
+      if (ev.op === "task.nudge") {
+        const wrong = before ? nudge(clockView(), before, ev, at, { agentQueue: agentHere, lead: leadHere }) : `no task ${taskId(ev.task)}`;
+        if (wrong) reject(wrong);
+        else if (before) timeTask(before);
+      }
       applyEvent(ctx, m, ev, member, at, reject);
+      if (!rejected.has(m.seq) && ev.op !== "task.nudge") {
+        const subject = ev.op === "task.add" ? tasks.get(m.seq) : before && tasks.has(before.id) ? before : undefined;
+        if (subject) {
+          tickTask(subject, m.seq, at, m.from);
+          for (const other of tasks.values())
+            if (other !== subject && other.state === "todo" && other.owner !== undefined && (other.owner === subject.owner || other.owner === ownedBy)) tickTask(other, m.seq, at);
+        } else if (ev.op === "github") {
+          for (const t of tasks.values()) if (t.state === "doing" || t.state === "review" || t.state === "landing") tickTask(t, m.seq, at);
+        } else if (!CLOCK_BLIND_OPS.has(ev.op)) {
+          for (const t of tasks.values()) tickTask(t, m.seq, at);
+        }
+      }
       if (taskAsk !== undefined && !rejected.has(m.seq)) closeOnItsOwn(taskAsk, m, at);
       const added = ev.op === "task.add" && !rejected.has(m.seq) ? tasks.get(m.seq) : undefined;
       if (added) {
@@ -669,14 +821,7 @@ function folding(
     }
   }
 
-  const openAsks = [...(from?.asks ?? []), ...messages.filter((m) => m.seq > after)].filter((m) => {
-    if (m.kind !== "ask" && m.kind !== "blocking") return false;
-    if (ignored(trust.get(m.seq)) || closedAsks.has(m.seq)) return false;
-    if (m.permission)
-      return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members, bySeq: permBySeq }) !== null));
-    const by = answered.get(m.seq);
-    return !by || ![...by].some((n) => answersAsk(members, m, n));
-  });
+  const openAsks = [...(from?.asks ?? []), ...messages.filter((m) => m.seq > after)].filter(stillOpen);
 
   const cut = head - KEEP_SEQS;
   const keyIndex = new Map<string, number>();
@@ -720,8 +865,11 @@ function folding(
       hold: ctx.hold,
       githubWrite: ctx.githubWrite,
       branchPrefix: ctx.branchPrefix,
+      ...(ctx.quietMs !== QUIET_MS ? { quietMs: ctx.quietMs } : {}),
       landing: ctx.landing,
-      merges: ctx.merges,
+      ...(ctx.landingSteps ? { landingSteps: ctx.landingSteps } : {}),
+      ...(passedAsks.size ? { passedAsks: [...passedAsks] } : {}),
+      ...(questions.size ? { stepQuestions: [...questions.values()] } : {}),
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],
       roleSets: [...roleSets],
@@ -831,8 +979,9 @@ function folding(
     hold: ctx.hold,
     githubWrite: ctx.githubWrite,
     branchPrefix: ctx.branchPrefix,
+    quietMs: ctx.quietMs,
     landing: ctx.landing,
-    merges: ctx.merges,
+    landingSteps: ctx.landingSteps,
     reactions,
     edits,
     deleted,

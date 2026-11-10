@@ -84,6 +84,19 @@ export function markSeen(room: string, seq: number, needs: number) {
   writeMark(room, { seen: Math.max(prev?.seen ?? 0, seq), needs });
 }
 
+/** The channel is read up to `seq` without having been in view: what waits on this person still waits. */
+export function markSeenTo(room: string, seq: number) {
+  const prev = readMarks()[room];
+  if (prev && prev.seen >= seq) return;
+  writeMark(room, { seen: seq, needs: prev?.needs ?? 0 });
+}
+
+export function markNeeds(room: string, needs: number) {
+  const prev = readMarks()[room];
+  if (!prev || prev.needs === needs) return;
+  writeMark(room, { seen: prev.seen, needs });
+}
+
 /** A channel seen for the first time starts with nothing new: its first listing isn't a backlog. */
 export function startMarks(heads: { room: string; head?: number }[]) {
   const known = readMarks();

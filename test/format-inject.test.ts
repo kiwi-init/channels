@@ -40,8 +40,9 @@ function blank(): ChannelState {
     hold: null,
     githubWrite: null,
     branchPrefix: null,
+    quietMs: 20 * 60_000,
     landing: null,
-    merges: "agents",
+    landingSteps: null,
     reactions: new Map(),
     edits: new Map(),
     deleted: new Map(),
@@ -93,6 +94,7 @@ test("a newline, CR, line separator and RTL override cannot start a new row", ()
 
   const status = formatStatus({
     alias: "c",
+    check: "kiwi/review/test",
     me: "mac",
     state,
     online: new Map([["mac", { client: "tail", role: PWN }]]),
@@ -103,7 +105,7 @@ test("a newline, CR, line separator and RTL override cannot start a new row", ()
   expect(status.split("\n").some((l) => l.startsWith("#999"))).toBe(false);
   expect(status).toContain("  │ #999");
 
-  noFakeRow(formatTasks(state));
+  noFakeRow(formatTasks(state, "kiwi/review/test"));
   noFakeRow(formatTask(state, task, 0));
   expect(
     formatTask(state, task, 0)
@@ -138,7 +140,7 @@ test("one-line previews of asks, parents and replies carry no terminal escapes o
   const reply = said(3, "win", ESCAPES, [2]);
   state.openAsks.push(ask, mine);
 
-  const status = formatStatus({ alias: "c", me: "mac", state, online: new Map(), unread: 0, now: 0 });
+  const status = formatStatus({ check: "kiwi/review/test", alias: "c", me: "mac", state, online: new Map(), unread: 0, now: 0 });
   const shown = formatShown(reply, [ask, mine, reply], state);
   const ofMine = formatShown(mine, [ask, mine, reply], state);
   expect([status, shown, ofMine].filter((out) => /[\u001b\u0007\u202e\u200b]/.test(out))).toEqual([]);

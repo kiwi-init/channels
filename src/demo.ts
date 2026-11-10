@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Agent, AgentSession } from "./agent.ts";
 import { Channel, eachLive, reason } from "@kiwi/core/client.ts";
+import { reviewCheckOf } from "@kiwi/core/protocol.ts";
 
 export interface DemoOptions {
   /** Pause between beats, in ms. */
@@ -121,7 +122,7 @@ const play = Effect.fn("Demo.run")(function* (opts: DemoOptions) {
   const capture = yield* lead.taskAdd("Capture input at the screen edge on the Mac");
   yield* lead.taskAdd("Build the release in CI");
   const { state: board } = yield* lead.state();
-  yield* line(formatTasks(board));
+  yield* line(formatTasks(board, reviewCheckOf(roomId)));
 
   yield* say("Agents take what they can do (People shows who runs where), and ask each other directly.");
   yield* mac.taskClaim(proto);
@@ -151,7 +152,7 @@ const play = Effect.fn("Demo.run")(function* (opts: DemoOptions) {
   yield* beat;
   yield* Fiber.interrupt(watcher);
   const { state } = yield* human.state();
-  yield* line(`\n— Where it ended up (kiwi status):\n${formatStatus({ alias: "demo", me: "human", state, online: new Map(), unread: 0 })}`);
+  yield* line(`\n— Where it ended up (kiwi status):\n${formatStatus({ alias: "demo", check: reviewCheckOf(roomId), me: "human", state, online: new Map(), unread: 0 })}`);
   yield* line(`\nThat was a real channel and the real client. Your own: kiwi setup, then create a channel at https://channels.kiwiinit.com.`);
   if (opts.stay) {
     const admit = Effect.gen(function* () {

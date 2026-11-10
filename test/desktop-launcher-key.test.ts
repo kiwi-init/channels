@@ -16,7 +16,7 @@ function scripted(answers: Record<string, string>): { ch: LineChannel; asked: st
   let closed = false;
   return {
     ch: {
-      request(line) {
+      async request(line) {
         asked.push(line);
         const a = answers[line] ?? answers[line.split(" ")[0] ?? ""];
         if (a === undefined) throw new Error(`no answer for ${line}`);
@@ -98,7 +98,7 @@ function launcher(items: Record<string, string> = {}): Launcher {
   const asked: string[] = [];
   let made = "";
   const ch: LineChannel = {
-    request(line) {
+    async request(line) {
       const verb = line.split(" ")[0] ?? "";
       asked.push(verb);
       const key = kept.get("store-key");
@@ -289,13 +289,18 @@ describe("where the key comes from", () => {
     expect(none).toEqual({ HOME: "/Users/ana" });
   });
 
-  test("ending the session says done, then closes the channel, even when the launcher has gone", () => {
+  test("ending the session says done, then closes the channel, even when the launcher has gone", async () => {
     const s = scripted({ done: "ok" });
-    endSession(s.ch);
+    await endSession(s.ch);
     expect(s.asked).toEqual(["done"]);
     expect(s.closed()).toBe(true);
     const gone = scripted({});
-    expect(() => endSession(gone.ch)).toThrow();
+    expect(
+      await endSession(gone.ch).then(
+        () => "ended",
+        () => "threw",
+      ),
+    ).toBe("threw");
     expect(gone.closed()).toBe(true);
   });
 

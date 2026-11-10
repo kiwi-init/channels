@@ -6,9 +6,10 @@ import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { REVIEW_CHECK } from "@kiwi/core/protocol.ts";
+import { REVIEW_CHECK, reviewCheckOf } from "@kiwi/core/protocol.ts";
 import { appJwt, githubAppFrom, githubPushFrom, pkcs8Of } from "../src/relay/github-app.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
+import { RETIRED } from "../src/relay/review-host.ts";
 import { checked } from "./check.ts";
 
 setDefaultTimeout(30_000);
@@ -145,20 +146,31 @@ describe("diffs and review checks through the relay", () => {
     expect((await room("GET", "/github/diff?repo=ojow/channels&sha=nope", member)).status).toBe(400);
   });
 
-  test("only the owner turns kiwi/review green; any member may turn it waiting or failed", async () => {
-    const body = { repo: "ojow/channels", sha, verdict: "approved", tasks: [45], note: "Looks right." };
-    const last = () => JSON.parse(calls.filter((c) => c.path === "/repos/ojow/channels/check-runs").at(-1)!.body) as Record<string, unknown>;
-    expect((await room("POST", "/github/check", member, body)).status).toBe(403);
-    expect(await (await room("POST", "/github/check", owner, body)).json()).toEqual({ url: "https://github.com/ojow/channels/runs/1" });
-    expect(last()).toEqual({ name: REVIEW_CHECK, head_sha: sha, status: "completed", conclusion: "success", output: { title: "T45 approved in Kiwi", summary: "Looks right." } });
-    expect((await room("POST", "/github/check", member, { ...body, verdict: "waiting", tasks: [45, 46], note: "" })).status).toBe(200);
-    expect(last()).toEqual({ name: REVIEW_CHECK, head_sha: sha, status: "in_progress", output: { title: "T45, T46: waiting in Kiwi", summary: "Not ready to ship yet." } });
-    expect((await room("POST", "/github/check", member, { ...body, verdict: "rejected", note: "" })).status).toBe(200);
-    expect(last()).toMatchObject({ status: "completed", conclusion: "failure", output: { title: "T45: changes requested in Kiwi", summary: "Changes requested." } });
-    await room("POST", "/github/check", owner, { repo: "ojow/channels", sha, verdict: "rejected", task: 7 });
-    expect(last()).toMatchObject({ conclusion: "failure", output: { title: "T7: changes requested in Kiwi" } });
-    expect((await room("POST", "/github/check", owner, { ...body, verdict: "maybe" })).status).toBe(400);
-    expect((await room("POST", "/github/check", owner, { ...body, tasks: [] })).status).toBe(400);
+  test("kiwi/review is retired: the owner's post becomes one green check that says so, and a member's writes nothing", async () => {
+    const body = { repo: "ojow/channels", sha, verdict: "rejected", tasks: [45], note: "Changes requested." };
+    const writes = () => calls.filter((c) => c.path === "/repos/ojow/channels/check-runs");
+    const before = writes().length;
+    expect(await (await room("POST", "/github/check", member, body)).json()).toEqual({ url: null });
+    expect(writes()).toHaveLength(before);
+    expect((await room("POST", "/github/check", owner, body)).status).toBe(200);
+    expect(JSON.parse(writes().at(-1)!.body)).toEqual({ name: reviewCheckOf(roomId), head_sha: sha, status: "completed", conclusion: "success", output: RETIRED });
+    expect((await room("POST", "/github/check", owner, { ...body, repo: "someone/else" })).status).toBe(400);
+  });
+
+  test("each channel's check goes under its own name, and a request can't choose it (T2681, #2888)", async () => {
+    const bea = await generateIdentity("bea");
+    const made = await Channel.create(relay, bea, { name: "bea", kind: "human" }, [], undefined, "dev:bea");
+    await new Channel(made.access, relay, bea).setGithubRepos(["ojow/channels"], "ghu_owner");
+    const named = () => calls.filter((c) => c.path === "/repos/ojow/channels/check-runs").map((c) => (JSON.parse(c.body) as { name: string }).name);
+    const before = named().length;
+    const pass = { repo: "ojow/channels", sha: "e".repeat(40), verdict: "approved", tasks: [], name: REVIEW_CHECK };
+    expect((await room("POST", "/github/check", owner, { ...pass, name: reviewCheckOf(made.access.roomId) })).status).toBe(200);
+    const text = JSON.stringify(pass);
+    const auth = await signRequest(bea, made.access.roomId, "POST", "/github/check", text);
+    const res = await fetch(`${relay}/v1/rooms/${made.access.roomId}/github/check`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${auth}` }, body: text });
+    expect(res.status).toBe(200);
+    expect(made.access.roomId).not.toBe(roomId);
+    expect(named().slice(before)).toEqual([reviewCheckOf(roomId), reviewCheckOf(made.access.roomId)]);
   });
 
   test("only the owner comments on a PR of a connected repo (the link back to its task)", async () => {

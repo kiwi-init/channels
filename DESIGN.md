@@ -233,7 +233,12 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   lead (an avatar or a tile), the title, an optional sub line and close;
   tabs, when it has them, sit under the title in the head. The body scrolls
   and an optional foot holds the actions. Esc, a click outside and Back or
-  Forward close it, and focus stays inside. Settings-like screens (channel
+  Forward close it, and focus stays inside. Once something is typed in it,
+  a click outside no longer closes it: only Esc, Cancel or the X do. The
+  same holds from the start for a dialog that shows something to copy
+  (Invite, Add an agent). Cancel
+  is quiet and sits left of the action; a dialog that throws something away
+  opens with the focus on Cancel. Settings-like screens (channel
   settings, profiles, Invite, Add an agent) open in it, built from Settings'
   `Group` and `Row` with real headings; the side panel is only for work: a
   thread, a task, a PR or an issue.
@@ -314,7 +319,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   16px fade: the text, then the action on its line's end, or under it when
   the text needs the width.
 - **Right panel** (`--panel-w` to start, resizable by its grip): a thread,
-  a task, a person or the channel slides in from the right (`panel-in`)
+  a task, a PR or an issue slides in from the right (`panel-in`)
   beside the conversation, with a title, a mono sub line and a close button.
   A thread keeps its own composer.
 - **Conversation.** No bubbles, everyone on the left, in the `--col` column.
@@ -429,8 +434,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 - In a thread with a doc, the composer is where you write: sending adds your
   block to the doc and posts it, and the doc itself takes no typing.
 - Send is a round button a little under `--ctl`: `ink` with `on-ink` when
-  there is something to send, `line-2` when not. Enter sends (or ⌘Enter, per
-  Settings).
+  there is something to send, `line-2` when not. Enter sends and
+  Shift+Enter is a new line.
 - Typing `@name` or a task id (`T12`) opens a list of people or tasks just
   above the composer; arrows move, Enter or Tab picks.
 - Drag-and-drop and pasted images attach in the composer; a drop shows

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
+import { t } from "~/i18n/i18n"
 import { Icon } from "~/kit/icons"
 
 export type Tone = "info" | "error"
@@ -12,7 +13,6 @@ export interface Toast {
 
 const SHOWN_MS = 2600
 const MOST = 3
-const NOT_COPIED = "Couldn't copy. Select it and copy by hand."
 
 const heard = new Set<(text: string, tone: Tone) => void>()
 
@@ -20,18 +20,23 @@ export function announce(text: string, tone: Tone = "info"): void {
   for (const l of heard) l(text, tone)
 }
 
-export function copyText(text: string, done = "Copied"): void {
-  if (!navigator.clipboard) return announce(NOT_COPIED, "error")
+export function onAnnounce(l: (text: string, tone: Tone) => void): () => void {
+  heard.add(l)
+  return () => void heard.delete(l)
+}
+
+export function copyText(text: string, done = t("kit.toasts.copied")): void {
+  if (!navigator.clipboard) return announce(t("kit.toasts.not.copied"), "error")
   void navigator.clipboard.writeText(text).then(
     () => announce(done),
-    () => announce(NOT_COPIED, "error")
+    () => announce(t("kit.toasts.not.copied"), "error")
   )
 }
 
 export function kept(list: Toast[], next: Toast): Toast[] {
-  const all = [...list.filter((t) => t.text !== next.text), next]
+  const all = [...list.filter((toast) => toast.text !== next.text), next]
   while (all.length > MOST) {
-    const info = all.findIndex((t, i) => t.tone === "info" && i < all.length - 1)
+    const info = all.findIndex((toast, i) => toast.tone === "info" && i < all.length - 1)
     all.splice(info < 0 ? 0 : info, 1)
   }
   return all
@@ -40,7 +45,7 @@ export function kept(list: Toast[], next: Toast): Toast[] {
 export function useToasts(): [Toast[], (text: string, tone?: Tone) => void, (id: number) => void] {
   const [toasts, setToasts] = useState<Toast[]>([])
   const next = useRef(0)
-  const dismiss = useCallback((id: number) => setToasts((list) => list.filter((t) => t.id !== id)), [])
+  const dismiss = useCallback((id: number) => setToasts((list) => list.filter((toast) => toast.id !== id)), [])
   const push = useCallback(
     (text: string, tone: Tone = "info") => {
       const id = ++next.current
@@ -49,27 +54,24 @@ export function useToasts(): [Toast[], (text: string, tone?: Tone) => void, (id:
     },
     [dismiss]
   )
-  useEffect(() => {
-    heard.add(push)
-    return () => void heard.delete(push)
-  }, [push])
+  useEffect(() => onAnnounce(push), [push])
   return [toasts, push, dismiss]
 }
 
 export function Toasts({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
   return (
     <div className="toasts" role="status" aria-live="polite">
-      {toasts.map((t) =>
-        t.tone === "error" ? (
-          <div key={t.id} className="toast is-error" role="alert">
-            <span>{t.text}</span>
-            <button type="button" className="toast-close" aria-label="Dismiss" onClick={() => onDismiss(t.id)}>
+      {toasts.map((toast) =>
+        toast.tone === "error" ? (
+          <div key={toast.id} className="toast is-error" role="alert">
+            <span>{toast.text}</span>
+            <button type="button" className="toast-close" aria-label={t("kit.toasts.dismiss")} onClick={() => onDismiss(toast.id)}>
               <Icon name="close" size={14} />
             </button>
           </div>
         ) : (
-          <p key={t.id} className="toast">
-            {t.text}
+          <p key={toast.id} className="toast">
+            {toast.text}
           </p>
         )
       )}

@@ -13,6 +13,7 @@ import { announce } from "~/kit/toasts"
 import type { EnrollDone } from "~/live/account-rare"
 import { rememberOwner } from "~/live/invites"
 import type { InviteInfo } from "~/model"
+import { SENT } from "~/sent"
 
 const manage = () => import("~/live/manage")
 
@@ -34,7 +35,7 @@ function joinCodeOf(typed: string): string | null {
 
 export async function newChannel(title: string): Promise<string> {
   const person = secrets().person
-  const make = async (fresh: boolean) => createChannel(title.trim() || "Untitled channel", await tokenForCreate(fresh), person ? { name: person.name } : null)
+  const make = async (fresh: boolean) => createChannel(title.trim() || SENT.untitledChannel, await tokenForCreate(fresh), person ? { name: person.name } : null)
   const m = await make(false).catch((err: unknown) => {
     if (isSignInGone(err) && bridge()) return make(true)
     throw err

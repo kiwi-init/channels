@@ -66,16 +66,45 @@ try {
   const fetchedAt = seen.findIndex((t) => t.startsWith("Fetching"));
   expect(fetchedAt >= 0 && !seen.slice(fetchedAt).some((t) => t.startsWith("Search older history")), "the offer doesn't flash back between the fetch and the new results");
 
+  const listIsFor = (words: string) =>
+    page.waitForFunction((want) => {
+      const rows = [...document.querySelectorAll(".search-item")];
+      return rows.length > 0 && rows.every((r) => (r.textContent ?? "").toLowerCase().includes(want));
+    }, words);
   await box.fill("relay dumb");
+  await listIsFor("relay dumb");
   await heading.waitFor();
   const older = page.locator(".search-item").filter({ hasText: "Keep the relay dumb" }).first();
   await older.waitFor();
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as unknown as { rowSeen: string[] }).rowSeen = seen;
+    const t0 = performance.now();
+    const note = (what: string) => seen.push(`${Math.round(performance.now() - t0)}ms ${what}`);
+    for (const type of ["pointerdown", "mousedown", "blur", "pointerup", "mouseup", "click"])
+      document.addEventListener(type, (e) => note(`${type} on ${(e.target as HTMLElement).className || (e.target as HTMLElement).tagName}`), true);
+    new MutationObserver(() => note(`list: ${document.querySelectorAll(".search-item").length} rows, bar ${document.querySelectorAll(".older-bar").length}`)).observe(document.body, {
+      subtree: true,
+      childList: true,
+    });
+  });
   await older.click();
   const bar = page.locator(".older-bar");
-  await bar.waitFor();
-  expect((await bar.innerText()).includes("Viewing older messages around"), "the bar says this is older history, and when");
+  await bar.waitFor({ timeout: 8000 }).catch(async (err: unknown) => {
+    const state = await page.evaluate(() => ({
+      seen: (window as unknown as { rowSeen: string[] }).rowSeen,
+      rows: [...document.querySelectorAll(".search-item")].map((r) => (r.textContent ?? "").slice(0, 60)),
+      query: (document.querySelector('[role="combobox"]') as HTMLInputElement | null)?.value ?? "no box",
+      focus: document.activeElement?.className || document.activeElement?.tagName,
+      feed: document.querySelectorAll("article.msg").length,
+      flash: document.querySelectorAll("article.msg.is-flash").length,
+    }));
+    console.log(`the older bar never showed after the click: ${JSON.stringify(state, null, 1)}`);
+    throw err;
+  });
   const hit = page.locator("article.msg.is-flash");
   await hit.waitFor();
+  expect((await bar.innerText()).includes("Viewing older messages around"), "once its stretch is loaded, the bar says this is older history, and when");
   const shown = await hit.boundingBox();
   expect(!!shown && shown.y > 100 && shown.y < 700 && (await hit.innerText()).includes("Keep the relay dumb"), "the hit is scrolled into view and marked");
   expect((await page.locator("article.msg").count()) > 10, "the stretch around the hit is shown, not just the hit");
@@ -93,6 +122,7 @@ try {
   if (!(await box.isVisible())) await page.getByRole("button", { name: /Search this channel/ }).click();
   await box.fill("relay dumb");
   await box.focus();
+  await listIsFor("relay dumb");
   await older.click();
   await bar.waitFor();
   await page

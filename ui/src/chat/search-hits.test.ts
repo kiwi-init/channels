@@ -49,6 +49,11 @@ describe("channel search", () => {
     ).toEqual(["message-1", "message-3", "message-6"])
   })
 
+  test("tasks come in Jump to's order: where the title matches first, then the most recently touched (T1820)", () => {
+    const found = [task(15, "Rotate the relay's signing key", { updatedAt: 10 }), task(17, "Find why the relay drops sockets", { updatedAt: 20 }), task(18, "Relay graphs", { updatedAt: 5 })]
+    expect(searchHits(found, index, "relay").slice(0, 3).map(hitKey)).toEqual(["task-18", "task-17", "task-15"])
+  })
+
   test("leaves out system lines and messages still being sent", () => {
     expect(keys("joined")).toEqual([])
     expect(keys("retry")).toEqual([])
@@ -88,5 +93,36 @@ describe("search reads messages the way people see them (#1763)", () => {
     const named = messageIndex({ nicknames: new Map([["gentle-otter", "lead"]]), messages: [msg(1, "@gentle-otter take the relay")] })
     expect(searchHits([], named, "lead").map(hitKey)).toEqual(["message-1"])
     expect(searchHits([], named, "gentle").map(hitKey)).toEqual([])
+  })
+})
+
+describe("the index is built again on every message while search is open (T1812)", () => {
+  const names = new Map([["atlas", "Atlas"]])
+  const found = (messages: Message[], nicknames: ReadonlyMap<string, string>, query: string) =>
+    searchHits([], messageIndex({ messages, nicknames }), query)
+      .filter((h) => h.kind === "message")
+      .map((h) => h.m.seq)
+
+  test("a later build finds what a first build would, new messages included", () => {
+    const first = [msg(1, "deploy the relay to staging"), msg(2, "the relay is up")]
+    expect(found(first, names, "relay")).toEqual(expect.arrayContaining([1, 2]))
+    const later = [...first.map((m) => ({ ...m })), msg(3, "relay logs look clean")]
+    expect(found(later, names, "relay").sort()).toEqual([1, 2, 3])
+    expect(found(later, names, "logs")).toEqual([3])
+  })
+
+  test("an edited message is found by its new words, not its old ones", () => {
+    found([msg(1, "deploy the relay to staging")], names, "relay")
+    const edited = [msg(1, "deploy the worker to staging")]
+    expect(found(edited, names, "relay")).toEqual([])
+    expect(found(edited, names, "worker")).toEqual([1])
+  })
+
+  test("a changed nickname is found by the new name", () => {
+    const messages = [msg(1, "deploy the relay to staging")]
+    expect(found(messages, names, "atlas")).toEqual([1])
+    const renamed = new Map([["atlas", "Hermes"]])
+    expect(found(messages, renamed, "hermes")).toEqual([1])
+    expect(found(messages, renamed, "atlas")).toEqual([])
   })
 })

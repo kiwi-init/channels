@@ -18,7 +18,6 @@ const ERROR_TAGS = [
   "MethodNotAllowed",
   "Conflict",
   "Taken",
-  "Fenced",
   "TooLarge",
   "UpdateRequired",
   "TooMany",
@@ -43,8 +42,6 @@ export function tagForStatus(status: number): ErrorTag {
       return "MethodNotAllowed";
     case 409:
       return "Conflict";
-    case 412:
-      return "Fenced";
     case 413:
       return "TooLarge";
     case 423:

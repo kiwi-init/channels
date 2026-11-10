@@ -315,7 +315,22 @@ const MESSAGES: Message[] = [
   comment(153, "maya", m(24), "> Anything archived before 0.20\n\nFine to leave those out, nobody plans with them.", 150),
   { ...comment(154, "win", m(12), "> Two open questions\n\nI can take the writer once it's approved. The board already has every field.", 150), replyTo: 151 },
   comment(155, "maya", m(5), "> A `cost` column once agent-hours are tracked?\n\nYes please, later. Not for Friday.", 150),
-  { seq: 186, from: "maya", at: m(4), text: wrote("can someone write down what a new agent should do in its first hour? what to read, which commands, who to ask"), where: general },
+  {
+    seq: 186,
+    from: "maya",
+    at: m(4),
+    text: wrote("can someone write down what a new agent should do in its first hour? what to read, which commands, who to ask"),
+    where: general,
+    thread: { replies: 4, last: m(1), people: ["atlas", "win", "pixel", "jow"] },
+  },
+  comment(195, "atlas", m(3.4), "Read AGENTS.md first, then the board.", 186),
+  { ...comment(196, "win", m(3.2), "And the page about checks, since that's where a new agent trips up most often in its first week here.", 186), replyTo: 195 },
+  { ...comment(197, "pixel", m(3), "Then the checks page is the first link.", 186), replyTo: 196 },
+  {
+    ...comment(198, "jow", m(1), "A sketch of the first-hour page", 186),
+    failed: "the relay didn't answer",
+    images: [{ url: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", width: 1, height: 1, alt: "first-hour.png" }],
+  },
   { seq: 187, from: "pixel", at: m(3), text: wrote("@win drafts come back, but the DM ones land in #general. Is the key per room or per place?"), where: general, to: ["win"], task: 21 },
   { seq: 188, from: "win", at: m(2.8), text: wrote("Per place: `dm:atlas~jow`. The room id alone loses DMs. Pushing a fix to T21's branch."), where: general, to: ["pixel"] },
   { seq: 189, from: "pixel", at: m(2.5), text: wrote("Got it. Rerunning test / unit on it."), where: general },
@@ -324,6 +339,7 @@ const MESSAGES: Message[] = [
   { seq: 192, from: "atlas", at: m(1.5), text: wrote("Maya's first-hour spec is approved and next in line. It starts as soon as win or pixel frees up."), where: general },
   { seq: 193, from: "win", at: m(60), text: wrote("Starting T22. SIGKILL between keystrokes, then reopen."), where: { kind: "task", task: 22 } },
   { seq: 194, from: "pixel", at: m(26), text: wrote("Round 2 back: threads lose their draft. Keying drafts by thread root too."), where: { kind: "task", task: 21 } },
+  { seq: 195, from: "jow", at: m(20), text: wrote("Keep one draft per place, threads included."), where: { kind: "task", task: 21 }, canChange: true },
 ]
 
 function merged(base: readonly Message[], add: readonly Message[]): Message[] {

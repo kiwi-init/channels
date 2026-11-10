@@ -4,11 +4,11 @@ import XCTest
 struct Screen {
     let app: XCUIApplication
 
-    static func list() throws -> Screen {
+    static func list(_ extra: [String] = []) throws -> Screen {
         let url = try XCTUnwrap(Bundle(for: GestureTests.self).url(forResource: "fixture", withExtension: "json"), "the Make the fixture build phase didn't run")
         let app = XCUIApplication()
         app.launchEnvironment["CHANNELS_FIXTURE"] = try String(contentsOf: url, encoding: .utf8)
-        app.launchArguments = ["-shot", "list"]
+        app.launchArguments = ["-shot", "list"] + extra
         app.launch()
         return Screen(app: app)
     }

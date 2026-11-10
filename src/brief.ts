@@ -3,7 +3,6 @@
 // the rest is. Everything else it learns when it needs it, from `kiwi help` and from what a command says
 // when it refuses.
 
-import type { Merger } from "@kiwi/core/protocol.ts";
 import { personaLines, type Persona } from "@kiwi/core/personality.ts";
 import { mayDo } from "@kiwi/core/format.ts";
 import { canPost, presetOf, type Scope } from "@kiwi/core/scopes.ts";
@@ -55,11 +54,7 @@ export interface Brief {
   persona?: Persona;
   contextLine?: boolean;
   memberRooms?: readonly string[];
-  merges?: Merger;
 }
-
-export const PEOPLE_MERGE =
-  "People merge pull requests in this channel: never merge one yourself. Once its task is approved and its checks are green, say it's ready in the task's thread, and a person merges it.";
 
 const WHERE_RULE =
   "Post where a person would in Slack or Teams: a room for what everyone there should see, a direct thread for one person, a task's or spec's thread for its work (progress, PRs, findings); in another room only for context agents there need, linking the message it answers (#123).";
@@ -73,14 +68,13 @@ export function briefText(b: Brief): string {
     ...directs(b.mc),
     b.charter,
     b.lead,
-    b.merges === "people" ? PEOPLE_MERGE : null,
     ...(b.persona ? personaLines(b.persona) : []),
     limited && !b.persona
       ? canPost(b.scopes!)
         ? `The owner lets you ${mayDo(b.scopes!)}; kiwi refuses the rest.`
         : "The owner lets you only read this channel; tell your human anything that needs saying."
       : null,
-    `Post with \`${COMMANDS.send(b.mc)}\`: while you're doing a task it goes to that task's thread, among the agents working it; say where with \`--to WHERE\`: #general, #room, T7, @name (direct) or #123 (a reply). Answer with \`${COMMANDS.reply(b.mc)}\`: a reply stays where its message is, a room's too (rooms have no threads). One to a message sent to several of you claims it; if kiwi says someone else is answering, leave it to them (claim a long answer first: \`${COMMANDS.answering(b.mc)}\`). You're sent #general, threads of tasks you work on or posted in, rooms you posted in, and @mentions; read the rest with \`${COMMANDS.log(b.mc)}\`. ${WHERE_RULE}${b.memberRooms?.length ? ` You're in the members-only room${b.memberRooms.length > 1 ? "s" : ""} ${b.memberRooms.map((r) => `#${r}`).join(", ")}: only its members are sent what's posted there, though anyone in the channel can open it.` : ""}${b.contextLine ? ` Your session may be cleared between turns, so while a task is yours, write where it stands at each milestone with \`${COMMANDS.checkpoint(b.mc)}\` (branch, last commit, done, next, traps); a new session of yours starts from it.` : ""}`,
+    `Post with \`${COMMANDS.send(b.mc)}\`: while you're doing a task it goes to that task's thread, among the agents working it; say where with \`--to WHERE\`: #general, #room, T7, @name (direct) or #123 (a reply). Answer with \`${COMMANDS.reply(b.mc)}\`: a reply stays where its message is, a room's too. To a message sent to several, the first reply is the answer; a later one goes under it, and one under yours needs no answer (long answer first: \`${COMMANDS.answering(b.mc)}\`). You're sent #general, threads of tasks you work on or posted in, rooms you posted in, and @mentions; read the rest with \`${COMMANDS.log(b.mc)}\`. ${WHERE_RULE}${b.memberRooms?.length ? ` You're in the members-only room${b.memberRooms.length > 1 ? "s" : ""} ${b.memberRooms.map((r) => `#${r}`).join(", ")}: only its members are sent what's posted there, though anyone in the channel can open it.` : ""}${b.contextLine ? ` Your session may be cleared between turns, so while a task is yours, write where it stands at each milestone with \`${COMMANDS.checkpoint(b.mc)}\` (branch, last commit, done, next, traps); a new session of yours starts from it.` : ""}`,
     `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. One-at-a-time work (a build, a release) takes a lease: \`${COMMANDS.lock(b.mc)}\`. ${voice(`react with \`${b.mc} react N 👍\` instead`)} Text with backticks or $ goes in on stdin with a quoted heredoc (\`${b.mc} send <<'EOF'\`, the text, then \`EOF\`) or \`--file PATH\`: inside "…" the shell eats them. The rest: \`${COMMANDS.help(b.mc)}\`.`,
     b.listen,
   ]

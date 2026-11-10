@@ -10,7 +10,7 @@ type Vars = Readonly<Record<string, string | number>>
 
 export const LANG_NAMES: Record<Lang, string> = { en: "English", "pt-BR": "Português (Brasil)", ja: "日本語", ko: "한국어", "zh-CN": "简体中文" }
 
-export type Loaded = { default: Catalog; covers: readonly string[] }
+export type Loaded = { default: Catalog }
 
 export const CATALOGS: Record<Exclude<Lang, "en">, () => Promise<Loaded>> = {
   "pt-BR": () => import("~/i18n/pt-BR"),
@@ -108,7 +108,7 @@ function numberFormat(options: Intl.NumberFormatOptions = {}): Intl.NumberFormat
 
 const num = (n: number): string => numberFormat().format(n)
 
-export const span = (n: number, unit: "minute" | "hour"): string => numberFormat({ style: "unit", unit, unitDisplay: "narrow" }).format(n)
+export const span = (n: number, unit: "minute" | "hour" | "day"): string => numberFormat({ style: "unit", unit, unitDisplay: "narrow" }).format(n)
 
 function plural(lang: Lang, n: number): Intl.LDMLPluralRule {
   let r = rules.get(lang)

@@ -1,7 +1,6 @@
 import { TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
 import { taskId, taskSpecRefusal } from "@kiwi/core/state.ts"
 import { assignTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
-import { tokenForCreate } from "@kiwi/app/auth.ts"
 import { forgetChannel, forgetPending, loadMember, loadPending, renameChannel } from "@kiwi/channel/store.ts"
 import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
@@ -15,7 +14,8 @@ import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { myUsage } from "~/live/usage"
-import { markSeenIn, seenIn } from "@kiwi/app/threads.ts"
+import { markSeenIn, READ_FLOOR, seenIn } from "@kiwi/app/threads.ts"
+import { markSeenTo } from "@kiwi/channel/news.ts"
 import { followKey, followMark } from "~/live/threads"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, leavingOnPurpose, openedRun, type Run } from "~/live/store"
@@ -26,6 +26,7 @@ const manage = () => import("~/live/manage")
 const rare = () => import("~/live/rare")
 const account = () => import("~/live/account-rare")
 const joining = () => import("~/live/join-rare")
+const auth = () => import("@kiwi/app/auth.ts")
 import { setWake } from "~/live/wakes"
 import { findDoc } from "~/chat/doc/find-doc"
 import type { Actions } from "~/model"
@@ -89,6 +90,14 @@ export function makeActions(): Actions {
       const last = lastIn(run.messages, run.state, run.me, where)
       if (last) markSeenIn(run.roomId, { [seenKeyOf(run.state, where, run.me)]: last })
     },
+    markChannelRead: (code, head) => {
+      const run = openedRun(code)
+      const room = run?.roomId ?? loadMember(code)?.access.roomId
+      const upTo = Math.max(head ?? 0, run?.messages.at(-1)?.seq ?? 0)
+      if (!room || upTo <= 0) return
+      markSeenIn(room, { [READ_FLOOR]: upTo })
+      markSeenTo(room, upTo)
+    },
     openDoc: (code, thread, th, on) => link(code).doc(thread, th, on),
     findDoc: (code, thread) => findDoc(link(code), code, thread),
     docVersions: async (code, th) => (await rare()).versionsOf(link(code), th),
@@ -128,6 +137,7 @@ export function makeActions(): Actions {
       }),
     answerStep: (code, id, reply) => attempt(t("live.actions.not.answered"), async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(t(yes ? "live.actions.let.in.failed" : "live.actions.turn.away.failed"), async () => (await manage()).answerJoin(code, id, yes, choice)),
+    endStep: (code, id, step) => attempt(t("live.actions.step.not.ended"), async () => (await rare()).endStep(code, id, step)),
     approveTask: (code, id, approve, why) => attempt(t(approve ? "live.actions.not.approved" : "live.actions.not.sent.back"), async () => (await rare()).approveTask(code, id, approve, why)),
     addTask: (code, ask, title) =>
       attempt(t("live.actions.task.not.added"), async () => {
@@ -154,14 +164,7 @@ export function makeActions(): Actions {
       }),
     setReviewer: (code, id, reviewer) => attempt(t("live.actions.reviewer.not.changed"), async () => (await rare()).setReviewer(code, id, reviewer)),
     nameGoal: (code, ask, name) => attempt(t("live.actions.goal.not.named"), async () => (await rare()).nameGoal(code, ask, name)),
-    newSpec: async (code, words, text) => {
-      try {
-        return await (await rare()).newSpec(code, words, text)
-      } catch (err) {
-        announce(t("live.actions.spec.not.started", { why: say(err) }))
-        return null
-      }
-    },
+    newSpec: async (code, words, text) => (await rare()).newSpec(code, words, text),
     writeSpec: (code, ask, text) => attempt(t("live.actions.spec.not.saved"), async () => (await rare()).writeSpec(code, ask, text)),
     approveSpec: (code, ask, v) => attempt(t("live.actions.not.approved"), async () => (await rare()).approveSpec(code, ask, v)),
     judgeSpec: (code, ask, verdict, note) =>
@@ -177,7 +180,7 @@ export function makeActions(): Actions {
     setAgentColor: (code, name, color) => attempt(t("live.actions.colour.not.changed"), async () => (await manage()).setAgentColor(code, name, color)),
     setNickname: (code, name, nickname) => attempt(t("live.actions.nickname.not.changed"), async () => (await manage()).setNickname(code, name, nickname)),
     setPowers: (code, name, powers) => attempt(t("live.actions.not.changed"), async () => (await manage()).setPowers(code, name, powers)),
-    addRoom: (code, typed, members) => tried(t("live.actions.room.not.made"), async () => (await manage()).addRoom(code, typed, members)),
+    addRoom: async (code, typed, members) => (await manage()).addRoom(code, typed, members),
     setRoomMembers: async (code, id, members) =>
       (await tried(t("live.actions.room.members.not.changed"), async () => {
         await (await manage()).setRoomMembers(code, id, members)
@@ -185,8 +188,8 @@ export function makeActions(): Actions {
       })) ?? false,
     setGithubWrite: (code, on) => attempt(t("live.actions.not.changed"), async () => (await manage()).setGithubWrite(code, on)),
     setBranchPrefix: (code, typed) => attempt(t("live.actions.branch.prefix.not.changed"), async () => (await manage()).setBranchPrefix(code, typed)),
+    setQuiet: (code, typed) => attempt(t("live.actions.quiet.not.changed"), async () => (await manage()).setQuiet(code, typed)),
     setLanding: (code, then) => attempt(t("live.actions.landing.not.changed"), async () => (await manage()).setLanding(code, then)),
-    setPeopleMerge: (code, on) => attempt(t("live.actions.merges.not.changed"), async () => (await manage()).setPeopleMerge(code, on)),
     renameRoom: (code, id, typed) => attempt(t("live.actions.room.not.renamed"), async () => (await manage()).renameRoom(code, id, typed)),
     setIcon: (code, file) =>
       attempt(t("live.actions.icon.not.changed"), async () => {
@@ -209,17 +212,11 @@ export function makeActions(): Actions {
     setGoal: (code, goal) => attempt(t("live.actions.goal.not.set"), async () => (await manage()).setGoal(code, goal)),
     setHold: (code, on, note) => attempt(t(on ? "live.actions.not.paused" : "live.actions.not.resumed"), async () => (await manage()).setHold(code, on, note)),
     askCompact: (code) => attempt(t("live.actions.not.asked"), async () => (await rare()).askCompact(code)),
-    approveCompact: (code, proposal) => attempt(t("live.actions.not.compacted"), async () => (await rare()).approveCompact(code, proposal)),
+    approveCompact: async (code, proposal) => (await rare()).approveCompact(code, proposal),
     myUsage,
     myRepos: async () => {
       const b = bridge()
-      if (!b) return []
-      try {
-        return (await b.githubRepos()).map((r) => r.fullName)
-      } catch {
-        // Unlinked GitHub, or no reach to it: the field still takes owner/repo typed by hand.
-        return []
-      }
+      return b ? (await b.githubRepos()).map((r) => r.fullName) : []
     },
     addRepo: (code, repo) => attempt(t("live.actions.repo.not.added"), async () => (await manage()).addRepo(code, repo)),
     removeRepo: (code, repo) => attempt(t("live.actions.repo.not.removed"), async () => (await manage()).removeRepo(code, repo)),
@@ -266,6 +263,7 @@ export function makeActions(): Actions {
     forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
     linkGithub: () => attempt(t("live.actions.github.not.linked"), async () => (await account()).linkGithub()),
     signInWithGithub: () => attempt(t("live.actions.github.not.signed.in"), async () => (await account()).linkGithub()),
+    cancelGithubSignIn: () => attempt(t("live.actions.github.not.signed.in"), async () => (await account()).dropGithubCode()),
     unlinkGithub: () => attempt(t("live.actions.github.not.unlinked"), async () => (await account()).unlinkGithub()),
     windowControl: (action) =>
       void bridge()
@@ -297,7 +295,7 @@ export function makeActions(): Actions {
     enrollBegin: () =>
       attempt(t("live.actions.enroll.failed"), async () =>
         (await account()).enrollBegin(
-          () => tokenForCreate(),
+          async () => (await auth()).tokenForCreate(),
           (d) => attempt(t("live.actions.join.channels.failed"), async () => (await joining()).joinGranted(d))
         )
       ),
@@ -306,7 +304,7 @@ export function makeActions(): Actions {
     saveTheme,
     deleteTheme,
     savePersonalities: (list) => attempt(t("live.actions.not.saved"), () => savePersonalities(list)),
-    setHooks: (harness, on) => attempt(t("live.actions.hooks.failed"), () => setHooks(harness, on)),
+    setHooks,
     checkComputer,
     computerSettings,
     launchedFrom: async (ids) => (await account()).launchedFrom(ids),

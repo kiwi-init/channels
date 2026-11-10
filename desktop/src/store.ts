@@ -66,14 +66,16 @@ export function openStore(v: StoreVault): void {
   if (read.ok && read.file && (staleVoice || read.resave)) saveStore();
 }
 
-const brokenError = () =>
-  new Error(
-    `Channels can't read its saved keys (${storeBroken}), so it saves nothing over them. ${brokenAdvice ?? "Unlock your keychain, then quit and reopen Channels."} The file is ${vault?.where()}.`,
-  );
+const brokenError = () => new Error(`Channels can't read its saved keys (${storeBroken}), so it saves nothing over them. ${brokenAdvice ?? DEFAULT_ADVICE} The file is ${vault?.where()}.`);
 
 export const keysAtRest = (): KeysAtRest => vault?.atRest?.() ?? { sealed: true, why: null };
 
 export const brokenStore = (): Error | null => (storeBroken === null ? null : brokenError());
+
+const DEFAULT_ADVICE = "Unlock your keychain, then quit and reopen Channels.";
+
+export const unreadableStore = (): { why: string; advice: string; file: string } | null =>
+  storeBroken === null ? null : { why: storeBroken, advice: brokenAdvice ?? DEFAULT_ADVICE, file: vault?.where() ?? "" };
 
 function saveStore(): void {
   if (storeBroken !== null) throw brokenError();
@@ -84,8 +86,11 @@ function saveStore(): void {
 export const snapshot = (): StoreSnapshot => snapshotOf(store);
 export const mutate = (fn: (s: StoreFile) => void) => {
   if (storeBroken !== null) throw brokenError();
-  fn(store);
-  saveStore();
+  if (!vault) throw new Error("the store isn't open yet");
+  const next = structuredClone(store);
+  fn(next);
+  vault.save(next);
+  store = next;
   const shell = host();
   shell.push("store", snapshot());
   shell.tellKeys({ type: "seats", seats: store.channels, person: personPk(), mine: store.computers.map((c) => c.machinePk) });

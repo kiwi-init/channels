@@ -3,6 +3,7 @@ import "~/i18n/en/settings"
 import { useEffect, useState, type ReactNode } from "react"
 
 import { cx, IconButton } from "~/kit/bits"
+import { Failed, failedToast, failure, type Failure } from "~/kit/failed"
 import { Toggle } from "~/kit/form"
 import { setDebugOptions, useDebugOptions } from "~/kit/debug"
 import { Icon } from "~/kit/icons"
@@ -17,11 +18,20 @@ import { useApp } from "~/nav"
 import { Confirm, Group, InlineEdit, Row, Seg } from "~/settings/controls"
 import { Themes } from "~/settings/themes"
 import { copyText } from "~/kit/toasts"
-import { UI_VERSION } from "~/settings/ui-version"
+import { uiVersion } from "~/settings/ui-version"
 import { OutsideLink } from "~/kit/outside"
 import { UsageBar } from "~/usage/meter"
 import { useUsage } from "~/usage/store"
 import { canUpgrade, levelOf, planHint, planName, resetsIn, seemsUnlimited, upgradeLabel, usageHint, usedOf } from "~/usage/words"
+
+function hostOf(url: string): string {
+  try {
+    return new URL(/^[a-z]+:\/\//i.test(url) ? url : `https://${url}`).host || url
+  } catch {
+    // Not a URL yet: the relay refuses it with its own words after the confirm.
+    return url
+  }
+}
 
 export function Page({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
   return (
@@ -38,6 +48,7 @@ export function Page({ title, lede, children }: { title: string; lede?: ReactNod
 export function AccountSection() {
   const { app } = useApp()
   const [leaving, setLeaving] = useState(false)
+  const [unlinking, setUnlinking] = useState(false)
   const account = app.account
   if (!account) return null
   const { actions } = app
@@ -53,9 +64,20 @@ export function AccountSection() {
           ) : account.github ? (
             <>
               <span className="set-value">@{account.github.login}</span>
-              <button type="button" className="btn is-quiet is-small" onClick={actions.unlinkGithub}>
+              <button type="button" className="btn is-quiet is-small" onClick={() => setUnlinking(true)}>
                 {t("settings.sections.github.unlink")}
               </button>
+              <Confirm
+                open={unlinking}
+                title={t("settings.sections.github.unlink.ask", { login: account.github.login })}
+                sub={t("settings.sections.github.unlink.sub")}
+                action={t("settings.sections.github.unlink")}
+                onClose={() => setUnlinking(false)}
+                onConfirm={() => {
+                  setUnlinking(false)
+                  actions.unlinkGithub()
+                }}
+              />
             </>
           ) : (
             <button type="button" className="btn is-primary is-small" onClick={actions.linkGithub}>
@@ -292,17 +314,18 @@ export function AboutSection() {
   const debug = useDebugOptions()
   const account = app.account
   if (!account) return null
+  const version = uiVersion()
   return (
     <Page title={t("settings.settings.about")} lede={t("settings.sections.about.lede")}>
       <Group>
         <VersionRow account={account} />
         <Row label={t("settings.sections.interface")} hint={t("settings.sections.interface.hint")}>
-          <code className="set-value set-mono">{UI_VERSION}</code>
+          <code className="set-value set-mono">{version}</code>
           <IconButton
             icon="copy"
             label={t("settings.sections.interface.copy")}
             onClick={() => {
-              copyText(UI_VERSION, t("settings.sections.interface.copied"))
+              copyText(version, t("settings.sections.interface.copied"))
             }}
           />
         </Row>
@@ -332,11 +355,18 @@ function CheckUpdates({ version }: { version: string }) {
     setBusy(true)
     void app.actions
       .checkUpdate()
-      .then(setResult)
+      .then(setResult, (err: unknown) => failedToast(t("settings.sections.check.failed"), err))
       .finally(() => setBusy(false))
   }
   return (
-    <Row label={<UpToDate />} hint={<span role="status">{busy ? t("settings.sections.checking") : result ? updateFound(result) : <span className="set-mono">{version}</span>}</span>}>
+    <Row
+      label={<UpToDate />}
+      hint={
+        <span role="status" className={cx(!busy && result?.state === "failed" && "tone-alert")}>
+          {busy ? t("settings.sections.checking") : result ? updateFound(result) : <span className="set-mono">{version}</span>}
+        </span>
+      }
+    >
       <button type="button" className="btn is-quiet is-small" disabled={busy} onClick={check}>
         {t("settings.sections.check.now")}
       </button>
@@ -346,27 +376,22 @@ function CheckUpdates({ version }: { version: string }) {
 
 function RelayRow({ relay }: { relay: string }) {
   const { app } = useApp()
-  const [error, setError] = useState<string | null>(null)
+  const [failed, setFailed] = useState<Failure | null>(null)
+  const [moving, setMoving] = useState<string | null>(null)
   return (
-    <Row
-      label={t("settings.sections.relay")}
-      hint={
-        error ? (
-          <span role="alert" className="tone-alert">
-            {error.slice(0, 1).toUpperCase() + error.slice(1)}
-          </span>
-        ) : (
-          t("settings.sections.relay.hint")
-        )
-      }
-    >
-      <InlineEdit
-        value={relay}
-        label={t("settings.sections.relay")}
-        verb={t("settings.sections.relay.change")}
-        onSave={(url) => {
-          setError(null)
-          void app.actions.setRelay(url).then(setError)
+    <Row label={t("settings.sections.relay")} hint={failed ? <Failed failure={failed} /> : t("settings.sections.relay.hint")}>
+      <InlineEdit value={relay} label={t("settings.sections.relay")} verb={t("settings.sections.relay.change")} onSave={(url) => (url.trim() === relay ? undefined : setMoving(url))} />
+      <Confirm
+        open={moving !== null}
+        title={t("settings.sections.relay.change.ask", { relay: hostOf(moving ?? "") })}
+        sub={t("settings.sections.relay.change.sub")}
+        action={t("settings.sections.relay.change.yes")}
+        onClose={() => setMoving(null)}
+        onConfirm={() => {
+          const url = moving
+          setMoving(null)
+          setFailed(null)
+          if (url) void app.actions.setRelay(url).catch((err: unknown) => setFailed(failure(t("settings.sections.relay.failed"), err)))
         }}
       />
     </Row>

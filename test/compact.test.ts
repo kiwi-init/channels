@@ -71,9 +71,9 @@ describe("compacting in fold", () => {
   test("the board and status leave archived tasks out, and status says the history was compacted", async () => {
     const { open, ms } = await board();
     const s = fold([...ms, await ev("jon", { op: "compact", summary: `Open: T${open.seq}`, through: ms.at(-1)!.seq })], roster);
-    expect(formatTasks(s, { all: false })).not.toContain("fix the build");
-    expect(formatTasks(s, { all: true })).toContain("fix the build");
-    const status = formatStatus({ alias: "c", me: "ann", state: s, online: new Map(), unread: 0 });
+    expect(formatTasks(s, "kiwi/review/test", { all: false })).not.toContain("fix the build");
+    expect(formatTasks(s, "kiwi/review/test", { all: true })).toContain("fix the build");
+    const status = formatStatus({ check: "kiwi/review/test", alias: "c", me: "ann", state: s, online: new Map(), unread: 0 });
     expect(status).toContain(`history compacted through #${ms.at(-1)!.seq} by jon: Open: T${open.seq}`);
     expect(status).toContain("1 archived");
   });

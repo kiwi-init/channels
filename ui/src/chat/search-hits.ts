@@ -1,8 +1,9 @@
-import { buildIndex, marks, rank, snippet, terms, type Index } from "@kiwi/core/search-rank.ts"
+import { buildIndex, countWords, indexOf, marks, rank, snippet, terms, type Counted, type Index } from "@kiwi/core/search-rank.ts"
 
 import { preview } from "~/chat/preview"
 import type { Channel, Message, OlderHit, Task, Where } from "~/model"
 import { between, nickname } from "~/names"
+import { titleRank } from "~/tasks/title-rank"
 import { wordsPlain, wordsRaw } from "~/words"
 
 export type Hit = { kind: "task"; task: Task } | { kind: "message"; m: Message } | { kind: "older"; o: OlderHit } | { kind: "fetch" }
@@ -15,25 +16,37 @@ const taskNumber = (query: string): number | null => {
   return id ? Number(id[1]) : null
 }
 
+let counted: { names: string; bySeq: Map<number, { raw: string; from: string; words: Counted }> } = { names: "", bySeq: new Map() }
+
 export function messageIndex(channel: Pick<Channel, "messages" | "nicknames">): Index<Message> {
-  return buildIndex(
-    channel.messages
-      .filter((m) => !m.system && !m.pending && wordsRaw(m.text).trim())
-      .map((m) => ({
-        item: m,
-        fields: [
-          { text: wordsPlain(m.text, channel.nicknames), weight: 1 },
-          { text: nickname(channel, m.from), weight: 1 },
-        ],
-      }))
-  )
+  const names = [...channel.nicknames].join()
+  const before = counted.names === names ? counted.bySeq : null
+  const bySeq: typeof counted.bySeq = new Map()
+  const docs: ({ item: Message } & Counted)[] = []
+  for (const m of channel.messages) {
+    const raw = wordsRaw(m.text)
+    if (m.system || m.pending || !raw.trim()) continue
+    const was = before?.get(m.seq)
+    const words =
+      was && was.raw === raw && was.from === m.from
+        ? was.words
+        : countWords([
+            { text: wordsPlain(m.text, channel.nicknames), weight: 1 },
+            { text: nickname(channel, m.from), weight: 1 },
+          ])
+    bySeq.set(m.seq, { raw, from: m.from, words })
+    docs.push({ item: m, ...words })
+  }
+  counted = { names, bySeq }
+  return indexOf(docs)
 }
 
 function matchingTasks(tasks: Task[], query: string): Task[] {
   const id = taskNumber(query)
   if (id !== null) return tasks.filter((t) => t.id === id)
   return rank(buildIndex(tasks.map((t) => ({ item: t, fields: [{ text: wordsRaw(t.title), weight: 1 }] }))), query)
-    .sort((a, b) => Number(a.item.archived) - Number(b.item.archived) || b.score - a.score || b.item.updatedAt - a.item.updatedAt)
+    .map((r) => ({ ...r, at: titleRank(wordsRaw(r.item.title), query) }))
+    .sort((a, b) => Number(a.item.archived) - Number(b.item.archived) || a.at - b.at || (a.at === 5 ? b.score - a.score : 0) || b.item.updatedAt - a.item.updatedAt)
     .map((r) => r.item)
 }
 
