@@ -60,6 +60,11 @@ struct Line: Identifiable {
     }
 }
 
+@MainActor
+final class RowsOnScreen {
+    var count = 0
+}
+
 struct Follow {
     var atBottom = true
     var unseen = 0
@@ -79,6 +84,7 @@ struct Conversation: View {
     var answer: (AskView) -> Void = { _ in }
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
+    @State private var onScreen = RowsOnScreen()
 
     private var solo: Bool {
         room.placeView(room.place).map { $0.kind == "dm" && $0.withMe } ?? false
@@ -114,6 +120,8 @@ struct Conversation: View {
                             sendBack(review)
                         }
                         .id(line.id)
+                        .onAppear { onScreen.count += 1 }
+                        .onDisappear { onScreen.count -= 1 }
                         .feedLogged()
                         .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
                     }
@@ -133,6 +141,12 @@ struct Conversation: View {
                 "off \(Int(geo.contentOffset.y)) content \(Int(geo.contentSize.height)) box \(Int(geo.containerSize.height)) insets \(Int(geo.contentInsets.top))/\(Int(geo.contentInsets.bottom)) visible \(Int(geo.visibleRect.minY))-\(Int(geo.visibleRect.maxY))"
             } action: { _, now in
                 FeedLog.note("geo \(now) msgs \(room.messages.count)")
+                Task {
+                    try? await Task.sleep(for: .milliseconds(150))
+                    guard onScreen.count <= 0, let last = room.messages.last else { return }
+                    FeedLog.note("heal: no rows on screen")
+                    proxy.scrollTo(model.sentAs[room.code]?[last.seq].map { "p\($0)" } ?? "b\(last.seq)", anchor: .bottom)
+                }
             }
             .onScrollGeometryChange(for: Bool.self) { geo in
                 geo.visibleRect.maxY >= geo.contentSize.height - 60
