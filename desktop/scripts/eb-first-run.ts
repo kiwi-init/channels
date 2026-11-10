@@ -20,15 +20,20 @@ const clickButton = ({ name, within }: { name: string; within: string }): boolea
 };
 
 export const sendMessage = ({ text, shows }: { text: string; shows: string }): boolean => {
-  if ([...document.querySelectorAll<HTMLElement>(".main article.msg")].some((m) => m.textContent?.includes(shows))) return true;
+  const showing = [...document.querySelectorAll<HTMLElement>(".main article.msg")].some((m) => m.textContent?.includes(shows));
   const area = document.querySelector<HTMLTextAreaElement>(".main .composer textarea");
+  const page = document.documentElement;
+  const pressed = page.dataset.smokeSent === text;
+  if (showing && !pressed) return true;
   if (!area || !document.querySelector(".main .thread-doc")) return false;
+  if (pressed && area.value !== text) return showing && area.value === "";
   area.focus();
   if (area.value !== text) {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(area, text);
     area.dispatchEvent(new Event("input", { bubbles: true }));
     return false;
   }
+  page.dataset.smokeSent = text;
   area.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, bubbles: true, cancelable: true }));
   return false;
 };
