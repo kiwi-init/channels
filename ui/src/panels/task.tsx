@@ -35,6 +35,7 @@ import { PanelHead } from "~/panels/frame"
 import { moveWords, someone } from "~/panels/task-moves"
 import { TONES } from "~/tasks/row"
 import { SendBack } from "~/tasks/send-back"
+import { personGo } from "~/person-go"
 
 function since(at: number): string {
   const age = ageOf(at)
@@ -124,7 +125,7 @@ function Who({ channel, name }: { channel: Channel; name: string }) {
   const go = useGo()
   const person = memberOf(channel, name)
   return (
-    <button type="button" className="task-who" onClick={() => go({ to: "modal", modal: { kind: "person", name } })}>
+    <button type="button" className="task-who" onClick={() => go(personGo(channel, name))}>
       <Avatar person={person} size="sm" />
       <span className="task-who-name">{nickname(channel, name)}</span>
       {name === channel.you && <span className="dimmer">{t("panels.task.you")}</span>}

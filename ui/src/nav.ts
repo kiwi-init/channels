@@ -228,6 +228,12 @@ export function useNicknames(): ReadonlyMap<string, string> {
   return (names === undefined ? use(AppContext)?.app.channel?.nicknames : names) ?? NO_NICKNAMES
 }
 
+export function useChannelHere(): Channel | null {
+  const channel = use(OpenContext)
+  const app = use(AppContext)
+  return channel === undefined ? (app?.app?.channel ?? null) : channel
+}
+
 export function useOpenChannel(): Channel | null {
   const channel = use(OpenContext)
   return channel === undefined ? whole(use(AppContext)).app.channel : channel

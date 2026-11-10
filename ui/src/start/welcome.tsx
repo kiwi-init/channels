@@ -283,7 +283,7 @@ function AgentLine({ tile, agent }: { tile: ChannelTile; agent: HomeAgent }) {
   const open = () => {
     go({ to: "channel", code: tile.code })
     if (agent.task) go({ to: "panel", panel: { kind: "task", task: agent.task.id } })
-    else go({ to: "modal", modal: { kind: "person", name: agent.name } })
+    else go({ to: "where", where: { kind: "dm", with: agent.person.seatOf ?? agent.name } })
   }
   const state = stateWords(agent)
   return (

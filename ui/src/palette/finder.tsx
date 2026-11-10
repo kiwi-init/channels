@@ -14,6 +14,7 @@ import { wordsPlain } from "~/words"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { keysHint } from "~/kit/keys"
+import { personGo } from "~/person-go"
 
 type Group = "channels" | "rooms" | "people" | "tasks" | "actions"
 
@@ -283,7 +284,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
         run: () => {
           close()
           if (nav.page !== "channel") go({ to: "back" })
-          go({ to: "modal", modal: { kind: "person", name: person.name } })
+          go(personGo(channel, person.name))
         },
       })
     }
