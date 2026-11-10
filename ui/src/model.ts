@@ -195,6 +195,7 @@ export interface Task {
   youReview?: "verdict" | "send-back"
   suggested?: { name: string; reason?: Reason }
   leftBy?: string
+  mentions?: number
 }
 
 type SpecStage = "draft" | "queued" | "working" | "delivered" | "accepted" | "dropped"
