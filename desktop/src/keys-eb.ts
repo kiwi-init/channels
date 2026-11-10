@@ -26,6 +26,7 @@ export interface KeysDeps {
   answer(m: KeysAsk, done: (extra?: KeysAnswer) => void): void;
   toPage(frame: KeysFrame): void;
   clock?: KeysClock;
+  pulse?: KeysClock;
 }
 
 export interface Keys {
@@ -41,12 +42,20 @@ export const RESTARTED = "Channels restarted the part that holds your keys; try 
 
 export const FLUSH_MS = 1_000;
 
+export const PULSE_MS = 15_000;
+
+export const SILENT_MS = 60_000;
+
 const realClock: KeysClock = { now: () => Date.now(), later: (fn, ms) => setTimeout(fn, ms), clear: (t) => clearTimeout(t) };
 
 const unreachable = (id: number, message: string): KeysReply => ({ id, ok: false, error: { kind: "unreachable", message } });
 
 export function keysController(deps: KeysDeps): Keys {
   const clock = deps.clock ?? realClock;
+  const pulse = deps.pulse ?? realClock;
+  let heard = 0;
+  let beatAt = 0;
+  let beating: Timer | null = null;
   let worker: KeysWorker | null = null;
   let wait = 1_000;
   let stopping = false;
@@ -84,7 +93,20 @@ export function keysController(deps: KeysDeps): Keys {
     w.post({ to: "port", port: to.port, data: req });
   }
 
+  function beat(w: KeysWorker): void {
+    beatAt = pulse.now();
+    beating = pulse.later(() => {
+      if (worker !== w || stopping) return;
+      const now = pulse.now();
+      if (now - beatAt > PULSE_MS * 2) heard = now;
+      if (now - heard >= SILENT_MS) return w.kill();
+      w.post({ to: "host", m: { type: "ping" } });
+      beat(w);
+    }, PULSE_MS);
+  }
+
   function onWorker(w: KeysWorker, m: FromWorker): void {
+    if (worker === w) heard = pulse.now();
     if (m.from === "port") {
       if (!page || m.port !== page.port) return;
       const d = m.data;
@@ -94,6 +116,7 @@ export function keysController(deps: KeysDeps): Keys {
       return;
     }
     if (m.m.type === "flushed") return flushed?.();
+    if (m.m.type === "pong") return;
     const ask = m.m;
     deps.answer(ask, (extra = {}) => {
       if (worker === w) w.post({ to: "host", m: { type: "done", id: ask.id, ...extra } });
@@ -108,6 +131,7 @@ export function keysController(deps: KeysDeps): Keys {
     w.onMessage((m) => onWorker(w, m));
     w.onExit(() => {
       if (worker !== w) return;
+      if (beating) pulse.clear(beating);
       worker = null;
       page = null;
       failAll(RESTARTED);
@@ -125,6 +149,8 @@ export function keysController(deps: KeysDeps): Keys {
       }, wait);
     });
     w.post({ to: "host", m: deps.init() });
+    heard = pulse.now();
+    beat(w);
     for (const q of queued.splice(0)) send(w, q.session, q.req, q.done);
   }
 
@@ -151,6 +177,7 @@ export function keysController(deps: KeysDeps): Keys {
         const finish = (): void => {
           flushed = null;
           clock.clear(timer);
+          if (beating) pulse.clear(beating);
           worker = null;
           failAll("Channels is quitting");
           w.kill();

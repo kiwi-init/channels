@@ -161,6 +161,7 @@ export type HostToKeys =
   | { type: "flush" }
   | { type: "relay"; relay: string }
   | { type: "nudge" }
+  | { type: "ping" }
   | { type: "port" }
   | { type: "done"; id: number; error?: string; claim?: JoinClaims | null; token?: string | null };
 
@@ -170,4 +171,5 @@ export type KeysToHost =
   | { type: "forget"; id: number; code: string }
   | { type: "prove"; id: number; code: string; memberPk: string }
   | { type: "githubToken"; id: number }
-  | { type: "flushed"; id: 0 };
+  | { type: "flushed"; id: 0 }
+  | { type: "pong"; id: 0 };
