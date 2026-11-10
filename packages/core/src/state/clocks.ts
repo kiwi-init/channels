@@ -1,12 +1,13 @@
-import type { NudgeStep } from "../protocol.ts";
+import type { NudgeStep, WakeGot, WakeSeen } from "../protocol.ts";
 import { prOfTask } from "../prs.ts";
 import { currentStep, stepMove } from "../steps.ts";
 import { runSight } from "./landing-steps.ts";
 import { landerOf, openRound, taskId } from "./tasks.ts";
-import type { ChannelState, Task, TaskClock } from "./types.ts";
+import type { ChannelState, Task, TaskClock, Woke } from "./types.ts";
 
 export const QUIET_MS = 20 * 60_000;
 export const QUEUE_MS = 24 * 60 * 60_000;
+export const UNREAD_MS = 5 * 60_000;
 
 export type ClockView = Pick<ChannelState, "tasks" | "openAsks" | "github" | "branchPrefix">;
 
@@ -101,31 +102,63 @@ export function tick(view: ClockView, t: Task, mark: { seq: number; at: number; 
   t.clock = { key: cur.key, seq: mark.seq, at: mark.at, ...(head ? { head } : {}) };
 }
 
-type Nudge = { mover: string; since: number; step: NudgeStep; day?: number };
+type Nudge = { mover: string; since: number; step: NudgeStep; day?: number; wake?: WakeSeen };
+type Rung = Nudge & { step: 1 | 2 | 3 };
 
-function stepOnAct(clock: TaskClock, since: number, step: 1 | 2 | 3, at: number, lead: string | undefined): TaskClock | string | undefined {
-  const act = clock.acts?.find((a) => a[1] === since && a[1] > clock.seq);
-  if (!act || act[0] !== lead) return undefined;
-  if (at - act[2] < step * QUIET_MS) return "early";
-  if (step <= (act[3] ?? 0)) return clock;
-  return { ...clock, acts: (clock.acts ?? []).map((a): Act => (a === act ? [a[0], a[1], a[2], step] : a)) };
+export const wokeFor = (clock: TaskClock, since: number): Woke | undefined => (clock.woke?.since === since ? clock.woke : undefined);
+
+export const wakeSeen = (woke: Woke | undefined): WakeSeen => (!woke ? "none" : woke.read !== undefined ? "read" : woke.delivered !== undefined ? "delivered" : "attempted");
+
+function reached(clock: TaskClock, ev: Rung, quietFrom: number, at: number): boolean {
+  if (at - quietFrom >= ev.step * QUIET_MS) return true;
+  if (ev.step !== 2 || at - quietFrom < QUIET_MS) return false;
+  const woke = wokeFor(clock, ev.since);
+  return woke ? woke.read === undefined && at - woke.at >= UNREAD_MS : ev.wake === "none";
 }
+
+function stepOnAct(clock: TaskClock, ev: Rung, mark: Mark, lead: string | undefined): TaskClock | string | undefined {
+  const act = clock.acts?.find((a) => a[1] === ev.since && a[1] > clock.seq);
+  if (!act || act[0] !== lead) return undefined;
+  if (!reached(clock, ev, act[2], mark.at)) return "early";
+  const stepped = ev.step <= (act[3] ?? 0) ? clock : { ...clock, acts: (clock.acts ?? []).map((a): Act => (a === act ? [a[0], a[1], a[2], ev.step] : a)) };
+  return attempted(stepped, ev, mark);
+}
+
+const attempted = (clock: TaskClock, ev: Rung, mark: Mark): TaskClock =>
+  ev.step !== 1 || wokeFor(clock, ev.since) ? clock : { ...clock, woke: { since: ev.since, seq: mark.seq, by: mark.by, at: mark.at } };
 
 export interface NudgeWho {
   agentQueue: (owner: string) => boolean;
   lead: () => string | undefined;
+  stands: (name: string) => string | undefined;
 }
 
-export function nudge(view: ClockView, t: Task, ev: Nudge, at: number, who: NudgeWho): string | null {
+interface Mark {
+  seq: number;
+  at: number;
+  by: string;
+}
+
+const seatOf = (party: string, who: NudgeWho): string | undefined => (party === LEAD ? who.lead() : who.stands(party));
+
+export function nudge(view: ClockView, t: Task, ev: Nudge, mark: Mark, who: NudgeWho): string | null {
   const id = taskId(t.id);
+  const at = mark.at;
   roll(view, t, at);
   const held = t.clock;
   if (!held) return `${id} is already done`;
   if (ev.step > 0 && held.key.startsWith("?")) return `${id} waits on an answer to #${held.key.slice(1)}: that is in Needs you, not on the clock`;
   const party = partyOfKey(held.key);
   const early = `${id} hasn't been quiet long enough for step ${ev.step} of its clock`;
-  if (party === ev.mover && ev.step !== 0 && held.seq !== ev.since) {
-    const onAct = stepOnAct(held, ev.since, ev.step, at, party === LEAD ? who.lead() : undefined);
+  const rung: Rung | undefined = ev.step === 0 ? undefined : { ...ev, step: ev.step };
+  const unfit = (): string | null => {
+    if (rung?.step === 1 && mark.by !== seatOf(party, who)) return `only the daemon hosting ${id}'s mover records its wake, as that seat`;
+    const stands = wakeSeen(wokeFor(held, ev.since));
+    return rung?.wake !== undefined && rung.wake !== stands ? `${id}'s wake stands as ${stands}, not ${rung.wake}` : null;
+  };
+  if (rung && party === ev.mover && held.seq !== ev.since) {
+    const onAct = stepOnAct(held, rung, mark, party === LEAD ? who.lead() : undefined);
+    if (onAct !== undefined && unfit()) return unfit();
     if (onAct === "early") return early;
     if (typeof onAct === "object") {
       t.clock = onAct;
@@ -134,7 +167,8 @@ export function nudge(view: ClockView, t: Task, ev: Nudge, at: number, who: Nudg
   }
   const clock = party === ev.mover && held.seq === ev.since ? held : undefined;
   if (!clock) return `${id}'s clock moved on: it is ${party || "nobody"}'s since #${held.seq}`;
-  if (ev.step === 0) {
+  if (rung && memberKey(clock.key) && unfit()) return unfit();
+  if (!rung) {
     const day = ev.day ?? 0;
     if (!queuedKey(clock.key)) return `${id} isn't waiting in a queue`;
     if (!who.agentQueue(party)) return `${id} isn't in an agent's queue: ${party} is a person, or has left`;
@@ -143,7 +177,18 @@ export function nudge(view: ClockView, t: Task, ev: Nudge, at: number, who: Nudg
     return null;
   }
   if (!memberKey(clock.key)) return `${id} has no member on the clock`;
-  if (at - clock.at < ev.step * QUIET_MS) return early;
-  if (ev.step > (clock.step ?? 0)) t.clock = { ...clock, step: ev.step };
+  if (!reached(clock, rung, clock.at, at)) return early;
+  t.clock = attempted(rung.step > (clock.step ?? 0) ? { ...clock, step: rung.step } : clock, rung, mark);
+  return null;
+}
+
+export function wakeGot(view: ClockView, t: Task, ev: { mover: string; since: number; got: WakeGot }, mark: Mark): string | null {
+  const id = taskId(t.id);
+  roll(view, t, mark.at);
+  const clock = t.clock;
+  const woke = clock && partyOfKey(clock.key) === ev.mover ? wokeFor(clock, ev.since) : undefined;
+  if (!clock || !woke) return `${id} has no wake attempt for that clock`;
+  if (mark.by !== woke.by) return `only ${woke.by}, the seat that was woken, says what came of ${id}'s wake`;
+  if (woke[ev.got] === undefined) t.clock = { ...clock, woke: { ...woke, [ev.got]: mark.at } };
   return null;
 }

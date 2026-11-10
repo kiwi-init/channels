@@ -79,7 +79,7 @@ describe("a quiet task climbs one ladder: its mover, the lead, the owner (#3930 
     expect(due(c, since + N - 1)).toEqual([]);
     expect(due(c, since + N)).toEqual([{ task: id, mover: "mac", since: epoch, step: 1, to: "mac" }]);
     c.wait(N);
-    await c.nudge("owl", id, "mac", epoch, 1);
+    const woke = await c.nudge("mac", id, "mac", epoch, 1);
     expect(due(c)).toEqual([]);
     expect(due(c, since + 2 * N)).toEqual([{ task: id, mover: "mac", since: epoch, step: 2, to: "owl" }]);
     c.wait(N);
@@ -90,7 +90,7 @@ describe("a quiet task climbs one ladder: its mover, the lead, the owner (#3930 
     const s = c.state();
     expect(s.rejected.size).toBe(0);
     expect(nudgesDue(s, since + 10 * N)).toEqual([]);
-    expect(s.tasks.get(id)!.clock).toEqual({ key: "mac|review|1", seq: epoch, at: since, step: 3 });
+    expect(s.tasks.get(id)!.clock).toEqual({ key: "mac|review|1", seq: epoch, at: since, step: 3, woke: { since: epoch, seq: woke.seq, by: "mac", at: woke.rts! } });
   });
 
   test("a step posted from the mover's own seat doesn't restart its clock, and the lead is still due at 2N", async () => {
@@ -122,16 +122,18 @@ describe("a quiet task climbs one ladder: its mover, the lead, the owner (#3930 
     const c = channel();
     const { id, epoch, since } = await inReview(c);
     c.wait(N);
-    await c.nudge("owl", id, "mac", epoch, 1);
-    await c.nudge("jon", id, "mac", epoch, 1);
+    await c.nudge("mac", id, "mac", epoch, 1);
+    c.wait(N);
+    await c.nudge("owl", id, "mac", epoch, 2);
+    await c.nudge("jon", id, "mac", epoch, 2);
     c.wait(40 * N);
     const filler = await c.add();
     await c.update("zed", filler, { note: "one" });
     await c.update("zed", filler, { note: "two" });
-    await c.nudge("zed", id, "mac", epoch, 1);
+    await c.nudge("zed", id, "mac", epoch, 2);
     const s = c.state();
     expect(s.rejected.size).toBe(0);
-    expect(s.tasks.get(id)!.clock).toEqual({ key: "mac|review|1", seq: epoch, at: since, step: 1 });
+    expect(s.tasks.get(id)!.clock).toMatchObject({ key: "mac|review|1", seq: epoch, at: since, step: 2 });
   });
 });
 
@@ -213,8 +215,8 @@ describe("only the mover's own progress, or a new mover, starts a new clock (#39
     expect(second.rts).toBe(first.rts);
     expect(read(c, id)).toMatchObject({ epoch: second.seq, since: first.rts! });
     c.wait(N);
-    const stale = await c.nudge("owl", id, "mac", first.seq, 1);
-    const good = await c.nudge("owl", id, "mac", second.seq, 1);
+    const stale = await c.nudge("mac", id, "mac", first.seq, 1);
+    const good = await c.nudge("mac", id, "mac", second.seq, 1);
     const s = c.state();
     expect(s.rejected.has(stale.seq)).toBe(true);
     expect(s.rejected.has(good.seq)).toBe(false);
@@ -273,7 +275,7 @@ describe("a landing step's clock starts when the move reaches a member (#3930 §
     expect(read(c, id, until - 1)).toBeUndefined();
     expect(read(c, id, until + 5_000)).toEqual({ mover: "zed", party: "zed", epoch: armed.seq, since: until, quiet: 5_000, paged: true, step: 0 });
     c.wait(HOUR + N);
-    const step = await c.nudge("owl", id, "zed", armed.seq, 1);
+    const step = await c.nudge("zed", id, "zed", armed.seq, 1);
     expect(c.state().rejected.has(step.seq)).toBe(false);
     expect(c.state().tasks.get(id)!.clock).toMatchObject({ key: "zed|land|s1|", seq: armed.seq, at: until, step: 1 });
   });
@@ -327,7 +329,7 @@ describe("a fold from a snapshot reads the same clocks as one fold of the whole 
     await c.update("win", held, { state: "doing" });
     const ask = await c.say("win", "ask", "Which one?", { to: ["jon"], holds: [held] });
     c.wait(N);
-    await c.nudge("owl", id, "mac", epoch, 1);
+    await c.nudge("mac", id, "mac", epoch, 1);
     await c.say("jon", "msg", "the first", { re: [ask.seq] });
     c.wait(2 * N);
     await c.say("zed", "msg", "noted", { re: [ask.seq] });
@@ -355,18 +357,18 @@ describe("the board and the task page say when a task is quiet, and the words on
     const c = channel();
     const { id, epoch, since } = await inReview(c);
     c.wait(2 * N);
-    const due1 = await c.nudge("owl", id, "mac", epoch, 1);
+    const due1 = await c.nudge("mac", id, "mac", epoch, 1);
     const s = c.state();
     const at = since + 2 * N + 60_000;
-    expect(formatTask(s, s.tasks.get(id)!, at).split("\n")).toContain("  quiet 41m with mac (a wake is due)");
+    expect(formatTask(s, s.tasks.get(id)!, at).split("\n")).toContain("  quiet 41m with mac (wake attempted 1m ago, not delivered, not read)");
     const row = (rows: string) => rows.split("\n").find((r) => r.trimStart().startsWith(`T${id} `));
-    expect(row(formatTasks(s, "kiwi", { now: at }))).toEndWith(" · move: mac to review it · quiet 41m with mac (a wake is due)");
+    expect(row(formatTasks(s, "kiwi", { now: at }))).toEndWith(" · move: mac to review it · quiet 41m with mac (wake attempted 1m ago, not delivered, not read)");
     expect(row(formatTasks(s, "kiwi"))).toEndWith(" · move: mac to review it");
     const words = (step: NudgeStep) =>
       describeEvent({ ...due1, ev: step === 0 ? { op: "task.nudge", task: id, mover: "mac", since: epoch, step, day: 1 } : { op: "task.nudge", task: id, mover: "mac", since: epoch, step } }, s);
     expect(([0, 1, 2, 3] as const).map(words)).toEqual([
       `noted that T${id} “ship” has waited a day in mac's queue`,
-      `marked T${id} “ship” quiet with mac: a wake is due`,
+      `marked T${id} “ship” quiet with mac: a wake is attempted`,
       `marked T${id} “ship” still quiet with mac: due to the lead`,
       `marked T${id} “ship” still quiet with mac: due in the owner's Needs you`,
     ]);
@@ -387,8 +389,8 @@ describe("round 2: the lead's own progress counts, and only an agent's queue giv
     expect(due(c)).toEqual([]);
     expect(due(c, spoke.rts! + N)).toEqual([{ task: id, mover: "@lead", since: spoke.seq, step: 1, to: "owl" }]);
     c.wait(N);
-    const stale = await c.nudge("jon", id, "@lead", round.seq - 1, 1);
-    const good = await c.nudge("jon", id, "@lead", spoke.seq, 1);
+    const stale = await c.nudge("owl", id, "@lead", round.seq - 1, 1);
+    const good = await c.nudge("owl", id, "@lead", spoke.seq, 1);
     const s = c.state();
     expect(s.rejected.has(stale.seq)).toBe(true);
     expect(s.rejected.has(good.seq)).toBe(false);
@@ -491,8 +493,8 @@ describe("round 3: on a task the lead holds, each member's act keeps its own epo
     const owls = await c.say("owl", "msg", "routing it now", { task: id });
     c.wait(N);
     const early = await c.nudge("jon", id, "@lead", owls.seq, 2);
-    const first = await c.nudge("jon", id, "@lead", owls.seq, 1);
-    const again = await c.nudge("zed", id, "@lead", owls.seq, 1);
+    const first = await c.nudge("owl", id, "@lead", owls.seq, 1);
+    const again = await c.nudge("owl", id, "@lead", owls.seq, 1);
     const s = c.state();
     expect(s.rejected.get(early.seq)).toBe(`T${id} hasn't been quiet long enough for step 2 of its clock`);
     expect(s.rejected.has(first.seq)).toBe(false);
