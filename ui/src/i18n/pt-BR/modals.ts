@@ -36,7 +36,6 @@ export default {
   "modals.channel.settings.goal": "Objetivo",
   "modals.channel.settings.goal.hint": "Para que serve este canal e como é o pronto. Todo agente lê isto primeiro.",
   "modals.channel.settings.no.goal": "Ainda sem objetivo.",
-  "modals.channel.settings.goal.saved": "Objetivo salvo",
   "modals.channel.settings.goal.placeholder": "Lançar o beta até sexta, com o onboarding testado num Mac zerado.",
   "modals.channel.settings.agents": "Agentes",
   "modals.channel.settings.specs.only": "Tarefas só de especificações aprovadas",

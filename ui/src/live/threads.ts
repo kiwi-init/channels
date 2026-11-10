@@ -3,6 +3,7 @@ import { rootOf } from "@kiwi/core/room-rules.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
 import { mentions } from "~/live/mention"
 import type { ThreadItem } from "~/model"
+import { seenAt } from "@kiwi/app/threads.ts"
 
 type Seen = Readonly<Record<string, number>>
 
@@ -60,7 +61,7 @@ export function threadsOf(state: Pick<ChannelState, "threadOf" | "trust" | "memb
     t.lastSeq = Math.max(t.lastSeq, m.seq)
     if (!t.people.includes(m.from)) t.people.push(m.from)
     if (mine(m) || forMe(m)) t.yours = true
-    if (!mine(m) && !state.deleted.has(m.seq) && m.seq > (seen[threadSeenKey(root)] ?? from)) {
+    if (!mine(m) && !state.deleted.has(m.seq) && m.seq > seenAt(seen, threadSeenKey(root), from)) {
       t.unread++
       if (forMe(m)) t.mentions++
     }

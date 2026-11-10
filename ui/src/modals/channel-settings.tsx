@@ -36,11 +36,11 @@ const TABS: readonly (readonly [ChannelTab, Key])[] = [
   ["notes", "modals.channel.settings.tab.notes"],
 ]
 
-export function ChannelSettings({ channel, tab: first, onClose }: { channel: Channel; tab?: ChannelTab; onClose: () => void }) {
+export function ChannelSettings({ channel, tab: first, end, onClose }: { channel: Channel; tab?: ChannelTab; end?: true | undefined; onClose: () => void }) {
   const { app, go, toast } = useApp()
   const own = channel.youOwn
   const owner = channel.people.find((p) => p.owner)
-  const [ending, setEnding] = useState(false)
+  const [ending, setEnding] = useState(!!end)
   const tabs = TABS.filter(([id]) => id !== "notes" || (channel.facts?.length ?? 0) > 0)
   const [picked, setTab] = useState<ChannelTab>(first ?? "general")
   const tab = tabs.some(([id]) => id === picked) ? picked : "general"
@@ -224,7 +224,7 @@ function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
 }
 
 function GoalEditor({ channel }: { channel: Channel }) {
-  const { app, toast } = useApp()
+  const { app } = useApp()
   const [draft, setDraft] = useState(channel.goal ?? "")
   const changed = draft.trim() !== (channel.goal ?? "")
   return (
@@ -234,7 +234,6 @@ function GoalEditor({ channel }: { channel: Channel }) {
         e.preventDefault()
         if (!changed) return
         app.actions.setGoal(channel.code, draft.trim())
-        toast(t("modals.channel.settings.goal.saved"))
       }}
     >
       <textarea
@@ -303,6 +302,16 @@ function Hold({ channel }: { channel: Channel }) {
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
+          {note.trim() !== (hold.note ?? "") && (
+            <div className="cset-save">
+              <button type="button" className="btn is-quiet is-small" onClick={() => setNote(hold.note ?? "")}>
+                {t("modals.channel.settings.cancel")}
+              </button>
+              <button type="submit" className="btn is-small">
+                {t("modals.channel.settings.save")}
+              </button>
+            </div>
+          )}
         </form>
       )}
       {hold && !own && hold.note && <p className="cset-note">{hold.note}</p>}

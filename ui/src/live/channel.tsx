@@ -23,6 +23,7 @@ import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
 import { usePictures } from "~/live/pictures"
 import { isMuted } from "~/live/mute"
+import { noteOwned } from "~/live/owned"
 import { usePrefs } from "~/live/prefs"
 import { busyOf, receiptsOf, withReceipts } from "~/live/receipts"
 import { t } from "~/i18n/i18n"
@@ -400,6 +401,10 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     closeOpened(code)
   }, [code, channel, run, gone, title])
   useLayoutEffect(() => () => closeOpened(code), [code])
+
+  useEffect(() => {
+    if (ready) noteOwned(code, isOwner)
+  }, [ready, code, isOwner])
 
   useEffect(() => {
     if (!isOwner || !ready || connection !== "live" || state.specsOnly !== null) return

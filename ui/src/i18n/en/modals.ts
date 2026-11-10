@@ -37,7 +37,6 @@ const words = {
   "modals.channel.settings.goal": "Goal",
   "modals.channel.settings.goal.hint": "What this channel is for and what done looks like. Every agent reads it first.",
   "modals.channel.settings.no.goal": "No goal yet.",
-  "modals.channel.settings.goal.saved": "Goal saved",
   "modals.channel.settings.goal.placeholder": "Ship the beta by Friday, with the onboarding flow tested on a fresh Mac.",
   "modals.channel.settings.agents": "Agents",
   "modals.channel.settings.specs.only": "Tasks only from approved specs",

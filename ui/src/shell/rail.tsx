@@ -138,6 +138,24 @@ export function Rail() {
                 title: (code) => tiles.find((c) => c.code === code)?.title ?? code,
                 muted: (code) => prefs.muted.includes(code),
                 setMute: (code, on) => actions.setMute(code, null, on),
+                settings:
+                  target.kind === "channel" && tiles.find((c) => c.code === target.code)?.state === "member"
+                    ? (code) => {
+                        go({ to: "channel", code })
+                        go({ to: "modal", modal: { kind: "channel" } })
+                      }
+                    : null,
+                own: target.kind === "channel" ? tiles.find((c) => c.code === target.code)?.own : undefined,
+                read:
+                  target.kind === "channel" && (tiles.find((c) => c.code === target.code)?.unread ?? 0) > 0 ? (code) => actions.markChannelRead(code, tiles.find((c) => c.code === code)?.head) : null,
+                invite: (code) => {
+                  go({ to: "channel", code })
+                  go({ to: "modal", modal: { kind: "invite" } })
+                },
+                end: (code) => {
+                  go({ to: "channel", code })
+                  go({ to: "modal", modal: { kind: "channel", end: true } })
+                },
                 save,
               })
             )

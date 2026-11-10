@@ -309,6 +309,7 @@ export type Scenario =
   | "github-code"
   | "github-signed-in"
   | "github-gate"
+  | "task-body"
   | "github-checking"
   | "thread-fetching"
   | "thread-unloaded"
@@ -317,6 +318,21 @@ export type Scenario =
   | "forgotten-computer"
   | "member"
   | "home-calm"
+
+const TASK_BODY = [
+  'Channel settings: four save patterns in one dialog, the icon set in two places, "Access" holds non-access rows',
+  "",
+  "**Where.** `ui/src/modals/channel-settings.tsx`.",
+  "",
+  "- **Four save patterns:** inline Rename with Save/Cancel, a Goal box whose Save appears only when changed, a pause note saved by Enter with no button (`:288-304`), and instant toggles.",
+  "- **Icon twice:** the header tile (`:187-221`) and the Icon row (`:159-185`). Remove the row.",
+  "- Toggles disabled for non-owners give no reason.",
+  "",
+  "**Fix.** One save pattern, one place per setting, plain words for the merge options.",
+  "",
+  "---",
+  "From the desktop audit. https://github.com/kiwi-init/channels/issues/2111",
+].join("\n")
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
@@ -339,38 +355,43 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                     ? withHandoff(DEMO_CHANNEL)
                     : scenario === "thread-fetching" || scenario === "thread-unloaded"
                       ? { ...DEMO_CHANNEL, since: 1_000_000 }
-                      : scenario === "opening"
-                        ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-                        : scenario === "held"
-                          ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                          : scenario === "compact" || scenario === "compacted"
-                            ? withCompact(DEMO_CHANNEL, scenario === "compacted")
-                            : scenario === "specs" || scenario === "spec-changed"
-                              ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
-                              : scenario === "forgotten-computer"
-                                ? {
-                                    ...DEMO_CHANNEL,
-                                    asks: [
-                                      {
-                                        kind: "join" as const,
-                                        id: "join-dudu",
-                                        at: Date.now() - 30 * 60_000,
-                                        name: "dudu",
-                                        who: "agent" as const,
-                                        harness: "claude" as const,
-                                        runs: "Claude Code · claude-opus-5-5",
-                                        machine: "MacBook-Pro-de-Davi",
-                                        sponsor: "harry",
-                                        revoked: true as const,
-                                        said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
-                                        code: "604-218",
-                                      },
-                                      ...DEMO_CHANNEL.asks,
-                                    ],
-                                  }
-                                : scenario === "event-runs"
-                                  ? withEventRuns(DEMO_CHANNEL)
-                                  : DEMO_CHANNEL,
+                      : scenario === "task-body"
+                        ? {
+                            ...DEMO_CHANNEL,
+                            tasks: DEMO_CHANNEL.tasks.map((k) => (k.id === 12 ? { ...k, title: wrote("Channel settings: four save patterns in one dialog, the…"), detail: wrote(TASK_BODY) } : k)),
+                          }
+                        : scenario === "opening"
+                          ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+                          : scenario === "held"
+                            ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+                            : scenario === "compact" || scenario === "compacted"
+                              ? withCompact(DEMO_CHANNEL, scenario === "compacted")
+                              : scenario === "specs" || scenario === "spec-changed"
+                                ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
+                                : scenario === "forgotten-computer"
+                                  ? {
+                                      ...DEMO_CHANNEL,
+                                      asks: [
+                                        {
+                                          kind: "join" as const,
+                                          id: "join-dudu",
+                                          at: Date.now() - 30 * 60_000,
+                                          name: "dudu",
+                                          who: "agent" as const,
+                                          harness: "claude" as const,
+                                          runs: "Claude Code · claude-opus-5-5",
+                                          machine: "MacBook-Pro-de-Davi",
+                                          sponsor: "harry",
+                                          revoked: true as const,
+                                          said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
+                                          code: "604-218",
+                                        },
+                                        ...DEMO_CHANNEL.asks,
+                                      ],
+                                    }
+                                  : scenario === "event-runs"
+                                    ? withEventRuns(DEMO_CHANNEL)
+                                    : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,
@@ -546,6 +567,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       docFile: (_code, f) => demoFile(f),
       setAgentColor: (code, name, color) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, color: color ?? undefined } : p)) })),
       leaveRoom: (code, room) => edit(code, (c) => ({ ...c, rooms: c.rooms.filter((r) => r.id !== room) })),
+      markChannelRead: (code) => {
+        edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => ({ ...r, unread: 0, mentions: 0 })), directs: c.directs.map((d) => ({ ...d, unread: 0 })) }))
+        setState((s) => ({ ...s, tiles: s.tiles.map((t) => (t.code === code ? { ...t, unread: 0 } : t)) }))
+      },
       markRead: (code, where) =>
         edit(code, (c) => ({
           ...c,
@@ -977,10 +1002,11 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   }, [shownUsage, scenario])
 
   const home = useMemo(() => [...state.channels.values()].map((c) => homeOf(c)), [state.channels])
+  const tiles = useMemo(() => state.tiles.map((t) => (state.channels.has(t.code) ? { ...t, own: !!state.channels.get(t.code)?.youOwn } : t)), [state.tiles, state.channels])
 
   return {
     account: state.account,
-    channels: state.tiles,
+    channels: tiles,
     home,
     channel: open && state.gone?.code !== open ? (state.channels.get(open) ?? null) : null,
     ...(state.gone && state.gone.code === open ? { gone: state.gone } : {}),

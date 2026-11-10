@@ -21,8 +21,10 @@ import { ageOf, ago } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
 import { openMessage } from "~/live/open-message"
 import { useGo, useActions, useToast } from "~/nav"
+import { Body } from "~/chat/body"
+import { detailParts } from "~/panels/task-detail"
 import { nickname, Shown } from "~/names"
-import { wordsPlain, wordsRaw } from "~/words"
+import { wordsPlain, wordsRaw, wrote } from "~/words"
 import { IssueMark, issueWord, PrCard } from "~/github/parts"
 import { t } from "~/i18n/i18n"
 import { tr } from "~/i18n/rich"
@@ -42,6 +44,8 @@ function since(at: number): string {
 
 const holds = (a: Ask, id: number): a is PermissionAsk | QuestionAsk =>
   a.kind === "permission" ? a.task === id && !a.answer : a.kind === "question" ? (a.task === id || a.holds.includes(id)) && !a.answer && !a.closed : false
+
+const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
 
 export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const task = channel.tasks.find((k) => k.id === id)
@@ -72,6 +76,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
       </>
     )
   const waits = channel.asks.filter((a) => holds(a, id))
+  const parts = detailParts(wordsRaw(task.title), task.detail ? wordsRaw(task.detail) : undefined)
   const may = !memberOf(channel, channel.you)?.readOnly
   return (
     <EditHere.Provider value="panel">
@@ -79,12 +84,12 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
       <div key={task.id} ref={body} className="panel-body task-body tp">
         <section className="panel-section tp-top">
           <h3 className="task-title">
-            <Shown value={task.title} />
+            <Shown value={wrote(parts.title)} />
           </h3>
-          {task.detail && (
-            <p className="task-detail">
-              <Shown value={task.detail} />
-            </p>
+          {parts.body && (
+            <div className="task-detail">
+              <Body text={wrote(parts.body)} seq={0} names={names} tasks={tasks} onImage={openImage} onMessage={onQuote} />
+            </div>
           )}
           <State key={`state-${task.id}`} channel={channel} task={task} may={may} />
         </section>
