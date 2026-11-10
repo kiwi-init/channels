@@ -27,7 +27,7 @@ import { usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
 import { useDeviceLists } from "~/live/devices"
 import { useGone, useHome, useOpened } from "~/live/store"
-import type { App, ChannelTile } from "~/model"
+import type { App, ChannelTile, HomeChannel } from "~/model"
 import { later } from "~/kit/later"
 import type { Go } from "~/nav"
 
@@ -35,18 +35,18 @@ const HomeMembers = later(() => import("~/live/home").then((m) => m.HomeMembers)
 
 const STATE: Record<ChannelRow["state"], ChannelTile["state"]> = { member: "member", pending: "waiting", agents: "gone", elsewhere: "gone" }
 
-function useTiles(rows: ChannelRow[], muted: readonly string[]): ChannelTile[] {
+function useTiles(rows: ChannelRow[], muted: readonly string[], home: readonly HomeChannel[]): ChannelTile[] {
   const marks = useMarks()
   const openNews = useOpenNews()
   const icons = useIcons()
-  const news = useMemo(
-    () =>
-      rows.map((r) => {
-        const n = rowNews(r, marks, openNews)
-        return isMuted(muted, r.code) ? { ...n, fresh: false, count: n.mentions, muted: true } : n
-      }),
-    [rows, marks, openNews, muted]
-  )
+  const news = useMemo(() => {
+    const live = new Map(home.flatMap((h) => (h.loading ? [] : [[h.code, h.asks.length] as const])))
+    return rows.map((r) => {
+      const n = rowNews(r, marks, openNews)
+      const counted = n.open ? n : { ...n, needs: live.get(r.code) ?? n.needs }
+      return isMuted(muted, r.code) ? { ...counted, fresh: false, count: counted.mentions, muted: true } : counted
+    })
+  }, [rows, marks, openNews, muted, home])
   useEffect(() => startMarks(rows), [rows])
   useTabNews(newsTotal(news), badgeTotal(news))
   return useMemo(
@@ -108,7 +108,8 @@ export function useLive(open: string | null): App {
   const account = useAccount()
   const rows = useChannelList()
   const prefs = usePrefs()
-  const channels = useTiles(rows, prefs.muted)
+  const home = useHome()
+  const channels = useTiles(rows, prefs.muted, home)
   useDuties(rows, useSecrets().person?.pk)
   const opened = useOpened()
   const harnesses = useHarnesses()
@@ -119,7 +120,6 @@ export function useLive(open: string | null): App {
   const signIn = useGithubSignIn()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
-  const home = useHome()
   const lost = useGone()
   const gone = !channel && lost && lost.code === open ? lost : null
   return useMemo(
@@ -189,13 +189,25 @@ export function LiveDuties({ open, view, go }: { open: string | null; view: View
   useEffect(() => {
     if (member) rememberChannel(member.code)
   }, [member])
-  if (member && !member.relay) return <OpenMember key={member.code} member={member} view={view} />
-  if (pending) return <OpenPending key={pending.code} pending={pending} />
-  if (!open && person)
+  const homes = person ? (
+    <Suspense fallback={null}>
+      <HomeMembers except={member && !member.relay ? member.code : null} />
+    </Suspense>
+  ) : null
+  if (member && !member.relay)
     return (
-      <Suspense fallback={null}>
-        <HomeMembers />
-      </Suspense>
+      <>
+        {homes}
+        <OpenMember key={member.code} member={member} view={view} />
+      </>
     )
+  if (pending)
+    return (
+      <>
+        {homes}
+        <OpenPending key={pending.code} pending={pending} />
+      </>
+    )
+  if (!open && person) return homes
   return null
 }
