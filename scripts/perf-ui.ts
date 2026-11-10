@@ -91,7 +91,19 @@ export async function letIn(page: Page, waiting: () => boolean, timeoutMs = 1200
   const match = page.getByRole("button", { name: /^It matches: let .+ in$/ }).first();
   const deadline = Date.now() + timeoutMs;
   while (waiting()) {
-    if (Date.now() > deadline) throw new Error("the agents were not let in in time");
+    if (Date.now() > deadline) {
+      const shows = await page
+        .evaluate(() => ({
+          needsYou: [...document.querySelectorAll("button")].filter((b) => /^Needs you/.test(b.textContent ?? "")).map((b) => `${b.textContent} pressed=${b.getAttribute("aria-pressed")}`),
+          buttons: [...document.querySelectorAll(".main button")]
+            .map((b) => (b.getAttribute("aria-label") ?? b.textContent ?? "").trim())
+            .filter(Boolean)
+            .slice(0, 40),
+          main: (document.querySelector<HTMLElement>(".main")?.innerText ?? document.body.innerText).replace(/\s+/g, " ").slice(0, 600),
+        }))
+        .catch((err: unknown) => ({ unreadable: String(err) }));
+      throw new Error(`the agents were not let in in time; the page shows ${JSON.stringify(shows)}`);
+    }
     if ((await needs.isVisible().catch(() => false)) && (await needs.getAttribute("aria-pressed").catch(() => null)) !== "true") await needs.click().catch(() => undefined);
     if (await match.isVisible().catch(() => false)) await match.click().catch(() => undefined);
     await page.waitForTimeout(100);
