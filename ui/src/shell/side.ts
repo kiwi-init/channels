@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 import { toggleSidebar } from "@kiwi/app/sidebar-hidden.ts"
+import { mod } from "~/kit/keys"
 
 const listeners = new Set<() => void>()
 let drawer = false
@@ -29,4 +30,4 @@ const onResize = (l: () => void) => (window.addEventListener("resize", l), () =>
 /** A portrait window wider than a phone: the channel is one tall page there. */
 export const useTall = (): boolean => useSyncExternalStore(onResize, () => matchMedia(TALL).matches)
 
-export const isSideKey = (e: KeyboardEvent): boolean => e.key === "\\" && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey
+export const isSideKey = (e: KeyboardEvent): boolean => e.key === "\\" && mod(e) && !e.altKey && !e.shiftKey
