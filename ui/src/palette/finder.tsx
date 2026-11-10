@@ -367,7 +367,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
         meta: <kbd className="palette-kbd">{keysHint("F")}</kbd>,
         run: () => {
           close()
-          runCommand("find")
+          setTimeout(() => runCommand("find"))
         },
       }
     )
