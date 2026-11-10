@@ -56,3 +56,42 @@ test("a store that opens after a broken one is writable again", () => {
   mutate((s) => (s.relayUrl = "https://r.example"));
   expect(saved.map((f) => f.relayUrl)).toEqual(["https://r.example"]);
 });
+
+test("a save that fails leaves the store as it was: nothing half-changed in memory, nothing pushed, and the next save doesn't carry it (T1777)", () => {
+  const saved: StoreFile[] = [];
+  let full = true;
+  openStore({
+    where: () => "/data/kiwi-store.bin",
+    load: () => ({ ok: true, file: { relayUrl: "https://before.example" }, resave: false }),
+    save: (file) => {
+      if (full) throw new Error("ENOSPC: no space left on device");
+      saved.push(structuredClone(file));
+    },
+  });
+  const before = store;
+  expect(() =>
+    mutate((s) => {
+      s.relayUrl = "https://lost.example";
+      s.channels.push({ code: "mc2-lost" } as StoreFile["channels"][number]);
+    }),
+  ).toThrow("ENOSPC");
+  expect(store).toBe(before);
+  expect(store.relayUrl).toBe("https://before.example");
+  expect(store.channels).toEqual([]);
+  full = false;
+  mutate((s) => (s.relayUrl = "https://after.example"));
+  expect(saved).toHaveLength(1);
+  expect(saved[0]?.relayUrl).toBe("https://after.example");
+  expect(saved[0]?.channels).toEqual([]);
+});
+
+test("a change that throws partway changes nothing", () => {
+  openStore({ where: () => "/data/kiwi-store.bin", load: () => ({ ok: true, file: { relayUrl: "https://before.example" }, resave: false }), save: () => {} });
+  expect(() =>
+    mutate((s) => {
+      s.relayUrl = "https://half.example";
+      throw new Error("stopped halfway");
+    }),
+  ).toThrow("stopped halfway");
+  expect(store.relayUrl).toBe("https://before.example");
+});

@@ -86,8 +86,11 @@ function saveStore(): void {
 export const snapshot = (): StoreSnapshot => snapshotOf(store);
 export const mutate = (fn: (s: StoreFile) => void) => {
   if (storeBroken !== null) throw brokenError();
-  fn(store);
-  saveStore();
+  if (!vault) throw new Error("the store isn't open yet");
+  const next = structuredClone(store);
+  fn(next);
+  vault.save(next);
+  store = next;
   const shell = host();
   shell.push("store", snapshot());
   shell.tellKeys({ type: "seats", seats: store.channels, person: personPk(), mine: store.computers.map((c) => c.machinePk) });

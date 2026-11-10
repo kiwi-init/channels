@@ -161,14 +161,18 @@ async function dropMade(key: StoreKey): Promise<void> {
 export async function openStore({ dir, key, legacy, platform = process.platform }: StoreOptions): Promise<OpenStore> {
   const file = path.join(dir, STORE_FILE);
   const backup = `${file}.bak`;
+  const previous = `${file}.prev`;
   const refuse = (why: string, cause: Refusal, at: string = file): OpenStore => ({ kind: "unreadable", why, file: at, cause });
   const keychainWhy = (why: string): string => `the system keychain didn't give Channels its store key: ${why}`;
   const saver =
     (k: Buffer | null) =>
     (json: string): void => {
       const raw = k ? seal(json, k) : Buffer.from(json, "utf8");
-      writePrivate(file, raw, platform);
+      const now = bytes(file);
+      const held = readCopy(now, k, k === null);
+      if (now !== null && held.kind === "ok" && Object.keys(held.json).length > 0 && JSON.stringify(held.json) !== json) writePrivate(previous, now, platform);
       writePrivate(backup, raw, platform);
+      writePrivate(file, raw, platform);
     };
   const open = (json: Record<string, unknown> | null, imported: string | null, k: Buffer | null, noKeychain: string | null, unmarked: string | null): OpenStore => ({
     kind: "open",

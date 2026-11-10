@@ -600,3 +600,58 @@ describe("a keyring that's there but cancelled or locked never costs the keys th
     expect(s.noKeychain).toBe("no secret service");
   });
 });
+
+describe("a save keeps the generation before it (T1777)", () => {
+  const PREV = `${STORE_FILE}.prev`;
+  const NEXT = { ...STORE, relayUrl: "https://next.example" };
+  const LAST = { ...STORE, relayUrl: "https://last.example" };
+
+  test("the first save has no generation before it; each later one keeps the store it replaces, sealed and private", async () => {
+    const dir = folder();
+    const k = keychain();
+    const s = opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" }));
+    s.save(JSON.stringify(STORE));
+    expect(existsSync(join(dir, PREV))).toBe(false);
+    s.save(JSON.stringify(NEXT));
+    expect(JSON.parse(unseal(read(dir, PREV), keyOf(k)))).toEqual(STORE);
+    expect(statSync(join(dir, PREV)).mode & 0o777).toBe(0o600);
+    s.save(JSON.stringify(LAST));
+    expect(JSON.parse(unseal(read(dir, PREV), keyOf(k)))).toEqual(NEXT);
+    for (const name of [STORE_FILE, `${STORE_FILE}.bak`]) expect(JSON.parse(unseal(read(dir, name), keyOf(k)))).toEqual(LAST);
+  });
+
+  test("saving the same store again doesn't push the older generation out", async () => {
+    const dir = folder();
+    const k = keychain();
+    const s = opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" }));
+    s.save(JSON.stringify(STORE));
+    s.save(JSON.stringify(NEXT));
+    s.save(JSON.stringify(NEXT));
+    expect(JSON.parse(unseal(read(dir, PREV), keyOf(k)))).toEqual(STORE);
+  });
+
+  test("a store damaged on disk is never kept as the generation before", async () => {
+    const dir = folder();
+    const k = keychain();
+    const s = opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" }));
+    s.save(JSON.stringify(STORE));
+    s.save(JSON.stringify(NEXT));
+    put(dir, STORE_FILE, "{torn");
+    s.save(JSON.stringify(LAST));
+    expect(JSON.parse(unseal(read(dir, PREV), keyOf(k)))).toEqual(STORE);
+    expect(JSON.parse(unseal(read(dir), keyOf(k)))).toEqual(LAST);
+  });
+
+  test("the store still opens from its two newest copies, never from the generation before", async () => {
+    const dir = folder();
+    const k = keychain();
+    const s = opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" }));
+    s.save(JSON.stringify(STORE));
+    s.save(JSON.stringify(NEXT));
+    put(dir, STORE_FILE, "{torn");
+    expect(opened(await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" })).json).toEqual(NEXT);
+    put(dir, STORE_FILE, "{torn");
+    put(dir, `${STORE_FILE}.bak`, "{torn");
+    expect((await openStore({ dir, key: k.key, legacy: NO_LEGACY, platform: "darwin" })).kind).toBe("unreadable");
+  });
+});
