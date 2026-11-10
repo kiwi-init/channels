@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { pageWithCsp } from "../desktop/src/eb-page.ts";
 import { ASK_AGAIN_URL, keyringNote, keyringPage, openedWithin } from "../desktop/src/keyring-wait.ts";
@@ -60,7 +62,7 @@ describe("a keyring that doesn't answer doesn't keep the window away (T1550)", (
   test("a cancelled prompt and a keyring that stayed locked each say so, and ask again", () => {
     expect(keyringPage(INDEX, "linux", "cancelled")).toContain("You cancelled the keyring prompt");
     expect(keyringPage(INDEX, "linux", "locked")).toContain("Your keyring stayed locked");
-    for (const state of ["waiting", "cancelled", "locked"] as const) expect(keyringPage(INDEX, "linux", state)).toContain(`<a class="ask" href="${ASK_AGAIN_URL}">Ask again</a>`);
+    for (const state of ["waiting", "cancelled", "locked"] as const) expect(keyringPage(INDEX, "linux", state)).toContain(`<a class="again" href="${ASK_AGAIN_URL}">Ask again</a>`);
     expect(keyringPage(INDEX, "darwin", "waiting")).not.toContain(ASK_AGAIN_URL);
   });
 
@@ -69,4 +71,11 @@ describe("a keyring that doesn't answer doesn't keep the window away (T1550)", (
     expect(ASK_AGAIN_URL).not.toBe("views://internal/index.html");
     expect(keyringPage(INDEX, "linux", "cancelled")).not.toContain("<script");
   });
+});
+
+test("the note pages take their look from tokens the app's stylesheet defines (T2276)", () => {
+  const tokens = readFileSync(join(import.meta.dir, "../ui/src/styles/tokens.css"), "utf8");
+  const used = new Set([...keyringPage(INDEX, "linux", "locked").matchAll(/var\((--[a-z0-9-]+)/g)].map((m) => m[1]!));
+  expect(used.size).toBeGreaterThan(5);
+  expect([...used].filter((name) => !tokens.includes(`${name}:`))).toEqual([]);
 });
