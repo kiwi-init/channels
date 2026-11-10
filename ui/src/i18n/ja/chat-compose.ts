@@ -154,7 +154,7 @@ export default {
   "chat.drafts.back.stash": "送信できませんでした: {why}。退避しました: {keys} で戻せます{lost}。",
   "chat.drafts.lost.image": "。画像は退避できませんでした",
   "chat.drafts.lost.images": "。画像 {count} 枚は退避できませんでした",
-  "chat.events.updates": "更新",
+  "chat.events.updates": "アクティビティ",
   "chat.feed.image.loading": "画像を読み込み中…",
   "chat.feed.notes.hold.you": "読みはしますが、あなたが再開するまで動きません。",
   "chat.feed.notes.hold.owner": "読みはしますが、{name} が再開するまで動きません。",
