@@ -1,6 +1,6 @@
 import "~/i18n/en/settings"
 
-import { useEffect, useState } from "react"
+import { useEffect, useId, useState } from "react"
 
 import { t } from "~/i18n/i18n"
 import { cx, IconButton } from "~/kit/bits"
@@ -280,6 +280,7 @@ export function ComputersSection() {
   const [linking, setLinking] = useState<Kind | null>(PRESET)
   const [forget, setForget] = useState<Computer | null>(null)
   const [shown, setShown] = useState<string | null>(null)
+  const pairedId = useId()
   const asked = app.account?.enrollAsk?.id
   const [seen, setSeen] = useState(asked)
   if (asked !== seen) {
@@ -296,14 +297,14 @@ export function ComputersSection() {
       {account.devices && account.devices.length > 0 && (
         <>
           <SignedDevices devices={account.devices} />
-          <section className="set-group" aria-label={t("settings.computers.paired")}>
+          <div className="set-group">
             <div className="heading">
-              <h3>{t("settings.computers.paired")}</h3>
+              <h3 id={pairedId}>{t("settings.computers.paired")}</h3>
             </div>
-          </section>
+          </div>
         </>
       )}
-      <ul className="set-devices">
+      <ul className="set-devices" aria-labelledby={account.devices?.length ? pairedId : undefined}>
         {computers.map((c) => (
           <li key={c.id} className="set-device">
             <span className="set-device-icon" aria-hidden="true">
