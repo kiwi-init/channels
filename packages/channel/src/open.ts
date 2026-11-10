@@ -3,7 +3,7 @@ import type { FoldBase } from "@kiwi/core/state.ts";
 import type { OpenedCache } from "./history.ts";
 import { planReload } from "./history-plan.ts";
 import { baseFrom, newestRules, startsWhole, usableBase } from "./base-plan.ts";
-import { keptBaseUpTo, type Kept } from "./kept.ts";
+import { keptBaseUpTo, nearUsable, type Kept } from "./kept.ts";
 import { heldWindow, type Warm } from "./warm.ts";
 
 export interface Planned {
@@ -19,6 +19,7 @@ export interface OpenSteps {
   requests: () => Promise<void>;
   rotate: () => Promise<boolean>;
   cache: () => Promise<OpenedCache | null>;
+  tail: (after: number) => Promise<OpenedCache | null>;
   kept: () => Promise<Kept | null>;
   plan: (cache: OpenedCache, head: number) => Promise<Planned | null>;
   snapshot: () => Promise<FoldBase | null>;
@@ -56,12 +57,20 @@ function provisional(cache: OpenedCache | null, limit: number): Planned | null {
 
 export function warmUp(steps: OpenSteps, was: Warm | undefined, limit: number): void {
   if (was?.messages.length) return;
-  void Promise.all([steps.cache(), steps.kept()]).then(([cache, kept]) => {
+  void steps.kept().then(async (kept) => {
+    const near = nearUsable(kept);
+    const tail = near ? await steps.tail(near.n).catch(() => null) : null;
+    const newest = kept && near && tail ? provisional(tail, limit) : null;
+    if (kept && near && newest) {
+      steps.early(newest, { ...kept, base: near });
+      await new Promise((painted) => setTimeout(painted, 0));
+    }
+    const cache = await steps.cache();
     const first = cache?.opened.length ? Math.min(...cache.opened.map((m) => m.seq)) : undefined;
     const base = was?.base ?? kept?.base ?? null;
     const covered = first === 1 || (base !== null && first !== undefined && base.n >= first - 1);
     if (!covered) void steps.snapshot().catch(() => null);
-    if (kept) steps.early(provisional(cache, limit), kept);
+    if (kept) steps.early(provisional(cache, limit), newest && near ? { ...kept, base: near } : kept);
   });
 }
 

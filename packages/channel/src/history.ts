@@ -175,6 +175,8 @@ export const rememberRow = (roomId: string, memberPk: string, row: CachedRow): P
  * Messages to paint, and the exclusive seq to stream from. An unusable cache
  * is deleted here, so the next save starts clean.
  */
+const OPEN_CHUNK = 250;
+
 export interface OpenedCache {
   stored: number;
   opened: (Message | Unread)[];
@@ -183,7 +185,22 @@ export interface OpenedCache {
 export async function openCached(roomId: string, memberPk: string, openRows: OpenRows, limit: number): Promise<OpenedCache> {
   const stored = await db().newest(roomId, memberPk, limit);
   markOnce("kiwi:cache-read");
-  return { stored: stored.length, opened: (await openRows(stored)).filter((m): m is Message | Unread => m !== null) };
+  const opened: (Message | Unread | null)[] = [];
+  for (let at = 0; at < stored.length; at += OPEN_CHUNK) {
+    if (at > 0) await new Promise((next) => setTimeout(next, 0));
+    opened.push(...(await openRows(stored.slice(at, at + OPEN_CHUNK))));
+  }
+  return { stored: stored.length, opened: opened.filter((m): m is Message | Unread => m !== null) };
+}
+
+export async function openTail(roomId: string, memberPk: string, openRows: OpenRows, after: number, most: number): Promise<OpenedCache | null> {
+  const stored = await db().after(roomId, memberPk, after, most + 1);
+  if (!stored.length || stored.length > most) return null;
+  const opened = (await openRows(stored)).filter((m): m is Message | Unread => m !== null);
+  const seqs = opened.map((m) => m.seq).sort((a, b) => a - b);
+  if (seqs.length !== stored.length || seqs.some((seq, i) => seq !== after + 1 + i)) return null;
+  markOnce("kiwi:tail-open");
+  return { stored: stored.length, opened };
 }
 
 export async function readCached(

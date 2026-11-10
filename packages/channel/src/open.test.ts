@@ -46,6 +46,11 @@ function relay(rotateTrips = 1, rotated = false) {
       requests: () => trip("requests", undefined),
       rotate: () => trip("rotate", rotated, rotateTrips),
       cache: async () => (cache.length ? ({ stored: cache.length, opened: cache.map(msg) } satisfies OpenedCache) : null),
+      tail: async (after) => {
+        const rows = cache.filter((seq) => seq > after);
+        log.push(`tail>${after}`);
+        return rows.length ? ({ stored: rows.length, opened: rows.map(msg) } satisfies OpenedCache) : null;
+      },
       plan: async (c, h): Promise<Planned> => ({
         messages: c.opened.filter((m): m is Message => !("unread" in m) && m.seq <= h),
         unread: [],
@@ -135,6 +140,34 @@ describe("opening a channel", () => {
     expect(r.log.filter((l) => l.startsWith("snapshot"))).toEqual([]);
     await r.roundTrip();
     expect(r.painted).toEqual([{ at: 1, seqs: range(3001, 5000), base: 3000 }]);
+  });
+
+  test("with a near base kept, the newest rows paint first from it, then the whole window joins them on the same base, before any round trip (T3008)", async () => {
+    const r = relay();
+    const steps = r.make(5000, range(3001, 5000), 3000, { ...kept(3000), near: base(4900) });
+    warmUp(steps, undefined, 2000);
+    void openChannel(steps, undefined, 2000);
+    await r.settle();
+    await r.settle();
+    expect(r.log.filter((l) => l.startsWith("tail"))).toEqual(["tail>4900"]);
+    expect(r.early).toEqual([
+      { at: 0, seqs: range(4901, 5000), base: 4900 },
+      { at: 0, seqs: range(3001, 5000), base: 4900 },
+    ]);
+    await r.roundTrip();
+    expect(r.painted).toEqual([{ at: 1, seqs: range(3001, 5000), base: 3000 }]);
+  });
+
+  test("no near base, or no rows after it, or one whose private rooms weren't opened: the window paints as before, once (T3008)", async () => {
+    for (const held of [kept(3000), { ...kept(3000), near: base(5000) }, { ...kept(3000), near: { ...base(4900), secret: [["room-x", {}]] } as unknown as FoldBase }]) {
+      const r = relay();
+      const steps = r.make(5000, range(3001, 5000), 3000, held);
+      warmUp(steps, undefined, 2000);
+      void openChannel(steps, undefined, 2000);
+      await r.settle();
+      await r.settle();
+      expect(r.early).toEqual([{ at: 0, seqs: range(3001, 5000), base: 3000 }]);
+    }
   });
 
   test("a kept base folded under older rules asks for the snapshot, and the snapshot is folded on (#1116)", async () => {

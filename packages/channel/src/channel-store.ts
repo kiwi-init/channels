@@ -10,7 +10,7 @@ import { reviewCheckOf, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/prot
 import { fold, nextExpiry, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
 import type { Reach } from "./history-fill.ts";
-import { openCached, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
+import { openCached, openTail, planCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
 import { markOnce } from "./marks.ts";
 import { ICON_LIVE } from "./icon-event.ts";
 import { addMarks, type Marks } from "./receipts.ts";
@@ -41,6 +41,8 @@ export const OLDER_PER_CLICK = 5_000;
 const OLDER_GAP_MS = 250;
 const KEEP_DELAY_MS = 3_000;
 const CLOCK_MS = 15_000;
+const TAIL = 100;
+const TAIL_MOST = 300;
 const LONGEST_WAIT_MS = 24 * 3_600_000;
 const GITHUB_SYNC_MS = 6 * 3_600_000;
 const OLDER_APP = /no such call/;
@@ -400,14 +402,23 @@ export class ChannelStore {
 
   private keepSealed(): (() => void) | undefined {
     if (!this.start.value || this.gone.value) return;
-    const kept = toKept({ roster: this.roster.value, base: this.partial.value ? null : this.base.value, guardFloor: this.guardFloor.value, roomsFloor: this.roomsFloor.value });
+    const base = this.partial.value ? null : this.base.value;
+    const state = { roster: this.roster.value, base, guardFloor: this.guardFloor.value, roomsFloor: this.roomsFloor.value };
     const t = setTimeout(() => {
       void this.ch
-        .keep(kept)
+        .keep(toKept({ ...state, near: this.nearBase(base) }))
         .then((sealed) => (sealed ? rememberKept(this.ch.roomId, this.ch.pk, sealed) : undefined))
         .catch(() => {});
     }, KEEP_DELAY_MS);
     return () => clearTimeout(t);
+  }
+
+  private nearBase(base: FoldBase | null): FoldBase | null {
+    const messages = this.messages.peek();
+    if (!base || this.partial.peek() || messages.length <= TAIL) return null;
+    let near: FoldBase | null = null;
+    fold(messages.slice(0, messages.length - TAIL), this.rosterForFold.peek(), Date.now(), this.roomsFloor.peek(), this.guardFloor.peek(), base, (b) => (near = b));
+    return near;
   }
 
   private readInfo(): void {
@@ -603,6 +614,7 @@ export class ChannelStore {
         openCached(ch.roomId, ch.pk, ch.openRows, REACH)
           .then((opened) => (markOnce("kiwi:cache-open"), opened))
           .catch(() => null),
+      tail: (after) => openTail(ch.roomId, ch.pk, ch.openRows, after, TAIL_MOST),
       plan: (opened, head) => planCached(ch.roomId, ch.pk, opened, head, REACH).catch(() => null),
       snapshot: () => ch.snapshot(),
       kept: async () => {

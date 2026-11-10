@@ -344,13 +344,19 @@ export class Keyring implements ChannelOps {
   async openKept(code: string, sealed: unknown): Promise<unknown> {
     const access = channelAccess(this.seat(code, true));
     const kept = access ? await openSealedKept(sealed, access.roomId, access.keys) : null;
-    const base = kept && typeof kept === "object" ? (kept as { base?: FoldBase | null }).base : null;
+    const { base, near } = kept && typeof kept === "object" ? (kept as { base?: FoldBase | null; near?: FoldBase | null }) : {};
     if (!base) return kept;
+    const ch = this.channel(code);
+    const opened = (b: FoldBase): Promise<{ base: FoldBase; ok: boolean }> =>
+      ch.openRooms(b).then(
+        (o) => ({ base: o, ok: true }),
+        () => ({ base: b, ok: false }),
+      );
+    const nearBy = near ? await opened(near) : null;
     return {
       ...(kept as object),
-      base: await this.channel(code)
-        .openRooms(base)
-        .catch(() => base),
+      base: (await opened(base)).base,
+      ...(nearBy ? { near: nearBy.base, nearOpened: nearBy.ok } : {}),
     };
   }
 
