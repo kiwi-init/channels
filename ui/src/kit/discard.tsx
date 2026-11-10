@@ -31,10 +31,10 @@ export function DiscardAsk({ onKeep, onDiscard }: { onKeep: () => void; onDiscar
       }}
     >
       <span>{t("kit.discard.ask")}</span>
-      <button type="button" className="btn is-quiet" onClick={onKeep}>
+      <button type="button" className="btn is-quiet" autoFocus onClick={onKeep}>
         {t("kit.discard.keep")}
       </button>
-      <button type="button" className="btn is-danger" autoFocus onClick={onDiscard}>
+      <button type="button" className="btn is-danger" onClick={onDiscard}>
         {t("kit.discard.discard")}
       </button>
     </div>
