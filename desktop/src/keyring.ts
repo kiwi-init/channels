@@ -4,7 +4,18 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 
-import { openKept as openSealedKept, openRows as openSealedRows, packKept, packRow, packEnvelope, type CachedKept, type CachedRow, type Unread } from "@kiwi/core/cache-row.ts";
+import {
+  openKept as openSealedKept,
+  openRows as openSealedRows,
+  reopenRows as reopenSealedRows,
+  packKept,
+  packRow,
+  packEnvelope,
+  type CachedKept,
+  type CachedRow,
+  type Reopened,
+  type Unread,
+} from "@kiwi/core/cache-row.ts";
 import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "@kiwi/core/client.ts";
 import type { DocStore } from "@kiwi/core/doc/hub.ts";
 import { heldPipe, type PipeIn } from "@kiwi/core/doc/held-pipe.ts";
@@ -279,6 +290,16 @@ export class Keyring implements ChannelOps {
       .catch(() => opened);
   }
 
+  async reopenRows(code: string, rows: readonly unknown[]): Promise<Reopened> {
+    const access = channelAccess(this.seat(code, true));
+    if (!access) return { opened: rows.map(() => null), rows: [] };
+    const out = await reopenSealedRows(rows, access.roomId, access.keys, access.epoch);
+    const opened = await this.channel(code)
+      .learnRooms(out.opened)
+      .catch(() => out.opened);
+    return { opened, rows: out.rows };
+  }
+
   private searcher(): { host: SearchHost; place: SearchPlace } | null {
     if (this.searching === undefined) {
       const place = this.host.search?.() ?? null;
@@ -392,7 +413,11 @@ export class Keyring implements ChannelOps {
         const key = ch.access.keys[String(ch.access.epoch)];
         const seq = ev.message.seq;
         const packed =
-          !key || !Number.isSafeInteger(seq) || seq <= 0 ? null : ev.envelope ? packEnvelope(key, ch.roomId, ch.access.epoch, ev.envelope) : packRow(key, ch.roomId, ch.access.epoch, ev.message);
+          !key || !Number.isSafeInteger(seq) || seq <= 0
+            ? null
+            : ev.envelope
+              ? packEnvelope(key, ch.roomId, ch.access.epoch, ev.envelope, ev.message.sigOk)
+              : packRow(key, ch.roomId, ch.access.epoch, ev.message);
         const row: CachedRow | null = packed ? await packed.catch(() => null) : null;
         return { _tag: "Message", message: ev.message, row };
       }

@@ -161,6 +161,9 @@ describe("channel keys stay out of the window (T203 step 2)", () => {
     const row = got.row as CachedRow;
     expect(JSON.stringify(row).includes("hello from bo")).toBe(false);
     expect((await aw.ops.openRows(code, [row]))[0]).toMatchObject({ body: "hello from bo" });
+    const reopened = await aw.ops.reopenRows(code, [row]);
+    expect(reopened.opened[0]).toMatchObject({ body: "hello from bo", sigOk: true });
+    expect(reopened.rows).toEqual([]);
     stop();
     const log = await aw.ops.call(code, "history", 0);
     const signed = log.messages.find((m) => m.body === "hello from bo");

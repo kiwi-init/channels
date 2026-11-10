@@ -75,6 +75,10 @@ function relay(
       calls.push({ op: "openRows", args: [rows.length] });
       return Promise.resolve(opts.open?.(rows) ?? []);
     },
+    reopenRows: (_code: string, rows: CachedRow[]) => {
+      calls.push({ op: "openRows", args: [rows.length] });
+      return Promise.resolve({ opened: opts.open?.(rows) ?? [], rows: [] });
+    },
     olderRows: (_code: string, before: number, limit: number) => {
       calls.push({ op: "olderRows", args: [before, limit] });
       return Promise.resolve(opts.older?.(before, limit) ?? { rows: [], done: true });

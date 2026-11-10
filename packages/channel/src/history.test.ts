@@ -5,9 +5,22 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { b64url, seal } from "@kiwi/core/crypto.ts";
 import { generateIdentity, sign } from "@kiwi/core/identity.ts";
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts";
-import { openKept, openRow, openRows, packKept, packRow, packEnvelope } from "@kiwi/core/cache-row.ts";
+import { openKept, openRow, openRows, packKept, packRow, packEnvelope, reopenRows } from "@kiwi/core/cache-row.ts";
 import { backfill, indexArchive, reach } from "./history-fill.ts";
-import { forgetAllHistory, forgetHistory, readCached, readKept, rememberKept, rememberRow, rememberRows, useHistoryDb, type CachedKept, type CachedRow, type HistoryDb } from "./history.ts";
+import {
+  forgetAllHistory,
+  forgetHistory,
+  readCached,
+  readKept,
+  reopenCached,
+  rememberKept,
+  rememberRow,
+  rememberRows,
+  useHistoryDb,
+  type CachedKept,
+  type CachedRow,
+  type HistoryDb,
+} from "./history.ts";
 
 const SENTINEL = "SENTINEL-plain-text-should-not-rest";
 const ROOM = "a".repeat(32);
@@ -116,6 +129,28 @@ test("a signed message still verifies after a cache round trip", async () => {
   await rememberMessage(ROOM, PK_A, 1, key, { ...signed, seq: 1, rts: 20, sigOk: true });
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, { "1": key }), 1, 10);
   expect(out.messages.map((m) => ({ body: m.body, seq: m.seq, sigOk: m.sigOk, pk: m.pk }))).toEqual([{ body: "signed", seq: 1, sigOk: true, pk: id.pk }]);
+});
+
+test("a reopen writes back the rows it had to check, marked, so the next reopen checks none (T3576)", async () => {
+  const id = await generateIdentity("Ada");
+  const signed = await sign(id, { v: PROTOCOL_VERSION as typeof PROTOCOL_VERSION, id: "id-1", from: "Ada", kind: "msg" as const, body: "signed", ts: 10 });
+  await rememberMessage(ROOM, PK_A, 1, key, { ...signed, seq: 1, rts: 20, sigOk: true });
+  await rememberMessage(ROOM, PK_A, 2, key, { ...signed, id: "id-2", body: "changed after signing", seq: 2, rts: 30, sigOk: true });
+  const rewritten: number[][] = [];
+  const reopen = async (rows: CachedRow[]) => {
+    const out = await reopenRows(rows, ROOM, { "1": key }, 1);
+    rewritten.push(out.rows.map((r) => r.seq));
+    return out;
+  };
+  const first = await reopenCached(ROOM, PK_A, reopen, 10);
+  expect(first.opened.map((m) => ("sigOk" in m ? [m.seq, m.sigOk] : null))).toEqual([
+    [1, true],
+    [2, false],
+  ]);
+  await Bun.sleep(5);
+  const second = await reopenCached(ROOM, PK_A, reopen, 10);
+  expect(second.opened).toEqual(first.opened);
+  expect(rewritten).toEqual([[1], []]);
 });
 
 test("two members and two rooms do not read each other's rows", async () => {

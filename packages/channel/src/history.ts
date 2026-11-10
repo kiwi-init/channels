@@ -12,13 +12,14 @@
 // page loads the usual window. The cache does not fill a gap or sort ahead of
 // the relay. See history-plan.ts.
 
-import type { CachedKept, CachedRow, Unread } from "@kiwi/core/cache-row.ts";
+import type { CachedKept, CachedRow, Reopened, Unread } from "@kiwi/core/cache-row.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { planReload } from "./history-plan.ts";
 import { markOnce } from "./marks.ts";
 
 export type { CachedKept, CachedRow };
 export type OpenRows = (rows: CachedRow[]) => Promise<(Message | Unread | null)[]>;
+export type ReopenRows = (rows: CachedRow[]) => Promise<Reopened>;
 
 export interface HistoryDb {
   put(roomId: string, memberPk: string, row: CachedRow): Promise<void>;
@@ -189,6 +190,17 @@ export const rememberRow = (roomId: string, memberPk: string, row: CachedRow): P
 export interface OpenedCache {
   stored: number;
   opened: (Message | Unread)[];
+}
+
+export async function reopenCached(roomId: string, memberPk: string, reopenRows: ReopenRows, limit: number): Promise<OpenedCache> {
+  const stored = await db().newest(roomId, memberPk, limit);
+  markOnce("kiwi:cache-read");
+  const { opened, rows } = await reopenRows(stored);
+  if (rows.length)
+    void db()
+      .putRows(roomId, memberPk, rows)
+      .catch(() => {});
+  return { stored: stored.length, opened: opened.filter((m): m is Message | Unread => m !== null) };
 }
 
 export async function openCached(roomId: string, memberPk: string, openRows: OpenRows, limit: number): Promise<OpenedCache> {
