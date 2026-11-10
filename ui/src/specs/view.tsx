@@ -12,7 +12,7 @@ import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import type { Channel, Spec, Task } from "~/model"
-import { useApp } from "~/nav"
+import { useGo, useNav } from "~/nav"
 import { Shown } from "~/names"
 import { SpecMark } from "~/specs/card"
 import { faceOf, needsYou, tasksOf, workersOf } from "~/specs/read"
@@ -58,7 +58,7 @@ function groupsOf(channel: Channel, shown: Shown): Group[] {
 }
 
 export function SpecsView({ channel, tall }: { channel: Channel; tall?: boolean }) {
-  const { nav } = useApp()
+  const nav = useNav()
   const spec = nav.spec !== undefined ? channel.specs?.find((s) => s.ask === nav.spec) : undefined
   if (spec) return <SpecPage key={`${channel.code}:${spec.ask}`} channel={channel} spec={spec} />
   return <SpecList channel={channel} tall={!!tall} />
@@ -130,7 +130,7 @@ function GroupCard({ channel, group }: { channel: Channel; group: Group }) {
 }
 
 function Loose({ channel, tasks, label }: { channel: Channel; tasks: Task[]; label: string }) {
-  const { nav } = useApp()
+  const nav = useNav()
   const [all, setAll] = useState(false)
   const on = nav.panel?.kind === "task" ? nav.panel.task : null
   const rows = all ? tasks : tasks.slice(0, LOOSE_SHOWN)
@@ -159,7 +159,8 @@ function Loose({ channel, tasks, label }: { channel: Channel; tasks: Task[]; lab
 }
 
 function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
-  const { go, nav } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const who = workersOf(channel, spec)
   const part = spec.stage === "delivered" ? "result" : spec.stage === "working" ? "inside" : "spec"
   const on = nav.panel?.kind === "task" ? nav.panel.task : null

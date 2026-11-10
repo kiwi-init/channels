@@ -9,7 +9,7 @@ import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Direct, type Person } from "~/model"
-import { sameWhere, useAct, useApp } from "~/nav"
+import { sameWhere, useAct, useGo, useNav } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
 import { comingBack, hiddenKey, hiddenPlaces, keptHidden, setHidden } from "~/shell/hidden-places"
 import { leftDirects } from "~/shell/left-directs"
@@ -19,7 +19,8 @@ import { t } from "~/i18n/i18n"
 const SideCards = later(() => import("~/shell/updates").then((m) => m.SideCards))
 
 export function Sidebar({ channel }: { channel: Channel }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const { actions } = useAct()
   const people = onePerPerson(channel.people.filter((p) => p.kind === "human")).filter((p) => !p.left)
   const me = people.find((p) => p.you)
@@ -196,7 +197,8 @@ function HiddenRows({ count, open, toggle }: { count: number; open: boolean; tog
 }
 
 function Former({ channel, direct }: { channel: Channel; direct: Direct }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const { actions } = useAct()
   const where = { kind: "dm", with: direct.with } as const
   const on = nav.tab === "chat" && sameWhere(nav.where, where)
@@ -222,7 +224,7 @@ function Former({ channel, direct }: { channel: Channel; direct: Direct }) {
 }
 
 function You({ person }: { person: Person }) {
-  const { go } = useApp()
+  const go = useGo()
   return (
     <li>
       <button type="button" className="side-row side-member" title={t("shell.sidebar.your.profile")} onClick={() => go({ to: "modal", modal: { kind: "person", name: person.name } })}>
@@ -235,7 +237,8 @@ function You({ person }: { person: Person }) {
 }
 
 function Member({ person, channel, direct }: { person: Person; channel: Channel; direct: Direct | undefined }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const { actions } = useAct()
   const where = { kind: "dm", with: person.name } as const
   const on = nav.tab === "chat" && sameWhere(nav.where, where)

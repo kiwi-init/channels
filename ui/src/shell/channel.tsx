@@ -11,7 +11,7 @@ import type { Channel } from "~/model"
 import { drawerNews } from "~/live/links"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { openAsks } from "~/needs/open"
-import { sameWhere, useApp } from "~/nav"
+import { sameWhere, useGo, useNav, useActions } from "~/nav"
 import { whereKey } from "~/places"
 import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
@@ -43,7 +43,9 @@ const AddAgent = later(() => import("~/modals/add-agent").then((m) => m.AddAgent
 const DocVersions = later(() => import("~/modals/doc-versions").then((m) => m.DocVersions))
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
-  const { nav, go, app } = useApp()
+  const nav = useNav()
+  const go = useGo()
+  const actions = useActions()
   const hidden = useSidebarHidden()
   const panel = usePanelWidth(hidden)
   const [jumpAt, setJumpAt] = useState<{ jump: Jump; visit: number } | null>(null)
@@ -63,7 +65,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const anchor = root === undefined ? target : (channel.messages.find((m) => m.seq === root) ?? target)
   const atAnchor = !!anchor && nav.tab === "chat" && sameWhere(anchor.where, nav.where)
   if (anchor && atAnchor && jump?.m.seq !== anchor.seq) setJump({ m: anchor, terms: [] })
-  const earlierTo = app.actions.earlierTo
+  const earlierTo = actions.earlierTo
   useEffect(() => {
     if (!wanted || found.kind !== "older") return
     void earlierTo(wanted.code, wanted.seq).then((held) => {
@@ -288,7 +290,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
 }
 
 function PanelView({ channel }: { channel: Channel }) {
-  const { nav } = useApp()
+  const nav = useNav()
   if (!nav.panel) return null
   return (
     <Boundary panel resetKey={JSON.stringify(nav.panel)}>
@@ -308,7 +310,8 @@ function PanelView({ channel }: { channel: Channel }) {
 }
 
 function ModalView({ channel }: { channel: Channel }) {
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   const modal = nav.modal
   if (!modal) return null
   const close = () => go({ to: "modal", modal: null })

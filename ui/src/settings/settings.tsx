@@ -8,7 +8,7 @@ import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
 import { useGlide } from "~/kit/glide"
 import { GlyphIcon, Icon, type Glyph, type IconName } from "~/kit/icons"
-import { useApp, type Section } from "~/nav"
+import { type Section, useGo, useNav } from "~/nav"
 import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
 import { AboutSection, AccountSection, AppearanceSection } from "~/settings/sections"
@@ -25,7 +25,8 @@ const SECTIONS: readonly (readonly [Section, Key, IconName | Glyph])[] = [
 
 export function Settings() {
   const navRef = useGlide<HTMLElement>(".side-row.is-on")
-  const { nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
   useSideways(navRef, nav.section)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

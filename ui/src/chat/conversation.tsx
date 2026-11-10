@@ -23,7 +23,7 @@ import { later } from "~/kit/later"
 import { day, sameDay } from "~/kit/time"
 import { inSpecThread, type Channel, type Message, type Person, type Where } from "~/model"
 import { liveOf, workingIn } from "~/doing"
-import { sameWhere, useApp } from "~/nav"
+import { sameWhere, useGo, useActions, useNav } from "~/nav"
 import { keepSpot, spotAt, spotKey, type Spot } from "~/places"
 import { between, nickname, shown } from "~/names"
 import { wordsRaw } from "~/words"
@@ -122,7 +122,8 @@ function reachFor(channel: Channel, where: Where, spot: Spot | null, jumping: bo
 }
 
 export function Conversation({ channel, jump }: { channel: Channel; jump: Jump | null }) {
-  const { nav, app } = useApp()
+  const nav = useNav()
+  const actions = useActions()
   const where: Where = nav.where
   const key = spotKey(channel.code, where)
   const spot = nav.restore !== undefined ? nav.restore : spotAt(key)
@@ -130,7 +131,7 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
   const target = reachFor(channel, where, spot, !!here)
   const visit = `${key}\n${nav.visit}`
   const [reached, setReached] = useState<string | null>(null)
-  const earlierTo = app.actions.earlierTo
+  const earlierTo = actions.earlierTo
   const code = channel.code
   useEffect(() => {
     if (target === null) return
@@ -187,8 +188,8 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
 }
 
 function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Where; spot: Spot | null; jump: Jump | null; doc: string | null }) {
-  const { go, app } = useApp()
-  const actions = app.actions
+  const go = useGo()
+  const actions = useActions()
   const since = channel.since
   const specAsks = useMemo(() => new Set((channel.specs ?? []).map((s) => s.ask)), [channel.specs])
   const feeds = useSyncExternalStore(docFeeds.subscribe, docFeeds.get)
@@ -663,7 +664,7 @@ export function ReadOnly({ channel, between: names }: { channel: Channel; betwee
 }
 
 function Working({ people }: { people: Person[] }) {
-  const { go } = useApp()
+  const go = useGo()
   const named = people.slice(0, 3)
   const more = people.length - named.length
   return (

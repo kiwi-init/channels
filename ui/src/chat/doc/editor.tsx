@@ -45,7 +45,7 @@ import { announce } from "~/kit/toasts"
 import type { BlockFiles, Channel, Message, Person, QuestionAsk, Task, Where } from "~/model"
 import { nickname, Shown } from "~/names"
 import { wordsRaw } from "~/words"
-import { useAct, useApp } from "~/nav"
+import { useAct, useGo, useActions, useAppAccount } from "~/nav"
 
 const QuestionCard = lazy(() => import("~/chat/question-card"))
 
@@ -488,7 +488,7 @@ function ReplyLine({ channel, to, quote, onClose }: { channel: Channel; to: Mess
 }
 
 function Head({ channel, attrs, onUnreply }: { channel: Channel; attrs: BlockAttrs; onUnreply: (id: string) => void }) {
-  const { go } = useApp()
+  const go = useGo()
   if (!attrs.author) return null
   return (
     <>
@@ -604,7 +604,8 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
   }, [channel.messages, channel.asks])
   const me = channel.you
   const you = channel.people.find((p) => p.you)
-  const { app } = useApp()
+  const actions = useActions()
+  const account = useAppAccount()
   const tooOld = useSyncExternalStore(
     (on) => onWriterFloor(shared.doc, on),
     () => writerFloor(shared.doc) > DOC_LEVEL
@@ -757,8 +758,8 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
       {tooOld && (
         <p className="doc-old">
           {t("chat.doc.editor.too.old")}
-          {app.account?.uiUpdate && (
-            <button type="button" onClick={() => app.actions.applyUi()}>
+          {account?.uiUpdate && (
+            <button type="button" onClick={() => actions.applyUi()}>
               {t("chat.doc.editor.switch")}
             </button>
           )}

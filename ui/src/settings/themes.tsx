@@ -6,7 +6,7 @@ import { use, useEffect, useMemo, useRef, useState, type CSSProperties } from "r
 import { t } from "~/i18n/i18n"
 import { Icon } from "~/kit/icons"
 import type { Appearance, CustomTheme, ThemeBase } from "~/model"
-import { useApp } from "~/nav"
+import { useActions, useAppPrefs } from "~/nav"
 import { Confirm, Seg } from "~/settings/controls"
 import { setPreview, useSystemDark } from "~/theme/apply"
 import { hex, isHex, TOKENS, type ColorTheme, type Colors } from "~/theme/derive"
@@ -61,8 +61,8 @@ function Mini({ colors }: { colors: Colors }) {
 }
 
 export function Themes() {
-  const { app } = useApp()
-  const { prefs, actions } = app
+  const actions = useActions()
+  const prefs = useAppPrefs()
   const systemDark = useSystemDark()
   const [query, setQuery] = useState("")
   const rex = use(loadRex())
@@ -152,7 +152,7 @@ export function Themes() {
 }
 
 function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[]; onDone: () => void }) {
-  const { app } = useApp()
+  const actions = useActions()
   const [draft, setDraft] = useState(start)
   const [from, setFrom] = useState("")
   const [more, setMore] = useState(false)
@@ -178,7 +178,7 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
       className="theme-editor"
       onSubmit={(e) => {
         e.preventDefault()
-        app.actions.saveTheme({ id: draft.id ?? `mine-${Date.now().toString(36)}`, name: name || t("settings.themes.mine"), appearance: draft.appearance, base: draft.base })
+        actions.saveTheme({ id: draft.id ?? `mine-${Date.now().toString(36)}`, name: name || t("settings.themes.mine"), appearance: draft.appearance, base: draft.base })
         onDone()
       }}
       onKeyDown={(e) => {
@@ -274,7 +274,7 @@ function Editor({ start, themes, onDone }: { start: Draft; themes: ColorTheme[];
         onClose={() => setDeleting(false)}
         onConfirm={() => {
           setDeleting(false)
-          if (draft.id) app.actions.deleteTheme(draft.id)
+          if (draft.id) actions.deleteTheme(draft.id)
           onDone()
         }}
       />

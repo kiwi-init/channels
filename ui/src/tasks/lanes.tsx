@@ -7,7 +7,7 @@ import { Empty } from "~/kit/empty"
 import { ago, clock } from "~/kit/time"
 import { contextOf, liveOf, restOf } from "~/doing"
 import type { Channel, PullRequest, Task } from "~/model"
-import { useApp } from "~/nav"
+import { useApp, useGo } from "~/nav"
 import { TONES } from "~/tasks/row"
 import { nickname, shown, Shown } from "~/names"
 import { lanesOf, type Lane } from "~/now"
@@ -51,7 +51,7 @@ function PrLine({ pr }: { pr: PullRequest }) {
 }
 
 function Current({ task }: { task: Task }) {
-  const { go } = useApp()
+  const go = useGo()
   return (
     <li className="lane-task">
       <button type="button" onClick={() => go({ to: "panel", panel: { kind: "task", task: task.id } })}>

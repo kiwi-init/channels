@@ -5,7 +5,7 @@ import { cx } from "~/kit/bits"
 import { later } from "~/kit/later"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
-import { useApp } from "~/nav"
+import { useNav, useGo, useActions, useTiles, useAppPrefs } from "~/nav"
 import type { Menu } from "~/shell/rail-menu"
 import { railItems, type DropTarget } from "~/shell/rail-items"
 import { t } from "~/i18n/i18n"
@@ -25,18 +25,22 @@ const spot = (e: { target: EventTarget }): DropTarget => {
 const keyOf = (target: DropTarget): string => (target.kind === "channel" ? `c:${target.code}` : target.kind === "folder" ? `f:${target.id}` : "rail")
 
 export function Rail() {
-  const { app, nav, go } = useApp()
+  const nav = useNav()
+  const go = useGo()
+  const actions = useActions()
+  const tiles = useTiles()
+  const prefs = useAppPrefs()
   const onChannel = nav.page === "channel"
   const home = onChannel && nav.channel === null
   const on = onChannel ? nav.channel : null
-  const folders = app.prefs.folders
-  const items = railItems(app.channels, folders)
+  const folders = prefs.folders
+  const items = railItems(tiles, folders)
   const ordered = items.flatMap((i) => (i.kind === "channel" ? [i.tile] : i.tiles))
   const [over, setOver] = useState<string | null>(null)
   const [moving, setMoving] = useState<string | null>(null)
   const [menu, setMenu] = useState<Menu | null>(null)
   const [fresh, setFresh] = useState<string | null>(null)
-  const save = (next: typeof folders) => app.actions.setPrefs({ folders: next })
+  const save = (next: typeof folders) => actions.setPrefs({ folders: next })
   const step = useEffectEvent((dir: 1 | -1) => {
     const from = ordered.findIndex((c) => c.code === on)
     const news = ordered.map((c, i) => ({ open: i === from, fresh: c.unread > 0, needs: c.needsYou, count: c.unread }))
@@ -64,13 +68,13 @@ export function Rail() {
     <nav className="rail" aria-label={t("shell.rail.channels")}>
       {document.documentElement.dataset["wm"] === "floating" && (
         <div className="wm-controls">
-          <button type="button" className="wm-btn is-close" aria-label={t("shell.rail.close.window")} title={t("shell.rail.close")} onClick={() => app.actions.windowControl("close")}>
+          <button type="button" className="wm-btn is-close" aria-label={t("shell.rail.close.window")} title={t("shell.rail.close")} onClick={() => actions.windowControl("close")}>
             <Icon name="close" size={10} />
           </button>
-          <button type="button" className="wm-btn" aria-label={t("shell.rail.minimize.window")} title={t("shell.rail.minimize")} onClick={() => app.actions.windowControl("minimize")}>
+          <button type="button" className="wm-btn" aria-label={t("shell.rail.minimize.window")} title={t("shell.rail.minimize")} onClick={() => actions.windowControl("minimize")}>
             <Icon name="minus" size={10} />
           </button>
-          <button type="button" className="wm-btn" aria-label={t("shell.rail.maximize.window")} title={t("shell.rail.maximize")} onClick={() => app.actions.windowControl("maximize")}>
+          <button type="button" className="wm-btn" aria-label={t("shell.rail.maximize.window")} title={t("shell.rail.maximize")} onClick={() => actions.windowControl("maximize")}>
             <Icon name="expand" size={10} />
           </button>
         </div>
@@ -166,7 +170,7 @@ export function Rail() {
       </div>
       {menu && (
         <Suspense fallback={null}>
-          <RailMenu menu={menu} folders={folders} title={(code) => app.channels.find((c) => c.code === code)?.title ?? code} save={save} close={() => setMenu(null)} />
+          <RailMenu menu={menu} folders={folders} title={(code) => tiles.find((c) => c.code === code)?.title ?? code} save={save} close={() => setMenu(null)} />
         </Suspense>
       )}
     </nav>

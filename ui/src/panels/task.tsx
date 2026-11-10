@@ -20,7 +20,7 @@ import { MoreButton } from "~/kit/menu-open"
 import { ageOf, ago } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent } from "~/model"
 import { openMessage } from "~/live/open-message"
-import { useApp } from "~/nav"
+import { useGo, useActions, useToast } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { wordsPlain, wordsRaw } from "~/words"
 import { IssueMark, issueWord, PrCard } from "~/github/parts"
@@ -116,7 +116,7 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
 }
 
 function Who({ channel, name }: { channel: Channel; name: string }) {
-  const { go } = useApp()
+  const go = useGo()
   const person = memberOf(channel, name)
   return (
     <button type="button" className="task-who" onClick={() => go({ to: "modal", modal: { kind: "person", name } })}>
@@ -192,7 +192,8 @@ function Props({ channel, task, may }: { channel: Channel; task: Task; may: bool
 }
 
 function Suggested({ channel, task, suggested }: { channel: Channel; task: Task; suggested: NonNullable<Task["suggested"]> }) {
-  const { app, toast } = useApp()
+  const actions = useActions()
+  const toast = useToast()
   return (
     <div className="task-suggest">
       <Avatar person={memberOf(channel, suggested.name)} size="sm" />
@@ -203,7 +204,7 @@ function Suggested({ channel, task, suggested }: { channel: Channel; task: Task;
         type="button"
         className="btn is-small"
         onClick={() => {
-          app.actions.assignTask(channel.code, task.id, suggested.name, suggested.reason ? reasonText(suggested.reason) : SENT.hasContext)
+          actions.assignTask(channel.code, task.id, suggested.name, suggested.reason ? reasonText(suggested.reason) : SENT.hasContext)
           toast(t("panels.task.yours.now", { task: String(task.id), name: nickname(channel, suggested.name) }))
         }}
       >
@@ -241,7 +242,8 @@ const aboutOf = (p: Person): string =>
     .join(" · ")
 
 function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
-  const { app, toast } = useApp()
+  const actions = useActions()
+  const toast = useToast()
   const [why, setWhy] = useState("")
   const close = () => {
     setWhy("")
@@ -251,7 +253,7 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
   const first = task.suggested ? people.filter((p) => p.name === task.suggested?.name) : []
   const rest = people.filter((p) => p.name !== task.suggested?.name).sort(agentsFirst)
   const pick = (name: string) => {
-    app.actions.assignTask(channel.code, task.id, name, why.trim() || (name === task.suggested?.name ? (task.suggested.reason ? reasonText(task.suggested.reason) : SENT.hasContext) : ""))
+    actions.assignTask(channel.code, task.id, name, why.trim() || (name === task.suggested?.name ? (task.suggested.reason ? reasonText(task.suggested.reason) : SENT.hasContext) : ""))
     toast(t("panels.task.yours.now", { task: String(task.id), name: nickname(channel, name) }))
     close()
   }
@@ -292,10 +294,11 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
 }
 
 function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
-  const { app, toast } = useApp()
+  const actions = useActions()
+  const toast = useToast()
   const people = channel.people.filter((p) => !p.left && !p.readOnly && p.name !== task.owner).sort(agentsFirst)
   const pick = (name: string) => {
-    app.actions.setReviewer(channel.code, task.id, name)
+    actions.setReviewer(channel.code, task.id, name)
     toast(name === ANYONE ? t("panels.task.anyone.reviews", { task: String(task.id) }) : t("panels.task.reviews", { name: nickname(channel, name), task: String(task.id) }))
     onClose()
   }
@@ -330,7 +333,7 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
 }
 
 function Waits({ channel, waits }: { channel: Channel; waits: (PermissionAsk | QuestionAsk)[] }) {
-  const { go } = useApp()
+  const go = useGo()
   return (
     <section className="panel-section" aria-label={t("panels.task.waiting.label")}>
       <div className="task-box is-waiting">
@@ -353,7 +356,7 @@ function Waits({ channel, waits }: { channel: Channel; waits: (PermissionAsk | Q
 }
 
 function LinkedIssue({ channel, id }: { channel: Channel; id: number }) {
-  const { go } = useApp()
+  const go = useGo()
   const issue = channel.issues?.find((i) => i.task === id)
   if (!issue) return null
   return (
@@ -367,7 +370,8 @@ function LinkedIssue({ channel, id }: { channel: Channel; id: number }) {
 }
 
 function Review({ channel, task }: { channel: Channel; task: Task }) {
-  const { app, toast } = useApp()
+  const actions = useActions()
+  const toast = useToast()
   const [sending, setSending] = useState(false)
   const last: ReviewRound | undefined = task.rounds.at(-1)
   const yours = task.youReview !== undefined
@@ -387,7 +391,7 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
           ? t("panels.task.review.unworked")
           : t("panels.task.review.waits")
   const sendBack = (why: string) => {
-    app.actions.approveTask(channel.code, task.id, false, why)
+    actions.approveTask(channel.code, task.id, false, why)
     setSending(false)
     toast(owner ? t("panels.task.sent.back.to", { task: String(task.id), name: owner }) : t("panels.task.sent.back", { task: String(task.id) }))
   }
@@ -417,7 +421,7 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
                 type="button"
                 className="btn is-primary"
                 onClick={() => {
-                  app.actions.approveTask(channel.code, task.id, true)
+                  actions.approveTask(channel.code, task.id, true)
                   toast(t("panels.task.approved", { task: String(task.id) }))
                 }}
               >
@@ -435,7 +439,7 @@ function Review({ channel, task }: { channel: Channel; task: Task }) {
 }
 
 function TaskMenu({ channel, task }: { channel: Channel; task: Task }) {
-  const { app } = useApp()
+  const actions = useActions()
   const [editing, setEditing] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const label = `T${task.id}`
@@ -448,7 +452,7 @@ function TaskMenu({ channel, task }: { channel: Channel; task: Task }) {
           [
             {
               label: t("panels.task.menu.delete"),
-              run: () => app.actions.deleteTask(channel.code, task.id),
+              run: () => actions.deleteTask(channel.code, task.id),
               confirm: { title: t("panels.task.delete.title", { task: String(task.id) }), sub: t("panels.task.delete.sub"), yes: t("panels.task.delete.yes") },
             },
           ],
@@ -461,7 +465,7 @@ function TaskMenu({ channel, task }: { channel: Channel; task: Task }) {
 }
 
 function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
-  const { app } = useApp()
+  const actions = useActions()
   const [title, setTitle] = useState(wordsRaw(task.title))
   const [detail, setDetail] = useState(task.detail ? wordsRaw(task.detail) : "")
   const close = () => {
@@ -483,7 +487,7 @@ function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Ta
         onSubmit={(e) => {
           e.preventDefault()
           if (!title.trim()) return
-          app.actions.editTask(channel.code, task.id, { title, detail })
+          actions.editTask(channel.code, task.id, { title, detail })
           onClose()
         }}
       >
@@ -518,7 +522,7 @@ function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Ta
 }
 
 function State({ channel, task, may }: { channel: Channel; task: Task; may: boolean }) {
-  const { app } = useApp()
+  const actions = useActions()
   return (
     <div className="tp-state">
       <p className="tp-status" title={t("panels.task.created", { when: since(task.createdAt) })}>
@@ -530,11 +534,11 @@ function State({ channel, task, may }: { channel: Channel; task: Task; may: bool
       {may && (
         <span className="tp-moves">
           {task.status === "done" ? (
-            <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "todo")}>
+            <button type="button" className="btn is-quiet is-small" onClick={() => actions.setTaskStatus(channel.code, task.id, "todo")}>
               {t("panels.task.reopen")}
             </button>
           ) : (
-            <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setTaskStatus(channel.code, task.id, "done")}>
+            <button type="button" className="btn is-quiet is-small" onClick={() => actions.setTaskStatus(channel.code, task.id, "done")}>
               {t("panels.task.mark.done")}
             </button>
           )}
@@ -545,7 +549,8 @@ function State({ channel, task, may }: { channel: Channel; task: Task; may: bool
 }
 
 function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
-  const { app, toast } = useApp()
+  const actions = useActions()
+  const toast = useToast()
   const [why, setWhy] = useState("")
   const close = () => {
     setWhy("")
@@ -565,7 +570,7 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
         onSubmit={(e) => {
           e.preventDefault()
           if (!why.trim()) return
-          app.actions.cancelTask(channel.code, task.id, why.trim())
+          actions.cancelTask(channel.code, task.id, why.trim())
           toast(t("panels.task.cancelled", { task: String(task.id) }))
           close()
         }}
@@ -618,7 +623,7 @@ function Activity({ channel, history }: { channel: Channel; history: TaskEvent[]
 }
 
 function Move({ channel, e }: { channel: Channel; e: TaskEvent }) {
-  const { go } = useApp()
+  const go = useGo()
   const [full, setFull] = useState(false)
   const note = e.note ? named(e.what === "mention" ? preview(wordsRaw(e.note)) : wordsRaw(e.note), channel.nicknames) : ""
   const long = note.length > LONG

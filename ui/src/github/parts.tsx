@@ -24,7 +24,7 @@ import { GlyphIcon, Icon, ISSUE, type Glyph } from "~/kit/icons"
 import { copyText } from "~/kit/toasts"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Check, type Issue, type PullRequest } from "~/model"
-import { useApp } from "~/nav"
+import { useGo } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { OutsideLink } from "~/kit/outside"
 
@@ -189,7 +189,7 @@ export function Branch({ name, copy }: { name: string; copy?: boolean }) {
 }
 
 export function TaskLink({ channel, id }: { channel: Channel; id: number }) {
-  const { go } = useApp()
+  const go = useGo()
   const task = channel.tasks.find((task) => task.id === id)
   if (!task) return null
   return (
@@ -210,7 +210,7 @@ export function TaskLink({ channel, id }: { channel: Channel; id: number }) {
 }
 
 export function PrCard({ pr }: { pr: PullRequest }) {
-  const { go } = useApp()
+  const go = useGo()
   const line = checksLine(pr)
   return (
     <div className="gh-card">

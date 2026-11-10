@@ -7,7 +7,7 @@ import "~/styles/start.css"
 import { autofocus, cx } from "~/kit/bits"
 import { Modal } from "~/kit/modal"
 import type { InviteInfo } from "~/model"
-import { useApp } from "~/nav"
+import { useApp, useGo } from "~/nav"
 import { t } from "~/i18n/i18n"
 
 const CODE = /^[A-Za-z0-9._~-]+$/
@@ -31,7 +31,7 @@ function inviteCode(text: string): string | null {
 }
 
 export function JoinDialog() {
-  const { go } = useApp()
+  const go = useGo()
   return <JoinForm onClose={() => go({ to: "dialog", dialog: null })} />
 }
 
