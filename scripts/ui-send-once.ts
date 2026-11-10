@@ -11,6 +11,7 @@ const DIST = harnessDist(process.argv.find((a) => a.startsWith("--dist="))?.slic
 const ENGINE = process.argv.includes("--webkit") ? "webkit" : "chromium";
 const OFFLINE = "written while the relay was away";
 const AGAIN = "written in a second outage";
+const UNSURE = "stored, but every answer was lost";
 
 const data = mkdtempSync(join(tmpdir(), "kiwi-send-once-"));
 mkdirSync(join(data, "relay"));
@@ -71,6 +72,21 @@ try {
     if (file) return route.fulfill({ path: file });
     return route.continue();
   });
+  let lost = false;
+  let lostPosts = 0;
+  await context.route("**/messages", async (route) => {
+    if (!lost || route.request().method() !== "POST") return route.fallback();
+    lostPosts += 1;
+    return route.abort("connectionreset");
+  });
+  await context.routeWebSocket(/\/ws\?/, (ws) => {
+    const server = ws.connectToServer();
+    ws.onMessage((m) => server.send(m));
+    server.onMessage((m) => {
+      if (lost && typeof m === "string" && m.includes('"t":"ack"')) return;
+      ws.send(m);
+    });
+  });
   const page = await context.newPage();
   const threw: string[] = [];
   page.on("pageerror", (e) => threw.push(e.message));
@@ -83,6 +99,18 @@ try {
   await rows(page, "sent while all was well").first().waitFor({ timeout: 30000 });
 
   await settled(page, "sent while all was well", 30_000);
+  lost = true;
+  await say(page, UNSURE);
+  const lostBy = Date.now() + 120_000;
+  while (lostPosts < 3 && Date.now() < lostBy) await page.waitForTimeout(250);
+  check("the relay stored a message whose every answer was lost", lostPosts >= 3 ? null : `only ${lostPosts} lost answers in 120 s`);
+  await page.waitForTimeout(5000);
+  lost = false;
+  const unsure = await settled(page, UNSURE, 60_000);
+  check("it shows once with no Couldn't send, and is not sent again", unsure.rows === 1 && unsure.failed === 0 ? null : `${unsure.rows} rows, ${unsure.failed} failed`);
+  const left = await page.locator(".main .composer textarea").first().inputValue();
+  check("nothing came back into the composer", left === "" ? null : `it holds "${left}"`);
+
   down = true;
   relay.kill();
   await new Promise((done) => relay.once("exit", done));
@@ -123,7 +151,7 @@ try {
   await page.reload();
   await docOpen(page);
   await rows(page, "sent while all was well").first().waitFor({ timeout: 30000 });
-  for (const text of ["sent while all was well", OFFLINE, AGAIN]) {
+  for (const text of ["sent while all was well", UNSURE, OFFLINE, AGAIN]) {
     const after = await settled(page, text, 15_000);
     check(`the relay holds "${text}" once`, after.rows === 1 && after.failed === 0 ? null : `${after.rows} rows, ${after.failed} failed`);
   }
