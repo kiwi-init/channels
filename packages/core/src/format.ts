@@ -841,7 +841,7 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
     `  status: ${statusWord(statusOf(state, t))} (${stateWord(t.state)})${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : t.leftBy ? ` · unassigned: ${inlineText(t.leftBy, 40)} left the channel` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
   ];
-  const mover = moverOf(state, t);
+  const mover = moverOf(state, t, now);
   if (mover) out.push(`  move: ${moverText(mover)}`);
   const stage = stageOf(state, t);
   out.push(`  stage: ${stageText(state, stage)}`);

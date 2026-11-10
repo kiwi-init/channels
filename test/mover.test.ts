@@ -1,9 +1,10 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { formatTask, formatTasks } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { moverOf, moverText } from "@kiwi/core/mover.ts";
+import { moverOf, moverText, type Mover } from "@kiwi/core/mover.ts";
 import { PROTOCOL_VERSION, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts";
+import { currentStep, type StepSpec } from "@kiwi/core/steps.ts";
 
 const NAMES = ["jon", "owl", "win", "mac", "zed"] as const;
 type Name = (typeof NAMES)[number];
@@ -102,7 +103,7 @@ describe("every open task has one mover, derived from state (#3930 §1)", () => 
     await c.ev("jon", { op: "github", items: [pr(A)] });
     await c.update("win", stale, { state: "review", at: A });
     await c.update("mac", stale, { state: "done", verdict: "approved", round: 1, at: A });
-    expect(moveOf(c.state(), stale)).toEqual({ kind: "member", name: "win", move: "land" });
+    expect(moveOf(c.state(), stale)).toEqual({ kind: "member", name: "win", move: "land", step: "s1 “merge”" });
     await c.ev("jon", { op: "github", items: [pr(B)] });
     const s = c.state();
     expect(s.tasks.get(stale)!.state).toBe("review");
@@ -119,8 +120,8 @@ describe("every open task has one mover, derived from state (#3930 §1)", () => 
     await c.update("win", led, { state: "review", at: A });
     await c.update("mac", led, { state: "done", verdict: "approved", round: 1, at: A });
     const s = c.state();
-    expect(moveOf(s, own)).toEqual({ kind: "member", name: "win", move: "land" });
-    expect(moveOf(s, led)).toEqual({ kind: "member", name: "owl", move: "land" });
+    expect(moveOf(s, own)).toEqual({ kind: "member", name: "win", move: "land", step: "s1 “merge”" });
+    expect(moveOf(s, led)).toEqual({ kind: "member", name: "owl", move: "land", step: "s1 “merge”" });
   });
 
   test("an open question that holds the task wins over its state: the first person named on the oldest one (case 20)", async () => {
@@ -212,5 +213,84 @@ describe("the board and the task page say whose move it is (#3930 §1)", () => {
     expect(formatTask(s, s.tasks.get(second)!).split("\n")).toContain("  move: waiting, 1 ahead of it for win");
     expect(formatTask(s, s.tasks.get(loose)!).split("\n")).toContain("  move: owl to give it an owner");
     expect(moverText({ kind: "nobody", move: "assign" })).toBe("nobody to give it an owner: the channel has no owner here");
+  });
+});
+
+describe("a landing task's mover is its current step's (#3930 §1 and §3, T4348)", () => {
+  const HOUR = 3_600_000;
+  async function landing(c: ReturnType<typeof channel>, steps: StepSpec[], more: Partial<Extract<Event, { op: "task.add" }>> = {}): Promise<number> {
+    const id = await c.add({ owner: "win", review: "mac", steps, ...more });
+    await c.update("win", id, { state: "review", at: A });
+    await c.update("mac", id, { state: "done", verdict: "approved", round: 1, at: A });
+    return id;
+  }
+  const end = (c: ReturnType<typeof channel>, from: Name, task: number, step: string) => c.ev(from, { op: "task.landed", task, step });
+
+  test("the current step's mover overrides the task's lander, and ending a step hands the move to the next one's", async () => {
+    const c = channel();
+    const id = await landing(c, [{ words: "owner completes the PR", by: "jon" }, { words: "cut the release", by: "zed" }, { words: "tell the list" }], { lander: "owl" });
+    expect(moveOf(c.state(), id)).toEqual({ kind: "member", name: "jon", move: "land", step: "s1 “owner completes the PR”" });
+    await end(c, "jon", id, "s1");
+    expect(moveOf(c.state(), id)).toEqual({ kind: "member", name: "zed", move: "land", step: "s2 “cut the release”" });
+    await end(c, "zed", id, "s2");
+    expect(moveOf(c.state(), id)).toEqual({ kind: "member", name: "owl", move: "land", step: "s3 “tell the list”" });
+    await end(c, "owl", id, "s3");
+    expect(c.state().tasks.get(id)!.state).toBe("done");
+    expect(moveOf(c.state(), id)).toBeUndefined();
+  });
+
+  test("a timed wait has no member move until it ends, then the step's mover has it", async () => {
+    const c = channel();
+    const id = await landing(c, [{ words: "soak in hml", by: "zed", wait: { reason: "24h soak", ms: 24 * HOUR } }]);
+    const s = c.state();
+    const until = currentStep(s.tasks.get(id)!)!.wait!.until!;
+    expect(moverOf(s, s.tasks.get(id)!, until - HOUR)).toEqual({ kind: "hold", step: "s1 “soak in hml”", until, left: HOUR, reason: "24h soak" });
+    expect(moverOf(s, s.tasks.get(id)!, until)).toEqual({ kind: "member", name: "zed", move: "land", step: "s1 “soak in hml”" });
+    expect(formatTask(s, s.tasks.get(id)!, until - HOUR).split("\n")).toContain("  move: nobody for 1h: step s1 “soak in hml” waits (24h soak)");
+  });
+
+  test("a run step has no member move while its run is in time; a failure, an overrun or a run Kiwi can't see hands it to the named member", async () => {
+    const c = channel();
+    await c.ev("jon", { op: "repos.set", repos: ["o/r"] });
+    const runEvent = (run: number, title: string, conclusion?: string, started = 1) =>
+      c.ev("jon", {
+        op: "github",
+        items: [{ event: "workflow_run", repo: "o/r", at: 1, action: conclusion ? "completed" : "in_progress", run, title, started, ...(conclusion ? { conclusion } : {}) }],
+      } as Event);
+    await runEvent(1, "warm-up", "success");
+    const id = await landing(c, [{ words: "prd pipeline", by: "zed", run: { id: "deploy-7", expected: HOUR } }]);
+    const blindId = await landing(c, [{ words: "other pipeline", by: "zed", run: { expected: HOUR } }]);
+    const s = c.state();
+    const due = currentStep(s.tasks.get(id)!)!.run!.due!;
+    expect(moverOf(s, s.tasks.get(id)!, due - 60_000)).toEqual({ kind: "run", step: "s1 “prd pipeline”", behind: "zed", due, left: 60_000 });
+    expect(moverOf(s, s.tasks.get(id)!, due)).toEqual({ kind: "member", name: "zed", move: "land", step: "s1 “prd pipeline”", why: "run overran" });
+    expect(moverOf(s, s.tasks.get(blindId)!, 2)).toMatchObject({ kind: "member", name: "zed", why: "run can't be seen" });
+    await runEvent(70, "deploy-7", undefined, 500);
+    await runEvent(70, "deploy-7", "failure", 500);
+    const failed = c.state();
+    expect(moverOf(failed, failed.tasks.get(id)!, due - 60_000)).toEqual({ kind: "member", name: "zed", move: "land", step: "s1 “prd pipeline”", why: "run failed" });
+  });
+
+  test("a step's mover who left hands the move to the channel's owner, and a step nobody is named for goes to the lead", async () => {
+    const c = channel();
+    const id = await landing(c, [{ words: "cut the release", by: "zed" }]);
+    expect(moveOf(c.state(rosterOf(["zed"])), id)).toEqual({ kind: "member", name: "jon", move: "land", step: "s1 “cut the release”" });
+    const loose = await c.add({ review: "mac", steps: [{ words: "ship" }] });
+    await c.update("owl", loose, { state: "review", at: A });
+    await c.update("mac", loose, { state: "done", verdict: "approved", round: 1, at: A });
+    const s = c.state();
+    expect(s.tasks.get(loose)!.state).toBe("landing");
+    expect(moveOf(s, loose)).toEqual({ kind: "member", name: "owl", move: "assign" });
+  });
+
+  test("a held question still wins over a step, a wait and a run", async () => {
+    const c = channel();
+    const stepped = await landing(c, [{ words: "cut the release", by: "zed" }]);
+    const waiting = await landing(c, [{ words: "soak", by: "zed", wait: { reason: "soak", ms: HOUR } }]);
+    const running = await landing(c, [{ words: "pipeline", by: "zed", run: { id: "deploy-9", expected: HOUR } }]);
+    const q = await c.ask("zed", ["jon"], [stepped, waiting, running]);
+    const s = c.state();
+    const answer: Mover = { kind: "member", name: "jon", move: "answer", question: q.seq };
+    expect([stepped, waiting, running].map((id) => moverOf(s, s.tasks.get(id)!, 5))).toEqual([answer, answer, answer]);
   });
 });
