@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -15,9 +15,9 @@ import { harnessDist } from "./ui-harness.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`What a needs-you badge costs and how fast it moves for a channel that isn't open. PERF_CHANNELS channels (20), each with
-PERF_MESSAGES messages (20); an agent in the first one. Samples the page's JS heap after GC and the browser's open connections to
-the relay: in a channel, on Home, and back in a channel. Then, with the last channel open, the agent asks in the first one and
-closes the ask again: how long the first channel's rail tile takes to show the badge and to drop it.
+PERF_MESSAGES messages (20); an agent in the first one. Samples the page's JS heap after GC: in a channel, on Home,
+and back in a channel. Then, with the last channel open, the agent asks Jonatas in the first one (holding his message, as
+ask-human does), visits it and comes back, and closes the ask: how fast the first channel's rail tile shows the badge and drops it.
 
   bun scripts/ui-harness.ts && bun scripts/perf-home-live.ts [--dist=ui/dist-harness] [--json out.json]`);
   process.exit(0);
@@ -63,27 +63,20 @@ const { relay, port } = await startLocalRelay(join(data, "relay"), DIST, { rateL
 const BASE = `http://127.0.0.1:${port}/`;
 const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 
-function browserConnections(): number {
-  const ss = spawnSync("ss", ["-Htnp", "state", "established", `( dport = :${port} )`], { encoding: "utf8" });
-  return ss.stdout
-    .split("\n")
-    .filter((l) => l.trim())
-    .filter((l) => /chrom|headless/i.test(l)).length;
-}
-
 async function sample(cdp: CDPSession, page: Page, phase: string): Promise<Record<string, number | string>> {
   await page.waitForTimeout(SETTLE_MS);
   await cdp.send("HeapProfiler.collectGarbage");
   const { metrics } = (await cdp.send("Performance.getMetrics")) as { metrics: { name: string; value: number }[] };
   const m = Object.fromEntries(metrics.map((x) => [x.name, x.value]));
-  const s = { phase, heapMB: mb(m.JSHeapUsedSize ?? 0), nodes: m.Nodes ?? 0, connections: browserConnections() };
+  const s = { phase, heapMB: mb(m.JSHeapUsedSize ?? 0), nodes: m.Nodes ?? 0 };
   log(phase, JSON.stringify(s));
   return s;
 }
 
 const tileLabel = (page: Page, title: string): Promise<string | null> =>
   page.evaluate(
-    (t) => [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === t)?.getAttribute("aria-label") ?? null,
+    (t) =>
+      [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === t)?.getAttribute("aria-label") ?? null,
     title,
   );
 
@@ -147,6 +140,16 @@ try {
   );
   const arrivedMs = await until(page, b!, (l) => l.includes("need you"), 30000);
   log(`an ask in ${b} while ${a} is open: ${arrivedMs === null ? "no badge after 30 s" : `badge after ${arrivedMs} ms`}`);
+  if (OUT) await page.locator('nav[aria-label="Channels"]').screenshot({ path: OUT.replace(/\.json$/, "") + "-rail.png" });
+  if (arrivedMs !== null) {
+    await switchTo(page, b!);
+    const inside = await tileLabel(page, b!);
+    await switchTo(page, a);
+    const backMs = await until(page, b!, (l) => l.includes("1 need you"), 10000);
+    const back = await tileLabel(page, b!);
+    log(`into ${b} and back to ${a} with the ask held: ${b}'s tile inside it "${inside}", back in ${a} "${back}"${backMs === null ? " (not 1 need you after 10 s)" : ""}`);
+    report.roundTrip = { inside, back, oneNeedsYouAfterMs: backMs };
+  }
   if (arrivedMs === null) {
     const seen = await runAgent(
       oneLook(
