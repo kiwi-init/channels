@@ -124,7 +124,7 @@ const words = {
   "start.enroll.approve.there": "Approve this computer there.",
   "start.enroll.type.these": "Type these on your other computer",
   "start.enroll.your.key": "Is this your key, {name}?",
-  "start.enroll.compare": "Compare it with your other computer, in Settings › Account. A different key means someone else answered: don't join.",
+  "start.enroll.compare": "Compare it with your other computer: Settings › Account, the line “Device sign-in key”. A different key means someone else answered: don't join.",
   "start.enroll.matches": "It matches, join",
   "start.enroll.no.match": "It doesn't match",
   "start.enroll.cancel": "Cancel",
