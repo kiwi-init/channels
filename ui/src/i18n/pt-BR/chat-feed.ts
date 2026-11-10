@@ -14,7 +14,6 @@ export default {
   "chat.menus.copy.message.link": "Copiar link da mensagem",
   "chat.menus.copy.seq": "Copiar #{seq}",
   "chat.menus.earlier.versions": "Versões anteriores",
-  "chat.menus.keep.hidden": "Sempre ocultar {name}",
   "chat.menus.show": "Mostrar {name}",
   "chat.menus.hide": "Ocultar {name}",
   "chat.menus.mark.read": "Marcar como lida",

@@ -14,7 +14,6 @@ export default {
   "chat.menus.copy.message.link": "复制消息链接",
   "chat.menus.copy.seq": "复制 #{seq}",
   "chat.menus.earlier.versions": "历史版本",
-  "chat.menus.keep.hidden": "保持隐藏 {name}",
   "chat.menus.show": "显示 {name}",
   "chat.menus.hide": "隐藏 {name}",
   "chat.menus.mark.read": "标为已读",

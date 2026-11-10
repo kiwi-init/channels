@@ -2,7 +2,6 @@ import type { Where } from "~/model"
 import { store } from "~/live/value"
 
 const STORE_KEY = "mc.hidden-places"
-const KEPT_KEY = "mc.kept-hidden-places"
 
 function saved(key: string): readonly string[] {
   try {
@@ -15,7 +14,6 @@ function saved(key: string): readonly string[] {
 }
 
 export const hiddenPlaces = store<readonly string[]>(saved(STORE_KEY))
-export const keptHidden = store<readonly string[]>(saved(KEPT_KEY))
 
 function save(list: typeof hiddenPlaces, key: string, next: readonly string[]): void {
   list.set(next)
@@ -28,11 +26,10 @@ function save(list: typeof hiddenPlaces, key: string, next: readonly string[]): 
 
 export const hiddenKey = (code: string, where: Extract<Where, { kind: "room" | "dm" }>): string => `${code}/${where.kind === "room" ? `room:${where.room}` : `dm:${where.with}`}`
 
-export function setHidden(key: string, on: boolean, keep = false): void {
+export function setHidden(key: string, on: boolean): void {
   save(hiddenPlaces, STORE_KEY, on ? [...new Set([...hiddenPlaces.get(), key])] : hiddenPlaces.get().filter((k) => k !== key))
-  save(keptHidden, KEPT_KEY, on && keep ? [...new Set([...keptHidden.get(), key])] : keptHidden.get().filter((k) => k !== key))
 }
 
-export function comingBack(rows: readonly { key: string; news: boolean; mention?: boolean }[], hidden: readonly string[], kept: readonly string[] = []): string[] {
-  return rows.filter((r) => hidden.includes(r.key) && (kept.includes(r.key) ? r.mention : r.news)).map((r) => r.key)
+export function comingBack(rows: readonly { key: string; mention: boolean }[], hidden: readonly string[]): string[] {
+  return rows.filter((r) => hidden.includes(r.key) && r.mention).map((r) => r.key)
 }
