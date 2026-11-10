@@ -1010,12 +1010,24 @@
   gap: 8px;
 }
 
-@media (max-width: 1180px) {
-  .chan.has-panel {
+@media (max-width: 1052px) {
+  .chan.has-panel:not(.is-bare) {
     grid-template-columns: var(--side-w) minmax(0, 1fr);
   }
 
-  .chan.has-panel .panel {
+  .chan.has-panel:not(.is-bare) .panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    width: min(var(--panel-w), 100vw);
+    background: var(--bg);
+  }
+}
+
+@media (max-width: 804px) {
+  .chan.is-bare.has-panel .panel {
     position: fixed;
     top: 0;
     right: 0;
@@ -1142,7 +1154,7 @@
   }
 }
 
-@media (min-width: 1181px) {
+@media (min-width: 805px) {
   .chan.is-bare.has-panel {
     grid-template-columns: minmax(0, 1fr) var(--panel-w);
   }
