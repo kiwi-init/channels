@@ -222,9 +222,9 @@ const say = (err: unknown): string => (err instanceof Error ? err.message : Stri
 
 export interface AnnotatorProps {
   image: { url: string; alt: string }
-  sender: string
-  face: Face | undefined
-  at: number
+  sender?: string
+  face?: Face | undefined
+  at?: number
   onSend?: (note: string, image: Upload) => void
   onClose: () => void
 }
@@ -237,7 +237,8 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
   const scroller = useRef<HTMLDivElement | null>(null)
   const room = useStageSize(stage)
   const [natural, setNatural] = useState<{ width: number; height: number } | null>(null)
-  const [tool, setTool] = useState<Tool>("arrow")
+  const [marking, setMarking] = useState(false)
+  const [tool, setTool] = useState<Tool>("move")
   const [ink, setInk] = useState<Ink>("alert")
   const [marks, setMarks] = useState<Mark[]>([])
   const [undone, setUndone] = useState<Mark[]>([])
@@ -309,12 +310,12 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
         return
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      const next = TOOL_KEYS[e.key.toLowerCase()]
+      const next = marking ? TOOL_KEYS[e.key.toLowerCase()] : undefined
       if (next) setTool(next)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [typing, asking, leave, undo, redo])
+  }, [typing, asking, leave, undo, redo, marking])
 
   const pointAt = (e: ReactPointerEvent<SVGSVGElement>): Point | null => (natural ? toImage(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect(), natural) : null)
 
@@ -390,7 +391,7 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
     if (!onSend || !marks.length) return
     try {
       onSend(note.trim(), await current())
-      toast(t("chat.annotator.sent.to", { name: sender }))
+      toast(t("chat.annotator.sent.to", { name: sender ?? name }))
       onClose()
     } catch (err) {
       toast(t("chat.annotator.not.sent", { why: say(err) }), "error")
@@ -404,7 +405,7 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
     <dialog
       ref={dialog}
       className="annot"
-      aria-label={t("chat.annotator.mark.up", { name })}
+      aria-label={marking ? t("chat.annotator.mark.up", { name }) : name}
       onCancel={(e) => {
         e.preventDefault()
         if (!typing && !asking) leave()
@@ -413,12 +414,10 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
     >
       <header className="annot-head">
         <div className="annot-who">
-          <Avatar person={face} size="sm" />
+          {sender !== undefined && <Avatar person={face} size="sm" />}
           <div className="annot-who-text">
-            <p className="annot-name">{sender}</p>
-            <p className="annot-meta">
-              {name} · {clock(at)}
-            </p>
+            <p className="annot-name">{sender ?? name}</p>
+            {sender !== undefined && <p className="annot-meta">{at === undefined ? name : `${name} · ${clock(at)}`}</p>}
           </div>
         </div>
         <div className="annot-actions">
@@ -489,7 +488,21 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
         </div>
       </div>
 
-      <div className="annot-bar">
+      {!marking && (
+        <div className="annot-bar">
+          <button
+            type="button"
+            className="btn annot-start"
+            onClick={() => {
+              setMarking(true)
+              setTool("arrow")
+            }}
+          >
+            {t("chat.annotator.annotate")}
+          </button>
+        </div>
+      )}
+      <div className="annot-bar" hidden={!marking}>
         <div role="toolbar" aria-label={t("chat.annotator.tools")} className="annot-tools">
           {TOOLS.map((item) => (
             <button
@@ -530,7 +543,7 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
         </div>
       </div>
 
-      {onSend && (
+      {onSend && marking && (
         <form
           className="annot-reply"
           onSubmit={(e) => {
@@ -546,7 +559,7 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
             className="annot-note"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder={marks.length ? t("chat.annotator.reply.with.marks", { name: sender }) : t("chat.annotator.mark.to.reply")}
+            placeholder={marks.length ? t("chat.annotator.reply.with.marks", { name: sender ?? name }) : t("chat.annotator.mark.to.reply")}
             aria-label={t("chat.annotator.note")}
           />
           <button type="submit" className="icon-btn annot-send" aria-label={t("chat.annotator.send")} disabled={!marks.length}>

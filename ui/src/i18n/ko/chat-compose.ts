@@ -22,6 +22,7 @@ export default {
   "chat.annotator.sent.to": "{name}에게 보냈습니다",
   "chat.annotator.not.sent": "보내지 못함: {why}",
   "chat.annotator.mark.up": "{name}에 표시하기",
+  "chat.annotator.annotate": "표시하기",
   "chat.annotator.fit.window": "창에 맞추기",
   "chat.annotator.actual.size": "실제 크기",
   "chat.annotator.fit.percent": "맞춤 · {percent}%",

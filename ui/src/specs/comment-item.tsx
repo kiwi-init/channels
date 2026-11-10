@@ -13,8 +13,9 @@ import { useAct } from "~/nav"
 import { nickname } from "~/names"
 import { faceOf, splitQuote, type Comment } from "~/specs/read"
 import { wordsRaw, wrote } from "~/words"
+import { viewImage } from "~/chat/image-view"
 
-export const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
+export const openImage = viewImage
 
 export function CommentItem({
   channel,

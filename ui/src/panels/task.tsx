@@ -35,6 +35,7 @@ import { PanelHead } from "~/panels/frame"
 import { moveWords, someone } from "~/panels/task-moves"
 import { TONES } from "~/tasks/row"
 import { SendBack } from "~/tasks/send-back"
+import { viewImage } from "~/chat/image-view"
 
 function since(at: number): string {
   const age = ageOf(at)
@@ -45,7 +46,7 @@ function since(at: number): string {
 const holds = (a: Ask, id: number): a is PermissionAsk | QuestionAsk =>
   a.kind === "permission" ? a.task === id && !a.answer : a.kind === "question" ? (a.task === id || a.holds.includes(id)) && !a.answer && !a.closed : false
 
-const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
+const openImage = viewImage
 
 export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const task = channel.tasks.find((k) => k.id === id)

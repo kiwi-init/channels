@@ -9,6 +9,7 @@ import { ActContext, AppContext, historyStep, type Ctx, type Go, type Nav, Accou
 import { keyRan, onCommand } from "~/kit/commands"
 import { mod } from "~/kit/keys"
 import { ContextMenus } from "~/kit/menu-open"
+import { ImageViews } from "~/chat/image-view"
 import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
 import { opening } from "~/shell/opening"
@@ -31,6 +32,7 @@ const LimitDialog = later(() => import("~/usage/limit").then((m) => m.LimitDialo
 const RailOnce = memo(Rail)
 const PaletteOnce = memo(Palette)
 const MenusOnce = memo(ContextMenus)
+const ImageViewsOnce = memo(ImageViews)
 const ScreenOnce = memo(ChannelScreen)
 
 type Broken = { channel: boolean; retry: () => void }
@@ -129,6 +131,7 @@ function Shown({ app, nav, go, broken }: RootProps) {
         )}
         <PaletteOnce />
         <MenusOnce />
+        <ImageViewsOnce />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
         <LimitWatch />
       </ActContext>

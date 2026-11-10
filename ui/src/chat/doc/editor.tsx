@@ -47,6 +47,7 @@ import { nickname, Shown } from "~/names"
 import { wordsRaw } from "~/words"
 import { useAct, useGo, useActions, useAppAccount } from "~/nav"
 import { keysHint } from "~/kit/keys"
+import { viewImage } from "~/chat/image-view"
 
 const QuestionCard = lazy(() => import("~/chat/question-card"))
 
@@ -446,7 +447,7 @@ interface ViewOpts {
   refuse: (line: string) => boolean
 }
 
-const openImage = (url: string) => void window.open(url, "_blank", "noopener,noreferrer")
+const openImage = viewImage
 
 function makeView(mount: HTMLElement, shared: Shared, me: string, heads: Heads, feet: Heads, opts: ViewOpts): { view: EditorView; stop: () => void } {
   const seen = new Map<number, { key: string; at: number }>()
