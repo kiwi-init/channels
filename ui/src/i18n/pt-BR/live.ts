@@ -246,8 +246,6 @@ export default {
   "live.home.open.to.retry": "abra o canal para tentar de novo",
   "live.home.wants.to.join": "Quer entrar",
   "live.home.asks": "{who} pergunta",
-  "live.home.needs.you": "precisa de você",
-  "live.home.in.review": "em revisão",
   "live.home.review": "Revisar T{id}",
   "live.home.bypass": "T{id} foi entregue com a trava fechada",
   "live.home.spec": "Especificação #{ask}",

@@ -244,8 +244,6 @@ export default {
   "live.home.open.to.retry": "再試行するにはチャンネルを開いてください",
   "live.home.wants.to.join": "参加希望",
   "live.home.asks": "{who} からの質問",
-  "live.home.needs.you": "あなたの対応待ち",
-  "live.home.in.review": "レビュー中",
   "live.home.review": "T{id} をレビュー",
   "live.home.bypass": "T{id} はゲートが閉じたまま出荷されました",
   "live.home.spec": "仕様 #{ask}",

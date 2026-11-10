@@ -314,7 +314,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   16px fade: the text, then the action on its line's end, or under it when
   the text needs the width.
 - **Right panel** (`--panel-w` to start, resizable by its grip): a thread,
-  a task, a person or the channel slides in from the right (`panel-in`)
+  a task, a PR or an issue slides in from the right (`panel-in`)
   beside the conversation, with a title, a mono sub line and a close button.
   A thread keeps its own composer.
 - **Conversation.** No bubbles, everyone on the left, in the `--col` column.

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { homeOf, saidIn, takeTurns } from "~/home"
+import { homeOf, takeTurns } from "~/home"
 import type { Ask, Channel, Person, Spec, Task } from "~/model"
 import { wrote } from "~/words"
 
@@ -54,7 +54,7 @@ const question = (id: string, at: number, more: Partial<Extract<Ask, { kind: "qu
 })
 
 describe("homeOf", () => {
-  test("names the lead by nickname and counts only working agents", () => {
+  test("names the lead by nickname", () => {
     const h = homeOf(
       channel({
         lead: "owl",
@@ -69,7 +69,6 @@ describe("homeOf", () => {
     )
     expect(h.lead).toBe("owl")
     expect(h.leadName).toBe("lead")
-    expect(h.working).toBe(1)
   })
 
   test("lists open asks oldest first and drops answered and idle ones", () => {
@@ -166,13 +165,7 @@ describe("homeOf", () => {
     expect(h.asks[0]?.text).toBe(long)
   })
 
-  test("a moving task's title names agents by nickname, not handle (#1763)", () => {
-    const t: Task = { ...task(1, "Pair with @gentle-otter on the relay"), status: "doing", history: [], updatedAt: 1 }
-    const h = homeOf(channel({ tasks: [t], nicknames: new Map([["gentle-otter", "lead"]]) }))
-    expect(h.moving[0]?.title).toBe("Pair with @lead on the relay")
-  })
-
-  test("shows the tasks moving with who has them and where they stand, and counts the rest and today's done", () => {
+  test("counts today's done", () => {
     const doing = (id: number, more: Partial<Task> = {}): Task => ({ ...task(id, `task ${id}`), status: "doing", history: [], updatedAt: id, ...more })
     const h = homeOf(
       channel({
@@ -188,23 +181,7 @@ describe("homeOf", () => {
         ],
       })
     )
-    expect(h.moving).toEqual([
-      { id: 4, title: "task 4", who: null, state: "", busy: false, red: false },
-      { id: 3, title: "task 3", who: null, state: "PR #8 · unit failed", busy: false, red: true },
-      { id: 2, title: "task 2", who: "moss", state: "PR #7 · checks running", busy: false, red: false },
-    ])
-    expect(h.more).toBe(1)
     expect(h.doneToday).toBe(1)
-  })
-
-  test("names who is running what when a task has no PR yet", () => {
-    const h = homeOf(
-      channel({
-        people: [agent("fern", { activity: { state: "working", tool: "mcp__kiwi__send" } })],
-        tasks: [{ ...task(1, "sync"), status: "doing", owner: "fern", history: [] }],
-      })
-    )
-    expect(h.moving[0]).toMatchObject({ who: "fern", state: "running send", busy: true })
   })
 
   test("lists every agent, working first, with the task it has and what it's doing, and counts red checks", () => {
@@ -234,25 +211,7 @@ describe("homeOf", () => {
       { name: "moss", nick: "moss", state: "idle", doing: "idle", task: null },
       { name: "zed", nick: "zed", state: "away", doing: "offline", task: null },
     ])
-    expect(h.working).toBe(1)
     expect(h.red).toBe(1)
-  })
-
-  test("the last word in #general reads as plain text from its author's nickname", () => {
-    const said = saidIn([
-      { seq: 1, from: "owl", at: 1, text: wrote("## Plan\n- ship **it**"), where: { kind: "room", room: "general" } },
-      { seq: 2, from: "owl", at: 2, text: wrote("in a thread"), where: { kind: "room", room: "general" }, inThread: 1 },
-      { seq: 3, from: "owl", at: 3, text: wrote("owl took T4"), where: { kind: "room", room: "general" }, system: true },
-      { seq: 4, from: "owl", at: 4, text: wrote("in a task"), where: { kind: "task", task: 4 } },
-    ])
-    expect(said).toEqual({ from: "owl", at: 1, text: "## Plan\n- ship **it**" })
-    expect(homeOf(channel({ nicknames: new Map([["owl", "lead"]]) }), said).said).toEqual({ from: "lead", at: 1, text: "Plan ship it" })
-    expect(saidIn([])).toBeNull()
-  })
-
-  test("the last word in #general names agents by nickname, not handle (#1763)", () => {
-    const said = saidIn([{ seq: 1, from: "jow", at: 1, text: wrote("@gentle-otter ship it"), where: { kind: "room", room: "general" } }])
-    expect(homeOf(channel({ nicknames: new Map([["gentle-otter", "lead"]]) }), said).said?.text).toBe("@lead ship it")
   })
 })
 

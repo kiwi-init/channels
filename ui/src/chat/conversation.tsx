@@ -12,7 +12,6 @@ import { chatterLine, chatterRuns, type ChatterRun } from "~/chat/chatter"
 import { MessageRow } from "~/chat/message"
 import { useStick } from "~/chat/stick"
 import { linked } from "~/chat/linked"
-import { threadReply } from "~/chat/quote"
 import { flash, jumpTo, ReplyContext, useReplying, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
@@ -188,7 +187,6 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
 }
 
 function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Where; spot: Spot | null; jump: Jump | null; doc: string | null }) {
-  const go = useGo()
   const actions = useActions()
   const since = channel.since
   const specAsks = useMemo(() => new Set((channel.specs ?? []).map((s) => s.ask)), [channel.specs])
@@ -307,12 +305,9 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     (seq: number, excerpt: string) => {
       const m = list.find((x) => x.seq === seq)
       if (!m) return
-      if (replying) return replying.set(m, excerpt)
-      const root = m.inThread ?? m.seq
-      threadReply.set({ code: channel.code, root, to: m.seq, excerpt })
-      go({ to: "panel", panel: { kind: "thread", seq: root } })
+      replying?.set(m, excerpt)
     },
-    [list, replying, channel.code, go]
+    [list, replying]
   )
 
   useEffect(() => {

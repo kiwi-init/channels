@@ -10,7 +10,7 @@ import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_
 import { longFeed } from "~/demo/long"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
-import { homeOf, saidIn } from "~/home"
+import { homeOf } from "~/home"
 import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
 import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, Usage } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
@@ -976,7 +976,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     }
   }, [shownUsage, scenario])
 
-  const home = useMemo(() => [...state.channels.values()].map((c) => homeOf(c, saidIn(c.messages))), [state.channels])
+  const home = useMemo(() => [...state.channels.values()].map((c) => homeOf(c)), [state.channels])
 
   return {
     account: state.account,

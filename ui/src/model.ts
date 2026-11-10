@@ -504,15 +504,6 @@ export interface HomeAsk {
   act: HomeAct
 }
 
-export interface HomeTask {
-  id: number
-  title: string
-  who: string | null
-  state: string
-  busy: boolean
-  red: boolean
-}
-
 export interface HomeAgent {
   name: string
   nick: string
@@ -523,25 +514,15 @@ export interface HomeAgent {
   task: { id: number; title: string } | null
 }
 
-export interface HomeLine {
-  from: string
-  at: number
-  text: string
-}
-
 export interface HomeChannel {
   code: string
   title: string
   lead: string | null
   leadName: string | null
-  working: number
   asks: HomeAsk[]
-  moving: HomeTask[]
-  more: number
   doneToday: number
   red: number
   agents: HomeAgent[]
-  said: HomeLine | null
   loading?: true
 }
 

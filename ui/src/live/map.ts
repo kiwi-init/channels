@@ -59,7 +59,6 @@ import type {
   Color,
   Direct,
   Harness,
-  HomeLine,
   Image,
   ImageSpot,
   Issue,
@@ -449,20 +448,6 @@ function whereOf(state: ChannelState, m: Wire, seat: string): Where {
   if (place.kind === "dm") return place.with.includes(me) ? { kind: "dm", with: place.with[0] === me ? place.with[1] : place.with[0] } : { kind: "theirs", between: place.with }
   const other = dmRoomWith(state, seat, m)
   return other ? { kind: "dm", with: other } : { kind: "room", room: roomOfMessage(state, m) }
-}
-
-export function lastSaidOf(state: ChannelState, messages: readonly Wire[], me: string): HomeLine | null {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]!
-    if (m.kind === "event" || ignored(state.trust.get(m.seq)) || isOverlay(m) || state.deleted.has(m.seq)) continue
-    const root = state.threadOf.get(m.seq)
-    if (root !== undefined && root !== m.seq) continue
-    const where = whereOf(state, m, me)
-    if (where.kind !== "room" || where.room !== GENERAL_ROOM) continue
-    const text = (state.edits.get(m.seq)?.body ?? m.body).trim()
-    if (text) return { from: m.from, at: m.ts, text }
-  }
-  return null
 }
 
 export function messagesOf(state: ChannelState, messages: readonly Wire[], me: string, askOf: ReadonlyMap<number, string>, pictures: Pictures, pending: readonly Pending[]): Message[] {
