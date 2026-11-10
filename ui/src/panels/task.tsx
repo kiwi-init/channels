@@ -637,7 +637,14 @@ function Move({ channel, e }: { channel: Channel; e: TaskEvent }) {
   return (
     <li className={cx("task-move", e.what === "cancelled" && "is-cancelled")}>
       {e.what === "mention" && e.root !== undefined ? (
-        <button type="button" className="task-move-line task-move-open" onClick={() => go({ to: "panel", panel: { kind: "thread", seq: e.root ?? e.seq } })}>
+        <button
+          type="button"
+          className="task-move-line task-move-open"
+          onClick={() => {
+            const root = e.root ?? e.seq
+            go((channel.specs ?? []).some((s) => s.ask === root) ? { to: "spec", ask: root, part: "spec" } : { to: "panel", panel: { kind: "thread", seq: root } })
+          }}
+        >
           {line}
         </button>
       ) : (

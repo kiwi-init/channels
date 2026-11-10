@@ -41,7 +41,6 @@ const words = {
   "specs.doc.line.comments": "Comments on lines of the spec",
   "specs.doc.reply": "Reply",
   "specs.doc.comment.actions": "Comment actions",
-  "specs.doc.open.thread": "Open in the thread",
   "specs.doc.show.comment": "Show this comment",
   "specs.doc.show.line": "Show this line in the spec",
   "specs.doc.diff.label": "What changed since it was approved",

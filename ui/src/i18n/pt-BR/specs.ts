@@ -40,7 +40,6 @@ export default {
   "specs.doc.line.comments": "Comentários em linhas da especificação",
   "specs.doc.reply": "Responder",
   "specs.doc.comment.actions": "Ações do comentário",
-  "specs.doc.open.thread": "Abrir na conversa",
   "specs.doc.show.comment": "Mostrar este comentário",
   "specs.doc.show.line": "Mostrar esta linha na especificação",
   "specs.doc.diff.label": "O que mudou desde a aprovação",

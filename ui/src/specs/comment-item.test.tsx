@@ -22,9 +22,10 @@ const render = (c: Comment): string =>
   )
 
 describe("a spec comment acts like a chat message (#1840)", () => {
-  test("a sent comment offers react, reply, copy and open in the thread", () => {
+  test("a sent comment offers react, reply and copy, and no second place to read it (T1877)", () => {
     const html = render(said())
-    for (const label of ["React 👍", "React ✅", "Reply", "Copy text", "Open in the thread"]) expect(html).toContain(`aria-label="${label}"`)
+    for (const label of ["React 👍", "React ✅", "Reply", "Copy text"]) expect(html).toContain(`aria-label="${label}"`)
+    expect(html).not.toContain("Open in the thread")
   })
 
   test("a comment shows its reactions with who reacted", () => {

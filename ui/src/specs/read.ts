@@ -258,8 +258,7 @@ export function lastMove(channel: Channel, spec: Spec): number {
 
 export function insideOf(channel: Pick<Channel, "messages" | "specs">, spec: Pick<Spec, "ask" | "tasks" | "comments">): Message[] {
   const tasks = new Set(spec.tasks)
-  const on = onSpecThread(channel, spec)
-  return channel.messages.filter((m) => m.seq === spec.ask || on(m) || (m.where.kind === "task" && tasks.has(m.where.task))).sort((a, b) => a.at - b.at)
+  return channel.messages.filter((m) => m.where.kind === "task" && tasks.has(m.where.task)).sort((a, b) => a.at - b.at)
 }
 
 export function faceOf(channel: Channel, name: string): Person | undefined {

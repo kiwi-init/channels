@@ -60,9 +60,6 @@ export function CommentItem({
             <button type="button" className="msg-tool" aria-label={t("chat.message.copy.text")} title={t("chat.message.copy.text")} onClick={() => copyText(c.text.trim() || wordsRaw(c.m.text))}>
               <Icon name="copy" size={14} />
             </button>
-            <button type="button" className="msg-tool" aria-label={t("specs.doc.open.thread")} title={t("specs.doc.open.thread")} onClick={() => openMessage(channel.code, c.m.seq)}>
-              <Icon name="thread" size={14} />
-            </button>
           </span>
         )}
       </header>
@@ -79,7 +76,7 @@ export function CommentItem({
           <span>{c.quote}</span>
         </button>
       )}
-      {c.text.trim() && <Body text={wrote(c.text)} seq={c.m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={() => {}} />}
+      {c.text.trim() && <Body text={wrote(c.text)} seq={c.m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={(seq) => openMessage(channel.code, seq)} />}
       {c.m.images && <MessageImages code={channel.code} images={c.m.images} open={openImage} />}
       <Reacts channel={channel} m={c.m} />
       <Unsent channel={channel} m={c.m} />
