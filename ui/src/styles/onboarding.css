@@ -52,6 +52,11 @@
 
 .onb-back {
   background: #6f8256;
+  opacity: 0;
+}
+
+.onb-back.is-in {
+  opacity: 1;
   animation: onb-in 2s var(--ease) both;
 }
 

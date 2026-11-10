@@ -25,7 +25,14 @@ function problemWith(name: string): string | null {
 
 export function FirstRun() {
   const { app } = useApp()
-  const [intro, setIntro] = useState(() => !app.account && !onboarded(false))
+  const [intro, setIntro] = useState(() => {
+    const show = !app.account && !onboarded(false)
+    if (show)
+      void import("~/meadow/meadow").catch(() => {
+        // The intro loads it again itself and shows without the scene if it can't.
+      })
+    return show
+  })
   return (
     <>
       <FirstStep />
