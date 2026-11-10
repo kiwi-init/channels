@@ -6,7 +6,7 @@ import type { SendExtras, Upload, Where } from "~/model"
 type Shelf = Pick<Storage, "getItem" | "setItem">
 
 const SAVED = "kiwi:unsent"
-const FRESH = 60 * 60_000
+const FRESH = 50 * 60_000
 
 let byRoom = new Map<string, Pending[]>()
 let lastKey = 0
@@ -37,7 +37,7 @@ const optional = (v: object, key: string, type: "number" | "string"): boolean =>
 function isFailed(v: unknown): v is Pending {
   if (typeof v !== "object" || v === null || !("key" in v) || !("where" in v) || !("text" in v) || !("at" in v) || !("failed" in v)) return false
   if (typeof v.key !== "number" || typeof v.text !== "string" || typeof v.at !== "number" || typeof v.failed !== "string" || !isWhere(v.where)) return false
-  if (!optional(v, "inThread", "number") || !optional(v, "replyTo", "number")) return false
+  if (!optional(v, "inThread", "number") || !optional(v, "replyTo", "number") || !optional(v, "id", "string") || !optional(v, "first", "number")) return false
   if ("images" in v && !(Array.isArray(v.images) && v.images.every(isUpload))) return false
   return !("block" in v) || (typeof v.block === "object" && v.block !== null && "th" in v.block && "id" in v.block && typeof v.block.th === "string" && typeof v.block.id === "string")
 }
@@ -99,6 +99,8 @@ restoreUnsent(storage())
 
 export const nextUnsentKey = (): number => ++lastKey
 
+export const newSendId = (): string => crypto.randomUUID().replaceAll("-", "")
+
 export const unsentIn = (room: string): Pending[] => byRoom.get(room) ?? []
 
 export function changeUnsent(room: string, change: (list: Pending[]) => Pending[]): Pending[] {
@@ -116,6 +118,11 @@ export function capUnsent(list: Pending[], max: number): Pending[] {
   return spare > 0 ? list.filter((p) => p.failed !== undefined || p.seq === undefined || spare-- <= 0) : list
 }
 
+export function landedOut(list: Pending[], landed: ReadonlySet<string>): Pending[] {
+  const next = list.filter((p) => p.failed === undefined || !p.id || !landed.has(p.id))
+  return next.length === list.length ? list : next
+}
+
 export const unsentBlock = (list: readonly Pending[], key: number): string | null => list.find((p) => p.key === key)?.block?.id ?? null
 
 export const resendOf = (p: Pending): SendExtras => ({
@@ -124,6 +131,8 @@ export const resendOf = (p: Pending): SendExtras => ({
   ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
   ...(p.images?.length ? { images: p.images } : {}),
   ...(p.block ? { block: p.block } : {}),
+  ...(p.id ? { id: p.id } : {}),
+  first: p.first ?? p.at,
 })
 
 export async function retryUnsent(list: readonly Pending[], key: number, drop: (key: number) => void, post: (where: Where, text: string, extras: SendExtras) => Promise<number>): Promise<number> {
@@ -133,11 +142,12 @@ export async function retryUnsent(list: readonly Pending[], key: number, drop: (
   return post(p.where, p.text, resendOf(p))
 }
 
-const dueAgain = (p: Pending, now: number): boolean => p.failed !== undefined && !p.lostImages && !limitWords(p.failed) && now - p.at < FRESH
+const dueAgain = (p: Pending, now: number): boolean => p.failed !== undefined && !p.lostImages && !limitWords(p.failed) && now - (p.first ?? p.at) < FRESH
 
-export async function resendDue(room: string, now: number, retry: (key: number) => Promise<number>): Promise<void> {
+export async function resendDue(room: string, now: number, retry: (key: number) => Promise<number>, landed: ReadonlySet<string> = new Set()): Promise<void> {
   if (resending.has(room)) return
   resending.add(room)
+  changeUnsent(room, (list) => landedOut(list, landed))
   try {
     for (const { key } of unsentIn(room).filter((p) => dueAgain(p, now))) {
       if (!unsentIn(room).some((p) => p.key === key && p.failed !== undefined)) continue

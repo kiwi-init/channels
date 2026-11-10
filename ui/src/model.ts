@@ -731,6 +731,8 @@ export interface SendExtras {
   side?: true
   images?: Upload[]
   block?: DocBlockRef
+  id?: string
+  first?: number
 }
 
 export interface Folder {

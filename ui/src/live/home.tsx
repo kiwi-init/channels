@@ -15,7 +15,7 @@ import { usePinsHere } from "~/live/pins"
 import { specAsksOf, specsOf } from "~/live/specs"
 import { withReach } from "~/live/reach"
 import { publishHome, type Run } from "~/live/store"
-import { changeUnsent, nextUnsentKey } from "~/live/unsent"
+import { changeUnsent, newSendId, nextUnsentKey } from "~/live/unsent"
 import { refusal } from "~/live/refused"
 import { backWords, composerKey, giveBack } from "~/chat/drafts"
 import { stashText } from "~/chat/stash"
@@ -70,8 +70,9 @@ const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }
       if (where.kind === "theirs") throw new Error(t("live.channel.theirs"))
       const body = text.trim()
       const room = where.kind === "dm" ? dmRoomOf(state, me, where.with) : undefined
+      const id = opts.id ?? newSendId()
       try {
-        return await send(body, room ? { kind: "msg", room } : sendOptions(state, messages, me, where, body, opts))
+        return await send(body, room ? { kind: "msg", room, id, cid: id } : sendOptions(state, messages, me, where, body, { ...opts, id }))
       } catch (err) {
         const refused = refusal(err)
         if (refused !== null) {
@@ -80,7 +81,7 @@ const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }
           throw err
         }
         const why = err instanceof Error ? err.message : String(err)
-        changeUnsent(roomId, (list) => [...list, { key: nextUnsentKey(), where, text: body, at: Date.now(), failed: why }])
+        changeUnsent(roomId, (list) => [...list, { key: nextUnsentKey(), where, text: body, at: Date.now(), id, failed: why }])
         announce(t("live.home.not.sent", { title, why }), "error")
         throw err
       }

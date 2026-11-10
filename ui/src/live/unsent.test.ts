@@ -3,7 +3,7 @@ import { wordsRaw } from "~/words"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { inFeed, postedBlocks } from "~/chat/doc/posted"
 import { messagesOf, type Pending } from "~/live/map"
-import { capUnsent, changeUnsent, nextUnsentKey, resendDue, resendOf, restoreUnsent, retryUnsent, unsentIn } from "~/live/unsent"
+import { capUnsent, changeUnsent, landedOut, newSendId, nextUnsentKey, resendDue, resendOf, restoreUnsent, retryUnsent, unsentIn } from "~/live/unsent"
 
 const where: Pending["where"] = { kind: "room", room: "general" }
 const pending = (key: number, text: string, failed?: string): Pending => ({ key, where, text, at: 1, ...(failed ? { failed } : {}) })
@@ -37,7 +37,7 @@ describe("retrying a failed doc line keeps its block (T1465)", () => {
 
   test("the retried line keeps everything it was sent with, its block too", () => {
     const failed: Pending = { key: 1, where, text: "ship it", at: 1, failed: "offline", inThread: 7, replyTo: 5, block }
-    expect(resendOf(failed)).toEqual({ inThread: 7, replyTo: 5, block })
+    expect(resendOf(failed)).toEqual({ inThread: 7, replyTo: 5, block, first: 1 })
   })
 
   test("the line shows in one place before, during and after the retry", () => {
@@ -69,7 +69,7 @@ describe("retrying a comment that failed to send (T2680)", () => {
     )
     expect(seq).toBe(9)
     expect(dropped).toEqual([3])
-    expect(posts).toEqual([{ where: spec, text: "the dialog I have in mind", extras: { inThread: 150, images: [image] } }])
+    expect(posts).toEqual([{ where: spec, text: "the dialog I have in mind", extras: { inThread: 150, images: [image], first: 1 } }])
   })
 
   test("a retry that fails again is posted once and hands the error back", async () => {
@@ -224,5 +224,63 @@ describe("failed messages send themselves when the connection is back (T1755)", 
     const { sent, retry } = sends("r5")
     await Promise.all([resendDue("r5", NOW, retry), resendDue("r5", NOW, retry)])
     expect(sent).toEqual([1, 2])
+  })
+})
+
+describe("a retry can't deliver the message twice (T1760)", () => {
+  test("every retry carries the id the line was first sent with, and when that was", () => {
+    const id = newSendId()
+    expect(id).toMatch(/^[A-Za-z0-9_-]{16,64}$/)
+    const failed: Pending = { key: 1, where, text: "ship it", at: 9, failed: "offline", id }
+    expect(resendOf(failed)).toEqual({ id, first: 9 })
+    expect(resendOf({ ...failed, at: 20, first: 9 })).toEqual({ id, first: 9 })
+  })
+
+  test("a failed line whose message is already in the feed is dropped, the others stay", () => {
+    const list: Pending[] = [
+      { ...pending(1, "arrived after all", "offline"), id: "a" },
+      { ...pending(2, "never left", "offline"), id: "b" },
+      { ...pending(3, "on its way"), id: "c" },
+      pending(4, "old line with no id", "offline"),
+    ]
+    expect(landedOut(list, new Set(["a", "c"])).map((p) => p.key)).toEqual([2, 3, 4])
+    expect(landedOut(list, new Set(["z"]))).toBe(list)
+  })
+
+  test("a line that landed while it looked failed is forgotten, not sent again", async () => {
+    changeUnsent("r7", () => [
+      { ...pending(1, "arrived after all", "offline"), at: Date.now(), id: "a" },
+      { ...pending(2, "never left", "offline"), at: Date.now(), id: "b" },
+    ])
+    const sent: number[] = []
+    await resendDue(
+      "r7",
+      Date.now(),
+      async (key) => {
+        sent.push(key)
+        changeUnsent("r7", (list) => list.filter((p) => p.key !== key))
+        return key
+      },
+      new Set(["a"])
+    )
+    expect(sent).toEqual([2])
+    expect(unsentIn("r7")).toEqual([])
+    restoreUnsent(null)
+  })
+
+  test("a line that keeps failing stops sending itself 50 minutes after its first try, not its last", async () => {
+    const NOW = 10 * 60 * 60_000
+    changeUnsent("r6", () => [
+      { ...pending(1, "retried a minute ago", "offline"), at: NOW - 60_000, first: NOW - 51 * 60_000 },
+      { ...pending(2, "recent", "offline"), at: NOW - 60_000, first: NOW - 49 * 60_000 },
+    ])
+    const sent: number[] = []
+    await resendDue("r6", NOW, async (key) => {
+      sent.push(key)
+      changeUnsent("r6", (list) => list.filter((p) => p.key !== key))
+      return key
+    })
+    expect(sent).toEqual([2])
+    restoreUnsent(null)
   })
 })

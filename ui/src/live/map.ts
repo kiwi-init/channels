@@ -433,6 +433,8 @@ export interface Pending {
   failed?: string
   images?: Upload[]
   lostImages?: true
+  id?: string
+  first?: number
   block?: DocBlockRef
 }
 
