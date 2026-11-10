@@ -88,7 +88,7 @@ const words = {
   "needs.quiet.open": "Open task",
   "needs.quiet.wake.none": "No wake was attempted.",
   "needs.quiet.wake.attempted": "A wake was attempted {time} ago. It isn't recorded as delivered.",
-  "needs.quiet.wake.delivered": "A wake was delivered {time} ago. It isn't recorded as read.",
+  "needs.quiet.wake.delivered": "A wake was attempted {time} ago. It is recorded as delivered, not as read.",
   "needs.quiet.wake.read": "A wake was attempted {time} ago, delivered and read.",
   "needs.review.approve": "Approve",
   "needs.review.send.back": "Send back",

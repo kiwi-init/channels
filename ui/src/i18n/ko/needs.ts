@@ -87,7 +87,7 @@ export default {
   "needs.quiet.open": "작업 열기",
   "needs.quiet.wake.none": "깨우려는 시도가 없었습니다.",
   "needs.quiet.wake.attempted": "{time} 전에 깨우려고 했습니다. 전달된 기록이 없습니다.",
-  "needs.quiet.wake.delivered": "{time} 전에 깨우는 알림이 전달되었습니다. 읽은 기록이 없습니다.",
+  "needs.quiet.wake.delivered": "{time} 전에 깨우려고 했습니다. 전달된 기록은 있고, 읽은 기록은 없습니다.",
   "needs.quiet.wake.read": "{time} 전에 깨우려고 했고, 전달되어 읽혔습니다.",
   "needs.review.approve": "승인",
   "needs.review.send.back": "반려",

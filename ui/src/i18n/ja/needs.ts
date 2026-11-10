@@ -87,7 +87,7 @@ export default {
   "needs.quiet.open": "タスクを開く",
   "needs.quiet.wake.none": "起こす試みはありませんでした。",
   "needs.quiet.wake.attempted": "{time} 前に起こそうとしました。届いた記録はありません。",
-  "needs.quiet.wake.delivered": "{time} 前に起こす通知が届きました。読んだ記録はありません。",
+  "needs.quiet.wake.delivered": "{time} 前に起こそうとしました。届いた記録はありますが、読んだ記録はありません。",
   "needs.quiet.wake.read": "{time} 前に起こそうとし、届いて読まれました。",
   "needs.review.approve": "承認",
   "needs.review.send.back": "差し戻す",

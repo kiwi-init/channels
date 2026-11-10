@@ -87,7 +87,7 @@ export default {
   "needs.quiet.open": "Abrir tarefa",
   "needs.quiet.wake.none": "Nenhuma tentativa de acordar foi feita.",
   "needs.quiet.wake.attempted": "Houve uma tentativa de acordar há {time}. Não há registro de entrega.",
-  "needs.quiet.wake.delivered": "Um aviso para acordar foi entregue há {time}. Não há registro de leitura.",
+  "needs.quiet.wake.delivered": "Houve uma tentativa de acordar há {time}. Há registro de entrega, não de leitura.",
   "needs.quiet.wake.read": "Houve uma tentativa de acordar há {time}, entregue e lida.",
   "needs.review.approve": "Aprovar",
   "needs.review.send.back": "Devolver",

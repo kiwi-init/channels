@@ -962,8 +962,7 @@ const LADDER_TOP = 3
 
 function wakeOf(woke: NonNullable<ReturnType<typeof clockOf>>["woke"]): WakeSeen {
   if (!woke) return { kind: "none" }
-  if (woke.read !== undefined) return { kind: "read", at: woke.at }
-  return { kind: woke.delivered === undefined ? "attempted" : "delivered", at: woke.at }
+  return { kind: woke.read !== undefined ? "read" : woke.delivered !== undefined ? "delivered" : "attempted", attempted: woke.at }
 }
 
 function quietAsks(state: ChannelState, now: number): QuietAsk[] {

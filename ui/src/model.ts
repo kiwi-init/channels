@@ -512,7 +512,7 @@ export interface ReviewAsk {
   task: number
 }
 
-export type WakeSeen = { kind: "none" } | { kind: "attempted"; at: number } | { kind: "delivered"; at: number } | { kind: "read"; at: number }
+export type WakeSeen = { kind: "none" } | { kind: "attempted" | "delivered" | "read"; attempted: number }
 
 export interface QuietAsk {
   kind: "quiet"

@@ -87,7 +87,7 @@ export default {
   "needs.quiet.open": "打开任务",
   "needs.quiet.wake.none": "没有尝试过唤醒。",
   "needs.quiet.wake.attempted": "{time} 前尝试过唤醒。没有送达记录。",
-  "needs.quiet.wake.delivered": "{time} 前唤醒已送达。没有已读记录。",
+  "needs.quiet.wake.delivered": "{time} 前尝试过唤醒。有送达记录，没有已读记录。",
   "needs.quiet.wake.read": "{time} 前尝试过唤醒，已送达并已读。",
   "needs.review.approve": "批准",
   "needs.review.send.back": "退回",

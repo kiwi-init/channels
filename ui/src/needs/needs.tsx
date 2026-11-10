@@ -18,23 +18,10 @@ import { Empty } from "~/kit/empty"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { ago, clock, lasting, useNow } from "~/kit/time"
-import {
-  NO_POWERS,
-  trusted,
-  type Ask,
-  type Channel,
-  type JoinAsk,
-  type Message,
-  type PermissionAsk,
-  type Person,
-  type Powers,
-  type QuestionAsk,
-  type QuietAsk,
-  type ReviewAsk,
-  type WakeSeen,
-} from "~/model"
+import { NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type Message, type PermissionAsk, type Person, type Powers, type QuestionAsk, type QuietAsk, type ReviewAsk } from "~/model"
 import { useApp, useGo, useChannelHere } from "~/nav"
 import { TASK_TICK_MS } from "~/tasks/tick"
+import { wakeLine } from "~/needs/wake-line"
 import { nickname, Shown } from "~/names"
 import { SendBack } from "~/tasks/send-back"
 import { isIdle, isOpen, openAsks } from "~/needs/open"
@@ -510,12 +497,6 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       )}
     </Shell>
   )
-}
-
-const WAKES: Readonly<Record<Exclude<WakeSeen["kind"], "none">, Key>> = { attempted: "needs.quiet.wake.attempted", delivered: "needs.quiet.wake.delivered", read: "needs.quiet.wake.read" }
-
-function wakeLine(wake: WakeSeen, now: number): string {
-  return wake.kind === "none" ? t("needs.quiet.wake.none") : t(WAKES[wake.kind], { time: lasting(now - wake.at) })
 }
 
 function QuietAskCard({ channel, ask }: { channel: Channel; ask: QuietAsk }) {

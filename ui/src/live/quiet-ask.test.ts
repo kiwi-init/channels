@@ -6,6 +6,7 @@ import { homeOf } from "~/home"
 import { asksOf } from "~/live/map"
 import type { Ask, Channel } from "~/model"
 import { isOpen } from "~/needs/open"
+import { wakeLine } from "~/needs/wake-line"
 
 const HEAD = "1".repeat(40)
 const MIN = 60_000
@@ -54,9 +55,22 @@ describe("a task quiet past 3N is one item in the owner's Needs you (#3930 §2)"
     const read = at(6, "mac", { op: "task.wake", task: TASK, mover: "mac", since: EPOCH, got: "read" }, SINCE + N + 2000)
     const top = (seq: number) => nudge(seq, "owl", 3, SINCE + 3 * N)
     const now = SINCE + 3 * N + MIN
-    expect(quiet([...woken, top(5)], now).map((a) => a.kind === "quiet" && a.wake)).toEqual([{ kind: "attempted", at: SINCE + N }])
-    expect(quiet([...woken, delivered, top(6)], now).map((a) => a.kind === "quiet" && a.wake)).toEqual([{ kind: "delivered", at: SINCE + N }])
-    expect(quiet([...woken, delivered, read, top(7)], now).map((a) => a.kind === "quiet" && a.wake)).toEqual([{ kind: "read", at: SINCE + N }])
+    expect(quiet([...woken, top(5)], now).map((a) => a.kind === "quiet" && a.wake)).toEqual([{ kind: "attempted", attempted: SINCE + N }])
+    expect(quiet([...woken, delivered, top(6)], now).map((a) => a.kind === "quiet" && a.wake)).toEqual([{ kind: "delivered", attempted: SINCE + N }])
+    expect(quiet([...woken, delivered, read, top(7)], now).map((a) => a.kind === "quiet" && a.wake)).toEqual([{ kind: "read", attempted: SINCE + N }])
+  })
+
+  test("a receipt that arrives late doesn't move the time on the card: it stays the time of the attempt", () => {
+    const late = SINCE + 3 * N - MIN
+    const wires = [...inReview(), nudge(4, "mac", 1, SINCE + N), at(5, "mac", { op: "task.wake", task: TASK, mover: "mac", since: EPOCH, got: "delivered" }, late), nudge(6, "owl", 3, SINCE + 3 * N)]
+    const now = SINCE + 3 * N
+    expect(fold(wires, roster, now).rejected.size).toBe(0)
+    expect(quiet(wires, now).map((a) => a.kind === "quiet" && a.wake)).toEqual([{ kind: "delivered", attempted: SINCE + N }])
+    const item = quiet(wires, now)[0]
+    expect(item?.kind === "quiet" && wakeLine(item.wake, now)).toBe("A wake was attempted 40m ago. It is recorded as delivered, not as read.")
+    expect(wakeLine({ kind: "attempted", attempted: SINCE + N }, now)).toBe("A wake was attempted 40m ago. It isn't recorded as delivered.")
+    expect(wakeLine({ kind: "read", attempted: SINCE + N }, now)).toBe("A wake was attempted 40m ago, delivered and read.")
+    expect(wakeLine({ kind: "none" }, now)).toBe("No wake was attempted.")
   })
 
   test("below step 3 there is no item, and only the owner gets one", () => {

@@ -993,7 +993,7 @@ const asks: Ask[] = [
     code: "731-845",
   },
   { kind: "review", id: "rev-14", at: m(12), from: "pixel", task: 14 },
-  { kind: "quiet", id: "quiet-17", at: m(11), from: "orbit", task: 17, since: m(71), wake: { kind: "delivered", at: m(51) } },
+  { kind: "quiet", id: "quiet-17", at: m(11), from: "orbit", task: 17, since: m(71), wake: { kind: "delivered", attempted: m(51) } },
   {
     kind: "question",
     id: "q-2",
