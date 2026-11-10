@@ -65,6 +65,8 @@ async function grows(page: Page): Promise<string | null> {
 }
 
 async function growsFull(page: Page): Promise<string | null> {
+  const rest = await below(page, "the comment box", page.locator(".spec-rail-foot"));
+  if (rest) return `${rest} before anything is typed`;
   const fill = await page.locator(".spec-rail-scroll").evaluate((el) => ({ content: el.scrollHeight, shown: el.clientHeight }));
   if (fill.content <= fill.shown + 1) return `the comments fit (${fill.content} px in ${fill.shown}), so the rail isn't full: make the window shorter`;
   return grows(page);

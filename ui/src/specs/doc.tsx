@@ -21,6 +21,7 @@ const WIDE_PX = 940
 const TALK_SHOWN = 3
 const DIFF_CONTEXT = 1
 const RAIL_LIST_MIN_PX = 120
+const USER_SCROLL_MS = 600
 const BLOCKS = "p, li, h1, h2, h3, h4, h5, h6, td, th, pre"
 const COMMENT_TEXT = ".spec-comment .md"
 
@@ -55,6 +56,9 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
   const scroll = useRef<HTMLDivElement>(null)
   const foot = useRef<HTMLDivElement>(null)
   const readUp = useRef(false)
+  const listTop = useRef(0)
+  const nudged = useRef(Number.NEGATIVE_INFINITY)
+  const grabbed = useRef(false)
   const opened = useRef<number | null>(null)
   const [wide, setWide] = useState(true)
   const [tops, setTops] = useState<ReadonlyMap<number, number>>(new Map())
@@ -107,6 +111,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
       el.style.setProperty("--page-h", `${page.clientHeight}px`)
       el.style.setProperty("--wrap-at", `${Math.round(el.getBoundingClientRect().top - page.getBoundingClientRect().top)}px`)
     }
+    fit()
     const watch = new ResizeObserver(fit)
     watch.observe(page)
     const top = page.querySelector(":scope > .spec-top")
@@ -115,6 +120,19 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
     return () => {
       watch.disconnect()
       page.removeEventListener("scroll", fit)
+    }
+  }, [])
+
+  useEffect(() => {
+    const release = () => {
+      grabbed.current = false
+      nudged.current = Date.now()
+    }
+    window.addEventListener("pointerup", release)
+    window.addEventListener("pointercancel", release)
+    return () => {
+      window.removeEventListener("pointerup", release)
+      window.removeEventListener("pointercancel", release)
     }
   }, [])
 
@@ -144,6 +162,7 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
     if (opened.current !== spec.ask) {
       opened.current = spec.ask
       readUp.current = false
+      listTop.current = 0
     }
     if (el && !readUp.current) el.scrollTop = el.scrollHeight
   })
@@ -249,9 +268,17 @@ export function SpecDoc({ channel, spec, editing, onEditing }: { channel: Channe
           <div
             ref={scroll}
             className="spec-rail-scroll"
+            onWheel={() => (nudged.current = Date.now())}
+            onTouchMove={() => (nudged.current = Date.now())}
+            onKeyDown={() => (nudged.current = Date.now())}
+            onPointerDown={() => (grabbed.current = true)}
             onScroll={(e) => {
               const el = e.currentTarget
-              readUp.current = el.scrollTop + el.clientHeight < el.scrollHeight - 4
+              const user = grabbed.current || Date.now() - nudged.current < USER_SCROLL_MS
+              const up = el.scrollTop < listTop.current
+              listTop.current = el.scrollTop
+              if (el.scrollTop + el.clientHeight >= el.scrollHeight - 4) readUp.current = false
+              else if (user && up) readUp.current = true
             }}
           >
             {anchored.length > 0 && (
