@@ -21,7 +21,8 @@ import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
 import { answerChecks, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
-import { checkAnswered, checkClosed, checkStep, seedSteps } from "./landing-steps.ts";
+import { checkAnswered, checkClosed, checkStep, migrateChecks, questionAnswered, seedSteps } from "./landing-steps.ts";
+import { choiceIn } from "../checks.ts";
 import { stepsOfThen } from "../steps.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
@@ -88,6 +89,8 @@ function earlierParent(m: Message): number | undefined {
 function touch(task: Task | undefined, name: string, at: number): void {
   if (task && (task.touched?.[name] ?? 0) < at) task.touched = { ...task.touched, [name]: at };
 }
+
+const PASSED_ASKS_KEPT = 500;
 
 export function fold(
   messages: Message[],
@@ -281,7 +284,8 @@ function folding(
   };
   const runsKept = !!from && !olderRules(from);
   const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, runsKept || !t.run ? t : { ...t, run: { ...omit(t.run, "start"), blind: true } }]));
-  for (const t of tasks.values()) if (t.then && !t.steps && t.state !== "done") seedSteps(t, stepsOfThen(t.then), "then");
+  const stepless = !!from && olderRules(from);
+  if (stepless) for (const t of tasks.values()) if (t.then && !t.steps && t.state !== "done") seedSteps(t, stepsOfThen(t.then), "then");
   const facts = new Map<string, Fact>(from?.facts.map((f) => [f.key, f]));
   const docs = new Map<string, string>(from?.docs);
   const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
@@ -321,6 +325,9 @@ function folding(
   const askHeads = new Map<number, AskHead>(from?.askHeads?.map((h) => [h.id, h]));
   const specs = new Map<number, Spec>(from?.specs?.map((sp) => [sp.ask, sp]));
   const checks = new Map<number, CheckState>(from?.checks?.map((c) => [c.seq, { ...c, ...(c.answers ? { answers: [...c.answers] } : {}) }]));
+  if (stepless) migrateChecks(tasks, checks);
+  const questions = new Map<number, Message>((from?.asks ?? []).flatMap((a): [number, Message][] => (a.choices?.length && !a.check ? [[a.seq, a]] : [])));
+  const passedAsks = new Map<number, string>(from?.passedAsks);
   const closeOnItsOwn = (ask: number, m: Pick<Message, "seq" | "from">, at: number): void => {
     const spec = specs.get(ask);
     if (spec && closesOnItsOwn({ tasks }, spec)) specs.set(ask, { ...spec, result: { seq: m.seq, by: m.from, at, verdict: "accepted", auto: true } });
@@ -384,6 +391,7 @@ function folding(
     branchPrefix: from?.branchPrefix ?? null,
     landing: from?.landing ?? null,
     landingSteps: from?.landingSteps ?? null,
+    passedAsks,
     merges: from?.merges ?? "agents",
   };
 
@@ -536,9 +544,16 @@ function folding(
         const changed = replaced === undefined ? `pre-ship check #${m.seq} added after the approval` : `pre-ship check #${replaced} replaced by #${m.seq} after the approval`;
         for (const t of reopened) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, changed);
         answerChecks(checks, m, [...members.values()].find((x) => x.owner)?.name);
+        if (m.choices?.length && !m.check) questions.set(m.seq, m);
         for (const r of m.re ?? []) {
           const answeredCheck = checks.get(r);
           if (answeredCheck?.answer?.seq === m.seq) checkAnswered(tasks, answeredCheck, { seq: m.seq, by: m.from, at });
+          const question = questions.get(r);
+          const first = question?.choices?.[0];
+          if (!question || first === undefined || closedAsks.has(r) || passedAsks.has(r) || !answersAsk(members, question, m.from)) continue;
+          if (choiceIn(m.body, question.choices ?? []) !== first) continue;
+          passedAsks.set(r, first);
+          questionAnswered(tasks, r, first, { seq: m.seq, by: m.from, at });
         }
         const parentPlace = parent !== undefined ? placeOf.get(parent) : undefined;
         const to = m.to?.length === 1 ? m.to[0]! : undefined;
@@ -754,6 +769,7 @@ function folding(
       branchPrefix: ctx.branchPrefix,
       landing: ctx.landing,
       landingSteps: ctx.landingSteps,
+      passedAsks: [...passedAsks].slice(-PASSED_ASKS_KEPT),
       merges: ctx.merges,
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],

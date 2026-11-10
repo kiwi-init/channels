@@ -420,6 +420,8 @@ describe("review rounds through the CLI", () => {
     expect(orphan.err).toContain("--by goes after the --then it belongs to");
     const faceless = await run(dev, "task", "add", "a run nobody is behind", "--ask", want, "--then", "prd pipeline", "--expect", "2h");
     expect(faceless.err).toContain("a step that waits on a run names who is behind it: --by NAME");
+    const asked = taskNo(await ok(dev, "task", "add", "waits on a question", "--ask", want, "--then", "owner says ship", "--answered", `#${want}`));
+    expect(JSON.parse(await ok(dev, "task", "show", `T${asked}`, "--json"))).toMatchObject({ steps: [{ id: "s1", detector: { kind: "answered", ask: Number(want) } }] });
     const old = taskNo(await ok(dev, "task", "add", "one old value", "--ask", want, "--then", "merge"));
     expect(JSON.parse(await ok(dev, "task", "show", `T${old}`, "--json"))).toMatchObject({ then: "merge", steps: [{ id: "s1", words: "merge", from: "then" }] });
     const t = taskNo(

@@ -335,6 +335,7 @@ export interface FoldBase {
   branchPrefix?: string | null;
   landing?: Landing | null;
   landingSteps?: StepSpec[] | null;
+  passedAsks?: [number, string][];
   merges?: Merger;
   compact: Compact | null;
   compactProposal: Compact | null;

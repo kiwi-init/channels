@@ -116,6 +116,7 @@ function parse() {
         then: { type: "string", multiple: true },
         by: { type: "string", multiple: true },
         before: { type: "string" },
+        answered: { type: "string", multiple: true },
         "step-id": { type: "string" },
         lander: { type: "string" },
         once: { type: "boolean" },

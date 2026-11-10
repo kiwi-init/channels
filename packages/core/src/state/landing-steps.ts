@@ -122,6 +122,33 @@ export function stepObservations(view: StepView & { tasks: ReadonlyMap<number, T
 
 const asks = (step: LandingStep, ask: number): boolean => step.detector?.kind === "answered" && step.detector.ask === ask;
 
+export function migrateChecks(tasks: ReadonlyMap<number, Task>, checks: ReadonlyMap<number, CheckState>): void {
+  for (const check of checks.values()) {
+    if (check.phase !== "pre-ship" || check.closed !== undefined || check.supersededBy !== undefined) continue;
+    for (const held of check.holds) {
+      const task = tasks.get(held);
+      if (!task || task.steps?.some((s) => asks(s, check.seq))) continue;
+      checkStep(task, { ...check, replaces: undefined });
+    }
+    const passed = (check.answers ?? (check.answer ? [check.answer] : [])).find((a) => a.pass);
+    if (passed) checkAnswered(tasks, { ...check, answer: passed }, { seq: passed.seq, by: passed.by, at: passed.at ?? 0 });
+  }
+}
+
+export function questionAnswered(tasks: ReadonlyMap<number, Task>, ask: number, choice: string, mark: StepMark): void {
+  for (const task of tasks.values()) {
+    if (task.state === "done") continue;
+    for (const step of task.steps ?? []) if (asks(step, ask)) see(task, step, mark, `#${ask} answered “${choice}”`);
+  }
+}
+
+export function seeAnswered(task: Task, passed: ReadonlyMap<number, string>, mark: StepMark): void {
+  for (const step of task.steps ?? []) {
+    const choice = step.detector?.kind === "answered" ? passed.get(step.detector.ask) : undefined;
+    if (choice !== undefined) see(task, step, mark, `#${step.detector?.kind === "answered" ? step.detector.ask : 0} answered “${choice}”`);
+  }
+}
+
 export function checkStep(task: Task, check: CheckState): void {
   if (task.state === "done" || check.phase !== "pre-ship") return;
   const replaced = check.replaces;
@@ -226,6 +253,7 @@ export function editSteps(task: Task, edit: StepEdit, mark: StepMark): void {
       case "run": {
         const expected = edit.expected ?? step.run?.expected;
         if (expected === undefined) return;
+        if (step.run?.id !== edit.run) step.progress = { kind: "open" };
         step.run = { id: edit.run, expected, ...(current(step) ? { due: mark.at + expected } : {}) };
         note(`step ${stepText(step)} waits on run ${edit.run}`);
         break;

@@ -282,6 +282,112 @@ describe("landing is a list of steps (#3930 §3)", () => {
   });
 });
 
+describe("what a detector saw is tied to what it watches (#3930 §3)", () => {
+  test("a step given another run forgets the old run's success: the new run has to succeed, or its member ends the step", async () => {
+    const c = await channel();
+    await c.run(1, "warm-up", "success");
+    const t = await c.task([
+      { words: "smoke test", by: "jow" },
+      { words: "prd pipeline", by: "zed", run: { id: "old-run", expected: HOUR } },
+    ]);
+    await c.run(40, "old-run", "success");
+    await c.approve(t);
+    await c.landed("jow", t, "s2", { artifact: { kind: "run", id: "old-run" } });
+    expect(ended(c.state(), t)).toEqual(["s1:open", "s2:seen"]);
+    await c.edit("zed", t, { kind: "run", id: "s2", run: "new-run" });
+    expect(ended(c.state(), t)).toEqual(["s1:open", "s2:open"]);
+    await c.landed("jow", t, "s1");
+    expect(ended(c.state(), t)).toEqual(["s1:said", "s2:open"]);
+    expect(c.state().tasks.get(t)!.state).toBe("landing");
+    const stale = await c.landed("jow", t, "s2", { artifact: { kind: "run", id: "old-run" } });
+    expect(c.state().rejected.get(stale.seq)).toBe(`step s2 “prd pipeline” of T${t} doesn't wait on run old-run`);
+    await c.run(41, "new-run", "success");
+    await c.landed("jow", t, "s2", { artifact: { kind: "run", id: "new-run" } });
+    expect(c.state().tasks.get(t)!.state).toBe("done");
+    const same = await channel();
+    await same.run(1, "warm-up", "success");
+    const u = await same.task([
+      { words: "smoke test", by: "jow" },
+      { words: "prd pipeline", by: "zed", run: { id: "old-run", expected: HOUR } },
+    ]);
+    await same.run(40, "old-run", "success");
+    await same.landed("jow", u, "s2", { artifact: { kind: "run", id: "old-run" } });
+    await same.edit("zed", u, { kind: "run", id: "s2", run: "old-run", expected: 2 * HOUR });
+    expect(ended(same.state(), u)).toEqual(["s1:open", "s2:seen"]);
+  });
+
+  test("an ordinary question is a detector too: the first option from someone it asked ends the step, also when it came before the step's turn or before the step", async () => {
+    const c = await channel();
+    const ask = await c.say("ann", "blocking", "Ship to prd?", { to: ["jow"], esc: true, choices: ["A: ship it", "B: hold"] });
+    const t = await c.task([{ words: "tag the build" }, { words: "owner says ship", by: "jow", detector: { kind: "answered", ask: ask.seq } }]);
+    await c.approve(t);
+    await c.say("mac", "msg", "A: ship it", { re: [ask.seq] });
+    expect(ended(c.state(), t)).toEqual(["s1:open", "s2:open"]);
+    await c.say("jow", "msg", "B: hold", { re: [ask.seq] });
+    expect(ended(c.state(), t)).toEqual(["s1:open", "s2:open"]);
+    await c.say("jow", "msg", "A: ship it", { re: [ask.seq] });
+    expect(ended(c.state(), t)).toEqual(["s1:open", "s2:seen"]);
+    await c.landed("ann", t, "s1");
+    const s = c.state();
+    expect(ended(s, t)).toEqual(["s1:said", "s2:detected"]);
+    expect(s.tasks.get(t)!.state).toBe("done");
+    expect(s.rejected.size).toBe(0);
+    const later = await c.task([{ words: "owner says ship", by: "jow", detector: { kind: "answered", ask: ask.seq } }, { words: "tell the list" }]);
+    expect(ended(c.state(), later)).toEqual(["s1:seen", "s2:open"]);
+    const kept: { base?: FoldBase } = {};
+    fold(c.log, roster, at(10_000), null, null, null, (b) => (kept.base = b));
+    if (!kept.base) throw new Error("the fold kept no base");
+    const third = await c.task([{ words: "owner says ship", by: "jow", detector: { kind: "answered", ask: ask.seq } }]);
+    const replayed = fold(c.log.slice(kept.base.n), roster, at(10_000), null, null, kept.base);
+    expect(ended(replayed, third)).toEqual(["s1:seen"]);
+    const closed = await channel();
+    const q = await closed.say("ann", "blocking", "Ship?", { to: ["jow"], esc: true, choices: ["A: yes", "B: no"] });
+    const v = await closed.task([{ words: "owner says ship", by: "jow", detector: { kind: "answered", ask: q.seq } }]);
+    await closed.ev("ann", { op: "ask.close", ask: q.seq });
+    await closed.say("jow", "msg", "A: yes", { re: [q.seq] });
+    expect(ended(closed.state(), v)).toEqual(["s1:open"]);
+  });
+
+  test("a snapshot from before steps turns its open pre-ship question into a step once, and one answer ends it", async () => {
+    const c = await channel();
+    const t = await c.task(undefined, "merge");
+    await c.opened(t);
+    const check: CheckAsk = { phase: "pre-ship", decider: "jow", artifact: prAt };
+    const ask = await c.say("ann", "blocking", "Check it on KDE", { to: ["jow"], esc: true, choices: ["A: works on KDE", "B: not yet"], holds: [t], check });
+    await c.approve(t);
+    const kept: { base?: FoldBase } = {};
+    fold(c.log, roster, at(10_000), null, null, null, (b) => (kept.base = b));
+    if (!kept.base) throw new Error("the fold kept no base");
+    const older: FoldBase = { ...kept.base, rules: FOLD_RULES - 1, tasks: kept.base.tasks.map((x) => omit(x, "steps", "stepCount")) };
+    const migrated = fold(c.log.slice(older.n), roster, at(10_000), null, null, older);
+    expect(migrated.tasks.get(t)!.steps!.map((x) => [x.id, x.words, x.by, x.from])).toEqual([
+      ["s2", `check #${ask.seq}`, "jow", "check"],
+      ["s1", "merge", undefined, "then"],
+    ]);
+    const next: { base?: FoldBase } = {};
+    fold(c.log.slice(older.n), roster, at(10_000), null, null, older, (b) => (next.base = b));
+    if (!next.base) throw new Error("the fold kept no base");
+    expect(next.base.rules).toBe(FOLD_RULES - 1);
+    const twice = fold([], roster, at(10_000), null, null, { ...next.base, rules: FOLD_RULES - 1 });
+    expect(twice.tasks.get(t)!.steps!.map((x) => x.id)).toEqual(["s2", "s1"]);
+    await c.say("jow", "msg", "A: works on KDE", { re: [ask.seq] });
+    const answered = fold(c.log.slice(older.n), roster, at(10_000), null, null, older);
+    expect(ended(answered, t)).toEqual(["s2:detected", "s1:open"]);
+    expect(answered.tasks.get(t)!.state).toBe("landing");
+    const before = await channel();
+    const u = await before.task(undefined, "merge");
+    await before.opened(u);
+    const early = await before.say("ann", "blocking", "Check it on KDE", { to: ["jow"], esc: true, choices: ["A: works on KDE", "B: not yet"], holds: [u], check });
+    await before.say("jow", "msg", "A: works on KDE", { re: [early.seq] });
+    await before.approve(u);
+    const cut: { base?: FoldBase } = {};
+    fold(before.log, roster, at(10_000), null, null, null, (b) => (cut.base = b));
+    if (!cut.base) throw new Error("the fold kept no base");
+    const old: FoldBase = { ...cut.base, rules: FOLD_RULES - 1, tasks: cut.base.tasks.map((x) => omit(x, "steps", "stepCount")) };
+    expect(ended(fold([], roster, at(10_000), null, null, old), u)).toEqual(["s2:detected", "s1:open"]);
+  });
+});
+
 describe("steps are edited by the lead or a person, and never reopen review (#3930 §3)", () => {
   test("add, move, reassign, skip with a reason and remove keep the task landing with its approval; ids are never reused", async () => {
     const c = await channel();

@@ -26,7 +26,7 @@ import { trustedAt } from "./times.ts";
 import { artifactKey, artifactText, doneGate } from "../done-gate.ts";
 import { runPin, type CheckArtifact } from "../checks.ts";
 import type { CheckState } from "./checks.ts";
-import { advance, artifactWords, editSteps, hasOpenSteps, observedRefusal, reopenThenSteps, reseedThen, say, see, seedSteps, seeThenSteps, stepEditRefusal } from "./landing-steps.ts";
+import { advance, artifactWords, editSteps, hasOpenSteps, observedRefusal, reopenThenSteps, reseedThen, say, see, seeAnswered, seedSteps, seeThenSteps, stepEditRefusal } from "./landing-steps.ts";
 import { landedStepRefusal, stepById, stepsOfThen, stepText, type StepSpec } from "../steps.ts";
 import { omit } from "../omit.ts";
 import { inlineText } from "../membership.ts";
@@ -114,6 +114,7 @@ export interface FoldCtx {
   branchPrefix: string | null;
   landing: Landing | null;
   landingSteps: StepSpec[] | null;
+  passedAsks: Map<number, string>;
   merges: Merger;
   compact: Compact | null;
   compactProposal: Compact | null;
@@ -554,6 +555,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (ev.steps) seedSteps(added, ev.steps);
       else if (then && hasLanding(then)) seedSteps(added, stepsOfThen(then), "then");
       else if (ev.then === undefined && c.landingSteps) seedSteps(added, c.landingSteps);
+      seeAnswered(added, c.passedAsks, { seq: m.seq, by: m.from, at });
       tasks.set(m.seq, added);
       break;
     }
@@ -658,7 +660,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const refused = stepEditRefusal(task, ev.edit, { name: m.from, person: isPerson(member), lead: c.leads(member) });
       if (refused) reject(refused);
-      else editSteps(task, ev.edit, { seq: m.seq, by: m.from, at });
+      else {
+        editSteps(task, ev.edit, { seq: m.seq, by: m.from, at });
+        seeAnswered(task, c.passedAsks, { seq: m.seq, by: m.from, at });
+      }
       break;
     }
 

@@ -144,9 +144,10 @@ Agents
      task add … --then merge|release:tag|release:npm:PKG@RANGE|run|none [--lander NAME]   what has to happen
                                                  after its approval: the task stays landing until then (the channel's
                                                  landing setting is the default); the lander (its owner unless named) lands it
-     task add … --then "words" [--by NAME] [--wait "24h why"] [--run ID --expect 2h]   repeat --then for a list of
-                                                 steps, each with its own mover (--by), a wait with its reason, or a run
-                                                 it waits on with who is behind it; the word merge ends when the PR merges
+     task add … --then "words" [--by NAME] [--wait "24h why"] [--run ID --expect 2h] [--answered N]   repeat --then
+                                                 for a list of steps, each with its own mover (--by), a wait with its
+                                                 reason, a run it waits on with who is behind it, or a question whose
+                                                 first option ends it; the word merge ends when the PR merges
      task landed T7 [--step ID] [--link URL] ["note"]   the current step is done (its mover, the lead or a person);
                                                  a retry names the same --step, so it never ends the next one
      task steps T7 [add "words" | remove ID | move ID [--before ID] | by ID NAME | skip ID "why" | wait ID 24h "why" | run ID RUN]

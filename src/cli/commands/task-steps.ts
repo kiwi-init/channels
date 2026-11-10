@@ -10,16 +10,16 @@ import { die, out, type session } from "../context.ts";
 type Session = Effect.Success<ReturnType<typeof session>>;
 
 const STEPS_USAGE =
-  '--then takes merge, release:tag, release:npm:PKG@RANGE, run or none, or the words of a step: repeat it for a list, each with its own --by NAME, --wait "24h why" or --run ID --expect 2h';
+  '--then takes merge, release:tag, release:npm:PKG@RANGE, run or none, or the words of a step: repeat it for a list, each with its own --by NAME, --wait "24h why", --run ID --expect 2h or --answered N (the number of a question)';
 
 export type Landed = { kind: "none" } | { kind: "then"; then: Landing } | { kind: "steps"; steps: StepSpec[] } | { kind: "bad"; why: string };
 
-type Group = { words: string; by?: string; wait?: string; run?: string; expect?: string };
+type Group = { words: string; by?: string; wait?: string; run?: string; expect?: string; answered?: string };
 
 const WAIT = /^(\d{1,4}[mhd])[\s:,]+(\S[\s\S]*)$/;
 
 function specOf(g: Group): StepSpec[] | string {
-  const plain = g.by === undefined && g.wait === undefined && g.run === undefined && g.expect === undefined;
+  const plain = g.by === undefined && g.wait === undefined && g.run === undefined && g.expect === undefined && g.answered === undefined;
   if (g.words === "none") return "--then none stands alone: it means no steps, so approval finishes the task";
   if (plain && isLanding(g.words)) return stepsOfThen(g.words);
   if (g.words.length > STEP_WORDS_MAX) return `a step's words are at most ${STEP_WORDS_MAX} characters`;
@@ -31,10 +31,13 @@ function specOf(g: Group): StepSpec[] | string {
   if (g.expect !== undefined && expected === null) return "--expect takes how long the run should take: 30m, 2h or 1d";
   if (g.expect !== undefined && g.by === undefined) return "a step that waits on a run names who is behind it: --by NAME";
   if (g.run !== undefined && !wellFormedRunId(g.run)) return `"${g.run}" isn't a run id: letters, digits and . _ : / @ + -, at most 200`;
+  const ask = g.answered === undefined ? undefined : /^#?[1-9]\d{0,14}$/.test(g.answered) ? Number(g.answered.replace(/^#/, "")) : null;
+  if (ask === null) return "--answered takes a question's number: the step ends when it is answered with its first option";
+  if (ask !== undefined && g.words === "merge") return "a merge step ends when its PR merges: put --answered on a step of its own";
   const spec: StepSpec = {
     words: g.words,
     ...(g.by !== undefined ? { by: g.by } : {}),
-    ...(g.words === "merge" ? { detector: { kind: "pr-merged" as const } } : {}),
+    ...(g.words === "merge" ? { detector: { kind: "pr-merged" as const } } : ask !== undefined ? { detector: { kind: "answered" as const, ask } } : {}),
     ...(waited && ms !== null ? { wait: { reason: (waited[2] ?? "").trim(), ms } } : {}),
     ...(expected !== null ? { run: { ...(g.run !== undefined ? { id: g.run } : {}), expected } } : {}),
   };
@@ -42,7 +45,7 @@ function specOf(g: Group): StepSpec[] | string {
 }
 
 export function landingFromOptions(): Landed {
-  void [opt.then, opt.by, opt.wait, opt.run, opt.expect];
+  void [opt.then, opt.by, opt.wait, opt.run, opt.expect, opt.answered];
   const groups: Group[] = [];
   for (const { name, value } of optionsInOrder) {
     const said = value.trim();
@@ -51,7 +54,7 @@ export function landingFromOptions(): Landed {
       groups.push({ words: said });
       continue;
     }
-    if (name !== "by" && name !== "wait" && name !== "run" && name !== "expect") continue;
+    if (name !== "by" && name !== "wait" && name !== "run" && name !== "expect" && name !== "answered") continue;
     const last = groups.at(-1);
     if (!last) return { kind: "bad", why: `--${name} goes after the --then it belongs to` };
     if (last[name] !== undefined) return { kind: "bad", why: `--${name} is given once per --then` };
@@ -59,8 +62,8 @@ export function landingFromOptions(): Landed {
   }
   const [only] = groups;
   if (!only) return { kind: "none" };
-  if (groups.length === 1 && isLanding(only.words) && only.by === undefined && only.wait === undefined && only.run === undefined && only.expect === undefined)
-    return { kind: "then", then: only.words };
+  const bare = only.by === undefined && only.wait === undefined && only.run === undefined && only.expect === undefined && only.answered === undefined;
+  if (groups.length === 1 && isLanding(only.words) && bare) return { kind: "then", then: only.words };
   const steps: StepSpec[] = [];
   for (const g of groups) {
     const made = specOf(g);
@@ -91,7 +94,7 @@ export const taskLanded = (s: Session, id: number) =>
 
 const STEPS_EDIT_USAGE = [
   "usage: kiwi task steps T7                                  its steps, with their ids",
-  '       kiwi task steps T7 add "words" [--by NAME] [--wait "24h why"] [--run ID --expect 2h] [--before ID]',
+  '       kiwi task steps T7 add "words" [--by NAME] [--wait "24h why"] [--run ID --expect 2h] [--answered N] [--before ID]',
   "       kiwi task steps T7 remove ID",
   "       kiwi task steps T7 move ID [--before ID]            to the end when --before is left out",
   "       kiwi task steps T7 by ID NAME|none                  who moves it (none: the task's lander)",
@@ -114,6 +117,7 @@ function editFromArgs(): StepEdit | string {
       ...(opt.wait !== undefined ? { wait: opt.wait } : {}),
       ...(opt.run?.[0] !== undefined ? { run: opt.run[0].trim() } : {}),
       ...(opt.expect !== undefined ? { expect: opt.expect } : {}),
+      ...(opt.answered?.[0] !== undefined ? { answered: opt.answered[0].trim() } : {}),
     });
     if (typeof made === "string") return made;
     const [step] = made;
