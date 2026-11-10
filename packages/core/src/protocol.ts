@@ -5,6 +5,7 @@
 // coordination events, signatures) lives inside the encrypted payload.
 
 import { wellFormedArtifact, wellFormedCheck, wellFormedRunId, type CheckArtifact, type CheckAsk } from "./checks.ts";
+import { wellFormedStepEdit, wellFormedStepLanded, wellFormedStepSpecs, type StepEdit, type StepLanded, type StepSpec } from "./steps.ts";
 import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
@@ -265,7 +266,7 @@ export type Event =
    * A task. `review`: who must approve it before it's done (a member's name, or "*" for anyone who hasn't
    * worked on it). Logs from older clients may also carry `after`, `needs` and `handoff`: they're ignored.
    */
-  | { op: "task.add"; title: string; detail?: string; owner?: string; review?: string; issue?: IssueRef; from?: number; then?: Landing; lander?: string }
+  | { op: "task.add"; title: string; detail?: string; owner?: string; review?: string; issue?: IssueRef; from?: number; then?: Landing; steps?: StepSpec[]; lander?: string }
   | { op: "task.claim"; task: number }
   | {
       op: "task.update";
@@ -294,6 +295,8 @@ export type Event =
     }
   | { op: "task.first"; task: number }
   | { op: "task.landed"; task: number; artifact: CheckArtifact }
+  | ({ op: "task.landed"; task: number } & StepLanded)
+  | { op: "task.steps"; task: number; edit: StepEdit }
   | { op: "task.delete"; task: number; why?: string }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
@@ -352,7 +355,7 @@ export type Event =
   | { op: "voice.set"; on: boolean }
   | { op: "github.write.set"; on: boolean }
   | { op: "branch.prefix.set"; prefix: string | null }
-  | { op: "landing.set"; then: Landing | null }
+  | { op: "landing.set"; then: Landing | null; steps?: StepSpec[] }
   | { op: "merges.set"; by: Merger }
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
@@ -923,7 +926,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 22;
+export const EVENT_OPS_VERSION = 23;
 
 export const REVIEW_CHECK = "kiwi/review";
 
@@ -951,7 +954,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 26;
+export const FOLD_RULES = 27;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1104,13 +1107,17 @@ function eventCheck(ev: unknown): boolean | null {
         opt(e.issue, isIssueRef) &&
         opt(e.from, (x): x is number => Number.isSafeInteger(x) && (x as number) > 0) &&
         opt(e.then, isLanding) &&
+        opt(e.steps, wellFormedStepSpecs) &&
+        (e.then === undefined || e.steps === undefined) &&
         opt(e.lander, (x): x is string => str(x, 64))
       );
     case "task.claim":
     case "task.first":
       return n(e.task);
     case "task.landed":
-      return n(e.task) && wellFormedArtifact(e.artifact);
+      return n(e.task) && (e.step === undefined ? wellFormedArtifact(e.artifact) : wellFormedStepLanded(e));
+    case "task.steps":
+      return n(e.task) && wellFormedStepEdit(e.edit);
     case "task.delete":
       return n(e.task) && opt(e.why, (x): x is string => str(x, 500));
     case "task.update":
@@ -1277,7 +1284,7 @@ function eventCheck(ev: unknown): boolean | null {
     case "branch.prefix.set":
       return e.prefix === null || (typeof e.prefix === "string" && BRANCH_PREFIX_RE.test(e.prefix));
     case "landing.set":
-      return e.then === null || isLanding(e.then);
+      return (e.then === null || isLanding(e.then)) && (e.steps === undefined || (e.then === null && wellFormedStepSpecs(e.steps)));
     case "merges.set":
       return (MERGERS as readonly unknown[]).includes(e.by);
     case "react":

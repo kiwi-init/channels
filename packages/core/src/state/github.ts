@@ -75,6 +75,8 @@ export interface GithubRun {
   run: number;
   title?: string;
   started: number;
+  attempt?: number;
+  conclusion?: string;
 }
 
 export interface GithubState {
@@ -103,9 +105,19 @@ function addRun(g: GithubState, i: GithubNote, seq: number): void {
   const key = runKey(i.repo, i.run);
   const was = g.runs.get(key);
   const title = was?.title ?? i.title;
+  const attempt = Math.max(i.attempt ?? 1, was?.attempt ?? 1);
+  const rerun = (i.attempt ?? 1) > (was?.attempt ?? 1);
+  const conclusion = (i.attempt ?? 1) < (was?.attempt ?? 1) ? was?.conclusion : (i.conclusion ?? (rerun ? undefined : was?.conclusion));
   g.runsSince ??= seq;
   g.runs.delete(key);
-  g.runs.set(key, { repo: i.repo, run: i.run, started: Math.min(i.started, was?.started ?? i.started), ...(title ? { title } : {}) });
+  g.runs.set(key, {
+    repo: i.repo,
+    run: i.run,
+    started: Math.min(i.started, was?.started ?? i.started),
+    ...(title ? { title } : {}),
+    ...(attempt > 1 ? { attempt } : {}),
+    ...(conclusion ? { conclusion } : {}),
+  });
   for (const old of [...g.runs.values()].slice(0, Math.max(0, g.runs.size - MAX_RUNS))) {
     g.runs.delete(runKey(old.repo, old.run));
     g.runsForgotten = Math.max(g.runsForgotten ?? old.started, old.started);

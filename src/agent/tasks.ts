@@ -20,6 +20,8 @@ import {
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { wellFormedRunId } from "@kiwi/core/checks.ts";
+import { currentStep, landedStepRefusal, stepById, stepText, type StepEdit, type StepSpec } from "@kiwi/core/steps.ts";
+import { stepEditRefusal } from "@kiwi/core/state/landing-steps.ts";
 import {
   isPerson,
   openRound,
@@ -78,7 +80,11 @@ export class SessionTasks extends SessionMessaging {
 
   readonly taskAdd = Effect.fn("AgentSession.taskAdd")(
     { self: this },
-    function* (this: SessionTasks, title: string, opts: { detail?: string; owner?: string; review?: string; re?: number; issue?: IssueRef; from?: number; then?: Landing; lander?: string } = {}) {
+    function* (
+      this: SessionTasks,
+      title: string,
+      opts: { detail?: string; owner?: string; review?: string; re?: number; issue?: IssueRef; from?: number; then?: Landing; steps?: StepSpec[]; lander?: string } = {},
+    ) {
       const long = titleRefusal(title);
       if (long) return yield* new Rejected(long);
       if (opts.detail && opts.detail.length > TASK_BODY_MAX_LENGTH)
@@ -89,6 +95,7 @@ export class SessionTasks extends SessionMessaging {
       const owner = opts.owner && (yield* this.resolveTo([opts.owner], state))?.[0];
       const review = opts.review === undefined ? undefined : yield* this.reviewer(state, opts.review);
       const lander = opts.lander && (yield* this.resolveTo([opts.lander], state))?.[0];
+      const steps = opts.steps ? yield* this.stepSpecs(state, opts.steps) : undefined;
       return yield* this.event(
         {
           op: "task.add",
@@ -98,7 +105,7 @@ export class SessionTasks extends SessionMessaging {
           ...(review ? { review } : {}),
           ...(opts.issue ? { issue: opts.issue } : {}),
           ...(opts.from !== undefined ? { from: opts.from } : {}),
-          ...(opts.then ? { then: opts.then } : {}),
+          ...(steps ? { steps } : opts.then ? { then: opts.then } : {}),
           ...(lander ? { lander } : {}),
         },
         `task: ${title}`,
@@ -322,6 +329,59 @@ export class SessionTasks extends SessionMessaging {
         ...(state.tasks.get(id)?.state === "doing" ? { state: "todo" as const } : {}),
       });
       return first ? yield* this.taskFirst(id) : after;
+    },
+    oneLook,
+  );
+
+  private stepSpecs(state: ChannelState, specs: readonly StepSpec[]) {
+    return Effect.forEach(specs, (spec) =>
+      spec.by === undefined ? Effect.succeed(spec) : Effect.map(this.resolveTo([spec.by], state), (names): StepSpec => ({ ...spec, by: names?.[0] ?? spec.by })),
+    );
+  }
+
+  readonly taskLanded = Effect.fn("AgentSession.taskLanded")(
+    { self: this },
+    function* (this: SessionTasks, id: number, said: { step?: string; link?: string; note?: string } = {}) {
+      const { state } = yield* this.state();
+      const t = state.tasks.get(id);
+      if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
+      if (!t.steps?.length) return yield* new Rejected(`${taskId(id)} has no landing steps: it finishes on approval`);
+      const current = currentStep(t);
+      const step = said.step ?? current?.id;
+      if (step === undefined) return yield* new Rejected(`${taskId(id)} has no step left to end`);
+      const wrong = landedStepRefusal(t, step);
+      if (wrong) return yield* new Rejected(wrong);
+      if (t.state !== "landing" && stepById(t, step)?.progress.kind === "open") return yield* new Rejected(`${taskId(id)} isn't approved and landing: it's ${t.state}`);
+      const note = said.note?.trim();
+      const seq = yield* this.event({ op: "task.landed", task: id, step, ...(said.link ? { link: said.link } : {}), ...(note ? { note } : {}) }, `${taskId(id)} step ${step} done`, [
+        ...new Set([t.owner, t.lander, ...(t.steps ?? []).map((x) => x.by)].filter((n): n is string => !!n)),
+      ]);
+      return { state: yield* this.confirm(seq), step };
+    },
+    oneLook,
+  );
+
+  readonly taskSteps = Effect.fn("AgentSession.taskSteps")(
+    { self: this },
+    function* (this: SessionTasks, id: number, change: StepEdit) {
+      const { state } = yield* this.state();
+      const t = state.tasks.get(id);
+      if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
+      const edit: StepEdit =
+        change.kind === "add"
+          ? { ...change, step: (yield* this.stepSpecs(state, [change.step]))[0] ?? change.step }
+          : change.kind === "by" && change.by
+            ? { ...change, by: (yield* this.resolveTo([change.by], state))?.[0] ?? change.by }
+            : change;
+      const me = state.members.get(this.me);
+      const lead = !!me && (!!me.owner || me.persona?.role === "lead" || state.lead === this.me);
+      const refused = me ? stepEditRefusal(t, edit, { name: this.me, person: isPerson(me), lead }) : null;
+      if (refused) return yield* new Rejected(refused);
+      const about = edit.kind === "add" ? edit.step.words : stepText(stepById(t, edit.id) ?? { id: edit.id, words: "" });
+      const seq = yield* this.event({ op: "task.steps", task: id, edit }, `${taskId(id)} steps: ${edit.kind} ${about}`, [
+        ...new Set([t.owner, t.lander, edit.kind === "add" ? edit.step.by : edit.kind === "by" ? (edit.by ?? undefined) : stepById(t, edit.id)?.by].filter((n): n is string => !!n)),
+      ]);
+      return yield* this.confirm(seq);
     },
     oneLook,
   );

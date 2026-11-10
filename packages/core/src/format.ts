@@ -34,6 +34,8 @@ import { changedSinceApproval, changedAfterApproval, freeAgents, specOfComment, 
 import { commentsLine, commentsWaiting, specLine } from "./spec-lines.ts";
 import { landingWaits, reviewNotRequired, rulesText } from "./prs.ts";
 import { artifactText } from "./done-gate.ts";
+import { currentStep, spanText, stepById, stepMove, type LandingStep, type StepEdit } from "./steps.ts";
+import { runSight } from "./state/landing-steps.ts";
 import { sayEvent, type EventKey, type EventSay } from "./event-words.ts";
 import { moverOf, moverTag, moverText } from "./mover.ts";
 import { statusOf, statusWord } from "./status.ts";
@@ -189,7 +191,12 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     case "task.first":
       return say("task.first", { task: task(ev.task) });
     case "task.landed":
-      return say("task.landed", { task: task(ev.task), at: artifactText(ev.artifact) });
+      if (!("step" in ev)) return say("task.landed", { task: task(ev.task), at: artifactText(ev.artifact) });
+      return ev.artifact
+        ? say("task.step.seen", { step: stepName(state, ev.task, ev.step), task: task(ev.task), at: artifactText(ev.artifact) })
+        : say("task.step.done", { step: stepName(state, ev.task, ev.step), task: task(ev.task), note: note([ev.note, ev.link].filter(Boolean).join(" ") || undefined) });
+    case "task.steps":
+      return say("task.steps", { task: task(ev.task), what: stepEditText(ev.edit) });
     case "task.delete":
       return say("task.delete", { task: taskId(ev.task), note: note(ev.why) });
     case "task.update": {
@@ -255,6 +262,7 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     case "merges.set":
       return ev.by === "people" ? say("merges.people") : say("merges.agents");
     case "landing.set":
+      if (ev.steps) return say("landing.steps", { steps: ev.steps.map((x) => `“${inlineText(x.words, 80)}”`).join(", ") });
       return ev.then && ev.then !== "none" ? say("landing.set", { then: ev.then }) : say("landing.approval");
     case "react":
       return ev.emoji ? say("react", { emoji: ev.emoji, seq: String(ev.seq) }) : say("react.back", { seq: String(ev.seq) });
@@ -441,6 +449,80 @@ function takeSpec(m: Message, state?: ChannelState, me?: string): string {
   const seat = state.members.get(me);
   if (!spec || !seat || isPerson(seat) || specStage(state, spec) !== "queued" || changedSinceApproval(spec) || specPlanner(state, ev.ask)) return "";
   return state.lead === me || freeAgents(state).includes(me) ? `; it waits for an agent, so take it now: kiwi spec start ${ev.ask}` : "";
+}
+
+function stepName(state: ChannelState | undefined, task: number, id: string): string {
+  const t = state?.tasks.get(task);
+  const step = t ? stepById(t, id) : undefined;
+  return step ? `${id} “${inlineText(step.words, 80)}”` : id;
+}
+
+export function stepEditText(edit: StepEdit): string {
+  switch (edit.kind) {
+    case "add":
+      return `+ “${inlineText(edit.step.words, 80)}”${edit.before ? ` < ${edit.before}` : ""}`;
+    case "remove":
+      return `− ${edit.id}`;
+    case "move":
+      return `${edit.id} ${edit.before ? `< ${edit.before}` : "→ ∎"}`;
+    case "by":
+      return `${edit.id} → ${edit.by ? `@${inlineText(edit.by, 40)}` : "∅"}`;
+    case "skip":
+      return `⤼ ${edit.id}: ${inlineText(edit.why, 200)}`;
+    case "wait":
+      return `${edit.id} ⏸ ${spanText(edit.ms)}: ${inlineText(edit.reason, 200)}`;
+    case "run":
+      return `${edit.id} ⏵ ${inlineText(edit.run, 80)}${edit.expected === undefined ? "" : ` ≤ ${spanText(edit.expected)}`}`;
+    default: {
+      const never: never = edit;
+      return never;
+    }
+  }
+}
+
+export function stepLines(state: ChannelState, t: Task, now: number): string[] {
+  const steps = t.steps ?? [];
+  if (!steps.length) return [];
+  const current = t.state === "landing" ? currentStep(t) : undefined;
+  const ended = steps.filter((x) => x.progress.kind === "ended").length;
+  const wide = Math.min(48, Math.max(...steps.map((x) => inlineText(x.words, 80).length)));
+  const rows = steps.map((step) => {
+    const who = inlineText(step.by ?? t.lander ?? t.owner ?? "nobody", 40);
+    const mark = step.progress.kind === "ended" ? (step.progress.end.how === "skipped" ? "–" : "✓") : step === current ? "→" : " ";
+    return `    ${mark} ${step.id.padEnd(3)} ${inlineText(step.words, 80).padEnd(wide)}  ${who}${stepTail(state, t, step, step === current, now)}`;
+  });
+  return [`  steps (${ended} of ${steps.length} ended${current ? `, ${current.id} is current` : ""}):`, ...rows];
+}
+
+function stepTail(state: ChannelState, t: Task, step: LandingStep, current: boolean, now: number): string {
+  if (step.progress.kind === "ended") {
+    const end = step.progress.end;
+    if (end.how === "skipped") return `  skipped ${ago(end.ts, now)} by ${inlineText(end.by, 40)}: ${inlineText(end.why, 200)}`;
+    if (end.how === "said")
+      return `  done ${ago(end.ts, now)}${end.by !== (step.by ?? t.lander ?? t.owner) ? ` by ${inlineText(end.by, 40)}` : ""}${end.note ? `: ${inlineText(end.note, 200)}` : ""}${end.link ? ` ${end.link}` : ""}`;
+    return `  done ${ago(end.ts, now)}${end.how === "detected" ? `: ${inlineText(end.saw, 120)}` : ""}`;
+  }
+  const seen = step.progress.seen ? `  seen early: ${inlineText(step.progress.seen.saw, 120)}` : "";
+  if (!current) {
+    const wait = step.wait ? `  not before +${spanText(step.wait.ms)}: ${inlineText(step.wait.reason, 120)}` : "";
+    const run = step.run ? `  waits on ${step.run.id ? `run ${inlineText(step.run.id, 60)}` : "a run"}, expected in ${spanText(step.run.expected)}` : "";
+    return `${wait}${run}${seen}`;
+  }
+  const move = stepMove(step, t.lander ?? t.owner, now, runSight(state.github, t, step));
+  switch (move.kind) {
+    case "waiting":
+      return `  not before ${spanText(Math.max(60_000, move.until - now))} from now: ${inlineText(move.reason, 120)}`;
+    case "run":
+      return `  run ${inlineText(step.run?.id ?? "", 60)} is expected within ${spanText(Math.max(60_000, move.due - now))}; nobody is paged meanwhile`;
+    case "member":
+      return move.why ? `  ${move.why}: ${inlineText(move.name, 40)} has the move` : "  current";
+    case "nobody":
+      return "  current, with nobody to move it";
+    default: {
+      const never: never = move;
+      return never;
+    }
+  }
 }
 
 function taskLine(state: ChannelState, t: Task): string {
@@ -779,6 +861,7 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
   if (t.then) out.push(`  lands on: ${t.then}, landed by ${inlineText(t.lander ?? t.owner ?? "its owner", 40)}${t.state === "landing" ? " (approved, not landed yet)" : ""}`);
   const waits = landingWaits(state, t);
   if (waits) out.push(`  ${waits}`);
+  out.push(...stepLines(state, t, now));
   if (t.closedWith) out.push(`  closed without landing: ${inlineText(t.closedWith, 200)}`);
   if (t.landed) out.push(`  landed: ${artifactText(t.landed.artifact)}`);
   if (t.landed) out.push(`  landed: ${artifactText(t.landed.artifact)}`);
