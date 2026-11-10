@@ -5,11 +5,10 @@ import { liveOf } from "~/doing"
 import { t } from "~/i18n/i18n"
 import { Avatar, Count, cx, Dot, statusWord } from "~/kit/bits"
 import { ago } from "~/kit/time"
-import { memberOf, type Channel, type PullRequest, type Task, type TaskStatus } from "~/model"
+import { memberOf, type Channel, type PullRequest, type Task } from "~/model"
 import { useGo } from "~/nav"
 import { nickname, Shown } from "~/names"
-
-export const TONES: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", landing: "tone-review", done: "tone-live", waiting: "tone-decide" }
+import { TONES } from "~/tasks/tones"
 
 function stateOf(channel: Channel, task: Task): { text: string; tone: string } | null {
   const owner = task.owner ? memberOf(channel, task.owner) : undefined

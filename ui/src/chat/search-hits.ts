@@ -3,6 +3,7 @@ import { buildIndex, countWords, indexOf, marks, rank, snippet, terms, type Coun
 import { preview } from "~/chat/preview"
 import type { Channel, Message, OlderHit, Task, Where } from "~/model"
 import { between, nickname } from "~/names"
+import { titleRank } from "~/tasks/title-rank"
 import { wordsPlain, wordsRaw } from "~/words"
 
 export type Hit = { kind: "task"; task: Task } | { kind: "message"; m: Message } | { kind: "older"; o: OlderHit } | { kind: "fetch" }
@@ -44,7 +45,8 @@ function matchingTasks(tasks: Task[], query: string): Task[] {
   const id = taskNumber(query)
   if (id !== null) return tasks.filter((t) => t.id === id)
   return rank(buildIndex(tasks.map((t) => ({ item: t, fields: [{ text: wordsRaw(t.title), weight: 1 }] }))), query)
-    .sort((a, b) => Number(a.item.archived) - Number(b.item.archived) || b.score - a.score || b.item.updatedAt - a.item.updatedAt)
+    .map((r) => ({ ...r, at: titleRank(wordsRaw(r.item.title), query) }))
+    .sort((a, b) => Number(a.item.archived) - Number(b.item.archived) || a.at - b.at || (a.at === 5 ? b.score - a.score : 0) || b.item.updatedAt - a.item.updatedAt)
     .map((r) => r.item)
 }
 

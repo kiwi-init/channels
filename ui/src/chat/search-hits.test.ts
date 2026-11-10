@@ -49,6 +49,11 @@ describe("channel search", () => {
     ).toEqual(["message-1", "message-3", "message-6"])
   })
 
+  test("tasks come in Jump to's order: where the title matches first, then the most recently touched (T1820)", () => {
+    const found = [task(15, "Rotate the relay's signing key", { updatedAt: 10 }), task(17, "Find why the relay drops sockets", { updatedAt: 20 }), task(18, "Relay graphs", { updatedAt: 5 })]
+    expect(searchHits(found, index, "relay").slice(0, 3).map(hitKey)).toEqual(["task-18", "task-17", "task-15"])
+  })
+
   test("leaves out system lines and messages still being sent", () => {
     expect(keys("joined")).toEqual([])
     expect(keys("retry")).toEqual([])
