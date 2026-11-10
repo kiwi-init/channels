@@ -278,7 +278,7 @@ check("desktop-only diff drops doc, fuzz and shots, keeping test-flows", pickWit
 check("a desktop source that flows tests import keeps test-flows", pickWith({ "desktop/src/keyring.ts": "k" }) === ALL_JOBS.replace(" doc", "").replace(" fuzz", "").replace(" shots", ""));
 check("an unclaimed file runs everything", pickWith({ "README2.md": "b" }) === ALL_JOBS);
 check("a release input runs everything", pickWith({ "ui/b.ts": "b" }, ["2026.11.15"]) === ALL_JOBS);
-check("a stamp commit runs everything", pickWith({}, [], true) === ALL_JOBS);
+check("a stamp commit over a narrowed diff runs everything", pickWith({ "ui/b.ts": "b" }, [], true) === ALL_JOBS);
 check("an unavailable main ref runs everything", pickWithoutBase() === ALL_JOBS);
 const covTable = Bun.YAML.parse(await Bun.file(".github/coverage.yml").text()) as { areas?: Record<string, { paths?: string[]; skip?: string[] }> };
 check(
