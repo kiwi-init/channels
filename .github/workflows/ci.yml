@@ -622,6 +622,18 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$APP/bin/launcher" ${{ matrix.sandbox }}
           img=$(ls "$PWD"/desktop/release-eb/linux/Channels-*-linux-x86_64.AppImage)
           xvfb-run -a -s "-screen 0 1280x800x24" bash desktop/scripts/eb-linux-start.sh "$img" ${{ matrix.sandbox }} --appimage-extract-and-run
+      - name: a start that fails says why in a message box and in main.log, then quits (T1763), with a screenshot
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/start-failure-check.ts "$APP" "$RUNNER_TEMP/start-failure"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: start-failure-${{ matrix.os }}
+          path: ${{ runner.temp }}/start-failure
+          if-no-files-found: warn
+          retention-days: 3
+          overwrite: true
       - name: the tray uses Channels' symbolic icon and title where a tray host runs
         if: ${{ !cancelled() }}
         run: |
