@@ -12,7 +12,7 @@ on:
         type: string
         default: ""
       jobs:
-        description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a thread doc's updates cost, at a short and a long thread, no gate), upgrade (an older release's data opened by this build), or all"
+        description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a thread doc's updates cost, at a short and a long thread, no gate), upgrade (an older release's data opened by this build), replies (three agents answer one message, in the app), or all"
         type: string
         default: "scale"
       doc_lines:
@@ -38,7 +38,7 @@ permissions:
 jobs:
   perf:
     name: perf / scale and soak
-    if: ${{ inputs.jobs != 'desktop' && inputs.jobs != 'doc' && inputs.jobs != 'upgrade' }}
+    if: ${{ inputs.jobs != 'desktop' && inputs.jobs != 'doc' && inputs.jobs != 'upgrade' && inputs.jobs != 'replies' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -114,6 +114,26 @@ jobs:
       - name: the control, its data reopened by itself
         if: ${{ !cancelled() }}
         run: bun scripts/ui-upgrade.ts --old=old-release --control
+
+  replies:
+    name: perf / three agents answer one message, in the app
+    if: ${{ inputs.jobs == 'replies' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/browser
+      - run: bun scripts/ui-harness.ts
+      - name: one answer, two under it, none dropped
+        run: bun scripts/ui-replies-under.ts --shot="$RUNNER_TEMP/replies-under.png"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: replies-under
+          path: ${{ runner.temp }}/replies-under.png
+          if-no-files-found: ignore
+          overwrite: true
 
   desktop:
     name: perf / desktop cold start and idle memory

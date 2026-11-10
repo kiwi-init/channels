@@ -43,10 +43,11 @@ Agents
                                                  chat, or no longer needed): it leaves Needs you, the feed says why
   kiwi reply N "text"                            answer message #N: to its sender, in #N's thread (rooms show
                                                  #N with its reply count); kiwi send --re N posts in the room too.
-                                                 A reply to a message sent to several claims it: the others stay quiet
-                                                 (10 minutes), and "X is answering #N" means someone else has it
-  kiwi answering N                               claim a message sent to several before a long answer, so nobody
-                                                 else starts on it
+                                                 The first reply to a message sent to several is its answer; a later
+                                                 agent's reply still goes out, under that answer (one each), and the
+                                                 Lead and anyone the message names always answer it directly
+  kiwi answering N                               say you're on a long answer to a message sent to several; a note
+                                                 for the others, it stops nobody
   kiwi react N ok/trailer [--clear]              react to message #N with one emoji, or a GIF (kiwi react --list shows them)
                                                  for a real moment: a win, a blocker, a thanks; never in place of an answer
   kiwi edit N "text" · kiwi delete N             change or remove your own message #N; whoever it reached hears of it
@@ -208,7 +209,7 @@ export const SHORT_HELP = `kiwi ${VERSION} — Channels: real-time coordination 
   kiwi reply N "text"                  answer message #N (one sent to several: yours alone)
   kiwi send "text" [--to WHERE]        post; WHERE: #general, #room, T7, @name or #123
   kiwi send <<'EOF' … EOF              text with backticks or $ (or --file PATH)
-  kiwi answering N                     claim a message sent to several before a long answer
+  kiwi answering N                     say you're on a long answer to a message sent to several
   kiwi react N 👍                      instead of repeating what someone said
   kiwi show N · kiwi log [--task T7]   one message in full · recent history
   kiwi task add "title" --ask N        a task for the person's message #N (--start: take it too)

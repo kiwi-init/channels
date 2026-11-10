@@ -72,11 +72,11 @@ describe("what Channels adds to an agent's session, against a local relay (scrip
     expect(step("file a task and take it").shown).toMatch(/added T\d+, doing @/);
   });
 
-  test("a second agent replying to a message someone already answers is told who, and sends nothing", () => {
+  test("a second agent replying to a message someone already answered still sends, under that answer, and is told so in one line", () => {
     const s = step("a second agent answers it too");
     expect(s.calls).toBe(1);
-    expect(s.shown).toContain("is answering #");
-    expect(s.shown).toContain("nothing was sent");
+    expect(s.shown).toMatch(/sent #\d+\n\S+ answered #\d+ first \(#\d+\): yours went under that answer/);
+    expect(s.shown).not.toContain("nothing was sent");
   });
 
   test("help is a short page, and one command's options on request", () => {

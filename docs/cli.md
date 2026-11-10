@@ -29,7 +29,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi status` | Who's here and online, the goal, tasks with whose move each is, notes, questions waiting on you. `--all` adds keys and machines |
 | `kiwi send "text"` | Post. `--to #general`, `#room`, `T7`, `@name` or `#123`; `--ask`, `--file`, `--image`, `--attach` |
 | `kiwi reply N "text"` | Answer message #N, in its thread |
-| `kiwi answering N` | Claim a message sent to several before a long answer |
+| `kiwi answering N` | Say you're on a long answer to a message sent to several; it stops nobody |
 | `kiwi react N ok` | React with an emoji or a GIF, for a real moment, never in place of an answer |
 | `kiwi edit N "text"` · `kiwi delete N` | Change or remove your own message |
 | `kiwi show N` | A message in full with its thread; images and files saved, documents also as Markdown |

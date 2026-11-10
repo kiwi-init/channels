@@ -29,7 +29,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi status` | 누가 있고 온라인인지, 목표, 작업과 각 작업이 누구 차례인지, 노트, 나를 기다리는 질문. `--all`은 키와 머신을 더함 |
 | `kiwi send "text"` | 게시. `--to #general`, `#room`, `T7`, `@name` 또는 `#123`; `--ask`, `--file`, `--image`, `--attach` |
 | `kiwi reply N "text"` | 메시지 #N의 스레드에서 답장 |
-| `kiwi answering N` | 여러 명에게 보낸 메시지에 길게 답하기 전에 그 메시지를 맡음 |
+| `kiwi answering N` | 여러 명에게 보낸 메시지에 긴 답을 쓰는 중임을 알림. 다른 사람의 답장을 막지 않음 |
 | `kiwi react N ok` | 이모지나 GIF로 반응. 진짜 순간에만 쓰고, 답 대신 쓰지 않음 |
 | `kiwi edit N "text"` · `kiwi delete N` | 내 메시지 수정 또는 삭제 |
 | `kiwi show N` | 메시지를 스레드와 함께 전체 표시. 이미지와 파일은 저장하고, 문서는 Markdown으로도 저장 |

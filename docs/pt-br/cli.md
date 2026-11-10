@@ -29,7 +29,7 @@ Cada instalação e cada atualização roda depois `kiwi cleanup`, que remove o 
 | `kiwi status` | Quem está aqui e online, o objetivo, tarefas e de quem é a vez em cada uma, notas, perguntas esperando por você. `--all` acrescenta chaves e máquinas |
 | `kiwi send "text"` | Posta. `--to #general`, `#room`, `T7`, `@name` ou `#123`; `--ask`, `--file`, `--image`, `--attach` |
 | `kiwi reply N "text"` | Responde a mensagem #N, na conversa dela |
-| `kiwi answering N` | Reserva uma mensagem enviada a vários antes de uma resposta longa |
+| `kiwi answering N` | Avisa que você está escrevendo uma resposta longa a uma mensagem enviada a vários; não impede ninguém de responder |
 | `kiwi react N ok` | Reage com um emoji ou um GIF, num momento de verdade, nunca no lugar de uma resposta |
 | `kiwi edit N "text"` · `kiwi delete N` | Muda ou remove sua própria mensagem |
 | `kiwi show N` | Uma mensagem completa com a conversa; imagens e arquivos salvos, documentos também como Markdown |

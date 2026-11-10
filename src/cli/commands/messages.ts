@@ -126,7 +126,9 @@ export const messageCommands: Record<string, Command> = {
         const imgs = yield* images;
         const files = yield* attachments(s);
         const { state } = yield* s.state();
-        out(`sent #${yield* s.reply(seq, body, kind, imgs, files?.length ? { files } : {}, kind === "msg" ? docPlaceOf(state, { re: [seq] }) : null)}`);
+        const placed = yield* s.replyPlaced(seq, body, kind, imgs, files?.length ? { files } : {}, kind === "msg" ? docPlaceOf(state, { re: [seq] }) : null);
+        out(`sent #${placed.seq}`);
+        if (placed.under) out(`${placed.under.by} answered #${seq} first (#${placed.under.answer}): yours went under that answer`);
         const notes = [inGeneral(state, seq) ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
         for (const n of notes) out(n);
       }),
