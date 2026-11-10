@@ -18,21 +18,31 @@ export function terms(query: string): string[] {
   return [...new Set(words(query).map((w) => w.folded))].slice(0, MAX_TERMS);
 }
 
-export function buildIndex<T>(docs: Iterable<Doc<T>>): Index<T> {
+export type Counted = { tokens: Map<string, number>; length: number };
+
+export function countWords(fields: Field[]): Counted {
+  const tokens = new Map<string, number>();
+  let length = 0;
+  for (const { text, weight } of fields)
+    for (const { folded } of words(text)) {
+      tokens.set(folded, (tokens.get(folded) ?? 0) + weight);
+      length += 1;
+    }
+  return { tokens, length };
+}
+
+export function indexOf<T>(docs: Iterable<{ item: T } & Counted>): Index<T> {
   const out: Index<T>["docs"] = [];
   let total = 0;
-  for (const { item, fields } of docs) {
-    const tokens = new Map<string, number>();
-    let length = 0;
-    for (const { text, weight } of fields)
-      for (const { folded } of words(text)) {
-        tokens.set(folded, (tokens.get(folded) ?? 0) + weight);
-        length += 1;
-      }
+  for (const { item, tokens, length } of docs) {
     out.push({ item, tokens, length });
     total += length;
   }
   return { docs: out, average: out.length ? total / out.length : 0 };
+}
+
+export function buildIndex<T>(docs: Iterable<Doc<T>>): Index<T> {
+  return indexOf(Array.from(docs, ({ item, fields }) => ({ item, ...countWords(fields) })));
 }
 
 const frequency = (tokens: Map<string, number>, term: string) => {
