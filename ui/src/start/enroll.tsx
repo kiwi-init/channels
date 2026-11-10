@@ -4,6 +4,7 @@ import "~/styles/start.css"
 import type { Enrolling } from "~/model"
 import { useActions } from "~/nav"
 import { t } from "~/i18n/i18n"
+import { clearNoMatch, sawNoMatch } from "~/start/no-match"
 
 function Asking() {
   return (
@@ -40,7 +41,14 @@ function Check({ person }: { person: { name: string; fingerprint: string } }) {
       </p>
       <p className="start-hint">{t("start.enroll.compare")}</p>
       <div className="start-row start-check">
-        <button type="button" className="btn is-quiet" onClick={() => actions.enrollCancel()}>
+        <button
+          type="button"
+          className="btn is-quiet"
+          onClick={() => {
+            sawNoMatch(person.fingerprint)
+            actions.enrollCancel()
+          }}
+        >
           {t("start.enroll.no.match")}
         </button>
         <button type="button" className="btn is-primary" autoFocus onClick={() => actions.enrollKeep()}>
@@ -48,6 +56,36 @@ function Check({ person }: { person: { name: string; fingerprint: string } }) {
         </button>
       </div>
     </>
+  )
+}
+
+export function NoMatch({ fingerprint }: { fingerprint: string }) {
+  const actions = useActions()
+  return (
+    <div className="start-first-box">
+      <span className="start-mark">
+        <img src="/icon.svg" width={40} height={40} alt="" />
+      </span>
+      <h1 className="start-word">{t("start.enroll.missed.title")}</h1>
+      <p className="start-lede">{t("start.enroll.missed.sub")}</p>
+      <p className="start-hint">{t("start.enroll.missed.devices", { fingerprint })}</p>
+      <div className="start-row start-check">
+        <button type="button" className="btn is-quiet" onClick={clearNoMatch}>
+          {t("start.enroll.missed.back")}
+        </button>
+        <button
+          type="button"
+          className="btn is-primary"
+          autoFocus
+          onClick={() => {
+            clearNoMatch()
+            actions.enrollBegin()
+          }}
+        >
+          {t("start.enroll.missed.again")}
+        </button>
+      </div>
+    </div>
   )
 }
 

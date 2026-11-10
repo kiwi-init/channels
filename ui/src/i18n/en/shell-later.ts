@@ -125,6 +125,12 @@ const words = {
   "start.enroll.type.these": "Type these on your other computer",
   "start.enroll.your.key": "Is this your key, {name}?",
   "start.enroll.compare": "Compare it with your other computer: Settings › Account, the line “Device sign-in key”. A different key means someone else answered: don't join.",
+  "start.enroll.missed.title": "Nothing was kept",
+  "start.enroll.missed.sub": "The key didn't match, so this computer didn't join your account.",
+  "start.enroll.missed.devices":
+    "If your other computer never showed {fingerprint}, someone else answered this one. Your other computer may still list it under Settings › Computers and phones: remove it there.",
+  "start.enroll.missed.again": "Try again",
+  "start.enroll.missed.back": "Back",
   "start.enroll.matches": "It matches, join",
   "start.enroll.no.match": "It doesn't match",
   "start.enroll.cancel": "Cancel",

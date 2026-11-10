@@ -218,7 +218,6 @@ export default {
   "live.account.enroll.desktop": "以你的设备身份登录需要使用 Channels 桌面应用",
   "live.account.enroll.failed": "无法以你的设备身份登录：{why}",
   "live.account.enroll.gone": "你的另一台电脑拒绝了这台电脑，或请求已过期",
-  "live.account.kept.nothing": "未保留任何内容。如果你的另一台电脑从未显示 {fingerprint}，说明是别人回应了这台电脑。它可能仍出现在“设备”列表中：请在那里移除。",
   "live.account.forget.needs.update": "移除设备需要下一个 Channels 版本",
   "live.account.keep.needs.update": "保留它的智能体需要下一个 Channels 版本",
   "live.account.not.a.device": "这台电脑不在你的设备列表中，因此无法接管智能体",

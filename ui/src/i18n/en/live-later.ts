@@ -55,7 +55,6 @@ const words = {
   "live.account.enroll.desktop": "signing in as one of your devices works in the Channels desktop app",
   "live.account.enroll.failed": "Couldn't sign in as one of your devices: {why}",
   "live.account.enroll.gone": "Your other computer turned this one away, or the ask ran out",
-  "live.account.kept.nothing": "Kept nothing. If your other computer never showed {fingerprint}, someone else answered this computer. It may still list this computer under Devices: remove it there.",
   "live.account.forget.needs.update": "forgetting a device needs the next Channels update",
   "live.account.keep.needs.update": "keeping its agents needs the next Channels update",
   "live.account.not.a.device": "this computer isn't on your list of devices, so it can't take the agents over",

@@ -218,7 +218,6 @@ export default {
   "live.account.enroll.desktop": "fazer login como um dos seus dispositivos funciona no app Channels para desktop",
   "live.account.enroll.failed": "Não deu para fazer login como um dos seus dispositivos: {why}",
   "live.account.enroll.gone": "Seu outro computador recusou este, ou o pedido expirou",
-  "live.account.kept.nothing": "Nada foi mantido. Se seu outro computador nunca mostrou {fingerprint}, outra pessoa respondeu a este computador. Ele ainda pode aparecer em Dispositivos: remova-o lá.",
   "live.account.forget.needs.update": "esquecer um dispositivo precisa da próxima atualização do Channels",
   "live.account.keep.needs.update": "manter os agentes dele precisa da próxima atualização do Channels",
   "live.account.not.a.device": "este computador não está na sua lista de dispositivos, então não pode assumir os agentes",

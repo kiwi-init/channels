@@ -191,6 +191,12 @@ export default {
   "start.enroll.your.key": "Esta é a sua chave, {name}?",
   "start.enroll.compare":
     "Compare com o seu outro computador: Configurações › Conta, na linha “Chave de entrada de dispositivos”. Uma chave diferente significa que outra pessoa respondeu: não entre.",
+  "start.enroll.missed.title": "Nada foi guardado",
+  "start.enroll.missed.sub": "A chave não bateu, então este computador não entrou na sua conta.",
+  "start.enroll.missed.devices":
+    "Se o seu outro computador nunca mostrou {fingerprint}, outra pessoa respondeu a este. O outro computador ainda pode listar este em Configurações › Computadores e celulares: remova-o lá.",
+  "start.enroll.missed.again": "Tentar de novo",
+  "start.enroll.missed.back": "Voltar",
   "start.enroll.matches": "Bate, entrar",
   "start.enroll.no.match": "Não bate",
   "start.enroll.cancel": "Cancelar",

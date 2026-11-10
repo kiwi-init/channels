@@ -218,8 +218,6 @@ export default {
   "live.account.enroll.desktop": "自分のデバイスとしてのサインインは Channels デスクトップアプリで使えます",
   "live.account.enroll.failed": "自分のデバイスとしてサインインできませんでした: {why}",
   "live.account.enroll.gone": "もう一方のコンピューターがこのコンピューターを拒否したか、リクエストの期限が切れました",
-  "live.account.kept.nothing":
-    "何も残しませんでした。もう一方のコンピューターに {fingerprint} が表示されなかった場合、このコンピューターに応答したのは別の誰かです。そのデバイス一覧にこのコンピューターがまだ表示されていれば、そこで削除してください。",
   "live.account.forget.needs.update": "デバイスの削除には次の Channels アップデートが必要です",
   "live.account.keep.needs.update": "エージェントを残すには次の Channels アップデートが必要です",
   "live.account.not.a.device": "このコンピューターはあなたのデバイス一覧にないため、エージェントを引き継げません",
