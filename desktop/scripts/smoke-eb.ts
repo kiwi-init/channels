@@ -320,14 +320,39 @@ try {
     if ((await settle(bareNow)) === side) once.push("⌘\\ left the sidebar as it was (no toggle, or two)");
     command("\\\\");
     if ((await settle(bareNow)) !== side) once.push("a second ⌘\\ didn't put the sidebar back");
-    await page(() => document.querySelector<HTMLElement>(".rail .tile.is-home")?.click());
-    await until("Home", 5_000, () => inChannel().then((on) => (on ? null : true))).catch(() => null);
-    await page(() => document.querySelector<HTMLElement>(".rail .rail-list .tile")?.click());
-    await until("the channel again", 5_000, () => inChannel().then((on) => (on ? true : null))).catch(() => null);
+    const room = () => page(() => (document.querySelector(".side-row.is-on")?.textContent ?? "").replace(/\s+/g, " ").trim());
+    const named = (el: Element, name: string) => [el.getAttribute("aria-label"), el.getAttribute("title"), el.textContent].some((t) => (t ?? "").trim() === name);
+    const goTo = async (name: string) => {
+      await d.evaluate((n: string) => [...document.querySelectorAll<HTMLElement>(".side-row")].find((r) => (r.textContent ?? "").includes(n))?.click(), name);
+      await until(`the ${name} room`, 5_000, () => room().then((r) => (r.includes(name) ? true : null))).catch(() => null);
+    };
+    await d.evaluate((src: string) => {
+      const is = new Function(`return ${src}`)() as (el: Element, name: string) => boolean;
+      [...document.querySelectorAll<HTMLElement>("button")].find((b) => is(b, "New room"))?.click();
+    }, named.toString());
+    await until("the New room dialog", 5_000, () => page(() => !!document.querySelector("dialog[open] input")).then((on) => (on ? true : null))).catch(() => null);
+    await page(() => {
+      const field = document.querySelector<HTMLInputElement>("dialog[open] input");
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      if (!field || !set) return;
+      set.call(field, "plans");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await page(() => [...document.querySelectorAll<HTMLElement>("dialog[open] button")].find((b) => (b.textContent ?? "").trim() === "Create room")?.click());
+    await until("the plans room in the sidebar", 10_000, () =>
+      page(() => [...document.querySelectorAll(".side-row")].some((r) => (r.textContent ?? "").includes("plans"))).then((on) => (on ? true : null)),
+    ).catch(() => null);
+    await goTo("general");
+    await goTo("plans");
+    await goTo("general");
+    const before = await room();
     command("[");
-    if (await settle(inChannel)) once.push("⌘[ from the channel didn't land on Home (no step back, or two)");
+    const back = await settle(room);
+    if (!back.includes("plans"))
+      once.push(`⌘[ from general, after general → plans → general, landed on ${JSON.stringify(back)}, not plans (it was on ${JSON.stringify(before)}: no step back, or two)`);
     command("]");
-    if (!(await settle(inChannel))) once.push("⌘] from Home didn't land on the channel (no step forward, or two)");
+    const forward = await settle(room);
+    if (!forward.includes("general")) once.push(`⌘] then landed on ${JSON.stringify(forward)}, not general (no step forward, or two)`);
     command("n");
     const asked = await until("⌘N opening New channel", 5_000, () => page(() => !!document.querySelector("dialog[open]:not(.palette)")).then((on) => (on ? true : null))).catch(() => null);
     escape();
