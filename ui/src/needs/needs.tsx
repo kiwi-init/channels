@@ -17,9 +17,24 @@ import { Avatar, Loading } from "~/kit/bits"
 import { Empty } from "~/kit/empty"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
-import { ago, clock } from "~/kit/time"
-import { NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type Message, type PermissionAsk, type Person, type Powers, type QuestionAsk, type ReviewAsk } from "~/model"
+import { ago, clock, lasting, useNow } from "~/kit/time"
+import {
+  NO_POWERS,
+  trusted,
+  type Ask,
+  type Channel,
+  type JoinAsk,
+  type Message,
+  type PermissionAsk,
+  type Person,
+  type Powers,
+  type QuestionAsk,
+  type QuietAsk,
+  type ReviewAsk,
+  type WakeSeen,
+} from "~/model"
 import { useApp, useGo, useChannelHere } from "~/nav"
+import { TASK_TICK_MS } from "~/tasks/tick"
 import { nickname, Shown } from "~/names"
 import { SendBack } from "~/tasks/send-back"
 import { isIdle, isOpen, openAsks } from "~/needs/open"
@@ -87,7 +102,7 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
 }
 
 function answeredAt(a: Ask): number {
-  if (a.kind === "review" || a.kind === "spec") return a.at
+  if (a.kind === "review" || a.kind === "spec" || a.kind === "quiet") return a.at
   if (a.kind === "question" && a.closed) return a.closed.at
   return a.answer?.at ?? a.at
 }
@@ -109,6 +124,7 @@ function doneLine(channel: Channel, a: Ask): string {
         : ""
     case "review":
     case "spec":
+    case "quiet":
       return ""
   }
 }
@@ -142,6 +158,8 @@ function Card({ channel, ask, onJump }: { channel: Channel; ask: Ask; onJump: (j
       return <ReviewAskCard channel={channel} ask={ask} link={link} />
     case "spec":
       return <SpecNeedCard channel={channel} ask={ask} />
+    case "quiet":
+      return <QuietAskCard channel={channel} ask={ask} />
   }
 }
 
@@ -490,6 +508,39 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
           )}
         </div>
       )}
+    </Shell>
+  )
+}
+
+const WAKES: Readonly<Record<Exclude<WakeSeen["kind"], "none">, Key>> = { attempted: "needs.quiet.wake.attempted", delivered: "needs.quiet.wake.delivered", read: "needs.quiet.wake.read" }
+
+function wakeLine(wake: WakeSeen, now: number): string {
+  return wake.kind === "none" ? t("needs.quiet.wake.none") : t(WAKES[wake.kind], { time: lasting(now - wake.at) })
+}
+
+function QuietAskCard({ channel, ask }: { channel: Channel; ask: QuietAsk }) {
+  const go = useGo()
+  const now = useNow(TASK_TICK_MS)
+  const who = member(channel, ask.from)
+  const task = channel.tasks.find((k) => k.id === ask.task)
+  return (
+    <Shell
+      face={who}
+      name={nickname(channel, ask.from)}
+      member={!!who}
+      verb={t("needs.quiet.verb", { time: lasting(now - ask.since) })}
+      at={ask.at}
+      link={null}
+      actions={
+        <button type="button" className="btn is-primary" onClick={() => go({ to: "task", task: ask.task })}>
+          {t("needs.quiet.open")}
+        </button>
+      }
+    >
+      <button type="button" className="needs-text needs-open" title={t("needs.open.task")} onClick={() => go({ to: "task", task: ask.task })}>
+        <span className="needs-id">T{ask.task}</span> {task && <Shown value={task.title} />}
+      </button>
+      <p className="needs-note">{wakeLine(ask.wake, now)}</p>
     </Shell>
   )
 }

@@ -245,6 +245,7 @@ export default {
   "live.home.wants.to.join": "申请加入",
   "live.home.asks": "{who} 提问",
   "live.home.review": "审核 T{id}",
+  "live.home.quiet": "T{id} 在 {who} 手上停滞",
   "live.home.spec": "规格 #{ask}",
   "live.home.spec.done": "规格 #{ask} 已完成：请查看",
   "live.home.spec.changed": "规格 #{ask} 已更改",

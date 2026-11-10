@@ -81,6 +81,7 @@ const words = {
   "live.home.wants.to.join": "Wants to join",
   "live.home.asks": "{who} asks",
   "live.home.review": "Review T{id}",
+  "live.home.quiet": "T{id} is quiet with {who}",
   "live.home.spec": "Spec #{ask}",
   "live.home.spec.done": "Spec #{ask} is done: check it",
   "live.home.spec.changed": "Spec #{ask} changed",

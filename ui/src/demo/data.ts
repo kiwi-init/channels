@@ -590,7 +590,7 @@ const tasks: Task[] = [
     id: 17,
     title: wrote("Find why the relay drops sockets at 10k"),
     mover: { kind: "member", name: "orbit", move: "work" },
-    quiet: { with: "orbit", since: m(41), from: m(21), every: 20 * 60_000, step: 1 },
+    quiet: { with: "orbit", since: m(71), from: m(51), every: 20 * 60_000, step: 3 },
     detail: wrote("Under load, the relay closes about 2% of sockets with 1006. Reproduce it, then fix it."),
     status: "doing",
     owner: "orbit",
@@ -993,6 +993,7 @@ const asks: Ask[] = [
     code: "731-845",
   },
   { kind: "review", id: "rev-14", at: m(12), from: "pixel", task: 14 },
+  { kind: "quiet", id: "quiet-17", at: m(11), from: "orbit", task: 17, since: m(71), wake: { kind: "delivered", at: m(51) } },
   {
     kind: "question",
     id: "q-2",

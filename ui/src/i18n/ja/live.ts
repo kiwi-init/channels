@@ -245,6 +245,7 @@ export default {
   "live.home.wants.to.join": "参加希望",
   "live.home.asks": "{who} からの質問",
   "live.home.review": "T{id} をレビュー",
+  "live.home.quiet": "T{id} が {who} のもとで止まっています",
   "live.home.spec": "仕様 #{ask}",
   "live.home.spec.done": "仕様 #{ask} が完了しました: 確認してください",
   "live.home.spec.changed": "仕様 #{ask} が変更されました",
