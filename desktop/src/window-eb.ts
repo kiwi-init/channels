@@ -21,8 +21,11 @@ import { snapshot, store } from "./store.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { ownAppImage } from "./update-asset.ts";
 import { channelUi, uiFromChannel, uiViewsRoot } from "./ui-engine-eb.ts";
+import { showWithin } from "./show-guard.ts";
 import { unreadablePage, type Unreadable } from "./unreadable-store.ts";
 import { minWindowWidth } from "./window-size.ts";
+
+const SHOW_WITHIN_MS = 8_000;
 
 const rgb = (hex: string): number => Number.parseInt(hex.slice(1), 16);
 
@@ -125,7 +128,9 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
     await fail("the window's navigation rules didn't take effect; not opening it");
     return null;
   }
+  let loaded = false;
   const load = (html: Uint8Array<ArrayBuffer> = page()): void => {
+    loaded = true;
     setPageHtml(webview.id, html);
     bridge.retire();
     webview.loadURL(PAGE_URL);
@@ -142,9 +147,22 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
           refreshPreload();
           load();
         },
+        nothingToShow: (why) => builtIn(new Error(why)),
       })
     : null;
-  const startUi = (): Promise<void> => (ui ? ui.start() : Promise.resolve()).catch(logMainError);
+  const builtIn = (why: unknown): void => {
+    logMainError(new Error("no UI from the channel could be shown, so the window loads the built-in one", { cause: why }));
+    try {
+      ui?.placeBuiltIn();
+    } catch (e) {
+      // The UI folder can't be written either: the page still loads, and main.log says why it may be bare.
+      logMainError(e);
+    }
+    current = index;
+    refreshPreload();
+    load();
+  };
+  const startUi = (): Promise<void> => (ui ? ui.start() : Promise.resolve()).catch(builtIn);
   attachWindow({
     win,
     view: webview,
@@ -160,7 +178,24 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
   });
   showNote = (state) => load(note(state));
   showCantRead = (u) => load(cantRead(u));
-  if (ui && !keyring && !unreadable) await startUi();
+  webview.on("dom-ready", () => {
+    mark("domReady");
+    const stayHidden = quiet;
+    quiet = false;
+    if (closing || stayHidden || win.isVisible()) return;
+    shown = true;
+    win.show();
+  });
+  const guard = showWithin(SHOW_WITHIN_MS, {
+    shown: () => shown || closing,
+    show: () => {
+      if (!loaded) builtIn(new Error("the UI engine hadn't loaded any page"));
+      shown = true;
+      win.show();
+    },
+    late: (waited) => logMainError(new Error(`the page wasn't ready ${waited / 1000} s after the window was made, so the window shows without waiting for it`)),
+  });
+  if (ui && !keyring && !unreadable) await Promise.race([startUi(), guard.waited]);
   else {
     ui?.placeBuiltIn();
     load(first);
@@ -175,14 +210,6 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
     const url = openedUrl(e.data?.detail);
     if (url) openOutside(url);
     else logMainError(new Error("a new-window request had no readable URL"));
-  });
-  webview.on("dom-ready", () => {
-    mark("domReady");
-    const stayHidden = quiet;
-    quiet = false;
-    if (closing || stayHidden || win.isVisible()) return;
-    shown = true;
-    win.show();
   });
   return win;
 }

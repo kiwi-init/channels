@@ -66,6 +66,7 @@ function say(event: AppEngineEvent): void {
 export interface UiWindow {
   win: BrowserWindow;
   show(index: string): void;
+  nothingToShow(why: string): void;
 }
 
 export interface ChannelUi {
@@ -91,7 +92,8 @@ export function channelUi(w: UiWindow): ChannelUi {
   let accepted = false;
   engine.on(say);
   engine.on((event) => {
-    if (event.type === "waiting") setUiWaiting({ version: event.manifest.uiVersion });
+    if (event.type === "safe-mode") w.nothingToShow(event.reason);
+    else if (event.type === "waiting") setUiWaiting({ version: event.manifest.uiVersion });
     else if (event.type === "booting") {
       accepted = false;
       setUiWaiting(null);
