@@ -8,6 +8,7 @@ import { heldPipe } from "@kiwi/core/doc/held-pipe.ts";
 import type { FoldInputs } from "../../../desktop/src/search-types.ts";
 import { errorOf, remoteOps } from "./channel-remote.ts";
 import { bridge } from "@kiwi/secrets/secrets.ts";
+import { refollowing } from "./refollow.ts";
 import { makeWatches, type Watches } from "./watch.ts";
 
 export { errorOf };
@@ -17,7 +18,7 @@ let picked: ChannelOps | null = null;
 let watching: Watches | null = null;
 
 export function watches(): Watches {
-  watching ??= makeWatches(ops());
+  watching ??= makeWatches({ follow: refollowing(ops().follow) });
   return watching;
 }
 
@@ -173,7 +174,7 @@ export class ChannelLink {
   historyAround = (around: HistoryAround) => this.via.historyAround(this.code, around);
   keep = (state: object) => this.via.keep(this.code, state);
   openKept = (sealed: CachedKept) => this.via.openKept(this.code, sealed);
-  follow = (since: number, on: (e: FollowEvent) => void) => this.via.follow(this.code, since, on);
+  follow = (since: number, on: (e: FollowEvent) => void) => refollowing(this.via.follow)(this.code, since, on);
   doc = (thread: string, th: string | null, on: (e: DocEvent) => void) => this.via.doc(this.code, thread, th, on);
 }
 

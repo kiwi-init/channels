@@ -7,6 +7,7 @@ import type { ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts";
 import { ChannelLink } from "./channel-ops.ts";
 import { APP_BEACON_MS, ChannelStore, PAGE, REACH, WINDOW } from "./channel-store.ts";
 import { PRESENCE_TTL } from "./online.ts";
+import { REFOLLOW_MS } from "./refollow.ts";
 import type { StoredMember } from "./store.ts";
 import { dropWarm, LEAN, LIGHT, warmOf } from "./warm.ts";
 import { useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts";
@@ -251,6 +252,38 @@ describe("a channel store", () => {
     expect(store.handle.value.reach.map((m) => m.seq)).toEqual(Array.from({ length: 250 }, (_, i) => i + 1));
     expect(warmOf(CODE)?.messages).toHaveLength(LIGHT);
     close();
+  });
+});
+
+describe("a live stream that dies without the channel being gone (T1784)", () => {
+  test("is followed again from the last message heard, and the channel goes live once it opens", async () => {
+    const r = relay(0);
+    const { store, close } = await opened(r);
+    r.say({ _tag: "Open" });
+    for (const seq of [1, 2, 3]) r.say({ _tag: "Message", message: msg(seq), row: null });
+    const dead = r.live();
+    dead.on({ _tag: "Failed", error: { kind: "other", message: "the stream broke" } });
+    expect(store.handle.value.connection).toBe("reconnecting");
+    await sleep(REFOLLOW_MS + 200);
+    expect(r.follows).toHaveLength(2);
+    expect(dead.stopped).toBe(true);
+    expect(r.live().since).toBe(3);
+    r.say({ _tag: "Open" });
+    expect(store.handle.value.connection).toBe("live");
+    dead.on({ _tag: "Message", message: msg(9), row: null });
+    await sleep(40);
+    expect(store.handle.value.messages.map((m) => m.seq)).toEqual([1, 2, 3]);
+    close();
+    expect(r.live().stopped).toBe(true);
+  });
+
+  test("closing while it waits to follow again follows nothing", async () => {
+    const r = relay(0);
+    const { close } = await opened(r);
+    r.say({ _tag: "Failed", error: { kind: "unreachable", message: "no route" } });
+    close();
+    await sleep(REFOLLOW_MS + 200);
+    expect(r.follows).toHaveLength(1);
   });
 });
 
