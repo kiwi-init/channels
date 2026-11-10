@@ -65,6 +65,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: point the gate at a real main SHA and expect the named verdict
         env:
+          GH_TOKEN: ${{ github.token }}
           EXPECT: ${{ inputs.expect }}
           SHA_ARG: ${{ inputs.sha }}
           REF_ARG: dry-run/${{ inputs.sha }}
