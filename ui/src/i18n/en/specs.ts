@@ -248,7 +248,7 @@ const words = {
   "tasks.lanes.empty": "No agents yet.",
   "tasks.lanes.empty.hint": "Add one from the sidebar.",
   "tasks.lanes.label": "Agent lanes",
-  "tasks.lanes.review.warning": "Tasks here land on merge, but {branches} doesn't require {check}, so a PR can merge before its task's gate opens. The owner can require it in the repo's ruleset.",
+  "tasks.lanes.review.warning": "{branches} still requires {check}, a check Kiwi has retired. Kiwi answers it green on every pull request until the owner removes it from the repo's ruleset.",
   "tasks.now.needs.you": "needs you",
   "tasks.now.in.progress.count": "{count} in progress",
   "tasks.now.done.today.count": "{count} done today",

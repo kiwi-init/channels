@@ -471,9 +471,6 @@ function GitHub({ channel }: { channel: Channel }) {
             <span className="cset-mono">{landing ?? t("modals.channel.settings.landing.approval")}</span>
           )}
         </Row>
-        <Row label={t("modals.channel.settings.people.merge")} hint={channel.peopleMerge ? t("modals.channel.settings.people.merge.on") : t("modals.channel.settings.people.merge.off")}>
-          <Toggle on={!!channel.peopleMerge} label={t("modals.channel.settings.people.merge")} disabled={!sets} onChange={(on) => app.actions.setPeopleMerge(channel.code, on)} />
-        </Row>
       </Group>
     </>
   )

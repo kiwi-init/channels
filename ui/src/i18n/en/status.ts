@@ -41,8 +41,6 @@ export default {
   "live.ask.irreversible.you": "Irreversible step for you",
   "live.ask.scope": "Scope call",
   "live.ask.scope.you": "Scope call for you",
-  "now.gate.shut": "shipped with its gate shut",
-  "now.ready.to.merge": "ready for a person to merge",
   "now.check.failed": "{check} failed",
   "now.checks.failed.count": "{count} checks failed",
   "now.checks.failed": "checks failed",

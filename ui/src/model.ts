@@ -190,7 +190,7 @@ export interface Task {
   history: TaskEvent[]
   archived: boolean
   cancelled?: boolean
-  lands?: { then: string; by?: string; waits?: string; bypassed?: string[]; ready?: true }
+  lands?: { then: string; by?: string; waits?: string }
   closedWith?: Words
   youReview?: "verdict" | "send-back"
   suggested?: { name: string; reason?: Reason }
@@ -479,16 +479,7 @@ export interface ReviewAsk {
   task: number
 }
 
-export interface BypassAsk {
-  kind: "bypass"
-  id: string
-  at: number
-  from: string
-  task: number
-  missing: string[]
-}
-
-export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk | BypassAsk
+export type Ask = PermissionAsk | QuestionAsk | JoinAsk | ReviewAsk | SpecAsk
 
 export type HomeAct =
   | { kind: "options"; options: { shown: string; answer: string }[] }
@@ -582,14 +573,13 @@ export interface Channel {
   newMembers?: "read" | "write"
   newPowers?: Powers
   repos: string[]
-  reviewNotRequired?: { repos: string[]; check: string }
+  reviewStillRequired?: { repos: string[]; check: string }
   prs?: PullRequest[]
   issues?: Issue[]
   github?: GithubHealth
   githubWrite?: boolean
   branchPrefix?: string
   landing?: string
-  peopleMerge?: true
   rooms: Room[]
   directs: Direct[]
   threads?: ThreadItem[]
@@ -782,7 +772,6 @@ export interface Actions {
   setGithubWrite(code: string, on: boolean): void
   setBranchPrefix(code: string, prefix: string | null): void
   setLanding(code: string, then: string | null): void
-  setPeopleMerge(code: string, on: boolean): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void

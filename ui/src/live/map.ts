@@ -6,9 +6,8 @@ import { answersAsHuman, permissionAnswer } from "@kiwi/core/permission.ts"
 import { describeEvent, proofLabel } from "@kiwi/core/format.ts"
 import type { EventSay } from "@kiwi/core/event-words.ts"
 import { memberLoad, showsLoad } from "@kiwi/core/load.ts"
-import { checksOf, FAILED, landingWaits, prLinks, readyForPerson, taskOfPr, taskPr } from "@kiwi/core/prs.ts"
+import { checksOf, FAILED, landingWaits, prLinks, taskOfPr, taskPr } from "@kiwi/core/prs.ts"
 import { stageOf } from "@kiwi/core/stage.ts"
-import { doneGate } from "@kiwi/core/done-gate.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf, sentTo } from "@kiwi/core/room-rules.ts"
 import { dmDocOf, dmRoomWith } from "~/live/dm"
@@ -678,11 +677,11 @@ function suggestionFor(state: ChannelState, t: CoreTask): Task["suggested"] {
   return top ? { name: top.name, ...(top.whys[0] ? { reason: top.whys[0] } : {}) } : undefined
 }
 
-const landsWaiting = (state: ChannelState, t: CoreTask): { waits?: string; bypassed?: string[]; ready?: true } => {
-  const waits = landingWaits(state, t)
-  const gate = doneGate(state, t)
-  const ready = readyForPerson(state, t)
-  return { ...(waits ? { waits } : {}), ...(gate?.kind === "bypassed" ? { bypassed: gate.missing } : {}), ...(ready ? { ready: true as const } : {}) }
+function landsOf(t: CoreTask): Task["lands"] {
+  if (!t.steps?.length) return undefined
+  const by = landerOf(t)
+  const waits = landingWaits(t)
+  return { then: t.steps.map((s) => s.words).join(" → "), ...(by ? { by } : {}), ...(waits ? { waits } : {}) }
 }
 
 export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string, messages: readonly Wire[]): Task[] {
@@ -697,6 +696,7 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
     const can = taskActions(t, me, person)
     const review = can.kind === "open" && can.review !== "none" ? can.review : undefined
     const suggested = person ? suggestionFor(state, t) : undefined
+    const lands = landsOf(t)
     return {
       id: t.id,
       title: wrote(t.title),
@@ -721,7 +721,7 @@ export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: stri
       history: history.get(t.id) ?? [],
       archived: !!t.archived,
       ...(t.cancelled ? { cancelled: true } : {}),
-      ...(t.then ? { lands: { then: t.then, ...((t.lander ?? t.owner) ? { by: t.lander ?? t.owner } : {}), ...landsWaiting(state, t) } } : {}),
+      ...(lands ? { lands } : {}),
       ...(t.closedWith ? { closedWith: wrote(t.closedWith) } : {}),
       ...(review ? { youReview: review } : {}),
       ...(suggested ? { suggested } : {}),
@@ -901,10 +901,5 @@ export function asksOf(
     }
   const me_ = state.members.get(me)
   for (const t of reviewsFor(state.tasks.values(), me, !!me_ && isPerson(me_))) asks.push({ kind: "review", id: `review-${t.id}`, at: t.updatedAt, from: t.owner ?? t.createdBy, task: t.id })
-  if (me_?.owner)
-    for (const t of state.tasks.values()) {
-      const gate = doneGate(state, t)
-      if (gate?.kind === "bypassed") asks.push({ kind: "bypass", id: `bypass-${t.id}`, at: t.updatedAt, from: landerOf(t) ?? t.createdBy, task: t.id, missing: gate.missing })
-    }
   return { asks, askOf, held }
 }

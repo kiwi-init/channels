@@ -99,9 +99,6 @@ export default {
   "modals.channel.settings.landing.none":
     "A aprovação conclui a tarefa. Escolha merge, release:tag ou run para mantê-la aberta até isso acontecer; uma tarefa pode esperar um release no npm com --then.",
   "modals.channel.settings.landing.approval": "Aprovação",
-  "modals.channel.settings.people.merge": "Pessoas mesclam",
-  "modals.channel.settings.people.merge.on": "Os agentes deixam os pull requests para uma pessoa mesclar quando a tarefa é aprovada e as verificações passam.",
-  "modals.channel.settings.people.merge.off": "Os agentes mesclam os próprios pull requests quando a tarefa é aprovada e as verificações passam.",
   "modals.channel.settings.repo.remove": "Remover {repo}",
   "modals.channel.settings.repo.remove.ask": "Remover {repo} de {channel}?",
   "modals.channel.settings.repo.remove.sub": "O canal deixa de acompanhá-lo. O repositório em si não é alterado.",

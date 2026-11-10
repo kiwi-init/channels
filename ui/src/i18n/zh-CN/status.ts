@@ -41,8 +41,6 @@ export default {
   "live.ask.irreversible.you": "待你确认不可撤销的一步",
   "live.ask.scope": "范围判断",
   "live.ask.scope.you": "待你判断范围",
-  "now.gate.shut": "在门禁关闭时发布",
-  "now.ready.to.merge": "可由人合并",
   "now.check.failed": "{check} 失败",
   "now.checks.failed.count": "{count} 项检查失败",
   "now.checks.failed": "检查失败",
