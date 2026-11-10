@@ -144,8 +144,8 @@ struct Conversation: View {
                 geo.contentSize.height > 0 && geo.visibleRect.minY > geo.contentSize.height - 24
             } action: { _, past in
                 if past {
-                    FeedLog.note("snap back")
-                    position.scrollTo(edge: .bottom)
+                    FeedLog.note("snap back (by id)")
+                    proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }
             .onChange(of: model.pending["\(room.code)|\(room.place)"]?.count ?? 0) { old, now in
