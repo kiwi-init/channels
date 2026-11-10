@@ -11,6 +11,7 @@ export interface DocWakeItem {
   context: string;
   selection: string | null;
   at: number;
+  clock?: { task: number; mover: string; since: number; told?: 2 | 3 };
 }
 
 const KEEP_PENDING = 200;
@@ -29,7 +30,8 @@ const isItem = (x: unknown): x is DocWakeItem => {
     typeof d.text === "string" &&
     typeof d.context === "string" &&
     (d.selection === null || typeof d.selection === "string") &&
-    Number.isFinite(d.at)
+    Number.isFinite(d.at) &&
+    (d.clock === undefined || (!!d.clock && Number.isFinite(d.clock.task) && typeof d.clock.mover === "string" && Number.isFinite(d.clock.since)))
   );
 };
 
@@ -80,6 +82,10 @@ export function addDocWake(channel: string, agent: string, w: DocWakeItem): bool
     );
   append(`${base(channel, agent)}.wakes`, JSON.stringify(w));
   return true;
+}
+
+export function docWakeTold(channel: string, agent: string, block: string): boolean {
+  return told(channel, agent).has(block);
 }
 
 export function tellDocWakes(channel: string, agent: string, blocks: readonly string[]): void {

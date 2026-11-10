@@ -283,7 +283,7 @@ const words = {
   "tasks.move.nobody": "Nobody: the channel has no owner here",
   "tasks.quiet.with": "quiet {time} with {who}",
   "tasks.quiet.due": "{quiet} ({due})",
-  "tasks.quiet.step.1": "a wake is due",
+  "tasks.quiet.step.1": "a wake was attempted",
   "tasks.quiet.step.2": "due to the lead",
   "tasks.quiet.step.3": "due in the owner's Needs you",
   "tasks.quiet.label": "Quiet tasks",

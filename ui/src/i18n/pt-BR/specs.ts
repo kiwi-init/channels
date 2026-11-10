@@ -282,7 +282,7 @@ export default {
   "tasks.move.nobody": "Ninguém: o canal não tem dono aqui",
   "tasks.quiet.with": "parada há {time} com {who}",
   "tasks.quiet.due": "{quiet} ({due})",
-  "tasks.quiet.step.1": "está na hora de acordar",
+  "tasks.quiet.step.1": "houve uma tentativa de acordar",
   "tasks.quiet.step.2": "está na hora de ir para o líder",
   "tasks.quiet.step.3": "está na hora de ir para o Precisa de você do dono",
   "tasks.quiet.label": "Tarefas paradas",

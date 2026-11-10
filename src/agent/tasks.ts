@@ -11,6 +11,7 @@ import {
   TASK_BODY_MAX_LENGTH,
   TASK_TITLE_LIMIT,
   ignored,
+  type Event,
   type IssueRef,
   type KeptEvidence,
   type TaskState,
@@ -387,6 +388,14 @@ export class SessionTasks extends SessionMessaging {
     },
     oneLook,
   );
+
+  readonly taskNudge = Effect.fn("AgentSession.taskNudge")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.nudge" }>, to?: string) {
+    return yield* this.event(ev, `${taskId(ev.task)} quiet`, to ? [to] : undefined);
+  });
+
+  readonly taskWake = Effect.fn("AgentSession.taskWake")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.wake" }>) {
+    return yield* this.event(ev, `${taskId(ev.task)} wake ${ev.got}`);
+  });
 
   readonly taskFirst = Effect.fn("AgentSession.taskFirst")(
     { self: this },

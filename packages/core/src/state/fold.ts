@@ -34,7 +34,7 @@ import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
-import { nudge, QUIET_MS, roll, tick, timedStep, type ClockView } from "./clocks.ts";
+import { nudge, QUIET_MS, roll, tick, timedStep, wakeGot, type ClockView } from "./clocks.ts";
 
 const CLOCK_BLIND_OPS: ReadonlySet<string> = new Set([
   "hello",
@@ -450,6 +450,7 @@ function folding(
     return !!who && who.active && !isPerson(who);
   };
   const leadHere = (): string | undefined => (lead && members.get(lead)?.active ? lead : [...members.values()].find((x) => x.owner && x.active)?.name);
+  const standsFor = (name: string): string | undefined => (members.get(name)?.active ? name : [...members.values()].find((x) => x.owner && x.active)?.name);
   const timeTask = (t: Task): void => void (timedStep(t) ? timed.add(t.id) : timed.delete(t.id));
   const tickTask = (t: Task | undefined, seq: number, at: number, by?: string): void => {
     if (!t) return;
@@ -779,7 +780,7 @@ function folding(
         m.seq,
         ev.op === "task.add"
           ? { kind: "task", task: m.seq }
-          : (ev.op === "task.update" || ev.op === "task.claim" || ev.op === "task.first" || ev.op === "task.landed" || ev.op === "task.nudge") && tasks.has(ev.task)
+          : (ev.op === "task.update" || ev.op === "task.claim" || ev.op === "task.first" || ev.op === "task.landed" || ev.op === "task.nudge" || ev.op === "task.wake") && tasks.has(ev.task)
             ? { kind: "task", task: ev.task }
             : MAIN,
       );
@@ -788,12 +789,16 @@ function folding(
       const before = "task" in ev ? tasks.get(ev.task) : undefined;
       const ownedBy = before?.owner;
       if (ev.op === "task.nudge") {
-        const wrong = before ? nudge(clockView(), before, ev, at, { agentQueue: agentHere, lead: leadHere }) : `no task ${taskId(ev.task)}`;
+        const wrong = before ? nudge(clockView(), before, ev, { seq: m.seq, at, by: m.from }, { agentQueue: agentHere, lead: leadHere, stands: standsFor }) : `no task ${taskId(ev.task)}`;
         if (wrong) reject(wrong);
         else if (before) timeTask(before);
       }
+      if (ev.op === "task.wake") {
+        const wrong = before ? wakeGot(clockView(), before, ev, { seq: m.seq, at, by: m.from }) : `no task ${taskId(ev.task)}`;
+        if (wrong) reject(wrong);
+      }
       applyEvent(ctx, m, ev, member, at, reject);
-      if (!rejected.has(m.seq) && ev.op !== "task.nudge") {
+      if (!rejected.has(m.seq) && ev.op !== "task.nudge" && ev.op !== "task.wake") {
         const subject = ev.op === "task.add" ? tasks.get(m.seq) : before && tasks.has(before.id) ? before : undefined;
         if (subject) {
           tickTask(subject, m.seq, at, m.from);

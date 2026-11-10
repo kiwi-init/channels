@@ -1,9 +1,9 @@
 import { inlineText } from "./membership.ts";
 import { channelOwner, moverOf } from "./mover.ts";
-import type { NudgeStep } from "./protocol.ts";
-import { actOf, memberKey, partyOfKey, queuedKey, QUEUE_MS, rolled } from "./state/clocks.ts";
+import type { NudgeStep, WakeSeen } from "./protocol.ts";
+import { actOf, memberKey, partyOfKey, queuedKey, QUEUE_MS, rolled, UNREAD_MS, wakeSeen, wokeFor } from "./state/clocks.ts";
 import { isPerson } from "./state/people.ts";
-import type { ChannelState, Task } from "./state/types.ts";
+import type { ChannelState, Task, Woke } from "./state/types.ts";
 import { spanText } from "./steps.ts";
 
 type Board = Pick<ChannelState, "tasks" | "members" | "lead" | "openAsks" | "github" | "branchPrefix" | "quietMs">;
@@ -16,6 +16,7 @@ export interface Clock {
   quiet: number;
   paged: boolean;
   step: 0 | 1 | 2 | 3;
+  woke?: Woke;
 }
 
 export function clockOf(state: Board, t: Task, now: number): Clock | undefined {
@@ -26,7 +27,8 @@ export function clockOf(state: Board, t: Task, now: number): Clock | undefined {
   const paged = memberKey(c.key) && !!member && !isPerson(member);
   const own = actOf(c, mover.name);
   const start = own ?? { seq: c.seq, at: c.at };
-  return { mover: mover.name, party: partyOfKey(c.key), epoch: start.seq, since: start.at, quiet: Math.max(0, now - start.at), paged, step: own ? own.step : (c.step ?? 0) };
+  const woke = wokeFor(c, start.seq);
+  return { mover: mover.name, party: partyOfKey(c.key), epoch: start.seq, since: start.at, quiet: Math.max(0, now - start.at), paged, step: own ? own.step : (c.step ?? 0), ...(woke ? { woke } : {}) };
 }
 
 export interface NudgeDue {
@@ -35,6 +37,7 @@ export interface NudgeDue {
   since: number;
   step: NudgeStep;
   day?: number;
+  wake?: WakeSeen;
   to: string | undefined;
 }
 
@@ -53,7 +56,20 @@ function quietDue(state: Board, t: Task, now: number, every: number): NudgeDue[]
   if (!clock?.paged) return [];
   const step = ladderStep(clock.quiet, every);
   if (step === 0 || clock.step >= step) return [];
+  if (step === 1 && clock.woke) return [];
   return [{ task: t.id, mover: clock.party, since: clock.epoch, step, to: target(state, clock.mover, step) }];
+}
+
+function skipDue(state: Board, t: Task, now: number, every: number): NudgeDue[] {
+  const clock = clockOf(state, t, now);
+  if (!clock?.paged || clock.step >= 2 || clock.quiet < every || clock.quiet >= 2 * every) return [];
+  const woke = clock.woke;
+  if (woke && (woke.read !== undefined || now - woke.at < UNREAD_MS)) return [];
+  return [{ task: t.id, mover: clock.party, since: clock.epoch, step: 2, to: target(state, clock.mover, 2), wake: wakeSeen(woke) }];
+}
+
+export function skipsDue(state: Board, now: number): NudgeDue[] {
+  return [...state.tasks.values()].filter((t) => t.state !== "done" && !t.archived).flatMap((t) => skipDue(state, t, now, state.quietMs));
 }
 
 function queueDue(state: Board, now: number): NudgeDue[] {
@@ -78,9 +94,16 @@ export function nudgesDue(state: Board, now: number): NudgeDue[] {
   return [...open.flatMap((t) => quietDue(state, t, now, state.quietMs)), ...queueDue(state, now)];
 }
 
-const DUE_WORDS = ["", "a wake is due", "due to the lead", "due in the owner's Needs you"] as const;
+const DUE_WORDS = ["a wake is due", "", "told to the lead", "in the owner's Needs you"] as const;
+
+function wakeText(woke: Woke | undefined, now: number): string {
+  if (!woke) return "no wake attempted";
+  const ago = `wake attempted ${spanText(Math.max(0, now - woke.at))} ago`;
+  return `${ago}, ${woke.delivered === undefined ? "not delivered" : "delivered"}, ${woke.read === undefined ? "not read" : "read"}`;
+}
 
 export function quietText(clock: Clock, every: number): string | undefined {
   if (!clock.paged || clock.quiet < every) return undefined;
-  return `quiet ${spanText(clock.quiet)} with ${inlineText(clock.mover, 40)}${clock.step ? ` (${DUE_WORDS[clock.step]})` : ""}`;
+  const told = clock.step === 0 && !clock.woke ? DUE_WORDS[0] : [DUE_WORDS[clock.step], wakeText(clock.woke, clock.since + clock.quiet)].filter(Boolean).join("; ");
+  return `quiet ${spanText(clock.quiet)} with ${inlineText(clock.mover, 40)} (${told})`;
 }

@@ -161,6 +161,7 @@ function wakeLines(w: DocWakeItem): string[] {
 }
 
 export function docWakeLine(w: DocWakeItem, mc: string): string {
+  if (w.clock) return [`▸ ${clip(w.text.trim(), LINE_TEXT)}.`, `  see where it stands: ${mc} task show T${w.clock.task}`].join("\n");
   const where = placeName(w.key);
   const to = where.startsWith("#") ? `'${where}'` : where;
   return [...wakeLines(w), `  answer in the doc: ${mc} send --to ${to} "…" (${mc} show ${where === "#general" ? "general" : where} has all of it)`].join("\n");

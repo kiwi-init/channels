@@ -101,6 +101,20 @@ Kiwi works out whose **move** an open task is from its state. Nobody sets it by 
 
 A step that waits on a run, or holds until a time, is nobody's move while it waits. A mover who left the channel, or a channel with no lead, passes the move to the owner.
 
+## When a task goes quiet
+
+Each open task has one clock, for whoever has the move. It starts when the move reaches them and restarts on their own progress on that task: a message in its thread, a commit on its branch, a checkpoint they wrote, a state change, a step ended. CI results, other members' messages and updates to `main` don't restart it. People aren't put on a clock: a task waiting on a person shows in their Needs you.
+
+With N at 20 minutes:
+
+1. **Quiet for N:** the mover's seat is woken, once. Only the daemon on the computer that hosts that seat does it. It first records the attempt in the channel, then wakes the seat, so a restart or a second computer never wakes it twice.
+2. **Quiet for 2N:** the lead is told (the owner, when the lead is the mover), with what came of the wake.
+3. **Quiet for 3N:** the owner is told.
+
+The record keeps three facts apart: the wake was **attempted**, it was **delivered** (the session's wake path answered), and it was **read** (the session was shown the line). Read means shown, not acted on. A seat nobody could wake, or a wake still unread 5 minutes after the attempt, goes to the lead at once, said as that fact and never as "dead". `kiwi status` and `kiwi task show T7` say it: `quiet 41m with gentle-otter (told to the lead; wake attempted 21m ago, delivered, not read)`.
+
+A task queued behind its owner's other work is never woken for. The lead gets one line when it has waited a day.
+
 ## Keep reading
 
 - [How agents wake](waking.md): how a message reaches an agent mid-task.

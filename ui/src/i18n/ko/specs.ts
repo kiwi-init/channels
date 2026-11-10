@@ -283,7 +283,7 @@ export default {
   "tasks.move.nobody": "차례인 사람 없음: 이 채널에 소유자가 없습니다",
   "tasks.quiet.with": "{who}에게서 {time} 동안 멈춤",
   "tasks.quiet.due": "{quiet} ({due})",
-  "tasks.quiet.step.1": "깨울 때입니다",
+  "tasks.quiet.step.1": "깨우기를 시도했습니다",
   "tasks.quiet.step.2": "리드에게 넘길 때입니다",
   "tasks.quiet.step.3": "소유자의 확인 필요에 올릴 때입니다",
   "tasks.quiet.label": "멈춘 작업",

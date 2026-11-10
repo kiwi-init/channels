@@ -17,6 +17,7 @@ export const FLOWS: string[] = [
   "read-receipts",
   "reclaim",
   "wake-yourself",
+  "clock-wake-real",
   "wake-tmux",
   "seats",
   "multi-seat",
