@@ -34,7 +34,6 @@ try {
   const theirs = page.locator('article.msg[data-seq="112"]');
   const editor = page.getByRole("textbox", { name: "Edit message" });
   const composer = page.locator(".main .composer textarea");
-  const editing = page.locator(".main .compose-hint", { hasText: "Editing" });
   await mine.waitFor();
 
   await theirs.hover();
@@ -44,27 +43,32 @@ try {
   await composer.fill("a draft from before");
   await mine.hover();
   await mine.getByRole("button", { name: "Edit" }).click();
-  await editing.waitFor({ timeout: 5000 }).catch(() => {});
-  expect((await composer.inputValue()) === "@win ship it: tag v1.0.0" && (await editor.count()) === 0, "Edit on a message without a doc block opens it in the composer, not in the row");
-  await composer.fill("@win ship it: tag v1.0.1");
-  await composer.press("Enter");
+  await mine.getByRole("textbox", { name: "Edit message" }).waitFor();
+  expect(
+    (await editor.count()) === 1 && (await editor.inputValue()) === "@win ship it: tag v1.0.0" && (await editor.evaluate((el) => el === document.activeElement)),
+    "Edit opens the message in a box in its own row, focused",
+  );
+  expect((await composer.inputValue()) === "a draft from before", "the composer keeps its draft while a message is edited");
+  await editor.fill("@win ship it: tag v1.0.1");
+  await editor.press("Enter");
   await page.waitForTimeout(200);
-  expect((await mine.innerText()).includes("v1.0.1"), "Enter saves the new text in place");
+  expect((await mine.innerText()).includes("v1.0.1") && (await editor.count()) === 0, "Enter saves the new text in place and closes the box");
   expect((await mine.locator(".msg-edited").count()) === 1, "the message is marked edited");
-  expect((await composer.inputValue()) === "a draft from before" && (await editing.count()) === 0, "saving puts the draft from before back");
+  expect((await composer.inputValue()) === "a draft from before", "and the draft is still there");
   await composer.fill("");
 
   await page.locator(".side-row", { hasText: "atlas" }).first().click();
   await composer.click();
   await composer.press("ArrowUp");
-  await editing.waitFor({ timeout: 5000 }).catch(() => {});
-  const up = await composer.inputValue();
-  await composer.fill("never mind");
-  await composer.press("Escape");
+  await editor.waitFor({ timeout: 5000 }).catch(() => {});
+  const up = (await editor.count()) === 1 ? await editor.inputValue() : "no editor";
+  const focused = (await editor.count()) === 1 && (await editor.evaluate((el) => el === document.activeElement));
+  await editor.fill("never mind").catch(() => {});
+  await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
   expect(
-    up === "yes, take it" && (await composer.inputValue()) === "" && (await page.locator("article.msg", { hasText: "never mind" }).count()) === 0,
-    "↑ in an empty composer edits your last message, and Esc keeps it as it was",
+    up === "yes, take it" && focused && (await editor.count()) === 0 && (await page.locator("article.msg", { hasText: "never mind" }).count()) === 0,
+    "↑ in an empty composer opens your last message in its row, and Esc keeps it as it was",
   );
 
   await page.locator(".side-row", { hasText: "general" }).first().click();
@@ -88,18 +92,16 @@ try {
   await page.waitForTimeout(900);
   await line.hover();
   await line.getByRole("button", { name: "Edit" }).click();
-  await panel
-    .locator(".compose-hint", { hasText: "Editing" })
-    .waitFor({ timeout: 5000 })
-    .catch(() => {});
+  const inRow = line.getByRole("textbox", { name: "Edit message" });
+  await inRow.waitFor({ timeout: 5000 }).catch(() => {});
   expect(
-    (await inPanel.inputValue()) === "a line from the task panel" && (await composer.inputValue()) === "" && (await editor.count()) === 0,
-    "Edit in the task panel opens the line in the panel's composer, not the main one",
+    (await editor.count()) === 1 && (await inRow.count()) === 1 && (await inRow.inputValue()) === "a line from the task panel" && (await inPanel.inputValue()) === "",
+    "Edit in the task panel opens the line in its row there, and nowhere else",
   );
-  await inPanel.fill("a line from the task panel, edited");
-  await inPanel.press("Enter");
+  await inRow.fill("a line from the task panel, edited");
+  await inRow.press("Enter");
   await page.waitForTimeout(200);
-  expect((await line.innerText()).includes("edited") && (await inPanel.inputValue()) === "", "saving in the panel changes the line in place");
+  expect((await line.innerText()).includes("edited") && (await editor.count()) === 0, "saving in the panel changes the line in place");
 } finally {
   await browser.close();
   await server.stop(true);

@@ -188,40 +188,40 @@ async function pdf(page: Page): Promise<void> {
 
 async function edits(page: Page): Promise<void> {
   const area = composer(page);
-  const editing = page.locator(".main .compose-hint", { hasText: "Editing" });
+  const editor = page.locator(".main").getByRole("textbox", { name: "Edit message" });
   await say(page, "edit me once");
   const row = page.locator(".main article.msg", { hasText: "edit me once" }).last();
   await row.waitFor({ timeout: 15000 });
   await area.fill("a half-typed draft");
   await row.hover();
   await row.getByRole("button", { name: "Edit" }).click();
-  await editing.waitFor({ timeout: 5000 }).catch(() => {});
-  const opened = await area.inputValue();
-  const inline = await page.getByRole("textbox", { name: "Edit message" }).count();
-  check("Edit opens your line in the composer, not in the row", opened === "edit me once" && inline === 0 ? null : `the composer holds ${JSON.stringify(opened)}, ${inline} inline editor(s)`);
-  await area.press("Escape");
+  await editor.waitFor({ timeout: 5000 }).catch(() => {});
+  const opened = (await editor.count()) === 1 ? await editor.inputValue() : "no editor";
+  const kept = await area.inputValue();
+  check(
+    "Edit opens your line in a box in its row, and the composer keeps its draft",
+    opened === "edit me once" && kept === "a half-typed draft" ? null : `the row editor holds ${JSON.stringify(opened)}, the composer ${JSON.stringify(kept)}`,
+  );
+  await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
-  const restored = await area.inputValue();
-  check("Esc puts the draft back", restored === "a half-typed draft" && !(await editing.count()) ? null : `the composer holds ${JSON.stringify(restored)}`);
+  check("Esc closes the box and changes nothing", !(await editor.count()) && (await area.inputValue()) === "a half-typed draft" ? null : `${await editor.count()} editor(s) open`);
   await row.hover();
   await row.getByRole("button", { name: "Edit" }).click();
-  await editing.waitFor({ timeout: 5000 }).catch(() => {});
+  await editor.waitFor({ timeout: 5000 }).catch(() => {});
   await switchTo(page, "away");
-  const elsewhere = await composer(page).inputValue();
+  const elsewhere = await page.locator(".main").getByRole("textbox", { name: "Edit message" }).count();
   await switchTo(page, "composer");
   await composer(page).waitFor({ timeout: 30000 });
   const home = await area.inputValue();
-  check(
-    "leaving mid-edit ends the edit and keeps the draft",
-    elsewhere !== "edit me once" && home === "a half-typed draft" && !(await editing.count()) ? null : `elsewhere ${JSON.stringify(elsewhere)}, back home ${JSON.stringify(home)}`,
-  );
+  check("leaving mid-edit keeps the draft", elsewhere === 0 && home === "a half-typed draft" ? null : `${elsewhere} editor(s) elsewhere, back home the composer holds ${JSON.stringify(home)}`);
+  await page.keyboard.press("Escape");
   await area.fill("");
   await area.press("ArrowUp");
-  await editing.waitFor({ timeout: 5000 }).catch(() => {});
-  const up = await area.inputValue();
-  check("↑ in an empty composer edits your last line", up === "edit me once" ? null : `the composer holds ${JSON.stringify(up)}`);
-  await area.fill("edit me twice");
-  await area.press(SEND);
+  await editor.waitFor({ timeout: 5000 }).catch(() => {});
+  const up = (await editor.count()) === 1 ? await editor.inputValue() : "no editor";
+  check("↑ in an empty composer opens your last line in its row", up === "edit me once" ? null : `the row editor holds ${JSON.stringify(up)}`);
+  await editor.fill("edit me twice");
+  await editor.press("Enter");
   await page.waitForTimeout(3000);
   const was = await lineOf(page, "edit me once");
   const now = await lineOf(page, "edit me twice");

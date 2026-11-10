@@ -3,8 +3,9 @@ import { lazy, Suspense, useCallback, useContext, useEffect, useEffectEvent, use
 import { AttachedFiles, DropHint, IMAGE_TYPES, useAttach } from "~/chat/attach"
 import { matchCommands, parseCommand } from "~/chat/commands"
 import { useCommands } from "~/chat/use-commands"
-import { EditHere, startEditing, stopEditing, useEditingIn } from "~/chat/editing"
-import { lastOwn, nextEdit, type Edit } from "~/chat/compose-edit"
+import { EditHere, startEditing } from "~/chat/editing"
+import { lastOwn } from "~/chat/compose-edit"
+import { openMessage } from "~/live/open-message"
 import { withExcerpt } from "~/chat/quote"
 import { sayerAt } from "~/chat/doc/sayer"
 import { preview, useReplying } from "~/chat/reply"
@@ -150,67 +151,16 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
     s.moved(at)
     drafts.set(key, value)
   }
-  const [edit, setEdit] = useState<Edit | null>(null)
   const { attach, paste, reading, dropping, dropZone } = useAttach({
     files,
     setFiles,
     zone: form,
     toast,
     anyFile: !!doc,
-    refused: () => (edit ? t("chat.composer.edit.text.only") : null),
   })
   const queued = useRef<string | null>(null)
   const at = useContext(EditHere)
-  const editingSeq = useEditingIn(channel.code, at)
-  const found = editingSeq === null ? undefined : channel.messages.find((m) => m.seq === editingSeq)
-  const editing = found?.partial ? undefined : found
-  const partialSeq = found?.partial ? found.seq : null
-  const { holdEarlier, earlierTo } = actions
-  useEffect(() => {
-    if (partialSeq === null) return
-    let live = true
-    holdEarlier(channel.code, "edit", partialSeq)
-    void earlierTo(channel.code, partialSeq).then((ok) => {
-      if (!live || ok) return
-      toast(t("chat.composer.edit.not.loaded"), "error")
-      stopEditing()
-    })
-    return () => {
-      live = false
-    }
-  }, [channel.code, partialSeq, holdEarlier, earlierTo, toast])
-  useEffect(() => {
-    if (editingSeq === null) holdEarlier(channel.code, "edit", null)
-  }, [channel.code, editingSeq, holdEarlier])
-  const [editSeen, setEditSeen] = useState<number | undefined>(undefined)
-  if (editing?.seq !== editSeen) {
-    setEditSeen(editing?.seq)
-    const next = nextEdit(edit, editing, text)
-    if (next) {
-      setEdit(next.edit)
-      update(next.text)
-    }
-  }
-  const editOpen = useRef<Edit | null>(null)
-  useEffect(() => {
-    editOpen.current = edit
-    if (edit) area.current?.focus()
-  }, [edit])
-  useEffect(
-    () => () => {
-      const open = editOpen.current
-      if (!open) return
-      drafts.set(key, open.was)
-      stopEditing()
-    },
-    [key]
-  )
   const send = (value = text) => {
-    if (edit) {
-      const next = value.trim()
-      if (next && (!editing || next !== wordsRaw(editing.text).trim())) actions.editMessage(channel.code, edit.seq, next)
-      return stopEditing()
-    }
     if (running && value === text) {
       running.command.run(running.args)
       setCue(null)
@@ -359,7 +309,6 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
             title={t("chat.composer.add.image.gif")}
             aria-haspopup="menu"
             data-gif-toggle
-            disabled={!!edit}
             onClick={addMenu}
           >
             <Icon name="plus" />
@@ -406,6 +355,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
                 if (last) {
                   e.preventDefault()
                   startEditing(channel.code, last.seq, at)
+                  if (!e.currentTarget.closest(".main, .panel")?.querySelector(`[data-seq="${last.seq}"]`)) openMessage(channel.code, last.seq)
                   return
                 }
               }
@@ -426,12 +376,6 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
                 })
               )
                 return
-              if (e.key === "Escape" && edit) {
-                e.preventDefault()
-                e.stopPropagation()
-                stopEditing()
-                return
-              }
               if (e.key === "Escape" && replyTo) {
                 e.preventDefault()
                 e.stopPropagation()
@@ -444,7 +388,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
               }
             }}
           />
-          <button type="submit" className={cx("send", ready && "is-ready")} aria-label={edit ? t("chat.composer.save") : t("chat.composer.send")} title={sendTitle(enterSends)} disabled={!ready}>
+          <button type="submit" className={cx("send", ready && "is-ready")} aria-label={t("chat.composer.send")} title={sendTitle(enterSends)} disabled={!ready}>
             <Icon name="send" />
           </button>
         </div>
@@ -455,12 +399,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
           </label>
         )}
       </form>
-      {edit && (
-        <p className="compose-hint" role="status">
-          <b>{t("chat.composer.editing")}</b> <span>·</span> {tr("chat.composer.key.cancels", { key: <kbd>Esc</kbd> })}
-        </p>
-      )}
-      {running && !cue && !edit && (
+      {running && !cue && (
         <p className="compose-hint" role="status">
           <b>/{running.command.name}</b> <span>·</span> {running.command.summary} <span>·</span> {tr("chat.composer.key.runs.it", { key: <kbd>{enterSends ? "↩" : keysHint("↩")}</kbd> })}
           {running.command.args && !running.args ? ` · ${running.command.args}` : ""}
