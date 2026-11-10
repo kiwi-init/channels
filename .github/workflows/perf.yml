@@ -15,6 +15,14 @@ on:
         description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), or all"
         type: string
         default: "scale"
+      desktop_messages:
+        description: "Messages in the channel the desktop app reopens (empty is 20)"
+        type: string
+        default: ""
+      desktop_idle:
+        description: "Seconds the desktop app idles before its memory is read (empty is 60, 0 skips it)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -57,7 +65,7 @@ jobs:
     name: perf / desktop cold start and idle memory
     if: ${{ inputs.jobs == 'desktop' || inputs.jobs == 'all' }}
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
@@ -81,6 +89,8 @@ jobs:
       - name: cold start, nine launches, and memory after an idle minute; numbers only, no gate
         env:
           PERF_RUNS: "9"
+          PERF_MESSAGES: ${{ inputs.desktop_messages || '20' }}
+          PERF_IDLE_SEC: ${{ inputs.desktop_idle || '60' }}
         run: bun scripts/perf-desktop.ts desktop/release-eb/build/dev-macos-*/*.app --no-gate --json "$RUNNER_TEMP/perf-desktop.json"
       - name: the report
         if: ${{ !cancelled() }}
