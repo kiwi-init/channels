@@ -40,11 +40,11 @@ async function dataUrlOf(blob: Blob): Promise<string> {
   return `data:${blob.type};base64,${btoa(bin)}`
 }
 
-export async function shrink(url: string, width: number, height: number): Promise<string | null> {
-  const mime = url.slice(url.indexOf(":") + 1, url.indexOf(";"))
-  const bytes = Uint8Array.from(atob(url.slice(url.indexOf(",") + 1)), (c) => c.charCodeAt(0))
+export async function shrink(url: string, width: number, height: number, held?: Blob): Promise<string | null> {
+  const mime = held ? held.type : url.slice(url.indexOf(":") + 1, url.indexOf(";"))
+  const bytes = held ? new Uint8Array(await held.arrayBuffer()) : Uint8Array.from(atob(url.slice(url.indexOf(",") + 1)), (c) => c.charCodeAt(0))
   if (moving(bytes, mime)) return null
-  const bitmap = await createImageBitmap(new Blob([bytes], { type: mime }), { resizeWidth: width, resizeQuality: "high" })
+  const bitmap = await createImageBitmap(held ?? new Blob([bytes], { type: mime }), { resizeWidth: width, resizeQuality: "high" })
   try {
     if (bitmap.width !== width || Math.abs(bitmap.height - height) > 1) return null
     return await dataUrlOf(await png(bitmap))
@@ -56,6 +56,7 @@ export async function shrink(url: string, width: number, height: number): Promis
 export interface ShrinkAsk {
   id: number
   url: string
+  blob?: Blob
   width: number
   height: number
 }

@@ -29,6 +29,7 @@ import { t } from "~/i18n/i18n"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
+import { holdOriginal, originalData, originalMime } from "~/chat/originals"
 import type { Person, Upload } from "~/model"
 import { useAct } from "~/nav"
 
@@ -171,9 +172,6 @@ function paint(ctx: CanvasRenderingContext2D, marks: Mark[], sw: number, fs: num
   }
 }
 
-const mimeOf = (url: string): string => /^data:([^;,]+)/.exec(url)?.[1] ?? "image/png"
-const dataOf = (url: string): string => url.slice(url.indexOf(",") + 1)
-
 async function burn(img: HTMLImageElement, marks: Mark[], name: string, mime: string, root: HTMLElement): Promise<Upload> {
   const color = resolver(root)
   const font = getComputedStyle(root).fontFamily
@@ -249,7 +247,8 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
   const [copied, setCopied] = useState(false)
   const pan = useRef<{ x: number; y: number } | null>(null)
   const name = image.alt || "image"
-  const mime = mimeOf(image.url)
+  const mime = originalMime(image.url)
+  useEffect(() => holdOriginal(image.url), [image.url])
 
   useEffect(() => {
     const el = dialog.current
@@ -357,7 +356,7 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
   }
 
   const current = async (): Promise<Upload> => {
-    if (!marks.length) return { name, mime, data: dataOf(image.url) }
+    if (!marks.length) return { name, mime, data: await originalData(image.url) }
     if (!img.current || !dialog.current) throw new Error(t("chat.annotator.not.loaded"))
     return burn(img.current, marks, name, mime, dialog.current)
   }

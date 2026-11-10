@@ -1,3 +1,4 @@
+import { originalBlob } from "~/chat/originals"
 import { shrink, type ShrinkAsk, type ShrinkReply } from "~/chat/thumb-shrink"
 
 export const FEED_BOX = 360
@@ -143,7 +144,8 @@ function inWorker(url: string, width: number, height: number): Promise<string | 
       if ("failed" in reply) fail(new Error(reply.failed))
       else done(reply.thumb)
     })
-    const ask: ShrinkAsk = { id, url, width, height }
+    const blob = originalBlob(url)
+    const ask: ShrinkAsk = { id, url: blob ? "" : url, width, height, ...(blob ? { blob } : {}) }
     to.postMessage(ask)
   })
 }
@@ -174,7 +176,7 @@ async function shoot(url: string, box: number, scale: number): Promise<Shot> {
       return await inWorker(url, size.width, size.height)
     } catch {
       // The worker couldn't make this copy: the page makes it, and if the page can, the worker's engine lacks something, so it isn't asked again.
-      const made = await shrink(url, size.width, size.height)
+      const made = await shrink(url, size.width, size.height, originalBlob(url))
       broken = true
       stopWorker()
       return made

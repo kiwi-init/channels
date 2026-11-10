@@ -138,6 +138,14 @@ const check = (what: string, why: string | null): void => {
 
 const copyOf = (src: string, original: string): boolean => src.startsWith("data:image/png;base64,") && src !== original;
 
+const bytesOf = (page: Page, src: string): Promise<string> =>
+  page.evaluate(async (url) => {
+    const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }, src);
+
 function feedCopy(shown: Shown, original: string): string | null {
   if (!copyOf(shown.src, original)) return `the feed shows ${shown.src.slice(0, 40)}…, not a copy`;
   if (shown.natural !== FEED * SCALE) return `the copy is ${shown.natural} px wide, not ${FEED * SCALE}`;
@@ -238,6 +246,8 @@ try {
     const sent = await shownIn(button);
     const original = sent.full?.src ?? `data:image/png;base64,${png}`;
     check("a Retina shot sent from the composer shows in the feed from a copy at 2× its 360 px box, with the original over it", feedCopy(sent, original));
+    check("the original over it is a blob, not base64 text in the page", original.startsWith("blob:") ? null : `its src starts ${original.slice(0, 30)}`);
+    const sentBytes = await bytesOf(page, original);
     const inDoc = page.locator(".thread-doc .doc-image img").last();
     await inDoc.waitFor({ state: "attached", timeout: 10000 });
     const doc = await inDoc.evaluate(async (el: HTMLImageElement) => {
@@ -265,7 +275,6 @@ try {
     await save.waitFor({ timeout: 10000 });
     const [download] = await Promise.all([page.waitForEvent("download", { timeout: 10000 }), save.click()]);
     const saved = Buffer.from(await Bun.file(await download.path()).bytes()).toString("base64");
-    const sentBytes = original.slice(original.indexOf(",") + 1);
     check(
       "Save image saves the original bytes",
       saved === sentBytes ? null : `it saved ${Math.round((saved.length * 0.75) / 1024)} KB, not the ${Math.round((sentBytes.length * 0.75) / 1024)} KB sent`,
@@ -296,7 +305,7 @@ try {
       "a drag starts on the original and carries it",
       drag.dragged[0] !== original
         ? `it started on ${drag.dragged[0]?.slice(0, 40) || "no image"}…`
-        : drag.dropped.length && !drag.dropped.some((d) => d.includes(original))
+        : drag.dropped.length && !drag.dropped.some((d) => d.includes(`base64,${sentBytes}`))
           ? `it carried ${drag.dropped.map((d) => d.slice(0, 40)).join(", ")}…`
           : null,
     );
@@ -310,7 +319,9 @@ try {
       await kiwi(["-c", "thumbs", "--as", "bot", "send", "--to", "#general", "a retina shot", "--image", shot]);
       await feed.nth(1).waitFor({ timeout: 30000 });
       await page.waitForTimeout(500);
-      check("an agent's posted Retina shot shows in the feed from a copy too", feedCopy(await shownIn(feed.nth(1)), `data:image/png;base64,${posted}`));
+      const theirs = await shownIn(feed.nth(1));
+      check("an agent's posted Retina shot shows in the feed from a copy too", feedCopy(theirs, theirs.full?.src ?? ""));
+      check("its original is the bytes the agent posted", theirs.full && (await bytesOf(page, theirs.full.src)) === posted ? null : "the original over it isn't what was posted");
       copies = 3;
     }
     const made = await page.evaluate(() => (window as unknown as { thumbWorker: { made: number; failed: number } }).thumbWorker);

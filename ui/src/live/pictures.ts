@@ -4,6 +4,7 @@ import { isRasterMime, type ImageAttachment, type Message as Wire } from "@kiwi/
 import type { ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import type { Image as Picture, ImageSpot } from "~/model"
 import type { Pictures } from "~/live/map"
+import { dropOriginal, keepOriginal } from "~/chat/originals"
 import { onPictureSeen, pictureVisible } from "~/chat/picture-watch"
 
 const RETRIES = 3
@@ -54,9 +55,14 @@ async function picture(ch: ChannelLink, img: ImageAttachment, id: string): Promi
   if (!isRasterMime(img.mime)) return null
   const data = img.data ?? (await ch.image(img))
   if (!data) return null
-  const url = `data:${img.mime};base64,${data}`
-  const { width, height } = await import("~/chat/image-button").then((m) => m.warmFeed(id, url))
-  return { url, width, height, alt: img.name, id }
+  const url = keepOriginal(img.mime, data)
+  try {
+    const { width, height } = await import("~/chat/image-button").then((m) => m.warmFeed(id, url))
+    return { url, width, height, alt: img.name, id }
+  } catch (e) {
+    dropOriginal(url)
+    throw e
+  }
 }
 
 export function spotOf(entry: Entry | undefined, spot: string, alt: string): Picture | ImageSpot {
@@ -74,6 +80,7 @@ export function usePictures(code: string, ch: ChannelLink, messages: readonly Wi
   const shelf = useRef(new Shelf(KEEP_PICTURES))
   const bySeq = useRef(new Map<number, Wire>())
   const live = useRef(true)
+  const closing = useRef(0)
   const [version, setVersion] = useState(0)
 
   useEffect(() => {
@@ -92,6 +99,7 @@ export function usePictures(code: string, ch: ChannelLink, messages: readonly Wi
           const had = cache.current.get(old)
           if (had?.state !== "ready") continue
           if (had.picture.id) onPictureSeen(had.picture.id, null)
+          dropOriginal(had.picture.url)
           cache.current.set(old, { state: "shed", width: had.picture.width, height: had.picture.height })
         }
         return spots.length > 0
@@ -106,6 +114,7 @@ export function usePictures(code: string, ch: ChannelLink, messages: readonly Wi
         return shedOld(shelf.current.put(spot, pictureVisible(id)))
       }
       const settle = (entry: Entry) => {
+        if (!live.current && entry.state === "ready") return dropOriginal(entry.picture.url)
         const anew = showsAnew(cache.current.get(spot), entry)
         cache.current.set(spot, entry)
         const shed = entry.state === "ready" && keep(entry.picture)
@@ -133,13 +142,26 @@ export function usePictures(code: string, ch: ChannelLink, messages: readonly Wi
   useEffect(() => {
     live.current = true
     loaders.set(code, load)
-    const held = cache.current
     return () => {
       live.current = false
       if (loaders.get(code) === load) loaders.delete(code)
-      for (const entry of held.values()) if (entry.state === "ready" && entry.picture.id) onPictureSeen(entry.picture.id, null)
     }
   }, [code, load])
+
+  useEffect(() => {
+    const held = cache.current
+    window.clearTimeout(closing.current)
+    return () => {
+      closing.current = window.setTimeout(() => {
+        for (const [spot, entry] of held) {
+          if (entry.state !== "ready") continue
+          if (entry.picture.id) onPictureSeen(entry.picture.id, null)
+          dropOriginal(entry.picture.url)
+          held.set(spot, { state: "shed", width: entry.picture.width, height: entry.picture.height })
+        }
+      }, 0)
+    }
+  }, [])
 
   return useMemo(() => ({ version, get: (seq: number, i: number, alt: string) => spotOf(cache.current.get(`${seq}:${i}`), `${seq}:${i}`, alt) }), [version])
 }
