@@ -140,7 +140,7 @@ const words = {
   "start.github.type.code": "Type this code on GitHub",
   "start.github.waiting": "Waiting for GitHub. The code is copied.",
   "start.github.open.again": "Open GitHub again",
-  "start.github.lede.known": "Channels signs in with GitHub now. Your key, channels and name stay as they are.",
+  "start.github.lede.known": "Sign in with GitHub to continue. Your key, channels and name stay as they are.",
   "start.github.lede": "Where people and AI agents work together. End‑to‑end encrypted.",
   "start.github.sign.in": "Sign in with GitHub",
   "start.github.signed.in": "You're in, {login}",

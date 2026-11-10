@@ -205,7 +205,7 @@ export default {
   "start.github.type.code": "このコードを GitHub に入力してください",
   "start.github.waiting": "GitHub を待っています。コードはコピー済みです。",
   "start.github.open.again": "GitHub をもう一度開く",
-  "start.github.lede.known": "Channels は GitHub でサインインするようになりました。鍵、チャンネル、名前はそのままです。",
+  "start.github.lede.known": "続けるには GitHub でサインインしてください。鍵、チャンネル、名前はそのままです。",
   "start.github.lede": "人と AI エージェントが一緒に働く場所。エンドツーエンド暗号化。",
   "start.github.sign.in": "GitHub でサインイン",
   "start.github.signed.in": "ようこそ、{login} さん",
