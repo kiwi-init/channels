@@ -8,6 +8,7 @@ import {
   TASK_TITLE_MAX_LENGTH,
   type Event,
   hasLanding,
+  type KeptEvidence,
   type Landing,
   type Merger,
   type Message,
@@ -17,10 +18,10 @@ import {
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKeyRefusal } from "./lead.ts";
-import { addRelease, applyGithub, dropRelease, prKey, repoKey, runStart, runsUnknownSince, type GithubState } from "./github.ts";
+import { addRelease, applyGithub, dropRelease, prKey, repoKey, runStart, runsUnknownSince, type GithubPr, type GithubState } from "./github.ts";
 import { branchLinks, prLinks, prOfTask } from "../prs.ts";
 import { recordedRuns } from "../review-check.ts";
-import { sameHead } from "../stage.ts";
+import { approvedAt, sameHead } from "../stage.ts";
 import { reposOf } from "./repos.ts";
 import { trustedAt } from "./times.ts";
 import { artifactKey, artifactText, doneGate } from "../done-gate.ts";
@@ -113,6 +114,50 @@ export interface FoldCtx {
   merges: Merger;
   compact: Compact | null;
   compactProposal: Compact | null;
+}
+
+function approvalHoldsAgain(t: Task, head: string, mark: { seq: number; by: string; at: number }): void {
+  const last = t.rounds.at(-1);
+  if (t.state !== "review" || last?.result.kind !== "approved" || last.stale === undefined || !approvedAt(last, head)) return;
+  last.stale = undefined;
+  t.state = "landing";
+  t.approvedBy = last.result.by;
+  t.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `head ${head.slice(0, 7)} is the approved code: the approval holds again` });
+  t.updatedAt = mark.at;
+}
+
+function headMoved(t: Task, pr: GithubPr & { sha: string }, mark: { seq: number; by: string; at: number }): void {
+  const last = t.rounds.at(-1);
+  if (last?.result.kind !== "approved" || !last.at) return;
+  if (approvedAt(last, pr.sha)) return approvalHoldsAgain(t, pr.sha, mark);
+  if (t.state !== "landing") return;
+  last.stale = mark.seq;
+  t.state = "review";
+  t.approvedBy = undefined;
+  t.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `new head ${pr.sha.slice(0, 7)} on ${pr.repo}#${pr.number} after the approval: back to review` });
+  t.updatedAt = mark.at;
+}
+
+function keptRefusal(task: Task, kept: KeptEvidence, from: string, lead: boolean): string | null {
+  const id = taskId(task.id);
+  const last = task.rounds.at(-1);
+  if (from !== task.owner && !lead) return `only ${task.owner ?? "its owner"} or the lead records that ${id}'s approval holds at a new head`;
+  if (last?.result.kind !== "approved" || !last.at) return `${id} has no approval pinned to a commit`;
+  if (!sameHead(last.at, kept.approved)) return `${id} is approved at ${last.at.slice(0, 7)}, not at ${kept.approved.slice(0, 7)}`;
+  return null;
+}
+
+function keepApproval(c: FoldCtx, task: Task, kept: KeptEvidence, mark: { seq: number; by: string; at: number; rts?: number }): void {
+  const last = task.rounds.at(-1);
+  if (!last) return;
+  if (!last.kept?.some((k) => k.head === kept.head)) {
+    last.kept = [...(last.kept ?? []), { ...kept, seq: mark.seq, by: mark.by, ...(mark.rts !== undefined ? { rts: mark.rts } : {}) }];
+    const words = kept.how === "same-tree" ? "the same tree as" : `a clean merge of ${kept.ref} into`;
+    task.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `${kept.head.slice(0, 7)} is ${words} the approved ${kept.approved.slice(0, 7)}: the approval holds` });
+    task.updatedAt = mark.at;
+  }
+  const pr = prOfTask(c.github, c.branchPrefix, task);
+  if (pr?.sha && pr.state === "open") approvalHoldsAgain(task, pr.sha, mark);
 }
 
 function landedRefusal(c: FoldCtx, task: Task, artifact: CheckArtifact, member: FoldMember, from: string): string | null {
@@ -338,16 +383,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (ev.items.some((i) => i.event === "workflow_run" && i.started !== undefined)) startRuns(c, tasks, { seq: m.seq, by: m.from, at });
       for (const [key, pr] of c.github.prs) {
         if (!pr.sha || pr.state !== "open" || heads.get(key) === pr.sha) continue;
+        const moved = { ...pr, sha: pr.sha };
         for (const t of tasks.values()) {
-          const last = t.rounds.at(-1);
-          if (t.state !== "landing" || last?.result.kind !== "approved" || !last.at || sameHead(last.at, pr.sha)) continue;
           const linked = branchLinks(pr, c.branchPrefix, t) || !!t.proof?.some((p) => prLinks(p.url).some((l) => prKey(l.repo, l.number) === key));
-          if (!linked) continue;
-          last.stale = m.seq;
-          t.state = "review";
-          t.approvedBy = undefined;
-          t.notes.push({ seq: m.seq, by: m.from, ts: at, text: `new head ${pr.sha.slice(0, 7)} on ${pr.repo}#${pr.number} after the approval: back to review` });
-          t.updatedAt = at;
+          if (linked) headMoved(t, moved, { seq: m.seq, by: m.from, at });
         }
       }
       break;
@@ -647,6 +686,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         reject(verdictWrong);
         break;
       }
+      const keptWrong = ev.kept ? keptRefusal(task, ev.kept, m.from, lead) : null;
+      if (keptWrong) {
+        reject(keptWrong);
+        break;
+      }
       const runWrong = runRefusal(task, ev.run, trustedAt(m));
       if (runWrong) {
         reject(runWrong);
@@ -733,8 +777,14 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
           ...(ev.checkpoint && ev.note ? { checkpoint: true as const } : {}),
           ...(ev.owner && ev.owner !== m.from && ev.note ? { assign: true as const } : {}),
         });
-      if (ev.proof && !task.proof?.some((p) => p.url === ev.proof!.url) && (task.proof?.length ?? 0) < PROOF_MAX)
+      if (ev.proof && !task.proof?.some((p) => p.url === ev.proof!.url) && (task.proof?.length ?? 0) < PROOF_MAX) {
         task.proof = [...(task.proof ?? []), { seq: m.seq, by: m.from, ts: at, url: ev.proof.url, ...(ev.proof.label ? { label: ev.proof.label } : {}) }];
+        for (const l of prLinks(ev.proof.url)) {
+          const pr = c.github.prs.get(prKey(l.repo, l.number));
+          if (pr?.sha && pr.state === "open") headMoved(task, { ...pr, sha: pr.sha }, { seq: m.seq, by: m.from, at });
+        }
+      }
+      if (ev.kept) keepApproval(c, task, ev.kept, { seq: m.seq, by: m.from, at, ...rts });
       if (ev.run && task.run?.id !== ev.run.id) {
         const start = runStart(c.github, ev.run.id, task.createdRts ?? Number.NEGATIVE_INFINITY);
         task.run = {

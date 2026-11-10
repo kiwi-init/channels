@@ -290,6 +290,7 @@ export type Event =
       lander?: string | null;
       close?: string;
       runs?: number[];
+      kept?: KeptEvidence;
     }
   | { op: "task.first"; task: number }
   | { op: "task.landed"; task: number; artifact: CheckArtifact }
@@ -541,6 +542,38 @@ export type MergeMethod = (typeof MERGE_METHODS)[number];
 export const MAX_REQUIRED_CHECKS = 50;
 export const MAX_RELEASE_COMMITS = 250;
 const SHA_RE = /^[0-9a-f]{7,40}$/;
+const FULL_SHA_RE = /^[0-9a-f]{40}$/;
+
+const KEPT_HOWS = ["same-tree", "clean-merge"] as const;
+export type KeptHow = (typeof KEPT_HOWS)[number];
+
+export interface KeptEvidence {
+  head: string;
+  approved: string;
+  how: KeptHow;
+  repo: string;
+  ref: string;
+  tip: string;
+}
+
+const KEPT_KEYS: readonly string[] = ["head", "approved", "how", "repo", "ref", "tip"];
+
+function isKeptEvidence(x: unknown): x is KeptEvidence {
+  if (!x || typeof x !== "object") return false;
+  const k = x as Record<string, unknown>;
+  const sha = (v: unknown): boolean => typeof v === "string" && FULL_SHA_RE.test(v);
+  const line = (v: unknown): boolean => typeof v === "string" && v.length > 0 && v.length <= 200 && !/\s/.test(v);
+  return (
+    Object.keys(k).every((key) => KEPT_KEYS.includes(key)) &&
+    sha(k.head) &&
+    sha(k.approved) &&
+    sha(k.tip) &&
+    k.head !== k.approved &&
+    (KEPT_HOWS as readonly unknown[]).includes(k.how) &&
+    line(k.repo) &&
+    line(k.ref)
+  );
+}
 
 export interface IssueRef {
   repo: string;
@@ -918,7 +951,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 25;
+export const FOLD_RULES = 26;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1111,6 +1144,7 @@ function eventCheck(ev: unknown): boolean | null {
         (e.lander === undefined || e.lander === null || str(e.lander, 64)) &&
         (e.runs === undefined || (e.verdict === "approved" && Array.isArray(e.runs) && e.runs.length <= 50 && e.runs.every((r) => Number.isSafeInteger(r) && (r as number) > 0))) &&
         (e.close === undefined || (e.state === "done" && e.verdict === undefined && str(e.close, 500) && e.close.trim().length > 0)) &&
+        opt(e.kept, isKeptEvidence) &&
         opt(e.proof, (x): x is { url: string; label?: string } => {
           const p = x as { url?: unknown; label?: unknown } | null;
           return (

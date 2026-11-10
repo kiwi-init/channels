@@ -1,6 +1,6 @@
 import type { Authors } from "./authors.ts";
 import type { Member as MemberRecord, Runs } from "../membership.ts";
-import type { Card, Color, IssueRef, Landing, MemberPicture, Merger, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
+import type { Card, Color, IssueRef, KeptHow, Landing, MemberPicture, Merger, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubRun, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
 import type { Power } from "../protocol.ts";
@@ -103,6 +103,18 @@ interface TaskProof {
 
 type RoundResult = { kind: "open" } | { kind: Verdict; by: string; seq: number; ts: number; rts?: number; runs?: number[] } | { kind: "withdrawn"; seq: number };
 
+interface KeptHead {
+  head: string;
+  approved: string;
+  how: KeptHow;
+  repo: string;
+  ref: string;
+  tip: string;
+  seq: number;
+  by: string;
+  rts?: number;
+}
+
 export interface ReviewRound {
   n: number;
   at?: string;
@@ -113,6 +125,7 @@ export interface ReviewRound {
   rts?: number;
   result: RoundResult;
   stale?: number;
+  kept?: KeptHead[];
 }
 
 export interface Task {

@@ -12,6 +12,7 @@ import {
   TASK_TITLE_LIMIT,
   ignored,
   type IssueRef,
+  type KeptEvidence,
   type Landing,
   type TaskState,
   type Verdict,
@@ -193,6 +194,7 @@ export class SessionTasks extends SessionMessaging {
         then?: Landing;
         lander?: string | null;
         close?: string;
+        kept?: KeptEvidence;
       },
       reviewText?: string,
     ) {

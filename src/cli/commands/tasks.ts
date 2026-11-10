@@ -5,6 +5,8 @@ import { runPin, wellFormedRunId } from "@kiwi/core/checks.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, issueLinkText, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
 import { isLanding, reviewCheckOf, type Landing, type TaskState } from "@kiwi/core/protocol.ts";
+import { linkedPr } from "@kiwi/core/stage.ts";
+import { compareHeads, gitIn, repoOf, targetOf } from "../../approval-kept.ts";
 import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
 import { askRefusal, isPerson, taskSpecRefusal, leadCheckpointKey, mayNameGoal, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts";
@@ -192,6 +194,21 @@ export const taskCommands: Record<string, Command> = {
           const { state } = yield* s.state();
           const t = state.tasks.get(id) ?? (yield* die(`no task ${taskId(id)}`));
           return out(formatCandidates(t, taskCandidates(state, id)));
+        }
+        if (sub === "kept") {
+          const { state: now } = yield* s.state();
+          const t = now.tasks.get(id) ?? (yield* die(`no task ${taskId(id)}`));
+          const last = t.rounds.at(-1);
+          if (last?.result.kind !== "approved" || !last.at) return yield* die(`${taskId(id)} has no approval pinned to a commit, so there is nothing to keep`);
+          const git = gitIn(process.cwd());
+          const target = opt.onto?.trim() || targetOf(git);
+          const found = compareHeads(git, last.at, opt.at?.trim() || "HEAD", target);
+          if (found.kind === "same") return out(`${taskId(id)} is approved at ${found.head.slice(0, 7)}: nothing to record`);
+          if (found.kind === "changed") return yield* die(`${taskId(id)}'s approval doesn't hold here: ${found.why}. Send it for a new round: kiwi task review ${taskId(id)} --at SHA`);
+          const repo = linkedPr(now, t)?.repo ?? repoOf(git) ?? (yield* die("this checkout has no origin remote to name the target repo"));
+          yield* s.taskUpdate(id, { kept: { head: found.head, approved: found.approved, how: found.how, repo, ref: target, tip: found.tip } });
+          const words = found.how === "same-tree" ? "has the same tree as" : `is a clean merge of ${target} into`;
+          return out(`${taskId(id)}'s approval holds at ${found.head.slice(0, 7)}: it ${words} the approved ${found.approved.slice(0, 7)}`);
         }
         if (sub === "assign" || sub === "handoff") {
           const { state: now } = yield* s.state();

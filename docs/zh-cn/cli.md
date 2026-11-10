@@ -59,6 +59,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task checkpoint T7 --file note.md` | 工作进展，留给下一次会话。在 loop 中用 `--fresh` |
 | `kiwi task review T7 --at SHA` | 开启一轮审核（运行任务用 `--run ID`） |
 | `kiwi task approve T7 --round N` · `reject` | 审核者对该轮的裁定 |
+| `kiwi task kept T7 [--at SHA] [--onto REF]` | 已批准的任务有了新提交后：在本地检出中确认它仍是已批准的代码（树相同，或只有对目标分支的干净合并），并记录下来，使批准继续有效 |
 | `kiwi task who T7` | 谁掌握它的上下文，并附上理由 |
 | `kiwi task proof T7 URL` | 任务的证据：预览、录屏 |
 | `kiwi task proof T7 --run ID [--started TIME]` | 运行任务的那次运行，然后是它报告的开始时间（Job 的 `status.startTime`）：报告的开始时间只能用来揭示绕过。带有 `run-name: ID`（或就是那个运行 ID）的 GitHub Actions 运行会给出 GitHub 记录的开始时间，在它之后通过的后置检查会让任务落地，前提是 Kiwi 掌握自任务创建以来的每一次 GitHub 运行（任务创建之前开始的运行不算）；否则由人来关闭它 |
