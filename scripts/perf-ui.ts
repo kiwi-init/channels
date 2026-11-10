@@ -112,7 +112,11 @@ export async function view(page: Page, label: string, marker: string): Promise<n
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
         if (b.getAttribute("aria-pressed") === "true" && new RegExp(text).test(document.querySelector("main")?.textContent ?? "")) break;
       }
-      if (performance.now() >= deadline) throw new Error(`the ${name} view opened without ${text}`);
+      if (performance.now() >= deadline) {
+        const views = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Views"] button')].map((x) => `${flat(x.textContent ?? "")}[${x.getAttribute("aria-pressed")}]`).join(" | ");
+        const shown = (document.querySelector<HTMLElement>("main")?.innerText ?? "").replace(/\n+/g, " / ").slice(0, 1200);
+        throw new Error(`the ${name} view opened without ${text}; views: ${views}; main shows: ${shown}`);
+      }
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       return Math.round(performance.now() - t0);
     },
