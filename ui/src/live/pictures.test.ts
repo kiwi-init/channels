@@ -3,7 +3,11 @@ import { generateIdentity, sign, verify } from "@kiwi/core/identity.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { messagesOf } from "~/live/map"
+<<<<<<< HEAD
 import { Shelf, showsAnew, spotOf, type Entry } from "~/live/pictures"
+=======
+import { showsAnew, spotOf, type Entry } from "~/live/pictures"
+>>>>>>> origin/main
 
 const jow = await generateIdentity("jow")
 const roster: Roster = [{ name: "jow", pk: jow.pk, owner: true, at: 0, active: true, kind: "human" }]
@@ -63,6 +67,7 @@ describe("a picture's load recomputes the feed once, when it shows something new
     expect(steps.filter(([was, next]) => showsAnew(was, next)).length).toBe(1)
   })
 })
+<<<<<<< HEAD
 
 describe("the pictures a channel holds are bounded (T2472)", () => {
   test("past the limit, the picture seen longest ago that is off screen is shed", () => {
@@ -109,3 +114,5 @@ describe("the pictures a channel holds are bounded (T2472)", () => {
     expect(showsAnew(again, { state: "ready", picture: ready })).toBe(true)
   })
 })
+=======
+>>>>>>> origin/main

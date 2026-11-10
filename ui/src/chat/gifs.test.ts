@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { gifFile, loadCatalog, peekCatalog, readCatalog, type Gif } from "~/chat/gifs"
+import { gifFile, gifHostOf, loadCatalog, peekCatalog, readCatalog, type Gif } from "~/chat/gifs"
 
 const real = globalThis.fetch
 afterEach(() => {
@@ -50,5 +50,19 @@ describe("GIFs come from what the relay serves", () => {
     globalThis.fetch = reply("RIFF....WEBP", "image/webp")
     const file = await gifFile("https://img.example", trailer)
     expect([file.name, file.type]).toEqual(["ok-trailer.webp", "image/webp"])
+  })
+})
+
+describe("where GIFs load from needs no app context (T2444)", () => {
+  test("a page served over http loads them from its own origin and never asks for the relay", () => {
+    let asked = 0
+    const relay = () => (asked++, "https://relay.example")
+    expect(gifHostOf({ protocol: "http:", origin: "http://127.0.0.1:5173" }, relay)).toBe("http://127.0.0.1:5173")
+    expect(gifHostOf({ protocol: "https:", origin: "https://app.example" }, relay)).toBe("https://app.example")
+    expect(asked).toBe(0)
+  })
+
+  test("the desktop app, served from its own scheme, loads them from its relay", () => {
+    expect(gifHostOf({ protocol: "views:", origin: "views://mainview" }, () => "https://relay.example//")).toBe("https://relay.example")
   })
 })

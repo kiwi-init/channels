@@ -6,7 +6,7 @@ import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import type { Channel, Message, Reaction } from "~/model"
-import { useAct, useApp } from "~/nav"
+import { useAct } from "~/nav"
 import { nickname } from "~/names"
 
 interface ForCompose {
@@ -23,7 +23,7 @@ interface ForMessage {
 }
 
 export default function Gifs(props: ForCompose | ForMessage) {
-  const host = gifHost(useApp().app.account?.relay)
+  const host = gifHost()
   const catalog = useCatalog(host)
   const ready = "m" in props ? undefined : props.onReady
   useEffect(() => ready?.(!!catalog), [ready, catalog])
@@ -107,7 +107,7 @@ function GifReaction({ channel, m, r, catalog }: { channel: Channel; m: Message;
 }
 
 function GifImg({ g }: { g: Gif }) {
-  const src = useGifSrc(gifHost(useApp().app.account?.relay), g)
+  const src = useGifSrc(gifHost(), g)
   return src ? <img src={src} alt="" /> : <span className="gif-wait" aria-hidden="true" />
 }
 
