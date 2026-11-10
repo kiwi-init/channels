@@ -321,15 +321,13 @@ try {
     command("\\\\");
     if ((await settle(bareNow)) !== side) once.push("a second ⌘\\ didn't put the sidebar back");
     const room = () => page(() => (document.querySelector(".side-row.is-on")?.textContent ?? "").replace(/\s+/g, " ").trim());
-    const named = (el: Element, name: string) => [el.getAttribute("aria-label"), el.getAttribute("title"), el.textContent].some((t) => (t ?? "").trim() === name);
     const goTo = async (name: string) => {
       await d.evaluate((n: string) => [...document.querySelectorAll<HTMLElement>(".side-row")].find((r) => (r.textContent ?? "").includes(n))?.click(), name);
       await until(`the ${name} room`, 5_000, () => room().then((r) => (r.includes(name) ? true : null))).catch(() => null);
     };
-    await d.evaluate((src: string) => {
-      const is = new Function(`return ${src}`)() as (el: Element, name: string) => boolean;
-      [...document.querySelectorAll<HTMLElement>("button")].find((b) => is(b, "New room"))?.click();
-    }, named.toString());
+    await page(() =>
+      [...document.querySelectorAll<HTMLElement>("button")].find((b) => [b.getAttribute("aria-label"), b.getAttribute("title"), b.textContent].some((t) => (t ?? "").trim() === "New room"))?.click(),
+    );
     await until("the New room dialog", 5_000, () => page(() => !!document.querySelector("dialog[open] input")).then((on) => (on ? true : null))).catch(() => null);
     await page(() => {
       const field = document.querySelector<HTMLInputElement>("dialog[open] input");
@@ -347,12 +345,12 @@ try {
     await goTo("general");
     const before = await room();
     command("[");
-    const back = await settle(room);
-    if (!back.includes("plans"))
-      once.push(`⌘[ from general, after general → plans → general, landed on ${JSON.stringify(back)}, not plans (it was on ${JSON.stringify(before)}: no step back, or two)`);
+    const stepped = await settle(room);
+    if (!stepped.includes("plans"))
+      once.push(`⌘[ from general, after general → plans → general, landed on ${JSON.stringify(stepped)}, not plans (it was on ${JSON.stringify(before)}: no step back, or two)`);
     command("]");
-    const forward = await settle(room);
-    if (!forward.includes("general")) once.push(`⌘] then landed on ${JSON.stringify(forward)}, not general (no step forward, or two)`);
+    const ahead = await settle(room);
+    if (!ahead.includes("general")) once.push(`⌘] then landed on ${JSON.stringify(ahead)}, not general (no step forward, or two)`);
     command("n");
     const asked = await until("⌘N opening New channel", 5_000, () => page(() => !!document.querySelector("dialog[open]:not(.palette)")).then((on) => (on ? true : null))).catch(() => null);
     escape();
