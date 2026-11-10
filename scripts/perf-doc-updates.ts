@@ -85,6 +85,45 @@ async function switchTo(page: Page, name: string): Promise<void> {
   });
 }
 
+interface ProfileNode {
+  id: number;
+  callFrame: { functionName: string; url: string; lineNumber: number };
+  children?: number[];
+}
+
+async function profile(cdp: CDPSession, per: number, run: () => Promise<unknown>): Promise<{ self: string[]; whole: string[] }> {
+  await cdp.send("Profiler.enable");
+  await cdp.send("Profiler.setSamplingInterval", { interval: 200 });
+  await cdp.send("Profiler.start");
+  await run();
+  const { profile: prof } = (await cdp.send("Profiler.stop")) as { profile: { nodes: ProfileNode[]; samples: number[]; timeDeltas: number[] } };
+  const byId = new Map(prof.nodes.map((n) => [n.id, n]));
+  const name = (n: ProfileNode) => `${n.callFrame.functionName || "(anon)"} ${n.callFrame.url.replace(/^.*\//, "")}:${n.callFrame.lineNumber}`;
+  const own = new Map<number, number>();
+  prof.samples.forEach((id, i) => own.set(id, (own.get(id) ?? 0) + (prof.timeDeltas[i] ?? 0)));
+  const within = new Map<number, number>();
+  const total = (id: number): number => {
+    const known = within.get(id);
+    if (known !== undefined) return known;
+    const sum = (own.get(id) ?? 0) + (byId.get(id)?.children ?? []).reduce((n, child) => n + total(child), 0);
+    within.set(id, sum);
+    return sum;
+  };
+  const self = new Map<string, number>();
+  const whole = new Map<string, number>();
+  for (const n of prof.nodes) {
+    self.set(name(n), (self.get(name(n)) ?? 0) + (own.get(n.id) ?? 0));
+    whole.set(name(n), (whole.get(name(n)) ?? 0) + total(n.id));
+  }
+  const top = (by: Map<string, number>, count: number) =>
+    [...by.entries()]
+      .filter(([k]) => !k.startsWith("(idle)") && !k.startsWith("(program)") && !k.startsWith("(root)"))
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, count)
+      .map(([k, v]) => `${(v / 1000 / per).toFixed(2)}ms  ${k}`);
+  return { self: top(self, 25), whole: top(whole, 45) };
+}
+
 const TEXT = "the relay deploy is done and the numbers are in, p50 is flat and p95 dropped by a third. ";
 const typed = (n: number): string => TEXT.repeat(Math.ceil(n / TEXT.length)).slice(0, n);
 const round = (n: number): number => Math.round(n * 100) / 100;
@@ -150,6 +189,14 @@ try {
     }
     await a.waitForFunction((want) => document.querySelector(".main .feed-list")?.textContent?.includes(want), `measured line ${SENDS} of ${SENDS}`, { timeout: 30000 });
   });
+  const profiled = await profile(cdp, SENDS, async () => {
+    for (let n = 1; n <= SENDS; n++) {
+      await say(b, `profiled line ${n} of ${SENDS}, sent by the other window`);
+      await b.waitForTimeout(400);
+    }
+    await a.waitForFunction((want) => document.querySelector(".main .feed-list")?.textContent?.includes(want), `profiled line ${SENDS} of ${SENDS}`, { timeout: 30000 });
+  });
+  console.log(`per line sent, self time:\n${profiled.self.join("\n")}\nper line sent, with what it calls:\n${profiled.whole.join("\n")}`);
   const perKeyTyped = await during(CHARS, () => composer(a).pressSequentially(typed(CHARS), { delay: 30 }));
   const result = { lines: LINES, sends: SENDS, chars: CHARS, idlePerLine, perLineSent, perKeyTyped };
   console.log(JSON.stringify(result, null, 2));
