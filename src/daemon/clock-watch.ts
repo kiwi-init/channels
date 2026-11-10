@@ -62,8 +62,9 @@ export interface ClockSeat {
 export interface ClockWatcher {
   look: () => Promise<void>;
   refresh: (delay?: number) => void;
-  invoked: () => void;
-  delivered: () => void;
+  invoked: () => string[];
+  rearm: (blocks: readonly string[]) => void;
+  delivered: (blocks: readonly string[]) => void;
   holds: (block: string) => boolean;
   stop: () => void;
 }
@@ -116,9 +117,9 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
   let busy = false;
   let again = false;
   let ended = false;
-  let armed: Armed | null = null;
-  let fired: Armed | null = null;
-  let reached: Armed | null = null;
+  const armed = new Map<string, Armed>();
+  const fired = new Map<string, Armed>();
+  const reached = new Map<string, Armed>();
   const tried = new Set<string>();
   const sent = new Map<string, number>();
 
@@ -142,23 +143,27 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
       .filter((w) => w.clock && !current(state, w, at))
       .map((w) => w.block);
     if (!stale.length) return;
-    if (armed && stale.includes(armed.block)) armed = null;
-    if (fired && stale.includes(fired.block)) fired = null;
-    if (reached && stale.includes(reached.block)) reached = null;
+    for (const block of stale) {
+      armed.delete(block);
+      fired.delete(block);
+      reached.delete(block);
+    }
     seat.drop(stale);
   };
 
   const receipts = async (state: ChannelState, at: number): Promise<void> => {
-    const got = reached;
-    reached = null;
-    if (got) await seat.got({ op: "task.wake", task: got.task, mover: got.mover, since: got.since, got: "delivered" });
+    const got = [...reached.values()];
+    reached.clear();
+    for (const g of got) await seat.got({ op: "task.wake", task: g.task, mover: g.mover, since: g.since, got: "delivered" });
     for (const t of state.tasks.values()) {
       const clock = clockOf(state, t, at);
       const woke = clock?.woke;
       if (!clock || !woke || woke.by !== seat.agent || clock.mover !== seat.agent || woke.read !== undefined) continue;
       if (!seat.told(clockBlock(t.id, clock.epoch))) continue;
-      if (armed?.block === clockBlock(t.id, clock.epoch)) armed = null;
-      if (woke.delivered === undefined && got?.block !== clockBlock(t.id, clock.epoch)) await seat.got({ op: "task.wake", task: t.id, mover: clock.party, since: clock.epoch, got: "delivered" });
+      const block = clockBlock(t.id, clock.epoch);
+      armed.delete(block);
+      fired.delete(block);
+      if (woke.delivered === undefined && !got.some((g) => g.block === block)) await seat.got({ op: "task.wake", task: t.id, mover: clock.party, since: clock.epoch, got: "delivered" });
       await seat.got({ op: "task.wake", task: t.id, mover: clock.party, since: clock.epoch, got: "read" });
     }
   };
@@ -175,7 +180,7 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
     const clock = after && t ? clockOf(after, t, now()) : undefined;
     if (!t || !clock || clock.epoch !== due.since || clock.woke?.seq !== seq || clock.mover !== seat.agent) return;
     const item = clockWakeItem(t, due.mover, due.since, clock.quiet, at);
-    armed = { block: item.block, task: t.id, mover: due.mover, since: due.since };
+    armed.set(item.block, { block: item.block, task: t.id, mover: due.mover, since: due.since });
     seat.add(item);
     seat.wake();
   };
@@ -261,19 +266,31 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
       schedule(delay);
     },
     invoked: () => {
-      if (!armed) return;
-      fired = armed;
-      armed = null;
+      const blocks = [...armed.keys()];
+      for (const [block, a] of armed) fired.set(block, a);
+      armed.clear();
+      return blocks;
     },
-    delivered: () => {
-      if (!fired) return;
-      reached = fired;
-      fired = null;
+    rearm: (blocks) => {
+      for (const block of blocks) {
+        const a = fired.get(block);
+        if (!a) continue;
+        fired.delete(block);
+        armed.set(block, a);
+      }
+    },
+    delivered: (blocks) => {
+      const now = blocks.flatMap((block) => fired.get(block) ?? []);
+      if (!now.length) return;
+      for (const a of now) {
+        fired.delete(a.block);
+        reached.set(a.block, a);
+      }
       if (timer) clearTimeout(timer);
       timer = null;
       schedule(0);
     },
-    holds: (block) => WAKE_BLOCK.test(block) && block !== armed?.block,
+    holds: (block) => WAKE_BLOCK.test(block) && !armed.has(block),
     stop: () => {
       ended = true;
       if (timer) clearTimeout(timer);

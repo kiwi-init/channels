@@ -186,9 +186,9 @@ describe("one waker (#3930 §2, cases 2 and 22)", () => {
     const host = seat(c, "mac");
     c.wait(N);
     await host.w.look();
-    host.w.invoked();
+    const ran = host.w.invoked();
     expect(host.w.holds(clockBlock(id, epoch))).toBe(true);
-    host.w.delivered();
+    host.w.delivered(ran);
     await host.w.look();
     await host.w.look();
     expect(c.events("task.wake").map((m) => m.ev)).toEqual([{ op: "task.wake", task: id, mover: "mac", since: epoch, got: "delivered" }]);
@@ -224,6 +224,49 @@ describe("one waker (#3930 §2, cases 2 and 22)", () => {
     await lead.w.look();
     expect(c.events("task.nudge").at(-1)!.ev).toEqual({ op: "task.nudge", task: id, mover: "mac", since: epoch, step: 2, wake: "attempted" });
     expect(host.did.wakes).toBe(1);
+  });
+
+  test("a second task's attempt armed while the first command runs keeps its own right to a wake, and the first command's answer is recorded for the first only", async () => {
+    const c = channel();
+    const first = await inReview(c);
+    const host = seat(c, "mac");
+    c.wait(N);
+    await host.w.look();
+    const running = host.w.invoked();
+    expect(running).toEqual([clockBlock(first.id, first.epoch)]);
+    const second = await inReview(c);
+    c.wait(N);
+    await host.w.look();
+    expect(host.did.wakes).toBe(2);
+    expect(host.w.holds(clockBlock(second.id, second.epoch))).toBe(false);
+    host.w.delivered(running);
+    await host.w.look();
+    expect(c.events("task.wake").map((m) => m.ev)).toEqual([{ op: "task.wake", task: first.id, mover: "mac", since: first.epoch, got: "delivered" }]);
+    expect(host.w.holds(clockBlock(second.id, second.epoch))).toBe(false);
+    const next = host.w.invoked();
+    expect(next).toEqual([clockBlock(second.id, second.epoch)]);
+    host.w.delivered(next);
+    host.w.delivered(running);
+    await host.w.look();
+    expect(c.events("task.wake").map((m) => (m.ev?.op === "task.wake" ? [m.ev.task, m.ev.got] : []))).toEqual([
+      [first.id, "delivered"],
+      [second.id, "delivered"],
+    ]);
+    expect(c.state().rejected.size).toBe(0);
+  });
+
+  test("a typed wake that has to be tried again gives the attempt back, once", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    const host = seat(c, "mac");
+    c.wait(N);
+    await host.w.look();
+    const tried = host.w.invoked();
+    expect(host.w.holds(clockBlock(id, epoch))).toBe(true);
+    host.w.rearm(tried);
+    expect(host.w.holds(clockBlock(id, epoch))).toBe(false);
+    expect(host.w.invoked()).toEqual(tried);
+    expect(host.w.invoked()).toEqual([]);
   });
 
   test("the seats a daemon chooses its posting seat from are the watched ones, in a fixed order: a dormant seat is never chosen", () => {
@@ -362,8 +405,8 @@ describe("one waker (#3930 §2, cases 2 and 22)", () => {
     c.wait(N);
     await host.w.look();
     expect(host.did.wakes).toBe(1);
-    host.w.invoked();
-    host.w.delivered();
+    const ran = host.w.invoked();
+    host.w.delivered(ran);
     host.shown(clockBlock(id, epoch));
     await host.w.look();
     c.wait(N);
