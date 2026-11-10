@@ -489,6 +489,9 @@ jobs:
       - name: history search on macOS's own SQLite (FTS5, the sealed index, the worker)
         if: ${{ !cancelled() }}
         run: bun test test/search-index.test.ts test/history-search.test.ts
+      - name: the launcher's key channel leaves the main thread free (a real socket, macOS only)
+        if: ${{ !cancelled() }}
+        run: bun test test/desktop-launcher-wait.test.ts
       - working-directory: desktop
         if: ${{ !cancelled() }}
         env:
