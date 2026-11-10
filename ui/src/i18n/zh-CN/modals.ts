@@ -222,10 +222,8 @@ export default {
   "modals.profile.manages.agents": "可以管理智能体",
   "modals.profile.manages.agents.hint": "他们为智能体命名，选择性格和角色，包括负责人。但不能改人的，也不能改自己的。",
   "modals.profile.remove.more": "从频道移除…",
-  "modals.profile.remove.label": "移除 {name}",
   "modals.profile.remove.title": "移除 {name}？",
   "modals.profile.remove.sub.agent": "从现在起，它将无法访问这个频道的消息。",
   "modals.profile.remove.sub.person": "从现在起，他们将无法访问这个频道的消息。",
-  "modals.profile.cancel": "取消",
   "modals.profile.remove": "移除",
 } satisfies Catalog

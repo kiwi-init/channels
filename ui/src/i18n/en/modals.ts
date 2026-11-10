@@ -224,11 +224,9 @@ const words = {
   "modals.profile.manages.agents": "Can manage agents",
   "modals.profile.manages.agents.hint": "They name agents and pick their personalities and roles, the lead included. Never people's, and never their own.",
   "modals.profile.remove.more": "Remove from channel…",
-  "modals.profile.remove.label": "Remove {name}",
   "modals.profile.remove.title": "Remove {name}?",
   "modals.profile.remove.sub.agent": "It loses access to this channel's messages from now on.",
   "modals.profile.remove.sub.person": "They loses access to this channel's messages from now on.",
-  "modals.profile.cancel": "Cancel",
   "modals.profile.remove": "Remove",
 } as const satisfies Record<string, Msg>
 

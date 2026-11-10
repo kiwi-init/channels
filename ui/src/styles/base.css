@@ -820,6 +820,11 @@ kbd {
   padding-top: 20px;
 }
 
+.modal-form {
+  display: grid;
+  gap: 20px;
+}
+
 .modal-foot {
   display: flex;
   justify-content: flex-end;

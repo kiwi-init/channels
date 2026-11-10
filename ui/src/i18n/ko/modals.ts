@@ -223,10 +223,8 @@ export default {
   "modals.profile.manages.agents": "에이전트 관리 가능",
   "modals.profile.manages.agents.hint": "리드를 포함해 에이전트의 이름을 짓고 성격과 역할을 고릅니다. 사람이나 자기 자신의 것은 바꿀 수 없습니다.",
   "modals.profile.remove.more": "채널에서 제거…",
-  "modals.profile.remove.label": "{name} 제거",
   "modals.profile.remove.title": "{name}을(를) 제거할까요?",
   "modals.profile.remove.sub.agent": "이제부터 이 채널의 메시지에 접근할 수 없습니다.",
   "modals.profile.remove.sub.person": "이제부터 이 채널의 메시지에 접근할 수 없습니다.",
-  "modals.profile.cancel": "취소",
   "modals.profile.remove": "제거",
 } satisfies Catalog

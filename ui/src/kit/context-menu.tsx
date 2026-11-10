@@ -1,8 +1,7 @@
 import "~/i18n/en/github-later"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 
-import { t } from "~/i18n/i18n"
-import { Modal } from "~/kit/modal"
+import { Confirm } from "~/kit/confirm"
 import { openMenu, type MenuItem, type OpenMenu } from "~/kit/menu-open"
 
 const GUTTER = 8
@@ -67,30 +66,16 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
   }, [])
   if (asking?.confirm)
     return (
-      <Modal
-        dismiss="outside"
+      <Confirm
         open
         onClose={() => openMenu.set(null)}
-        label={asking.confirm.title}
         title={asking.confirm.title}
         sub={asking.confirm.sub}
-        foot={
-          <>
-            <button type="button" className="btn" onClick={() => openMenu.set(null)}>
-              {t("kit.context.menu.cancel")}
-            </button>
-            <button
-              type="button"
-              className="btn is-danger"
-              onClick={() => {
-                openMenu.set(null)
-                asking.run()
-              }}
-            >
-              {asking.confirm.yes}
-            </button>
-          </>
-        }
+        action={asking.confirm.yes}
+        onConfirm={() => {
+          openMenu.set(null)
+          asking.run()
+        }}
       />
     )
   return (
