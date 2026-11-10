@@ -51,7 +51,9 @@ export function usePictures(code: string, ch: ChannelLink, messages: readonly Wi
         cache.current.set(spot, entry)
         if (live.current) setVersion((v) => v + 1)
       }
-      settle({ state: "loading" })
+      const shows = spotOf(was, spot, "")
+      cache.current.set(spot, { state: "loading" })
+      if (!("state" in shows) || shows.state !== "waiting") setVersion((v) => v + 1)
       void (async () => {
         for (let tries = 0; ; tries++) {
           try {
