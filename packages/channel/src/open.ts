@@ -23,7 +23,7 @@ export interface OpenSteps {
   kept: () => Promise<Kept | null>;
   plan: (cache: OpenedCache, head: number) => Promise<Planned | null>;
   snapshot: () => Promise<FoldBase | null>;
-  early: (cached: Planned | null, kept: Kept) => void;
+  early: (cached: Planned | null, kept: Kept, rest: boolean) => void;
   paint: (cached: Planned | null, base: FoldBase | null, head: number) => void;
 }
 
@@ -62,7 +62,7 @@ export function warmUp(steps: OpenSteps, was: Warm | undefined, limit: number): 
     const tail = near ? await steps.tail(near.n).catch(() => null) : null;
     const newest = kept && near && tail ? provisional(tail, limit) : null;
     if (kept && near && newest) {
-      steps.early(newest, { ...kept, base: near });
+      steps.early(newest, { ...kept, base: near }, true);
       await new Promise((painted) => setTimeout(painted, 0));
     }
     const cache = await steps.cache();
@@ -70,7 +70,7 @@ export function warmUp(steps: OpenSteps, was: Warm | undefined, limit: number): 
     const base = was?.base ?? kept?.base ?? null;
     const covered = first === 1 || (base !== null && first !== undefined && base.n >= first - 1);
     if (!covered) void steps.snapshot().catch(() => null);
-    if (kept) steps.early(provisional(cache, limit), newest && near ? { ...kept, base: near } : kept);
+    if (kept) steps.early(provisional(cache, limit), newest && near ? { ...kept, base: near } : kept, false);
   });
 }
 

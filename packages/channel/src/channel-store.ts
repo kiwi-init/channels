@@ -80,6 +80,7 @@ export interface ChannelHandle {
   snapshotTooBig: boolean;
   github: GithubHealth | null;
   ready: boolean;
+  opening: boolean;
   caughtUp: boolean;
   older: OlderHistory;
 }
@@ -112,6 +113,7 @@ export class ChannelStore {
 
   private readonly connection = signal<Connection>("connecting");
   private readonly ready: Signal<boolean>;
+  private readonly opening = signal(false);
   private readonly start = signal<{ head: number; whole: boolean } | null>(null);
   private readonly gone = signal<"removed" | "closed" | null>(null);
   private readonly messages: Signal<Message[]>;
@@ -254,6 +256,7 @@ export class ChannelStore {
       snapshotTooBig: this.snapshotTooBig.value,
       github: this.ch.isOwner ? this.githubHealth.value : null,
       ready: this.ready.value,
+      opening: this.opening.value,
       caughtUp: this.caughtUp.value,
       older: this.older,
     }));
@@ -278,7 +281,9 @@ export class ChannelStore {
   };
 
   private scrollback(): Promise<Scrollback> {
-    return (this.scroll ??= import("./back.ts").then((b) => new b.Scrollback({ ch: this.ch, back: this.back, shown: this.shown, messages: this.messages, gone: this.gone, page: PAGE, reach: REACH })));
+    return (this.scroll ??= import("./back.ts").then(
+      (b) => new b.Scrollback({ ch: this.ch, back: this.back, shown: this.shown, messages: this.messages, opening: this.opening, gone: this.gone, page: PAGE, reach: REACH }),
+    ));
   }
 
   private wakeFor(opts: SendOptions): string[] {
@@ -379,6 +384,7 @@ export class ChannelStore {
 
   private keepWarm(): void {
     if (this.gone.value) return dropWarm(this.code);
+    if (this.opening.value) return;
     const state = this.state.value;
     const [messages, roster, guardFloor, roomsFloor, base] = [this.messages.value, this.roster.value, this.guardFloor.value, this.roomsFloor.value, this.base.value];
     keepWarm(
@@ -624,9 +630,10 @@ export class ChannelStore {
         markOnce("kiwi:kept-open");
         return kept;
       },
-      early: (cached, kept) => {
+      early: (cached, kept, rest) => {
         if (closed || painted) return;
         batch(() => {
+          this.opening.value = rest;
           if (!this.rosterIn) this.roster.value = kept.roster;
           if (kept.base) {
             earlyBase = true;
@@ -651,6 +658,7 @@ export class ChannelStore {
         if (closed) return;
         painted = true;
         batch(() => {
+          this.opening.value = false;
           if (cached?.unread.length || earlyUnread.size) {
             const seen = cached?.unread ?? [];
             this.unread.value = handOver(

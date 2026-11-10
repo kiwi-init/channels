@@ -38,7 +38,7 @@ function relay(rotateTrips = 1, rotated = false) {
     await settle();
   };
   const painted: { at: number; seqs: number[]; base: number | null }[] = [];
-  const early: { at: number; seqs: number[]; base: number | null }[] = [];
+  const early: { at: number; seqs: number[]; base: number | null; rest?: true }[] = [];
   const make = (head: number, cache: number[], snap: number | null, held: Kept | null = null): OpenSteps =>
     onceEach({
       head: () => trip("head", head),
@@ -59,7 +59,7 @@ function relay(rotateTrips = 1, rotated = false) {
       }),
       snapshot: () => trip("snapshot", snap === null ? null : base(snap)),
       kept: async () => held,
-      early: (cached, k) => early.push({ at: trips, seqs: cached?.messages.map((m) => m.seq) ?? [], base: k.base?.n ?? null }),
+      early: (cached, k, rest) => early.push({ at: trips, seqs: cached?.messages.map((m) => m.seq) ?? [], base: k.base?.n ?? null, ...(rest ? { rest: true as const } : {}) }),
       paint: (cached, b) => painted.push({ at: trips, seqs: cached?.messages.map((m) => m.seq) ?? [], base: b?.n ?? null }),
     });
   return { log, roundTrip, painted, early, make, trips: () => trips, settle };
@@ -151,7 +151,7 @@ describe("opening a channel", () => {
     await r.settle();
     expect(r.log.filter((l) => l.startsWith("tail"))).toEqual(["tail>4900"]);
     expect(r.early).toEqual([
-      { at: 0, seqs: range(4901, 5000), base: 4900 },
+      { at: 0, seqs: range(4901, 5000), base: 4900, rest: true },
       { at: 0, seqs: range(3001, 5000), base: 4900 },
     ]);
     await r.roundTrip();

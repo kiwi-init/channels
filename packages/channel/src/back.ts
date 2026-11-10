@@ -55,6 +55,7 @@ export interface Paged {
   back: Signal<Message[]>;
   shown: ReadonlySignal<Message[]>;
   messages: ReadonlySignal<Message[]>;
+  opening: ReadonlySignal<boolean>;
   gone: ReadonlySignal<unknown>;
   page: number;
   reach: number;
@@ -70,8 +71,20 @@ export class Scrollback {
   private first = (): number | undefined => this.p.shown.peek()[0]?.seq;
 
   more(): Promise<boolean> {
-    this.paging ??= this.once().finally(() => (this.paging = null));
+    this.paging ??= (this.p.opening.peek() ? this.whole().then(() => this.once()) : this.once()).finally(() => (this.paging = null));
     return this.paging;
+  }
+
+  private whole(): Promise<void> {
+    const opening = this.p.opening;
+    if (!opening.peek()) return Promise.resolve();
+    return new Promise((resolve) => {
+      const stop = opening.subscribe((on) => {
+        if (on) return;
+        queueMicrotask(() => stop());
+        resolve();
+      });
+    });
   }
 
   private async once(): Promise<boolean> {
@@ -87,6 +100,7 @@ export class Scrollback {
   }
 
   async to(seq: number): Promise<boolean> {
+    if (this.p.opening.peek()) await this.whole();
     const has = () => (this.first() ?? Infinity) <= seq;
     const first = this.first();
     if (first === undefined || seq < 1 || first - seq > this.p.reach) return false;

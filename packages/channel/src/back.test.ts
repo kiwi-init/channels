@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts";
-import { pageBefore, type PageSource } from "./back.ts";
+import { computed, signal } from "@preact/signals-core";
+import type { ChannelLink } from "./channel-ops.ts";
+import { pageBefore, Scrollback, type PageSource } from "./back.ts";
 import { useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts";
 
 const row = (seq: number): CachedRow => ({ seq, e: 1, iv: "iv", ct: "ct" });
@@ -89,5 +91,34 @@ describe("a page of older messages for the scrollback", () => {
     const page = await pageBefore("room", "pk", 401, 200, src);
     expect(page.messages[0]?.seq).toBe(301);
     expect(src.asked).toEqual([]);
+  });
+});
+
+describe("scrollback while only the newest rows are in (T3008)", () => {
+  test("a page waits for the whole window, then reads below it: no row comes twice", async () => {
+    useHistoryDb(archive(range(1, 500)));
+    const asked: number[] = [];
+    const ch = {
+      roomId: "room",
+      pk: "pk",
+      olderRows: async () => ({ rows: [], done: true }),
+      openRows: async (rows: CachedRow[]) => (asked.push(rows[0]!.seq), rows.map((r) => msg(r.seq))),
+    } as unknown as ChannelLink;
+    const messages = signal(range(451, 500).map(msg));
+    const back = signal<Message[]>([]);
+    const opening = signal(true);
+    const shown = computed(() => [...back.value, ...messages.value]);
+    const scroll = new Scrollback({ ch, back, shown, messages, opening, gone: signal(null), page: 100, reach: 2000 });
+    const paged = scroll.more();
+    const reached = scroll.to(300);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(asked).toEqual([]);
+    messages.value = range(201, 500).map(msg);
+    opening.value = false;
+    expect(await paged).toBe(true);
+    expect(await reached).toBe(true);
+    expect(asked).toEqual([101]);
+    const seqs = [...back.peek(), ...messages.peek()].map((m) => m.seq);
+    expect(seqs).toEqual(range(101, 500));
   });
 });
