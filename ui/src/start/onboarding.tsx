@@ -1,13 +1,12 @@
 import "~/i18n/en/shell-later"
 import "~/styles/onboarding.css"
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type AnimationEvent } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type AnimationEvent } from "react"
 
 import type { Meadow } from "~/meadow/meadow"
 import { Settle, useStill } from "~/meadow/settle"
 import { cx } from "~/kit/bits"
 import { rememberOnboarded } from "~/start/onboarded"
-import { PLEDGE, pledged, same } from "~/start/pledge"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 
@@ -15,7 +14,6 @@ const WORD = "Channels"
 const SCENE_WAIT_MS = 4000
 const HEX = "0123456789abcdef"
 const TRUST: readonly Key[] = ["start.onboarding.trust.sealed", "start.onboarding.trust.harness"]
-const SAYS: readonly Key[] = ["start.onboarding.says.not.harness", "start.onboarding.says.not.bots"]
 const noise = (n: number): string => Array.from({ length: n }, (_, i) => (i % 5 === 4 ? " " : (HEX[Math.floor(Math.random() * 16)] ?? "0"))).join("")
 
 function Sealed({ still, length }: { still: boolean; length: number }) {
@@ -41,16 +39,13 @@ function Line({ text, still, delay }: { text: string; still: boolean; delay: num
 
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const still = useStill()
-  const [step, setStep] = useState<"intro" | "trust" | "pledge">("intro")
-  const [typed, setTyped] = useState("")
+  const [step, setStep] = useState<"intro" | "trust">("intro")
   const [leaving, setLeaving] = useState(false)
   const [ready, setReady] = useState(false)
   const box = useRef<HTMLDialogElement>(null)
   const stage = useRef<HTMLDivElement>(null)
   const meadow = useRef<Meadow | null>(null)
   const latest = useRef({ still, leaving })
-  const sayId = useId()
-  const done = pledged(typed)
   const lede = t("start.onboarding.lede")
   const plain = t("start.onboarding.plain")
 
@@ -92,12 +87,10 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
   useEffect(() => meadow.current?.setStill(still), [still])
 
-  useEffect(() => {
-    if (!done) return
+  const begin = (): void => {
     rememberOnboarded()
-    const timer = window.setTimeout(() => setLeaving(true), still ? 0 : 600)
-    return () => window.clearTimeout(timer)
-  }, [done, still])
+    setLeaving(true)
+  }
 
   useEffect(() => {
     if (leaving) meadow.current?.freeze()
@@ -139,7 +132,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             {t("start.onboarding.continue")}
           </button>
         </main>
-      ) : step === "trust" ? (
+      ) : (
         <main key="trust" className="onb-step">
           <div className="onb-wire" aria-hidden="true">
             <span className="onb-wire-head">{t("start.onboarding.your.device")}</span>
@@ -164,47 +157,9 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               <Line key={line} text={t(line)} still={still} delay={1.8 + i * 1.3} />
             ))}
           </div>
-          <button type="button" className="onb-next is-later" autoFocus onClick={() => setStep("pledge")}>
+          <button type="button" className="onb-next is-later" autoFocus onClick={begin}>
             {t("start.onboarding.continue")}
           </button>
-        </main>
-      ) : (
-        <main key="pledge" className="onb-step is-pledge">
-          <div id={sayId} className="onb-says">
-            {SAYS.map((line, i) => (
-              <Line key={line} text={t(line)} still={still} delay={0.3 + i * 1.3} />
-            ))}
-          </div>
-          <label className={cx("onb-type", done && "is-done")}>
-            <span className="onb-ghost" aria-hidden="true">
-              {[...PLEDGE].map((ch, i) => {
-                const got = typed[i]
-                if (got === undefined) return <span key={i}>{ch}</span>
-                const right = same(got, ch)
-                return (
-                  <span key={i} className={right ? "is-ok" : "is-bad"}>
-                    {right ? ch : got}
-                  </span>
-                )
-              })}
-            </span>
-            <input
-              className="onb-input"
-              value={typed}
-              maxLength={PLEDGE.length}
-              autoFocus
-              autoComplete="off"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              readOnly={done}
-              aria-label={t("start.onboarding.type.pledge", { pledge: PLEDGE })}
-              aria-describedby={sayId}
-              onPaste={(e) => e.preventDefault()}
-              onDrop={(e) => e.preventDefault()}
-              onChange={(e) => setTyped(e.target.value)}
-            />
-          </label>
         </main>
       )}
     </dialog>
