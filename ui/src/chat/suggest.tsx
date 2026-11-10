@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type RefObject } from "react"
 
 import { mentionNames, type Picks } from "~/chat/linked"
-import { peopleMatches, specMatches, taskMatches } from "~/chat/matches"
+import { peopleMatches, refDone, specMatches, taskMatches } from "~/chat/matches"
 import { t } from "~/i18n/i18n"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import type { Channel, Person, Spec, Task } from "~/model"
@@ -65,7 +65,8 @@ export function useSuggest({
   const closed = closedOn !== null && closedOn === `${caret}:${text}`
   const typed = text.slice(0, caret)
   const query = closed ? undefined : MENTION.exec(typed)?.[2]
-  const taskQuery = closed || query !== undefined ? undefined : TASK_REF.exec(typed)?.[2]
+  const asked = closed || query !== undefined ? undefined : TASK_REF.exec(typed)?.[2]
+  const taskQuery = asked !== undefined && refDone(asked) ? undefined : asked
   const people = query === undefined ? [] : peopleMatches(withFormer ? [...channel.people, ...(channel.former ?? [])] : channel.people, query)
   const tasks = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
   const specs = taskQuery === undefined ? [] : specMatches(channel.specs ?? [], taskQuery)

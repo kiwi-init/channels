@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { specMatches } from "~/chat/matches"
+import { refDone, specMatches } from "~/chat/matches"
 import type { Spec } from "~/model"
 import { wrote } from "~/words"
 
@@ -33,5 +33,12 @@ describe("# also finds specs (T1875)", () => {
 
   test("nothing typed lists them, open ones before closed ones, newest edit first", () => {
     expect(specMatches(specs, "").map((s) => s.ask)).toEqual([160, 150, 170])
+  })
+
+  test("a number followed by a space is a finished reference: the list doesn't come back for it", () => {
+    expect(refDone("160 ")).toBe(true)
+    expect(refDone("160 and then")).toBe(true)
+    expect(refDone("160")).toBe(false)
+    expect(refDone("drafts survive")).toBe(false)
   })
 })

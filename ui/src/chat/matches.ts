@@ -22,6 +22,8 @@ export function taskMatches(tasks: readonly Task[], query: string): Task[] {
     .map((x) => x.t)
 }
 
+export const refDone = (query: string): boolean => /^\d+\s/.test(query)
+
 export function specMatches(specs: readonly Spec[], query: string): Spec[] {
   const q = query.trim().toLowerCase()
   const score = (s: Spec): number => {
