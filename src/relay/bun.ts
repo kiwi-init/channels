@@ -11,7 +11,7 @@ import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, MAX_BLOB_BYTES, PING, PONG } from "@kiwi/core/protocol.ts";
 import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
-import { clockLayer, MAX_REQUEST_BYTES } from "./http.ts";
+import { clockLayer, MAX_REQUEST_BYTES, MAX_SNAPSHOT_REQUEST_BYTES } from "./http.ts";
 import { devHostOk, devHumanAuth, devRequestOk, githubHumanAuth, Human, HUMAN_HEADER, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
@@ -490,7 +490,7 @@ export function startRelay(
     port: opts.port ?? 8787,
     hostname: opts.hostname ?? "0.0.0.0",
     idleTimeout: 0,
-    maxRequestBodySize: Math.max(MAX_REQUEST_BYTES, MAX_BLOB_BYTES) + 64 * 1024,
+    maxRequestBodySize: Math.max(MAX_REQUEST_BYTES, MAX_BLOB_BYTES, MAX_SNAPSHOT_REQUEST_BYTES) + 64 * 1024,
     async fetch(req, server) {
       try {
         const url = new URL(req.url);

@@ -92,7 +92,7 @@ export const setSnapshot = Effect.fn("Room.setSnapshot")(function* (snapshot: un
   const db = yield* RoomStore;
   const { epoch } = yield* readMeta;
   if (!fits(SealedSnapshot, snapshot) || snapshot.e > epoch || snapshot.n > db.head()) {
-    return yield* new BadRequest({ message: "bad snapshot (at most 512KB, sealed with a channel key, at a seq the channel has)" });
+    return yield* new BadRequest({ message: "bad snapshot (at most 1.5MB, sealed with a channel key, at a seq the channel has)" });
   }
   const stored = db.snapshot();
   if (stored && snapshot.n < stored.n) return yield* new Conflict({ message: `this channel has a newer snapshot (#${stored.n})` });

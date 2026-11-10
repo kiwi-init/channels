@@ -1,7 +1,7 @@
 import { verifyRequest } from "@kiwi/core/auth.ts";
 import { isRefusal, refusalResponse, Unauthorized } from "../failures.ts";
 import type { HumanAuth } from "../human.ts";
-import { MAX_REQUEST_BYTES, readText } from "../http.ts";
+import { readText, requestCap } from "../http.ts";
 import { requestToken } from "./auth.ts";
 
 export function errorResponse(err: unknown): Response {
@@ -35,7 +35,7 @@ export async function gateRoom(req: Request, roomId: string, rest: string, now =
   }
   let body = "";
   if (method !== "GET" && method !== "HEAD" && !(method === "PUT" && rest.startsWith("/blobs/"))) {
-    const read = await readText(req.clone().body, MAX_REQUEST_BYTES, req.headers.get("content-length"));
+    const read = await readText(req.clone().body, requestCap(method, rest), req.headers.get("content-length"));
     if (read === null) return Response.json({ error: "request too large", tag: "TooLarge" }, { status: 413 });
     body = read;
   }

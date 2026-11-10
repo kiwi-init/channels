@@ -1,4 +1,4 @@
-import { BASE_WIRE_VERSION, baseFromWire, toWire } from "@kiwi/core/base-wire.ts";
+import { BASE_WIRE_VERSION, baseFromWire, readableWire, toWire } from "@kiwi/core/base-wire.ts";
 import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts";
 import { ChannelGone, type RoomsSetting, type SendOptions } from "@kiwi/core/client.ts";
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
@@ -52,7 +52,7 @@ function resumeOf(x: unknown): Resume | null {
   if (!x || typeof x !== "object") return null;
   const r = x as Record<string, unknown>;
   const { since, last } = r;
-  if (r.v !== RESUME_VERSION || r.bv !== BASE_WIRE_VERSION || !seqOk(since) || !seqOk(last) || since > last) return null;
+  if (r.v !== RESUME_VERSION || !readableWire(r.bv) || !seqOk(since) || !seqOk(last) || since > last) return null;
   if (r.base === null) return { since, last, base: null };
   const base = baseFromWire(r.base);
   return base && !olderRules(base) && base.n <= last ? { since, last, base } : null;

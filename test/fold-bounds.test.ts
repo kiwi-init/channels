@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { newChannelKey } from "@kiwi/core/crypto.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
-import { MAX_SNAPSHOT_LENGTH, PROTOCOL_VERSION, type Event, type Message } from "@kiwi/core/protocol.ts";
-import { sealSnapshot } from "@kiwi/core/snapshot.ts";
+import { MAX_GITHUB_ITEMS, MAX_SNAPSHOT_LENGTH, PROTOCOL_VERSION, type Event, type GithubNote, type Message } from "@kiwi/core/protocol.ts";
+import { openSnapshot, sealSnapshot } from "@kiwi/core/snapshot.ts";
 import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 
 const T0 = 1_700_000_000_000;
@@ -234,5 +234,84 @@ describe("the fold base stays bounded", () => {
       expect(sealed).not.toBeNull();
       expect(fold([{ ...messages[12_345]!, seq: 22_002 }], roster, T0, null, null, base).rejected.get(22_002)).toContain("a copy of #12346");
     }
+  });
+
+  test("a month of a busy channel (1,900 merged PRs, checks on 300 commits, 80 done tasks with notes) seals over the old 512 KB cap and opens to the same state", async () => {
+    let seed = 7;
+    const random = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return (t ^ (t >>> 14)) >>> 0;
+    };
+    const hex = () => Array.from({ length: 40 }, () => (random() % 16).toString(16)).join("");
+    const words = ["Fold", "relay", "keeps", "snapshot", "app", "shows", "tasks", "after", "seal", "base", "checks", "merge", "opens", "owner", "lead"];
+    const title = () => Array.from({ length: 8 }, () => words[random() % words.length]).join(" ");
+    const at = (i: number, of: number) => T0 + Math.floor((i * 29 * DAY) / of);
+    const prs: GithubNote[] = Array.from({ length: 1_900 }, (_, i) => ({
+      event: "pull_request",
+      repo: "o/r",
+      number: 100 + i,
+      state: "closed",
+      merged: true,
+      title: title(),
+      url: `https://github.com/o/r/pull/${100 + i}`,
+      branch: `T${1_000 + i}-work`,
+      sha: hex(),
+      merge: hex(),
+      by: "jow",
+      additions: random() % 500,
+      deletions: random() % 200,
+      files: random() % 30,
+      at: at(i, 1_900),
+      happened: at(i, 1_900),
+    }));
+    const names = Array.from({ length: 19 }, (_, i) => `job ${i}`);
+    const checks: GithubNote[] = Array.from({ length: 300 }, (_, s) => {
+      const sha = hex();
+      const wf = 40_000_000_000 + random();
+      return names.map((name): GithubNote => {
+        const job = 120_000_000_000 + random();
+        const started = at(s, 300);
+        return {
+          event: "check_run",
+          repo: "o/r",
+          sha,
+          name,
+          url: `https://github.com/o/r/actions/runs/${wf}/job/${job}`,
+          run: job,
+          attempt: 1,
+          status: "completed",
+          conclusion: "success",
+          at: started + 90_000,
+          happened: started + 60_000 + (random() % 60_000),
+        };
+      });
+    }).flat();
+    const notes = [...prs, ...checks];
+    const messages = Array.from({ length: Math.ceil(notes.length / MAX_GITHUB_ITEMS) }, (_, i) =>
+      ev(i + 1, at(i, notes.length / MAX_GITHUB_ITEMS), { op: "github", items: notes.slice(i * MAX_GITHUB_ITEMS, (i + 1) * MAX_GITHUB_ITEMS) }),
+    );
+    const note = () => Array.from({ length: 16 }, () => `${title()} ${hex().slice(0, 8)} #${random() % 5_000}`).join(". ");
+    const first = messages.length + 1;
+    const work = Array.from({ length: 80 * 17 }, (_, i): Message => {
+      const step = i % 17;
+      const task = first + i - step;
+      const e: Event = step === 0 ? { op: "task.add", title: title() } : step === 16 ? { op: "task.update", task, state: "done" } : { op: "task.update", task, note: note() };
+      return ev(first + i, T0 + 28 * DAY + i * MIN, e);
+    });
+    const base = baseOf([...messages, ...work]);
+    expect(base.tasks.filter((t) => t.state === "done" && t.notes.length === 15)).toHaveLength(80);
+    expect(base.github?.prs).toHaveLength(1_900);
+    expect(base.github?.checks).toHaveLength(300);
+    const owner = await generateIdentity("jow");
+    const access = { roomId: "ab".repeat(16), ownerPk: owner.pk, ownerXpk: owner.xpk ?? "", epoch: 0, keys: { "0": newChannelKey() } };
+    const sealed = await sealSnapshot(owner, access, base);
+    expect(sealed).not.toBeNull();
+    expect(sealed!.ct.length).toBeGreaterThan(512 * 1024);
+    expect(sealed!.ct.length).toBeLessThanOrEqual(MAX_SNAPSHOT_LENGTH);
+    const opened = await openSnapshot(access, sealed);
+    expect(opened?.github).toEqual(base.github!);
+    expect(opened?.tasks).toEqual(base.tasks);
   });
 });
