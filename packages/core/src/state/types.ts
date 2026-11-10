@@ -1,5 +1,6 @@
 import type { Authors } from "./authors.ts";
 import type { Member as MemberRecord, Runs } from "../membership.ts";
+import type { LandingStep, StepSpec } from "../steps.ts";
 import type { Card, Color, IssueRef, Landing, MemberPicture, Merger, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubRun, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
@@ -135,6 +136,8 @@ export interface Task {
   closedSeq?: number;
   landed?: { key: string; artifact: CheckArtifact; seq: number; by: string };
   then?: Landing;
+  steps?: LandingStep[];
+  stepCount?: number;
   lander?: string;
   issue?: IssueRef;
   from?: number;
@@ -254,6 +257,7 @@ export interface ChannelState {
   githubWrite: number | null;
   branchPrefix: string | null;
   landing: Landing | null;
+  landingSteps: StepSpec[] | null;
   merges: Merger;
   compact: Compact | null;
   compactProposal: Compact | null;
@@ -330,6 +334,7 @@ export interface FoldBase {
   githubWrite?: number | null;
   branchPrefix?: string | null;
   landing?: Landing | null;
+  landingSteps?: StepSpec[] | null;
   merges?: Merger;
   compact: Compact | null;
   compactProposal: Compact | null;

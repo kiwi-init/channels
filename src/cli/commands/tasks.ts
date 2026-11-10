@@ -13,11 +13,12 @@ import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, keepDaemon, offlineOk, out, session } from "../context.ts";
 import { firstLine, readText, taskArg, text } from "../input.ts";
+import { landingFromOptions, taskLanded, taskSteps } from "./task-steps.ts";
 import { LOOP_ENV } from "../../hooks/loop-wait.ts";
 import { askFresh, LOOP_TASK_ENV } from "../../loop/fresh.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
-const LANDING_USAGE = "--then takes merge, release:tag, release:npm:PKG@RANGE, run or none";
+const LANDING_USAGE = "task edit --then takes merge, release:tag, release:npm:PKG@RANGE, run or none; a list of steps changes with kiwi task steps T7";
 const ANCHORS = "--ask N (the person's message #N it answers), --from T… (the task it comes from) or --issue N (a GitHub issue)";
 
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -82,8 +83,12 @@ export const taskCommands: Record<string, Command> = {
           const given = [opt.body !== undefined, opt.file !== undefined, opt.detail !== undefined].filter(Boolean).length;
           if (given > 1) return yield* die('give the task\'s body once: --body "…", --file spec.md or --detail "…"');
           const body = opt.file !== undefined ? (yield* readText(opt.file)).trim() || (yield* die(`${opt.file} is empty`)) : (opt.body ?? opt.detail);
-          const then = opt.then === undefined ? undefined : isLanding(opt.then.trim()) ? (opt.then.trim() as Landing) : yield* die(LANDING_USAGE);
-          const landing = { ...(then ? { then } : {}), ...(opt.lander?.trim() ? { lander: opt.lander.trim() } : {}) };
+          const lands = landingFromOptions();
+          if (lands.kind === "bad") return yield* die(lands.why);
+          const landing = {
+            ...(lands.kind === "then" ? { then: lands.then } : lands.kind === "steps" ? { steps: lands.steps } : {}),
+            ...(opt.lander?.trim() ? { lander: opt.lander.trim() } : {}),
+          };
           if (opt.issue !== undefined) {
             const made = yield* s.taskFromIssue(opt.issue, {
               title: args.slice(2).join(" ") || undefined,
@@ -101,7 +106,7 @@ export const taskCommands: Record<string, Command> = {
           const title = opt.file !== undefined ? args.slice(2).join(" ") : yield* text(2);
           if (!title.trim())
             return yield* die(
-              'usage: kiwi task add "title" --ask N|--from T…|--issue N [--body "the spec" | --file spec.md] [--owner NAME | --start] [--review NAME|any] [--then merge|release:tag|release:npm:PKG@RANGE|run|none] [--lander NAME]',
+              'usage: kiwi task add "title" --ask N|--from T…|--issue N [--body "the spec" | --file spec.md] [--owner NAME | --start] [--review NAME|any] [--then merge|release:tag|release:npm:PKG@RANGE|run|none|"a step" …] [--lander NAME]',
             );
           for (const gone of ["after", "needs"] as const)
             if (opt[gone] !== undefined) process.stderr.write(`kiwi: --${gone} is gone (tasks don't wait on or match anything now); put it in the body (--body)\n`);
@@ -146,7 +151,8 @@ export const taskCommands: Record<string, Command> = {
           if (opt.body !== undefined && opt.file !== undefined) return yield* die('give the new body once: --body "…" or --file spec.md');
           const detail = opt.file !== undefined ? (yield* readText(opt.file)).trim() || (yield* die(`${opt.file} is empty`)) : opt.body?.trim();
           const title = opt.title?.trim();
-          const then = opt.then === undefined ? undefined : isLanding(opt.then.trim()) ? (opt.then.trim() as Landing) : yield* die(LANDING_USAGE);
+          const said = opt.then?.map((x) => x.trim());
+          const then: Landing | undefined = said === undefined ? undefined : said.length === 1 && isLanding(said[0]) ? said[0] : yield* die(LANDING_USAGE);
           const stays = opt.review !== undefined ? openRound(t) : undefined;
           const staysNote = stays ? `round ${stays.n} stays open ${stays.at ? `at ${stays.at}` : "at no commit"}` : "";
           const change = {
@@ -182,6 +188,8 @@ export const taskCommands: Record<string, Command> = {
           }
           return out(lines.join("\n"));
         }
+        if (sub === "landed") return yield* taskLanded(s, id);
+        if (sub === "steps") return yield* taskSteps(s, id);
         if (sub === "delete") {
           const why = args.slice(3).join(" ") || opt.note || undefined;
           yield* s.taskDelete(id, why);

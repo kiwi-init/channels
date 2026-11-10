@@ -21,6 +21,8 @@ import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
 import { answerChecks, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
+import { checkAnswered, checkClosed, checkStep, seedSteps } from "./landing-steps.ts";
+import { stepsOfThen } from "../steps.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf, sentTo } from "../room-rules.ts";
@@ -279,6 +281,7 @@ function folding(
   };
   const runsKept = !!from && !olderRules(from);
   const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, runsKept || !t.run ? t : { ...t, run: { ...omit(t.run, "start"), blind: true } }]));
+  for (const t of tasks.values()) if (t.then && !t.steps && t.state !== "done") seedSteps(t, stepsOfThen(t.then), "then");
   const facts = new Map<string, Fact>(from?.facts.map((f) => [f.key, f]));
   const docs = new Map<string, string>(from?.docs);
   const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
@@ -380,6 +383,7 @@ function folding(
     githubWrite: from?.githubWrite ?? null,
     branchPrefix: from?.branchPrefix ?? null,
     landing: from?.landing ?? null,
+    landingSteps: from?.landingSteps ?? null,
     merges: from?.merges ?? "agents",
   };
 
@@ -522,10 +526,20 @@ function folding(
         }
         roomOf.set(m.seq, room);
         openCheck(checks, m);
+        const opened = checks.get(m.seq);
+        if (opened?.seq === m.seq && m.check)
+          for (const held of opened.holds) {
+            const holder = tasks.get(held);
+            if (holder) checkStep(holder, opened);
+          }
         const replaced = m.check?.replaces;
         const changed = replaced === undefined ? `pre-ship check #${m.seq} added after the approval` : `pre-ship check #${replaced} replaced by #${m.seq} after the approval`;
         for (const t of reopened) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, changed);
         answerChecks(checks, m, [...members.values()].find((x) => x.owner)?.name);
+        for (const r of m.re ?? []) {
+          const answeredCheck = checks.get(r);
+          if (answeredCheck?.answer?.seq === m.seq) checkAnswered(tasks, answeredCheck, { seq: m.seq, by: m.from, at });
+        }
         const parentPlace = parent !== undefined ? placeOf.get(parent) : undefined;
         const to = m.to?.length === 1 ? m.to[0]! : undefined;
         const pair = m.dm && to && members.has(to) ? ([rootOf(m.from, members), rootOf(to, members)] as const) : null;
@@ -616,6 +630,8 @@ function folding(
           if (lateClose) reject(lateClose);
           else {
             closedAsks.add(ev.ask);
+            const closing = checks.get(ev.ask);
+            if (closing && closing.closed === undefined) checkClosed(tasks, closing, { seq: m.seq, by: m.from, at });
             closeCheck(checks, ev.ask, m);
             for (const t of reopens) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, `pre-ship check #${ev.ask} closed after the approval`);
           }
@@ -737,6 +753,7 @@ function folding(
       githubWrite: ctx.githubWrite,
       branchPrefix: ctx.branchPrefix,
       landing: ctx.landing,
+      landingSteps: ctx.landingSteps,
       merges: ctx.merges,
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],
@@ -848,6 +865,7 @@ function folding(
     githubWrite: ctx.githubWrite,
     branchPrefix: ctx.branchPrefix,
     landing: ctx.landing,
+    landingSteps: ctx.landingSteps,
     merges: ctx.merges,
     reactions,
     edits,

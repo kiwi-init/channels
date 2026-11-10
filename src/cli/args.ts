@@ -19,7 +19,9 @@ if (process.argv[2] === QUERY_ARG && process.argv.length === 3) {
 const isRelay = process.argv[2] === "relay";
 const raw = process.argv.slice(2);
 const isTaskAdd = raw.some((a, i) => a === "task" && raw[i + 1] === "add");
-const argv = isTaskAdd ? raw.map((a) => (a === "--ask" ? "--re" : a.startsWith("--ask=") ? `--re=${a.slice(6)}` : a)) : raw;
+const isTaskStep = raw.some((a, i) => a === "task" && (raw[i + 1] === "landed" || raw[i + 1] === "steps"));
+const stepNamed = (a: string): string => (a === "--step" ? "--step-id" : a.startsWith("--step=") ? `--step-id=${a.slice(7)}` : a);
+const argv = isTaskAdd ? raw.map((a) => (a === "--ask" ? "--re" : a.startsWith("--ask=") ? `--re=${a.slice(6)}` : a)) : isTaskStep ? raw.map(stepNamed) : raw;
 const OPTION_TOKEN = /^(-[A-Za-z]+|--[A-Za-z][\w-]*(=[\s\S]*)?)$/;
 const texts = new Map<string, string>();
 const shielded = (isRelay ? ["relay"] : argv).map((a, i) => {
@@ -34,6 +36,7 @@ function parse() {
     return parseArgs({
       args: shielded,
       allowPositionals: true,
+      tokens: true,
       options: {
         channel: { type: "string", short: "c" },
         as: { type: "string" },
@@ -110,7 +113,10 @@ function parse() {
         needs: { type: "string" },
         "needs-you": { type: "boolean" },
         review: { type: "string" },
-        then: { type: "string" },
+        then: { type: "string", multiple: true },
+        by: { type: "string", multiple: true },
+        before: { type: "string" },
+        "step-id": { type: "string" },
         lander: { type: "string" },
         once: { type: "boolean" },
         now: { type: "boolean" },
@@ -162,6 +168,10 @@ export const opt = new Proxy(values, {
   },
 });
 export const args = parsed.positionals.map(back);
+
+export const optionsInOrder: readonly { name: string; value: string }[] = parsed.tokens.flatMap((t) =>
+  t.kind === "option" && typeof t.value === "string" ? [{ name: t.name, value: back(t.value) }] : [],
+);
 
 export function ignoredOptions(): string[] {
   return [...given].filter((k) => !read.has(k));
