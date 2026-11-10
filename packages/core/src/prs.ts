@@ -1,3 +1,4 @@
+import { currentStep, stepText } from "./steps.ts";
 import { inlineText } from "./membership.ts";
 import type { Task } from "./state/types.ts";
 import { prChecks, prKey, rulesOf, type ChannelState, type GithubPr, type GithubState } from "./state.ts";
@@ -116,6 +117,8 @@ export function reviewNotRequired(state: Pick<ChannelState, "landing" | "repos" 
 export function landingWaits(state: ChannelState, task: Task): string | null {
   const gate = doneGate(state, task);
   if (gate?.kind === "bypassed") return `shipped while its ship gate was shut (missing ${gate.missing.join(", ")}): a person closes it with a reason`;
+  const step = task.state === "landing" && !task.then ? currentStep(task) : undefined;
+  if (step) return `waits for step ${stepText(step)}${(step.by ?? task.lander ?? task.owner) ? `, ${step.by ?? task.lander ?? task.owner}'s` : ""}`;
   if (task.state !== "landing" || !task.then || task.then === "none") return null;
   if (!gate) return null;
   if (gate.kind === "landed") return `is ready to land at ${artifactText(gate.artifact)}: the owner's app marks it landed`;

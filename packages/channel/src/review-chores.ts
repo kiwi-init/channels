@@ -1,10 +1,11 @@
 import { RelayError } from "@kiwi/core/client/relay-errors.ts";
 import type { ChannelLink } from "./channel-ops.ts";
 import { drain } from "./github-queue.ts";
-import { checkPosted, checksToPost, issuesToPost, landPosted, landsToPost, linksToPost, setCheckedUpTo, tasksToClose } from "./review-checks.ts";
+import { checkPosted, checksToPost, issuesToPost, landPosted, landsToPost, linksToPost, setCheckedUpTo, stepsToPost, tasksToClose } from "./review-checks.ts";
 import { closeFromGithub, type TaskSend } from "./task-actions.ts";
 import type { CheckArtifact } from "@kiwi/core/checks.ts";
 import { artifactText } from "@kiwi/core/done-gate.ts";
+import type { StepObservation } from "@kiwi/core/state/landing-steps.ts";
 import { landerOf, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts";
 
 export function landTask(t: Task, artifact: CheckArtifact): TaskSend {
@@ -15,6 +16,14 @@ export function landTask(t: Task, artifact: CheckArtifact): TaskSend {
   };
 }
 
+export function seeStep(o: StepObservation): TaskSend {
+  const to = [...new Set([landerOf(o.task), o.task.owner, o.step.by].filter((n): n is string => !!n))];
+  return {
+    body: `${taskId(o.task.id)} step ${o.step.id} seen done: ${artifactText(o.artifact)}`,
+    opts: { kind: "event", ev: { op: "task.landed", task: o.task.id, step: o.step.id, artifact: o.artifact }, ...(to.length ? { to } : {}) },
+  };
+}
+
 export async function postReviewChores(ch: ChannelLink, state: ChannelState): Promise<void> {
   const due = checksToPost(ch.roomId, state).map((p, seq) => ({ ...p, seq }));
   const fenced = new Set<number>();
@@ -22,7 +31,8 @@ export async function postReviewChores(ch: ChannelLink, state: ChannelState): Pr
   const issues = issuesToPost(ch.roomId, state);
   const closes = tasksToClose(ch.roomId, state);
   const lands = landsToPost(ch.roomId, state);
-  if (!due.length && !links.length && !issues.length && !closes.length && !lands.length) return;
+  const seen = stepsToPost(ch.roomId, state).map((o, seq) => ({ ...o, seq }));
+  if (!due.length && !links.length && !issues.length && !closes.length && !lands.length && !seen.length) return;
   if (
     !(await drain(
       due,
@@ -71,15 +81,29 @@ export async function postReviewChores(ch: ChannelLink, state: ChannelState): Pr
     ))
   )
     return;
+  if (
+    !(await drain(
+      lands,
+      async (l) => {
+        const { body, opts } = landTask(l.task, l.artifact);
+        await ch.send(body, opts);
+      },
+      (seq) => {
+        const l = lands.find((x) => x.seq === seq);
+        if (l) landPosted(ch.roomId, l.key);
+      },
+    ))
+  )
+    return;
   await drain(
-    lands,
-    async (l) => {
-      const { body, opts } = landTask(l.task, l.artifact);
+    seen,
+    async (o) => {
+      const { body, opts } = seeStep(o);
       await ch.send(body, opts);
     },
     (seq) => {
-      const l = lands.find((x) => x.seq === seq);
-      if (l) landPosted(ch.roomId, l.key);
+      const o = seen[seq];
+      if (o) landPosted(ch.roomId, o.key);
     },
   );
 }

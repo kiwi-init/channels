@@ -3,6 +3,8 @@ import { shaKey } from "@kiwi/core/state/github.ts";
 import { reviewCheckOf } from "@kiwi/core/protocol.ts";
 import { reviewPosts, type ReviewPost } from "@kiwi/core/ship-gate.ts";
 import { landingsDue } from "@kiwi/core/done-gate.ts";
+import { prOfTask } from "@kiwi/core/prs.ts";
+import { stepObservations, type StepObservation } from "@kiwi/core/state/landing-steps.ts";
 import { issuesToClose, issuesToLink, prsToLinkBack, tasksClosedOnGithub } from "@kiwi/core/work.ts";
 
 const memory = new Map<string, number>();
@@ -47,6 +49,9 @@ export const tasksToClose = (roomId: string, state: ChannelState) => dueAfter(ro
 const landed = new Set<string>();
 
 export const landsToPost = (roomId: string, state: ChannelState) => landingsDue(state).filter((l) => !landed.has(`${roomId}:${l.key}`));
+
+export const stepsToPost = (roomId: string, state: ChannelState): StepObservation[] =>
+  stepObservations({ github: state.github, tasks: state.tasks, prOf: (t) => prOfTask(state.github, state.branchPrefix, t) }).filter((o) => !landed.has(`${roomId}:${o.key}`));
 
 export const landPosted = (roomId: string, key: string): void => {
   landed.add(`${roomId}:${key}`);

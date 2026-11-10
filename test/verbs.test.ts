@@ -413,6 +413,70 @@ describe("review rounds through the CLI", () => {
     expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ review: "rev" });
   });
 
+  test("a task lands by a list of steps: --then repeats, task landed ends the current one, and task steps changes them (#3930)", async () => {
+    const at = "4444444444444444444444444444444444444444";
+    const orphan = await run(dev, "task", "add", "no step to bind", "--ask", want, "--by", "rev");
+    expect(orphan.code).not.toBe(0);
+    expect(orphan.err).toContain("--by goes after the --then it belongs to");
+    const faceless = await run(dev, "task", "add", "a run nobody is behind", "--ask", want, "--then", "prd pipeline", "--expect", "2h");
+    expect(faceless.err).toContain("a step that waits on a run names who is behind it: --by NAME");
+    const asked = taskNo(await ok(dev, "task", "add", "waits on a question", "--ask", want, "--then", "owner says ship", "--answered", `#${want}`));
+    expect(JSON.parse(await ok(dev, "task", "show", `T${asked}`, "--json"))).toMatchObject({ steps: [{ id: "s1", detector: { kind: "answered", ask: Number(want) } }] });
+    const old = taskNo(await ok(dev, "task", "add", "one old value", "--ask", want, "--then", "merge"));
+    expect(JSON.parse(await ok(dev, "task", "show", `T${old}`, "--json"))).toMatchObject({ then: "merge", steps: [{ id: "s1", words: "merge", from: "then" }] });
+    const t = taskNo(
+      await ok(
+        dev,
+        "task",
+        "add",
+        "ship the exporter",
+        "--ask",
+        want,
+        "--start",
+        "--review",
+        "rev",
+        "--then",
+        "tag the build",
+        "--then",
+        "soak in staging",
+        "--by",
+        "rev",
+        "--wait",
+        "2h let the cache warm",
+        "--then",
+        "tell the list",
+      ),
+    );
+    const listed = await ok(dev, "task", "steps", `T${t}`);
+    expect(listed).toContain("steps (0 of 3 ended):");
+    expect(listed).toMatch(/s1 {2}tag the build {4}dev\n/);
+    expect(listed).toMatch(/s2 {2}soak in staging {2}rev {2}not before \+2h: let the cache warm\n/);
+    const early = await run(dev, "task", "landed", `T${t}`);
+    expect(early.code).not.toBe(0);
+    expect(early.err).toContain(`T${t} isn't approved and landing: it's doing`);
+    await ok(dev, "task", "review", `T${t}`, "--at", at);
+    expect(await ok(rev, "task", "approve", `T${t}`, "--round", "1")).toContain("approved, landing");
+    const first = await ok(dev, "task", "landed", `T${t}`, "v1.2.0 tagged", "--link", "https://example.test/releases/1");
+    expect(first).toContain(`ended step s1 of T${t}: T${t} is still landing`);
+    expect(first).toContain("steps (1 of 3 ended, s2 is current):");
+    expect(await ok(dev, "task", "landed", `T${t}`, "--step", "s1")).toContain("steps (1 of 3 ended, s2 is current):");
+    const ahead = await run(dev, "task", "landed", `T${t}`, "--step", "s3");
+    expect(ahead.code).not.toBe(0);
+    expect(ahead.err).toContain(`step s3 “tell the list” of T${t} isn't the current one: its current step is s2 “soak in staging”. A retry resends the step id it first carried`);
+    const notMine = await run(dev, "task", "landed", `T${t}`);
+    expect(notMine.err).toContain(`only rev, the lead or a person ends step s2 “soak in staging” of T${t}`);
+    const byAgent = await run(dev, "task", "steps", `T${t}`, "skip", "s3", "not needed");
+    expect(byAgent.err).toContain(`only a person or the lead changes T${t}'s steps`);
+    const added = await ok(owner, "--as", "human", "task", "steps", `T${t}`, "add", "smoke test", "--by", "dev", "--before", "s3");
+    expect(added).toMatch(/s4 {2}smoke test\s+dev\n(.*\n)*.*s3 {2}tell the list/);
+    await ok(rev, "task", "landed", `T${t}`);
+    await ok(dev, "task", "landed", `T${t}`, "--step", "s4", "smoke run 12 is green");
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ state: "landing", approvedBy: "rev", rounds: [{ n: 1, result: { kind: "approved" } }] });
+    expect(await ok(owner, "--as", "human", "task", "steps", `T${t}`, "skip", "s3", "the list is retired")).toContain(`T${t} is done`);
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ state: "done" });
+    expect(await ok(dev, "log", "--task", `T${t}`, "-n", "40")).toContain(`ended step s1 “tag the build” of T${t}`);
+  });
+
   test("review --review NAME hands the open round on with its commit, and tells both reviewers", async () => {
     const at = "3333333333333333333333333333333333333333";
     const t = taskNo(await ok(dev, "task", "add", "hand the review on", "--review", "rev", "--ask", want));

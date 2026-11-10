@@ -1,6 +1,7 @@
 import { hasLanding, type Landing, type OldTaskState, type TaskState, type Verdict } from "../protocol.ts";
 import type { CheckAsk, CheckPhase } from "../checks.ts";
 import type { CheckState } from "./checks.ts";
+import { currentStep } from "../steps.ts";
 import type { ChannelState, ReviewRound, Task } from "./types.ts";
 
 export function taskId(id: number): string {
@@ -79,8 +80,10 @@ export function landingRefusal(task: Task, ev: LandingChange, from: { person: bo
   if (ev.close !== undefined) return trusted ? (task.state === "done" ? `${id} is already done` : null) : `only a person or the lead closes ${id} with a reason`;
   if ((ev.then !== undefined || ev.lander !== undefined) && !trusted) return `only a person or the lead changes how ${id} lands`;
   if (task.state === "landing" && landerAfter(task, ev) !== landerOf(task) && !trusted) return `only a person or the lead changes who lands ${id}`;
-  if (ev.state === "landing" && !hasLanding(task.then)) return `${id} has no landing step: it finishes on approval`;
-  if (ev.state === "done" && ev.verdict !== "approved" && hasLanding(task.then) && task.state !== "done") return `${id} lands by its step (${task.then}): approve it, or close it with a reason`;
+  const step = currentStep(task);
+  if (ev.state === "landing" && !hasLanding(task.then) && !step) return `${id} has no landing step: it finishes on approval`;
+  if (ev.state === "done" && ev.verdict !== "approved" && (hasLanding(task.then) || step) && task.state !== "done")
+    return `${id} lands by its step (${task.then ?? step?.words}): approve it, or close it with a reason`;
   if (task.state === "landing" && newRun(task, ev.run) && !trusted) return `only a person or the lead declares another run for ${id} once it's approved`;
   return null;
 }
