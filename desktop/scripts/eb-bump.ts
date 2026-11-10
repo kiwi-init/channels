@@ -16,6 +16,23 @@ export interface Release {
 
 export const coreUrl = (base: string, version: string, key: string): string => `${base}/v${version}/electrobun-core-${key.replace(/^macos-/, "darwin-")}.tar.gz`;
 
+export const pairedHutch = (config: string): string | null => /^\/\/ @hutch cli=(\S+)/m.exec(config)?.[1] ?? null;
+
+export function hutchNote(paired: string, pinned: string): string | null {
+  return paired === pinned
+    ? null
+    : `Livewire pairs Hutch ${paired}, and Channels pins Hutch ${pinned}. eb-bump.ts moves only the Livewire pins, so this bump stays open for a person or an agent to move Hutch with it.`;
+}
+
+async function releaseHutch(ref: string): Promise<string> {
+  const url = `https://raw.githubusercontent.com/${REPO}/${ref}/package/hutch.config.ts`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) throw new Error(`${url} answered ${res.status}`);
+  const paired = pairedHutch(await res.text());
+  if (!paired) throw new Error(`${url} names no Hutch release (no "// @hutch cli=" line)`);
+  return paired;
+}
+
 export function coreName(pinned: string): string {
   const name = path.posix.basename(pinned);
   return RENAMED[name] ?? name;
@@ -96,9 +113,12 @@ if (import.meta.main) {
   const wanted = flag("--version")?.replace(/^v/, "");
   const release: Release = wanted ? { version: wanted, url: `https://github.com/${REPO}/releases/tag/v${wanted}` } : await latest();
   const force = process.argv.includes("--force");
+  const hutch = await releaseHutch(flag("--source-ref") ?? `v${release.version}`);
+  const unpaired = hutchNote(hutch, PINS.hutch.version);
+  if (unpaired) console.log(unpaired);
   if (release.version === PINS.electrobun && !force) {
     console.log(`Channels already builds on Livewire ${release.version}`);
-    output({ changed: "false", version: release.version });
+    output({ changed: "false", version: release.version, hutch, paired: String(!unpaired) });
   } else {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eb-bump-"));
     try {
@@ -109,9 +129,11 @@ if (import.meta.main) {
       const next = bumped(PINS, release.version, devkit, cores);
       const moved = changes(PINS, next);
       fs.writeFileSync(PINS_FILE, `${JSON.stringify(next, null, 2)}\n`);
-      const notes = [`Livewire ${release.version}: ${release.url}`, "", moved.length ? `Pins that moved: ${moved.join(", ")}.` : "No pinned file changed."].join("\n");
+      const notes = [`Livewire ${release.version}: ${release.url}`, "", moved.length ? `Pins that moved: ${moved.join(", ")}.` : "No pinned file changed.", ...(unpaired ? ["", unpaired] : [])].join(
+        "\n",
+      );
       console.log(notes);
-      output({ changed: String(release.version !== PINS.electrobun || moved.length > 0), version: release.version, url: release.url, notes });
+      output({ changed: String(release.version !== PINS.electrobun || moved.length > 0), version: release.version, url: release.url, notes, hutch, paired: String(!unpaired) });
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

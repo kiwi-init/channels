@@ -65,6 +65,7 @@ jobs:
           APP: ${{ steps.app.outputs.app-slug }}
           VERSION: ${{ steps.look.outputs.version }}
           NOTES: ${{ steps.look.outputs.notes }}
+          PAIRED: ${{ steps.look.outputs.paired }}
         run: |
           id=$(gh api "users/$APP%5Bbot%5D" --jq .id)
           who=$(gh api "users/$GITHUB_ACTOR" --jq '.name // .login')
@@ -88,7 +89,9 @@ jobs:
             git commit -q -a -m "Desktop: build on Livewire $VERSION" -m "$NOTES" -m "Opened by livewire-bump.yml from Livewire's release; desktop/scripts/eb-bump.ts regenerated the devkit and app pins from the release's core archives." -m "Agent: livewire-bump.yml on behalf of $who"
           fi
           git push -q origin "HEAD:$BRANCH"
-          body=$(printf '%s\n\n%s\n\n%s' "livewire-bump.yml on behalf of $who" "$NOTES" "This runs \`desktop / mac\`, \`desktop / linux\` and \`build\` on the branch and merges itself when they pass. A red run leaves it open.")
+          merging="This runs \`desktop / mac\`, \`desktop / linux\` and \`build\` on the branch and merges itself when they pass. A red run leaves it open."
+          [ "$PAIRED" = true ] || merging="This runs \`desktop / mac\`, \`desktop / linux\` and \`build\` on the branch, but never merges itself: the Hutch this Livewire pairs with isn't the one Channels pins."
+          body=$(printf '%s\n\n%s\n\n%s' "livewire-bump.yml on behalf of $who" "$NOTES" "$merging")
           pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
           if [ -n "$pr" ]; then
             gh pr edit "$pr" --title "Desktop: build on Livewire $VERSION" --body "$body"
@@ -119,12 +122,21 @@ jobs:
           until [ "$(gh run view "$run" --json status --jq .status)" = completed ]; do sleep 60; done
           echo "conclusion=$(gh run view "$run" --json conclusion --jq .conclusion)" >> "$GITHUB_OUTPUT"
 
-      - if: steps.checks.outputs.conclusion == 'success'
+      - if: steps.checks.outputs.conclusion == 'success' && steps.look.outputs.paired == 'true'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           PR: ${{ steps.push.outputs.pr }}
           SHA: ${{ steps.push.outputs.sha }}
         run: gh pr merge "$PR" --squash --auto --match-head-commit "$SHA"
+
+      - if: steps.checks.outputs.conclusion == 'success' && steps.look.outputs.paired != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ steps.push.outputs.pr }}
+          WHO: ${{ steps.push.outputs.who }}
+          HUTCH: ${{ steps.look.outputs.hutch }}
+        run: |
+          gh pr comment "$PR" --body "$(printf '%s\n\n%s' "livewire-bump.yml on behalf of $WHO" "The desktop and build jobs passed, but this Livewire pairs with Hutch $HUTCH and desktop/electrobun-pins.json pins another Hutch, so it stays open: move the Hutch pins with it before it merges.")"
 
       - if: steps.push.outputs.fresh == 'true' && steps.checks.outputs.conclusion != 'success'
         env:
