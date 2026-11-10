@@ -28,6 +28,7 @@ import { keepSpot, spotAt, spotKey, type Spot } from "~/places"
 import { between, nickname, shown } from "~/names"
 import { wordsRaw } from "~/words"
 import { openMessage } from "~/live/open-message"
+import { markOnce } from "@kiwi/channel/marks.ts"
 
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
 const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
@@ -213,6 +214,12 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     [channel.messages, since, where, doc]
   )
   const { talk: all, runs } = useMemo(() => splitUpdates(raw), [raw])
+  const anyRow = raw.length > 0
+  useEffect(() => {
+    if (!anyRow) return
+    const frame = requestAnimationFrame(() => markOnce("kiwi:first-message"))
+    return () => cancelAnimationFrame(frame)
+  }, [anyRow])
   const general = where.kind === "room" && where.room === "general"
   const compact = general ? channel.compact : undefined
   const proposal = general ? channel.proposal : undefined

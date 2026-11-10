@@ -1,4 +1,4 @@
-import type { ChildProcess } from "node:child_process";
+import { spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -12,14 +12,17 @@ import { calibrateInPage, loopInPage } from "./perf-calibrate.ts";
 if (process.argv.includes("--help") || !process.argv[2]) {
   console.log(`The packaged desktop app's cold start, measured: from launching the executable to its window, its first screen, the first cached message
 of the channel it reopens on screen, and live, PERF_RUNS times (5) after one run that makes a channel with PERF_MESSAGES messages (20) on a local relay,
-and leaves it open. A launch that doesn't reopen that channel fails. Each launch also times perf-scale's CPU calibration in the app's page; the medians are scaled by it to the reference runner in
+and leaves it open. On a Mac it then starts the app once more, leaves it alone for PERF_IDLE_SEC seconds (60; 0 skips it) and reports the memory
+(footprint) of the app's own processes and of every WebKit helper on the machine, so run it where no other WebKit app is open. A launch that doesn't reopen that channel fails. Each launch also times perf-scale's CPU calibration in the app's page; the medians are scaled by it to the reference runner in
 scripts/perf-budgets.json, and it fails when one is over its gate there (the limits whose source is desktop). The report also has loopMs, a
 pure-JS loop timed in the same page that doesn't depend on the engine's DOM speed, for comparing runners; nothing is gated on it.
 
 The app is a Channels.app built with CHANNELS_EB_TEST=1 (so com.kiwiinit.channels.test), driven through its test driver's socket,
 with ~/Library and HOME in one temp home (CFFIXED_USER_HOME and HOME) and the relay given by KIWI_EB_RELAY: it never touches the real app.
 
-  bun scripts/perf-desktop.ts <Channels.app> [--json out.json]`);
+  bun scripts/perf-desktop.ts <Channels.app> [--json out.json] [--no-gate]
+
+--no-gate prints what is over a gate and still exits 0: for a by-hand run that reports numbers.`);
   process.exit(process.argv[2] ? 0 : 2);
 }
 
@@ -29,6 +32,7 @@ if (!existsSync(exe)) {
   process.exit(2);
 }
 const RUNS = Number(process.env.PERF_RUNS ?? 5);
+const IDLE_SEC = Number(process.env.PERF_IDLE_SEC ?? 60);
 const MESSAGES = Number(process.env.PERF_MESSAGES ?? 20);
 const at = process.argv.indexOf("--json");
 const OUT = at > 0 ? process.argv[at + 1] : undefined;
@@ -114,6 +118,35 @@ const runs: {
   page?: Record<string, number>;
 }[] = [];
 let running: Running | null = null;
+let memory: { idleSec: number; appMb: number; webkitMb: number; totalMb: number; processes: string[] } | null = null;
+
+function footprintMb(pid: string): number {
+  const m = /phys_footprint:\s*([\d.]+)\s*(KB|MB|GB)/.exec(spawnSync("footprint", [pid]).stdout.toString());
+  if (!m) return 0;
+  const v = Number(m[1]);
+  return m[2] === "GB" ? v * 1024 : m[2] === "KB" ? v / 1024 : v;
+}
+
+function idleMemory(): NonNullable<typeof memory> {
+  const own = processesOf(exe).map((l) => l.split(/\s+/)[0]!);
+  const helpers = spawnSync("ps", ["-Ao", "pid=,comm="])
+    .stdout.toString()
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.includes("/com.apple.WebKit."))
+    .map((l) => ({ pid: l.split(/\s+/)[0]!, name: l.split("/").at(-1) ?? "" }));
+  const appMb = own.reduce((sum, pid) => sum + footprintMb(pid), 0);
+  const each = helpers.map((h) => ({ ...h, mb: footprintMb(h.pid) }));
+  const webkitMb = each.reduce((sum, h) => sum + h.mb, 0);
+  return {
+    idleSec: IDLE_SEC,
+    appMb: Math.round(appMb),
+    webkitMb: Math.round(webkitMb),
+    totalMb: Math.round(appMb + webkitMb),
+    processes: [`app ${Math.round(appMb)} MB in ${own.length} processes`, ...each.map((h) => `${h.name} ${Math.round(h.mb)} MB`)],
+  };
+}
+
 try {
   log("first run: a person, a channel and its messages on the local relay");
   running = await launch();
@@ -179,6 +212,19 @@ try {
     await app.quit();
     running = null;
   }
+  if (process.platform === "darwin" && IDLE_SEC > 0) {
+    running = await launch();
+    const app = running;
+    await until("the reopened channel live, before the idle minute", 60_000, () =>
+      app.evaluate(() => (performance.getEntriesByName("kiwi:live", "mark").length ? true : null), null, 2_000).catch(() => null),
+    );
+    log(`idle for ${IDLE_SEC} s before reading memory`);
+    await later(IDLE_SEC * 1000);
+    memory = idleMemory();
+    log("memory", JSON.stringify(memory));
+    await app.quit();
+    running = null;
+  }
 } catch (e) {
   const where = await running?.where().catch(() => null);
   console.error(`where it stopped:\n${where?.slice(0, 1500) ?? "(no window)"}`);
@@ -218,6 +264,7 @@ const report = {
   scaled,
   loopScaled,
   ...(marks.length ? { startup } : {}),
+  ...(memory ? { memory } : {}),
   each: runs,
 };
 console.log(JSON.stringify(report, null, 2));
@@ -230,4 +277,4 @@ const over = Object.values(limits).flatMap((l) => {
     : [];
 });
 for (const o of over) console.error(o);
-if (over.length) process.exit(1);
+if (over.length && !process.argv.includes("--no-gate")) process.exit(1);

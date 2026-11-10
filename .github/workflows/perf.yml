@@ -11,6 +11,10 @@ on:
         description: "0 keeps the soak on the conversation, with no tour of the views each minute"
         type: string
         default: ""
+      jobs:
+        description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), or all"
+        type: string
+        default: "scale"
 
 permissions:
   contents: read
@@ -18,6 +22,7 @@ permissions:
 jobs:
   perf:
     name: perf / scale and soak
+    if: ${{ inputs.jobs != 'desktop' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -45,5 +50,48 @@ jobs:
         with:
           name: perf
           path: ${{ runner.temp }}/perf-*.json
+          if-no-files-found: ignore
+          overwrite: true
+
+  desktop:
+    name: perf / desktop cold start and idle memory
+    if: ${{ inputs.jobs == 'desktop' || inputs.jobs == 'all' }}
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: bun run ui:build
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/electrobun-pins.json') }}
+      - name: electrobun toolchain
+        working-directory: desktop
+        timeout-minutes: 5
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
+      - name: the kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+      - name: test build (the test driver in, its own bundle id)
+        working-directory: desktop
+        run: bun scripts/eb.ts build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          DASH_RELEASE_OFFLINE: "1"
+      - name: cold start, nine launches, and memory after an idle minute; numbers only, no gate
+        env:
+          PERF_RUNS: "9"
+        run: bun scripts/perf-desktop.ts desktop/release-eb/build/dev-macos-*/*.app --no-gate --json "$RUNNER_TEMP/perf-desktop.json"
+      - name: the report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          [ -f "$RUNNER_TEMP/perf-desktop.json" ] || { echo "no report was written"; exit 1; }
+          { echo '```json'; jq '{runs, calibrationMs, measured, scaled, memory, startup}' "$RUNNER_TEMP/perf-desktop.json"; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf-desktop
+          path: ${{ runner.temp }}/perf-desktop.json
           if-no-files-found: ignore
           overwrite: true
