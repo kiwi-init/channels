@@ -129,6 +129,7 @@ function approvalHoldsAgain(t: Task, head: string, mark: { seq: number; by: stri
   t.approvedBy = last.result.by;
   t.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: `head ${head.slice(0, 7)} is the approved code: the approval holds again` });
   t.updatedAt = mark.at;
+  if (t.steps || !t.then) advance(t, mark);
 }
 
 function headMoved(t: Task, pr: GithubPr & { sha: string }, mark: { seq: number; by: string; at: number }): void {

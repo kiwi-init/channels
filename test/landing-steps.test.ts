@@ -391,6 +391,43 @@ describe("what a detector saw is tied to what it watches (#3930 §3)", () => {
     expect(through(open, unanswered).tasks.get(v)!.state).toBe("done");
   });
 
+  test("an approval that holds again after a head came back picks its steps up where they stand", async () => {
+    const S2 = "2".repeat(40);
+    const head = (c: Awaited<ReturnType<typeof channel>>, t: number, sha: string) => c.github([{ event: "pull_request", action: "synchronize", number: 7, state: "open", branch: `T${t}-x`, sha }]);
+    const c = await channel();
+    const ask = await c.say("ann", "blocking", "Ship to prd?", { to: ["jow"], esc: true, choices: ["A: yes", "B: hold"] });
+    const t = await c.task([{ words: "owner says ship", by: "jow", detector: { kind: "answered", ask: ask.seq } }]);
+    await c.opened(t);
+    await c.approve(t);
+    await head(c, t, S2);
+    expect(c.state().tasks.get(t)!.state).toBe("review");
+    await c.say("jow", "msg", "A: yes", { re: [ask.seq] });
+    expect(ended(c.state(), t)).toEqual(["s1:seen"]);
+    await head(c, t, S1);
+    expect(ended(c.state(), t)).toEqual(["s1:detected"]);
+    expect(c.state().tasks.get(t)).toMatchObject({ state: "done", approvedBy: "mac" });
+
+    const bare = await channel();
+    const u = await bare.task([{ words: "tell the list" }]);
+    await bare.opened(u);
+    await bare.approve(u);
+    await head(bare, u, S2);
+    await bare.edit("lead", u, { kind: "remove", id: "s1" });
+    expect(bare.state().tasks.get(u)).toMatchObject({ state: "review" });
+    expect(bare.state().tasks.get(u)!.steps).toBeUndefined();
+    await head(bare, u, S1);
+    expect(bare.state().tasks.get(u)!.state).toBe("done");
+
+    const old = await channel();
+    const v = await old.task(undefined, "merge");
+    await old.opened(v);
+    await old.approve(v);
+    await head(old, v, S2);
+    await head(old, v, S1);
+    expect(old.state().tasks.get(v)!.state).toBe("landing");
+    expect(ended(old.state(), v)).toEqual(["s1:open"]);
+  });
+
   test("a snapshot from before steps turns its open pre-ship question into a step once, and one answer ends it", async () => {
     const c = await channel();
     const t = await c.task(undefined, "merge");
