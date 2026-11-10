@@ -39,13 +39,19 @@ try {
   await page.locator("article.msg").first().waitFor();
   await page.waitForTimeout(1200);
   const room = await place(page);
-  const mentions = page.locator('article.msg .msg-text a[href^="kiwi-mention:"]');
+  const mentions = page.locator('article.msg .msg-text a[href^="kiwi-mention:"]').filter({ visible: true });
   const count = await mentions.count();
   expect(count > 0, `the demo channel's feed has mentions to click (${count})`);
   let opened = "";
   for (let i = 0; i < count && !opened; i++) {
-    await mentions.nth(i).scrollIntoViewIfNeeded();
-    await mentions.nth(i).click();
+    const clicked = await mentions
+      .nth(i)
+      .click({ timeout: 5000 })
+      .then(
+        () => true,
+        () => false,
+      );
+    if (!clicked) continue;
     await settle(page);
     if (await profile(page)) {
       await page.keyboard.press("Escape");
