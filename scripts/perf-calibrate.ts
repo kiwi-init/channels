@@ -6,6 +6,7 @@ export interface Calibration {
 }
 
 export async function calibrateInPage(): Promise<Calibration> {
+  const OWN_ROWS = 2700;
   const times: number[] = [];
   for (let r = 0; r < 5; r++) {
     await new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 0)));
@@ -13,7 +14,7 @@ export async function calibrateInPage(): Promise<Calibration> {
     const host = document.createElement("div");
     host.style.cssText = "all:initial;position:absolute;left:-20000px;top:0;width:720px;display:block";
     const rows = host.attachShadow({ mode: "closed" });
-    for (let i = 0; i < 2000; i++) {
+    for (let i = 0; i < OWN_ROWS; i++) {
       const row = document.createElement("div");
       row.style.cssText = "display:flex;align-items:flex-start;gap:8px;padding:6px 12px;font:13px/1.5 sans-serif";
       const who = document.createElement("span");
