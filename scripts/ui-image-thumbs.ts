@@ -10,7 +10,7 @@ import { composer, firstRun, letIn, newChannel, SEND } from "./perf-ui.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`A Retina screenshot posted in chat shows from a copy sized to its box (360 CSS px in the feed, 480 in the thread doc, at
-twice the pixels), while the viewer, Save image and a drag still get the full original, which is loaded only once the image is pressed. With --memory=N it posts N such
+twice the pixels), while the viewer, Save image and a drag still get the full original. With --memory=N it posts N such
 shots instead, scrolls past them all and prints the page's memory (macOS WebKit: its WebContent and GPU processes); run
 it once with --dist= pointing at a build of main and once at this one to compare.
 
@@ -136,14 +136,13 @@ const check = (what: string, why: string | null): void => {
 
 const copyOf = (src: string, original: string): boolean => src.startsWith("data:image/png;base64,") && src !== original;
 
-function feedCopy(shown: Shown, original: string, pressed = true): string | null {
+function feedCopy(shown: Shown, original: string): string | null {
   if (!copyOf(shown.src, original)) return `the feed shows ${shown.src.slice(0, 40)}…, not a copy`;
   if (shown.natural !== FEED * SCALE) return `the copy is ${shown.natural} px wide, not ${FEED * SCALE}`;
   if (shown.width !== FEED) return `it's laid out ${shown.width} px wide, not ${FEED}`;
   if (!shown.full) return "there's no full image over it for a drag or the menu";
-  if (!pressed && (shown.full.src === original || shown.full.natural === WIDTH)) return "the original is loaded over it before anyone pressed it";
-  if (pressed && shown.full.src !== original) return "the full image over it isn't the one posted";
-  if (pressed && shown.full.natural !== WIDTH) return `the full image is ${shown.full.natural} px wide, not ${WIDTH}`;
+  if (shown.full.src !== original) return "the full image over it isn't the one posted";
+  if (shown.full.natural !== WIDTH) return `the full image is ${shown.full.natural} px wide, not ${WIDTH}`;
   if (shown.full.opacity !== "0") return `the full image shows (opacity ${shown.full.opacity})`;
   if (!shown.full.same) return "the full image doesn't sit exactly over the copy";
   return null;
@@ -208,13 +207,9 @@ try {
     const button = feed.first();
     await button.waitFor({ timeout: 30000 });
     await page.waitForTimeout(500);
-    const resting = await shownIn(button);
-    await button.dispatchEvent("pointerdown");
-    await page.waitForTimeout(300);
     const sent = await shownIn(button);
     const original = sent.full?.src ?? `data:image/png;base64,${png}`;
-    check("a Retina shot sent from the composer shows in the feed from a copy at 2× its 360 px box, and the original isn't loaded until it is pressed", feedCopy(resting, original, false));
-    check("once pressed, the original sits over the copy for a drag or the menu", feedCopy(sent, original));
+    check("a Retina shot sent from the composer shows in the feed from a copy at 2× its 360 px box, with the original over it", feedCopy(sent, original));
     const inDoc = page.locator(".thread-doc .doc-image img").last();
     await inDoc.waitFor({ state: "attached", timeout: 10000 });
     const doc = await inDoc.evaluate(async (el: HTMLImageElement) => {
@@ -287,7 +282,7 @@ try {
       await kiwi(["-c", "thumbs", "--as", "bot", "send", "--to", "#general", "a retina shot", "--image", shot]);
       await feed.nth(1).waitFor({ timeout: 30000 });
       await page.waitForTimeout(500);
-      check("an agent's posted Retina shot shows in the feed from a copy too, its original not loaded", feedCopy(await shownIn(feed.nth(1)), `data:image/png;base64,${posted}`, false));
+      check("an agent's posted Retina shot shows in the feed from a copy too", feedCopy(await shownIn(feed.nth(1)), `data:image/png;base64,${posted}`));
       copies = 3;
     }
     const made = await page.evaluate(() => (window as unknown as { thumbWorker: { made: number; failed: number } }).thumbWorker);

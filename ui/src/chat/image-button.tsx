@@ -38,22 +38,17 @@ function useThumb(id: string | undefined, url: string, box: number): string {
 
 export function ImageButton({ image, onOpen }: { image: Image; onOpen: (url: string, alt: string) => void }) {
   const src = useThumb(image.id, image.url, FEED_BOX)
-  const [held, setHeld] = useState<string | null>(null)
   const width = image.width || undefined
   const height = image.height || undefined
-  const hold = () => setHeld(image.url)
   return (
     <button
       type="button"
       className="msg-image"
       aria-label={image.alt ? t("chat.image.button.open", { name: image.alt }) : t("chat.image.button.open.image")}
-      onPointerDown={hold}
-      onContextMenu={hold}
-      onDragStart={hold}
       onClick={() => onOpen(image.url, image.alt)}
     >
       <img src={src} alt={image.alt} width={width} height={height} draggable={src === image.url ? undefined : false} />
-      {src !== image.url && <img className="msg-image-full" src={held === image.url ? image.url : BLANK} alt={image.alt} width={width} height={height} />}
+      {src !== image.url && <img className="msg-image-full" src={image.url} alt={image.alt} width={width} height={height} />}
     </button>
   )
 }

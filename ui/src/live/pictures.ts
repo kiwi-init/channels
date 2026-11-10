@@ -8,7 +8,7 @@ import type { Pictures } from "~/live/map"
 const RETRIES = 3
 const RETRY_MS = 5_000
 
-type Entry = { state: "loading" } | { state: "ready"; picture: Picture } | { state: "failed" } | { state: "gone" }
+export type Entry = { state: "loading" } | { state: "ready"; picture: Picture } | { state: "failed" } | { state: "gone" }
 
 const pause = (ms: number): Promise<void> => new Promise((ok) => setTimeout(ok, ms))
 
@@ -30,6 +30,10 @@ export function spotOf(entry: Entry | undefined, spot: string, alt: string): Pic
   return { spot, alt, state: entry?.state === "failed" ? "failed" : entry?.state === "gone" ? "gone" : "waiting" }
 }
 
+const shown = (entry: Entry | undefined): string => (entry?.state === "ready" ? "ready" : entry?.state === "failed" ? "failed" : entry?.state === "gone" ? "gone" : "waiting")
+
+export const showsAnew = (was: Entry | undefined, next: Entry): boolean => shown(was) !== shown(next)
+
 export function usePictures(code: string, ch: ChannelLink, messages: readonly Wire[]): Pictures {
   const cache = useRef(new Map<string, Entry>())
   const bySeq = useRef(new Map<number, Wire>())
@@ -48,12 +52,11 @@ export function usePictures(code: string, ch: ChannelLink, messages: readonly Wi
       const img = bySeq.current.get(seq ?? -1)?.imgs?.[i ?? -1]
       if (!img) return
       const settle = (entry: Entry) => {
+        const anew = showsAnew(cache.current.get(spot), entry)
         cache.current.set(spot, entry)
-        if (live.current) setVersion((v) => v + 1)
+        if (live.current && anew) setVersion((v) => v + 1)
       }
-      const shows = spotOf(was, spot, "")
-      cache.current.set(spot, { state: "loading" })
-      if (!("state" in shows) || shows.state !== "waiting") setVersion((v) => v + 1)
+      settle({ state: "loading" })
       void (async () => {
         for (let tries = 0; ; tries++) {
           try {

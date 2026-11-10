@@ -3,7 +3,7 @@ import { generateIdentity, sign, verify } from "@kiwi/core/identity.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { messagesOf } from "~/live/map"
-import { spotOf } from "~/live/pictures"
+import { showsAnew, spotOf, type Entry } from "~/live/pictures"
 
 const jow = await generateIdentity("jow")
 const roster: Roster = [{ name: "jow", pk: jow.pk, owner: true, at: 0, active: true, kind: "human" }]
@@ -35,5 +35,31 @@ describe("feed images load when they come into view (T604)", () => {
     expect(spotOf({ state: "failed" }, "1:0", "a").state).toBe("failed")
     expect(spotOf({ state: "gone" }, "1:0", "a").state).toBe("gone")
     expect(spotOf({ state: "ready", picture: ready }, "1:0", "a")).toBe(ready)
+  })
+})
+
+describe("a picture's load recomputes the feed once, when it shows something new (T1795)", () => {
+  const picture: Entry = { state: "ready", picture: ready }
+
+  test("starting a load changes nothing on screen: the spot is already waiting", () => {
+    expect(showsAnew(undefined, { state: "loading" })).toBe(false)
+  })
+
+  test("the loaded picture, a failure and a gone image each show something new", () => {
+    expect(showsAnew({ state: "loading" }, picture)).toBe(true)
+    expect(showsAnew({ state: "loading" }, { state: "failed" })).toBe(true)
+    expect(showsAnew({ state: "loading" }, { state: "gone" })).toBe(true)
+  })
+
+  test("Retry on a failed image goes back to waiting, which the feed must show", () => {
+    expect(showsAnew({ state: "failed" }, { state: "loading" })).toBe(true)
+  })
+
+  test("one load is one recompute where it used to be two", () => {
+    const steps: [Entry | undefined, Entry][] = [
+      [undefined, { state: "loading" }],
+      [{ state: "loading" }, picture],
+    ]
+    expect(steps.filter(([was, next]) => showsAnew(was, next)).length).toBe(1)
   })
 })
