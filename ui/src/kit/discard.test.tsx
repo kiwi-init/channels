@@ -14,11 +14,12 @@ describe("Esc in an editor asks before it throws edits away (T1865)", () => {
     expect(leaving(true, false)).toBe("keep")
   })
 
-  test("the question offers Keep editing and Discard, with Discard focused", () => {
+  test("the question offers Keep editing and Discard, with Keep editing focused so Enter never discards", () => {
     const html = renderToStaticMarkup(<DiscardAsk onKeep={() => {}} onDiscard={() => {}} />)
     expect(html).toContain('role="alertdialog"')
     expect(html).toContain("Discard your changes?")
     expect(html.indexOf("Keep editing")).toBeLessThan(html.indexOf(">Discard<"))
-    expect(html).toMatch(/<button[^>]*autofocus[^>]*>Discard</i)
+    expect(html).toMatch(/<button[^>]*autofocus[^>]*>Keep editing</i)
+    expect(html).not.toMatch(/<button[^>]*autofocus[^>]*>Discard</i)
   })
 })
