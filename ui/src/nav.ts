@@ -41,7 +41,7 @@ export interface Nav {
 
 export type Go =
   | { to: "channel"; code: string; jump?: true }
-  | { to: "where"; where: Where; jump?: true; replace?: true }
+  | { to: "where"; where: Where; jump?: true; replace?: true; person?: string }
   | { to: "tab"; tab: Tab }
   | { to: "github"; view: GithubView }
   | { to: "spec"; ask: number | null; part?: SpecPart }
@@ -140,6 +140,7 @@ function step(nav: Nav, go: Exclude<Go, { to: "history" }>): Nav {
       return { ...nav, page: "channel", channel: go.code, where: kept?.where ?? GENERAL, tab: kept?.tab ?? "chat", panel: null, modal: null, dialog: null }
     }
     case "where":
+      if (go.person !== undefined && nav.page === "channel" && nav.tab === "chat" && sameWhere(nav.where, go.where)) return { ...nav, modal: { kind: "person", name: go.person } }
       return { ...nav, page: "channel", where: go.where, tab: "chat", panel: nav.panel?.kind === "thread" ? null : nav.panel, modal: null }
     case "tab":
       return { ...nav, page: "channel", tab: go.tab }
@@ -226,6 +227,12 @@ const NO_NICKNAMES: ReadonlyMap<string, string> = new Map()
 export function useNicknames(): ReadonlyMap<string, string> {
   const names = use(NamesContext)
   return (names === undefined ? use(AppContext)?.app.channel?.nicknames : names) ?? NO_NICKNAMES
+}
+
+export function useChannelHere(): Channel | null {
+  const channel = use(OpenContext)
+  const app = use(AppContext)
+  return channel === undefined ? (app?.app?.channel ?? null) : channel
 }
 
 export function useOpenChannel(): Channel | null {

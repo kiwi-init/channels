@@ -20,6 +20,7 @@ import { useApp, useGo } from "~/nav"
 import { devicesOf, nickname, roleWord, seatRoot, shown, Shown } from "~/names"
 import { contextOf, liveOf, restOf } from "~/doing"
 import { Confirm, Group, InlineEdit, Row } from "~/settings/controls"
+import { personGo } from "~/person-go"
 
 const since = (at: number): string => {
   const age = ageOf(at)
@@ -163,7 +164,7 @@ function Facts({ channel, person }: { channel: Channel; person: Person }) {
   const sponsor = person.sponsor ? memberOf(channel, person.sponsor) : undefined
   const devices = devicesOf(channel.people, { name: seatRoot(channel, person.name) })
   const by = sponsor ? (
-    <button type="button" className="person-ref" onClick={() => go({ to: "modal", modal: { kind: "person", name: sponsor.name } })}>
+    <button type="button" className="person-ref" onClick={() => go(personGo(channel, sponsor.name))}>
       {sponsor.you ? t("modals.profile.by.you") : shown(sponsor)}
     </button>
   ) : person.sponsor ? (

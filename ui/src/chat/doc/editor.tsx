@@ -47,6 +47,7 @@ import { nickname, Shown } from "~/names"
 import { wordsRaw } from "~/words"
 import { useAct, useGo, useActions, useAppAccount } from "~/nav"
 import { keysHint } from "~/kit/keys"
+import { personGo } from "~/person-go"
 import { viewImage } from "~/chat/image-view"
 
 const QuestionCard = lazy(() => import("~/chat/question-card"))
@@ -557,7 +558,7 @@ function Head({ channel, attrs, onUnreply }: { channel: Channel; attrs: BlockAtt
         <ReplyLine channel={channel} to={channel.messages.find((m) => m.seq === attrs.re)} quote={attrs.quote} onClose={attrs.author === channel.you ? () => onUnreply(attrs.id) : null} />
       )}
       <span className="blk-line">
-        <button type="button" className="msg-name" title={clock(attrs.at)} onClick={() => go({ to: "modal", modal: { kind: "person", name: attrs.author } })}>
+        <button type="button" className="msg-name" title={clock(attrs.at)} onClick={() => go(personGo(channel, attrs.author))}>
           {nickname(channel, attrs.author)}
         </button>
         {(attrs.kind === "tool" || attrs.kind === "comment") && <span className="blk-kind">{t(KINDS[attrs.kind])}</span>}

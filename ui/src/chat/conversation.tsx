@@ -22,12 +22,13 @@ import { later } from "~/kit/later"
 import { day, sameDay } from "~/kit/time"
 import { inSpecThread, type Channel, type Message, type Person, type Where } from "~/model"
 import { liveOf, workingIn } from "~/doing"
-import { sameWhere, useGo, useActions, useNav } from "~/nav"
+import { sameWhere, useGo, useActions, useNav, useChannelHere } from "~/nav"
 import { keepSpot, spotAt, spotKey, type Spot } from "~/places"
 import { between, nickname, shown } from "~/names"
 import { wordsRaw } from "~/words"
 import { openMessage } from "~/live/open-message"
 import { markOnce } from "@kiwi/channel/marks.ts"
+import { personGo } from "~/person-go"
 
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
 const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
@@ -660,6 +661,7 @@ export function ReadOnly({ channel, between: names }: { channel: Channel; betwee
 
 function Working({ people }: { people: Person[] }) {
   const go = useGo()
+  const open = useChannelHere()
   const named = people.slice(0, 3)
   const more = people.length - named.length
   return (
@@ -673,7 +675,7 @@ function Working({ people }: { people: Person[] }) {
         {named.map((p, i) => (
           <Fragment key={p.name}>
             {i > 0 && ", "}
-            <button type="button" className="working-name" onClick={() => go({ to: "modal", modal: { kind: "person", name: p.name } })}>
+            <button type="button" className="working-name" onClick={() => go(open ? personGo(open, p.name) : { to: "modal", modal: { kind: "person", name: p.name } })}>
               {shown(p)}
             </button>{" "}
             {liveOf(p)?.text}

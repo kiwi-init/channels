@@ -12,6 +12,7 @@ import { TONES } from "~/tasks/row"
 import { nickname, shown, Shown } from "~/names"
 import { lanesOf, type Lane } from "~/now"
 import { OutsideLink } from "~/kit/outside"
+import { personGo } from "~/person-go"
 
 const MAX_TICKS = 8
 
@@ -78,7 +79,7 @@ function LaneCard({ channel, lane }: { channel: Channel; lane: Lane }) {
   const about = [p.sponsor ? t("tasks.lanes.for", { who: nickname(channel, p.sponsor) }) : null, p.model].filter(Boolean).join(" · ")
   return (
     <section className="lane" aria-label={shown(p)}>
-      <button type="button" className="lane-head" title={about || undefined} onClick={() => go({ to: "modal", modal: { kind: "person", name: p.name } })}>
+      <button type="button" className="lane-head" title={about || undefined} onClick={() => go(personGo(channel, p.name))}>
         <Avatar person={p} pip />
         <span className="lane-who">
           <span className="lane-name">
