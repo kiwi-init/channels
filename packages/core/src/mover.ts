@@ -1,5 +1,5 @@
 import { inlineText } from "./membership.ts";
-import { landerOf, openRound, type ChannelState, type Task } from "./state.ts";
+import { isPerson, landerOf, openRound, type ChannelState, type Task } from "./state.ts";
 
 type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land";
 
@@ -22,7 +22,13 @@ const leadOr = (state: Board, name: string | undefined, move: MoveFor, unowned: 
 
 function heldBy(state: Board, t: Task): Mover | undefined {
   const oldest = state.openAsks.filter((m) => m.holds?.includes(t.id)).sort((a, b) => a.seq - b.seq)[0];
-  return oldest ? settle(state, oldest.to?.[0], "answer", oldest.seq) : undefined;
+  if (!oldest) return undefined;
+  const named = oldest.to ?? [];
+  const person = named.find((n) => {
+    const m = state.members.get(n);
+    return !!m && isPerson(m);
+  });
+  return settle(state, person ?? named[0], "answer", oldest.seq);
 }
 
 function queued(state: Board, t: Task, owner: string): Mover {
@@ -64,6 +70,6 @@ export function moverText(m: Mover): string {
 export function moverTag(t: Pick<Task, "owner">, m: Mover | undefined): string {
   if (!m) return "";
   if (m.kind === "waiting") return ` · waiting, ${m.ahead} ahead`;
-  if (m.kind === "nobody" || m.move === "assign") return "";
+  if (m.kind === "nobody") return "";
   return m.name === t.owner && m.move !== "revise" ? "" : ` · move: ${inlineText(m.name, 40)} ${MOVE_WORDS[m.move]}${m.question !== undefined ? ` #${m.question}` : ""}`;
 }

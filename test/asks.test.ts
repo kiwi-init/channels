@@ -95,17 +95,17 @@ describe("tasks are filed under the ask they serve", () => {
     ]);
     expect(formatTasks(s, "kiwi/review/test").split("\n")).toEqual([
       "#1 jow: “UI ideas so we can keep up”",
-      "  T6    planned   compare the two",
-      "  T8    planned   trim the board",
+      "  T6    planned   compare the two · move: jow to give it an owner",
+      "  T8    planned   trim the board · move: jow to give it an owner",
       "#2 jow: “Screenshot 1.png”",
-      "  T4    planned   explore a delegate board",
-      "  T9    planned   a follow-up",
-      "  T11   planned   fix task who",
+      "  T4    planned   explore a delegate board · move: jow to give it an owner",
+      "  T9    planned   a follow-up · move: jow to give it an owner",
+      "  T11   planned   fix task who · move: jow to give it an owner",
       "#13 jow: “jow's own task”",
-      "  T13   planned   jow's own task",
+      "  T13   planned   jow's own task · move: jow to give it an owner",
       "unfiled (no person's message holds these)",
-      "  T12   planned   an agent's own finding",
-      "  T14   planned   from an older client",
+      "  T12   planned   an agent's own finding · move: jow to give it an owner",
+      "  T14   planned   from an older client · move: jow to give it an owner",
     ]);
     const status = formatStatus({ check: "kiwi/review/test", alias: "dev", me: "lead", state: s, online: new Map(), unread: 0, now: T0 + 60_000 });
     expect(status).toContain("tasks (8 open, 1 done), by the ask each serves:\n  #1 jow: “UI ideas so we can keep up”\n    T6    planned   compare the two");

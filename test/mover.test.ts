@@ -135,6 +135,18 @@ describe("every open task has one mover, derived from state (#3930 §1)", () => 
     expect(moveOf(c.state(), id)).toMatchObject({ kind: "member", name: "zed", move: "answer" });
   });
 
+  test("the first person named answers, wherever an agent stands in the list; a question for agents only is the first one's", async () => {
+    const c = channel();
+    const id = await c.add({ owner: "win" });
+    await c.update("win", id, { state: "doing" });
+    const mixed = await c.ask("win", ["zed", "jon"], [id]);
+    expect(moveOf(c.state(), id)).toEqual({ kind: "member", name: "jon", move: "answer", question: mixed.seq });
+    const other = await c.add({ owner: "win" });
+    const agents = await c.ask("win", ["zed", "mac"], [other]);
+    expect(moveOf(c.state(), other)).toEqual({ kind: "member", name: "zed", move: "answer", question: agents.seq });
+    expect(moveOf(c.state(rosterOf(["zed"])), other)).toEqual({ kind: "member", name: "jon", move: "answer", question: agents.seq });
+  });
+
   test("a mover who left, or a channel with no lead, hands the move to the channel's owner", async () => {
     const c = channel();
     const owned = await c.add({ owner: "win" });
@@ -177,6 +189,17 @@ describe("the board and the task page say whose move it is (#3930 §1)", () => {
     expect(row(waits)).toEndWith(" · waiting, 1 ahead");
     expect(row(reviewed)).toEndWith(" · move: mac to review it");
     expect(row(held)).toEndWith(` · move: jon to answer #${q.seq}`);
+  });
+
+  test("a row with no owner names who gives it one: the lead, or the channel's owner when there is no lead", async () => {
+    const c = channel();
+    const id = await c.add({ title: "loose" });
+    const row = (s: ChannelState) =>
+      formatTasks(s, "kiwi")
+        .split("\n")
+        .find((r) => r.trimStart().startsWith(`T${id} `))!;
+    expect(row(c.state())).toEndWith("loose · move: owl to give it an owner");
+    expect(row(c.state(rosterOf([], false)))).toEndWith("loose · move: jon to give it an owner");
   });
 
   test("task show has a move line", async () => {
