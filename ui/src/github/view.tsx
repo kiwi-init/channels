@@ -181,6 +181,11 @@ const NONE: Record<"pr" | "issue", Record<Shown, Key>> = {
   issue: { open: "github.view.none.open.issues", closed: "github.view.none.closed.issues" },
 }
 
+function appDocs(): string {
+  const lang = document.documentElement.lang.toLowerCase()
+  return `https://channels.kiwiinit.com${lang && lang !== "en" ? `/${lang}` : ""}/docs/github-app`
+}
+
 function Nothing({ query, clear, shown, icon, trouble }: { query: string; clear: () => void; shown: Shown; icon: "pr" | "issue"; trouble: GithubTrouble | null }) {
   if (query.trim())
     return (
@@ -194,6 +199,9 @@ function Nothing({ query, clear, shown, icon, trouble }: { query: string; clear:
     return (
       <Empty title={t("github.view.no.app")} icon="github">
         <p>{t("github.view.no.app.why")}</p>
+        <OutsideLink className="btn is-small gh-empty-btn" href={appDocs()}>
+          {t("github.view.no.app.how")}
+        </OutsideLink>
       </Empty>
     )
   if (trouble?.kind === "not-installed")
