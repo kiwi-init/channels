@@ -130,8 +130,8 @@ export function useChannelList(): ChannelRow[] {
 }
 
 export function useKnownChannels(): KnownChannel[] {
-  useSecrets();
-  const [, setTick] = useState(0);
+  const secrets = useSecrets();
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     const update = () => setTick((n) => n + 1);
     window.addEventListener(CHANGED, update);
@@ -141,7 +141,7 @@ export function useKnownChannels(): KnownChannel[] {
       window.removeEventListener("storage", update);
     };
   }, []);
-  return knownChannels();
+  return useMemo(() => knownChannels(), [secrets, tick]);
 }
 
 export interface KnownChannel {
@@ -150,8 +150,18 @@ export interface KnownChannel {
   name?: string;
 }
 
+export function sameChannels(prev: KnownChannel[], next: KnownChannel[]): KnownChannel[] {
+  return prev.length === next.length && prev.every((c, i) => c.code === next[i]?.code && c.at === next[i]?.at && c.name === next[i]?.name) ? prev : next;
+}
+
+let known: KnownChannel[] = [];
+
 function knownChannels(): KnownChannel[] {
-  return allMembers()
-    .map((m) => ({ code: m.code, at: m.at, ...(m.name ? { name: m.name } : {}) }))
-    .sort((a, b) => b.at - a.at);
+  known = sameChannels(
+    known,
+    allMembers()
+      .map((m) => ({ code: m.code, at: m.at, ...(m.name ? { name: m.name } : {}) }))
+      .sort((a, b) => b.at - a.at),
+  );
+  return known;
 }
