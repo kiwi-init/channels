@@ -11,6 +11,13 @@ export interface MenuItem {
   confirm?: { title: string; sub: string; yes: string }
 }
 
+export interface MenuField {
+  label: string
+  value: string
+  max: number
+  save: (value: string) => void
+}
+
 export type MenuGroups = readonly (readonly MenuItem[])[]
 
 export interface OpenMenu {
@@ -19,6 +26,7 @@ export interface OpenMenu {
   label: string
   groups: MenuGroups
   above?: true
+  field?: MenuField
 }
 
 export const openMenu = store<OpenMenu | null>(null)

@@ -8,12 +8,11 @@ import type { ChannelTile } from "~/model"
 import { channelOf, onCommand } from "~/kit/commands"
 import { inText } from "~/kit/keys"
 import { useNav, useGo, useActions, useTiles, useAppPrefs } from "~/nav"
-import type { Menu } from "~/shell/rail-menu"
+import { openMenu } from "~/kit/menu-open"
 import { railItems, type DropTarget } from "~/shell/rail-items"
 import { t } from "~/i18n/i18n"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 
-const RailMenu = later(() => import("~/shell/rail-menu").then((m) => m.default))
 const FolderTile = later(() => import("~/shell/rail-folder").then((m) => m.default))
 const UsageMeter = later(() => import("~/usage/meter").then((m) => m.UsageMeter))
 const RailCards = later(() => import("~/shell/updates").then((m) => m.RailCards))
@@ -44,7 +43,6 @@ export function Rail() {
   const ordered = items.flatMap((i) => (i.kind === "channel" ? [i.tile] : i.tiles))
   const [over, setOver] = useState<string | null>(null)
   const [moving, setMoving] = useState<string | null>(null)
-  const [menu, setMenu] = useState<Menu | null>(null)
   const [fresh, setFresh] = useState<string | null>(null)
   const save = (next: typeof folders) => actions.setPrefs({ folders: next })
   const step = useEffectEvent((dir: 1 | -1) => {
@@ -132,8 +130,18 @@ export function Rail() {
           const target = spot(e)
           if (target.kind === "rail") return
           e.preventDefault()
-          const top = (e.target as Element).closest("[data-code],[data-folder]")?.getBoundingClientRect().top ?? e.clientY
-          setMenu(target.kind === "channel" ? { kind: "channel", code: target.code, top } : { kind: "folder", id: target.id, top })
+          const at = { x: e.currentTarget.getBoundingClientRect().right - 4, y: (e.target as Element).closest("[data-code],[data-folder]")?.getBoundingClientRect().top ?? e.clientY }
+          void import("~/shell/rail-menu").then((m) =>
+            openMenu.set(
+              m.railMenu(target, at, {
+                folders,
+                title: (code) => tiles.find((c) => c.code === code)?.title ?? code,
+                muted: (code) => prefs.muted.includes(code),
+                setMute: (code, on) => actions.setMute(code, null, on),
+                save,
+              })
+            )
+          )
         }}
       >
         {items.map((item) =>
@@ -188,11 +196,6 @@ export function Rail() {
           <Icon name="gear" size={18} />
         </button>
       </div>
-      {menu && (
-        <Suspense fallback={null}>
-          <RailMenu menu={menu} folders={folders} title={(code) => tiles.find((c) => c.code === code)?.title ?? code} save={save} close={() => setMenu(null)} />
-        </Suspense>
-      )}
     </nav>
   )
 }
