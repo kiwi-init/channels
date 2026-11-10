@@ -7,6 +7,7 @@ import { PrChip } from "~/chat/cards"
 import { DiffBar } from "~/github/parts"
 import { t } from "~/i18n/i18n"
 import { cx, Dot } from "~/kit/bits"
+import { Confirm } from "~/kit/confirm"
 import { ago } from "~/kit/time"
 import type { Channel, Spec, Task } from "~/model"
 import { useAct } from "~/nav"
@@ -24,6 +25,8 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
   const { actions, go } = useAct()
   const [back, setBack] = useState(false)
   const [note, setNote] = useState("")
+  const [asking, setAsking] = useState<"drop" | "early" | null>(null)
+  const title = wordsPlain(spec.title, channel.nicknames)
   const boxes = boxesOf(spec)
   const tasks = tasksOf(channel, spec)
   const kept = tasks.filter((task) => !task.cancelled)
@@ -70,7 +73,7 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
         </div>
         {judge && !back && (
           <div className="result-actions">
-            <button type="button" className="btn is-quiet is-danger-text" onClick={() => actions.judgeSpec(channel.code, spec.ask, "dropped")}>
+            <button type="button" className="btn is-quiet is-danger-text" onClick={() => setAsking("drop")}>
               {t("specs.result.drop")}
             </button>
             {spec.approved && (
@@ -78,11 +81,38 @@ export function Result({ channel, spec }: { channel: Channel; spec: Spec }) {
                 {t("specs.result.send.back")}
               </button>
             )}
-            <button type="button" className={cx("btn", ready && "is-primary")} disabled={!ready && !spec.approved} onClick={() => actions.judgeSpec(channel.code, spec.ask, "accepted")}>
+            <button
+              type="button"
+              className={cx("btn", ready && "is-primary")}
+              disabled={!ready && !spec.approved}
+              onClick={() => (ready ? actions.judgeSpec(channel.code, spec.ask, "accepted") : setAsking("early"))}
+            >
               {t("specs.result.accept")}
             </button>
           </div>
         )}
+        <Confirm
+          open={asking === "drop"}
+          title={t("specs.result.drop.ask", { title })}
+          sub={t("specs.result.drop.sub")}
+          action={t("specs.result.drop")}
+          onClose={() => setAsking(null)}
+          onConfirm={() => {
+            setAsking(null)
+            actions.judgeSpec(channel.code, spec.ask, "dropped")
+          }}
+        />
+        <Confirm
+          open={asking === "early"}
+          title={t("specs.result.early.ask", { title })}
+          sub={t("specs.result.early.sub")}
+          action={t("specs.result.early.yes")}
+          onClose={() => setAsking(null)}
+          onConfirm={() => {
+            setAsking(null)
+            actions.judgeSpec(channel.code, spec.ask, "accepted")
+          }}
+        />
         {judge && back && (
           <div className="result-back">
             <textarea

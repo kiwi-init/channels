@@ -23,6 +23,15 @@ import { UsageBar } from "~/usage/meter"
 import { useUsage } from "~/usage/store"
 import { canUpgrade, levelOf, planHint, planName, resetsIn, seemsUnlimited, upgradeLabel, usageHint, usedOf } from "~/usage/words"
 
+function hostOf(url: string): string {
+  try {
+    return new URL(/^[a-z]+:\/\//i.test(url) ? url : `https://${url}`).host || url
+  } catch {
+    // Not a URL yet: the relay refuses it with its own words after the confirm.
+    return url
+  }
+}
+
 export function Page({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
   return (
     <>
@@ -38,6 +47,7 @@ export function Page({ title, lede, children }: { title: string; lede?: ReactNod
 export function AccountSection() {
   const { app } = useApp()
   const [leaving, setLeaving] = useState(false)
+  const [unlinking, setUnlinking] = useState(false)
   const account = app.account
   if (!account) return null
   const { actions } = app
@@ -53,9 +63,20 @@ export function AccountSection() {
           ) : account.github ? (
             <>
               <span className="set-value">@{account.github.login}</span>
-              <button type="button" className="btn is-quiet is-small" onClick={actions.unlinkGithub}>
+              <button type="button" className="btn is-quiet is-small" onClick={() => setUnlinking(true)}>
                 {t("settings.sections.github.unlink")}
               </button>
+              <Confirm
+                open={unlinking}
+                title={t("settings.sections.github.unlink.ask", { login: account.github.login })}
+                sub={t("settings.sections.github.unlink.sub")}
+                action={t("settings.sections.github.unlink")}
+                onClose={() => setUnlinking(false)}
+                onConfirm={() => {
+                  setUnlinking(false)
+                  actions.unlinkGithub()
+                }}
+              />
             </>
           ) : (
             <button type="button" className="btn is-primary is-small" onClick={actions.linkGithub}>
@@ -348,6 +369,7 @@ function CheckUpdates({ version }: { version: string }) {
 function RelayRow({ relay }: { relay: string }) {
   const { app } = useApp()
   const [error, setError] = useState<string | null>(null)
+  const [moving, setMoving] = useState<string | null>(null)
   return (
     <Row
       label={t("settings.sections.relay")}
@@ -361,13 +383,18 @@ function RelayRow({ relay }: { relay: string }) {
         )
       }
     >
-      <InlineEdit
-        value={relay}
-        label={t("settings.sections.relay")}
-        verb={t("settings.sections.relay.change")}
-        onSave={(url) => {
+      <InlineEdit value={relay} label={t("settings.sections.relay")} verb={t("settings.sections.relay.change")} onSave={(url) => (url.trim() === relay ? undefined : setMoving(url))} />
+      <Confirm
+        open={moving !== null}
+        title={t("settings.sections.relay.change.ask", { relay: hostOf(moving ?? "") })}
+        sub={t("settings.sections.relay.change.sub")}
+        action={t("settings.sections.relay.change.yes")}
+        onClose={() => setMoving(null)}
+        onConfirm={() => {
+          const url = moving
+          setMoving(null)
           setError(null)
-          void app.actions.setRelay(url).then(setError)
+          if (url) void app.actions.setRelay(url).then(setError)
         }}
       />
     </Row>
