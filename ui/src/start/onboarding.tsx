@@ -12,6 +12,7 @@ import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 
 const WORD = "Channels"
+const SCENE_WAIT_MS = 4000
 const HEX = "0123456789abcdef"
 const TRUST: readonly Key[] = ["start.onboarding.trust.sealed", "start.onboarding.trust.harness"]
 const SAYS: readonly Key[] = ["start.onboarding.says.not.harness", "start.onboarding.says.not.bots"]
@@ -43,6 +44,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<"intro" | "trust" | "pledge">("intro")
   const [typed, setTyped] = useState("")
   const [leaving, setLeaving] = useState(false)
+  const [ready, setReady] = useState(false)
   const box = useRef<HTMLDialogElement>(null)
   const stage = useRef<HTMLDivElement>(null)
   const meadow = useRef<Meadow | null>(null)
@@ -62,12 +64,15 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     let gone = false
+    const arrive = () => requestAnimationFrame(() => requestAnimationFrame(() => !gone && setReady(true)))
+    const late = window.setTimeout(arrive, SCENE_WAIT_MS)
     void import("~/meadow/meadow")
       .then(({ startMeadow }) => {
         if (gone || !stage.current) return null
         return startMeadow(stage.current, latest.current.still)
       })
       .then((m) => {
+        arrive()
         if (!m) return
         if (gone) return m.dispose()
         meadow.current = m
@@ -75,9 +80,11 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       })
       .catch(() => {
         // Without the scene the haze stays behind the words, and they still read.
+        arrive()
       })
     return () => {
       gone = true
+      window.clearTimeout(late)
       meadow.current?.dispose()
       meadow.current = null
     }
@@ -112,9 +119,9 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       onAnimationEnd={ended}
     >
       <div className="onb-drag" />
-      <div ref={stage} className="onb-back" aria-hidden="true" />
-      <div className="onb-shade" aria-hidden="true" />
-      {step === "intro" ? (
+      <div ref={stage} className={cx("onb-back", ready && "is-in")} aria-hidden="true" />
+      {ready && <div className="onb-shade" aria-hidden="true" />}
+      {!ready ? null : step === "intro" ? (
         <main key="intro" className="onb-step">
           <h1 className="onb-word">
             <span className="onb-sr">{WORD}</span>

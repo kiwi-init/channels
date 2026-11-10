@@ -257,6 +257,7 @@ export interface Act {
   actions: Actions
   go: (go: Go) => void
   toast: (text: string, tone?: Tone) => void
+  now?: () => App
 }
 
 export const ActContext = createContext<Act | null>(null)

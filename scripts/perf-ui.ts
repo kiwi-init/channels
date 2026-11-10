@@ -31,11 +31,13 @@ export const PLEDGE = "Channels is not a harness";
 
 export async function passOnboarding(page: Page): Promise<void> {
   const next = page.getByRole("button", { name: "continue", exact: true });
-  await next
+  const intro = page.locator("dialog.onb");
+  await intro
     .or(page.getByRole("textbox", { name: "Your name" }))
     .first()
     .waitFor();
-  if (!(await next.isVisible())) return;
+  if (!(await intro.count())) return;
+  await next.waitFor();
   await next.click();
   await page.locator(".onb-wire").waitFor();
   await next.click();

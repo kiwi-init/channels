@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, and the phone jobs ios, android); empty runs everything but the phone jobs"
+        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, and the phone jobs ios, android); empty picks from what the branch changed (.github/coverage.yml), everything when in doubt"
         required: false
         default: ""
       update_from:
@@ -457,6 +457,9 @@ jobs:
       - name: ui a reload keeps the room, tab and scroll, and ⌘[ / ⌘] step back and forward after search jumps, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-restore-place.ts --dist ui/dist
+      - name: ui a click on a mention opens the direct conversation with that person, and their name inside it opens the profile
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-person-click.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist
