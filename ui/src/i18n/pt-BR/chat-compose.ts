@@ -22,6 +22,7 @@ export default {
   "chat.annotator.sent.to": "Enviada para {name}",
   "chat.annotator.not.sent": "Não enviada: {why}",
   "chat.annotator.mark.up": "Marcar {name}",
+  "chat.annotator.annotate": "Anotar",
   "chat.annotator.fit.window": "Ajustar à janela",
   "chat.annotator.actual.size": "Tamanho real",
   "chat.annotator.fit.percent": "Ajustar · {percent}%",

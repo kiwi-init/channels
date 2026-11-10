@@ -22,6 +22,7 @@ export default {
   "chat.annotator.sent.to": "{name} に送信しました",
   "chat.annotator.not.sent": "送信できませんでした: {why}",
   "chat.annotator.mark.up": "{name} にマークを付ける",
+  "chat.annotator.annotate": "注釈を付ける",
   "chat.annotator.fit.window": "ウィンドウに合わせる",
   "chat.annotator.actual.size": "実際のサイズ",
   "chat.annotator.fit.percent": "合わせる · {percent}%",

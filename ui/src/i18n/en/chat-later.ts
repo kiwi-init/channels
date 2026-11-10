@@ -23,6 +23,7 @@ const words = {
   "chat.annotator.sent.to": "Sent to {name}",
   "chat.annotator.not.sent": "Not sent: {why}",
   "chat.annotator.mark.up": "Mark up {name}",
+  "chat.annotator.annotate": "Annotate",
   "chat.annotator.fit.window": "Fit to window",
   "chat.annotator.actual.size": "Actual size",
   "chat.annotator.fit.percent": "Fit · {percent}%",
