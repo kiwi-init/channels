@@ -30,6 +30,7 @@ export interface Opened {
   head: number;
   since: number;
   whole: boolean;
+  fresh?: true;
 }
 
 export function onceEach(steps: OpenSteps): OpenSteps {
@@ -80,8 +81,10 @@ export async function openChannel(steps: OpenSteps, was: Warm | undefined, limit
   const partial = was?.partial ? was.base : null;
   const snap = (from > 0 && !warm) || (warm !== null && (olderRules(warm) || warm === partial)) ? await steps.snapshot() : null;
   const base = newestRules([usableBase(snap, from), keptBase, warm]);
+  const unreached = (from > 0 && base === null) || (partial !== null && base === partial);
   steps.paint(cached, base, head);
   if (await rotated) await steps.roster();
+  if (unreached) return { head, since: 0, whole: true, fresh: true };
   return { head, since, whole: startsWhole(head, limit, since, firstSeq, base === partial ? null : (base ?? warm)) };
 }
 

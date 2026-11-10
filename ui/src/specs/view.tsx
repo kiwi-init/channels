@@ -97,6 +97,7 @@ function SpecList({ channel }: { channel: Channel }) {
             {t("specs.view.new")}
           </button>
         </div>
+        {channel.behind && <p className="specs-behind">{t("specs.view.reading")}</p>}
         {groups.length || tasks.length ? (
           <div className="board-stack">
             {groups.map((g) => (
@@ -106,7 +107,7 @@ function SpecList({ channel }: { channel: Channel }) {
           </div>
         ) : channel.loading ? (
           <Loading />
-        ) : (
+        ) : channel.behind ? null : (
           <Empty title={!specs.length ? t("specs.view.empty") : shown === "open" ? t("specs.view.empty.open") : t("specs.view.empty.done")} icon="spec" />
         )}
       </div>

@@ -646,6 +646,7 @@ export interface Channel {
   connection: "connecting" | "live" | "reconnecting"
   docs?: Readonly<Record<string, string>>
   loading?: boolean
+  behind?: true
   waiting?: { code: string; since: number; state?: "waiting" | "unreachable" | "declined"; owner?: string }
 }
 
