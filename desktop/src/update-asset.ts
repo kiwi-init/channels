@@ -77,6 +77,8 @@ export interface SwapPlan {
   moved?: { marker: string; text: string };
 }
 
+const RELAUNCHED_TRIES = 25;
+
 export function swapScript(o: SwapPlan): string {
   const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
   const old = `${o.target}.old-${o.pid}`;
@@ -84,6 +86,10 @@ export function swapScript(o: SwapPlan): string {
   return [
     "#!/bin/sh",
     `while kill -0 ${o.pid} 2>/dev/null; do sleep 0.2; done`,
+    `t=${q(o.target)}`,
+    `running() { /bin/ps -axo command= | T="$t/Contents/MacOS/" /usr/bin/awk 'index($0, ENVIRON["T"]) == 1 { found = 1 } END { exit !found }'; }`,
+    `n=0; while running && [ "$n" -lt ${RELAUNCHED_TRIES} ]; do n=$((n + 1)); sleep 0.2; done`,
+    `if running; then exit 0; fi`,
     `mkdir -p ${q(path.dirname(o.target))} 2>/dev/null`,
     `if [ -e ${q(o.target)} ]; then if mv ${q(o.target)} ${q(old)} && mv ${q(o.next)} ${q(o.target)}; then rm -rf ${q(old)}; ok=1; else [ -e ${q(o.target)} ] || mv ${q(old)} ${q(o.target)}; ok=0; fi; elif mv ${q(o.next)} ${q(o.target)}; then ok=1; else ok=0; fi`,
     `if [ "$ok" = 1 ]; then rm -f ${q(o.marker)};${o.moved ? ` printf '%s' ${q(o.moved.text)} > ${q(o.moved.marker)};` : ""} else printf '%s' ${q(o.version)} > ${q(o.marker)}; fi`,

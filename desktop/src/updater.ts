@@ -95,6 +95,10 @@ async function githubFetch(url: string, signal: AbortSignal): Promise<Response> 
 }
 
 const failedMarker = () => path.join(host().app.path("data"), "update-failed");
+const stageDir = () => path.join(host().app.path("data"), "update-staged");
+const MANIFEST = "staged.json";
+const SUMS = "SHA256SUMS";
+const SUMS_SIGNATURE = "SHA256SUMS.minisig";
 const movedMarker = () => path.join(host().app.path("data"), "update-moved");
 
 const writableDir = (dir: string): boolean => {
@@ -152,8 +156,72 @@ const failedBefore = (version: string): boolean => {
   }
 };
 
+interface Manifest {
+  version: string;
+  name: string;
+  url: string;
+  into: string;
+}
+
+const isManifest = (v: unknown): v is Manifest => {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return typeof o["version"] === "string" && typeof o["name"] === "string" && typeof o["url"] === "string" && typeof o["into"] === "string";
+};
+
+const listedSum = (sums: Uint8Array, name: string): string | undefined =>
+  new TextDecoder()
+    .decode(sums)
+    .split("\n")
+    .map((l) => l.trim().split(/\s+/))
+    .find(([, f]) => f === name)?.[0];
+
+function fileSum(file: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    fs.createReadStream(file)
+      .on("data", (chunk) => hash.update(chunk))
+      .on("error", reject)
+      .on("end", () => resolve(hash.digest("hex")));
+  });
+}
+
+async function keptStage(dir: string): Promise<Staged | null> {
+  const m: unknown = JSON.parse(fs.readFileSync(path.join(dir, MANIFEST), "utf8"));
+  if (!isManifest(m) || compareVersions(m.version, host().app.version()) <= 0 || failedBefore(m.version)) return null;
+  const appImage = runningAppImage();
+  const bundle = process.platform === "darwin" ? macBundle() : undefined;
+  const target = bundle ? macTarget(bundle) : appImage ? swapTarget(appImage) : undefined;
+  if (m.into !== target || m.name !== swapAsset(m.version, process.platform, process.arch, appImage) || cantSwap(target, canMakeIn, false)) return null;
+  if (bundle) {
+    const next = path.join(dir, "Channels.app");
+    if (bundleVersion(next) !== m.version || !(await signedLikeThisApp(bundle, next))) return null;
+    return { version: m.version, path: next, url: m.url, into: m.into, dir };
+  }
+  const sums = new Uint8Array(fs.readFileSync(path.join(dir, SUMS)));
+  if (!minisignVerifies(sums, fs.readFileSync(path.join(dir, SUMS_SIGNATURE), "utf8"), RELEASE_KEY)) return null;
+  const file = path.join(dir, m.name);
+  const want = listedSum(sums, m.name);
+  if (!want || (await fileSum(file)) !== want) return null;
+  return { version: m.version, path: file, url: m.url, into: m.into, dir };
+}
+
+let adopted: Promise<void> | null = null;
+
+async function adoptStage(): Promise<void> {
+  const dir = stageDir();
+  if (!fs.existsSync(dir)) return;
+  const kept = await keptStage(dir).catch(() => null);
+  if (staged || fetching) return;
+  if (!kept) return fs.rmSync(dir, { recursive: true, force: true });
+  staged = kept;
+  set({ version: kept.version, state: "ready", url: kept.url });
+  console.log(`Channels: the update to ${kept.version} downloaded before is still good, so it isn't downloaded again`);
+}
+
 async function check(): Promise<UpdateCheck> {
   if (fetching && current) return current;
+  await (adopted ??= adoptStage());
   const res = await fetch(`https://github.com/${REPO}/releases/latest`, {
     headers: { "user-agent": "channels-desktop" },
     redirect: "manual",
@@ -196,7 +264,9 @@ async function check(): Promise<UpdateCheck> {
 async function fetchUpdate(version: string, url: string, into: string, assetUrl: string, sumsUrl: string, signatureUrl: string | null, name: string): Promise<void> {
   let dir: string | null = null;
   try {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-update-"));
+    fs.rmSync(stageDir(), { recursive: true, force: true });
+    fs.mkdirSync(stageDir(), { recursive: true });
+    dir = stageDir();
     let shown = 0;
     const onBytes = (got: number, total: number) => {
       const progress = Math.min(99, Math.floor((got / total) * 100));
@@ -204,7 +274,9 @@ async function fetchUpdate(version: string, url: string, into: string, assetUrl:
       shown = progress;
       set({ version, state: "downloading", url, progress: progress / 100 });
     };
-    staged = { version, path: await download(assetUrl, sumsUrl, signatureUrl, name, dir, onBytes), url, into, dir };
+    const next = await download(assetUrl, sumsUrl, signatureUrl, name, dir, onBytes);
+    fs.writeFileSync(path.join(dir, MANIFEST), JSON.stringify({ version, name, url, into } satisfies Manifest));
+    staged = { version, path: next, url, into, dir };
   } catch (e) {
     retrySoon(`couldn't put Channels ${version} in place: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
@@ -243,10 +315,13 @@ async function save(url: string, file: string, name: string, onBytes: (got: numb
   }
 }
 
-async function signedSums(sums: Uint8Array, signatureUrl: string): Promise<void> {
+async function signedSums(sums: Uint8Array, signatureUrl: string, dir: string): Promise<void> {
   const signature = await githubFetch(signatureUrl, AbortSignal.timeout(ASK_WAIT_MS));
   if (!signature.ok) throw new Error(`SHA256SUMS.minisig answered ${signature.status}`);
-  if (!minisignVerifies(sums, await signature.text(), RELEASE_KEY)) throw new Error("SHA256SUMS isn't signed with the Channels release key");
+  const text = await signature.text();
+  if (!minisignVerifies(sums, text, RELEASE_KEY)) throw new Error("SHA256SUMS isn't signed with the Channels release key");
+  fs.writeFileSync(path.join(dir, SUMS), sums);
+  fs.writeFileSync(path.join(dir, SUMS_SIGNATURE), text);
 }
 
 /** The release's file for this install, checked against its SHA256SUMS (signed, when a signature is asked for) and unpacked in `dir`: what goes in place, or null. */
@@ -254,12 +329,8 @@ async function download(assetUrl: string, sumsUrl: string, signatureUrl: string 
   const sums = await githubFetch(sumsUrl, AbortSignal.timeout(ASK_WAIT_MS));
   if (!sums.ok) throw new Error(`SHA256SUMS answered ${sums.status}`);
   const listed = new Uint8Array(await sums.arrayBuffer());
-  if (signatureUrl) await signedSums(listed, signatureUrl);
-  const want = new TextDecoder()
-    .decode(listed)
-    .split("\n")
-    .map((l) => l.trim().split(/\s+/))
-    .find(([, f]) => f === name)?.[0];
+  if (signatureUrl) await signedSums(listed, signatureUrl, dir);
+  const want = listedSum(listed, name);
   if (!want) throw new Error(`SHA256SUMS doesn't list ${name}`);
   const file = path.join(dir, name);
   if ((await save(assetUrl, file, name, onBytes)) !== want) throw new Error(`${name} doesn't match its SHA256SUMS line`);
@@ -400,6 +471,7 @@ export function startUpdates(onChange: (s: UpdateState) => void): void {
   if (!host().app.packaged()) return;
   console.log(`Channels: update checks are on, every ${EVERY_MS / 3_600_000} h`);
   const tick = () => void checkForUpdate();
+  void (adopted ??= adoptStage());
   setTimeout(tick, 20_000);
   setInterval(tick, EVERY_MS);
   // Whatever's ready goes in when the app quits on its own terms.

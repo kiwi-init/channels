@@ -380,3 +380,76 @@ test("an AppImage takes its update only from GitHub: a redirect off GitHub's hos
   expect(readFileSync(appImage, "utf8")).toBe(OLD);
   expect(downloads()).toEqual([]);
 });
+
+test("an update downloaded before a crash is still good at the next start: checked again against its signed SHA256SUMS, shown as ready, and not downloaded again (T1770)", async () => {
+  const appImage = installed("Kept");
+  const data = join(root, "data-kept");
+  release();
+  const first = await launch(appImage, data);
+  expect((await first.u.checkForUpdate()).state).toBe("downloading");
+  expect((await settled(first.u))?.state).toBe("ready");
+  expect(downloads()).toEqual([]);
+  expect(readdirSync(join(data, "update-staged")).sort()).toEqual(["SHA256SUMS", "SHA256SUMS.minisig", appImageName("0.27.0", arch), "staged.json"].sort());
+  const seen = release();
+  const { fake, u } = await launch(appImage, data);
+  expect(await u.checkForUpdate()).toEqual({ version: "0.27.0", state: "ready", url: PAGE });
+  expect(seen).toEqual([LATEST]);
+  expect(u.applyUpdate(true)).toBe(true);
+  expect(readFileSync(appImage, "utf8")).toBe(NEW);
+  expect(fake.did).toContain(`relaunch ${appImage}`);
+  expect(existsSync(join(data, "update-staged"))).toBe(false);
+});
+
+test("a kept download that was changed, lost its signature, or is only half there is thrown away and fetched again (T1770)", async () => {
+  const name = appImageName("0.27.0", arch);
+  const spoil: Record<string, (stage: string) => void> = {
+    "the AppImage changed": (stage) => writeFileSync(join(stage, name), "not the 0.27.0 AppImage"),
+    "SHA256SUMS rewritten to match a changed AppImage": (stage) => {
+      writeFileSync(join(stage, name), "not the 0.27.0 AppImage");
+      writeFileSync(join(stage, "SHA256SUMS"), `${sha("not the 0.27.0 AppImage")}  ${name}\n`);
+    },
+    "signed by another key": (stage) => {
+      writeFileSync(join(stage, name), "not the 0.27.0 AppImage");
+      const sums = `${sha("not the 0.27.0 AppImage")}  ${name}\n`;
+      writeFileSync(join(stage, "SHA256SUMS"), sums);
+      writeFileSync(join(stage, "SHA256SUMS.minisig"), otherKey.sign(sums));
+    },
+    "no manifest": (stage) => rmSync(join(stage, "staged.json")),
+    "a manifest for another place": (stage) => writeFileSync(join(stage, "staged.json"), JSON.stringify({ version: "0.27.0", name, url: PAGE, into: join(root, "elsewhere", "Channels.AppImage") })),
+  };
+  let n = 0;
+  for (const [what, change] of Object.entries(spoil)) {
+    const appImage = installed(`Spoiled${n}`);
+    const data = join(root, `data-spoiled${n++}`);
+    release();
+    const first = await launch(appImage, data);
+    await first.u.checkForUpdate();
+    expect((await settled(first.u))?.state, what).toBe("ready");
+    change(join(data, "update-staged"));
+    const seen = release();
+    const { u } = await launch(appImage, data);
+    expect((await u.checkForUpdate()).state, what).toBe("downloading");
+    expect((await settled(u))?.state, what).toBe("ready");
+    expect(
+      seen.some((url) => url.endsWith(`/${name}`)),
+      what,
+    ).toBe(true);
+    expect(u.applyUpdate(false), what).toBe(true);
+    expect(readFileSync(appImage, "utf8"), what).toBe(NEW);
+  }
+});
+
+test("a kept download for a version this app already is, is cleared at the next start (T1770)", async () => {
+  const appImage = installed("Stale");
+  const data = join(root, "data-stale");
+  const stage = join(data, "update-staged");
+  mkdirSync(stage, { recursive: true });
+  writeFileSync(join(stage, "staged.json"), JSON.stringify({ version: "0.26.0", name: appImageName("0.26.0", arch), url: PAGE, into: appImage }));
+  writeFileSync(join(stage, appImageName("0.26.0", arch)), OLD);
+  globalThis.fetch = Object.assign(async () => new Response(null, { status: 302, headers: { location: "https://github.com/kiwi-init/channels/releases/tag/v0.26.0" } }), {
+    preconnect: realFetch.preconnect,
+  });
+  const { u } = await launch(appImage, data);
+  expect((await u.checkForUpdate()).state).toBe("current");
+  expect(existsSync(stage)).toBe(false);
+});
