@@ -138,6 +138,18 @@ async function sample(cdp: CDPSession): Promise<{ heapMB: number; nodes: number;
   return { heapMB: mb(m.JSHeapUsedSize ?? 0), nodes: m.Nodes ?? 0, listeners: m.JSEventListeners ?? 0, documents: m.Documents ?? 0, attached: result.value[0], rows: result.value[1] };
 }
 
+async function census(page: Page): Promise<Record<string, number>> {
+  return page.evaluate(() => {
+    const counts = new Map<string, number>();
+    for (const el of document.querySelectorAll("*")) {
+      const cls = typeof el.className === "string" ? el.className.split(/\s+/).filter(Boolean)[0] : undefined;
+      const key = `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ""}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return Object.fromEntries([...counts].sort((a, b) => b[1] - a[1]).slice(0, 14));
+  });
+}
+
 async function drain(page: Page): Promise<{ longTasks: number; longMs: number; worstMs: number; events: { name: string; duration: number; delay: number }[]; keys: number }> {
   return page.evaluate(() => {
     const w = window as unknown as { __long: number[]; __events: { name: string; duration: number; delay: number }[]; __keys: number };
@@ -456,6 +468,7 @@ try {
     if (process.env.PERF_SOAK_TABS !== "0") for (const v of ["Tasks", "Agents", "Conversation"]) await tab(page, v, "");
     await drain(page);
     await mark(`soak minute ${minute}`);
+    if (minute === 1 || minute % 5 === 0 || Date.now() >= soakEnd) log(`census at soak minute ${minute}`, JSON.stringify(await census(page)));
   }
   await posting;
   const soak = idle;

@@ -104,6 +104,7 @@ class BlockView implements NodeView {
   contentDOM: HTMLElement
   private head: HTMLElement
   private foot: HTMLElement
+  private hidden = false
 
   constructor(
     public node: Node,
@@ -131,8 +132,17 @@ class BlockView implements NodeView {
     const a = attrsOf(this.node)
     this.dom.dataset.kind = a.kind
     this.dom.dataset.block = a.id
+    if (this.hidden) return
     this.heads.set(this.head, a)
     this.feet.set(this.foot, a)
+  }
+
+  hide(hidden: boolean): void {
+    if (this.hidden === hidden) return
+    this.hidden = hidden
+    if (!hidden) return this.paint()
+    this.heads.drop(this.head)
+    this.feet.drop(this.foot)
   }
 
   update(node: Node): boolean {
@@ -170,12 +180,14 @@ function paintRuns(root: HTMLElement, shown: Map<HTMLElement, BlockView>, me: st
   const last = new Map<string, HTMLElement>()
   for (const el of root.children) {
     if (!(el instanceof HTMLElement)) continue
-    const node = shown.get(el)?.node
-    if (!node) continue
+    const view = shown.get(el)
+    const node = view?.node
+    if (!view || !node) continue
     const a = attrsOf(node)
     const empty = isEmpty(node)
     const mine = a.author === me
     const hidden = emptyHidden(node, me, here, drafts.made) || drafts.posted(a.id) || drafts.inFeed(a.id)
+    view.hide(hidden)
     el.classList.toggle("is-cont", !hidden && continues(prev, node))
     el.classList.toggle("is-empty", empty)
     el.classList.toggle("is-mine", mine)

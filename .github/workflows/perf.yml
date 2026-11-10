@@ -2,6 +2,15 @@ name: perf
 
 on:
   workflow_dispatch:
+    inputs:
+      soak_only:
+        description: "Minutes of soak for one diagnosis run, with no gates (empty runs the usual four runs and the 20-minute soak)"
+        type: string
+        default: ""
+      soak_tabs:
+        description: "0 keeps the soak on the conversation, with no tour of the views each minute"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -16,11 +25,19 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/browser
       - run: bun scripts/ui-harness.ts
+      - name: perf-scale, one soak for a diagnosis
+        if: ${{ inputs.soak_only != '' }}
+        env:
+          PERF_SOAK_MIN: ${{ inputs.soak_only }}
+          PERF_SOAK_TABS: ${{ inputs.soak_tabs }}
+        run: bun scripts/perf-scale.ts --gated --json "$RUNNER_TEMP/perf-soak.json"
       - name: perf-scale, four runs and one with the 20-minute soak
+        if: ${{ inputs.soak_only == '' }}
         run: |
           for i in 1 2 3 4; do PERF_SOAK_MIN=0 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-$i.json"; done
           PERF_SOAK_MIN=20 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-5.json"
       - name: medians against the gates
+        if: ${{ inputs.soak_only == '' }}
         shell: bash
         run: bun scripts/perf-check.ts --nightly "$RUNNER_TEMP"/perf-*.json | tee -a "$GITHUB_STEP_SUMMARY"
       - if: ${{ !cancelled() }}
