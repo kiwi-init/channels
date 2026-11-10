@@ -17,7 +17,7 @@ let clocks: { lang: string; format: Intl.DateTimeFormat } | null = null
 export function clock(at: number): string {
   const lang = locales().join()
   if (clocks?.lang !== lang) clocks = { lang, format: new Intl.DateTimeFormat(locales(), { hour: "2-digit", minute: "2-digit" }) }
-  return clocks.format.format(at)
+  return Number.isFinite(at) ? clocks.format.format(at) : new Date(at).toLocaleTimeString(locales(), { hour: "2-digit", minute: "2-digit" })
 }
 
 export function ageOf(at: number, now = Date.now()): "now" | "recent" | "date" {
