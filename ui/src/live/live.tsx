@@ -12,7 +12,7 @@ import { adoptThisComputer } from "@kiwi/app/computers.ts"
 import { useIcons, useMemberIcons } from "@kiwi/app/icons.ts"
 import { lastChannel, rememberChannel, reopenable } from "@kiwi/app/last-channel.ts"
 import { isMuted } from "~/live/mute"
-import { badgeTotal, newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@kiwi/channel/news.ts"
+import { badgeTotal, markNeeds, newsTotal, rowNews, startMarks, useMarks, useOpenNews, useTabNews } from "@kiwi/channel/news.ts"
 import { useOwnPersonalities } from "@kiwi/app/personalities.ts"
 import { bridge, useSecrets } from "@kiwi/secrets/secrets.ts"
 import { useAccount, useEnrolling, useGithubGate, useGithubSignIn } from "~/live/account"
@@ -27,7 +27,7 @@ import { usePrefs } from "~/live/prefs"
 import { useComputer } from "~/live/computer"
 import { useDeviceLists } from "~/live/devices"
 import { useGone, useHome, useOpened } from "~/live/store"
-import type { App, ChannelTile } from "~/model"
+import type { App, ChannelTile, HomeChannel } from "~/model"
 import { useOwned } from "~/live/owned"
 import { later } from "~/kit/later"
 import type { Go } from "~/nav"
@@ -36,20 +36,29 @@ const HomeMembers = later(() => import("~/live/home").then((m) => m.HomeMembers)
 
 const STATE: Record<ChannelRow["state"], ChannelTile["state"]> = { member: "member", pending: "waiting", agents: "gone", elsewhere: "gone" }
 
-function useTiles(rows: ChannelRow[], muted: readonly string[]): ChannelTile[] {
+function useTiles(rows: ChannelRow[], muted: readonly string[], home: readonly HomeChannel[]): ChannelTile[] {
   const marks = useMarks()
   const openNews = useOpenNews()
   const icons = useIcons()
   const owned = useOwned()
+  const waiting = useMemo(() => new Map(home.flatMap((h) => (h.loading ? [] : [[h.code, h.asks.length] as const]))), [home])
   const news = useMemo(
     () =>
       rows.map((r) => {
-        const n = rowNews(r, marks, openNews)
+        const seen = rowNews(r, marks, openNews)
+        const live = seen.open ? undefined : waiting.get(r.code)
+        const n = live === undefined ? seen : { ...seen, needs: live }
         return isMuted(muted, r.code) ? { ...n, fresh: false, count: n.mentions, muted: true } : n
       }),
-    [rows, marks, openNews, muted]
+    [rows, marks, openNews, muted, waiting]
   )
   useEffect(() => startMarks(rows), [rows])
+  useEffect(() => {
+    for (const r of rows) {
+      const live = waiting.get(r.code)
+      if (live !== undefined) markNeeds(r.room, live)
+    }
+  }, [rows, waiting, marks])
   useTabNews(newsTotal(news), badgeTotal(news))
   return useMemo(
     () =>
@@ -112,7 +121,8 @@ export function useLive(open: string | null): App {
   const account = useAccount()
   const rows = useChannelList()
   const prefs = usePrefs()
-  const channels = useTiles(rows, prefs.muted)
+  const home = useHome()
+  const channels = useTiles(rows, prefs.muted, home)
   useDuties(rows, useSecrets().person?.pk)
   const opened = useOpened()
   const harnesses = useHarnesses()
@@ -123,7 +133,6 @@ export function useLive(open: string | null): App {
   const signIn = useGithubSignIn()
   const actions = useMemo(() => makeActions(), [])
   const channel = opened && opened.code === open ? opened.channel : null
-  const home = useHome()
   const lost = useGone()
   const gone = !channel && lost && lost.code === open ? lost : null
   return useMemo(
