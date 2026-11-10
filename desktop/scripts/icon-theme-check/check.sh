@@ -45,8 +45,9 @@ cat "$work/probe.log"
 
 dark="$XDG_DATA_HOME/icons/breeze-dark/apps/48/channels-desktop.svg"
 awk -v dark="$dark" '
-  $1 == 1 && ($2 != "breeze-dark" || $4 > 90 || $5 != dark) { print "Breeze Dark, " $3 " px: theme " $2 ", tile luma " $4 ", from " $5 "; wanted the dark tile from " dark; bad = 1 }
-  $1 != 1 && ($2 != "breeze" || $4 < 170 || $5 !~ /\/icons\/hicolor\//) { print "step " $1 ", Breeze, " $3 " px: theme " $2 ", tile luma " $4 ", from " $5 "; wanted the light tile from hicolor"; bad = 1 }
+  $5 < 250 { print "step " $1 ", " $2 ", " $3 " px: the tile is see-through (alpha " $5 "), so nothing drew it from " $6; bad = 1 }
+  $1 == 1 && ($2 != "breeze-dark" || $4 > 90 || $6 != dark) { print "Breeze Dark, " $3 " px: theme " $2 ", tile luma " $4 ", from " $6 "; wanted the dark tile from " dark; bad = 1 }
+  $1 != 1 && ($2 != "breeze" || $4 < 170 || $6 !~ /\/icons\/hicolor\//) { print "step " $1 ", Breeze, " $3 " px: theme " $2 ", tile luma " $4 ", from " $6 "; wanted the light tile from hicolor"; bad = 1 }
   END { exit bad }
 ' "$work/probe.log"
 echo "checked: one running KIconLoader consumer draws the light tile under Breeze, the dark tile from breeze-dark under Breeze Dark, and the light tile again, each after the iconChanged signal Plasma sends"
