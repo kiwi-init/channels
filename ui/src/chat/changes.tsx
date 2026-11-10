@@ -7,6 +7,7 @@ import { askDelete, EditHere, startEditing, stopAskingDelete, stopEditing, useAs
 import { t } from "~/i18n/i18n"
 import { Confirm } from "~/kit/confirm"
 import { GlyphIcon } from "~/kit/icons"
+import { announce } from "~/kit/toasts"
 import type { Channel, Message } from "~/model"
 import { useAct } from "~/nav"
 import { wordsRaw } from "~/words"
@@ -14,7 +15,7 @@ import { wordsRaw } from "~/words"
 type Props = { kind: "tools" | "editor"; channel: Channel; m: Message }
 
 export default function Changes({ kind, channel, m }: Props) {
-  return kind === "tools" ? <Tools channel={channel} m={m} /> : <Editor channel={channel} m={m} />
+  return kind === "tools" ? <Tools channel={channel} m={m} /> : <Whole channel={channel} m={m} />
 }
 
 function Tools({ channel, m }: { channel: Channel; m: Message }) {
@@ -47,6 +48,29 @@ function Tools({ channel, m }: { channel: Channel; m: Message }) {
   )
 }
 
+function Whole({ channel, m }: { channel: Channel; m: Message }) {
+  const { actions } = useAct()
+  const { holdEarlier, earlierTo } = actions
+  const code = channel.code
+  const seq = m.seq
+  const partial = !!m.partial
+  useEffect(() => {
+    if (!partial) return
+    let live = true
+    holdEarlier(code, "edit", seq)
+    void earlierTo(code, seq).then((ok) => {
+      if (!live || ok) return
+      announce(t("chat.composer.edit.not.loaded"), "error")
+      stopEditing()
+    })
+    return () => {
+      live = false
+      holdEarlier(code, "edit", null)
+    }
+  }, [code, seq, partial, holdEarlier, earlierTo])
+  return partial ? null : <Editor channel={channel} m={m} />
+}
+
 function Editor({ channel, m }: { channel: Channel; m: Message }) {
   const { actions } = useAct()
   const [text, setText] = useState(wordsRaw(m.text))
@@ -54,6 +78,7 @@ function Editor({ channel, m }: { channel: Channel; m: Message }) {
   useEffect(() => {
     const el = area.current
     if (!el) return
+    el.scrollIntoView({ block: "nearest" })
     el.focus()
     el.setSelectionRange(el.value.length, el.value.length)
   }, [])

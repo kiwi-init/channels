@@ -339,6 +339,7 @@ const MESSAGES: Message[] = [
   { seq: 192, from: "atlas", at: m(1.5), text: wrote("Maya's first-hour spec is approved and next in line. It starts as soon as win or pixel frees up."), where: general },
   { seq: 193, from: "win", at: m(60), text: wrote("Starting T22. SIGKILL between keystrokes, then reopen."), where: { kind: "task", task: 22 } },
   { seq: 194, from: "pixel", at: m(26), text: wrote("Round 2 back: threads lose their draft. Keying drafts by thread root too."), where: { kind: "task", task: 21 } },
+  { seq: 195, from: "jow", at: m(20), text: wrote("Keep one draft per place, threads included."), where: { kind: "task", task: 21 }, canChange: true },
 ]
 
 function merged(base: readonly Message[], add: readonly Message[]): Message[] {

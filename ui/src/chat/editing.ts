@@ -33,7 +33,4 @@ export function stopEditing(): void {
   emit()
 }
 
-export const useEditing = (code: string, seq: number): boolean => useSyncExternalStore(subscribe, () => editing === `:${code}:${seq}`)
-
-export const useEditingIn = (code: string, at: EditAt): number | null =>
-  useSyncExternalStore(subscribe, () => (at && editing?.startsWith(`${at}:${code}:`) ? Number(editing.slice(at.length + code.length + 2)) : null))
+export const useEditing = (code: string, seq: number, at: EditAt = ""): boolean => useSyncExternalStore(subscribe, () => editing === `${at}:${code}:${seq}`)
