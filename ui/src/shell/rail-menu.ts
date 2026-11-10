@@ -13,6 +13,7 @@ interface Rail {
   muted: (code: string) => boolean
   setMute: (code: string, on: boolean) => void
   save: (folders: Folder[]) => void
+  settings: ((code: string) => void) | null
 }
 
 export function railMenu(target: RailTarget, at: { x: number; y: number }, rail: Rail): OpenMenu | null {
@@ -43,6 +44,7 @@ export function railMenu(target: RailTarget, at: { x: number; y: number }, rail:
               { label: t("shell.rail.menu.new.folder"), run: () => save([...folders, { id: newFolderId(), name: folderName(), codes: [code], open: true }]) },
             ]),
       ],
+      ...(rail.settings ? [[{ label: t("shell.channel.settings"), run: () => rail.settings?.(code) }]] : []),
     ],
   }
 }

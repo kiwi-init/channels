@@ -138,6 +138,13 @@ export function Rail() {
                 title: (code) => tiles.find((c) => c.code === code)?.title ?? code,
                 muted: (code) => prefs.muted.includes(code),
                 setMute: (code, on) => actions.setMute(code, null, on),
+                settings:
+                  target.kind === "channel" && tiles.find((c) => c.code === target.code)?.state === "member"
+                    ? (code) => {
+                        go({ to: "channel", code })
+                        go({ to: "modal", modal: { kind: "channel" } })
+                      }
+                    : null,
                 save,
               })
             )
