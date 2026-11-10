@@ -24,8 +24,16 @@ const browser = await (ENGINE === "webkit" ? webkit.launch() : chromium.launch({
 });
 
 const failures: string[] = [];
+const said: string[] = [];
 const check = (what: string, why: string | null): void => {
   if (why) failures.push(`${what}: ${why}`);
+  if (why)
+    console.log(
+      `  the page's last lines at ${new Date().toISOString().slice(11, 19)}:\n${said
+        .slice(-40)
+        .map((l) => `    ${l}`)
+        .join("\n")}`,
+    );
   console.log(`${why ? "✗" : "✓"} ${what}${why ? `: ${why}` : ""}`);
 };
 
@@ -64,7 +72,8 @@ try {
   const page = await context.newPage();
   const threw: string[] = [];
   page.on("pageerror", (e) => threw.push(e.message));
-  if (process.argv.includes("--console")) page.on("console", (m) => console.log(`  [page ${m.type()}] ${m.text().slice(0, 200)}`));
+  page.on("console", (m) => void said.push(`${new Date().toISOString().slice(11, 19)} [${m.type()}] ${m.text().slice(0, 220)}`));
+  page.on("requestfailed", (r) => void said.push(`${new Date().toISOString().slice(11, 19)} [request failed] ${r.method()} ${new URL(r.url()).pathname} ${r.failure()?.errorText ?? ""}`));
   await page.goto(BASE);
   await firstRun(page, "owner");
   await newChannel(page, "send once");
