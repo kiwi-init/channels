@@ -28,7 +28,7 @@ const expect = (ok: boolean, what: string) => {
   if (!ok) fails.push(what);
 };
 
-const place = (page: Page): Promise<string> => page.evaluate(() => document.querySelector(".side [aria-current='page'] .side-label, [aria-current='page'] .side-label")?.textContent?.trim() ?? "");
+const place = (page: Page): Promise<string> => page.evaluate(() => document.querySelector(".side [aria-current='page']")?.querySelector(".side-label, .side-name")?.textContent?.trim() ?? "");
 const profile = (page: Page): Promise<boolean> => page.evaluate(() => !!document.querySelector("dialog[open]"));
 const settle = (page: Page) => page.waitForTimeout(500);
 
