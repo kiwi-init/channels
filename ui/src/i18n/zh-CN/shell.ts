@@ -189,7 +189,7 @@ export default {
   "start.enroll.approve.there": "在那里批准这台电脑。",
   "start.enroll.type.these": "在你的另一台电脑上输入这些数字",
   "start.enroll.your.key": "{name}，这是你的密钥吗？",
-  "start.enroll.compare": "与另一台电脑上“设置 › 账户”中的密钥比较。密钥不同说明是别人在应答：不要加入。",
+  "start.enroll.compare": "与另一台电脑上“设置 › 账户”里的“设备登录密钥”比较。密钥不同说明是别人在应答：不要加入。",
   "start.enroll.matches": "一致，加入",
   "start.enroll.no.match": "不一致",
   "start.enroll.cancel": "取消",

@@ -189,7 +189,8 @@ export default {
   "start.enroll.approve.there": "Aprove este computador lá.",
   "start.enroll.type.these": "Digite estes números no seu outro computador",
   "start.enroll.your.key": "Esta é a sua chave, {name}?",
-  "start.enroll.compare": "Compare com o seu outro computador, em Configurações › Conta. Uma chave diferente significa que outra pessoa respondeu: não entre.",
+  "start.enroll.compare":
+    "Compare com o seu outro computador: Configurações › Conta, na linha “Chave de entrada de dispositivos”. Uma chave diferente significa que outra pessoa respondeu: não entre.",
   "start.enroll.matches": "Bate, entrar",
   "start.enroll.no.match": "Não bate",
   "start.enroll.cancel": "Cancelar",

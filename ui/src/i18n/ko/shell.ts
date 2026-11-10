@@ -189,7 +189,7 @@ export default {
   "start.enroll.approve.there": "그곳에서 이 컴퓨터를 승인하세요.",
   "start.enroll.type.these": "다른 컴퓨터에 이 숫자를 입력하세요",
   "start.enroll.your.key": "{name}님, 이 키가 맞습니까?",
-  "start.enroll.compare": "다른 컴퓨터의 설정 › 계정과 비교하세요. 키가 다르면 다른 누군가가 응답한 것입니다. 참여하지 마세요.",
+  "start.enroll.compare": "다른 컴퓨터의 설정 › 계정에 있는 “기기 로그인 키”와 비교하세요. 키가 다르면 다른 누군가가 응답한 것입니다. 참여하지 마세요.",
   "start.enroll.matches": "일치함, 참여",
   "start.enroll.no.match": "일치하지 않음",
   "start.enroll.cancel": "취소",

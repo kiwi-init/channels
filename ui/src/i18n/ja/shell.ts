@@ -189,7 +189,7 @@ export default {
   "start.enroll.approve.there": "そちらでこのコンピュータを承認してください。",
   "start.enroll.type.these": "もう一台のコンピュータでこの数字を入力してください",
   "start.enroll.your.key": "{name} さん、これはあなたの鍵ですか？",
-  "start.enroll.compare": "もう一台のコンピュータの「設定 › アカウント」と比べてください。鍵が違う場合は別の誰かが応答しています。参加しないでください。",
+  "start.enroll.compare": "もう一台のコンピュータの「設定 › アカウント」にある「デバイスのサインイン用の鍵」と比べてください。鍵が違う場合は別の誰かが応答しています。参加しないでください。",
   "start.enroll.matches": "一致する、参加",
   "start.enroll.no.match": "一致しない",
   "start.enroll.cancel": "キャンセル",
