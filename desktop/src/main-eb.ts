@@ -17,11 +17,11 @@ import { catchMainErrors, logMainError } from "./main-log.ts";
 import { followColorScheme, missingGuard, sandboxOff, watchDrops, watchPaste } from "./native-eb.ts";
 import { watchCancels } from "./secret-service.ts";
 import { claimInstance, handoffFor, launchArgs, launchToken, type Instance } from "./single-instance.ts";
-import { keyringLocked, openStoreForThisBuild, warnIfStoreBroken } from "./store-open-eb.ts";
+import { keyringLocked, openStoreForThisBuild, unreadable, warnAboutStore } from "./store-open-eb.ts";
 import { driveForTests, wrongTestHome } from "./test-build-eb.ts";
 import { runningAppImage } from "./updater.ts";
 import { fail, releaseFirst } from "./start-fail-eb.ts";
-import { createWindow, showKeyringNote } from "./window-eb.ts";
+import { createWindow, showKeyringNote, showUnreadable } from "./window-eb.ts";
 
 declare const KIWI_EB_TEST: boolean;
 
@@ -54,7 +54,7 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
   followColorScheme();
   watchDrops();
   watchPaste();
-  const win = await createWindow(cancelled && (!inTime || keyringLocked()) ? "cancelled" : !inTime ? "waiting" : keyringLocked() ? "locked" : null);
+  const win = await createWindow(cancelled && (!inTime || keyringLocked()) ? "cancelled" : !inTime ? "waiting" : keyringLocked() ? "locked" : null, inTime ? unreadable() : null);
   if (!win) {
     instance.release();
     return;
@@ -69,12 +69,19 @@ async function start(instance: Extract<Instance, { kind: "first" }>): Promise<vo
     console.error("Channels: the keyring stayed locked, so the window asks to unlock it and nothing is kept unencrypted");
     return;
   }
+  const cantRead = unreadable();
+  if (cantRead) {
+    console.error(`Channels: the store can't be read (${cantRead.why}), so the window says so instead of starting over it`);
+    if (!inTime) showUnreadable(cantRead);
+    driveForTests(win);
+    return;
+  }
   startKeys();
   if (!inTime) ebHost.reload();
   driveForTests(win);
   startLife(win, instance.release);
   keepDaemonAlive();
-  warnIfStoreBroken();
+  warnAboutStore();
 }
 
 BrowserView.on("created", (tag) => tag.remove());

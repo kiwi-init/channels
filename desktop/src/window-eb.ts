@@ -21,6 +21,7 @@ import { snapshot, store } from "./store.ts";
 import { TRAFFIC_LIGHTS, WINDOW_SIZE, windowBackground } from "./window-look.ts";
 import { ownAppImage } from "./update-asset.ts";
 import { channelUi, uiFromChannel, uiViewsRoot } from "./ui-engine-eb.ts";
+import { unreadablePage, type Unreadable } from "./unreadable-store.ts";
 import { minWindowWidth } from "./window-size.ts";
 
 const rgb = (hex: string): number => Number.parseInt(hex.slice(1), 16);
@@ -39,6 +40,10 @@ function openOutside(url: string): void {
 let showNote: (state: KeyringState) => void = () => {};
 
 export const showKeyringNote = (state: KeyringState): void => showNote(state);
+
+let showCantRead: (u: Unreadable) => void = () => {};
+
+export const showUnreadable = (u: Unreadable): void => showCantRead(u);
 
 function askAgain(): void {
   ebHost.app.relaunch(ownAppImage(process.env["APPIMAGE"], process.env["APPDIR"], process.execPath) ?? path.join(path.dirname(process.execPath), "launcher"));
@@ -60,12 +65,13 @@ function rulesHold(view: BrowserView): Promise<boolean> {
   );
 }
 
-export async function createWindow(keyring: KeyringState | null = null): Promise<BrowserWindow | null> {
+export async function createWindow(keyring: KeyringState | null = null, unreadable: Unreadable | null = null): Promise<BrowserWindow | null> {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8");
   let current = index;
   const page = (): Uint8Array<ArrayBuffer> => cString(pageWithCsp(current, store.relayUrl));
   const note = (state: KeyringState): Uint8Array<ArrayBuffer> => cString(pageWithCsp(keyringPage(index, process.platform, state), store.relayUrl));
-  const first = keyring ? note(keyring) : page();
+  const cantRead = (u: Unreadable): Uint8Array<ArrayBuffer> => cString(pageWithCsp(unreadablePage(index, u), store.relayUrl));
+  const first = keyring ? note(keyring) : unreadable ? cantRead(unreadable) : page();
   const bundled = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "preload", "index.js"), "utf8");
   const table = handlers(ebHost);
   let view: BrowserView | null = null;
@@ -153,7 +159,8 @@ export async function createWindow(keyring: KeyringState | null = null): Promise
     },
   });
   showNote = (state) => load(note(state));
-  if (ui && !keyring) await startUi();
+  showCantRead = (u) => load(cantRead(u));
+  if (ui && !keyring && !unreadable) await startUi();
   else {
     ui?.placeBuiltIn();
     load(first);
