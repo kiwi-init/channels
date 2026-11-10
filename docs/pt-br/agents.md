@@ -64,9 +64,42 @@ Só quando as regras do próprio projeto pedem uma. Uma tarefa adicionada com `-
 2. Quem revisa responde `kiwi task approve T7 --round N` ou `kiwi task reject T7 --round N`, nomeando a rodada que leu.
 3. Uma rejeição devolve o trabalho ao responsável. Um veredito para uma rodada que não é a aberta é recusado em todo lugar, então uma revisão atrasada nunca cai sobre um trabalho mais novo.
 
+O veredito fica no Kiwi, na rodada e na conversa da tarefa. Quem revisa não o copia para o PR, e o Kiwi não bloqueia um merge no GitHub.
+
 ### Quando quem revisa está ausente
 
 Quem revisa e está offline, ou saiu, não prende a tarefa. O líder, uma pessoa ou quem revisa passa a revisão adiante com `kiwi task review T7 --review OUTRO` (ou `kiwi task edit T7 --review OUTRO`, ou `any`). A rodada aberta continua aberta no mesmo commit, e quem passa a revisar responde `kiwi task approve T7 --round N`. Um trabalho revisado e entregue fora do Kiwi é fechado com um motivo: `kiwi task close T7 "por quê"`. Um `kiwi task done` recusado aponta as duas saídas.
+
+## Depois da aprovação: os passos para integrar
+
+Uma tarefa sem passos está concluída quando é aprovada. Uma com passos fica **integrando** até o último passo terminar:
+
+```bash
+kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to staging" --by gentle-otter --then "check staging" --by jow
+```
+
+- Cada passo tem um id, palavras e alguém que o move. Só o passo atual pode terminar.
+- `kiwi task landed T7 --link URL "nota"` termina o passo atual; quem o move, o líder ou uma pessoa pode dizer isso. Uma nota basta quando não há link, então funciona sem repo conectado.
+- A palavra `merge` termina sozinha quando o PR da tarefa é mesclado. Um passo também pode terminar na primeira opção de uma pergunta (`--answered N`), esperar uma execução com alguém nomeado por trás (`--run ID --expect 2h`) ou ficar parado até uma hora, com o motivo (`--wait "24h motivo"`).
+- A conferência de uma pessoa antes da entrega é um passo colocado antes de `merge`. O Kiwi mostra a ordem e de quem é a vez; o GitHub não a impõe.
+- `kiwi task steps T7` lista os passos com seus ids. O líder ou uma pessoa acrescenta, remove, reordena, reatribui ou pula um passo, e isso nunca reabre a revisão. `kiwi task close T7 "motivo"` conclui uma tarefa sem os passos restantes.
+
+## De quem é a vez
+
+Toda tarefa aberta tem uma única pessoa ou agente **da vez**, calculado a partir do estado dela. Ninguém define isso à mão, e o `kiwi status` e o app mostram.
+
+| A tarefa está | De quem é a vez |
+| --- | --- |
+| Em andamento | Do responsável; sem responsável, do líder |
+| A fazer, primeira na fila do responsável | Do responsável |
+| A fazer, atrás de outro trabalho | De ninguém: ela está esperando |
+| A fazer, sem responsável | Do líder |
+| Em revisão, com rodada aberta | De quem revisa; do líder quando é "qualquer um" |
+| Em revisão, sem rodada aberta | Do responsável |
+| Segurada por uma pergunta aberta | Da primeira pessoa perguntada, em qualquer estado |
+| Integrando | De quem move o passo atual |
+
+Se quem tem a vez saiu do canal, ou o canal não tem líder, a vez passa para o dono.
 
 ## Continue lendo
 

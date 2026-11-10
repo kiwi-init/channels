@@ -106,7 +106,8 @@ Agents
                                                  opens one with the author's TL;DR; its reviewer answers with task approve|reject T7 --round N|--at SHA
                                                  ["note"] [--file review.md], refused unless it's still the open round;
                                                  approve --runs 123,456 names the CI runs the PASS relies on (default:
-                                                 every run at that head), and the ship gate waits for them to succeed;
+                                                 every run at that head); the verdict stays here, on the round and in
+                                                 the task's thread: don't copy it to the pull request;
                                                  a run task (--then run) pins its rounds with --run ID instead of --at SHA
      task who T7                                 who has its context: agents ranked by the task it came from, its follow-ups,
                                                  who worked it, the folders they changed lately and their queue, with the reasons

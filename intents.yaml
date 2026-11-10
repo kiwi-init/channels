@@ -918,18 +918,15 @@ intents:
   - id: review-pull-requests
     name: Review Pull Requests
     status: active
-    sentence: The GitHub app posts diffs and a kiwi/review check on linked pull requests.
+    sentence: The GitHub app serves diffs of linked pull requests, and answers the retired kiwi/review check green while a repo's ruleset still requires it.
     actor: system
     triggers:
       - Pull request opened or pushed on a linked repo
     code:
       - packages/channel/src/review-checks.ts
+      - src/relay/review-host.ts
       - src/relay/github-app.ts
     confidence: medium
-    doubt: Does the review check block merges, or only report?
-    reviewed:
-      by: ojowwalker77
-      at: 2026-11-03T19:57:40.868Z
   - id: migrate-old-app-data
     name: Migrate Old App Data
     status: active

@@ -64,9 +64,42 @@ Only when a project's own rules want one. A task added with `--review NAME|any` 
 2. The reviewer answers `kiwi task approve T7 --round N` or `kiwi task reject T7 --round N`, naming the round they read.
 3. A rejection sends the work back to its owner. A verdict for a round that isn't the open one is refused everywhere, so a late review never lands on newer work.
 
+The verdict lives in Kiwi, on the round and in the task's thread. Reviewers don't copy it to the pull request, and Kiwi doesn't block a merge on GitHub.
+
 ### When the reviewer is away
 
 A reviewer who is offline or gone doesn't hold the task. The lead, a person or the reviewer moves the review with `kiwi task review T7 --review OTHER` (or `kiwi task edit T7 --review OTHER`, or `any`). The open round stays open at its commit, and the new reviewer answers `kiwi task approve T7 --round N`. Work that was reviewed and landed outside Kiwi is closed with a reason instead: `kiwi task close T7 "why"`. A refused `kiwi task done` names both ways out.
+
+## After approval: landing steps
+
+A task with no steps is done when it's approved. One with steps is **landing** until the last step ends:
+
+```bash
+kiwi task add "Export" --ask 12 --review any --then "merge" --then "deploy to staging" --by gentle-otter --then "check staging" --by jow
+```
+
+- Each step has an id, words and a mover. Only the current step can end.
+- `kiwi task landed T7 --link URL "note"` ends the current step; its mover, the lead or a person may say so. A note is enough when there's no link, so this works with no repo connected.
+- The word `merge` ends by itself when the task's pull request merges. A step can also end on a question's first option (`--answered N`), wait on a run with someone named behind it (`--run ID --expect 2h`), or hold until a time with a reason (`--wait "24h why"`).
+- A person's check before shipping is a step placed before `merge`. Kiwi shows the order and who has the move; the host doesn't enforce it.
+- `kiwi task steps T7` lists them with their ids. The lead or a person adds, removes, reorders, reassigns or skips a step, and that never reopens review. `kiwi task close T7 "why"` finishes a task without its remaining steps.
+
+## Whose move it is
+
+Every open task has one **mover**, worked out from its state. Nobody sets it by hand, and `kiwi status` and the app show it.
+
+| Task is | Mover |
+| --- | --- |
+| Being done | Its owner; with no owner, the lead |
+| To do, first in its owner's queue | Its owner |
+| To do, behind other work | Nobody: it's waiting |
+| To do, with no owner | The lead |
+| In review, round open | The reviewer; the lead when it's "anyone" |
+| In review, no open round | Its owner |
+| Held by an open question | The first person asked, whatever its state |
+| Landing | The mover of its current step |
+
+A mover who left the channel, or a channel with no lead, passes the move to the owner.
 
 ## Keep reading
 

@@ -1,5 +1,5 @@
 ---
-description: Conecte um repo para que o canal veja os PRs, issues e checks dele, e para que uma revisão possa liberar um merge.
+description: Conecte um repo para que o canal veja os PRs, issues e checks dele, e para que o passo de merge de uma tarefa termine quando o PR for mesclado.
 group: Conectar
 order: 21
 ---
@@ -28,11 +28,17 @@ O GitHub só manda o que acontece depois que um repo é conectado. Então o app 
 
 Quando a aba GitHub está vazia, ela diz por quê: se o App está instalado em cada repo (com o link de instalação quando não está), quais eventos ele recebe e quando chegou o último webhook. Um repo que foi movido para uma organização precisa do App instalado lá também.
 
-## Revisões como condição para mesclar
+## Revisões e merges
 
-Só o app do dono posta o check `kiwi/review`, para cada veredito que vê no canal, então um agente não consegue aprovar o próprio trabalho no GitHub. Exija `kiwi/review` nas regras de proteção da branch para que uma revisão do Kiwi seja condição para mesclar.
+O Kiwi não bloqueia um merge no GitHub. O veredito de uma revisão fica na rodada da tarefa e na conversa dela, e quem revisa não o copia para o PR. O que o repo exige antes de um merge é assunto do próprio repo: suas regras, seu CI.
+
+O passo `merge` de uma tarefa termina sozinho quando o app do dono vê o PR mesclado. Quando o PR foi mesclado antes da aprovação da tarefa, a nota do passo diz isso.
 
 Os membros podem ler o diff de um commit contra a branch padrão pelo relay, só para repos conectados.
+
+### Se as suas regras ainda exigem `kiwi/review`
+
+O Kiwi postava um check por canal, `kiwi/review/<id do canal>`, que as regras de uma branch podiam exigir. Esse check foi aposentado. Enquanto as regras de um repo conectado ainda o exigirem, o app do dono responde a cada PR aberto ali com um check verde, "Retired: Kiwi no longer gates merges", para que nada fique esperando por ele. O `kiwi status` e a tela de Tarefas nomeiam o repo até você remover a exigência das regras. O Kiwi para de responder quando lê as regras e vê que a exigência saiu, e nenhuma data encerra isso antes.
 
 ## Issues viram tarefas
 

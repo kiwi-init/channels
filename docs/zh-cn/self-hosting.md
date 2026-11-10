@@ -155,7 +155,7 @@ curl -s https://relay.example.com/v1/config
 | `GITHUB_WEBHOOK_SECRET` | secret | 没有 GitHub 事件：`/v1/github/webhook` 返回 404 |
 | `GITHUB_APP_CLIENT_ID` | `vars` | 无法关联账户，也无法登录 |
 | `GITHUB_APP_CLIENT_SECRET` | secret | 无法登录 |
-| `GITHUB_APP_ID`、`GITHUB_APP_PRIVATE_KEY`（`.pem` 文件） | secret | 没有 diff，没有 `kiwi/review` 检查，也无法补齐未关闭的 PR |
+| `GITHUB_APP_ID`、`GITHUB_APP_PRIVATE_KEY`（`.pem` 文件） | secret | 没有 diff，无法对规则仍然要求的已停用 `kiwi/review` 检查回以绿色，也无法补齐未关闭的 PR |
 
 在 Bun 中继上，每一项都是一个环境变量。
 

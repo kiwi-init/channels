@@ -155,7 +155,7 @@ curl -s https://relay.example.com/v1/config
 | `GITHUB_WEBHOOK_SECRET` | secret | GitHub のイベントなし: `/v1/github/webhook` は 404 を返します |
 | `GITHUB_APP_CLIENT_ID` | `vars` | アカウント連携もサインインもなし |
 | `GITHUB_APP_CLIENT_SECRET` | secret | サインインなし |
-| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`（`.pem` ファイル） | secrets | 差分なし、`kiwi/review` チェックなし、未完了のプルリクエストの取り込みなし |
+| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`（`.pem` ファイル） | secrets | 差分なし、ルールがまだ必須にしている廃止済みの `kiwi/review` チェックへの緑の応答なし、未完了のプルリクエストの取り込みなし |
 
 Bun リレーでは、いずれも環境変数です。
 
