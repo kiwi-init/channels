@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
 
-import { reactionsOn, settleRequests, type Settle } from "./settle-requests.ts";
+import { reactionsOn, settleRequests, stopFetchOnLeave, type Settle } from "./settle-requests.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
@@ -25,6 +25,10 @@ const server = Bun.serve({
     if (path === "/probe/other.json") return new Response("{}", { headers: { "content-type": "application/json" } });
     if (path === "/probe/cancel.html")
       return new Response(`<!doctype html><script>fetch("/reactions/index.json").then((r) => r.json()).catch(() => {})</script>`, { headers: { "content-type": "text/html" } });
+    if (path === "/probe/late.html")
+      return new Response(`<!doctype html><script>addEventListener("pagehide", () => fetch("/probe/other.json").then((r) => r.json()).catch(() => {}))</script>`, {
+        headers: { "content-type": "text/html" },
+      });
     if (path === "/probe/hang.html") return new Response(`<!doctype html><script>fetch("/reactions/hang.json").catch(() => {})</script>`, { headers: { "content-type": "text/html" } });
     if (path === "/reactions/hang.json") {
       await new Promise<void>((done) => hung.push(done));
@@ -47,7 +51,7 @@ const note = (what: string) => console.log(`  ${what}`);
 
 const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 
-const fresh = async (): Promise<{ page: Page; errors: string[]; settle: Settle; catalogAsked: () => boolean }> => {
+const fresh = async (): Promise<{ page: Page; errors: string[]; settle: Settle; leave: () => Promise<void>; catalogAsked: () => boolean }> => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
   if (engine === "chromium") await (await page.context().newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: CPU_SLOWDOWN });
   const errors: string[] = [];
@@ -56,15 +60,16 @@ const fresh = async (): Promise<{ page: Page; errors: string[]; settle: Settle; 
   page.on("request", (r) => {
     if (new URL(r.url()).pathname === "/reactions/index.json") asked = true;
   });
-  return { page, errors, settle: settleRequests(page, reactionsOn(base)), catalogAsked: () => asked };
+  return { page, errors, settle: settleRequests(page, reactionsOn(base)), leave: await stopFetchOnLeave(page), catalogAsked: () => asked };
 };
 
 type Run = { askedAtIdle: boolean[]; inFlightAtGoto: string[][]; errors: string[] };
 
 const shotLoop = async (wait: boolean): Promise<Run> => {
-  const { page, errors, settle, catalogAsked } = await fresh();
+  const { page, errors, settle, leave, catalogAsked } = await fresh();
   const run: Run = { askedAtIdle: [], inFlightAtGoto: [], errors };
   for (const shot of SHOTS) {
+    if (wait) await leave();
     if (wait) await settle.settled(CATALOG_MS * 3);
     run.inFlightAtGoto.push(settle.inFlight());
     await page.goto(`${base}?shot=${shot}&theme=light`);
@@ -101,7 +106,42 @@ try {
     await asked;
     await page.goto(`${base}probe/other.html`);
     await later(500);
-    note(`WebKit, leaving a page while its caught catalog fetch is in flight (#1850, seen only now and then): ${errors.join("; ") || "no page error this run"}`);
+    note(`WebKit, leaving a page while its caught catalog fetch is in flight (not #1850, such a fetch is only cancelled): ${errors.join("; ") || "no page error this run"}`);
+    await page.close();
+  }
+  const lateFetch = async (stop: boolean): Promise<string[]> => {
+    const { page, errors, leave } = await fresh();
+    await page.goto(`${base}probe/late.html`);
+    if (stop) await leave();
+    await page.goto(`${base}probe/other.html`);
+    await later(500);
+    await page.close();
+    return errors;
+  };
+  const late = await lateFetch(false);
+  if (engine === "webkit")
+    check(
+      late.some((e) => e.includes("/probe/other.json due to access control checks")),
+      `WebKit, a caught fetch that starts while its page is being left raises #1850's page error: ${late.join("; ") || "none"}`,
+    );
+  else note(`Chromium, a caught fetch that starts while its page is being left: ${late.join("; ") || "no page error"}`);
+  const stopped = await lateFetch(true);
+  check(stopped.length === 0, `once the loop says it is leaving, that fetch never starts and no page error is recorded${stopped.length ? `: ${stopped.join("; ")}` : ""}`);
+  {
+    const { page, errors, leave } = await fresh();
+    await page.goto(`${base}probe/other.html`);
+    await leave();
+    await page.evaluate(
+      () =>
+        void setTimeout(() => {
+          throw new Error("thrown after leaving");
+        }),
+    );
+    await later(200);
+    check(
+      errors.some((e) => e.includes("thrown after leaving")),
+      "a page error thrown after the loop says it is leaving is still recorded",
+    );
     await page.close();
   }
   {

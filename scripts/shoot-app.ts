@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit } from "playwright-core";
 
-import { reactionsOn, settleRequests } from "./settle-requests.ts";
+import { reactionsOn, settleRequests, stopFetchOnLeave } from "./settle-requests.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -66,6 +66,7 @@ try {
   page.on("requestfailed", (r) => isReaction(new URL(r.url())) && trace(`page: ${new URL(r.url()).pathname} failed: ${r.failure()?.errorText ?? "no reason given"}`));
   page.on("framenavigated", (f) => f === page.mainFrame() && trace(`page: navigated to ${f.url().replace(base, "/")}`));
   const reactions = settleRequests(page, reactionsOn(base));
+  const leave = await stopFetchOnLeave(page);
   for (const theme of themes) {
     for (const name of names) {
       trail = trail.slice(-12);
@@ -79,6 +80,7 @@ try {
           // about:blank before the first shot has no storage to clear
         }
       });
+      await leave();
       await reactions.settled();
       await page.goto(`${base}?shot=${name}&theme=${theme}`);
       await page.waitForLoadState("networkidle");
