@@ -55,7 +55,8 @@ jobs:
           ref-name: ${{ github.ref_name }}
 
   gate-dry-run:
-    if: github.event_name == 'workflow_dispatch'
+    needs: [on-main, ci-green]
+    if: always() && github.event_name == 'workflow_dispatch' && !cancelled()
     runs-on: ubuntu-latest
     timeout-minutes: 50
     permissions:
