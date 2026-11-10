@@ -5,14 +5,14 @@ import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { useDebugOptions } from "~/kit/debug"
 import { Icon } from "~/kit/icons"
 import { docOf } from "~/chat/doc-of"
-import type { App, Channel, Task, TaskStatus, Theme, Where } from "~/model"
+import type { App, Channel, Task, TaskStatus, Where } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
 import { nickname, onePerPerson, roleWord, shown } from "~/names"
-import { toggleSide } from "~/shell/side"
 import { statusOf } from "~/shell/sidebar"
 import { wordsPlain } from "~/words"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
+import { runCommand } from "~/kit/commands"
 import { keysHint } from "~/kit/keys"
 import { personGo } from "~/person-go"
 
@@ -32,15 +32,7 @@ const LIMIT = 8
 
 const SEP = /[\s#@/._:-]/
 
-const FIRST_QUERY = new URLSearchParams(location.search).get("q") ?? ""
-
 const TONE: Record<TaskStatus, string> = { todo: "", doing: "tone-doing", review: "tone-review", landing: "tone-review", done: "tone-live", waiting: "tone-decide" }
-
-const THEMES: { theme: Theme; label: Key; icon: "moon" | "sun" | "computer" }[] = [
-  { theme: "dark", label: "palette.finder.theme.dark", icon: "moon" },
-  { theme: "light", label: "palette.finder.theme.light", icon: "sun" },
-  { theme: "system", label: "palette.finder.theme.system", icon: "computer" },
-]
 
 interface Item {
   id: string
@@ -68,7 +60,7 @@ interface Ranked {
 
 export function Finder() {
   const { app, nav, go } = useApp()
-  const [query, setQuery] = useState(FIRST_QUERY)
+  const [query, setQuery] = useState("")
   const [active, setActive] = useState(0)
   const listId = useId()
   const listRef = useRef<HTMLDivElement>(null)
@@ -343,19 +335,42 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
     }
   )
 
-  if (channel && nav.page === "channel")
+  if (nav.page !== "channel" || nav.channel !== null)
     items.push({
-      id: "action:sidebar",
+      id: "action:home",
       group: "actions",
-      label: t("palette.finder.toggle.sidebar"),
-      keys: ["hide", "show", "rooms", "people"],
-      lead: <Icon name="sidebar" size={14} />,
-      meta: <kbd className="palette-kbd">{keysHint("\\")}</kbd>,
-      run: () => {
-        close()
-        toggleSide()
-      },
+      label: t("palette.finder.home"),
+      keys: ["start", "channels"],
+      lead: <Icon name="home" size={14} />,
+      run: () => go({ to: "home" }),
     })
+
+  if (channel && nav.page === "channel")
+    items.push(
+      {
+        id: "action:needs",
+        group: "actions",
+        label: t("palette.finder.needs.you"),
+        keys: ["asks", "decide", "waiting", "approve"],
+        lead: <Icon name="check" size={14} />,
+        run: () => {
+          close()
+          go({ to: "tab", tab: "needs" })
+        },
+      },
+      {
+        id: "action:search",
+        group: "actions",
+        label: t("palette.finder.search"),
+        keys: ["find", "messages"],
+        lead: <Icon name="search" size={14} />,
+        meta: <kbd className="palette-kbd">{keysHint("F")}</kbd>,
+        run: () => {
+          close()
+          runCommand("find")
+        },
+      }
+    )
 
   const versions = channel && nav.page === "channel" ? versionsHere(channel, nav) : null
   if (versions)
@@ -421,22 +436,6 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
         },
       }
     )
-
-  for (const theme of THEMES) {
-    const on = app.prefs.theme === theme.theme
-    items.push({
-      id: `action:theme-${theme.theme}`,
-      group: "actions",
-      label: t(theme.label),
-      keys: ["appearance", "mode"],
-      lead: <Icon name={theme.icon} size={14} />,
-      meta: on ? <Icon name="check" size={14} label={t("palette.finder.current.theme")} /> : undefined,
-      run: () => {
-        if (!on) app.actions.setPrefs({ theme: theme.theme })
-        close()
-      },
-    })
-  }
 
   return items
 }
