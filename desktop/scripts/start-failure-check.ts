@@ -63,6 +63,8 @@ if (templates.length !== 1) {
 }
 rmSync(templates[0]!);
 
+const visible = (): string[] => spawnSync("xdotool", ["search", "--onlyvisible", "--name", ".*"], { encoding: "utf8" }).stdout.split("\n").filter(Boolean);
+const before = new Set(visible());
 const problems: string[] = [];
 const child = spawn(join(broken, "bin", "launcher"), [], {
   env: {
@@ -86,11 +88,23 @@ const logged = (): string => {
   const log = existsSync(home) ? find(home, "main.log")[0] : undefined;
   return log ? readFileSync(log, "utf8") : "";
 };
-const boxes = (): string[] => spawnSync("xdotool", ["search", "--onlyvisible", "--name", ".*"], { encoding: "utf8" }).stdout.split("\n").filter(Boolean);
+const boxes = (): string[] => visible().filter((id) => !before.has(id));
+const pressOk = (): void => {
+  for (const id of boxes()) {
+    spawnSync("xdotool", ["windowfocus", "--sync", id], { timeout: 3000 });
+    spawnSync("xdotool", ["key", "--window", id, "Return"]);
+  }
+  spawnSync("xdotool", ["key", "Return"]);
+};
 
 try {
   for (let i = 0; i < 120 && code === undefined && !boxes().length; i++) await sleep(500);
-  await sleep(1500);
+  for (let i = 0, same = 0, last = -1; i < 20 && same < 3 && code === undefined; i++) {
+    const now = boxes().length;
+    same = now === last ? same + 1 : 0;
+    last = now;
+    await sleep(500);
+  }
   const windows = boxes();
   if (!logged().includes("the window couldn't start")) problems.push(`main.log doesn't say the window couldn't start: ${logged().slice(0, 400) || "empty"}`);
   if (!said.includes("Channels: the window couldn't start")) problems.push("the console doesn't say the window couldn't start");
@@ -99,12 +113,10 @@ try {
   console.log(`windows on screen: ${windows.map((id) => `${id} "${spawnSync("xdotool", ["getwindowname", id], { encoding: "utf8" }).stdout.trim()}"`).join(", ") || "none"}`);
   if (existsSync(screen)) writeFileSync(join(out, "start-failure.png"), png(readFileSync(screen)));
   else problems.push(`Xvfb left no screen dump at ${screen}`);
-  for (const id of windows) {
-    spawnSync("xdotool", ["windowfocus", "--sync", id], { timeout: 3000 });
-    spawnSync("xdotool", ["key", "--window", id, "Return"]);
+  for (let i = 0; i < 20 && code === undefined; i++) {
+    if (i % 2 === 0) pressOk();
+    await sleep(500);
   }
-  spawnSync("xdotool", ["key", "Return"]);
-  for (let i = 0; i < 20 && code === undefined; i++) await sleep(500);
   if (code === undefined) problems.push("the app was still running 10 s after OK was pressed");
   else if (code !== 1) problems.push(`the app quit with ${code}, not 1`);
 } finally {
