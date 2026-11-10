@@ -681,14 +681,21 @@ const bridgeEvents = async (d: Driver): Promise<BridgeEvent[]> => {
 };
 
 const PAGE_EVENTS = ["host-message", "dom-ready"];
-const postFromPage = (d: Driver): Promise<boolean> =>
+const postFromPage = (d: Driver): Promise<{ posted: boolean; webviewId: unknown; sendToHost: boolean }> =>
   d.evaluate(
     (names) => {
-      const w = window as unknown as { webkit?: { messageHandlers?: Record<string, { postMessage(s: string): void } | undefined> }; __electrobunWebviewId?: number };
-      const bridge = w.webkit?.messageHandlers?.["eventBridge"];
-      if (!bridge || w.__electrobunWebviewId === undefined) return false;
+      const w = window as unknown as {
+        webkit?: { messageHandlers?: Record<string, { postMessage(s: string): void } | undefined> };
+        __electrobunWebviewId?: number;
+        __electrobunEventBridge?: { postMessage(s: string): void };
+        __electrobunSendToHost?: (m: unknown) => void;
+      };
+      const bridge = w.__electrobunEventBridge ?? w.webkit?.messageHandlers?.["eventBridge"];
+      const sendToHost = typeof w.__electrobunSendToHost === "function";
+      if (!bridge || w.__electrobunWebviewId === undefined) return { posted: false, webviewId: w.__electrobunWebviewId ?? null, sendToHost };
       for (const eventName of names) bridge.postMessage(JSON.stringify({ id: "webviewEvent", type: "message", payload: { id: w.__electrobunWebviewId, eventName, detail: `page-${eventName}` } }));
-      return true;
+      w.__electrobunSendToHost?.({ page: "send-to-host" });
+      return { posted: true, webviewId: w.__electrobunWebviewId, sendToHost };
     },
     PAGE_EVENTS,
     2_000,
@@ -1292,14 +1299,19 @@ try {
     "none of the mod's forged new-window-open, will-navigate, dom-ready or host-message events reached the app",
   );
   check(!whileMod.some((e) => e.name !== "will-navigate"), "no dom-ready, host-message or new-window-open reached the app while the mod ran");
-  const pageAt = (await bridgeEvents(d)).length;
-  const posted = await postFromPage(d);
+  const all = await bridgeEvents(d);
+  console.log(`everything the app heard from its web view since it started: ${JSON.stringify(all.slice(0, bridgeAt))}`);
+  const pageAt = all.length;
+  const page = await postFromPage(d);
   const fromPage = await until("the page's own events", 10_000, async () => {
     const got = (await bridgeEvents(d)).slice(pageAt);
-    return PAGE_EVENTS.every((n) => got.some((e) => e.name === n && e.detail === `page-${n}`)) ? got : null;
-  }).catch(() => null);
-  console.log(`the page posted its own ${PAGE_EVENTS.join(" and ")} (${posted ? "posted" : "no event bridge"}); the app heard: ${JSON.stringify(fromPage)}`);
-  check(posted && !!fromPage, "the top page's own dom-ready and host-message, posted the same way, reach the app");
+    return PAGE_EVENTS.every((n) => got.some((e) => e.name === n && e.detail.includes(`page-${n}`))) ? got : null;
+  }).catch(async () => (await bridgeEvents(d)).slice(pageAt));
+  console.log(`the page posted its own ${PAGE_EVENTS.join(" and ")}: ${JSON.stringify(page)}; the app heard: ${JSON.stringify(fromPage)}`);
+  check(
+    page.posted && PAGE_EVENTS.every((n) => fromPage.some((e) => e.name === n && e.detail.includes(`page-${n}`))),
+    "the top page's own dom-ready and host-message, posted the same way, reach the app",
+  );
   await step("⌘K again", 10_000, palette);
   await step("the mod's command, typed into ⌘K", 10_000, () => d.evaluate(fillIn, { selector: ".palette-input", value: "Say hi" }, 2_000));
   await step("the mod's command in ⌘K", 10_000, () => d.evaluate(clickText, { selector: ".palette-item", text: "Say hi from the probe mod" }, 2_000));

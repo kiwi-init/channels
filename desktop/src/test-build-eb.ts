@@ -28,16 +28,16 @@ export function openTestStore(first: () => void): boolean {
   return false;
 }
 
-const BRIDGE_EVENTS = ["dom-ready", "host-message", "will-navigate"] as const;
+const BRIDGE_EVENTS = ["dom-ready", "host-message", "will-navigate", "new-window-open"];
 
 function hearBridgeEvents(win: BrowserWindow): () => { name: string; detail: string }[] {
   const heard: { name: string; detail: string }[] = [];
   const detailOf = (e: unknown): string => {
     const data = typeof e === "object" && e !== null && "data" in e ? e.data : null;
-    return typeof data === "object" && data !== null && "detail" in data ? String(data.detail).slice(0, 300) : "";
+    const detail = typeof data === "object" && data !== null && "detail" in data ? data.detail : "";
+    return (typeof detail === "string" ? detail : JSON.stringify(detail)).slice(0, 300);
   };
-  for (const name of BRIDGE_EVENTS) win.webview.on(name, (e: unknown) => void heard.push({ name, detail: detailOf(e) }));
-  Electrobun.events.on(`new-window-open-${win.webview.id}`, (e: unknown) => void heard.push({ name: "new-window-open", detail: detailOf(e) }));
+  for (const name of BRIDGE_EVENTS) Electrobun.events.on(`${name}-${win.webview.id}`, (e: unknown) => void heard.push({ name, detail: detailOf(e) }));
   return () => [...heard];
 }
 
