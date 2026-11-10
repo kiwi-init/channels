@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, and the phone jobs ios, android); empty runs everything but the phone jobs"
+        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, and the phone jobs ios, android); empty picks from what the branch changed (.github/coverage.yml), everything when in doubt"
         required: false
         default: ""
       update_from:
@@ -81,6 +81,18 @@ jobs:
           for j in $pick; do case " $all $phones " in *" $j "*) ;; *) echo "no job named $j; the jobs are: $all $phones"; exit 1 ;; esac; done
           json=$(for j in $all $phones; do case " $pick " in *" $j "*) v=true ;; *) v=false ;; esac; printf '"%s":%s,' "$j" "$v"; done)
           echo "run={${json%,}}" >> "$GITHUB_OUTPUT"
+
+  ui-assets:
+    name: ui assets
+    needs: plan
+    if: ${{ !cancelled() && (fromJSON(needs.plan.outputs.run)['build'] || fromJSON(needs.plan.outputs.run)['doc'] || fromJSON(needs.plan.outputs.run)['fuzz'] || fromJSON(needs.plan.outputs.run)['shots']) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/ui-assets
+        with:
+          mode: produce
 
   # Types, lint, format, unused code and action pins.
   static:
@@ -183,8 +195,9 @@ jobs:
       - uses: ./.github/actions/browser
         with:
           webkit: "true"
-      - name: ui build
-        run: bun run ui:build
+      - uses: ./.github/actions/ui-assets
+        with:
+          mode: consume
       - name: ui bundle budget
         if: ${{ !cancelled() && matrix.part == 'app' }}
         run: bun scripts/ui-bundle.ts
@@ -249,11 +262,9 @@ jobs:
       - uses: ./.github/actions/browser
         with:
           webkit: "true"
-      - name: ui build
-        run: bun run ui:build
-      - name: ui harness build, with the plain-browser key store
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-harness.ts
+      - uses: ./.github/actions/ui-assets
+        with:
+          mode: consume
       - name: doc replay, a line you send from the composer shows once, whole, in a second window of yours too
         if: ${{ !cancelled() && matrix.part == 'send' }}
         run: bun scripts/ui-doc-replay.ts --chromium --second-window --rounds=2
@@ -341,11 +352,9 @@ jobs:
       - uses: ./.github/actions/browser
         with:
           webkit: "true"
-      - name: ui build
-        run: bun run ui:build
-      - name: ui harness build, with the plain-browser key store
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-harness.ts
+      - uses: ./.github/actions/ui-assets
+        with:
+          mode: consume
       - name: doc fuzzer, fixed seeds, two windows of one person and an agent never lose or mix a line, in Chromium and WebKit
         if: ${{ !cancelled() }}
         run: |
@@ -400,7 +409,9 @@ jobs:
       - uses: ./.github/actions/browser
         with:
           webkit: "true"
-      - run: bun run ui:build
+      - uses: ./.github/actions/ui-assets
+        with:
+          mode: consume
       - name: ui shots in Chromium and WebKit, ${{ matrix.engine }}
         run: |
           pids=""

@@ -1,0 +1,65 @@
+name: ui-assets
+description: The built UI and its harness, produced once per run and consumed opportunistically; a consumer that finds no artifact builds both itself.
+inputs:
+  mode:
+    description: produce or consume
+    required: true
+runs:
+  using: composite
+  steps:
+    - id: key
+      shell: bash
+      run: echo "key=$(printf '%s-%s' "${{ runner.os }}" "$(hashFiles('bun.lock') | cut -c1-12)")-bun1.4.4" >> "$GITHUB_OUTPUT"
+    - if: inputs.mode == 'produce'
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.0.9
+      with:
+        bun-version: 1.4.4
+    - if: inputs.mode == 'produce'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.bun/install/cache
+        key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+        restore-keys: bun-${{ runner.os }}-
+    - if: inputs.mode == 'produce'
+      shell: bash
+      run: |
+        bun install --frozen-lockfile
+        bun run ui:build
+        bun scripts/ui-harness.ts
+    - if: inputs.mode == 'produce'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ui-dist-${{ steps.key.outputs.key }}
+        path: ui/dist
+        retention-days: 1
+    - if: inputs.mode == 'produce'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ui-harness-${{ steps.key.outputs.key }}
+        path: ui/dist-harness
+        retention-days: 1
+    - if: inputs.mode == 'consume'
+      id: pull
+      continue-on-error: true
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: ui-dist-${{ steps.key.outputs.key }}
+        path: ui/dist
+    - if: inputs.mode == 'consume' && steps.pull.outcome == 'success'
+      id: pull_harness
+      continue-on-error: true
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: ui-harness-${{ steps.key.outputs.key }}
+        path: ui/dist-harness
+    - if: inputs.mode == 'consume'
+      shell: bash
+      run: |
+        if [ ! -f ui/dist/index.html ]; then
+          echo "no shared ui dist: building it here"
+          bun run ui:build
+        fi
+        if [ ! -f ui/dist-harness/index.html ]; then
+          echo "no shared harness: building it here"
+          bun scripts/ui-harness.ts
+        fi
