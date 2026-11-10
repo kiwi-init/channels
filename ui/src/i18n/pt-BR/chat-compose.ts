@@ -145,7 +145,6 @@ export default {
   "chat.doc.editor.kind.comment": "comentário",
   "chat.doc.editor.people": "Pessoas",
   "chat.doc.editor.commands": "Comandos",
-  "chat.doc.editor.tasks": "Tarefas",
   "chat.doc.editor.write.to": "Escreva para {place}",
   "chat.doc.editor.write.in": "Escreva em {place}",
   "chat.doc.editor.placeholder": "{prompt} · {keys} envia",

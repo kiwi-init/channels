@@ -145,7 +145,6 @@ export default {
   "chat.doc.editor.kind.comment": "评论",
   "chat.doc.editor.people": "人",
   "chat.doc.editor.commands": "命令",
-  "chat.doc.editor.tasks": "任务",
   "chat.doc.editor.write.to": "写给 {place}",
   "chat.doc.editor.write.in": "在 {place} 中写",
   "chat.doc.editor.placeholder": "{prompt} · {keys} 发送",

@@ -145,7 +145,6 @@ export default {
   "chat.doc.editor.kind.comment": "コメント",
   "chat.doc.editor.people": "人",
   "chat.doc.editor.commands": "コマンド",
-  "chat.doc.editor.tasks": "タスク",
   "chat.doc.editor.write.to": "{place} 宛てに書く",
   "chat.doc.editor.write.in": "{place} に書く",
   "chat.doc.editor.placeholder": "{prompt} · {keys} で送信",

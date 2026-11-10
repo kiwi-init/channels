@@ -83,7 +83,6 @@ const words = {
   "chat.doc.editor.kind.comment": "comment",
   "chat.doc.editor.people": "People",
   "chat.doc.editor.commands": "Commands",
-  "chat.doc.editor.tasks": "Tasks",
   "chat.doc.editor.write.to": "Write to {place}",
   "chat.doc.editor.write.in": "Write in {place}",
   "chat.doc.editor.placeholder": "{prompt} · {keys} sends",

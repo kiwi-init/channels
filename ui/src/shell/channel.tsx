@@ -66,7 +66,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const wanted = useWantedMessage()
   const found = findWanted(wanted, channel.code, channel.messages, channel.since)
   const target = found.kind === "found" ? found.m : null
-  const root = target?.inThread !== undefined && (channel.specs ?? []).some((s) => s.ask === target.inThread) ? target.inThread : undefined
+  const specAsk = (seq: number | undefined): boolean => seq !== undefined && (channel.specs ?? []).some((s) => s.ask === seq)
+  const root = target && specAsk(target.seq) ? target.seq : specAsk(target?.inThread) ? target?.inThread : undefined
   const anchor = root === undefined ? target : null
   const atAnchor = !!anchor && nav.tab === "chat" && sameWhere(anchor.where, nav.where)
   if (anchor && atAnchor && jump?.m.seq !== anchor.seq) setJump({ m: anchor, terms: [] })

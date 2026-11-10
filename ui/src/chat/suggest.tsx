@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState, type RefObject } from "react"
 
 import { mentionNames, type Picks } from "~/chat/linked"
-import { peopleMatches, taskMatches } from "~/chat/matches"
+import { peopleMatches, specMatches, taskMatches } from "~/chat/matches"
 import { t } from "~/i18n/i18n"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
-import type { Channel, Person, Task } from "~/model"
+import type { Channel, Person, Spec, Task } from "~/model"
 import { nickname, onePerPerson, roleWord, shown, Shown } from "~/names"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
@@ -27,11 +27,13 @@ export type Suggest = {
   quiet: boolean
   people: Person[]
   tasks: Task[]
+  specs: Spec[]
   count: number
   moved: (at: number) => void
   insert: (before: string) => void
   complete: (name: string) => void
   completeTask: (id: number) => void
+  completeSpec: (ask: number) => void
   keys: (e: Pickable, more?: { count: number; choose: (i: number) => void }) => boolean
   sent: (body: string) => string
   forget: () => void
@@ -66,6 +68,7 @@ export function useSuggest({
   const taskQuery = closed || query !== undefined ? undefined : TASK_REF.exec(typed)?.[2]
   const people = query === undefined ? [] : peopleMatches(withFormer ? [...channel.people, ...(channel.former ?? [])] : channel.people, query)
   const tasks = taskQuery === undefined ? [] : taskMatches(channel.tasks, taskQuery)
+  const specs = taskQuery === undefined ? [] : specMatches(channel.specs ?? [], taskQuery)
   const mentions = useMemo(() => mentionNames(onePerPerson(channel.people), channel.former), [channel.people, channel.former])
 
   const moved = useCallback((at: number) => {
@@ -84,9 +87,10 @@ export function useSuggest({
   }
   const complete = (name: string) => insert(typed.replace(MENTION, (_all, pre: string) => `${pre}@${mentions.typed(name, picksFor(id))} `))
   const completeTask = (task: number) => insert(typed.replace(TASK_REF, (_all, pre: string) => `${pre}T${task} `))
+  const completeSpec = (ask: number) => insert(typed.replace(TASK_REF, (_all, pre: string) => `${pre}#${ask} `))
 
   const keys: Suggest["keys"] = (e, more) => {
-    const count = people.length || tasks.length || (more?.count ?? 0)
+    const count = people.length || tasks.length + specs.length || (more?.count ?? 0)
     if (!count) return false
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault()
@@ -97,8 +101,10 @@ export function useSuggest({
       e.preventDefault()
       const p = people[pick]
       const t = tasks[pick]
+      const sp = specs[pick - tasks.length]
       if (p) complete(p.name)
       else if (t) completeTask(t.id)
+      else if (sp) completeSpec(sp.ask)
       else more?.choose(pick)
       return true
     }
@@ -117,11 +123,13 @@ export function useSuggest({
     quiet: closed || query !== undefined || taskQuery !== undefined,
     people,
     tasks,
-    count: people.length || tasks.length,
+    specs,
+    count: people.length || tasks.length + specs.length,
     moved,
     insert,
     complete,
     completeTask,
+    completeSpec,
     keys,
     sent: (body) => mentions.sent(body, picksFor(id)),
     forget: () => void picked.delete(id),
@@ -129,11 +137,11 @@ export function useSuggest({
 }
 
 export function listId(s: Suggest): string | undefined {
-  return s.people.length ? `${s.id}-people` : s.tasks.length ? `${s.id}-tasks` : undefined
+  return s.people.length ? `${s.id}-people` : s.tasks.length + s.specs.length ? `${s.id}-tasks` : undefined
 }
 
 export function Suggestions({ channel, s }: { channel: Channel; s: Suggest }) {
-  if (s.tasks.length)
+  if (s.tasks.length + s.specs.length)
     return (
       <ul className="mentions" role="listbox" aria-label={t("chat.suggest.tasks")} id={`${s.id}-tasks`}>
         {s.tasks.map((t, i) => (
@@ -145,6 +153,23 @@ export function Suggestions({ channel, s }: { channel: Channel; s: Suggest }) {
                 <Shown value={t.title} />
               </span>
               <span className="dim">{t.owner ? nickname(channel, t.owner) : STATUS_WORDS[t.status]}</span>
+            </button>
+          </li>
+        ))}
+        {s.specs.map((sp, i) => (
+          <li key={`spec-${sp.ask}`} role="option" aria-selected={s.tasks.length + i === s.pick}>
+            <button
+              type="button"
+              tabIndex={-1}
+              className={cx("mention-row task-row", s.tasks.length + i === s.pick && "is-on")}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => s.completeSpec(sp.ask)}
+            >
+              <span className="task-row-id">#{sp.ask}</span>
+              <span className="task-row-title">
+                <Shown value={sp.title} />
+              </span>
+              <span className="dim">{t("chat.suggest.spec")}</span>
             </button>
           </li>
         ))}
