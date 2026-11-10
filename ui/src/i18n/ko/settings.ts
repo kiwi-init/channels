@@ -31,6 +31,7 @@ export default {
   "settings.enroll.digits": "{device}에 표시된 6자리 숫자",
   "settings.enroll.no.match": { other: "일치하지 않습니다. {count}번 남았습니다." },
   "settings.enroll.then.key": "그다음 내 키가 표시됩니다: {key}",
+  "settings.enroll.failed": "처리되지 않았습니다: {why}. 다시 시도하십시오.",
   "settings.enroll.not.mine": "내 기기 아님",
   "settings.enroll.continue": "계속",
   "settings.enroll.approve": "승인",

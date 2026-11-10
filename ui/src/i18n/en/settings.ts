@@ -32,6 +32,7 @@ const words = {
   "settings.enroll.digits": "The 6 digits {device} shows",
   "settings.enroll.no.match": { one: "Those don't match. {count} try left.", other: "Those don't match. {count} tries left." },
   "settings.enroll.then.key": "Then it shows your key: {key}",
+  "settings.enroll.failed": "That didn't go through: {why}. Try again.",
   "settings.enroll.not.mine": "Not mine",
   "settings.enroll.continue": "Continue",
   "settings.enroll.approve": "Approve",
