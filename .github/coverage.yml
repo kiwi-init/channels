@@ -10,4 +10,4 @@ areas:
   desktop:
     paths:
       - desktop/
-    skip: [doc, fuzz, shots]
+    skip: [doc, fuzz, shots, desktop-distros]
