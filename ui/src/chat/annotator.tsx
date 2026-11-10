@@ -558,10 +558,10 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
       {asking && (
         <div role="alertdialog" aria-label={t("chat.annotator.discard.ask")} className="annot-ask">
           <span>{marks.length === 1 ? t("chat.annotator.discard.one") : t("chat.annotator.discard.many", { count: marks.length })}</span>
-          <button type="button" className="btn is-quiet" onClick={() => setAsking(false)}>
+          <button type="button" className="btn is-quiet" autoFocus onClick={() => setAsking(false)}>
             {t("chat.annotator.keep.editing")}
           </button>
-          <button type="button" className="btn is-danger" autoFocus onClick={onClose}>
+          <button type="button" className="btn is-danger" onClick={onClose}>
             {t("chat.annotator.discard")}
           </button>
         </div>

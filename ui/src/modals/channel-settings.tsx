@@ -584,7 +584,7 @@ function Facts({ channel }: { channel: Channel }) {
           </button>
           {clearing === f.key ? (
             <span className="cset-fact-confirm">
-              <button type="button" className="btn is-quiet is-small" onClick={() => setClearing(null)}>
+              <button type="button" className="btn is-quiet is-small" autoFocus onClick={() => setClearing(null)}>
                 {t("modals.channel.settings.note.keep")}
               </button>
               <button type="button" className="btn is-danger is-small" onClick={() => (app.actions.clearFact(channel.code, f.key), setClearing(null))}>
