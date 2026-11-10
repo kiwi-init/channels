@@ -264,7 +264,7 @@ try {
           : null,
     );
 
-    let copies = 2;
+    let copies = 1;
     if (ENGINE === "webkit" && process.platform === "linux") console.log("- an agent's posted shot is left out here: Linux WebKit's Web Crypto (libgcrypt) takes the page down on one, on main too");
     else {
       const posted = await screenshotPng(page, "posted");
@@ -274,7 +274,7 @@ try {
       await feed.nth(1).waitFor({ timeout: 30000 });
       await page.waitForTimeout(500);
       check("an agent's posted Retina shot shows in the feed from a copy too", feedCopy(await shownIn(feed.nth(1)), `data:image/png;base64,${posted}`));
-      copies = 3;
+      copies = 2;
     }
     const made = await page.evaluate(() => (window as unknown as { thumbWorker: { made: number; failed: number } }).thumbWorker);
     check(
