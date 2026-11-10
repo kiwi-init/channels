@@ -11,6 +11,10 @@ on:
         description: "0 keeps the soak on the conversation, with no tour of the views each minute"
         type: string
         default: ""
+      names:
+        description: "1 builds the harness unminified so the soak's profile names functions (a diagnosis only)"
+        type: string
+        default: ""
       jobs:
         description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a thread doc's updates cost, at a short and a long thread, no gate), or all"
         type: string
@@ -42,6 +46,8 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/browser
       - run: bun scripts/ui-harness.ts
+        env:
+          KIWI_HARNESS_NAMES: ${{ inputs.names }}
       - name: perf-scale, one soak for a diagnosis
         if: ${{ inputs.soak_only != '' }}
         env:

@@ -15,10 +15,13 @@ if (import.meta.main) {
     console.log(`Builds ui/ into ui/dist-harness for the app smoke and the perf harnesses: the production bundle with only import.meta.env.DEV
 set, so the plain-browser key store works: they drive the app in a browser with no desktop bridge.
 
-  bun scripts/ui-harness.ts`);
+  bun scripts/ui-harness.ts
+
+KIWI_HARNESS_NAMES=1 leaves the bundle unminified, so a profile names functions. Slower: for a diagnosis, never for a gated number.`);
     process.exit(0);
   }
-  const build = Bun.spawn(["bun", "x", "vite", "build", "--mode", "harness", "--outDir", HARNESS_DIST, "--logLevel", "warn"], {
+  const named = process.env.KIWI_HARNESS_NAMES === "1" ? ["--minify", "false"] : [];
+  const build = Bun.spawn(["bun", "x", "vite", "build", "--mode", "harness", "--outDir", HARNESS_DIST, "--logLevel", "warn", ...named], {
     cwd: join(ROOT, "ui"),
     env: { ...process.env, NODE_ENV: "production" },
     stdout: "inherit",

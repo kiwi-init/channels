@@ -144,25 +144,46 @@ interface HeapSite {
   children?: HeapSite[];
 }
 
-function liveByChunk(head: HeapSite): { totalMB: number; byChunk: Record<string, number>; sites: string[] } {
+interface Held {
+  totalMB: number;
+  byChunk: Record<string, number>;
+  sites: Map<string, number>;
+}
+
+function liveByChunk(head: HeapSite): Held {
   const chunks = new Map<string, number>();
   const sites = new Map<string, number>();
   let total = 0;
-  const walk = (n: HeapSite): void => {
+  const named = (n: HeapSite): string => {
     const file =
       n.callFrame.url
         .replace(/^.*\//, "")
         .replace(/-[A-Za-z0-9_-]{8}\./, ".")
         .replace(/\?.*$/, "") || "(engine)";
-    chunks.set(file, (chunks.get(file) ?? 0) + n.selfSize);
-    const site = `${n.callFrame.functionName || "(anon)"} ${file}:${n.callFrame.lineNumber}`;
-    sites.set(site, (sites.get(site) ?? 0) + n.selfSize);
-    total += n.selfSize;
-    for (const child of n.children ?? []) walk(child);
+    return `${n.callFrame.functionName || "(anon)"} ${file}:${n.callFrame.lineNumber}`;
   };
-  walk(head);
+  const walk = (n: HeapSite, callers: readonly string[]): void => {
+    const here = named(n);
+    const file = here.slice(here.indexOf(" ") + 1).replace(/:-?\d+$/, "");
+    chunks.set(file, (chunks.get(file) ?? 0) + n.selfSize);
+    const site = [here, ...callers.filter((c) => !c.includes("(engine)")).slice(0, 4)].join(" < ");
+    if (n.selfSize) sites.set(site, (sites.get(site) ?? 0) + n.selfSize);
+    total += n.selfSize;
+    for (const child of n.children ?? []) walk(child, [here, ...callers]);
+  };
+  walk(head, []);
   const top = (by: Map<string, number>, count: number) => [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, count);
-  return { totalMB: mb(total), byChunk: Object.fromEntries(top(chunks, 12).map(([k, v]) => [k, mb(v)])), sites: top(sites, 20).map(([k, v]) => `${mb(v)}MB  ${k}`) };
+  return { totalMB: mb(total), byChunk: Object.fromEntries(top(chunks, 12).map(([k, v]) => [k, mb(v)])), sites };
+}
+
+function heldOverTime(marks: readonly { atMin: number; held: Held }[]): { atMin: number[]; totalMB: number[]; byChunk: Record<string, number>[]; sites: string[] } {
+  const last = marks.at(-1)?.held.sites ?? new Map<string, number>();
+  const kb = (b: number) => Math.round(b / 1024);
+  const sites = [...last.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 30)
+    .map(([site]) => `${marks.map((m) => kb(m.held.sites.get(site) ?? 0)).join(" → ")} KB  ${site}`);
+  return { atMin: marks.map((m) => m.atMin), totalMB: marks.map((m) => m.held.totalMB), byChunk: marks.map((m) => m.held.byChunk), sites };
 }
 
 const docBlocks = (page: Page): Promise<number> => page.evaluate(() => document.querySelectorAll(".thread-doc section.blk").length);
@@ -511,6 +532,13 @@ try {
     }),
   );
   let minute = 0;
+  const heldAt: { atMin: number; held: Held }[] = [];
+  const holdNow = async (atMin: number) => {
+    await cdp.send("HeapProfiler.collectGarbage");
+    const { profile: sampled } = (await cdp.send("HeapProfiler.getSamplingProfile")) as unknown as { profile: { head: HeapSite } };
+    heldAt.push({ atMin, held: liveByChunk(sampled.head) });
+  };
+  const third = Math.max(1, Math.floor(SOAK_MIN / 3));
   const idle = { longTasks: 0, longMs: 0, worstMs: 0 };
   while (Date.now() < soakEnd) {
     await page.waitForTimeout(60000);
@@ -522,14 +550,14 @@ try {
     if (process.env.PERF_SOAK_TABS !== "0") for (const v of ["Tasks", "Agents", "Conversation"]) await tab(page, v, "");
     await drain(page);
     await mark(`soak minute ${minute}`);
+    if (minute % third === 0 && Date.now() < soakEnd) await holdNow(minute);
     if (minute === 1 || minute % 5 === 0 || Date.now() >= soakEnd) log(`census at soak minute ${minute}`, JSON.stringify(await census(page)));
   }
   await posting;
-  await cdp.send("HeapProfiler.collectGarbage");
-  const { profile: sampled } = (await cdp.send("HeapProfiler.getSamplingProfile")) as unknown as { profile: { head: HeapSite } };
+  await holdNow(minute);
   await cdp.send("HeapProfiler.stopSampling");
-  report["soak: what was allocated in it and is still held, by file (sampled)"] = { docBlocksAtStart: blocksAtStart, docBlocksAtEnd: await docBlocks(page), ...liveByChunk(sampled.head) };
-  log("soak held", JSON.stringify(report["soak: what was allocated in it and is still held, by file (sampled)"]));
+  report["soak: what was allocated in it and is still held, over time (sampled)"] = { docBlocksAtStart: blocksAtStart, docBlocksAtEnd: await docBlocks(page), ...heldOverTime(heldAt) };
+  log("soak held", JSON.stringify(report["soak: what was allocated in it and is still held, over time (sampled)"], null, 1));
   const soak = idle;
   const soakHeap = heap.filter((h) => h.phase.startsWith("soak"));
   const first = soakHeap[0];
