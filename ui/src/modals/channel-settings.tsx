@@ -24,6 +24,7 @@ import { LandingPick } from "~/modals/landing-pick"
 import { Confirm, Group, InlineEdit, Row } from "~/settings/controls"
 import { useAppCan } from "~/live/app-can"
 import { isMuted } from "~/live/mute"
+import { openMenu } from "~/kit/menu-open"
 import { copyText } from "~/kit/toasts"
 import { OutsideLink } from "~/kit/outside"
 
@@ -119,7 +120,6 @@ function General({ channel, onEnd }: { channel: Channel; onEnd: () => void }) {
               onSave={(title) => app.actions.renameChannel(channel.code, title)}
             />
           </Row>
-          <IconRow channel={channel} />
         </Group>
       )}
       <Group title={t("modals.channel.settings.goal")} hint={t("modals.channel.settings.goal.hint")}>
@@ -159,34 +159,6 @@ function General({ channel, onEnd }: { channel: Channel; onEnd: () => void }) {
   )
 }
 
-function IconRow({ channel }: { channel: Channel }) {
-  const { app } = useApp()
-  const input = useRef<HTMLInputElement>(null)
-  return (
-    <Row label={t("modals.channel.settings.icon")} hint={t("modals.channel.settings.icon.hint")}>
-      {channel.icon && (
-        <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setIcon(channel.code, null)}>
-          {t("modals.channel.settings.icon.remove")}
-        </button>
-      )}
-      <button type="button" className="btn is-small" onClick={() => input.current?.click()}>
-        {channel.icon ? t("modals.channel.settings.icon.change") : t("modals.channel.settings.icon.choose")}
-      </button>
-      <input
-        ref={input}
-        type="file"
-        accept="image/png,image/jpeg,image/gif,image/webp"
-        hidden
-        onChange={(e) => {
-          const file = e.currentTarget.files?.[0]
-          e.currentTarget.value = ""
-          if (file) app.actions.setIcon(channel.code, file)
-        }}
-      />
-    </Row>
-  )
-}
-
 function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
   const { app } = useApp()
   const input = useRef<HTMLInputElement>(null)
@@ -204,7 +176,21 @@ function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
         className="cset-tile is-button"
         aria-label={channel.icon ? t("modals.channel.settings.image.change") : t("modals.channel.settings.image.choose")}
         title={channel.icon ? t("modals.channel.settings.image.change") : t("modals.channel.settings.image.choose")}
-        onClick={() => input.current?.click()}
+        onClick={(e) => {
+          if (!channel.icon) return input.current?.click()
+          const at = e.currentTarget.getBoundingClientRect()
+          openMenu.set({
+            x: at.left,
+            y: at.bottom + 4,
+            label: t("modals.channel.settings.image.change"),
+            groups: [
+              [
+                { label: t("modals.channel.settings.image.change"), run: () => input.current?.click() },
+                { label: t("modals.channel.settings.icon.remove"), run: () => void app.actions.setIcon(channel.code, null) },
+              ],
+            ],
+          })
+        }}
       >
         {tile}
       </button>
