@@ -94,7 +94,7 @@ function evaluates(state: ChannelState, me: string, mover: string): boolean {
   if (parties.includes(me)) return true;
   const sponsor = human(mine);
   if (!sponsor) return false;
-  return parties.some((n) => human(state.members.get(n)) === sponsor) || (!!owner && (mine.sponsor?.handle === owner || mine.sponsor?.name === owner));
+  return parties.some((n) => human(state.members.get(n)) === sponsor);
 }
 
 export function watchClock(seat: ClockSeat, now: () => number = Date.now, every: number = EVERY_MS): ClockWatcher {

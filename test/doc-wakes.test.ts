@@ -8,7 +8,8 @@ import { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { ChannelState, Task } from "@kiwi/core/state.ts";
 import { docWakeLine } from "../src/agent/docs.ts";
-import { addDocWake, docSeen, pendingDocWakes, tellDocWakes, type DocWakeItem } from "../src/config/doc-wakes.ts";
+import { addDocWake, docSeen, docWakeTold, pendingDocWakes, tellDocWakes, type DocWakeItem } from "../src/config/doc-wakes.ts";
+import { clockBlock, clockWakeItem } from "../src/daemon/clock-watch.ts";
 import { docFollows, followDocs } from "../src/daemon/doc-follow.ts";
 
 const was = process.env.KIWI_HOME;
@@ -87,6 +88,20 @@ describe("the doc wakes an agent hasn't been told yet (T606)", () => {
       '  answer in the doc: kiwi send --to T7 "…" (kiwi show T7 has all of it)',
     ]);
     expect(docWakeLine(item("b4", { key: "main" }), "kiwi")).toContain(`kiwi send --to '#general' "…" (kiwi show general has all of it)`);
+  });
+
+  test("a quiet task's wake rides the same queue: queued once, said in one line with where to look, and told once shown (T4171)", () => {
+    const w = clockWakeItem(task(7, {}), "olivia", 31, 41 * 60_000, 5);
+    expect(w.block).toBe(clockBlock(7, 31));
+    expect(addDocWake("clocked", "olivia", w)).toBe(true);
+    expect(addDocWake("clocked", "olivia", w)).toBe(false);
+    expect(pendingDocWakes("clocked", "olivia").map((p) => p.clock)).toEqual([{ task: 7, mover: "olivia", since: 31 }]);
+    expect(docWakeLine(w, "kiwi").split("\n")).toEqual(["▸ T7 has been quiet 41m and it's your move.", "  see where it stands: kiwi task show T7"]);
+    expect(docWakeTold("clocked", "olivia", w.block)).toBe(false);
+    tellDocWakes("clocked", "olivia", [w.block]);
+    expect(docWakeTold("clocked", "olivia", w.block)).toBe(true);
+    expect(pendingDocWakes("clocked", "olivia")).toEqual([]);
+    expect(addDocWake("clocked", "olivia", w)).toBe(false);
   });
 
   test("the answer command it suggests survives a shell: #general stays an argument, not a comment (T1353)", async () => {

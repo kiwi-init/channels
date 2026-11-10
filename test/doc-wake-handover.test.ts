@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { daemonListeners, daemonListening, daemonSock, stopDaemon } from "../src/daemon.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "./owner.ts";
-import { addDocWake, pendingDocWakes } from "../src/config/doc-wakes.ts";
+import { addDocWake, docWakeTold, pendingDocWakes } from "../src/config/doc-wakes.ts";
 import { loadConfig } from "../src/config.ts";
 import { notePending, settlePending } from "../src/hooks/delivered.ts";
 
@@ -173,6 +173,33 @@ test("kiwi listen streams doc-only lines (T1741)", async () => {
     await p.exited;
     await reading;
   }
+});
+
+const quietWake = (task: number, since: number) => ({
+  key: `task:${task}`,
+  th: "",
+  block: `clock:T${task}:${since}`,
+  author: "kiwi",
+  text: `T${task} has been quiet 41m and it's your move`,
+  context: "",
+  selection: null,
+  at: Date.now(),
+  clock: { task, mover: me, since },
+});
+
+test("a quiet task's wake is handed over by kiwi listen and by the stop hook as its own line, and told once shown (T4171)", async () => {
+  const alias = inAgent(() => Object.keys(loadConfig().channels)[0]!);
+  inAgent(() => addDocWake(alias, me, quietWake(900_001, 7)));
+  const out = await ok(agent, ["listen", "--once", "--timeout", "5s"], NOHARNESS);
+  expect(out).toContain("T900001 has been quiet 41m and it's your move.");
+  expect(out).toContain("task show T900001");
+  expect(out).not.toContain("shared doc");
+  expect(inAgent(() => docWakeTold(alias, me, "clock:T900001:7"))).toBe(true);
+  inAgent(() => addDocWake(alias, me, quietWake(900_002, 9)));
+  const stop = JSON.parse(await ok(agent, ["hook", "stop"], S, JSON.stringify({ session_id: "dochand", cwd: agent, hook_event_name: "Stop" }))) as { reason: string };
+  expect(stop.reason).toContain("T900002 has been quiet 41m and it's your move.");
+  expect(stop.reason).not.toContain("shared doc");
+  expect(inAgent(() => docWakeTold(alias, me, "clock:T900002:9"))).toBe(true);
 });
 
 test("hooks with only doc lines say where to answer, not reply N (T1741)", async () => {
