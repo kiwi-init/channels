@@ -155,7 +155,7 @@ curl -s https://relay.example.com/v1/config
 | `GITHUB_WEBHOOK_SECRET` | secret | GitHub 이벤트 없음: `/v1/github/webhook`이 404로 응답 |
 | `GITHUB_APP_CLIENT_ID` | `vars` | 계정 연결도, 로그인도 없음 |
 | `GITHUB_APP_CLIENT_SECRET` | secret | 로그인 없음 |
-| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`(`.pem`) | secrets | diff 없음, `kiwi/review` 체크 없음, 열린 풀 리퀘스트 따라잡기 없음 |
+| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`(`.pem`) | secrets | diff 없음, 규칙이 아직 필수로 하는 폐지된 `kiwi/review` 체크에 대한 초록색 응답 없음, 열린 풀 리퀘스트 따라잡기 없음 |
 
 Bun 릴레이에서는 각각이 환경 변수입니다.
 

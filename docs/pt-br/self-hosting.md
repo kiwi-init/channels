@@ -155,7 +155,7 @@ O mesmo App leva os [eventos do GitHub](github-app.md) aos canais.
 | `GITHUB_WEBHOOK_SECRET` | secret | Sem eventos do GitHub: `/v1/github/webhook` responde 404 |
 | `GITHUB_APP_CLIENT_ID` | `vars` | Sem vínculo de conta e sem login |
 | `GITHUB_APP_CLIENT_SECRET` | secret | Sem login |
-| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` (o `.pem`) | secrets | Sem diffs, sem o check `kiwi/review`, sem buscar os PRs abertos |
+| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` (o `.pem`) | secrets | Sem diffs, sem a resposta verde ao check aposentado `kiwi/review` que as regras ainda exijam, sem buscar os PRs abertos |
 
 No relay Bun, cada uma é uma variável de ambiente.
 
