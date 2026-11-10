@@ -108,6 +108,9 @@ jobs:
         run: bun install --frozen-lockfile && bun scripts/ui-harness.ts
       - name: its data, opened by this build
         run: bun scripts/ui-upgrade.ts --old=old-release
+      - name: this build's own data, reopened by itself
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-upgrade.ts --old=.
       - name: the control, its data reopened by itself
         if: ${{ !cancelled() }}
         run: bun scripts/ui-upgrade.ts --old=old-release --control
