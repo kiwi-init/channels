@@ -1,0 +1,1 @@
+function e(e,t=``){return e?e.display||e.name:t}export{e as t};

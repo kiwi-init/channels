@@ -1,0 +1,1 @@
+function e(e,...t){let n={...e};for(let e of t)delete n[e];return n}export{e as t};

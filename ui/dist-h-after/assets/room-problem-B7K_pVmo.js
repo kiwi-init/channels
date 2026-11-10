@@ -1,0 +1,1 @@
+import"./live-later-Ch7IR1i-.js";import{s as e}from"./i18n-R3phIFSP.js";function t(t){switch(t.kind){case`unnamed`:return e(`live.room.unnamed`);case`taken`:return e(`live.room.taken`,{name:t.name});case`full`:return e(`live.room.full`,{count:t.max})}}export{t};

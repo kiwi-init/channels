@@ -1,0 +1,1 @@
+var e={addsAgents:!1,answersDecisions:!1,managesAgents:!1},t={addsAgents:!0,answersDecisions:!0,managesAgents:!0},n=e=>e.addsAgents&&e.answersDecisions&&e.managesAgents,r=(e,t)=>e.inThread!==void 0&&t.has(e.inThread);function i(e,t){return e.people.find(e=>e.name===t)??e.former?.find(e=>e.name===t)}export{n as a,i,e as n,r,t};

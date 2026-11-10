@@ -1,0 +1,1 @@
+function e(){let e=null,t=!1,n=[],r=r=>{t||(e?r(e):n.push(r))};return{pipe:{update:e=>r(t=>t.update(e)),aware:e=>r(t=>t.aware(e)),close:()=>{t=!0,n.length=0,e?.close()}},attach:r=>{if(t)return r.close();e=r;for(let e of n.splice(0))e(r)}}}export{e as t};

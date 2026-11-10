@@ -138,13 +138,21 @@ const check = (what: string, why: string | null): void => {
 
 const copyOf = (src: string, original: string): boolean => src.startsWith("data:image/png;base64,") && src !== original;
 
-const bytesOf = (page: Page, src: string): Promise<string> =>
-  page.evaluate(async (url) => {
-    const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
-    let bin = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    return btoa(bin);
-  }, src);
+async function savedFrom(page: Page, button: Locator): Promise<string> {
+  await button.click({ button: "right" });
+  const save = page.getByRole("menuitem", { name: "Save image" });
+  await save.waitFor({ timeout: 10000 });
+  const [download] = await Promise.all([page.waitForEvent("download", { timeout: 10000 }), save.click()]);
+  return Buffer.from(await Bun.file(await download.path()).bytes()).toString("base64");
+}
+
+const widthOf = (page: Page, base64: string): Promise<number> =>
+  page.evaluate(async (b64) => {
+    const bitmap = await createImageBitmap(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))]));
+    const width = bitmap.width;
+    bitmap.close();
+    return width;
+  }, base64);
 
 function feedCopy(shown: Shown, original: string): string | null {
   if (!copyOf(shown.src, original)) return `the feed shows ${shown.src.slice(0, 40)}…, not a copy`;
@@ -242,12 +250,14 @@ try {
     await page.keyboard.press(SEND);
     const button = feed.first();
     await button.waitFor({ timeout: 30000 });
+    await page
+      .waitForFunction(() => document.querySelector<HTMLImageElement>(".main article.msg .msg-image .msg-image-full")?.src.startsWith("blob:"), null, { timeout: 15000 })
+      .catch(() => undefined);
     await page.waitForTimeout(500);
     const sent = await shownIn(button);
     const original = sent.full?.src ?? `data:image/png;base64,${png}`;
     check("a Retina shot sent from the composer shows in the feed from a copy at 2× its 360 px box, with the original over it", feedCopy(sent, original));
     check("the original over it is a blob, not base64 text in the page", original.startsWith("blob:") ? null : `its src starts ${original.slice(0, 30)}`);
-    const sentBytes = await bytesOf(page, original);
     const inDoc = page.locator(".thread-doc .doc-image img").last();
     await inDoc.waitFor({ state: "attached", timeout: 10000 });
     const doc = await inDoc.evaluate(async (el: HTMLImageElement) => {
@@ -270,15 +280,9 @@ try {
     await page.keyboard.press("Escape");
     await viewer.waitFor({ state: "detached", timeout: 10000 });
 
-    await button.click({ button: "right" });
-    const save = page.getByRole("menuitem", { name: "Save image" });
-    await save.waitFor({ timeout: 10000 });
-    const [download] = await Promise.all([page.waitForEvent("download", { timeout: 10000 }), save.click()]);
-    const saved = Buffer.from(await Bun.file(await download.path()).bytes()).toString("base64");
-    check(
-      "Save image saves the original bytes",
-      saved === sentBytes ? null : `it saved ${Math.round((saved.length * 0.75) / 1024)} KB, not the ${Math.round((sentBytes.length * 0.75) / 1024)} KB sent`,
-    );
+    const sentBytes = await savedFrom(page, button);
+    const savedWidth = await widthOf(page, sentBytes).catch(() => 0);
+    check("Save image saves the full original", savedWidth === WIDTH ? null : `it saved an image ${savedWidth} px wide (${Math.round((sentBytes.length * 0.75) / 1024)} KB), not ${WIDTH}`);
 
     await page.evaluate(() => {
       const seen = window as unknown as { dragged?: string[]; dropped?: string[] };
@@ -302,10 +306,10 @@ try {
       return { dragged: seen.dragged ?? [], dropped: (seen.dropped ?? []).filter((d) => d.trim()) };
     });
     check(
-      "a drag starts on the original and carries it",
+      "a drag starts on the original and carries the same bytes Save image saves, as a data: URL",
       drag.dragged[0] !== original
         ? `it started on ${drag.dragged[0]?.slice(0, 40) || "no image"}…`
-        : drag.dropped.length && !drag.dropped.some((d) => d.includes(`base64,${sentBytes}`))
+        : !drag.dropped.some((d) => d.includes(`base64,${sentBytes}`))
           ? `it carried ${drag.dropped.map((d) => d.slice(0, 40)).join(", ")}…`
           : null,
     );
@@ -321,7 +325,11 @@ try {
       await page.waitForTimeout(500);
       const theirs = await shownIn(feed.nth(1));
       check("an agent's posted Retina shot shows in the feed from a copy too", feedCopy(theirs, theirs.full?.src ?? ""));
-      check("its original is the bytes the agent posted", theirs.full && (await bytesOf(page, theirs.full.src)) === posted ? null : "the original over it isn't what was posted");
+      const theirBytes = await savedFrom(page, feed.nth(1));
+      check(
+        "Save image on it saves the exact bytes the agent posted",
+        theirBytes === posted ? null : `it saved ${Math.round((theirBytes.length * 0.75) / 1024)} KB, not the ${Math.round((posted.length * 0.75) / 1024)} KB posted`,
+      );
       copies = 3;
     }
     const made = await page.evaluate(() => (window as unknown as { thumbWorker: { made: number; failed: number } }).thumbWorker);

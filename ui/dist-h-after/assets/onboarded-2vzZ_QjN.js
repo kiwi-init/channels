@@ -1,0 +1,1 @@
+var e=`ui.onboarded`,t=!1;function n(n=!0){if(n)try{localStorage.setItem(e,`1`);return}catch{}t=!0}function r(r){if(t)return!0;let i=!1;try{i=localStorage.getItem(e)===`1`}catch{}return i||!r?i:(n(),!0)}export{n,r as t};

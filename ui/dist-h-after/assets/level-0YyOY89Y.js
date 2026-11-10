@@ -1,0 +1,1 @@
+var e=`rules`,t=/^writer\.([1-9][0-9]{0,8})$/;function n(n){let r=0;for(let i of n.getMap(e).keys()){let e=Number(t.exec(i)?.[1]??0);e>r&&(r=e)}return r}function r(t,r){return!Number.isSafeInteger(r)||r<1||n(t)>=r?!1:(t.getMap(e).set(`writer.${r}`,!0),!0)}function i(t,n){let r=t.getMap(e);return r.observe(n),()=>r.unobserve(n)}export{r as n,n as r,i as t};
