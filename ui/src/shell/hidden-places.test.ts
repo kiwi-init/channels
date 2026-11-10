@@ -9,20 +9,17 @@ describe("hiding a room or a DM (T1503)", () => {
     expect(hiddenKey("b", { kind: "room", room: "ops" })).toBe("b/room:ops")
   })
 
-  test("a hidden place with news comes back, and nothing else does", () => {
+  test("a hidden room stays hidden through new messages and comes back on a mention (T1846)", () => {
     const rows = [
-      { key: "a/room:ops", news: true },
-      { key: "a/room:quiet", news: false },
-      { key: "a/room:shown", news: true },
+      { key: "a/room:ops", mention: true },
+      { key: "a/room:busy", mention: false },
+      { key: "a/room:shown", mention: true },
     ]
-    expect(comingBack(rows, ["a/room:ops", "a/room:quiet"])).toEqual(["a/room:ops"])
+    expect(comingBack(rows, ["a/room:ops", "a/room:busy"])).toEqual(["a/room:ops"])
   })
 
-  test("a room kept hidden ignores new messages, but a mention still brings it back", () => {
-    const quiet = [{ key: "a/room:ops", news: true, mention: false }]
-    const mentioned = [{ key: "a/room:ops", news: true, mention: true }]
-    expect(comingBack(quiet, ["a/room:ops"], ["a/room:ops"])).toEqual([])
-    expect(comingBack(mentioned, ["a/room:ops"], ["a/room:ops"])).toEqual(["a/room:ops"])
-    expect(comingBack(quiet, ["a/room:ops"], [])).toEqual(["a/room:ops"])
+  test("a hidden direct conversation comes back when they write: every message there is to you", () => {
+    expect(comingBack([{ key: "a/dm:maya", mention: true }], ["a/dm:maya"])).toEqual(["a/dm:maya"])
+    expect(comingBack([{ key: "a/dm:maya", mention: false }], ["a/dm:maya"])).toEqual([])
   })
 })

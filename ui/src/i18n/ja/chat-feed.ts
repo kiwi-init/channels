@@ -14,7 +14,6 @@ export default {
   "chat.menus.copy.message.link": "メッセージへのリンクをコピー",
   "chat.menus.copy.seq": "#{seq} をコピー",
   "chat.menus.earlier.versions": "以前のバージョン",
-  "chat.menus.keep.hidden": "{name} を非表示のままにする",
   "chat.menus.show": "{name} を表示",
   "chat.menus.hide": "{name} を非表示",
   "chat.menus.mark.read": "既読にする",

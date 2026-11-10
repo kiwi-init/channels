@@ -14,7 +14,6 @@ export default {
   "chat.menus.copy.message.link": "메시지 링크 복사",
   "chat.menus.copy.seq": "#{seq} 복사",
   "chat.menus.earlier.versions": "이전 버전",
-  "chat.menus.keep.hidden": "{name} 계속 숨기기",
   "chat.menus.show": "{name} 표시",
   "chat.menus.hide": "{name} 숨기기",
   "chat.menus.mark.read": "읽음으로 표시",

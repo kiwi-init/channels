@@ -132,7 +132,6 @@ const words = {
   "chat.menus.copy.message.link": "Copy link to message",
   "chat.menus.copy.seq": "Copy #{seq}",
   "chat.menus.earlier.versions": "Earlier versions",
-  "chat.menus.keep.hidden": "Keep {name} hidden",
   "chat.menus.show": "Show {name}",
   "chat.menus.hide": "Hide {name}",
   "chat.menus.mark.read": "Mark as read",
