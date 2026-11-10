@@ -190,6 +190,12 @@ export default {
   "start.enroll.type.these": "다른 컴퓨터에 이 숫자를 입력하세요",
   "start.enroll.your.key": "{name}님, 이 키가 맞습니까?",
   "start.enroll.compare": "다른 컴퓨터의 설정 › 계정에 있는 “기기 로그인 키”와 비교하세요. 키가 다르면 다른 누군가가 응답한 것입니다. 참여하지 마세요.",
+  "start.enroll.missed.title": "아무것도 저장되지 않았습니다",
+  "start.enroll.missed.sub": "키가 일치하지 않아 이 컴퓨터는 계정에 추가되지 않았습니다.",
+  "start.enroll.missed.devices":
+    "다른 컴퓨터에 {fingerprint}가 표시된 적이 없다면 다른 누군가가 이 컴퓨터에 응답한 것입니다. 다른 컴퓨터의 설정 › 컴퓨터 및 휴대폰에 이 컴퓨터가 남아 있다면 거기서 제거하세요.",
+  "start.enroll.missed.again": "다시 시도",
+  "start.enroll.missed.back": "뒤로",
   "start.enroll.matches": "일치함, 참여",
   "start.enroll.no.match": "일치하지 않음",
   "start.enroll.cancel": "취소",

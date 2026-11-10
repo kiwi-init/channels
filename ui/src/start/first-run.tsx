@@ -7,8 +7,10 @@ import { useApp } from "~/nav"
 import { onboarded } from "~/start/onboarded"
 import { Onboarding } from "~/start/onboarding"
 import { t } from "~/i18n/i18n"
+import { useNoMatch } from "~/start/no-match"
 
 const Enroll = lazy(() => import("~/start/enroll"))
+const NoMatch = lazy(() => import("~/start/enroll").then((m) => ({ default: m.NoMatch })))
 const GithubSignIn = lazy(() => import("~/start/github-sign-in"))
 
 const ALLOWED = /^[A-Za-z0-9._-]+$/
@@ -35,6 +37,16 @@ export function FirstRun() {
 function FirstStep() {
   const { app } = useApp()
   const signIn = app.signIn
+  const missed = useNoMatch()
+  if (missed && !app.enrolling)
+    return (
+      <main className="start-first">
+        <div className="start-drag" />
+        <Suspense fallback={null}>
+          <NoMatch fingerprint={missed} />
+        </Suspense>
+      </main>
+    )
   if (signIn && (signIn.stage === "sign-in" || signIn.stage === "checking" || (signIn.stage === "signed-in" && !app.enrolling)))
     return (
       <main className="start-first">

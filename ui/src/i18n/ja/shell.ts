@@ -190,6 +190,12 @@ export default {
   "start.enroll.type.these": "もう一台のコンピュータでこの数字を入力してください",
   "start.enroll.your.key": "{name} さん、これはあなたの鍵ですか？",
   "start.enroll.compare": "もう一台のコンピュータの「設定 › アカウント」にある「デバイスのサインイン用の鍵」と比べてください。鍵が違う場合は別の誰かが応答しています。参加しないでください。",
+  "start.enroll.missed.title": "何も保存されませんでした",
+  "start.enroll.missed.sub": "鍵が一致しなかったため、このコンピュータはアカウントに追加されていません。",
+  "start.enroll.missed.devices":
+    "もう一台のコンピュータに {fingerprint} が表示されなかった場合は、別の誰かがこのコンピュータに応答しています。もう一台の「設定 › コンピューターとスマートフォン」にこのコンピュータが残っていたら、そこで削除してください。",
+  "start.enroll.missed.again": "もう一度試す",
+  "start.enroll.missed.back": "戻る",
   "start.enroll.matches": "一致する、参加",
   "start.enroll.no.match": "一致しない",
   "start.enroll.cancel": "キャンセル",

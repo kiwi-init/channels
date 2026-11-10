@@ -2,6 +2,7 @@ import "~/i18n/en/shell-later"
 import "~/styles/start.css"
 
 import { GithubIcon } from "@hugeicons/core-free-icons"
+import { useEffect, useState } from "react"
 
 import { GlyphIcon } from "~/kit/icons"
 import { useLate } from "~/kit/late"
@@ -22,7 +23,7 @@ function Mark() {
   )
 }
 
-function Ask({ code, problem }: { code: { code: string; url: string } | null; problem: string | null }) {
+function Ask({ code, problem, onOther, onCancel }: { code: { code: string; url: string } | null; problem: string | null; onOther: () => void; onCancel: () => void }) {
   const { app } = useApp()
   const known = !!app.account
   if (code)
@@ -40,7 +41,14 @@ function Ask({ code, problem }: { code: { code: string; url: string } | null; pr
           <OutsideLink className="btn is-quiet" href={code.url}>
             {t("start.github.open.again")}
           </OutsideLink>
-          <button type="button" className="btn is-quiet" onClick={() => app.actions.cancelGithubSignIn()}>
+          <button
+            type="button"
+            className="btn is-quiet"
+            onClick={() => {
+              onCancel()
+              app.actions.cancelGithubSignIn()
+            }}
+          >
             {t("start.enroll.cancel")}
           </button>
         </div>
@@ -57,6 +65,18 @@ function Ask({ code, problem }: { code: { code: string; url: string } | null; pr
       <p className={problem ? "start-hint is-error" : "start-hint"} aria-live="polite">
         {problem}
       </p>
+      {!known && (
+        <button
+          type="button"
+          className="btn is-quiet start-other"
+          onClick={() => {
+            onOther()
+            app.actions.signInWithGithub()
+          }}
+        >
+          {t("start.github.other.computer")}
+        </button>
+      )}
     </>
   )
 }
@@ -94,12 +114,24 @@ function Checking() {
   )
 }
 
+const OTHER_MS = 5000
+
 export default function GithubSignIn({ signIn }: { signIn: SignIn }) {
-  if (signIn.stage === "checking") return <Checking />
+  const { app } = useApp()
+  const [other, setOther] = useState(false)
+  const enrollBegin = app.actions.enrollBegin
+  const going = other && signIn.stage === "signed-in"
+  useEffect(() => {
+    if (!going) return
+    enrollBegin()
+    const timer = setTimeout(() => setOther(false), OTHER_MS)
+    return () => clearTimeout(timer)
+  }, [going, enrollBegin])
+  if (signIn.stage === "checking" || going) return <Checking />
   return (
     <div className="start-first-box">
       <Mark />
-      {signIn.stage === "sign-in" ? <Ask code={signIn.code} problem={signIn.problem} /> : <SignedIn login={signIn.login} />}
+      {signIn.stage === "sign-in" ? <Ask code={signIn.code} problem={signIn.problem} onOther={() => setOther(true)} onCancel={() => setOther(false)} /> : <SignedIn login={signIn.login} />}
     </div>
   )
 }

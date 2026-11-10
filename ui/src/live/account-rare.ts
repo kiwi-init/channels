@@ -69,10 +69,8 @@ export async function enrollCancel(): Promise<void> {
   if (enrollTimer) clearTimeout(enrollTimer)
   enrollTimer = null
   enrollRun = null
-  const shown = selfEnroll.get()
   selfEnroll.set(null)
   await enrollBridge().enrollCancel()
-  if (shown?.stage === "check") announce(t("live.account.kept.nothing", { fingerprint: shown.person.fingerprint }), "error")
 }
 
 export async function launchedFrom(ids: readonly string[]): Promise<LaunchedAgent[]> {

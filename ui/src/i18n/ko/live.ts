@@ -218,8 +218,6 @@ export default {
   "live.account.enroll.desktop": "내 기기로 로그인하기는 Channels 데스크톱 앱에서 할 수 있습니다",
   "live.account.enroll.failed": "내 기기로 로그인하지 못했습니다: {why}",
   "live.account.enroll.gone": "다른 컴퓨터가 이 컴퓨터를 거절했거나 요청이 만료되었습니다",
-  "live.account.kept.nothing":
-    "아무것도 유지하지 않았습니다. 다른 컴퓨터에 {fingerprint}이(가) 표시된 적이 없다면 다른 누군가가 이 컴퓨터에 응답한 것입니다. 그 컴퓨터의 기기 목록에 이 컴퓨터가 아직 있을 수 있으니 거기서 제거하세요.",
   "live.account.forget.needs.update": "기기를 삭제하려면 다음 Channels 업데이트가 필요합니다",
   "live.account.keep.needs.update": "에이전트를 유지하려면 다음 Channels 업데이트가 필요합니다",
   "live.account.not.a.device": "이 컴퓨터는 내 기기 목록에 없어서 에이전트를 넘겨받을 수 없습니다",
