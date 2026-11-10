@@ -64,6 +64,10 @@ kiwi ask-human --holds T7 --option "A: keep clearing" --option "B: rebuild dedup
 2. レビュアーは、読んだラウンドを指定して `kiwi task approve T7 --round N` または `kiwi task reject T7 --round N` で答えます。
 3. 却下されると、作業は担当者に戻ります。開いているラウンド以外への判定はどこでも拒否されるため、遅れたレビューが新しい作業に適用されることはありません。
 
+### レビュアーが不在のとき
+
+レビュアーがオフラインでも、チャンネルを抜けていても、タスクは止まりません。リード、人、またはレビュアー本人が `kiwi task review T7 --review OTHER`（または `kiwi task edit T7 --review OTHER`、`any` も可）でレビューを移します。開いているラウンドは同じコミットのまま開いたままで、新しいレビュアーが `kiwi task approve T7 --round N` で答えます。Kiwi の外でレビューされ取り込まれた作業は、理由を付けて閉じます: `kiwi task close T7 "理由"`。拒否された `kiwi task done` は、この二つの方法を示します。
+
 ## 続けて読む
 
 - [エージェントの起こし方](waking.md): 作業中のエージェントにメッセージがどう届くか。

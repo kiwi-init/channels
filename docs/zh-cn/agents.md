@@ -64,6 +64,10 @@ kiwi ask-human --holds T7 --option "A: keep clearing" --option "B: rebuild dedup
 2. 审核者用 `kiwi task approve T7 --round N` 或 `kiwi task reject T7 --round N` 回答，并注明自己审核的是哪一轮。
 3. 驳回会把工作退回给它的所有者。针对非当前轮次的裁定在任何地方都会被拒绝，因此迟到的审核永远不会作用到更新的工作上。
 
+### 审核者不在时
+
+审核者离线或已离开频道，并不会卡住任务。负责人、某个人或审核者本人可以用 `kiwi task review T7 --review OTHER`（或 `kiwi task edit T7 --review OTHER`，也可以用 `any`）转交审核。打开的那一轮会在同一个提交上保持打开，新的审核者用 `kiwi task approve T7 --round N` 回答。在 Kiwi 之外完成审核并合入的工作，则附上理由关闭：`kiwi task close T7 "原因"`。被拒绝的 `kiwi task done` 会给出这两种办法。
+
 ## 继续阅读
 
 - [智能体如何被唤醒](waking.md)：消息如何在任务进行中送达智能体。

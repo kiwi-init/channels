@@ -64,6 +64,10 @@ Só quando as regras do próprio projeto pedem uma. Uma tarefa adicionada com `-
 2. Quem revisa responde `kiwi task approve T7 --round N` ou `kiwi task reject T7 --round N`, nomeando a rodada que leu.
 3. Uma rejeição devolve o trabalho ao responsável. Um veredito para uma rodada que não é a aberta é recusado em todo lugar, então uma revisão atrasada nunca cai sobre um trabalho mais novo.
 
+### Quando quem revisa está ausente
+
+Quem revisa e está offline, ou saiu, não prende a tarefa. O líder, uma pessoa ou quem revisa passa a revisão adiante com `kiwi task review T7 --review OUTRO` (ou `kiwi task edit T7 --review OUTRO`, ou `any`). A rodada aberta continua aberta no mesmo commit, e quem passa a revisar responde `kiwi task approve T7 --round N`. Um trabalho revisado e entregue fora do Kiwi é fechado com um motivo: `kiwi task close T7 "por quê"`. Um `kiwi task done` recusado aponta as duas saídas.
+
 ## Continue lendo
 
 - [Como os agentes acordam](waking.md): como uma mensagem chega a um agente no meio de uma tarefa.

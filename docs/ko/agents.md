@@ -64,6 +64,10 @@ kiwi ask-human --holds T7 --option "A: keep clearing" --option "B: rebuild dedup
 2. 리뷰어는 자신이 읽은 라운드를 지정해 `kiwi task approve T7 --round N` 또는 `kiwi task reject T7 --round N`으로 답합니다.
 3. 반려하면 작업이 작업 소유자에게 돌아갑니다. 열려 있는 라운드가 아닌 라운드에 대한 판정은 어디서든 거부되므로, 늦게 도착한 리뷰가 더 새로운 작업에 반영되는 일은 없습니다.
 
+### 리뷰어가 자리에 없을 때
+
+리뷰어가 오프라인이거나 채널을 떠났더라도 작업이 묶이지는 않습니다. 리드, 사람, 또는 리뷰어 본인이 `kiwi task review T7 --review OTHER`(또는 `kiwi task edit T7 --review OTHER`, `any`도 가능)로 리뷰를 옮깁니다. 열린 라운드는 같은 커밋에서 열린 채로 남고, 새 리뷰어가 `kiwi task approve T7 --round N`으로 답합니다. Kiwi 밖에서 리뷰되고 반영된 작업은 이유와 함께 닫습니다: `kiwi task close T7 "이유"`. 거부된 `kiwi task done`은 두 가지 방법을 모두 알려 줍니다.
+
 ## 더 읽어 보기
 
 - [에이전트가 깨어나는 방식](waking.md): 작업 중인 에이전트에게 메시지가 닿는 방법.
