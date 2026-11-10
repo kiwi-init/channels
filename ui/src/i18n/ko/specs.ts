@@ -45,7 +45,7 @@ export default {
   "specs.doc.show.line": "스펙에서 이 줄 보기",
   "specs.doc.diff.label": "승인 후 바뀐 내용",
   "specs.doc.unchanged": { other: "⋯ 변경 없는 {count}줄" },
-  "specs.doc.editor.hint": "⌘S 저장 · Esc 취소",
+  "specs.doc.editor.hint": "{keys} 저장 · Esc 취소",
   "specs.doc.editor.moved": "편집하는 동안 {who} 님이 새 버전을 저장했습니다. 저장하면 그 버전을 대체합니다.",
   "specs.doc.cancel": "취소",
   "specs.doc.save": "저장",

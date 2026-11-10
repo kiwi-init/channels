@@ -1,3 +1,5 @@
+import { t } from "~/i18n/i18n"
+
 type Mods = Pick<KeyboardEvent, "metaKey" | "ctrlKey">
 
 const platform = (): string => (typeof navigator === "undefined" ? "" : navigator.platform)
@@ -12,3 +14,8 @@ export function inText(el: EventTarget | null): boolean {
 }
 
 export const dialogOpen = (): boolean => !!document.querySelector("dialog[open]")
+
+export function keysHint(key: string, shift: boolean = false, mac: boolean = onMac()): string {
+  if (mac) return `${shift ? "⇧" : ""}⌘${key === "Enter" ? ` ${t("shell.keys.enter")}` : key}`
+  return [t("shell.keys.ctrl"), ...(shift ? [t("shell.keys.shift")] : []), key === "↩" || key === "Enter" ? t("shell.keys.enter") : key].join("+")
+}

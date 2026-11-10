@@ -45,7 +45,7 @@ export default {
   "specs.doc.show.line": "Mostrar esta linha na especificação",
   "specs.doc.diff.label": "O que mudou desde a aprovação",
   "specs.doc.unchanged": { one: "⋯ {count} linha sem mudança", other: "⋯ {count} linhas sem mudança" },
-  "specs.doc.editor.hint": "⌘S salva · Esc cancela",
+  "specs.doc.editor.hint": "{keys} salva · Esc cancela",
   "specs.doc.editor.moved": "{who} salvou uma versão mais nova enquanto você editava: salvar vai substituí-la.",
   "specs.doc.cancel": "Cancelar",
   "specs.doc.save": "Salvar",

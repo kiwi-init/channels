@@ -106,7 +106,7 @@ export default {
   "chat.search.box.fetches": "リレーから古いメッセージを最大 {count} 件取得します。",
   "chat.search.box.fetches.since": "{date} までさかのぼって検索しました。リレーから古いメッセージを最大 {count} 件取得します。",
   "chat.send.keys.enter": "送信 (Enter)",
-  "chat.send.keys.cmd.enter": "送信 (⌘ Enter)",
+  "chat.send.keys.cmd.enter": "送信 ({keys})",
   "chat.stash.list.label": "退避した下書き",
   "chat.stash.list.drops.one": "{key} で1件削除",
   "chat.step.copied": "コマンドをコピーしました",

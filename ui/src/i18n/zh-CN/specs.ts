@@ -45,7 +45,7 @@ export default {
   "specs.doc.show.line": "在规格中显示这一行",
   "specs.doc.diff.label": "批准后的改动",
   "specs.doc.unchanged": { other: "⋯ {count} 行未改动" },
-  "specs.doc.editor.hint": "⌘S 保存 · Esc 取消",
+  "specs.doc.editor.hint": "{keys} 保存 · Esc 取消",
   "specs.doc.editor.moved": "你编辑时 {who} 保存了更新的版本：保存会覆盖它。",
   "specs.doc.cancel": "取消",
   "specs.doc.save": "保存",

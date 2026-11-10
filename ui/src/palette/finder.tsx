@@ -8,12 +8,12 @@ import { docOf } from "~/chat/doc-of"
 import type { App, Channel, Task, TaskStatus, Theme, Where } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
 import { nickname, onePerPerson, roleWord, shown } from "~/names"
-import { SIDEBAR_KEYS } from "@kiwi/app/sidebar-hidden.ts"
 import { toggleSide } from "~/shell/side"
 import { statusOf } from "~/shell/sidebar"
 import { wordsPlain } from "~/words"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
+import { keysHint } from "~/kit/keys"
 
 type Group = "channels" | "rooms" | "people" | "tasks" | "actions"
 
@@ -349,7 +349,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       label: t("palette.finder.toggle.sidebar"),
       keys: ["hide", "show", "rooms", "people"],
       lead: <Icon name="sidebar" size={14} />,
-      meta: <kbd className="palette-kbd">{SIDEBAR_KEYS}</kbd>,
+      meta: <kbd className="palette-kbd">{keysHint("\\")}</kbd>,
       run: () => {
         close()
         toggleSide()
