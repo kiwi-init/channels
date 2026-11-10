@@ -22,9 +22,9 @@ async function step(fn: () => Promise<string | null>): Promise<ProbeStep> {
   }
 }
 
-function answer(ch: LineChannel, line: string): Promise<string | null> {
-  const a = parseAnswer(ch.request(line));
-  return Promise.resolve(a.kind === "key" ? a.value : a.kind);
+async function answer(ch: LineChannel, line: string): Promise<string | null> {
+  const a = parseAnswer(await ch.request(line));
+  return a.kind === "key" ? a.value : a.kind;
 }
 
 function legacyName(): string {
@@ -138,7 +138,7 @@ async function probe(): Promise<ProbeReport> {
   report["cloexec"] = { ok: channelCloexec(other) };
   report["native"] = { ok: nativeChild() };
   report["done"] = await step(async () => {
-    endSession(ch);
+    await endSession(ch);
     return "ended";
   });
   report["after"] = { ok: afterDone(other) };

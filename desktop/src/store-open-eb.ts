@@ -11,11 +11,14 @@ let opened: OpenStore | null = null;
 
 function endKeySession(): void {
   if (launcherKeys instanceof Error) return;
-  try {
-    launcherKeys.done();
-  } catch {
-    // A test build may start without the launcher in front, and then there's no session to end.
-  }
+  const keys = launcherKeys;
+  void (async () => {
+    try {
+      await keys.done();
+    } catch {
+      // A test build may start without the launcher in front, and then there's no session to end.
+    }
+  })();
 }
 
 export async function openStoreForThisBuild(): Promise<void> {

@@ -32,7 +32,7 @@ export async function openEbStore({ dir, keys, home = os.homedir(), platform = p
     return await openStore({ dir, key: keys.key, legacy: () => readLegacyStore(keys.legacy, platform, home), platform });
   } finally {
     try {
-      keys.done();
+      await keys.done();
     } catch {
       // The launcher has gone already: the store is open or refused either way, and nothing asks it for a key again.
     }

@@ -25,14 +25,14 @@ function unsetenv(name: string): void {
 }
 
 export interface LineChannel {
-  request(line: string): string;
+  request(line: string): Promise<string>;
   close(): void;
 }
 
 export interface KeySources {
   key: StoreKey;
   legacy: LegacyPassword;
-  done(): void;
+  done(): void | Promise<void>;
 }
 
 type Answer = { kind: "key"; value: string } | { kind: "none" } | { kind: "ok" };
@@ -42,20 +42,27 @@ function fdChannel(inherited: number): LineChannel {
   fs.closeSync(inherited);
   let pending = "";
   let open = true;
+  let last: Promise<unknown> = Promise.resolve();
   const chunk = Buffer.alloc(MAX_LINE);
+  const read = (): Promise<number> => new Promise((got, failed) => fs.read(fd, chunk, 0, chunk.length, null, (err, n) => (err ? failed(err) : got(n))));
+  const ask = async (line: string): Promise<string> => {
+    if (!open) throw new Error("the launcher's key channel is closed");
+    fs.writeSync(fd, `${line}\n`);
+    while (!pending.includes("\n")) {
+      if (pending.length > MAX_LINE) throw new Error("the launcher's answer is too long");
+      const n = await read();
+      if (n === 0) throw new Error("the launcher closed its key channel");
+      pending += chunk.toString("latin1", 0, n);
+    }
+    const at = pending.indexOf("\n");
+    const answer = pending.slice(0, at);
+    pending = pending.slice(at + 1);
+    return answer;
+  };
   return {
     request(line) {
-      if (!open) throw new Error("the launcher's key channel is closed");
-      fs.writeSync(fd, `${line}\n`);
-      while (!pending.includes("\n")) {
-        if (pending.length > MAX_LINE) throw new Error("the launcher's answer is too long");
-        const n = fs.readSync(fd, chunk, 0, chunk.length, null);
-        if (n === 0) throw new Error("the launcher closed its key channel");
-        pending += chunk.toString("latin1", 0, n);
-      }
-      const at = pending.indexOf("\n");
-      const answer = pending.slice(0, at);
-      pending = pending.slice(at + 1);
+      const answer = last.then(() => ask(line));
+      last = answer.catch(() => null);
       return answer;
     },
     close() {
@@ -89,26 +96,26 @@ function keyOrNone(line: string): string | null {
 }
 
 export function launcherKey(ch: LineChannel): StoreKey {
-  const ok = (line: string, otherwise: string): void => {
-    if (parseAnswer(ch.request(line)).kind !== "ok") throw new Error(otherwise);
+  const ok = async (line: string, otherwise: string): Promise<void> => {
+    if (parseAnswer(await ch.request(line)).kind !== "ok") throw new Error(otherwise);
   };
   return {
-    get: async () => keyOrNone(ch.request("get")),
-    set: async (value) => ok(`set ${toWire(value)}`, "the launcher didn't save the store key"),
-    drop: async () => ok("drop", "the launcher didn't take back the store key"),
+    get: async () => keyOrNone(await ch.request("get")),
+    set: (value) => ok(`set ${toWire(value)}`, "the launcher didn't save the store key"),
+    drop: () => ok("drop", "the launcher didn't take back the store key"),
     finished: async () => {
-      const a = parseAnswer(ch.request("finished"));
+      const a = parseAnswer(await ch.request("finished"));
       if (a.kind === "key") throw new Error("the launcher gave a key where it should say whether the store key is marked ready");
       return a.kind === "ok";
     },
-    finish: async (key) => ok(`finish ${readyMark(key)}`, "the launcher didn't mark the store key ready"),
+    finish: (key) => ok(`finish ${readyMark(key)}`, "the launcher didn't mark the store key ready"),
   };
 }
 
 export const launcherLegacyPassword =
   (ch: LineChannel): LegacyPassword =>
   async (name) => {
-    const key = keyOrNone(ch.request(`legacy ${name}`));
+    const key = keyOrNone(await ch.request(`legacy ${name}`));
     return key === null ? [] : [key];
   };
 
@@ -126,9 +133,9 @@ export function launcherChannel(env: NodeJS.ProcessEnv = process.env): LineChann
   return fd === null ? null : fdChannel(fd);
 }
 
-export function endSession(ch: LineChannel): void {
+export async function endSession(ch: LineChannel): Promise<void> {
   try {
-    parseAnswer(ch.request("done"));
+    parseAnswer(await ch.request("done"));
   } finally {
     ch.close();
   }
