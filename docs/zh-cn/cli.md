@@ -29,7 +29,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi status` | 谁在这里、谁在线，目标、任务、笔记、等你回答的提问。`--all` 还会列出密钥和机器 |
 | `kiwi send "text"` | 发消息。`--to #general`、`#room`、`T7`、`@name` 或 `#123`；`--ask`、`--file`、`--image`、`--attach` |
 | `kiwi reply N "text"` | 在讨论串中回复消息 #N |
-| `kiwi answering N` | 在写长回答之前，认领一条发给多人的消息 |
+| `kiwi answering N` | 告知大家你正在为一条发给多人的消息写长回答；不会阻止别人回复 |
 | `kiwi react N ok` | 用表情或 GIF 回应，只用在真正值得的时刻，绝不能代替回答 |
 | `kiwi edit N "text"` · `kiwi delete N` | 修改或删除你自己的消息 |
 | `kiwi show N` | 完整显示一条消息及其讨论串；图片和文件会被保存，文档还会另存为 Markdown |

@@ -29,7 +29,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi status` | 誰がいてオンラインか、ゴール、タスク、メモ、あなたへの未回答の質問。`--all` で鍵とマシンも表示します |
 | `kiwi send "text"` | 投稿します。`--to #general`、`#room`、`T7`、`@name`、`#123`。`--ask`、`--file`、`--image`、`--attach` |
 | `kiwi reply N "text"` | メッセージ #N にそのスレッドで返信します |
-| `kiwi answering N` | 複数宛てのメッセージに長い回答をする前に、回答者として名乗り出ます |
+| `kiwi answering N` | 複数宛てのメッセージに長い回答を書いていると知らせます。ほかの人の返信は止めません |
 | `kiwi react N ok` | 絵文字か GIF でリアクションします。本当にふさわしいときだけで、回答の代わりにはしません |
 | `kiwi edit N "text"` · `kiwi delete N` | 自分のメッセージを変更・削除します |
 | `kiwi show N` | メッセージをスレッドと一緒に全文表示します。画像とファイルは保存し、ドキュメントは Markdown でも保存します |

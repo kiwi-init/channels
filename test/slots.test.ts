@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
 import { signRequest } from "@kiwi/core/auth.ts";
+import { mentionsOf } from "@kiwi/core/changes.ts";
 import { seal, slotId } from "@kiwi/core/crypto.ts";
 import { AgentLive, AgentSession } from "../src/agent.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -18,6 +19,8 @@ let server: ReturnType<typeof startRelay>;
 let owner: OwnerSetup;
 let ann: AgentSession;
 let bob: AgentSession;
+let carl: AgentSession;
+let lea: AgentSession;
 let annId: Awaited<ReturnType<typeof joinAgent>>["id"];
 
 const run = <A, E>(e: Effect.Effect<A, E, unknown>) => Effect.runPromise(e.pipe(Effect.provide(AgentLive)) as Effect.Effect<A, E, never>);
@@ -39,6 +42,9 @@ beforeAll(async () => {
   };
   ann = await session("ann");
   bob = await session("bob");
+  carl = await session("carl");
+  lea = await session("lea");
+  await owner.ownerCh.send("lea leads", { kind: "event", ev: { op: "role.set", member: "lea", role: "lead" } });
 });
 
 afterAll(() => {
@@ -80,24 +86,24 @@ describe("task claims are compare-and-set on the relay", () => {
 });
 
 describe("answering #N", () => {
-  test("the first to say it answers; the others are told who and can't reply over it", async () => {
+  test("the first to say it's answering is noted; the other is told, and its reply still goes out: under the answer once there is one", async () => {
     const q = await owner.ownerCh.send("who can look at the flaky test?");
     const [a, b] = await Promise.all([settled(run(ann.answering(q))), settled(run(bob.answering(q)))]);
     expect([a.ok, b.ok].filter(Boolean)).toHaveLength(1);
     const [winner, other] = a.ok ? [ann, bob] : [bob, ann];
     const name = a.ok ? "ann" : "bob";
     const lost = a.ok ? b : a;
-    expect(lost.ok ? "" : lost.why).toStartWith(`${name} is answering #${q}: leave it to them`);
-    await expect(run(other.reply(q, "me too"))).rejects.toThrow(
-      `${name} is answering #${q}: leave the answer to them; nothing else is in its thread yet: react to it (kiwi react ${q} 👍), or add to the thread under ${name}'s answer once it's there`,
-    );
-    await expect(run(other.send("me too", { re: [q] }))).rejects.toThrow(`${name} is answering #${q}`);
+    expect(lost.ok ? "" : lost.why).toStartWith(`${name} is already answering #${q}; a reply of yours still goes out, under theirs`);
+    const early = await run(other.replyPlaced(q, "me too"));
+    expect(early.seq).toBeGreaterThan(q);
+    expect(early.under).toBeUndefined();
+    expect(await run(other.send("and one more thing", { re: [q] }))).toBeGreaterThan(early.seq);
     const answer = await run(winner.reply(q, "on it"));
     expect(answer).toBeGreaterThan(q);
-    await expect(run(other.reply(q, "I'll pair, it's the 'cold' run"))).rejects.toThrow(
-      `${name} is answering #${q}: leave the answer to them; to add to its thread, post under #${answer} instead: kiwi send --to '#${answer}' 'I'\\''ll pair, it'\\''s the '\\''cold'\\'' run'`,
-    );
-    expect(await run(other.send("I'll pair", { re: [answer] }))).toBeGreaterThan(answer);
+    const late = await run(carl.replyPlaced(q, "I'll pair, it's the 'cold' run"));
+    expect(late.under).toEqual({ answer, by: name });
+    const { messages } = await run(carl.state());
+    expect(messages.find((m) => m.seq === late.seq)).toMatchObject({ re: [answer], to: ["jon"], body: "I'll pair, it's the 'cold' run" });
   });
 
   test("the marker doesn't count as an answer to an ask", async () => {
@@ -107,14 +113,60 @@ describe("answering #N", () => {
     expect(state.openAsks.map((m) => m.seq)).toContain(q);
   });
 
-  test("a reply to a message sent to everyone claims it in the same call: the next agent hears who has it and adds under the answer", async () => {
+  test("the first reply to a message sent to everyone is its answer; the next agent's reply is sent under it, once, and never dropped (T5088)", async () => {
     const q = await owner.ownerCh.send("who can review PR 12?");
     const answer = await run(ann.reply(q, "I'll take it"));
     expect(answer).toBeGreaterThan(q);
-    await expect(run(bob.reply(q, "me too"))).rejects.toThrow(`ann is answering #${q}: leave it to them; nothing was sent`);
-    await expect(run(bob.answering(q))).rejects.toThrow(`ann is answering #${q}: leave it to them`);
+    const second = await run(bob.replyPlaced(q, "me too"));
+    expect(second.under).toEqual({ answer, by: "ann" });
+    const { messages } = await run(bob.state());
+    expect(messages.find((m) => m.seq === second.seq)).toMatchObject({ from: "bob", re: [answer], to: ["jon"], body: "me too" });
+    await expect(run(bob.reply(q, "and another"))).rejects.toThrow(`you already added #${second.seq} under ann's answer to #${q}: carry on there with kiwi reply ${second.seq} "…"`);
+    expect(await run(bob.reply(second.seq, "and another"))).toBeGreaterThan(second.seq);
+    await expect(run(bob.answering(q))).rejects.toThrow(`ann is already answering #${q}; a reply of yours still goes out, under theirs`);
     expect(await run(ann.reply(q, "PR 12 is approved"))).toBeGreaterThan(answer);
-    expect(await run(bob.send("after you, I'll check the CI run", { re: [answer] }))).toBeGreaterThan(answer);
+    const third = await run(carl.replyPlaced(q, "I can take the next one"));
+    expect(third.under).toEqual({ answer, by: "ann" });
+  });
+
+  test("an agent the message names answers it directly, claim or not", async () => {
+    const q = await owner.ownerCh.send("who can cut the release? @bob knows the script");
+    const answer = await run(ann.reply(q, "I can"));
+    const named = await run(bob.replyPlaced(q, "I'll do it, I wrote the script"));
+    expect(named.under).toBeUndefined();
+    const both = await owner.ownerCh.send("ann and bob, which of you has the staging key?", { to: ["ann", "bob"] });
+    const first = await run(ann.replyPlaced(both, "I do"));
+    const other = await run(bob.replyPlaced(both, "I have the old one"));
+    expect([first.under, other.under]).toEqual([undefined, undefined]);
+    const { messages } = await run(bob.state());
+    expect(messages.find((m) => m.seq === named.seq)?.re).toEqual([q]);
+    expect(messages.find((m) => m.seq === other.seq)?.re).toEqual([both]);
+    expect(answer).toBeLessThan(named.seq);
+  });
+
+  test("the channel's Lead answers directly, after someone else's answer and after someone's answering note", async () => {
+    const q = await owner.ownerCh.send("is the release still on for today?");
+    const answer = await run(ann.reply(q, "I think so"));
+    const said = await run(lea.replyPlaced(q, "Yes: the tag goes out at five"));
+    expect(said.under).toBeUndefined();
+    const noted = await owner.ownerCh.send("who owns the changelog?");
+    await run(bob.answering(noted));
+    expect((await run(lea.replyPlaced(noted, "bob does"))).under).toBeUndefined();
+    const { messages, state } = await run(lea.state());
+    expect(state.lead).toBe("lea");
+    expect(messages.find((m) => m.seq === said.seq)?.re).toEqual([q]);
+    expect(answer).toBeLessThan(said.seq);
+  });
+
+  test("a reply sent under an answer is addressed to the asker alone and wakes no agent", async () => {
+    const q = await owner.ownerCh.send("anyone seen the 502s?");
+    const answer = await run(ann.reply(q, "yes, since noon"));
+    const under = await run(bob.replyPlaced(q, "same on staging"));
+    const { messages, state } = await run(ann.state());
+    const sent = messages.find((m) => m.seq === under.seq);
+    expect(sent).toMatchObject({ re: [answer], to: ["jon"] });
+    expect(state.threadOf.get(under.seq)).toBe(state.threadOf.get(answer) ?? q);
+    expect([...mentionsOf(sent?.body ?? "")]).toEqual([]);
   });
 
   test("a reply to a message sent only to you claims nothing", async () => {
