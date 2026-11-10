@@ -3,7 +3,7 @@ import type { CheckArtifact, CheckAsk } from "@kiwi/core/checks.ts";
 import { formatTask, stepLines } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { prOfTask } from "@kiwi/core/prs.ts";
-import { FOLD_RULES, PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
+import { PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { fold, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { runSight, stepObservations } from "@kiwi/core/state/landing-steps.ts";
@@ -14,6 +14,7 @@ const R = "o/r";
 const S1 = "1".repeat(40);
 const M1 = "9".repeat(40);
 const HOUR = 3_600_000;
+const BEFORE_STEPS = 26;
 const at = (s: number) => T0 + s * 1_000;
 type Extra = Partial<Pick<Message, "to" | "ev" | "re" | "esc" | "choices" | "holds" | "check">>;
 
@@ -438,7 +439,7 @@ describe("what a detector saw is tied to what it watches (#3930 §3)", () => {
     const kept: { base?: FoldBase } = {};
     fold(c.log, roster, at(10_000), null, null, null, (b) => (kept.base = b));
     if (!kept.base) throw new Error("the fold kept no base");
-    const older: FoldBase = { ...kept.base, rules: FOLD_RULES - 1, tasks: kept.base.tasks.map((x) => omit(x, "steps", "stepCount")) };
+    const older: FoldBase = { ...kept.base, rules: BEFORE_STEPS, tasks: kept.base.tasks.map((x) => ({ ...omit(x, "steps", "stepCount"), then: "merge" as const })) };
     const migrated = fold(c.log.slice(older.n), roster, at(10_000), null, null, older);
     expect(migrated.tasks.get(t)!.steps!.map((x) => [x.id, x.words, x.by, x.from])).toEqual([
       ["s2", `check #${ask.seq}`, "jow", "check"],
@@ -447,8 +448,8 @@ describe("what a detector saw is tied to what it watches (#3930 §3)", () => {
     const next: { base?: FoldBase } = {};
     fold(c.log.slice(older.n), roster, at(10_000), null, null, older, (b) => (next.base = b));
     if (!next.base) throw new Error("the fold kept no base");
-    expect(next.base.rules).toBe(FOLD_RULES - 1);
-    const twice = fold([], roster, at(10_000), null, null, { ...next.base, rules: FOLD_RULES - 1 });
+    expect(next.base.rules).toBe(BEFORE_STEPS);
+    const twice = fold([], roster, at(10_000), null, null, { ...next.base, rules: BEFORE_STEPS });
     expect(twice.tasks.get(t)!.steps!.map((x) => x.id)).toEqual(["s2", "s1"]);
     await c.say("jow", "msg", "A: works on KDE", { re: [ask.seq] });
     const answered = fold(c.log.slice(older.n), roster, at(10_000), null, null, older);
@@ -463,7 +464,7 @@ describe("what a detector saw is tied to what it watches (#3930 §3)", () => {
     const cut: { base?: FoldBase } = {};
     fold(before.log, roster, at(10_000), null, null, null, (b) => (cut.base = b));
     if (!cut.base) throw new Error("the fold kept no base");
-    const old: FoldBase = { ...cut.base, rules: FOLD_RULES - 1, tasks: cut.base.tasks.map((x) => omit(x, "steps", "stepCount")) };
+    const old: FoldBase = { ...cut.base, rules: BEFORE_STEPS, tasks: cut.base.tasks.map((x) => ({ ...omit(x, "steps", "stepCount"), then: "merge" as const })) };
     expect(ended(fold([], roster, at(10_000), null, null, old), u)).toEqual(["s2:detected", "s1:open"]);
   });
 });
@@ -535,7 +536,6 @@ describe("steps are edited by the lead or a person, and never reopen review (#39
       ["s1", "merge", undefined],
       ["s2", "tell the list", "zed"],
     ]);
-    expect(s.tasks.get(a)!.then).toBeUndefined();
     expect(s.tasks.get(b)!.steps).toBeUndefined();
     expect(s.tasks.get(own)!.steps!.map((x) => x.words)).toEqual(["only this"]);
     await c.ev("ann", { op: "task.update", task: b, state: "done" });
@@ -554,11 +554,13 @@ describe("tasks from before steps keep landing (#3930 §6)", () => {
     expect(landing.steps!.map((x) => [x.id, x.words, x.from, x.detector])).toEqual([["s1", "merge", "then", { kind: "pr-merged" }]]);
     expect(stepObservations(view(c.state()))).toEqual([]);
     await c.merged(t);
-    const post = await c.ev("jow", { op: "task.landed", task: t, artifact: prAt });
+    expect(stepObservations(view(c.state())).map((o) => [o.step.id, o.artifact])).toEqual([["s1", prAt]]);
+    const post = await c.landed("jow", t, "s1", { artifact: prAt });
     const s = c.state();
     expect(s.rejected.size).toBe(0);
-    expect(s.tasks.get(t)).toMatchObject({ state: "done", closedSeq: post.seq, landed: { key: `T${t}:pr:o/r#7@${S1}` } });
+    expect(s.tasks.get(t)).toMatchObject({ state: "done", closedSeq: post.seq });
     expect(ended(s, t)).toEqual(["s1:detected"]);
+    expect(stepObservations(view(s))).toEqual([]);
   });
 
   test("the old values map to steps, and a snapshot from before steps gives its open tasks theirs", async () => {
@@ -574,7 +576,7 @@ describe("tasks from before steps keep landing (#3930 §6)", () => {
     const kept: { base?: FoldBase } = {};
     fold(c.log, roster, at(10_000), null, null, null, (b) => (kept.base = b));
     if (!kept.base) throw new Error("the fold kept no base");
-    const older: FoldBase = { ...kept.base, rules: FOLD_RULES - 1, tasks: kept.base.tasks.map((x) => omit(x, "steps", "stepCount")) };
+    const older: FoldBase = { ...kept.base, rules: BEFORE_STEPS, tasks: kept.base.tasks.map((x) => ({ ...omit(x, "steps", "stepCount"), then: "release:tag" as const })) };
     const again = fold(c.log.slice(older.n), roster, at(10_000), null, null, older);
     expect(again.tasks.get(t)!.state).toBe("landing");
     expect(again.tasks.get(t)!.steps!.map((x) => [x.id, x.words, x.from])).toEqual([
@@ -611,19 +613,6 @@ describe("tasks from before steps keep landing (#3930 §6)", () => {
     await before.landed("jow", b, "s2");
     expect(ended(before.state(), b)).toEqual(["s2:said", "s1:detected"]);
     expect(before.state().tasks.get(b)!.state).toBe("done");
-  });
-
-  test("a step from an old value ends through its gate: an agent can't say it done, and no step observation stands in for it", async () => {
-    const c = await channel();
-    const t = await c.task(undefined, "merge");
-    await c.opened(t);
-    await c.approve(t);
-    const said = await c.landed("ann", t, "s1");
-    expect(c.state().rejected.get(said.seq)).toBe(`step s1 “merge” of T${t} ends through its landing gate: a person or the lead can end it by hand`);
-    await c.merged(t);
-    const seen = await c.landed("jow", t, "s1", { artifact: prAt });
-    expect(c.state().rejected.get(seen.seq)).toBe(`T${t}'s step s1 “merge” ends through its landing gate, not a step observation`);
-    expect(c.state().tasks.get(t)!.state).toBe("landing");
   });
 });
 

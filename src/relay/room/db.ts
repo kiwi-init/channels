@@ -38,8 +38,6 @@ const READS_TABLE = "CREATE TABLE reads (pk TEXT PRIMARY KEY, seq INTEGER NOT NU
 
 const SLOTS_TABLE = "CREATE TABLE slots (id TEXT PRIMARY KEY, holder TEXT NOT NULL, seq INTEGER NOT NULL, until INTEGER NOT NULL)";
 
-const REVIEW_TICKETS_TABLE = "CREATE TABLE review_tickets (id TEXT PRIMARY KEY, key TEXT NOT NULL, holder TEXT NOT NULL, issued INTEGER NOT NULL, seq INTEGER)";
-
 const DELEGATIONS_TABLE = "CREATE TABLE delegations (pk TEXT PRIMARY KEY, d TEXT NOT NULL, until INTEGER NOT NULL, keys TEXT NOT NULL)";
 
 const DOCS_TABLE = "CREATE TABLE docs (th TEXT NOT NULL, dseq INTEGER NOT NULL, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL, PRIMARY KEY (th, dseq))";
@@ -182,7 +180,6 @@ export class RoomDb {
     );
     this.sql.run(READS_TABLE);
     this.sql.run(SLOTS_TABLE);
-    this.sql.run(REVIEW_TICKETS_TABLE);
     this.sql.run(DELEGATIONS_TABLE);
     this.sql.run(DOCS_TABLE);
     this.sql.run(DOC_SNAPS_TABLE);
@@ -203,7 +200,7 @@ export class RoomDb {
     }
     this.sql.run(READS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(SLOTS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
-    this.sql.run(REVIEW_TICKETS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
+    this.sql.run("DROP TABLE IF EXISTS review_tickets");
     if (!this.sql.all<{ name: string }>("PRAGMA table_info(msgs)").some((c) => c.name === "sent")) this.sql.run("ALTER TABLE msgs ADD COLUMN sent TEXT");
     if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sends'").length) {
       this.sql.run("UPDATE msgs SET sent = (SELECT s.sender || ' ' || s.cid FROM sends s WHERE s.seq = msgs.seq) WHERE seq IN (SELECT seq FROM sends)");
@@ -312,27 +309,6 @@ export class RoomDb {
     }
     w.sends = sends;
     return sends;
-  }
-
-  issueTicket(id: string, key: string, holder: string, issued: number): void {
-    this.sql.run("INSERT INTO review_tickets (id, key, holder, issued, seq) VALUES (?, ?, ?, ?, NULL)", id, key, holder, issued);
-  }
-
-  ticket(id: string): { key: string; holder: string; issued: number; seq: number | null } | null {
-    return this.sql.all<{ key: string; holder: string; issued: number; seq: number | null }>("SELECT key, holder, issued, seq FROM review_tickets WHERE id = ?", id)[0] ?? null;
-  }
-
-  deliverTickets(ids: readonly string[], seq: number): void {
-    for (const id of ids) this.sql.run("UPDATE review_tickets SET seq = ? WHERE id = ? AND seq IS NULL", seq, id);
-  }
-
-  fenceAt(key: string, pendingSince: number): { pending: boolean; delivered: number | null; known: boolean } {
-    const row = this.sql.all<{ pending: number; delivered: number | null; n: number }>(
-      "SELECT SUM(CASE WHEN seq IS NULL AND issued > ? THEN 1 ELSE 0 END) AS pending, MAX(seq) AS delivered, COUNT(*) AS n FROM review_tickets WHERE key = ?",
-      pendingSince,
-      key,
-    )[0];
-    return { pending: (row?.pending ?? 0) > 0, delivered: row?.delivered ?? null, known: (row?.n ?? 0) > 0 };
   }
 
   slotHolder(id: string, now: number): { holder: string; seq: number } | null {

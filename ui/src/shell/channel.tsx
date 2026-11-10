@@ -218,7 +218,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           </button>
           <button
             type="button"
-            aria-pressed={nav.tab === "specs" || nav.tab === "tasks"}
+            aria-pressed={nav.tab === "specs"}
             onClick={() => go({ to: "spec", ask: null })}
             title={specsNeed ? t("shell.channel.specs.need", { count: specsNeed }) : t("shell.channel.specs.open", { specs: specs.length, tasks })}
           >
@@ -276,7 +276,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               <Lanes channel={channel} />
             ) : nav.tab === "github" ? (
               <GithubView channel={channel} />
-            ) : nav.tab === "specs" || nav.tab === "tasks" ? (
+            ) : nav.tab === "specs" ? (
               <SpecsView channel={channel} />
             ) : nav.tab === "needs" ? (
               <NeedsYou channel={channel} onJump={setJump} />

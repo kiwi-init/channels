@@ -1,6 +1,4 @@
-import type { Landing } from "@kiwi/core/protocol.ts";
 import { currentStep, type LandingStep } from "@kiwi/core/steps.ts";
-import { landingWaits, taskPr } from "@kiwi/core/prs.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { reentryText } from "@kiwi/core/reentry.ts";
 import { planningText } from "@kiwi/core/spec-lines.ts";
@@ -172,16 +170,6 @@ export function workName(work: Work): string {
   }
 }
 
-function landingDo(state: ChannelState, t: Task, step: Landing): string {
-  if (state.merges !== "people") return "Do what lands it at the approved artifact (for a merge, merge its PR at the approved head once its checks are green).";
-  const id = taskId(t.id);
-  const ready = `once its checks are green, say in ${id}'s thread that it's ready for a person to merge`;
-  if (step === "merge") return `People merge pull requests here, so don't merge it yourself: ${ready}.`;
-  if (step === "release:tag" || taskPr(state, t.id))
-    return `People merge pull requests here, so don't merge its PR yourself: ${ready}. Once a person has merged it, the rest of its ${step} step is yours: do it at the approved artifact.`;
-  return `Its ${step} step is yours: do it at the approved artifact. People merge pull requests here, so if it comes to need one merged, don't merge it yourself: ${ready}.`;
-}
-
 function stepFocus(t: Task, step: LandingStep, me: string, mc: string): string {
   const id = taskId(t.id);
   const mover = step.by ?? landerOf(t);
@@ -192,18 +180,11 @@ function stepFocus(t: Task, step: LandingStep, me: string, mc: string): string {
   ].join(" ");
 }
 
-function landingFocus(state: ChannelState, t: Task, me: string, mc: string): string {
-  const id = taskId(t.id);
-  const lander = landerOf(t);
-  const current = t.then ? undefined : currentStep(t);
+function landingFocus(t: Task, me: string, mc: string): string {
+  const current = currentStep(t);
   if (current) return stepFocus(t, current, me, mc);
-  const step = t.then ?? "merge";
-  const waits = landingWaits(state, t);
-  return [
-    `This session is for landing ${id} “${inlineText(t.title, 160)}”. Its review already approved it, and ${lander === me ? "you land it" : `${inlineText(lander ?? "its owner", 40)} lands it`}: its landing step is ${step}.${waits ? ` It ${waits.replace(/^waits/, "still waits")}.` : ""}`,
-    `Don't run \`${mc} task start ${id}\` or send another \`${mc} task review ${id}\`: that reopens approved work. ${landingDo(state, t, step)} ${id} is done when that evidence arrives.`,
-    `If it can't land, say why in ${id}'s thread, and ask the lead or a person to close it with a reason or to name another lander with \`${mc} task edit ${id} --lander NAME\`. Answer messages for you as they come. The session ends when ${id} is done or another lander takes it.`,
-  ].join(" ");
+  const id = taskId(t.id);
+  return `This session is for landing ${id} “${inlineText(t.title, 160)}”. Its review already approved it and no step is left, so it finishes on its own. Don't run \`${mc} task start ${id}\` or send another \`${mc} task review ${id}\`: that reopens approved work. Answer messages for you as they come.`;
 }
 
 function focus(work: Work, state: ChannelState, me: string, mc: string): string {
@@ -215,7 +196,7 @@ function focus(work: Work, state: ChannelState, me: string, mc: string): string 
       const head = `This session is for ${id}${title}, which you own. Answer messages for you as they come; only other tasks and reviews wait for their own session.`;
       const send = `write where it stands with \`${mc} task checkpoint ${id} --file note.md\`, then send it for review with \`${mc} task review ${id} --at SHA\` (the commit it's at)`;
       const selfReviewed = t?.review === me ? ` You're also its reviewer, so nobody else will give its verdict: ask the lead or a person to name another reviewer.` : "";
-      if (t?.state === "landing") return landingFocus(state, t, me, mc);
+      if (t?.state === "landing") return landingFocus(t, me, mc);
       const round = t ? openRound(t) : undefined;
       if (t?.review && round)
         return `${head} Its round ${round.n} is with ${inlineText(t.review, 40)}: wait here for the verdict, and don't run \`${mc} task start ${id}\`, which would withdraw that round. On a rejection, fix what it says, ${send}. The session ends when the review approves ${id}, or sooner if a review you owe comes up while you wait (a rejection then gets a fresh session).${selfReviewed}`;

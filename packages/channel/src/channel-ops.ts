@@ -1,7 +1,5 @@
 import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts";
 import type { PresenceFields } from "@kiwi/core/client.ts";
-import { RelayError } from "@kiwi/core/client/relay-errors.ts";
-import type { Outgoing } from "@kiwi/core/ship-gate.ts";
 
 import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, DocEvent, FollowEvent, HistoryAround, HistorySearch } from "../../../desktop/src/bridge.ts";
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts";
@@ -77,7 +75,6 @@ type Args<K extends ChannelCallName> = Parameters<ChannelCalls[K]>;
 
 export class ChannelLink {
   readonly isOwner: boolean;
-  beforeSend: ((body: string, opts: Omit<Outgoing, "from" | "body">) => Promise<string[]>) | null = null;
 
   constructor(
     readonly code: string,
@@ -125,7 +122,7 @@ export class ChannelLink {
   syncGithub = (...a: Args<"syncGithub">) => this.c("syncGithub", ...a);
   githubStatus = () => this.c("githubStatus");
   githubDiff = (...a: Args<"githubDiff">) => this.c("githubDiff", ...a);
-  postReviewCheck = (...a: Args<"postReviewCheck">) => this.c("postReviewCheck", ...a);
+  retireReview = (...a: Args<"retireReview">) => this.c("retireReview", ...a);
   commentOnPr = (...a: Args<"commentOnPr">) => this.c("commentOnPr", ...a);
   githubIssue = (...a: Args<"githubIssue">) => this.c("githubIssue", ...a);
   closeIssue = (...a: Args<"closeIssue">) => this.c("closeIssue", ...a);
@@ -150,18 +147,7 @@ export class ChannelLink {
   setIcon = (...a: Args<"setIcon">) => this.c("setIcon", ...a);
   close = () => this.c("close");
   leave = () => this.c("leave");
-  send = async (...[body, opts = {}]: Args<"send">) => {
-    const once = async () => {
-      const tickets = (await this.beforeSend?.(body, opts)) ?? [];
-      return this.c("send", body, tickets.length ? { ...opts, tickets } : opts);
-    };
-    try {
-      return await once();
-    } catch (err) {
-      if (!(err instanceof RelayError && err.tag === "Fenced")) throw err;
-      return once();
-    }
-  };
+  send = (...a: Args<"send">) => this.c("send", ...a);
   image = (...a: Args<"image">) => import("./image-bytes.ts").then((m) => m.heldImage(a[0]) ?? this.c("image", ...a));
   putImage = (...a: Args<"putImage">) => this.c("putImage", ...a);
   putFileData = (...a: Args<"putFileData">) => this.c("putFileData", ...a);

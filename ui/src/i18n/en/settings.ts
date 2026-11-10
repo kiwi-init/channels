@@ -174,7 +174,7 @@ const words = {
   "settings.personalities.can.assign": "Assign work",
   "settings.personalities.can.assign.hint": "Hand tasks to others (the lead)",
   "settings.personalities.can.notes": "Set notes",
-  "settings.personalities.can.notes.hint": "Channel facts",
+  "settings.personalities.can.notes.hint": "Channel notes",
   "settings.personalities.title": "Personalities",
   "settings.personalities.new": "New personality",
   "settings.personalities.yours": "{name} (yours)",

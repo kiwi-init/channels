@@ -13,7 +13,6 @@ import {
   ignored,
   type IssueRef,
   type KeptEvidence,
-  type Landing,
   type TaskState,
   type Verdict,
 } from "@kiwi/core/protocol.ts";
@@ -83,7 +82,7 @@ export class SessionTasks extends SessionMessaging {
     function* (
       this: SessionTasks,
       title: string,
-      opts: { detail?: string; owner?: string; review?: string; re?: number; issue?: IssueRef; from?: number; then?: Landing; steps?: StepSpec[]; lander?: string } = {},
+      opts: { detail?: string; owner?: string; review?: string; re?: number; issue?: IssueRef; from?: number; steps?: StepSpec[]; noSteps?: true; lander?: string } = {},
     ) {
       const long = titleRefusal(title);
       if (long) return yield* new Rejected(long);
@@ -105,7 +104,7 @@ export class SessionTasks extends SessionMessaging {
           ...(review ? { review } : {}),
           ...(opts.issue ? { issue: opts.issue } : {}),
           ...(opts.from !== undefined ? { from: opts.from } : {}),
-          ...(steps ? { steps } : opts.then ? { then: opts.then } : {}),
+          ...(steps ? { steps } : opts.noSteps ? { then: "none" as const } : {}),
           ...(lander ? { lander } : {}),
         },
         `task: ${title}`,
@@ -133,7 +132,11 @@ export class SessionTasks extends SessionMessaging {
 
   readonly taskFromIssue = Effect.fn("AgentSession.taskFromIssue")(
     { self: this },
-    function* (this: SessionTasks, ref: string, opts: { title?: string; detail?: string; owner?: string; review?: string; re?: number; from?: number; then?: Landing; lander?: string } = {}) {
+    function* (
+      this: SessionTasks,
+      ref: string,
+      opts: { title?: string; detail?: string; owner?: string; review?: string; re?: number; from?: number; steps?: StepSpec[]; noSteps?: true; lander?: string } = {},
+    ) {
       const { state } = yield* this.state();
       const issue = parseIssueRef(ref, state.repos);
       if (typeof issue === "string") return yield* new Rejected(issue);
@@ -196,9 +199,8 @@ export class SessionTasks extends SessionMessaging {
         round?: number;
         runs?: number[];
         proof?: { url: string; label?: string };
-        run?: { id: string; started?: number };
+        run?: { id: string };
         checkpoint?: true;
-        then?: Landing;
         lander?: string | null;
         close?: string;
         kept?: KeptEvidence;

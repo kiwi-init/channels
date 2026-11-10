@@ -1,14 +1,13 @@
 import type { Authors } from "./authors.ts";
 import type { Member as MemberRecord, Runs } from "../membership.ts";
 import type { LandingStep, StepSpec } from "../steps.ts";
-import type { Card, Color, IssueRef, KeptHow, Landing, MemberPicture, Merger, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
+import type { Card, Color, IssueRef, KeptHow, Landing, MemberPicture, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubRun, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
 import type { Power } from "../protocol.ts";
 import type { RoomMember, RoomMeta, RoomSeal } from "../room-rules.ts";
 import type { Scope } from "../scopes.ts";
 import type { CheckState } from "./checks.ts";
-import type { CheckArtifact } from "../checks.ts";
 export interface Member {
   name: string;
   kind?: "human" | "agent" | "computer";
@@ -149,14 +148,12 @@ export interface Task {
   updatedAt: number;
   notes: TaskNote[];
   proof?: TaskProof[];
-  run?: { id: string; seq: number; by: string; reportedStart?: number; start?: GithubRun; blind?: true };
+  run?: { id: string; seq: number; by: string };
   review?: string;
   approvedBy?: string;
   cancelled?: boolean;
   closedWith?: string;
   closedSeq?: number;
-  landed?: { key: string; artifact: CheckArtifact; seq: number; by: string };
-  then?: Landing;
   steps?: LandingStep[];
   stepCount?: number;
   lander?: string;
@@ -279,7 +276,6 @@ export interface ChannelState {
   branchPrefix: string | null;
   landing: Landing | null;
   landingSteps: StepSpec[] | null;
-  merges: Merger;
   compact: Compact | null;
   compactProposal: Compact | null;
   reactions: Map<number, Map<string, Reaction>>;
@@ -358,7 +354,6 @@ export interface FoldBase {
   landingSteps?: StepSpec[] | null;
   passedAsks?: [number, string][];
   stepQuestions?: StepQuestion[];
-  merges?: Merger;
   compact: Compact | null;
   compactProposal: Compact | null;
   scopesByKey: [string, Scope[]][];
@@ -366,7 +361,7 @@ export interface FoldBase {
   roleSets: [string, { seq: number; role: string | null; about?: string | null }][];
   gone?: [string, number][];
   nicknames?: [string, Nickname][];
-  tasks: Task[];
+  tasks: (Task & { then?: Landing; landed?: object })[];
   facts: Fact[];
   docs?: [string, string][];
   leases: Lease[];

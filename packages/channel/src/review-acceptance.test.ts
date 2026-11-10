@@ -5,7 +5,9 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import { PROTOCOL_VERSION, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { ChannelLink } from "./channel-ops.ts";
-import { checksToPost, landsToPost } from "./review-checks.ts";
+import { reviewCheckOf } from "@kiwi/core/protocol.ts";
+import { retiredHeads } from "@kiwi/core/review-check.ts";
+import { headsToRetire, stepsToPost } from "./review-checks.ts";
 import { postReviewChores } from "./review-chores.ts";
 
 const S = "6".repeat(40);
@@ -55,9 +57,9 @@ function ownerApp(room: string) {
   const ops = {
     call: async (_code: string, op: string, ...args: unknown[]) => {
       if (!up) throw new TypeError("fetch failed");
-      if (op === "postReviewCheck") posts.push(args[0] as Record<string, unknown>);
+      if (op === "retireReview") posts.push(args[0] as Record<string, unknown>);
       if (op === "send") sent.push({ body: args[0] as string, opts: args[1] as { ev?: Event } });
-      return op === "postReviewCheck" ? { url: null } : 99;
+      return op === "retireReview" ? { url: null } : 99;
     },
   } as unknown as ChannelOps;
   const link = new ChannelLink("code", room, ids.jow!.pk, ids.jow!.pk, ops);
@@ -71,45 +73,8 @@ function ownerApp(room: string) {
   };
 }
 
-describe("#623 acceptance cases on the owner's app (T3348)", () => {
-  test("case 4: a check answered while the owner's app was down is reconciled when it's back", async () => {
-    const c = await channel();
-    const kde = await c.say("ann", "blocking", "Does it work on KDE?", {
-      to: ["jow"],
-      esc: true,
-      choices: ["A: it works on KDE", "B: it's broken there"],
-      holds: [c.t],
-      check: { phase: "pre-ship", decider: "jow", artifact: { kind: "pr", repo: "o/r", pr: 9, sha: S } },
-    });
-    await c.approve();
-    const room = `room-${crypto.randomUUID()}`;
-    const app = ownerApp(room);
-    await postReviewChores(app.link, c.state());
-    expect(app.posts).toMatchObject([{ verdict: "waiting", tasks: [c.t] }]);
-    app.reach(false);
-    await c.say("jow", "msg", "A", { re: [kde.seq] });
-    await postReviewChores(app.link, c.state());
-    expect(app.posts).toHaveLength(1);
-    expect(checksToPost(room, c.state())).toMatchObject([{ verdict: "approved", tasks: [c.t] }]);
-    app.reach(true);
-    await postReviewChores(app.link, c.state());
-    expect(app.posts.at(-1)).toEqual({ repo: "o/r", sha: S, verdict: "approved", tasks: [c.t], upTo: c.state().head });
-    expect(checksToPost(room, c.state())).toEqual([]);
-  });
-
-  test("case 13: a PASS posted while CI is pending turns kiwi/review green on the CI completion alone", async () => {
-    const c = await channel();
-    await c.github([{ event: "check_run", sha: S, name: "build", run: 11, status: "in_progress" }]);
-    await c.approve([11]);
-    const app = ownerApp(`room-${crypto.randomUUID()}`);
-    await postReviewChores(app.link, c.state());
-    expect(app.posts).toMatchObject([{ verdict: "waiting", note: `T${c.t}: CI run 11 (pending)` }]);
-    await c.github([{ event: "check_run", sha: S, name: "build", run: 11, status: "completed", conclusion: "success" }]);
-    await postReviewChores(app.link, c.state());
-    expect(app.posts.at(-1)).toMatchObject({ verdict: "approved", tasks: [c.t] });
-  });
-
-  test("case 10: two owner apps detecting the merge each send task.landed once, and the channel records one landing", async () => {
+describe("the owner's app after the gate (#3930 §5)", () => {
+  test("case 18: two owner apps seeing the merge each send the observation once, and one step ends", async () => {
     const c = await channel();
     await c.approve();
     await c.github([{ event: "pull_request", action: "closed", number: 9, state: "closed", merged: true, merge: M, branch: `T${c.t}-x`, sha: S, happened: T0 + c.log.length * 1_000 }]);
@@ -119,15 +84,103 @@ describe("#623 acceptance cases on the owner's app (T3348)", () => {
     for (const app of [laptop, phone]) {
       await postReviewChores(app.link, merged);
       await postReviewChores(app.link, merged);
-      expect(app.sent.map((s) => s.opts.ev?.op)).toEqual(["task.landed"]);
-      expect(landsToPost(app.link.roomId, merged)).toEqual([]);
+      expect(app.sent.map((s) => s.opts.ev)).toEqual([{ op: "task.landed", task: c.t, step: "s1", artifact: { kind: "pr", repo: "o/r", pr: 9, sha: S } }]);
+      expect(stepsToPost(app.link.roomId, merged)).toEqual([]);
     }
     for (const app of [laptop, phone]) await c.ev("jow", app.sent[0]!.opts.ev!);
     const after = c.state();
     const task = after.tasks.get(c.t)!;
     expect(task.state).toBe("done");
-    expect(task.landed).toMatchObject({ key: `T${c.t}:pr:o/r#9@${S}`, by: "jow" });
-    expect(task.notes.filter((n) => n.text.startsWith("landed:"))).toHaveLength(1);
+    expect(task.notes.filter((n) => n.text.startsWith("step s1"))).toHaveLength(1);
     expect([...after.rejected.keys()].filter((seq) => seq > merged.head)).toEqual([]);
+  });
+
+  test("case 15: every open head is answered green once, a later head again, and only a ruleset read without the requirement stops it", async () => {
+    const c = await channel();
+    const app = ownerApp(`room-${crypto.randomUUID()}`);
+    const check = reviewCheckOf(app.link.roomId);
+    const rules = (required: string[]) => c.ev("jow", { op: "github.rules", repo: "o/r", branch: "main", required, merge: ["squash"] });
+    const pushed = (sha: string) => c.github([{ event: "pull_request", action: "synchronize", number: 9, state: "open", branch: `T${c.t}-x`, sha }]);
+    const echoed = (sha: string) => c.github([{ event: "check_run", sha, name: check, run: 1, status: "completed", conclusion: "success" }]);
+
+    await postReviewChores(app.link, c.state());
+    await postReviewChores(app.link, c.state());
+    expect(app.posts).toEqual([{ repo: "o/r", sha: S }]);
+
+    await rules(["build", check]);
+    await echoed(S);
+    await postReviewChores(app.link, c.state());
+    expect(app.posts).toHaveLength(1);
+
+    const later = "7".repeat(40);
+    await pushed(later);
+    await postReviewChores(app.link, c.state());
+    expect(app.posts.at(-1)).toEqual({ repo: "o/r", sha: later });
+    expect(app.posts).toHaveLength(2);
+
+    await rules(["build"]);
+    const gone = "8".repeat(40);
+    await pushed(gone);
+    expect(headsToRetire(app.link.roomId, c.state())).toEqual([]);
+    await postReviewChores(app.link, c.state());
+    expect(app.posts).toHaveLength(2);
+
+    await rules(["build", check]);
+    await postReviewChores(app.link, c.state());
+    expect(app.posts.at(-1)).toEqual({ repo: "o/r", sha: gone });
+    expect(app.posts).toHaveLength(3);
+  });
+
+  test("a head the relay couldn't be reached for is answered on the next look", async () => {
+    const c = await channel();
+    const app = ownerApp(`room-${crypto.randomUUID()}`);
+    app.reach(false);
+    await postReviewChores(app.link, c.state());
+    expect(app.posts).toEqual([]);
+    app.reach(true);
+    await postReviewChores(app.link, c.state());
+    expect(app.posts).toEqual([{ repo: "o/r", sha: S }]);
+  });
+
+  test("a failure that shows at a head after its green is answered again, once, and a ruleset still requiring the check keeps it so", async () => {
+    const c = await channel();
+    const app = ownerApp(`room-${crypto.randomUUID()}`);
+    const check = reviewCheckOf(app.link.roomId);
+    const shown = (run: number, conclusion: string) => c.github([{ event: "check_run", sha: S, name: check, run, status: "completed", conclusion }]);
+    await c.ev("jow", { op: "github.rules", repo: "o/r", branch: "main", required: [check], merge: ["squash"] });
+    await postReviewChores(app.link, c.state());
+    await postReviewChores(app.link, c.state());
+    expect(app.posts).toHaveLength(1);
+    await shown(1, "success");
+    await shown(2, "failure");
+    await postReviewChores(app.link, c.state());
+    await postReviewChores(app.link, c.state());
+    expect(app.posts).toEqual([
+      { repo: "o/r", sha: S },
+      { repo: "o/r", sha: S },
+    ]);
+    await shown(3, "success");
+    await postReviewChores(app.link, c.state());
+    expect(app.posts).toHaveLength(2);
+  });
+
+  test("an app that just started remembers nothing: the log alone says a head showing a failure is due and one showing green isn't", async () => {
+    const c = await channel();
+    const check = reviewCheckOf(`room-${crypto.randomUUID()}`);
+    const shown = (run: number, conclusion: string) => c.github([{ event: "check_run", sha: S, name: check, run, status: "completed", conclusion }]);
+    await c.ev("jow", { op: "github.rules", repo: "o/r", branch: "main", required: [check], merge: ["squash"] });
+    expect(retiredHeads(c.state(), check)).toEqual([{ repo: "o/r", sha: S }]);
+    await shown(1, "success");
+    expect(retiredHeads(c.state(), check)).toEqual([]);
+    await shown(2, "failure");
+    expect(retiredHeads(c.state(), check)).toEqual([{ repo: "o/r", sha: S }]);
+    await shown(3, "success");
+    expect(retiredHeads(c.state(), check)).toEqual([]);
+  });
+
+  test("a pull request in a repo the channel doesn't hold is left alone", async () => {
+    const c = await channel();
+    await c.ev("jow", { op: "repos.set", repos: [] });
+    expect(headsToRetire(`room-${crypto.randomUUID()}`, c.state())).toEqual([]);
   });
 });

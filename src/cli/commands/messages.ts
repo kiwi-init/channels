@@ -28,7 +28,6 @@ import {
   type Message,
   type Step,
 } from "@kiwi/core/protocol.ts";
-import { ARTIFACT_USAGE, CHECK_PHASES, parseArtifact, type CheckArtifact, type CheckPhase } from "@kiwi/core/checks.ts";
 import { asksOnSameWork, chooseThread, inGeneral, longForGeneral, parseTaskId, taskId, wentTo } from "@kiwi/core/state.ts";
 import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
@@ -289,6 +288,8 @@ export const messageCommands: Record<string, Command> = {
 
   "ask-human": () =>
     Effect.gen(function* () {
+      const gone = checkFlagsGone(opt);
+      if (gone) return yield* die(gone);
       const s = yield* session();
       if (opt.close !== undefined) {
         const ask = Number(opt.close.replace(/^#/, "")) || (yield* die('usage: kiwi ask-human --close N "why": closes your ask #N once you have its answer some other way'));
@@ -329,8 +330,6 @@ export const messageCommands: Record<string, Command> = {
       const digestNote = () => {
         if (!named.length) process.stderr.write("kiwi: this holds nothing up, so it goes to the person's digest, not Needs you; name the task or message it holds with --holds T7,#18\n");
       };
-      if ((opt.step || opt.handoff !== undefined) && (opt.check ?? opt.decider ?? opt.artifact ?? opt.replaces) !== undefined)
-        return yield* die("--check goes on a decision with --option, not on a step or a handoff");
       const stepFlags = ["do", "run", "expect", "link", "why", "needs-person"] as const;
       if (!opt.step && stepFlags.some((f) => opt[f] !== undefined)) return yield* die(`--${stepFlags.find((f) => opt[f] !== undefined)} goes with --step`);
       if (opt.step) {
@@ -367,9 +366,7 @@ export const messageCommands: Record<string, Command> = {
         for (const f of ["vendor", "expires", "wait"] as const) if (opt[f] !== undefined) return yield* die(`--${f} goes with --handoff URL`);
         const choices = opt.option?.map((o) => o.trim());
         if (choices && !wellFormedChoices(choices)) return yield* die(`--option takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
-        const check = checkOf(opt);
-        if (typeof check === "string") return yield* die(check);
-        const { seq, to, also } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}), ...hold, ...(check ? { check } : {}) });
+        const { seq, to, also } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}), ...hold });
         digestNote();
         out(
           `escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}${heldText}${alsoAnswers(also)}; wait for their answer before acting on it (if it comes some other way, close it: kiwi ask-human --close ${seq} "why")`,
@@ -398,20 +395,16 @@ export const messageCommands: Record<string, Command> = {
     }),
 };
 
-function checkOf(o: {
-  check?: string;
-  decider?: string;
-  artifact?: string;
-  replaces?: string;
-}): { phase: CheckPhase; decider?: string; artifact: CheckArtifact; replaces?: number } | string | undefined {
-  if (o.check === undefined) return o.decider !== undefined || o.artifact !== undefined || o.replaces !== undefined ? "--decider, --artifact and --replaces go with --check pre-ship|post" : undefined;
-  const phase = CHECK_PHASES.find((p) => p === o.check);
-  if (!phase) return `--check takes pre-ship or post, not "${o.check}"`;
-  if (o.artifact === undefined) return `a check needs ${ARTIFACT_USAGE}`;
-  const artifact = parseArtifact(o.artifact);
-  if (typeof artifact === "string") return artifact;
-  const decider = o.decider?.trim().replace(/^@/, "");
-  const replaces = o.replaces === undefined ? undefined : Number(o.replaces.trim().replace(/^#/, ""));
-  if (replaces !== undefined && !(Number.isSafeInteger(replaces) && replaces > 0)) return `--replaces takes the check it replaces, like #42, not "${o.replaces}"`;
-  return { phase, ...(decider ? { decider } : {}), artifact, ...(replaces !== undefined ? { replaces } : {}) };
+const CHECK_FLAGS = ["check", "decider", "artifact", "replaces"] as const;
+
+function checkFlagsGone(given: Partial<Record<(typeof CHECK_FLAGS)[number], string>>): string | null {
+  const used = CHECK_FLAGS.filter((f) => given[f] !== undefined);
+  if (!used.length) return null;
+  return [
+    `${used.map((f) => `--${f}`).join(", ")} ${used.length === 1 ? "is" : "are"} gone, and nothing was posted: Kiwi no longer blocks a merge on the host, so a check can't hold one back.`,
+    "Ask the question with its options and --holds T7, as before. To have it answered before the merge, the lead or a person makes it a step:",
+    "  kiwi task steps T7                                              lists the steps with their ids",
+    '  kiwi task steps T7 add "words" --answered N --before ID        N is the question, ID the merge step',
+    "Kiwi shows that order and chases it; the host doesn't enforce it.",
+  ].join("\n");
 }

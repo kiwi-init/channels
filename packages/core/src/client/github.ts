@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import { cleanGithubNote, GITHUB_SYNC_LISTS, MAX_GITHUB_ITEMS, wellFormedEvent, type GithubNote, type MergeMethod } from "../protocol.ts";
 import type { GithubStatus } from "../github-health.ts";
+import type { RetiredHead } from "../review-check.ts";
 import { githubNews, type GithubRelease, type GithubRules, type GithubState } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refused } from "./errors.ts";
@@ -32,20 +33,6 @@ interface GithubRulesInfo {
 const sameRules = (a: GithubRulesInfo, b: GithubRulesInfo | undefined): boolean =>
   !!b && a.branch === b.branch && a.required.join("\n") === b.required.join("\n") && a.merge.join(",") === b.merge.join(",");
 
-export interface ReviewCheck {
-  repo: string;
-  sha: string;
-  verdict: "approved" | "waiting" | "rejected";
-  tasks: number[];
-  note?: string;
-  upTo?: number;
-}
-
-export interface ReviewPosted {
-  url: string | null;
-  ticket?: string;
-}
-
 export interface GithubFx {
   setGithubRepos(repos: string[], token?: string | null): Effect.Effect<string[], Refused, Relay>;
   drainGithub(): Effect.Effect<number, Refused, Relay>;
@@ -54,7 +41,7 @@ export interface GithubFx {
   syncGithub(repo: string, known: GithubState): Effect.Effect<number, Refused, Relay>;
   githubStatus(): Effect.Effect<GithubStatus, Refused, Relay>;
   githubDiff(repo: string, sha: string): Effect.Effect<GithubDiff, Refused, Relay>;
-  postReviewCheck(c: ReviewCheck): Effect.Effect<ReviewPosted, Refused, Relay>;
+  retireReview(head: RetiredHead): Effect.Effect<{ url: string | null }, Refused, Relay>;
   commentOnPr(repo: string, number: number, body: string): Effect.Effect<{ url: string | null }, Refused, Relay>;
   githubIssue(repo: string, number: number): Effect.Effect<GithubIssueInfo, Refused, Relay>;
   closeIssue(c: { repo: string; number: number; reason: "completed" | "not_planned"; body: string }): Effect.Effect<{ url: string | null }, Refused, Relay>;
@@ -86,9 +73,9 @@ export class ChannelGithub {
       return yield* this.ch.request<GithubDiff>("/github/diff", {}, { repo, sha });
     }),
 
-    postReviewCheck: Effect.fn("Channel.postReviewCheck")({ self: this }, function* (this: ChannelGithub, c: ReviewCheck) {
-      if (c.verdict === "approved") yield* this.ch.ownerOnly();
-      return yield* this.ch.request<ReviewPosted>("/github/check", { method: "POST", body: JSON.stringify(c) });
+    retireReview: Effect.fn("Channel.retireReview")({ self: this }, function* (this: ChannelGithub, head: RetiredHead) {
+      yield* this.ch.ownerOnly();
+      return yield* this.ch.request<{ url: string | null }>("/github/check", { method: "POST", body: JSON.stringify({ repo: head.repo, sha: head.sha, verdict: "approved", tasks: [] }) });
     }),
 
     commentOnPr: Effect.fn("Channel.commentOnPr")({ self: this }, function* (this: ChannelGithub, repo: string, number: number, body: string) {

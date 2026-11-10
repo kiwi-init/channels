@@ -18,21 +18,7 @@ import { Empty } from "~/kit/empty"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
-import {
-  ALL_POWERS,
-  NO_POWERS,
-  trusted,
-  type Ask,
-  type Channel,
-  type JoinAsk,
-  type Message,
-  type PermissionAsk,
-  type Person,
-  type Powers,
-  type QuestionAsk,
-  type ReviewAsk,
-  type BypassAsk,
-} from "~/model"
+import { NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type Message, type PermissionAsk, type Person, type Powers, type QuestionAsk, type ReviewAsk } from "~/model"
 import { useApp, useGo, useChannelHere } from "~/nav"
 import { nickname, Shown } from "~/names"
 import { SendBack } from "~/tasks/send-back"
@@ -101,7 +87,7 @@ export function NeedsYou({ channel, onJump }: { channel: Channel; onJump: (jump:
 }
 
 function answeredAt(a: Ask): number {
-  if (a.kind === "review" || a.kind === "spec" || a.kind === "bypass") return a.at
+  if (a.kind === "review" || a.kind === "spec") return a.at
   if (a.kind === "question" && a.closed) return a.closed.at
   return a.answer?.at ?? a.at
 }
@@ -123,7 +109,6 @@ function doneLine(channel: Channel, a: Ask): string {
         : ""
     case "review":
     case "spec":
-    case "bypass":
       return ""
   }
 }
@@ -157,8 +142,6 @@ function Card({ channel, ask, onJump }: { channel: Channel; ask: Ask; onJump: (j
       return <ReviewAskCard channel={channel} ask={ask} link={link} />
     case "spec":
       return <SpecNeedCard channel={channel} ask={ask} />
-    case "bypass":
-      return <BypassAskCard channel={channel} ask={ask} link={link} />
   }
 }
 
@@ -486,20 +469,6 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
               )}
             </Opt>
           )}
-          {!agent && (
-            <Opt label={t("needs.join.full.trust")} hint={!only && trusted(can) ? t("needs.join.full.trust.on") : t("needs.join.full.trust.off")}>
-              {(id) => (
-                <Toggle
-                  id={id}
-                  on={!only && trusted(can)}
-                  onChange={(on) => {
-                    if (on) setReadOnly(false)
-                    setPowers(on ? ALL_POWERS : NO_POWERS)
-                  }}
-                />
-              )}
-            </Opt>
-          )}
           {!chosen && (
             <Opt
               label={t("needs.join.read.only")}
@@ -514,47 +483,13 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
                 {(id) => <Toggle id={id} on={can[power]} onChange={(on) => setPowers({ ...can, [power]: on })} />}
               </Opt>
             ))}
+          {!agent && !only && trusted(can) && (
+            <p className="trust-note tone-decide" role="status">
+              {t("needs.join.trusted.note", { name: ask.freeName ?? ask.name })}
+            </p>
+          )}
         </div>
       )}
-    </Shell>
-  )
-}
-
-function BypassAskCard({ channel, ask, link }: { channel: Channel; ask: BypassAsk; link: ReactNode }) {
-  const { app, go, toast } = useApp()
-  const who = member(channel, ask.from)
-  const task = channel.tasks.find((k) => k.id === ask.task)
-  const [closing, setClosing] = useState(false)
-  const close = (why: string) => {
-    app.actions.closeTask(channel.code, ask.task, why)
-    setClosing(false)
-    toast(t("needs.bypass.closed", { task: String(ask.task) }))
-  }
-  return (
-    <Shell
-      face={who}
-      name={nickname(channel, ask.from)}
-      member={!!who}
-      tag={{ text: t("needs.bypass.gate.shut"), tone: "alert" }}
-      verb={t("needs.bypass.verb")}
-      at={ask.at}
-      link={link}
-      actions={
-        closing ? (
-          <SendBack ask={t("needs.bypass.why")} submit={t("needs.bypass.close")} onSend={close} onCancel={() => setClosing(false)} />
-        ) : (
-          <button type="button" className="btn" onClick={() => setClosing(true)}>
-            {t("needs.bypass.close.reason")}
-          </button>
-        )
-      }
-    >
-      {task && (
-        <button type="button" className="needs-text needs-open" title={t("needs.open.task")} onClick={() => go({ to: "task", task: task.id })}>
-          <span className="needs-id">T{task.id}</span> <Shown value={task.title} />
-        </button>
-      )}
-      <p className="needs-text tone-alert">{t("needs.bypass.missing", { missing: ask.missing.join(", ") })}</p>
     </Shell>
   )
 }

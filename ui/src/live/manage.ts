@@ -183,10 +183,6 @@ export async function setLanding(code: string, typed: string | null): Promise<vo
   await event(setup(code), then && then !== "none" ? `tasks land on: ${then}` : "tasks finish on approval", { op: "landing.set", then })
 }
 
-export async function setPeopleMerge(code: string, on: boolean): Promise<void> {
-  await event(setup(code), on ? "people merge pull requests" : "agents merge pull requests again", { op: "merges.set", by: on ? "people" : "agents" })
-}
-
 export async function setBranchPrefix(code: string, typed: string | null): Promise<void> {
   const prefix = typed?.trim() || null
   if (prefix && !BRANCH_PREFIX_RE.test(prefix)) throw new Error(t("live.manage.bad.branch.prefix"))

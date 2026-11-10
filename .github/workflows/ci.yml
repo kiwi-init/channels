@@ -75,7 +75,13 @@ jobs:
           phones="ios android"
           case "$EVENT" in
             pull_request) pick="static test-unit"; if echo "$TITLE" | grep -qE '^kiwi [0-9]{4}\.[0-9]{1,2}\.[0-9]+(-rc\.[0-9]+)?$'; then pick="$pick cli-macos"; fi ;;
-            workflow_dispatch) if [ -n "$JOBS" ]; then pick=$(echo "$JOBS" | tr ',' ' '); else pick=$(bash scripts/coverage-pick.sh "$RELEASE"); fi ;;
+            workflow_dispatch)
+              if [ -n "$JOBS" ]; then
+                pick=$(echo "$JOBS" | tr ',' ' ')
+                case " $pick " in *" desktop-distros "*) case " $pick " in *" desktop-linux "*) ;; *) pick="$pick desktop-linux" ;; esac ;; esac
+              else
+                pick=$(bash scripts/coverage-pick.sh "$RELEASE")
+              fi ;;
             *) pick="$all" ;;
           esac
           for j in $pick; do case " $all $phones " in *" $j "*) ;; *) echo "no job named $j; the jobs are: $all $phones"; exit 1 ;; esac; done
@@ -868,11 +874,10 @@ jobs:
           retention-days: 3
           overwrite: true
 
-  # desktop / distros stays before merge on every default dispatch (and on pushes to main) because
-  # release.yml today checks only that a tag's commit is on main, not that CI passed at that commit:
-  # nothing but this job catches a broken AppImage before a release goes out (a release= dispatch
-  # verifies an already-published artifact). It moves after merge only when a release gate enforces
-  # green CI at the exact tagged SHA before publish — spec #1967, tasks T2017 and T2018.
+  # desktop / distros runs after merge: on every push to main and when a dispatch names it (naming
+  # it also selects desktop-linux, the leg that builds its AppImage), not on default dispatches.
+  # This is safe because release.yml's ci-green gate refuses to build or publish a tag whose exact
+  # commit lacks a green push run — distros included — so a broken AppImage cannot ship.
   desktop-distros:
     name: desktop / distros, ${{ matrix.distro }}
     needs: [plan, desktop-linux]

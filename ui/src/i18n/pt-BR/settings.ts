@@ -173,7 +173,7 @@ export default {
   "settings.personalities.can.assign": "Atribuir trabalho",
   "settings.personalities.can.assign.hint": "Passar tarefas para outros (o líder)",
   "settings.personalities.can.notes": "Definir notas",
-  "settings.personalities.can.notes.hint": "Fatos do canal",
+  "settings.personalities.can.notes.hint": "Notas do canal",
   "settings.personalities.title": "Personalidades",
   "settings.personalities.new": "Nova personalidade",
   "settings.personalities.yours": "{name} (sua)",

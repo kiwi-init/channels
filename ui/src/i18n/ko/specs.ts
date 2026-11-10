@@ -89,7 +89,7 @@ export default {
   "specs.page.all.specs": "모든 스펙",
   "specs.page.parts": "스펙, 내부, 결과",
   "specs.page.spec": "스펙",
-  "specs.page.inside": "내부",
+  "specs.page.inside": "작업",
   "specs.page.result": "결과",
   "specs.page.to.look.at": "확인할 것 {count}개",
   "specs.page.asked.by": "{who} 요청 {when}",
@@ -248,7 +248,7 @@ export default {
   "tasks.lanes.empty.hint": "사이드바에서 추가할 수 있습니다.",
   "tasks.lanes.label": "에이전트 레인",
   "tasks.lanes.review.warning":
-    "여기 작업은 병합 시 완료되지만 {branches} 브랜치는 {check} 체크를 요구하지 않아, 작업의 게이트가 열리기 전에 PR이 병합될 수 있습니다. 소유자가 저장소 ruleset에서 이를 요구하도록 설정할 수 있습니다.",
+    "{branches} 브랜치는 아직 {check} 체크를 요구하지만, Kiwi는 이 체크를 폐지했습니다. 소유자가 저장소 ruleset에서 제거할 때까지 Kiwi는 모든 풀 리퀘스트에 성공으로 응답합니다.",
   "tasks.now.needs.you": "내 확인 필요",
   "tasks.now.in.progress.count": "{count}개 진행 중",
   "tasks.now.done.today.count": "오늘 {count}개 완료",

@@ -21,6 +21,7 @@ import { TaskRow } from "~/tasks/row"
 import { wordsPlain } from "~/words"
 
 const LOOSE_SHOWN = 3
+const DONE_PAGE = 20
 
 const SpecPage = later(() => import("~/specs/page").then((m) => m.SpecPage))
 const NewSpec = later(() => import("~/specs/new").then((m) => m.NewSpec))
@@ -72,19 +73,22 @@ function SpecList({ channel }: { channel: Channel }) {
   const groups = groupsOf(channel, shown)
   const inSpecs = new Set(specs.flatMap((s) => s.tasks))
   const loose = channel.tasks.filter((task) => !inSpecs.has(task.id) && !task.archived && task.status !== "done")
+  const finished = channel.tasks.filter((task) => !inSpecs.has(task.id) && !task.cancelled && task.status === "done").sort((a, b) => b.updatedAt - a.updatedAt)
   const live = channel.tasks.some((task) => !task.archived)
+  const tasks = shown === "open" ? loose : finished
+  const label = specs.length ? t("specs.view.not.in.spec") : t("specs.view.tasks")
   return (
     <div className="board">
       <div className="board-list gh-list specs-list">
         {live && <NowCard channel={channel} />}
         <div className="gh-top">
-          {specs.length > 0 && (
+          {(specs.length > 0 || finished.length > 0) && (
             <Track className="seg" role="group" aria-label={t("specs.view.open.or.done")}>
               <button type="button" aria-pressed={shown === "open"} onClick={() => setShown("open")}>
-                {t("specs.view.open")} <span className="gh-n num">{open}</span>
+                {t("specs.view.open")} <span className="gh-n num">{open + loose.length}</span>
               </button>
               <button type="button" aria-pressed={shown === "done"} onClick={() => setShown("done")}>
-                {t("specs.view.done")} <span className="gh-n num">{specs.length - open}</span>
+                {t("specs.view.done")} <span className="gh-n num">{specs.length - open + finished.length}</span>
               </button>
             </Track>
           )}
@@ -93,12 +97,12 @@ function SpecList({ channel }: { channel: Channel }) {
             {t("specs.view.new")}
           </button>
         </div>
-        {groups.length || (shown === "open" && loose.length) ? (
+        {groups.length || tasks.length ? (
           <div className="board-stack">
             {groups.map((g) => (
               <GroupCard key={g.key} channel={channel} group={g} />
             ))}
-            {shown === "open" && loose.length > 0 && <Loose channel={channel} tasks={loose} label={specs.length ? t("specs.view.not.in.spec") : t("specs.view.tasks")} />}
+            {tasks.length > 0 && <Loose key={shown} channel={channel} tasks={tasks} label={label} page={shown === "open" ? LOOSE_SHOWN : DONE_PAGE} more={shown === "done"} />}
           </div>
         ) : channel.loading ? (
           <Loading />
@@ -129,11 +133,12 @@ function GroupCard({ channel, group }: { channel: Channel; group: Group }) {
   )
 }
 
-function Loose({ channel, tasks, label }: { channel: Channel; tasks: Task[]; label: string }) {
+function Loose({ channel, tasks, label, page, more }: { channel: Channel; tasks: Task[]; label: string; page: number; more: boolean }) {
   const nav = useNav()
-  const [all, setAll] = useState(false)
+  const [pages, setPages] = useState(1)
   const on = nav.panel?.kind === "task" ? nav.panel.task : null
-  const rows = all ? tasks : tasks.slice(0, LOOSE_SHOWN)
+  const rows = tasks.slice(0, page * pages)
+  const left = tasks.length - rows.length
   return (
     <section className="board-group gh-group is-loose" aria-label={label}>
       <div className="board-head">
@@ -149,9 +154,9 @@ function Loose({ channel, tasks, label }: { channel: Channel; tasks: Task[]; lab
           </li>
         ))}
       </ul>
-      {tasks.length > LOOSE_SHOWN && (
-        <button type="button" className="board-more" onClick={() => setAll(!all)}>
-          {all ? t("specs.view.show.fewer") : t("specs.view.show.more", { count: tasks.length - LOOSE_SHOWN })}
+      {tasks.length > page && (
+        <button type="button" className="board-more" onClick={() => setPages(left > 0 ? (more ? pages + 1 : Math.ceil(tasks.length / page)) : 1)}>
+          {left > 0 ? t("specs.view.show.more", { count: more ? Math.min(page, left) : left }) : t("specs.view.show.fewer")}
         </button>
       )}
     </section>

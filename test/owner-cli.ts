@@ -15,6 +15,7 @@ import { fingerprint } from "@kiwi/core/identity.ts";
 import { runsLine } from "@kiwi/core/membership.ts";
 import { openOwnerSession } from "../src/owner.ts";
 import { baseName, here } from "../src/seats.ts";
+import { ownerArgs } from "./owner-args.ts";
 import { join } from "node:path";
 import { isLeadRole } from "@kiwi/core/state.ts";
 import { personaOf, type Persona } from "@kiwi/core/personality.ts";
@@ -29,15 +30,7 @@ const personaFor = (role: string, about?: string): Persona => {
 };
 
 const OWNER = "human";
-const argv = process.argv.slice(2);
-const opt: Record<string, string | true> = {};
-const args: string[] = [];
-for (let i = 0; i < argv.length; i++) {
-  const a = argv[i]!;
-  if (a === "--open" || a === "--yes") opt[a.slice(2)] = true;
-  else if (a.startsWith("--") || a === "-c") opt[a.replace(/^-+/, "")] = argv[++i]!;
-  else args.push(a);
-}
+const { opt, args } = ownerArgs(process.argv.slice(2));
 const str = (k: string) => (typeof opt[k] === "string" ? (opt[k] as string) : undefined);
 const out = (l: string) => process.stdout.write(l + "\n");
 class Die {

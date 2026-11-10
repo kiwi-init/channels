@@ -214,7 +214,6 @@ export const joinCommands: Record<string, Command> = {
               charter: charterLines(state),
               lead: leadLine(state, name),
               human: humanOf(state, name),
-              merges: state.merges,
               ...(seat?.persona ? { persona: seat.persona } : {}),
             }),
           );

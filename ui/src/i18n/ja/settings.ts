@@ -173,7 +173,7 @@ export default {
   "settings.personalities.can.assign": "作業の割り当て",
   "settings.personalities.can.assign.hint": "他の人にタスクを渡す (リード)",
   "settings.personalities.can.notes": "ノートの設定",
-  "settings.personalities.can.notes.hint": "チャンネルの情報",
+  "settings.personalities.can.notes.hint": "チャンネルのメモ",
   "settings.personalities.title": "パーソナリティ",
   "settings.personalities.new": "新しいパーソナリティ",
   "settings.personalities.yours": "{name} (自分用)",

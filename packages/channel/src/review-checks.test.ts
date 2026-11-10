@@ -1,55 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { generateIdentity, sign, verify } from "@kiwi/core/identity.ts";
-import { reviewCheckOf, type Event, type Message } from "@kiwi/core/protocol.ts";
+import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { fold } from "@kiwi/core/state.ts";
-import { checkedUpTo, checkPosted, checksToPost, issuesToPost, linksToPost, tasksToClose } from "./review-checks.ts";
+import { checkedUpTo, issuesToPost, linksToPost, tasksToClose } from "./review-checks.ts";
 import { closeFromGithub } from "./task-actions.ts";
 
 describe("posting review checks from the owner's app", () => {
-  test("kiwi/review follows the folded state: posted once until GitHub echoes it, and again when someone else changed it", async () => {
-    const jon = await generateIdentity("jon");
-    const rev = await generateIdentity("rev");
-    const roster = [
-      { name: "jon", pk: jon.pk, owner: true, at: 0, active: true, kind: "human" as const },
-      { name: "rev", pk: rev.pk, owner: false, at: 1, active: true, kind: "agent" as const },
-    ];
-    let seq = 0;
-    const ev = async (id: typeof jon, from: string, e: Event): Promise<Message> => {
-      seq++;
-      const p = await sign(id, { v: 1 as const, id: crypto.randomUUID(), from, kind: "event" as const, body: "", ts: seq, ev: e });
-      return { ...p, seq, rts: seq, sigOk: await verify(p) };
-    };
-    const log: Message[] = [];
-    const say = async (id: typeof jon, from: string, e: Event): Promise<number> => {
-      const m = await ev(id, from, e);
-      log.push(m);
-      return m.seq;
-    };
-    const sha = "d".repeat(40);
-    const kiwiReview = (run: number, conclusion?: string) =>
-      say(jon, "jon", {
-        op: "github",
-        items: [{ repo: "o/r", at: seq, event: "check_run", sha, name: reviewCheckOf(room), run, status: conclusion ? "completed" : "in_progress", ...(conclusion ? { conclusion } : {}) }],
-      } as Event);
-    await say(jon, "jon", { op: "repos.set", repos: ["o/r"] });
-    await say(jon, "jon", { op: "branch.prefix.set", prefix: "T" });
-    const t = await say(jon, "jon", { op: "task.add", title: "x", review: "rev" });
-    await say(jon, "jon", { op: "github", items: [{ repo: "o/r", at: seq, event: "pull_request", action: "opened", number: 9, state: "open", branch: `T${t}-x`, sha }] } as Event);
-    await say(jon, "jon", { op: "task.update", task: t, state: "review", at: sha });
-    const room = `room-${crypto.randomUUID()}`;
-    expect(checksToPost(room, fold(log, roster))).toEqual([]);
-    await say(rev, "rev", { op: "task.update", task: t, state: "done", verdict: "approved", round: 1, at: sha });
-    const due = checksToPost(room, fold(log, roster));
-    expect(due).toEqual([{ repo: "o/r", sha, pr: 9, verdict: "approved", tasks: [t] }]);
-    checkPosted(room, fold(log, roster), due[0]!);
-    expect(checksToPost(room, fold(log, roster))).toEqual([]);
-    await kiwiReview(1, "success");
-    expect(checksToPost(room, fold(log, roster))).toEqual([]);
-    await kiwiReview(2);
-    expect(checksToPost(room, fold(log, roster))).toMatchObject([{ verdict: "approved", tasks: [t] }]);
-  });
-
   test("with Write to GitHub on, a PR on branch T<n>-… is linked back once, and not on the first look", async () => {
     const jon = await generateIdentity("jon");
     const roster = [{ name: "jon", pk: jon.pk, owner: true, at: 0, active: true, kind: "human" as const }];
