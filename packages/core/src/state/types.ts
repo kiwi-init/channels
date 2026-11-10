@@ -136,6 +136,16 @@ export interface StepQuestion {
   choices: string[];
 }
 
+export interface TaskClock {
+  key: string;
+  seq: number;
+  at: number;
+  step?: 1 | 2 | 3;
+  day?: number;
+  head?: string;
+  acts?: [name: string, seq: number, at: number, step?: 1 | 2 | 3][];
+}
+
 export interface Task {
   id: number;
   title: string;
@@ -161,6 +171,7 @@ export interface Task {
   from?: number;
   areas?: string[];
   touched?: Record<string, number>;
+  clock?: TaskClock;
   workedBy: string[];
   rounds: ReviewRound[];
   source?: number;

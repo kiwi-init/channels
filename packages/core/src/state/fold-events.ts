@@ -579,6 +579,9 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
+    case "task.nudge":
+      break;
+
     case "task.first": {
       const task = tasks.get(ev.task);
       if (!task) reject(`no task ${taskId(ev.task)}`);

@@ -103,6 +103,7 @@ const OPS: Record<Event["op"], true> = {
   "specs.only.set": true,
   devices: true,
   "task.first": true,
+  "task.nudge": true,
   "task.landed": true,
   "task.steps": true,
   "hold.set": true,
@@ -467,6 +468,7 @@ const OPS_AT: Record<number, readonly string[]> = {
     "task.steps",
   ],
 };
+OPS_AT[24] = [...(OPS_AT[23] ?? []), "task.nudge"];
 
 describe("events from a newer client", () => {
   test("every op the Event type has is known, and a new op needs EVENT_OPS_VERSION raised with it", () => {

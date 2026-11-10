@@ -1,5 +1,7 @@
 import { inlineText } from "./membership.ts";
-import { isPerson, landerOf, openRound, type ChannelState, type Task } from "./state.ts";
+import { isPerson } from "./state/people.ts";
+import { landerOf, openRound } from "./state/tasks.ts";
+import type { ChannelState, Task } from "./state/types.ts";
 import { runSight } from "./state/landing-steps.ts";
 import { currentStep, spanText, stepMove, stepText, type LandingStep } from "./steps.ts";
 
@@ -18,7 +20,7 @@ type Board = Pick<ChannelState, "tasks" | "members" | "lead" | "openAsks" | "git
 
 const here = (state: Board, name: string | undefined | null): name is string => !!name && state.members.get(name)?.active === true;
 
-function channelOwner(state: Board): string | undefined {
+export function channelOwner(state: Pick<ChannelState, "members">): string | undefined {
   return [...state.members.values()].find((m) => m.owner && m.active)?.name;
 }
 

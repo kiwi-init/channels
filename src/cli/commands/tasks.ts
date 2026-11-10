@@ -40,7 +40,7 @@ const board = () =>
           const sess = yield* openSession(alias, c, me);
           const { state } = yield* sess.state();
           const owner = opt.mine ? sess.me : opt.owner;
-          const lines = formatTasks(state, reviewCheckOf(c.roomId), { all: opt.all, owner });
+          const lines = formatTasks(state, reviewCheckOf(c.roomId), { all: opt.all, owner, now: Date.now() });
           out(`## ${alias}${lines === "no tasks" ? " — no tasks" : ""}`);
           if (lines !== "no tasks")
             out(
@@ -54,7 +54,7 @@ const board = () =>
       }
       const s = yield* session();
       const { state } = yield* s.state();
-      out(formatTasks(state, reviewCheckOf(s.ch.roomId), { all: opt.all, owner: opt.mine ? s.me : opt.owner }));
+      out(formatTasks(state, reviewCheckOf(s.ch.roomId), { all: opt.all, owner: opt.mine ? s.me : opt.owner, now: Date.now() }));
     }),
   );
 
