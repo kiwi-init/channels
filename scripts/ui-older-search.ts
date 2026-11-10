@@ -66,7 +66,13 @@ try {
   const fetchedAt = seen.findIndex((t) => t.startsWith("Fetching"));
   expect(fetchedAt >= 0 && !seen.slice(fetchedAt).some((t) => t.startsWith("Search older history")), "the offer doesn't flash back between the fetch and the new results");
 
+  const listIsFor = (words: string) =>
+    page.waitForFunction((want) => {
+      const rows = [...document.querySelectorAll(".search-item")];
+      return rows.length > 0 && rows.every((r) => (r.textContent ?? "").toLowerCase().includes(want));
+    }, words);
   await box.fill("relay dumb");
+  await listIsFor("relay dumb");
   await heading.waitFor();
   const older = page.locator(".search-item").filter({ hasText: "Keep the relay dumb" }).first();
   await older.waitFor();
@@ -116,6 +122,7 @@ try {
   if (!(await box.isVisible())) await page.getByRole("button", { name: /Search this channel/ }).click();
   await box.fill("relay dumb");
   await box.focus();
+  await listIsFor("relay dumb");
   await older.click();
   await bar.waitFor();
   await page
