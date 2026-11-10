@@ -1,6 +1,6 @@
 import type { Where } from "~/model"
 
-export type Tab = "chat" | "specs" | "tasks" | "agents" | "needs" | "github"
+export type Tab = "chat" | "specs" | "agents" | "needs" | "github"
 
 export interface Spot {
   seq: number
