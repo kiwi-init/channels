@@ -96,6 +96,18 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     if (leaving) meadow.current?.freeze()
   }, [leaving])
 
+  useEffect(() => {
+    if (!ready || leaving) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== "Enter" || e.defaultPrevented || e.repeat || document.activeElement instanceof HTMLButtonElement) return
+      e.preventDefault()
+      if (step === "intro") setStep("trust")
+      else begin()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [ready, leaving, step])
+
   const ended = (e: AnimationEvent<HTMLDialogElement>): void => {
     if (e.target === e.currentTarget && e.animationName === "onb-out") onDone()
   }
