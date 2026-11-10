@@ -9,6 +9,7 @@ import { ActContext, AppContext, historyStep, type Go, type Nav } from "~/nav"
 import { ContextMenus } from "~/kit/menu-open"
 import { Palette } from "~/palette/palette"
 import { ChannelScreen } from "~/shell/channel"
+import { opening } from "~/shell/opening"
 import { Rail } from "~/shell/rail"
 import { useLimitHit } from "~/usage/store"
 import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
@@ -83,7 +84,7 @@ function Shown({ app, nav, go, broken }: RootProps) {
               </Crashed>
             ) : app.channel ? (
               <ChannelScreen key={app.channel.code} channel={app.channel} />
-            ) : (
+            ) : opening(app, nav) ? null : (
               <Suspense fallback={null}>{app.gone ? <Gone gone={app.gone} /> : <Welcome />}</Suspense>
             )}
           </Boundary>

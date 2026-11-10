@@ -9,7 +9,7 @@ import { APP_BEACON_MS, ChannelStore, PAGE, REACH, WINDOW } from "./channel-stor
 import { PRESENCE_TTL } from "./online.ts";
 import { REFOLLOW_MS } from "./refollow.ts";
 import type { StoredMember } from "./store.ts";
-import { dropWarm, LEAN, LIGHT, warmOf } from "./warm.ts";
+import { dropWarm, foldedFor, LEAN, LIGHT, warmOf, type Warm } from "./warm.ts";
 import { useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts";
 
 const CODE = "mc2-store-test";
@@ -204,6 +204,52 @@ describe("a channel store", () => {
     await until(() => again.follows.length > 0);
     expect(again.live().since).toBe(2);
     close();
+  });
+
+  test("the next store for a warm channel takes the folded state as it is: nothing refolds on a switch back (T1788)", async () => {
+    const r = relay(0);
+    const first = await opened(r);
+    for (const seq of [1, 2]) r.say({ _tag: "Message", message: msg(seq), row: null });
+    await sleep(40);
+    const folded = first.store.handle.value.state;
+    first.close();
+    const again = relay(2);
+    const store = new ChannelStore(member, undefined, { link: again.link, lend: again.lend });
+    expect(store.handle.value.state).toBe(folded);
+    const close = store.open();
+    await until(() => again.follows.length > 0);
+    expect(store.handle.value.state).toBe(folded);
+    again.say({ _tag: "Message", message: msg(3), row: null });
+    await until(() => store.handle.value.messages.length === 3);
+    expect(store.handle.value.state).not.toBe(folded);
+    expect(store.handle.value.state.head).toBe(3);
+    close();
+  });
+
+  test("a kept state is not reused once what it was folded from differs, or once something in it has expired", () => {
+    const state = fold([msg(1)], [], 0, null, null, null);
+    const messages = [msg(1)];
+    const roster = [person("atlas", "pk-atlas")];
+    const warm = (over: Partial<Warm> = {}): Warm => ({
+      messages,
+      reach: [],
+      unread: [],
+      roster,
+      requests: [],
+      marks: new Map(),
+      guardFloor: null,
+      roomsFloor: null,
+      base: null,
+      partial: false,
+      folded: { state, messages, roster, guardFloor: null, roomsFloor: null, base: null, until: 1_000 },
+      ...over,
+    });
+    expect(foldedFor(warm(), 999)?.state).toBe(state);
+    expect(foldedFor(warm(), 1_000)).toBeNull();
+    expect(foldedFor(warm({ messages: [msg(1)] }), 999)).toBeNull();
+    expect(foldedFor(warm({ roster: [...roster] }), 999)).toBeNull();
+    expect(foldedFor(warm({ folded: undefined }), 999)).toBeNull();
+    expect(foldedFor(undefined, 999)).toBeNull();
   });
 
   test("with the sign-in known to be gone, it never follows", async () => {
