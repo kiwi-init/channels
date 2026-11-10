@@ -191,3 +191,11 @@ describe("bump-main pushes a stamp that edits the stamped files, and refuses one
     expect(r.out).toContain(says);
   });
 });
+
+test("nothing is built or published unless the ci-green gate passes", () => {
+  expect(needs("ci-green")).toEqual(["on-main"]);
+  expect(needs("build")).toContain("ci-green");
+  expect(needs("publish")).toContain("build");
+  const through = (job: string, seen: Set<string> = new Set()): boolean => job === "ci-green" || needs(job).some((n) => !seen.has(n) && (seen.add(n), through(n, seen)));
+  for (const job of ["build", "publish"]) expect({ job, gatedByCiGreen: through(job) }).toEqual({ job, gatedByCiGreen: true });
+});

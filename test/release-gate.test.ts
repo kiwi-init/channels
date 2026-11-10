@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -28,7 +28,18 @@ const FULL_LEGS = [
 type Job = { name: string; conclusion: string };
 type Run = { id: number; head_sha: string; status: string; attempt: number };
 
-export function fixture(scenario: { runs?: Run[]; jobs?: Job[]; manifest?: string; ghFails?: boolean; clock?: number[] }): string {
+export function fixture(scenario: {
+  runs?: Run[];
+  runsPage2?: Run[];
+  jobs?: Job[];
+  jobsPage2?: Job[];
+  attemptJobs?: Record<number, Job[]>;
+  statusSeq?: string[];
+  manifest?: string;
+  ghFails?: boolean;
+  statusFailsOnce?: boolean;
+  clock?: number[];
+}): string {
   const dir = mkdtempSync(join(tmpdir(), "gate-"));
   const bin = join(dir, "bin");
   mkdirSync(bin);
@@ -40,18 +51,23 @@ export function fixture(scenario: { runs?: Run[]; jobs?: Job[]; manifest?: strin
   );
   writeFileSync(join(bin, "sleep"), "#!/usr/bin/env bash\nexit 0\n");
   writeFileSync(join(dir, "runs.json"), JSON.stringify({ workflow_runs: scenario.runs ?? [] }));
+  writeFileSync(join(dir, "runs2.json"), JSON.stringify({ workflow_runs: scenario.runsPage2 ?? [] }));
   const first = (scenario.runs ?? [])[0] ?? { id: 42, head_sha: "none", status: "completed", attempt: 1 };
   writeFileSync(join(dir, "run.json"), JSON.stringify({ ...first, run_attempt: first.attempt }));
   writeFileSync(join(dir, "artifacts.json"), JSON.stringify({ artifacts: [{ id: 7, name: "ci-legs" }] }));
   writeFileSync(join(dir, "jobs.json"), JSON.stringify({ jobs: scenario.jobs ?? [] }));
+  writeFileSync(join(dir, "jobs2.json"), JSON.stringify({ jobs: scenario.jobsPage2 ?? [] }));
+  for (const [attempt, jobs] of Object.entries(scenario.attemptJobs ?? {})) writeFileSync(join(dir, `jobs-a${attempt}.json`), JSON.stringify({ jobs }));
+  writeFileSync(join(dir, "status.txt"), (scenario.statusSeq ?? ["completed"]).join("\n") + "\n");
   const gh = [
     "#!/usr/bin/env bash",
+    'echo "$2" >> "$GATE_DIR/calls"',
     'payload=""',
-    `case "$2" in`,
-    '  "repos/o/r/actions/workflows/ci.yml/runs?event=push&branch=main&per_page=50&page=1") payload="$GATE_DIR/runs.json" ;;',
-    '  repos/o/r/actions/runs/*/attempts/*) payload="$GATE_DIR/jobs.json" ;;',
+    'case "$2" in',
+    '  repos/o/r/actions/workflows/ci.yml/runs*) sha=$(echo "$2" | sed -E "s#.*head_sha=([^&]+).*#\\1#"); base="$GATE_DIR/runs.json"; [ "${2#*page=2}" != "$2" ] && base="$GATE_DIR/runs2.json"; jq -c --arg s "$sha" \'{workflow_runs: [.workflow_runs[]? | select(.head_sha == $s)]}\' "$base"; exit 0 ;;',
+    '  repos/o/r/actions/runs/*/attempts/*/jobs*) url="$2"; a=$(echo "$url" | sed -E "s#.*/attempts/([0-9]+)/jobs.*#\\1#"); pg=$(echo "$url" | sed -E "s#.*[&?]page=([0-9]+).*#\\1#"); if [ -f "$GATE_DIR/jobs-a$a.json" ] && [ "$pg" = "1" ]; then payload="$GATE_DIR/jobs-a$a.json"; elif [ "$pg" = "2" ]; then payload="$GATE_DIR/jobs2.json"; else payload="$GATE_DIR/jobs.json"; fi ;;',
     '  repos/o/r/actions/runs/*/artifacts*) payload="$GATE_DIR/artifacts.json" ;;',
-    '  repos/o/r/actions/runs/*) payload="$GATE_DIR/run.json" ;;',
+    '  repos/o/r/actions/runs/*) if [ "$3" = "--jq" ] && [ "$4" = ".status" ]; then if [ -s "$GATE_DIR/status-err" ]; then rm "$GATE_DIR/status-err"; echo "api down" >&2; exit 2; fi; n=$(cat "$GATE_DIR/scount" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$GATE_DIR/scount"; v=$(sed -n "${n}p" "$GATE_DIR/status.txt"); [ -z "$v" ] && v=$(tail -n 1 "$GATE_DIR/status.txt"); echo "$v"; exit 0; fi; payload="$GATE_DIR/run.json" ;;',
     '  *) payload="" ;;',
     "esac",
     'expr="."',
@@ -69,85 +85,113 @@ export function fixture(scenario: { runs?: Run[]; jobs?: Job[]; manifest?: strin
       : `#!/usr/bin/env bash\nprintf '%s' '${scenario.manifest.replace(/'/g, `'\\''`)}' > ci-legs.json\n`,
   );
   writeFileSync(join(bin, "unzip"), "#!/usr/bin/env bash\nexit 0\n");
+  if (scenario.statusFailsOnce) writeFileSync(join(dir, "status-err"), "1");
   for (const f of ["date", "sleep", "gh", "curl", "unzip"]) chmodSync(join(bin, f), 0o755);
   return dir;
 }
 
-export function gate(scenario: Parameters<typeof fixture>[0], sha = "abc123"): { code: number; out: string } {
+function gate(scenario: Parameters<typeof fixture>[0], sha = "abc123"): { code: number; out: string; calls: string } {
   const dir = fixture(scenario);
   const r = spawnSync("bash", [".github/actions/ci-green/gate.sh", sha, "dry-run"], {
     env: { ...process.env, PATH: `${dir}/bin:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GH_TOKEN: "t", GATE_DIR: dir },
   });
-  return { code: r.status ?? 1, out: `${r.stdout}${r.stderr}` };
+  const calls = (() => {
+    try {
+      return readFileSync(join(dir, "calls"), "utf8");
+    } catch {
+      return "";
+    }
+  })();
+  return { code: r.status ?? 1, out: `${r.stdout}${r.stderr}`, calls };
 }
 
 const greenJobs: Job[] = FULL_LEGS.map((name) => ({ name, conclusion: "success" }));
+const red = (leg: string, conclusion = "failure"): Job[] => greenJobs.map((j) => (j.name === leg ? { ...j, conclusion } : j));
 const runAt = (sha: string, over: Partial<Run> = {}): Run[] => [{ id: 42, head_sha: sha, status: over.status ?? "completed", attempt: over.attempt ?? 1 }];
+const manifest = JSON.stringify(FULL_LEGS);
 
 describe("the release gate", () => {
   test("a full green run at the exact SHA accepts", () => {
-    const { code, out } = gate({ runs: runAt("abc123"), jobs: greenJobs, manifest: JSON.stringify(FULL_LEGS) });
+    const { code, out } = gate({ runs: runAt("abc123"), jobs: greenJobs, manifest });
     expect(code).toBe(0);
     expect(out).toContain("every expected leg green in attempt 1");
   });
 
+  test("the required legs found beyond jobs page 1 still accept", () => {
+    const fillers: Job[] = Array.from({ length: 100 }, (_, i) => ({ name: `filler ${i}`, conclusion: "success" }));
+    const { code, out } = gate({ runs: runAt("abc123"), jobs: fillers, jobsPage2: greenJobs, manifest });
+    expect(code).toBe(0);
+    expect(out).toContain("every expected leg green");
+  });
+
+  test("a run found beyond runs page 1 accepts", () => {
+    const fillers: Run[] = Array.from({ length: 50 }, (_, i) => ({ id: 1000 + i, head_sha: "abc123", status: "completed", attempt: 1 }));
+    const { code } = gate({ runs: fillers, runsPage2: runAt("abc123"), jobs: greenJobs, manifest });
+    expect(code).toBe(0);
+  });
+
   test("a run at another SHA never matches: the gate times out and refuses", () => {
-    const { code, out } = gate({ runs: runAt("other"), jobs: greenJobs, manifest: JSON.stringify(FULL_LEGS), clock: [1_000, 1_000, 9_999_999, 9_999_999, 9_999_999, 9_999_999] });
+    const { code, out } = gate({ runs: runAt("other"), jobs: greenJobs, manifest, clock: [1_000, 1_000, 9_999_999, 9_999_999] });
     expect(code).toBe(1);
     expect(out).toContain("no ci push run on main");
   });
 
   test("partial green refuses, naming the red leg", () => {
-    const jobs = greenJobs.map((j) => (j.name === "build / fuzz" ? { ...j, conclusion: "failure" } : j));
-    const { code, out } = gate({ runs: runAt("abc123"), jobs, manifest: JSON.stringify(FULL_LEGS) });
+    const { code, out } = gate({ runs: runAt("abc123"), jobs: red("build / fuzz"), manifest });
     expect(code).toBe(1);
     expect(out).toContain("build / fuzz: failure");
   });
 
   test("a leg missing from the attempt refuses", () => {
-    const jobs = greenJobs.filter((j) => j.name !== "build / doc, view");
-    const { code, out } = gate({ runs: runAt("abc123"), jobs, manifest: JSON.stringify(FULL_LEGS) });
+    const { code, out } = gate({ runs: runAt("abc123"), jobs: greenJobs.filter((j) => j.name !== "build / doc, view"), manifest });
     expect(code).toBe(1);
     expect(out).toContain("build / doc, view missing from attempt 1");
   });
 
   test("a skipped matrix leg refuses", () => {
-    const jobs = greenJobs.map((j) => (j.name === "build / shots, webkit" ? { ...j, conclusion: "skipped" } : j));
-    const { code, out } = gate({ runs: runAt("abc123"), jobs, manifest: JSON.stringify(FULL_LEGS) });
+    const { code, out } = gate({ runs: runAt("abc123"), jobs: red("build / shots, webkit", "skipped"), manifest });
     expect(code).toBe(1);
     expect(out).toContain("build / shots, webkit: skipped");
   });
 
   test("a cancelled attempt refuses", () => {
-    const jobs = greenJobs.map((j) => (j.name === "test / unit" ? { ...j, conclusion: "cancelled" } : j));
-    const { code, out } = gate({ runs: runAt("abc123"), jobs, manifest: JSON.stringify(FULL_LEGS) });
+    const { code, out } = gate({ runs: runAt("abc123"), jobs: red("test / unit", "cancelled"), manifest });
     expect(code).toBe(1);
     expect(out).toContain("test / unit: cancelled");
   });
 
-  test("a green old attempt under a red latest rerun refuses, reading the latest attempt", () => {
-    const { code, out } = gate({
+  test("a green old attempt under a red latest rerun refuses, having read the latest attempt", () => {
+    const { code, out, calls } = gate({
       runs: runAt("abc123", { attempt: 2 }),
-      jobs: greenJobs.map((j) => (j.name === "desktop / distros, arch" ? { ...j, conclusion: "failure" } : j)),
-      manifest: JSON.stringify(FULL_LEGS),
+      attemptJobs: { 1: greenJobs, 2: red("desktop / distros, arch") },
+      manifest,
     });
     expect(code).toBe(1);
     expect(out).toContain("attempt 2");
     expect(out).toContain("desktop / distros, arch: failure");
+    expect(calls).toContain("attempts/2/jobs");
+    expect(calls).not.toContain("attempts/1/jobs");
   });
 
-  test("a full green rerun (attempt 2 green) accepts", () => {
-    const { code } = gate({ runs: runAt("abc123", { attempt: 2 }), jobs: greenJobs, manifest: JSON.stringify(FULL_LEGS) });
+  test("a full green rerun (attempt 2 green) accepts, reading attempt 2's jobs", () => {
+    const { code, calls } = gate({ runs: runAt("abc123", { attempt: 2 }), attemptJobs: { 1: red("build / fuzz"), 2: greenJobs }, manifest });
     expect(code).toBe(0);
+    expect(calls).toContain("attempts/2/jobs");
   });
 
   test("an api error fails closed", () => {
-    const { code } = gate({ runs: runAt("abc123"), jobs: greenJobs, manifest: JSON.stringify(FULL_LEGS), ghFails: true });
+    const { code } = gate({ runs: runAt("abc123"), jobs: greenJobs, manifest, ghFails: true });
     expect(code).toBe(1);
   });
 
-  test("a run still in progress that goes green is waited for and accepted", () => {
-    const { code } = gate({ runs: runAt("abc123", { status: "completed" }), jobs: greenJobs, manifest: JSON.stringify(FULL_LEGS) });
+  test("a status read that errors once fails closed, even if the next read would say completed", () => {
+    const { code, out } = gate({ runs: runAt("abc123"), jobs: greenJobs, manifest, statusFailsOnce: true, statusSeq: ["in_progress", "completed"] });
+    expect(code).toBe(1);
+    expect(out).toContain("could not read push run");
+  });
+
+  test("a run in progress is waited for and then accepted", () => {
+    const { code } = gate({ runs: runAt("abc123"), jobs: greenJobs, manifest, statusSeq: ["in_progress", "in_progress", "completed"] });
     expect(code).toBe(0);
   });
 
@@ -155,7 +199,8 @@ describe("the release gate", () => {
     const { code, out } = gate({
       runs: runAt("abc123", { status: "in_progress" }),
       jobs: greenJobs,
-      manifest: JSON.stringify(FULL_LEGS),
+      manifest,
+      statusSeq: ["in_progress"],
       clock: [1_000, 1_000, 9_999_999, 9_999_999],
     });
     expect(code).toBe(1);
@@ -163,7 +208,7 @@ describe("the release gate", () => {
   });
 
   test("an empty manifest refuses instead of shrinking the contract to two legs", () => {
-    const jobs = [
+    const jobs: Job[] = [
       { name: "desktop / distros, arch", conclusion: "success" },
       { name: "ci-ok", conclusion: "success" },
       { name: "repo / static", conclusion: "failure" },

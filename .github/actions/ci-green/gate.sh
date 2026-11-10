@@ -9,18 +9,20 @@ deadline=$(( $(date +%s) + 45*60 ))
 run_id=""
 while [ "$(date +%s)" -lt "$deadline" ]; do
   page=1
-  while [ "$page" -le 10 ]; do
-    runs_json=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?event=push&branch=main&per_page=50&page=$page") || die "could not list ci push runs (page $page)"
-    run_id=$(printf '%s' "$runs_json" | jq -r --arg sha "$SHA" '[.workflow_runs[]? | select(.head_sha == $sha)][0].id // empty')
+  while [ "$page" -le 5 ]; do
+    runs_json=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?event=push&branch=main&head_sha=$SHA&per_page=50&page=$page") || die "could not list ci push runs (page $page)"
+    run_id=$(printf '%s' "$runs_json" | jq -r --arg sha "$SHA" '[.workflow_runs[]? | select(.head_sha == $sha)][0].id // empty' 2>/dev/null) || die "could not parse the ci push run list (page $page)"
     [ -n "$run_id" ] && break 2
-    count=$(printf '%s' "$runs_json" | jq '.workflow_runs | length')
+    count=$(printf '%s' "$runs_json" | jq '.workflow_runs | length' 2>/dev/null) || die "could not count the ci push run list (page $page)"
     [ "$count" -lt 50 ] && break
     page=$((page + 1))
   done
   sleep 60
 done
 [ -n "$run_id" ] || die "no ci push run on main at $REF's commit $SHA appeared within 45 minutes"
-while [ "$(gh api "repos/$REPO/actions/runs/$run_id" --jq .status)" != "completed" ]; do
+while :; do
+  status=$(gh api "repos/$REPO/actions/runs/$run_id" --jq .status) || die "could not read push run $run_id's status"
+  [ "$status" = "completed" ] && break
   [ "$(date +%s)" -lt "$deadline" ] || die "push run $run_id did not finish within the gate's bound"
   sleep 60
 done
@@ -35,17 +37,17 @@ jq -e 'type == "array" and length > 0 and all(.[]; type == "string" and length >
 missing=$(jq -rn --argjson full "$FULL_LEGS" --argjson legs "$legs" '$full - $legs | join(", ")')
 [ -z "$missing" ] || die "the ci-legs manifest is incomplete: $missing"
 attempt=$(gh api "repos/$REPO/actions/runs/$run_id" --jq .run_attempt) || die "could not read the run's attempt count"
-jobs_json="["
+rm -f gate-jobs.all
 page=1
 while :; do
   page_json=$(gh api "repos/$REPO/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100&page=$page") || die "could not read the jobs of attempt $attempt (page $page)"
-  trimmed=$(printf '%s' "$page_json" | jq -c '[.jobs[]? | {name, conclusion}]')
-  jobs_json="${jobs_json%,}${trimmed:1:${#trimmed}-2},"
+  printf '%s\n' "$page_json" | jq -e 'type == "object" and (.jobs | type == "array")' > /dev/null 2>&1 || die "could not parse the jobs of attempt $attempt (page $page)"
+  printf '%s' "$page_json" | jq -c '[.jobs[]? | {name, conclusion}]' >> gate-jobs.all
   count=$(printf '%s' "$page_json" | jq '.jobs | length')
   [ "$count" -lt 100 ] && break
   page=$((page + 1))
 done
-jobs_json="${jobs_json%,}]"
+jobs_json=$(jq -s 'add' gate-jobs.all) || die "could not assemble the jobs of attempt $attempt"
 bad=$(jq -rn --argjson legs "$legs" --argjson jobs "$jobs_json" --arg attempt "$attempt" '
   ($jobs | map(.name)) as $names |
   ($legs[] | select(. as $l | $names | index($l) | not) | "\(.) missing from attempt \($attempt)"),
