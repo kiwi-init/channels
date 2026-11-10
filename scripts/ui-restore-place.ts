@@ -79,11 +79,10 @@ async function roomsAndTabs() {
   await page.getByRole("navigation", { name: "Views" }).getByRole("button", { name: /Specs/ }).click();
   await settle(page, 700);
   await page.reload();
-  const specs = page.getByRole("navigation", { name: "Views" }).getByRole("button", { name: /Specs/ });
-  await specs.waitFor();
-  expect((await specs.getAttribute("aria-pressed")) === "true", "a restart reopens the tab you were on");
-  await page.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "# design" }).click();
-  expect((await room(page)) === "design", "and the room you were in");
+  const chat = page.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "# design" });
+  await chat.waitFor();
+  expect((await chat.getAttribute("aria-pressed")) === "true", "a restart reopens the channel on its chat, not on the tab you left (T1833)");
+  expect((await room(page)) === "design", "in the room you were in");
 
   await search(page, "Wayland fixes", "2026.10.6 is out");
   await page.locator(".is-flash").first().waitFor();

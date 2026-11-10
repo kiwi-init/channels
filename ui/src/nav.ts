@@ -136,8 +136,8 @@ function travel(nav: Nav, way: "back" | "forward"): Nav {
 function step(nav: Nav, go: Exclude<Go, { to: "history" }>): Nav {
   switch (go.to) {
     case "channel": {
-      const kept = go.code === nav.channel ? { where: nav.where, tab: "chat" as const } : keptPlace(go.code)
-      return { ...nav, page: "channel", channel: go.code, where: kept?.where ?? GENERAL, tab: kept?.tab ?? "chat", panel: null, modal: null, dialog: null }
+      const where = go.code === nav.channel ? nav.where : keptPlace(go.code)?.where
+      return { ...nav, page: "channel", channel: go.code, where: where ?? GENERAL, tab: "chat", panel: null, modal: null, dialog: null }
     }
     case "where":
       if (go.person !== undefined && nav.page === "channel" && nav.tab === "chat" && sameWhere(nav.where, go.where)) return { ...nav, modal: { kind: "person", name: go.person } }
@@ -172,10 +172,10 @@ function step(nav: Nav, go: Exclude<Go, { to: "history" }>): Nav {
 }
 
 export function useKeepPlace(nav: Nav): void {
-  const { page, channel, where, tab } = nav
+  const { page, channel, where } = nav
   useEffect(() => {
-    if (page === "channel" && channel) keepPlace(channel, { where, tab })
-  }, [page, channel, where, tab])
+    if (page === "channel" && channel) keepPlace(channel, { where })
+  }, [page, channel, where])
 }
 
 export interface Ctx {
