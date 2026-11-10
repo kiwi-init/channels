@@ -87,9 +87,17 @@ const CLI_EXTERNAL = ["node-liblzma", "@mongodb-js/zstd"];
 
 const CHILD_ENV = (): NodeJS.ProcessEnv => ({ PATH: "/usr/bin:/bin", HOME: os.homedir(), TMPDIR: os.tmpdir() });
 
+const QUIT_SIGNALS: readonly string[] = ["SIGTERM", "SIGINT", "SIGHUP", "SIGQUIT"];
+
+export class EndedBySignal extends Error {}
+
 function run(file: string, args: string[], what: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, { timeout: 120_000, cwd: "/", env: CHILD_ENV() }, (err, _out, stderr) => (err ? reject(new Error(`${what}: ${stderr.trim() || err.message}`)) : resolve()));
+    execFile(file, args, { timeout: 120_000, cwd: "/", env: CHILD_ENV() }, (err, _out, stderr) => {
+      if (!err) return resolve();
+      const message = `${what}: ${stderr.trim() || err.message}`;
+      reject(!err.killed && QUIT_SIGNALS.includes(err.signal ?? "") ? new EndedBySignal(message) : new Error(message));
+    });
   });
 }
 

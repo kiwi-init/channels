@@ -5,7 +5,7 @@ import type { DeviceLink } from "@kiwi/core/devices.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
 import type { ComputerView } from "./bridge.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
-import { ensureOnPath, keepCli, place, type KeptCli } from "./cli.ts";
+import { EndedBySignal, ensureOnPath, keepCli, place, type KeptCli } from "./cli.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, daemonUnpair, kiwiHome, noteDaemon, spawnDaemon, trimDaemonLog, type HelloResult } from "./daemon-client.ts";
 import { keepAlive } from "./daemon-keeper.ts";
 import { host } from "./host.ts";
@@ -110,9 +110,9 @@ export async function keepDaemon(stopped: () => boolean): Promise<void> {
   if (host().app.packaged()) {
     try {
       await keepOwnCli();
-    } catch {
+    } catch (e) {
       // The daemon still runs from the app's own copy, and an older one must give way to it; a quit that ended the build starts no second one.
-      if (stopped()) return;
+      if (stopped() || e instanceof EndedBySignal) return;
       kiwiBin = await runnableKiwi().then(
         (bin) => ({ path: bin, version: host().app.version() }),
         () => null,
