@@ -92,7 +92,7 @@ describe("how an enrolment ended stays on screen until dismissed (T1866)", () =>
     return { got, stop }
   }
 
-  test("backing out at the key check says nothing was kept, with the key to compare, and it stays", async () => {
+  test("backing out at the key check leaves the words to the screen: no toast", async () => {
     const b = fakeBridge()
     const heard = said()
     await enrollBegin(
@@ -104,9 +104,8 @@ describe("how an enrolment ended stays on screen until dismissed (T1866)", () =>
     await Bun.sleep(10)
     await enrollCancel()
     heard.stop()
-    expect(heard.got.map(([, tone]) => tone)).toEqual(["error"])
-    expect(heard.got[0]?.[0]).toContain("Kept nothing")
-    expect(heard.got[0]?.[0]).toContain(check.person.fingerprint)
+    expect(heard.got).toEqual([])
+    expect(enrollingNow()).toBeNull()
   })
 
   test("being turned away by the other computer stays too", async () => {
