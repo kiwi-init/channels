@@ -20,7 +20,7 @@ import type { Channel, Room } from "~/model"
 import { nickname, roomPeople, seatRoot, shown } from "~/names"
 import { useApp, type ChannelTab, useGo } from "~/nav"
 import { repoOffers } from "~/modals/repo-offers"
-import { LandingPick } from "~/modals/landing-pick"
+import { LandingPick, landingWord } from "~/modals/landing-pick"
 import { Confirm, Group, InlineEdit, Row } from "~/settings/controls"
 import { useAppCan } from "~/live/app-can"
 import { isMuted } from "~/live/mute"
@@ -119,7 +119,6 @@ function General({ channel, onEnd }: { channel: Channel; onEnd: () => void }) {
               onSave={(title) => app.actions.renameChannel(channel.code, title)}
             />
           </Row>
-          <IconRow channel={channel} />
         </Group>
       )}
       <Group title={t("modals.channel.settings.goal")} hint={t("modals.channel.settings.goal.hint")}>
@@ -128,7 +127,13 @@ function General({ channel, onEnd }: { channel: Channel; onEnd: () => void }) {
       <Group title={t("modals.channel.settings.agents")}>
         <Hold channel={channel} />
         <Row label={t("modals.channel.settings.specs.only")} hint={channel.specsOnly ? t("modals.channel.settings.specs.only.on") : t("modals.channel.settings.specs.only.off")}>
-          <Toggle on={!!channel.specsOnly} label={t("modals.channel.settings.specs.only")} disabled={!own} onChange={(next) => app.actions.setSpecsOnly(channel.code, next)} />
+          <Toggle
+            on={!!channel.specsOnly}
+            label={t("modals.channel.settings.specs.only")}
+            disabled={!own}
+            why={t("modals.channel.settings.owner.only")}
+            onChange={(next) => app.actions.setSpecsOnly(channel.code, next)}
+          />
         </Row>
       </Group>
       <Group title={t("modals.channel.settings.notifications")}>
@@ -159,34 +164,6 @@ function General({ channel, onEnd }: { channel: Channel; onEnd: () => void }) {
   )
 }
 
-function IconRow({ channel }: { channel: Channel }) {
-  const { app } = useApp()
-  const input = useRef<HTMLInputElement>(null)
-  return (
-    <Row label={t("modals.channel.settings.icon")} hint={t("modals.channel.settings.icon.hint")}>
-      {channel.icon && (
-        <button type="button" className="btn is-quiet is-small" onClick={() => app.actions.setIcon(channel.code, null)}>
-          {t("modals.channel.settings.icon.remove")}
-        </button>
-      )}
-      <button type="button" className="btn is-small" onClick={() => input.current?.click()}>
-        {channel.icon ? t("modals.channel.settings.icon.change") : t("modals.channel.settings.icon.choose")}
-      </button>
-      <input
-        ref={input}
-        type="file"
-        accept="image/png,image/jpeg,image/gif,image/webp"
-        hidden
-        onChange={(e) => {
-          const file = e.currentTarget.files?.[0]
-          e.currentTarget.value = ""
-          if (file) app.actions.setIcon(channel.code, file)
-        }}
-      />
-    </Row>
-  )
-}
-
 function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
   const { app } = useApp()
   const input = useRef<HTMLInputElement>(null)
@@ -208,6 +185,17 @@ function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
       >
         {tile}
       </button>
+      {channel.icon && (
+        <button
+          type="button"
+          className="cset-tile-off"
+          aria-label={t("modals.channel.settings.image.remove")}
+          title={t("modals.channel.settings.image.remove")}
+          onClick={() => void app.actions.setIcon(channel.code, null)}
+        >
+          <Icon name="close" size={10} />
+        </button>
+      )}
       <input
         ref={input}
         type="file"
@@ -280,6 +268,7 @@ function Hold({ channel }: { channel: Channel }) {
           label={t("modals.channel.settings.pause")}
           on={!!hold}
           disabled={!own}
+          why={t("modals.channel.settings.owner.only")}
           onChange={(on) => {
             app.actions.setHold(channel.code, on, on ? note.trim() || undefined : undefined)
             if (!on) setNote("")
@@ -443,8 +432,16 @@ function GitHub({ channel }: { channel: Channel }) {
       </Group>
       <Group title={t("modals.channel.settings.access")}>
         <Row label={t("modals.channel.settings.github.write")} hint={write ? t("modals.channel.settings.github.write.on") : t("modals.channel.settings.github.write.off")}>
-          <Toggle on={write} label={t("modals.channel.settings.github.write")} disabled={!own} onChange={(on) => app.actions.setGithubWrite(channel.code, on)} />
+          <Toggle
+            on={write}
+            label={t("modals.channel.settings.github.write")}
+            disabled={!own}
+            why={t("modals.channel.settings.owner.only")}
+            onChange={(on) => app.actions.setGithubWrite(channel.code, on)}
+          />
         </Row>
+      </Group>
+      <Group title={t("modals.channel.settings.tasks.prs")}>
         <Row label={t("modals.channel.settings.branch.prefix")} hint={prefix ? t("modals.channel.settings.branch.prefix.set", { prefix }) : t("modals.channel.settings.branch.prefix.none")}>
           {sets ? (
             <span className="cset-prefix">
@@ -464,15 +461,17 @@ function GitHub({ channel }: { channel: Channel }) {
             <span className="cset-mono">{prefix ?? t("modals.channel.settings.none")}</span>
           )}
         </Row>
-        <Row label={t("modals.channel.settings.landing")} hint={landing ? t("modals.channel.settings.landing.set", { landing }) : t("modals.channel.settings.landing.none")}>
-          {sets ? (
-            <LandingPick value={landing} onPick={(then) => app.actions.setLanding(channel.code, then)} />
-          ) : (
-            <span className="cset-mono">{landing ?? t("modals.channel.settings.landing.approval")}</span>
-          )}
+        <Row label={t("modals.channel.settings.landing")} hint={landing ? t("modals.channel.settings.landing.set") : t("modals.channel.settings.landing.none")}>
+          {sets ? <LandingPick value={landing} onPick={(then) => app.actions.setLanding(channel.code, then)} /> : <span>{landingWord(landing)}</span>}
         </Row>
         <Row label={t("modals.channel.settings.people.merge")} hint={channel.peopleMerge ? t("modals.channel.settings.people.merge.on") : t("modals.channel.settings.people.merge.off")}>
-          <Toggle on={!!channel.peopleMerge} label={t("modals.channel.settings.people.merge")} disabled={!sets} onChange={(on) => app.actions.setPeopleMerge(channel.code, on)} />
+          <Toggle
+            on={!!channel.peopleMerge}
+            label={t("modals.channel.settings.people.merge")}
+            disabled={!sets}
+            why={t("modals.channel.settings.trusted.only")}
+            onChange={(on) => app.actions.setPeopleMerge(channel.code, on)}
+          />
         </Row>
       </Group>
     </>
