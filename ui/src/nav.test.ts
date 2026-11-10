@@ -56,9 +56,9 @@ describe("back and forward walk the places you were (T978)", () => {
     expect(navigate(back, { to: "tab", tab: "specs" }).ahead).toEqual([])
   })
 
-  test("tabs are places, settings isn't, and nothing happens at either end", () => {
-    const nav = run(startNav("a"), { to: "tab", tab: "agents" }, { to: "settings" }, { to: "back" })
-    expect(nav.back.map((p) => p.tab)).toEqual(["chat"])
+  test("tabs are places, and nothing happens at either end", () => {
+    const nav = run(startNav("a"), { to: "tab", tab: "agents" })
+    expect(nav.back.map((p) => p.at === "channel" && p.tab)).toEqual(["chat"])
     const start = startNav("a")
     expect(navigate(start, { to: "history", step: "back" })).toBe(start)
     expect(navigate(start, { to: "history", step: "forward" })).toBe(start)
@@ -98,6 +98,58 @@ describe("back and forward walk the places you were (T978)", () => {
     const back = run(startNav("a"), { to: "where", where: room("design") }, { to: "history", step: "back" })
     expect(back.restore).not.toBeUndefined()
     expect(navigate(back, { to: "panel", panel: null }).restore).toBeUndefined()
+  })
+})
+
+describe("every place you can go to is a step back (T1848)", () => {
+  const back: Go = { to: "history", step: "back" }
+  const forward: Go = { to: "history", step: "forward" }
+
+  test("Home is a place: back from a channel returns to it, and forward returns to the channel", () => {
+    const inChannel = run(startNav(null), { to: "channel", code: "a" })
+    const home = navigate(inChannel, back)
+    expect(home.page).toBe("channel")
+    expect(home.channel).toBeNull()
+    expect(navigate(home, forward).channel).toBe("a")
+    const viaHome = run(startNav("a"), { to: "home" }, { to: "channel", code: "b" }, back)
+    expect(viaHome.channel).toBeNull()
+    expect(navigate(viaHome, back).channel).toBe("a")
+  })
+
+  test("Settings is a place, section by section, and closing it leaves it one step back", () => {
+    const nav = run(startNav("a"), { to: "settings", section: "appearance" }, { to: "settings", section: "agents" }, { to: "back" })
+    expect(nav.page).toBe("channel")
+    const agents = navigate(nav, back)
+    expect([agents.page, agents.section]).toEqual(["settings", "agents"])
+    const appearance = navigate(agents, back)
+    expect([appearance.page, appearance.section]).toEqual(["settings", "appearance"])
+    const channel = navigate(appearance, back)
+    expect([channel.page, channel.channel]).toEqual(["channel", "a"])
+    expect(navigate(channel, forward).section).toBe("appearance")
+  })
+
+  test("opening Settings on the section it already shows adds nothing", () => {
+    const nav = run(startNav("a"), { to: "settings" }, { to: "settings" })
+    expect(nav.back).toHaveLength(1)
+  })
+
+  test("an open spec is a place: back from elsewhere returns to that spec, not the list", () => {
+    const nav = run(startNav("a"), { to: "spec", ask: null }, { to: "spec", ask: 12, part: "inside" }, { to: "where", where: room("design") })
+    const spec = navigate(nav, back)
+    expect([spec.tab, spec.spec, spec.part]).toEqual(["specs", 12, "inside"])
+    const list = navigate(spec, back)
+    expect([list.tab, list.spec]).toEqual(["specs", undefined])
+    expect(navigate(list, forward).spec).toBe(12)
+  })
+
+  test("another part of the same spec is the same place", () => {
+    const nav = run(startNav("a"), { to: "spec", ask: 12 }, { to: "spec", ask: 12, part: "result" })
+    expect(nav.back).toHaveLength(1)
+  })
+
+  test("a panel, a modal and a dialog are not places", () => {
+    const nav = run(startNav("a"), { to: "panel", panel: { kind: "task", task: 7 } }, { to: "modal", modal: { kind: "invite" } }, { to: "modal", modal: null }, { to: "dialog", dialog: "palette" })
+    expect(nav.back).toEqual([])
   })
 })
 
