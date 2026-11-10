@@ -24,6 +24,9 @@ Product words, translated the same way everywhere. Channels and Kiwi stay as the
 | reply            | responder       | 返信             | 답장         | 回复     |
 | reaction         | reação          | リアクション     | 반응         | 表情回应 |
 | Needs you        | Precisa de você | あなたの対応待ち | 내 확인 필요 | 待你处理 |
+| Activity (event log) | Atividade   | アクティビティ   | 활동         | 动态     |
+| Join with a code | Entrar com um código | コードで参加 | 코드로 참여 | 用邀请码加入 |
+| Work (spec tab)  | Trabalho        | 作業             | 작업         | 工作     |
 | question, ask    | pergunta        | 質問             | 질문         | 提问     |
 | checkpoint       | checkpoint      | チェックポイント | 체크포인트   | 检查点   |
 | doc              | documento       | ドキュメント     | 문서         | 文档     |

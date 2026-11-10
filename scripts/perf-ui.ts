@@ -46,11 +46,11 @@ export async function firstRun(page: Page, name: string): Promise<void> {
   await passOnboarding(page);
   await page.getByRole("textbox", { name: "Your name" }).fill(name);
   await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByRole("button", { name: "New channel", exact: true }).waitFor({ timeout: 15000 });
+  await page.locator(".rail .tile.is-add").waitFor({ timeout: 15000 });
 }
 
 export async function newChannel(page: Page, title: string): Promise<string> {
-  await page.getByRole("button", { name: "New channel", exact: true }).click();
+  await page.locator(".rail .tile.is-add").click();
   const dialog = page.getByRole("dialog", { name: "New channel" });
   await dialog.getByRole("textbox").fill(title);
   await dialog.getByRole("button", { name: "Create channel" }).click();

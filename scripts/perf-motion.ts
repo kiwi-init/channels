@@ -230,7 +230,7 @@ try {
   );
 
   await toConversation();
-  const add = page.getByRole("button", { name: "New channel", exact: true });
+  const add = page.locator(".rail .tile.is-add");
   await measure(
     "dialog close",
     () => add.click().then(() => page.getByRole("dialog").waitFor()),
