@@ -12,7 +12,8 @@ if (process.argv.includes("--help")) {
   console.log(`A Retina screenshot posted in chat shows from a copy sized to its box (360 CSS px in the feed, 480 in the thread doc, at
 twice the pixels), while the viewer, Save image and a drag still get the full original. With --memory=N it posts N such
 shots instead, scrolls past them all and prints the page's memory (macOS WebKit: its WebContent and GPU processes); run
-it once with --dist= pointing at a build of main and once at this one to compare.
+it once with --dist= pointing at a build of main and once at this one to compare. With --split as well, it then takes the
+images out of the thread doc, and after that out of the feed, and prints the memory after each, to say which of them holds it.
 
   bun scripts/ui-image-thumbs.ts [--webkit] [--dist=ui/dist-harness] [--memory=13]`);
   process.exit(0);
@@ -22,6 +23,7 @@ const ROOT = resolve(import.meta.dir, "..");
 const DIST = harnessDist(process.argv.find((a) => a.startsWith("--dist="))?.slice(7));
 const ENGINE = process.argv.includes("--webkit") ? "webkit" : "chromium";
 const MEMORY = Number(process.argv.find((a) => a.startsWith("--memory="))?.slice(9) ?? 0);
+const SPLIT = process.argv.includes("--split");
 const WIDTH = 3232;
 const HEIGHT = 2148;
 const SCALE = 2;
@@ -183,7 +185,7 @@ try {
       writeFileSync(file, Buffer.from(await screenshotPng(page, `shot ${i}`), "base64"));
       await kiwi(["-c", "thumbs", "--as", "bot", "send", "--to", "#general", `retina shot ${i}`, "--image", file]);
     }
-    const buttons = page.locator(".main .msg-image");
+    const buttons = page.locator(".main .msg-images > *");
     await buttons.nth(MEMORY - 1).waitFor({ timeout: 60000 });
     for (let pass = 0; pass < 2; pass++)
       for (let i = 0; i < MEMORY; i++) {
@@ -194,7 +196,33 @@ try {
     const pids = [...ours()].filter((p) => !before.has(p));
     const each = pids.map((p) => `${spawnSync("ps", ["-o", "comm=", "-p", p]).stdout.toString().trim().split(".").at(-2) ?? p} ${footprintMb(p).toFixed(0)} MB`);
     const total = pids.reduce((sum, p) => sum + footprintMb(p), 0);
+    const held = await page.evaluate(() => {
+      const imgs = [...document.querySelectorAll<HTMLImageElement>(".main .msg-image img")];
+      return { shown: document.querySelectorAll(".main .msg-image").length, waiting: document.querySelectorAll(".main .msg-image-spot").length, srcChars: imgs.reduce((n, i) => n + i.src.length, 0) };
+    });
+    console.log(
+      `in the feed at the end: ${held.shown} pictures shown, ${held.waiting} waiting spots, ${(held.srcChars / 1e6).toFixed(1)} M characters of image src; page errors: ${errors.length ? errors.join("; ") : "none"}`,
+    );
+    const footprint = (): number => pids.reduce((sum, p) => sum + footprintMb(p), 0);
     console.log(`${MEMORY} shots of ${WIDTH}×${HEIGHT} shown, ${ENGINE} ${DIST}: ${pids.length ? `${total.toFixed(0)} MB (${each.join(", ")})` : "no WebKit processes to measure on this system"}`);
+    if (SPLIT && pids.length) {
+      for (const [what, selector] of [
+        ["the thread doc", ".thread-doc img"],
+        ["the feed", ".main .msg-images img"],
+      ] as const) {
+        const cleared = await page.evaluate((sel) => {
+          const imgs = [...document.querySelectorAll<HTMLImageElement>(sel)].filter((i) => i.src.startsWith("data:") && i.src.length > 1000);
+          const chars = imgs.reduce((n, i) => n + i.src.length, 0);
+          const pixels = imgs.reduce((n, i) => n + i.naturalWidth * i.naturalHeight, 0);
+          for (const i of imgs) i.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+          return { count: imgs.length, chars, pixels };
+        }, selector);
+        await page.waitForTimeout(6000);
+        console.log(
+          `without the ${cleared.count} images in ${what} (${(cleared.chars / 1e6).toFixed(1)} M characters of src, ${((cleared.pixels * 4) / 1e6).toFixed(0)} MB if every one were decoded): ${footprint().toFixed(0)} MB`,
+        );
+      }
+    }
   } else {
     const feed = page.locator(".main article.msg .msg-image");
     const png = await screenshotPng(page, "sent");
