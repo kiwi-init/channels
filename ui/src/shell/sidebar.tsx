@@ -186,7 +186,7 @@ export function statusOf(p: Person, channel: Channel): string {
   return restOf(p)
 }
 
-export const taskOf = (p: Person, channel: Channel) => (p.load?.doing[0] !== undefined ? channel.tasks.find((t) => t.id === p.load?.doing[0]) : undefined)
+const taskOf = (p: Person, channel: Channel) => (p.load?.doing[0] !== undefined ? channel.tasks.find((t) => t.id === p.load?.doing[0]) : undefined)
 
 function HiddenRows({ count, open, toggle }: { count: number; open: boolean; toggle: () => void }) {
   return (

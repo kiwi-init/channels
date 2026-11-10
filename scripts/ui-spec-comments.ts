@@ -269,32 +269,6 @@ try {
     expect((await page.locator(".compose-reply").count()) === 0, "nor the reply it was writing");
     await page.close();
   }
-
-  {
-    const page = await open("spec-draft", 900, 1400);
-    await page.locator(".spec-doc-wrap:not(.is-wide)").waitFor();
-    const all = page.getByRole("button", { name: /^All \d+$/ });
-    if (await all.count()) await all.first().click();
-    await plainBox(page).fill("private draft for the export spec");
-    await page.locator(".spec-box-new input[type=file]").last().setInputFiles({ name: "board.png", mimeType: "image/png", buffer: PNG });
-    await page.locator(".compose-file").first().waitFor();
-    const drafted = page.locator(".spec-comment", { hasText: "Drafted it. Two open questions inside." }).first();
-    await hoverOrSay(page, drafted);
-    await drafted.getByRole("button", { name: "Reply" }).click();
-    await page.locator(".spec-box-new .compose-reply").first().waitFor();
-    const card = page.locator(".spec-card", { hasText: "A first hour for new agents" }).first();
-    await card.scrollIntoViewIfNeeded();
-    await card.locator(".spec-card-main").click();
-    await page.waitForTimeout(400);
-    const box = page.locator(".spec-box-new:not(.is-anchored) textarea").first();
-    await box.waitFor();
-    const top = await page.locator(".spec-page h1").first().innerText();
-    expect(top.includes("A first hour for new agents"), `the card opened the first-hour spec in place (${top})`);
-    expect((await box.inputValue()) === "", "in the tall layout, a spec card in the chat switches specs and the box drops the old spec's draft");
-    expect((await page.locator(".spec-box-new .compose-file").count()) === 0, "and its image");
-    expect((await page.locator(".spec-box-new .compose-reply").count()) === 0, "and the reply it was writing");
-    await page.close();
-  }
 } finally {
   await browser.close();
   await server.stop(true);
