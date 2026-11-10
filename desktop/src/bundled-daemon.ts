@@ -41,10 +41,12 @@ export async function kiwiCli(): Promise<string> {
   return kiwiBin?.path ?? (await runnableKiwi());
 }
 
+const outdated = (hello: HelloResult): boolean => !!kiwiBin && compareVersions(hello.version, kiwiBin.version) < 0;
+
 async function ensureDaemon(): Promise<HelloResult | null> {
   const home = kiwiHome();
   const running = await daemonHello(home);
-  if (running && !(kiwiBin && compareVersions(running.version, kiwiBin.version) < 0)) return running;
+  if (running && !outdated(running)) return running;
   if (running) {
     await daemonStop(home);
     for (let i = 0; i < 20 && (await daemonHello(home, 500)); i++) await new Promise((r) => setTimeout(r, 250));
@@ -53,8 +55,11 @@ async function ensureDaemon(): Promise<HelloResult | null> {
   const until = Date.now() + 10_000;
   for (;;) {
     const hello = await daemonHello(home);
-    if (hello) return hello;
-    if (Date.now() > until) return null;
+    if (hello && !outdated(hello)) return hello;
+    if (Date.now() > until) {
+      if (hello) noteDaemon(`an older daemon (${hello.version}) was asked to stop and still answers; Channels ${kiwiBin?.version ?? ""} keeps asking it to give way`);
+      return null;
+    }
     await new Promise((r) => setTimeout(r, 250));
   }
 }
@@ -113,7 +118,10 @@ export async function keepDaemon(stopped: () => boolean): Promise<void> {
   }
   await ensureDaemon().catch(() => null);
   await keepAlive({
-    hello: async () => (await daemonHello(kiwiHome(), 2_000)) !== null,
+    hello: async () => {
+      const hello = await daemonHello(kiwiHome(), 2_000);
+      return hello !== null && !outdated(hello);
+    },
     start: async () => (await ensureDaemon().catch(() => null)) !== null,
     log: (line) => noteDaemon(line),
     stopped,
