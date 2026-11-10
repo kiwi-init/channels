@@ -109,9 +109,16 @@ try {
       return el instanceof HTMLInputElement ? (el.getAttribute("aria-label") ?? el.labels?.[0]?.textContent ?? "") : "";
     });
     expect(label.trim() === field, `${name} opens with its field focused`);
+    if (shot !== "new-channel") expect((await page.getByRole("dialog", { name }).getByRole("button", { name: "Cancel", exact: true }).count()) === 1, `${name} has a Cancel`);
+    await page.keyboard.type("x");
     await page.mouse.click(8, 400);
     await page.waitForTimeout(200);
-    expect((await modal.count()) === 1, `a click outside ${name} keeps its form`);
+    expect((await modal.count()) === 1, `a click outside ${name} keeps what was typed`);
+    await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
+    await page.getByRole("dialog", { name }).waitFor();
+    await page.mouse.click(8, 400);
+    await page.waitForTimeout(200);
+    expect((await modal.count()) === 0, `a click outside ${name} closes it while nothing is typed`);
   }
 } finally {
   await browser.close();

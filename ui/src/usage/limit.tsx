@@ -21,7 +21,6 @@ export function LimitDialog({ hit }: { hit: LimitHit }) {
     const who = owner ? (owner.display ?? owner.name) : t("usage.channel.owner")
     return (
       <Modal
-        dismiss="outside"
         label={t("usage.channel.out")}
         title={t("usage.channel.out")}
         sub={t("usage.channel.out.sub", { who, again })}
@@ -39,7 +38,6 @@ export function LimitDialog({ hit }: { hit: LimitHit }) {
   const limit = usage?.limit ?? null
   return (
     <Modal
-      dismiss="outside"
       label={t("usage.used.up")}
       title={t("usage.used.up")}
       sub={limit === null ? t("usage.used.up.sub", { again }) : t("usage.used.up.count", { count: limit, plan: planLimit(usage), again })}

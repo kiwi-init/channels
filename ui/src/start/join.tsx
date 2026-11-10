@@ -73,7 +73,6 @@ function JoinForm({ onClose }: { onClose: () => void }) {
     const owner = invite.owner
     return (
       <Modal
-        dismiss="x"
         onClose={onClose}
         label={t("start.join.title")}
         title={owner ? t("start.join.invited.by", { owner }) : t("start.join.invited")}
@@ -129,7 +128,7 @@ function JoinForm({ onClose }: { onClose: () => void }) {
 
   const hint = error ?? (bad ? t("start.join.not.invite") : null)
   return (
-    <Modal dismiss="x" onClose={onClose} label={t("start.join.title")} title={t("start.join.title")}>
+    <Modal onClose={onClose} label={t("start.join.title")} title={t("start.join.title")}>
       <form
         className="start-form"
         onSubmit={async (e) => {
@@ -165,7 +164,10 @@ function JoinForm({ onClose }: { onClose: () => void }) {
           {hint}
         </p>
         {failed && <Failed failure={failed} />}
-        <div className="modal-foot start-foot">
+        <div className="modal-foot">
+          <button type="button" className="btn is-quiet" onClick={onClose}>
+            {t("kit.context.menu.cancel")}
+          </button>
           <button type="submit" className="btn is-primary" disabled={!code || busy}>
             {busy ? t("start.join.checking") : t("start.join.continue")}
           </button>

@@ -259,7 +259,6 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
   }
   return (
     <Modal
-      dismiss="x"
       open={open}
       onClose={close}
       label={t("panels.task.who.works", { task: String(task.id) })}
@@ -306,7 +305,6 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
   const verdict = task.status === "review" ? t("panels.task.reviewer.open") : t("panels.task.reviewer.later")
   return (
     <Modal
-      dismiss="outside"
       open={open}
       onClose={onClose}
       label={t("panels.task.who.reviews", { task: String(task.id) })}
@@ -475,7 +473,6 @@ function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Ta
   }
   return (
     <Modal
-      dismiss="x"
       open={open}
       onClose={close}
       label={t("panels.task.edit.heading", { task: String(task.id) })}
@@ -558,7 +555,6 @@ function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task
   }
   return (
     <Modal
-      dismiss="x"
       open={open}
       onClose={close}
       label={t("panels.task.cancel.title", { task: String(task.id) })}

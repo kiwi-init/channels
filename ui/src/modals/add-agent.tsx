@@ -42,7 +42,7 @@ export function AddAgent({ channel, onClose }: { channel: Channel; onClose: () =
   const taken = takenNames(channel)
   const [name, setName] = useState(() => freeName(taken))
   return (
-    <Modal dismiss="x" onClose={onClose} label={t("modals.add.agent.title")} title={t("modals.add.agent.title")} sub={t("modals.add.agent.sub")} className="add-body">
+    <Modal stays onClose={onClose} label={t("modals.add.agent.title")} title={t("modals.add.agent.title")} sub={t("modals.add.agent.sub")} className="add-body">
       <RunCommand channel={channel} name={name} setName={setName} taken={taken} />
     </Modal>
   )

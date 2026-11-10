@@ -30,11 +30,11 @@ export default function PermissionCard({ channel, ask }: { channel: Channel; ask
       ) : (
         <>
           <div className="actions">
-            <button type="button" className="btn is-primary is-small" onClick={() => actions.answerPermission(channel.code, ask.id, true)}>
-              {t("chat.permission.card.allow")}
-            </button>
             <button type="button" className="btn is-small" onClick={() => actions.answerPermission(channel.code, ask.id, false)}>
               {t("chat.permission.card.deny")}
+            </button>
+            <button type="button" className="btn is-primary is-small" onClick={() => actions.answerPermission(channel.code, ask.id, true)}>
+              {t("chat.permission.card.allow")}
             </button>
           </div>
         </>

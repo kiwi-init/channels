@@ -5,6 +5,7 @@ import { t } from "~/i18n/i18n"
 import { autofocus } from "~/kit/bits"
 import { Failed, failure, type Failure } from "~/kit/failed"
 import { Field } from "~/kit/form"
+import { mod } from "~/kit/keys"
 import { Modal } from "~/kit/modal"
 import type { Channel } from "~/model"
 import { useAct } from "~/nav"
@@ -37,7 +38,6 @@ export function NewSpec({ channel, onClose }: { channel: Channel; onClose: () =>
   }
   return (
     <Modal
-      dismiss="x"
       open
       onClose={onClose}
       label={t("specs.new.title")}
@@ -53,7 +53,14 @@ export function NewSpec({ channel, onClose }: { channel: Channel; onClose: () =>
         </>
       }
     >
-      <div className="spec-new">
+      <div
+        className="spec-new"
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" || !mod(e) || !words.trim() || busy) return
+          e.preventDefault()
+          void start()
+        }}
+      >
         <Field label={t("specs.new.want")} hint={t("specs.new.want.hint")}>
           <textarea className="textarea" rows={4} ref={autofocus} value={words} onChange={(e) => setWords(e.target.value)} placeholder={t("specs.new.want.placeholder")} />
         </Field>
