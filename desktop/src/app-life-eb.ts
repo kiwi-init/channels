@@ -1,6 +1,7 @@
 import Electrobun, { Utils, type BrowserView, type BrowserWindow } from "electrobun/main";
 
-import { shortcutAction, textStepOf, type MenuAction } from "./app-menus.ts";
+import { HELP_URL, shortcutAction, textStepOf, uiCommandOf, type MenuAction } from "./app-menus.ts";
+import type { UiCommand } from "./ui-command.ts";
 import { closeAction } from "./close-action.ts";
 import { createTray, setAppMenu, type AppTray } from "./menus-eb.ts";
 import { hasTrayHost, onShortcut } from "./native-eb.ts";
@@ -16,6 +17,8 @@ export interface LifeShell {
   showWindow(): void;
   reload(): void;
   textStep(step: TextStep): void;
+  command(command: UiCommand): void;
+  openHelp(url: string): void;
   restartToUpdate(): void;
   update(): UpdateState | null;
   nudgeKeys(): void;
@@ -30,10 +33,16 @@ export function startAppLife(shell: LifeShell): AppTray {
   const act = (a: MenuAction): void => {
     const step = textStepOf(a);
     if (step) return shell.textStep(step);
+    const command = uiCommandOf(a);
+    if (command) {
+      shell.showWindow();
+      return shell.command(command);
+    }
     if (a === "open") shell.showWindow();
     else if (a === "restart") shell.restartToUpdate();
     else if (a === "quit") Utils.quit();
     else if (a === "reload") shell.reload();
+    else if (a === "help") shell.openHelp(HELP_URL);
     else if (a === "devtools") shell.view.toggleDevTools();
     else if (a === "close") shell.win.requestClose();
     else if (a === "fullscreen") shell.win.setFullScreen(!shell.win.isFullScreen());

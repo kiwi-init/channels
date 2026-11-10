@@ -6,6 +6,7 @@ import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
 import type { App } from "~/model"
 import { ActContext, AppContext, historyStep, type Ctx, type Go, type Nav, AccountContext, NamesContext, NavContext, OpenContext, PrefsContext, TilesContext } from "~/nav"
+import { keyRan, onCommand } from "~/kit/commands"
 import { mod } from "~/kit/keys"
 import { ContextMenus } from "~/kit/menu-open"
 import { Palette } from "~/palette/palette"
@@ -49,7 +50,18 @@ function Shown({ app, nav, go, broken }: RootProps) {
   const [toasts, toast, dismissToast] = useToasts()
   const ctx = useMemo(() => ({ app, nav, go, toast }), [app, nav, go, toast])
   const act = useMemo(() => ({ actions: app.actions, go, toast }), [app.actions, go, toast])
-  usePaletteKey(useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog]))
+  const togglePalette = useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog])
+  usePaletteKey(togglePalette)
+  useEffect(
+    () =>
+      onCommand((c) => {
+        if (c === "settings") go({ to: "settings" })
+        else if (c === "new-channel") go({ to: "dialog", dialog: "new-channel" })
+        else if (c === "jump") togglePalette()
+        else if (c === "back" || c === "forward") go({ to: "history", step: c })
+      }),
+    [go, togglePalette]
+  )
   useHistoryKeys(go, !!nav.modal)
   useTheme(app)
 
@@ -158,6 +170,7 @@ function useHistoryKeys(go: (go: Go) => void, modal: boolean) {
       const step = historyStep(e)
       if (!step || e.defaultPrevented || document.querySelectorAll("dialog[open]").length > (modal ? 1 : 0)) return
       e.preventDefault()
+      keyRan(step)
       go({ to: "history", step })
     }
     window.addEventListener("keydown", onKey)
@@ -170,6 +183,7 @@ function usePaletteKey(toggle: () => void) {
     const onKey = (e: KeyboardEvent) => {
       if (!mod(e) || e.key.toLowerCase() !== "k") return
       e.preventDefault()
+      keyRan("jump")
       toggle()
     }
     window.addEventListener("keydown", onKey)

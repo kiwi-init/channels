@@ -2,6 +2,7 @@
 // main-eb.ts and preload-eb.ts; renderer-neutral on purpose (no node imports),
 // so ui/ can type against it without touching this process.
 
+import type { UiCommand } from "./ui-command.ts";
 import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
@@ -460,6 +461,7 @@ export interface KiwiBridge {
   /** A link came in while the app runs (it waits for getDeepLink too, so it's opened once). */
   onDeepLink(cb: (url: string) => void): () => void;
   onTextStep(cb: (step: TextStep) => void): () => void;
+  onCommand(cb: (command: UiCommand) => void): () => void;
   onFrost(cb: (on: boolean) => void): () => void;
   getAccentColor(): Promise<string | null>;
   /** What this app can run: its UI contract version and the channel calls it serves, so a newer UI hides what it can't do. */
