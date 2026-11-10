@@ -89,7 +89,7 @@ export default {
   "specs.page.all.specs": "すべての仕様",
   "specs.page.parts": "仕様・内部・結果",
   "specs.page.spec": "仕様",
-  "specs.page.inside": "内部",
+  "specs.page.inside": "作業",
   "specs.page.result": "結果",
   "specs.page.to.look.at": "要確認 {count} 件",
   "specs.page.asked.by": "{who} が依頼 {when}",

@@ -173,7 +173,7 @@ export default {
   "settings.personalities.can.assign": "작업 배정",
   "settings.personalities.can.assign.hint": "다른 이에게 작업 넘기기 (리드)",
   "settings.personalities.can.notes": "메모 설정",
-  "settings.personalities.can.notes.hint": "채널 정보",
+  "settings.personalities.can.notes.hint": "채널 메모",
   "settings.personalities.title": "성격",
   "settings.personalities.new": "새 성격",
   "settings.personalities.yours": "{name} (내 것)",

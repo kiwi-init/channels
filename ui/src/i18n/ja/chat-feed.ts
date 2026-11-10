@@ -133,7 +133,7 @@ export default {
   "chat.suggest.people": "人",
   "chat.suggest.person": "人",
   "chat.suggest.agent": "エージェント",
-  "chat.updates.panel.label": "更新",
+  "chat.updates.panel.label": "アクティビティ",
   "chat.updates.panel.show.older": "さらに古いものを表示",
   "chat.updates.panel.fewer": "折りたたむ",
   "chat.updates.panel.more": { other: "ほか {count} 件" },

@@ -100,7 +100,7 @@ try {
   for (const [shot, name, field] of [
     ["new-room", "New room", "Room name"],
     ["new-channel", "New channel", "Name"],
-    ["join", "Join a channel", "Invite link or code"],
+    ["join", "Join with a code", "Invite link or code"],
   ] as const) {
     await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
     await page.getByRole("dialog", { name }).waitFor();

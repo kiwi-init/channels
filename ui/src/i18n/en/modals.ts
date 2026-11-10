@@ -233,7 +233,7 @@ const words = {
   "modals.profile.remove.more": "Remove from channel…",
   "modals.profile.remove.title": "Remove {name}?",
   "modals.profile.remove.sub.agent": "It loses access to this channel's messages from now on.",
-  "modals.profile.remove.sub.person": "They loses access to this channel's messages from now on.",
+  "modals.profile.remove.sub.person": "They lose access to this channel's messages from now on.",
   "modals.profile.remove": "Remove",
 } as const satisfies Record<string, Msg>
 
