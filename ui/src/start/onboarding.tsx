@@ -13,7 +13,7 @@ import { t } from "~/i18n/i18n"
 const WORD = "Channels"
 const SCENE_WAIT_MS = 4000
 const HEX = "0123456789abcdef"
-const TRUST: readonly Key[] = ["start.onboarding.trust.sealed", "start.onboarding.trust.harness"]
+const TRUST: readonly Key[] = ["start.onboarding.trust.sealed"]
 const noise = (n: number): string => Array.from({ length: n }, (_, i) => (i % 5 === 4 ? " " : (HEX[Math.floor(Math.random() * 16)] ?? "0"))).join("")
 
 function Sealed({ still, length }: { still: boolean; length: number }) {
@@ -95,6 +95,18 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     if (leaving) meadow.current?.freeze()
   }, [leaving])
+
+  useEffect(() => {
+    if (!ready || leaving) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== "Enter" || e.defaultPrevented || e.repeat || document.activeElement instanceof HTMLButtonElement) return
+      e.preventDefault()
+      if (step === "intro") setStep("trust")
+      else begin()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [ready, leaving, step])
 
   const ended = (e: AnimationEvent<HTMLDialogElement>): void => {
     if (e.target === e.currentTarget && e.animationName === "onb-out") onDone()
