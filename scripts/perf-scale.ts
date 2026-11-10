@@ -349,6 +349,27 @@ try {
           firstScreenMs: Math.round((window as unknown as { __firstScreen?: number }).__firstScreen ?? -1),
           domContentLoadedMs: Math.round(nav.domContentLoadedEventEnd),
           fcpMs: Math.round(performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? -1),
+          responseEndMs: Math.round(nav.responseEnd),
+          marks: Object.fromEntries(
+            performance
+              .getEntriesByType("mark")
+              .filter((m) => m.name.startsWith("kiwi:"))
+              .map((m) => [m.name.slice(5), Math.round(m.startTime)]),
+          ),
+          files: (performance.getEntriesByType("resource") as PerformanceResourceTiming[])
+            .filter((r) => r.initiatorType === "script" || r.initiatorType === "link" || r.initiatorType === "css" || /\.(js|css|woff2?)(\?|$)/.test(r.name))
+            .map((r) => ({
+              file:
+                r.name
+                  .split("/")
+                  .pop()
+                  ?.replace(/-[A-Za-z0-9_-]{8}\./, ".") ?? r.name,
+              startMs: Math.round(r.startTime),
+              endMs: Math.round(r.responseEnd),
+              kb: Math.round(r.encodedBodySize / 1024),
+            }))
+            .sort((x, y) => x.endMs - y.endMs),
+          longTasks: ((window as unknown as { __long?: number[] }).__long ?? []).map((d) => Math.round(d)),
         };
       });
       if (throttle === 1) report["reload, in page"] = inPage;
