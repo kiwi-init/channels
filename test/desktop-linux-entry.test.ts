@@ -78,12 +78,12 @@ describe("the AppImage keeps its own desktop entry (#1284)", () => {
     const p = place();
     for (const dir of ["16", "22", "32", "48"]) {
       mkdirSync(join(p.appDir, "usr", "share", "icons", "breeze-dark", "apps", dir), { recursive: true });
-      writeFileSync(join(p.appDir, "usr", "share", "icons", "breeze-dark", "apps", dir, "channels-desktop.png"), `dark ${dir}`);
+      writeFileSync(join(p.appDir, "usr", "share", "icons", "breeze-dark", "apps", dir, "channels-desktop.svg"), `dark ${dir}`);
     }
     const kept = keepEntry(p);
     const wrote = kept.kind === "kept" ? kept.wrote : [];
-    for (const dir of ["16", "22", "32", "48"]) expect(wrote).toContain(join(p.dataHome, "icons", "breeze-dark", "apps", dir, "channels-desktop.png"));
-    expect(readFileSync(join(p.dataHome, "icons", "breeze-dark", "apps", "48", "channels-desktop.png"), "utf8")).toBe("dark 48");
+    for (const dir of ["16", "22", "32", "48"]) expect(wrote).toContain(join(p.dataHome, "icons", "breeze-dark", "apps", dir, "channels-desktop.svg"));
+    expect(readFileSync(join(p.dataHome, "icons", "breeze-dark", "apps", "48", "channels-desktop.svg"), "utf8")).toBe("dark 48");
     expect(readFileSync(join(p.dataHome, "icons", "hicolor", "64x64", "apps", "channels-desktop.png"), "utf8")).toBe("png 64x64");
   });
 

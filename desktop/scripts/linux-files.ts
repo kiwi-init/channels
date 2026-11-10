@@ -2,7 +2,16 @@ export type LinuxArch = "x64" | "arm64";
 
 export const EXECUTABLE = "channels-desktop";
 
-export const BREEZE_DARK_APPS: Readonly<Record<string, string>> = { "16x16": "16", "22x22": "22", "32x32": "32", "256x256": "48" };
+export const BREEZE_DARK_APPS: ReadonlyArray<{ size: number; dir: string }> = [
+  { size: 16, dir: "16" },
+  { size: 22, dir: "22" },
+  { size: 32, dir: "32" },
+  { size: 256, dir: "48" },
+];
+
+export const pngInSvg = (png: Uint8Array, size: number): string =>
+  `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">` +
+  `<image width="${size}" height="${size}" xlink:href="data:image/png;base64,${Buffer.from(png).toString("base64")}"/></svg>\n`;
 export const APP_FOLDER = "Channels";
 export const ELECTROBUN_LAUNCHER = "electrobun-launcher";
 export const MAX_DOWNLOAD = 60 * 1024 ** 2;

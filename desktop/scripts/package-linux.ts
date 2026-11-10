@@ -14,6 +14,7 @@ import {
   EXECUTABLE,
   LEFT_OUT,
   MAX_DOWNLOAD,
+  pngInSvg,
   RUNTIME_SHA256,
   runtimeUrl,
   type LinuxArch,
@@ -64,10 +65,10 @@ function icons(root: string, share: string): void {
   }
   const dark = join(desktop, "build", "icons-dark");
   if (!existsSync(dark)) throw new Error("package-linux: no build/icons-dark: run bun desktop/scripts/icons.ts on a Mac and commit what it writes");
-  for (const [size, dir] of Object.entries(BREEZE_DARK_APPS)) {
+  for (const { size, dir } of BREEZE_DARK_APPS) {
     const at = join(root, share, "icons", "breeze-dark", "apps", dir);
     mkdirSync(at, { recursive: true });
-    cpSync(join(dark, `${size}.png`), join(at, `${EXECUTABLE}.png`));
+    writeFileSync(join(at, `${EXECUTABLE}.svg`), pngInSvg(readFileSync(join(dark, `${size}x${size}.png`)), size));
   }
 }
 
