@@ -26,7 +26,6 @@ const WIDTH = 3232;
 const HEIGHT = 2148;
 const SCALE = 2;
 const FEED = 360;
-const DOC = 480;
 
 const data = mkdtempSync(join(tmpdir(), "kiwi-image-thumbs-"));
 const cli = join(data, "cli");
@@ -210,16 +209,8 @@ try {
     const sent = await shownIn(button);
     const original = sent.full?.src ?? `data:image/png;base64,${png}`;
     check("a Retina shot sent from the composer shows in the feed from a copy at 2× its 360 px box, with the original over it", feedCopy(sent, original));
-    const inDoc = page.locator(".thread-doc .doc-image img").last();
-    await inDoc.waitFor({ state: "attached", timeout: 10000 });
-    const doc = await inDoc.evaluate(async (el: HTMLImageElement) => {
-      await el.decode().catch(() => undefined);
-      return { src: el.src, natural: el.naturalWidth };
-    });
-    check(
-      "the doc holds the sent shot as a copy at 2× its 480 px box",
-      !copyOf(doc.src, original) ? `the doc shows ${doc.src.slice(0, 40)}…` : doc.natural !== DOC * SCALE ? `the copy is ${doc.natural} px wide` : null,
-    );
+    const inDoc = await page.locator(".thread-doc .doc-image img").count();
+    check("the doc mounts no second copy of a shot that shows in the feed", inDoc ? `it holds ${inDoc}` : null);
 
     await button.click();
     const viewer = page.getByRole("dialog", { name: /^Mark up/ });
