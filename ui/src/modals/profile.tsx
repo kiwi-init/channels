@@ -15,7 +15,7 @@ import { Swatches } from "~/kit/swatches"
 import { Icon } from "~/kit/icons"
 import { ageOf, ago } from "~/kit/time"
 import { copyText } from "~/kit/toasts"
-import { ALL_POWERS, memberOf, NO_POWERS, trusted, type App, type Channel, type Person, type Task } from "~/model"
+import { memberOf, trusted, type App, type Channel, type Person, type Task } from "~/model"
 import { useApp, useGo } from "~/nav"
 import { devicesOf, nickname, roleWord, seatRoot, shown, Shown } from "~/names"
 import { contextOf, liveOf, restOf } from "~/doing"
@@ -310,18 +310,6 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
       )}
       {owns && (
         <Group title={t("modals.profile.powers")}>
-          {!agent && (
-            <Row label={t("modals.profile.full.trust")} hint={t("modals.profile.full.trust.hint")}>
-              <Toggle
-                label={t("modals.profile.full.trust")}
-                on={trust}
-                onChange={(on) => {
-                  if (on && person.readOnly) app.actions.setReadOnly(channel.code, person.name, false)
-                  app.actions.setPowers(channel.code, person.name, on ? ALL_POWERS : NO_POWERS)
-                }}
-              />
-            </Row>
-          )}
           <Row label={t("modals.profile.read.only")} hint={agent ? t("modals.profile.read.only.agent") : t("modals.profile.read.only.person")}>
             <Toggle label={t("modals.profile.read.only")} on={!!person.readOnly} onChange={(on) => app.actions.setReadOnly(channel.code, person.name, on)} />
           </Row>
@@ -341,6 +329,11 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
               <Row label={t("modals.profile.manages.agents")} hint={t("modals.profile.manages.agents.hint")}>
                 <Toggle label={t("modals.profile.manages.agents")} on={!!person.managesAgents} onChange={(on) => app.actions.setPowers(channel.code, person.name, { managesAgents: on })} />
               </Row>
+              {trust && (
+                <p className="trust-note tone-decide" role="status">
+                  {t("modals.profile.trusted.note", { name: shown(person) })}
+                </p>
+              )}
             </>
           )}
         </Group>
