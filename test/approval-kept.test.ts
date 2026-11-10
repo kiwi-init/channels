@@ -40,13 +40,13 @@ const pr =
   (sha: string, state: "open" | "closed" = "open", merged = false) =>
   (task: number): GithubNote => ({ event: "pull_request", repo: "o/r", number: 7, state, merged, branch: `T${task}-ship`, sha, at: seq, ...(merged ? { happened: seq + 1 } : {}) });
 
-async function approvedAtA(): Promise<{ id: number; log: Message[] }> {
+async function approvedAtA(at: string = A): Promise<{ id: number; log: Message[] }> {
   const repos = await ev("jon", { op: "repos.set", repos: ["o/r"] });
   const prefix = await ev("jon", { op: "branch.prefix.set", prefix: "T" });
   const add = await ev("owl", { op: "task.add", title: "Ship", owner: "win", review: "mac", then: "merge" });
-  const opened = await ev("jon", { op: "github", items: [pr(A)(add.seq)] });
-  const round = await ev("win", { op: "task.update", task: add.seq, state: "review", at: A });
-  const pass = await ev("mac", { op: "task.update", task: add.seq, state: "done", verdict: "approved", round: 1, at: A });
+  const opened = await ev("jon", { op: "github", items: [pr(at)(add.seq)] });
+  const round = await ev("win", { op: "task.update", task: add.seq, state: "review", at });
+  const pass = await ev("mac", { op: "task.update", task: add.seq, state: "done", verdict: "approved", round: 1, at });
   return { id: add.seq, log: [repos, prefix, add, opened, round, pass] };
 }
 
@@ -211,6 +211,29 @@ describe("an approval survives a new head on recorded evidence (#3930 §4)", () 
     expect(swapped.notes.at(-1)!.text).toBe("new head bbbbbbb on o/r#8 after the approval: back to review");
   });
 
+  test("a PR merged at the approved head and only then linked keeps the approval, the round and landing (case 13)", async () => {
+    const repos = await ev("jon", { op: "repos.set", repos: ["o/r"] });
+    const add = await ev("owl", { op: "task.add", title: "Ship", owner: "win", review: "mac", then: "merge" });
+    const round = await ev("win", { op: "task.update", task: add.seq, state: "review", at: A });
+    const pass = await ev("mac", { op: "task.update", task: add.seq, state: "done", verdict: "approved", round: 1, at: A });
+    const opened = await ev("jon", { op: "github", items: [{ ...pr(A)(0), branch: "ship-it" }] });
+    const merged = await ev("jon", { op: "github", items: [{ ...pr(A, "closed", true)(0), branch: "ship-it" }] });
+    const link = await ev("win", { op: "task.update", task: add.seq, proof: { url: "https://github.com/o/r/pull/7" } });
+    const s = fold([repos, add, round, pass, opened, merged, link], roster);
+    expect(s.rejected.size).toBe(0);
+    const t = s.tasks.get(add.seq)!;
+    expect(t.state).toBe("landing");
+    expect(t.approvedBy).toBe("mac");
+    expect(t.rounds.length).toBe(1);
+    expect(t.rounds[0]).toMatchObject({ n: 1, at: A, result: { kind: "approved" } });
+    expect(t.rounds[0]!.stale).toBeUndefined();
+    expect(t.proof!.map((p) => p.url)).toEqual(["https://github.com/o/r/pull/7"]);
+    const landed = await ev("owl", { op: "task.landed", task: add.seq, artifact: { kind: "pr", repo: "o/r", pr: 7, sha: A } });
+    const after = fold([repos, add, round, pass, opened, merged, link, landed], roster);
+    expect(after.rejected.has(landed.seq)).toBe(false);
+    expect(after.tasks.get(add.seq)).toMatchObject({ state: "done", closedSeq: landed.seq, approvedBy: "mac" });
+  });
+
   test("the wire shape takes whole commit ids, two different heads and a known kind", async () => {
     const good = await keep("win", 1, kept());
     expect(wellFormed(good)).toBe(true);
@@ -335,6 +358,36 @@ describe("the builder's checkout decides whether a new head is the approved code
     run("merge", "-q", "--no-ff", "-m", "octopus", "arm-one", "arm-two");
     const head = run("rev-parse", "HEAD");
     expect(compareHeads(git, approved, head, "main")).toEqual({ kind: "changed", why: `${head.slice(0, 7)} isn't a merge of two parents, so it may change the task's code` });
+  });
+
+  test("recorded clean-merge evidence still holds after the target moves so the merged commit is no longer on it (case 23)", async () => {
+    branchAt("target23", "main");
+    const before = run("rev-parse", "HEAD");
+    const tip = commit("target23.txt", "target work\n", "target moves");
+    branchAt("merged23", approved);
+    run("merge", "-q", "--no-ff", "-m", "merge target23", "target23");
+    const head = run("rev-parse", "HEAD");
+    const found = compareHeads(git, approved, head, "target23");
+    expect(found).toEqual({ kind: "kept", how: "clean-merge", head, approved, tip });
+    const evidence: KeptEvidence = { head, approved, how: "clean-merge", repo: "o/r", ref: "target23", tip };
+    const { id, log } = await approvedAtA(approved);
+    const recorded = await keep("win", id, evidence);
+    const pushed = await push(id, head);
+    const all = [...log, recorded, pushed];
+    const held = fold(all, roster).tasks.get(id)!;
+    expect(held.state).toBe("landing");
+    run("branch", "-f", "target23", before);
+    expect(tryRun("merge-base", "--is-ancestor", tip, "target23")).toBe(false);
+    expect(compareHeads(git, approved, head, "target23")).toEqual({ kind: "changed", why: `${head.slice(0, 7)} merges ${tip.slice(0, 7)}, which isn't on target23` });
+    const s = fold(all, roster);
+    expect(s.rejected.size).toBe(0);
+    const t = s.tasks.get(id)!;
+    expect(t.state).toBe("landing");
+    expect(t.approvedBy).toBe("mac");
+    expect(t.rounds.length).toBe(1);
+    expect(t.rounds[0]!.stale).toBeUndefined();
+    expect(t.rounds[0]!.kept).toEqual([{ ...evidence, seq: recorded.seq, by: "win", rts: recorded.seq }]);
+    expect(t.rounds[0]!.kept).toEqual(held.rounds[0]!.kept);
   });
 
   test("a commit or a target this checkout doesn't have can't be judged", () => {

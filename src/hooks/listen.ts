@@ -31,7 +31,7 @@ export interface Served {
 export function listenHead(alias: string, mc: string, share: number, messages = true): string {
   const full = messages
     ? `New Kiwi Channels messages for you (${alias}). Handle them; answer with \`${mc} reply N "…"\`:`
-    : `New lines for you in Kiwi Channels' shared doc (${alias}). Each says where to answer:`;
+    : `New lines for you in Kiwi Channels (${alias}) that aren't messages. Each says what to do next:`;
   if (full.length + 2 <= share) return full;
   const short = `New Kiwi Channels messages (${alias}):`;
   return short.length + 2 <= share ? short : short.slice(0, Math.max(0, share - 2));

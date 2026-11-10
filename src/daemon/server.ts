@@ -26,6 +26,8 @@ import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
 import { throttled } from "./throttle.ts";
 import { readAdmitRoom, startAdmitter } from "./admit.ts";
+import { addDocWake, docWakeTold, pendingDocWakes, tellDocWakes } from "../config/doc-wakes.ts";
+import { watchClock, watchedPeers, type ClockWatcher } from "./clock-watch.ts";
 import { followDocs } from "./doc-follow.ts";
 import { pathOf, seatWakes } from "./wake.ts";
 
@@ -180,7 +182,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const current = (seat: Seat): boolean => !stopped && seats.get(seat.key) === seat;
 
-  const { scheduleWake, stateOf, wakeable } = seatWakes({
+  const { scheduleWake, stateOf, sessionOf, wakeable } = seatWakes({
     dir,
     wakeDelayMs: opts.wakeDelayMs ?? WAKE_DELAY_MS,
     wakeGapMs: opts.wakeGapMs ?? WAKE_GAP_MS,
@@ -188,6 +190,41 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     stopped: () => stopped,
     current,
   });
+
+  const clockFor = (seat: Seat): ClockWatcher => {
+    const posting = async <A>(send: (session: NonNullable<Awaited<ReturnType<typeof sessionOf>>>) => Promise<A>): Promise<A | null> => {
+      const session = await sessionOf(seat);
+      if (!session) return null;
+      try {
+        return await send(session);
+      } catch {
+        // The relay refused it or couldn't be reached: nothing is assumed sent, and nothing is woken on a guess.
+        return null;
+      }
+    };
+    return watchClock({
+      agent: seat.agent,
+      peers: async () => {
+        const here = [...seats.values()].filter((s) => s.alias === seat.alias);
+        return watchedPeers(await Promise.all(here.map(async (s) => ({ agent: s.agent, key: s.key, watched: s === seat || s.subs.size > 0 || (await wakeable(s)) }))));
+      },
+      hosts: (name) => [...seats.values()].some((s) => s.alias === seat.alias && s.agent === name),
+      wanted: async () => seat.subs.size > 0 || (await wakeable(seat)),
+      wakes: async () => {
+        const cfg = loadConfig();
+        return wakeOn(cfg, seat.alias, seat.agent) && (seat.subs.size > 0 || (await pathOf(cfg, seat.alias, seat.agent)).kind !== "none");
+      },
+      reachable: (name) => [...seat.heard.values()].some((h) => h.presence.from === name && h.presence.reach !== "unreachable" && Date.now() - h.at < 3 * beaconMs),
+      stateOf: () => stateOf(seat),
+      nudge: (ev, to) => posting(async (session) => (await import("../agent.ts")).runAgent(session.taskNudge(ev, to))),
+      got: async (ev) => void (await posting(async (session) => (await import("../agent.ts")).runAgent(session.taskWake(ev)))),
+      pending: () => pendingDocWakes(seat.alias, seat.agent),
+      told: (block) => docWakeTold(seat.alias, seat.agent, block),
+      add: (item) => void addDocWake(seat.alias, seat.agent, item),
+      drop: (blocks) => tellDocWakes(seat.alias, seat.agent, blocks),
+      wake: () => scheduleWake(seat),
+    });
+  };
 
   const seatInfo = async (s: Seat): Promise<DaemonSeat> => {
     const cfg = loadConfig();
@@ -256,6 +293,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const endSeat = (seat: Seat): void => {
     seat.docs?.stop();
     seat.docs = null;
+    seat.clock?.stop();
+    seat.clock = null;
     seat.ctl.abort();
     stopBeacon(seat);
     if (seat.markTimer) clearTimeout(seat.markTimer);
@@ -445,7 +484,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         openedAt: null,
         listenerAt: 0,
         docs: null,
+        clock: null,
       };
+      seat.clock = clockFor(seat);
       seat.docs = followDocs(
         seat,
         () => stateOf(seat),
@@ -464,6 +505,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           if (m.seq > seat.head) seat.head = m.seq;
           heardList(m);
           if (m.from !== seat.agent) scheduleWake(seat);
+          seat.clock?.refresh();
           if ((m.ev && FOLLOW_OPS.has(m.ev.op)) || (m.from === seat.agent && m.task !== undefined)) seat.docs?.refresh();
           for (const sub of [...seat.subs]) {
             if (sub.held) sub.held.push(m);
@@ -474,6 +516,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           signal: seat.ctl.signal,
           onOpen: ({ presence, mark, probe }) => {
             seat.docs?.refresh(0);
+            seat.clock?.refresh();
             return opened(seat, presence, mark, probe);
           },
           onPresence: (p) => {

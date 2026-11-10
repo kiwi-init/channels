@@ -1,84 +1,84 @@
 {
-  "electrobun": "2026.11.3",
+  "electrobun": "2026.11.4",
   "releasesBaseUrl": "https://github.com/kiwi-init/electrobun-livewire/releases/download",
   "hutch": {
-    "version": "0.28.2-canary.8",
+    "version": "0.29.0",
     "platforms": {
       "macos-arm64": {
-        "url": "https://hutch.blackboard.sh/hutch/builds/c2ede316742ecc6734e8f86c92d87abcae609b69/macos-arm64/hutch.tar.gz",
-        "size": 1247422,
-        "sha256": "4b3b99c30155ebfd263791931573763cf5353514cddbac35c960c3bfa1642118",
+        "url": "https://hutch.blackboard.sh/hutch/builds/a2c9255ed54f93225814d7d7cf04ad5a613e44eb/macos-arm64/hutch.tar.gz",
+        "size": 1249476,
+        "sha256": "f081abca6d08d9d862577e77365f3cb5437e65858ca45a27173505e4e2345994",
         "files": {
-          "bin/hutch": "c6fcede0ddbab8c775bafa5942ba485213d51227fcdb4ef3734b01c08829d3b3",
-          "bin/hutch-engine": "327c4669adad755fe4d30bff6211510eae3600f2d6dd0a18baadf13ee9ddbefc",
-          "hutch-release.json": "644854183fe53a5c7803507dbe240162553823027b494e989a7e4fdaaa760f8e"
+          "bin/hutch": "2b1ea6505e2eda224e2e87f3571151d42375f240aea79ef76d8b2c53d3278493",
+          "bin/hutch-engine": "232a0d5eb9ff8508c500b11b9eb7c92d73f118af9449d29ca37e0868ff22ccdf",
+          "hutch-release.json": "db4314ae37bda93ed56c2988576fe616e0bc62229b253eb131c4c98c32162551"
         }
       },
       "linux-x64": {
-        "url": "https://hutch.blackboard.sh/hutch/builds/c2ede316742ecc6734e8f86c92d87abcae609b69/linux-x64/hutch.tar.gz",
-        "size": 1237081,
-        "sha256": "84a60bd3fc5933d94bcb836892de8cac60a1830f9660054f04043a286e69d10c",
+        "url": "https://hutch.blackboard.sh/hutch/builds/a2c9255ed54f93225814d7d7cf04ad5a613e44eb/linux-x64/hutch.tar.gz",
+        "size": 1238436,
+        "sha256": "4aa3c5c7fa24898d8227b087dd393eb2a1463658f0d87e23a72cfe611af83b75",
         "files": {
-          "bin/hutch": "d2b03d9c26d594b3755683bf63db9b740369015e8e755f1a983c441141f3f2ad",
-          "bin/hutch-engine": "83d9d11dc84950160ae4aa47c68e372fdb84bb83f71c53614c0cbc045a0cf1f4",
-          "hutch-release.json": "7c438b18bcfdc58145d8aac6ae5e77e362524cbd18e17d8f259e82434e4877e3"
+          "bin/hutch": "bcec6c53b0a099d388a7b3e638767f932409c5cc4cad57e0437fd4cec7a540e4",
+          "bin/hutch-engine": "c576d461525e875b6000064bd3a6eef061620d19e27e3bed0c08314ef340ce91",
+          "hutch-release.json": "001b5ce8b12d9a42d5b9f4f24b2c821c1024d67d7b766b1c2ddba461b348fbbb"
         }
       },
       "linux-arm64": {
-        "url": "https://hutch.blackboard.sh/hutch/builds/c2ede316742ecc6734e8f86c92d87abcae609b69/linux-arm64/hutch.tar.gz",
-        "size": 1294983,
-        "sha256": "f5e724fe8cf5eebececf7610b1209889624dc85665253cf777afd5bae06a311a",
+        "url": "https://hutch.blackboard.sh/hutch/builds/a2c9255ed54f93225814d7d7cf04ad5a613e44eb/linux-arm64/hutch.tar.gz",
+        "size": 1296514,
+        "sha256": "9897e36548ef25c40cd8038ab1c5e35b561c603a6d8864b6563ad78d507e42db",
         "files": {
-          "bin/hutch": "9e6cfdd7a9b4d0b5a2d5fbbd4d5f029e63fee6623f16d662b4aeba0a410d3305",
-          "bin/hutch-engine": "0cadcbd0c27aced6e9c22c7ff5e39280c1fe8099569d6bccfcf849522f75402f",
-          "hutch-release.json": "39d968d1b387c9520b8c139e2288bf0f10f8f069dd8a3831a824b6d5b9982a94"
+          "bin/hutch": "73e24837498f3e102cd95285d11348e2ca770acdff1a21b126eab3b407b9adae",
+          "bin/hutch-engine": "b5aa0bc00329f2e14beef18fba541b3225d2d781c5c734cf738e8c516f70957a",
+          "hutch-release.json": "f6c483f2e84756cfd04b8a1dbeac56c4936c019618da482813dea830bc8282ff"
         }
       }
     }
   },
   "devkit": {
-    "macos-arm64": "db27c9725c62bba153f2ef0d8bc2edabd26f1d16c266280e65be3c4bd9e4e76c",
-    "linux-x64": "db27c9725c62bba153f2ef0d8bc2edabd26f1d16c266280e65be3c4bd9e4e76c",
-    "linux-arm64": "db27c9725c62bba153f2ef0d8bc2edabd26f1d16c266280e65be3c4bd9e4e76c"
+    "macos-arm64": "a383ef126c49105359912c73c7bf040d7967f9b881ee63f6b95dc6116be21446",
+    "linux-x64": "a383ef126c49105359912c73c7bf040d7967f9b881ee63f6b95dc6116be21446",
+    "linux-arm64": "a383ef126c49105359912c73c7bf040d7967f9b881ee63f6b95dc6116be21446"
   },
   "app": {
     "macos-arm64": {
       "Contents/MacOS/launcher": "2a15159252beea2f49844ff1f55752f36f502ef127849509d1e863143eb185ca",
       "Contents/MacOS/bun": "0a2237cdcfa0d16ef501d9acca9f0026309ef348bea7393a64e8d1e3609565cc",
-      "Contents/MacOS/libElectrobunCore.dylib": "ed2f4908fb0228f8473c07e39393f3be2ece417fd11eac82e15e50d6ed00cc7a",
-      "Contents/MacOS/libNativeWrapper.dylib": "e25e4e01b0f0d9978a76341b520935e67ec8761c51cfecba39b16eef68c1a86a",
+      "Contents/MacOS/libElectrobunCore.dylib": "4702042729265176a6bae4ec162f4336331ab249cc08cb282a4c06e0e793271b",
+      "Contents/MacOS/libNativeWrapper.dylib": "ed48ad1bf78f95a4c4db11953799f757384dc4f9b63ce13be8fa5a0387297dbc",
       "Contents/MacOS/libasar.dylib": "775e92fed7238ea1da09ec5ae54a72a19baaccf602a4467f16bb2e36cff9cfbc",
       "Contents/MacOS/zig-zstd": "581944e9e8cac153581cf17109f1f58b5b87202524909d11803bfce2402c2548",
       "Contents/MacOS/bspatch": "a722fd1cf674012f25eb192c84b154bb753ec62422eb5d568907c44405cc81dd",
       "Contents/Resources/main.js": "db3593eeb506247d154a0c868bf05fb6c0a1dad82b7c7885c891d8b8a45b9755",
       "Contents/Resources/preload-full.js": "0de49cdec806dfc7f7e55da5ad02ce69a7211be6e9d656b2b10c06af691d6a3c",
       "Contents/Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Contents/Resources/uninstall": "55cf0c096dc6b913d276439d922220a8c2f418931065611f6bc405b01c9c3c3e"
+      "Contents/Resources/uninstall": "2abe110fa77e490200f427e80c25f1d283556e3a3c5678eb04d138a96c7726b0"
     },
     "linux-x64": {
       "bin/launcher": "3e5ac50d79450102cf7a7ca94ce3042b0d493d6d0cd2c184c8e283f0a95bbe4a",
       "bin/bun": "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235",
-      "bin/libElectrobunCore.so": "ca8ddce49cc0ef8af402d06e6ee362e3bf234819c7c08a12833e52d8309a44df",
-      "bin/libNativeWrapper.so": "914f8273f0d3a377e1582d82e25bf8cca364157784de9dbd845bedc9977e1325",
+      "bin/libElectrobunCore.so": "c35c93c31b16d38a3434ec69890e55ea7ad10703b2edfffc21bf07ba69f9421d",
+      "bin/libNativeWrapper.so": "97a4d78289e6ebb3ff73061c1c0010f791b6f4cef7c0a3520e18f23e9df29ed8",
       "bin/libasar.so": "2b3363eab51436f8df6077d99f4663ce5c6eb7be184d8df53561f4117a49654c",
       "bin/zig-zstd": "552b4211e699232c4983c223b94be3b7c74a8e58f41b647d014ebc25aca7ec7e",
       "bin/bspatch": "21a4678c0c8f90926438c6cd5626b46fb8e6b95eac41a1461dae2ec55d82ea70",
       "Resources/main.js": "db3593eeb506247d154a0c868bf05fb6c0a1dad82b7c7885c891d8b8a45b9755",
       "Resources/preload-full.js": "0de49cdec806dfc7f7e55da5ad02ce69a7211be6e9d656b2b10c06af691d6a3c",
       "Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Resources/uninstall": "d724a951c26fc0cb7068e7b008e3bb0eba7e51f3d647cd8ef985426676cb2301"
+      "Resources/uninstall": "c2126cb5aa477352f9c47028f7cdfa229a0e9fc1a582f041b896cae66ff30b3d"
     },
     "linux-arm64": {
       "bin/launcher": "efb6953345c1160403826e4f161c4a8103c51d08befb0eb6e1d7756c6ed18f5e",
-      "bin/libElectrobunCore.so": "31410c2427dc285c6d891b1278d22a1b1c3128b76ff43cd831da5b317dfe7896",
-      "bin/libNativeWrapper.so": "4c1695a1f5155c59dcf9741ed23f1abf20a86b941b4435ed93c1218a927cd56f",
+      "bin/libElectrobunCore.so": "da618ab3923941c3c14efc3ae8a863daa52f6b4f46efbebcf1a19f8e14b16227",
+      "bin/libNativeWrapper.so": "4ab7bce22d4e59d8de8581c869a6c83639158e77550f30bd9d325f1d74ee0651",
       "bin/libasar.so": "b2290cc159d7c85768de1fdc48bc90782042ed6b5cf59c11c462db61557f989c",
       "bin/zig-zstd": "03e661e3fd8f2c8715d0d6b7c7a009d7b2f00b5591bc070e3ccf3b9987599de6",
       "bin/bspatch": "0cc582dbf94b5a11cd416f147a8631997e439cfa2536af72b8692a03266b993b",
       "Resources/main.js": "db3593eeb506247d154a0c868bf05fb6c0a1dad82b7c7885c891d8b8a45b9755",
       "Resources/preload-full.js": "0de49cdec806dfc7f7e55da5ad02ce69a7211be6e9d656b2b10c06af691d6a3c",
       "Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Resources/uninstall": "c5671f4d184fec5cc316be9390820b91008fa3ae212a0114be34633b25185e4b"
+      "Resources/uninstall": "ad5dbe76d900be28fe661c1b18527c2b95cf202f18cd2671ffabfec800aa7cb3"
     }
   }
 }

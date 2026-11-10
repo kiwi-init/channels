@@ -282,7 +282,7 @@ export default {
   "tasks.move.nobody": "无人：此频道没有所有者",
   "tasks.quiet.with": "在 {who} 手上已停滞 {time}",
   "tasks.quiet.due": "{quiet}（{due}）",
-  "tasks.quiet.step.1": "该唤醒了",
+  "tasks.quiet.step.1": "已尝试唤醒",
   "tasks.quiet.step.2": "该交给负责人了",
   "tasks.quiet.step.3": "该放进所有者的待你处理了",
   "tasks.quiet.label": "停滞的任务",

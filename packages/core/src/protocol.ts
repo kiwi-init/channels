@@ -294,7 +294,8 @@ export type Event =
       kept?: KeptEvidence;
     }
   | { op: "task.first"; task: number }
-  | { op: "task.nudge"; task: number; mover: string; since: number; step: NudgeStep; day?: number }
+  | { op: "task.nudge"; task: number; mover: string; since: number; step: NudgeStep; day?: number; wake?: WakeSeen }
+  | { op: "task.wake"; task: number; mover: string; since: number; got: WakeGot }
   | { op: "task.landed"; task: number; artifact: CheckArtifact }
   | ({ op: "task.landed"; task: number } & StepLanded)
   | { op: "task.steps"; task: number; edit: StepEdit }
@@ -555,6 +556,11 @@ export const MAX_QUIET_MINUTES = 24 * 60;
 export const quietMinutes = (x: unknown): x is number => typeof x === "number" && Number.isSafeInteger(x) && x >= 1 && x <= MAX_QUIET_MINUTES;
 
 export type NudgeStep = 0 | 1 | 2 | 3;
+
+const WAKE_GOTS = ["delivered", "read"] as const;
+export type WakeGot = (typeof WAKE_GOTS)[number];
+const WAKES_SEEN = ["none", "attempted", ...WAKE_GOTS] as const;
+export type WakeSeen = (typeof WAKES_SEEN)[number];
 
 const KEPT_HOWS = ["same-tree", "clean-merge"] as const;
 export type KeptHow = (typeof KEPT_HOWS)[number];
@@ -935,7 +941,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 25;
+export const EVENT_OPS_VERSION = 26;
 
 export const REVIEW_CHECK = "kiwi/review";
 
@@ -963,7 +969,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 29;
+export const FOLD_RULES = 30;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1124,7 +1130,16 @@ function eventCheck(ev: unknown): boolean | null {
     case "task.first":
       return n(e.task);
     case "task.nudge":
-      return n(e.task) && str(e.mover, 64) && e.mover.length > 0 && n(e.since) && (e.step === 0 ? n(e.day) : (e.step === 1 || e.step === 2 || e.step === 3) && e.day === undefined);
+      return (
+        n(e.task) &&
+        str(e.mover, 64) &&
+        e.mover.length > 0 &&
+        n(e.since) &&
+        (e.step === 0 ? n(e.day) : (e.step === 1 || e.step === 2 || e.step === 3) && e.day === undefined) &&
+        (e.wake === undefined || (e.step === 2 && WAKES_SEEN.some((w) => w === e.wake)))
+      );
+    case "task.wake":
+      return n(e.task) && str(e.mover, 64) && e.mover.length > 0 && n(e.since) && WAKE_GOTS.some((g) => g === e.got);
     case "task.landed":
       return n(e.task) && (e.step === undefined ? wellFormedArtifact(e.artifact) : wellFormedStepLanded(e));
     case "task.steps":

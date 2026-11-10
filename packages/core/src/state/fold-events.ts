@@ -590,6 +590,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "task.nudge":
+    case "task.wake":
       break;
 
     case "task.first": {

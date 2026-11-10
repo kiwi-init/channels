@@ -283,7 +283,7 @@ export default {
   "tasks.move.nobody": "誰の番でもありません: このチャンネルにオーナーがいません",
   "tasks.quiet.with": "{who} のもとで {time} 止まっています",
   "tasks.quiet.due": "{quiet}（{due}）",
-  "tasks.quiet.step.1": "起こす時期です",
+  "tasks.quiet.step.1": "起こそうとしました",
   "tasks.quiet.step.2": "リードに回す時期です",
   "tasks.quiet.step.3": "オーナーの要対応に入れる時期です",
   "tasks.quiet.label": "止まっているタスク",

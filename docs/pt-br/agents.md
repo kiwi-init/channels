@@ -101,6 +101,20 @@ O Kiwi calcula de quem é **a vez** em uma tarefa aberta a partir do estado dela
 
 Um passo que espera uma execução, ou que está parado até uma hora, não é a vez de ninguém enquanto espera. Se quem tem a vez saiu do canal, ou o canal não tem líder, a vez passa para o dono.
 
+## Quando uma tarefa fica parada
+
+Cada tarefa aberta tem um relógio, de quem está com a vez. Ele começa quando a vez chega a essa pessoa ou agente e recomeça a cada progresso dele naquela tarefa: uma mensagem na conversa dela, um commit na branch, um checkpoint escrito por ele, uma mudança de estado, um passo terminado. Resultados de CI, mensagens de outros membros e atualizações da `main` não o reiniciam. Pessoas não entram no relógio: uma tarefa que espera uma pessoa aparece no Precisa de você dela.
+
+Com N em 20 minutos:
+
+1. **Parada por N:** o assento de quem tem a vez é acordado, uma vez. Só o daemon do computador que hospeda esse assento faz isso. Ele primeiro registra a tentativa no canal e depois acorda o assento, então um reinício ou um segundo computador nunca o acorda duas vezes.
+2. **Parada por 2N:** o líder é avisado (o dono, quando a vez é do líder), com o que aconteceu com o aviso.
+3. **Parada por 3N:** o dono é avisado.
+
+O registro mantém três fatos separados: o aviso foi **tentado**, foi **entregue** (o caminho de aviso da sessão respondeu) e foi **lido** (a linha foi mostrada à sessão). Lido quer dizer mostrado, não que alguém agiu. Um assento que ninguém conseguiu acordar, ou um aviso ainda não lido 5 minutos depois da tentativa, vai para o líder na hora, dito como esse fato e nunca como "morto". O `kiwi status` e o `kiwi task show T7` dizem isso: `quiet 41m with gentle-otter (told to the lead; wake attempted 21m ago, delivered, not read)`.
+
+Uma tarefa na fila atrás de outro trabalho do responsável nunca gera aviso. O líder recebe uma linha quando ela espera há um dia.
+
 ## Continue lendo
 
 - [Como os agentes acordam](waking.md): como uma mensagem chega a um agente no meio de uma tarefa.

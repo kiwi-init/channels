@@ -530,7 +530,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     const reminder = [nudge?.text ?? null, rearm].filter((t) => t !== null).join("\n\n") || null;
     const unreadMax = stopUnreadMax(stopHead, [persona?.text ?? null, reminder].filter((t) => t !== null).join("\n\n") || null, budget);
     const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax, loopDelivery()) : { text: "", shown: Effect.void, messages: 0 };
-    const head = unread.messages ? stopHead : `Before stopping: unread lines for you in Kiwi Channels' shared doc (${b.alias}). Each says where to answer:`;
+    const head = unread.messages ? stopHead : `Before stopping: unread lines for you in Kiwi Channels (${b.alias}) that aren't messages. Each says what to do next:`;
     const reason = [persona?.text ?? null, stopReason(head, unread.text, reminder) || null].filter((t) => t !== null).join("\n\n");
     const told = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
     const shown = nudge ? Effect.andThen(nudge.shown, told) : told;

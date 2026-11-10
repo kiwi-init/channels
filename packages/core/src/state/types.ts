@@ -136,6 +136,15 @@ export interface StepQuestion {
   choices: string[];
 }
 
+export interface Woke {
+  since: number;
+  seq: number;
+  by: string;
+  at: number;
+  delivered?: number;
+  read?: number;
+}
+
 export interface TaskClock {
   key: string;
   seq: number;
@@ -144,6 +153,7 @@ export interface TaskClock {
   day?: number;
   head?: string;
   acts?: [name: string, seq: number, at: number, step?: 1 | 2 | 3][];
+  woke?: Woke;
 }
 
 export interface Task {

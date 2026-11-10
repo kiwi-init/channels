@@ -193,7 +193,9 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     case "task.first":
       return say("task.first", { task: task(ev.task) });
     case "task.nudge":
-      return say(NUDGE_KEYS[ev.step], { task: task(ev.task), name: inlineText(ev.mover, 40) });
+      return say(ev.step === 2 && ev.wake ? `task.nudge.lead.${ev.wake}` : NUDGE_KEYS[ev.step], { task: task(ev.task), name: inlineText(ev.mover, 40) });
+    case "task.wake":
+      return say(`task.wake.${ev.got}`, { task: task(ev.task), name: inlineText(ev.mover, 40) });
     case "task.landed":
       if (!("step" in ev)) return say("task.landed", { task: task(ev.task), at: artifactWords(ev.artifact) });
       return ev.artifact
