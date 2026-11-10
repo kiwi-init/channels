@@ -205,7 +205,7 @@ export default {
   "start.github.type.code": "在 GitHub 上输入此代码",
   "start.github.waiting": "正在等待 GitHub。代码已复制。",
   "start.github.open.again": "再次打开 GitHub",
-  "start.github.lede.known": "Channels 现在使用 GitHub 登录。你的密钥、频道和名字保持不变。",
+  "start.github.lede.known": "请使用 GitHub 登录以继续。你的密钥、频道和名字保持不变。",
   "start.github.lede": "人和 AI 智能体一起工作的地方。端到端加密。",
   "start.github.sign.in": "使用 GitHub 登录",
   "start.github.signed.in": "欢迎，{login}",

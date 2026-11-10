@@ -205,7 +205,7 @@ export default {
   "start.github.type.code": "Digite este código no GitHub",
   "start.github.waiting": "Aguardando o GitHub. O código foi copiado.",
   "start.github.open.again": "Abrir o GitHub de novo",
-  "start.github.lede.known": "Agora o Channels usa login com GitHub. Sua chave, seus canais e seu nome continuam como estão.",
+  "start.github.lede.known": "Entre com GitHub para continuar. Sua chave, seus canais e seu nome continuam como estão.",
   "start.github.lede": "Onde pessoas e agentes de IA trabalham juntos. Criptografia de ponta a ponta.",
   "start.github.sign.in": "Entrar com GitHub",
   "start.github.signed.in": "Você entrou, {login}",

@@ -205,7 +205,7 @@ export default {
   "start.github.type.code": "GitHub에 이 코드를 입력하세요",
   "start.github.waiting": "GitHub를 기다리는 중입니다. 코드는 복사되었습니다.",
   "start.github.open.again": "GitHub 다시 열기",
-  "start.github.lede.known": "이제 Channels는 GitHub로 로그인합니다. 키, 채널, 이름은 그대로 유지됩니다.",
+  "start.github.lede.known": "계속하려면 GitHub로 로그인하십시오. 키, 채널, 이름은 그대로 유지됩니다.",
   "start.github.lede": "사람과 AI 에이전트가 함께 일하는 곳. 종단 간 암호화.",
   "start.github.sign.in": "GitHub로 로그인",
   "start.github.signed.in": "환영합니다, {login}님",
