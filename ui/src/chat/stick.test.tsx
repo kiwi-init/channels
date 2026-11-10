@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test"
+import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test"
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 
@@ -9,7 +9,14 @@ const VIEW_H = 700
 const LINE = 26.4
 const DOC_PAD = 40
 
-type Listener = () => void
+type Listener = (e: { deltaY: number }) => void
+
+let clock = Date.parse("2026-01-01T00:00:00Z")
+
+function later(ms = 1_000): void {
+  clock += ms
+  setSystemTime(new Date(clock))
+}
 type Stick = ReturnType<typeof useStick>
 
 class Feed {
@@ -111,8 +118,14 @@ class Feed {
     return el
   }
 
-  fire(kind: string): void {
-    for (const f of this.listeners.get(kind) ?? []) f()
+  fire(kind: string, deltaY = 0): void {
+    for (const f of this.listeners.get(kind) ?? []) f({ deltaY })
+  }
+
+  layout(): boolean {
+    const clamped = this.top > this.max
+    if (clamped) this.top = this.max
+    return clamped
   }
 
   resized(): void {
@@ -139,6 +152,7 @@ const container = () => ({
 const saved = { window: Reflect.get(globalThis, "window"), observer: Reflect.get(globalThis, "ResizeObserver"), act: Reflect.get(globalThis, "IS_REACT_ACT_ENVIRONMENT") }
 
 beforeAll(() => {
+  setSystemTime(new Date(clock))
   Reflect.set(globalThis, "window", globalThis)
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
   Reflect.set(
@@ -160,6 +174,7 @@ beforeAll(() => {
 })
 
 afterAll(() => {
+  setSystemTime()
   Reflect.set(globalThis, "window", saved.window)
   Reflect.set(globalThis, "ResizeObserver", saved.observer)
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", saved.act)
@@ -183,9 +198,10 @@ async function mount(f: Feed, following: boolean, still: boolean): Promise<{ sti
 }
 
 function userScroll(f: Feed, s: Stick, dy: number): void {
-  f.fire("wheel")
+  f.fire("wheel", dy)
   f.scrollTo(f.top + dy)
   s.remember()
+  later()
 }
 
 function arrive(f: Feed, s: Stick, seq: number, h: number): void {
@@ -246,6 +262,55 @@ describe("useStick in a thread doc", () => {
     await act(async () => root.unmount())
   })
 
+  test("a wheel scroll still animating up from the bottom when a line arrives is not pulled back down (#2025)", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    const from = f.top
+    f.fire("wheel", -58)
+    f.scrollTo(from - 58)
+    f.rows.push({ seq: 101, h: 52.8 })
+    stick.settle()
+    expect(f.listH - VIEW_H - f.top).toBeGreaterThanOrEqual(100)
+    later()
+    const before = f.docTop
+    arrive(f, stick, 102, 52.8)
+    expect(Math.abs(f.docTop - before)).toBeLessThan(1)
+    await act(async () => root.unmount())
+  })
+
+  test("a row the window drops above you while a wheel scroll animates up leaves the scroll room to carry on (#2025)", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    f.fire("wheel", -200)
+    f.scrollTo(f.top - 7)
+    stick.remember()
+    f.rows.shift()
+    f.rows.push({ seq: 101, h: 28.8 })
+    expect(f.layout()).toBe(false)
+    stick.settle()
+    f.resized()
+    f.scrollTo(f.top - 193)
+    stick.remember()
+    expect(f.top).toBeLessThan(f.listH - VIEW_H - 150)
+    later()
+    stick.remember()
+    expect(f.spacer.style.height).toBe("")
+    expect(f.layout()).toBe(false)
+    await act(async () => root.unmount())
+  })
+
+  test("without a reserve, the same dropped row clamps the view to the bottom, which is what cancels WebKit's wheel scroll", () => {
+    const f = new Feed(100)
+    f.scrollTo(f.max - 7)
+    f.rows.shift()
+    f.rows.push({ seq: 101, h: 28.8 })
+    expect(f.layout()).toBe(true)
+  })
+
   test("the scroll you make between a line's arrival and its correction is kept", async () => {
     const f = new Feed(100)
     const { stick, root } = await mount(f, true, true)
@@ -257,6 +322,61 @@ describe("useStick in a thread doc", () => {
     stick.settle()
     f.resized()
     expect(Math.abs(f.docTop - (before + 30))).toBeLessThan(1)
+    await act(async () => root.unmount())
+  })
+
+  test("reversing a wheel back down to the bottom leaves no blank space, and lines that arrive are followed", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    f.fire("wheel", -200)
+    f.scrollTo(f.top - 7)
+    stick.remember()
+    expect(f.spacer.style.height).toBe(`${VIEW_H}px`)
+    f.fire("wheel", 1000)
+    f.layout()
+    f.scrollTo(f.max)
+    stick.remember()
+    expect(f.spacer.style.height).toBe("")
+    expect(f.top).toBe(f.max)
+    later()
+    stick.remember()
+    expect(f.spacer.style.height).toBe("")
+    arrive(f, stick, 101, 52.8)
+    docLine(f)
+    expect(f.max - f.top).toBeLessThan(1)
+    await act(async () => root.unmount())
+  })
+
+  test("a reserve left by a wheel that stopped is released once the wheel is over, wherever you are", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    f.fire("wheel", -200)
+    f.scrollTo(f.max)
+    stick.remember()
+    later()
+    stick.remember()
+    expect(f.spacer.style.height).toBe("")
+    f.layout()
+    expect(f.top).toBe(f.max)
+    await act(async () => root.unmount())
+  })
+
+  test("a wheel down at the bottom reserves no room, and lines that arrive are followed", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    f.fire("wheel", 120)
+    stick.remember()
+    expect(f.spacer.style.height).toBe("")
+    later()
+    arrive(f, stick, 101, 52.8)
+    docLine(f)
+    expect(f.max - f.top).toBeLessThan(1)
     await act(async () => root.unmount())
   })
 
