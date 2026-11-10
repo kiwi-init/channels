@@ -5,8 +5,9 @@ import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 
 const [app, out] = [process.argv[2], process.argv[3]];
-if (!app || !out || process.platform !== "linux" || !process.env.DISPLAY) {
-  console.error("usage (on Linux, under Xvfb): bun desktop/scripts/start-failure-check.ts <the app's folder, with bin/launcher> <folder for the screenshot>");
+const screen = process.env.XVFB_FBDIR ? join(process.env.XVFB_FBDIR, "Xvfb_screen0") : null;
+if (!app || !out || !screen || process.platform !== "linux" || !process.env.DISPLAY) {
+  console.error("usage (on Linux, under Xvfb started with -fbdir $XVFB_FBDIR): bun desktop/scripts/start-failure-check.ts <the app's folder, with bin/launcher> <folder for the screenshot>");
   process.exit(2);
 }
 
@@ -95,9 +96,9 @@ try {
   if (!said.includes("Channels: the window couldn't start")) problems.push("the console doesn't say the window couldn't start");
   if (code !== undefined) problems.push(`the app quit (${code}) before anyone could read why`);
   if (!windows.length) problems.push("no message box is on screen");
-  const dump = spawnSync("xwd", ["-root", "-silent"], { maxBuffer: 64 * 1024 * 1024 });
-  if (dump.status === 0) writeFileSync(join(out, "start-failure.png"), png(dump.stdout));
-  else problems.push(`xwd couldn't take the screenshot: ${dump.stderr.toString().slice(0, 200)}`);
+  console.log(`windows on screen: ${windows.map((id) => `${id} "${spawnSync("xdotool", ["getwindowname", id], { encoding: "utf8" }).stdout.trim()}"`).join(", ") || "none"}`);
+  if (existsSync(screen)) writeFileSync(join(out, "start-failure.png"), png(readFileSync(screen)));
+  else problems.push(`Xvfb left no screen dump at ${screen}`);
   for (const id of windows) {
     spawnSync("xdotool", ["windowfocus", "--sync", id], { timeout: 3000 });
     spawnSync("xdotool", ["key", "--window", id, "Return"]);
