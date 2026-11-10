@@ -237,6 +237,19 @@ try {
     const opened = await until("Ctrl+, opening Settings", 5_000, () => inSettings().then((on) => (on ? true : null))).catch(() => null);
     await d.evaluate(() => document.querySelector<HTMLElement>(".rail-gear.is-on")?.click(), null);
     const left = await until("leaving Settings", 5_000, () => inSettings().then((on) => (on ? null : true))).catch(() => null);
+    const bare = () => d.evaluate(() => !!document.querySelector(".chan.is-bare"), null) as Promise<boolean>;
+    const side = await bare();
+    key("ctrl+backslash");
+    const flipped = await until("Ctrl+\\ toggling the sidebar", 5_000, () => bare().then((now) => (now !== side ? true : null))).catch(() => null);
+    await later(600);
+    const held = (await bare()) !== side;
+    key("ctrl+backslash");
+    const restored = await until("Ctrl+\\ toggling the sidebar back", 5_000, () => bare().then((now) => (now === side ? true : null))).catch(() => null);
+    if (flipped && held && restored) console.log("Ctrl+\\ toggles the sidebar once per press");
+    else
+      problems.push(
+        `Ctrl+\\ ${flipped ? "toggled" : "didn't toggle"} the sidebar, it ${held ? "stayed" : "flipped back by itself"}, and a second press ${restored ? "put it back" : "didn't put it back"}`,
+      );
     if (opened && left) console.log("Ctrl+, (libkiwi-shell's shortcut 8) opens Settings in the page");
     else problems.push(`Ctrl+, ${opened ? "opened Settings" : "didn't open Settings"}${opened && !left ? ", and the gear didn't leave it" : ""}`);
     const marks = await spellingMarks(d);
@@ -294,6 +307,43 @@ try {
     const stayed = await page(() => !!document.querySelector("dialog.palette[open]"));
     command("k");
     const shut = await until("⌘K closing the palette", 5_000, () => page(() => !document.querySelector("dialog.palette[open]")).then((off) => (off ? true : null))).catch(() => null);
+    const escape = () => osa(`tell application "System Events" to key code 53`);
+    const inChannel = () => page(() => !!document.querySelector(".chan"));
+    const settle = async <T>(read: () => Promise<T>): Promise<T> => {
+      await later(700);
+      return read();
+    };
+    const once: string[] = [];
+    const bareNow = () => page(() => !!document.querySelector(".chan.is-bare"));
+    const side = await bareNow();
+    command("\\\\");
+    if ((await settle(bareNow)) === side) once.push("⌘\\ left the sidebar as it was (no toggle, or two)");
+    command("\\\\");
+    if ((await settle(bareNow)) !== side) once.push("a second ⌘\\ didn't put the sidebar back");
+    await page(() => document.querySelector<HTMLElement>(".rail .tile.is-home")?.click());
+    await until("Home", 5_000, () => inChannel().then((on) => (on ? null : true))).catch(() => null);
+    await page(() => document.querySelector<HTMLElement>(".rail .rail-list .tile")?.click());
+    await until("the channel again", 5_000, () => inChannel().then((on) => (on ? true : null))).catch(() => null);
+    command("[");
+    if (await settle(inChannel)) once.push("⌘[ from the channel didn't land on Home (no step back, or two)");
+    command("]");
+    if (!(await settle(inChannel))) once.push("⌘] from Home didn't land on the channel (no step forward, or two)");
+    command("n");
+    const asked = await until("⌘N opening New channel", 5_000, () => page(() => !!document.querySelector("dialog[open]:not(.palette)")).then((on) => (on ? true : null))).catch(() => null);
+    escape();
+    await until("New channel closing", 5_000, () => page(() => !document.querySelector("dialog[open]")).then((off) => (off ? true : null))).catch(() => null);
+    if (!asked) once.push("⌘N didn't open New channel");
+    command("f");
+    const finding = await until("⌘F opening search", 5_000, () => page(() => !!document.querySelector(".top-tools.is-searching")).then((on) => (on ? true : null))).catch(() => null);
+    escape();
+    if (!finding) once.push("⌘F didn't open search");
+    await page(() => document.querySelector<HTMLElement>(".rail .tile.is-home")?.click());
+    await until("Home", 5_000, () => inChannel().then((on) => (on ? null : true))).catch(() => null);
+    command("1");
+    const first = await until("⌘1 opening the first channel", 5_000, () => inChannel().then((on) => (on ? true : null))).catch(() => null);
+    if (!first) once.push("⌘1 from Home didn't open the first channel");
+    if (once.length) problems.push(...once);
+    else console.log("through the menu bar: ⌘\\ toggles the sidebar once per press, ⌘[ and ⌘] move one place each, ⌘N opens New channel, ⌘F opens search, ⌘1 opens the first channel");
     if (inSettings && jumped && stayed && shut) console.log("⌘, opens Settings; ⌘K, a menu key and a page key at once, opens the palette once and closes it once");
     else
       problems.push(
