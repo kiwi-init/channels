@@ -4,7 +4,7 @@ export default {
   "shell.channel.drawer.label": "Salas e pessoas ({keys})",
   "shell.channel.drawer.label.news": "Salas e pessoas, mensagens novas ({keys})",
   "shell.channel.drawer.title": "Mostrar ou ocultar salas e pessoas ({keys})",
-  "shell.channel.settings.label": "{name}: configurações do canal",
+  "shell.channel.menu.label": "{name}: menu do canal",
   "shell.channel.settings": "Configurações do canal",
   "shell.channel.views": "Visões",
   "shell.channel.specs.need": "{count} aguardando você",

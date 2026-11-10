@@ -19,6 +19,7 @@ interface Rail {
   invite?: (code: string) => void
   end?: (code: string) => void
   read?: ((code: string) => void) | null
+  noFolders?: true
 }
 
 export function railMenu(target: RailTarget, at: { x: number; y: number }, rail: Rail): OpenMenu | null {
@@ -43,12 +44,14 @@ export function railMenu(target: RailTarget, at: { x: number; y: number }, rail:
       [
         ...(rail.read ? [{ label: t("shell.sidebar.mark.read"), run: () => rail.read?.(code) }] : []),
         { label: muted ? t("shell.rail.menu.unmute") : t("shell.rail.menu.mute"), run: () => rail.setMute(code, !muted) },
-        ...(holder
-          ? [{ label: t("shell.rail.menu.take.out", { name: holder.name }), run: () => save(dropOn(folders, code, { kind: "rail" }, newFolderId)) }]
-          : [
-              ...folders.map((f) => ({ label: t("shell.rail.menu.add.to", { name: f.name }), run: () => save(dropOn(folders, code, { kind: "folder", id: f.id }, newFolderId)) })),
-              { label: t("shell.rail.menu.new.folder"), run: () => save([...folders, { id: newFolderId(), name: folderName(), codes: [code], open: true }]) },
-            ]),
+        ...(rail.noFolders
+          ? []
+          : holder
+            ? [{ label: t("shell.rail.menu.take.out", { name: holder.name }), run: () => save(dropOn(folders, code, { kind: "rail" }, newFolderId)) }]
+            : [
+                ...folders.map((f) => ({ label: t("shell.rail.menu.add.to", { name: f.name }), run: () => save(dropOn(folders, code, { kind: "folder", id: f.id }, newFolderId)) })),
+                { label: t("shell.rail.menu.new.folder"), run: () => save([...folders, { id: newFolderId(), name: folderName(), codes: [code], open: true }]) },
+              ]),
       ],
       ...(rail.settings
         ? [

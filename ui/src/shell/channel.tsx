@@ -13,7 +13,8 @@ import type { Channel } from "~/model"
 import { drawerNews } from "~/live/links"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { openAsks } from "~/needs/open"
-import { sameWhere, useGo, useNav, useActions } from "~/nav"
+import { sameWhere, useGo, useNav, useActions, useAppPrefs, useTiles } from "~/nav"
+import { openMenu } from "~/kit/menu-open"
 import { whereKey } from "~/places"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
@@ -48,6 +49,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const nav = useNav()
   const go = useGo()
   const actions = useActions()
+  const tiles = useTiles()
+  const prefs = useAppPrefs()
   const hidden = useSidebarHidden()
   const panel = usePanelWidth(hidden)
   const [jumpAt, setJumpAt] = useState<{ jump: Jump; visit: number } | null>(null)
@@ -180,10 +183,33 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           <button
             type="button"
             className="top-chan"
-            aria-pressed={nav.modal?.kind === "channel"}
-            onClick={() => go({ to: "modal", modal: nav.modal?.kind === "channel" ? null : { kind: "channel" } })}
-            aria-label={t("shell.channel.settings.label", { name: channel.title })}
-            title={t("shell.channel.settings")}
+            aria-haspopup="menu"
+            aria-label={t("shell.channel.menu.label", { name: channel.title })}
+            onClick={(e) => {
+              const at = e.currentTarget.getBoundingClientRect()
+              const tile = tiles.find((c) => c.code === channel.code)
+              void import("~/shell/rail-menu").then((m) =>
+                openMenu.set(
+                  m.railMenu(
+                    { kind: "channel", code: channel.code },
+                    { x: at.left, y: at.bottom + 4 },
+                    {
+                      noFolders: true,
+                      folders: [],
+                      save: () => {},
+                      title: () => channel.title,
+                      muted: (code) => prefs.muted.includes(code),
+                      setMute: (code, on) => actions.setMute(code, null, on),
+                      settings: () => go({ to: "modal", modal: { kind: "channel" } }),
+                      own: channel.youOwn,
+                      invite: () => go({ to: "modal", modal: { kind: "invite" } }),
+                      end: () => go({ to: "modal", modal: { kind: "channel", end: true } }),
+                      read: (tile?.unread ?? 0) > 0 ? (code) => actions.markChannelRead(code, tile?.head) : null,
+                    }
+                  )
+                )
+              )
+            }}
           >
             <span className="top-name">{channel.title}</span>
             <Icon name="down" size={14} />

@@ -128,8 +128,16 @@ export async function channelSettings(page: Page, opening: boolean): Promise<num
   return page.evaluate(async (open) => {
     const shown = () => document.querySelector('dialog.modal[open][aria-label="Channel settings"]');
     const close = () => [...(shown()?.querySelectorAll<HTMLElement>("button") ?? [])].find((b) => b.getAttribute("aria-label") === "Close");
-    const button = open ? [...document.querySelectorAll<HTMLElement>("button")].find((b) => (b.getAttribute("aria-label") ?? "").endsWith(": channel settings")) : close();
-    if (!button) throw new Error(open ? "no channel settings button" : "no Close in channel settings");
+    const fromMenu = async (): Promise<HTMLElement | undefined> => {
+      const name = [...document.querySelectorAll<HTMLElement>("button")].find((b) => (b.getAttribute("aria-label") ?? "").endsWith(": channel menu"));
+      if (!name) throw new Error("no channel name button");
+      name.click();
+      const item = () => [...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')].find((b) => b.textContent === "Channel settings");
+      for (const until = performance.now() + 15000; performance.now() < until && !item();) await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+      return item();
+    };
+    const button = open ? await fromMenu() : close();
+    if (!button) throw new Error(open ? "no Channel settings in the channel's menu" : "no Close in channel settings");
     const t0 = performance.now();
     button.click();
     const deadline = t0 + 15000;
