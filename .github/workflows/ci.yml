@@ -58,7 +58,7 @@ jobs:
         with:
           fetch-depth: 50
         if: github.event_name == 'workflow_dispatch' && inputs.jobs == ''
-      - run: git fetch --depth=50 origin main
+      - run: git fetch --depth=50 origin main || true
         if: github.event_name == 'workflow_dispatch' && inputs.jobs == ''
       - id: plan
         env:
@@ -839,6 +839,11 @@ jobs:
           retention-days: 3
           overwrite: true
 
+  # desktop / distros stays before merge on every default dispatch (and on pushes to main) because
+  # release.yml today checks only that a tag's commit is on main, not that CI passed at that commit:
+  # nothing but this job catches a broken AppImage before a release goes out (a release= dispatch
+  # verifies an already-published artifact). It moves after merge only when a release gate enforces
+  # green CI at the exact tagged SHA before publish — spec #1967, tasks T2017 and T2018.
   desktop-distros:
     name: desktop / distros, ${{ matrix.distro }}
     needs: [plan, desktop-linux]

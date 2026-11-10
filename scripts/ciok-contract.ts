@@ -229,7 +229,7 @@ check(
   parts.every((p) => (perPart.get(p) ?? 0) > 0),
 );
 
-function pickWith(files: Record<string, string>, args: string[] = []): string {
+function fixture(files: Record<string, string>, opts: { stamp?: boolean; withBase?: boolean } = {}): string {
   const dir = mkdtempSync(join(tmpdir(), "cov-"));
   const run = (cmd: string[]) => spawnSync(cmd[0] ?? "", cmd.slice(1), { cwd: dir });
   const git = (...a: string[]) => run(["git", ...a]);
@@ -245,7 +245,7 @@ function pickWith(files: Record<string, string>, args: string[] = []): string {
   run(["touch", join(dir, "ui/a.ts")]);
   git("add", "-A");
   git("commit", "-qm", "base");
-  git("update-ref", "refs/remotes/origin/main", "main");
+  if (opts.withBase !== false) git("update-ref", "refs/remotes/origin/main", "main");
   git("checkout", "-qb", "feature");
   for (const [name, content] of Object.entries(files)) {
     mkdirSync(dirname(join(dir, name)), { recursive: true });
@@ -253,7 +253,20 @@ function pickWith(files: Record<string, string>, args: string[] = []): string {
   }
   git("add", "-A");
   git("commit", "-qm", "change");
+  if (opts.stamp) git("commit", "-q", "--allow-empty", "-m", "kiwi 2026.11.16");
+  return dir;
+}
+
+function pickWith(files: Record<string, string>, args: string[] = [], stamp = false): string {
+  const dir = fixture(files, { stamp });
   const r = spawnSync("bash", [join(dir, "scripts/coverage-pick.sh"), ...args], { cwd: dir });
+  rmSync(dir, { recursive: true, force: true });
+  return `${r.stdout}`.trim();
+}
+
+function pickWithoutBase(): string {
+  const dir = fixture({ "ui/b.ts": "b" }, { withBase: false });
+  const r = spawnSync("bash", [join(dir, "scripts/coverage-pick.sh")], { cwd: dir });
   rmSync(dir, { recursive: true, force: true });
   return `${r.stdout}`.trim();
 }
@@ -261,12 +274,12 @@ function pickWith(files: Record<string, string>, args: string[] = []): string {
 const ALL_JOBS = "static test-unit test-flows build doc fuzz shots desktop-mac desktop-linux desktop-distros cli-macos";
 check("ui-only diff drops cli-macos only", pickWith({ "ui/b.ts": "b" }) === ALL_JOBS.replace(" cli-macos", ""));
 check("ui and desktop diff runs everything", pickWith({ "ui/b.ts": "b", "desktop/b.ts": "b" }) === ALL_JOBS);
-check(
-  "desktop-only diff drops test-flows, doc, fuzz and shots",
-  pickWith({ "desktop/b.ts": "b" }) === ALL_JOBS.replace(" test-flows", "").replace(" doc", "").replace(" fuzz", "").replace(" shots", ""),
-);
+check("desktop-only diff drops doc, fuzz and shots, keeping test-flows", pickWith({ "desktop/b.ts": "b" }) === ALL_JOBS.replace(" doc", "").replace(" fuzz", "").replace(" shots", ""));
+check("a desktop source that flows tests import keeps test-flows", pickWith({ "desktop/src/keyring.ts": "k" }) === ALL_JOBS.replace(" doc", "").replace(" fuzz", "").replace(" shots", ""));
 check("an unclaimed file runs everything", pickWith({ "README2.md": "b" }) === ALL_JOBS);
 check("a release input runs everything", pickWith({ "ui/b.ts": "b" }, ["2026.11.15"]) === ALL_JOBS);
+check("a stamp commit runs everything", pickWith({}, [], true) === ALL_JOBS);
+check("an unavailable main ref runs everything", pickWithoutBase() === ALL_JOBS);
 const covTable = Bun.YAML.parse(await Bun.file(".github/coverage.yml").text()) as { areas?: Record<string, { paths?: string[]; skip?: string[] }> };
 check(
   "coverage table areas parse with paths and skips",
