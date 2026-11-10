@@ -93,6 +93,8 @@ export default {
   "chat.message.actions": "Message actions",
   "chat.message.react": "React {emoji}",
   "chat.message.reply": "Reply",
+  "chat.message.reply.thread": "Reply in thread",
+  "chat.message.thread.replies": { one: "{count} reply", other: "{count} replies" },
   "chat.message.copy.text": "Copy text",
   "chat.send.keys.enter": "Send (Enter)",
   "chat.suggest.tasks": "Tasks and specs",

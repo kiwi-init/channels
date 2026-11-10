@@ -466,9 +466,9 @@ jobs:
       - name: ui top bar in Chromium moves the window only from its background
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-drag-regions.ts --dist ui/dist
-      - name: ui rooms are flat in Chromium and WebKit, a reply shows inline with its quote and nothing opens a thread
+      - name: ui room replies in Chromium and WebKit, a reply shows inline with its quote and a message opens its thread
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
-        run: bun scripts/ui-flat-rooms.ts --dist ui/dist && bun scripts/ui-flat-rooms.ts --dist ui/dist --webkit
+        run: bun scripts/ui-room-replies.ts --dist ui/dist && bun scripts/ui-room-replies.ts --dist ui/dist --webkit
       - name: ui onboarding's meadow holds still with the app's own Reduce motion, in Chromium and WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-onboarding-meadow.ts --dist ui/dist && bun scripts/ui-onboarding-meadow.ts --dist ui/dist --webkit

@@ -13,7 +13,7 @@ import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
-import { clock } from "~/kit/time"
+import { ago, clock } from "~/kit/time"
 import { memberOf, type Channel, type Image, type ImageSpot, type Message, type Person } from "~/model"
 import { openMessage as showMessage } from "~/live/open-message"
 import { limitWords } from "~/live/refused"
@@ -220,6 +220,8 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const cited = useMemo(() => (typeof quote === "object" ? quotedExcerpt(m, quote) : null), [m, quote])
   const said = cited ? cited.rest : wordsRaw(m.text)
   const body = m.docMedia ? withoutMediaNames(said, m.docMedia) : said
+  const threaded = !inThread && !older && !spec && (m.where.kind === "room" || m.where.kind === "dm")
+  const openThread = () => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })
 
   if (m.system)
     return (
@@ -235,7 +237,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
     if (m.pending || m.failed !== undefined || m.leftOut || m.fromDoc || m.deleted || editing) return
     const target = e.target
     const reply = replying && quoting ? () => replying.set(m) : null
-    showMenu(e, t("chat.message.menu"), (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, at }))
+    showMenu(e, t("chat.message.menu"), (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, thread: threaded ? openThread : null, at }))
   }
 
   return (
@@ -322,6 +324,14 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </Suspense>
         )}
         <Reacts channel={channel} m={m} />
+        {m.thread && threaded && (
+          <button type="button" className="msg-thread" onClick={openThread}>
+            <span className="msg-thread-n">{t("chat.message.thread.replies", { count: m.thread.replies })}</span>
+            <span className="dim">
+              {m.thread.people.map((p) => nickname(channel, p)).join(", ")} · {ago(m.thread.last)}
+            </span>
+          </button>
+        )}
         {m.receipt && (
           <p className="msg-receipt" aria-live="polite">
             {m.receipt}
@@ -349,6 +359,11 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           {replying && quoting && (
             <button type="button" className="msg-tool" aria-label={t("chat.message.reply")} title={t("chat.message.reply")} onClick={() => replying.set(m)}>
               <Icon name="reply" size={14} />
+            </button>
+          )}
+          {threaded && (
+            <button type="button" className="msg-tool" aria-label={t("chat.message.reply.thread")} title={t("chat.message.reply.thread")} onClick={openThread}>
+              <Icon name="thread" size={14} />
             </button>
           )}
           <button type="button" className="msg-tool" aria-label={t("chat.message.copy.text")} title={t("chat.message.copy.text")} onClick={() => copyText(wordsRaw(m.text))}>

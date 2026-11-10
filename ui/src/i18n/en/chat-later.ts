@@ -126,6 +126,7 @@ const words = {
   "chat.menus.open.image": "Open image",
   "chat.menus.save.image": "Save image",
   "chat.menus.reply": "Reply",
+  "chat.menus.reply.thread": "Reply in thread",
   "chat.menus.edit": "Edit",
   "chat.menus.delete": "Delete",
   "chat.menus.copy.text": "Copy text",

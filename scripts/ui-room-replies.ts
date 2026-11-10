@@ -40,14 +40,30 @@ try {
   await feed.locator(`[data-seq="${ROOT}"]`).waitFor();
   await page.waitForTimeout(500);
 
-  expect((await page.locator(".msg-thread").count()) === 0, 'no message in #general shows an "N replies" link');
   const root = feed.locator(`[data-seq="${ROOT}"]`);
+  const panel = page.locator(".panel");
+  const inPanel = async (): Promise<number[]> => panel.locator("[data-seq]").evaluateAll((els) => els.map((el) => Number(el.getAttribute("data-seq"))));
+  expect(/^\d+ repl/.test((await root.locator(".msg-thread-n").textContent()) ?? ""), 'a message with replies shows an "N replies" line');
+  await root.locator(".msg-thread").click();
+  await panel.locator(`[data-seq="${SIDE_REPLY}"]`).waitFor();
+  const shown = await inPanel();
+  expect(shown[0] === ROOT && shown.includes(SIDE_REPLY) && shown.includes(LATER_REPLY), `"N replies" opens the thread: the message, then its replies (${shown.join(", ")})`);
+  await panel.getByRole("button", { name: "Close" }).click();
+  await panel.waitFor({ state: "detached" });
   await root.hover();
-  expect((await page.getByRole("button", { name: "Reply in thread" }).count()) === 0, 'a hovered message has no "Reply in thread" button');
+  expect((await root.getByRole("button", { name: "Reply in thread" }).count()) === 1, 'a hovered message has a "Reply in thread" button');
+  await feed.locator(`[data-seq="${LATER_REPLY}"]`).hover();
+  await feed.locator(`[data-seq="${LATER_REPLY}"]`).getByRole("button", { name: "Reply in thread" }).click();
+  await panel.locator(`[data-seq="${ROOT}"]`).waitFor();
+  expect((await inPanel())[0] === ROOT, "on a reply, Reply in thread opens the thread of the message it answers");
+  expect((await panel.getByRole("button", { name: "Reply in thread" }).count()) === 0 && (await panel.locator(".msg-thread").count()) === 0, "inside the thread, no row offers a thread of its own");
+  await panel.getByRole("button", { name: "Close" }).click();
+  await panel.waitFor({ state: "detached" });
+  await root.hover();
   expect((await root.getByRole("button", { name: "Reply", exact: true }).count()) === 1, "a hovered message has a Reply button that quotes it");
 
   const reply = feed.locator(`[data-seq="${SIDE_REPLY}"]`);
-  expect((await reply.count()) === 1, "a reply sent only to its thread by an old CLI shows in #general");
+  expect((await reply.count()) === 1, "a reply the CLI marks thread-only still shows in #general");
   expect((await reply.locator(".msg-quote").count()) === 0, "right under the message it answers, a reply needs no quote");
   const quoted = async (seq: number): Promise<string> => (await feed.locator(`[data-seq="${seq}"] .msg-quote-text`).allTextContents()).join(" ");
   const rootText = (await feed.locator(`[data-seq="${ROOT}"] .msg-text`).first().textContent()) ?? "";
@@ -61,7 +77,7 @@ try {
   await root.click({ button: "right", position: { x: 200, y: 12 } });
   const menu = page.getByRole("menu");
   await menu.waitFor();
-  expect((await menu.getByRole("menuitem", { name: "Reply in thread" }).count()) === 0, 'the message menu has no "Reply in thread"');
+  expect((await menu.getByRole("menuitem", { name: "Reply in thread" }).count()) === 1, 'the message menu has "Reply in thread"');
   expect((await menu.getByRole("menuitem", { name: "Reply", exact: true }).count()) === 1, "the message menu has Reply");
   await page.keyboard.press("Escape");
 

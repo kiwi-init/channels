@@ -1184,6 +1184,28 @@ button.msg-image-spot:hover {
   text-overflow: ellipsis;
 }
 
+.msg-thread {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: var(--t-meta) var(--ui);
+}
+
+.msg-thread-n {
+  flex: none;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.msg-thread:hover .msg-thread-n {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .msg-tools {
   position: absolute;
   top: -0.875rem;
