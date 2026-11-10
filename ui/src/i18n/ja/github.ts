@@ -185,5 +185,8 @@ export default {
   "kit.time.yesterday": "昨日",
   "kit.toasts.not.copied": "コピーできませんでした。選択して手動でコピーしてください。",
   "kit.toasts.copied": "コピーしました",
+  "kit.discard.ask": "変更を破棄しますか？",
+  "kit.discard.discard": "破棄",
+  "kit.discard.keep": "編集を続ける",
   "kit.toasts.dismiss": "閉じる",
 } satisfies Catalog

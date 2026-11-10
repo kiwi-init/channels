@@ -13,6 +13,7 @@ import { Icon } from "~/kit/icons"
 import { RoleFace } from "~/kit/role-face"
 import { useApp } from "~/nav"
 import { Confirm, Row, Seg } from "~/settings/controls"
+import { DiscardAsk, useDiscard } from "~/kit/discard"
 
 const TAGLINE: Record<string, Key> = {
   builder: "settings.personalities.tagline.builder",
@@ -127,6 +128,7 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
   const [area, setArea] = useState("")
   const [deleting, setDeleting] = useState(false)
   const ref = useRef<HTMLFormElement>(null)
+  const discard = useDiscard(JSON.stringify(draft) !== JSON.stringify(start) || !!area.trim(), onDone)
   const own = app.ownPersonalities
   const set = (patch: Partial<Personality>) => setDraft((d) => ({ ...d, ...patch }))
   const toggle = (c: Capability) => set({ capabilities: CAPABILITIES.filter((x) => (x === c ? !draft.capabilities.includes(c) : draft.capabilities.includes(x))) })
@@ -156,7 +158,7 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
       onKeyDown={(e) => {
         if (e.key !== "Escape" || deleting) return
         e.preventDefault()
-        onDone()
+        discard.leave()
       }}
     >
       <h3 className="persona-title">{isNew ? t("settings.personalities.new") : t("settings.personalities.edit.title")}</h3>
@@ -227,6 +229,7 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
           </button>
         )}
         <span className="persona-foot-gap" />
+        {discard.asking && <DiscardAsk onKeep={discard.keep} onDiscard={onDone} />}
         <button type="button" className="btn is-quiet" onClick={onDone}>
           {t("settings.controls.cancel")}
         </button>

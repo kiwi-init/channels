@@ -7,6 +7,7 @@ import { ActContext, AppContext, type Act, type Ctx } from "~/nav"
 import { pastedFiles } from "~/chat/attach"
 import { CommentBox, commentKeys, commentOf, type CommentReply } from "~/specs/comment-box"
 import { wrote } from "~/words"
+import { keysHint } from "~/kit/keys"
 
 const key = (more: Partial<SendKey>): SendKey & { preventDefault(): void } => ({
   key: "Enter",
@@ -94,7 +95,7 @@ describe("one send rule for the chat composer and spec comments (#1842)", () => 
     expect(render(true, "a quoted line")).toContain(`title="${sendTitle(true)}"`)
     expect(render(false, "a quoted line")).toContain(`title="${sendTitle(false)}"`)
     expect(sendTitle(true)).toBe("Send (Enter)")
-    expect(sendTitle(false)).toBe("Send (⌘ Enter)")
+    expect(sendTitle(false)).toBe(`Send (${keysHint("Enter")})`)
   })
 
   test("replying to a comment shows who and what it quotes, like the chat composer (#1840)", () => {

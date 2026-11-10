@@ -3,19 +3,18 @@ import { Fragment, useEffect, useState } from "react"
 
 import { Icon } from "~/kit/icons"
 import { copyText } from "~/kit/toasts"
-import { useGo, useActions, useAppAccount } from "~/nav"
+import { useActions, useAppAccount } from "~/nav"
 import { t } from "~/i18n/i18n"
+import { showAsk } from "~/shell/enroll-hidden"
 
 type Card = { key: string; text: string; detail?: string; path?: string; act?: string; busy?: string; onAct?: () => void; progress?: number }
 
 function useCards(): Card[] {
-  const go = useGo()
   const actions = useActions()
   const account = useAppAccount()
   const cards: Card[] = []
   const ask = account?.enrollAsk
-  if (ask && ask.stage !== "elsewhere")
-    cards.push({ key: "ask", text: t("shell.updates.sign.in.ask", { name: ask.label }), act: t("shell.updates.review"), onAct: () => go({ to: "settings", section: "computers" }) })
+  if (ask && ask.stage !== "elsewhere") cards.push({ key: "ask", text: t("shell.updates.sign.in.ask", { name: ask.label }), act: t("shell.updates.review"), onAct: showAsk })
   const moved = account?.moved
   if (moved)
     cards.push({

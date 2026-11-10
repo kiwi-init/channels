@@ -14,6 +14,8 @@ import { nickname } from "~/names"
 import { commentsOf, lineDiff, quoteIn, type Comment } from "~/specs/read"
 import { CommentBox, type CommentReply } from "~/specs/comment-box"
 import { CommentItem, openImage } from "~/specs/comment-item"
+import { keysHint } from "~/kit/keys"
+import { DiscardAsk, useDiscard } from "~/kit/discard"
 
 const WIDE_PX = 940
 const TALK_SHOWN = 3
@@ -284,6 +286,7 @@ function Editor({ channel, spec, onDone }: { channel: Channel; spec: Spec; onDon
     if (text.trim() && text.trim() !== wordsRaw(spec.text).trim()) actions.writeSpec(channel.code, spec.ask, text)
     onDone()
   }
+  const discard = useDiscard(text.trim() !== wordsRaw(spec.text).trim(), onDone)
   const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key.toLowerCase() === "s" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
@@ -291,14 +294,15 @@ function Editor({ channel, spec, onDone }: { channel: Channel; spec: Spec; onDon
     }
     if (e.key === "Escape") {
       e.preventDefault()
-      onDone()
+      discard.leave()
     }
   }
   return (
     <div className="spec-editor">
       <div className="spec-editor-bar">
-        <span className="spec-editor-hint">{t("specs.doc.editor.hint")}</span>
+        <span className="spec-editor-hint">{t("specs.doc.editor.hint", { keys: keysHint("S") })}</span>
         {moved && <span className="tone-decide spec-editor-moved">{t("specs.doc.editor.moved", { who: nickname(channel, spec.edited.by) })}</span>}
+        {discard.asking && <DiscardAsk onKeep={discard.keep} onDiscard={onDone} />}
         <button type="button" className="btn is-quiet" onClick={onDone}>
           {t("specs.doc.cancel")}
         </button>

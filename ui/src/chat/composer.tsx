@@ -22,6 +22,7 @@ import { nickname } from "~/names"
 import { withNames } from "~/chat/linked"
 import { listId, Suggestions, useSuggest } from "~/chat/suggest"
 import { wordsRaw } from "~/words"
+import { keysHint } from "~/kit/keys"
 
 const Gifs = lazy(() => import("~/chat/gif-picker"))
 const StashList = lazy(() => import("~/chat/stash-list"))
@@ -326,7 +327,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
               type="button"
               className={cx("stash-chip", listOpen && "is-open")}
               aria-expanded={listOpen}
-              title={t("chat.composer.stashed.title")}
+              title={t("chat.composer.stashed.title", { keys: keysHint("S", true) })}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => setListOf(listOpen ? null : key)}
             >
@@ -335,8 +336,8 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
             </button>
           </div>
         )}
-        {dropping && <DropHint />}
-        <AttachedFiles files={files} onRemove={(i) => setFiles((now) => now.filter((_, j) => j !== i))} />
+        {dropping && <DropHint anyFile={!!doc} />}
+        <AttachedFiles files={files} anyFile={!!doc} onRemove={(i) => setFiles((now) => now.filter((_, j) => j !== i))} />
         {replyTo && (
           <div className={cx("compose-reply", excerpt && "is-excerpt")}>
             <Icon name="reply" size={13} />
@@ -461,7 +462,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
       )}
       {running && !cue && !edit && (
         <p className="compose-hint" role="status">
-          <b>/{running.command.name}</b> <span>·</span> {running.command.summary} <span>·</span> {tr("chat.composer.key.runs.it", { key: <kbd>{enterSends ? "↩" : "⌘↩"}</kbd> })}
+          <b>/{running.command.name}</b> <span>·</span> {running.command.summary} <span>·</span> {tr("chat.composer.key.runs.it", { key: <kbd>{enterSends ? "↩" : keysHint("↩")}</kbd> })}
           {running.command.args && !running.args ? ` · ${running.command.args}` : ""}
         </p>
       )}
@@ -472,7 +473,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
             t("chat.composer.left", { count: cue.left })
           ) : (
             <>
-              {tr("chat.composer.key.brings.back", { key: <kbd>⇧⌘S</kbd> })}
+              {tr("chat.composer.key.brings.back", { key: <kbd>{keysHint("S", true)}</kbd> })}
               {cue.lost ? ` · ${cue.lost === 1 ? t("chat.composer.lost.file") : t("chat.composer.lost.files", { count: cue.lost })}` : ""}
             </>
           )}

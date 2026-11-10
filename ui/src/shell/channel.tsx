@@ -4,6 +4,8 @@ import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
 import { cx, Count, IconButton, useLate } from "~/kit/bits"
 import { useGlide } from "~/kit/glide"
+import { keyRan, onCommand } from "~/kit/commands"
+import { dialogOpen, keysHint, mod } from "~/kit/keys"
 import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
@@ -13,7 +15,7 @@ import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { openAsks } from "~/needs/open"
 import { sameWhere, useGo, useNav, useActions } from "~/nav"
 import { whereKey } from "~/places"
-import { SIDEBAR_KEYS, useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
+import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer, useTall } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
@@ -100,20 +102,32 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
     const onKey = (e: KeyboardEvent) => {
       if (isSideKey(e)) {
         e.preventDefault()
+        keyRan("sidebar")
         toggleSide()
       }
-      if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("dialog[open]")) {
+      if (e.key === "Escape" && !e.defaultPrevented && !dialogOpen()) {
         if (drawer) setDrawer(false)
         else if (nav.panel) go({ to: "panel", panel: null })
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+      if (mod(e) && !e.altKey && e.key.toLowerCase() === "f" && !dialogOpen()) {
         e.preventDefault()
+        keyRan("find")
         setSearching(true)
         setFocusAsk((n) => n + 1)
       }
     }
+    const stop = onCommand((c) => {
+      if (c === "sidebar") toggleSide()
+      if (c === "find" && !dialogOpen()) {
+        setSearching(true)
+        setFocusAsk((n) => n + 1)
+      }
+    })
     window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
+    return () => {
+      stop()
+      window.removeEventListener("keydown", onKey)
+    }
   }, [nav.panel, go, drawer])
 
   if (channel.waiting)
@@ -151,8 +165,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
         <button
           type="button"
           className="icon-btn top-drawer"
-          aria-label={t(news ? "shell.channel.drawer.label.news" : "shell.channel.drawer.label", { keys: SIDEBAR_KEYS })}
-          title={t("shell.channel.drawer.title", { keys: SIDEBAR_KEYS })}
+          aria-label={t(news ? "shell.channel.drawer.label.news" : "shell.channel.drawer.label", { keys: keysHint("\\") })}
+          title={t("shell.channel.drawer.title", { keys: keysHint("\\") })}
           aria-pressed={drawer}
           onClick={toggleSide}
         >
@@ -224,7 +238,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           )}
           <div className="top-group">
             <span className="top-updates" ref={setUpdatesSlot} />
-            <IconButton icon="search" label={t("shell.channel.search")} onClick={() => setSearching(true)} />
+            <IconButton icon="search" label={t("shell.channel.search", { keys: keysHint("F") })} onClick={() => setSearching(true)} />
           </div>
         </div>
       </header>
