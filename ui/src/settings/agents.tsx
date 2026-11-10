@@ -6,6 +6,7 @@ import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { tr } from "~/i18n/rich"
 import { cx } from "~/kit/bits"
+import { failedToast } from "~/kit/failed"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { LOGOS } from "~/kit/logos"
@@ -32,7 +33,20 @@ const HOOK_SAYS: Record<Hook["state"], { state: Key; action: Key; label: Key; to
 
 function HookState({ hook }: { hook: Hook }) {
   const { app } = useApp()
+  const [busy, setBusy] = useState(false)
   const says = HOOK_SAYS[hook.state]
+  const change = () => {
+    const on = hook.state !== "installed"
+    setBusy(true)
+    void app.actions
+      .setHooks(hook.harness, on)
+      .catch((err: unknown) =>
+        failedToast(t("settings.agents.hooks.failed", { harness: hook.label }), err, {
+          other: t("settings.agents.hooks.failed.next", { command: `kiwi hooks ${on ? "install" : "uninstall"} ${hook.harness}` }),
+        })
+      )
+      .finally(() => setBusy(false))
+  }
   return (
     <>
       <span className={cx("set-harness-state", says.tone)} title={says.why && t(says.why)}>
@@ -43,7 +57,8 @@ function HookState({ hook }: { hook: Hook }) {
         className="btn is-quiet is-small"
         title={t("settings.agents.hooks.do")}
         aria-label={t(says.label, { harness: hook.label })}
-        onClick={() => app.actions.setHooks(hook.harness, hook.state !== "installed")}
+        disabled={busy}
+        onClick={change}
       >
         {t(says.action)}
       </button>

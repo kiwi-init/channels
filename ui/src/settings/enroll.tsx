@@ -6,6 +6,7 @@ import { useState } from "react"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { autofocus } from "~/kit/bits"
+import { Failed, failure, type Failure } from "~/kit/failed"
 import { Field } from "~/kit/form"
 import { Modal } from "~/kit/modal"
 import type { EnrollAsk } from "~/model"
@@ -22,7 +23,7 @@ export function EnrollDialog() {
   const { app } = useApp()
   const ask = app.account?.enrollAsk
   const hidden = useHiddenAsk()
-  const [typed, setTyped] = useState({ id: "", digits: "", left: null as number | null, busy: false, failed: null as string | null })
+  const [typed, setTyped] = useState({ id: "", digits: "", left: null as number | null, busy: false, failed: null as Failure | null })
   const open = !!ask && ask.stage !== "elsewhere" && hidden !== ask.id
   if (!ask) return null
   const mine = typed.id === ask.id ? typed : { id: ask.id, digits: "", left: null, busy: false, failed: null }
@@ -37,7 +38,7 @@ export function EnrollDialog() {
     setTyped({ ...mine, busy: true, failed: null })
     void app.actions.enrollConfirm(ask.id, digits).then(
       (r) => setTyped({ id: ask.id, digits: "", left: r.ok ? null : r.left, busy: false, failed: null }),
-      (err: unknown) => setTyped({ ...mine, busy: false, failed: err instanceof Error && err.message ? err.message : String(err) })
+      (err: unknown) => setTyped({ ...mine, busy: false, failed: failure(t("settings.enroll.failed", { device: ask.label }), err) })
     )
   }
 
@@ -68,9 +69,7 @@ export function EnrollDialog() {
           <Field
             label={t("settings.enroll.digits", { device: ask.label })}
             hint={
-              mine.failed !== null
-                ? t("settings.enroll.failed", { why: mine.failed })
-                : mine.left !== null
+              mine.left !== null
                   ? t("settings.enroll.no.match", { count: mine.left })
                   : ask.fingerprint
                     ? t("settings.enroll.then.key", { key: ask.fingerprint })
@@ -89,6 +88,7 @@ export function EnrollDialog() {
             />
           </Field>
         )}
+        {mine.failed && <Failed failure={mine.failed} />}
         <div className="modal-foot">
           <button type="button" className="btn is-quiet" onClick={deny}>
             {t("settings.enroll.not.mine")}

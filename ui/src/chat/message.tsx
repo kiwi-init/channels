@@ -9,12 +9,14 @@ import { EditHere, useEditing } from "~/chat/editing"
 import { quotedExcerpt } from "~/chat/quote"
 import { preview, useReplying } from "~/chat/reply"
 import { Body } from "~/chat/body"
+import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import { memberOf, type Channel, type Image, type ImageSpot, type Message, type Person } from "~/model"
 import { openMessage as showMessage } from "~/live/open-message"
+import { limitWords } from "~/live/refused"
 import { useAct } from "~/nav"
 import { nickname, roleWord } from "~/names"
 import { wordsPlain, wordsRaw, wrote } from "~/words"
@@ -122,12 +124,14 @@ export function Reacts({ channel, m }: { channel: Channel; m: Message }) {
   )
 }
 
+const notSent = (channel: Channel, why: string): Key => (limitWords(why) ? "chat.message.not.sent.limit" : channel.connection !== "live" ? "chat.message.not.sent.offline" : "chat.message.not.sent")
+
 export function Unsent({ channel, m }: { channel: Channel; m: Message }) {
   const { actions } = useAct()
   if (m.failed === undefined) return null
   return (
     <p className="msg-failed" role="status" title={m.failed}>
-      {t("chat.message.not.sent")}
+      {t(notSent(channel, m.failed))}
       <button type="button" className="msg-failed-act" onClick={() => actions.retry(channel.code, m.seq)}>
         {t("chat.message.retry")}
       </button>

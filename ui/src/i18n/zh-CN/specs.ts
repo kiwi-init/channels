@@ -86,6 +86,7 @@ export default {
   "specs.new.name.placeholder": "将标注导出为 CSV",
   "specs.new.how": "它会发到 #general，由 {lead} 起草规格供你批准。",
   "specs.new.the.lead": "负责人",
+  "specs.new.failed": "无法开始规格。",
   "specs.page.all.specs": "全部规格",
   "specs.page.parts": "规格、内部或结果",
   "specs.page.spec": "规格",

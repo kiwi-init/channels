@@ -68,6 +68,8 @@ const words = {
   "chat.compact.you.propose": "You propose compacting the history",
   "chat.compact.proposes": "{name} proposes compacting the history",
   "chat.compact.approve": "Approve and compact",
+  "chat.compact.approving": "Compacting…",
+  "chat.compact.failed": "Couldn't compact the history.",
   "chat.compact.waiting.owner": "Waiting for the owner to approve",
   "chat.compact.waiting.for": "Waiting for {name} to approve",
   "chat.compact.nothing.deleted": "Nothing is deleted: earlier messages fold behind this summary and finished tasks archive.",

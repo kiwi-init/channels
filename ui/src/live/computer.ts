@@ -76,6 +76,6 @@ function settingsLines(s: ComputerSettings): [string, string[]][] {
 
 export async function computerSettings(id: string): Promise<[string, string[]][]> {
   const got = await need().settingsOn(id)
-  if (!got.ok) throw new Error(got.detail)
+  if (!got.ok) throw Object.assign(new Error(got.detail), got.why ? { why: got.why } : {})
   return settingsLines(got.value)
 }

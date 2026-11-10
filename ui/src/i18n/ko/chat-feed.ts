@@ -49,6 +49,8 @@ export default {
   "chat.message.edited.at": "{time}에 편집됨",
   "chat.message.deleted": "삭제된 메시지입니다",
   "chat.message.not.sent": "보내지 못했습니다",
+  "chat.message.not.sent.offline": "보내지 못했습니다: 연결이 없습니다",
+  "chat.message.not.sent.limit": "보내지 못했습니다: 오늘의 메시지를 모두 썼습니다",
   "chat.message.retry": "다시 시도",
   "chat.message.back.to.draft": "초안으로 되돌리기",
   "chat.message.delete": "삭제",

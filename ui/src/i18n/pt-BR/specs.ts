@@ -86,6 +86,7 @@ export default {
   "specs.new.name.placeholder": "Exportar anotações como CSV",
   "specs.new.how": "Vai para o #general, e {lead} faz o rascunho da especificação para você aprovar.",
   "specs.new.the.lead": "o líder",
+  "specs.new.failed": "Não foi possível iniciar a especificação.",
   "specs.page.all.specs": "Todas as especificações",
   "specs.page.parts": "Especificação, por dentro ou resultado",
   "specs.page.spec": "Especificação",

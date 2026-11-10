@@ -6,6 +6,7 @@ import { pinned } from "@kiwi/core/pin.ts"
 import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scopes.ts"
 import { secrets } from "@kiwi/secrets/secrets.ts"
 import { t } from "~/i18n/i18n"
+import { Plain, plainly } from "~/kit/failed"
 import { announce } from "~/kit/toasts"
 import { newMemberPowers, newMemberScopes } from "~/live/defaults"
 import { attempt, event, memberOf, need, owner, personalities, say, setup } from "~/live/run"
@@ -216,7 +217,7 @@ export const removeRepo = (code: string, repo: string): Promise<void> =>
 
 async function roomFolded(run: () => Run | null, room: { id: string; name: string }): Promise<void> {
   for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 50))) if (run()?.state.rooms.get(room.id)?.name === room.name) return
-  throw new Error(t("live.manage.room.not.back", { room: room.name }))
+  throw new Plain(t("live.manage.room.not.back", { room: room.name }))
 }
 
 const picks = (run: Run, names: readonly string[]) =>
@@ -228,7 +229,8 @@ const picks = (run: Run, names: readonly string[]) =>
 const open = (rooms: Iterable<{ id: string; name: string; members?: unknown }>) => [...rooms].filter((r) => !r.members)
 
 const updateFirst = (err: unknown): never => {
-  throw new Error(/no such call|not a call|unknown call|makeRoom|changeRoom|leaveRoom/i.test(say(err)) ? t("live.manage.update.for.rooms") : say(err))
+  if (/no such call|not a call|unknown call|makeRoom|changeRoom|leaveRoom/i.test(say(err))) throw new Plain(t("live.manage.update.for.rooms"))
+  throw err
 }
 
 export async function leaveRoom(code: string, id: string): Promise<void> {
@@ -236,12 +238,12 @@ export async function leaveRoom(code: string, id: string): Promise<void> {
 }
 
 export async function addRoom(code: string, typed: string, members?: string[]): Promise<string> {
-  const run = setup(code)
+  const run = plainly(() => setup(code))
   const problem = roomProblem(run.state.rooms.values(), typed)
-  if (problem) throw new Error(roomProblemWords(problem))
+  if (problem) throw new Plain(roomProblemWords(problem))
   const name = cleanRoomName(typed)
   if (members?.length) {
-    const id = await run.ch.makeRoom(name, picks(run, members)).catch(updateFirst)
+    const id = await run.ch.makeRoom(name, plainly(() => picks(run, members))).catch(updateFirst)
     await roomFolded(() => openedRun(code), { id, name })
     return id
   }
@@ -294,33 +296,29 @@ export async function answerJoin(code: string, id: string, yes: boolean, choice?
 }
 
 export const exportHistory: Actions["exportHistory"] = async (code, kind) => {
-  try {
-    const run = need(code)
-    const b = bridge()
-    if (b && !("saveFile" in b)) return announce(t("live.manage.save.needs.update"))
-    const [{ checkedState, exportNote, logExport, logFileName, transcript }, history] = await Promise.all([import("@kiwi/app/log-export.ts"), run.ch.history(0)])
-    const log = logExport(history)
-    const state = await checkedState(history, run.foldFrom, () => run.ch.snapshot().catch(() => null), run.state)
-    const at = new Date()
-    const title = openedChannel(code)?.title
-    const text = kind === "log" ? log.text : transcript({ title, log, state, nameOf: (from) => memberName(state.members.get(from), from), at })
-    const name = logFileName(title, at, kind)
-    if (b) {
-      const saved = await b.saveFile(name, text)
-      announce(t("live.manage.saved.downloads", { file: saved }))
-    } else {
-      const url = URL.createObjectURL(new Blob([text], { type: kind === "log" ? "application/jsonl" : "text/markdown" }))
-      const a = document.createElement("a")
-      a.href = url
-      a.download = name
-      a.click()
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    }
-    const note = exportNote(log)
-    if (!note.complete) announce(note.text)
-  } catch (err) {
-    announce(t("live.manage.not.saved", { why: err instanceof Error ? err.message : String(err) }), "error")
+  const run = plainly(() => need(code))
+  const b = bridge()
+  if (b && !("saveFile" in b)) throw new Plain(t("live.manage.save.needs.update"))
+  const [{ checkedState, exportNote, logExport, logFileName, transcript }, history] = await Promise.all([import("@kiwi/app/log-export.ts"), run.ch.history(0)])
+  const log = logExport(history)
+  const state = await checkedState(history, run.foldFrom, () => run.ch.snapshot().catch(() => null), run.state)
+  const at = new Date()
+  const title = openedChannel(code)?.title
+  const text = kind === "log" ? log.text : transcript({ title, log, state, nameOf: (from) => memberName(state.members.get(from), from), at })
+  const name = logFileName(title, at, kind)
+  if (b) {
+    const saved = await b.saveFile(name, text)
+    announce(t("live.manage.saved.downloads", { file: saved }))
+  } else {
+    const url = URL.createObjectURL(new Blob([text], { type: kind === "log" ? "application/jsonl" : "text/markdown" }))
+    const a = document.createElement("a")
+    a.href = url
+    a.download = name
+    a.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
   }
+  const note = exportNote(log)
+  if (!note.complete) announce(note.text)
 }
 
 export const forgetComputer: Actions["forgetComputer"] = (id) =>

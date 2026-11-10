@@ -85,6 +85,8 @@ export default {
   "chat.compact.you.propose": "기록 압축을 제안합니다",
   "chat.compact.proposes": "{name}이(가) 기록 압축을 제안합니다",
   "chat.compact.approve": "승인하고 압축",
+  "chat.compact.approving": "압축하는 중…",
+  "chat.compact.failed": "기록을 압축하지 못했습니다.",
   "chat.compact.waiting.owner": "소유자의 승인을 기다리는 중",
   "chat.compact.waiting.for": "{name}의 승인을 기다리는 중",
   "chat.compact.nothing.deleted": "아무것도 삭제되지 않습니다. 이전 메시지는 이 요약 뒤로 접히고 완료된 작업은 보관됩니다.",

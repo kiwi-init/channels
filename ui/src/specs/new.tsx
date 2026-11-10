@@ -3,6 +3,7 @@ import { useState } from "react"
 
 import { t } from "~/i18n/i18n"
 import { autofocus } from "~/kit/bits"
+import { Failed, failure, type Failure } from "~/kit/failed"
 import { Field } from "~/kit/form"
 import { Modal } from "~/kit/modal"
 import type { Channel } from "~/model"
@@ -15,14 +16,22 @@ export function NewSpec({ channel, onClose }: { channel: Channel; onClose: () =>
   const [words, setWords] = useState("")
   const [title, setTitle] = useState("")
   const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState<Failure | null>(null)
   const lead = channel.lead ? nickname(channel, channel.lead) : null
   const start = async () => {
     if (!words.trim() || busy) return
     setBusy(true)
+    setFailed(null)
     const name = title.trim() || words.trim().split("\n")[0]!.slice(0, 80)
-    const ask = await actions.newSpec(channel.code, words, SPEC_TEMPLATE(name))
+    let ask: number
+    try {
+      ask = await actions.newSpec(channel.code, words, SPEC_TEMPLATE(name))
+    } catch (err) {
+      // The dialog keeps what was typed and says what went wrong, so the person can post again.
+      setFailed(failure(t("specs.new.failed"), err))
+      return setBusy(false)
+    }
     setBusy(false)
-    if (ask === null) return
     onClose()
     go({ to: "spec", ask, part: "spec" })
   }
@@ -52,6 +61,7 @@ export function NewSpec({ channel, onClose }: { channel: Channel; onClose: () =>
           <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("specs.new.name.placeholder")} />
         </Field>
         <p className="spec-new-how">{t("specs.new.how", { lead: lead ?? t("specs.new.the.lead") })}</p>
+        {failed && <Failed failure={failed} />}
       </div>
     </Modal>
   )

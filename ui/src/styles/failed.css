@@ -1,0 +1,45 @@
+.failed {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--alert);
+  font: var(--t-meta) / 1.5 var(--ui);
+  text-wrap: pretty;
+}
+
+.failed-details {
+  min-width: 0;
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.failed-details summary {
+  display: inline-flex;
+  width: fit-content;
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--ui);
+  list-style: none;
+  cursor: pointer;
+}
+
+.failed-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.failed-details summary:hover,
+.failed-details[open] summary {
+  color: var(--ink);
+}
+
+.failed-details code {
+  display: block;
+  margin-top: 4px;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--bg-3);
+  color: var(--ink-2);
+  font: var(--t-stamp) / 1.5 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}

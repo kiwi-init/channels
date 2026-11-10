@@ -775,7 +775,7 @@ export interface Actions {
   assignTask(code: string, task: number, to: string, why: string): void
   setReviewer(code: string, task: number, reviewer: string): void
   nameGoal(code: string, ask: number, name: string | null): void
-  newSpec(code: string, words: string, text: string): Promise<number | null>
+  newSpec(code: string, words: string, text: string): Promise<number>
   writeSpec(code: string, ask: number, text: string): void
   approveSpec(code: string, ask: number, v: number): void
   judgeSpec(code: string, ask: number, verdict: "accepted" | "back" | "dropped", note?: string): void
@@ -789,7 +789,7 @@ export interface Actions {
   setNickname(code: string, name: string, nickname: string | null): void
   setAgentColor(code: string, name: string, color: Color | null): void
   setPowers(code: string, name: string, powers: Partial<Powers>): void
-  addRoom(code: string, name: string, members?: string[]): Promise<string | null>
+  addRoom(code: string, name: string, members?: string[]): Promise<string>
   renameRoom(code: string, id: string, name: string): void
   setRoomMembers(code: string, id: string, members: string[]): Promise<boolean>
   setIcon(code: string, file: File | null): void
@@ -803,7 +803,7 @@ export interface Actions {
   setGoal(code: string, goal: string): void
   setHold(code: string, on: boolean, note?: string): void
   askCompact(code: string): void
-  approveCompact(code: string, proposal: number): void
+  approveCompact(code: string, proposal: number): Promise<void>
   addRepo(code: string, repo: string): void
   myRepos(): Promise<string[]>
   removeRepo(code: string, repo: string): void
@@ -828,7 +828,7 @@ export interface Actions {
   unlinkGithub(): void
   installUpdate(): void
   checkUpdate(): Promise<UpdateCheck | null>
-  setRelay(url: string): Promise<string | null>
+  setRelay(url: string): Promise<void>
   windowControl(action: "minimize" | "maximize" | "close"): void
   applyUi(): void
   dismissMoved(): void
@@ -847,7 +847,7 @@ export interface Actions {
   saveTheme(theme: CustomTheme): void
   deleteTheme(id: string): void
   savePersonalities(list: Personality[]): void
-  setHooks(harness: HookHarness, on: boolean): void
+  setHooks(harness: HookHarness, on: boolean): Promise<void>
   checkComputer(): Promise<Finding[] | null>
   setContextLine(on: boolean): void
   computerSettings(id: string): Promise<[string, string[]][]>

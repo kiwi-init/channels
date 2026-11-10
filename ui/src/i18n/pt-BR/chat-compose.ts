@@ -85,6 +85,8 @@ export default {
   "chat.compact.you.propose": "Você propõe compactar o histórico",
   "chat.compact.proposes": "{name} propõe compactar o histórico",
   "chat.compact.approve": "Aprovar e compactar",
+  "chat.compact.approving": "Compactando…",
+  "chat.compact.failed": "Não foi possível compactar o histórico.",
   "chat.compact.waiting.owner": "Esperando o dono aprovar",
   "chat.compact.waiting.for": "Esperando {name} aprovar",
   "chat.compact.nothing.deleted": "Nada é excluído: as mensagens anteriores ficam recolhidas atrás deste resumo e as tarefas concluídas são arquivadas.",
