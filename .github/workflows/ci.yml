@@ -406,7 +406,7 @@ jobs:
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['shots']
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -434,7 +434,20 @@ jobs:
             bun scripts/shoot-app.ts --dist ui/dist --size 390x844 --only channel,tasks --theme dark "$RUNNER_TEMP/shots/phone" || status=1
           fi
           for pid in $pids; do wait "$pid" || status=1; done
-          exit "$status"
+          [ "$status" = 0 ] || exit "$status"
+          if [ "${{ matrix.engine }}" = webkit ]; then
+            for i in $(seq 1 40); do
+              bun scripts/shoot-app.ts --dist ui/dist --browser webkit --theme light --shard 1/2 "$RUNNER_TEMP/loop-a" > "$RUNNER_TEMP/a.log" 2>&1 &
+              a=$!
+              bun scripts/shoot-app.ts --dist ui/dist --browser webkit --theme light --shard 2/2 "$RUNNER_TEMP/loop-b" > "$RUNNER_TEMP/b.log" 2>&1 &
+              b=$!
+              bad=0
+              wait "$a" || bad=1
+              wait "$b" || bad=1
+              echo "repeat $i: $([ "$bad" = 0 ] && echo clean || echo FAILED)"
+              if [ "$bad" = 1 ]; then grep -v "\.png$" "$RUNNER_TEMP/a.log" "$RUNNER_TEMP/b.log"; exit 1; fi
+            done
+          fi
       - name: ui stash clicks in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-stash-click.ts --dist ui/dist
