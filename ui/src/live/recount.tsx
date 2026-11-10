@@ -19,6 +19,7 @@ const GIVE_UP_MS = 30_000
 
 const counted = new Map<string, number>()
 const heads = new Map<string, number>()
+const echoed = new Set<string>()
 
 export function Recount({ open }: { open: string }) {
   const { channels } = useSecrets()
@@ -55,7 +56,9 @@ export function Recount({ open }: { open: string }) {
         if (ev._tag === "Head") {
           if (ev.seq <= (heads.get(m.code) ?? 0)) return
           heads.set(m.code, ev.seq)
-        } else if (Date.now() - at < ECHO_MS) return
+        } else if (Date.now() - at >= ECHO_MS) echoed.delete(m.code)
+        else if (echoed.has(m.code)) return
+        else echoed.add(m.code)
         dirty.current.add(m.code)
         clearTimeout(soon)
         soon = window.setTimeout(pump, Math.max(SETTLE_MS, at + GAP_MS - Date.now()))
