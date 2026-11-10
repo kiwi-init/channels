@@ -434,6 +434,20 @@ describe("review rounds through the CLI", () => {
     });
   });
 
+  test("with its reviewer away, task done names both ways out and task edit --review moves the open round (#2032)", async () => {
+    const at = "4444444444444444444444444444444444444444";
+    const t = taskNo(await ok(dev, "task", "add", "an absent reviewer", "--review", "rev", "--ask", want));
+    await ok(dev, "task", "claim", `T${t}`);
+    await ok(dev, "task", "review", `T${t}`, "--at", at);
+    const done = await run(dev, "task", "done", `T${t}`);
+    expect(done.code).not.toBe(0);
+    expect(done.err).toContain(
+      `T${t} needs review by rev before it's done: rev answers kiwi task approve T${t} --round 1; the lead or a person can move the review (kiwi task review T${t} --review OTHER) or close the task (kiwi task close T${t} "why")`,
+    );
+    expect(await ok(owner, "--as", "human", "task", "edit", `T${t}`, "--review", "other")).toContain(`edited T${t}'s reviewer (other; round 1 stays open at ${at})`);
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ review: "other", rounds: [{ n: 1, at, result: { kind: "open" } }] });
+  });
+
   test("review takes the author's inline or file summary, keeps it out of notes, and caps its length", async () => {
     const t = taskNo(await ok(dev, "task", "add", "summarize this round", "--review", "rev", "--ask", want));
     await ok(dev, "task", "claim", `T${t}`);

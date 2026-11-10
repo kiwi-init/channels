@@ -147,16 +147,19 @@ export const taskCommands: Record<string, Command> = {
           const detail = opt.file !== undefined ? (yield* readText(opt.file)).trim() || (yield* die(`${opt.file} is empty`)) : opt.body?.trim();
           const title = opt.title?.trim();
           const then = opt.then === undefined ? undefined : isLanding(opt.then.trim()) ? (opt.then.trim() as Landing) : yield* die(LANDING_USAGE);
+          const stays = opt.review !== undefined ? openRound(t) : undefined;
+          const staysNote = stays ? `round ${stays.n} stays open ${stays.at ? `at ${stays.at}` : "at no commit"}` : "";
           const change = {
             ...(title ? { title } : {}),
             ...(detail !== undefined ? { detail } : {}),
             ...(opt.owner !== undefined ? { owner: opt.owner.trim() || null } : {}),
             ...(then ? { then } : {}),
             ...(opt.lander !== undefined ? { lander: opt.lander.trim() || null } : {}),
+            ...(opt.review !== undefined ? { review: opt.review, ...(staysNote ? { note: staysNote } : {}) } : {}),
           };
           if (!Object.keys(change).length && opt.goal === undefined)
             return yield* die(
-              'usage: kiwi task edit T7 [--title "…"] [--body "…" | --file spec.md] [--owner NAME] [--then merge|release:tag|release:npm:PKG@RANGE|run|none] [--lander NAME] [--goal "…"]',
+              'usage: kiwi task edit T7 [--title "…"] [--body "…" | --file spec.md] [--owner NAME] [--then merge|release:tag|release:npm:PKG@RANGE|run|none] [--lander NAME] [--review NAME|any] [--goal "…"]',
             );
           const lines: string[] = [];
           if (Object.keys(change).length) {
@@ -167,6 +170,7 @@ export const taskCommands: Record<string, Command> = {
               opt.owner !== undefined ? `owner (${after.owner ?? "nobody"})` : null,
               then ? `landing step (${after.then ?? "none"})` : null,
               opt.lander !== undefined ? `lander (${after.lander ?? after.owner ?? "its owner"})` : null,
+              opt.review !== undefined ? `reviewer (${after.review === "*" ? "anyone who hasn't worked on it" : (after.review ?? "nobody")}${staysNote ? `; ${staysNote}` : ""})` : null,
             ]
               .filter(Boolean)
               .join(", ");

@@ -32,7 +32,22 @@ import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { cleanPersona } from "../personality.ts";
 import { isPerson, ownSeat, sponsorsAgent } from "./people.ts";
 import { roomName } from "./rooms.ts";
-import { currentState, landerOf, landingRefusal, landingReopens, newRun, openRound, reviewClaimRefusal, reviewMoveRefusal, revisedOut, runRefusal, taskId, verdictRefusal, worked } from "./tasks.ts";
+import {
+  currentState,
+  landerOf,
+  landingRefusal,
+  landingReopens,
+  newRun,
+  openRound,
+  reviewClaimRefusal,
+  reviewMoveRefusal,
+  reviewWaysOut,
+  revisedOut,
+  runRefusal,
+  taskId,
+  verdictRefusal,
+  worked,
+} from "./tasks.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
 
@@ -611,7 +626,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const owner = ev.owner === undefined ? task.owner : ev.owner || undefined;
       const mayFinish = !review || isPerson(member) || (review === "*" ? m.from !== owner && !task.workedBy.includes(m.from) : m.from === review);
       if (ev.state === "done" && ev.close === undefined && task.state !== "done" && !mayFinish) {
-        reject(`${taskId(task.id)} needs review by ${review === "*" ? "someone who hasn't worked on it" : review} before it's done (send it for review)`);
+        const open = openRound(task);
+        reject(
+          `${taskId(task.id)} needs review by ${review === "*" ? "someone who hasn't worked on it" : review} before it's done${open ? `: ${reviewWaysOut(task.id, review, open.n)}` : " (send it for review)"}`,
+        );
         break;
       }
       const landingWrong = landingRefusal(task, ev, { person: isPerson(member), lead });
