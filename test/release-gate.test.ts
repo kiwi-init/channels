@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 const FULL_LEGS = [
   "repo / static",
@@ -92,7 +92,9 @@ export function fixture(scenario: {
 
 function gate(scenario: Parameters<typeof fixture>[0], sha = "abc123"): { code: number; out: string; calls: string } {
   const dir = fixture(scenario);
-  const r = spawnSync("bash", [".github/actions/ci-green/gate.sh", sha, "dry-run"], {
+  const script = resolve(import.meta.dir, "../.github/actions/ci-green/gate.sh");
+  const r = spawnSync("bash", [script, sha, "dry-run"], {
+    cwd: dir,
     env: { ...process.env, PATH: `${dir}/bin:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GH_TOKEN: "t", GATE_DIR: dir },
   });
   const calls = (() => {
@@ -102,6 +104,7 @@ function gate(scenario: Parameters<typeof fixture>[0], sha = "abc123"): { code: 
       return "";
     }
   })();
+  rmSync(dir, { recursive: true, force: true });
   return { code: r.status ?? 1, out: `${r.stdout}${r.stderr}`, calls };
 }
 
@@ -124,10 +127,12 @@ describe("the release gate", () => {
     expect(out).toContain("every expected leg green");
   });
 
-  test("a run found beyond runs page 1 accepts", () => {
-    const fillers: Run[] = Array.from({ length: 50 }, (_, i) => ({ id: 1000 + i, head_sha: "abc123", status: "completed", attempt: 1 }));
-    const { code } = gate({ runs: fillers, runsPage2: runAt("abc123"), jobs: greenJobs, manifest });
+  test("an older exact commit is retrieved by the head_sha filter, not by walking recent runs", () => {
+    const fillers: Run[] = Array.from({ length: 50 }, (_, i) => ({ id: 1000 + i, head_sha: `other${i}`, status: "completed", attempt: 1 }));
+    const { code, calls } = gate({ runs: [...fillers, ...runAt("abc123")], jobs: greenJobs, manifest });
     expect(code).toBe(0);
+    expect(calls).toContain("head_sha=abc123");
+    expect(calls).not.toContain("page=2");
   });
 
   test("a run at another SHA never matches: the gate times out and refuses", () => {
