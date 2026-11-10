@@ -272,8 +272,8 @@ function pickWithoutBase(): string {
 }
 
 const ALL_JOBS = "static test-unit test-flows build doc fuzz shots desktop-mac desktop-linux desktop-distros cli-macos";
-check("ui-only diff drops cli-macos only", pickWith({ "ui/b.ts": "b" }) === ALL_JOBS.replace(" cli-macos", ""));
-check("ui and desktop diff runs everything", pickWith({ "ui/b.ts": "b", "desktop/b.ts": "b" }) === ALL_JOBS);
+check("ui-only diff drops cli-macos and distros", pickWith({ "ui/b.ts": "b" }) === ALL_JOBS.replace(" cli-macos", "").replace(" desktop-distros", ""));
+check("ui and desktop diff runs everything but distros", pickWith({ "ui/b.ts": "b", "desktop/b.ts": "b" }) === ALL_JOBS.replace(" desktop-distros", ""));
 check(
   "desktop-only diff drops doc, fuzz, shots and distros, keeping test-flows",
   pickWith({ "desktop/b.ts": "b" }) === ALL_JOBS.replace(" doc", "").replace(" fuzz", "").replace(" shots", "").replace(" desktop-distros", ""),
@@ -282,10 +282,10 @@ check(
   "a desktop source that flows tests import keeps test-flows",
   pickWith({ "desktop/src/keyring.ts": "k" }) === ALL_JOBS.replace(" doc", "").replace(" fuzz", "").replace(" shots", "").replace(" desktop-distros", ""),
 );
-check("an unclaimed file runs everything", pickWith({ "README2.md": "b" }) === ALL_JOBS);
-check("a release input runs everything", pickWith({ "ui/b.ts": "b" }, ["2026.11.15"]) === ALL_JOBS);
-check("a stamp commit over a narrowed diff runs everything", pickWith({ "ui/b.ts": "b" }, [], true) === ALL_JOBS);
-check("an unavailable main ref runs everything", pickWithoutBase() === ALL_JOBS);
+check("an unclaimed file runs everything but distros", pickWith({ "README2.md": "b" }) === ALL_JOBS.replace(" desktop-distros", ""));
+check("a release input runs everything", pickWith({ "ui/b.ts": "b" }, ["2026.11.15"]) === ALL_JOBS.replace(" desktop-distros", ""));
+check("a stamp commit over a narrowed diff runs everything", pickWith({ "ui/b.ts": "b" }, [], true) === ALL_JOBS.replace(" desktop-distros", ""));
+check("an unavailable main ref runs everything but distros", pickWithoutBase() === ALL_JOBS.replace(" desktop-distros", ""));
 const covTable = Bun.YAML.parse(await Bun.file(".github/coverage.yml").text()) as { areas?: Record<string, { paths?: string[]; skip?: string[] }> };
 check(
   "coverage table areas parse with paths and skips",

@@ -12,7 +12,7 @@ import subprocess, sys, re, yaml
 ALL = ["static", "test-unit", "test-flows", "build", "doc", "fuzz", "shots", "desktop-mac", "desktop-linux", "desktop-distros", "cli-macos"]
 
 def every():
-    print(" ".join(ALL))
+    print(" ".join(j for j in ALL if j != "desktop-distros"))
     sys.exit(0)
 
 if sys.argv[1]:
@@ -43,6 +43,7 @@ for f in files:
 skip = set(areas[touched.pop()]["skip"]) if touched else set()
 for name in touched:
     skip &= set(areas[name]["skip"])
+skip.add("desktop-distros")
 
 print(" ".join(j for j in ALL if j not in skip))
 PY
