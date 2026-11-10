@@ -58,7 +58,7 @@ export default {
   "shell.rail.maximize.window": "Maximize window",
   "shell.rail.maximize": "Maximize",
   "shell.rail.home": "Home",
-  "shell.rail.new.channel": "New channel or join one",
+  "shell.rail.new.channel": "New channel",
   "shell.rail.settings": "Settings",
   "shell.rail.tile.muted": "muted",
   "shell.rail.tile.need.you": "{count} need you",

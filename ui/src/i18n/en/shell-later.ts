@@ -156,7 +156,7 @@ const words = {
   "start.join.name.reserved": "That name is kept for Channels itself",
   "start.join.gone": "This invite no longer works: the channel was deleted, or the code is wrong. Ask whoever sent it for a new one.",
   "start.join.check.failed": "Couldn't check the invite.",
-  "start.join.title": "Join a channel",
+  "start.join.title": "Join with a code",
   "start.join.invited.by": "{owner} invited you to a channel",
   "start.join.invited": "You're invited to a channel",
   "start.join.sub.named": "{owner} sees your name and a code to check, then lets you in.",

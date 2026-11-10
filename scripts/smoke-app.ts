@@ -68,7 +68,7 @@ try {
   await passOnboarding(page);
   await page.getByRole("textbox", { name: "Your name" }).fill("smoke");
   await page.getByRole("button", { name: "Continue" }).click();
-  const addChannel = page.getByRole("button", { name: "New channel or join one" });
+  const addChannel = page.getByRole("button", { name: "New channel", exact: true });
   await addChannel.waitFor({ timeout: 15000 });
   step(at);
 

@@ -73,7 +73,7 @@ async function keys(platform: "MacIntel" | "Linux x86_64"): Promise<void> {
     await settle();
   }
 
-  await page.getByRole("button", { name: "New channel or join one" }).click();
+  await page.getByRole("button", { name: "New channel", exact: true }).click();
   const dialog = page.locator("dialog[open]").first();
   await dialog.waitFor();
   await page.keyboard.press(`${mine}+f`);
