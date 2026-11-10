@@ -232,6 +232,13 @@ try {
     const reset = await until("Ctrl+0 reaching the page", 5_000, () => scale().then((v) => (v === "" ? "reset" : null))).catch(() => null);
     if (bigger && reset) console.log(`Ctrl+= then Ctrl+0 (libkiwi-shell's shortcuts; Electrobun has no app menu on Linux): the page's text scale went to ${bigger}, then back`);
     else problems.push(`Ctrl+= then Ctrl+0 gave the page's --text-scale ${JSON.stringify(bigger)}, then ${JSON.stringify(reset)} (it was ${JSON.stringify(was)})`);
+    const inSettings = () => d.evaluate(() => !!document.querySelector(".rail-gear.is-on"), null) as Promise<boolean>;
+    key("ctrl+comma");
+    const opened = await until("Ctrl+, opening Settings", 5_000, () => inSettings().then((on) => (on ? true : null))).catch(() => null);
+    await d.evaluate(() => document.querySelector<HTMLElement>(".rail-gear.is-on")?.click(), null);
+    const left = await until("leaving Settings", 5_000, () => inSettings().then((on) => (on ? null : true))).catch(() => null);
+    if (opened && left) console.log("Ctrl+, (libkiwi-shell's shortcut 8) opens Settings in the page");
+    else problems.push(`Ctrl+, ${opened ? "opened Settings" : "didn't open Settings"}${opened && !left ? ", and the gear didn't leave it" : ""}`);
     const marks = await spellingMarks(d);
     if (typeof marks === "string") problems.push(`spell check underlining a misspelled word: ${marks}`);
     else if (marks.wrong - marks.right >= 20)
@@ -272,6 +279,26 @@ try {
     const quitKey = osa(`tell application "System Events" to get value of attribute "AXMenuItemCmdChar" of menu item "Quit Channels" of menu 1 of menu bar item 2 of menu bar 1 of (${proc})`);
     if (quitKey === "Q") console.log("the app menu: Quit Channels on ⌘Q");
     else problems.push(`the app menu's Quit Channels has key ${JSON.stringify(quitKey)}, not ⌘Q`);
+    const settingsKey = osa(`tell application "System Events" to get value of attribute "AXMenuItemCmdChar" of menu item "Settings…" of menu 1 of menu bar item 2 of menu bar 1 of (${proc})`);
+    const menus = osa(`tell application "System Events" to get name of every menu bar item of menu bar 1 of (${proc})`);
+    if (settingsKey === "," && /Go/.test(menus) && /Help/.test(menus)) console.log(`the app menu: Settings… on ⌘, and the menu bar reads ${menus}`);
+    else problems.push(`the app menu's Settings… has key ${JSON.stringify(settingsKey)}, and the menu bar reads ${JSON.stringify(menus)}`);
+    const page = <T>(fn: () => T) => d.evaluate(fn, null) as Promise<T>;
+    command(",");
+    const inSettings = await until("⌘, opening Settings", 5_000, () => page(() => !!document.querySelector(".rail-gear.is-on")).then((on) => (on ? true : null))).catch(() => null);
+    await page(() => document.querySelector<HTMLElement>(".rail-gear.is-on")?.click());
+    await until("leaving Settings", 5_000, () => page(() => !document.querySelector(".rail-gear.is-on")).then((off) => (off ? true : null))).catch(() => null);
+    command("k");
+    const jumped = await until("⌘K opening the palette", 5_000, () => page(() => !!document.querySelector("dialog.palette[open]")).then((on) => (on ? true : null))).catch(() => null);
+    await later(600);
+    const stayed = await page(() => !!document.querySelector("dialog.palette[open]"));
+    command("k");
+    const shut = await until("⌘K closing the palette", 5_000, () => page(() => !document.querySelector("dialog.palette[open]")).then((off) => (off ? true : null))).catch(() => null);
+    if (inSettings && jumped && stayed && shut) console.log("⌘, opens Settings; ⌘K, a menu key and a page key at once, opens the palette once and closes it once");
+    else
+      problems.push(
+        `⌘, ${inSettings ? "opened" : "didn't open"} Settings; ⌘K ${jumped ? "opened" : "didn't open"} the palette, it ${stayed ? "stayed" : "closed again by itself"}, and a second ⌘K ${shut ? "closed" : "didn't close"} it`,
+      );
     command("w");
     const closed = await until("⌘W closing the window", 10_000, visible(false)).catch(() => null);
     spawnSync("open", [bundle]);

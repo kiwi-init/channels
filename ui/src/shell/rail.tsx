@@ -5,6 +5,7 @@ import { cx } from "~/kit/bits"
 import { later } from "~/kit/later"
 import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
+import { channelOf, onCommand } from "~/kit/commands"
 import { inText } from "~/kit/keys"
 import { useNav, useGo, useActions, useTiles, useAppPrefs } from "~/nav"
 import type { Menu } from "~/shell/rail-menu"
@@ -48,6 +49,10 @@ export function Rail() {
     const next = nextWithNews(ordered, news, from, dir)
     if (next) go({ to: "channel", code: next.code })
   })
+  const pick = useEffectEvent((n: number | null) => {
+    const tile = n === null ? undefined : ordered[n - 1]
+    if (tile) go({ to: "channel", code: tile.code })
+  })
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return
@@ -56,8 +61,12 @@ export function Rail() {
       e.stopPropagation()
       step(e.key === "ArrowDown" ? 1 : -1)
     }
+    const stop = onCommand((c) => pick(channelOf(c)))
     window.addEventListener("keydown", onKey, true)
-    return () => window.removeEventListener("keydown", onKey, true)
+    return () => {
+      stop()
+      window.removeEventListener("keydown", onKey, true)
+    }
   }, [])
   const dragOver = (e: DragEvent) => {
     if (!moving) return

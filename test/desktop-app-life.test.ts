@@ -4,7 +4,7 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { appMenu, menuAction, shortcutAction, textStepOf, trayItems, type AppMenuItem } from "../desktop/src/app-menus.ts";
+import { appMenu, HELP_URL, menuAction, shortcutAction, textStepOf, trayItems, uiCommandOf, type AppMenuItem } from "../desktop/src/app-menus.ts";
 import { claimInstance, handoffFor, launchArgs, launchToken, LOCK_FILE, readHandoff, SOCKET_FILE, type Handoff, type Instance } from "../desktop/src/single-instance.ts";
 import { slept, watchWake, type WakeClock } from "../desktop/src/wake.ts";
 
@@ -256,11 +256,44 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
     return m && "submenu" in m ? m.submenu : [];
   };
 
-  test("the Mac gets the app menu; every platform gets File, Edit, View and Window", () => {
-    expect(labels(appMenu("darwin"))).toEqual(["Channels", "File", "Edit", "View", "Window"]);
-    expect(labels(appMenu("linux"))).toEqual(["File", "Edit", "View", "Window"]);
-    expect(labels(sub(appMenu("darwin"), "Channels"))).toEqual(["About Channels", "-", "Hide Channels", "hideOthers", "showAll", "-", "Quit Channels"]);
-    expect(labels(sub(appMenu("darwin"), "Edit"))).toEqual(["undo", "redo", "-", "cut", "copy", "paste", "pasteAndMatchStyle", "delete", "selectAll"]);
+  test("the Mac gets the app menu; every platform gets File, Edit, View, Go, Window and Help", () => {
+    expect(labels(appMenu("darwin"))).toEqual(["Channels", "File", "Edit", "View", "Go", "Window", "Help"]);
+    expect(labels(appMenu("linux"))).toEqual(["File", "Edit", "View", "Go", "Window", "Help"]);
+    expect(labels(sub(appMenu("darwin"), "Channels"))).toEqual(["About Channels", "-", "Settings…", "-", "Hide Channels", "hideOthers", "showAll", "-", "Quit Channels"]);
+    expect(labels(sub(appMenu("darwin"), "Edit"))).toEqual(["undo", "redo", "-", "cut", "copy", "paste", "pasteAndMatchStyle", "delete", "selectAll", "-", "Find…"]);
+  });
+
+  test("every in-app shortcut has a menu item with its key: Settings ⌘, New Channel ⌘N, Find ⌘F, Toggle Sidebar ⌘\\, Jump to ⌘K, Back ⌘[, Forward ⌘], Channel 1 to 9 on ⌘1 to ⌘9 (T1851)", () => {
+    const keyed = appMenu("darwin")
+      .flatMap((m) => ("submenu" in m ? m.submenu : []))
+      .flatMap((i) => ("action" in i && i.action.startsWith("ui-") ? [[i.label, i.action, i.accelerator ?? ""]] : []));
+    expect(keyed).toEqual([
+      ["Settings…", "ui-settings", ","],
+      ["New Channel…", "ui-new-channel", "n"],
+      ["Find…", "ui-find", "f"],
+      ["Toggle Sidebar", "ui-sidebar", "\\"],
+      ["Jump to…", "ui-jump", "k"],
+      ["Back", "ui-back", "["],
+      ["Forward", "ui-forward", "]"],
+      ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [`Channel ${n}`, `ui-channel-${n}`, String(n)]),
+    ]);
+  });
+
+  test("no two menu items share a key", () => {
+    const keys = appMenu("darwin")
+      .flatMap((m) => ("submenu" in m ? m.submenu : []))
+      .flatMap((i) => ("accelerator" in i && i.accelerator ? [i.accelerator] : []));
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  test("Help opens the docs, and a menu item's action names the UI command it sends", () => {
+    expect(sub(appMenu("darwin"), "Help")).toEqual([{ label: "Channels Help", action: "help" }]);
+    expect(HELP_URL).toBe("https://channels.kiwiinit.com/docs/");
+    expect(uiCommandOf("ui-settings")).toBe("settings");
+    expect(uiCommandOf("ui-channel-9")).toBe("channel-9");
+    expect(uiCommandOf("reload")).toBeNull();
+    expect(menuAction({ data: { action: "ui-find" } })).toBe("ui-find");
+    expect(menuAction({ data: { action: "ui-channel-10" } })).toBeNull();
   });
 
   test("View keeps the text sizes on ⌘0, ⌘= and ⌘-, with reload and the developer tools", () => {
@@ -272,13 +305,14 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
       ["text-reset", "0"],
       ["text-bigger", "="],
       ["text-smaller", "-"],
+      ["ui-sidebar", "\\"],
     ]);
     expect(view.at(-1)).toEqual({ role: "toggleFullScreen", accelerator: "Ctrl+Cmd+f" });
   });
 
   test("a packaged app ships no developer tools in View; reload stays (#1002)", () => {
     const actions = sub(appMenu("darwin", true), "View").flatMap((i) => ("action" in i ? [i.action] : []));
-    expect(actions).toEqual(["reload", "text-reset", "text-bigger", "text-smaller"]);
+    expect(actions).toEqual(["reload", "text-reset", "text-bigger", "text-smaller", "ui-sidebar"]);
     expect(sub(appMenu("linux", true), "View").some((i) => "action" in i && i.action === "devtools")).toBe(false);
   });
 
@@ -305,6 +339,11 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
 
   test("Linux has no app menu, so libkiwi-shell's shortcuts (numbered as kiwi-shell.c sends them) carry the menu's actions (T769)", () => {
     expect([1, 2, 3, 4, 5, 6, 7].map(shortcutAction)).toEqual(["text-bigger", "text-smaller", "text-reset", "reload", "quit", "close", "fullscreen"]);
-    for (const n of [0, 8, -1, 1.5]) expect(shortcutAction(n)).toBeNull();
+    expect([8, 9, 10, 18].map(shortcutAction)).toEqual(["ui-settings", "ui-new-channel", "ui-channel-1", "ui-channel-9"]);
+    for (const n of [0, 19, -1, 1.5]) expect(shortcutAction(n)).toBeNull();
+    const table = fs.readFileSync(path.join(import.meta.dir, "../desktop/native/linux/kiwi-shell.c"), "utf8");
+    const sent = [...table.matchAll(/\{GDK_KEY_(\w+), (GDK_CONTROL_MASK|0), (\d+)\}/g)].map((m) => [m[1], Number(m[3])]);
+    expect(sent.filter(([, n]) => Number(n) >= 8)).toEqual([["comma", 8], ["n", 9], ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => [String(d), d + 9])]);
+    expect(Math.max(...sent.map(([, n]) => Number(n)))).toBe(18);
   });
 });
