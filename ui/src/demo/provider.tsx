@@ -567,6 +567,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       docFile: (_code, f) => demoFile(f),
       setAgentColor: (code, name, color) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, color: color ?? undefined } : p)) })),
       leaveRoom: (code, room) => edit(code, (c) => ({ ...c, rooms: c.rooms.filter((r) => r.id !== room) })),
+      markChannelRead: (code) => {
+        edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => ({ ...r, unread: 0, mentions: 0 })), directs: c.directs.map((d) => ({ ...d, unread: 0 })) }))
+        setState((s) => ({ ...s, tiles: s.tiles.map((t) => (t.code === code ? { ...t, unread: 0 } : t)) }))
+      },
       markRead: (code, where) =>
         edit(code, (c) => ({
           ...c,

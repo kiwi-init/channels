@@ -536,6 +536,7 @@ export interface ChannelTile {
   last: number
   muted?: true
   own?: boolean
+  head?: number
 }
 
 export interface InviteInfo {
@@ -730,6 +731,7 @@ export interface Actions {
   loadImage(code: string, spot: string): void
   discard(code: string, seq: number): void
   markRead(code: string, where: Where): void
+  markChannelRead(code: string, head?: number): void
   followThread(code: string, root: number, on: boolean): void
   openDoc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void): PipeIn
   findDoc(code: string, thread: string): Promise<string | null>

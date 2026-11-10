@@ -43,6 +43,14 @@ describe("a phone's read marks go through its person's note (T1372)", () => {
     expect(got).toEqual({ main: 40, "dm:jow~lead": 12 });
   });
 
+  test("a note that carries a desktop's read floor is read without trouble: the phone takes its own places and leaves the rest (T3487)", async () => {
+    const { room, synced } = await phone({ main: 40, "dm:jow~lead": 12, floor: 57 });
+    const got = await room.marks({ main: 31 }, true);
+    room.stop();
+    expect(synced).toEqual([{ local: { main: 31 }, write: true }]);
+    expect(got).toEqual({ main: 40, "dm:jow~lead": 12 });
+  });
+
   test("coming to the front only reads the note", async () => {
     const { room, synced } = await phone({ main: 40 });
     expect(await room.marks({ main: 3 }, false)).toEqual({ main: 40 });

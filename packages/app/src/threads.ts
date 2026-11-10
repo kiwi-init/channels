@@ -55,11 +55,20 @@ export function markSeenIn(room: string, updates: Record<string, number>): void 
   const next = { ...was };
   for (const [k, v] of Object.entries(updates)) next[k] = Math.max(next[k] ?? 0, v);
   const entries = Object.entries(next);
-  if (entries.length > SEEN_KEEP) for (const [k] of entries.sort((a, b) => a[1] - b[1]).slice(0, entries.length - SEEN_KEEP)) delete next[k];
+  if (entries.length > SEEN_KEEP)
+    for (const [k] of entries
+      .filter(([k]) => k !== READ_FLOOR)
+      .sort((a, b) => a[1] - b[1])
+      .slice(0, entries.length - SEEN_KEEP))
+      delete next[k];
   seenCache.set(room, next);
   writeLater(seenKey(room), JSON.stringify(next));
   for (const l of seenListeners) l();
 }
+
+export const READ_FLOOR = "floor";
+
+export const seenAt = (seen: Readonly<Record<string, number>>, key: string, unseen = 0): number => Math.max(seen[key] ?? unseen, seen[READ_FLOOR] ?? 0);
 
 const roomsFromKey = (room: string) => `mc.rooms-from.${room}`;
 const roomsFromCache = new Map<string, number>();

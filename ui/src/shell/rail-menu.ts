@@ -18,6 +18,7 @@ interface Rail {
   own?: boolean | undefined
   invite?: (code: string) => void
   end?: (code: string) => void
+  read?: ((code: string) => void) | null
 }
 
 export function railMenu(target: RailTarget, at: { x: number; y: number }, rail: Rail): OpenMenu | null {
@@ -40,6 +41,7 @@ export function railMenu(target: RailTarget, at: { x: number; y: number }, rail:
     label: rail.title(code),
     groups: [
       [
+        ...(rail.read ? [{ label: t("shell.sidebar.mark.read"), run: () => rail.read?.(code) }] : []),
         { label: muted ? t("shell.rail.menu.unmute") : t("shell.rail.menu.mute"), run: () => rail.setMute(code, !muted) },
         ...(holder
           ? [{ label: t("shell.rail.menu.take.out", { name: holder.name }), run: () => save(dropOn(folders, code, { kind: "rail" }, newFolderId)) }]

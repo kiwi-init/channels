@@ -14,7 +14,8 @@ import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
 import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { myUsage } from "~/live/usage"
-import { markSeenIn, seenIn } from "@kiwi/app/threads.ts"
+import { markSeenIn, READ_FLOOR, seenIn } from "@kiwi/app/threads.ts"
+import { markSeenTo } from "@kiwi/channel/news.ts"
 import { followKey, followMark } from "~/live/threads"
 import { lastIn, seenKeyOf } from "~/live/seen-place"
 import { closeOpened, leavingOnPurpose, openedRun, type Run } from "~/live/store"
@@ -88,6 +89,14 @@ export function makeActions(): Actions {
       const run = need(code)
       const last = lastIn(run.messages, run.state, run.me, where)
       if (last) markSeenIn(run.roomId, { [seenKeyOf(run.state, where, run.me)]: last })
+    },
+    markChannelRead: (code, head) => {
+      const run = openedRun(code)
+      const room = run?.roomId ?? loadMember(code)?.access.roomId
+      const upTo = Math.max(head ?? 0, run?.messages.at(-1)?.seq ?? 0)
+      if (!room || upTo <= 0) return
+      markSeenIn(room, { [READ_FLOOR]: upTo })
+      markSeenTo(room, upTo)
     },
     openDoc: (code, thread, th, on) => link(code).doc(thread, th, on),
     findDoc: (code, thread) => findDoc(link(code), code, thread),

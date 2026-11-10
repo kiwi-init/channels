@@ -66,6 +66,7 @@ function useTiles(rows: ChannelRow[], muted: readonly string[]): ChannelTile[] {
           last: r.ts,
           ...(n && "muted" in n ? { muted: true as const } : {}),
           ...(owned[r.code] === undefined ? {} : { own: owned[r.code] }),
+          ...(r.head === undefined ? {} : { head: r.head }),
         }
       }),
     [rows, news, icons, owned]
