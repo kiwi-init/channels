@@ -171,18 +171,13 @@ if (id === "com.kiwiinit.channels" && !process.env.CI) {
     const wide = spawnSync("ps", ["-o", "pid,ppid,pgid,etime,command", "-www", "-p", pids.join(",")], { encoding: "utf8" }).stdout.trim();
     if (wide) console.error(`eb-env-check: ${label}:\n${wide}`);
   };
-  const inGroup = spawnSync("ps", ["-axo", "pid,pgid,command", "-www"], { encoding: "utf8" })
-    .stdout.split("\n")
-    .filter((l) => l.trim().split(/\s+/)[1] === String(child.pid))
-    .join("\n")
-    .trim();
-  if (inGroup) console.error(`eb-env-check: at SIGTERM the app's group ran:\n${inGroup}`);
+  const running = () => spawnSync("pgrep", ["-f", app], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
+  groupAt("at SIGTERM the app ran", running());
   try {
     process.kill(-child.pid!, "SIGTERM");
   } catch {
     // The group is gone already: the app exited on its own, which the checks above report.
   }
-  const running = () => spawnSync("pgrep", ["-f", app], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
   for (const end = Date.now() + 10_000; running().length && Date.now() < end; await later(250));
   const left = running();
   for (const pid of left) console.error(`eb-env-check: still running 10s after SIGTERM, where it waits:\n${stuck(pid)}`);

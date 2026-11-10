@@ -111,13 +111,15 @@ export async function keepDaemon(stopped: () => boolean): Promise<void> {
     try {
       await keepOwnCli();
     } catch {
-      // The daemon still runs from the app's own copy, and an older one must give way to it.
+      // The daemon still runs from the app's own copy, and an older one must give way to it; a quit that ended the build starts no second one.
+      if (stopped()) return;
       kiwiBin = await runnableKiwi().then(
         (bin) => ({ path: bin, version: host().app.version() }),
         () => null,
       );
     }
   }
+  if (stopped()) return;
   trimDaemonLog();
   const trimming = setInterval(() => trimDaemonLog(), LOG_TRIM_EVERY_MS);
   await ensureDaemon().catch(() => null);
