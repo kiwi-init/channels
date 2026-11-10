@@ -57,6 +57,7 @@ async function inReview(c: Channel): Promise<{ id: number; epoch: number }> {
 
 interface Rig {
   wakes?: boolean;
+  wanted?: boolean;
   posts?: boolean;
   hosts?: Name[];
   reachable?: boolean;
@@ -73,6 +74,7 @@ function seat(c: Channel, agent: Name, rig: Rig = {}) {
       agent,
       posts: () => set.posts ?? true,
       hosts: (name) => (set.hosts ?? [agent]).some((n) => n === name),
+      wanted: async () => set.wanted ?? true,
       wakes: async () => set.wakes ?? true,
       reachable: () => set.reachable ?? true,
       stateOf: async () => c.state(),
@@ -223,6 +225,18 @@ describe("one waker (#3930 §2, cases 2 and 22)", () => {
     await host.w.look();
     expect(c.events("task.nudge").map((m) => [m.from, m.to, m.ev])).toEqual([["mac", ["owl"], { op: "task.nudge", task: id, mover: "mac", since: epoch, step: 2, wake: "none" }]]);
     expect(host.did.wakes).toBe(0);
+  });
+
+  test("a seat with no listener and no way to wake it doesn't read the channel at all; another evaluator says no wake was attempted", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    const host = seat(c, "mac", { wanted: false, wakes: false });
+    const lead = seat(c, "owl", { reachable: false });
+    c.wait(N);
+    await host.w.look();
+    expect(c.events("task.nudge")).toEqual([]);
+    await lead.w.look();
+    expect(c.events("task.nudge").map((m) => [m.from, m.ev])).toEqual([["owl", { op: "task.nudge", task: id, mover: "mac", since: epoch, step: 2, wake: "none" }]]);
   });
 
   test("case 2: the hosting daemon is offline: another evaluator tells the lead at N when the seat is unreachable, and waits 5 min when it looks reachable", async () => {

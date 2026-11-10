@@ -206,6 +206,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       agent: seat.agent,
       posts: () => [...seats.values()].filter((s) => s.alias === seat.alias).sort((a, b) => (a.key < b.key ? -1 : 1))[0] === seat,
       hosts: (name) => [...seats.values()].some((s) => s.alias === seat.alias && s.agent === name),
+      wanted: async () => seat.subs.size > 0 || (await wakeable(seat)),
       wakes: async () => {
         const cfg = loadConfig();
         return wakeOn(cfg, seat.alias, seat.agent) && (seat.subs.size > 0 || (await pathOf(cfg, seat.alias, seat.agent)).kind !== "none");

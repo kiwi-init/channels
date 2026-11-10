@@ -46,6 +46,7 @@ export interface ClockSeat {
   agent: string;
   posts: () => boolean;
   hosts: (name: string) => boolean;
+  wanted: () => Promise<boolean>;
   wakes: () => Promise<boolean>;
   reachable: (name: string) => boolean;
   stateOf: () => Promise<ChannelState | null>;
@@ -203,6 +204,7 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
     }
     busy = true;
     try {
+      if (!(await seat.wanted())) return;
       const state = await seat.stateOf();
       if (!state || ended) return;
       const at = now();
