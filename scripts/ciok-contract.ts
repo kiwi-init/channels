@@ -13,7 +13,11 @@ const DOC_TESTS: [name: string, command: string][] = [
   ["doc image order, a line sent with an image from the composer stays above the lines sent after it", "bun scripts/ui-doc-image-order.ts"],
   ["send once, a message whose answer was lost or that was written with the relay away survives a reload and is delivered once", "bun scripts/ui-send-once.ts"],
   [
-    "image copies, a Retina shot in the feed and the doc shows from a copy sized to its box, while the viewer, Save image and a drag get the original, in Chromium and WebKit",
+    "hidden blocks, a line in the feed is one bare node in the doc, selecting takes it once, and Back to draft gives a failed line back, in Chromium and WebKit",
+    "bun scripts/ui-doc-hidden.ts && bun scripts/ui-doc-hidden.ts --webkit",
+  ],
+  [
+    "image copies, a Retina shot in the feed shows from a copy sized to its box and the doc mounts no second one, while the viewer, Save image and a drag get the original, in Chromium and WebKit",
     "bun scripts/ui-image-thumbs.ts || status=1\nbun scripts/ui-image-thumbs.ts --webkit || status=1",
   ],
   [

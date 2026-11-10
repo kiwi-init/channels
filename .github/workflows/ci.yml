@@ -264,7 +264,7 @@ jobs:
       - name: hidden blocks, a line in the feed is one bare node in the doc, selecting takes it once, and Back to draft gives a failed line back, in Chromium and WebKit
         if: ${{ !cancelled() && matrix.part == 'send' }}
         run: bun scripts/ui-doc-hidden.ts && bun scripts/ui-doc-hidden.ts --webkit
-      - name: image copies, a Retina shot in the feed and the doc shows from a copy sized to its box, while the viewer, Save image and a drag get the original, in Chromium and WebKit
+      - name: image copies, a Retina shot in the feed shows from a copy sized to its box and the doc mounts no second one, while the viewer, Save image and a drag get the original, in Chromium and WebKit
         if: ${{ !cancelled() && matrix.part == 'view' }}
         run: |
           status=0
