@@ -24,8 +24,6 @@ export function dropOn(folders: readonly Folder[], code: string, target: DropTar
 
 export const renamed = (folders: readonly Folder[], id: string, name: string): Folder[] => folders.map((f) => (f.id === id ? { ...f, name: name.trim().slice(0, MAX_NAME) || folderName() } : f))
 
-export const toggled = (folders: readonly Folder[], id: string): Folder[] => folders.map((f) => (f.id === id ? { ...f, open: !f.open } : f))
-
 export const ungrouped = (folders: readonly Folder[], id: string): Folder[] => folders.filter((f) => f.id !== id)
 
 export function folderNews(tiles: readonly ChannelTile[], on: string | null): { needsYou: number; unread: boolean; holdsOn: boolean } {

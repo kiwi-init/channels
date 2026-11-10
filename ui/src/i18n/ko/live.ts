@@ -244,8 +244,6 @@ export default {
   "live.home.open.to.retry": "다시 시도하려면 채널을 여세요",
   "live.home.wants.to.join": "참여 요청",
   "live.home.asks": "{who}의 질문",
-  "live.home.needs.you": "내 확인 필요",
-  "live.home.in.review": "리뷰 중",
   "live.home.review": "T{id} 리뷰",
   "live.home.bypass": "T{id}이(가) 게이트가 닫힌 채 배포되었습니다",
   "live.home.spec": "스펙 #{ask}",

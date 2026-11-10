@@ -243,8 +243,6 @@ export default {
   "live.home.open.to.retry": "打开频道以重试",
   "live.home.wants.to.join": "申请加入",
   "live.home.asks": "{who} 提问",
-  "live.home.needs.you": "待你处理",
-  "live.home.in.review": "审核中",
   "live.home.review": "审核 T{id}",
   "live.home.bypass": "T{id} 在门禁关闭时已发布",
   "live.home.spec": "规格 #{ask}",

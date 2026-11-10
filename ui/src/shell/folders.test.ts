@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { dropOn, folderNews, renamed, toggled, ungrouped } from "~/shell/folders"
+import { dropOn, folderNews, renamed, ungrouped } from "~/shell/folders"
 import { cleanFolders, railItems } from "~/shell/rail-items"
 import type { ChannelTile, Folder } from "~/model"
 
@@ -66,7 +66,6 @@ describe("rail folders", () => {
     const start: Folder[] = [{ id: "f", name: "x", codes: ["a", "b"], open: false }]
     expect(renamed(start, "f", "  games  ")[0]?.name).toBe("games")
     expect(renamed(start, "f", "   ")[0]?.name).toBe("Folder")
-    expect(toggled(start, "f")[0]?.open).toBe(true)
     expect(ungrouped(start, "f")).toEqual([])
   })
 

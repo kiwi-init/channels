@@ -10,7 +10,7 @@ import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { sendOptions } from "~/live/channel"
 import { dmRoomOf } from "~/live/dm"
-import { asksOf, lastSaidOf, peopleOf, tasksOf } from "~/live/map"
+import { asksOf, peopleOf, tasksOf } from "~/live/map"
 import { usePinsHere } from "~/live/pins"
 import { specAsksOf, specsOf } from "~/live/specs"
 import { withReach } from "~/live/reach"
@@ -45,24 +45,20 @@ const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }
   const specs = useMemo(() => specsOf(state, me), [state, me])
   const nicknames = useMemo(() => nicknamesOf(state.members.values()), [state.members])
   const lead = state.lead
-  const said = useMemo(() => lastSaidOf(state, messages, me), [state, messages, me])
   const summary = useMemo(
     () =>
-      homeOf(
-        {
-          code,
-          title,
-          ...(lead ? { lead } : {}),
-          people,
-          asks: [...asks.asks, ...specAsksOf(specs)],
-          specs,
-          tasks,
-          nicknames,
-          ...(ready ? {} : { loading: true as const }),
-        },
-        said
-      ),
-    [code, title, lead, people, asks.asks, specs, tasks, nicknames, ready, said]
+      homeOf({
+        code,
+        title,
+        ...(lead ? { lead } : {}),
+        people,
+        asks: [...asks.asks, ...specAsksOf(specs)],
+        specs,
+        tasks,
+        nicknames,
+        ...(ready ? {} : { loading: true as const }),
+      }),
+    [code, title, lead, people, asks.asks, specs, tasks, nicknames, ready]
   )
 
   const post = useCallback(
