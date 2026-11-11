@@ -17,18 +17,20 @@ describe("a personality pinned in an invite", () => {
     const pin = await readPin(token, room, owner.pk);
     expect(pin).toMatchObject({ id: "builder", name: "Builder" });
 
-    expect(await readPin(token, "ab".repeat(16), owner.pk)).toBeNull();
+    expect(await readPin(token, "ab".repeat(16), owner.pk)).toEqual({ invalid: true });
     const other = await generateIdentity("other");
-    expect(await readPin(token, room, other.pk)).toBeNull();
-    expect(await readPin(await makePin(other, room, builder), room, owner.pk)).toBeNull();
-    expect(await readPin(`${token.slice(0, -4)}AAAA`, room, owner.pk)).toBeNull();
-    expect(await readPin("not a token", room, owner.pk)).toBeNull();
+    expect(await readPin(token, room, other.pk)).toEqual({ invalid: true });
+    expect(await readPin(await makePin(other, room, builder), room, owner.pk)).toEqual({ invalid: true });
+    expect(await readPin(`${token.slice(0, -4)}AAAA`, room, owner.pk)).toEqual({ invalid: true });
+    expect(await readPin("not a token", room, owner.pk)).toEqual({ invalid: true });
     expect(await readPin(undefined, room, owner.pk)).toBeNull();
   });
 
   test("a pin names its personality as it was: the same one resolves, an edited one doesn't", async () => {
     const owner = await generateIdentity("human");
-    const pin = (await readPin(await makePin(owner, room, builder), room, owner.pk))!;
+    const read = await readPin(await makePin(owner, room, builder), room, owner.pk);
+    if (!read || "invalid" in read) throw new Error("the owner's own token should read back");
+    const pin = read;
     expect(await pinned(pin, PRESETS)).toEqual(personaOf(builder));
     expect(await pinned(pin, [{ ...builder, instructions: `${builder.instructions} Also deploy.` }])).toBeNull();
     expect(

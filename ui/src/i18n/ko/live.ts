@@ -170,6 +170,7 @@ export default {
   "live.manage.agents.manager.only": "에이전트의 역할, 성격, 닉네임은 소유자나 에이전트를 관리하는 사람만 바꿀 수 있습니다",
   "live.manage.personality.missing": "그 성격은 이 컴퓨터에 없습니다",
   "live.manage.pin.gone": "{name}은(는) {persona}(으)로 초대되었지만 그 성격이 더 이상 이 컴퓨터에 없습니다",
+  "live.manage.pin.failed": "{name}의 초대 토큰 검증에 실패했습니다. 먼저 성격을 고르세요",
   "live.manage.bad.name": "{name}은(는) 이름으로 쓸 수 없습니다: 문자, 숫자, . _ - 만 가능합니다",
   "live.manage.name.taken": "{name}은(는) 여기서도 이미 사용 중입니다",
   "live.manage.joined.as": "{name}이(가) {persona}(으)로 참여했습니다",

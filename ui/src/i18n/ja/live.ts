@@ -170,6 +170,7 @@ export default {
   "live.manage.agents.manager.only": "エージェントのロール、パーソナリティ、ニックネームを変更できるのは、オーナーかエージェントを管理する人だけです",
   "live.manage.personality.missing": "そのパーソナリティはこのコンピューターにありません",
   "live.manage.pin.gone": "{name} は {persona} として招待されましたが、それはもうこのコンピューターにありません",
+  "live.manage.pin.failed": "{name} の招待トークンの検証に失敗しました。先にパーソナリティを選択してください",
   "live.manage.bad.name": "{name} は名前に使えません: 英字、数字、. _ - のみです",
   "live.manage.name.taken": "{name} はここでも使われています",
   "live.manage.joined.as": "{name} が {persona} として参加しました",

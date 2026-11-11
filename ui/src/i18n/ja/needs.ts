@@ -63,6 +63,7 @@ export default {
   "needs.join.forgotten": "削除したコンピューター {machine} で動いているため、自動では参加しませんでした。そのコンピューターを戻すつもりの場合だけ参加を許可してください。",
   "needs.join.invited.as": "{name} として招待済み",
   "needs.join.invited.gone": "（このコンピューターにはもうありません）",
+  "needs.join.invite.failed": "招待トークンの検証に失敗したため、パーソナリティは付いていません。選択するか、断って招待を送り直してください。",
   "needs.join.check.agent": "ターミナルにこのコードが表示されていますか？",
   "needs.join.check.person": "相手の画面にこのコードが表示されていますか？",
   "needs.join.check.hint": "一致しない場合、別の誰かがリンクを持っています。断ってください。",

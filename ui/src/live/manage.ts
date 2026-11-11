@@ -45,6 +45,7 @@ async function personaFor(r: JoinRequest, choice: JoinChoice): Promise<Persona |
     return personaOf(p)
   }
   if (!r.pin) return null
+  if ("invalid" in r.pin) throw new Error(t("live.manage.pin.failed", { name: r.name }))
   const pin = await pinned(r.pin, all)
   if (!pin) throw new Error(t("live.manage.pin.gone", { name: r.name, persona: r.pin.name }))
   return pin

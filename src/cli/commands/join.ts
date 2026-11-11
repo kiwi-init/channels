@@ -1,4 +1,4 @@
-import { MAX_PIN } from "@kiwi/core/pin.ts";
+import { MAX_PIN, pinFits } from "@kiwi/core/pin.ts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { openSession } from "../../agent.ts";
@@ -148,6 +148,11 @@ export const joinCommands: Record<string, Command> = {
       if (opt.persona !== undefined && (opt.persona.length > MAX_PIN || !/^[A-Za-z0-9_-]+$/.test(opt.persona))) {
         yield* doneAsking;
         return yield* die("--persona takes the token from the owner's invite, as it was copied");
+      }
+      const token = opt.persona;
+      if (token !== undefined && !(yield* Effect.promise(() => pinFits(token, decodeJoinCode(code))))) {
+        yield* doneAsking;
+        return yield* die("this invite token failed verification: it isn't signed by this channel's owner for this channel. Ask the owner for the invite again and copy it whole; nothing was sent", 2);
       }
       const card = mergeCard(detectCard(), undefined, { model });
       const runs = yield* Effect.promise(() => detectRuns(process.env, { ...(opt.harness ? { harness: opt.harness } : {}), model }));

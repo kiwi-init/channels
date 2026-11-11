@@ -64,6 +64,7 @@ const words = {
   "needs.join.forgotten": "It runs on {machine}, a computer you forgot, so it didn't join on its own. Let it in only if you meant to bring that computer back.",
   "needs.join.invited.as": "Invited as {name}",
   "needs.join.invited.gone": ", which isn't on this computer anymore",
+  "needs.join.invite.failed": "Its invite token failed verification, so no personality comes with it. Pick one, or turn it away and send the invite again.",
   "needs.join.check.agent": "Does its terminal show this code?",
   "needs.join.check.person": "Does their screen show this code?",
   "needs.join.check.hint": "If it doesn't match, someone else has the link. Turn them away.",

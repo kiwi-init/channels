@@ -35,7 +35,11 @@ afterAll(() => {
 async function ownedWithInvite() {
   const owner = await generateIdentity("boss");
   const { code, access } = await Channel.create(relay, owner, { name: "boss" });
-  const token = await makePin(owner, decodeJoinCode(code).roomId, PRESETS.find((p) => p.id === "builder")!);
+  const token = await makePin(
+    owner,
+    decodeJoinCode(code).roomId,
+    PRESETS.find((p) => p.id === "builder")!,
+  );
   return { code, ownerCh: new Channel(access, relay, owner), token };
 }
 

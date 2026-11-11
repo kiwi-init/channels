@@ -1,4 +1,4 @@
-import { b64url, fromB64url } from "./crypto.ts";
+import { b64url, fromB64url, ownerFingerprint, type JoinCode } from "./crypto.ts";
 import { sign, verify, type Identity } from "./identity.ts";
 import { personaOf, type Persona, type Personality } from "./personality.ts";
 
@@ -23,18 +23,36 @@ export async function makePin(owner: Identity, room: string, p: Personality): Pr
   return b64url(new TextEncoder().encode(JSON.stringify(signed)));
 }
 
-export async function readPin(token: unknown, room: string, ownerPk: string): Promise<Pin | null> {
-  if (typeof token !== "string" || !token || token.length > MAX_PIN || !/^[A-Za-z0-9_-]+$/.test(token)) return null;
+export interface PinFailed {
+  invalid: true;
+}
+
+const failed = (): PinFailed => ({ invalid: true });
+
+async function openPin(token: unknown, room: string): Promise<{ pk: string; pin: Pin } | PinFailed | null> {
+  if (token === undefined || token === null || token === "") return null;
+  if (typeof token !== "string" || token.length > MAX_PIN || !/^[A-Za-z0-9_-]+$/.test(token)) return failed();
   try {
     const o = JSON.parse(new TextDecoder().decode(fromB64url(token))) as { room?: unknown; pk?: unknown; sig?: unknown; pin?: { id?: unknown; name?: unknown; hash?: unknown } };
-    if (o.room !== room || o.pk !== ownerPk || typeof o.sig !== "string" || !(await verify(o as { pk: string; sig: string }))) return null;
+    if (o.room !== room || typeof o.pk !== "string" || typeof o.sig !== "string" || !(await verify(o as { pk: string; sig: string }))) return failed();
     const { id, name, hash } = o.pin ?? {};
-    if (typeof id !== "string" || !id || id.length > MAX_ID || typeof name !== "string" || !name.trim() || typeof hash !== "string" || !HASH_RE.test(hash)) return null;
-    return { id, name: name.trim(), hash };
+    if (typeof id !== "string" || !id || id.length > MAX_ID || typeof name !== "string" || !name.trim() || typeof hash !== "string" || !HASH_RE.test(hash)) return failed();
+    return { pk: o.pk, pin: { id, name: name.trim(), hash } };
   } catch {
-    // A token that isn't base64url JSON pins nothing: the request shows without a pin.
-    return null;
+    // A token that isn't base64url JSON, or whose key can't check a signature, failed verification.
+    return failed();
   }
+}
+
+export async function readPin(token: unknown, room: string, ownerPk: string): Promise<Pin | PinFailed | null> {
+  const read = await openPin(token, room);
+  if (!read || "invalid" in read) return read;
+  return read.pk === ownerPk ? read.pin : failed();
+}
+
+export async function pinFits(token: string, code: JoinCode): Promise<boolean> {
+  const read = await openPin(token, code.roomId);
+  return !!read && !("invalid" in read) && (await ownerFingerprint(read.pk)) === code.ownerFp;
 }
 
 export async function pinned(pin: Pick<Pin, "id" | "hash">, options: readonly Personality[]): Promise<Persona | null> {

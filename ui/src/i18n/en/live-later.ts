@@ -6,6 +6,7 @@ const words = {
   "live.manage.agents.manager.only": "only the owner, or a person who manages agents, changes an agent's role, personality or nickname",
   "live.manage.personality.missing": "that personality isn't on this computer",
   "live.manage.pin.gone": "{name} was invited as {persona}, which isn't on this computer anymore",
+  "live.manage.pin.failed": "{name}'s invite token failed verification: pick a personality for it first",
   "live.manage.bad.name": "{name} can't be a name: letters, digits, . _ - only",
   "live.manage.name.taken": "{name} is taken here too",
   "live.manage.joined.as": "{name} joined as {persona}",
