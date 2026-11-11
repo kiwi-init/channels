@@ -151,6 +151,14 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     keys step 8px (32 with Shift), a double-click puts 18rem back. It sets
     `--side-want`, which `--side-w` reads, so the second sidebar takes the
     same width and the centre holds.
+  - Two layouts (Settings > Appearance > Layout, `@kiwi/app/layout.ts`, kept
+    on this computer). Sidebar, the default: the views (Needs you, Specs,
+    Agents, GitHub) are rows under the channel's name. Top bar: they are one
+    row above the work (`.views-bar`, grid row 2 of the work's column), on
+    the channel tiles' line, starting on the gutter line; the sidebar keeps
+    the channel's name, rooms, people and agents, and the work starts under
+    the row. The grid, the centre and the second sidebar are the same in
+    both. A window 760px wide or less, or a portrait one, uses Sidebar.
   - One gutter. Every view keeps `--gutter` (40px) on each side of its
     content. The conversation has no maximum width: the gap is always 40 and
     the column is whatever the window leaves. A scrolling view reserves its

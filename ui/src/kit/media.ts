@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 export const WIDE = "(min-width: 1180px) and (orientation: landscape)"
+export const NARROW = "(max-width: 760px), (orientation: portrait)"
 
 export function useMedia(query: string): boolean {
   return useSyncExternalStore(

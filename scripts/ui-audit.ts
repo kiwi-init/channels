@@ -6,6 +6,7 @@ import { chromium, webkit } from "playwright-core";
 
 const SHOTS = [
   "channel",
+  "channel-top",
   "dm",
   "thread-doc",
   "task",

@@ -1150,6 +1150,33 @@
   grid-column: 2;
 }
 
+.views-bar {
+  grid-row: 2;
+  grid-column: 2;
+  position: relative;
+  z-index: 4;
+  align-self: start;
+  min-width: 0;
+  padding: 0 32px 16px;
+  -webkit-app-region: no-drag;
+}
+
+.views-bar ul {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tile);
+}
+
+.views-bar .side-row {
+  width: auto;
+}
+
+.chan.is-top .main {
+  grid-row: 3 / -1;
+}
+
 @media (min-width: 1180px) and (orientation: landscape) {
   .chan.is-reading .main {
     grid-column: 2 / -1;
@@ -1328,11 +1355,11 @@
   }
 }
 
-:root[data-side-move="out"] .main {
+:root[data-side-move="out"] :is(.main, .views-bar) {
   animation: main-fill var(--slow) var(--ease);
 }
 
-:root[data-side-move="in"] .main {
+:root[data-side-move="in"] :is(.main, .views-bar) {
   animation: main-yield var(--slow) var(--ease);
 }
 
