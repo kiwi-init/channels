@@ -407,6 +407,32 @@ describe("useStick in a thread doc", () => {
     }
   })
 
+  test("a reader's scroll that lands with a resize above is kept, not undone, when its scroll event arrives (#2295)", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, false)
+    stick.toRow(f.rowEl(20) as HTMLElement, -10)
+    f.scrollTo(f.top + 100)
+    const read = f.top
+    f.rows[0]!.h += 50
+    stick.remember()
+    expect(Math.abs(f.top - (read + 50))).toBeLessThan(2)
+    await act(async () => root.unmount())
+  })
+
+  test("a restored row stays put when content below shrinks and the browser pulls the scroll back (#2295)", async () => {
+    const f = new Feed(100)
+    f.lines = 60
+    const { stick, root } = await mount(f, true, false)
+    stick.toRow(f.rowEl(95) as HTMLElement, -20)
+    const at = (f.rowEl(95) as HTMLElement).getBoundingClientRect().top - VIEW_TOP
+    for (const r of f.rows.slice(0, 10)) r.h -= 40
+    f.lines = 20
+    f.scrollTo(f.top)
+    stick.settle()
+    expect(Math.abs((f.rowEl(95) as HTMLElement).getBoundingClientRect().top - VIEW_TOP - at)).toBeLessThan(2)
+    await act(async () => root.unmount())
+  })
+
   test("unmounting stops watching the feed", async () => {
     const f = new Feed(100)
     const { root } = await mount(f, true, true)

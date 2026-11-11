@@ -102,9 +102,9 @@ export function useStick(following = true, still = false) {
       anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
       return
     }
-    const ours = placed.current === a
+    const forced = a.at > box.scrollHeight - box.clientHeight + 0.5
     const clamped = still && box.scrollTop < a.at && box.scrollTop >= box.scrollHeight - box.clientHeight - 0.5
-    const aim = clamped || ours ? a.top : a.top - (box.scrollTop - a.at)
+    const aim = clamped || forced ? a.top : a.top - (box.scrollTop - a.at)
     const shift = el.getBoundingClientRect().top - top - aim
     const short = still ? box.scrollTop + shift - (box.scrollHeight - box.clientHeight) : 0
     if (short > 0.5) {
@@ -133,6 +133,8 @@ export function useStick(following = true, still = false) {
     const box = scroller.current
     const list = content.current
     if (!box || !list) return
+    const p = placed.current
+    const ours = !!p && p === anchor.current && (Math.abs(box.scrollTop - p.at) < 0.5 || p.at > box.scrollHeight - box.clientHeight + 0.5)
     if (height.current && list.offsetHeight !== height.current) settle()
     if (reserve.current > 0 && Date.now() - wheeled.current >= WHEEL_MS) {
       reserve.current = 0
@@ -148,7 +150,7 @@ export function useStick(following = true, still = false) {
     const down = box.scrollTop > seen.current + 0.5
     const near = !still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !up && (stuck.current || down)
     stuck.current = live.current && !held.current && near
-    const kept = placed.current && placed.current === anchor.current && placed.current.el.isConnected && Math.abs(box.scrollTop - placed.current.at) < 0.5 ? placed.current : null
+    const kept = ours && placed.current === anchor.current && anchor.current?.el.isConnected ? anchor.current : null
     anchor.current = (still && touched.current ? docIn(box, list) : null) ?? (stuck.current ? null : (kept ?? anchorIn(box, list)))
     placed.current = null
     height.current = list.offsetHeight
