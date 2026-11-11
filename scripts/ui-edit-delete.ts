@@ -57,7 +57,7 @@ try {
   expect((await composer.inputValue()) === "a draft from before", "and the draft is still there");
   await composer.fill("");
 
-  await page.locator(".side-row", { hasText: "atlas" }).first().click();
+  await page.locator('.side-row:has-text("atlas"), .side-face[aria-label^="atlas"]').first().click();
   await composer.click();
   await composer.press("ArrowUp");
   await editor.waitFor({ timeout: 5000 }).catch(() => {});

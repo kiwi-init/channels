@@ -92,7 +92,7 @@ async function run() {
   await toBottom(page);
   await settle(page);
   expect(!(await visible(page, older.seq)), "the linked message is off screen once the feed is back at the bottom");
-  await page.locator(".side-row", { hasText: "atlas" }).first().click();
+  await page.locator('.side-row:has-text("atlas"), .side-face[aria-label^="atlas"]').first().click();
   await page.getByRole("textbox", { name: "Message" }).fill(`back to ${link} please`);
   await page.keyboard.press("Enter");
   const pasted = page

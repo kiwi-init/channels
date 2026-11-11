@@ -33,7 +33,7 @@ try {
   const area = page.getByRole("textbox", { name: "Message" });
   const chip = page.locator(".stash-chip");
   const rows = page.locator(".stash-row");
-  await page.locator(".side-row", { hasText: "atlas" }).first().click();
+  await page.locator('.side-row:has-text("atlas"), .side-face[aria-label^="atlas"]').first().click();
   await area.click();
   for (const text of ["first draft", "second draft"]) {
     await area.fill(text);
