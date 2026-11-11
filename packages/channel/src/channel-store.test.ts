@@ -9,7 +9,7 @@ import { APP_BEACON_MS, ChannelStore, PAGE, REACH, WINDOW } from "./channel-stor
 import { PRESENCE_TTL } from "./online.ts";
 import { REFOLLOW_MS } from "./refollow.ts";
 import type { StoredMember } from "./store.ts";
-import { dropWarm, foldedFor, keepWarm, LEAN, LIGHT, warmOf, type Warm } from "./warm.ts";
+import { dropWarm, foldedFor, keepWarm, LEAN, leanNow, LIGHT, warmOf, type Warm } from "./warm.ts";
 import { useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts";
 
 const CODE = "mc2-store-test";
@@ -19,8 +19,10 @@ const msg = (seq: number): Message => ({ v: PROTOCOL_VERSION, id: `id-${seq}`, f
 const person = (name: string, pk: string): Member => ({ name, pk, xpk: `x${pk}`, owner: false, at: 0, active: true });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function until(ok: () => boolean): Promise<void> {
+async function until(ok: () => boolean, progress?: () => object): Promise<void> {
+  const from = performance.now();
   for (let i = 0; i < 200 && !ok(); i++) await sleep(1);
+  if (!ok() && progress) console.error("until gave up", { afterMs: Math.round(performance.now() - from), ...progress() });
   expect(ok()).toBe(true);
 }
 
@@ -115,14 +117,43 @@ function relay(
   return { link, lend, follows, lent, live, say, setRoster, changedAt, called, kept, beacons };
 }
 
+const leftOpen = new Set<() => void>();
+
+const opening = (store: ChannelStore): (() => void) => {
+  const stop = store.open();
+  const close = () => {
+    leftOpen.delete(close);
+    stop();
+  };
+  leftOpen.add(close);
+  return close;
+};
+
 const opened = async (r: ReturnType<typeof relay>, human?: null) => {
   const store = new ChannelStore(member, human, { link: r.link, lend: r.lend });
-  const close = store.open();
+  const close = opening(store);
   if (human !== null) await until(() => r.follows.length > 0);
   return { store, close };
 };
 
-afterEach(() => dropWarm(CODE));
+afterEach(() => {
+  for (const close of [...leftOpen]) close();
+  dropWarm(CODE);
+});
+
+describe("a store a test leaves open (#2261)", () => {
+  let left: ReturnType<typeof relay> | undefined;
+
+  test("is still following when its test ends without closing it", async () => {
+    left = relay(0);
+    await opened(left);
+    expect(left.live().stopped).toBe(false);
+  });
+
+  test("is closed before the next test runs, so it can't write over that test's warm copy", () => {
+    expect(left?.live().stopped).toBe(true);
+  });
+});
 
 describe("a channel store", () => {
   test("follows from the relay's head once open, and goes live on the relay's Open", async () => {
@@ -204,7 +235,7 @@ describe("a channel store", () => {
     const store = new ChannelStore(member, undefined, { link: again.link, lend: again.lend });
     expect(store.handle.value.ready).toBe(true);
     expect(store.handle.value.messages.map((m) => m.seq)).toEqual([1, 2]);
-    const close = store.open();
+    const close = opening(store);
     await until(() => again.follows.length > 0);
     expect(again.live().since).toBe(2);
     close();
@@ -220,7 +251,7 @@ describe("a channel store", () => {
     const again = relay(2);
     const store = new ChannelStore(member, undefined, { link: again.link, lend: again.lend });
     expect(store.handle.value.state).toBe(folded);
-    const close = store.open();
+    const close = opening(store);
     await until(() => again.follows.length > 0);
     expect(store.handle.value.state).toBe(folded);
     again.say({ _tag: "Message", message: msg(3), row: null });
@@ -270,7 +301,10 @@ describe("a channel store", () => {
     const all = Array.from({ length: 2_600 }, (_, i) => msg(i + 1));
     for (const m of all) r.say({ _tag: "Message", message: m, row: null });
     await sleep(40);
-    await until(() => store.handle.value.messages.length < all.length);
+    await until(
+      () => store.handle.value.messages.length < all.length,
+      () => ({ messages: store.handle.value.messages.length, reach: store.handle.value.reach.length, leanLoaded: leanNow() !== null }),
+    );
     const { messages, reach, state } = store.handle.value;
     expect(messages.at(-1)?.seq).toBe(2_600);
     expect(messages.length).toBe(WINDOW);
@@ -295,7 +329,7 @@ describe("a channel store", () => {
   test(`a store for Home keeps ${LIGHT} messages and leaves a light warm copy that never replaces a whole one`, async () => {
     const r = relay(0);
     const store = new ChannelStore(member, undefined, { link: r.link, lend: r.lend }, true);
-    const close = store.open();
+    const close = opening(store);
     await until(() => r.follows.length > 0);
     for (let seq = 1; seq <= 300; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
     await until(() => store.handle.value.messages.length === LIGHT);
@@ -426,7 +460,7 @@ describe("the GitHub chores", () => {
     warm.close();
     const r = relay(1, { owner: true, answers: withRepo });
     const store = new ChannelStore(member, undefined, { link: r.link, lend: r.lend });
-    const close = store.open();
+    const close = opening(store);
     await until(() => r.called("drainGithub").length === 1);
     close();
   });
@@ -675,7 +709,7 @@ describe("a channel longer than the window, opened with no base under it (T1759)
     let asked = 0;
     const r = relay(HEAD, { answers: { snapshot: () => (++asked === 1 ? Promise.reject(new Error("the wifi dropped")) : baseAt(HEAD - REACH)) } });
     const store = new ChannelStore(member, undefined, { link: r.link, lend: r.lend });
-    const close = store.open();
+    const close = opening(store);
     await sleep(100);
     expect(r.follows).toHaveLength(0);
     expect(store.handle.value.connection).toBe("reconnecting");
