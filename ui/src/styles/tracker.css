@@ -30,7 +30,7 @@
 
 .track-counts {
   color: var(--ink-3);
-  font: 400 var(--t-stamp) / 16px var(--mono);
+  font: 400 var(--t-stamp) var(--mono);
   letter-spacing: -0.01em;
 }
 
