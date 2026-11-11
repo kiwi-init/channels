@@ -1134,7 +1134,7 @@
 .spec-boxes > li {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 16px;
 }
 
 .spec-boxes > li.is-done {
@@ -1172,6 +1172,7 @@
 
 .spec-box-btn {
   display: inline-grid;
+  flex: none;
   place-items: center;
   width: var(--slot);
   height: var(--slot);
@@ -1187,9 +1188,9 @@
 
 .result-tried {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
-  padding: 0 0 0 20px;
+  padding: 0 0 0 32px;
   color: var(--ink);
   font: var(--t-ui) / 1.45 var(--ui);
 }
@@ -1279,4 +1280,8 @@
 
 .inside-add .btn {
   height: var(--ctl-sm);
+}
+
+.result-actions > .btn.is-quiet:first-child {
+  margin-left: -12px;
 }
