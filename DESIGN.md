@@ -145,6 +145,12 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     on the window in every state. Settings and Home centre on the window too.
     A window under 1180px wide has no third column and centres the work in
     what is left.
+  - The sidebar's width is yours. Its right edge drags (`shell/side-width.ts`,
+    `.side-grip`): 14rem to 28rem, snapped to 8px, kept in rem so it follows
+    the text size, and never so wide that the work has under 480px. Arrow
+    keys step 8px (32 with Shift), a double-click puts 18rem back. It sets
+    `--side-want`, which `--side-w` reads, so the second sidebar takes the
+    same width and the centre holds.
   - One gutter. Every view keeps `--gutter` (40px) on each side of its
     content. The conversation has no maximum width: the gap is always 40 and
     the column is whatever the window leaves. A scrolling view reserves its

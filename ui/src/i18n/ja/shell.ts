@@ -26,6 +26,7 @@ export default {
   "shell.channel.reconnecting": "再接続中…",
   "shell.channel.details": "詳細",
   "shell.channel.resize": "パネルのサイズを変更",
+  "shell.channel.resize.side": "サイドバーのサイズを変更",
   "shell.channel.resize.title": "ドラッグでサイズ変更 · ダブルクリックで元に戻す",
   "shell.sidebar.rooms": "ルーム",
   "shell.sidebar.new.room": "新しいルーム",

@@ -26,6 +26,7 @@ export default {
   "shell.channel.reconnecting": "다시 연결 중…",
   "shell.channel.details": "세부 정보",
   "shell.channel.resize": "패널 크기 조절",
+  "shell.channel.resize.side": "사이드바 크기 조절",
   "shell.channel.resize.title": "드래그해 크기 조절 · 더블클릭해 초기화",
   "shell.sidebar.rooms": "방",
   "shell.sidebar.new.room": "새 방",
