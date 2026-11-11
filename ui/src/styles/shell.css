@@ -1150,31 +1150,80 @@
   grid-column: 2;
 }
 
-.views-bar {
-  grid-row: 2;
-  grid-column: 2;
-  position: relative;
-  z-index: 4;
-  align-self: start;
-  min-width: 0;
-  padding: 0 32px 16px;
+:root[data-layout="top"] .app > .rail {
+  --tile: var(--ctl);
+
+  grid-row: 1;
+  grid-column: 1 / -1;
+  z-index: 10;
+  flex-wrap: nowrap;
+  align-items: center;
+  margin-left: var(--side-w);
+  padding: 0 8px 0 var(--gutter);
+  overflow: hidden;
+  -webkit-app-region: drag;
+}
+
+:root[data-layout="top"] .app > .rail :is(.tile, .side-row) {
   -webkit-app-region: no-drag;
+}
+
+:root[data-layout="top"] .app > .home-area {
+  grid-row: 2 / -1;
+}
+
+:root[data-layout="top"][data-bare] .app > .rail {
+  width: auto;
+  pointer-events: auto;
+}
+
+:root[data-layout="top"] .app > .rail .tile,
+:root[data-layout="top"][data-bare] .app > .rail .tile {
+  flex: 0 1 var(--tile);
+  min-width: var(--ctl-sm);
+  visibility: visible;
+  opacity: 1;
+  translate: none;
+}
+
+:root[data-layout="top"] .tile-dot {
+  bottom: -6px;
+}
+
+:root[data-layout="top"] .folder-grid {
+  grid-template-columns: repeat(2, 0.75rem);
+  grid-auto-rows: 0.75rem;
+}
+
+.views-bar {
+  flex: 1 1 0;
+  min-width: calc(4 * (var(--slot) + 16px) + 24px);
+  margin-left: 8px;
+  container-type: inline-size;
 }
 
 .views-bar ul {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  min-height: var(--tile);
+}
+
+.views-bar li {
+  flex: 0 1 auto;
+  min-width: calc(var(--slot) + 16px);
 }
 
 .views-bar .side-row {
-  width: auto;
+  overflow: hidden;
 }
 
-.chan.is-top .main {
-  grid-row: 3 / -1;
+@container (max-width: 30rem) {
+  .views-bar .side-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+  }
 }
 
 @media (min-width: 1180px) and (orientation: landscape) {
@@ -1355,11 +1404,11 @@
   }
 }
 
-:root[data-side-move="out"] :is(.main, .views-bar) {
+:root[data-side-move="out"] .main {
   animation: main-fill var(--slow) var(--ease);
 }
 
-:root[data-side-move="in"] :is(.main, .views-bar) {
+:root[data-side-move="in"] .main {
   animation: main-yield var(--slow) var(--ease);
 }
 

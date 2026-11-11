@@ -340,45 +340,77 @@ try {
     console.log(`\nthe top bar layout, ${width}×${height}`);
     const page = await browser.newPage({ viewport: { width, height } });
     await open(page, "channel-top");
+    const strip = await boxOf(page, ".top");
     const bar = await boxOf(page, ".views-bar ul");
     const tile = await boxOf(page, ".tile[data-code]");
+    const home = await boxOf(page, ".tile.is-home");
+    const add = await boxOf(page, ".tile.is-add");
     const main = await boxOf(page, ".main");
     const side = await boxOf(page, ".side");
     const title = await boxOf(page, ".top-here");
     const rows = await page.evaluate(() => [...document.querySelectorAll(".views-bar .side-row")].map((row) => Math.round(row.getBoundingClientRect().top)));
-    expect(rows.length >= 3 && new Set(rows).size === 1, `the views are one row above the work (${rows.length} in ${new Set(rows).size} row)`);
+    expect(rows.length >= 3 && new Set(rows).size === 1, `the views are one row (${rows.length} in ${new Set(rows).size} row)`);
     expect(!!bar && !!tile && near(bar.y, tile.y), `on the channel tiles' line (${bar?.y.toFixed(1)} and ${tile?.y.toFixed(1)})`);
-    expect(!!bar && !!side && bar.left >= side.right, "after the sidebar's column");
-    expect(!!bar && !!main && main.top >= bar.bottom, "the work starts under them");
+    expect(
+      !!strip && !!tile && !!bar && tile.bottom <= strip.bottom && bar.bottom <= strip.bottom,
+      `the tiles and the views are in the top strip (${tile?.bottom} and ${bar?.bottom} of ${strip?.bottom})`,
+    );
+    expect(!!home && !!side && near(home.left, side.right + 40), `the tiles start on the work's gutter line (${home?.left} after ${side?.right})`);
+    expect(!!bar && !!add && bar.left >= add.right, "the views come after the tiles");
+    expect(
+      !!strip && !!main && !!side && near(main.top, strip.bottom) && near(side.top, strip.bottom),
+      `the work and the sidebar start right under the strip (${main?.top} and ${side?.top} of ${strip?.bottom})`,
+    );
     expect((await page.locator(".side .side-views .side-row").count()) === 0 && (await page.locator(".side .side-chan").count()) === 1, "the sidebar keeps the channel's name and loses the view rows");
-    expect(!!title && near(title.x, width / 2), `the title is still on the window's centre (${title?.x.toFixed(1)} of ${width / 2})`);
+    expect(title === null, "the strip has no title");
     await page.locator(".views-bar .side-row", { hasText: "Specs" }).click();
     await page.waitForTimeout(300);
-    expect((await page.locator('.views-bar .side-row[aria-pressed="true"]').innerText()).includes("Specs"), "a view opens from the bar and shows as chosen");
+    expect((await page.locator('.views-bar .side-row[aria-pressed="true"]').innerText()).includes("Specs"), "a view opens from the strip and shows as chosen");
     const edge = await boxOf(page, ".side-grip");
-    if (edge && bar && side) {
-      await page.mouse.move(edge.right - 2, bar.y);
+    if (edge) {
+      await page.mouse.move(edge.x, edge.y);
       await page.mouse.down();
-      await page.mouse.move(edge.right + 59, bar.y, { steps: 6 });
+      await page.mouse.move(edge.x + 61, edge.y, { steps: 6 });
       await page.mouse.up();
     }
     const sideAfter = await boxOf(page, ".side");
-    expect(!!edge && !!side && !!sideAfter && sideAfter.right === side.right + 64, `the sidebar's edge still drags beside the bar (${side?.right} → ${sideAfter?.right})`);
+    const homeAfter = await boxOf(page, ".tile.is-home");
+    expect(!!edge && !!side && !!sideAfter && sideAfter.right === side.right + 64, `the sidebar's edge drags (${side?.right} → ${sideAfter?.right})`);
+    expect(!!home && !!homeAfter && homeAfter.left === home.left + 64, `and the tiles follow it (${home?.left} → ${homeAfter?.left})`);
     await page.close();
     const bare = await browser.newPage({ viewport: { width, height } });
     await bare.addInitScript(() => localStorage.setItem("mc.sidebar-hidden", "1"));
     await open(bare, "channel-top");
+    const taken = (): Promise<boolean[]> =>
+      bare.evaluate(() =>
+        [...document.querySelectorAll(".rail .tile")].map((tile) => {
+          const r = tile.getBoundingClientRect();
+          return tile.contains(document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2));
+        }),
+      );
+    const hidden = await taken();
+    const work = await boxOf(bare, ".main");
+    const homeBare = await boxOf(bare, ".tile.is-home");
+    expect(hidden.length > 0 && hidden.every(Boolean), `with the sidebar hidden, the channel tiles stay in the strip and take the click (${hidden.filter(Boolean).length} of ${hidden.length})`);
+    expect(!!work && near(work.left, 0) && !!home && !!homeBare && homeBare.left === home.left, `the work takes the sidebar's place and the tiles stay where they were (${homeBare?.left})`);
     await bare.mouse.move(400, 500);
     await bare.mouse.move(3, 500, { steps: 6 });
     await bare.waitForTimeout(700);
-    const tiles = await bare.evaluate(() =>
-      [...document.querySelectorAll(".rail .tile")].map((tile) => {
-        const r = tile.getBoundingClientRect();
-        return tile.contains(document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2));
-      }),
-    );
-    expect(tiles.length > 0 && tiles.every(Boolean), `with the sidebar hidden, the peek's channel tiles are over the bar (${tiles.filter(Boolean).length} of ${tiles.length} take the click)`);
+    const peeked = await taken();
+    expect(peeked.length > 0 && peeked.every(Boolean), `and they take it under the peek too (${peeked.filter(Boolean).length} of ${peeked.length})`);
     await bare.close();
+  }
+  for (const [width, height] of [[900, 700]] as const) {
+    console.log(`\nthe top bar layout, ${width}×${height}`);
+    const page = await browser.newPage({ viewport: { width, height } });
+    await open(page, "channel-top");
+    const over = await page.evaluate(() => (document.scrollingElement?.scrollWidth ?? 0) - innerWidth);
+    const names = await page.evaluate(() => [...document.querySelectorAll(".views-bar .side-label")].map((label) => Math.round(label.getBoundingClientRect().width)));
+    const main = await boxOf(page, ".main");
+    expect(over <= 0, `nothing scrolls sideways (${over}px over)`);
+    expect(names.length >= 3 && names.every((w) => w <= 1), `the views are icons when their names don't fit (${names.join(", ")})`);
+    expect(!!main && near(main.top, 48), `the work still starts under the strip (${main?.top})`);
+    await page.close();
   }
   for (const [width, height] of [
     [1000, 760],

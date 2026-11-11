@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useEffectEvent, useState, type CSSProperties, type DragEvent } from "react"
+import { Suspense, useEffect, useEffectEvent, useLayoutEffect, useState, type CSSProperties, type DragEvent } from "react"
 
 import { nextWithNews } from "@kiwi/channel/news.ts"
 import { cx } from "~/kit/bits"
@@ -10,6 +10,8 @@ import { inText } from "~/kit/keys"
 import { useNav, useGo, useActions, useTiles, useAppPrefs } from "~/nav"
 import { openMenu } from "~/kit/menu-open"
 import { railItems, type DropTarget } from "~/shell/rail-items"
+import { ViewsBar } from "~/shell/sidebar"
+import { useTopLayout } from "~/shell/top-layout"
 import { t } from "~/i18n/i18n"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 
@@ -36,6 +38,13 @@ export function Rail() {
   const onChannel = nav.page === "channel"
   const home = onChannel && nav.channel === null
   const sidebarHidden = useSidebarHidden()
+  const top = useTopLayout()
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    if (top) root.dataset["layout"] = "top"
+    else delete root.dataset["layout"]
+    return () => void delete root.dataset["layout"]
+  }, [top])
   const cardsHere = onChannel && (home || sidebarHidden)
   const on = onChannel ? nav.channel : null
   const folders = prefs.folders
@@ -209,6 +218,7 @@ export function Rail() {
           </button>
         </li>
       </ul>
+      {top && onChannel && !home && <ViewsBar />}
       {hint && (
         <span className="rail-hint" aria-hidden="true" style={{ "--x": `${hint.x}px`, "--y": `${hint.y}px` } as CSSProperties}>
           {hint.name}

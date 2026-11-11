@@ -77,7 +77,7 @@ export default {
   "settings.sections.layout": "布局",
   "settings.sections.layout.side": "侧边栏",
   "settings.sections.layout.top": "顶栏",
-  "settings.sections.layout.hint": "顶栏会把各个视图排成一行,放在工作区上方。",
+  "settings.sections.layout.hint": "顶栏会把频道和各个视图排成一行,放在窗口顶部。",
   "settings.sections.motion": "动效",
   "settings.sections.update.ready": "{version} 已就绪",
   "settings.sections.update.ready.hint": "当前版本为 {version}。Channels 将以新版本重启。",
