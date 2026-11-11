@@ -186,6 +186,8 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   an edge 1 or 2px off its neighbours, a boxed control off the grid, a lone
   edge near a common one, and anything that can scroll sideways. It costs
   frames while it is on, so no build turns it on by default.
+  `bun scripts/ui-audit.ts --dist ui/dist` opens every demo shot with the
+  overlay on, at two window sizes, and fails on any issue it reports.
   `bun scripts/ui-layout.ts --dist ui/dist` measures these rules in the built
   page (the centre, the sidebar's edges, the tracker's place, the two sides
   of the conversation, hiding and peeking the sidebar, search, a wide panel)
