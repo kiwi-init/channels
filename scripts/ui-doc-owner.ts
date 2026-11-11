@@ -96,10 +96,7 @@ async function joinAs(p: Person, base: string, code: string, owner: Page): Promi
 }
 
 async function general(p: Person): Promise<void> {
-  await p.page
-    .getByRole("navigation", { name: "Views" })
-    .getByRole("button", { name: /general/ })
-    .click();
+  await p.page.locator('section[aria-label="Rooms"] button').filter({ hasText: "general" }).click();
   await p.page.locator(".thread-doc").first().waitFor({ state: "attached", timeout: 30000 });
 }
 

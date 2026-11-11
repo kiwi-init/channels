@@ -391,7 +391,9 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   as rows, the ones that need you first (a `Dot`, the title in full on up to
   two lines, steps done of all in mono when the task has steps; no face, the
   owner is in the row's `title`), eight at most and "+N more" to Specs. On a
-  wide window it stands in for the Now card at the top of Specs. A row opens
+  wide window it stands in for the Now card at the top of Specs. An open
+  spec is the exception: it reads across both columns, with no tracker
+  beside it, so its comments keep their margin. A row opens
   the task in this same column, and closing it brings the tracker back. A
   thread, a task, a PR or an issue opens here too; at the column's own width
   that moves nothing, the composer included. A panel someone has dragged

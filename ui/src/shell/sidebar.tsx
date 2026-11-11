@@ -69,7 +69,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
       <button
         type="button"
         className={cx("side-row", tab === "needs" && "is-needs", nav.tab === tab && "is-on")}
-        aria-current={nav.tab === tab ? "page" : undefined}
+        aria-pressed={nav.tab === tab}
         title={title}
         onClick={() => go(tab === "specs" ? { to: "spec", ask: null } : { to: "tab", tab })}
       >

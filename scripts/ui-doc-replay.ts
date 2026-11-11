@@ -101,7 +101,7 @@ async function openOther(page: Page): Promise<Page> {
     .first()
     .click();
   await next.waitForTimeout(300);
-  await views.getByRole("button", { name: /general/ }).click();
+  await next.locator('section[aria-label="Rooms"] button').filter({ hasText: "general" }).click();
   await next.locator(".thread-doc").first().waitFor({ state: "attached", timeout: 30000 });
   await next.waitForTimeout(500);
   console.log("ok  a second window of the same person went away and back to #general, its doc already synced");
@@ -134,7 +134,7 @@ async function round(page: Page, i: number): Promise<string | null> {
       .first()
       .click();
     await page.waitForTimeout(300);
-    await views.getByRole("button", { name: /general/ }).click();
+    await page.locator('section[aria-label="Rooms"] button').filter({ hasText: "general" }).click();
     await area.click();
     await page.keyboard.press("End");
   }

@@ -118,6 +118,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
     return () => window.removeEventListener("mousemove", onMove)
   }, [peeking])
   const panelOpen = !!nav.panel
+  const reading = nav.tab === "specs" && nav.spec != null && !panelOpen
   useLayoutEffect(() => {
     const root = document.documentElement
     root.toggleAttribute("data-bare", hidden)
@@ -195,7 +196,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const news = drawerNews(channel)
 
   return (
-    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare", peeking && "is-peek")}>
+    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare", peeking && "is-peek", reading && "is-reading")}>
       {hidden && !peek && <div className="side-edge" onMouseEnter={() => setPeek(true)} />}
       <header className="top">
         <div className="top-lead">
@@ -249,7 +250,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           </Suspense>
         </Boundary>
       </main>
-      {!nav.panel && !older && (
+      {!nav.panel && !older && !reading && (
         <Suspense fallback={null}>
           <Tracker channel={channel} />
         </Suspense>

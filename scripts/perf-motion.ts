@@ -124,7 +124,7 @@ try {
   await firstRun(page, "Jonatas");
   const code = await newChannel(page, "motion");
   const views = page.getByRole("navigation", { name: "Views" });
-  const toConversation = () => views.getByRole("button", { name: /general/ }).click();
+  const toConversation = () => page.locator('section[aria-label="Rooms"] button').filter({ hasText: "general" }).click();
   const toTasks = () => views.getByRole("button", { name: /^Specs/ }).click();
   let joined = false;
   const joining = kiwi(["join", code, "motion", "--as", "atlas", "--model", "claude-opus-5-5", "--relay", BASE]).then(() => void (joined = true));

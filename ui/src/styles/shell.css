@@ -1158,6 +1158,12 @@
   grid-column: 2;
 }
 
+@media (min-width: 1180px) and (orientation: landscape) {
+  .chan.is-reading .main {
+    grid-column: 2 / -1;
+  }
+}
+
 .track,
 .panel {
   grid-row: 2 / -1;
