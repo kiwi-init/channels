@@ -26,7 +26,6 @@ export default {
   "chat.menus.leave.sub": "Some da sua lista agora. Fica fechada de vez quando outra pessoa da sala estiver online, e ela pode adicionar você de volta.",
   "chat.menus.leave.yes": "Sair",
   "chat.menus.copy.name": "Copiar nome",
-  "chat.menus.conversation": "conversa",
   "chat.menus.this.conversation": "Esta conversa",
   "chat.mermaid.invalid": "não é um Mermaid válido",
   "chat.mermaid.too.long": "é longo demais para desenhar (mais de {count} caracteres)",

@@ -84,13 +84,13 @@ export function versionsItems({ channel, go }: MenuContext, where: Where, name: 
   return thread && channel.docs?.[thread] ? [{ label: t("chat.menus.earlier.versions"), run: () => go({ to: "modal", modal: { kind: "versions", thread, name } }) }] : []
 }
 
-function hideItem(ctx: MenuContext, actions: Actions, where: Extract<Where, { kind: "room" | "dm" }>, name: string, open: boolean): MenuItem {
-  const key = hiddenKey(ctx.channel.code, where)
+function hideItem(ctx: MenuContext, actions: Actions, room: { id: string; name: string }, open: boolean): MenuItem {
+  const key = hiddenKey(ctx.channel.code, room.id)
   const hidden = hiddenPlaces.get().includes(key)
   return {
-    label: t(hidden ? "chat.menus.show" : "chat.menus.hide", { name }),
+    label: t(hidden ? "chat.menus.show" : "chat.menus.hide", { name: `#${room.name}` }),
     run: () => {
-      if (!hidden) actions.markRead(ctx.channel.code, where)
+      if (!hidden) actions.markRead(ctx.channel.code, { kind: "room", room: room.id })
       setHidden(key, !hidden)
       if (!hidden && open) ctx.go({ to: "where", where: { kind: "room", room: GENERAL_ROOM } })
     },
@@ -109,7 +109,7 @@ export function roomGroups(
     [
       ...(room.unread > 0 ? [{ label: t("chat.menus.mark.read"), run: () => actions.markRead(channel.code, { kind: "room", room: room.id }) }] : []),
       { label: t(room.muted ? "chat.menus.unmute" : "chat.menus.mute", { room: room.name }), run: () => actions.setMute(channel.code, room.id, !room.muted) },
-      ...(room.id === GENERAL_ROOM ? [] : [hideItem(ctx, actions, { kind: "room", room: room.id }, `#${room.name}`, open)]),
+      ...(room.id === GENERAL_ROOM ? [] : [hideItem(ctx, actions, room, open)]),
     ],
     versionsItems(ctx, { kind: "room", room: room.id }, `#${room.name}`),
     channel.youOwn || channel.youTrusted ? [{ label: t("chat.menus.room.settings"), run: () => go({ to: "modal", modal: { kind: "channel", tab: "rooms" } }) }] : [],
@@ -129,12 +129,9 @@ export function roomGroups(
   ]
 }
 
-export function directGroups(ctx: MenuContext, actions: Actions, open: boolean, direct: { with: string; unread: number }, who: Person | undefined): MenuGroups {
+export function directGroups(ctx: MenuContext, actions: Actions, direct: { with: string; unread: number }, who: Person | undefined): MenuGroups {
   return [
-    [
-      ...(direct.unread > 0 ? [{ label: t("chat.menus.mark.read"), run: () => actions.markRead(ctx.channel.code, { kind: "dm", with: direct.with }) }] : []),
-      hideItem(ctx, actions, { kind: "dm", with: direct.with }, t("chat.menus.conversation"), open),
-    ],
+    direct.unread > 0 ? [{ label: t("chat.menus.mark.read"), run: () => actions.markRead(ctx.channel.code, { kind: "dm", with: direct.with }) }] : [],
     versionsItems(ctx, { kind: "dm", with: direct.with }, t("chat.menus.this.conversation")),
     who ? personItems(ctx, who).slice(0, 1) : [],
   ]

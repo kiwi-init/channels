@@ -26,7 +26,6 @@ export default {
   "chat.menus.leave.sub": "它会立即从你的列表中移除。房间里有其他人上线后才完全退出，他们可以把你加回来。",
   "chat.menus.leave.yes": "退出",
   "chat.menus.copy.name": "复制名称",
-  "chat.menus.conversation": "会话",
   "chat.menus.this.conversation": "此会话",
   "chat.mermaid.invalid": "不是有效的 Mermaid",
   "chat.mermaid.too.long": "太长，无法绘制（超过 {count} 个字符）",

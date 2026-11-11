@@ -33,7 +33,7 @@ try {
   page.on("pageerror", (e) => fails.push(`page threw: ${e.message}`));
   await page.goto(`http://127.0.0.1:${server.port}/?shot=channel`);
   const area = page.getByRole("textbox", { name: "Message" });
-  const room = (name: string) => page.locator(`.side-row:has-text("${name}"), .side-face[aria-label^="${name}"]`).first();
+  const room = (name: string) => page.locator(`.side-row:has-text("${name}")`).first();
 
   await room("atlas").click();
   await area.fill("only for atlas");

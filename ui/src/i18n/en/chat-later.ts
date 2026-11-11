@@ -144,7 +144,6 @@ const words = {
   "chat.menus.leave.sub": "It leaves your list now. It's fully closed once someone else in the room is online, and they can add you back.",
   "chat.menus.leave.yes": "Leave",
   "chat.menus.copy.name": "Copy name",
-  "chat.menus.conversation": "conversation",
   "chat.menus.this.conversation": "This conversation",
   "chat.mermaid.invalid": "it isn’t valid Mermaid",
   "chat.mermaid.too.long": "it's too long to draw (over {count} characters)",

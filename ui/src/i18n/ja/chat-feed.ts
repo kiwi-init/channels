@@ -26,7 +26,6 @@ export default {
   "chat.menus.leave.sub": "今すぐリストから消えます。ルームの誰かがオンラインになると完全に退出となり、その人はあなたを再び追加できます。",
   "chat.menus.leave.yes": "退出",
   "chat.menus.copy.name": "名前をコピー",
-  "chat.menus.conversation": "会話",
   "chat.menus.this.conversation": "この会話",
   "chat.mermaid.invalid": "有効な Mermaid ではありません",
   "chat.mermaid.too.long": "長すぎて描画できません（{count} 文字超）",

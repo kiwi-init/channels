@@ -141,14 +141,13 @@ try {
       return {
         text: edges(".side-label, .side-name", true),
         faces: edges(".side-member .av", false),
-        resting: edges(".side-faces .av", false).slice(0, 1),
-        sizes: [...new Set([...el.querySelectorAll(".side-member .av, .side-faces .av")].map((node) => Math.round(node.getBoundingClientRect().width * 10) / 10))],
+        sizes: [...new Set([...el.querySelectorAll(".side-member .av")].map((node) => Math.round(node.getBoundingClientRect().width * 10) / 10))],
         pillOff: on ? Math.round(el.getBoundingClientRect().top + pill.m42 - el.scrollTop - on.getBoundingClientRect().top) : 0,
         headTop: el.querySelector(".heading")?.getBoundingClientRect().top ?? 0,
       };
     });
     expect(!!side && side.text.length === 1, `every sidebar row's text starts on one edge (${side?.text.join(", ")})`);
-    expect(!!side && side.faces.length === 1 && (side.resting.length === 0 || side.resting[0] === side.faces[0]) && side.sizes.length === 1, "resting agents' faces share the rows' column and size");
+    expect(!!side && side.faces.length === 1 && side.sizes.length === 1, "every sidebar face sits in one column, at one size");
     expect(!!side && side.pillOff === 0, "the open row's pill sits on its row");
 
     const tracker = await boxOf(page, ".track");
@@ -283,6 +282,23 @@ try {
     const composer = await boxOf(page, ".main .composer");
     expect(!!panel && near(panel.right - panel.left, 490) && near(1710 - panel.right, 0), `the panel keeps the width it was dragged to (${panel ? panel.right - panel.left : "?"})`);
     expect(!!panel && !!chat && !!composer && near(chat.right, panel.left) && composer.right <= panel.left, "the conversation and its composer end where the panel starts");
+    await page.close();
+  }
+  {
+    console.log("\nthe sidebar's agents");
+    const page = await browser.newPage({ viewport: { width: 1280, height: 1180 } });
+    await open(page, "channel");
+    const agents = page.locator('.side section[aria-label="Agents"]');
+    const row = (name: string) => agents.locator(`.side-row:has-text("${name}")`);
+    expect((await row("atlas").count()) === 1 && (await row("pip").count()) === 1, "an agent with nothing to do keeps its own row");
+    expect((await row("scout").count()) === 0, "an agent that left has no row");
+    await agents.getByRole("button", { name: "1 hidden" }).click();
+    expect((await row("scout").innerText()).includes("left"), "the hidden row brings it back, marked as left");
+    await row("scout").click();
+    await agents.getByRole("button", { name: "Show less" }).click();
+    expect((await row("scout").count()) === 1 && (await agents.getByRole("button", { name: "1 hidden" }).count()) === 0, "it stays listed while its conversation is open");
+    await page.locator('.side-row:has-text("general")').first().click();
+    expect((await row("scout").count()) === 0 && (await agents.getByRole("button", { name: "1 hidden" }).count()) === 1, "and hides again once you go elsewhere");
     await page.close();
   }
   for (const [width, height] of [
