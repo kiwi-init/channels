@@ -213,6 +213,20 @@ async function belowTheAsk() {
   await settle(page, 1500);
   const after = await topRow(page);
   expect(near(after, spot), `a restart onto the message below the permission ask lands on that message once the cards settle (${JSON.stringify(spot)} → ${JSON.stringify(after)})`);
+
+  await page.reload();
+  await page.locator("article.msg").first().waitFor();
+  const feed = await page.locator(".feed").boundingBox();
+  if (feed) await page.mouse.move(feed.x + feed.width / 2, feed.y + feed.height / 2);
+  await page.mouse.wheel(0, -600);
+  await settle(page, 1500);
+  const wheeled = await topRow(page);
+  await settle(page, 700);
+  const still = await topRow(page);
+  expect(
+    !!wheeled && !!spot && wheeled.seq < spot.seq && near(still, wheeled),
+    `a wheel while the cards are still settling takes the feed away from the restored spot, and it stays there (${JSON.stringify(spot)} → ${JSON.stringify(wheeled)} → ${JSON.stringify(still)})`,
+  );
   await page.context().close();
 }
 

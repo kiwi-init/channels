@@ -25,6 +25,7 @@ class Feed {
   top = 0
   observers = new Set<() => void>()
   listeners = new Map<string, Set<Listener>>()
+  docListeners = new Map<string, Set<Listener>>()
   readonly spacer = { style: { height: "" } }
   private readonly rowEls = new Map<number, unknown>()
 
@@ -75,6 +76,14 @@ class Feed {
       this.listeners.set(kind, set)
     },
     removeEventListener: (kind: string, f: Listener) => this.listeners.get(kind)?.delete(f),
+    ownerDocument: {
+      addEventListener: (kind: string, f: Listener) => {
+        const set = this.docListeners.get(kind) ?? new Set<Listener>()
+        set.add(f)
+        this.docListeners.set(kind, set)
+      },
+      removeEventListener: (kind: string, f: Listener) => this.docListeners.get(kind)?.delete(f),
+    },
   }
 
   readonly doc = {
@@ -116,6 +125,10 @@ class Feed {
     }
     this.rowEls.set(seq, el)
     return el
+  }
+
+  fireDoc(kind: string): void {
+    for (const f of this.docListeners.get(kind) ?? []) f({ deltaY: 0 })
   }
 
   fire(kind: string, deltaY = 0): void {
@@ -411,6 +424,7 @@ describe("useStick in a thread doc", () => {
     const f = new Feed(100)
     const { stick, root } = await mount(f, true, false)
     stick.toRow(f.rowEl(20) as HTMLElement, -10)
+    f.fireDoc("wheel")
     f.scrollTo(f.top + 100)
     const read = f.top
     f.rows[0]!.h += 50
@@ -430,6 +444,70 @@ describe("useStick in a thread doc", () => {
     f.scrollTo(f.top)
     stick.settle()
     expect(Math.abs((f.rowEl(95) as HTMLElement).getBoundingClientRect().top - VIEW_TOP - at)).toBeLessThan(2)
+    await act(async () => root.unmount())
+  })
+
+  test("a reader who scrolls away from a restore before content shrinks keeps their place, not the restored one (#2295)", async () => {
+    const f = new Feed(100)
+    f.lines = 60
+    const { stick, root } = await mount(f, true, false)
+    stick.toRow(f.rowEl(95) as HTMLElement, -20)
+    f.fireDoc("wheel")
+    f.scrollTo(f.top - 1000)
+    const read = f.top
+    for (const r of f.rows.slice(0, 10)) r.h -= 40
+    f.lines = 20
+    expect(f.top).toBeLessThan(f.max)
+    stick.remember()
+    expect(Math.abs(f.top - (read - 400))).toBeLessThan(2)
+    await act(async () => root.unmount())
+  })
+
+  test("a key or a pointer anywhere on the page, such as keyboard scrolling or a scrollbar drag, releases a restore (#2295)", async () => {
+    for (const still of [false, true])
+      for (const kind of ["keydown", "pointerdown", "touchstart"]) {
+        const f = new Feed(100)
+        const { stick, root } = await mount(f, true, still)
+        stick.toRow(f.rowEl(20) as HTMLElement, -10)
+        f.fireDoc(kind)
+        f.scrollTo(f.top + 100)
+        const read = f.top
+        f.rows[0]!.h += 50
+        stick.remember()
+        expect(Math.abs(f.top - (read + 50))).toBeLessThan(2)
+        await act(async () => root.unmount())
+        expect(f.docListeners.get(kind)?.size ?? 0).toBe(0)
+      }
+  })
+
+  test("the app's own scrolls release a restore: a jump, an unstick or the bottom (#2295)", async () => {
+    for (const how of ["toOffset", "unstick", "toBottom"] as const) {
+      const f = new Feed(100)
+      const { stick, root } = await mount(f, true, false)
+      stick.toRow(f.rowEl(20) as HTMLElement, -10)
+      if (how === "toOffset") stick.toOffset(f.top + 300)
+      if (how === "unstick") stick.unstick()
+      if (how === "toBottom") stick.toBottom(false)
+      if (how !== "toBottom") f.scrollTo(f.top + 100)
+      const read = f.top
+      stick.remember()
+      f.rows[0]!.h += 50
+      stick.settle()
+      expect(Math.abs(f.top - (how === "toBottom" ? f.max : read + 50))).toBeLessThan(2)
+      await act(async () => root.unmount())
+    }
+  })
+
+  test("a restore stops holding once its time is up, so later scrolling isn't fought (#2295)", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, false)
+    stick.toRow(f.rowEl(20) as HTMLElement, -10)
+    later(5_000)
+    f.scrollTo(f.top + 100)
+    const moved = f.top
+    f.rows[0]!.h += 50
+    stick.remember()
+    expect(Math.abs(f.top - (moved + 50))).toBeLessThan(2)
     await act(async () => root.unmount())
   })
 
