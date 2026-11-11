@@ -9,7 +9,7 @@ import { APP_BEACON_MS, ChannelStore, PAGE, REACH, WINDOW } from "./channel-stor
 import { PRESENCE_TTL } from "./online.ts";
 import { REFOLLOW_MS } from "./refollow.ts";
 import type { StoredMember } from "./store.ts";
-import { dropWarm, foldedFor, LEAN, LIGHT, warmOf, type Warm } from "./warm.ts";
+import { dropWarm, foldedFor, keepWarm, LEAN, leanNow, LIGHT, warmOf, type Warm } from "./warm.ts";
 import { useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts";
 
 const CODE = "mc2-store-test";
@@ -19,8 +19,10 @@ const msg = (seq: number): Message => ({ v: PROTOCOL_VERSION, id: `id-${seq}`, f
 const person = (name: string, pk: string): Member => ({ name, pk, xpk: `x${pk}`, owner: false, at: 0, active: true });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function until(ok: () => boolean): Promise<void> {
+async function until(ok: () => boolean, progress?: () => object): Promise<void> {
+  const from = performance.now();
   for (let i = 0; i < 200 && !ok(); i++) await sleep(1);
+  if (!ok() && progress) console.error("until gave up", { afterMs: Math.round(performance.now() - from), ...progress() });
   expect(ok()).toBe(true);
 }
 
@@ -115,14 +117,43 @@ function relay(
   return { link, lend, follows, lent, live, say, setRoster, changedAt, called, kept, beacons };
 }
 
+const leftOpen = new Set<() => void>();
+
+const opening = (store: ChannelStore): (() => void) => {
+  const stop = store.open();
+  const close = () => {
+    leftOpen.delete(close);
+    stop();
+  };
+  leftOpen.add(close);
+  return close;
+};
+
 const opened = async (r: ReturnType<typeof relay>, human?: null) => {
   const store = new ChannelStore(member, human, { link: r.link, lend: r.lend });
-  const close = store.open();
+  const close = opening(store);
   if (human !== null) await until(() => r.follows.length > 0);
   return { store, close };
 };
 
-afterEach(() => dropWarm(CODE));
+afterEach(() => {
+  for (const close of [...leftOpen]) close();
+  dropWarm(CODE);
+});
+
+describe("a store a test leaves open (#2261)", () => {
+  let left: ReturnType<typeof relay> | undefined;
+
+  test("is still following when its test ends without closing it", async () => {
+    left = relay(0);
+    await opened(left);
+    expect(left.live().stopped).toBe(false);
+  });
+
+  test("is closed before the next test runs, so it can't write over that test's warm copy", () => {
+    expect(left?.live().stopped).toBe(true);
+  });
+});
 
 describe("a channel store", () => {
   test("follows from the relay's head once open, and goes live on the relay's Open", async () => {
@@ -204,7 +235,7 @@ describe("a channel store", () => {
     const store = new ChannelStore(member, undefined, { link: again.link, lend: again.lend });
     expect(store.handle.value.ready).toBe(true);
     expect(store.handle.value.messages.map((m) => m.seq)).toEqual([1, 2]);
-    const close = store.open();
+    const close = opening(store);
     await until(() => again.follows.length > 0);
     expect(again.live().since).toBe(2);
     close();
@@ -220,7 +251,7 @@ describe("a channel store", () => {
     const again = relay(2);
     const store = new ChannelStore(member, undefined, { link: again.link, lend: again.lend });
     expect(store.handle.value.state).toBe(folded);
-    const close = store.open();
+    const close = opening(store);
     await until(() => again.follows.length > 0);
     expect(store.handle.value.state).toBe(folded);
     again.say({ _tag: "Message", message: msg(3), row: null });
@@ -270,7 +301,10 @@ describe("a channel store", () => {
     const all = Array.from({ length: 2_600 }, (_, i) => msg(i + 1));
     for (const m of all) r.say({ _tag: "Message", message: m, row: null });
     await sleep(40);
-    await until(() => store.handle.value.messages.length < all.length);
+    await until(
+      () => store.handle.value.messages.length < all.length,
+      () => ({ messages: store.handle.value.messages.length, reach: store.handle.value.reach.length, leanLoaded: leanNow() !== null }),
+    );
     const { messages, reach, state } = store.handle.value;
     expect(messages.at(-1)?.seq).toBe(2_600);
     expect(messages.length).toBe(WINDOW);
@@ -295,7 +329,7 @@ describe("a channel store", () => {
   test(`a store for Home keeps ${LIGHT} messages and leaves a light warm copy that never replaces a whole one`, async () => {
     const r = relay(0);
     const store = new ChannelStore(member, undefined, { link: r.link, lend: r.lend }, true);
-    const close = store.open();
+    const close = opening(store);
     await until(() => r.follows.length > 0);
     for (let seq = 1; seq <= 300; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
     await until(() => store.handle.value.messages.length === LIGHT);
@@ -426,7 +460,7 @@ describe("the GitHub chores", () => {
     warm.close();
     const r = relay(1, { owner: true, answers: withRepo });
     const store = new ChannelStore(member, undefined, { link: r.link, lend: r.lend });
-    const close = store.open();
+    const close = opening(store);
     await until(() => r.called("drainGithub").length === 1);
     close();
   });
@@ -523,6 +557,25 @@ describe("history from the relay is fetched only when asked (T977, #1944)", () =
       kept: async () => null,
     };
   }
+
+  test("a disk tail at head with no base under it is replayed from the first message, and an old task survives it (#2288)", async () => {
+    const head = REACH + 1_000;
+    useHistoryDb(archive(head - REACH + 1, head));
+    try {
+      const r = relay(head);
+      const { store, close } = await opened(r);
+      expect(r.follows[0]!.since).toBe(0);
+      expect(store.handle.value.caughtUp).toBe(false);
+      await sleep(150);
+      r.say({ _tag: "Message", message: { ...msg(1), pk: "pk-atlas", kind: "event", ev: { op: "task.add", title: "old unfinished task", owner: "atlas" } } as Message, row: null });
+      for (let seq = 2; seq <= head; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
+      await until(() => store.handle.value.caughtUp);
+      expect(store.handle.value.state.tasks.has(1)).toBe(true);
+      close();
+    } finally {
+      useHistoryDb(null);
+    }
+  });
 
   test("opening a channel and receiving live messages never reads older history from the relay", async () => {
     useHistoryDb(archive(50, 60));
@@ -648,13 +701,15 @@ describe("a channel longer than the window, opened with no base under it (T1759)
   const hearWindow = (r: ReturnType<typeof relay>) => {
     for (let seq = HEAD - REACH + 1; seq <= HEAD; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
   };
-  const sealedBase = (r: ReturnType<typeof relay>) => (r.kept.at(-1)?.state as { base: unknown } | undefined)?.base;
+  const hearUpTo = (r: ReturnType<typeof relay>, last: number) => {
+    for (let seq = 1; seq <= last; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
+  };
 
   test("a snapshot request that fails is asked again, and the channel opens on its whole history", async () => {
     let asked = 0;
     const r = relay(HEAD, { answers: { snapshot: () => (++asked === 1 ? Promise.reject(new Error("the wifi dropped")) : baseAt(HEAD - REACH)) } });
     const store = new ChannelStore(member, undefined, { link: r.link, lend: r.lend });
-    const close = store.open();
+    const close = opening(store);
     await sleep(100);
     expect(r.follows).toHaveLength(0);
     expect(store.handle.value.connection).toBe("reconnecting");
@@ -666,36 +721,117 @@ describe("a channel longer than the window, opened with no base under it (T1759)
     close();
   });
 
-  test("with no snapshot to be had, the window still trims but its partial base is never sealed to disk", async () => {
+  test("with no snapshot to be had, the store follows from the first message and is caught up only once the whole log is in (#2288)", async () => {
     const r = relay(HEAD);
     const { store, close } = await opened(r);
-    hearWindow(r);
+    expect(r.follows[0]!.since).toBe(0);
+    hearUpTo(r, HEAD - REACH);
     await sleep(40);
-    await until(() => store.handle.value.messages.length === WINDOW);
     expect(store.handle.value.caughtUp).toBe(false);
-    await sleep(3_300);
-    expect(r.kept.length).toBeGreaterThan(0);
-    expect(sealedBase(r)).toBeNull();
+    hearWindow(r);
+    await until(() => store.handle.value.caughtUp);
+    expect(store.handle.value.state.head).toBe(HEAD);
     close();
-  }, 10_000);
+  });
 
-  test("the next store for that channel asks for the snapshot again and doesn't take the partial base for the whole history", async () => {
-    const first = relay(HEAD);
-    const one = await opened(first);
-    hearWindow(first);
-    await sleep(40);
-    await until(() => one.store.handle.value.messages.length === WINDOW);
-    one.close();
+  const oldTask = (): Message => ({ ...msg(1), pk: "pk-atlas", kind: "event", ev: { op: "task.add", title: "old unfinished task", owner: "atlas" } }) as Message;
+  const warmTail = () =>
+    keepWarm(CODE, {
+      messages: Array.from({ length: REACH }, (_, i) => msg(HEAD - REACH + 1 + i)),
+      reach: [],
+      unread: [],
+      roster: [person("atlas", "pk-atlas")],
+      requests: [],
+      marks: new Map(),
+      guardFloor: null,
+      roomsFloor: null,
+      base: null,
+      partial: true,
+    });
+  const replay = (r: ReturnType<typeof relay>, last: number) => {
+    r.say({ _tag: "Message", message: oldTask(), row: null });
+    for (let seq = 2; seq <= last; seq++) r.say({ _tag: "Message", message: msg(seq), row: null });
+  };
+
+  test("a warm tail at head with no base under it isn't caught up until the replay from the first message is, and an old task survives it (#2288)", async () => {
+    warmTail();
+    const r = relay(HEAD);
+    const { store, close } = await opened(r);
+    expect(r.follows[0]!.since).toBe(0);
+    expect(store.handle.value.caughtUp).toBe(false);
+    await sleep(150);
+    expect(store.handle.value.caughtUp).toBe(false);
+    replay(r, HEAD);
+    await until(() => store.handle.value.caughtUp);
+    expect(store.handle.value.state.tasks.has(1)).toBe(true);
+    await until(() => store.handle.value.messages.length <= WINDOW);
+    close();
     const again = relay(HEAD);
     const two = await opened(again);
-    expect(again.called("snapshot")).toHaveLength(1);
-    expect(two.store.handle.value.messages).toHaveLength(WINDOW);
-    expect(two.store.handle.value.state.head).toBe(HEAD);
-    expect(two.store.handle.value.caughtUp).toBe(false);
+    expect(two.store.handle.value.state.tasks.has(1)).toBe(true);
     two.close();
+  });
+
+  test("a partial warm base doesn't stand in for the missing prefix: the store replays from the first message, and an old task survives it and a reopen (#2288)", async () => {
+    const made: { base?: FoldBase } = {};
+    fold(
+      Array.from({ length: 1_600 }, (_, i) => msg(1_001 + i)),
+      [{ name: "atlas", pk: "pk-atlas", owner: false, at: 0, active: true }],
+      Date.now(),
+      null,
+      null,
+      null,
+      (b) => void (made.base = b),
+    );
+    keepWarm(CODE, {
+      messages: Array.from({ length: HEAD - 2_600 }, (_, i) => msg(2_601 + i)),
+      reach: [],
+      unread: [],
+      roster: [person("atlas", "pk-atlas")],
+      requests: [],
+      marks: new Map(),
+      guardFloor: null,
+      roomsFloor: null,
+      base: made.base!,
+      partial: true,
+    });
+    const r = relay(HEAD);
+    const { store, close } = await opened(r);
+    expect(r.follows[0]!.since).toBe(0);
+    expect(store.handle.value.caughtUp).toBe(false);
+    replay(r, HEAD);
+    await until(() => store.handle.value.caughtUp);
+    expect(store.handle.value.state.tasks.has(1)).toBe(true);
+    await until(() => store.handle.value.messages.length <= WINDOW);
+    close();
+    const two = await opened(relay(HEAD));
+    expect(two.store.handle.value.state.tasks.has(1)).toBe(true);
+    two.close();
+  });
+
+  test("a replay from the first message that stops short over a warm tail stays behind", async () => {
+    warmTail();
+    const r = relay(HEAD);
+    const { store, close } = await opened(r);
+    replay(r, 500);
+    await sleep(150);
+    expect(store.handle.value.caughtUp).toBe(false);
+    expect(store.handle.value.state.tasks.has(1)).toBe(true);
+    close();
+  });
+
+  test("a whole-log read that stops short leaves the channel behind, and a later store with a snapshot at hand catches up", async () => {
+    const first = relay(HEAD);
+    const one = await opened(first);
+    hearUpTo(first, HEAD - 500);
+    await sleep(40);
+    expect(one.store.handle.value.caughtUp).toBe(false);
+    one.close();
     const healed = relay(HEAD, { answers: { snapshot: () => baseAt(HEAD - 100) } });
     const three = await opened(healed);
-    expect(three.store.handle.value.caughtUp).toBe(true);
+    for (let seq = HEAD - 99; seq <= HEAD; seq++) healed.say({ _tag: "Message", message: msg(seq), row: null });
+    await until(() => three.store.handle.value.caughtUp);
+    expect(three.store.handle.value.state.head).toBe(HEAD);
     three.close();
   });
 });

@@ -1,6 +1,6 @@
 import { b64url, openBytes, sealBytes, type ChannelAccess } from "./crypto.ts";
 import { canonical, sign, verify, type Identity } from "./identity.ts";
-import { BASE_WIRE_VERSION, fromWire, toWire, wellFormedWire } from "./base-wire.ts";
+import { BASE_WIRE_VERSION, fromWire, readableWire, toWire, wellFormedWire } from "./base-wire.ts";
 import { MAX_SNAPSHOT_LENGTH, outgrown } from "./protocol.ts";
 import type { FoldBase } from "./state.ts";
 
@@ -93,7 +93,7 @@ export async function openSnapshot(access: ChannelAccess, s: unknown): Promise<F
   if (!plain || (await digest(plain)) !== s.hash) return null;
   try {
     const o = JSON.parse(new TextDecoder().decode(plain)) as { v?: unknown; room?: unknown; base?: unknown };
-    const base = (o.v === 5 || o.v === VERSION) && o.room === access.roomId && wellFormedWire(o.base, s.n) ? fromWire(o.base) : null;
+    const base = (o.v === 5 || readableWire(o.v)) && o.room === access.roomId && wellFormedWire(o.base, s.n) ? fromWire(o.base) : null;
     return base && !outgrown(base) ? base : null;
   } catch {
     return null;

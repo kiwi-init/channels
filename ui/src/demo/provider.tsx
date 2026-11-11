@@ -271,6 +271,7 @@ function withCompact(c: Channel, approved: boolean): Channel {
 
 export type Scenario =
   | "full"
+  | "specs-behind"
   | "compact"
   | "compacted"
   | "long"
@@ -328,11 +329,19 @@ const TASK_BODY = [
   "- **Icon twice:** the header tile (`:187-221`) and the Icon row (`:159-185`). Remove the row.",
   "- Toggles disabled for non-owners give no reason.",
   "",
+  "```",
+  "$ rg -n 'onSave|onBlur|onKeyDown|onChange' ui/src/modals/channel-settings.tsx",
+  '172:        <button type="submit" className="btn is-primary" disabled={!name.trim() || name === channel.name}>',
+  '296:              onKeyDown={(e) => e.key === "Enter" && actions.pause(channel.code, note.trim())}',
+  "```",
+  "",
   "**Fix.** One save pattern, one place per setting, plain words for the merge options.",
   "",
   "---",
   "From the desktop audit. https://github.com/kiwi-init/channels/issues/2111",
 ].join("\n")
+
+const behindOf = (c: Channel): Channel => ({ ...c, behind: true, specs: c.specs?.filter((s) => !!s.result), tasks: c.tasks.filter((k) => k.status === "done") })
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
   const prefs = { ...DEMO_PREFS, ...look }
@@ -366,32 +375,34 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                             ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
                             : scenario === "compact" || scenario === "compacted"
                               ? withCompact(DEMO_CHANNEL, scenario === "compacted")
-                              : scenario === "specs" || scenario === "spec-changed"
-                                ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
-                                : scenario === "forgotten-computer"
-                                  ? {
-                                      ...DEMO_CHANNEL,
-                                      asks: [
-                                        {
-                                          kind: "join" as const,
-                                          id: "join-dudu",
-                                          at: Date.now() - 30 * 60_000,
-                                          name: "dudu",
-                                          who: "agent" as const,
-                                          harness: "claude" as const,
-                                          runs: "Claude Code · claude-opus-5-5",
-                                          machine: "MacBook-Pro-de-Davi",
-                                          sponsor: "harry",
-                                          revoked: true as const,
-                                          said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
-                                          code: "604-218",
-                                        },
-                                        ...DEMO_CHANNEL.asks,
-                                      ],
-                                    }
-                                  : scenario === "event-runs"
-                                    ? withEventRuns(DEMO_CHANNEL)
-                                    : DEMO_CHANNEL,
+                              : scenario === "specs-behind"
+                                ? behindOf(withSpecs(DEMO_CHANNEL, false))
+                                : scenario === "specs" || scenario === "spec-changed"
+                                  ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
+                                  : scenario === "forgotten-computer"
+                                    ? {
+                                        ...DEMO_CHANNEL,
+                                        asks: [
+                                          {
+                                            kind: "join" as const,
+                                            id: "join-dudu",
+                                            at: Date.now() - 30 * 60_000,
+                                            name: "dudu",
+                                            who: "agent" as const,
+                                            harness: "claude" as const,
+                                            runs: "Claude Code · claude-opus-5-5",
+                                            machine: "MacBook-Pro-de-Davi",
+                                            sponsor: "harry",
+                                            revoked: true as const,
+                                            said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
+                                            code: "604-218",
+                                          },
+                                          ...DEMO_CHANNEL.asks,
+                                        ],
+                                      }
+                                    : scenario === "event-runs"
+                                      ? withEventRuns(DEMO_CHANNEL)
+                                      : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,

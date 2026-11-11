@@ -13,7 +13,7 @@ export interface GithubCheck {
   attempts?: RunAttempt[];
 }
 
-interface RunAttempt {
+export interface RunAttempt {
   run: number;
   attempt: number;
   started?: number;

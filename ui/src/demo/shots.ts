@@ -48,6 +48,7 @@ export const SHOTS: Record<string, Shot> = {
   "github-issue": kiwi({ tab: "github", github: "issues", panel: { kind: "issue", repo: "kiwi-init/electrobun-livewire", number: 9 } }),
   "github-empty": { scenario: "full", channel: "landing", nav: { tab: "github" } },
   specs: { scenario: "specs", channel: "kiwi", nav: { tab: "specs" } },
+  "specs-behind": { scenario: "specs-behind", channel: "kiwi", nav: { tab: "specs" } },
   "specs-general": { scenario: "specs", channel: "kiwi" },
   "spec-draft": { scenario: "specs", channel: "kiwi", nav: { tab: "specs", spec: 150, part: "spec" } },
   "spec-queued": { scenario: "specs", channel: "kiwi", nav: { tab: "specs", spec: 186, part: "spec" } },

@@ -125,6 +125,25 @@ describe("opening a channel", () => {
     expect(r.painted).toEqual([{ at: 1, seqs: [], base: 3000 }]);
   });
 
+  test("no base reaches the window on a long channel: the whole log is read, so nothing created before the window is lost (#2288)", async () => {
+    const r = relay();
+    const none = r.make(5114, [], null);
+    warmUp(none, undefined, 2000);
+    const opened = openChannel(none, undefined, 2000);
+    await r.settle();
+    await r.roundTrip();
+    expect(await opened).toEqual({ head: 5114, since: 0, whole: true, fresh: true });
+    expect(r.painted).toEqual([{ at: 1, seqs: [], base: null }]);
+    const s = relay();
+    const stale = s.make(5114, range(3200, 5114), 1000);
+    warmUp(stale, undefined, 2000);
+    const later = openChannel(stale, undefined, 2000);
+    await s.settle();
+    await s.roundTrip();
+    expect(await later).toEqual({ head: 5114, since: 0, whole: true, fresh: true });
+    expect(s.painted.at(-1)!.base).toBeNull();
+  });
+
   test("a kept state paints the channel before any round trip, from the cache and the kept base", async () => {
     const r = relay();
     const steps = r.make(5000, range(3001, 5000), 3000, kept(3000));

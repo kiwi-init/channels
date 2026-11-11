@@ -29,7 +29,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "400 bad settings (sealed with a channel key this channel doesn't have)",
   "400 bad slot",
   "400 bad slots to free",
-  "400 bad snapshot (at most 512KB, sealed with a channel key, at a seq the channel has)",
+  "400 bad snapshot (at most 1.5MB, sealed with a channel key, at a seq the channel has)",
   "400 bad thread id",
   "400 bad title",
   "400 bad title (sealed with a channel key this channel doesn't have)",
