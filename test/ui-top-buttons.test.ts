@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const SHELL = readFileSync(join(import.meta.dir, "../ui/src/styles/shell.css"), "utf8");
-const BUTTONS = /\.(top-chan|top-drawer|top-group)(?![\w-])/;
+const BUTTONS = /\.(top-chan|top-drawer|top-lead|top-tools)(?![\w-])/;
 const RAISED = /(?:^|;|\s)(box-shadow\s*:[^;]*--shadow[^;]*|background(?:-color)?\s*:[^;]*--float[^;]*)/;
 
 function raisedRules(css: string): string[] {

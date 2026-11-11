@@ -74,7 +74,7 @@ export async function approveSpec(page: Page, timeoutMs = 60000): Promise<void> 
   await approve.waitFor({ timeout: timeoutMs });
   await approve.click();
   await approve.waitFor({ state: "detached", timeout: timeoutMs });
-  await views.getByRole("button", { name: /general/ }).click();
+  await page.locator('section[aria-label="Rooms"] button').filter({ hasText: "general" }).click();
 }
 
 export async function unfold(page: Page, spec: string): Promise<void> {
@@ -107,24 +107,26 @@ export async function letIn(page: Page, waiting: () => boolean, timeoutMs = 1200
     if (await match.isVisible().catch(() => false)) await match.click().catch(() => undefined);
     await page.waitForTimeout(100);
   }
-  await views.getByRole("button", { name: /general/ }).click();
+  await page.locator('section[aria-label="Rooms"] button').filter({ hasText: "general" }).click();
 }
 
 export async function view(page: Page, label: string, marker: string): Promise<number> {
   return page.evaluate(
     async ([name, text]) => {
       const flat = (s: string) => s.replace(/\s+/g, "");
-      const b = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Views"] button')].find((x) => flat(x.textContent ?? "").startsWith(flat(name)));
+      const b = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Views"] button, section[aria-label="Rooms"] button')].find((x) => flat(x.textContent ?? "").startsWith(flat(name)));
       if (!b) throw new Error(`no ${name} view`);
       const t0 = performance.now();
       b.click();
       const deadline = t0 + 15000;
       while (performance.now() < deadline) {
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
-        if (b.getAttribute("aria-pressed") === "true" && new RegExp(text).test(document.querySelector("main")?.textContent ?? "")) break;
+        if ((b.getAttribute("aria-pressed") === "true" || b.getAttribute("aria-current") === "page") && new RegExp(text).test(document.querySelector("main")?.textContent ?? "")) break;
       }
       if (performance.now() >= deadline) {
-        const views = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Views"] button')].map((x) => `${flat(x.textContent ?? "")}[${x.getAttribute("aria-pressed")}]`).join(" | ");
+        const views = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Views"] button, section[aria-label="Rooms"] button')]
+          .map((x) => `${flat(x.textContent ?? "")}[${x.getAttribute("aria-pressed") ?? x.getAttribute("aria-current")}]`)
+          .join(" | ");
         const shown = (document.querySelector<HTMLElement>("main")?.innerText ?? "").replace(/\n+/g, " / ").slice(0, 1200);
         throw new Error(`the ${name} view opened without ${text}; views: ${views}; main shows: ${shown}`);
       }

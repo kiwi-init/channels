@@ -20,7 +20,8 @@
   flex-direction: column;
   min-height: 0;
   padding: 12px 12px 24px;
-  overflow-y: auto;
+  overflow: hidden auto;
+  scrollbar-width: none;
 }
 
 .set-nav .side-cards {
@@ -31,13 +32,14 @@
 .set-main {
   min-width: 0;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden auto;
+  scrollbar-gutter: stable;
 }
 
 html .set-body {
   max-width: calc(720px + 2 * var(--gutter));
-  margin: 0;
-  padding: 16px 32px 64px;
+  margin: 0 auto;
+  padding: 16px var(--gutter-end) 64px var(--gutter);
   animation: fade var(--fast) var(--ease);
 }
 
@@ -603,12 +605,11 @@ html .set-body {
   .set-nav {
     padding: 8px 10px;
     border-right: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
   }
 
   .set-nav ul {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
   }
 
@@ -664,9 +665,8 @@ html .set-body {
   height: var(--ctl);
   padding: 0 12px 0 8px;
   border: 0;
-  border-radius: var(--r-ctl);
-  background: var(--float);
-  box-shadow: var(--shadow-float);
+  border-radius: var(--r-row);
+  background: none;
   color: var(--ink);
   font: 600 var(--t-body) var(--ui);
   letter-spacing: -0.01em;
@@ -684,7 +684,7 @@ html .set-body {
 }
 
 .set-back:hover {
-  background: var(--float-2);
+  background: var(--wash);
 }
 
 .set-back:hover .icon {
@@ -754,4 +754,8 @@ html .set-body {
   color: var(--ink-2);
   transform: translateY(-50%);
   pointer-events: none;
+}
+
+.set-row .btn.is-quiet:last-of-type {
+  margin-right: -8px;
 }

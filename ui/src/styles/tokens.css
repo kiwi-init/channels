@@ -114,6 +114,7 @@
   --white: #fff;
   --img-edge: light-dark(oklch(0 0 0 / 0.1), oklch(1 0 0 / 0.1));
   --shadow-pop: 0 0 0 1px var(--line-2), 0 16px 48px rgb(0 0 0 / 0.32);
+  --plate: var(--bg-2);
   --float: var(--bg-3);
   --float-2: color-mix(in srgb, var(--float) 90%, var(--ink));
   --float-3: color-mix(in srgb, var(--float) 80%, var(--ink));
@@ -140,18 +141,26 @@
   --r-card: 14px;
   --r-win: 18px;
 
-  --ctl: 2rem;
-  --ctl-sm: 1.5rem;
-  --gutter: 24px;
+  --ctl: round(2rem, 8px);
+  --ctl-sm: round(1.5rem, 8px);
+  --row: round(1.75rem, 8px);
+  --row-text: round(1.375rem, 8px);
+  --slot: round(1.5rem, 8px);
+  --tile: round(2.375rem, 8px);
+  --av: round(2rem, 8px);
+  --av-sm: round(1.5rem, 8px);
+  --av-lg: round(3.5rem, 8px);
+  --gutter: 40px;
+  --bar: 0px;
+  --gutter-end: max(0px, calc(var(--gutter) - var(--bar)));
   --card-pad: 16px;
 
-  --rail-w: 4rem;
-  --side-w: 15.5rem;
+  --side-w: round(18rem, 8px);
   --panel-w: 400px;
-  --top-h: 3.25rem;
-  --col: 47.5rem;
+  --top-h: calc(var(--ctl) + 16px);
+  --col: round(47.5rem, 8px);
   --list: 2400px;
-  --compose-space: 8rem;
+  --compose-space: round(8rem, 8px);
 
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --fast: 0.16s;
@@ -214,6 +223,7 @@
   --h-codex: #111;
   --h-gemini: #2f6fe4;
   --h-opencode: #444;
+  --plate: var(--bg-2);
   --float: var(--bg);
   --shadow-float: 0 0 0 1px var(--line-2), 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 12px rgb(0 0 0 / 0.06);
 }
@@ -258,6 +268,7 @@
     --h-codex: #111;
     --h-gemini: #2f6fe4;
     --h-opencode: #444;
+    --plate: var(--bg-2);
     --float: var(--bg);
     --shadow-float: 0 0 0 1px var(--line-2), 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 12px rgb(0 0 0 / 0.06);
   }

@@ -5,9 +5,9 @@ import { minWindowWidth } from "../desktop/src/window-size.ts";
 
 const ui = join(import.meta.dir, "..", "ui", "src");
 const phoneWidth = (): number | null => {
-  const shell = /@media \(min-width: (\d+)px\)/.exec(readFileSync(join(ui, "styles", "shell.css"), "utf8"));
+  const widths = [...readFileSync(join(ui, "styles", "shell.css"), "utf8").matchAll(/@media \(max-width: (\d+)px\)/g)].map((m) => Number(m[1]));
   const side = /matchMedia\("\(max-width: (\d+)px\)"\)/.exec(readFileSync(join(ui, "shell", "side.ts"), "utf8"));
-  return shell && side ? Math.max(Number(shell[1]) - 1, Number(side[1])) : null;
+  return widths.length && side ? Math.max(Math.min(...widths), Number(side[1])) : null;
 };
 
 test("a Mac window is wider than the app's phone layout: below it the phone layout's headers sit under the traffic lights", () => {

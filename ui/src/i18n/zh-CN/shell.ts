@@ -48,8 +48,6 @@ export default {
   "shell.sidebar.you": "你",
   "shell.sidebar.mark.read": "标为已读",
   "shell.sidebar.needs.person": "需要人来处理",
-  "shell.sidebar.offline": "离线",
-  "shell.sidebar.idle": "空闲",
   "shell.updates.sign.in.ask": "{name} 想以你的身份登录",
   "shell.updates.review": "查看",
   "shell.updates.moved": "Channels 已移到 {path}",

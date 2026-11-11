@@ -67,7 +67,7 @@
   min-height: 0;
   max-height: 440px;
   padding: 8px;
-  overflow-y: auto;
+  overflow: hidden auto;
   overscroll-behavior: contain;
   scroll-padding: 8px;
 }

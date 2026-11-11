@@ -66,7 +66,7 @@
   border-radius: var(--r-card);
   background: var(--bg);
   box-shadow: var(--shadow-pop);
-  overflow-y: auto;
+  overflow: hidden auto;
   overscroll-behavior: contain;
   scroll-padding: 8px;
   font: var(--t-ui) var(--ui);

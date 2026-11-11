@@ -141,7 +141,7 @@
 }
 
 .gh-row.spec-row {
-  grid-template-columns: 1rem minmax(0, 1fr) auto;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   grid-template-rows: auto;
   width: 100%;
   padding-right: 8px;
@@ -200,7 +200,7 @@
 .spec-steps {
   grid-column: 1 / -1;
   margin: 0;
-  padding: 0 8px 6px 24px;
+  padding: 0 0 8px 24px;
 }
 
 @container (min-width: 46.59rem) {
@@ -210,7 +210,7 @@
   }
 
   .specs-list .board-row {
-    grid-template-columns: 1rem auto minmax(120px, 1fr) auto;
+    grid-template-columns: 16px auto minmax(120px, 1fr) auto;
     grid-template-rows: auto;
     column-gap: 16px;
     padding-block: 6px;
@@ -235,9 +235,10 @@
   --spec-max: calc(var(--col) + 744px);
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden auto;
   overscroll-behavior: contain;
-  padding: 16px var(--gutter) 48px;
+  scrollbar-gutter: stable;
+  padding: 16px var(--gutter-end) 48px var(--gutter);
   container: spec-page / inline-size;
 }
 
@@ -416,7 +417,7 @@
 .spec-rail-scroll {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden auto;
   overscroll-behavior: contain;
 }
 
@@ -646,7 +647,7 @@
   min-height: var(--ctl);
   max-height: calc(6lh + 14px);
   padding-block: 6px;
-  overflow-y: auto;
+  overflow: hidden auto;
   resize: none;
 }
 
@@ -1133,7 +1134,7 @@
 .spec-boxes > li {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 16px;
 }
 
 .spec-boxes > li.is-done {
@@ -1170,7 +1171,12 @@
 }
 
 .spec-box-btn {
-  display: inline-flex;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--slot);
+  height: var(--slot);
+  margin: -4px;
   padding: 0;
   border: 0;
   background: none;
@@ -1182,9 +1188,9 @@
 
 .result-tried {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
-  padding: 0 0 0 20px;
+  padding: 0 0 0 32px;
   color: var(--ink);
   font: var(--t-ui) / 1.45 var(--ui);
 }
@@ -1274,4 +1280,8 @@
 
 .inside-add .btn {
   height: var(--ctl-sm);
+}
+
+.result-actions > .btn.is-quiet:first-child {
+  margin-left: -12px;
 }

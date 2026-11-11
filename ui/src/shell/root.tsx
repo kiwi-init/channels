@@ -1,6 +1,7 @@
 import { Fragment, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react"
 
 import { t, useLanguage } from "~/i18n/i18n"
+import { watchScrollbar } from "~/kit/scrollbar"
 import { Boundary, Crashed } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
@@ -59,6 +60,7 @@ function Shown({ app, nav, go, broken }: RootProps) {
   const act = useMemo(() => ({ actions: app.actions, go, toast, now }), [app.actions, go, toast, now])
   const togglePalette = useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog])
   usePaletteKey(togglePalette)
+  useLayoutEffect(watchScrollbar, [])
   useEffect(
     () =>
       onCommand((c) => {

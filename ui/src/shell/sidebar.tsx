@@ -1,8 +1,8 @@
-import { Suspense, useEffect, useState, useSyncExternalStore } from "react"
+import { Suspense, useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
 import { liveOf, restOf } from "~/doing"
 
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"
-import { showMenu } from "~/kit/menu-open"
+import { openMenu, showMenu } from "~/kit/menu-open"
 import { useAppCan } from "~/live/app-can"
 import { useGlide } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
@@ -13,6 +13,9 @@ import { sameWhere, useAct, useGo, useNav } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
 import { comingBack, hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
 import { leftDirects } from "~/shell/left-directs"
+import { openAsks } from "~/needs/open"
+import { openTasks } from "~/tasks/open"
+import { headerLine } from "~/now"
 import { wordsPlain } from "~/words"
 import { t } from "~/i18n/i18n"
 
@@ -21,7 +24,7 @@ const SideCards = later(() => import("~/shell/updates").then((m) => m.SideCards)
 export function Sidebar({ channel }: { channel: Channel }) {
   const nav = useNav()
   const go = useGo()
-  const { actions } = useAct()
+  const { actions, now } = useAct()
   const people = onePerPerson(channel.people.filter((p) => p.kind === "human")).filter((p) => !p.left)
   const me = people.find((p) => p.you)
   const humans = people.filter((p) => !p.you)
@@ -52,8 +55,94 @@ export function Sidebar({ channel }: { channel: Channel }) {
   const hiddenDirects = leftPeople.filter((d) => hidden.includes(dmKey(d.with))).length
   const hiddenAgents = leftAgents.filter((d) => hidden.includes(dmKey(d.with))).length
   const toggleHidden = () => setShowHidden(!showHidden)
+  const needs = openAsks(channel).length
+  const tasks = openTasks(channel).length
+  const github = channel.repos.length > 0 || !!channel.prs?.length || !!channel.issues?.length
+  const openPrs = channel.prs?.filter((p) => p.state === "open" || p.state === "draft") ?? []
+  const red = openPrs.some((p) => p.checks === "fail" || !!p.ticks?.failed.length)
+  const openIssues = channel.issues?.filter((i) => i.state === "open").length ?? 0
+  const specs = channel.specs?.filter((s) => !s.result) ?? []
+  const specsNeed = specs.filter((s) => s.canJudge && (s.stage === "draft" || s.stage === "delivered" || s.changed)).length
+  const line = channel.loading ? [] : headerLine(channel, 0)
+  const view = (tab: "needs" | "specs" | "agents" | "github", icon: "needs" | "spec" | "agent" | "github", label: string, title: string | undefined, mark: ReactNode) => (
+    <li>
+      <button
+        type="button"
+        className={cx("side-row", tab === "needs" && "is-needs", nav.tab === tab && "is-on")}
+        aria-pressed={nav.tab === tab}
+        title={title}
+        onClick={() => go(tab === "specs" ? { to: "spec", ask: null } : { to: "tab", tab })}
+      >
+        <span className="side-icon">
+          <Icon name={icon} />
+        </span>
+        <span className="side-label">{label}</span>
+        {mark}
+      </button>
+    </li>
+  )
+  const channelMenu = (at: DOMRect) => {
+    const tile = now?.().channels.find((c) => c.code === channel.code)
+    void import("~/shell/rail-menu").then((m) =>
+      openMenu.set(
+        m.railMenu(
+          { kind: "channel", code: channel.code },
+          { x: at.left, y: at.bottom + 4 },
+          {
+            noFolders: true,
+            folders: [],
+            save: () => {},
+            title: () => channel.title,
+            muted: (code) => now?.().prefs.muted.includes(code) ?? false,
+            setMute: (code, on) => actions.setMute(code, null, on),
+            settings: () => go({ to: "modal", modal: { kind: "channel" } }),
+            own: channel.youOwn,
+            invite: () => go({ to: "modal", modal: { kind: "invite" } }),
+            end: () => go({ to: "modal", modal: { kind: "channel", end: true } }),
+            read: (tile?.unread ?? 0) > 0 ? (code) => actions.markChannelRead(code, tile?.head) : null,
+          }
+        )
+      )
+    )
+  }
+  const openDm = (who: string) => onChat && sameWhere(nav.where, { kind: "dm", with: who })
+  const rests = (p: Person) => !liveOf(p) && !(directOf.get(p.name)?.unread ?? 0) && !openDm(p.name)
+  const restsLeft = (d: Direct) => !d.unread && !openDm(d.with)
+  const resting = agents.filter(rests)
+  const restingLeft = leftAgents.filter((d) => showDm(d) && restsLeft(d))
   return (
     <div ref={sideRef} className="side">
+      <nav className="side-views" aria-label={t("shell.channel.views")}>
+        <button
+          type="button"
+          className="side-chan"
+          aria-haspopup="menu"
+          aria-label={t("shell.channel.menu.label", { name: channel.title })}
+          onClick={(e) => channelMenu(e.currentTarget.getBoundingClientRect())}
+        >
+          <span className="side-chan-name">{channel.title}</span>
+          <Icon name="down" size={14} />
+        </button>
+        <ul>
+          {(needs > 0 || nav.tab === "needs") && view("needs", "needs", t("shell.channel.needs.you"), undefined, <Count n={needs} loud />)}
+          {view(
+            "specs",
+            "spec",
+            t("shell.channel.specs"),
+            specsNeed ? t("shell.channel.specs.need", { count: specsNeed }) : t("shell.channel.specs.open", { specs: specs.length, tasks }),
+            specsNeed > 0 && <span className="side-mark is-decide" role="img" aria-label={t("shell.channel.waiting.on.you")} />
+          )}
+          {(agents.length > 0 || nav.tab === "agents") && view("agents", "agent", t("shell.channel.agents"), line.length ? line.join(" · ") : undefined, null)}
+          {(github || nav.tab === "github") &&
+            view(
+              "github",
+              "github",
+              t("shell.channel.github"),
+              red ? t("shell.channel.github.red") : t("shell.channel.github.open", { prs: openPrs.length, issues: openIssues }),
+              red && <span className="side-mark" role="img" aria-label={t("shell.channel.checks.failed")} />
+            )}
+        </ul>
+      </nav>
       <section aria-label={t("shell.sidebar.rooms")}>
         <Heading action={channel.youOwn || channel.youTrusted ? <IconButton icon="plus" label={t("shell.sidebar.new.room")} onClick={() => go({ to: "dialog", dialog: "new-room" })} /> : undefined}>
           {t("shell.sidebar.rooms")}
@@ -115,12 +204,26 @@ export function Sidebar({ channel }: { channel: Channel }) {
           {t("shell.sidebar.agents")}
         </Heading>
         <ul>
-          {agents.map((p) => (
-            <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
-          ))}
-          {leftAgents.filter(showDm).map((d) => (
-            <Former key={d.with} channel={channel} direct={d} />
-          ))}
+          {agents
+            .filter((p) => !rests(p))
+            .map((p) => (
+              <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
+            ))}
+          {leftAgents
+            .filter((d) => showDm(d) && !restsLeft(d))
+            .map((d) => (
+              <Former key={d.with} channel={channel} direct={d} />
+            ))}
+          {resting.length + restingLeft.length > 0 && (
+            <li className="side-faces">
+              {resting.map((p) => (
+                <Face key={p.name} channel={channel} name={p.name} person={p} />
+              ))}
+              {restingLeft.map((d) => (
+                <Face key={d.with} channel={channel} name={d.with} person={memberOf(channel, d.with)} direct={d} />
+              ))}
+            </li>
+          )}
           {hiddenAgents > 0 && <HiddenRows count={hiddenAgents} open={showHidden} toggle={toggleHidden} />}
           {agents.length === 0 && (
             <li>
@@ -135,8 +238,18 @@ export function Sidebar({ channel }: { channel: Channel }) {
 
       {channel.theirs.length > 0 && (
         <section aria-label={t("shell.sidebar.others")}>
-          <Heading>{t("shell.sidebar.others")}</Heading>
           <ul>
+            {!onTheirs && (
+              <li>
+                <button type="button" className="side-row is-add" aria-expanded={openTheirs} onClick={() => setOpenTheirs(!openTheirs)}>
+                  <span className="side-icon">
+                    <Icon name={openTheirs ? "down" : "chevron"} size={14} />
+                  </span>
+                  <span className="side-label">{t("shell.sidebar.others")}</span>
+                  <Count n={channel.theirs.length} />
+                </button>
+              </li>
+            )}
             {theirsShown &&
               channel.theirs.map((pair) => {
                 const where = { kind: "theirs", between: pair.between } as const
@@ -153,14 +266,6 @@ export function Sidebar({ channel }: { channel: Channel }) {
                   </li>
                 )
               })}
-            {channel.theirs.length > 0 && !onTheirs && (
-              <li>
-                <button type="button" className="side-row is-add" aria-expanded={openTheirs} onClick={() => setOpenTheirs(!openTheirs)}>
-                  <Icon name={openTheirs ? "down" : "chevron"} size={14} />
-                  <span className="side-label">{openTheirs ? t("shell.sidebar.show.less") : t("shell.sidebar.others.count", { count: channel.theirs.length })}</span>
-                </button>
-              </li>
-            )}
           </ul>
         </section>
       )}
@@ -196,6 +301,28 @@ function HiddenRows({ count, open, toggle }: { count: number; open: boolean; tog
         <span className="side-label">{open ? t("shell.sidebar.show.less") : t("shell.sidebar.hidden", { count })}</span>
       </button>
     </li>
+  )
+}
+
+function Face({ channel, name, person, direct }: { channel: Channel; name: string; person: Person | undefined; direct?: Direct }) {
+  const go = useGo()
+  const { actions } = useAct()
+  const label = person && !direct ? `${shown(person)} · ${statusOf(person, channel)}` : `${nickname(channel, name)} · ${t("shell.sidebar.left")}`
+  return (
+    <button
+      type="button"
+      className="side-face"
+      title={label}
+      aria-label={label}
+      onClick={() => go({ to: "where", where: { kind: "dm", with: name } })}
+      onContextMenu={(e) =>
+        direct
+          ? showMenu(e, nickname(channel, name), (x) => x.directGroups({ channel, go }, actions, false, direct, person))
+          : person && showMenu(e, shown(person), (x) => [x.personItems({ channel, go }, person)])
+      }
+    >
+      <Avatar person={person} size="sm" />
+    </button>
   )
 }
 
@@ -263,9 +390,9 @@ function Member({ person, channel, direct }: { person: Person; channel: Channel;
       >
         <Avatar person={person} size="sm" pip />
         <span className="side-name">{shown(person)}</span>
-        {agent && (
-          <span key={live?.text} className="side-state">
-            {live ? (live.busy ? live.text : t("shell.sidebar.needs.person")) : person.presence === "offline" ? t("shell.sidebar.offline") : t("shell.sidebar.idle")}
+        {live && (
+          <span key={live.text} className="side-state">
+            {live.busy ? live.text : t("shell.sidebar.needs.person")}
           </span>
         )}
         <Count n={unread} loud />

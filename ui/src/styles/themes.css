@@ -37,8 +37,8 @@
 }
 
 .theme-search .input {
-  height: 1.875rem;
-  padding: 6px 10px 6px 32px;
+  height: var(--ctl);
+  padding: 0 8px 0 32px;
   font-size: var(--t-ui);
 }
 

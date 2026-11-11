@@ -9,9 +9,10 @@
 .feed {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden auto;
   overscroll-behavior: contain;
   overflow-anchor: none;
+  scrollbar-gutter: stable;
 }
 
 .feed-wait {
@@ -78,9 +79,8 @@
   flex-direction: column;
   justify-content: flex-end;
   min-height: 100%;
-  max-width: calc(var(--col) + 2 * var(--gutter));
   margin: 0 auto;
-  padding: 24px var(--gutter) max(var(--compose-space), calc(var(--compose-h, 0px) + 40px));
+  padding: 24px var(--gutter-end) max(var(--compose-space), calc(var(--compose-h, 0px) + 40px)) var(--gutter);
 }
 
 .feed-start {
@@ -131,7 +131,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 24px 0 12px;
+  min-height: var(--slot);
+  margin: 24px 0 8px;
   color: var(--ink-3);
   font: var(--t-stamp) var(--ui);
 }
@@ -151,10 +152,10 @@ html .day.is-members {
 
 .msg {
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr);
+  grid-template-columns: var(--av) minmax(0, 1fr);
   column-gap: 16px;
-  margin: 12px -12px 0;
-  padding: 4px 12px;
+  margin: 16px -16px 0;
+  padding: 4px 16px;
   border-radius: var(--r-ctl);
 }
 
@@ -288,6 +289,7 @@ html .day.is-members {
   color: var(--ink-2);
   font: var(--t-ui) var(--ui);
   text-align: left;
+  padding-block: calc((var(--slot) - 1lh) / 2);
 }
 
 .msg-quote:hover {
@@ -431,6 +433,7 @@ html .day.is-members {
   color: inherit;
   text-align: left;
   cursor: pointer;
+  padding-block: calc((var(--slot) - 1lh) / 2);
 }
 
 .md-sort > span:last-child {
@@ -514,7 +517,7 @@ html .day.is-members {
 .md-mermaid-drawn {
   margin: 0;
   padding: 12px;
-  overflow-x: auto;
+  overflow: hidden;
   border-radius: var(--r-ctl);
   background: var(--raise);
   color: var(--ink);
@@ -627,6 +630,7 @@ html .day.is-members {
   background: none;
   color: var(--accent);
   font: 500 var(--t-meta) var(--ui);
+  padding-block: calc((var(--slot) - 1lh) / 2);
 }
 
 .msg-more:hover {
@@ -702,7 +706,7 @@ button.msg-image-spot:hover {
   align-items: baseline;
   gap: 8px;
   max-width: 100%;
-  padding: 6px 10px;
+  padding: calc((var(--ctl) - 2px - 1lh) / 2) 8px;
   border: 1px solid var(--line);
   border-radius: var(--r-ctl);
   background: var(--wash);
@@ -748,6 +752,10 @@ button.msg-image-spot:hover {
   text-align: left;
   text-decoration: none;
   transition: background var(--fast);
+  box-sizing: border-box;
+  min-height: var(--ctl);
+  padding-block: 0;
+  align-content: center;
 }
 
 .chip:hover {
@@ -780,9 +788,10 @@ button.msg-image-spot:hover {
   max-width: 560px;
   margin-top: 8px;
   padding: var(--card-pad);
-  border: 1px solid var(--line-2);
+  border: 0;
   border-radius: var(--r-card);
-  background: var(--bg);
+  background: var(--plate);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .ask.is-choice {
@@ -792,8 +801,8 @@ button.msg-image-spot:hover {
 
 .ask.is-free {
   padding: 0;
-  border: 0;
   background: none;
+  box-shadow: none;
 }
 
 .ask > .btn {
@@ -1108,9 +1117,8 @@ button.msg-image-spot:hover {
 .gifs-tabs {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
   gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 
 .gifs-tab {
@@ -1146,7 +1154,7 @@ button.msg-image-spot:hover {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  overflow-y: auto;
+  overflow: hidden auto;
 }
 
 .gifs-item {
@@ -1193,6 +1201,7 @@ button.msg-image-spot:hover {
   border: 0;
   background: none;
   font: var(--t-meta) var(--ui);
+  padding-block: calc((var(--slot) - 1lh) / 2);
 }
 
 .msg-thread-n {
@@ -1249,8 +1258,9 @@ button.msg-image-spot:hover {
 .sys {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 10px 0 0 calc(2rem + 16px);
+  gap: 8px;
+  min-height: var(--slot);
+  margin: 8px 0 0 calc(var(--av) + 16px);
   color: var(--ink-2);
   font: var(--t-meta) var(--ui);
 }
@@ -1283,8 +1293,9 @@ button.msg-image-spot:hover {
 .fold {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 10px 0 0 calc(2rem + 16px);
+  gap: 8px;
+  min-height: var(--slot);
+  margin: 8px 0 0 calc(var(--av) + 16px);
   color: var(--ink-3);
   font: var(--t-meta) var(--ui);
 }
@@ -1314,7 +1325,7 @@ button.msg-image-spot:hover {
 
 .compacted-summary {
   max-width: 560px;
-  margin-left: calc(2rem + 16px);
+  margin-left: calc(var(--av) + 16px);
   padding-left: 12px;
   border-left: 2px solid var(--line);
 }
@@ -1324,7 +1335,7 @@ button.msg-image-spot:hover {
 }
 
 .compact-card {
-  margin: 10px 0 0 calc(2rem + 16px);
+  margin: 10px 0 0 calc(var(--av) + 16px);
 }
 
 .compact-card > .ask {
@@ -1410,7 +1421,7 @@ button.msg-image-spot:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 12px 0 0 calc(2rem + 16px);
+  margin: 12px 0 0 calc(var(--av) + 16px);
   color: var(--ink-2);
   font: var(--t-meta) var(--ui);
 }
@@ -1485,7 +1496,7 @@ button.msg-image-spot:hover {
   bottom: 0;
   left: 0;
   z-index: 4;
-  width: min(var(--col), calc(100% - 48px));
+  width: calc(100% - 80px);
   margin: 0 auto;
   padding: 0 0 16px;
   pointer-events: none;
@@ -1499,18 +1510,20 @@ button.msg-image-spot:hover {
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 12px 10px 8px 12px;
-  border: 1px solid var(--line-2);
+  padding: 16px 8px 8px 16px;
+  border: 0;
   border-radius: var(--r-win);
   background: color-mix(in srgb, var(--bg-3) 68%, transparent);
   box-shadow: var(--shadow-float);
   -webkit-backdrop-filter: blur(18px) saturate(1.5);
   backdrop-filter: blur(18px) saturate(1.5);
-  transition: border-color var(--fast);
+  transition: box-shadow var(--fast);
 }
 
 .composer:focus-within {
-  border-color: var(--line-3);
+  box-shadow:
+    var(--shadow-float),
+    inset 0 0 0 1px var(--line-3);
 }
 
 .composer-row {
@@ -1520,7 +1533,7 @@ button.msg-image-spot:hover {
     "text text text"
     "plus . send";
   align-items: center;
-  gap: 6px 4px;
+  gap: 8px;
 }
 
 .compose-reply {
@@ -1694,12 +1707,12 @@ button.msg-image-spot:hover {
 .composer textarea {
   grid-area: text;
   min-width: 0;
-  min-height: calc(var(--ctl) * 1.4);
+  min-height: calc(2 * var(--row-text));
   max-height: 40vh;
-  padding: 2px 0 0 2px;
+  padding: 0;
   border: 0;
   background: none;
-  font: var(--t-body) / 1.35 var(--sans);
+  font: var(--t-body) / var(--row-text) var(--sans);
   resize: none;
   outline: none;
 }
@@ -1716,8 +1729,8 @@ button.msg-image-spot:hover {
   grid-area: send;
   place-items: center;
   flex: none;
-  width: calc(var(--ctl) - 4px);
-  height: calc(var(--ctl) - 4px);
+  width: var(--ctl);
+  height: var(--ctl);
   border: 0;
   border-radius: 50%;
   background: var(--ink);
@@ -1892,9 +1905,9 @@ button.msg-image-spot:hover {
   grid-area: plus;
   place-items: center;
   flex: none;
-  width: calc(var(--ctl) - 6px);
-  height: calc(var(--ctl) - 6px);
-  margin-left: -6px;
+  width: var(--ctl);
+  height: var(--ctl);
+  margin-left: -8px;
   padding: 0;
   border: 0;
   border-radius: var(--r-ctl);
@@ -2066,7 +2079,7 @@ button.msg-image-spot:hover {
   width: min(420px, calc(100vw - 32px));
   max-height: min(480px, 70vh);
   padding: 4px 16px 12px;
-  overflow-y: auto;
+  overflow: hidden auto;
   overscroll-behavior: contain;
   border-radius: var(--r-card);
   background: var(--float);
@@ -2095,4 +2108,53 @@ button.msg-image-spot:hover {
 .updates-older {
   align-self: flex-start;
   margin-top: 10px;
+}
+
+.msg.is-mine {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.msg.is-mine.is-compact {
+  margin-top: 0;
+}
+
+.msg.is-mine:not(.is-failed):hover {
+  background: none;
+}
+
+.msg.is-mine > .msg-gutter {
+  display: none;
+}
+
+.msg.is-mine > .msg-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-self: end;
+  max-width: min(100%, 36rem);
+}
+
+.msg.is-mine:has(.msg-edit) > .msg-body {
+  align-items: stretch;
+  width: 100%;
+}
+
+.msg.is-mine .msg-name {
+  display: none;
+}
+
+.msg.is-mine .msg-quote {
+  max-width: 100%;
+  margin: 0 0 4px;
+}
+
+.msg.is-mine .msg-text {
+  padding: 4px 16px;
+  border-radius: var(--r-win);
+  background: color-mix(in srgb, var(--accent) 20%, var(--bg-2));
+}
+
+.md-mermaid-drawn svg {
+  max-width: 100%;
+  height: auto;
 }

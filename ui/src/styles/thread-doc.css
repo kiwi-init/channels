@@ -12,11 +12,11 @@
 .thread-doc .blk {
   display: block;
   margin: 4px 0 0;
-  padding: 0 0 0 calc(2rem + 16px);
+  padding: 0 0 0 calc(var(--av) + 16px);
 }
 
 .thread-doc .blk:not(.is-cont) {
-  margin-top: 12px;
+  margin-top: 16px;
 }
 
 .thread-doc .blk.is-cont {
@@ -42,9 +42,13 @@
 }
 
 .blk-line .msg-name {
+  min-width: var(--slot);
+  margin-block: calc((var(--slot) - 1lh) / -2);
+  padding-block: calc((var(--slot) - 1lh) / 2);
   color: var(--ink-3);
   font: inherit;
   font-weight: 500;
+  text-align: left;
 }
 
 .blk-line .msg-name:hover {
@@ -210,7 +214,7 @@
 
 .thread-doc .doc-suggest {
   bottom: auto;
-  overflow-y: auto;
+  overflow: hidden auto;
   overscroll-behavior: contain;
 }
 

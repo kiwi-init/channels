@@ -48,8 +48,6 @@ export default {
   "shell.sidebar.you": "você",
   "shell.sidebar.mark.read": "Marcar como lida",
   "shell.sidebar.needs.person": "precisa de uma pessoa",
-  "shell.sidebar.offline": "offline",
-  "shell.sidebar.idle": "ocioso",
   "shell.updates.sign.in.ask": "{name} quer entrar como você",
   "shell.updates.review": "Revisar",
   "shell.updates.moved": "O Channels foi movido para {path}",

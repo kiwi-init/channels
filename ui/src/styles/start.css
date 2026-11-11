@@ -21,7 +21,7 @@
   place-items: center;
   height: 100vh;
   padding: 64px 24px;
-  overflow-y: auto;
+  overflow: hidden auto;
   background: var(--bg);
 }
 
@@ -140,7 +140,7 @@
   min-height: 0;
   height: 100vh;
   padding: 64px 32px;
-  overflow-y: auto;
+  overflow: hidden auto;
 }
 
 .start-welcome {
@@ -638,6 +638,7 @@
   color: var(--ink);
   text-align: left;
   cursor: pointer;
+  min-height: var(--row);
 }
 
 .calm-chan:hover,

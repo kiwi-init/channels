@@ -38,8 +38,8 @@ export default function Menu({ menu }: { menu: OpenMenu }) {
     [menu]
   )
   useLayoutEffect(() => {
-    const rect = box.current?.getBoundingClientRect()
-    if (rect) setPlace(placed(menu, rect.width, rect.height, window.innerWidth, window.innerHeight))
+    const el = box.current
+    if (el) setPlace(placed(menu, el.offsetWidth, el.offsetHeight, window.innerWidth, window.innerHeight))
     ;(box.current?.querySelector("input") ?? box.current)?.focus()
   }, [menu])
   useEffect(() => {

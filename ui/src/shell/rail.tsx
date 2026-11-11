@@ -44,6 +44,14 @@ export function Rail() {
   const [over, setOver] = useState<string | null>(null)
   const [moving, setMoving] = useState<string | null>(null)
   const [fresh, setFresh] = useState<string | null>(null)
+  const [hint, setHint] = useState<{ name: string; x: number; y: number } | null>(null)
+  const point = (e: { target: EventTarget }) => {
+    const el = e.target instanceof Element ? e.target.closest<HTMLElement>("[data-code],[data-folder]") : null
+    const name = el?.dataset["code"] ? tiles.find((c) => c.code === el.dataset["code"])?.title : folders.find((f) => f.id === el?.dataset["folder"])?.name
+    if (!el || !name || moving) return setHint(null)
+    const box = el.getBoundingClientRect()
+    setHint({ name, x: box.left + box.width / 2, y: box.bottom + 4 })
+  }
   const save = (next: typeof folders) => actions.setPrefs({ folders: next })
   const step = useEffectEvent((dir: 1 | -1) => {
     const from = ordered.findIndex((c) => c.code === on)
@@ -104,6 +112,10 @@ export function Rail() {
       </button>
       <ul
         className={cx("rail-list", moving && "is-moving", over === "rail" && "is-drop")}
+        onMouseOver={point}
+        onMouseLeave={() => setHint(null)}
+        onMouseDown={() => setHint(null)}
+        onScroll={() => setHint(null)}
         onDragStart={(e) => {
           const target = spot(e)
           if (target.kind !== "channel") return
@@ -130,7 +142,9 @@ export function Rail() {
           const target = spot(e)
           if (target.kind === "rail") return
           e.preventDefault()
-          const at = { x: e.currentTarget.getBoundingClientRect().right - 4, y: (e.target as Element).closest("[data-code],[data-folder]")?.getBoundingClientRect().top ?? e.clientY }
+          const box = (e.target as Element).closest("[data-code],[data-folder]")?.getBoundingClientRect()
+          const at = { x: box?.left ?? e.clientX, y: (box?.bottom ?? e.clientY) + 4 }
+          setHint(null)
           void import("~/shell/rail-menu").then((m) =>
             openMenu.set(
               m.railMenu(target, at, {
@@ -195,6 +209,11 @@ export function Rail() {
           </button>
         </li>
       </ul>
+      {hint && (
+        <span className="rail-hint" aria-hidden="true" style={{ "--x": `${hint.x}px`, "--y": `${hint.y}px` } as CSSProperties}>
+          {hint.name}
+        </span>
+      )}
       <div className="rail-foot">
         {cardsHere && (
           <Suspense fallback={null}>
@@ -236,7 +255,6 @@ function Tile({ tile, on, drop, moving, onClick }: { tile: ChannelTile; on: bool
       className={cx("tile", on && "is-on", tile.state !== "member" && "is-waiting", drop && "is-drop", moving && "is-moving", tile.muted && "is-muted")}
       aria-current={on ? "page" : undefined}
       aria-label={label}
-      title={tile.title}
       onClick={onClick}
     >
       <Face tile={tile} />
