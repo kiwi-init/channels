@@ -203,10 +203,7 @@ async function windowOf(label: string, from?: BrowserContext): Promise<Win> {
 }
 
 async function general(w: Win): Promise<void> {
-  await w.page
-    .getByRole("navigation", { name: "Views" })
-    .getByRole("button", { name: /general/ })
-    .click();
+  await w.page.locator('section[aria-label="Rooms"] button').filter({ hasText: "general" }).click();
   await w.page.locator(".thread-doc").first().waitFor({ state: "attached", timeout: 30000 });
 }
 

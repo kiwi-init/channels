@@ -135,7 +135,7 @@ try {
   step(at);
 
   at = "the agent writes a spec, no task goes in before the person approves it, then the agent posts a message and a task";
-  await views.getByRole("button", { name: /general/ }).click();
+  await page.locator('section[aria-label="Rooms"] button').filter({ hasText: "general" }).click();
   const asked = (await said("bot")).find((m) => m.body === "smoke test");
   if (asked === undefined) throw new Error("the block the person wrote never became a message in the agent's log");
   if (!asked.block?.th || !asked.block.id) throw new Error(`the message from the block doesn't say which block it came from: ${JSON.stringify(asked)}`);
@@ -178,7 +178,7 @@ try {
   await unfold(page, "Smoke");
   await page.getByRole("main").getByText("Smoke task").first().waitFor({ timeout: 15000 });
   await shot("tasks");
-  await views.getByRole("button", { name: /general/ }).click();
+  await page.locator('section[aria-label="Rooms"] button').filter({ hasText: "general" }).click();
   step(at);
 
   at = "the owner turns on Write to GitHub and sets a branch prefix";
@@ -201,7 +201,7 @@ try {
   }
   for (const w of wanted) if (!got.includes(w)) throw new Error(`the agent never saw "${w}"`);
   await page.keyboard.press("Escape");
-  await views.getByRole("button", { name: /general/ }).click();
+  await page.locator('section[aria-label="Rooms"] button').filter({ hasText: "general" }).click();
   step(at);
 
   at = "search lists tasks and messages, jumps to a message, and clears";
@@ -226,7 +226,7 @@ try {
   await page.keyboard.press("ControlOrMeta+f");
   if (!(await search.evaluate((el) => el === document.activeElement))) throw new Error("the search shortcut did not focus the open search field");
   await views.getByRole("button", { name: /^Specs/ }).click();
-  await views.getByRole("button", { name: /general/ }).click();
+  await page.locator('section[aria-label="Rooms"] button').filter({ hasText: "general" }).click();
   await row("hello from bot").first().waitFor({ timeout: 15000 });
   await page.waitForTimeout(300);
   if (await page.evaluate(() => CSS.highlights.has("search-hit"))) throw new Error("coming back to the room replayed the old search jump");
