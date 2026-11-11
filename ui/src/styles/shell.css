@@ -1241,6 +1241,11 @@
     justify-self: stretch;
   }
 
+  .top-tools .updates-panel {
+    right: 0;
+    left: auto;
+  }
+
   .top-drawer-dot {
     position: absolute;
     top: 4px;

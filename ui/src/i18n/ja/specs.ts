@@ -254,6 +254,7 @@ export default {
   "tasks.now.in.progress.count": "{count} 件進行中",
   "tasks.now.done.today.count": "今日 {count} 件完了",
   "tasks.now.label": "いま",
+  "tasks.now.shows": "いま、またはアクティビティ",
   "tasks.now.in.progress": "進行中",
   "tasks.now.more": "+{count} 件",
   "tasks.now.nothing": "いまは何もありません",

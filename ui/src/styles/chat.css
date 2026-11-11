@@ -2055,10 +2055,6 @@ button.msg-image-spot:hover {
   background: var(--raise-2);
 }
 
-.top-updates {
-  display: contents;
-}
-
 .updates {
   position: relative;
   display: flex;
@@ -2072,10 +2068,8 @@ button.msg-image-spot:hover {
 .updates-panel {
   position: absolute;
   top: calc(100% + 8px);
-  right: 0;
+  left: 0;
   z-index: 30;
-  display: flex;
-  flex-direction: column;
   width: min(420px, calc(100vw - 32px));
   max-height: min(480px, 70vh);
   padding: 4px 16px 12px;
@@ -2093,15 +2087,20 @@ button.msg-image-spot:hover {
   font: var(--t-stamp) var(--ui);
 }
 
-.updates-panel .sys {
+.updates-log {
+  display: flex;
+  flex-direction: column;
+}
+
+.updates-log .sys {
   margin: 6px 0 0;
 }
 
-.updates-panel .sys.is-task-row {
+.updates-log .sys.is-task-row {
   margin-left: 16px;
 }
 
-.updates-panel .sys-text {
+.updates-log .sys-text {
   flex: 1;
 }
 

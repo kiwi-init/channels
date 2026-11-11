@@ -10,6 +10,7 @@ import { docThread } from "@kiwi/core/doc/threads.ts"
 import type { Prefs } from "~/model"
 import { navigate, startNav, useKeepPlace, type Go, type Nav } from "~/nav"
 import { Root } from "~/shell/root"
+import { keepTab } from "~/tasks/track-tab"
 import { hashTarget } from "~/live/links"
 import { openFromNote } from "~/live/open-message"
 import { parseHash } from "@kiwi/channel/hash.ts"
@@ -26,6 +27,7 @@ const seeded = shot?.nav?.where
 if (shot?.docs !== undefined && shot.channel && seeded && seeded.kind !== "dm" && seeded.kind !== "theirs") seedThreadDoc(shot.channel, docThread(seeded), shot.docs, shot.streams)
 
 if (!shot?.onboarding) rememberOnboarded(false)
+keepTab(shot?.track ?? "now")
 
 const SWITCH_AFTER_MS = 400
 

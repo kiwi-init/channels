@@ -3,7 +3,7 @@ import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutE
 import { Composer } from "~/chat/composer"
 import { docOf } from "~/chat/doc-of"
 import { EditHere } from "~/chat/editing"
-import { Updates } from "~/chat/events"
+import { showActivity } from "~/chat/activity"
 import { splitUpdates } from "~/chat/split-updates"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
 import { docFeeds, EMPTY_FEED, withDocMedia, withLines } from "~/chat/doc/finished"
@@ -213,6 +213,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     [channel.messages, since, where, doc]
   )
   const { talk: all, runs } = useMemo(() => splitUpdates(raw), [raw])
+  const task = where.kind === "task" ? where.task : null
+  const logged = jump && runs.some((r) => r.some((m) => m.seq === jump.m.seq)) ? jump.m.seq : null
+  useLayoutEffect(() => showActivity(runs.length ? { runs, here: task, target: logged } : null), [runs, task, logged])
+  useLayoutEffect(() => () => showActivity(null), [])
   const anyRow = raw.length > 0
   useEffect(() => {
     if (!anyRow) return
@@ -534,7 +538,6 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
           <QuotePick root={content} onQuote={quote} />
         </Suspense>
       )}
-      <Updates channel={channel} runs={runs} here={where.kind === "task" ? where.task : null} jump={jump?.m.seq ?? null} />
       <div className="feed" ref={scroller} onScroll={onScroll}>
         <div className="feed-list" ref={content}>
           {list.length === 0 && !compact

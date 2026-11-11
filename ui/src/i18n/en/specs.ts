@@ -254,6 +254,7 @@ const words = {
   "tasks.now.in.progress.count": "{count} in progress",
   "tasks.now.done.today.count": "{count} done today",
   "tasks.now.label": "Now",
+  "tasks.now.shows": "Now or Activity",
   "tasks.now.in.progress": "In progress",
   "tasks.now.more": "+{count} more",
   "tasks.now.nothing": "nothing right now",
