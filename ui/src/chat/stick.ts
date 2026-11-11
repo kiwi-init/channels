@@ -68,7 +68,7 @@ export function useStick(following = true, still = false) {
   const seen = useRef(Number.NaN)
   const wheeled = useRef(Number.NEGATIVE_INFINITY)
   const reserve = useRef(0)
-  const placed = useRef(Number.NaN)
+  const placed = useRef<Anchor | null>(null)
   const pad = useCallback(() => {
     const h = room.current + reserve.current
     if (spacer.current) spacer.current.style.height = h > 0 ? `${h}px` : ""
@@ -102,8 +102,10 @@ export function useStick(following = true, still = false) {
       anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
       return
     }
+    const ours = placed.current === a
     const clamped = still && box.scrollTop < a.at && box.scrollTop >= box.scrollHeight - box.clientHeight - 0.5
-    const shift = el.getBoundingClientRect().top - top - (clamped ? a.top : a.top - (box.scrollTop - a.at))
+    const aim = clamped || ours ? a.top : a.top - (box.scrollTop - a.at)
+    const shift = el.getBoundingClientRect().top - top - aim
     const short = still ? box.scrollTop + shift - (box.scrollHeight - box.clientHeight) : 0
     if (short > 0.5) {
       room.current += short
@@ -112,8 +114,9 @@ export function useStick(following = true, still = false) {
     if (Math.abs(shift) > 0.5) box.scrollTop += shift
     const gap = bottom(box) - box.scrollTop
     if (still && stuck.current && gap > 0.5 && gap < NEAR_BOTTOM) box.scrollTop = bottom(box)
-    anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
-    placed.current = box.scrollTop
+    const landed = el.getBoundingClientRect().top - top
+    anchor.current = { el, seq: a.seq, top: Math.abs(landed - aim) < 1 ? aim : landed, at: box.scrollTop }
+    placed.current = anchor.current
   }, [still, pad])
 
   const settle = useCallback(() => {
@@ -145,9 +148,9 @@ export function useStick(following = true, still = false) {
     const down = box.scrollTop > seen.current + 0.5
     const near = !still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !up && (stuck.current || down)
     stuck.current = live.current && !held.current && near
-    const ours = Math.abs(box.scrollTop - placed.current) < 0.5 && anchor.current?.el.isConnected ? anchor.current : null
-    anchor.current = (still && touched.current ? docIn(box, list) : null) ?? (stuck.current ? null : (ours ?? anchorIn(box, list)))
-    placed.current = Number.NaN
+    const kept = placed.current && placed.current === anchor.current && placed.current.el.isConnected && Math.abs(box.scrollTop - placed.current.at) < 0.5 ? placed.current : null
+    anchor.current = (still && touched.current ? docIn(box, list) : null) ?? (stuck.current ? null : (kept ?? anchorIn(box, list)))
+    placed.current = null
     height.current = list.offsetHeight
     seen.current = box.scrollTop
   }, [settle, still, pad])
@@ -220,7 +223,7 @@ export function useStick(following = true, still = false) {
       const seq = Number(el.dataset.seq)
       if (stuck.current || !Number.isSafeInteger(seq)) return
       anchor.current = { el, seq, top: el.getBoundingClientRect().top - box.getBoundingClientRect().top, at: box.scrollTop }
-      placed.current = box.scrollTop
+      placed.current = anchor.current
     },
     [remember]
   )
