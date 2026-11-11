@@ -14,7 +14,15 @@ interface Anchor {
   under: number
 }
 
-const endOf = (list: HTMLElement): number => (list.lastElementChild ?? list).getBoundingClientRect().bottom
+const gapIn = (box: HTMLElement): number => box.scrollHeight - box.scrollTop - box.clientHeight
+
+const laidOut = (el: Element): boolean => el.isConnected && el.getClientRects().length > 0
+
+function endOf(list: HTMLElement): number {
+  let last = list.lastElementChild
+  while (last && !laidOut(last)) last = last.previousElementSibling
+  return (last ?? list).getBoundingClientRect().bottom
+}
 
 function spot(box: HTMLElement, list: HTMLElement, el: Element, seq: number): Anchor {
   const top = el.getBoundingClientRect().top
@@ -35,10 +43,6 @@ function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
   const seq = Number(el?.dataset.seq)
   return el && Number.isSafeInteger(seq) ? spot(box, list, el, seq) : null
 }
-
-const gapIn = (box: HTMLElement): number => box.scrollHeight - box.scrollTop - box.clientHeight
-
-const laidOut = (el: Element): boolean => el.isConnected && el.getClientRects().length > 0
 
 function docIn(box: HTMLElement, list: HTMLElement): Anchor | null {
   const el = list.querySelector(".thread-doc")

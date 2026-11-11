@@ -98,15 +98,23 @@ class Feed {
   readonly doc = {
     isConnected: true,
     classList: { contains: (c: string) => c === "thread-doc" },
+    previousElementSibling: null,
     getClientRects: () => [{}],
     getBoundingClientRect: () => ({ top: this.docTop, bottom: this.docTop + DOC_PAD + this.lines * LINE }),
+  }
+
+  readonly hidden = {
+    isConnected: true,
+    previousElementSibling: this.doc,
+    getClientRects: () => [],
+    getBoundingClientRect: () => ({ top: 0, bottom: 0 }),
   }
 
   readonly list = {
     get offsetHeight(): number {
       return Math.round(feed().listH)
     },
-    lastElementChild: this.doc,
+    lastElementChild: this.hidden,
     querySelector: (sel: string) => (sel === ".thread-doc" ? this.doc : null),
     querySelectorAll: () => this.rows.map((r) => this.rowEl(r.seq)),
   }
