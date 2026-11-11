@@ -691,7 +691,7 @@
   grid-template-columns: subgrid;
   align-items: center;
   position: relative;
-  z-index: 7;
+  z-index: 9;
   font-family: var(--ui);
   -webkit-app-region: drag;
 }

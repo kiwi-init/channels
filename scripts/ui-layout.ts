@@ -235,6 +235,16 @@ try {
       !!find && !!toggle && !!tools && near(find.left, toggle.right + 8) && near(tools.right - find.right, 8),
       `search grows from its button, beside the sidebar button (${find?.left} to ${find?.right})`,
     );
+    await page.getByRole("combobox").first().fill("bundle");
+    await page.waitForTimeout(900);
+    const reachable = await page.evaluate(() => {
+      const option = document.querySelector('[role="listbox"] [role="option"]');
+      const box = option?.getBoundingClientRect();
+      const top = box ? document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) : null;
+      return !!option && !!top && (option === top || option.contains(top));
+    });
+    expect(reachable, "a search result is on top of everything under it, the channel tiles included");
+    await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
     const slot = await boxOf(page, ".track");
