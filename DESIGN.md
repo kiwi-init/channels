@@ -132,9 +132,7 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   head, 24), `--tile` (40), `--av` / `--av-sm` / `--av-lg` (32 / 24 / 64) and
   `--row-text` (a 24px line). Spacing between them is 8, 16 or 24. What can't
   be on the grid is what follows the window or the words: a column centred
-  in an odd-width window, a label's own width, a paragraph's height. The
-  blueprint (below) prints an off-grid ruler number in `decide` and says
-  `off grid` in its notes.
+  in an odd-width window, a label's own width, a paragraph's height.
 - Rules of place:
   - One grid. The window is three columns, `--side-w | 1fr | --side-w` (320
     at Default): the sidebar, the work, the second sidebar. The top bar
@@ -165,27 +163,6 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   - Nothing you click moves. Hiding the sidebar or opening the right panel
     changes no control's position. Content may: a hidden sidebar gives its
     column to the work.
-  ⌥⌘B (Ctrl+Alt+B) lays a blueprint over the app (`kit/blueprint.tsx`, loaded
-  only when asked for): an 8px grid, a line on every measured column and row
-  edge, a ruler with each column's width, the window's centre line with how
-  far the title and the composer sit from it (`live` within a pixel, `alert`
-  beyond), and under the pointer an element's size and position. It takes no
-  clicks, so the app works under it. Everything it draws is also in the
-  accessibility tree, one labelled element per fact, each starting `bp:`
-  (`bp: span x 361 to 527 w 166`, `bp: part .main .composer x 527 …`,
-  `bp: item .side .side-row 3 of 16 … gap 0`, `bp: text … starts at x 142.5`),
-  so a tool that reads the tree gets the numbers along with the picture.
-  ⌥-click selects what is under the pointer: it gets a `decide` outline, and
-  its id is copied (`bp: pick .side-row.is-muted in .app > .chan > .side
-  "#releases" x 80 y 136 w 256 h 32`: its classes, where it sits, what it
-  says, its box) and published to the tree as well. ⌥⇧-click on the same spot
-  steps up to its container. The click never reaches the app.
-  It also audits what it measures, one `bp: issue <kind>: …` per finding and
-  a `bp: audit N issues` line, each outlined in `alert`: a control under
-  another, a target under 24px, text cut short, anything outside the window,
-  an edge 1 or 2px off its neighbours, a boxed control off the grid, a lone
-  edge near a common one, and anything that can scroll sideways. It costs
-  frames while it is on, so no build turns it on by default.
   `bun scripts/ui-layout.ts --dist ui/dist` measures these rules in the built
   page (the centre, the sidebar's edges, the tracker's place, the two sides
   of the conversation, hiding and peeking the sidebar, search, a wide panel)
