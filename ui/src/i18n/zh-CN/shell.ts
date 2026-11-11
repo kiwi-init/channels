@@ -26,6 +26,7 @@ export default {
   "shell.channel.reconnecting": "正在重新连接…",
   "shell.channel.details": "详情",
   "shell.channel.resize": "调整面板大小",
+  "shell.channel.resize.side": "调整侧边栏大小",
   "shell.channel.resize.title": "拖动调整大小 · 双击恢复",
   "shell.sidebar.rooms": "房间",
   "shell.sidebar.new.room": "新建房间",

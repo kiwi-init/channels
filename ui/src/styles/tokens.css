@@ -155,7 +155,8 @@
   --gutter-end: max(0px, calc(var(--gutter) - var(--bar)));
   --card-pad: 16px;
 
-  --side-w: round(18rem, 8px);
+  --side-want: 18rem;
+  --side-w: min(round(var(--side-want), 8px), max(round(18rem, 8px), round(down, calc((100vw - 480px) / 2), 8px)));
   --panel-w: 400px;
   --top-h: calc(var(--ctl) + 16px);
   --col: round(47.5rem, 8px);

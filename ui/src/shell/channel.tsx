@@ -17,6 +17,7 @@ import { whereKey } from "~/places"
 import { useLayout } from "@kiwi/app/layout.ts"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
+import { useSideWidth } from "~/shell/side-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
 import { Sidebar, ViewsBar } from "~/shell/sidebar"
 import { ActivityButton } from "~/chat/events"
@@ -61,6 +62,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const narrow = useMedia(NARROW)
   const top = layout === "top" && !narrow
   const panel = usePanelWidth(hidden)
+  const side = useSideWidth()
   useLayoutEffect(() => {
     const root = document.documentElement
     root.style.setProperty("--panel-w", `${panel.width}px`)
@@ -204,6 +206,20 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   return (
     <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare", top && "is-top", peeking && "is-peek", reading && "is-reading")}>
       {hidden && !peek && <div className="side-edge" onMouseEnter={() => setPeek(true)} />}
+      {!hidden && (
+        <div
+          className="side-grip"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t("shell.channel.resize.side")}
+          aria-valuemin={side.min}
+          aria-valuemax={side.max}
+          aria-valuenow={side.width}
+          tabIndex={0}
+          title={t("shell.channel.resize.title")}
+          {...side.grip}
+        />
+      )}
       <header className="top">
         <div className="top-lead">
           <button

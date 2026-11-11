@@ -652,12 +652,12 @@ function End({ channel, open, onClose, onDone }: { channel: Channel; open: boole
       title={t("modals.channel.settings.delete.title", { title: channel.title })}
       sub={t("modals.channel.settings.delete.sub")}
       action={t("modals.channel.settings.delete.channel")}
-      ready={typed.trim() === channel.title}
+      ready={typed.trim().toLowerCase() === channel.title.trim().toLowerCase()}
       onClose={close}
       onConfirm={onDone}
     >
       <Field label={t("modals.channel.settings.delete.type", { title: channel.title })}>
-        <input ref={autofocus} className="input is-mono" value={typed} onChange={(e) => setTyped(e.target.value)} />
+        <input ref={autofocus} className="input is-mono" placeholder={channel.title} value={typed} onChange={(e) => setTyped(e.target.value)} />
       </Field>
     </Confirm>
   )

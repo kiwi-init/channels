@@ -1,16 +1,15 @@
 import { useCallback, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from "react"
 
+import { rootPx, sidePx, useSideRem } from "~/shell/side-width"
+
 const KEY = "channels.panel.width"
 const OLD_KEY = "mc.panel.width"
 const START = 400
 const MIN = 320
 const MAX = 760
 const MIN_CHAT = 420
-const RAIL = 64
-const SIDE = 248
-
-export function panelRoom(w: number, windowWidth: number, sideHidden: boolean): number {
-  const chat = windowWidth - RAIL - (sideHidden ? 0 : SIDE) - MIN_CHAT
+export function panelRoom(w: number, windowWidth: number, side: number): number {
+  const chat = windowWidth - side - MIN_CHAT
   return Math.round(Math.max(MIN, Math.min(w, MAX, windowWidth * 0.6, chat)))
 }
 
@@ -48,15 +47,17 @@ function keep(w: number): void {
 export function usePanelWidth(sideHidden: boolean) {
   const [wanted, setWanted] = useState(stored)
   const windowWidth = useWindowWidth()
-  const width = panelRoom(wanted, windowWidth, sideHidden)
+  const sideRem = useSideRem()
+  const side = sideHidden ? 0 : sidePx(sideRem, rootPx(), windowWidth)
+  const width = panelRoom(wanted, windowWidth, side)
 
   const set = useCallback(
     (w: number) => {
-      const next = panelRoom(w, window.innerWidth, sideHidden)
+      const next = panelRoom(w, window.innerWidth, side)
       setWanted(next)
       keep(next)
     },
-    [sideHidden]
+    [side]
   )
 
   const onPointerDown = useCallback(

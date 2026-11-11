@@ -302,6 +302,41 @@ try {
     await page.close();
   }
   for (const [width, height] of SIZES) {
+    console.log(`\nthe sidebar's width, ${width}×${height}`);
+    const page = await browser.newPage({ viewport: { width, height } });
+    await open(page, "channel");
+    const sideWidth = async (): Promise<number> => {
+      const side = await boxOf(page, ".side");
+      return side ? side.right - side.left : 0;
+    };
+    const grip = page.getByRole("separator", { name: "Resize the sidebar" });
+    const gripBox = await grip.boundingBox();
+    const sideBefore = await sideWidth();
+    if (gripBox) {
+      const [gx, gy] = [gripBox.x + gripBox.width / 2, gripBox.y + gripBox.height / 2];
+      await page.mouse.move(gx, gy);
+      await page.mouse.down();
+      await page.mouse.move(gx + 61, gy, { steps: 6 });
+      await page.mouse.up();
+    }
+    const sideWide = await sideWidth();
+    const titleWide = await boxOf(page, ".top-here");
+    const trackWide = await boxOf(page, ".track");
+    expect(!!gripBox && sideWide === sideBefore + 64, `dragging the sidebar's edge 61px widens it by 64, on the grid (${sideBefore} → ${sideWide})`);
+    expect(!!titleWide && near(titleWide.x, width / 2), `the title stays on the window's centre with a wider sidebar (${titleWide?.x.toFixed(1)} of ${width / 2})`);
+    expect(!trackWide || near(trackWide.right - trackWide.left, sideWide), "and the second sidebar takes the same width");
+    await grip.focus();
+    await page.keyboard.press("Home");
+    const sideLeast = await sideWidth();
+    expect(sideLeast < sideBefore && sideLeast % 8 === 0, `Home takes it to its narrowest, on the grid (${sideLeast})`);
+    await page.keyboard.press("End");
+    const sideMost = await sideWidth();
+    expect(sideMost > sideBefore && sideMost % 8 === 0 && width - 2 * sideMost >= 480, `End takes it to its widest, and the work keeps 480px (${sideMost})`);
+    await grip.dblclick();
+    expect((await sideWidth()) === sideBefore, "a double-click puts it back");
+    await page.close();
+  }
+  for (const [width, height] of SIZES) {
     console.log(`\nthe top bar layout, ${width}×${height}`);
     const page = await browser.newPage({ viewport: { width, height } });
     await open(page, "channel-top");
