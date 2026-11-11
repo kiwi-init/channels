@@ -6,7 +6,7 @@ import { Channel, keepHeld, RelayError, type JoinStatus, type JoinWatch } from "
 import { Cursor, Keystore, loadConfig } from "../../config.ts";
 import { heldText, seatHeldAway } from "../../hold.ts";
 import { decodeJoinCode, type ChannelAccess } from "@kiwi/core/crypto.ts";
-import { freeAgentName, handleFor, inlineText } from "@kiwi/core/membership.ts";
+import { freeAgentName, handleFor, inlineText, type Member } from "@kiwi/core/membership.ts";
 import { freeHandle } from "@kiwi/core/handles.ts";
 import { baseName, here, seatsNear, tooBroad } from "../../seats.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
@@ -35,6 +35,20 @@ const OWNER_NAME = "human";
 const MODEL_WAIT_MS = 5_000;
 
 const POKE_EVERY_MS = 60_000;
+
+function ignoredOnResume(seat: Pick<Member, "display" | "persona"> | undefined): string[] {
+  const lines: string[] = [];
+  if (opt.persona !== undefined) {
+    const keeps = seat?.persona ? `it keeps ${seat.persona.name}` : "it keeps no personality";
+    lines.push(`--persona was ignored: this key is already a member, and only the owner changes a member's personality (${keeps}). Ask the owner to change it in the member's profile.`);
+  }
+  const nick = inlineText(opt.nick ?? "", 40);
+  if (nick && nick !== (seat?.display ?? "")) {
+    const stays = seat?.display ? `it stays "${seat.display}"` : "it has none";
+    lines.push(`--nick was ignored: this key is already a member, and only the owner changes a member's nickname (${stays}). Ask the owner to change it in the member's profile.`);
+  }
+  return lines;
+}
 
 const joinedAlias = Effect.fn("kiwi.joinedAlias")(function* (roomId: string, alias?: string, title?: string | null) {
   const channels = (yield* config).channels;
@@ -207,6 +221,7 @@ export const joinCommands: Record<string, Command> = {
           if (how === "resumed") out("this key is already a member: resumed, nothing new was granted.");
           const { state } = yield* s.state();
           const seat = state.members.get(name);
+          if (how === "resumed") for (const line of ignoredOnResume(seat)) process.stderr.write(`kiwi: ${line}\n`);
           out(
             joinedText(alias, name, {
               scopes,
