@@ -8,6 +8,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as References from "effect/References";
+import { MAX_SNAPSHOT_LENGTH } from "@kiwi/core/protocol.ts";
 import { BadRequest, refusalResponse, type Refusal } from "./failures.ts";
 
 // ---------- the relay's services, built once ----------
@@ -55,6 +56,10 @@ export class Request_ extends Context.Service<Request_, Incoming>()("kiwi/relay/
 
 export const MAX_REQUEST_BYTES = 1 << 20;
 
+export const MAX_SNAPSHOT_REQUEST_BYTES = MAX_SNAPSHOT_LENGTH + 64 * 1024;
+
+export const requestCap = (method: string, path: string): number => (method === "PUT" && path === "/snapshot" ? MAX_SNAPSHOT_REQUEST_BYTES : MAX_REQUEST_BYTES);
+
 export async function readText(body: ReadableStream<Uint8Array> | null, max: number, declared?: string | null): Promise<string | null> {
   if (Number(declared ?? 0) > max) return null;
   if (!body) return "";
@@ -85,7 +90,7 @@ export async function incoming(req: Request, path: string): Promise<Incoming | n
   if (method === "PUT" && path.startsWith("/blobs/")) return { req, url: new URL(req.url), method, path, body: "" };
   if (method === "GET" || method === "HEAD") return { req, url: new URL(req.url), method, path, body: "" };
   // Every client signs the exact body it sends (empty when there is none), so reading DELETE's too is safe.
-  const body = await readText(req.body, MAX_REQUEST_BYTES, req.headers.get("content-length"));
+  const body = await readText(req.body, requestCap(method, path), req.headers.get("content-length"));
   return body === null ? null : { req, url: new URL(req.url), method, path, body };
 }
 

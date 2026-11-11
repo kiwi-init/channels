@@ -1,4 +1,4 @@
-import { BASE_WIRE_VERSION, baseFromWire, toWire } from "@kiwi/core/base-wire.ts";
+import { BASE_WIRE_VERSION, baseFromWire, readableWire, toWire } from "@kiwi/core/base-wire.ts";
 import type { RoomsSetting } from "@kiwi/core/client.ts";
 import type { Member } from "@kiwi/core/membership.ts";
 import type { FoldBase, GuardFloor } from "@kiwi/core/state.ts";
@@ -20,7 +20,7 @@ export function toKept(k: Kept): object {
 }
 
 export function asKept(x: unknown): Kept | null {
-  if (!record(x) || x.v !== KEPT_VERSION || x.bv !== BASE_WIRE_VERSION || !Array.isArray(x.roster) || !x.roster.every(member)) return null;
+  if (!record(x) || x.v !== KEPT_VERSION || !readableWire(x.bv) || !Array.isArray(x.roster) || !x.roster.every(member)) return null;
   const base = x.base === null ? null : baseFromWire(x.base);
   if (x.base !== null && !base) return null;
   return {
