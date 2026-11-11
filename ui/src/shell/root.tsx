@@ -2,6 +2,7 @@ import { Fragment, memo, Suspense, useCallback, useEffect, useLayoutEffect, useM
 
 import { t, useLanguage } from "~/i18n/i18n"
 import { watchScrollbar } from "~/kit/scrollbar"
+import { isBlueprintKey, toggleBlueprint, useBlueprint } from "~/kit/blueprint-on"
 import { Boundary, Crashed } from "~/kit/boundary"
 import { later } from "~/kit/later"
 import { Toasts, useToasts } from "~/kit/toasts"
@@ -28,6 +29,7 @@ const EnrollDialog = later(() => import("~/settings/enroll").then((m) => m.Enrol
 const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
+const Blueprint = later(() => import("~/kit/blueprint").then((m) => m.Blueprint))
 const LimitDialog = later(() => import("~/usage/limit").then((m) => m.LimitDialog))
 
 const RailOnce = memo(Rail)
@@ -60,7 +62,17 @@ function Shown({ app, nav, go, broken }: RootProps) {
   const act = useMemo(() => ({ actions: app.actions, go, toast, now }), [app.actions, go, toast, now])
   const togglePalette = useCallback(() => go({ to: "dialog", dialog: nav.dialog === "palette" ? null : "palette" }), [go, nav.dialog])
   usePaletteKey(togglePalette)
+  const blueprint = useBlueprint()
   useLayoutEffect(watchScrollbar, [])
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isBlueprintKey(e)) return
+      e.preventDefault()
+      toggleBlueprint()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
   useEffect(
     () =>
       onCommand((c) => {
@@ -141,6 +153,11 @@ function Shown({ app, nav, go, broken }: RootProps) {
         <ImageViewsOnce />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
         <LimitWatch />
+        {(blueprint || import.meta.env.VITE_KIWI_BLUEPRINT === "1") && (
+          <Suspense fallback={null}>
+            <Blueprint drawn={blueprint} />
+          </Suspense>
+        )}
       </ActContext>
     </Parts>
   )

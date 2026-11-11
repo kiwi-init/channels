@@ -1,0 +1,162 @@
+.bp {
+  --bp: var(--accent);
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow: hidden;
+  color: var(--bp);
+  font: var(--t-stamp) var(--mono);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.bp-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--bp) 14%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--bp) 14%, transparent) 1px, transparent 1px),
+    linear-gradient(to right, color-mix(in srgb, var(--bp) 6%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--bp) 6%, transparent) 1px, transparent 1px);
+  background-size:
+    64px 64px,
+    64px 64px,
+    8px 8px,
+    8px 8px;
+}
+
+.bp-v {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--bp) 70%, transparent);
+}
+
+.bp-v.is-centre {
+  width: 0;
+  border-left: 1px dashed var(--ink);
+  background: none;
+}
+
+.bp-span {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  height: 12px;
+  border-inline: 1px solid var(--bp);
+  background: linear-gradient(var(--bp), var(--bp)) center / 100% 1px no-repeat;
+}
+
+.bp-n {
+  padding: 0 4px;
+  border-radius: var(--r-tick);
+  background: var(--bg);
+}
+
+.bp-checks {
+  position: absolute;
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  translate: -50% 0;
+}
+
+.bp-check {
+  padding: 2px 6px;
+  border-radius: var(--r-tag);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px currentColor;
+  white-space: nowrap;
+}
+
+.bp-check.is-ok {
+  color: var(--live);
+}
+
+.bp-check.is-off {
+  color: var(--alert);
+}
+
+.bp-probe {
+  position: absolute;
+  outline: 1px solid var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.bp-probe-n {
+  position: absolute;
+  bottom: 100%;
+  left: -1px;
+  padding: 2px 6px;
+  border-radius: var(--r-tick);
+  background: var(--ink);
+  color: var(--on-ink);
+  white-space: nowrap;
+}
+
+.bp-probe-n.is-under {
+  top: 100%;
+  bottom: auto;
+}
+
+.bp-lines {
+  position: absolute;
+  inset: 0;
+}
+
+.bp-notes {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
+  opacity: 0;
+}
+
+.bp-note {
+  width: 8px;
+  height: 8px;
+}
+
+.bp-n.is-off {
+  color: var(--decide);
+}
+
+.bp-probe.is-picked {
+  outline: 2px solid var(--decide);
+  background: color-mix(in srgb, var(--decide) 10%, transparent);
+}
+
+.bp-probe.is-picked .bp-probe-n {
+  left: -2px;
+  max-width: 60vw;
+  overflow: hidden;
+  background: var(--decide);
+  text-overflow: ellipsis;
+}
+
+.bp-lines[hidden] {
+  display: none;
+}
+
+.bp-issue {
+  position: absolute;
+  outline: 1px dashed var(--alert);
+  outline-offset: 1px;
+  background: color-mix(in srgb, var(--alert) 8%, transparent);
+}
+
+.bp-do {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  opacity: 0;
+  pointer-events: auto;
+}

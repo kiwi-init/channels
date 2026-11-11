@@ -5,7 +5,7 @@ import { parseSync } from "oxc-parser";
 const ROOT = join(import.meta.dir, "..");
 const SRC = join(ROOT, "ui/src");
 const ALLOW = join(import.meta.dir, "ui-english.json");
-const SKIP = /(?:\.test\.tsx?|\.page\.ts|\.d\.ts)$|^(?:demo|i18n)\/|^sent\.ts$|^chat\/thumb(?:s|-shrink)\.ts$|^kit\/typing-(?:record|trace)\.ts$/;
+const SKIP = /(?:\.test\.tsx?|\.page\.ts|\.d\.ts)$|^(?:demo|i18n)\/|^sent\.ts$|^chat\/thumb(?:s|-shrink)\.ts$|^kit\/typing-(?:record|trace)\.ts$|^kit\/blueprint(?:-audit)?\.tsx?$/;
 const SHOWN_ATTRS = new Set(["label", "title", "aria-label", "aria-description", "placeholder", "alt", "hint", "lede", "sub", "tip", "verb"]);
 const SENTENCE = /^[A-Z][a-z']+(?:\s|[.,:;!?…]|$)|[a-z]{2,}\s+[a-z]{2,}.*[.?!…]$/;
 const PHRASE = /^(?:[a-z']+|§)(?: (?:[a-z']+|§))+$/;
