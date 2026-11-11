@@ -68,6 +68,7 @@ export function useStick(following = true, still = false) {
   const seen = useRef(Number.NaN)
   const wheeled = useRef(Number.NEGATIVE_INFINITY)
   const reserve = useRef(0)
+  const placed = useRef(Number.NaN)
   const pad = useCallback(() => {
     const h = room.current + reserve.current
     if (spacer.current) spacer.current.style.height = h > 0 ? `${h}px` : ""
@@ -112,6 +113,7 @@ export function useStick(following = true, still = false) {
     const gap = bottom(box) - box.scrollTop
     if (still && stuck.current && gap > 0.5 && gap < NEAR_BOTTOM) box.scrollTop = bottom(box)
     anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
+    placed.current = box.scrollTop
   }, [still, pad])
 
   const settle = useCallback(() => {
@@ -143,7 +145,9 @@ export function useStick(following = true, still = false) {
     const down = box.scrollTop > seen.current + 0.5
     const near = !still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !up && (stuck.current || down)
     stuck.current = live.current && !held.current && near
-    anchor.current = (still && touched.current ? docIn(box, list) : null) ?? (stuck.current ? null : anchorIn(box, list))
+    const ours = Math.abs(box.scrollTop - placed.current) < 0.5 && anchor.current?.el.isConnected ? anchor.current : null
+    anchor.current = (still && touched.current ? docIn(box, list) : null) ?? (stuck.current ? null : (ours ?? anchorIn(box, list)))
+    placed.current = Number.NaN
     height.current = list.offsetHeight
     seen.current = box.scrollTop
   }, [settle, still, pad])
@@ -207,6 +211,20 @@ export function useStick(following = true, still = false) {
     if (box) box.scrollTop = top
   }, [])
 
+  const toRow = useCallback(
+    (el: HTMLElement, offset: number) => {
+      const box = scroller.current
+      if (!box) return
+      box.scrollTop = Math.round(box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top - offset)
+      remember()
+      const seq = Number(el.dataset.seq)
+      if (stuck.current || !Number.isSafeInteger(seq)) return
+      anchor.current = { el, seq, top: el.getBoundingClientRect().top - box.getBoundingClientRect().top, at: box.scrollTop }
+      placed.current = box.scrollTop
+    },
+    [remember]
+  )
+
   const unstick = useCallback(() => {
     stuck.current = false
     anchor.current = null
@@ -226,5 +244,5 @@ export function useStick(following = true, still = false) {
     [remember]
   )
 
-  return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, unstick, hold }
+  return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold }
 }

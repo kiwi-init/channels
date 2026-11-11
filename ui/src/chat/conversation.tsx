@@ -279,7 +279,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
   const following = end === list.length
   const latest = useRef(false)
-  const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, unstick, hold } = useStick(following, !!doc)
+  const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold } = useStick(following, !!doc)
   const code = channel.code
   const holdEarlier = actions.holdEarlier
   const earlierPage = actions.earlier
@@ -336,8 +336,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     const box = scroller.current
     const row = back && content.current ? rowAt(content.current, list, back.at) : null
     if (back && box && row) {
-      toOffset(Math.round(box.scrollTop + row.getBoundingClientRect().top - box.getBoundingClientRect().top - back.offset))
-      remember()
+      toRow(row, back.offset)
       if (!stuck.current && unread) queueMicrotask(() => setFresh(unread.count))
       return
     }
@@ -349,7 +348,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     toOffset(line.offsetTop - 12)
     remember()
     if (!stuck.current) queueMicrotask(() => setFresh(unread.count))
-  }, [back, list, unread, remember, toBottom, toOffset, stuck, content, scroller, jump, code, holdEarlier])
+  }, [back, list, unread, remember, toBottom, toOffset, toRow, stuck, content, scroller, jump, code, holdEarlier])
 
   const last = list.at(-1)
   const lastSeq = useRef(last?.seq ?? 0)

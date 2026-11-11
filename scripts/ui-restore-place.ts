@@ -138,9 +138,67 @@ async function scroll() {
   await page.context().close();
 }
 
+const MARKDOWN_LATE_MS = 1500;
+
+const heights = (page: Page) =>
+  page.evaluate(() => {
+    const out: Record<string, { h: number; plain: boolean }> = {};
+    for (const row of document.querySelectorAll<HTMLElement>(".feed-list > [data-seq]"))
+      out[row.dataset.seq ?? ""] = { h: row.getBoundingClientRect().height, plain: !!row.querySelector(".md-plain") };
+    return out;
+  });
+
+const markdownLate = (page: Page) =>
+  page.route(/\/markdown-[^/]*\.js$/, async (route) => {
+    await page.waitForTimeout(MARKDOWN_LATE_MS);
+    await route.continue();
+  });
+
+async function plainFirst() {
+  const page = await fresh("long-feed");
+  await page.locator("article.msg").first().waitFor();
+  await settle(page);
+  for (let i = 0; i < 4; i++) {
+    await page.locator(".feed").evaluate((el) => {
+      el.scrollTop = Math.max(0, el.scrollTop - 1500);
+    });
+    await settle(page, 300);
+  }
+  await settle(page, 700);
+  const full = await heights(page);
+  await markdownLate(page);
+  await page.reload();
+  await page.locator("article.msg").first().waitFor();
+  const plain = await heights(page);
+  const row = Object.entries(full)
+    .map(([seq, md]) => ({ seq: Number(seq), md: md.h, plain: plain[seq] }))
+    .find((r) => r.seq >= 2000 && r.plain?.plain && r.plain.h + 12 < r.md);
+  expect(!!row, `a message in the long feed is shorter as plain text than as markdown (${JSON.stringify(row)})`);
+  if (!row?.plain) return void (await page.context().close());
+  await settle(page, MARKDOWN_LATE_MS + 700);
+  const offset = -Math.round((row.plain.h + row.md) / 2);
+  await page.locator(".feed").evaluate(
+    (el, { seq, offset }) => {
+      const at = el.querySelector<HTMLElement>(`.feed-list > [data-seq="${seq}"]`);
+      if (at) el.scrollTop += at.getBoundingClientRect().top - el.getBoundingClientRect().top - offset;
+    },
+    { seq: row.seq, offset },
+  );
+  await settle(page, 700);
+  const spot = await topRow(page);
+  expect(spot?.seq === row.seq, `the feed rests on a message whose plain text ends above the top (${JSON.stringify(row)} → ${JSON.stringify(spot)})`);
+  await page.reload();
+  await page.locator("article.msg").first().waitFor();
+  await settle(page, MARKDOWN_LATE_MS + 1200);
+  const after = await topRow(page);
+  expect(near(after, spot), `a restart that paints plain text before markdown still lands on the same message (${JSON.stringify(spot)} → ${JSON.stringify(after)})`);
+  await page.context().close();
+}
+
 try {
   await roomsAndTabs();
   await scroll();
+  await plainFirst();
 } finally {
   await browser.close();
   void server.stop(true);
