@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { b64url, fromB64url } from "@kiwi/core/crypto.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { personaOf } from "@kiwi/core/personality.ts";
 import { makePin, MAX_PIN, pinned, readPin } from "@kiwi/core/pin.ts";
@@ -36,5 +37,17 @@ describe("a personality pinned in an invite", () => {
         PRESETS.filter((p) => p.id !== "builder"),
       ),
     ).toBeNull();
+  });
+
+  test("a token that fails verification is told apart from no token at all", async () => {
+    const owner = await generateIdentity("human");
+    const token = await makePin(owner, room, builder);
+    const o = JSON.parse(new TextDecoder().decode(fromB64url(token))) as { pk: string };
+    o.pk = `${o.pk.slice(0, 15)}${o.pk[15] === "Z" ? "J" : "Z"}${o.pk.slice(16)}`;
+    const bent = b64url(new TextEncoder().encode(JSON.stringify(o)));
+    expect(await readPin(bent, room, owner.pk)).toEqual({ invalid: true });
+    expect(await readPin(token, "ab".repeat(16), owner.pk)).toEqual({ invalid: true });
+    expect(await readPin(await makePin(await generateIdentity("other"), room, builder), room, owner.pk)).toEqual({ invalid: true });
+    expect(await readPin(undefined, room, owner.pk)).toBeNull();
   });
 });
