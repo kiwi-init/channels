@@ -8,6 +8,7 @@ import { dialogOpen, keysHint, mod } from "~/kit/keys"
 import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
+import { useMedia, WIDE } from "~/kit/media"
 import type { Channel } from "~/model"
 import { drawerNews } from "~/live/links"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
@@ -17,7 +18,7 @@ import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
-import { setUpdatesSlot } from "~/chat/updates-slot"
+import { ActivityButton } from "~/chat/events"
 import { between, nickname } from "~/names"
 import { t } from "~/i18n/i18n"
 
@@ -119,6 +120,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   }, [peeking])
   const panelOpen = !!nav.panel
   const reading = nav.tab === "specs" && nav.spec != null && !panelOpen
+  const second = useMedia(WIDE) && !panelOpen && !older && !reading
   useLayoutEffect(() => {
     const root = document.documentElement
     root.toggleAttribute("data-bare", hidden)
@@ -226,7 +228,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               </Suspense>
             </div>
           )}
-          <span className="top-updates" ref={setUpdatesSlot} />
+          {!second && <ActivityButton channel={channel} />}
           <IconButton icon="search" label={t("shell.channel.search", { keys: keysHint("F") })} onClick={() => setSearching(true)} />
         </div>
       </header>
@@ -250,7 +252,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           </Suspense>
         </Boundary>
       </main>
-      {!nav.panel && !older && !reading && (
+      {second && (
         <Suspense fallback={null}>
           <Tracker channel={channel} />
         </Suspense>

@@ -253,6 +253,7 @@ export default {
   "tasks.now.in.progress.count": "{count} em andamento",
   "tasks.now.done.today.count": { one: "{count} feita hoje", other: "{count} feitas hoje" },
   "tasks.now.label": "Agora",
+  "tasks.now.shows": "Agora ou Atividade",
   "tasks.now.in.progress": "Em andamento",
   "tasks.now.more": "+{count} a mais",
   "tasks.now.nothing": "nada no momento",

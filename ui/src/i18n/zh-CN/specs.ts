@@ -253,6 +253,7 @@ export default {
   "tasks.now.in.progress.count": "{count} 个进行中",
   "tasks.now.done.today.count": "今天完成 {count} 个",
   "tasks.now.label": "现在",
+  "tasks.now.shows": "现在或动态",
   "tasks.now.in.progress": "进行中",
   "tasks.now.more": "+{count} 个",
   "tasks.now.nothing": "暂时没有",

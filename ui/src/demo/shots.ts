@@ -1,6 +1,7 @@
 import type { Scenario } from "~/demo/provider"
 import type { Prefs, Usage } from "~/model"
 import type { Nav } from "~/nav"
+import type { TrackTab } from "~/tasks/track-tab"
 
 export interface Shot {
   scenario: Scenario
@@ -10,6 +11,7 @@ export interface Shot {
   docs?: number
   streams?: boolean
   onboarding?: true
+  track?: TrackTab
   usage?: Partial<Usage>
   broken?: true
 }
@@ -71,6 +73,7 @@ export const SHOTS: Record<string, Shot> = {
   compact: { scenario: "compact", channel: "kiwi" },
   compacted: { scenario: "compacted", channel: "kiwi" },
   events: { scenario: "events", channel: "kiwi" },
+  activity: { scenario: "events", channel: "kiwi", track: "activity" },
   "ci-live": { scenario: "ci-live", channel: "kiwi" },
   "event-runs": { scenario: "event-runs", channel: "kiwi" },
   stash: kiwi(),

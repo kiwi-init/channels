@@ -410,12 +410,18 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   16px fade: the text, then the action on its line's end, or under it when
   the text needs the width.
 - **Second sidebar.** The right column (`--side-w`) is one place with two
-  states. At rest, on every view, it is the task tracker: a head reading Now
-  with the counts (in progress, done today) in mono, then a 4px bar with one
+  states. At rest, on every view, it holds Now and Activity. Now is the task
+  tracker: the counts (in progress, done today) in mono beside its name, or
+  on their own line under the toggle, then a 4px bar with one
   segment per state in the state colours, the next step, and the open tasks
   as rows, the ones that need you first (a `Dot`, the title in full on up to
   two lines, steps done of all in mono when the task has steps; no face, the
-  owner is in the row's `title`), eight at most and "+N more" to Specs. On a
+  owner is in the row's `title`), eight at most and "+N more" to Specs.
+  Activity is the open conversation's event log, newest first under a line
+  per day: each event on up to two lines with its time, Open on a task's
+  event, and a run of events folded into its last one. When the conversation
+  has both, a `Seg` in the head picks one and the choice is kept; with only
+  one, the head is its name. A link to an event opens Activity on it. On a
   wide window it stands in for the Now card at the top of Specs. An open
   spec is the exception: it reads across both columns, with no tracker
   beside it, so its comments keep their margin. A row opens
@@ -424,7 +430,9 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   that moves nothing, the composer included. A panel someone has dragged
   wider takes the extra width from the work and never lies over it. A window
   under 1180px wide has no third column: no tracker, and a panel lies over
-  the work.
+  the work. Whenever the column is not there for it (that window, an open
+  panel, an open spec), Activity is an icon beside Search that opens the same
+  log in a popover under it.
 - **Right panel** (`--side-w` to start, wider by its grip): a thread,
   a task, a PR or an issue slides in from the right (`panel-in`)
   beside the conversation, with a title, a mono sub line and a close button.

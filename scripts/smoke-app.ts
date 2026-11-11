@@ -164,16 +164,16 @@ try {
   const task = /\bT(\d+)\b/.exec(added)?.[1];
   if (task === undefined) throw new Error(`kiwi task add printed no task id: ${added.trim()}`);
   await row("hello from bot").first().waitFor({ timeout: 30000 });
-  const updates = page.getByRole("button", { name: "Activity" });
-  await updates.click();
+  await page.getByRole("button", { name: "Activity", exact: true }).click();
   await page
-    .getByRole("dialog", { name: "Activity" })
+    .getByRole("complementary", { name: "Activity" })
     .getByText(/added task T\d+ “Smoke task”/)
     .first()
     .waitFor({ timeout: 30000 });
-  if (await row("Smoke task").count()) throw new Error("the task's update stayed in the thread instead of the Updates panel");
+  if (await row("Smoke task").count()) throw new Error("the task's update stayed in the thread instead of Activity");
   await shot("general");
-  await updates.click();
+  await page.getByRole("button", { name: "Now", exact: true }).click();
+  await page.getByRole("complementary", { name: "Now" }).waitFor();
   await views.getByRole("button", { name: /^Specs/ }).click();
   await unfold(page, "Smoke");
   await page.getByRole("main").getByText("Smoke task").first().waitFor({ timeout: 15000 });

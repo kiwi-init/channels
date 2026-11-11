@@ -254,6 +254,7 @@ export default {
   "tasks.now.in.progress.count": "{count}개 진행 중",
   "tasks.now.done.today.count": "오늘 {count}개 완료",
   "tasks.now.label": "지금",
+  "tasks.now.shows": "지금 또는 활동",
   "tasks.now.in.progress": "진행 중",
   "tasks.now.more": "+{count}개",
   "tasks.now.nothing": "지금은 없음",

@@ -14,6 +14,9 @@
   align-items: center;
   gap: 8px;
   min-height: var(--tile);
+}
+
+.track-name {
   margin: 0;
   font: 600 var(--t-body) var(--ui);
   letter-spacing: -0.01em;
@@ -23,6 +26,16 @@
   color: var(--ink-3);
   font: 400 var(--t-stamp) var(--mono);
   letter-spacing: -0.01em;
+}
+
+.track-counts.is-line {
+  flex: none;
+  margin: 0;
+  line-height: var(--row-text);
+}
+
+.track-counts.is-line + .track-bar {
+  margin-top: 8px;
 }
 
 .track-bar {
@@ -54,6 +67,46 @@
 
 .track-seg.is-waiting {
   background: var(--decide);
+}
+
+.track .updates-log {
+  margin-top: 8px;
+}
+
+.track .updates-log .updates-day {
+  margin: 16px 0 0;
+  line-height: var(--row-text);
+}
+
+.track .updates-log .updates-day:first-child {
+  margin-top: 0;
+}
+
+.track .updates-log .sys {
+  align-items: flex-start;
+  min-height: var(--row-text);
+  margin: 0;
+}
+
+.track .updates-log .sys > * {
+  flex: none;
+  line-height: var(--row-text);
+}
+
+.track .updates-log .sys-line {
+  margin-top: calc((var(--row-text) - 6px) / 2);
+}
+
+.track .updates-log .sys > .sys-text {
+  display: -webkit-box;
+  flex: 1;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.track .updates-log .updates-older {
+  margin-top: 8px;
 }
 
 .track-next {
@@ -91,12 +144,6 @@
   color: var(--ink-3);
   font: var(--t-stamp) var(--mono);
   letter-spacing: -0.01em;
-}
-
-@media (max-width: 1179px), (orientation: portrait) {
-  .track {
-    display: none;
-  }
 }
 
 @media (min-width: 1180px) and (orientation: landscape) {

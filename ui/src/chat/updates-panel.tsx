@@ -15,22 +15,14 @@ const PAGE = 60
 
 type Item = { kind: "day"; at: number } | { kind: "line"; line: EventLine }
 
-export function Panel({ channel, runs, here, target, onClose }: { channel: Channel; runs: readonly Message[][]; here: number | null; target: number | null; onClose: () => void }) {
-  const tasks = useMemo(() => new Map(channel.tasks.map((t) => [t.id, t])), [channel.tasks])
-  const items = useMemo(() => {
-    const out: Item[] = []
-    let last: number | null = null
-    for (const run of [...runs].reverse()) {
-      const at = run[0]!.at
-      if (last === null || !sameDay(last, at)) out.push({ kind: "day", at })
-      last = at
-      for (const line of linesOf(run, tasks).reverse()) out.push({ kind: "line", line })
-    }
-    return out
-  }, [runs, tasks])
-  const reach = target === null ? -1 : items.findIndex((i) => i.kind === "line" && (i.line.kind === "one" ? i.line.m.seq === target : i.line.list.some((m) => m.seq === target)))
-  const [limit, setLimit] = useState(PAGE)
-  const shownTo = Math.max(limit, reach + 1)
+interface Shown {
+  channel: Channel
+  runs: readonly Message[][]
+  here: number | null
+  target: number | null
+}
+
+export function Panel({ onClose, ...shown }: Shown & { onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const esc = (e: KeyboardEvent) => {
@@ -49,11 +41,35 @@ export function Panel({ channel, runs, here, target, onClose }: { channel: Chann
       document.removeEventListener("pointerdown", outside, true)
     }
   }, [onClose])
+  return (
+    <div ref={box} role="dialog" aria-label={t("chat.updates.panel.label")} className="updates-panel">
+      <Log {...shown} />
+    </div>
+  )
+}
+
+export function Log({ channel, runs, here, target }: Shown) {
+  const tasks = useMemo(() => new Map(channel.tasks.map((t) => [t.id, t])), [channel.tasks])
+  const items = useMemo(() => {
+    const out: Item[] = []
+    let last: number | null = null
+    for (const run of [...runs].reverse()) {
+      const at = run[0]!.at
+      if (last === null || !sameDay(last, at)) out.push({ kind: "day", at })
+      last = at
+      for (const line of linesOf(run, tasks).reverse()) out.push({ kind: "line", line })
+    }
+    return out
+  }, [runs, tasks])
+  const reach = target === null ? -1 : items.findIndex((i) => i.kind === "line" && (i.line.kind === "one" ? i.line.m.seq === target : i.line.list.some((m) => m.seq === target)))
+  const [limit, setLimit] = useState(PAGE)
+  const shownTo = Math.max(limit, reach + 1)
+  const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (target !== null) box.current?.querySelector(`[data-seq="${target}"]`)?.scrollIntoView({ block: "center" })
   }, [target])
   return (
-    <div ref={box} role="dialog" aria-label={t("chat.updates.panel.label")} className="updates-panel">
+    <div ref={box} className="updates-log">
       {items.slice(0, shownTo).map((item) =>
         item.kind === "day" ? (
           <p key={`day${item.at}`} className="updates-day">
