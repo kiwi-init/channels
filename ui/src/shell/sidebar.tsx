@@ -21,7 +21,68 @@ import { t } from "~/i18n/i18n"
 
 const SideCards = later(() => import("~/shell/updates").then((m) => m.SideCards))
 
-export function Sidebar({ channel }: { channel: Channel }) {
+function ViewRows({ channel }: { channel: Channel }) {
+  const nav = useNav()
+  const go = useGo()
+  const agents = channel.people.filter((p) => p.kind === "agent" && !p.left)
+  const needs = openAsks(channel).length
+  const tasks = openTasks(channel).length
+  const github = channel.repos.length > 0 || !!channel.prs?.length || !!channel.issues?.length
+  const openPrs = channel.prs?.filter((p) => p.state === "open" || p.state === "draft") ?? []
+  const red = openPrs.some((p) => p.checks === "fail" || !!p.ticks?.failed.length)
+  const openIssues = channel.issues?.filter((i) => i.state === "open").length ?? 0
+  const specs = channel.specs?.filter((s) => !s.result) ?? []
+  const specsNeed = specs.filter((s) => s.canJudge && (s.stage === "draft" || s.stage === "delivered" || s.changed)).length
+  const line = channel.loading ? [] : headerLine(channel, 0)
+  const view = (tab: "needs" | "specs" | "agents" | "github", icon: "needs" | "spec" | "agent" | "github", label: string, title: string | undefined, mark: ReactNode) => (
+    <li>
+      <button
+        type="button"
+        className={cx("side-row", tab === "needs" && "is-needs", nav.tab === tab && "is-on")}
+        aria-pressed={nav.tab === tab}
+        title={title}
+        onClick={() => go(tab === "specs" ? { to: "spec", ask: null } : { to: "tab", tab })}
+      >
+        <span className="side-icon">
+          <Icon name={icon} />
+        </span>
+        <span className="side-label">{label}</span>
+        {mark}
+      </button>
+    </li>
+  )
+  return (
+    <ul>
+      {(needs > 0 || nav.tab === "needs") && view("needs", "needs", t("shell.channel.needs.you"), undefined, <Count n={needs} loud />)}
+      {view(
+        "specs",
+        "spec",
+        t("shell.channel.specs"),
+        specsNeed ? t("shell.channel.specs.need", { count: specsNeed }) : t("shell.channel.specs.open", { specs: specs.length, tasks }),
+        specsNeed > 0 && <span className="side-mark is-decide" role="img" aria-label={t("shell.channel.waiting.on.you")} />
+      )}
+      {(agents.length > 0 || nav.tab === "agents") && view("agents", "agent", t("shell.channel.agents"), line.length ? line.join(" · ") : undefined, null)}
+      {(github || nav.tab === "github") &&
+        view(
+          "github",
+          "github",
+          t("shell.channel.github"),
+          red ? t("shell.channel.github.red") : t("shell.channel.github.open", { prs: openPrs.length, issues: openIssues }),
+          red && <span className="side-mark" role="img" aria-label={t("shell.channel.checks.failed")} />
+        )}
+    </ul>
+  )
+}
+
+export function ViewsBar({ channel }: { channel: Channel }) {
+  return (
+    <nav className="views-bar" aria-label={t("shell.channel.views")}>
+      <ViewRows channel={channel} />
+    </nav>
+  )
+}
+
+export function Sidebar({ channel, views = true }: { channel: Channel; views?: boolean }) {
   const nav = useNav()
   const go = useGo()
   const { actions, now } = useAct()
@@ -56,32 +117,6 @@ export function Sidebar({ channel }: { channel: Channel }) {
   const tuckedPeople = tucked(leftPeople)
   const tuckedAgents = tucked(leftAgents)
   const toggleHidden = () => setShowHidden(!showHidden)
-  const needs = openAsks(channel).length
-  const tasks = openTasks(channel).length
-  const github = channel.repos.length > 0 || !!channel.prs?.length || !!channel.issues?.length
-  const openPrs = channel.prs?.filter((p) => p.state === "open" || p.state === "draft") ?? []
-  const red = openPrs.some((p) => p.checks === "fail" || !!p.ticks?.failed.length)
-  const openIssues = channel.issues?.filter((i) => i.state === "open").length ?? 0
-  const specs = channel.specs?.filter((s) => !s.result) ?? []
-  const specsNeed = specs.filter((s) => s.canJudge && (s.stage === "draft" || s.stage === "delivered" || s.changed)).length
-  const line = channel.loading ? [] : headerLine(channel, 0)
-  const view = (tab: "needs" | "specs" | "agents" | "github", icon: "needs" | "spec" | "agent" | "github", label: string, title: string | undefined, mark: ReactNode) => (
-    <li>
-      <button
-        type="button"
-        className={cx("side-row", tab === "needs" && "is-needs", nav.tab === tab && "is-on")}
-        aria-pressed={nav.tab === tab}
-        title={title}
-        onClick={() => go(tab === "specs" ? { to: "spec", ask: null } : { to: "tab", tab })}
-      >
-        <span className="side-icon">
-          <Icon name={icon} />
-        </span>
-        <span className="side-label">{label}</span>
-        {mark}
-      </button>
-    </li>
-  )
   const channelMenu = (at: DOMRect) => {
     const tile = now?.().channels.find((c) => c.code === channel.code)
     void import("~/shell/rail-menu").then((m) =>
@@ -119,25 +154,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
           <span className="side-chan-name">{channel.title}</span>
           <Icon name="down" size={14} />
         </button>
-        <ul>
-          {(needs > 0 || nav.tab === "needs") && view("needs", "needs", t("shell.channel.needs.you"), undefined, <Count n={needs} loud />)}
-          {view(
-            "specs",
-            "spec",
-            t("shell.channel.specs"),
-            specsNeed ? t("shell.channel.specs.need", { count: specsNeed }) : t("shell.channel.specs.open", { specs: specs.length, tasks }),
-            specsNeed > 0 && <span className="side-mark is-decide" role="img" aria-label={t("shell.channel.waiting.on.you")} />
-          )}
-          {(agents.length > 0 || nav.tab === "agents") && view("agents", "agent", t("shell.channel.agents"), line.length ? line.join(" · ") : undefined, null)}
-          {(github || nav.tab === "github") &&
-            view(
-              "github",
-              "github",
-              t("shell.channel.github"),
-              red ? t("shell.channel.github.red") : t("shell.channel.github.open", { prs: openPrs.length, issues: openIssues }),
-              red && <span className="side-mark" role="img" aria-label={t("shell.channel.checks.failed")} />
-            )}
-        </ul>
+        {views && <ViewRows channel={channel} />}
       </nav>
       <section aria-label={t("shell.sidebar.rooms")}>
         <Heading action={channel.youOwn || channel.youTrusted ? <IconButton icon="plus" label={t("shell.sidebar.new.room")} onClick={() => go({ to: "dialog", dialog: "new-room" })} /> : undefined}>

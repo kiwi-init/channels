@@ -8,16 +8,17 @@ import { dialogOpen, keysHint, mod } from "~/kit/keys"
 import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
-import { useMedia, WIDE } from "~/kit/media"
+import { NARROW, useMedia, WIDE } from "~/kit/media"
 import type { Channel } from "~/model"
 import { drawerNews } from "~/live/links"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { sameWhere, useGo, useNav, useActions } from "~/nav"
 import { whereKey } from "~/places"
+import { useLayout } from "@kiwi/app/layout.ts"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
-import { Sidebar } from "~/shell/sidebar"
+import { Sidebar, ViewsBar } from "~/shell/sidebar"
 import { ActivityButton } from "~/chat/events"
 import { between, nickname } from "~/names"
 import { t } from "~/i18n/i18n"
@@ -56,6 +57,9 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const go = useGo()
   const actions = useActions()
   const hidden = useSidebarHidden()
+  const layout = useLayout()
+  const narrow = useMedia(NARROW)
+  const top = layout === "top" && !narrow
   const panel = usePanelWidth(hidden)
   useLayoutEffect(() => {
     const root = document.documentElement
@@ -198,7 +202,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const news = drawerNews(channel)
 
   return (
-    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare", peeking && "is-peek", reading && "is-reading")}>
+    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare", top && "is-top", peeking && "is-peek", reading && "is-reading")}>
       {hidden && !peek && <div className="side-edge" onMouseEnter={() => setPeek(true)} />}
       <header className="top">
         <div className="top-lead">
@@ -232,7 +236,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           <IconButton icon="search" label={t("shell.channel.search", { keys: keysHint("F") })} onClick={() => setSearching(true)} />
         </div>
       </header>
-      <Sidebar channel={channel} />
+      {top && <ViewsBar channel={channel} />}
+      <Sidebar channel={channel} views={!top} />
       <main className="main">
         <Boundary resetKey={nav.tab}>
           <Suspense fallback={null}>

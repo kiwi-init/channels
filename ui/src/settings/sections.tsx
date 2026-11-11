@@ -1,5 +1,6 @@
 import "~/i18n/en/settings"
 
+import { setLayout, useLayout, type Layout } from "@kiwi/app/layout.ts"
 import { useEffect, useState, type ReactNode } from "react"
 
 import { cx, IconButton } from "~/kit/bits"
@@ -201,6 +202,12 @@ const fonts = () =>
     ["atkinson", "Atkinson"],
   ] as const satisfies readonly (readonly [TextFont, string])[]
 
+const layouts = () =>
+  [
+    ["side", t("settings.sections.layout.side")],
+    ["top", t("settings.sections.layout.top")],
+  ] as const satisfies readonly (readonly [Layout, string])[]
+
 const motion = () =>
   [
     ["full", t("settings.sections.motion.full")],
@@ -211,6 +218,7 @@ export function AppearanceSection() {
   const { app } = useApp()
   const { prefs, actions } = app
   const set = (p: Partial<Prefs>) => actions.setPrefs(p)
+  const layout = useLayout()
   return (
     <Page title={t("settings.settings.appearance")} lede={t("settings.sections.appearance.lede")}>
       <Group>
@@ -222,6 +230,9 @@ export function AppearanceSection() {
         </Row>
         <Row label={t("settings.sections.font")}>
           <Seg label={t("settings.sections.font")} value={prefs.font} options={fonts()} onChange={(font) => set({ font })} />
+        </Row>
+        <Row label={t("settings.sections.layout")} hint={t("settings.sections.layout.hint")}>
+          <Seg label={t("settings.sections.layout")} value={layout} options={layouts()} onChange={setLayout} />
         </Row>
         <Row label={t("settings.sections.motion")}>
           <Seg label={t("settings.sections.motion")} value={prefs.reduceMotion ? "reduced" : "full"} options={motion()} onChange={(m) => set({ reduceMotion: m === "reduced" })} />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
+import { setLayout } from "@kiwi/app/layout.ts"
 import { rememberOnboarded } from "~/start/onboarded"
 import { DEMO_PREFS } from "~/demo/data"
 import { DEMO_HANDLES, navWithDemoHandles, renamedAgents, withDemoHandles } from "~/demo/handles"
@@ -28,6 +29,7 @@ if (shot?.docs !== undefined && shot.channel && seeded && seeded.kind !== "dm" &
 
 if (!shot?.onboarding) rememberOnboarded(false)
 keepTab(shot?.track ?? "now")
+if (shot?.layout) setLayout(shot.layout)
 
 const SWITCH_AFTER_MS = 400
 

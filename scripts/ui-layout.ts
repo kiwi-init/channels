@@ -301,6 +301,27 @@ try {
     expect((await row("scout").count()) === 0 && (await agents.getByRole("button", { name: "1 hidden" }).count()) === 1, "and hides again once you go elsewhere");
     await page.close();
   }
+  for (const [width, height] of SIZES) {
+    console.log(`\nthe top bar layout, ${width}×${height}`);
+    const page = await browser.newPage({ viewport: { width, height } });
+    await open(page, "channel-top");
+    const bar = await boxOf(page, ".views-bar ul");
+    const tile = await boxOf(page, ".tile[data-code]");
+    const main = await boxOf(page, ".main");
+    const side = await boxOf(page, ".side");
+    const title = await boxOf(page, ".top-here");
+    const rows = await page.evaluate(() => [...document.querySelectorAll(".views-bar .side-row")].map((row) => Math.round(row.getBoundingClientRect().top)));
+    expect(rows.length >= 3 && new Set(rows).size === 1, `the views are one row above the work (${rows.length} in ${new Set(rows).size} row)`);
+    expect(!!bar && !!tile && near(bar.y, tile.y), `on the channel tiles' line (${bar?.y.toFixed(1)} and ${tile?.y.toFixed(1)})`);
+    expect(!!bar && !!side && bar.left >= side.right, "after the sidebar's column");
+    expect(!!bar && !!main && main.top >= bar.bottom, "the work starts under them");
+    expect((await page.locator(".side .side-views .side-row").count()) === 0 && (await page.locator(".side .side-chan").count()) === 1, "the sidebar keeps the channel's name and loses the view rows");
+    expect(!!title && near(title.x, width / 2), `the title is still on the window's centre (${title?.x.toFixed(1)} of ${width / 2})`);
+    await page.locator(".views-bar .side-row", { hasText: "Specs" }).click();
+    await page.waitForTimeout(300);
+    expect((await page.locator('.views-bar .side-row[aria-pressed="true"]').innerText()).includes("Specs"), "a view opens from the bar and shows as chosen");
+    await page.close();
+  }
   for (const [width, height] of [
     [1000, 760],
     [700, 760],
