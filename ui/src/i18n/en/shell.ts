@@ -26,6 +26,7 @@ export default {
   "shell.channel.reconnecting": "Reconnecting…",
   "shell.channel.details": "Details",
   "shell.channel.resize": "Resize the panel",
+  "shell.channel.resize.side": "Resize the sidebar",
   "shell.channel.resize.title": "Drag to resize · double-click to reset",
   "shell.sidebar.rooms": "Rooms",
   "shell.sidebar.new.room": "New room",

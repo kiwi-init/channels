@@ -26,6 +26,7 @@ export default {
   "shell.channel.reconnecting": "Reconectando…",
   "shell.channel.details": "Detalhes",
   "shell.channel.resize": "Redimensionar o painel",
+  "shell.channel.resize.side": "Redimensionar a barra lateral",
   "shell.channel.resize.title": "Arraste para redimensionar · clique duas vezes para restaurar",
   "shell.sidebar.rooms": "Salas",
   "shell.sidebar.new.room": "Nova sala",

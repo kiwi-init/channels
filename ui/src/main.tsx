@@ -12,6 +12,7 @@ import { LiveDuties, useLive } from "~/live/live"
 import { storedThemePrefs } from "~/live/prefs"
 import { navigate, startNav, useKeepPlace, type Go, type Nav } from "~/nav"
 import { Root } from "~/shell/root"
+import { bootSideWidth } from "~/shell/side-width"
 import { bootTheme } from "~/theme/apply"
 import { loadRex } from "~/theme/rex"
 import { wantsRex, type ThemePrefs } from "~/theme/themes"
@@ -67,6 +68,7 @@ if (hasBridge()) void import("~/kit/native-menu").then((m) => m.quietNativeMenu(
 
 if (!demo) {
   applyStoredAppearance()
+  bootSideWidth()
   bridge()?.onTextStep(stepTextSize)
   const menus = bridge()
   if (menus && typeof menus.onCommand === "function") menus.onCommand((c) => runCommand(c))
