@@ -341,8 +341,6 @@ const TASK_BODY = [
   "From the desktop audit. https://github.com/kiwi-init/channels/issues/2111",
 ].join("\n")
 
-const TASK_BRANCH = "Channels12-channel-settings-one-save-pattern-per-setting"
-
 const behindOf = (c: Channel): Channel => ({ ...c, behind: true, specs: c.specs?.filter((s) => !!s.result), tasks: c.tasks.filter((k) => k.status === "done") })
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
@@ -369,11 +367,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                       : scenario === "task-body"
                         ? {
                             ...DEMO_CHANNEL,
-                            tasks: DEMO_CHANNEL.tasks.map((k) =>
-                              k.id === 12
-                                ? { ...k, title: wrote("Channel settings: four save patterns in one dialog, the…"), detail: wrote(TASK_BODY), ...(k.pr && { pr: { ...k.pr, branch: TASK_BRANCH } }) }
-                                : k
-                            ),
+                            tasks: DEMO_CHANNEL.tasks.map((k) => (k.id === 12 ? { ...k, title: wrote("Channel settings: four save patterns in one dialog, the…"), detail: wrote(TASK_BODY) } : k)),
                           }
                         : scenario === "opening"
                           ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
