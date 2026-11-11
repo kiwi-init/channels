@@ -2,6 +2,20 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.18 — 2026-11-11
+
+- **Right panel: it pushes the chat again, down to narrow windows (T5516)** ([#2282](https://github.com/kiwi-init/channels/pull/2282))
+- **App: a task shows whose move it is, how long it has been quiet, and its landing steps (T4172)** ([#2280](https://github.com/kiwi-init/channels/pull/2280))
+- **Waker: the daemon hosting a quiet task's mover wakes it once; attempted, delivered and read are kept apart; unread goes to the lead (T4171)** ([#2279](https://github.com/kiwi-init/channels/pull/2279))
+- **Desktop: Livewire 2026.11.4 with Hutch 0.29.0 and the electrobun shim 2.0.6 (T1793)** ([#2281](https://github.com/kiwi-init/channels/pull/2281))
+- **smoke-eb: sendMessage never types the text again after pressing Enter (T4900)** ([#2283](https://github.com/kiwi-init/channels/pull/2283))
+- **App: a task quiet past three times the quiet time is an item in the owner's Needs you (T4857)** ([#2284](https://github.com/kiwi-init/channels/pull/2284))
+- **Tests: an approval holds when its PR is merged before it's linked, and after the target moves past recorded evidence (#3930 cases 13, 23, T5025)** ([#2285](https://github.com/kiwi-init/channels/pull/2285))
+- **Shots: a page the loop is leaving starts no fetch, which ends #1850's WebKit page error (T1561)** ([#2287](https://github.com/kiwi-init/channels/pull/2287))
+- **Rail: inside a channel, another channel's needs-you badge arrives and clears live (T2996)** ([#2286](https://github.com/kiwi-init/channels/pull/2286))
+- **Rail: switching channels keeps the other channels' followers, so they don't reconnect (T5147)** ([#2289](https://github.com/kiwi-init/channels/pull/2289))
+- **App: a channel with no base under its window opens on the whole log, and Specs and Now say when it's still reading (T5096, #2288)** ([#2290](https://github.com/kiwi-init/channels/pull/2290))
+
 ## 2026.11.17 — 2026-11-10
 
 - **Replies: a reply to a message sent to several is never dropped (T5088)** ([#2269](https://github.com/kiwi-init/channels/pull/2269))
