@@ -26,7 +26,6 @@ export default {
   "chat.menus.leave.sub": "지금 목록에서 사라집니다. 방의 다른 사람이 온라인이 되면 완전히 나가게 되며, 그 사람이 다시 추가할 수 있습니다.",
   "chat.menus.leave.yes": "나가기",
   "chat.menus.copy.name": "이름 복사",
-  "chat.menus.conversation": "대화",
   "chat.menus.this.conversation": "이 대화",
   "chat.mermaid.invalid": "유효한 Mermaid가 아닙니다",
   "chat.mermaid.too.long": "너무 길어서 그릴 수 없습니다({count}자 초과)",

@@ -1,4 +1,3 @@
-import type { Where } from "~/model"
 import { store } from "~/live/value"
 
 const STORE_KEY = "mc.hidden-places"
@@ -24,7 +23,7 @@ function save(list: typeof hiddenPlaces, key: string, next: readonly string[]): 
   }
 }
 
-export const hiddenKey = (code: string, where: Extract<Where, { kind: "room" | "dm" }>): string => `${code}/${where.kind === "room" ? `room:${where.room}` : `dm:${where.with}`}`
+export const hiddenKey = (code: string, room: string): string => `${code}/room:${room}`
 
 export function setHidden(key: string, on: boolean): void {
   save(hiddenPlaces, STORE_KEY, on ? [...new Set([...hiddenPlaces.get(), key])] : hiddenPlaces.get().filter((k) => k !== key))

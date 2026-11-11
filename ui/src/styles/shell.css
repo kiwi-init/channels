@@ -570,29 +570,6 @@
   }
 }
 
-.side-faces {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-  padding: 0 0 0 calc(8px - (var(--row) - var(--av-sm)) / 2);
-}
-
-.side-face {
-  display: grid;
-  place-items: center;
-  width: var(--row);
-  height: var(--row);
-  padding: 0;
-  border: 0;
-  border-radius: var(--r-row);
-  background: none;
-  transition: background var(--fast);
-}
-
-.side-face:hover {
-  background: var(--wash);
-}
-
 @keyframes hint-grow {
   from {
     opacity: 0;

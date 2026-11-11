@@ -64,7 +64,6 @@ const PARTS: readonly string[] = [
   ".top-tools .icon-btn:last-child",
   ".side",
   ".side-row.is-on",
-  ".side-faces",
   ".main",
   ".feed-list",
   ".main .composer",
