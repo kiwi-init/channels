@@ -355,7 +355,30 @@ try {
     await page.locator(".views-bar .side-row", { hasText: "Specs" }).click();
     await page.waitForTimeout(300);
     expect((await page.locator('.views-bar .side-row[aria-pressed="true"]').innerText()).includes("Specs"), "a view opens from the bar and shows as chosen");
+    const edge = await boxOf(page, ".side-grip");
+    if (edge && bar && side) {
+      await page.mouse.move(edge.right - 2, bar.y);
+      await page.mouse.down();
+      await page.mouse.move(edge.right + 59, bar.y, { steps: 6 });
+      await page.mouse.up();
+    }
+    const sideAfter = await boxOf(page, ".side");
+    expect(!!edge && !!side && !!sideAfter && sideAfter.right === side.right + 64, `the sidebar's edge still drags beside the bar (${side?.right} → ${sideAfter?.right})`);
     await page.close();
+    const bare = await browser.newPage({ viewport: { width, height } });
+    await bare.addInitScript(() => localStorage.setItem("mc.sidebar-hidden", "1"));
+    await open(bare, "channel-top");
+    await bare.mouse.move(400, 500);
+    await bare.mouse.move(3, 500, { steps: 6 });
+    await bare.waitForTimeout(700);
+    const tiles = await bare.evaluate(() =>
+      [...document.querySelectorAll(".rail .tile")].map((tile) => {
+        const r = tile.getBoundingClientRect();
+        return tile.contains(document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2));
+      }),
+    );
+    expect(tiles.length > 0 && tiles.every(Boolean), `with the sidebar hidden, the peek's channel tiles are over the bar (${tiles.filter(Boolean).length} of ${tiles.length} take the click)`);
+    await bare.close();
   }
   for (const [width, height] of [
     [1000, 760],
