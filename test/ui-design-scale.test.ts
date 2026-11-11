@@ -73,16 +73,16 @@ describe("the top bar's controls float", () => {
     }
   });
 
-  test("the chrome sits on the float: the bar's tabs, the rail's tiles and the terminal's tabs and close", () => {
+  test("the chrome is flat: the bar's tabs, the rail's tiles and Settings' back button carry no float", () => {
     const controls: [string, string][] = [
-      [shell, ".tabs"],
       [settings, ".set-back"],
       [shell, ".tile"],
     ];
     for (const [css, selector] of controls) {
       const body = rule(css, selector);
-      expect(body).toContain("background: var(--float)");
-      expect(body).toContain("box-shadow: var(--shadow-float)");
+      expect(body).not.toBe("");
+      expect(body).not.toContain("var(--float)");
+      expect(body).not.toContain("var(--shadow-float)");
     }
   });
 
@@ -93,32 +93,38 @@ describe("the top bar's controls float", () => {
     expect(body).toContain("box-shadow: var(--shadow-float)");
   });
 
-  test("the rail's + and gear and a panel's close stay quiet; the gear floats while Settings is open", () => {
-    for (const selector of [".tile.is-add", ".rail-gear"]) {
+  test("the + tile, the gear and a panel's close stay quiet; the gear takes the chosen wash while Settings is open", () => {
+    for (const selector of [".tile.is-add,\n.tile.is-waiting", ".rail-gear"]) {
       expect(rule(shell, selector)).toContain("background: none");
-      expect(rule(shell, selector)).toContain("box-shadow: none");
+      expect(rule(shell, selector)).not.toContain("shadow-float");
     }
     expect(rule(shell, ".panel-head > .icon-btn")).not.toContain("var(--float)");
-    expect(rule(shell, ".rail-gear.is-on")).toContain("box-shadow: var(--shadow-float)");
+    expect(rule(shell, ".rail-gear.is-on")).toContain("background: var(--wash-2)");
   });
 });
 
-describe("the sidebar button stays in one place, open or collapsed", () => {
+describe("the shell is one grid", () => {
   const shell = readFileSync(join(STYLES, "shell.css"), "utf8");
-  const wide = shell.slice(shell.indexOf("@media (min-width: 761px) {\n  .chan:not(.is-bare) .top-drawer"));
   const rule = (selector: string): string => {
-    const at = wide.indexOf(`\n  ${selector} {`);
-    return at < 0 ? "" : wide.slice(at, wide.indexOf("}", at));
+    const at = shell.indexOf(`\n${selector} {`);
+    return at < 0 ? "" : shell.slice(at, shell.indexOf("}", at));
   };
 
-  test("open, it sits first at the bar's left edge, where the collapsed bar puts it", () => {
-    expect(rule(".chan:not(.is-bare) .top-drawer")).toContain("justify-self: start");
-    expect(rule(".chan:not(.is-bare) .top-drawer")).toContain("margin-left: 8px");
-    expect(rule(".chan.is-bare .top")).toContain("padding-left: 8px");
+  test("three columns, the two sides the same width, so the work is on the window's centre", () => {
+    expect(rule(".app")).toContain("grid-template-columns: var(--side-w) minmax(0, 1fr) var(--side-w)");
+    expect(rule(".top")).toContain("grid-template-columns: subgrid");
   });
 
-  test("open, the switcher follows it at the same gap as collapsed", () => {
-    expect(rule(".chan.is-bare .top-title")).toContain("padding: 0 10px");
-    expect(rule(".chan:not(.is-bare) .top-title")).toContain("padding-left: calc(8px + var(--ctl) + 10px)");
+  test("the channel tiles are the sidebar's first row, not a column of their own", () => {
+    expect(rule(".rail")).toContain("grid-column: 1");
+    expect(rule(".rail")).toContain("flex-wrap: wrap");
+    expect(shell).not.toContain("--rail-w");
+  });
+
+  test("no state moves the sidebar button, and a hidden sidebar gives up its column without animating the grid", () => {
+    expect(/\.is-bare[^{};]*\.top-(?:lead|drawer)(?![\w-])[^{};]*\{/.test(shell)).toBe(false);
+    expect(shell).toContain(":root[data-bare] .app {\n  grid-template-columns: 0px minmax(0, 1fr) var(--side-w);");
+    expect(shell).not.toContain(":has(.chan");
+    expect(shell).not.toContain("transition: grid-template-columns");
   });
 });
