@@ -48,8 +48,6 @@ export default {
   "shell.sidebar.you": "あなた",
   "shell.sidebar.mark.read": "既読にする",
   "shell.sidebar.needs.person": "人の対応が必要",
-  "shell.sidebar.offline": "オフライン",
-  "shell.sidebar.idle": "待機中",
   "shell.updates.sign.in.ask": "{name} があなたとしてサインインしようとしています",
   "shell.updates.review": "確認",
   "shell.updates.moved": "Channels は {path} に移動しました",

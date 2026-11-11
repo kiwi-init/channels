@@ -52,7 +52,7 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 
 | Token | Dark (Channels Dark) | OLED Black | Light |
 |---|---|---|---|
-| `bg` (canvas, rail, sidebar, panels) | `#111113` | `#000000` | `#ffffff` |
+| `bg` (canvas, sidebar, panels) | `#111113` | `#000000` | `#ffffff` |
 | `bg-2` (raised: dialogs, cards) | `#18181b` | `#0c0c0d` | `#f7f7f8` |
 | `bg-3` (fills: buttons, fields, tiles, tracks) | `#212125` | `#18181a` | `#efeff1` |
 | `ink` | `#ececef` | `#ececef` | `#18181b` |
@@ -105,7 +105,7 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 - Text size scales the root: `:root` has `font-size: calc(var(--text-scale) *
   100%)` (Default 1.1; Small 1, Large 1.25, Larger 1.4, Largest 1.6), so
   everything in `rem` grows with it. Type, every box that holds text
-  (controls, rows, chips, avatars with initials, the rail's tiles), the
+  (controls, rows, chips, avatars with initials, the channel tiles), the
   columns sized for text (`--side-w`, `--col`), icons and container-query
   breakpoints are in `rem`. A breakpoint is its width at Default divided by
   17.6 (1rem at Default), so it fires where it always did there and moves
@@ -123,15 +123,86 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 
 ## 5. Radius, shadow, layout
 
+- The 8px grid. Every fixed size in the shell is a multiple of 8 on screen,
+  at every text size. Text size scales the root (1rem is 17.6px at Default),
+  so a bare rem size lands between pixels (18rem is 316.8px); the shell's
+  sizes are therefore tokens that snap, `round(<rem>, 8px)`: `--side-w`,
+  `--col`, `--ctl` (32), `--ctl-sm` (24), `--row` (a
+  sidebar or tracker row, 32), `--slot` (a row's icon column and a section
+  head, 24), `--tile` (40), `--av` / `--av-sm` / `--av-lg` (32 / 24 / 64) and
+  `--row-text` (a 24px line). Spacing between them is 8, 16 or 24. What can't
+  be on the grid is what follows the window or the words: a column centred
+  in an odd-width window, a label's own width, a paragraph's height. The
+  blueprint (below) prints an off-grid ruler number in `decide` and says
+  `off grid` in its notes.
+- Rules of place:
+  - One grid. The window is three columns, `--side-w | 1fr | --side-w` (320
+    at Default): the sidebar, the work, the second sidebar. The top bar
+    shares them. Nothing else places the big parts: no margins, no absolute
+    positions, no measuring in script.
+  - The window's true centre. The two sides are the same width, so the work
+    is on the window's centre by construction, and the bar's title is centred
+    on the window in every state. Settings and Home centre on the window too.
+    A window under 1180px wide has no third column and centres the work in
+    what is left.
+  - One gutter. Every view keeps `--gutter` (40px) on each side of its
+    content. The conversation has no maximum width: the gap is always 40 and
+    the column is whatever the window leaves. A scrolling view reserves its
+    scrollbar (`scrollbar-gutter: stable`) and takes the scrollbar's measured
+    width (`--bar`, set by `kit/scrollbar.ts`) off its right padding
+    (`--gutter-end`), so content ends on the same line with a classic
+    scrollbar, an overlay one or none.
+  - One left line, one right line. In a list view the headings, the rows'
+    icons and "Show more" start on the gutter line, titles 32px after it (a
+    16px icon column and a 16px gap), and a row's last column ends on the
+    right line; a row's hover plate bleeds 8px past both. In the
+    conversation, faces start on the composer's left edge and your own
+    bubbles end on its right edge.
+  - Nothing scrolls sideways. Every scroller is vertical only (`overflow:
+    hidden auto`): strips wrap, long code and diff lines wrap, a diagram
+    shrinks to fit. The one exception is the image annotator's zoomed
+    picture.
+  - Nothing you click moves. Hiding the sidebar or opening the right panel
+    changes no control's position. Content may: a hidden sidebar gives its
+    column to the work.
+  ⌥⌘B (Ctrl+Alt+B) lays a blueprint over the app (`kit/blueprint.tsx`, loaded
+  only when asked for): an 8px grid, a line on every measured column and row
+  edge, a ruler with each column's width, the window's centre line with how
+  far the title and the composer sit from it (`live` within a pixel, `alert`
+  beyond), and under the pointer an element's size and position. It takes no
+  clicks, so the app works under it. Everything it draws is also in the
+  accessibility tree, one labelled element per fact, each starting `bp:`
+  (`bp: span x 361 to 527 w 166`, `bp: part .main .composer x 527 …`,
+  `bp: item .side .side-row 3 of 16 … gap 0`, `bp: text … starts at x 142.5`),
+  so a tool that reads the tree gets the numbers along with the picture.
+  ⌥-click selects what is under the pointer: it gets a `decide` outline, and
+  its id is copied (`bp: pick .side-row.is-muted in .app > .chan > .side
+  "#releases" x 80 y 136 w 256 h 32`: its classes, where it sits, what it
+  says, its box) and published to the tree as well. ⌥⇧-click on the same spot
+  steps up to its container. The click never reaches the app.
+  It also audits what it measures, one `bp: issue <kind>: …` per finding and
+  a `bp: audit N issues` line, each outlined in `alert`: a control under
+  another, a target under 24px, text cut short, anything outside the window,
+  an edge 1 or 2px off its neighbours, a boxed control off the grid, a lone
+  edge near a common one, and anything that can scroll sideways. It costs
+  frames while it is on, so no build turns it on by default.
+  `bun scripts/ui-layout.ts --dist ui/dist` measures these rules in the built
+  page (the centre, the sidebar's edges, the tracker's place, the two sides
+  of the conversation, hiding and peeking the sidebar, search, a wide panel)
+  at four window sizes; run it after any layout change.
 - Spacing: padding, margin and gap sit on one scale: 0, 1, 2, 4, 6, 8, 10, 12,
   16, 20, 24, 32, 40, 48, 64. `test/ui-design-scale.test.ts` fails on anything
   else.
 - Rhythm: a page has `--gutter` (24px) at its sides, 24px above and 48px below.
-  A card is `bg` with a 1px `line-2` border, `--r-card` and text inset
-  `--card-pad` (16px). A list of cards has 12px between them; sections of a
+  A plate is something you act on (a thing that needs you, an agent, the Now
+  line, a question): a `plate` fill (`bg-2`) with a `line` edge drawn inside,
+  no border, `--r-card` and text inset `--card-pad` (16px). A list (Specs,
+  GitHub) has no box: its groups sit on the page with a hairline between
+  them. A list of cards has 12px between them; sections of a
   page or panel have 24px or 32px between them. A panel's text is inset 16px.
-- Control heights: `--ctl` (2rem: buttons, fields, tabs, tracks, the channel
-  switcher, sidebar rows, send, attach) and `--ctl-sm` (1.5rem: small buttons).
+- Control heights: `--ctl` (32px at Default: buttons, fields, tracks,
+  send, attach) and `--ctl-sm` (24px: small buttons);
+  a sidebar row is `--row`.
   A quiet button or icon button at the end of a row is pulled out by its own
   padding so its text or glyph lines up with the row's right edge.
 - Radii, only from tokens: `--r-tick 2px` (bars, ticks), `--r-tag 6px` (tags,
@@ -155,9 +226,10 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 - No glass, no `backdrop-filter`, no blur anywhere, with one exception: the
   composer (§10) is frosted, so the thread scrolls under it. Nothing else
   takes a blur.
-- Sizes on `:root`: `--rail-w 4rem` (channel tiles), `--side-w 15.5rem`
-  (the sidebar), `--panel-w 400px` (the right panel, which people resize),
-  `--top-h 3.25rem` (the top bar, which drags the window), `--col 47.5rem`
+- Sizes on `:root`: `--side-w 18rem` (the sidebar and the second sidebar),
+  `--panel-w` (the right panel's width once someone has dragged it wider),
+  `--top-h` (`--ctl` + 16px: the top bar, which drags the window),
+  `--gutter 40px` (each side of a view's content), `--col 47.5rem`
   (the reading column), `--list 2400px` (the cap for the list views Specs,
   GitHub and Needs you, which otherwise fill the content area inside
   `--gutter`), `--compose-space 8rem` (room under the last message for the
@@ -165,17 +237,29 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 
 ## 6. Motion
 
+- Things grow out of what was pressed: the search field out of the search
+  button (`find-grow`, a clip, never a width), a menu out of its corner
+  (`menu-grow`), the right panel in from the window's edge (`panel-in`), a
+  view up into place when its row opens (`view-in`; the conversation is there
+  at once). Pointing at a channel's tile drops its name under it
+  (`hint-drop`), so a name never costs a click. The sidebar slides out and in
+  and the work slides with it (`main-fill`, `main-yield`); the grid itself
+  never animates.
+- Motion moves `transform`, `translate`, `opacity` and `clip-path` only.
+  Nothing animates a width, a height, a position or a grid.
 - Motion answers an action: something opens, arrives or moves because someone
   did something. It is felt, never watched: short, soft, and nothing plays
-  twice for the same event. Three things loop: the working dots under the
-  conversation when the sidebar is hidden (`blink`), a working task's `Dot` (`spin`, 6s) and the current
-  step's mark while adding an agent (`spin`).
+  twice for the same event. Two things loop: the working dots under the
+  conversation when the sidebar is hidden (`blink`) and the current
+  step's mark while adding an agent (`spin`). A task's `Dot` never moves on
+  its own: in progress is a whole ring with a centre, the same size as every
+  other state.
 - CSS first, and no animation library. Two speeds and one ease for fades and
   fills: `--fast 0.16s`, `--slow 0.28s`, `--ease cubic-bezier(0.32, 0.72, 0, 1)`.
   Two springs for things that move, written as `transition: transform var(--glide)`:
   `--glide` (0.48s, a slight overshoot: selections, panels, dialogs, cards) and
   `--pop` (0.35s, livelier: presses, marks, counts, toasts).
-- The selection glides. One pill moves between tabs, segments and sidebar rows
+- The selection glides. One pill moves between segments and sidebar rows
   (`useGlide` and `Track` in `ui/src/kit/glide.tsx`) instead of each option
   lighting up on its own.
 - Pressing a control dips it to 0.96 and it springs back on `--pop`. This is the
@@ -191,7 +275,7 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 - Keyframes: `rise` (6px up and in), `fade`, `panel-in` (the right panel, 12px
   from the right), `dialog-in`, `toast-in`, `pop-in`, `palette-in` (6px down),
   `jump-in` (Jump to latest),
-  `tile-bar` (the rail's mark), `msg-flash` (a message you jumped to, 1.6s).
+  `msg-flash` (a message you jumped to, 1.6s).
 - Scrolling content fades under the top bar (16px, `bg` to transparent).
 - Reduced motion: the OS setting or Settings' own (`data-motion="reduced"` on
   `<html>`) cuts every animation and transition to 0.01ms, and `land()` does
@@ -208,20 +292,13 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   `--ctl-sm`. There is no blue button.
 - `IconButton` (`.icon-btn`, 28px, `r-row`): `ink-2`, `wash-2` on hover and
   while pressed.
-- The top bar floats its controls: the channel switcher and the sidebar
-  button are each one `float` object (`r-ctl`, `shadow-float`); the view tabs
-  are one `float` group with the chosen tab's pill gliding inside it, and
-  search sits in a second group (`.top-group`, 2px inset, 28px buttons at
-  `r-row`). The search field floats the same way when open,
-  and on a narrow window it takes the tabs' place. The other bars follow:
-  Settings' back button floats too (a panel's close is a plain `IconButton`:
-  the panel is already its own column), and so does
-  the rail: home and every channel tile (a tile still waiting to be let in
-  keeps its outline and no fill); + and the Settings gear stay quiet, a bare
-  `ink-3` glyph with `wash` on hover, and the gear floats only while Settings
-  is open. Hover on a
-  floating control is `float-2` (the `float` fill, 10% toward `ink`); the
-  chosen one is `float-3` (20%).
+- Chrome is flat. The channel tiles, the sidebar button, Search and
+  Settings' back button cast no shadow and have no raised fill: a tile rests
+  on `wash` and the open channel's tile is `ink` with `on-ink` text; the rest
+  have no fill at rest, hover is `wash`, chosen is `wash-2`.
+  A tile still waiting to be let in keeps its outline and no fill; + and the
+  Settings gear are bare `ink-3` glyphs. What floats is what sits over the
+  work: the composer, menus, dialogs.
 - Fields (`.input`, `.textarea`, `Field` with label and hint): `bg-3` fill,
   `--ctl` high, `t-ui`; `.input.is-mono` for codes and paths.
 - `Seg` (`.seg`): a `bg-3` track, the chosen segment on `wash-2` in `ink`
@@ -281,48 +358,79 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
 ## 9. App patterns
 
-- **Shell.** Three columns on `bg`: the rail (`--rail-w`: one 38px tile per
-  channel, a `decide` badge for what waits, + after them and the Settings gear
-  at its foot, on every page; on a Mac the traffic lights sit above it, the rail
-  is 80px so tiles centre under them, and `--top-h` is 46px so the bar centres
-  on them), the sidebar (`--side-w`) and the main area.
-  The top bar spans the sidebar and the main area (`--top-h`): the sidebar
-  toggle first at the left edge, then the channel switcher, both in the same
-  place whether the sidebar is open or collapsed; the views in the middle
-  (`# room`, Specs, Agents, GitHub once a repo is linked, Needs you in
-  `decide` with its count), words only, no icons, the open one on `wash-2`.
-  A tab carries a mark only when something needs a look: a `decide` dot on
-  Specs while one waits on you, an `alert` dot on GitHub while an open pull
-  request's checks failed. Ambient numbers (open specs, open pull requests,
-  who's working, merged today) live in the tab's `title`, not on the bar.
-  On the right, Search; a `decide` "paused" chip joins it
-  while the agents are paused, on every view but the conversation, whose
-  banner already says it. No borders between the columns.
-- **Sidebar.** Every row is one `--ctl` line, its text on one edge after a
-  24px icon column (the `#`, a face, an icon). Three sections with a mono
+- **Shell.** One grid on `bg`, three columns: the sidebar (`--side-w`), the
+  work, the second sidebar (`--side-w`). There are no tabs and no separate
+  rail. The top bar (`--top-h`) spans them and drags the window: at its left
+  the sidebar toggle and Search, side by side, in the same place whether the
+  sidebar is open or hidden (after the traffic lights on a Mac); on the
+  window's centre a quiet title in `ink-2` (the room, the person, or the
+  view's name). A `decide` "paused" chip joins Search while the agents are
+  paused, on every view but the conversation, whose banner already says it.
+  Search opens into a field that grows from its button to the sidebar's edge.
+  Under the bar the sidebar starts with the channels, in a row that wraps:
+  home, one 40px tile per channel (its icon or first letter, a `decide` badge
+  for what waits, a folder as a tile of four minis), then +. Pointing at a
+  tile drops its name under it. The Settings gear sits in the window's
+  bottom-left corner. ⌘\ hides the sidebar: its column goes to the work, the
+  toggle and Search stay where they are, and touching the window's left edge
+  slides the sidebar in over the work until the pointer leaves it. No borders
+  between the columns.
+- **Sidebar.** Under the tiles, the channel's name (its menu: settings,
+  invite, mute, end), then the channel's views as rows with an icon: Needs
+  you in `decide` with its count, only while something waits; Specs; Agents;
+  GitHub once a repo is linked. A view row carries a mark only when something
+  needs a look: a `decide` dot on Specs while one waits on you, an `alert` dot
+  on GitHub while an open pull request's checks failed. Ambient numbers (open
+  specs, open pull requests, who's working) live in the row's `title`.
+  Every row is one `--row` line (32px), its text on one edge after a `--slot`
+  icon column (24px: the `#`, a face, an icon). Three sections with a mono
   head: Rooms (`#` rows, the people icon for a members-only room), People and Agents. Each
   member is listed once, and the row is your conversation with them: a click
   opens the DM, its unread count sits on the row, and the profile is in the
   row's menu (and in the Agents view). You aren't listed. A person's pip
-  carries their presence. Agents are rows like people: the face, the name, and at
-  the row's end one mono `ink-3` word of what it does now (`thinking`, `running Bash`,
-  `idle`, `offline`), cut with an ellipsis; at work it reads `ink-2`, and
-  "needs a person" reads `decide`. Each new step rises in on `--fast`; the
+  carries their presence. Agents at work are rows like people: the face, the name,
+  and one mono word of what it does now (`thinking`, `running Bash`) at the
+  row's end in `ink-2`, cut with an ellipsis; "needs a person" reads
+  `decide`. Agents at rest (idle, offline, left) have no row: they fold into
+  one line of faces under the working ones, on the same column and at the
+  same size as the rows' faces, each a click to its conversation with its
+  name and state on hover. One with unread messages, or whose conversation is
+  open, is a row again. Each new step rises in on `--fast`; the
   task waits in the row's `title`. Working agents come first, the lead first
   among them. A DM with someone no longer listed follows
   the people; conversations between
-  others fold under the agents ("1 between others"). A section's + (New
+  others fold into one row under the agents ("Others' direct messages", with
+  a count). A section's + (New
   room, Invite people, Add an agent) shows when the pointer is over the
   section; it becomes a row only while the section is empty. The open row is
   on `wash-2`; a row with news is 600 with a count. Cards for what waits on
   you (an update, a device) sit at the foot under a
   16px fade: the text, then the action on its line's end, or under it when
   the text needs the width.
-- **Right panel** (`--panel-w` to start, resizable by its grip): a thread,
+- **Second sidebar.** The right column (`--side-w`) is one place with two
+  states. At rest, on every view, it is the task tracker: a head reading Now
+  with the counts (in progress, done today) in mono, then a 4px bar with one
+  segment per state in the state colours, the next step, and the open tasks
+  as rows, the ones that need you first (a `Dot`, the title in full on up to
+  two lines, steps done of all in mono when the task has steps; no face, the
+  owner is in the row's `title`), eight at most and "+N more" to Specs. On a
+  wide window it stands in for the Now card at the top of Specs. A row opens
+  the task in this same column, and closing it brings the tracker back. A
+  thread, a task, a PR or an issue opens here too; at the column's own width
+  that moves nothing, the composer included. A panel someone has dragged
+  wider takes the extra width from the work and never lies over it. A window
+  under 1180px wide has no third column: no tracker, and a panel lies over
+  the work.
+- **Right panel** (`--side-w` to start, wider by its grip): a thread,
   a task, a PR or an issue slides in from the right (`panel-in`)
   beside the conversation, with a title, a mono sub line and a close button.
   A thread keeps its own composer.
-- **Conversation.** No bubbles, everyone on the left, in the `--col` column.
+- **Conversation.** Everyone else on the left with no bubbles, in the
+  `--col` column; your own messages on the right as bubbles (the text on
+  accent 20% over `bg-2`, `r-win`, no face and no name, the time above, at
+  most 36rem wide), the way Messages tells the two sides apart. Everything a
+  message carries besides its text (pictures, a task chip, reactions, the
+  replies line) lines up on the same side, outside the bubble.
   A message is a 32px face, 16px of gap, then the name (600), the "to you" or
   "asks you" word when it's for you, and the mono time, and the text in
   `t-body` under it. Role and harness are not repeated on every message: the
@@ -357,7 +465,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   author, size, when), every check with its link (failing on `alert-wash`
   first), the task, and Open on GitHub as the one primary button. A task's
   panel shows a compact PR card with passing checks folded, and its issue.
-- **Specs.** The work view, one tab in the top bar, and the only way in: the
+- **Specs.** The work view, one row in the sidebar, and the only way in: the
   sidebar doesn't list specs again. The view fills the content area up to
   `--list`; a spec page is `--col` + 400px wide. A segment for Open and Done, a quiet line and New spec as the
   view's one primary button, then cards like GitHub's by what each spec needs
@@ -481,7 +589,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   published mark where its brand allows (Cursor, OpenCode, Pi); the rest keep
   today's icons until their brands answer. People wear their picture, or their
   initials in their member colour.
-- A channel's tile on the rail is its icon, or its first letter.
+- A channel's tile in the sidebar is its icon, or its first letter.
 
 ## 13. Do and don't
 

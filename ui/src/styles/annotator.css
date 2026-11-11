@@ -142,8 +142,8 @@
   align-items: center;
   gap: 2px;
   max-width: 100%;
+  flex-wrap: wrap;
   padding: 6px;
-  overflow-x: auto;
   border-radius: var(--r-card);
   background: var(--bg-2);
   box-shadow: var(--shadow-pop);

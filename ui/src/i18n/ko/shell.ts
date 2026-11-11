@@ -48,8 +48,6 @@ export default {
   "shell.sidebar.you": "나",
   "shell.sidebar.mark.read": "읽음으로 표시",
   "shell.sidebar.needs.person": "사람이 필요함",
-  "shell.sidebar.offline": "오프라인",
-  "shell.sidebar.idle": "대기 중",
   "shell.updates.sign.in.ask": "{name}에서 내 계정으로 로그인하려고 합니다",
   "shell.updates.review": "확인",
   "shell.updates.moved": "Channels가 {path}(으)로 이동했습니다",

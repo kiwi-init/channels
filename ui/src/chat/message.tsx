@@ -243,7 +243,15 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   return (
     <article
       onContextMenu={onMenu}
-      className={cx("msg", compact && "is-compact", m.mentionsYou && "is-for-you", m.pending && "is-pending", m.failed !== undefined && "is-failed", m.leftOut && "is-left-out")}
+      className={cx(
+        "msg",
+        compact && "is-compact",
+        m.from === channel.you && "is-mine",
+        m.mentionsYou && "is-for-you",
+        m.pending && "is-pending",
+        m.failed !== undefined && "is-failed",
+        m.leftOut && "is-left-out"
+      )}
       data-seq={m.seq}
       aria-label={`${nickname(channel, m.from)}, ${clock(m.at)}`}
     >

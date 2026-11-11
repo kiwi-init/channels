@@ -40,7 +40,6 @@ export default function FolderTile({
       className={cx("tile is-folder", shut && news.holdsOn && "is-on", drop && "is-drop", fresh && "is-new")}
       aria-expanded={folder.open}
       aria-label={label}
-      title={folder.name}
       data-folder={folder.id}
       onClick={onClick}
     >

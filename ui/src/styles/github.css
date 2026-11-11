@@ -6,7 +6,7 @@
 .gh-list {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 16px;
 }
 
 .gh-top {
@@ -36,9 +36,8 @@
 .gh-kind button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 1.875rem;
-  padding: 0 12px;
+  gap: 8px;
+  padding: 0 8px;
   font: 500 var(--t-ui) var(--ui);
 }
 
@@ -110,7 +109,7 @@
 .gh-item {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 2rem;
+  grid-template-columns: minmax(0, 1fr) var(--slot);
   align-items: center;
   border-radius: var(--r-row);
   transition: background var(--fast);
@@ -126,18 +125,20 @@
 
 .gh-row {
   display: grid;
-  grid-template-columns: 1rem minmax(0, 1fr) auto;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   grid-template-rows: auto auto;
-  column-gap: 12px;
+  column-gap: 16px;
   row-gap: 4px;
   align-items: center;
   min-width: 0;
-  padding: 8px 0 8px 8px;
+  padding: 8px;
   border: 0;
   border-radius: var(--r-row);
   background: none;
   color: var(--ink);
   text-align: left;
+  min-height: var(--tile);
+  align-content: center;
 }
 
 .gh-row > .gh-mark {
@@ -223,8 +224,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 1.75rem;
+  width: var(--slot);
+  height: var(--slot);
   border-radius: var(--r-row);
   color: var(--ink-3);
   opacity: 0;
@@ -252,11 +253,11 @@
 
 @container (min-width: 34.09rem) {
   .gh-row {
-    grid-template-columns: 1rem minmax(0, 1fr) 10rem 4rem;
+    grid-template-columns: 16px minmax(0, 1fr) 10rem 4rem;
   }
 
   .gh-row.is-issue {
-    grid-template-columns: 1rem minmax(0, 1fr) 4rem;
+    grid-template-columns: 16px minmax(0, 1fr) 4rem;
   }
 
   .gh-col-ci {
@@ -275,7 +276,7 @@
 
 @container (min-width: 42.05rem) {
   .gh-row {
-    grid-template-columns: 1rem minmax(0, 1fr) 10rem 8.25rem 4rem;
+    grid-template-columns: 16px minmax(0, 1fr) 10rem 8.25rem 4rem;
   }
 
   .gh-col-size {
@@ -362,9 +363,12 @@
 }
 
 .gh-copy {
-  display: inline-flex;
+  display: inline-grid;
   flex: none;
-  padding: 4px;
+  place-items: center;
+  width: var(--slot);
+  height: var(--slot);
+  padding: 0;
   border: 0;
   border-radius: var(--r-tag);
   background: none;
@@ -446,10 +450,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 1.625rem;
   padding: 0 4px;
   border-radius: var(--r-tag);
   font: var(--t-meta) var(--ui);
+  min-height: var(--slot);
 }
 
 .gh-check.is-fail {
@@ -593,6 +597,7 @@ button.gh-check:hover .gh-check-word {
   font: var(--t-ui) var(--ui);
   text-align: left;
   transition: background var(--fast);
+  padding-block: calc((var(--tile) - 2px - 1lh) / 2);
 }
 
 .gh-task:hover {
@@ -643,4 +648,12 @@ button.gh-check:hover .gh-check-word {
 
 .gh-empty-btn {
   margin-top: 8px;
+}
+
+.main .gh-item:has(> .gh-out) {
+  margin-right: -16px;
+}
+
+.main .gh-item:has(> .gh-out) > .gh-row {
+  padding-right: 0;
 }

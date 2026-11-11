@@ -18,13 +18,22 @@ const onResize = (l: () => void) => (window.addEventListener("resize", l), () =>
 
 const useWindowWidth = (): number => useSyncExternalStore(onResize, () => window.innerWidth)
 
+function start(): number {
+  const probe = document.createElement("div")
+  probe.style.cssText = "position:absolute;visibility:hidden;width:var(--side-w)"
+  document.documentElement.append(probe)
+  const left = probe.offsetWidth
+  probe.remove()
+  return left > 0 ? left : START
+}
+
 function stored(): number {
   try {
     const n = Number(localStorage.getItem(KEY) ?? localStorage.getItem(OLD_KEY))
-    return n || START
+    return n || start()
   } catch {
     // Storage can be off (private windows, blocked site data): start at the default width.
-    return START
+    return start()
   }
 }
 
@@ -85,5 +94,5 @@ export function usePanelWidth(sideHidden: boolean) {
     [width, set]
   )
 
-  return { width, grip: { onPointerDown, onKeyDown, onDoubleClick: () => set(START) }, min: MIN, max: MAX }
+  return { width, grip: { onPointerDown, onKeyDown, onDoubleClick: () => set(start()) }, min: MIN, max: MAX }
 }

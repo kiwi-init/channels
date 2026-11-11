@@ -1,0 +1,106 @@
+.track {
+  display: flex;
+  flex-direction: column;
+  padding: 0 max(0px, calc(16px - var(--bar))) 16px 16px;
+  overflow: hidden auto;
+  scrollbar-gutter: stable;
+  font: var(--t-ui) var(--ui);
+  animation: fade var(--slow) var(--ease);
+}
+
+.track-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tile);
+  margin: 0;
+  font: 600 var(--t-body) var(--ui);
+  letter-spacing: -0.01em;
+}
+
+.track-counts {
+  color: var(--ink-3);
+  font: 400 var(--t-stamp) var(--mono);
+  letter-spacing: -0.01em;
+}
+
+.track-bar {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  height: 4px;
+  margin: 16px 0;
+}
+
+.track-seg {
+  min-width: 4px;
+  border-radius: var(--r-tick);
+  background: var(--line-3);
+}
+
+.track-seg.is-done,
+.track-seg.is-landing {
+  background: var(--live);
+}
+
+.track-seg.is-review {
+  background: var(--review);
+}
+
+.track-seg.is-doing {
+  background: var(--doing);
+}
+
+.track-seg.is-waiting {
+  background: var(--decide);
+}
+
+.track-next {
+  margin: 0 0 16px;
+  color: var(--ink-2);
+  font: var(--t-ui) / 1.4 var(--ui);
+}
+
+.track-list {
+  margin: 0 -8px;
+}
+
+.track-row {
+  align-items: flex-start;
+  padding-block: 4px;
+}
+
+.track-row .side-icon,
+.track-row .track-steps {
+  height: var(--row-text);
+  line-height: var(--row-text);
+}
+
+.track-row .side-label {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: var(--row-text);
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.track-steps {
+  flex: none;
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--mono);
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 1179px), (orientation: portrait) {
+  .track {
+    display: none;
+  }
+}
+
+@media (min-width: 1180px) and (orientation: landscape) {
+  .main .now {
+    display: none;
+  }
+}

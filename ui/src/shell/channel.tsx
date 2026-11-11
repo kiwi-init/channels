@@ -1,9 +1,8 @@
-import { Suspense, useEffect, useState, type CSSProperties } from "react"
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
-import { cx, Count, IconButton, useLate } from "~/kit/bits"
-import { useGlide } from "~/kit/glide"
+import { cx, IconButton, useLate } from "~/kit/bits"
 import { keyRan, onCommand } from "~/kit/commands"
 import { dialogOpen, keysHint, mod } from "~/kit/keys"
 import { Boundary } from "~/kit/boundary"
@@ -12,20 +11,26 @@ import { later } from "~/kit/later"
 import type { Channel } from "~/model"
 import { drawerNews } from "~/live/links"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
-import { openAsks } from "~/needs/open"
-import { sameWhere, useAct, useGo, useNav, useActions } from "~/nav"
-import { openMenu } from "~/kit/menu-open"
+import { sameWhere, useGo, useNav, useActions } from "~/nav"
 import { whereKey } from "~/places"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
 import { Sidebar } from "~/shell/sidebar"
 import { setUpdatesSlot } from "~/chat/updates-slot"
-import { useSideways } from "~/kit/sideways"
-import { openTasks } from "~/tasks/open"
-import { headerLine } from "~/now"
 import { between, nickname } from "~/names"
 import { t } from "~/i18n/i18n"
+
+const PEEK_SLACK = 24
+const SIDE_MOVE_MS = 320
+
+const VIEW_NAMES = {
+  chat: "shell.channel.views",
+  specs: "shell.channel.specs",
+  agents: "shell.channel.agents",
+  github: "shell.channel.github",
+  needs: "shell.channel.needs.you",
+} as const
 
 const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
@@ -36,6 +41,7 @@ const SpecsView = later(() => import("~/specs/view").then((m) => m.SpecsView))
 const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
 const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
+const Tracker = later(() => import("~/tasks/tracker").then((m) => m.Tracker))
 const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
 const ThreadPanel = later(() => import("~/panels/thread").then((m) => m.ThreadPanel))
 const Profile = later(() => import("~/modals/profile").then((m) => m.Profile))
@@ -48,9 +54,13 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const nav = useNav()
   const go = useGo()
   const actions = useActions()
-  const { now } = useAct()
   const hidden = useSidebarHidden()
   const panel = usePanelWidth(hidden)
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty("--panel-w", `${panel.width}px`)
+    return () => void root.style.removeProperty("--panel-w")
+  }, [panel.width])
   const [jumpAt, setJumpAt] = useState<{ jump: Jump; visit: number } | null>(null)
   const jump = jumpAt?.visit === nav.visit ? jumpAt.jump : null
   const setJump = (j: Jump | null) => setJumpAt(j ? { jump: j, visit: nav.visit } : null)
@@ -95,8 +105,40 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   }, [gone, go])
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
-  const tabsRef = useGlide<HTMLElement>('[aria-pressed="true"]')
-  useSideways(tabsRef, nav.tab, '[aria-pressed="true"]')
+  const [peek, setPeek] = useState(false)
+  if (!hidden && peek) setPeek(false)
+  const peeking = hidden && peek
+  useEffect(() => {
+    if (!peeking) return
+    const onMove = (e: MouseEvent) => {
+      const edge = document.querySelector(".side")?.getBoundingClientRect().right ?? 0
+      if (e.clientX > edge + PEEK_SLACK) setPeek(false)
+    }
+    window.addEventListener("mousemove", onMove)
+    return () => window.removeEventListener("mousemove", onMove)
+  }, [peeking])
+  const panelOpen = !!nav.panel
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    root.toggleAttribute("data-bare", hidden)
+    root.toggleAttribute("data-peek", peeking)
+    root.toggleAttribute("data-panel", panelOpen)
+    return () => {
+      for (const name of ["data-bare", "data-peek", "data-panel"]) root.removeAttribute(name)
+    }
+  }, [hidden, peeking, panelOpen])
+  const wasHidden = useRef(hidden)
+  useLayoutEffect(() => {
+    if (wasHidden.current === hidden) return
+    wasHidden.current = hidden
+    const root = document.documentElement
+    root.dataset.sideMove = hidden ? "out" : "in"
+    const timer = window.setTimeout(() => delete root.dataset.sideMove, SIDE_MOVE_MS)
+    return () => {
+      window.clearTimeout(timer)
+      delete root.dataset.sideMove
+    }
+  }, [hidden])
   const offline = useLate(channel.connection !== "live", 1000)
   useEffect(() => {
     setDrawer(false)
@@ -141,16 +183,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       </Suspense>
     )
 
-  const needs = openAsks(channel).length
-  const tasks = openTasks(channel).length
-  const agents = channel.people.some((p) => p.kind === "agent" && !p.left)
-  const github = channel.repos.length > 0 || !!channel.prs?.length || !!channel.issues?.length
-  const openPrs = channel.prs?.filter((p) => p.state === "open" || p.state === "draft") ?? []
-  const red = openPrs.some((p) => p.checks === "fail" || !!p.ticks?.failed.length)
-  const openIssues = channel.issues?.filter((i) => i.state === "open").length ?? 0
-  const specs = channel.specs?.filter((s) => !s.result) ?? []
-  const specsNeed = specs.filter((s) => s.canJudge && (s.stage === "draft" || s.stage === "delivered" || s.changed)).length
-  const line = channel.loading ? [] : headerLine(channel, 0)
   const here =
     nav.where.kind === "room"
       ? `# ${channel.rooms.find((r) => r.id === (nav.where as { room: string }).room)?.name ?? "general"}`
@@ -163,90 +195,23 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const news = drawerNews(channel)
 
   return (
-    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare")} style={{ "--panel-w": `${panel.width}px` } as CSSProperties}>
+    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare", peeking && "is-peek")}>
+      {hidden && !peek && <div className="side-edge" onMouseEnter={() => setPeek(true)} />}
       <header className="top">
-        <button
-          type="button"
-          className="icon-btn top-drawer"
-          aria-label={t(news ? "shell.channel.drawer.label.news" : "shell.channel.drawer.label", { keys: keysHint("\\") })}
-          title={t("shell.channel.drawer.title", { keys: keysHint("\\") })}
-          aria-pressed={drawer}
-          onClick={toggleSide}
-        >
-          <Icon name="sidebar" />
-          {news && <span className={cx("top-drawer-dot", news === "loud" && "is-loud")} />}
-        </button>
-        <div className="top-title">
+        <div className="top-lead">
           <button
             type="button"
-            className="top-chan"
-            aria-haspopup="menu"
-            aria-label={t("shell.channel.menu.label", { name: channel.title })}
-            onClick={(e) => {
-              const at = e.currentTarget.getBoundingClientRect()
-              const tile = now?.().channels.find((c) => c.code === channel.code)
-              void import("~/shell/rail-menu").then((m) =>
-                openMenu.set(
-                  m.railMenu(
-                    { kind: "channel", code: channel.code },
-                    { x: at.left, y: at.bottom + 4 },
-                    {
-                      noFolders: true,
-                      folders: [],
-                      save: () => {},
-                      title: () => channel.title,
-                      muted: (code) => now?.().prefs.muted.includes(code) ?? false,
-                      setMute: (code, on) => actions.setMute(code, null, on),
-                      settings: () => go({ to: "modal", modal: { kind: "channel" } }),
-                      own: channel.youOwn,
-                      invite: () => go({ to: "modal", modal: { kind: "invite" } }),
-                      end: () => go({ to: "modal", modal: { kind: "channel", end: true } }),
-                      read: (tile?.unread ?? 0) > 0 ? (code) => actions.markChannelRead(code, tile?.head) : null,
-                    }
-                  )
-                )
-              )
-            }}
+            className="icon-btn top-drawer"
+            aria-label={t(news ? "shell.channel.drawer.label.news" : "shell.channel.drawer.label", { keys: keysHint("\\") })}
+            title={t("shell.channel.drawer.title", { keys: keysHint("\\") })}
+            aria-pressed={drawer}
+            onClick={toggleSide}
           >
-            <span className="top-name">{channel.title}</span>
-            <Icon name="down" size={14} />
+            <Icon name="sidebar" />
+            {news && <span className={cx("top-drawer-dot", news === "loud" && "is-loud")} />}
           </button>
         </div>
-        <nav ref={tabsRef} className="tabs" aria-label={t("shell.channel.views")}>
-          <button type="button" aria-pressed={nav.tab === "chat"} onClick={() => go({ to: "tab", tab: "chat" })}>
-            {here}
-          </button>
-          <button
-            type="button"
-            aria-pressed={nav.tab === "specs"}
-            onClick={() => go({ to: "spec", ask: null })}
-            title={specsNeed ? t("shell.channel.specs.need", { count: specsNeed }) : t("shell.channel.specs.open", { specs: specs.length, tasks })}
-          >
-            {t("shell.channel.specs")}
-            {specsNeed > 0 && <span className="tab-red is-decide" role="img" aria-label={t("shell.channel.waiting.on.you")} />}
-          </button>
-          {(agents || nav.tab === "agents") && (
-            <button type="button" className="is-agents" aria-pressed={nav.tab === "agents"} title={line.length ? line.join(" · ") : undefined} onClick={() => go({ to: "tab", tab: "agents" })}>
-              {t("shell.channel.agents")}
-            </button>
-          )}
-          {(github || nav.tab === "github") && (
-            <button
-              type="button"
-              aria-pressed={nav.tab === "github"}
-              onClick={() => go({ to: "tab", tab: "github" })}
-              title={red ? t("shell.channel.github.red") : t("shell.channel.github.open", { prs: openPrs.length, issues: openIssues })}
-            >
-              {t("shell.channel.github")}
-              {red && <span className="tab-red" role="img" aria-label={t("shell.channel.checks.failed")} />}
-            </button>
-          )}
-          {(needs > 0 || nav.tab === "needs") && (
-            <button type="button" className="is-needs" aria-pressed={nav.tab === "needs"} onClick={() => go({ to: "tab", tab: "needs" })}>
-              {t("shell.channel.needs.you")} <Count n={needs} loud />
-            </button>
-          )}
-        </nav>
+        <h1 className="top-here">{nav.tab === "chat" ? here : t(VIEW_NAMES[nav.tab])}</h1>
         <div className={cx("top-tools", searching && "is-searching")}>
           {channel.hold && nav.tab !== "chat" && (
             <span className="top-hold" title={channel.hold.note}>
@@ -260,10 +225,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               </Suspense>
             </div>
           )}
-          <div className="top-group">
-            <span className="top-updates" ref={setUpdatesSlot} />
-            <IconButton icon="search" label={t("shell.channel.search", { keys: keysHint("F") })} onClick={() => setSearching(true)} />
-          </div>
+          <span className="top-updates" ref={setUpdatesSlot} />
+          <IconButton icon="search" label={t("shell.channel.search", { keys: keysHint("F") })} onClick={() => setSearching(true)} />
         </div>
       </header>
       <Sidebar channel={channel} />
@@ -286,6 +249,11 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           </Suspense>
         </Boundary>
       </main>
+      {!nav.panel && !older && (
+        <Suspense fallback={null}>
+          <Tracker channel={channel} />
+        </Suspense>
+      )}
       {offline && (
         <p className="conn" role="status">
           <span className="dot is-doing" aria-hidden="true" />

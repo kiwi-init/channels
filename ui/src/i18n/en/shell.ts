@@ -48,8 +48,6 @@ export default {
   "shell.sidebar.you": "you",
   "shell.sidebar.mark.read": "Mark as read",
   "shell.sidebar.needs.person": "needs a person",
-  "shell.sidebar.offline": "offline",
-  "shell.sidebar.idle": "idle",
   "shell.rail.channels": "Channels",
   "shell.rail.close.window": "Close window",
   "shell.rail.close": "Close",
