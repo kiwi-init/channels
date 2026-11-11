@@ -2,6 +2,10 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.19 — 2026-11-11
+
+- **Snapshot: the seal holds 1.5 MB and the base stores check runs compactly, so a busy channel's snapshot seals again (T5130)** ([#2291](https://github.com/kiwi-init/channels/pull/2291))
+
 ## 2026.11.18 — 2026-11-11
 
 - **Right panel: it pushes the chat again, down to narrow windows (T5516)** ([#2282](https://github.com/kiwi-init/channels/pull/2282))
