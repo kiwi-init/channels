@@ -11,10 +11,8 @@
 .track-head {
   display: flex;
   flex: none;
-  flex-wrap: wrap;
-  place-content: center flex-start;
   align-items: center;
-  gap: 0 8px;
+  gap: 8px;
   min-height: var(--tile);
 }
 
@@ -24,14 +22,20 @@
   letter-spacing: -0.01em;
 }
 
-.track-head > .seg {
-  margin-left: -4px;
-}
-
 .track-counts {
   color: var(--ink-3);
   font: 400 var(--t-stamp) var(--mono);
   letter-spacing: -0.01em;
+}
+
+.track-counts.is-line {
+  flex: none;
+  margin: 0;
+  line-height: var(--row-text);
+}
+
+.track-counts.is-line + .track-bar {
+  margin-top: 8px;
 }
 
 .track-bar {

@@ -40,6 +40,7 @@ export function Tracker({ channel }: { channel: Channel }) {
   const done = now.doneCount
   const total = open.length + done
   if (!total && !activity) return null
+  const both = total > 0 && !!activity
   const log = !!activity && (tab === "activity" || !total)
   const name = log ? t("chat.events.updates") : t("tasks.now.label")
   const pick = (next: TrackTab) => {
@@ -52,7 +53,7 @@ export function Tracker({ channel }: { channel: Channel }) {
   return (
     <aside className="track" aria-label={name}>
       <div className="track-head">
-        {total > 0 && activity ? (
+        {both ? (
           <Track className="seg" role="group" aria-label={t("tasks.now.shows")}>
             <button type="button" aria-pressed={!log} onClick={() => pick("now")}>
               {t("tasks.now.label")}
@@ -64,23 +65,24 @@ export function Tracker({ channel }: { channel: Channel }) {
         ) : (
           <h2 className="track-name">{name}</h2>
         )}
-        {!log && counts && <span className="track-counts num">{counts}</span>}
+        {!both && !log && counts && <span className="track-counts num">{counts}</span>}
       </div>
       {log ? (
         <Suspense fallback={null}>
           <Log channel={channel} runs={activity.runs} here={activity.here} target={target} />
         </Suspense>
       ) : (
-        <Now channel={channel} open={open} count={count} counts={counts} next={now.next} />
+        <Now channel={channel} open={open} count={count} counts={counts} under={both} next={now.next} />
       )}
     </aside>
   )
 }
 
-function Now({ channel, open, count, counts, next }: { channel: Channel; open: readonly Task[]; count: (status: TaskStatus) => number; counts: string; next: string | null }) {
+function Now({ channel, open, count, counts, under, next }: { channel: Channel; open: readonly Task[]; count: (status: TaskStatus) => number; counts: string; under: boolean; next: string | null }) {
   const go = useGo()
   return (
     <>
+      {under && counts && <p className="track-counts is-line num">{counts}</p>}
       <div className="track-bar" role="img" aria-label={counts}>
         {BAR.map((status) => {
           const n = count(status)

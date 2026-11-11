@@ -411,8 +411,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   the text needs the width.
 - **Second sidebar.** The right column (`--side-w`) is one place with two
   states. At rest, on every view, it holds Now and Activity. Now is the task
-  tracker: the counts (in progress, done today) in mono beside the head, or
-  under it when they don't fit, then a 4px bar with one
+  tracker: the counts (in progress, done today) in mono beside its name, or
+  on their own line under the toggle, then a 4px bar with one
   segment per state in the state colours, the next step, and the open tasks
   as rows, the ones that need you first (a `Dot`, the title in full on up to
   two lines, steps done of all in mono when the task has steps; no face, the
