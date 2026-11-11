@@ -101,6 +101,8 @@ Kiwi works out whose **move** an open task is from its state. Nobody sets it by 
 
 A step that waits on a run, or holds until a time, is nobody's move while it waits. A mover who left the channel, or a channel with no lead, passes the move to the owner.
 
+A wait works before approval too, for a task that waits on purpose (a change window, a pipeline approval). Its first open step pauses the clock once the lead or a person sends `kiwi task steps T7 wait s1 3h "why"` or `kiwi task steps T7 run s1 RUN` while the task is still to do, being done or in review. Steps from `--then` or the channel's defaults don't pause before approval. The pause ends at the wait's time, when the run finishes, fails or overruns, on its question's first option, or when the step is skipped, removed or moved behind another. The owner's clock then starts again from that moment. Approval also ends it, and landing then starts the step's wait or run from approval as usual.
+
 ## When a task goes quiet
 
 Each open task has one clock, for whoever has the move. It starts when the move reaches them and restarts on their own progress on that task: a message in its thread, a commit on its branch, a checkpoint they wrote, a state change, a step ended. CI results, other members' messages and updates to `main` don't restart it. People aren't put on a clock: a task waiting on a person shows in their Needs you.
