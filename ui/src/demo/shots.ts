@@ -16,6 +16,7 @@ export interface Shot {
   layout?: Layout
   usage?: Partial<Usage>
   broken?: true
+  copyRefused?: true
 }
 
 const PAID: Partial<Usage> = { plan: "paid", used: 3_120, limit: 100_000, paidLimit: 100_000, upgradeUrl: null, billingUrl: "https://billing.stripe.com/demo" }
@@ -99,6 +100,7 @@ export const SHOTS: Record<string, Shot> = {
   "room-members": kiwi({ where: { kind: "room", room: "launch-plan" }, modal: { kind: "channel", tab: "rooms" } }),
   invite: kiwi({ modal: { kind: "invite" } }),
   "add-agent": kiwi({ modal: { kind: "add-agent" } }),
+  "add-agent-copy-refused": { ...kiwi({ modal: { kind: "add-agent" } }), copyRefused: true },
   palette: kiwi({ dialog: "palette" }),
   "new-channel": kiwi({ dialog: "new-channel" }),
   join: kiwi({ dialog: "join" }),

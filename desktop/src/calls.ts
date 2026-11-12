@@ -91,6 +91,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     movedApp: () => t.call("movedApp"),
     dismissMovedApp: () => t.call("dismissMovedApp"),
     openExternal: (url) => t.call("openExternal", url),
+    copyText: (text) => t.call("copyText", text),
     saveFile: (name, text) => t.call("saveFile", name, text),
     getDeepLink: () => t.call("getDeepLink"),
     takeDroppedFiles: () => t.call("takeDroppedFiles"),
