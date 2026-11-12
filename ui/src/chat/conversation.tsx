@@ -505,7 +505,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const toLatest = () => {
     setFresh(0)
     setFar(false)
-    if (following) return toBottom(true)
+    if (following) {
+      setSpan((s) => ({ ...s, bottom: null }))
+      return toBottom(true)
+    }
     latest.current = true
     setSpan({ top: null, bottom: null })
   }

@@ -32,8 +32,6 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | --- | --- | --- |
 | At the bottom, a picture that arrives after its line leaves the last line at the bottom of the view | `scripts/ui-feed-late-image.ts` | `a late picture leaves the last line at the bottom of the view` |
 | Scrolled up, a picture that arrives above the view leaves the row you read on its pixel | `scripts/ui-feed-late-image.ts` | `a late picture above the view leaves the row at the top on its pixel` |
-| At the bottom, a font that arrives late and wraps the lines again leaves the last line at the bottom of the view | `scripts/ui-feed-late-font.ts` | `a late font leaves the last line at the bottom of the view` |
-| Scrolled up, it leaves the row you read on its pixel | `scripts/ui-feed-late-font.ts` | `a late font leaves the row at the top of the view on its pixel` |
 | A bubble fitted while a font was loading is fitted again when it arrives, and the fit never changes the message's height | `scripts/ui-own-bubble.ts` | `fitting a bubble to its text never changes the message's height` |
 | A line that arrives while the rest of the app's styles load in the background is laid out at once, never blank | `scripts/ui-doc-steady.ts` | `the stylesheets of lazy chunks load after the page, not in <head>` |
 
@@ -65,6 +63,8 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | A search hit moves the feed to it | `scripts/ui-restore-place.ts` | `a search hit in the same room moves the feed` |
 | ⌘[ goes back to the spot you were reading, and ⌘] to the hit again | `scripts/ui-restore-place.ts` | `⌘[ undoes a jump inside the room` |
 | An older hit opens the stretch around it, scrolled into view | `scripts/ui-older-search.ts` | `the hit is scrolled into view and marked` |
+| Scrolled up, a little or far past the rows the feed holds, Jump to latest shows and nothing covers it | `scripts/ui-feed-latest.ts` | `nothing covers it, a click at its middle lands on it` |
+| A click on it brings the feed's last line back to the bottom of the view, and it goes, also from near the top of the rows the feed holds | `scripts/ui-feed-latest.ts` | `a click brings the feed's last line back to the bottom of the view` |
 | From an older stretch, Back to latest returns to the live feed | `scripts/ui-older-search.ts` | `Back to latest returns to the live feed` |
 | A link to a message jumps to it in its room | `scripts/ui-message-link.ts` | `clicking it jumps to the message in its room` |
 
@@ -80,3 +80,9 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | Each room has its own unread count and read mark | `packages/app/src/rooms.test.ts` | `each room has its own unread count and read mark` |
 | A room's unread counts what its feed shows | `ui/src/live/side-replies.test.ts` | `a room's unread counts what its feed shows` |
 | Another channel's needs-you badge arrives, stays exactly 1 through a visit, and goes when the ask closes | `scripts/ui-rail-needs.ts` | `still shows exactly 1 need you` |
+
+## Waiting on a fix
+
+Not checked on CI right now. Each line goes back to its table with its fix.
+
+- A font that arrives late and wraps the lines again leaves the conversation where it was, at the bottom and scrolled up: `scripts/ui-feed-late-font.ts`. At the bottom it failed at random in WebKit, with the view 38.7 px above the end (T2635).
