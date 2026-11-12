@@ -2,7 +2,9 @@ import * as Effect from "effect/Effect";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join as joinPath } from "node:path";
 import { home, Keystore, loadConfig, updateConfig } from "../../config.ts";
-import { taskId } from "@kiwi/core/state.ts";
+import { openRound, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { openSession } from "../../agent.ts";
+import { sessionNeighbours } from "../../seats.ts";
 import { daemonSeat, type DaemonSeat } from "../../daemon.ts";
 import { isWakeVia, wakeKey, wakeWords } from "@kiwi/core/wake.ts";
 import { ago, holdLine, formatRooms, formatStatus, statusJson } from "@kiwi/core/format.ts";
@@ -126,6 +128,10 @@ export const channelCommands: Record<string, Command> = {
       const snap = { alias: s.alias, check: reviewCheckOf(s.ch.roomId), me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
       const all = !!opt.all;
       out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus({ ...snap, all }));
+      if (!opt.json) {
+        const shared = yield* sharedElsewhere(s.alias);
+        if (shared.length) out(["", "sessions this machine shares with other channels:", ...shared.map((l) => `  ${l}`)].join("\n"));
+      }
       yield* noteRead(s);
     }),
 
@@ -160,3 +166,32 @@ function wakeLine(w: DaemonSeat["wake"]): string {
   const last = w.last ? ` · last wake ${ago(w.last.at)} via ${wakeWords(w.last.via)}, ${w.last.unread} unread, ${w.last.ok ? "ok" : "failed"}` : "";
   return `wake ${w.on ? "on" : "off"} · ${how}${last}`;
 }
+
+export function inFlight(state: Pick<ChannelState, "tasks">, name: string): string[] {
+  return [...state.tasks.values()].flatMap((t) => {
+    const round = t.state === "review" && t.review === name ? openRound(t) : undefined;
+    if (round) return [`round ${round.n} of ${taskId(t.id)} to review`];
+    return t.owner === name && t.state === "doing" ? [`${taskId(t.id)} in progress`] : [];
+  });
+}
+
+const sharedElsewhere = (alias: string) =>
+  Effect.gen(function* () {
+    const cfg = loadConfig();
+    const lines: string[] = [];
+    for (const [seat, others] of sessionNeighbours(cfg, alias)) {
+      for (const o of others) {
+        const there = cfg.channels[o.alias];
+        const state = there
+          ? yield* openSession(o.alias, there, o.as).pipe(
+              Effect.flatMap((x) => x.state()),
+              Effect.map((r) => r.state),
+              Effect.catchCause(() => Effect.succeed(null)),
+            )
+          : null;
+        const work = state ? inFlight(state, o.as) : [];
+        lines.push(`${seat} runs in one session with @${o.as} in "${o.alias}"${work.length ? `, which has ${work.join(", ")}: resetting the session loses that` : ""}`);
+      }
+    }
+    return lines;
+  });

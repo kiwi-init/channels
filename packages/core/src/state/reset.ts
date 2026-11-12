@@ -37,6 +37,23 @@ export function markReset(on: boolean, giver: Pick<Member, "reset" | "card">, ve
   giver.reset = { kind: "needs", verdict, session };
 }
 
+export function sharedWith(members: ReadonlyMap<string, Pick<Member, "card" | "active">>, name: string): string[] {
+  const session = members.get(name)?.card?.session;
+  return sessionPrint(session) ? [...members.entries()].flatMap(([other, m]) => (other !== name && m.active && m.card?.session === session ? [other] : [])) : [];
+}
+
+export function resetLine(state: { reviewReset: boolean; members: ReadonlyMap<string, Pick<Member, "card" | "active" | "reset">> }, name: string): string {
+  const mark = state.members.get(name)?.reset;
+  const shares = sharedWith(state.members, name);
+  return [
+    mark?.kind === "needs" ? `needs a fresh session since verdict #${mark.verdict}: reviews nothing until it rejoins from a new session` : "",
+    mark?.kind === "waived" && state.reviewReset ? "may review from one session (waived)" : "",
+    shares.length ? `shares a session with ${shares.map((x) => `@${x}`).join(", ")}: resetting it resets them too` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export function clearOnCard(member: Pick<Member, "reset">, session: unknown): void {
   if (member.reset?.kind === "needs" && sessionPrint(session) && session !== member.reset.session) member.reset = undefined;
 }

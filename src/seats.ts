@@ -473,6 +473,22 @@ export function seatsHeldAnywhere(who: Here = here(), opts: Pick<SeatOptions, "c
   });
 }
 
+export function sessionNeighbours(cfg: Config, alias: string): Map<string, Binding[]> {
+  const all = Object.keys(cfg.bindings ?? {})
+    .flatMap((d) => seatsAt(cfg, d))
+    .filter((b) => realSession({ ...(b.harness ? { harness: b.harness } : {}), ...(b.session ? { session: b.session } : {}) }) && cfg.channels[b.alias]);
+  const out = new Map<string, Binding[]>();
+  for (const b of all.filter((x) => x.alias === alias)) {
+    const others = all.filter((o) => o.session === b.session && o.alias !== alias).filter((o, i, list) => list.findIndex((x) => sameSeat(x, o)) === i);
+    if (others.length)
+      out.set(
+        b.as,
+        [...(out.get(b.as) ?? []), ...others].filter((o, i, list) => list.findIndex((x) => sameSeat(x, o)) === i),
+      );
+  }
+  return out;
+}
+
 export function sameSeat(a: Pick<Binding, "alias" | "as">, b: Pick<Binding, "alias" | "as">): boolean {
   return a.alias === b.alias && a.as === b.as;
 }
