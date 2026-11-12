@@ -494,6 +494,9 @@ jobs:
       - name: ui your own message is a bubble as wide as its longest line, with its picture, chip, reactions and replies on one right edge, and a run of them reads as one group
         if: ${{ !cancelled() }}
         run: bun scripts/ui-own-bubble.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui the line under your message names an agent that can't be woken or isn't listening, and a busy one with its task, the messages ahead and the lead to ask
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-signs.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist

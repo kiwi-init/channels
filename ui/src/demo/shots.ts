@@ -30,6 +30,7 @@ export const SHOTS: Record<string, Shot> = {
   "home-calm": { scenario: "home-calm", channel: null },
   "long-feed": { scenario: "long", channel: "kiwi" },
   "own-bubbles": { scenario: "own-bubbles", channel: "kiwi" },
+  signs: { scenario: "signs", channel: "kiwi" },
   opening: { scenario: "opening", channel: "kiwi" },
   "opening-tasks": { scenario: "opening", channel: "kiwi", nav: { tab: "specs" } },
   "opening-needs": { scenario: "opening", channel: "kiwi", nav: { tab: "needs" } },

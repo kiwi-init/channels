@@ -140,3 +140,73 @@ export function onIt(...args: Parameters<typeof onItOf>): string | null {
   if (!o) return null;
   return o.busy ? `${o.name} is on it · ${o.busy.text}${lasted(o.minutes)}` : `${o.name} is on it`;
 }
+
+export type Reached = "here" | "asleep" | "silent";
+
+export interface Behind {
+  name: string;
+  busy: Busy;
+  task?: number;
+  ahead: number;
+}
+
+export interface Waits {
+  asleep: string[];
+  silent: string[];
+  read: string[];
+  behind: Behind | null;
+  ask: { to: string; name: string } | null;
+}
+
+function aheadOf(m: Message, name: string, read: number, messages: readonly Message[], state: Pick<ChannelState, "members" | "tasks" | "lead">): number {
+  let ahead = 0;
+  for (const x of messages) {
+    if (x.seq <= read || x.seq >= m.seq || x.kind === "event" || x.kind === "done" || x.from === name) continue;
+    if (recipients(x, state).includes(name)) ahead++;
+  }
+  return ahead;
+}
+
+function doingOf(state: Pick<ChannelState, "tasks">, name: string): number | undefined {
+  let first: number | undefined;
+  for (const t of state.tasks.values()) if (t.owner === name && t.state === "doing" && (first === undefined || t.id < first)) first = t.id;
+  return first;
+}
+
+export function waitsOf(
+  m: Message,
+  messages: readonly Message[],
+  state: Pick<ChannelState, "members" | "tasks" | "lead">,
+  marks: Marks,
+  pkOf: (name: string) => string | undefined,
+  reached: (name: string) => Reached | null,
+  busy: (name: string) => Busy | null,
+  replied: (from: readonly string[]) => boolean,
+): Waits | null {
+  const to = recipients(m, state);
+  if (!to.length || replied(to)) return null;
+  const unread = to.filter((n) => readAt(marks, pkOf(n), m.seq) === null);
+  const asleep = unread.filter((n) => reached(n) === "asleep");
+  const silent = unread.filter((n) => reached(n) === "silent");
+  const there = unread.filter((n) => !asleep.includes(n) && !silent.includes(n));
+  const named = !!m.to?.length && !m.to.includes("*");
+  const waits = named || (unread.length === to.length && there.every((n) => busy(n) !== null));
+  const queued = waits
+    ? there.flatMap((n) => {
+        const b = busy(n);
+        const read = marks.get(pkOf(n) ?? "")?.at(-1)?.seq;
+        return b && read !== undefined ? [{ n, b, ahead: aheadOf(m, n, read, messages, state) }] : [];
+      })
+    : [];
+  const first = queued.find((q) => q.n === state.lead) ?? queued.toSorted((a, b) => a.ahead - b.ahead)[0];
+  if (!asleep.length && !silent.length && !first) return null;
+  const task = first ? doingOf(state, first.n) : undefined;
+  const lead = first && state.lead && state.lead !== first.n && state.lead !== m.from && (reached(state.lead) ?? "here") === "here" ? state.lead : null;
+  return {
+    asleep: asleep.map((n) => nickOf(state, n)),
+    silent: silent.map((n) => nickOf(state, n)),
+    read: to.filter((n) => !unread.includes(n)).map((n) => nickOf(state, n)),
+    behind: first ? { name: nickOf(state, first.n), busy: first.b, ...(task === undefined ? {} : { task }), ahead: first.ahead } : null,
+    ask: lead ? { to: lead, name: nickOf(state, lead) } : null,
+  };
+}
