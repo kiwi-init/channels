@@ -34,6 +34,27 @@ export function reseedThen(task: Task, then: string | undefined): void {
 
 export const hasOpenSteps = (task: Task): boolean => currentStep(task) !== undefined;
 
+const beforeApproval = (task: Task): boolean => task.state !== "landing" && task.state !== "done" && !task.archived;
+
+export const heldStep = (task: Task): LandingStep | undefined => {
+  const step = beforeApproval(task) ? currentStep(task) : undefined;
+  return step?.hold ? step : undefined;
+};
+
+export type Pause = { step: LandingStep; kind: "hold"; until: number; reason: string } | { step: LandingStep; kind: "run"; due: number; behind: string };
+
+export function pausingStep(github: GithubState, task: Task, now: number): Pause | undefined {
+  const step = heldStep(task);
+  if (!step?.hold || step.progress.kind !== "open" || step.progress.seen) return undefined;
+  const sight = step.run ? runSight(github, task, step) : "blind";
+  if (sight === "succeeded") return undefined;
+  const { until, due } = step.hold;
+  if (until !== undefined && now < until) return { step, kind: "hold", until, reason: step.wait?.reason ?? step.words };
+  const running = sight === "running" || sight === "unseen";
+  if (due !== undefined && now < due && running && step.run?.id !== undefined && step.by) return { step, kind: "run", due, behind: step.by };
+  return undefined;
+}
+
 export function advance(task: Task, mark: StepMark): void {
   while (task.state === "landing") {
     const step = currentStep(task);
@@ -168,11 +189,15 @@ export function migrateChecks(tasks: ReadonlyMap<number, Task>, checks: Readonly
 export const questionWatched = (tasks: ReadonlyMap<number, Task>, ask: number): boolean =>
   [...tasks.values()].some((t) => t.state !== "done" && !!t.steps?.some((s) => s.progress.kind === "open" && asks(s, ask)));
 
-export function questionAnswered(tasks: ReadonlyMap<number, Task>, ask: number, choice: string, mark: StepMark): void {
+export function questionAnswered(tasks: ReadonlyMap<number, Task>, ask: number, choice: string, mark: StepMark): Task[] {
+  const seen: Task[] = [];
   for (const task of tasks.values()) {
     if (task.state === "done") continue;
-    for (const step of task.steps ?? []) if (asks(step, ask)) see(task, step, mark, `#${ask} answered “${choice}”`);
+    const watching = (task.steps ?? []).filter((step) => asks(step, ask));
+    for (const step of watching) see(task, step, mark, `#${ask} answered “${choice}”`);
+    if (watching.length) seen.push(task);
   }
+  return seen;
 }
 
 export function seeAnswered(task: Task, passed: ReadonlyMap<number, string>, mark: StepMark): void {
@@ -252,6 +277,7 @@ export function editSteps(task: Task, edit: StepEdit, mark: StepMark): void {
   const steps = task.steps ?? [];
   const note = (text: string) => task.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text });
   const current = (step: LandingStep): boolean => task.state === "landing" && currentStep(task) === step;
+  const held = (step: LandingStep): boolean => beforeApproval(task) && currentStep(task) === step;
   if (edit.kind === "add") {
     const [made] = mintSteps(task, [edit.step]);
     if (!made) return;
@@ -281,6 +307,7 @@ export function editSteps(task: Task, edit: StepEdit, mark: StepMark): void {
         break;
       case "wait":
         step.wait = { reason: edit.reason, ms: edit.ms, ...(current(step) ? { until: mark.at + edit.ms } : {}) };
+        if (held(step)) step.hold = { ...step.hold, until: mark.at + edit.ms };
         note(`step ${stepText(step)} waits: ${edit.reason}`);
         break;
       case "run": {
@@ -288,6 +315,7 @@ export function editSteps(task: Task, edit: StepEdit, mark: StepMark): void {
         if (expected === undefined) return;
         if (step.run?.id !== edit.run) step.progress = { kind: "open" };
         step.run = { id: edit.run, expected, ...(current(step) ? { due: mark.at + expected } : {}) };
+        if (held(step)) step.hold = { ...step.hold, due: mark.at + expected };
         note(`step ${stepText(step)} waits on run ${edit.run}`);
         break;
       }

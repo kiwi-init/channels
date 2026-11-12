@@ -631,7 +631,7 @@ function folding(
           questions.delete(r);
           passedAsks.set(r, first);
           for (const old of [...passedAsks.keys()].slice(0, Math.max(0, passedAsks.size - PASSED_ASKS_KEPT))) passedAsks.delete(old);
-          questionAnswered(tasks, r, first, { seq: m.seq, by: m.from, at });
+          for (const t of questionAnswered(tasks, r, first, { seq: m.seq, by: m.from, at })) if (t.state !== "landing") tickTask(t, m.seq, at);
         }
         const parentPlace = parent !== undefined ? placeOf.get(parent) : undefined;
         const to = m.to?.length === 1 ? m.to[0]! : undefined;
@@ -805,7 +805,7 @@ function folding(
           for (const other of tasks.values())
             if (other !== subject && other.state === "todo" && other.owner !== undefined && (other.owner === subject.owner || other.owner === ownedBy)) tickTask(other, m.seq, at);
         } else if (ev.op === "github") {
-          for (const t of tasks.values()) if (t.state === "doing" || t.state === "review" || t.state === "landing") tickTask(t, m.seq, at);
+          for (const t of tasks.values()) if (t.state === "doing" || t.state === "review" || t.state === "landing" || (t.state === "todo" && timed.has(t.id))) tickTask(t, m.seq, at);
         } else if (!CLOCK_BLIND_OPS.has(ev.op)) {
           for (const t of tasks.values()) tickTask(t, m.seq, at);
         }

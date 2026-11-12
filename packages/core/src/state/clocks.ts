@@ -1,7 +1,7 @@
 import { QUIET_MINUTES, type NudgeStep, type WakeGot, type WakeSeen } from "../protocol.ts";
 import { prOfTask } from "../prs.ts";
 import { currentStep, stepMove } from "../steps.ts";
-import { runSight } from "./landing-steps.ts";
+import { heldStep, pausingStep, runSight } from "./landing-steps.ts";
 import { landerOf, openRound, taskId } from "./tasks.ts";
 import type { ChannelState, Task, TaskClock, Woke } from "./types.ts";
 
@@ -41,6 +41,7 @@ function queueParty(view: ClockView, t: Task, owner: string): Party {
 function partyOf(view: ClockView, t: Task, now: number): Party {
   const question = view.openAsks.filter((m) => m.holds?.includes(t.id)).sort((a, b) => a.seq - b.seq)[0];
   if (question) return { key: `?${question.seq}`, mover: `?${question.seq}` };
+  if (pausingStep(view.github, t, now)) return NONE;
   if (t.state === "doing") return t.owner ? member(t.owner, "work") : lead("assign");
   if (t.state === "todo") return t.owner ? queueParty(view, t, t.owner) : lead("assign");
   if (t.state === "landing") return landingParty(view, t, now);
@@ -49,14 +50,29 @@ function partyOf(view: ClockView, t: Task, now: number): Party {
   return t.review && t.review !== "*" ? member(t.review, "review", String(round.n)) : lead("route");
 }
 
-function passedDeadline(t: Task, now: number): number | undefined {
-  const step = t.state === "landing" ? currentStep(t) : undefined;
-  const passed = [step?.wait?.until, step?.run?.due].filter((x): x is number => x !== undefined && x <= now);
+function heldEnd(view: ClockView, t: Task): number | undefined {
+  const step = heldStep(t);
+  if (!step?.hold) return undefined;
+  const sight = step.run ? runSight(view.github, t, step) : "blind";
+  const running = step.run?.id !== undefined && (sight === "running" || sight === "unseen");
+  const { until, due } = step.hold;
+  return running && due !== undefined ? Math.max(until ?? due, due) : until;
+}
+
+function deadlines(view: ClockView, t: Task): (number | undefined)[] {
+  if (t.state !== "landing") return [heldEnd(view, t)];
+  const step = currentStep(t);
+  return [step?.wait?.until, step?.run?.due];
+}
+
+function passedDeadline(view: ClockView, t: Task, now: number): number | undefined {
+  const passed = deadlines(view, t).filter((x): x is number => x !== undefined && x <= now);
   return passed.length ? Math.max(...passed) : undefined;
 }
 
 export const timedStep = (t: Task): boolean => {
-  const step = t.state === "landing" ? currentStep(t) : undefined;
+  if (t.state !== "landing") return heldStep(t) !== undefined;
+  const step = currentStep(t);
   return !!step && (step.wait !== undefined || step.run !== undefined);
 };
 
@@ -67,7 +83,10 @@ export function rolled(view: ClockView, t: Task, now: number): TaskClock | undef
   const cur = partyOf(view, t, now);
   const was = t.clock;
   if (was?.key === cur.key) return was;
-  return { key: cur.key, seq: was?.seq ?? t.id, at: passedDeadline(t, now) ?? was?.at ?? t.createdAt, ...(was?.head ? { head: was.head } : {}) };
+  const deadline = passedDeadline(view, t, now);
+  const floor = t.state === "landing" ? undefined : was?.at;
+  const at = deadline !== undefined && floor !== undefined ? Math.max(deadline, floor) : (deadline ?? was?.at ?? t.createdAt);
+  return { key: cur.key, seq: was?.seq ?? t.id, at, ...(was?.head ? { head: was.head } : {}) };
 }
 
 export function roll(view: ClockView, t: Task, now: number): void {

@@ -27,6 +27,7 @@ export interface LandingStep {
   detector?: StepDetector;
   wait?: { reason: string; ms: number; until?: number };
   run?: { id?: string; expected: number; due?: number };
+  hold?: { until?: number; due?: number };
   from?: "then" | "check";
   progress: StepProgress;
 }

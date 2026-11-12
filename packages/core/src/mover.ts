@@ -2,7 +2,7 @@ import { inlineText } from "./membership.ts";
 import { isPerson } from "./state/people.ts";
 import { landerOf, openRound } from "./state/tasks.ts";
 import type { ChannelState, Task } from "./state/types.ts";
-import { runSight } from "./state/landing-steps.ts";
+import { pausingStep, runSight } from "./state/landing-steps.ts";
 import { currentStep, spanText, stepMove, stepText, type LandingStep } from "./steps.ts";
 
 type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land";
@@ -66,6 +66,9 @@ export function moverOf(state: Board, t: Task, now: number = Date.now()): Mover 
   if (t.state === "done" || t.archived) return undefined;
   const held = heldBy(state, t);
   if (held) return held;
+  const paused = pausingStep(state.github, t, now);
+  if (paused?.kind === "hold") return { kind: "hold", step: stepText(paused.step), until: paused.until, left: paused.until - now, reason: paused.reason };
+  if (paused) return { kind: "run", step: stepText(paused.step), behind: paused.behind, due: paused.due, left: paused.due - now };
   if (t.state === "doing") return leadOr(state, t.owner, "work", "assign");
   if (t.state === "todo") return t.owner && here(state, t.owner) ? queued(state, t, t.owner) : leadOr(state, t.owner, "start", "assign");
   if (t.state === "landing") return landingMover(state, t, now);
