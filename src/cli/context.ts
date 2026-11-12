@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import { OfflineReads } from "@kiwi/core/client.ts";
 import { openSession, type Agent } from "../agent.ts";
 import { DEFAULT_RELAY, Keystore, type ChannelConfig } from "../config.ts";
-import { here, seatsNear } from "../seats.ts";
+import { here, hereAs, notePlainPlace, seatsNear, type Here } from "../seats.ts";
 import { ensureDaemon, reportRead } from "../daemon.ts";
 import { seatsFor } from "../hooks.ts";
 import { heardFrom } from "../hooks/delivered.ts";
@@ -125,6 +125,7 @@ export const session = Effect.fn("kiwi.session")(function* (code?: string) {
   if (!(yield* keys.identitiesIn(cfg.roomId)).includes(acting.name)) {
     return yield* die(`${acting.name} has no key in "${alias}" on this machine`);
   }
+  notePlainPlace(alias, acting.name, declaredHere());
   yield* keepDaemon;
   return yield* openSession(alias, cfg, acting.name);
 });
@@ -138,8 +139,12 @@ export const keepDaemon = Effect.promise(() =>
 
 export const noteRead = (s: { alias: string; me: string }) => Effect.promise(() => reportRead(s.alias, s.me, here().session));
 
+export function declaredHere(): Here {
+  return opt.harness?.trim().toLowerCase() === "deepcode" ? hereAs("deepcode") : here();
+}
+
 export function seatHere(alias: string, name: string, plain: boolean, model?: string) {
-  const who = here();
+  const who = declaredHere();
   return {
     alias,
     as: name,

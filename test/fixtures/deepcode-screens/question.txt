@@ -1,0 +1,13 @@
+
+✦ Read the review brief and checked the diff.
+
+   - Two findings, both minor.
+   - Verdict posted in the task thread.
+
+Which branch should I review?
+
+> main
+  release
+  Other
+
+↑/↓ move · Space toggle · Enter submit/next · Esc cancel

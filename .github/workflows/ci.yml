@@ -664,7 +664,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bison bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols libkf6iconthemes-dev qt6-base-dev qt6-svg-plugins breeze-icon-theme sway swaybg grim gsettings-desktop-schemas libglib2.0-bin libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bison bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols libkf6iconthemes-dev qt6-base-dev qt6-svg-plugins breeze-icon-theme sway swaybg grim gsettings-desktop-schemas libglib2.0-bin libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0 openbox wmctrl' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -759,6 +759,13 @@ jobs:
           test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
           [ -n "$test" ] || { echo "no dev-linux test build under desktop/release-eb/build"; exit 1; }
           xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-native-click.ts "$test"
+      - name: Linux window controls sit at the top-right, act on the window under openbox, and their label follows the window manager
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 5
+        run: |
+          test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
+          [ -n "$test" ] || { echo "no dev-linux test build under desktop/release-eb/build"; exit 1; }
+          xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-window-controls.ts "$test"
       - if: ${{ !cancelled() && matrix.drive }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

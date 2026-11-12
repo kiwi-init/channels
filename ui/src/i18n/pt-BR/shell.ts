@@ -90,6 +90,8 @@ export default {
   "shell.rail.minimize": "Minimizar",
   "shell.rail.maximize.window": "Maximizar janela",
   "shell.rail.maximize": "Maximizar",
+  "shell.rail.restore.window": "Restaurar janela",
+  "shell.rail.restore": "Restaurar",
   "shell.rail.home": "Início",
   "shell.rail.new.channel": "Novo canal",
   "shell.rail.settings": "Configurações",

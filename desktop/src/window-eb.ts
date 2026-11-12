@@ -179,6 +179,13 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
       else load();
     },
   });
+  let maximized = win.isMaximized();
+  win.on("resize", () => {
+    const now = win.isMaximized();
+    if (now === maximized) return;
+    maximized = now;
+    bridge.push("maximized", now);
+  });
   showNote = (state) => load(note(state));
   showCantRead = (u) => load(cantRead(u));
   webview.on("dom-ready", () => {

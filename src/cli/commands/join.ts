@@ -8,7 +8,7 @@ import { heldText, seatHeldAway } from "../../hold.ts";
 import { decodeJoinCode, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { freeAgentName, handleFor, inlineText, type Member } from "@kiwi/core/membership.ts";
 import { freeHandle } from "@kiwi/core/handles.ts";
-import { baseName, here, seatsNear, tooBroad } from "../../seats.ts";
+import { baseName, seatsNear, tooBroad } from "../../seats.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
 import { cardLine, charterLines, holdLine, leadLine, parseDuration } from "@kiwi/core/format.ts";
 import { canPost, SCOPES } from "@kiwi/core/scopes.ts";
@@ -23,7 +23,7 @@ import { notePersonaTold, personaMark } from "../../hooks/persona-line.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../../card.ts";
 import { listenMode, runInBackground } from "../../hooks/reach.ts";
 import { args, opt } from "../args.ts";
-import { agentName, type Command, config, die, keepDaemon, NAME_RE, out, relayUrl, seatHere, session } from "../context.ts";
+import { agentName, type Command, config, declaredHere, die, keepDaemon, NAME_RE, out, relayUrl, seatHere, session } from "../context.ts";
 import { listenAs, modeFor } from "./listen.ts";
 
 const JOIN_POLL_MS = /^[1-9]\d*$/.test(process.env.KIWI_JOIN_POLL_MS ?? "") ? Number(process.env.KIWI_JOIN_POLL_MS) : 1500;
@@ -106,7 +106,7 @@ export const joinCommands: Record<string, Command> = {
       if (args[2] !== undefined && !NAME_RE.test(args[2])) return yield* die(`the alias ${JSON.stringify(args[2])} is invalid (1-32 letters, digits, _ . or -)`);
       const relay = relayUrl();
       const roomId = decodeJoinCode(code).roomId;
-      const who = here();
+      const who = declaredHere();
       const local = yield* keys.identitiesIn(roomId);
       const picked = opt.as ?? process.env.KIWI_AS;
       const aliasHere = Object.entries((yield* keys.config).channels).find(([, c]) => c.roomId === roomId)?.[0];
