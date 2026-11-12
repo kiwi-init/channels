@@ -668,7 +668,7 @@ function Working({ people }: { people: Person[] }) {
   const named = people.slice(0, 3)
   const more = people.length - named.length
   return (
-    <p className="working" aria-live="polite">
+    <p className="working" data-aside="" aria-live="polite">
       <span className="working-dots" aria-hidden="true">
         <i />
         <i />
