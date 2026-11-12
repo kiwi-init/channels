@@ -868,3 +868,61 @@ describe("useStick when the feed changes width (T231)", () => {
     }
   })
 })
+
+describe("useStick when rows far above leave the feed (T1211)", () => {
+  const TALL = 40 * 52.8
+
+  function leave(f: Feed, rows: number, lines: number): void {
+    f.rows.splice(0, rows)
+    f.lines -= lines
+    f.layout()
+  }
+
+  test("the row being read stays where the reader's scroll put it when the end comes closer in the same step", async () => {
+    const f = new Feed(200)
+    const { stick, root } = await mount(f, false, false)
+    f.scrollTo(f.max - TALL - 130)
+    stick.remember()
+    f.scrollTo(f.top + 120)
+    const read = rowTop(f, 160)
+    stick.lift(TALL)
+    leave(f, 40, 2)
+    stick.settle()
+    expect(Math.abs(rowTop(f, 160) - read)).toBeLessThan(1)
+    stick.remember()
+    expect(Math.abs(rowTop(f, 160) - read)).toBeLessThan(1)
+    await act(async () => root.unmount())
+  })
+
+  test("in a thread doc, mid-wheel, the row being read does not move", async () => {
+    const f = new Feed(200)
+    const { stick, root } = await mount(f, false, true)
+    f.scrollTo(4000)
+    stick.remember()
+    f.fire("wheel", 120)
+    f.scrollTo(f.top + 120)
+    const read = rowTop(f, 85)
+    stick.lift(TALL)
+    leave(f, 40, 0)
+    stick.settle()
+    expect(Math.abs(rowTop(f, 85) - read)).toBeLessThan(1)
+    stick.remember()
+    expect(Math.abs(rowTop(f, 85) - read)).toBeLessThan(1)
+    expect(room(f)).toBe(0)
+    await act(async () => root.unmount())
+  })
+
+  test("a lift the scroll cannot make in full is corrected from the row being read", async () => {
+    const f = new Feed(200)
+    const { stick, root } = await mount(f, false, false)
+    f.scrollTo(1500)
+    stick.remember()
+    const read = rowTop(f, 35)
+    stick.lift(TALL)
+    expect(f.top).toBe(0)
+    leave(f, 20, 0)
+    stick.settle()
+    expect(Math.abs(rowTop(f, 35) - read)).toBeLessThan(1)
+    await act(async () => root.unmount())
+  })
+})

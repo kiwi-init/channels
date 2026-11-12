@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, webkit } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const SHOTS = [
   "channel",
@@ -95,7 +96,7 @@ try {
     for (const shot of shots) {
       const page = await browser.newPage({ viewport: { width, height } });
       const errors: string[] = [];
-      page.on("pageerror", (e) => errors.push(e.message));
+      await pageErrors(page, (e) => errors.push(e));
       await page.addInitScript(() => {
         try {
           localStorage.setItem("kiwi:blueprint", "1");

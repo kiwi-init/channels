@@ -618,6 +618,15 @@ html .set-body {
     white-space: nowrap;
   }
 
+  .app .set-nav[data-glide]::before {
+    width: var(--glide-w);
+    height: var(--glide-h);
+    margin-top: 0;
+    border-radius: var(--r-row);
+    background: var(--wash-2);
+    mask: none;
+  }
+
   .set-nav[data-more-end] {
     mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
   }

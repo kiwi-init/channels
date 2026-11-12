@@ -122,6 +122,7 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
   const reached = new Map<string, Armed>();
   const tried = new Set<string>();
   const sent = new Map<string, number>();
+  const posted = new Set<string>();
 
   const schedule = (delay: number): void => {
     if (timer || ended) return;
@@ -202,7 +203,7 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
 
   const tell = async (state: ChannelState, due: NudgeDue, at: number): Promise<void> => {
     const key = keyOf(due);
-    if (at - (sent.get(key) ?? -AGAIN_MS) < AGAIN_MS) return;
+    if (posted.has(key) || at - (sent.get(key) ?? -AGAIN_MS) < AGAIN_MS) return;
     const t = state.tasks.get(due.task);
     const clock = t ? clockOf(state, t, at) : undefined;
     const label = due.step === 2 ? (due.wake ?? wakeSeen(clock?.woke)) : undefined;
@@ -211,10 +212,11 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
       seat.add(toldItem(t, { ...due, step: due.step }, clock.mover, wakeWords(clock.woke), at));
       seat.wake();
     }
-    await seat.nudge(
+    const seq = await seat.nudge(
       { op: "task.nudge", task: due.task, mover: due.mover, since: due.since, step: due.step, ...(due.day !== undefined ? { day: due.day } : {}), ...(label ? { wake: label } : {}) },
       due.to,
     );
+    if (seq !== null) posted.add(key);
   };
 
   const look = async (): Promise<void> => {
@@ -249,6 +251,7 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
         if (await skipsNow(state, d, at)) await tell(state, d, at);
       }
       for (const key of sent.keys()) if (!live.has(key)) sent.delete(key);
+      for (const key of posted) if (!live.has(key)) posted.delete(key);
     } finally {
       busy = false;
       if (!ended) schedule(again ? SOON_MS : every);

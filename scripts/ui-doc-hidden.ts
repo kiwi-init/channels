@@ -6,6 +6,7 @@ import { chromium, webkit, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { composer, firstRun, newChannel, say } from "./perf-ui.ts";
+import { pageErrors } from "./page-errors.ts";
 
 const DIST = harnessDist(process.argv.find((a) => a.startsWith("--dist="))?.slice(7));
 const ENGINE = process.argv.includes("--webkit") ? "webkit" : "chromium";
@@ -64,7 +65,7 @@ try {
   });
   const page = await context.newPage();
   const threw: string[] = [];
-  page.on("pageerror", (e) => threw.push(e.message));
+  await pageErrors(page, (e) => threw.push(e));
   await page.goto(`http://127.0.0.1:${port}/`);
   await firstRun(page, "owner");
   await newChannel(page, "hidden blocks");

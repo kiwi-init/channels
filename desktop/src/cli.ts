@@ -3,7 +3,7 @@
 // where the install script does (~/.kiwi/bin/kiwi), whenever that one is missing or older (never a
 // downgrade: a newer one someone installed stays), and makes sure a shell finds it as plain `kiwi`.
 
-import { execFile } from "node:child_process";
+import { execFile, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -87,9 +87,25 @@ const CLI_EXTERNAL = ["node-liblzma", "@mongodb-js/zstd"];
 
 const CHILD_ENV = (): NodeJS.ProcessEnv => ({ PATH: "/usr/bin:/bin", HOME: os.homedir(), TMPDIR: os.tmpdir() });
 
+const working = new Set<ChildProcess>();
+const unfinished = new Set<string>();
+let quitting = false;
+
+export function stopCliWork(): void {
+  quitting = true;
+  for (const child of working) child.kill("SIGKILL");
+  for (const tmp of unfinished) for (const file of [tmp, `${tmp}.cstemp`]) fs.rmSync(file, { force: true });
+}
+
 function run(file: string, args: string[], what: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, { timeout: 120_000, cwd: "/", env: CHILD_ENV() }, (err, _out, stderr) => (err ? reject(new Error(`${what}: ${stderr.trim() || err.message}`)) : resolve()));
+    if (quitting) return reject(new Error(`${what}: Channels is quitting`));
+    const child = execFile(file, args, { timeout: 120_000, cwd: "/", env: CHILD_ENV() }, (err, _out, stderr) => {
+      working.delete(child);
+      if (err) reject(new Error(`${what}: ${stderr.trim() || err.message}`));
+      else resolve();
+    });
+    working.add(child);
   });
 }
 
@@ -104,8 +120,10 @@ async function compile(bundle: string, out: string): Promise<void> {
 }
 
 async function unpack(bundled: string, dest: string): Promise<void> {
+  if (quitting) throw new Error("Channels is quitting");
   await fs.promises.mkdir(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.new-${process.pid}-${randomUUID()}`;
+  unfinished.add(tmp);
   try {
     if (bundled.endsWith(".js")) await compile(bundled, tmp);
     else if (bundled.endsWith(".zst")) await pipeline(fs.createReadStream(bundled), zlib.createZstdDecompress(), fs.createWriteStream(tmp));
@@ -114,7 +132,10 @@ async function unpack(bundled: string, dest: string): Promise<void> {
     await fs.promises.rename(tmp, dest);
   } catch (e) {
     await fs.promises.rm(tmp, { force: true });
+    await fs.promises.rm(`${tmp}.cstemp`, { force: true });
     throw e;
+  } finally {
+    unfinished.delete(tmp);
   }
 }
 

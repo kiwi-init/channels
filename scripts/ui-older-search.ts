@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
@@ -28,7 +29,7 @@ const expect = (ok: boolean, what: string) => {
 };
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-  page.on("pageerror", (e) => fails.push(`page threw: ${e.message}`));
+  await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
   await page.goto(`http://127.0.0.1:${server.port}/?shot=channel`);
   await page.locator("article.msg").first().waitFor();
   await page.getByRole("button", { name: /Search this channel/ }).click();
@@ -109,7 +110,7 @@ try {
   expect(!!shown && shown.y > 100 && shown.y < 700 && (await hit.innerText()).includes("Keep the relay dumb"), "the hit is scrolled into view and marked");
   expect((await page.locator("article.msg").count()) > 10, "the stretch around the hit is shown, not just the hit");
 
-  await hit.hover();
+  await hit.locator(".msg-body").hover();
   expect((await hit.getByRole("button", { name: "React 👍" }).count()) === 1, "an older message can still be reacted to");
   expect((await hit.getByRole("button", { name: "Copy text" }).count()) === 1, "and copied");
   expect((await hit.getByRole("button", { name: "Reply" }).count()) === 0, "but not replied to, since the quote couldn't show it");

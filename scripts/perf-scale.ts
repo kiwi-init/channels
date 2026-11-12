@@ -14,6 +14,7 @@ import { startLocalRelay } from "./local-relay.ts";
 import { calibrate } from "./perf-calibrate.ts";
 import { approveSpec, composer, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, view, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`A busy channel, measured: PERF_AGENTS agents (10), PERF_TASKS tasks (100), PERF_MESSAGES messages (2000), then PERF_SOAK_MIN minutes (20) of agents posting.
@@ -253,7 +254,7 @@ try {
     new MutationObserver((_, obs) => seen() && obs.disconnect()).observe(document, { childList: true, subtree: true, characterData: true });
   }, SEEDED);
   const page = await context.newPage();
-  page.on("pageerror", (e) => log(`page error: ${e.message}`));
+  await pageErrors(page, (e) => log(`page error: ${e}`), { observers: false });
   const cdp = await context.newCDPSession(page);
   await cdp.send("Performance.enable");
   await cdp.send("Network.enable");

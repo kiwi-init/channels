@@ -7,6 +7,7 @@ import { chromium } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { docOpen, firstRun, letIn, newChannel, say } from "./perf-ui.ts";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`Three agents answer one message sent to everyone, in the app. The owner asks in #general from the app; ann, bob and
@@ -58,7 +59,7 @@ const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMI
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  await pageErrors(page, (e) => errors.push(e));
   await page.goto(BASE);
   await firstRun(page, "jow");
   const code = await newChannel(page, "team");

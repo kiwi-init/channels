@@ -33,6 +33,7 @@ const REPO = /^[\w.-]+\/[\w.-]+$/
 const TABS: readonly (readonly [ChannelTab, Key])[] = [
   ["general", "modals.channel.settings.tab.general"],
   ["rooms", "modals.channel.settings.tab.rooms"],
+  ["tasks", "modals.channel.settings.tab.tasks"],
   ["github", "modals.channel.settings.tab.github"],
   ["notes", "modals.channel.settings.tab.notes"],
 ]
@@ -71,6 +72,8 @@ export function ChannelSettings({ channel, tab: first, end, onClose }: { channel
           <General channel={channel} onEnd={() => setEnding(true)} />
         ) : tab === "rooms" ? (
           <Rooms channel={channel} />
+        ) : tab === "tasks" ? (
+          <Tasks channel={channel} />
         ) : tab === "github" ? (
           <GitHub channel={channel} />
         ) : (
@@ -425,8 +428,6 @@ function GitHub({ channel }: { channel: Channel }) {
   const sets = own || !!channel.youTrusted
   const write = !!channel.githubWrite
   const prefix = channel.branchPrefix
-  const quiet = String(channel.quietMinutes ?? QUIET_MINUTES)
-  const landing = channel.landing
   return (
     <>
       <Group title={t("modals.channel.settings.repos")} hint={t("modals.channel.settings.repos.hint")}>
@@ -443,7 +444,7 @@ function GitHub({ channel }: { channel: Channel }) {
           />
         </Row>
       </Group>
-      <Group title={t("modals.channel.settings.tasks.prs")}>
+      <Group title={t("modals.channel.settings.prs")}>
         <Row label={t("modals.channel.settings.branch.prefix")} hint={prefix ? t("modals.channel.settings.branch.prefix.set", { prefix }) : t("modals.channel.settings.branch.prefix.none")}>
           {sets ? (
             <span className="cset-prefix">
@@ -463,6 +464,20 @@ function GitHub({ channel }: { channel: Channel }) {
             <span className="cset-mono">{prefix ?? t("modals.channel.settings.none")}</span>
           )}
         </Row>
+      </Group>
+    </>
+  )
+}
+
+function Tasks({ channel }: { channel: Channel }) {
+  const { app } = useApp()
+  const own = channel.youOwn
+  const sets = own || !!channel.youTrusted
+  const quiet = String(channel.quietMinutes ?? QUIET_MINUTES)
+  const landing = channel.landing
+  return (
+    <>
+      <Group>
         <Row label={t("modals.channel.settings.quiet")} hint={t("modals.channel.settings.quiet.hint", { minutes: quiet })}>
           {sets ? (
             <span className="cset-prefix">

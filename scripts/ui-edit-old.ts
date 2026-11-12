@@ -6,6 +6,7 @@ import { chromium, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { composer, firstRun, letIn, newChannel } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`Editing a message from past the app's 400-message window: two people on a local relay, ana sends a long line,
@@ -33,7 +34,7 @@ const check = (said: string, why: string | null): void => {
 
 const open = async (name: string): Promise<Page> => {
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 860 } })).newPage();
-  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await pageErrors(page, (e) => errors.push(`${name}: ${e}`));
   await page.goto(BASE);
   await firstRun(page, name);
   return page;

@@ -104,3 +104,23 @@
 .add-body .input[aria-invalid="true"] {
   border-color: color-mix(in srgb, var(--alert) 60%, transparent);
 }
+
+.copy-manual {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.copy-manual-hint {
+  color: var(--ink-2);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.copy-manual-text {
+  width: 100%;
+  resize: none;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

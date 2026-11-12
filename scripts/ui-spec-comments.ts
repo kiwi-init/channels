@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Locator, type Page } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
@@ -31,7 +32,7 @@ const expect = (ok: boolean, what: string) => {
 
 const open = async (shot: string, width = 1440, height = 900): Promise<Page> => {
   const page = await browser.newPage({ viewport: { width, height } });
-  page.on("pageerror", (e) => fails.push(`page threw: ${e.message}`));
+  await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
   await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
   await page.locator(".spec-comment").first().waitFor();
   const all = page.getByRole("button", { name: /^All \d+$/ });
@@ -120,7 +121,7 @@ const imeEnter = (page: Page, box: "plain" | "anchored") =>
 try {
   {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-    page.on("pageerror", (e) => fails.push(`page threw: ${e.message}`));
+    await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
     await page.goto(`http://127.0.0.1:${server.port}/?shot=specs-general`);
     const reply = page.locator("article.msg", { hasText: "Read AGENTS.md first, then the board." });
     await reply.waitFor();

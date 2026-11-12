@@ -12,6 +12,7 @@ import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { firstRun, letIn, newChannel, say } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`What a needs-you badge costs and how fast it moves for a channel that isn't open. PERF_CHANNELS channels (20), each with
@@ -104,7 +105,7 @@ const samples: Record<string, number | string>[] = [];
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
-  page.on("pageerror", (e) => log(`page error: ${e.message}`));
+  await pageErrors(page, (e) => log(`page error: ${e}`), { observers: false });
   const cdp = await context.newCDPSession(page);
   await cdp.send("Performance.enable");
   await page.goto(BASE);

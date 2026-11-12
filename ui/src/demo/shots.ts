@@ -16,6 +16,7 @@ export interface Shot {
   layout?: Layout
   usage?: Partial<Usage>
   broken?: true
+  copyRefused?: true
 }
 
 const PAID: Partial<Usage> = { plan: "paid", used: 3_120, limit: 100_000, paidLimit: 100_000, upgradeUrl: null, billingUrl: "https://billing.stripe.com/demo" }
@@ -30,6 +31,10 @@ export const SHOTS: Record<string, Shot> = {
   "home-calm": { scenario: "home-calm", channel: null },
   "long-feed": { scenario: "long", channel: "kiwi" },
   "own-bubbles": { scenario: "own-bubbles", channel: "kiwi" },
+  "tabs-3": { scenario: "tabs-3", channel: "kiwi" },
+  "tabs-8": { scenario: "tabs-8", channel: "kiwi" },
+  "tabs-8-top": { scenario: "tabs-8", channel: "kiwi", layout: "top" },
+  signs: { scenario: "signs", channel: "kiwi" },
   opening: { scenario: "opening", channel: "kiwi" },
   "opening-tasks": { scenario: "opening", channel: "kiwi", nav: { tab: "specs" } },
   "opening-needs": { scenario: "opening", channel: "kiwi", nav: { tab: "needs" } },
@@ -94,11 +99,14 @@ export const SHOTS: Record<string, Shot> = {
   "needs-panel": kiwi({ tab: "needs", modal: { kind: "person", name: "pixel" } }),
   "needs-empty": { scenario: "full", channel: "landing", nav: { tab: "needs" } },
   "channel-settings": kiwi({ modal: { kind: "channel" } }),
-  "review-reset-settings": { scenario: "review-reset", channel: "kiwi", nav: { modal: { kind: "channel", tab: "github" } } },
+  "review-reset-settings": { scenario: "review-reset", channel: "kiwi", nav: { modal: { kind: "channel", tab: "tasks" } } },
+  "channel-settings-github": kiwi({ modal: { kind: "channel", tab: "github" } }),
+  "channel-settings-no-repo": { scenario: "full", channel: "landing", nav: { modal: { kind: "channel", tab: "tasks" } } },
   "review-reset-agent": { scenario: "review-reset", channel: "kiwi", nav: { modal: { kind: "person", name: "atlas" } } },
   "room-members": kiwi({ where: { kind: "room", room: "launch-plan" }, modal: { kind: "channel", tab: "rooms" } }),
   invite: kiwi({ modal: { kind: "invite" } }),
   "add-agent": kiwi({ modal: { kind: "add-agent" } }),
+  "add-agent-copy-refused": { ...kiwi({ modal: { kind: "add-agent" } }), copyRefused: true },
   palette: kiwi({ dialog: "palette" }),
   "new-channel": kiwi({ dialog: "new-channel" }),
   join: kiwi({ dialog: "join" }),
