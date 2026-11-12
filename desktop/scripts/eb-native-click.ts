@@ -83,8 +83,28 @@ try {
             return !document.querySelector(".set");
           }, null)) || null,
       );
+      const hit = await d.evaluate((at: { x: number; y: number }) => {
+        const seen: string[] = [];
+        Reflect.set(window, "kiwiPresses", seen);
+        const name = (el: Element | null) =>
+          el
+            ? `${el.tagName.toLowerCase()}.${String(el.getAttribute("class") ?? "")
+                .trim()
+                .replace(/\s+/g, ".")}`
+            : "nothing";
+        for (const type of ["pointerdown", "mousedown", "mouseup", "click"])
+          document.addEventListener(type, (e) => void seen.push(`${type} on ${name(e.target as Element)} at ${Math.round((e as MouseEvent).clientX)},${Math.round((e as MouseEvent).clientY)}`), true);
+        const chain: string[] = [];
+        for (let el = document.elementFromPoint(at.x, at.y); el; el = el.parentElement) chain.push(`${name(el)}[${getComputedStyle(el).getPropertyValue("--electrobun-app-region").trim() || "-"}]`);
+        return `viewport ${innerWidth}x${innerHeight}; at ${Math.round(at.x)},${Math.round(at.y)}: ${chain.slice(0, 6).join(" < ")}`;
+      }, gear);
+      console.log(`${layout.name}: window ${sh(["xdotool", "getwindowgeometry", win]).replace(/\s+/g, " ")}; ${hit}`);
       click(win, gear.x, gear.y, 1);
-      await until(`Settings opens on a real click in the ${layout.name} layout`, 10_000, async () => (await d.evaluate(() => !!document.querySelector(".set"), null)) || null);
+      try {
+        await until(`Settings opens on a real click in the ${layout.name} layout`, 10_000, async () => (await d.evaluate(() => !!document.querySelector(".set"), null)) || null);
+      } finally {
+        console.log(`${layout.name}: the page saw ${JSON.stringify(await d.evaluate(() => Reflect.get(window, "kiwiPresses"), null))}`);
+      }
       click(win, gear.x, gear.y, 1);
       await until(
         `Settings closes on the gear's second click in the ${layout.name} layout`,
