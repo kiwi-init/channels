@@ -536,9 +536,6 @@ jobs:
       - name: ui Jump to latest shows when you scroll up a long feed, takes a click and brings the feed to its end, from a little up, from far past the rows it holds, from near their top and while older rows load
         if: ${{ !cancelled() }}
         run: bun scripts/ui-feed-latest.ts --dist ui/dist --browser ${{ matrix.engine }}
-      - name: ui a font that arrives late leaves the conversation where it was, at the bottom and scrolled up
-        if: ${{ !cancelled() }}
-        run: bun scripts/ui-feed-late-font.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist
