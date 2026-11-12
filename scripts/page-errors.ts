@@ -27,9 +27,9 @@ function observersIn(text: string): Observers | null {
   try {
     const seen: unknown = JSON.parse(text);
     if (seen === null || typeof seen !== "object") return null;
-    const { late, ran } = seen as { late?: unknown; ran?: unknown };
+    const { late, untold, ran } = seen as { late?: unknown; untold?: unknown; ran?: unknown };
     const lines = (x: unknown): string[] => (Array.isArray(x) ? x.filter((l): l is string => typeof l === "string") : []);
-    return { late: lines(late), ran: lines(ran) };
+    return { late: lines(late), untold: lines(untold), ran: lines(ran) };
   } catch {
     // a page's own debug line that starts like ours is not a trace
     return null;
@@ -39,10 +39,15 @@ function observersIn(text: string): Observers | null {
 function traceObservers(tag: string): void {
   const Real = window.ResizeObserver;
   if (!Real) return;
+  interface Watched {
+    box: ResizeObserverBoxOptions;
+    told: [number, number] | null;
+    since: number;
+  }
   interface Made {
     id: number;
     where: string;
-    sizes: Map<Element, [number, number]>;
+    watched: Map<Element, Watched>;
   }
   const live = new Set<Made>();
   const owned = new WeakMap<ResizeObserver, Made>();
@@ -50,9 +55,16 @@ function traceObservers(tag: string): void {
   let count = 0;
   const name = (el: Element): string =>
     `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ""}${typeof el.className === "string" && el.className.trim() ? `.${el.className.trim().split(/\s+/).slice(0, 3).join(".")}` : ""}`;
-  const size = (e: ResizeObserverEntry): [number, number] => {
-    const box = e.borderBoxSize?.[0];
-    return box ? [box.inlineSize, box.blockSize] : [e.contentRect.width, e.contentRect.height];
+  const toldSize = (e: ResizeObserverEntry, box: ResizeObserverBoxOptions): [number, number] => {
+    const of = (box === "border-box" ? e.borderBoxSize : box === "device-pixel-content-box" ? e.devicePixelContentBoxSize : e.contentBoxSize)?.[0];
+    return of ? [of.inlineSize, of.blockSize] : [e.contentRect.width, e.contentRect.height];
+  };
+  const px = (v: string): number => Number.parseFloat(v) || 0;
+  const sizeNow = (el: HTMLElement, box: ResizeObserverBoxOptions): [number, number] => {
+    if (box === "border-box") return [el.offsetWidth, el.offsetHeight];
+    const s = getComputedStyle(el);
+    const scale = box === "device-pixel-content-box" ? window.devicePixelRatio : 1;
+    return [(el.clientWidth - px(s.paddingLeft) - px(s.paddingRight)) * scale, (el.clientHeight - px(s.paddingTop) - px(s.paddingBottom)) * scale];
   };
   window.ResizeObserver = class extends Real {
     constructor(run: ResizeObserverCallback) {
@@ -64,15 +76,19 @@ function traceObservers(tag: string): void {
           .filter((l) => /\.[cm]?[jt]sx?[:?]/.test(l))
           .slice(0, 2)
           .join(" < "),
-        sizes: new Map(),
+        watched: new Map(),
       };
       super((entries, self) => {
-        live.add(made);
-        for (const e of entries) made.sizes.set(e.target, size(e));
+        const sizes = entries.map((e): [Element, [number, number]] => {
+          const seen = made.watched.get(e.target) ?? { box: "content-box", told: null, since: performance.now() };
+          seen.told = toldSize(e, seen.box);
+          made.watched.set(e.target, seen);
+          return [e.target, seen.told];
+        });
         ran.push({
           at: performance.now(),
-          line: `observer ${made.id}${made.where ? ` (made at ${made.where})` : ""}: ${entries
-            .map((e) => `${name(e.target)} ${Math.round(size(e)[0])}x${Math.round(size(e)[1])}`)
+          line: `observer ${made.id}${made.where ? ` (made at ${made.where})` : ""}: ${sizes
+            .map(([el, [w, h]]) => `${name(el)} ${Math.round(w)}x${Math.round(h)}`)
             .join(", ")
             .slice(0, 400)}`,
         });
@@ -81,14 +97,22 @@ function traceObservers(tag: string): void {
       });
       owned.set(this, made);
     }
+    observe(target: Element, options?: ResizeObserverOptions): void {
+      const made = owned.get(this);
+      if (made) {
+        live.add(made);
+        made.watched.set(target, { box: options?.box ?? "content-box", told: null, since: performance.now() });
+      }
+      super.observe(target, options);
+    }
     unobserve(target: Element): void {
-      owned.get(this)?.sizes.delete(target);
+      owned.get(this)?.watched.delete(target);
       super.unobserve(target);
     }
     disconnect(): void {
       const made = owned.get(this);
       if (made) {
-        made.sizes.clear();
+        made.watched.clear();
         live.delete(made);
       }
       super.disconnect();
@@ -98,17 +122,25 @@ function traceObservers(tag: string): void {
     if (!String(e.message).includes("ResizeObserver")) return;
     const now = performance.now();
     const late: string[] = [];
+    const untold: { since: number; line: string }[] = [];
     for (const made of live) {
-      for (const [el, [w, h]] of made.sizes) {
+      const by = `observer ${made.id}${made.where ? ` (made at ${made.where})` : ""}`;
+      for (const [el, { box, told, since }] of made.watched) {
         if (!(el instanceof HTMLElement) || !el.isConnected) continue;
-        if (Math.abs(el.offsetWidth - w) < 1 && Math.abs(el.offsetHeight - h) < 1) continue;
-        late.push(`${name(el)} ${Math.round(w)}x${Math.round(h)} -> ${el.offsetWidth}x${el.offsetHeight}, watched by observer ${made.id}${made.where ? ` (made at ${made.where})` : ""}`);
+        const [w, h] = sizeNow(el, box);
+        if (!told) untold.push({ since, line: `${name(el)} ${Math.round(w)}x${Math.round(h)}, put under watch ${Math.round(now - since)} ms before by ${by}` });
+        else if (Math.abs(w - told[0]) >= 1 || Math.abs(h - told[1]) >= 1)
+          late.push(`${name(el)} ${Math.round(told[0])}x${Math.round(told[1])} -> ${Math.round(w)}x${Math.round(h)}, watched by ${by}`);
       }
     }
     console.debug(
       tag +
         JSON.stringify({
           late: late.slice(0, 12),
+          untold: untold
+            .sort((a, b) => b.since - a.since)
+            .slice(0, 12)
+            .map((u) => u.line),
           ran: ran
             .filter((r) => now - r.at < 250)
             .map((r) => r.line)
