@@ -1,13 +1,17 @@
+:root[data-wm="floating"] {
+  --wm-w: calc(3 * var(--row) + 2 * 4px + 8px);
+}
+
 .wm-btn {
   display: grid;
   place-items: center;
-  width: 14px;
-  height: 14px;
+  width: var(--row);
+  height: var(--row);
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  background: var(--bg-3);
-  color: transparent;
+  border-radius: var(--r-row);
+  background: none;
+  color: var(--ink-2);
   transition:
     background var(--fast),
     color var(--fast);
@@ -15,6 +19,7 @@
 
 .wm-btn:hover {
   background: var(--wash-2);
+  color: var(--ink);
 }
 
 .wm-btn.is-close:hover {
@@ -695,8 +700,7 @@
   padding-left: 8px;
 }
 
-:root[data-shell="mac"] :is(.top-lead, .set-top-title),
-:root[data-wm="floating"] :is(.top-lead, .set-top-title) {
+:root[data-shell="mac"] :is(.top-lead, .set-top-title) {
   padding-left: calc(64px + 16px);
 }
 
@@ -756,8 +760,7 @@
   pointer-events: none;
 }
 
-:root[data-shell="mac"] .top-tools,
-:root[data-wm="floating"] .top-tools {
+:root[data-shell="mac"] .top-tools {
   padding-left: calc(64px + 16px + var(--ctl) + 8px);
 }
 
@@ -1014,11 +1017,11 @@
 
 .wm-controls {
   position: fixed;
-  top: calc((var(--top-h) - 14px) / 2);
-  left: 16px;
-  z-index: 7;
+  top: calc((var(--top-h) - var(--row)) / 2);
+  right: 8px;
+  z-index: 11;
   display: flex;
-  gap: 6px;
+  gap: 4px;
   -webkit-app-region: no-drag;
 }
 
@@ -1207,7 +1210,7 @@
   --tail-n: 2;
 }
 
-:root[data-tabs]:is([data-shell="mac"], [data-wm="floating"]) .app > .rail {
+:root[data-tabs][data-shell="mac"] .app > .rail {
   --lead-pad: calc(64px + 16px);
 }
 
@@ -1223,6 +1226,18 @@
   justify-self: end;
   width: auto;
   padding: 0 8px;
+}
+
+:root[data-tabs][data-wm="floating"] .top-tools {
+  margin-right: var(--wm-w);
+}
+
+:root[data-tabs][data-wm="floating"] .app > .rail {
+  margin-right: calc(8px + var(--tail-n) * (var(--ctl) + 8px) + var(--wm-w));
+}
+
+:root[data-tabs][data-wm="floating"]:has(.top-tools.is-searching, .top-hold) .app > .rail {
+  margin-right: calc(var(--side-w) + var(--wm-w));
 }
 
 :root[data-tabs] .top-tools.is-searching {
@@ -1527,6 +1542,10 @@
   .top-tools.is-searching {
     grid-column: 2 / -1;
     justify-self: stretch;
+  }
+
+  :root[data-wm="floating"] .top-tools {
+    margin-right: var(--wm-w);
   }
 
   .top-tools .updates-panel {

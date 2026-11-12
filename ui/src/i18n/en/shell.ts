@@ -56,6 +56,8 @@ export default {
   "shell.rail.minimize": "Minimize",
   "shell.rail.maximize.window": "Maximize window",
   "shell.rail.maximize": "Maximize",
+  "shell.rail.restore.window": "Restore window",
+  "shell.rail.restore": "Restore",
   "shell.rail.home": "Home",
   "shell.rail.new.channel": "New channel",
   "shell.rail.settings": "Settings",

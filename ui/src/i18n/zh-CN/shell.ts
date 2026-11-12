@@ -90,6 +90,8 @@ export default {
   "shell.rail.minimize": "最小化",
   "shell.rail.maximize.window": "最大化窗口",
   "shell.rail.maximize": "最大化",
+  "shell.rail.restore.window": "还原窗口",
+  "shell.rail.restore": "还原",
   "shell.rail.home": "主页",
   "shell.rail.new.channel": "新建频道",
   "shell.rail.settings": "设置",

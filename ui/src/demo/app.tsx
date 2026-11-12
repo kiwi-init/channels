@@ -31,6 +31,7 @@ if (shot?.docs !== undefined && shot.channel && seeded && seeded.kind !== "dm" &
 if (!shot?.onboarding) rememberOnboarded(false)
 keepTab(shot?.track ?? "now")
 if (shot?.layout) setLayout(shot.layout)
+if (shot?.wm) document.documentElement.dataset["wm"] = shot.wm
 if (shot?.copyRefused) refuseCopies()
 
 const SWITCH_AFTER_MS = 400
