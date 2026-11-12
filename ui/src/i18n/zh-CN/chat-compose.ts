@@ -187,6 +187,7 @@ export default {
   "chat.markdown.copy.text": "复制 {text}",
   "chat.markdown.code.block": "代码块",
   "chat.markdown.code.block.lang": "代码块：{lang}",
+  "chat.markdown.utc.assuming": "按消息日期 {date}（UTC）计算",
   "chat.markdown.task": "任务：{text}",
   "chat.doc.media.didnt.load": "{name} 未能加载",
 } satisfies Catalog

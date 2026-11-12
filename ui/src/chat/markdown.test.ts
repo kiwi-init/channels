@@ -15,6 +15,7 @@ const { parseMarkdown } = await import("react-native-enriched-markdown/lib/modul
 const { RenderNode } = await import("react-native-enriched-markdown/lib/module/web/renderers/index.js")
 const { default: Markdown, blockGaps, withTextSize, safeLinks, sortedRows } = await import("~/chat/markdown")
 const { keepParsed } = await import("~/chat/parsed")
+const { zonedTimes } = await import("~/chat/zoned-times")
 
 const fixed = (name: string, s: CSSProperties): string[] => [
   ...(typeof s.fontSize === "number" ? [`${name} fontSize ${s.fontSize}`] : []),
@@ -77,7 +78,7 @@ const shape = (node: Shape): string => (node.type === "Text" ? (node.content ?? 
 describe("a line after a list is its own paragraph, not glued onto the last item (T4145)", () => {
   test("an unindented line right after a bulleted or numbered list starts a new paragraph", async () => {
     const source = readFileSync(join(import.meta.dir, "markdown.tsx"), "utf8")
-    expect(source).toContain("parseMarkdown(blockGaps(markdown), FLAGS)")
+    expect(source).toContain("parseMarkdown(blockGaps(source), FLAGS)")
     const bullets = await parseMarkdown(blockGaps("Waits for:\n\n- #1713: rerun\n- T4114: red\nThen: full CI"), FLAGS)
     expect((bullets.children ?? []).map(shape)).toEqual(["Paragraph(Waits for:)", "UnorderedList(ListItem(Paragraph(#1713: rerun)) ListItem(Paragraph(T4114: red)))", "Paragraph(Then: full CI)"])
     const numbered = await parseMarkdown(blockGaps("1. build\n2. ship\nDone."), FLAGS)
@@ -241,5 +242,22 @@ describe("a link to a message keeps its href; other kiwi:// links don't (T987)",
     expect(html).toContain(`href="kiwi://join/${code}?m=12"`)
     expect(html).not.toContain(`href="kiwi://join/${code}"`)
     expect(html).not.toContain('href="kiwi://other')
+  })
+})
+
+describe("a UTC time in prose shows its local time (#2367)", () => {
+  test("recognized times become kiwi-utc links whose text stays the original token", async () => {
+    const at = Date.UTC(2030, 0, 16, 22)
+    const markdown = "standup 06:30Z, review 2030-01-16T01:15:00Z, plain 06:30 stays, `07:00Z` too"
+    const source = zonedTimes(markdown, at)
+    const ast = await parseMarkdown(source, FLAGS)
+    safeLinks(ast)
+    keepParsed(source, ast)
+    const html = renderToStaticMarkup(createElement(Markdown, { markdown, at, onMention: quiet, onTask: quiet, onMessage: quiet, onImage: quiet, onShown: quiet, copied: quiet }))
+    expect(html).toContain('href="kiwi-utc:2030-01-16T06:30:00Z"')
+    expect(html).toContain('href="kiwi-utc:2030-01-16T01:15:00Z"')
+    expect(html).toContain(">06:30Z</a>")
+    expect(html).toContain(">2030-01-16T01:15:00Z</a>")
+    expect(html.match(/kiwi-utc:/g)?.length).toBe(2)
   })
 })

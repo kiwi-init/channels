@@ -187,6 +187,7 @@ export default {
   "chat.markdown.copy.text": "{text} をコピー",
   "chat.markdown.code.block": "コードブロック",
   "chat.markdown.code.block.lang": "コードブロック: {lang}",
+  "chat.markdown.utc.assuming": "メッセージの日付 {date}（UTC）として解釈",
   "chat.markdown.task": "タスク: {text}",
   "chat.doc.media.didnt.load": "{name} を読み込めませんでした",
 } satisfies Catalog

@@ -229,6 +229,7 @@ const words = {
   "chat.updates.panel.and.more": " and {count} more",
   "chat.markdown.code.block": "Code block",
   "chat.markdown.code.block.lang": "Code block: {lang}",
+  "chat.markdown.utc.assuming": "assuming {date} UTC, the message date",
   "chat.markdown.task": "Task: {text}",
   "chat.doc.media.didnt.load": "{name} didn't load",
   "chat.fold.opened": "opened",

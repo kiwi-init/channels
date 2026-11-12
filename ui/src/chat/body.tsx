@@ -17,6 +17,7 @@ export function Body({
   onImage,
   onMessage,
   hug = false,
+  at,
 }: {
   text: Words
   seq: number
@@ -25,6 +26,7 @@ export function Body({
   onImage: (url: string, alt: string) => void
   onMessage: (seq: number) => void
   hug?: boolean
+  at?: number
 }) {
   const { go, now } = useAct()
   const parser = useMentionParser()
@@ -45,7 +47,7 @@ export function Body({
     <div className="msg-text" ref={box}>
       {!shown && !parsedFor(markdown) && <p className="md-plain">{wordsPlain(text, names)}</p>}
       <Suspense fallback={null}>
-        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} />
+        <Markdown markdown={markdown} at={at} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} />
       </Suspense>
     </div>
   )
