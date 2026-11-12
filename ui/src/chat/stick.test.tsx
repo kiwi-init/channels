@@ -24,6 +24,9 @@ class Feed {
   lines = 10
   pad = 0
   top = 0
+  width = 800
+  working = 0
+  whole: (v: number) => number = Math.round
   observers = new Set<() => void>()
   listeners = new Map<string, Set<Listener>>()
   docListeners = new Map<string, Set<Listener>>()
@@ -39,7 +42,7 @@ class Feed {
   }
 
   get natural(): number {
-    return this.above + DOC_PAD + this.lines * LINE + this.pad
+    return this.above + DOC_PAD + this.lines * LINE + this.working + this.pad
   }
 
   get listH(): number {
@@ -62,12 +65,19 @@ class Feed {
     return VIEW_TOP + this.lift + this.above - this.top
   }
 
+  get docEnd(): number {
+    return this.docTop + DOC_PAD + this.lines * LINE
+  }
+
   scrollTo(v: number): void {
-    this.top = Math.round(Math.min(this.max, Math.max(0, v)))
+    this.top = this.whole(Math.min(this.max, Math.max(0, v)))
   }
 
   readonly box = {
     clientHeight: VIEW_H,
+    get clientWidth(): number {
+      return feed().width
+    },
     getBoundingClientRect: () => ({ top: VIEW_TOP, bottom: VIEW_TOP + VIEW_H }),
     get scrollTop(): number {
       return feed().top
@@ -99,22 +109,24 @@ class Feed {
     isConnected: true,
     classList: { contains: (c: string) => c === "thread-doc" },
     previousElementSibling: null,
+    hasAttribute: () => false,
     getClientRects: () => [{}],
-    getBoundingClientRect: () => ({ top: this.docTop, bottom: this.docTop + DOC_PAD + this.lines * LINE }),
+    getBoundingClientRect: () => ({ top: this.docTop, bottom: this.docEnd }),
   }
 
-  readonly hidden = {
+  readonly workingLine = {
     isConnected: true,
     previousElementSibling: this.doc,
-    getClientRects: () => [],
-    getBoundingClientRect: () => ({ top: 0, bottom: 0 }),
+    hasAttribute: (name: string) => name === "data-aside",
+    getClientRects: () => (this.working > 0 ? [{}] : []),
+    getBoundingClientRect: () => (this.working > 0 ? { top: this.docEnd, bottom: this.docEnd + this.working } : { top: 0, bottom: 0 }),
   }
 
   readonly list = {
     get offsetHeight(): number {
       return Math.round(feed().listH)
     },
-    lastElementChild: this.hidden,
+    lastElementChild: this.workingLine,
     querySelector: (sel: string) => (sel === ".thread-doc" ? this.doc : null),
     querySelectorAll: () => this.rows.map((r) => this.rowEl(r.seq)),
   }
@@ -245,6 +257,25 @@ function docLine(f: Feed): void {
   f.lines++
   f.resized()
 }
+
+const WORKING = 27
+
+const SIDE = 320
+
+function relaid(f: Feed, s: Stick, change: { width?: number; rowH?: number; lines?: number; working?: number }): void {
+  if (change.width !== undefined) f.width = change.width
+  if (change.rowH !== undefined) for (const r of f.rows) r.h = change.rowH
+  if (change.lines !== undefined) f.lines = change.lines
+  if (change.working !== undefined) f.working = change.working
+  const from = f.top
+  f.layout()
+  f.resized()
+  if (f.top !== from) s.remember()
+}
+
+const room = (f: Feed): number => Number.parseFloat(f.spacer.style.height) || 0
+
+const rowTop = (f: Feed, seq: number): number => (f.rowEl(seq) as { getBoundingClientRect: () => { top: number } }).getBoundingClientRect().top
 
 describe("useStick in a thread doc", () => {
   test("lines arriving above the doc you read leave it where it is", async () => {
@@ -619,5 +650,221 @@ describe("useStick in a thread doc", () => {
     await act(async () => root.unmount())
     expect(f.observers.size).toBe(0)
     for (const set of f.listeners.values()) expect(set.size).toBe(0)
+  })
+})
+
+describe("useStick when the feed changes width (T231)", () => {
+  test("at the bottom, the working line under the doc coming and going never leaves blank room, round after round", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    f.fire("pointerdown")
+    for (let round = 0; round < 3; round++) {
+      relaid(f, stick, { working: WORKING })
+      expect(f.top).toBe(f.max)
+      relaid(f, stick, { working: 0 })
+      expect(room(f)).toBe(0)
+      expect(f.top).toBe(f.max)
+    }
+    await act(async () => root.unmount())
+  })
+
+  test("hiding and showing the sidebar at the bottom leaves the last line on the composer, with no blank room, after any number of rounds", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    f.fire("pointerdown")
+    for (let round = 0; round < 3; round++) {
+      relaid(f, stick, { width: 800 + SIDE, rowH: 52.8, lines: 8, working: WORKING })
+      expect(room(f)).toBe(0)
+      expect(f.top).toBe(f.max)
+      relaid(f, stick, { width: 800, rowH: 79.2, lines: 10, working: 0 })
+      expect(room(f)).toBe(0)
+      expect(f.top).toBe(f.max)
+    }
+    await act(async () => root.unmount())
+  })
+
+  test("a wider feed that unwraps the doc's own lines is not a line leaving the doc: at the bottom it adds no room", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    f.fire("pointerdown")
+    relaid(f, stick, { width: 800 + SIDE, lines: 7 })
+    expect(room(f)).toBe(0)
+    expect(f.top).toBe(f.max)
+    await act(async () => root.unmount())
+  })
+
+  test("a narrower feed that wraps more lines keeps a reader at the bottom at the bottom", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    f.fire("pointerdown")
+    relaid(f, stick, { width: 800 - SIDE, rowH: 105.6, lines: 16, working: WORKING })
+    expect(room(f)).toBe(0)
+    expect(f.top).toBe(f.max)
+    await act(async () => root.unmount())
+  })
+
+  test("a width change at the bottom takes back the room a leaving doc line had left", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    f.fire("pointerdown")
+    relaid(f, stick, { lines: 9 })
+    expect(Math.abs(room(f) - LINE)).toBeLessThan(0.01)
+    relaid(f, stick, { width: 800 + SIDE })
+    expect(room(f)).toBe(0)
+    expect(f.top).toBe(f.max)
+    await act(async () => root.unmount())
+  })
+
+  test("scrolled up, the row being read stays where it is through a wider and a narrower feed, and no room is added", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    userScroll(f, stick, -120)
+    stick.remember()
+    expect(room(f)).toBe(0)
+    const reading = Math.min(...f.rows.map((r) => r.seq).filter((seq) => rowTop(f, seq) >= VIEW_TOP))
+    const before = rowTop(f, reading)
+    for (let round = 0; round < 3; round++) {
+      relaid(f, stick, { width: 800 + SIDE, rowH: 39.6, lines: 8, working: WORKING })
+      expect(room(f)).toBe(0)
+      expect(rowTop(f, reading)).toBeGreaterThanOrEqual(VIEW_TOP)
+      expect(rowTop(f, reading)).toBeLessThan(VIEW_TOP + VIEW_H)
+      relaid(f, stick, { width: 800, rowH: 52.8, lines: 10, working: 0 })
+      expect(room(f)).toBe(0)
+      expect(Math.abs(rowTop(f, reading) - before)).toBeLessThan(2)
+    }
+    await act(async () => root.unmount())
+  })
+
+  test("a feed with no doc keeps the bottom at the bottom and a read row in view through a width change", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, false)
+    f.scrollTo(f.max)
+    stick.remember()
+    relaid(f, stick, { width: 800 + SIDE, rowH: 39.6, working: WORKING })
+    expect(f.top).toBe(f.max)
+    relaid(f, stick, { width: 800, rowH: 52.8, working: 0 })
+    expect(f.top).toBe(f.max)
+    expect(room(f)).toBe(0)
+    userScroll(f, stick, -400)
+    const first = Math.min(...f.rows.map((r) => r.seq).filter((seq) => rowTop(f, seq) + 52.8 > VIEW_TOP))
+    const before = rowTop(f, first)
+    relaid(f, stick, { width: 800 + SIDE, rowH: 39.6 })
+    expect(rowTop(f, first) + 39.6).toBeGreaterThan(VIEW_TOP)
+    expect(rowTop(f, first)).toBeLessThan(VIEW_TOP + VIEW_H)
+    relaid(f, stick, { width: 800, rowH: 52.8 })
+    expect(Math.abs(rowTop(f, first) - before)).toBeLessThan(2)
+    expect(room(f)).toBe(0)
+    await act(async () => root.unmount())
+  })
+
+  test("in a browser that scrolls by whole pixels, a doc read while scrolled up is back on its pixel after ten rounds of hide and show", async () => {
+    const f = new Feed(31)
+    f.whole = Math.floor
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    userScroll(f, stick, -120)
+    stick.remember()
+    expect(room(f)).toBe(0)
+    const before = f.docTop
+    expect(before).toBeLessThan(VIEW_TOP + VIEW_H)
+    for (let round = 0; round < 10; round++) {
+      relaid(f, stick, { width: 800 + SIDE, rowH: 39.6, working: WORKING })
+      relaid(f, stick, { width: 800, rowH: 52.8, working: 0 })
+    }
+    expect(Math.abs(f.docTop - before)).toBeLessThan(2)
+    expect(room(f)).toBe(0)
+    await act(async () => root.unmount())
+  })
+
+  test("a reader a little above the end, pulled to the end by a wider feed, is back on their row when the width is back", async () => {
+    for (const still of [false, true]) {
+      const f = new Feed(101)
+      f.whole = Math.floor
+      const { stick, root } = await mount(f, true, still)
+      f.scrollTo(f.max)
+      stick.remember()
+      userScroll(f, stick, -60)
+      stick.remember()
+      expect(room(f)).toBe(0)
+      const first = Math.min(...f.rows.map((r) => r.seq).filter((seq) => rowTop(f, seq) + 52.8 > VIEW_TOP))
+      const before = rowTop(f, first)
+      const above = f.max - f.top
+      expect(above).toBeGreaterThan(50)
+      for (let round = 0; round < 5; round++) {
+        relaid(f, stick, { width: 800 + SIDE, rowH: 39.6, lines: 7 })
+        expect(f.top).toBe(f.max)
+        expect(rowTop(f, first)).toBeLessThan(VIEW_TOP + VIEW_H)
+        expect(room(f)).toBe(0)
+        relaid(f, stick, { width: 800, rowH: 52.8, lines: 10 })
+        expect(Math.abs(rowTop(f, first) - before)).toBeLessThan(2)
+        expect(Math.abs(f.max - f.top - above)).toBeLessThan(2)
+        expect(room(f)).toBe(0)
+      }
+      await act(async () => root.unmount())
+    }
+  })
+
+  test("pulled to the end by a wider feed, a reader who then follows a new message or scrolls is not taken back", async () => {
+    for (const leave of ["a new message", "a scroll"] as const) {
+      const f = new Feed(101)
+      const { stick, root } = await mount(f, true, false)
+      f.scrollTo(f.max)
+      stick.remember()
+      userScroll(f, stick, -100)
+      stick.remember()
+      relaid(f, stick, { width: 800 + SIDE, rowH: 39.6, lines: 7 })
+      expect(f.top).toBe(f.max)
+      if (leave === "a new message") {
+        arrive(f, stick, 102, 39.6)
+        expect(f.top).toBe(f.max)
+        relaid(f, stick, { width: 800, rowH: 52.8, lines: 10 })
+        expect(f.top).toBe(f.max)
+      } else {
+        userScroll(f, stick, -400)
+        stick.remember()
+        const first = Math.min(...f.rows.map((r) => r.seq).filter((seq) => rowTop(f, seq) + 39.6 > VIEW_TOP))
+        const share = (VIEW_TOP - rowTop(f, first)) / 39.6
+        relaid(f, stick, { width: 800, rowH: 52.8, lines: 10 })
+        expect(Math.abs((VIEW_TOP - rowTop(f, first)) / 52.8 - share)).toBeLessThan(0.05)
+      }
+      await act(async () => root.unmount())
+    }
+  })
+
+  test("a row cut by the top edge keeps the same share of itself hidden, so ten rounds of hide and show end where they began", async () => {
+    for (const still of [false, true]) {
+      const f = new Feed(100)
+      const { stick, root } = await mount(f, true, still)
+      f.scrollTo(f.max)
+      stick.remember()
+      userScroll(f, stick, -1000)
+      stick.remember()
+      const first = Math.min(...f.rows.map((r) => r.seq).filter((seq) => rowTop(f, seq) + 52.8 > VIEW_TOP))
+      const before = rowTop(f, first)
+      expect(before).toBeLessThan(VIEW_TOP - 10)
+      for (let round = 0; round < 10; round++) {
+        relaid(f, stick, { width: 800 + SIDE, rowH: 39.6, working: WORKING })
+        stick.remember()
+        expect(rowTop(f, first) + 39.6).toBeGreaterThan(VIEW_TOP)
+        relaid(f, stick, { width: 800, rowH: 52.8, working: 0 })
+        stick.remember()
+      }
+      expect(Math.abs(rowTop(f, first) - before)).toBeLessThan(2)
+      expect(room(f)).toBe(0)
+      await act(async () => root.unmount())
+    }
   })
 })
