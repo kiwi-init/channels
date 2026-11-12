@@ -130,7 +130,7 @@ const isNow = (leaf: Leaf): boolean => leaf.doc?.kind === "now"
 
 const docked = (code: string, root: Node): Node => ({ kind: "split", id: `split-${++made}`, dir: "row", ratio: 0.7, fix: { side: "b", px: null }, a: root, b: nowLeaf(code) })
 
-function layoutOf(code: string): Layout {
+export function layoutOf(code: string): Layout {
   const held = layouts.get(code)
   if (held) return held
   const first: Layout = { root: docked(code, ONLY), focus: MAIN }
@@ -185,9 +185,11 @@ const beside = (edge: Edge, leaf: Leaf, found: Node): Split => {
 
 export function splitAt(code: string, target: string, edge: Edge, page: Page): void {
   const layout = layoutOf(code)
+  const now = page.at === "doc" && page.doc.kind === "now" ? findLeaf(layout.root, isNow) : null
+  if (now) return now.id === target ? focusPane(code, now.id) : movePane(code, now.id, target, edge)
   const leaf = fresh(code, page)
   const root = swap(layout.root, target, (found) => beside(edge, leaf, found))
-  if (root && root !== layout.root) put(code, { root, focus: leaf.id })
+  if (root && root !== layout.root) put(code, { ...layout, root, focus: leaf.id })
 }
 
 export function movePane(code: string, id: string, target: string, edge: Edge): void {
@@ -195,13 +197,13 @@ export function movePane(code: string, id: string, target: string, edge: Edge): 
   const leaf = leafOf(layout.root, id)
   if (!leaf || id === target || !leafOf(layout.root, target)) return
   const root = swap(without(layout.root, id), target, (found) => beside(edge, leaf, found))
-  if (root) put(code, { root, focus: id })
+  if (root) put(code, { ...layout, root, focus: id })
 }
 
 export function closePane(code: string, id: string): void {
   const layout = layoutOf(code)
   if (id === MAIN || !leafOf(layout.root, id)) return
-  put(code, { root: without(layout.root, id), focus: layout.focus === id ? MAIN : layout.focus })
+  put(code, { root: without(layout.root, id), focus: layout.focus === id ? MAIN : layout.focus, typing: layout.typing === id ? MAIN : layout.typing })
 }
 
 export function resizeSplit(code: string, id: string, size: { ratio: number } | { px: number }): void {
@@ -259,6 +261,8 @@ export const closeFocused = (): boolean => closer?.() ?? false
 export function showDoc(code: string, id: string | null, doc: Doc, shown: boolean): void {
   const layout = layoutOf(code)
   const here = id ? leafOf(layout.root, id) : null
+  const other = doc.kind === "now" ? findLeaf(layout.root, isNow) : null
+  if (other && other.id !== here?.id) return shown ? focusPane(code, other.id) : movePane(code, other.id, MAIN, "right")
   if (here?.nav) {
     const where: Where = doc.kind === "task" ? { kind: "task", task: doc.task } : NOWHERE
     const root = swap(layout.root, here.id, () => ({ ...here, nav: { ...here.nav!, tab: "chat", where }, doc }))
@@ -269,7 +273,7 @@ export function showDoc(code: string, id: string | null, doc: Doc, shown: boolea
   const now = findLeaf(layout.root, isNow)
   if (!now) {
     const root = docked(code, layout.root)
-    return put(code, { root, focus: dockedNow(root)?.id ?? MAIN })
+    return put(code, { ...layout, root, focus: dockedNow(root)?.id ?? MAIN })
   }
   if (shown) return focusPane(code, now.id)
   movePane(code, now.id, MAIN, "right")
