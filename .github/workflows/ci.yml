@@ -149,6 +149,9 @@ jobs:
       - name: ui words in catalogs
         if: ${{ !cancelled() }}
         run: bun scripts/ui-english.ts
+      - name: feed promises, every line of FEED.md names a check that is in the repo, still says its words, and runs here
+        if: ${{ !cancelled() }}
+        run: bun scripts/feed-promises.ts
       - name: knip
         if: ${{ !cancelled() }}
         run: bun run knip
@@ -323,6 +326,20 @@ jobs:
           status=0
           bun scripts/ui-msg-edit.ts || status=1
           bun scripts/ui-msg-edit.ts --webkit || status=1
+          exit "$status"
+      - name: feed late picture, a picture that arrives after its line leaves the conversation where it was, at the bottom and scrolled up, in Chromium and WebKit
+        if: ${{ !cancelled() && matrix.part == 'edit' }}
+        run: |
+          status=0
+          bun scripts/ui-feed-late-image.ts || status=1
+          bun scripts/ui-feed-late-image.ts --webkit || status=1
+          exit "$status"
+      - name: feed unread, lines posted while you sit in another room count on its row, open under the New line and clear when read, and scrolled up the button counts the new ones, in Chromium and WebKit
+        if: ${{ !cancelled() && matrix.part == 'edit' }}
+        run: |
+          status=0
+          bun scripts/ui-feed-unread.ts || status=1
+          bun scripts/ui-feed-unread.ts --webkit || status=1
           exit "$status"
       - name: ui a busy thread doc never scrolls on its own, under the composer or while you read, in WebKit
         if: ${{ !cancelled() && matrix.part == 'view' }}
@@ -506,6 +523,12 @@ jobs:
       - name: ui the sidebar stays where it is scrolled while its highlight glides to the row just opened, and a press on a row right after opens it
         if: ${{ !cancelled() }}
         run: bun scripts/ui-side-still.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui Jump to latest shows when you scroll up a long feed, takes a click and brings the feed to its end, from a little up and from far past the rows it holds
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-feed-latest.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui a font that arrives late leaves the conversation where it was, at the bottom and scrolled up
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-feed-late-font.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist
