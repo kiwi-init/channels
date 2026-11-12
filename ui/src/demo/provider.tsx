@@ -9,6 +9,7 @@ import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_INTERLINKED, DEMO_LAUNCHED, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { withOwnBubbles } from "~/demo/own-bubbles"
+import { withSigns } from "~/demo/signs"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf } from "~/home"
@@ -18,6 +19,7 @@ import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
 import { muteKey } from "~/live/mute"
+import { specLineTest } from "~/specs/quote"
 import { wordsRaw, wrote } from "~/words"
 
 const unticked = (text: string): string => text.replace(/^(\s*[-*+]\s+)\[[xX]\]/gm, "$1[ ]").trim()
@@ -285,6 +287,7 @@ export type Scenario =
   | "doc-busy"
   | "event-runs"
   | "own-bubbles"
+  | "signs"
   | "handoff"
   | "opening"
   | "held"
@@ -454,7 +457,9 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                                           ? withEventRuns(DEMO_CHANNEL)
                                           : scenario === "own-bubbles"
                                             ? withOwnBubbles(DEMO_CHANNEL)
-                                            : DEMO_CHANNEL,
+                                            : scenario === "signs"
+                                              ? withSigns(DEMO_CHANNEL)
+                                              : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,
@@ -592,6 +597,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           const root = opts?.inThread ?? (target ? (target.inThread ?? target.seq) : undefined)
           const replyTo = opts?.replyTo !== undefined && opts.replyTo !== root ? opts.replyTo : undefined
           const images = opts?.images?.map((i) => ({ url: `data:${i.mime};base64,${i.data}`, width: 0, height: 0, alt: i.name }))
+          const spec = root === undefined ? undefined : c.specs?.find((x) => x.ask === root)
+          const asked = spec ? c.messages.find((m) => m.seq === spec.ask) : undefined
+          const line = spec && (replyTo !== undefined ? !!target?.specLine : specLineTest(wordsRaw(spec.text), asked ? wordsRaw(asked.text) : "")(text))
           const next = post(c, seq, {
             from: c.you,
             text: wrote(text),
@@ -601,6 +609,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             pending: true,
             canChange: true,
             ...(root !== undefined && opts?.side ? { side: true as const } : {}),
+            ...(spec ? (line ? { specLine: true as const } : { onSpec: spec.ask }) : {}),
             ...(images?.length ? { images } : {}),
             ...(opts?.block ? { block: opts.block.id } : {}),
           })

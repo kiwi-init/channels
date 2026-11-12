@@ -26,7 +26,7 @@ import { usePictures } from "~/live/pictures"
 import { isMuted } from "~/live/mute"
 import { noteOwned } from "~/live/owned"
 import { usePrefs } from "~/live/prefs"
-import { busyOf, receiptsOf, withReceipts } from "~/live/receipts"
+import { busyOf, reachedOf, receiptsOf, withReceipts } from "~/live/receipts"
 import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
@@ -103,6 +103,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     reach,
     roster,
     online,
+    asleep,
+    answered,
     requests,
     isOwner,
     connection,
@@ -153,7 +155,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const unsent = useMemo(() => landedOut(pending, mine), [pending, mine])
   const rows = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, unsent), [state, messages, me, asks.askOf, pictures, unsent])
   const busy = useMemo(() => busyOf(people), [people])
-  const receipts = useMemo(() => receiptsOf(state, shownWire, me, marks, pkOf, clock, busy), [state, shownWire, me, marks, pkOf, busy])
+  const reached = useMemo(() => reachedOf(online, asleep, answered), [online, asleep, answered])
+  const receipts = useMemo(() => receiptsOf(state, shownWire, me, marks, pkOf, clock, busy, undefined, reached), [state, shownWire, me, marks, pkOf, busy, reached])
   const mapped = useMemo(() => kept(code, withReceipts(rows, receipts)), [code, rows, receipts])
   const leftOut = useMemo(() => (isOwner ? leftOutOf(state, shownWire, me) : []), [isOwner, state, shownWire, me])
   const listed = useTasksNow(state, asks.held, me, messages)

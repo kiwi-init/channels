@@ -11,7 +11,7 @@ import { later } from "~/kit/later"
 import { useMedia, WIDE } from "~/kit/media"
 import type { Channel } from "~/model"
 import { drawerNews } from "~/live/links"
-import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
+import { dropMessage, findWanted, specOfWanted, useWantedMessage } from "~/live/open-message"
 import { sameWhere, useGo, useNav, useActions } from "~/nav"
 import { whereKey } from "~/places"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
@@ -80,8 +80,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const wanted = useWantedMessage()
   const found = findWanted(wanted, channel.code, channel.messages, channel.since)
   const target = found.kind === "found" ? found.m : null
-  const specAsk = (seq: number | undefined): boolean => seq !== undefined && (channel.specs ?? []).some((s) => s.ask === seq)
-  const root = wanted?.code === channel.code && specAsk(wanted.seq) ? wanted.seq : specAsk(target?.inThread) ? target?.inThread : undefined
+  const root = specOfWanted(wanted, channel.code, target, (seq) => (channel.specs ?? []).some((s) => s.ask === seq))
   const anchor = root === undefined ? target : null
   const atAnchor = !!anchor && nav.tab === "chat" && sameWhere(anchor.where, nav.where)
   if (anchor && atAnchor && jump?.m.seq !== anchor.seq) setJump({ m: anchor, terms: [] })

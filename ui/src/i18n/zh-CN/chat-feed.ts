@@ -45,6 +45,8 @@ export default {
   "chat.message.an.image": "一张图片",
   "chat.message.menu": "消息",
   "chat.message.edited": "已编辑",
+  "chat.message.on.spec": "规格里也有",
+  "chat.message.ask.lead": "问 {name}",
   "chat.message.edited.at": "编辑于 {time}",
   "chat.message.deleted": "消息已删除",
   "chat.message.not.sent": "发送失败",

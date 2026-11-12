@@ -10,7 +10,7 @@ export type GithubView = "prs" | "issues"
 
 export type Panel = { kind: "task"; task: number } | { kind: "pr"; repo: string; number: number } | { kind: "issue"; repo: string; number: number } | { kind: "thread"; seq: number; focus?: number }
 
-export type ChannelTab = "general" | "rooms" | "github" | "notes"
+export type ChannelTab = "general" | "rooms" | "tasks" | "github" | "notes"
 
 type ModalView = { kind: "person"; name: string } | { kind: "channel"; tab?: ChannelTab; end?: true } | { kind: "invite" } | { kind: "add-agent" } | { kind: "versions"; thread: string; name: string }
 

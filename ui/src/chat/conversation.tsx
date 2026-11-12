@@ -20,7 +20,7 @@ import { Loading } from "~/kit/bits"
 import { land } from "~/kit/glide"
 import { later } from "~/kit/later"
 import { day, sameDay } from "~/kit/time"
-import { inSpecThread, type Channel, type Message, type Person, type Where } from "~/model"
+import { type Channel, type Message, type Person, type Where } from "~/model"
 import { liveOf, workingIn } from "~/doing"
 import { sameWhere, useGo, useActions, useNav, useChannelHere } from "~/nav"
 import { keepSpot, spotAt, spotKey, type Spot } from "~/places"
@@ -196,7 +196,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     const fromDoc = doc ? (feeds.get(`${channel.code}\n${doc}`) ?? EMPTY_FEED) : EMPTY_FEED
     const feed = withLeftOut(
       channel.messages
-        .filter((m) => (since === undefined || m.seq < 0 || m.seq >= since) && sameWhere(m.where, where) && inFeed(m, !!doc) && (where.kind !== "room" || !inSpecThread(m, specAsks)))
+        .filter((m) => (since === undefined || m.seq < 0 || m.seq >= since) && sameWhere(m.where, where) && inFeed(m, !!doc) && (where.kind !== "room" || !m.specLine))
         .map((m) => withDocMedia(m, m.block === undefined ? undefined : fromDoc.media.get(m.block))),
       (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
     )
@@ -207,7 +207,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
       fromDoc.lines.filter((l) => !posted.has(l.id)),
       where
     )
-  }, [channel.messages, channel.leftOut, channel.code, where, specAsks, doc, feeds, since])
+  }, [channel.messages, channel.leftOut, channel.code, where, doc, feeds, since])
   const olderHere = useMemo(
     () => since !== undefined && channel.messages.some((m) => m.seq > 0 && m.seq < since && sameWhere(m.where, where) && inFeed(m, !!doc)),
     [channel.messages, since, where, doc]
@@ -474,8 +474,8 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     if (jumpTo(content.current, wanted.current)) wanted.current = null
   })
   const onQuote = useCallback(
-    (seq: number) => {
-      if (specAsks.has(seq)) return openMessage(channel.code, seq)
+    (seq: number, quoted = false) => {
+      if (!quoted && specAsks.has(seq)) return openMessage(channel.code, seq)
       if (jumpTo(content.current, seq)) return
       const { list, all } = known.current
       const at = list.findIndex((m) => m.seq === seq)

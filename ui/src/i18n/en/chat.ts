@@ -78,6 +78,8 @@ export default {
   "chat.message.an.image": "an image",
   "chat.message.menu": "Message",
   "chat.message.edited": "edited",
+  "chat.message.on.spec": "Also on the spec",
+  "chat.message.ask.lead": "Ask {name}",
   "chat.message.edited.at": "Edited {time}",
   "chat.message.deleted": "Message deleted",
   "chat.message.not.sent": "Couldn't send",

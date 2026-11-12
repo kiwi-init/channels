@@ -470,6 +470,9 @@ jobs:
       - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
+      - name: ui the Tasks tab changes quiet time and where tasks land, and reads both back, with and without a repo, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-task-settings.ts --dist ui/dist --browser webkit
       - name: ui People lists you first, and your row opens your profile, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-people-you.ts --dist ui/dist
@@ -494,6 +497,9 @@ jobs:
       - name: ui your own message shows its hover tools only over the bubble, what hangs on it or the tools, never on its words, and keyboard focus still shows them
         if: ${{ !cancelled() }}
         run: bun scripts/ui-own-tools.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui the line under your message names an agent that can't be woken or isn't listening, and a busy one with its task, the messages ahead and the lead to ask
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-signs.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist

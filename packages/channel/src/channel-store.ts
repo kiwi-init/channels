@@ -21,7 +21,7 @@ import type { Watches } from "./watch.ts";
 import { subscribeTick, tickOf } from "./clock.ts";
 import { noteAgentWorked } from "./recent.ts";
 import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./store.ts";
-import { hear, onlineByName, sharedOnline, type Online } from "./online.ts";
+import { asleepNames, hear, onlineByName, sharedOnline, type Online } from "./online.ts";
 import { trimmed } from "./trim.ts";
 import { foldRoster } from "./fold-roster.ts";
 import { asKept, toKept } from "./kept.ts";
@@ -57,6 +57,7 @@ export interface OlderHistory {
 
 export const APP_BEACON_MS = 60_000;
 const ANSWER_GAP_MS = 500;
+export const PRESENCE_SETTLE_MS = 3_000;
 export interface ChannelHandle {
   ch: ChannelLink;
   connection: Connection;
@@ -66,6 +67,8 @@ export interface ChannelHandle {
   roster: Member[];
   state: ChannelState;
   online: Map<string, Online>;
+  asleep: readonly string[];
+  answered: boolean;
   isOwner: boolean;
   requests: JoinRequest[];
   send: (body: string, opts: SendOptions) => Promise<number>;
@@ -119,6 +122,7 @@ export class ChannelStore {
   private readonly unread: Signal<number[]>;
   private readonly roster: Signal<Member[]>;
   private readonly online = signal<ReadonlyMap<string, Online>>(new Map());
+  private readonly answered = signal(false);
   private readonly marks: Signal<Marks>;
   private readonly requests: Signal<JoinRequest[]>;
   private readonly now = signal(tickOf(Date.now(), CLOCK_MS));
@@ -225,6 +229,11 @@ export class ChannelStore {
     });
     let shownOnline = new Map<string, Online>();
     const live = computed(() => (shownOnline = sharedOnline(shownOnline, onlineByName(this.online.value, this.keyOf.value, this.now.value))));
+    let shownAsleep: readonly string[] = [];
+    const asleep = computed(() => {
+      const next = asleepNames(this.online.value, this.keyOf.value, this.now.value);
+      return next.join("\n") === shownAsleep.join("\n") ? shownAsleep : (shownAsleep = next);
+    });
     this.handle = computed(() => ({
       ch: this.ch,
       connection: this.connection.value,
@@ -234,6 +243,8 @@ export class ChannelStore {
       roster: this.roster.value,
       state: this.state.value,
       online: live.value,
+      asleep: asleep.value,
+      answered: this.connection.value === "live" && this.answered.value,
       isOwner: this.ch.isOwner,
       requests: this.requests.value,
       send: this.send,
@@ -437,6 +448,7 @@ export class ChannelStore {
     let stopLive: (() => void) | null = null;
     let closed = false;
     let beat: ReturnType<typeof setInterval> | undefined;
+    let settling: ReturnType<typeof setTimeout> | undefined;
     let answeredAt = 0;
     let indexing: "idle" | "running" | "again" | "off" = "idle";
     let indexed: (() => void)[] = [];
@@ -543,6 +555,9 @@ export class ChannelStore {
             void this.refreshRoster();
           }
           void ch.presence({ client: "probe", query: true }).catch(() => {});
+          this.answered.value = false;
+          clearTimeout(settling);
+          settling = setTimeout(() => (this.answered.value = true), PRESENCE_SETTLE_MS);
           here();
           beat ??= setInterval(here, APP_BEACON_MS);
           return;
@@ -681,6 +696,7 @@ export class ChannelStore {
       settle();
       stopLive?.();
       clearTimeout(flush);
+      clearTimeout(settling);
       clearInterval(beat);
       lent.release();
     };

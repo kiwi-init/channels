@@ -90,6 +90,7 @@ import type {
 } from "~/model"
 import { mentions } from "~/live/mention"
 import { phraseOf } from "~/live/said"
+import { specLineTest } from "~/specs/quote"
 import { type Words, wrote } from "~/words"
 import { seenAt } from "@kiwi/app/threads.ts"
 
@@ -229,14 +230,43 @@ export function formerOf(state: ChannelState, me: string): Person[] {
     .map((m) => ({ ...personOf(state, m, undefined, undefined, me, new Map()), presence: "offline" as const, left: true }))
 }
 
+interface SpecMarks {
+  lines: ReadonlySet<number>
+  onLine: (ask: number, body: string) => boolean
+}
+
+function specMarksOf(state: ChannelState, messages: readonly Wire[]): SpecMarks {
+  const lines = new Set<number>()
+  const asked = new Map<number, string>()
+  const tests = new Map<number, (body: string) => boolean>()
+  const bodyOf = (m: Wire): string => state.edits.get(m.seq)?.body ?? m.body
+  const onLine = (ask: number, body: string): boolean => {
+    const spec = state.specs.get(ask)
+    if (!spec) return false
+    const test = tests.get(ask) ?? specLineTest(spec.text, asked.get(ask))
+    tests.set(ask, test)
+    return test(body)
+  }
+  if (!state.specs.size) return { lines, onLine }
+  for (const m of messages) {
+    if (m.kind === "event") continue
+    if (state.specs.has(m.seq)) asked.set(m.seq, bodyOf(m))
+    const root = state.threadOf.get(m.seq)
+    if (root === undefined || root === m.seq || !state.specs.has(root)) continue
+    const to = m.re?.[0]
+    if (to !== undefined && to !== root ? lines.has(to) : onLine(root, bodyOf(m))) lines.add(m.seq)
+  }
+  return { lines, onLine }
+}
+
 export function roomsOf(state: ChannelState, messages: readonly Wire[], me: string, seen: Seen, from: number): Room[] {
   const unread = new Map<string, number>()
   const mentions = new Map<string, number>()
+  const { lines } = specMarksOf(state, messages)
   for (const m of messages) {
     if (m.kind === "event" || m.from === me || ignored(state.trust.get(m.seq))) continue
     if ((state.placeOf.get(m.seq) ?? MAIN).kind !== "main") continue
-    const root = state.threadOf.get(m.seq)
-    if (root !== undefined && root !== m.seq && state.specs.has(root)) continue
+    if (lines.has(m.seq)) continue
     const id = roomOfMessage(state, m)
     const room = state.rooms.get(id)
     if (room?.dm || room?.self) continue
@@ -475,6 +505,13 @@ function whereOf(state: ChannelState, m: Wire, seat: string): Where {
   return other ? { kind: "dm", with: other } : { kind: "room", room: roomOfMessage(state, m) }
 }
 
+function pendingSpecMark(state: ChannelState, marks: SpecMarks, p: Pick<Pending, "inThread" | "replyTo" | "text">): Pick<Message, "onSpec" | "specLine"> {
+  const root = p.inThread ?? (p.replyTo === undefined ? undefined : (state.threadOf.get(p.replyTo) ?? p.replyTo))
+  if (root === undefined || !state.specs.has(root)) return {}
+  const line = p.replyTo !== undefined && p.replyTo !== root ? marks.lines.has(p.replyTo) : marks.onLine(root, p.text)
+  return line ? { specLine: true } : { onSpec: root }
+}
+
 export function messagesOf(state: ChannelState, messages: readonly Wire[], me: string, askOf: ReadonlyMap<number, string>, pictures: Pictures, pending: readonly Pending[]): Message[] {
   const bySeq = new Map(messages.map((m) => [m.seq, m]))
   const threads = new Map<number, { replies: number; last: number; people: string[] }>()
@@ -494,6 +531,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
     if (!t.people.includes(m.from)) t.people.push(m.from)
     threads.set(root, t)
   }
+  const marks = specMarksOf(state, messages)
   const out: Message[] = []
   for (const m of messages) {
     if (ignored(state.trust.get(m.seq)) || isOverlay(m)) continue
@@ -541,6 +579,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(said ? { said } : {}),
       ...(root !== undefined ? { inThread: root } : {}),
       ...(root !== undefined && m.side ? { side: true as const } : {}),
+      ...(marks.lines.has(m.seq) ? { specLine: true as const } : root !== undefined && state.specs.has(root) ? { onSpec: root } : {}),
       ...(quoted !== undefined && quoted !== root && target?.kind !== "event" ? { replyTo: quoted } : {}),
       ...(threads.has(m.seq) ? { thread: threads.get(m.seq) } : {}),
       ...(m.kind === "done" && m.task !== undefined && !state.rejected.has(m.seq) ? { task: m.task, done: true } : {}),
@@ -564,6 +603,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(p.failed !== undefined ? { failed: p.failed } : { pending: true }),
       ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
       ...(p.inThread !== undefined && p.side ? { side: true as const } : {}),
+      ...pendingSpecMark(state, marks, p),
       ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
       ...(p.images?.length ? { images: p.images.map((i) => ({ url: `data:${i.mime};base64,${i.data}`, width: 0, height: 0, alt: i.name })) } : {}),
       ...(p.block ? { block: p.block.id } : {}),

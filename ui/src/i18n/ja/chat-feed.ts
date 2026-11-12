@@ -45,6 +45,8 @@ export default {
   "chat.message.an.image": "画像",
   "chat.message.menu": "メッセージ",
   "chat.message.edited": "編集済み",
+  "chat.message.on.spec": "仕様にも表示",
+  "chat.message.ask.lead": "{name} に聞く",
   "chat.message.edited.at": "{time} に編集",
   "chat.message.deleted": "メッセージは削除されました",
   "chat.message.not.sent": "送信できませんでした",
