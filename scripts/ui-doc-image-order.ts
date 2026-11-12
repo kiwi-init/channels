@@ -80,6 +80,38 @@ const seen = (page: Page, text: string): Promise<Seen | null> =>
     return null;
   }, text);
 
+interface LineFrame {
+  has: boolean;
+  at: number;
+  size: number;
+}
+
+const watchLine = (page: Page, text: string): Promise<void> =>
+  page.evaluate((want) => {
+    const frames: LineFrame[] = [];
+    (window as Window & { lineFrames?: LineFrame[] }).lineFrames = frames;
+    const t0 = performance.now();
+    const tick = (): void => {
+      const pane = document.querySelector(".main");
+      const walker = pane ? document.createTreeWalker(pane, NodeFilter.SHOW_TEXT) : null;
+      let row: Element | null = null;
+      for (let n = walker?.nextNode(); n; n = walker?.nextNode()) {
+        const el = n.parentElement;
+        if (!n.textContent?.includes(want) || !el || !el.getClientRects().length || el.closest(".composer")) continue;
+        row = el.closest(".msg, section.blk, [data-seq]") ?? el;
+        break;
+      }
+      if (row) {
+        const box = [...row.querySelectorAll("img")].find((i) => i.getClientRects().length && i.complete && i.naturalWidth > 0)?.getBoundingClientRect();
+        frames.push(box ? { has: true, at: Math.round(box.top - row.getBoundingClientRect().top), size: Math.round(box.height) } : { has: false, at: 0, size: 0 });
+      }
+      if (performance.now() - t0 < 3300) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, text);
+
+const lineFrames = (page: Page): Promise<LineFrame[]> => page.evaluate(() => (window as Window & { lineFrames?: LineFrame[] }).lineFrames ?? []);
+
 const failures: string[] = [];
 const check = (what: string, why: string | null): void => {
   if (why) failures.push(`${what}: ${why}`);
@@ -133,8 +165,28 @@ try {
     .setInputFiles({ name: "notes.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n") });
   await page.locator(".main .composer .compose-file", { hasText: "notes.pdf" }).waitFor({ timeout: 10000 });
   await page.keyboard.type("a line with a picture and a file");
+  await watchLine(page, "a line with a picture and a file");
   await page.keyboard.press(SEND);
   await page.waitForTimeout(3500);
+  const frames = await lineFrames(page);
+  const shown = frames.slice(
+    Math.max(
+      0,
+      frames.findIndex((f) => f.has),
+    ),
+  );
+  const without = shown.filter((f) => !f.has).length;
+  const places = new Set(shown.filter((f) => f.has).map((f) => `${f.at}:${f.size}`));
+  check(
+    "your line's picture, once shown, stays where it is while the line lands",
+    !shown.some((f) => f.has)
+      ? `its picture never showed in ${frames.length} frames`
+      : without
+        ? `${without} of ${shown.length} frames had no picture after it first showed`
+        : places.size > 1
+          ? `the picture took ${places.size} places or sizes in its row: ${[...places].join(", ")}`
+          : null,
+  );
   const both = await seen(page, "a line with a picture and a file");
   const chips = await page.locator(".main [data-seq]", { hasText: "a line with a picture and a file" }).getByText("notes.pdf", { exact: true }).count();
   check(
