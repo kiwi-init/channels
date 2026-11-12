@@ -430,8 +430,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
 
     case "review.reset.set": {
-      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
-        reject(trustOnly("turns the fresh-session rule for reviewers on or off"));
+      if (!member.owner) {
+        reject("only the owner turns the fresh-session rule for reviewers on or off");
         break;
       }
       c.reviewReset = ev.on;
@@ -442,7 +442,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     case "review.reset.waive": {
       const target = members.get(ev.member);
       if (!target?.active) reject(`no member named ${ev.member}`);
-      else if (!member.owner && !c.trusted(m.pk ?? "", member)) reject(trustOnly("waives the fresh-session rule for a reviewer"));
+      else if (!member.owner) reject("only the owner waives the fresh-session rule for a reviewer");
       else if (ev.waived) target.reset = { kind: "waived" };
       else if (target.reset?.kind === "waived") target.reset = undefined;
       break;

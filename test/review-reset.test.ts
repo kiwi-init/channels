@@ -3,6 +3,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import { wellFormed, type Event, type Message } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { moverOf, moverText } from "@kiwi/core/mover.ts";
+import { nudgesDue } from "@kiwi/core/clock.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -142,8 +143,8 @@ describe("what clears the mark", () => {
     const waive = await ev("owl", { op: "review.reset.waive", member: "mac", waived: true });
     const s = fold([byLead, waive], roster);
     expect(s.reviewReset).toBe(false);
-    expect(s.rejected.get(byLead.seq)).toBe("only the owner, or a person they fully trust, turns the fresh-session rule for reviewers on or off");
-    expect(s.rejected.get(waive.seq)).toBe("only the owner, or a person they fully trust, waives the fresh-session rule for a reviewer");
+    expect(s.rejected.get(byLead.seq)).toBe("only the owner turns the fresh-session rule for reviewers on or off");
+    expect(s.rejected.get(waive.seq)).toBe("only the owner waives the fresh-session rule for a reviewer");
   });
 });
 
@@ -174,6 +175,24 @@ describe("the same marks after a restart", () => {
       expect(resumed.reviewReset).toBe(true);
       expect(resumed.rejected.has(second.seq)).toBe(whole.rejected.has(second.seq));
     }
+  });
+});
+
+describe("no review wake reaches a marked reviewer", () => {
+  test("no due nudge names it, and a nudge or wake queued for its old review clock is refused", async () => {
+    const { t1, t2, log } = await twoInReview();
+    const before = fold(log, roster);
+    const oldEpoch = before.tasks.get(t2)!.clock!.seq;
+    expect(nudgesDue(before, Date.now()).some((d) => d.task === t2 && d.mover === "mac")).toBe(true);
+    const pass = await approve("mac", t1, 1, "a1");
+    const queued = await ev("mac", { op: "task.nudge", task: t2, mover: "mac", since: oldEpoch, step: 1 });
+    const late = await ev("mac", { op: "task.wake", task: t2, mover: "mac", since: oldEpoch, got: "delivered" });
+    const s = fold([...log, pass, queued, late], roster);
+    const due = nudgesDue(s, Date.now());
+    expect(due.filter((d) => d.mover === "mac" || d.to === "mac")).toEqual([]);
+    expect(due.filter((d) => d.task === t2).map((d) => d.mover)).toEqual(["@lead"]);
+    expect(s.rejected.get(queued.seq)).toBe(`T${t2}'s clock moved on: it is @lead's since #${pass.seq}`);
+    expect(s.rejected.get(late.seq)).toBe(`T${t2} has no wake attempt for that clock`);
   });
 });
 

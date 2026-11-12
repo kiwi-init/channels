@@ -476,7 +476,7 @@ function GitHub({ channel }: { channel: Channel }) {
           <Toggle
             on={!!channel.reviewReset}
             label={t("modals.channel.settings.review.reset")}
-            disabled={!sets}
+            disabled={!own}
             why={t("modals.channel.settings.owner.only")}
             onChange={(on) => app.actions.setReviewReset(channel.code, on)}
           />

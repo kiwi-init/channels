@@ -197,11 +197,11 @@ export async function setQuiet(code: string, typed: string): Promise<void> {
 }
 
 export async function setReviewReset(code: string, on: boolean): Promise<void> {
-  await event(setup(code), on ? "reviewers start a fresh session after each verdict" : "reviewers may keep one session", { op: "review.reset.set", on })
+  await event(owner(code), on ? "reviewers start a fresh session after each verdict" : "reviewers may keep one session", { op: "review.reset.set", on })
 }
 
 export async function setResetWaived(code: string, name: string, waived: boolean): Promise<void> {
-  await event(setup(code), waived ? `${name} may review from one session` : `${name} starts a fresh session after each verdict`, { op: "review.reset.waive", member: name, waived })
+  await event(owner(code), waived ? `${name} may review from one session` : `${name} starts a fresh session after each verdict`, { op: "review.reset.waive", member: name, waived })
 }
 
 export async function setGoal(code: string, goal: string): Promise<void> {
