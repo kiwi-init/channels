@@ -48,7 +48,7 @@ describe("an old channel's roles read the same as personalities", () => {
   test("what each agent is told and what status shows say the same roles", () => {
     const s = fold(log, roster);
     const brief = (name: string) => briefText({ alias: "c", agent: name, mc: "kiwi", listen: "", persona: s.members.get(name)!.persona! });
-    expect(brief("puma")).toContain("You join as Lead. You may write and ask, work tasks, assign work, set notes.");
+    expect(brief("puma")).toContain("You join as Lead. You may write and ask, ask people, work tasks, assign work, set notes.");
     expect(brief("puma")).toContain("Your instructions: keeps the board");
     expect(brief("wren")).toContain("You join as frontend (Builder). You may write and ask.");
     expect(brief("otter")).toContain("You join as tester (Builder). You may only read.");
