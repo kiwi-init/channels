@@ -13,6 +13,7 @@ export {
   asksOnSameWork,
   directThreadStart,
   handedOver,
+  handedTo,
   heldBy,
   holdsWork,
   leadForAsk,
@@ -20,6 +21,7 @@ export {
   readHandedOver,
   type AskGroup,
   type Handed,
+  type HandedAsk,
 } from "./state/asks.ts";
 export {
   allowedOnHold,

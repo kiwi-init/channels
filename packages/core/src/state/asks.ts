@@ -191,6 +191,20 @@ export function readHandedOver(body: string): Handed | null {
   };
 }
 
+export interface HandedAsk {
+  ask: Message;
+  handed: Handed;
+}
+
+export function handedTo(state: Pick<ChannelState, "openAsks">, me: string): HandedAsk[] {
+  return state.openAsks
+    .flatMap((ask) => {
+      const handed = ask.from !== me && ask.to?.includes(me) ? readHandedOver(String(ask.body ?? "")) : null;
+      return handed?.from === ask.from ? [{ ask, handed }] : [];
+    })
+    .sort((a, b) => a.ask.seq - b.ask.seq);
+}
+
 function isPeopleTarget(state: Pick<ChannelState, "members">, name: string): boolean {
   const m = state.members.get(name);
   return !!m && isPerson(m);

@@ -12,6 +12,7 @@ import {
   colorOf,
   decidersOf,
   fullyTrusted,
+  handedTo,
   heldBy,
   holdsWork,
   askedOfPeopleByOthers,
@@ -25,6 +26,7 @@ import {
   type AskHead,
   type ChannelState,
   type Fact,
+  type HandedAsk,
   type Lease,
   type ReviewRound,
   type Task,
@@ -709,6 +711,30 @@ function heldLine(state: ChannelState, a: Message): string {
   return `${a.step ? " [step]" : a.decision ? ` [${a.decision}]` : ""}${held.length ? ` · holds ${held.join(", ")}` : ""}`;
 }
 
+const HELD = /^(T\d+|#\d+)$/;
+
+function handedLines({ ask, handed }: HandedAsk, now: number): string[] {
+  const kind = handed.step ? " [step]" : handed.decision ? ` [${handed.decision}]` : "";
+  const held = handed.holds.filter((h) => HELD.test(h));
+  const under = handed.step
+    ? `a step for a person: ${inlineText(handed.step.why, 140)} · why an agent can't: ${inlineText(handed.step.needsPerson, 140)}`
+    : handed.choices.map((c) => inlineText(c, 80)).join(" · ");
+  return [
+    `  #${ask.seq} ${inlineText(ask.from, 40)}, ${ago(ask.rts ?? ask.ts, now)}${kind}${held.length ? ` · holds ${held.join(", ")}` : ""}: ${inlineText(handed.question, 140)}`,
+    ...(under ? [`      ${under}`] : []),
+  ];
+}
+
+export function handedNote(state: Pick<ChannelState, "openAsks">, me: string, mc: string, shown: readonly number[] = [], now = Date.now()): string | null {
+  const handed = handedTo(state, me);
+  const first = handed[0];
+  if (!first || handed.every((h) => shown.includes(h.ask.seq))) return null;
+  const since = ago(first.ask.rts ?? first.ask.ts, now);
+  return handed.length === 1
+    ? `* 1 decision handed to you waits (#${first.ask.seq}, from ${since}): \`${mc} status\` shows it.`
+    : `* ${handed.length} decisions handed to you wait, the oldest (#${first.ask.seq}) from ${since}: \`${mc} status\` lists them, oldest first.`;
+}
+
 export function formatStatus({ alias, check, me, state, online, unread, now = Date.now(), all = false }: Snapshot): string {
   const out: string[] = [];
   const meM = state.members.get(me);
@@ -765,7 +791,12 @@ export function formatStatus({ alias, check, me, state, online, unread, now = Da
   }
   if (left.length) out.push(`  left or removed: ${left.sort().join(", ")}`);
 
-  const toMe = state.openAsks.filter((a) => a.from !== me && (!a.to?.length || a.to.includes(me) || a.to.includes("*")));
+  const handed = handedTo(state, me);
+  if (handed.length) {
+    out.push("", `decisions handed to you (${handed.length}), oldest first — decide one: kiwi reply <#> "…" · send it on to a person: kiwi ask-human --re <#> …`);
+    for (const h of handed) out.push(...handedLines(h, now));
+  }
+  const toMe = state.openAsks.filter((a) => a.from !== me && !handed.some((h) => h.ask === a) && (!a.to?.length || a.to.includes(me) || a.to.includes("*")));
   const self = state.members.get(me);
   const asks = self && isPerson(self) ? toMe.filter((a) => holdsWork(state, a)) : toMe;
   const digest = toMe.filter((a) => !asks.includes(a));
