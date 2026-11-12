@@ -8,7 +8,7 @@ import { ySyncPlugin } from "y-prosemirror"
 
 import type { DocEvent } from "../../../../desktop/src/bridge.ts"
 import { blockAfter, blocks, startBlock } from "~/chat/doc/blocks"
-import { docFeed } from "~/chat/doc/finished"
+import { docFeed } from "~/chat/doc/feed-of"
 import { giveBackBlock, onGiveBack } from "~/chat/doc/give-back"
 import type { Pending } from "~/live/map"
 import { unsentBlock } from "~/live/unsent"

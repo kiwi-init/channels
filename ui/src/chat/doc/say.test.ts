@@ -11,7 +11,7 @@ import { changeBlock } from "~/chat/doc/change-block"
 import { LiveDoc, type OpenDoc, type Poster } from "~/chat/doc/live"
 import { putAll, type DocMedia } from "~/chat/doc/media"
 import { attached, composerKey, drafts, giveBack } from "~/chat/drafts"
-import type { Upload } from "~/model"
+import type { BlockFiles, Upload } from "~/model"
 import { letSay, sayerAt } from "~/chat/doc/sayer"
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms))
@@ -21,6 +21,7 @@ interface Sent {
   th: string
   id: string
   re?: number
+  media?: BlockFiles
 }
 
 function liveFor(me: string, answer: () => boolean = () => true): { live: LiveDoc; posts: Sent[]; open: () => void } {
@@ -35,8 +36,8 @@ function liveFor(me: string, answer: () => boolean = () => true): { live: LiveDo
     () => {},
     {
       me,
-      post: (text, block, reply) => {
-        posts.push({ text, th: block.th, id: block.id, ...(reply ? { re: reply.re } : {}) })
+      post: (text, block, reply, media) => {
+        posts.push({ text, th: block.th, id: block.id, ...(reply ? { re: reply.re } : {}), ...(media ? { media } : {}) })
         return Promise.resolve(answer())
       },
     }
@@ -217,6 +218,55 @@ describe("the composer writes into the thread's doc (T5115)", () => {
     expect(posts[0]!.text).toContain("the notes")
     expect(posts[0]!.text).toContain("[file: notes.pdf]")
     expect(posts[0]!.id).toBe(block!.id)
+    live.destroy()
+  })
+
+  test("the post carries the line's picture and file itself, so the message shows them without its block", async () => {
+    const { live, posts, open } = liveFor("jow")
+    const pdf: Upload = { name: "notes.pdf", mime: "application/pdf", data: "JVBERi0=" }
+    const png: Upload = { name: "shot.png", mime: "image/png", data: "iVBORw==" }
+    live.say("the notes", null, () => {}, putAll([pdf, png], media))
+    open()
+    await wait(5)
+    expect(posts[0]!.media).toEqual({
+      imgs: [{ name: "shot.png", mime: "image/png", ref: { id: BLOB, key: KEY, size: 4 } }],
+      files: [{ name: "notes.pdf", mime: "application/pdf", size: 4, pieces: [{ id: BLOB, key: KEY, size: 4 }] }],
+    })
+    live.destroy()
+  })
+
+  test("the post's words leave out the picture it carries and still name the file, and the block keeps both", async () => {
+    const { live, posts, open } = liveFor("jow")
+    const pdf: Upload = { name: "notes.pdf", mime: "application/pdf", data: "JVBERi0=" }
+    const png: Upload = { name: "shot.png", mime: "image/png", data: "iVBORw==" }
+    live.say("the notes", null, () => {}, putAll([pdf, png], media))
+    open()
+    await wait(5)
+    expect(posts[0]!.text.split("\n").toSorted()).toEqual(["[file: notes.pdf]", "the notes"])
+    expect(blocksOf(live.doc)[0]!.text).toContain("[image: shot.png]")
+    live.destroy()
+  })
+
+  test("a picture sent with no words posts no words", async () => {
+    const { live, posts, open } = liveFor("jow")
+    const png: Upload = { name: "shot.png", mime: "image/png", data: "iVBORw==" }
+    live.say("", null, () => {}, putAll([png], media))
+    await wait(5)
+    open()
+    await wait(5)
+    expect(posts).toHaveLength(1)
+    expect(posts[0]!.text).toBe("")
+    expect(posts[0]!.media?.imgs.map((i) => i.name)).toEqual(["shot.png"])
+    live.destroy()
+  })
+
+  test("a line with no picture or file posts without any", async () => {
+    const { live, posts, open } = liveFor("jow")
+    live.say("just words", null, () => {})
+    open()
+    await wait(5)
+    expect(posts).toHaveLength(1)
+    expect(posts[0]!.media).toBeUndefined()
     live.destroy()
   })
 

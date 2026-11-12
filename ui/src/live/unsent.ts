@@ -1,7 +1,9 @@
+import type { SendOptions } from "@kiwi/core/client.ts"
+
 import { t } from "~/i18n/i18n"
 import type { Pending } from "~/live/map"
 import { limitWords, refusal } from "~/live/refused"
-import type { SendExtras, Upload, Where } from "~/model"
+import type { BlockFiles, SendExtras, Upload, Where } from "~/model"
 
 type Shelf = Pick<Storage, "getItem" | "setItem">
 
@@ -125,12 +127,20 @@ export function landedOut(list: Pending[], landed: ReadonlySet<string>): Pending
 
 export const unsentBlock = (list: readonly Pending[], key: number): string | null => list.find((p) => p.key === key)?.block?.id ?? null
 
+export function ownMedia(media: BlockFiles | undefined): Pick<SendOptions, "imgs" | "files"> {
+  return {
+    ...(media?.imgs.length ? { imgs: media.imgs.map((i) => ({ name: i.name, mime: i.mime, ref: i.ref })) } : {}),
+    ...(media?.files.length ? { files: media.files.map((f) => ({ name: f.name, mime: f.mime, size: f.size, pieces: [...f.pieces] })) } : {}),
+  }
+}
+
 export const resendOf = (p: Pending): SendExtras => ({
   ...(p.inThread !== undefined ? { inThread: p.inThread } : {}),
   ...(p.side ? { side: true as const } : {}),
   ...(p.replyTo !== undefined ? { replyTo: p.replyTo } : {}),
   ...(p.images?.length ? { images: p.images } : {}),
   ...(p.block ? { block: p.block } : {}),
+  ...(p.media ? { media: p.media } : {}),
   ...(p.id ? { id: p.id } : {}),
   first: p.first ?? p.at,
 })
