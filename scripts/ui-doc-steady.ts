@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
-import { firstRun, newChannel, say } from "./perf-ui.ts";
+import { firstRun, newChannel, say, switchTo } from "./perf-ui.ts";
 import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
@@ -29,17 +29,6 @@ mkdirSync(join(data, "relay"));
 const { relay, port } = await startLocalRelay(join(data, "relay"), DIST, { rateLimits: false });
 const BASE = `http://127.0.0.1:${port}/`;
 const browser = ENGINE === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
-
-async function switchTo(page: Page, name: string): Promise<void> {
-  await page.evaluate((title) => {
-    const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === title);
-    if (!tile) throw new Error(`no ${title} tile in the rail`);
-    tile.click();
-  }, name);
-  await page.waitForFunction((title) => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] === title, name, {
-    timeout: 15000,
-  });
-}
 
 const rows = (from: number, to: number): string => Array.from({ length: to - from + 1 }, (_, i) => `row ${from + i} of the tall line below the fold`).join("\n");
 
