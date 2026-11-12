@@ -22,6 +22,21 @@ const pictures = { get: () => ({ spot: "", alt: "", state: "waiting" as const })
 const rows = (log: Wire[], me = "jow") => messagesOf(fold(log, roster, 0), log, me, new Map(), pictures, [])
 const row = (log: Wire[], seq: number, me = "jow") => rows(log, me).find((m) => m.seq === seq)
 
+describe("a message brings its own files", () => {
+  const piece = { id: "b".repeat(32), key: "k".repeat(43), size: 9 }
+  const pdf = { name: "r.pdf", mime: "application/pdf", size: 9, pieces: [piece] }
+
+  test("the row has them, and a deleted message has none", () => {
+    const sent = wire({ body: "the report [file: r.pdf]", files: [pdf], block: { th: "th1", id: "b1" } })
+    const gone = wire({ body: "old", files: [pdf] })
+    const dropped = wire({ kind: "event", body: "", ev: { op: "msg.delete", seq: gone.seq } })
+    const log = [sent, gone, dropped]
+    expect(row(log, sent.seq)?.files).toEqual([pdf])
+    expect(row(log, gone.seq)?.files).toBeUndefined()
+    expect(row([wire({ body: "plain" })], next)?.files).toBeUndefined()
+  })
+})
+
 describe("a message row says what it is (T641)", () => {
   test("questions, blockers and finishes say so, and who for", () => {
     const ask = wire({ kind: "ask", to: ["jow"], body: "Ship it now?" })

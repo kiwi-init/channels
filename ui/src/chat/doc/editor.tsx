@@ -10,6 +10,7 @@ import { yCursorPlugin, ySyncPlugin, ySyncPluginKey, yUndoPlugin } from "y-prose
 import * as Y from "yjs"
 
 import { blockAt, caretAway, continues, dropEmptyOwn, emptyHidden, isEmpty, noteMade, unreply, type Made } from "~/chat/doc/blocks"
+import { filesOf } from "~/chat/doc/files-of"
 import { caretShown } from "~/chat/doc/carets"
 import { writeOwnLinesOnly } from "~/chat/doc/own-writes"
 import { keepScreenSelection, withScreenSelection } from "~/chat/doc/screen-selection"
@@ -19,8 +20,8 @@ import { noteTyping, setTypingFocus, tracingTyping, type TypingFocus } from "~/k
 import { linksPlugin } from "~/chat/doc/links"
 import { fileDrag, takeDropped } from "@kiwi/app/dropped.ts"
 import { fileView, filesIn, imageView, putAll, type DocMedia } from "~/chat/doc/media"
-import { blocksOf, mediaOfBlock, richBlocks } from "@kiwi/core/doc/blocks.ts"
-import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/finished"
+import { blocksOf, richBlocks } from "@kiwi/core/doc/blocks.ts"
+import { docFeed, oldestAt, setDocFeed } from "~/chat/doc/feed-of"
 import { postedBlocks } from "~/chat/doc/posted"
 import { markdownRules } from "~/chat/doc/rules"
 import { attrsOf, FRAGMENT, isBack, isSent, schema, type BlockAttrs } from "~/chat/doc/schema"
@@ -42,7 +43,7 @@ import { Icon } from "~/kit/icons"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
-import type { BlockFiles, Channel, Message, Person, QuestionAsk, Spec, Task, Where } from "~/model"
+import type { Channel, Message, Person, QuestionAsk, Spec, Task, Where } from "~/model"
 import { nickname, Shown } from "~/names"
 import { wordsRaw } from "~/words"
 import { useAct, useGo, useActions, useAppAccount } from "~/nav"
@@ -653,11 +654,6 @@ function Suggest({ channel, query, options, pick, at, onPick }: { channel: Chann
 
 const within = (r: DOMRect, x: number, y: number): boolean => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
 
-function filesOf(doc: Y.Doc, block: string): BlockFiles {
-  const { imgs, files } = mediaOfBlock(doc, block)
-  return { imgs: imgs.flatMap((i) => (i.ref ? [{ name: i.name, mime: i.mime, ref: i.ref }] : [])), files }
-}
-
 function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { channel: Channel; where: Where; thread: string; shared: Shared; hold: (on: boolean) => void; media?: DocMedia | null }) {
   const mount = useRef<HTMLDivElement>(null)
   const box = useRef<HTMLDivElement>(null)
@@ -906,7 +902,8 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
           (why) => announce(t("chat.doc.editor.didnt.open", { why }), "error"),
           {
             me,
-            post: (text, block, reply) => actions.send(code, here.current, reply?.quote ? withExcerpt(reply.quote, text) : text, { block, ...(reply ? { replyTo: reply.re } : {}) }),
+            post: (text, block, reply, media) =>
+              actions.send(code, here.current, reply?.quote ? withExcerpt(reply.quote, text) : text, { block, ...(reply ? { replyTo: reply.re } : {}), ...(media ? { media } : {}) }),
             posted: (block) => known.current.has(block),
           },
           () => actions.findDoc(code, thread)

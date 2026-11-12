@@ -973,6 +973,7 @@
   flex-direction: row-reverse;
   align-items: center;
   gap: 8px;
+  -webkit-app-region: no-drag;
 }
 
 .rail-gear {
@@ -985,6 +986,7 @@
   border-radius: var(--r-row);
   background: none;
   color: var(--ink-3);
+  -webkit-app-region: no-drag;
 }
 
 .rail-gear:hover {

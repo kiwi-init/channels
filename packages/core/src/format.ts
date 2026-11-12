@@ -1,6 +1,6 @@
 // Plain-text rendering for agents: compact, greppable, one header line per message.
 
-import { ROLE_LABEL } from "./personality.ts";
+import { asksPeople, ROLE_LABEL } from "./personality.ts";
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange } from "./protocol.ts";
@@ -626,7 +626,7 @@ export function memberJson(state: ChannelState, name: string, online: Snapshot["
     card: m?.card ? { ...m.card } : null,
     // What the owner signed at approval as running this agent; the card above is the agent's own word.
     runs: m?.runs ? { ...m.runs } : null,
-    persona: m?.persona ? { name: m.persona.name, role: m.persona.role, capabilities: [...m.persona.capabilities], areas: [...m.persona.areas] } : null,
+    persona: m?.persona ? { name: m.persona.name, role: m.persona.role, capabilities: [...m.persona.capabilities], askPeople: asksPeople(m.persona), areas: [...m.persona.areas] } : null,
   };
 }
 

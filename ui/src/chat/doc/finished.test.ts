@@ -4,7 +4,8 @@ import { appendToBlock, blocksOf, markBack, markPosted, newBlock, richBlocks, ty
 import { prosemirrorToYDoc } from "y-prosemirror"
 import * as Y from "yjs"
 
-import { docFeed, withDocMedia, withLines, withoutMediaNames } from "~/chat/doc/finished"
+import { docFeed } from "~/chat/doc/feed-of"
+import { withDocMedia, withLines, withoutMediaNames } from "~/chat/doc/finished"
 import { FRAGMENT, schema } from "~/chat/doc/schema"
 import type { Message } from "~/model"
 
@@ -114,6 +115,28 @@ describe("finished doc lines with no message sit in the feed at their time (T135
     const pasted: Message = { ...msg(4, T), block: "c" }
     expect(withDocMedia(pasted, { imgs: [shot], files: [] }).docMedia).toEqual({ imgs: [shot], files: [] })
     expect(withDocMedia(pasted, undefined)).toBe(pasted)
+  })
+
+  test("a line typed in the app keeps drawing its pictures from its block when its message carries the same ones, so nothing changes as it lands", () => {
+    const own = [{ spot: "7:0", alt: "a.png", state: "waiting" as const }]
+    const line: Message = { ...msg(7, T), block: "t", images: own }
+    const drawn = withDocMedia(line, { imgs: [shot], files: [] }, true)
+    expect(drawn.images).toBeUndefined()
+    expect(drawn.docMedia).toEqual({ imgs: [shot], files: [] })
+    expect(withDocMedia(line, { imgs: [shot], files: [] }, false)).toBe(line)
+    expect(withDocMedia(line, undefined, true)).toBe(line)
+    const more: Message = { ...msg(8, T), block: "t", images: [...own, { spot: "8:1", alt: "extra.png", state: "waiting" as const }] }
+    expect(withDocMedia(more, { imgs: [shot], files: [] }, true)).toBe(more)
+  })
+
+  test("a message that brings its own files draws those, with or without its block, and never the block's copies too", () => {
+    const pdf = { name: "r.pdf", mime: "application/pdf", size: 9, pieces: [] }
+    const other = { name: "old.pdf", mime: "application/pdf", size: 7, pieces: [] }
+    const line: Message = { ...msg(5, T), block: "d", files: [pdf] }
+    expect(withDocMedia(line, undefined).docMedia).toEqual({ imgs: [], files: [pdf] })
+    expect(withDocMedia(line, { imgs: [shot], files: [other] }).docMedia).toEqual({ imgs: [shot], files: [pdf] })
+    const plain: Message = { ...msg(6, T), files: [pdf] }
+    expect(withDocMedia(plain, undefined).docMedia).toEqual({ imgs: [], files: [pdf] })
   })
 })
 
