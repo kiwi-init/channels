@@ -96,6 +96,11 @@ try {
   const after = await height(a);
   check("tall lines sent below the fold keep their height when the reader scrolls to them", Math.abs(after - before) <= 0.5 ? null : `the feed went from ${before} to ${after} px as it scrolled`);
   await a.waitForTimeout(500);
+  const sheets = await b.evaluate(() => ({
+    head: document.head.querySelectorAll('link[rel="stylesheet"]').length,
+    after: document.body.querySelectorAll('link[rel="stylesheet"]').length,
+  }));
+  check("the stylesheets of lazy chunks load after the page, not in <head>", sheets.head <= 1 && sheets.after > 0 ? null : `${sheets.head} in <head>, ${sheets.after} after the page`);
   check("no page errors", errors.length ? errors.slice(0, 3).join("; ") : null);
 } finally {
   await browser.close();
