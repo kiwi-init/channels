@@ -10,8 +10,7 @@ import { inText } from "~/kit/keys"
 import { useNav, useGo, useActions, useTiles, useAppPrefs } from "~/nav"
 import { openMenu } from "~/kit/menu-open"
 import { railItems, type DropTarget } from "~/shell/rail-items"
-import { ViewsBar } from "~/shell/sidebar"
-import { useTopLayout } from "~/shell/top-layout"
+import { useTabs } from "~/shell/top-layout"
 import { t } from "~/i18n/i18n"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 
@@ -38,13 +37,12 @@ export function Rail() {
   const onChannel = nav.page === "channel"
   const home = onChannel && nav.channel === null
   const sidebarHidden = useSidebarHidden()
-  const top = useTopLayout()
+  const tabs = useTabs()
   useLayoutEffect(() => {
     const root = document.documentElement
-    if (top) root.dataset["layout"] = "top"
-    else delete root.dataset["layout"]
-    return () => void delete root.dataset["layout"]
-  }, [top])
+    root.toggleAttribute("data-tabs", tabs)
+    return () => root.removeAttribute("data-tabs")
+  }, [tabs])
   const cardsHere = onChannel && (home || sidebarHidden)
   const on = onChannel ? nav.channel : null
   const folders = prefs.folders
@@ -218,7 +216,6 @@ export function Rail() {
           </button>
         </li>
       </ul>
-      {top && onChannel && !home && <ViewsBar />}
       {hint && (
         <span className="rail-hint" aria-hidden="true" style={{ "--x": `${hint.x}px`, "--y": `${hint.y}px` } as CSSProperties}>
           {hint.name}
@@ -268,6 +265,7 @@ function Tile({ tile, on, drop, moving, onClick }: { tile: ChannelTile; on: bool
       onClick={onClick}
     >
       <Face tile={tile} />
+      <span className="tile-name">{tile.title}</span>
       {tile.needsYou > 0 ? <span className="tile-badge">{tile.needsYou}</span> : tile.unread > 0 && !on ? <span className="tile-dot" /> : null}
     </button>
   )

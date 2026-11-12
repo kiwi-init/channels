@@ -9,7 +9,7 @@ import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Direct, type Person } from "~/model"
-import { sameWhere, useAct, useGo, useNav, useOpenChannel } from "~/nav"
+import { sameWhere, useAct, useGo, useNav } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
 import { comingBack, hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
 import { leftDirects } from "~/shell/left-directs"
@@ -74,13 +74,12 @@ function ViewRows({ channel }: { channel: Channel }) {
   )
 }
 
-export function ViewsBar() {
-  const channel = useOpenChannel()
-  return channel ? (
-    <div className="views-bar" role="group" aria-label={t("shell.channel.views")}>
+export function ViewsBar({ channel }: { channel: Channel }) {
+  return (
+    <nav className="views-bar" aria-label={t("shell.channel.views")}>
       <ViewRows channel={channel} />
-    </div>
-  ) : null
+    </nav>
+  )
 }
 
 export function Sidebar({ channel, views = true }: { channel: Channel; views?: boolean }) {

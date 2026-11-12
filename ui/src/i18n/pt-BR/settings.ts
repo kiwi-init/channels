@@ -77,7 +77,7 @@ export default {
   "settings.sections.layout": "Layout",
   "settings.sections.layout.side": "Barra lateral",
   "settings.sections.layout.top": "Barra superior",
-  "settings.sections.layout.hint": "A barra superior põe seus canais, Precisa de você, Especificações, Agentes e GitHub em uma linha no topo da janela.",
+  "settings.sections.layout.hint": "A barra superior põe Precisa de você, Especificações, Agentes e GitHub em uma linha abaixo das abas dos canais.",
   "settings.sections.motion": "Animação",
   "settings.sections.update.ready": "A {version} está pronta",
   "settings.sections.update.ready.hint": "Você está na {version}. O Channels reinicia na nova.",

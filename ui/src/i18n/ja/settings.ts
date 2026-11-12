@@ -77,7 +77,7 @@ export default {
   "settings.sections.layout": "レイアウト",
   "settings.sections.layout.side": "サイドバー",
   "settings.sections.layout.top": "トップバー",
-  "settings.sections.layout.hint": "トップバーでは、チャンネルとビューがウィンドウの上端に横一列で並びます。",
+  "settings.sections.layout.hint": "トップバーでは、ビューがチャンネルのタブの下に横一列で並びます。",
   "settings.sections.motion": "モーション",
   "settings.sections.update.ready": "{version} の準備ができました",
   "settings.sections.update.ready.hint": "現在は {version} です。Channels は新しいバージョンで再起動します。",

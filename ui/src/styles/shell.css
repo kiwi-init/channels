@@ -883,6 +883,10 @@
   outline-offset: 2px;
 }
 
+.tile-name {
+  display: none;
+}
+
 .tile-badge {
   position: absolute;
   top: -4px;
@@ -1150,80 +1154,147 @@
   grid-column: 2;
 }
 
-:root[data-layout="top"] .app > .rail {
+:root[data-tabs] .app > .rail {
   --tile: var(--ctl);
+  --lead-pad: 8px;
+  --lead-n: 2;
 
   grid-row: 1;
   grid-column: 1 / -1;
   z-index: 10;
   flex-wrap: nowrap;
   align-items: center;
-  margin-left: var(--side-w);
-  padding: 0 8px 0 var(--gutter);
+  margin-left: calc(var(--lead-pad) + var(--lead-n) * (var(--ctl) + 8px));
+  padding: 0 8px;
   overflow: hidden;
+  transition: margin-left var(--slow) var(--ease);
   -webkit-app-region: drag;
 }
 
-:root[data-layout="top"] .app > .rail :is(.tile, .side-row) {
+:root[data-tabs]:has(.top-tools > .updates) .app > .rail {
+  --lead-n: 3;
+}
+
+:root[data-tabs]:is([data-shell="mac"], [data-wm="floating"]) .app > .rail {
+  --lead-pad: calc(64px + 16px);
+}
+
+:root[data-tabs]:has(.top-tools.is-searching, .top-hold) .app > .rail {
+  margin-left: var(--side-w);
+}
+
+:root[data-tabs] .app > .rail .tile {
   -webkit-app-region: no-drag;
 }
 
-:root[data-layout="top"] .app > .home-area {
+:root[data-tabs] .app > .home-area {
   grid-row: 2 / -1;
 }
 
-:root[data-layout="top"][data-bare] .app > .rail {
+:root[data-tabs][data-bare] .app > .rail {
   width: auto;
   pointer-events: auto;
 }
 
-:root[data-layout="top"] .app > .rail .tile,
-:root[data-layout="top"][data-bare] .app > .rail .tile {
-  flex: 0 1 var(--tile);
-  min-width: var(--ctl-sm);
+:root[data-tabs] .app > .rail .tile,
+:root[data-tabs][data-bare] .app > .rail .tile {
   visibility: visible;
   opacity: 1;
   translate: none;
 }
 
-:root[data-layout="top"] .tile-dot {
+:root[data-tabs] .app > .rail .tile[data-code] {
+  display: flex;
+  flex: 1 1 0;
+  gap: 8px;
+  width: auto;
+  min-width: var(--ctl);
+  max-width: max-content;
+  padding: 0 8px;
+  background: none;
+  font: var(--t-ui) var(--ui);
+}
+
+:root[data-tabs] .app > .rail .tile[data-code]:hover {
+  background: var(--wash);
+}
+
+:root[data-tabs] .app > .rail .tile[data-code].is-on {
+  flex: none;
+  outline: 0;
+  background: var(--wash-2);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+:root[data-tabs] .tile[data-code] > :first-child {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: calc(var(--slot) - 8px);
+  height: calc(var(--slot) - 8px);
+  border-radius: var(--r-tick);
+  background: var(--wash-2);
+  font: 600 var(--t-stamp) / 1 var(--ui);
+}
+
+:root[data-tabs] .tile[data-code].is-on > :first-child {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+:root[data-tabs] .tile[data-code] .tile-name {
+  display: block;
+  min-width: 0;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root[data-tabs] .tile[data-code] :is(.tile-badge, .tile-dot) {
+  position: static;
+  flex: none;
+  margin: 0;
+  box-shadow: none;
+}
+
+:root[data-tabs] .tile.is-folder .tile-dot {
   bottom: -6px;
 }
 
-:root[data-layout="top"] .folder-grid {
+:root[data-tabs] .folder-grid {
   grid-template-columns: repeat(2, 0.75rem);
   grid-auto-rows: 0.75rem;
 }
 
 .views-bar {
-  flex: 1 1 0;
-  min-width: calc(4 * (var(--slot) + 16px) + 24px);
-  margin-left: 8px;
-  container-type: inline-size;
+  grid-row: 2;
+  grid-column: 2;
+  position: relative;
+  z-index: 4;
+  align-self: start;
+  min-width: 0;
+  padding: 0 32px 8px;
 }
 
 .views-bar ul {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
-.views-bar li {
-  flex: 0 1 auto;
-  min-width: calc(var(--slot) + 16px);
-}
-
 .views-bar .side-row {
-  overflow: hidden;
+  width: auto;
 }
 
-@container (max-width: 30rem) {
-  .views-bar .side-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    clip-path: inset(50%);
-  }
+.chan.is-top .main {
+  grid-row: 3 / -1;
+}
+
+.chan.is-top .side {
+  grid-row: 2 / -1;
 }
 
 @media (min-width: 1180px) and (orientation: landscape) {
@@ -1404,11 +1475,11 @@
   }
 }
 
-:root[data-side-move="out"] .main {
+:root[data-side-move="out"] :is(.main, .views-bar) {
   animation: main-fill var(--slow) var(--ease);
 }
 
-:root[data-side-move="in"] .main {
+:root[data-side-move="in"] :is(.main, .views-bar) {
   animation: main-yield var(--slow) var(--ease);
 }
 
