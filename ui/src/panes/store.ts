@@ -215,10 +215,10 @@ export function resizeSplit(code: string, id: string, size: { ratio: number } | 
 
 const talks = (leaf: Leaf): boolean => !leaf.nav || (leaf.nav.tab === "chat" && !leaf.doc)
 
-export function focusPane(code: string, id: string): void {
+export function focusPane(code: string, id: string, moveTyping = true): void {
   const layout = layoutOf(code)
   const leaf = leafOf(layout.root, id)
-  const typing = leaf && talks(leaf) ? id : layout.typing
+  const typing = moveTyping && leaf && talks(leaf) ? id : layout.typing
   if (layout.focus !== id || layout.typing !== typing) put(code, { ...layout, focus: id, typing })
 }
 

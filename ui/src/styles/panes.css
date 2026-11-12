@@ -84,8 +84,17 @@
   }
 }
 
-.panes > .pane:not(.is-corner) {
-  border-radius: 0;
+.panes {
+  --pane-gap: 6px;
+}
+
+.content:has(> .panes) {
+  background: none;
+}
+
+.panes > .pane {
+  border-radius: var(--r-ctl);
+  background: var(--bg);
 }
 
 .pane-tools {

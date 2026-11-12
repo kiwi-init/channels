@@ -1,5 +1,5 @@
 import "~/styles/panes.css"
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react"
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react"
 import { createPortal } from "react-dom"
 
 import { cx, IconButton } from "~/kit/bits"
@@ -69,6 +69,24 @@ const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
 const ThreadPanel = later(() => import("~/panels/thread").then((m) => m.ThreadPanel))
 
 const LINK = "a[href^='kiwi-']"
+
+const isAll = (l: Len): boolean => l.p === 1 && l.px === 0 && l.side === 0
+
+function spaced(box: Box): CSSProperties {
+  const half = "var(--pane-gap) / 2"
+  const right = { p: box.x.p + box.w.p, px: box.x.px + box.w.px, side: box.x.side + box.w.side }
+  const bottom = { p: box.y.p + box.h.p, px: box.y.px + box.h.px, side: box.y.side + box.h.side }
+  const l = isNone(box.x) ? "0px" : half
+  const t = isNone(box.y) ? "0px" : half
+  const r = isAll(right) ? "0px" : half
+  const b = isAll(bottom) ? "0px" : half
+  return {
+    left: `calc(${css(box.x)} + ${l})`,
+    top: `calc(${css(box.y)} + ${t})`,
+    width: `calc(${css(box.w)} - ${l} - ${r})`,
+    height: `calc(${css(box.h)} - ${t} - ${b})`,
+  }
+}
 
 export function roomiest(code: string): { id: string; edge: Edge } | undefined {
   const panes = [...document.querySelectorAll<HTMLElement>(`[data-panes="${code}"] > [data-pane]`)].map((el) => ({ id: el.dataset.pane ?? "", r: el.getBoundingClientRect() }))
@@ -186,7 +204,7 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
   const heir = leaves.find(({ leaf }) => leaf.nav && !leaf.doc)?.leaf
   const talks = (leaf: Leaf): boolean => (leaf.nav ? leaf.nav.tab === "chat" && !leaf.doc : nav.tab === "chat")
   const pick = (id: string | undefined) => leaves.find(({ leaf }) => leaf.id === id && talks(leaf))?.leaf.id
-  const typing = pick(layout.focus) ?? pick(layout.typing) ?? leaves.find(({ leaf }) => talks(leaf))?.leaf.id ?? MAIN
+  const typing = pick(layout.typing) ?? pick(layout.focus) ?? leaves.find(({ leaf }) => talks(leaf))?.leaf.id ?? MAIN
   const close = (id: string): boolean => {
     if (id !== MAIN) return (closePane(code, id), true)
     if (!heir?.nav) return false
@@ -198,6 +216,18 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
   useLayoutEffect(() => {
     live.current = { leaves, close, focus: layout.focus, nav }
   })
+  const hovering = useRef(0)
+  const hover = (id: string, buttons: number) => {
+    window.clearTimeout(hovering.current)
+    const root = document.documentElement
+    if (buttons || leaves.length < 2 || root.hasAttribute("data-dragging") || root.dataset.resizing) return
+    hovering.current = window.setTimeout(() => {
+      const at = document.activeElement
+      const busy = at instanceof HTMLTextAreaElement && at.closest(".compose") && at.value.trim() !== ""
+      focusPane(code, id, !busy)
+    }, 70)
+  }
+  useEffect(() => () => window.clearTimeout(hovering.current), [])
   const [born] = useState(() => new Set(leaves.map(({ leaf }) => leaf.id)))
   useEffect(() => {
     const now = () => live.current
@@ -273,8 +303,10 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
             )}
             data-pane={leaf.id}
             aria-label={leaf.nav ? name : label}
-            style={{ left: css(box.x), top: css(box.y), width: css(box.w), height: css(box.h) }}
+            style={spaced(box)}
             onPointerDownCapture={() => focusPane(code, leaf.id)}
+            onPointerEnter={(e) => hover(leaf.id, e.buttons)}
+            onPointerLeave={() => window.clearTimeout(hovering.current)}
             onPointerDown={(e) => {
               const href = (e.target as Element).closest?.(LINK)?.getAttribute("href")
               const out = href ? carried(channel, href) : null
