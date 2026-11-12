@@ -212,6 +212,31 @@ describe("a wait set before approval pauses the quiet clock (#5954)", () => {
     replays(running, running.now());
   });
 
+  test("a run that failed inside the wait dates the resume at the wait's end, whether or not anything is logged before the run's deadline", async () => {
+    const quiet = async (between: boolean) => {
+      const c = channel();
+      await withRepos(c);
+      const id = await doing(c);
+      await c.steps(id, { kind: "add", step: { words: "prd pipeline", by: "zed" } });
+      const armed = await c.steps(id, { kind: "run", id: "s1", run: "deploy-7", expected: 5 * HOUR });
+      const wait = await c.steps(id, { kind: "wait", id: "s1", reason: "change freeze", ms: HOUR });
+      const until = wait.rts! + HOUR;
+      await c.run(70, "deploy-7");
+      await c.run(70, "deploy-7", "failure");
+      if (between) {
+        c.wait(2 * HOUR);
+        await c.say("jon", "msg", "unrelated");
+      }
+      expect(read(c, id, wait.rts! + 6 * HOUR)).toMatchObject({ mover: "win", epoch: armed.seq, since: until });
+      c.wait(6 * HOUR);
+      await c.say("jon", "msg", "later");
+      expect(task(c, id).clock).toMatchObject({ key: "win|work|", seq: armed.seq, at: until });
+      replays(c, c.now());
+    };
+    await quiet(false);
+    await quiet(true);
+  });
+
   test("a step whose run already succeeded starts no pause and leaves the clock as it was", async () => {
     const c = channel();
     await withRepos(c);
