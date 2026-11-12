@@ -199,6 +199,52 @@ async function checks(page: Page, at: string): Promise<void> {
   expect(grew.length === 0, `${at}: fitting a bubble to its text never changes the message's height${grew.map((g) => `, ${g}`).join("")}`);
 }
 
+async function sweep(page: Page): Promise<{ steps: number; wrong: string[] }> {
+  const widths: number[] = [];
+  for (let w = 1000; w >= 420; w -= 29) widths.push(w);
+  for (let w = 449; w <= 1000; w += 37) widths.push(w);
+  const wrong: string[] = [];
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+    const found = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>(".main article.msg.is-mine")].flatMap((row) => {
+        const bubble = row.querySelector<HTMLElement>(".msg-text");
+        const body = row.querySelector<HTMLElement>(".msg-body");
+        if (!bubble || !body) return [];
+        const box = bubble.getBoundingClientRect();
+        const range = document.createRange();
+        const walk = document.createTreeWalker(bubble, NodeFilter.SHOW_TEXT);
+        const tops = new Set<number>();
+        let right = 0;
+        for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+          if (!n.nodeValue?.trim()) continue;
+          range.selectNodeContents(n);
+          for (const r of range.getClientRects()) {
+            tops.add(Math.round(r.top / 4));
+            right = Math.max(right, r.right);
+          }
+        }
+        const said: string[] = [];
+        const gap = box.right - Number.parseFloat(getComputedStyle(bubble).paddingRight) - right;
+        if (tops.size > 1 && (gap > 2.5 || gap < -0.5)) said.push(`#${row.dataset.seq} is ${Math.round(gap * 10) / 10}px off its longest line`);
+        if (box.left < body.getBoundingClientRect().left - 0.5 || box.left < row.getBoundingClientRect().left) said.push(`#${row.dataset.seq} is wider than its room`);
+        const set = bubble.style.width;
+        if (set) {
+          const fitted = row.getBoundingClientRect().height;
+          bubble.style.width = "";
+          const loose = row.getBoundingClientRect().height;
+          bubble.style.width = set;
+          if (fitted !== loose) said.push(`#${row.dataset.seq} is ${fitted}px tall fitted and ${loose}px unfitted`);
+        }
+        return said;
+      }),
+    );
+    wrong.push(...found.map((f) => `at ${width}px ${f}`));
+  }
+  return { steps: widths.length, wrong };
+}
+
 interface Painted {
   frames: number;
   loose: number;
@@ -337,14 +383,20 @@ try {
       await page.waitForTimeout(300);
       await checks(page, `${theme}, ${width} wide`);
     }
+    const swept = await sweep(page);
+    expect(
+      swept.wrong.length === 0,
+      `${theme}: narrowed and widened in ${swept.steps} small steps, every wrapped bubble stays as wide as its longest line, inside its room and no taller than unfitted${swept.wrong
+        .slice(0, 6)
+        .map((w) => `, ${w}`)
+        .join("")}`,
+    );
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(300);
     await checks(page, `${theme}, back at 1440`);
     const painted = await page.evaluate(() => (window as Window & { bubblePaints?: Painted }).bubblePaints ?? null);
     const frames = `${painted?.frames ?? 0} frames read after paint, ${painted?.loose ?? 0} with a wrapped bubble wider than its longest line, ${painted?.longest ?? 0} in a row at most${painted?.worst ? ` (${painted.worst})` : ""}`;
-    if (engine === "webkit")
-      expect(painted !== null && painted.frames > 30 && painted.longest <= 1, `${theme}: from first load through every resize, no wrapped bubble of yours stays too wide on screen: ${frames}`);
-    else console.log(`     ${theme}, printed and not checked in ${engine} until its run of frames is explained: ${frames}`);
+    expect(painted !== null && painted.frames > 30 && painted.longest <= 1, `${theme}: from first load through every resize, no wrapped bubble of yours stays too wide on screen: ${frames}`);
     await page.close();
   }
 } finally {

@@ -4,6 +4,22 @@ const RIGID = "pre, table, img, svg, hr, video, iframe, .md-mermaid, .katex"
 const BLOCK = "p, li, h1, h2, h3, h4, h5, h6, dd, dt, blockquote, div"
 const SLACK = 1
 
+interface Measured {
+  width: number | null
+  natural: number
+  grow: number
+}
+
+interface Fitted extends Measured {
+  room: number
+  tall: number
+}
+
+interface Hugged {
+  bubble: HTMLElement
+  last: Fitted | null
+}
+
 const px = (v: string): number => Number.parseFloat(v) || 0
 
 function edge(el: Element): number {
@@ -11,31 +27,61 @@ function edge(el: Element): number {
   return px(s.paddingRight) + px(s.borderRightWidth)
 }
 
-function widest(bubble: HTMLElement): number | null {
-  if (bubble.querySelector(RIGID)) return null
+function measure(bubble: HTMLElement): Measured {
   const box = bubble.getBoundingClientRect()
-  const after = new Map<Element, number>()
+  if (bubble.querySelector(RIGID)) return { width: null, natural: box.width, grow: Infinity }
+  const blocks = new Map<Element, { after: number; lines: Set<number>; text: number }>()
+  const places = new Map<Element, { after: number; block: { lines: Set<number>; text: number } }>()
   const walk = document.createTreeWalker(bubble, NodeFilter.SHOW_TEXT)
   const range = document.createRange()
   let need = 0
   for (let n = walk.nextNode(); n; n = walk.nextNode()) {
     const from = n.parentElement
     if (!from || !n.nodeValue?.trim()) continue
-    let room = after.get(from)
-    if (room === undefined) {
+    let place = places.get(from)
+    if (!place) {
       const found = from.closest(BLOCK)
-      const block = found && bubble.contains(found) ? found : bubble
-      room = box.right - block.getBoundingClientRect().right + edge(block)
-      for (let el: Element | null = from; el && el !== block; el = el.parentElement) room += edge(el)
-      after.set(from, room)
+      const el = found && bubble.contains(found) ? found : bubble
+      let block = blocks.get(el)
+      if (!block) {
+        block = { after: box.right - el.getBoundingClientRect().right + edge(el), lines: new Set(), text: 0 }
+        blocks.set(el, block)
+      }
+      let after = block.after
+      for (let up: Element | null = from; up && up !== el; up = up.parentElement) after += edge(up)
+      place = { after, block }
+      places.set(from, place)
     }
     range.selectNodeContents(n)
-    for (const r of range.getClientRects()) need = Math.max(need, r.right - box.left + room)
+    for (const r of range.getClientRects()) {
+      need = Math.max(need, r.right - box.left + place.after)
+      place.block.lines.add(Math.round(r.top))
+      place.block.text += r.width
+    }
   }
-  return need > 0 && need + SLACK < box.width ? Math.ceil(need) + SLACK : null
+  let grow = Infinity
+  for (const { lines, text } of blocks.values()) if (lines.size > 1) grow = Math.min(grow, text / (lines.size - 1))
+  return { width: need > 0 && need + SLACK < box.width ? Math.ceil(need) + SLACK : null, natural: box.width, grow }
 }
 
-const rows = new Map<Element, HTMLElement>()
+function roomFor(bubble: HTMLElement): number {
+  const { width, maxWidth } = bubble.style
+  bubble.style.width = "100000px"
+  bubble.style.maxWidth = "100%"
+  const room = bubble.getBoundingClientRect().width
+  bubble.style.width = width
+  bubble.style.maxWidth = maxWidth
+  return room
+}
+
+function holds(last: Fitted, room: number, tall: number): boolean {
+  if (last.tall !== tall) return false
+  if (room === last.room) return true
+  if (last.width !== null) return last.width <= room && (room < last.room || room < last.grow)
+  return last.natural < last.room - SLACK && last.natural <= room
+}
+
+const rows = new Map<Element, Hugged>()
 let fonts: Promise<unknown> | null = null
 
 function refitAfterFonts(): void {
@@ -43,18 +89,35 @@ function refitAfterFonts(): void {
   const ready = document.fonts.ready
   if (ready === fonts) return
   fonts = ready
-  void ready.then(() => fit([...rows.keys()]))
+  void ready.then(() => fit(rows.keys(), true))
 }
 
-function fit(due: readonly Element[]): void {
-  const pairs = due.flatMap((row) => {
-    const bubble = rows.get(row)
-    return bubble?.isConnected && row instanceof HTMLElement ? [{ row, bubble }] : []
+function fit(due: Iterable<Element>, all = false): void {
+  const seen = [...due].flatMap((row) => {
+    const hugged = rows.get(row)
+    return hugged?.bubble.isConnected && row instanceof HTMLElement ? [{ row, hugged, tall: row.offsetHeight }] : []
   })
-  for (const { bubble } of pairs) bubble.style.width = ""
-  const loose = pairs.map(({ row, bubble }) => ({ row, bubble, width: widest(bubble), height: row.offsetHeight }))
-  for (const { bubble, width } of loose) if (width !== null) bubble.style.width = `${width}px`
-  for (const { row, bubble, width, height } of loose) if (width !== null && row.offsetHeight !== height) bubble.style.width = ""
+  const rooms = new Map<Element | null, number>()
+  const stale = seen.flatMap(({ row, hugged, tall }) => {
+    let room = rooms.get(row.parentElement)
+    if (room === undefined) {
+      room = roomFor(hugged.bubble)
+      rooms.set(row.parentElement, room)
+    }
+    if (!all && hugged.last && holds(hugged.last, room, tall)) {
+      hugged.last.room = room
+      return []
+    }
+    return [{ row, hugged, room }]
+  })
+  for (const { hugged } of stale) hugged.bubble.style.width = ""
+  const loose = stale.map(({ row, hugged, room }) => ({ row, hugged, room, tall: row.offsetHeight, ...measure(hugged.bubble) }))
+  for (const { hugged, width } of loose) if (width !== null) hugged.bubble.style.width = `${width}px`
+  for (const { row, hugged, room, tall, width, natural, grow } of loose) {
+    const kept = width !== null && row.offsetHeight === tall
+    if (width !== null && !kept) hugged.bubble.style.width = ""
+    hugged.last = { room, tall, width: kept ? width : null, natural, grow }
+  }
   refitAfterFonts()
 }
 
@@ -65,7 +128,7 @@ export function useHug(ref: RefObject<HTMLElement | null>, on: boolean, content:
     const bubble = ref.current
     const row = on ? bubble?.closest("article") : null
     if (!bubble || !row) return
-    rows.set(row, bubble)
+    rows.set(row, { bubble, last: null })
     if (watch) watch.observe(row)
     else fit([row])
     return () => {
