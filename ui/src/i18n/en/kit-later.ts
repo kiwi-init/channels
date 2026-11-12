@@ -12,6 +12,9 @@ const words = {
   "kit.failed.busy": "Too much is waiting right now. Try again in a minute.",
   "kit.failed.update": "This needs a newer Channels. Update, then try again.",
   "kit.failed.other": "Try again in a moment.",
+  "kit.discard.ask": "Discard your changes?",
+  "kit.discard.discard": "Discard",
+  "kit.discard.keep": "Keep editing",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

@@ -24,7 +24,6 @@ export default {
   "chat.chatter.line.about": "{people} · {count} messages between agents about {tasks}",
   "chat.composer.image": "Image",
   "chat.composer.add.to.message": "Add to the message",
-  "chat.composer.edit.not.loaded": "The whole message couldn't be loaded, so it can't be edited right now",
   "chat.composer.commands": "Commands",
   "chat.composer.stashed.title": "Stashed drafts ({keys} brings back the newest)",
   "chat.composer.stashed.count": "{n} stashed",

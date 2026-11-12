@@ -26,8 +26,5 @@ export default {
   "kit.time.yesterday": "Yesterday",
   "kit.toasts.not.copied": "Couldn't copy. Select it and copy by hand.",
   "kit.toasts.copied": "Copied",
-  "kit.discard.ask": "Discard your changes?",
-  "kit.discard.discard": "Discard",
-  "kit.discard.keep": "Keep editing",
   "kit.toasts.dismiss": "Dismiss",
 } as const satisfies Record<string, Msg>
