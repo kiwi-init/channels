@@ -97,6 +97,46 @@ try {
   await page.waitForTimeout(200);
   expect((await modal.count()) === 0, "and so does Esc");
 
+  for (const personality of [null, "Lead"]) {
+    await page.goto(`http://127.0.0.1:${server.port}/?shot=add-agent`);
+    await add.waitFor();
+    const command = add.locator(".invite-box code");
+    await command.locator(".invite-part").first().waitFor();
+    if (personality) {
+      await add.getByRole("combobox", { name: "Personality" }).selectOption({ label: personality });
+      await command.getByText(/^--persona /).waitFor();
+    }
+    const height = async () => Math.round((await add.boundingBox())?.height ?? 0);
+    const settled = new Set([await height()]);
+    await page.evaluate(() => {
+      const open = document.querySelector("dialog.modal[open]");
+      if (!open) throw new Error("no open modal");
+      const seen = document.documentElement.dataset;
+      seen.blank = "0";
+      seen.heights = "";
+      new MutationObserver(() => {
+        if (open.querySelector(".invite-box code")?.textContent === "…") seen.blank = String(Number(seen.blank) + 1);
+        seen.heights += `${Math.round(open.getBoundingClientRect().height)} `;
+      }).observe(open, { childList: true, subtree: true, characterData: true });
+    });
+    await add.getByRole("textbox", { name: "Name" }).press("ControlOrMeta+a");
+    const typed = "scout-7";
+    for (let i = 1; i <= typed.length; i++) {
+      await page.keyboard.type(typed.charAt(i - 1));
+      await command.getByText(`--nick ${typed.slice(0, i)}`, { exact: true }).waitFor();
+      settled.add(await height());
+    }
+    const seen = await page.evaluate(() => ({
+      blank: Number(document.documentElement.dataset.blank),
+      heights: (document.documentElement.dataset.heights ?? "").trim().split(" ").filter(Boolean).map(Number),
+    }));
+    const odd = [...new Set(seen.heights.filter((h) => !settled.has(h)))];
+    const how = personality ? `with the ${personality} personality` : "with no personality";
+    expect(seen.heights.length > 0, `typing a name in Add an agent ${how} makes a new command for each letter`);
+    expect(seen.blank === 0, `and the Command box never goes blank between letters (T21)${seen.blank ? `: blank ${seen.blank} times` : ""}`);
+    expect(odd.length === 0, `and the modal is only ever the size of a command it showed${odd.length ? `: ${odd.join(", ")}px seen, settled sizes ${[...settled].join(", ")}px` : ""}`);
+  }
+
   for (const [shot, name, field] of [
     ["new-room", "New room", "Room name"],
     ["new-channel", "New channel", "Name"],

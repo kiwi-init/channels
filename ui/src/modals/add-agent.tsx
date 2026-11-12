@@ -1,9 +1,10 @@
 import "~/i18n/en/modals"
-import { useEffect, useId, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 
 import { t } from "~/i18n/i18n"
 import { wantPersona } from "~/live/persona-later"
 import { Icon } from "~/kit/icons"
+import { copyText } from "~/kit/toasts"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
 import { Modal } from "~/kit/modal"
@@ -107,26 +108,46 @@ function PersonaPick({ value, onPick, none }: { value: string; onPick: (id: stri
   )
 }
 
-function useJoinCommand(code: string, nick: string, persona: string): { line: string | null; failed: boolean; retry: () => void } {
+type Got = { code: string; key: string; line: string } | { code: string; key: string; failed: true }
+
+export function useJoinCommand(code: string, nick: string, persona: string): { line: string | null; failed: boolean; copy: () => void; retry: () => void } {
   const { app } = useApp()
   const key = JSON.stringify([code, nick, persona])
-  const [got, setGot] = useState<{ key: string; line: string } | { key: string; failed: true } | null>(null)
+  const [got, setGot] = useState<Got | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const copyWhenReady = useRef(false)
   useEffect(() => {
     let live = true
+    const asked = JSON.stringify([code, nick, persona])
     const as = { ...(nick ? { nick } : {}), ...(persona ? { persona } : {}) }
     app.actions
       .joinCommand(code, as)
-      .then((line) => live && setGot({ key: JSON.stringify([code, nick, persona]), line }))
-      .catch(() => live && setGot({ key: JSON.stringify([code, nick, persona]), failed: true }))
+      .then((line) => {
+        if (!live) return
+        setGot({ code, key: asked, line })
+        if (copyWhenReady.current) copyText(line)
+        copyWhenReady.current = false
+      })
+      .catch(() => {
+        if (!live) return
+        setGot({ code, key: asked, failed: true })
+        copyWhenReady.current = false
+      })
     return () => {
       live = false
+      copyWhenReady.current = false
     }
   }, [app.actions, code, nick, persona, attempt])
-  const mine = got?.key === key ? got : null
+  const last = got?.code === code ? got : null
+  const line = last && "line" in last ? last.line : null
+  const ready = last?.key === key
   return {
-    line: mine && "line" in mine ? mine.line : null,
-    failed: !!mine && "failed" in mine,
+    line,
+    failed: !!last && "failed" in last,
+    copy: () => {
+      if (line && ready) copyText(line)
+      else copyWhenReady.current = true
+    },
     retry: () => {
       setGot(null)
       setAttempt((n) => n + 1)
@@ -137,7 +158,7 @@ function useJoinCommand(code: string, nick: string, persona: string): { line: st
 function RunCommand({ channel, name, setName, taken }: NameProps) {
   const [persona, setPersona] = useState("")
   const problem = nameProblem(name, taken)
-  const { line, failed, retry } = useJoinCommand(channel.code, name, channel.youOwn ? persona : "")
+  const { line, failed, copy, retry } = useJoinCommand(channel.code, name, channel.youOwn ? persona : "")
   useEffect(() => {
     if (!channel.youOwn) wantPersona(channel.code, name, persona)
   }, [channel.code, channel.youOwn, name, persona])
@@ -159,7 +180,7 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
             </button>
           </div>
         ) : (
-          <CopyBox text={line} label={t("modals.add.agent.copy.command")} disabled={!!problem} wrap />
+          <CopyBox text={line} onCopy={copy} label={t("modals.add.agent.copy.command")} disabled={!!problem} wrap />
         )}
       </div>
     </>
@@ -168,7 +189,7 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
 
 export function AddAgentCard({ channel }: { channel: Channel }) {
   const [name] = useState(() => freeName(takenNames(channel)))
-  const { line, failed, retry } = useJoinCommand(channel.code, name, "")
+  const { line, failed, copy, retry } = useJoinCommand(channel.code, name, "")
   return (
     <section className="add-card" aria-label={t("modals.add.agent.title")}>
       <p className="add-card-title">{t("modals.add.agent.title")}</p>
@@ -181,7 +202,7 @@ export function AddAgentCard({ channel }: { channel: Channel }) {
           </button>
         </div>
       ) : (
-        <CopyBox text={line} label={t("modals.add.agent.copy.command")} wrap />
+        <CopyBox text={line} onCopy={copy} label={t("modals.add.agent.copy.command")} wrap />
       )}
     </section>
   )
