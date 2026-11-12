@@ -197,7 +197,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     const feed = withLeftOut(
       channel.messages
         .filter((m) => (since === undefined || m.seq < 0 || m.seq >= since) && sameWhere(m.where, where) && inFeed(m, !!doc) && (where.kind !== "room" || !m.specLine))
-        .map((m) => withDocMedia(m, m.block === undefined ? undefined : fromDoc.media.get(m.block))),
+        .map((m) => (m.block === undefined ? withDocMedia(m, undefined) : withDocMedia(m, fromDoc.media.get(m.block), fromDoc.typed.has(m.block)))),
       (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
     )
     if (!doc) return feed

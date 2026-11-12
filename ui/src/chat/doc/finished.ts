@@ -16,18 +16,33 @@ export interface DocFeed {
   lines: readonly Line[]
   hidden: ReadonlySet<string>
   media: ReadonlyMap<string, BlockFiles>
+  typed: ReadonlySet<string>
 }
 
 const SHOWN: readonly Block["kind"][] = ["text", "agent", "comment"]
 
-export const EMPTY_FEED: DocFeed = { lines: [], hidden: new Set(), media: new Map() }
+export const EMPTY_FEED: DocFeed = { lines: [], hidden: new Set(), media: new Map(), typed: new Set() }
 
 const NO_FILES: BlockFiles = { imgs: [], files: [] }
 
-export function withDocMedia(m: Message, media: BlockFiles | undefined): Message {
-  const imgs = m.images?.length ? [] : (media?.imgs ?? [])
+function mirrors(own: NonNullable<Message["images"]>, imgs: BlockFiles["imgs"]): boolean {
+  const left = imgs.map((i) => i.name)
+  return own.every((i) => {
+    const at = left.indexOf(i.alt)
+    if (at >= 0) left.splice(at, 1)
+    return at >= 0
+  })
+}
+
+export function withDocMedia(m: Message, media: BlockFiles | undefined, typed = false): Message {
+  const own = m.images ?? []
+  const fromBlock = !own.length || (typed && !!media && mirrors(own, media.imgs))
+  const imgs = fromBlock ? (media?.imgs ?? []) : []
   const files = m.files?.length ? m.files : (media?.files ?? [])
-  return imgs.length || files.length ? { ...m, docMedia: { imgs, files } } : m
+  if (!imgs.length && !files.length) return m
+  const row = { ...m, docMedia: { imgs, files } }
+  if (own.length && fromBlock) delete row.images
+  return row
 }
 
 export function withoutMediaNames(text: string, media: BlockFiles): string {
@@ -44,6 +59,7 @@ export function docFeed(blocks: readonly Block[], rich: ReadonlyMap<string, Rich
   const lines: Line[] = []
   const hidden = new Set<string>()
   const media = new Map<string, BlockFiles>()
+  const typed = new Set<string>()
   for (let i = blocks.length - 1; i >= 0; i--) {
     const b = blocks[i]!
     const done = b.sent || (!b.back && later.finish(b))
@@ -52,12 +68,13 @@ export function docFeed(blocks: readonly Block[], rich: ReadonlyMap<string, Rich
     if (!done) continue
     const files = r?.media ? filesOf(b.id) : null
     if (files) media.set(b.id, files)
+    if (files && b.kind === "text") typed.add(b.id)
     if (posted.has(b.id)) continue
     hidden.add(b.id)
     const text = (r?.markdown ?? b.text).trim()
     if (b.at >= since && (text || files) && SHOWN.includes(b.kind)) lines.push({ id: b.id, author: b.author, at: b.at, text, ...(files ? { media: files } : {}) })
   }
-  return { lines: lines.reverse(), hidden, media }
+  return { lines: lines.reverse(), hidden, media, typed }
 }
 
 const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>): boolean => a.size === b.size && [...a].every((x) => b.has(x))
@@ -68,6 +85,7 @@ const same = (a: DocFeed | undefined, b: DocFeed): boolean =>
   a.lines.length === b.lines.length &&
   a.lines.every((x, i) => x.id === b.lines[i]!.id && x.text === b.lines[i]!.text && filesKey(x.media) === filesKey(b.lines[i]!.media)) &&
   sameSet(a.hidden, b.hidden) &&
+  sameSet(a.typed, b.typed) &&
   sameMedia(a.media, b.media)
 
 export const docFeeds = store<ReadonlyMap<string, DocFeed>>(new Map())

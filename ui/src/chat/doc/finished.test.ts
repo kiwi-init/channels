@@ -116,6 +116,18 @@ describe("finished doc lines with no message sit in the feed at their time (T135
     expect(withDocMedia(pasted, undefined)).toBe(pasted)
   })
 
+  test("a line typed in the app keeps drawing its pictures from its block when its message carries the same ones, so nothing changes as it lands", () => {
+    const own = [{ spot: "7:0", alt: "a.png", state: "waiting" as const }]
+    const line: Message = { ...msg(7, T), block: "t", images: own }
+    const drawn = withDocMedia(line, { imgs: [shot], files: [] }, true)
+    expect(drawn.images).toBeUndefined()
+    expect(drawn.docMedia).toEqual({ imgs: [shot], files: [] })
+    expect(withDocMedia(line, { imgs: [shot], files: [] }, false)).toBe(line)
+    expect(withDocMedia(line, undefined, true)).toBe(line)
+    const more: Message = { ...msg(8, T), block: "t", images: [...own, { spot: "8:1", alt: "extra.png", state: "waiting" as const }] }
+    expect(withDocMedia(more, { imgs: [shot], files: [] }, true)).toBe(more)
+  })
+
   test("a message that brings its own files draws those, with or without its block, and never the block's copies too", () => {
     const pdf = { name: "r.pdf", mime: "application/pdf", size: 9, pieces: [] }
     const other = { name: "old.pdf", mime: "application/pdf", size: 7, pieces: [] }
