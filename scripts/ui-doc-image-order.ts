@@ -26,6 +26,9 @@ chmodSync(join(cli, "bin", "xdg-open"), 0o755);
 process.env.KIWI_HOME = join(cli, "home");
 const picture = join(data, "agent.png");
 writeFileSync(picture, Buffer.from(PNG, "base64"));
+const report = join(data, "report.txt");
+writeFileSync(report, "a report\n");
+const SHOTS = process.argv.find((a) => a.startsWith("--shots="))?.slice(8);
 const cliEnv = { KIWI_MODEL: "test-model", ...process.env, KIWI_HOME: join(cli, "home"), CLAUDE_CONFIG_DIR: join(cli, "no-claude"), PATH: `${join(cli, "bin")}:${process.env.PATH}` };
 
 const kiwi = (args: string[]): Promise<string> => {
@@ -141,6 +144,7 @@ try {
   const bot = await AgentSession.open("order", loadConfig().channels["order"]!, "bot");
   const { messages } = await runAgent(bot.state());
   const sent = messages.find((m) => m.body?.includes("a line with a picture and a file"));
+  if (SHOTS) await page.screenshot({ path: join(SHOTS, "line.png") });
   const pointers = (sent?.imgs ?? []).filter((i) => i.ref && i.data === undefined).map((i) => i.name);
   const files = (sent?.files ?? []).map((f) => f.name);
   check(
@@ -154,6 +158,46 @@ try {
           : files.join() !== "notes.pdf"
             ? `the message carries the files [${files.join(", ")}]`
             : null,
+  );
+  check(
+    "its words leave out the picture the message carries and still name the file",
+    !sent
+      ? "the agent never got the line"
+      : sent.body?.includes("[image: plan.png]")
+        ? `its words are ${JSON.stringify(sent.body)}`
+        : !sent.body?.includes("[file: notes.pdf]")
+          ? `its words are ${JSON.stringify(sent.body)}`
+          : null,
+  );
+
+  await composer(page).click();
+  await paste(page, "only.png");
+  await page.locator(".main .composer .compose-file").first().waitFor({ timeout: 10000 });
+  await page.keyboard.press(SEND);
+  await page.waitForTimeout(3500);
+  const alone = (await runAgent(bot.state())).messages.find((m) => m.imgs?.some((i) => i.name === "only.png"));
+  const stray = await page.getByText("[image: only.png]").filter({ visible: true }).count();
+  check(
+    "a picture sent with no words posts no words, and the page shows no name in its place",
+    !alone ? "the agent never got it" : (alone.body ?? "").trim() ? `its words are ${JSON.stringify(alone.body)}` : stray ? `the page shows [image: only.png] as text ${stray} times` : null,
+  );
+
+  await kiwi(["-c", "order", "--as", "bot", "send", "--to", "@jow", "a report for you", "--attach", report]);
+  await page.locator(".side-member", { hasText: "bot" }).first().click();
+  const direct = page.locator(".main article.msg", { hasText: "a report for you" }).filter({ visible: true });
+  const there = await direct
+    .first()
+    .waitFor({ timeout: 15000 })
+    .then(
+      () => true,
+      () => false,
+    );
+  await page.waitForTimeout(1000);
+  const reports = there ? await direct.first().locator(".msg-file", { hasText: "report.txt" }).count() : 0;
+  if (SHOTS) await page.screenshot({ path: join(SHOTS, "direct.png") });
+  check(
+    "a file an agent sends directly, where there is no doc, shows as a chip on its message",
+    !there ? "the agent's direct message isn't on screen" : reports !== 1 ? `its row shows ${reports} chips for report.txt` : null,
   );
 } finally {
   await browser.close();
