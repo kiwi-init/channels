@@ -99,7 +99,14 @@ try {
         return `viewport ${innerWidth}x${innerHeight}; at ${Math.round(at.x)},${Math.round(at.y)}: ${chain.slice(0, 6).join(" < ")}`;
       }, gear);
       console.log(`${layout.name}: window ${sh(["xdotool", "getwindowgeometry", win]).replace(/\s+/g, " ")}; ${hit}`);
+      const middle = await d.evaluate(() => ({ x: innerWidth / 2, y: innerHeight / 2 }), null);
+      click(win, middle.x, middle.y, 1);
+      await Bun.sleep(500);
+      console.log(
+        `${layout.name}: a click mid-page at ${Math.round(middle.x)},${Math.round(middle.y)} (pointer ${sh(["xdotool", "getmouselocation"])}) reached the page as ${JSON.stringify(await d.evaluate(() => (Reflect.get(window, "kiwiPresses") as string[]).splice(0), null))}`,
+      );
       click(win, gear.x, gear.y, 1);
+      console.log(`${layout.name}: pointer after the gear click: ${sh(["xdotool", "getmouselocation"])}`);
       try {
         await until(`Settings opens on a real click in the ${layout.name} layout`, 10_000, async () => (await d.evaluate(() => !!document.querySelector(".set"), null)) || null);
       } finally {
