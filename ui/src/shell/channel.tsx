@@ -8,18 +8,18 @@ import { dialogOpen, keysHint, mod } from "~/kit/keys"
 import { Boundary } from "~/kit/boundary"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
-import { NARROW, useMedia, WIDE } from "~/kit/media"
+import { useMedia, WIDE } from "~/kit/media"
 import type { Channel } from "~/model"
 import { drawerNews } from "~/live/links"
 import { dropMessage, findWanted, useWantedMessage } from "~/live/open-message"
 import { sameWhere, useGo, useNav, useActions } from "~/nav"
 import { whereKey } from "~/places"
-import { useLayout } from "@kiwi/app/layout.ts"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { usePanelWidth } from "~/shell/panel-width"
 import { useSideWidth } from "~/shell/side-width"
 import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
 import { Sidebar, ViewsBar } from "~/shell/sidebar"
+import { useTabs, useTopLayout } from "~/shell/top-layout"
 import { ActivityButton } from "~/chat/events"
 import { between, nickname } from "~/names"
 import { t } from "~/i18n/i18n"
@@ -58,9 +58,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const go = useGo()
   const actions = useActions()
   const hidden = useSidebarHidden()
-  const layout = useLayout()
-  const narrow = useMedia(NARROW)
-  const top = layout === "top" && !narrow
+  const tabs = useTabs()
+  const top = useTopLayout()
   const panel = usePanelWidth(hidden)
   const side = useSideWidth()
   useLayoutEffect(() => {
@@ -201,6 +200,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           ? between(channel, nav.where.between)
           : `T${nav.where.task}`
 
+  const title = nav.tab === "chat" ? here : t(VIEW_NAMES[nav.tab])
   const news = drawerNews(channel)
 
   return (
@@ -234,7 +234,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             {news && <span className={cx("top-drawer-dot", news === "loud" && "is-loud")} />}
           </button>
         </div>
-        <h1 className="top-here">{nav.tab === "chat" ? here : t(VIEW_NAMES[nav.tab])}</h1>
+        {!tabs && <h1 className="top-here">{title}</h1>}
         <div className={cx("top-tools", searching && "is-searching")}>
           {channel.hold && nav.tab !== "chat" && (
             <span className="top-hold" title={channel.hold.note}>
@@ -254,7 +254,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       </header>
       {top && <ViewsBar channel={channel} />}
       <Sidebar channel={channel} views={!top} />
-      <main className="main">
+      <main className="main" aria-label={tabs ? title : undefined}>
         <Boundary resetKey={nav.tab}>
           <Suspense fallback={null}>
             {older ? (

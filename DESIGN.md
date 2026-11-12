@@ -141,10 +141,18 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     shares them. Nothing else places the big parts: no margins, no absolute
     positions, no measuring in script.
   - The window's true centre. The two sides are the same width, so the work
-    is on the window's centre by construction, and the bar's title is centred
-    on the window in every state. Settings and Home centre on the window too.
-    A window under 1180px wide has no third column and centres the work in
-    what is left.
+    is on the window's centre by construction. Settings and Home centre on
+    the window too. A window under 1180px wide has no third column and
+    centres the work in what is left.
+  - Channels are tabs. The top bar's row is a browser's tab strip (`.rail`
+    on grid row 1): Home, then one tab per channel with a 16px icon, the
+    channel's name and its count, then New channel. It starts after the
+    search button and stays there when the sidebar hides or its edge is
+    dragged; it moves aside only for the search field. The row has no
+    title. Tabs share the row equally: short names stay whole, long ones
+    end in an ellipsis, and the open tab keeps its whole name; nothing
+    wraps or scrolls. A window 760px wide or less, or a portrait one, keeps
+    the title and a row of 40px tiles under it.
   - The sidebar's width is yours. Its right edge drags (`shell/side-width.ts`,
     `.side-grip`): 14rem to 28rem, snapped to 8px, kept in rem so it follows
     the text size, and never so wide that the work has under 480px. Arrow
@@ -152,13 +160,14 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     `--side-want`, which `--side-w` reads, so the second sidebar takes the
     same width and the centre holds.
   - Two layouts (Settings > Appearance > Layout, `@kiwi/app/layout.ts`, kept
-    on this computer). Sidebar, the default: the views (Needs you, Specs,
-    Agents, GitHub) are rows under the channel's name. Top bar: they are one
-    row above the work (`.views-bar`, grid row 2 of the work's column), on
-    the channel tiles' line, starting on the gutter line; the sidebar keeps
-    the channel's name, rooms, people and agents, and the work starts under
-    the row. The grid, the centre and the second sidebar are the same in
-    both. A window 760px wide or less, or a portrait one, uses Sidebar.
+    on this computer), for where the views go (Needs you, Specs, Agents,
+    GitHub). Sidebar, the default: they are rows under the channel's name.
+    Top bar: they are one row under the tabs (`.views-bar`, grid row 2 of
+    the work's column), starting on the gutter line, with the sidebar's
+    channel name beside them, and the work starts under that row. The
+    sidebar keeps the channel's name, rooms, people and agents. The grid
+    and the second sidebar are the same in both. A window 760px wide or
+    less, or a portrait one, uses Sidebar.
   - One gutter. Every view keeps `--gutter` (40px) on each side of its
     content. The conversation has no maximum width: the gap is always 40 and
     the column is whatever the window leaves. A scrolling view reserves its

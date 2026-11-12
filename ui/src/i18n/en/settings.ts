@@ -78,7 +78,7 @@ const words = {
   "settings.sections.layout": "Layout",
   "settings.sections.layout.side": "Sidebar",
   "settings.sections.layout.top": "Top bar",
-  "settings.sections.layout.hint": "Top bar puts Needs you, Specs, Agents and GitHub in a row above the work.",
+  "settings.sections.layout.hint": "Top bar puts Needs you, Specs, Agents and GitHub in a row under the channel tabs.",
   "settings.sections.motion": "Motion",
   "settings.sections.update.ready": "{version} is ready",
   "settings.sections.update.ready.hint": "You're on {version}. Channels restarts on the new one.",

@@ -77,7 +77,7 @@ export default {
   "settings.sections.layout": "레이아웃",
   "settings.sections.layout.side": "사이드바",
   "settings.sections.layout.top": "상단 바",
-  "settings.sections.layout.hint": "상단 바는 보기들을 작업 영역 위에 한 줄로 놓습니다.",
+  "settings.sections.layout.hint": "상단 바는 보기들을 채널 탭 아래 한 줄로 놓습니다.",
   "settings.sections.motion": "모션",
   "settings.sections.update.ready": "{version} 준비됨",
   "settings.sections.update.ready.hint": "현재 {version}입니다. Channels가 새 버전으로 다시 시작합니다.",
