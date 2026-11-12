@@ -272,6 +272,7 @@ export default {
   "tasks.move.assign": "{who} deve dar um responsável",
   "tasks.move.review": "{who} deve revisar",
   "tasks.move.route": "{who} deve dar um revisor",
+  "tasks.move.reset": "{who} deve reiniciar a sessão de {reviewer} ou passar a revisão adiante",
   "tasks.move.revise": "{who} deve enviar para revisão de novo",
   "tasks.move.answer": "{who} deve responder",
   "tasks.move.land": "{who} deve integrar",

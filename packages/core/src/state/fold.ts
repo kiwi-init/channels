@@ -446,7 +446,7 @@ function folding(
     const by = answered.get(m.seq);
     return !by || ![...by].some((n) => answersAsk(members, m, n));
   };
-  const clockView = (): ClockView => ({ tasks, github: ctx.github, branchPrefix: ctx.branchPrefix, quietMs: ctx.quietMs, openAsks: holding.filter(stillOpen) });
+  const clockView = (): ClockView => ({ tasks, members, github: ctx.github, branchPrefix: ctx.branchPrefix, quietMs: ctx.quietMs, openAsks: holding.filter(stillOpen) });
   const agentHere = (name: string): boolean => {
     const who = members.get(name);
     return !!who && who.active && !isPerson(who);
@@ -799,7 +799,9 @@ function folding(
         const wrong = before ? wakeGot(clockView(), before, ev, { seq: m.seq, at, by: m.from }) : `no task ${taskId(ev.task)}`;
         if (wrong) reject(wrong);
       }
+      const markWas = member.reset;
       applyEvent(ctx, m, ev, member, at, reject);
+      const marksMoved = !rejected.has(m.seq) && (ev.op === "review.reset.set" || ev.op === "review.reset.waive" || member.reset !== markWas);
       if (!rejected.has(m.seq) && ev.op !== "task.nudge" && ev.op !== "task.wake") {
         const subject = ev.op === "task.add" ? tasks.get(m.seq) : before && tasks.has(before.id) ? before : undefined;
         if (subject) {
@@ -812,6 +814,7 @@ function folding(
           for (const t of tasks.values()) tickTask(t, m.seq, at);
         }
       }
+      if (marksMoved) for (const t of tasks.values()) if (t.state === "review" && t !== before) tickTask(t, m.seq, at);
       if (taskAsk !== undefined && !rejected.has(m.seq)) closeOnItsOwn(taskAsk, m, at);
       const added = ev.op === "task.add" && !rejected.has(m.seq) ? tasks.get(m.seq) : undefined;
       if (added) {

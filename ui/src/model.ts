@@ -172,12 +172,12 @@ export interface TaskEvent {
   root?: number
 }
 
-export type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land"
+export type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land" | "reset"
 
 export type RunTrouble = "failed" | "unseen" | "overran"
 
 export type TaskMover =
-  | { kind: "member"; name: string; move: MoveFor; question?: number; trouble?: RunTrouble }
+  | { kind: "member"; name: string; move: MoveFor; question?: number; trouble?: RunTrouble; reviewer?: string }
   | { kind: "waiting"; owner: string; ahead: number }
   | { kind: "run"; behind: string; due: number }
   | { kind: "hold"; until: number; reason: Words }

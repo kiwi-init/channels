@@ -699,7 +699,15 @@ const TROUBLE: Record<NonNullable<Extract<Mover, { kind: "member" }>["why"]>, Ru
 function moverFor(state: ChannelState, t: CoreTask, now: number): TaskMover | undefined {
   const m = moverOf(state, t, now)
   if (!m) return undefined
-  if (m.kind === "member") return { kind: "member", name: m.name, move: m.move, ...(m.question !== undefined ? { question: m.question } : {}), ...(m.why ? { trouble: TROUBLE[m.why] } : {}) }
+  if (m.kind === "member")
+    return {
+      kind: "member",
+      name: m.name,
+      move: m.move,
+      ...(m.question !== undefined ? { question: m.question } : {}),
+      ...(m.why ? { trouble: TROUBLE[m.why] } : {}),
+      ...(m.reviewer ? { reviewer: m.reviewer } : {}),
+    }
   if (m.kind === "waiting") return { kind: "waiting", owner: m.owner, ahead: m.ahead }
   if (m.kind === "run") return { kind: "run", behind: m.behind, due: m.due }
   if (m.kind === "nobody") return { kind: "nobody" }

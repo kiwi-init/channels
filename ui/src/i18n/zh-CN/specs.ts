@@ -272,6 +272,7 @@ export default {
   "tasks.move.assign": "该 {who} 指定负责人",
   "tasks.move.review": "该 {who} 评审",
   "tasks.move.route": "该 {who} 指定评审人",
+  "tasks.move.reset": "该 {who} 重置 {reviewer} 的会话，或把评审转给别人",
   "tasks.move.revise": "该 {who} 再次送审",
   "tasks.move.answer": "该 {who} 回答",
   "tasks.move.land": "该 {who} 落地",

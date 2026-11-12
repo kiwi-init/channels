@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormed, type Event, type Message } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
+import { moverOf, moverText } from "@kiwi/core/mover.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -173,5 +174,23 @@ describe("the same marks after a restart", () => {
       expect(resumed.reviewReset).toBe(true);
       expect(resumed.rejected.has(second.seq)).toBe(whole.rejected.has(second.seq));
     }
+  });
+});
+
+describe("the move and the clock while a reviewer needs a reset", () => {
+  test("the marked reviewer's other open round becomes the lead's move, and goes back to it once it rejoins from a new session", async () => {
+    const { t1, t2, log } = await twoInReview();
+    const pass = await approve("mac", t1, 1, "a1");
+    const marked = fold([...log, pass], roster);
+    const t = marked.tasks.get(t2)!;
+    expect(t.clock?.key).toBe("@lead|reset|mac");
+    expect(t.clock?.seq).toBe(pass.seq);
+    expect(moverOf(marked, t)).toEqual({ kind: "member", name: "owl", move: "reset", reviewer: "mac" });
+    expect(moverText(moverOf(marked, t)!)).toBe("owl to reset mac's session or move its review");
+    const fresh = await card("mac", S2);
+    const back = fold([...log, pass, fresh], roster);
+    expect(back.tasks.get(t2)!.clock?.key).toBe("mac|review|1");
+    expect(back.tasks.get(t2)!.clock?.seq).toBe(fresh.seq);
+    expect(moverOf(back, back.tasks.get(t2)!)).toEqual({ kind: "member", name: "mac", move: "review" });
   });
 });
