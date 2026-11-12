@@ -7,7 +7,7 @@ import { AgentLive, AgentSession } from "../src/agent.ts";
 import { personaOf, type Persona } from "@kiwi/core/personality.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
-import { handedOver } from "@kiwi/core/state.ts";
+import { handedOver, readHandedOver } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, kiwiCmd, pairComputer, setupChannel, type OwnerSetup, type PairedComputer } from "./owner.ts";
 
@@ -58,6 +58,26 @@ describe("handedOver: what the Lead reads", () => {
 
   test("a bare question is the question and whose it is", () => {
     expect(handedOver("wren", "Ship it?", {})).toBe("Ship it?\n\nHanded to you, the Lead: wren doesn't ask people. Decide it yourself, or ask a person with kiwi ask-human.");
+  });
+});
+
+describe("readHandedOver: what the Lead's list reads back (T504)", () => {
+  test("a decision reads back as it was asked, with a question of several paragraphs", () => {
+    const ask = { choices: ["A: glass", "B: flat"], holds: ["T7", "#18"], decision: "taste" as const };
+    expect(readHandedOver(handedOver("wren", "Which look?\n\nThe top bar is flat already.", ask))).toEqual({ from: "wren", question: "Which look?\n\nThe top bar is flat already.", ...ask });
+  });
+
+  test("a step reads back with why, why an agent can't, and how", () => {
+    const step = { why: "the release waits on it", needsPerson: "the key is on your Mac", do: ["Open Keychain"], run: ["bun run sign"], expect: "signed", links: ["https://example.com/keys"] };
+    expect(readHandedOver(handedOver("wren", "Sign the build", { holds: ["T7"], step }))).toEqual({ from: "wren", question: "Sign the build", choices: [], holds: ["T7"], step });
+    const bare = { why: "the release waits on it", needsPerson: "the key is on your Mac", links: ["https://example.com/keys"] };
+    expect(readHandedOver(handedOver("wren", "Sign the build", { holds: ["T7"], step: bare }))?.step).toEqual(bare);
+  });
+
+  test("a bare question, and a message that isn't a hand-over", () => {
+    expect(readHandedOver(handedOver("wren", "Ship it?", {}))).toEqual({ from: "wren", question: "Ship it?", choices: [], holds: [] });
+    expect(readHandedOver("Ship it?")).toBeNull();
+    expect(readHandedOver("Ship it?\n\nOptions:\n- A: yes\n- B: no")).toBeNull();
   });
 });
 
