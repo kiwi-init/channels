@@ -154,6 +154,36 @@ describe("a harness started from another harness's session", () => {
   });
 });
 
+describe("a Deep Code seat (T7367)", () => {
+  test("joined with --harness deepcode it keeps that harness; a command in tmux records its pane, one outside leaves it, and the wake types there", async () => {
+    const owner = scratch("own-dc");
+    const code = created(await ok(owner, ["create", "deep", "--as", "boss"]));
+    const dc = scratch("dc");
+    const plain = { CLAUDECODE: "", CLAUDE_CODE_SESSION_ID: "", CLAUDE_PID: "", TMUX: "", TMUX_PANE: "", KIWI_HARNESS: "" };
+    const me = youAre((await join_(owner, dc, code, plain, dc, ["--harness", "deepcode"])).out);
+    const seat = () => {
+      const cfg = JSON.parse(readFileSync(join(dc, "config.json"), "utf8")) as {
+        bindings?: Record<string, { as: string; harness?: string; tmux?: { pane: string } } | { as: string; harness?: string; tmux?: { pane: string } }[]>;
+      };
+      return Object.values(cfg.bindings ?? {})
+        .flatMap((v) => (Array.isArray(v) ? v : [v]))
+        .find((b) => b.as === me);
+    };
+    expect(seat()).toMatchObject({ as: me, harness: "deepcode" });
+    expect(seat()?.tmux).toBeUndefined();
+    expect(await ok(dc, ["wake"], plain)).toContain("can't be woken");
+
+    const inTmux = { ...plain, TMUX: `${join(dc, "tmux-sock")},1,0`, TMUX_PANE: "%9" };
+    await ok(dc, ["send", "ready for reviews"], inTmux);
+    expect(seat()?.tmux?.pane).toBe("%9");
+    await ok(dc, ["send", "from another terminal"], plain);
+    expect(seat()?.tmux?.pane).toBe("%9");
+    await ok(dc, ["send", "from a Claude session in tmux"], { ...inTmux, TMUX_PANE: "%3", CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "other", CLAUDE_PID: String(process.pid), KIWI_AS: me });
+    expect(seat()?.tmux?.pane).toBe("%9");
+    await until(async () => (await ok(dc, ["wake"], plain)).includes("wakes via typing into its tmux pane"), "the daemon reading the Deep Code seat's pane");
+  });
+});
+
 describe("--as", () => {
   test("a typo does not mint a new unused identity", async () => {
     const owner = scratch("as-typo");
