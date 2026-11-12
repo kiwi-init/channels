@@ -6,7 +6,7 @@
 - **Native Temporal is everywhere measured:** Bun 1.4.4, Chromium 158, Playwright WebKit 27.2 and the system WebKitGTK 2.54.2 JavaScriptCore all expose native `Temporal`, detected at runtime. This contradicts the spec's premise that system WebKit lacks it. The macOS WKWebView (Safari) was not measured.
 - **Bundle:** a polyfill import in `kit/time.ts` adds **+18,879 B gzip to the initial JS** and nothing to the lazy JS. It breaks the repo's own first-load budget gate (`scripts/ui-bundle.ts`): 855,741 B of raw (uncompressed) initial JS against its raw budget of 800,000 B; the baseline already sits at 799,260 B raw. The +18,879 B figure is gzip; the gate measures raw bytes.
 - **Correctness:** one real bug. `day()` in `ui/src/kit/time.ts:44-50` mislabels "Yesterday" around DST changes. It accounts for 49 distinct inputs and is the only difference between Date and Temporal in Bun, WebKit and JSC. Temporal's answer is the correct one. Chromium adds a second difference that is a V8 bug on the Temporal side (`hour: "2-digit"` is dropped).
-- **History:** no past fix in the repo was caused by time zones, DST or calendar math.
+- **History:** this audit found no past fix caused by time zones, DST or calendar math (searched commit messages and merged PRs; see section 4).
 - **Recommendation:** no move to Temporal. Fix the one real calendar bug in `day()` with the Date-only change (`setDate(getDate() - 1)`), which costs 0 B and needs no engine support (to be tested on the 49 DST inputs in the fix PR). Native `Temporal` at that site becomes an option only once macOS and iOS WebKit are verified to ship it. Details are at the end.
 
 ## Pinned versions and machine
@@ -112,9 +112,9 @@ The classification covers non-test `.ts/.tsx/.js/.mjs` files: 1,081 files scanne
 
 By area: `src` 208 lines, `ui` 165, `scripts` 96, `packages/core` 53, `desktop` 47, `packages/channel` 24, `ios` 14, `packages/app` 10, `site` 3, `android` 2. Classes that Temporal does not improve: timestamps (epoch ms is already the wire format) and durations (plain integer math, measured above as 15x to 126x cheaper).
 
-**Calendar and time zone math sites, reviewed:**
+**Calendar and time zone math sites, reviewed by reading the code (an audit finding, not a proof; only `day()` was exercised by the harness):**
 
-| site | what | correct today? |
+| site | what | correct on review? |
 |---|---|---|
 | `ui/src/kit/time.ts:44-50` `day()` | local start of day via `setHours(0,0,0,0)`, then "yesterday" = `start - 24h` | **No, a DST bug** (below). Temporal fixes it with `toPlainDate()` and `subtract({days:1})`. |
 | `ui/src/kit/time.ts:52` `sameDay()` | `toDateString()` equality | Yes (equal on all 2,254 pairs in 6 zones and 4 engines) |
@@ -128,7 +128,7 @@ By area: `src` 208 lines, `ui` 165, `scripts` 96, `packages/core` 53, `desktop` 
 | `ui/src/usage/words.ts:57` | UTC day key | Yes |
 | `scripts/tracker.ts:177-180`, `scripts/stamp.ts:24`, `scripts/changelog.ts:118`, `scripts/stamp.ts:79` | UTC dates, release month, days since | Yes |
 
-The regex also matched `src/relay/worker.ts:338,340` and `ui/src/demo/provider.tsx:1047` (`days * 86_400_000`). I reclassified them as durations: an alarm N×24 h away is intended. Also outside the pinned SHA: the unmerged branch `origin/T7429-utc-hover` (commit `31f732985`, "Chat: a UTC time in prose shows its local time…") adds `ui/src/chat/zoned-times.ts` with `Date.UTC` round-trip validation and per-zone `Intl` formatting. `Temporal.PlainDate.from({…}, { overflow: "reject" })` and `ZonedDateTime` would simplify it. It is correct as written.
+The regex also matched `src/relay/worker.ts:338,340` and `ui/src/demo/provider.tsx:1047` (`days * 86_400_000`). I reclassified them as durations: an alarm N×24 h away is intended. Also outside the pinned SHA: the unmerged branch `origin/T7429-utc-hover` (commit `31f732985`, "Chat: a UTC time in prose shows its local time…") adds `ui/src/chat/zoned-times.ts` with `Date.UTC` round-trip validation and per-zone `Intl` formatting. `Temporal.PlainDate.from({…}, { overflow: "reject" })` and `ZonedDateTime` would simplify it. On review it looks correct as written.
 
 **The real bug, `day()` across DST.** On the day after a 23 h day, a message from late on the day before yesterday shows as "Yesterday". On the day after a 25 h day, a message from just after midnight yesterday shows its weekday instead of "Yesterday". The harness found it in America/New_York (70 of 11,270 outputs), Europe/Berlin (70) and Australia/Sydney (105), with identical results in Bun, Chromium, Playwright WebKit and JSC. All five languages are affected. There are no differences in Sao_Paulo, Kolkata or UTC. Temporal's output is correct in every case: it compares calendar dates. Examples (en-US):
 
@@ -170,7 +170,7 @@ Searches run on `origin/main`:
 - `git log --all -i --grep 'DST|daylight|timezone|time zone|tz'`.
 - `gh pr list -R kiwi-init/channels --state merged --search 'timezone OR "time zone" OR DST OR midnight OR "daylight saving" OR "local time" OR yesterday OR calendar'`: 12 PRs.
 
-**I found no fix caused by time zone, DST or calendar math.** The hits are features that introduced the sites above, not fixes:
+**This search found no fix caused by time zone, DST or calendar math.** It covers commit messages and merged PR titles, not every behaviour change. The hits are features that introduced the sites above, not fixes:
 
 - #941 `77e28c96e`: Now card, "done today"
 - #948 `a622de93b`: merged counts as done today
@@ -188,10 +188,10 @@ The nearest real date fix is #570 `774672d79`: "A message dated past what a date
 ## Recommendation: no move; fix `day()` with Date now; native Temporal there only after macOS/iOS are verified
 
 - **No full move.** About 95% of uses are timestamps (376 lines) and durations (217 lines) on epoch ms, which is also the wire format. Temporal is 1.1x to 2.6x slower on the display kernels and 15x to 126x slower on duration math, and fixes nothing in these classes. The only measured correctness difference besides `day()` is a V8 bug in which Temporal is the wrong side. A full move would mean about 600 edits to fix one bug (`day()`), which a one-line Date change also fixes.
-- **No Bun-side move.** The daemon's clock math is pure integer arithmetic with no Date or Intl call. It is equal on every threshold case, and Temporal there is 15.8x slower in Bun with no readability gain. The relay's UTC day keys are correct as written.
+- **No Bun-side move.** The daemon's clock math is pure integer arithmetic with no Date or Intl call. It is equal on every threshold case, and Temporal there is 15.8x slower in Bun with no readability gain. On review, the relay's UTC day keys look correct as written.
 - **Fix the one real calendar bug now, without Temporal.** `ui/src/kit/time.ts:44-50` `day()` mislabels "Yesterday" on the day after every DST change. Fix it with `setDate(getDate() - 1)` instead of `- DAY`. It costs 0 B and needs no engine support. It has not been run against the 49 differing inputs yet; the fix PR should add them as a test.
   - Native `Temporal` (`toZonedDateTimeISO(Temporal.Now.timeZoneId()).toPlainDate()` and `subtract({ days: 1 })`) is an option at this site only after macOS WKWebView and iOS WebKit are verified to expose it. The polyfill is not: it costs +18.9 KB gzip and fails the raw 800,000 B first-load gate.
-  - Keep `sameDay()` on `toDateString()`: it is correct and 1.9x to 7x faster.
+  - Keep `sameDay()` on `toDateString()`: it matched Date on every corpus input and is 1.9x to 7x faster.
   - The extra ~5 µs per `day()` call is invisible at day-separator frequency.
 
 ## What I could not measure
