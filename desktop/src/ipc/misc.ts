@@ -26,6 +26,7 @@ export function miscCalls(
   | "movedApp"
   | "dismissMovedApp"
   | "openExternal"
+  | "copyText"
   | "getDeepLink"
   | "takeDroppedFiles"
   | "takePastedImage"
@@ -58,6 +59,10 @@ export function miscCalls(
         logMainError(new Error(`could not open ${ext} in the system browser`, { cause: err }));
         throw err;
       }
+    },
+    copyText: (text: string) => {
+      if (typeof text !== "string" || Buffer.byteLength(text) > MAX_SAVE_BYTES) throw new Error("that text is too big to copy");
+      return host.copyText(text);
     },
     getDeepLink: () => takeDeepLink(),
     takeDroppedFiles: () => host.droppedFiles(),
