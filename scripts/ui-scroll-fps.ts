@@ -297,8 +297,8 @@ try {
     { dy: 120, frames: 400 },
   ];
   const thrown = [
-    { dy: -120, frames: 200 },
-    { dy: 1_000_000, frames: 240 },
+    { dy: -120, frames: 400 },
+    { dy: 1_000_000, frames: 800 },
   ];
   const idles: Frames[] = [];
   const runs: Frames[] = [];
