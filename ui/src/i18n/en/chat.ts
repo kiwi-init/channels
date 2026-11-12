@@ -29,6 +29,7 @@ export default {
   "chat.composer.stashed.title": "Stashed drafts ({keys} brings back the newest)",
   "chat.composer.stashed.count": "{n} stashed",
   "chat.composer.quoting": "Quoting {name}",
+  "chat.composer.quoting.task": "Quoting {task}'s description",
   "chat.composer.replying.to": "Replying to {name}",
   "chat.composer.cancel.reply": "Cancel reply",
   "chat.composer.cancel.reply.esc": "Cancel reply (Esc)",

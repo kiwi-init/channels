@@ -9,7 +9,8 @@ import { compactAt, quoteOf, useNames, useTaskIds } from "~/chat/conversation"
 import { named } from "~/chat/linked"
 import { MessageRow } from "~/chat/message"
 import { preview } from "~/chat/preview"
-import { jumpTo } from "~/chat/reply"
+import { jumpTo, ReplyContext, replyTo, type Quoting, type Replying } from "~/chat/reply"
+import { QuotePick } from "~/chat/quote-pick"
 import { useWhole } from "~/chat/whole"
 import { ANYONE } from "@kiwi/channel/task-actions.ts"
 import { autofocus, Avatar, cx, Dot, Heading, statusWord } from "~/kit/bits"
@@ -50,6 +51,8 @@ const holds = (a: Ask, id: number): a is PermissionAsk | QuestionAsk =>
 
 const openImage = viewImage
 
+const QUOTABLE = ".msg-body .md, .task-detail"
+
 export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const task = channel.tasks.find((k) => k.id === id)
   const talk = useMemo(() => channel.messages.filter((m) => m.where.kind === "task" && m.where.task === id), [channel.messages, id])
@@ -64,6 +67,18 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
     },
     [channel.code]
   )
+  const where = `${channel.code}\n${id}`
+  const [reply, setReply] = useState<{ where: string; quoting: Quoting } | null>(null)
+  if (reply && reply.where !== where) setReply(null)
+  const replying = useMemo((): Replying => ({ quoting: reply?.where === where ? reply.quoting : null, set: (quoting) => setReply(quoting ? { where, quoting } : null) }), [reply, where])
+  const quoteMessage = useCallback(
+    (seq: number, excerpt: string) => {
+      const m = talk.find((x) => x.seq === seq)
+      if (m) setReply({ where, quoting: replyTo(m, excerpt) })
+    },
+    [talk, where]
+  )
+  const quoteTask = useCallback((task: number, excerpt: string) => setReply({ where, quoting: { kind: "task", task, excerpt } }), [where])
   const last = talk.at(-1)?.seq
   const seen = useRef({ id, last })
   useLayoutEffect(() => {
@@ -82,44 +97,47 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const parts = detailParts(wordsRaw(task.title), task.detail ? wordsRaw(task.detail) : undefined)
   const may = !memberOf(channel, channel.you)?.readOnly
   return (
-    <EditHere.Provider value="panel">
-      <PanelHead title={`T${task.id}`}>{may && <TaskMenu key={`menu-${task.id}`} channel={channel} task={task} />}</PanelHead>
-      <div key={task.id} ref={body} className="panel-body task-body tp">
-        <section className="panel-section tp-top">
-          <h3 className="task-title">
-            <Shown value={wrote(parts.title)} />
-          </h3>
-          {parts.body && (
-            <div className="task-detail">
-              <Body text={wrote(parts.body)} seq={0} names={names} tasks={tasks} onImage={openImage} onMessage={onQuote} />
-            </div>
+    <ReplyContext.Provider value={may ? replying : null}>
+      <EditHere.Provider value="panel">
+        <PanelHead title={`T${task.id}`}>{may && <TaskMenu key={`menu-${task.id}`} channel={channel} task={task} />}</PanelHead>
+        {may && <QuotePick root={body} body={QUOTABLE} onQuote={quoteMessage} onQuoteTask={quoteTask} />}
+        <div key={task.id} ref={body} className="panel-body task-body tp">
+          <section className="panel-section tp-top">
+            <h3 className="task-title">
+              <Shown value={wrote(parts.title)} />
+            </h3>
+            {parts.body && (
+              <div className="task-detail" data-quote-task={task.id}>
+                <Body text={wrote(parts.body)} seq={0} names={names} tasks={tasks} onImage={openImage} onMessage={onQuote} />
+              </div>
+            )}
+            <State key={`state-${task.id}`} channel={channel} task={task} may={may} />
+          </section>
+          <section className="panel-section">
+            <Props key={`props-${task.id}`} channel={channel} task={task} may={may} />
+            {may && task.suggested && !task.owner && <Suggested channel={channel} task={task} suggested={task.suggested} />}
+          </section>
+          {waits.length > 0 && <Waits channel={channel} waits={waits} />}
+          <Review key={`review-${task.id}`} channel={channel} task={task} />
+          {(task.pr || channel.issues?.some((i) => i.task === task.id)) && (
+            <section className="panel-section tp-links">
+              {task.pr && <PrCard pr={task.pr} />}
+              <LinkedIssue channel={channel} id={task.id} />
+            </section>
           )}
-          <State key={`state-${task.id}`} channel={channel} task={task} may={may} />
-        </section>
-        <section className="panel-section">
-          <Props key={`props-${task.id}`} channel={channel} task={task} may={may} />
-          {may && task.suggested && !task.owner && <Suggested channel={channel} task={task} suggested={task.suggested} />}
-        </section>
-        {waits.length > 0 && <Waits channel={channel} waits={waits} />}
-        <Review key={`review-${task.id}`} channel={channel} task={task} />
-        {(task.pr || channel.issues?.some((i) => i.task === task.id)) && (
-          <section className="panel-section tp-links">
-            {task.pr && <PrCard pr={task.pr} />}
-            <LinkedIssue channel={channel} id={task.id} />
-          </section>
-        )}
-        {task.history.length > 0 && <Activity key={`activity-${task.id}`} channel={channel} history={task.history} />}
-        {talk.length > 0 && (
-          <section className="panel-section task-talk">
-            <Heading>{t("panels.task.conversation")}</Heading>
-            {talk.map((m, i) => (
-              <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} tasks={tasks} inThread quote={quoteOf(talk, i, bySeq)} onQuote={onQuote} />
-            ))}
-          </section>
-        )}
-      </div>
-      <Composer key={`compose-${task.id}`} channel={channel} where={{ kind: "task", task: task.id }} placeholder={t("panels.task.message.in", { task: String(task.id) })} />
-    </EditHere.Provider>
+          {task.history.length > 0 && <Activity key={`activity-${task.id}`} channel={channel} history={task.history} />}
+          {talk.length > 0 && (
+            <section className="panel-section task-talk">
+              <Heading>{t("panels.task.conversation")}</Heading>
+              {talk.map((m, i) => (
+                <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} tasks={tasks} inThread quote={quoteOf(talk, i, bySeq)} onQuote={onQuote} />
+              ))}
+            </section>
+          )}
+        </div>
+        <Composer key={`compose-${task.id}`} channel={channel} where={{ kind: "task", task: task.id }} placeholder={t("panels.task.message.in", { task: String(task.id) })} />
+      </EditHere.Provider>
+    </ReplyContext.Provider>
   )
 }
 

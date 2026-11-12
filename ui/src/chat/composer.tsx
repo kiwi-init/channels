@@ -40,8 +40,9 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   const actions = useActions()
   const toast = useToast()
   const replying = useReplying()
-  const replyTo = replying?.to ?? null
-  const excerpt = replyTo ? (replying?.excerpt ?? null) : null
+  const quoting = replying?.quoting ?? null
+  const replyTo = quoting?.kind === "message" ? quoting.to : null
+  const excerpt = quoting?.excerpt ?? null
   const key = composerKey(channel.code, where, inThread)
   const [text, setText] = useState(() => drafts.get(key) ?? "")
   const area = useRef<HTMLTextAreaElement>(null)
@@ -102,8 +103,8 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   }, [text])
 
   useEffect(() => {
-    if (replyTo || inThread !== undefined) area.current?.focus()
-  }, [replyTo, excerpt, inThread])
+    if (quoting || inThread !== undefined) area.current?.focus()
+  }, [quoting, inThread])
 
   useLayoutEffect(() => {
     const el = box.current
@@ -225,7 +226,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
       <Suggestions channel={channel} s={s} />
       <form
         ref={form}
-        className={cx("composer", replyTo && "is-replying", dropping && "is-dropping")}
+        className={cx("composer", quoting && "is-replying", dropping && "is-dropping")}
         onSubmit={(e) => {
           e.preventDefault()
           send()
@@ -268,11 +269,13 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
         )}
         {dropping && <DropHint anyFile={!!doc} />}
         <AttachedFiles files={files} anyFile={!!doc} onRemove={(i) => setFiles((now) => now.filter((_, j) => j !== i))} />
-        {replyTo && (
+        {quoting && (
           <div className={cx("compose-reply", excerpt && "is-excerpt")}>
             <Icon name="reply" size={13} />
             <span className="compose-reply-text">
-              {tr(excerpt ? "chat.composer.quoting" : "chat.composer.replying.to", { name: <b>{nickname(channel, replyTo.from)}</b> })}{" "}
+              {quoting.kind === "task"
+                ? tr("chat.composer.quoting.task", { task: <b>{`T${quoting.task}`}</b> })
+                : tr(excerpt ? "chat.composer.quoting" : "chat.composer.replying.to", { name: <b>{nickname(channel, quoting.to.from)}</b> })}{" "}
               <span className={excerpt ? "compose-reply-excerpt" : "dim"}>{excerpt ? `“${quoteLine.slice(0, 160)}${quoteLine.length > 160 ? "…" : ""}”` : quoteLine.slice(0, 160)}</span>
             </span>
             <button type="button" className="compose-reply-x" aria-label={t("chat.composer.cancel.reply")} title={t("chat.composer.cancel.reply.esc")} onClick={() => replying?.set(null)}>
@@ -356,7 +359,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
                 })
               )
                 return
-              if (e.key === "Escape" && replyTo) {
+              if (e.key === "Escape" && quoting) {
                 e.preventDefault()
                 e.stopPropagation()
                 replying?.set(null)

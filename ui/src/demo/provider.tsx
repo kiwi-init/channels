@@ -319,6 +319,8 @@ export type Scenario =
   | "github-signed-in"
   | "github-gate"
   | "task-body"
+  | "task-quote"
+  | "task-quote-read-only"
   | "github-checking"
   | "thread-fetching"
   | "thread-unloaded"
@@ -372,6 +374,30 @@ const TASK_BODY = [
 
 const TASK_BRANCH = "Channels12-channel-settings-one-save-pattern-per-setting"
 
+function withTaskBody(c: Channel): Channel {
+  return {
+    ...c,
+    tasks: c.tasks.map((k) =>
+      k.id === 12 ? { ...k, title: wrote("Channel settings: four save patterns in one dialog, the…"), detail: wrote(TASK_BODY), ...(k.pr && { pr: { ...k.pr, branch: TASK_BRANCH } }) } : k
+    ),
+  }
+}
+
+function withTaskQuote(c: Channel, readOnly: boolean): Channel {
+  const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
+  const where = { kind: "task", task: 12 } as const
+  const at = Date.now() - 20 * 60_000
+  return {
+    ...withTaskBody(c),
+    people: readOnly ? c.people.map((p) => (p.name === c.you ? { ...p, readOnly: true } : p)) : c.people,
+    messages: [
+      ...c.messages,
+      { seq, from: "atlas", at, text: wrote("Keep Rename inline, but save the Goal box on blur like the pause note, as T10 did."), where },
+      { seq: seq + 1, from: "win", at: at + 60_000, text: wrote("Agreed on the Icon row: the header tile is enough.\n\nI'll drop the row in the same PR."), where },
+    ],
+  }
+}
+
 const behindOf = (c: Channel): Channel => ({ ...c, behind: true, specs: c.specs?.filter((s) => !!s.result), tasks: c.tasks.filter((k) => k.status === "done") })
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
@@ -396,73 +422,68 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                     : scenario === "thread-fetching" || scenario === "thread-unloaded"
                       ? { ...DEMO_CHANNEL, since: 1_000_000 }
                       : scenario === "task-body"
-                        ? {
-                            ...DEMO_CHANNEL,
-                            tasks: DEMO_CHANNEL.tasks.map((k) =>
-                              k.id === 12
-                                ? { ...k, title: wrote("Channel settings: four save patterns in one dialog, the…"), detail: wrote(TASK_BODY), ...(k.pr && { pr: { ...k.pr, branch: TASK_BRANCH } }) }
-                                : k
-                            ),
-                          }
-                        : scenario === "opening"
-                          ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-                          : scenario === "held"
-                            ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                            : scenario === "compact" || scenario === "compacted"
-                              ? withCompact(DEMO_CHANNEL, scenario === "compacted")
-                              : scenario === "specs-behind"
-                                ? behindOf(withSpecs(DEMO_CHANNEL, false))
-                                : scenario === "specs" || scenario === "spec-changed"
-                                  ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
-                                  : scenario === "forgotten-computer"
-                                    ? {
-                                        ...DEMO_CHANNEL,
-                                        asks: [
-                                          {
-                                            kind: "join" as const,
-                                            id: "join-dudu",
-                                            at: Date.now() - 30 * 60_000,
-                                            name: "dudu",
-                                            who: "agent" as const,
-                                            harness: "claude" as const,
-                                            runs: "Claude Code · claude-opus-5-5",
-                                            machine: "MacBook-Pro-de-Davi",
-                                            sponsor: "harry",
-                                            revoked: true as const,
-                                            said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
-                                            code: "604-218",
-                                          },
-                                          ...DEMO_CHANNEL.asks,
-                                        ],
-                                      }
-                                    : scenario === "invite-failed"
+                        ? withTaskBody(DEMO_CHANNEL)
+                        : scenario === "task-quote" || scenario === "task-quote-read-only"
+                          ? withTaskQuote(DEMO_CHANNEL, scenario === "task-quote-read-only")
+                          : scenario === "opening"
+                            ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+                            : scenario === "held"
+                              ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+                              : scenario === "compact" || scenario === "compacted"
+                                ? withCompact(DEMO_CHANNEL, scenario === "compacted")
+                                : scenario === "specs-behind"
+                                  ? behindOf(withSpecs(DEMO_CHANNEL, false))
+                                  : scenario === "specs" || scenario === "spec-changed"
+                                    ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
+                                    : scenario === "forgotten-computer"
                                       ? {
                                           ...DEMO_CHANNEL,
                                           asks: [
                                             {
                                               kind: "join" as const,
-                                              id: "join-quill",
-                                              at: Date.now() - 5 * 60_000,
-                                              name: "quill",
+                                              id: "join-dudu",
+                                              at: Date.now() - 30 * 60_000,
+                                              name: "dudu",
                                               who: "agent" as const,
                                               harness: "claude" as const,
                                               runs: "Claude Code · claude-opus-5-5",
-                                              said: { machine: "Linux x64 · 8 cores · 16 GB", repo: "interlinked/site@main", outside: true },
-                                              pin: { failed: true as const },
-                                              code: "317-552",
+                                              machine: "MacBook-Pro-de-Davi",
+                                              sponsor: "harry",
+                                              revoked: true as const,
+                                              said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
+                                              code: "604-218",
                                             },
                                             ...DEMO_CHANNEL.asks,
                                           ],
                                         }
-                                      : scenario === "review-reset"
-                                        ? withReviewReset(DEMO_CHANNEL)
-                                        : scenario === "event-runs"
-                                          ? withEventRuns(DEMO_CHANNEL)
-                                          : scenario === "own-bubbles"
-                                            ? withOwnBubbles(DEMO_CHANNEL)
-                                            : scenario === "signs"
-                                              ? withSigns(DEMO_CHANNEL)
-                                              : DEMO_CHANNEL,
+                                      : scenario === "invite-failed"
+                                        ? {
+                                            ...DEMO_CHANNEL,
+                                            asks: [
+                                              {
+                                                kind: "join" as const,
+                                                id: "join-quill",
+                                                at: Date.now() - 5 * 60_000,
+                                                name: "quill",
+                                                who: "agent" as const,
+                                                harness: "claude" as const,
+                                                runs: "Claude Code · claude-opus-5-5",
+                                                said: { machine: "Linux x64 · 8 cores · 16 GB", repo: "interlinked/site@main", outside: true },
+                                                pin: { failed: true as const },
+                                                code: "317-552",
+                                              },
+                                              ...DEMO_CHANNEL.asks,
+                                            ],
+                                          }
+                                        : scenario === "review-reset"
+                                          ? withReviewReset(DEMO_CHANNEL)
+                                          : scenario === "event-runs"
+                                            ? withEventRuns(DEMO_CHANNEL)
+                                            : scenario === "own-bubbles"
+                                              ? withOwnBubbles(DEMO_CHANNEL)
+                                              : scenario === "signs"
+                                                ? withSigns(DEMO_CHANNEL)
+                                                : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,

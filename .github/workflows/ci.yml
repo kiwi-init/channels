@@ -236,6 +236,10 @@ jobs:
       - name: ui specs worker avatars name themselves on hover and keyboard focus, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-spec-names.ts --dist ui/dist
+      # Selecting text in a task's description or its messages offers Quote; the excerpt lands in the task's composer next to the draft, a description quote cites the task and a message quote its message, mixed selections and read-only members get no Quote, and switching tasks clears it (#2374).
+      - name: ui a task panel quotes its description and its messages, in WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
+        run: bun scripts/ui-task-quote.ts --dist ui/dist
       # A feed keeps its place when its width changes: the sidebar hidden and shown, its edge dragged, the panel opened and closed, the window resized. At the bottom it stays at the bottom with no blank room; scrolled up, the row being read comes back to its pixel (T231).
       - name: ui a feed keeps its place when its width changes, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
