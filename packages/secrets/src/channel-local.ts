@@ -1,10 +1,12 @@
 import { keepRecordsIn } from "@kiwi/core/client/info.ts";
+import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { Member } from "@kiwi/core/membership.ts";
 import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
 
-import type { ChannelOps, PersonView } from "../../../desktop/src/bridge.ts";
+import type { ChannelOps, DocEvent, PersonView } from "../../../desktop/src/bridge.ts";
 import { Keyring } from "../../../desktop/src/keyring.ts";
+import { inTasks } from "./in-tasks.ts";
 import { CHECKS_PREFIX, RECORD_PREFIX, read, readLocal, writeLocal } from "./local-store.ts";
 import { personClaimFor } from "./person-claim.ts";
 import { devBuild, relayUrl } from "./relay.ts";
@@ -34,6 +36,21 @@ const budget: SigningBudget = {
   },
 };
 
+class PageKeyring extends Keyring {
+  override doc(code: string, thread: string, th: string | null, on: (e: DocEvent) => void, level?: number): PipeIn {
+    const page = inTasks(on);
+    const pipe = super.doc(code, thread, th, page.hand, level);
+    return {
+      update: (u) => pipe.update(u),
+      aware: (state) => pipe.aware(state),
+      close: () => {
+        page.stop();
+        pipe.close();
+      },
+    };
+  }
+}
+
 export function localOps(): ChannelOps {
   if (!devBuild()) throw new Error(NO_BROWSER_KEYS);
   keepRecordsIn({
@@ -41,7 +58,7 @@ export function localOps(): ChannelOps {
     set: (room, pk, m) => localStorage.setItem(`${RECORD_PREFIX}${room}.${pk}`, JSON.stringify(m)),
   });
   const seats = () => readLocal().channels;
-  const keyring = new Keyring({
+  const keyring = new PageKeyring({
     relay: relayUrl,
     seats,
     save: async (entry) => {
