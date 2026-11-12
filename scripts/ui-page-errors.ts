@@ -10,6 +10,8 @@ if (engine !== "webkit" && engine !== "chromium") throw new Error(`--browser is 
 
 const PAGE = `<!doctype html><meta charset="utf-8"><title>page errors</title>
 <div id="box" class="grows" style="width:120px;height:40px"></div>
+<div id="pad" style="width:120px;height:40px;padding-bottom:6px"></div>
+<div id="rows"><div id="first" style="height:20px"></div></div>
 <script src="/loop.js"></script>`;
 
 const SCRIPT = `window.throwNow = function throwNow() {
@@ -19,16 +21,38 @@ const SCRIPT = `window.throwNow = function throwNow() {
 };
 window.loopNow = function loopNow() {
   const box = document.getElementById("box");
+  const pad = document.getElementById("pad");
   let turns = 0;
-  new ResizeObserver(function grow() {
-    if (turns++ < 2) box.style.height = box.offsetHeight + 20 + "px";
-  }).observe(box);
+  const watch = new ResizeObserver(function grow() {
+    if (turns++ >= 2) return;
+    box.style.height = box.offsetHeight + 20 + "px";
+    pad.style.paddingBottom = "2px";
+  });
+  watch.observe(box);
+  watch.observe(pad);
+};
+window.watchLate = function watchLate() {
+  const rows = document.getElementById("rows");
+  let mounted = false;
+  const watch = new ResizeObserver(function seen() {
+    if (mounted) return;
+    mounted = true;
+    queueMicrotask(function mount() {
+      const row = document.createElement("div");
+      row.id = "second";
+      row.style.height = "20px";
+      rows.append(row);
+      watch.observe(row);
+    });
+  });
+  watch.observe(document.getElementById("first"));
 };
 `;
 
 interface Probes {
   throwNow?: () => void;
   loopNow?: () => void;
+  watchLate?: () => void;
 }
 
 const server = Bun.serve({
@@ -80,7 +104,21 @@ try {
     expect(loop.includes("after: ok   it carries its stack"), "it names the check it came after too");
     expect(/div#box\.grows \d+x\d+ -> \d+x\d+, watched by observer \d+/.test(all), "it names the element that changed size after its observer ran, with both sizes");
     expect(/observer \d+ \(made at .*loop\.js:\d+/.test(all), "it names where that observer was made");
-  } else console.log(`note ${engine} does not raise a resize observer loop as a page error, so there is nothing to tell here: WebKit runs these four`);
+    expect(!/div#pad \d+x\d+ -> /.test(all), "an element whose padding changed, and whose watched box did not, is not named as changed");
+  } else console.log(`note ${engine} does not raise a resize observer loop as a page error, so there is nothing to tell here: WebKit runs these`);
+
+  const toldBefore = told.length;
+  const printedBefore = printed.length;
+  await page.evaluate(() => (window as Window & Probes).watchLate?.());
+  await until(() => told.length > toldBefore || engine !== "webkit");
+  await new Promise((next) => setTimeout(next, 500));
+  const late = told.slice(toldBefore).find((t) => t.includes("ResizeObserver")) ?? "";
+  const lateAll = `${told.slice(toldBefore).join("\n")}\n${printed.slice(printedBefore).join("\n")}`;
+  if (engine === "webkit" || late) {
+    expect(late !== "", `an element put under watch right after its observer ran, in the same frame, is told as a loop (${late.split("\n")[0]})`);
+    expect(/div#second \d+x20, put under watch \d+ ms before by observer \d+/.test(lateAll), "it names that element, its size and how long before it was put under watch");
+    expect(!/div#first \d+x\d+ -> /.test(lateAll), "and no element that kept its size");
+  }
   await page.close();
 } finally {
   await browser.close();

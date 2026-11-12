@@ -413,6 +413,7 @@ export interface Message {
   task?: number
   prs?: PullRequest[]
   images?: (Image | ImageSpot)[]
+  files?: readonly DocFile[]
   docMedia?: BlockFiles
   reactions?: Reaction[]
   ask?: string
@@ -766,6 +767,7 @@ export interface SendExtras {
   side?: true
   images?: Upload[]
   block?: DocBlockRef
+  media?: BlockFiles
   id?: string
   first?: number
 }

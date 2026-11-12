@@ -226,6 +226,9 @@ jobs:
       - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-still.ts --dist ui/dist
+      - name: ui removing a repo from channel settings keeps the settings dialog open, in WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
+        run: bun scripts/ui-settings-remove.ts --dist ui/dist
       # A feed keeps its place when its width changes: the sidebar hidden and shown, its edge dragged, the panel opened and closed, the window resized. At the bottom it stays at the bottom with no blank room; scrolled up, the row being read comes back to its pixel (T231).
       - name: ui a feed keeps its place when its width changes, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
@@ -731,6 +734,20 @@ jobs:
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 5
         run: bash desktop/scripts/icon-theme-check/check.sh "$RUNNER_TEMP/appimage/squashfs-root" "$RUNNER_TEMP/icon-theme-check"
+      - name: test build (the test driver in, for the native click check)
+        if: ${{ !cancelled() && matrix.drive }}
+        working-directory: desktop
+        run: bun scripts/eb.ts build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          DASH_RELEASE_OFFLINE: "1"
+      - name: in the real app the Settings gear opens Settings, and a press on it never starts a window move, in both layouts
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 5
+        run: |
+          test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
+          [ -n "$test" ] || { echo "no dev-linux test build under desktop/release-eb/build"; exit 1; }
+          xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-native-click.ts "$test"
       - if: ${{ !cancelled() && matrix.drive }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

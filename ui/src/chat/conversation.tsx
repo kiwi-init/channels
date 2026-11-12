@@ -107,6 +107,28 @@ function rowAt(box: HTMLElement, list: readonly Message[], at: number): HTMLElem
   return null
 }
 
+function keepFrom(box: HTMLElement, rows: HTMLElement, list: readonly Message[], start: number, wanted: number): { from: number; row: HTMLElement; tall: number } | null {
+  const room = Math.min(box.scrollHeight - box.scrollTop - box.clientHeight, box.scrollTop - box.clientHeight) - 1
+  const head = rows.getBoundingClientRect().top
+  const at = new Map<number, number>()
+  for (let i = start; i <= wanted; i++) {
+    const seq = list[i]?.seq
+    if (seq !== undefined) at.set(seq, i)
+  }
+  const shown = rows.querySelectorAll<HTMLElement>(":scope > [data-seq]")
+  let low = -1
+  let high = shown.length - 1
+  while (low < high) {
+    const mid = (low + high + 1) >> 1
+    const row = shown[mid]
+    if (row && at.has(Number(row.dataset.seq)) && row.getBoundingClientRect().top - head < room) low = mid
+    else high = mid - 1
+  }
+  const row = shown[low]
+  const from = at.get(Number(row?.dataset.seq))
+  return row && from !== undefined && from > start ? { from, row, tall: row.getBoundingClientRect().top - head } : null
+}
+
 function firstUnreadIn(channel: Channel, where: Where): number | undefined {
   const seen = where.kind === "room" ? channel.rooms.find((r) => r.id === where.room)?.seen : where.kind === "dm" ? channel.directs.find((d) => d.with === where.with)?.seen : undefined
   if (seen === undefined) return undefined
@@ -197,7 +219,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     const feed = withLeftOut(
       channel.messages
         .filter((m) => (since === undefined || m.seq < 0 || m.seq >= since) && sameWhere(m.where, where) && inFeed(m, !!doc) && (where.kind !== "room" || !m.specLine))
-        .map((m) => withDocMedia(m, m.block === undefined ? undefined : fromDoc.media.get(m.block))),
+        .map((m) => (m.block === undefined ? withDocMedia(m, undefined) : withDocMedia(m, fromDoc.media.get(m.block), fromDoc.typed.has(m.block)))),
       (channel.leftOut ?? []).filter((m) => sameWhere(m.where, where))
     )
     if (!doc) return feed
@@ -283,7 +305,31 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
   const following = end === list.length
   const latest = useRef(false)
-  const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold } = useStick(following, !!doc)
+  const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift } = useStick(following, !!doc)
+  const shownFrom = list[start]?.seq
+  const shownTo = list[end - 1]?.seq
+  const edges = useRef({ from: shownFrom, to: shownTo })
+  const dropped = useRef<{ row: HTMLElement; top: number } | null>(null)
+  useLayoutEffect(() => {
+    const was = edges.current
+    edges.current = { from: shownFrom, to: shownTo }
+    const kept = dropped.current
+    if (kept) {
+      dropped.current = null
+      if (kept.row.isConnected) lift(kept.top - kept.row.getBoundingClientRect().top)
+      settle()
+      return
+    }
+    const box = scroller.current
+    const rows = content.current
+    if (!box || !rows || following || end - start <= CAP) return
+    if (shownFrom !== was.from || shownTo === undefined || was.to === undefined || shownTo <= was.to) return
+    const cut = keepFrom(box, rows, list, start, end - CAP)
+    if (!cut) return
+    dropped.current = { row: cut.row, top: cut.row.getBoundingClientRect().top }
+    lift(cut.tall)
+    setSpan(spanOf(list, cut.from, end))
+  }, [shownFrom, shownTo, following, start, end, list, settle, lift, scroller, content])
   const code = channel.code
   const holdEarlier = actions.holdEarlier
   const earlierPage = actions.earlier

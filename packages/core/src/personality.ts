@@ -26,6 +26,8 @@ const CAPABILITY_LABEL: Record<Capability, string> = {
   notes: "set notes",
 };
 
+const ASKS_PEOPLE: readonly Role[] = ["explorer", "releaser", "lead"];
+
 export const MAX_NAME = 40;
 export const MAX_AREAS = 20;
 export const MAX_AREA = 100;
@@ -37,6 +39,7 @@ export interface Personality {
   glyph: string;
   role: Role;
   capabilities: Capability[];
+  askPeople?: boolean;
   areas: string[];
   instructions: string;
 }
@@ -53,18 +56,27 @@ export function cleanPersona(x: unknown): Persona | null {
   if (!name || instructions === null || !(ROLES as readonly unknown[]).includes(p.role)) return null;
   if (!Array.isArray(p.capabilities) || !p.capabilities.every((c) => (CAPABILITIES as readonly unknown[]).includes(c))) return null;
   if (!Array.isArray(p.areas) || p.areas.length > MAX_AREAS || !p.areas.every((a) => !!text(a, MAX_AREA)?.trim())) return null;
+  if (p.askPeople !== undefined && typeof p.askPeople !== "boolean") return null;
   return {
     name,
     role: p.role as Role,
     capabilities: CAPABILITIES.filter((c) => (p.capabilities as unknown[]).includes(c)),
+    ...(p.askPeople === undefined ? {} : { askPeople: p.askPeople }),
     areas: [...new Set((p.areas as string[]).map((a) => a.trim()))],
     instructions,
   };
 }
 
 export function personaOf(p: Personality): Persona {
-  return { name: p.name, role: p.role, capabilities: p.capabilities, areas: p.areas, instructions: p.instructions };
+  return { name: p.name, role: p.role, capabilities: p.capabilities, ...(p.askPeople === undefined ? {} : { askPeople: p.askPeople }), areas: p.areas, instructions: p.instructions };
 }
+
+export function asksPeople(p: Pick<Persona, "role" | "capabilities" | "askPeople">): boolean {
+  return p.capabilities.includes("write") && (p.askPeople ?? ASKS_PEOPLE.includes(p.role));
+}
+
+const mayOf = (p: Pick<Persona, "role" | "capabilities" | "askPeople">): string[] =>
+  p.capabilities.flatMap((c) => (c === "write" && asksPeople(p) ? [CAPABILITY_LABEL[c], "ask people"] : [CAPABILITY_LABEL[c]]));
 
 export function personaScopes(p: Pick<Persona, "capabilities">): Scope[] {
   const has = (c: Capability) => p.capabilities.includes(c);
@@ -79,7 +91,7 @@ const oneLine = (s: string) =>
     .trim();
 
 export function personaLines(p: Persona, now = false): string[] {
-  const may = p.capabilities.map((c) => CAPABILITY_LABEL[c]);
+  const may = mayOf(p);
   const told = p.instructions
     .replace(/\r\n?|[\u2028\u2029]/g, "\n")
     .replace(UNSAFE, "")
@@ -91,10 +103,6 @@ export function personaLines(p: Persona, now = false): string[] {
     `You ${now ? "are now" : "join as"} ${oneLine(personaLabel(p) ?? "")}.${may.length ? ` You may ${may.join(", ")}.` : " You may only read."}${p.areas.length ? ` You work in ${p.areas.map(oneLine).join(", ")}.` : ""}`,
     ...(told ? [`Your instructions: ${told}`] : []),
   ];
-}
-
-export function capabilityLine(p: Pick<Persona, "capabilities">): string {
-  return p.capabilities.length ? p.capabilities.map((c) => CAPABILITY_LABEL[c]).join(" · ") : "reads only";
 }
 
 export function carriedPersona(lead: boolean, role: string | undefined, about: string | undefined, scopes: readonly Scope[]): Persona | undefined {
