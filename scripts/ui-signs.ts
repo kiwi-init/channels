@@ -2,6 +2,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
@@ -68,7 +69,7 @@ const sideways = (page: Page): Promise<number> =>
 try {
   for (const theme of ["dark", "light"]) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-    page.on("pageerror", (e) => fails.push(`page threw in ${theme}: ${e.message}`));
+    await pageErrors(page, (e) => fails.push(`page threw in ${theme}: ${e}`));
     await page.goto(`http://127.0.0.1:${server.port}/?shot=signs&theme=${theme}`);
     await page.locator(".main article.msg .msg-receipt").first().waitFor();
     await page.waitForTimeout(600);

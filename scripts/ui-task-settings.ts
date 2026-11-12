@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
@@ -54,7 +55,7 @@ async function change(page: Page, minutes: string, landing: string, where: strin
 async function channel(shot: string, connected: boolean): Promise<void> {
   const where = connected ? "with a repo" : "without a repo";
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
-  page.on("pageerror", (e) => fails.push(`page threw: ${e.message}`));
+  await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
   await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
   await page.getByRole("dialog", { name: "Channel settings" }).waitFor();
   await tab(page, "GitHub");
