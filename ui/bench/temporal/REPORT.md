@@ -4,10 +4,10 @@
 
 - **Speed:** Temporal is slower than Date/Intl on every measured kernel and engine. With native Temporal, display kernels cost 1.1x to 2.6x more, except `clock()` in Chromium (12.8x). The daemon's clock math costs 15x to 126x more, because the baseline is plain integer subtraction. In absolute terms the UI kernels stay at 0.5 to 17 µs per call, so a full move would not cause a visible slowdown. It would not make anything faster either.
 - **Native Temporal is everywhere measured:** Bun 1.4.4, Chromium 158, Playwright WebKit 27.2 and the system WebKitGTK 2.54.2 JavaScriptCore all expose native `Temporal`, detected at runtime. This contradicts the spec's premise that system WebKit lacks it. The macOS WKWebView (Safari) was not measured.
-- **Bundle:** a polyfill import in `kit/time.ts` adds **+18,879 B gzip to the initial JS** and nothing to the lazy JS. It breaks the repo's own first-load budget gate (`scripts/ui-bundle.ts`): 855,741 B against a budget of 800,000 B, and the baseline already sits at 799,260 B.
+- **Bundle:** a polyfill import in `kit/time.ts` adds **+18,879 B gzip to the initial JS** and nothing to the lazy JS. It breaks the repo's own first-load budget gate (`scripts/ui-bundle.ts`): 855,741 B of raw (uncompressed) initial JS against its raw budget of 800,000 B; the baseline already sits at 799,260 B raw. The +18,879 B figure is gzip; the gate measures raw bytes.
 - **Correctness:** one real bug. `day()` in `ui/src/kit/time.ts:44-50` mislabels "Yesterday" around DST changes. It accounts for 49 distinct inputs and is the only difference between Date and Temporal in Bun, WebKit and JSC. Temporal's answer is the correct one. Chromium adds a second difference that is a V8 bug on the Temporal side (`hour: "2-digit"` is dropped).
 - **History:** no past fix in the repo was caused by time zones, DST or calendar math.
-- **Recommendation:** use Temporal only at the calendar-math sites, natively, without a polyfill. In practice that means fixing `day()`. Do not do a full move, and do not move the Bun side. Details are at the end.
+- **Recommendation:** no move to Temporal. Fix the one real calendar bug in `day()` with the Date-only change (`setDate(getDate() - 1)`), which costs 0 B and needs no engine support (to be tested on the 49 DST inputs in the fix PR). Native `Temporal` at that site becomes an option only once macOS and iOS WebKit are verified to ship it. Details are at the end.
 
 ## Pinned versions and machine
 
@@ -185,13 +185,12 @@ The `day()` logic dates from #1042 `f4d49301c` and #2024 `c7c1886e0` and has not
 
 The nearest real date fix is #570 `774672d79`: "A message dated past what a date can hold no longer crashes the app" (T136). A signed `ts` of 1e16 made `Date` formatting throw `RangeError`. That is a range bug, not a time zone bug. Temporal would not have prevented it: `Temporal.Instant.fromEpochMilliseconds` has the same ±8.64e15 ms limit and throws as well.
 
-## Recommendation: targeted use at the calendar-math sites (native only), no full move, no Bun-side move
+## Recommendation: no move; fix `day()` with Date now; native Temporal there only after macOS/iOS are verified
 
-- **No full move.** About 95% of uses are timestamps (376 lines) and durations (217 lines) on epoch ms, which is also the wire format. Temporal is 1.1x to 2.6x slower on the display kernels and 15x to 126x slower on duration math, and fixes nothing in these classes. The only measured correctness difference besides `day()` is a V8 bug in which Temporal is the wrong side. A full move would mean about 600 edits for zero bugs fixed.
+- **No full move.** About 95% of uses are timestamps (376 lines) and durations (217 lines) on epoch ms, which is also the wire format. Temporal is 1.1x to 2.6x slower on the display kernels and 15x to 126x slower on duration math, and fixes nothing in these classes. The only measured correctness difference besides `day()` is a V8 bug in which Temporal is the wrong side. A full move would mean about 600 edits to fix one bug (`day()`), which a one-line Date change also fixes.
 - **No Bun-side move.** The daemon's clock math is pure integer arithmetic with no Date or Intl call. It is equal on every threshold case, and Temporal there is 15.8x slower in Bun with no readability gain. The relay's UTC day keys are correct as written.
-- **Targeted use: yes, for the one real calendar bug.** `ui/src/kit/time.ts:44-50` `day()` mislabels "Yesterday" on the day after every DST change. Fix it with `toZonedDateTimeISO(Temporal.Now.timeZoneId()).toPlainDate()` and `subtract({ days: 1 })`, using the **global native `Temporal`** that all four measured engines expose.
-  - Do not import the polyfill on that path: it costs +18.9 KB gzip of first-load JS and fails the 800,000 B budget gate.
-  - If shipping must cover a WebKit without Temporal, either guard and fall back to a Date-based fix, or fix `day()` without Temporal: `setDate(getDate() - 1)` instead of `- DAY`. That is equally correct and costs 0 B.
+- **Fix the one real calendar bug now, without Temporal.** `ui/src/kit/time.ts:44-50` `day()` mislabels "Yesterday" on the day after every DST change. Fix it with `setDate(getDate() - 1)` instead of `- DAY`. It costs 0 B and needs no engine support. It has not been run against the 49 differing inputs yet; the fix PR should add them as a test.
+  - Native `Temporal` (`toZonedDateTimeISO(Temporal.Now.timeZoneId()).toPlainDate()` and `subtract({ days: 1 })`) is an option at this site only after macOS WKWebView and iOS WebKit are verified to expose it. The polyfill is not: it costs +18.9 KB gzip and fails the raw 800,000 B first-load gate.
   - Keep `sameDay()` on `toDateString()`: it is correct and 1.9x to 7x faster.
   - The extra ~5 µs per `day()` call is invisible at day-separator frequency.
 
