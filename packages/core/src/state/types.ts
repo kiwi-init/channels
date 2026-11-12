@@ -29,7 +29,10 @@ export interface Member {
   lastSeen: number;
   messages: number;
   ops?: Record<string, number>;
+  reset?: ResetMark;
 }
+
+export type ResetMark = { kind: "waived" } | { kind: "needs"; verdict: number; session: string };
 
 export type FoldMember = Member & { role?: string; about?: string };
 
@@ -296,6 +299,7 @@ export interface ChannelState {
   githubWrite: number | null;
   branchPrefix: string | null;
   quietMs: number;
+  reviewReset: boolean;
   landing: Landing | null;
   landingSteps: StepSpec[] | null;
   compact: Compact | null;
@@ -354,7 +358,18 @@ export type PersonaLead = boolean | "roster";
 
 export interface FoldBase {
   n: number;
-  members: { name: string; role?: string; about?: string; color?: Color; picture?: MemberPicture; card?: Card & { at: number }; lastSeen: number; messages: number; ops?: Record<string, number> }[];
+  members: {
+    name: string;
+    role?: string;
+    about?: string;
+    color?: Color;
+    picture?: MemberPicture;
+    card?: Card & { at: number };
+    lastSeen: number;
+    messages: number;
+    ops?: Record<string, number>;
+    reset?: ResetMark;
+  }[];
   lead: string | null;
   charter: Charter | null;
   repos?: string[];
@@ -373,6 +388,7 @@ export interface FoldBase {
   githubWrite?: number | null;
   branchPrefix?: string | null;
   quietMs?: number;
+  reviewReset?: true;
   landing?: Landing | null;
   landingSteps?: StepSpec[] | null;
   passedAsks?: [number, string][];

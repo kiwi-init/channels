@@ -360,6 +360,8 @@ export type Event =
   | { op: "quiet.set"; minutes: number }
   | { op: "landing.set"; then: Landing | null; steps?: StepSpec[] }
   | { op: "merges.set"; by: Merger }
+  | { op: "review.reset.set"; on: boolean }
+  | { op: "review.reset.waive"; member: string; waived: boolean }
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
   | { op: "ask.close"; ask: number; why?: string }
@@ -468,6 +470,7 @@ export interface Card {
   /** Anything else worth knowing about it, in its own words. */
   note?: string;
   fresh?: number;
+  session?: string;
 }
 
 /** Most tools a card lists. */
@@ -941,7 +944,11 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 26;
+export const EVENT_OPS_VERSION = 27;
+
+export const SESSION_PRINT_RE = /^[A-Za-z0-9_-]{16}$/;
+
+export const sessionPrint = (x: unknown): x is string => typeof x === "string" && SESSION_PRINT_RE.test(x);
 
 export const REVIEW_CHECK = "kiwi/review";
 
@@ -1194,7 +1201,8 @@ function eventCheck(ev: unknown): boolean | null {
         ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch"].every((k) => opt(e[k], (x): x is string => str(x, 120))) &&
         opt(e.tools, (x): x is string[] => tags(x)) &&
         opt(e.note, (x): x is string => str(x, 500)) &&
-        opt(e.fresh, (x): x is number => Number.isSafeInteger(x) && (x as number) >= 0)
+        opt(e.fresh, (x): x is number => Number.isSafeInteger(x) && (x as number) >= 0) &&
+        opt(e.session, sessionPrint)
       );
     case "claim":
       return (
@@ -1313,6 +1321,10 @@ function eventCheck(ev: unknown): boolean | null {
       return quietMinutes(e.minutes);
     case "landing.set":
       return (e.then === null || isLanding(e.then)) && (e.steps === undefined || (e.then === null && wellFormedStepSpecs(e.steps)));
+    case "review.reset.set":
+      return typeof e.on === "boolean";
+    case "review.reset.waive":
+      return str(e.member, 64) && e.member.trim() !== "" && typeof e.waived === "boolean";
     case "merges.set":
       return (MERGERS as readonly unknown[]).includes(e.by);
     case "react":

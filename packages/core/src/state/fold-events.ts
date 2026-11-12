@@ -48,6 +48,7 @@ import {
   verdictRefusal,
   worked,
 } from "./tasks.ts";
+import { clearOnCard, markReset, resetRefusal } from "./reset.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
 
@@ -86,6 +87,7 @@ export interface FoldCtx {
   githubWrite: number | null;
   branchPrefix: string | null;
   quietMs: number;
+  reviewReset: boolean;
   landing: Landing | null;
   landingSteps: StepSpec[] | null;
   passedAsks: Map<number, string>;
@@ -427,6 +429,25 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     case "merges.set":
       break;
 
+    case "review.reset.set": {
+      if (!member.owner && !c.trusted(m.pk ?? "", member)) {
+        reject(trustOnly("turns the fresh-session rule for reviewers on or off"));
+        break;
+      }
+      c.reviewReset = ev.on;
+      if (!ev.on) for (const x of members.values()) if (x.reset?.kind === "needs") x.reset = undefined;
+      break;
+    }
+
+    case "review.reset.waive": {
+      const target = members.get(ev.member);
+      if (!target?.active) reject(`no member named ${ev.member}`);
+      else if (!member.owner && !c.trusted(m.pk ?? "", member)) reject(trustOnly("waives the fresh-session rule for a reviewer"));
+      else if (ev.waived) target.reset = { kind: "waived" };
+      else if (target.reset?.kind === "waived") target.reset = undefined;
+      break;
+    }
+
     case "landing.set": {
       if (!member.owner && !c.trusted(m.pk ?? "", member)) {
         reject(trustOnly("sets how tasks land"));
@@ -563,6 +584,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     case "card": {
       const card = omit(ev, "op");
       member.card = { ...card, ...(card.tools ? { tools: normTags(card.tools) } : {}), at };
+      clearOnCard(member, card.session);
       break;
     }
 
@@ -725,6 +747,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const asked =
         ev.state === "cancelled" ? (cancel && (mayFinish || lead || (ev.round !== undefined && revisedOut(task, m.from, open) === ev.round)) ? "done" : undefined) : ev.state && currentState(ev.state);
       const state = reopens ? "review" : lands && asked === "done" ? "landing" : asked;
+      const resetWrong = resetRefusal(members, task, ev, m.from, review, state);
+      if (resetWrong) {
+        reject(resetWrong);
+        break;
+      }
       const happened = trustedAt(m);
       const rts = happened !== undefined ? { rts: happened } : {};
       if (open && state && state !== "review")
@@ -809,6 +836,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;
       if (task.state === "landing") advance(task, { seq: m.seq, by: m.from, at });
+      if (ev.verdict && mayFinish) markReset(c.reviewReset, member, m.seq);
       break;
     }
 

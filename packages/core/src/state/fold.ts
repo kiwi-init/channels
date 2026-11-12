@@ -214,6 +214,7 @@ function folding(
       m.lastSeen = Math.max(m.lastSeen, p.lastSeen);
       m.messages = p.messages;
       if (p.ops) m.ops = { ...p.ops };
+      if (p.reset) m.reset = p.reset;
     }
   }
   const ownerName = [...members.values()].find((x) => x.owner)?.name ?? "owner";
@@ -427,6 +428,7 @@ function folding(
     githubWrite: from?.githubWrite ?? null,
     branchPrefix: from?.branchPrefix ?? null,
     quietMs: from?.quietMs ?? QUIET_MS,
+    reviewReset: from?.reviewReset ?? false,
     landing: from?.landing ?? null,
     landingSteps: from?.landingSteps ?? null,
     passedAsks,
@@ -851,6 +853,7 @@ function folding(
         lastSeen: m.lastSeen,
         messages: m.messages,
         ...(m.ops ? { ops: { ...m.ops } } : {}),
+        ...(m.reset ? { reset: m.reset } : {}),
       })),
       lead,
       charter: ctx.charter,
@@ -871,6 +874,7 @@ function folding(
       githubWrite: ctx.githubWrite,
       branchPrefix: ctx.branchPrefix,
       ...(ctx.quietMs !== QUIET_MS ? { quietMs: ctx.quietMs } : {}),
+      ...(ctx.reviewReset ? { reviewReset: true as const } : {}),
       landing: ctx.landing,
       ...(ctx.landingSteps ? { landingSteps: ctx.landingSteps } : {}),
       ...(passedAsks.size ? { passedAsks: [...passedAsks] } : {}),
@@ -985,6 +989,7 @@ function folding(
     githubWrite: ctx.githubWrite,
     branchPrefix: ctx.branchPrefix,
     quietMs: ctx.quietMs,
+    reviewReset: ctx.reviewReset,
     landing: ctx.landing,
     landingSteps: ctx.landingSteps,
     reactions,

@@ -267,6 +267,10 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return ev.prefix ? say("branch.prefix.set", { prefix: ev.prefix }) : say("branch.prefix.cleared");
     case "quiet.set":
       return say("quiet.set", { time: spanText(ev.minutes * 60_000) });
+    case "review.reset.set":
+      return ev.on ? say("review.reset.on") : say("review.reset.off");
+    case "review.reset.waive":
+      return ev.waived ? say("review.reset.waived", { name: ev.member }) : say("review.reset.unwaived", { name: ev.member });
     case "merges.set":
       return ev.by === "people" ? say("merges.people") : say("merges.agents");
     case "landing.set":
