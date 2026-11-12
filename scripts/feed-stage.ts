@@ -18,12 +18,6 @@ export interface Stage {
   close: () => Promise<void>;
 }
 
-export interface Place {
-  top: number;
-  below: number;
-  height: number;
-}
-
 const ROOT = resolve(import.meta.dir, "..");
 
 export const engineOf = (argv: string[]): Engine => (argv.includes("--webkit") ? "webkit" : "chromium");
@@ -93,31 +87,3 @@ export async function openStage(channel: string, engine: Engine, seeds: number, 
     throw err;
   }
 }
-
-export const frames = (page: Page, n: number): Promise<void> =>
-  page.evaluate(
-    (n) =>
-      new Promise<void>((done) => {
-        let left = n;
-        const tick = () => (--left > 0 ? void requestAnimationFrame(tick) : done());
-        requestAnimationFrame(tick);
-      }),
-    n,
-  );
-
-export const place = (page: Page): Promise<Place> =>
-  page.evaluate(() => {
-    const feed = document.querySelector<HTMLElement>(".main .feed");
-    const list = feed?.querySelector<HTMLElement>(".feed-list");
-    if (!feed || !list) throw new Error("no feed on screen");
-    return { top: feed.scrollTop, below: feed.scrollHeight - feed.scrollTop - feed.clientHeight, height: list.getBoundingClientRect().height };
-  });
-
-export async function wheelUp(page: Page, by: number): Promise<void> {
-  const box = await page.locator(".main .feed").boundingBox();
-  if (!box) throw new Error("no feed box");
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.wheel(0, -by);
-}
-
-export const px = (n: number): string => `${Math.round(n * 10) / 10}px`;

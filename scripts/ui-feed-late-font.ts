@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
+import { px, rests, serveDist, topRow, wheelUp } from "./feed-place.ts";
 import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
@@ -9,7 +10,7 @@ const flag = (name: string): string | undefined => {
 };
 if (process.argv.includes("--help")) {
   console.log(
-    "usage: bun scripts/ui-feed-late-font.ts [--dist ui/dist] [--browser webkit|chromium]\n\nThe text font arrives after the feed is on screen and its lines wrap again. At the bottom the feed is still at the bottom; scrolled up, the row at the top of the view is still on its pixel.",
+    "usage: bun scripts/ui-feed-late-font.ts [--dist ui/dist] [--browser webkit|chromium]\n\nThe text font arrives after the feed is on screen and its lines wrap again. At the bottom the last line is still at the bottom of the view; scrolled up, the row at the top of the view is still on its pixel.",
   );
   process.exit(0);
 }
@@ -21,17 +22,8 @@ if (engine !== "webkit" && engine !== "chromium") throw new Error(`--browser is 
 const FONT = "lato";
 const FACE = '16px "Lato"';
 const UP = 1500;
-const SETTLE_FRAMES = 40;
 
-const server = Bun.serve({
-  port: 0,
-  hostname: "127.0.0.1",
-  async fetch(req) {
-    const path = decodeURIComponent(new URL(req.url).pathname);
-    const file = Bun.file(join(dist, path === "/" || !path.includes(".") ? "index.html" : path));
-    return (await file.exists()) ? new Response(file) : new Response("not found", { status: 404 });
-  },
-});
+const server = serveDist(dist);
 const browser = await (engine === "webkit" ? webkit : chromium).launch({ executablePath: engine === "chromium" ? process.env.SMOKE_CHROMIUM || undefined : undefined });
 const fails: string[] = [];
 const expect = (ok: boolean, what: string) => {
@@ -39,49 +31,11 @@ const expect = (ok: boolean, what: string) => {
   if (!ok) fails.push(what);
 };
 
-interface Seen {
-  below: number;
-  height: number;
-  seq: number;
-  top: number;
-  loaded: boolean;
-  family: string;
-}
-
-const frames = (page: Page, n: number): Promise<void> =>
-  page.evaluate(
-    (n) =>
-      new Promise<void>((done) => {
-        let left = n;
-        const tick = () => (--left > 0 ? void requestAnimationFrame(tick) : done());
-        requestAnimationFrame(tick);
-      }),
-    n,
-  );
-
-const seen = (page: Page, seq: number | null): Promise<Seen> =>
-  page.evaluate(
-    ({ seq, face }) => {
-      const feed = document.querySelector<HTMLElement>(".main .feed");
-      const list = feed?.querySelector<HTMLElement>(".feed-list");
-      if (!feed || !list) throw new Error("no feed on screen");
-      const edge = feed.getBoundingClientRect().top;
-      const rows = [...list.querySelectorAll<HTMLElement>(":scope > [data-seq]")];
-      const row = seq === null ? rows.find((r) => r.getBoundingClientRect().bottom > edge + 1) : rows.find((r) => Number(r.getAttribute("data-seq")) === seq);
-      const text = list.querySelector<HTMLElement>(".msg-text") ?? list;
-      return {
-        below: feed.scrollHeight - feed.scrollTop - feed.clientHeight,
-        height: list.getBoundingClientRect().height,
-        seq: row ? Number(row.getAttribute("data-seq")) : -1,
-        top: row ? row.getBoundingClientRect().top - edge : Number.NaN,
-        loaded: document.fonts.check(face),
-        family: getComputedStyle(text).fontFamily.split(",")[0]?.trim() ?? "",
-      };
-    },
-    { seq, face: FACE },
-  );
-
-const px = (n: number): string => `${Math.round(n * 10) / 10}px`;
+const font = (page: Page): Promise<{ loaded: boolean; family: string }> =>
+  page.evaluate((face) => {
+    const text = document.querySelector<HTMLElement>(".main .feed .msg-text") ?? document.body;
+    return { loaded: document.fonts.check(face), family: getComputedStyle(text).fontFamily.split(",")[0]?.trim() ?? "" };
+  }, FACE);
 
 try {
   for (const mode of ["at the bottom", "scrolled up"] as const) {
@@ -97,27 +51,15 @@ try {
     });
     await page.goto(`http://127.0.0.1:${server.port}/?shot=long-feed`);
     await page.waitForSelector(".main .feed-list > [data-seq]", { timeout: 15_000 });
-    await page.evaluate((font) => document.documentElement.setAttribute("data-font", font), FONT);
-    await page.waitForFunction(
-      () => {
-        const feed = document.querySelector<HTMLElement>(".main .feed");
-        return !!feed && feed.scrollHeight - feed.scrollTop - feed.clientHeight <= 2 && !document.querySelector(".main .feed-jump");
-      },
-      undefined,
-      { timeout: 30_000 },
-    );
-    await frames(page, SETTLE_FRAMES);
-    if (mode === "scrolled up") {
-      const box = await page.locator(".main .feed").boundingBox();
-      if (!box) throw new Error("no feed box");
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.mouse.wheel(0, -UP);
-      await frames(page, SETTLE_FRAMES);
-    }
-    const before = await seen(page, null);
+    await page.evaluate((name) => document.documentElement.setAttribute("data-font", name), FONT);
+    const opened = await rests(page, (p) => p.pill === "");
+    if (mode === "scrolled up") await wheelUp(page, UP);
+    const before = await rests(page, () => true, 10_000);
+    const read = await topRow(page, null);
+    const early = await font(page);
     expect(
-      !before.loaded && before.family.includes("Lato") && (mode === "at the bottom" ? before.below <= 1 : before.below > 300),
-      `${mode}: the feed is on screen in ${before.family} while that font is still on its way (${px(before.below)} above its end, row ${before.seq} at the top)`,
+      !early.loaded && early.family.includes("Lato") && (mode === "at the bottom" ? Math.abs(before.under - opened.under) <= 2 : before.under > 300),
+      `${mode}: the feed is on screen in ${early.family} while that font is still on its way (row ${read.seq} at the top, the last line ends ${px(before.under)} under the view)`,
     );
     arrive();
     const came = await page
@@ -125,15 +67,16 @@ try {
       .then(() => true)
       .catch(() => false);
     await page.evaluate(() => document.fonts.ready);
-    await frames(page, SETTLE_FRAMES);
-    const after = await seen(page, before.seq);
+    const after = await rests(page, () => true, 10_000);
+    const now = await topRow(page, read.seq);
     expect(came && Math.abs(after.height - before.height) > 4, `${mode}: the font arrives and the feed's lines wrap again (its rows are ${px(after.height - before.height)} taller)`);
-    if (mode === "at the bottom") expect(after.below <= 1, `at the bottom: a late font leaves the feed at its end (${px(after.below)} below the view)`);
-    else
+    if (mode === "at the bottom")
       expect(
-        Math.abs(after.top - before.top) <= 2,
-        `scrolled up: a late font leaves the row at the top of the view on its pixel (row ${before.seq} was ${px(before.top)} from the top, now ${Number.isNaN(after.top) ? "gone" : px(after.top)})`,
+        Math.abs(after.under - before.under) <= 2 && after.pill === "",
+        `at the bottom: a late font leaves the last line at the bottom of the view (${px(after.under - before.under)} from where it was)`,
       );
+    else
+      expect(Math.abs(now.top - read.top) <= 2, `scrolled up: a late font leaves the row at the top of the view on its pixel (row ${read.seq} was ${px(read.top)} from the top, now ${px(now.top)})`);
     await page.close();
   }
 } finally {

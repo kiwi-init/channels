@@ -29,9 +29,9 @@ The conversation stays where you left it. Each line below is one promise, the ch
 
 | The feed promises | The check that fails | Words in that check |
 | --- | --- | --- |
-| At the bottom, a picture that arrives after its line leaves the feed at its end | `scripts/ui-feed-late-image.ts` | `a late picture leaves the feed at its end` |
+| At the bottom, a picture that arrives after its line leaves the last line at the bottom of the view | `scripts/ui-feed-late-image.ts` | `a late picture leaves the last line at the bottom of the view` |
 | Scrolled up, a picture that arrives above the view leaves the row you read on its pixel | `scripts/ui-feed-late-image.ts` | `a late picture above the view leaves the row at the top on its pixel` |
-| At the bottom, a font that arrives late and wraps the lines again leaves the feed at its end | `scripts/ui-feed-late-font.ts` | `a late font leaves the feed at its end` |
+| At the bottom, a font that arrives late and wraps the lines again leaves the last line at the bottom of the view | `scripts/ui-feed-late-font.ts` | `a late font leaves the last line at the bottom of the view` |
 | Scrolled up, it leaves the row you read on its pixel | `scripts/ui-feed-late-font.ts` | `a late font leaves the row at the top of the view on its pixel` |
 | A bubble fitted while a font was loading is fitted again when it arrives, and the fit never changes the message's height | `scripts/ui-own-bubble.ts` | `fitting a bubble to its text never changes the message's height` |
 
@@ -64,7 +64,7 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | ⌘[ goes back to the spot you were reading, and ⌘] to the hit again | `scripts/ui-restore-place.ts` | `⌘[ undoes a jump inside the room` |
 | An older hit opens the stretch around it, scrolled into view | `scripts/ui-older-search.ts` | `the hit is scrolled into view and marked` |
 | Scrolled up, a little or far past the rows the feed holds, Jump to latest shows and nothing covers it | `scripts/ui-feed-latest.ts` | `nothing covers it, a click at its middle lands on it` |
-| A click on it brings the feed to its end, on its last row, and it goes | `scripts/ui-feed-latest.ts` | `a click brings the feed to its end and Jump to latest goes` |
+| A click on it brings the feed's last line back to the bottom of the view, and it goes | `scripts/ui-feed-latest.ts` | `a click brings the feed's last line back to the bottom of the view` |
 | From an older stretch, Back to latest returns to the live feed | `scripts/ui-older-search.ts` | `Back to latest returns to the live feed` |
 | A link to a message jumps to it in its room | `scripts/ui-message-link.ts` | `clicking it jumps to the message in its room` |
 
@@ -75,7 +75,7 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | Lines posted in a room while you sit in another count on its row | `scripts/ui-feed-unread.ts` | `lines posted in #general show as` |
 | Opening that room puts the New line in view, right above the first unread line | `scripts/ui-feed-unread.ts` | `puts the New line in view, right above the first unread line` |
 | Reading them clears the count | `scripts/ui-feed-unread.ts` | `reading them clears the count on #general's row` |
-| Scrolled up, lines that arrive leave the view where it was and the button counts them | `scripts/ui-feed-unread.ts` | `lines arrive and the button reads` |
+| Scrolled up, lines that arrive leave the row you read on its pixel and the button counts them | `scripts/ui-feed-unread.ts` | `lines arrive and the button reads` |
 | A click on that button ends at the bottom with nothing unread | `scripts/ui-feed-unread.ts` | `ends at the bottom with the button gone and nothing unread` |
 | Each room has its own unread count and read mark | `packages/app/src/rooms.test.ts` | `each room has its own unread count and read mark` |
 | A room's unread counts what its feed shows | `ui/src/live/side-replies.test.ts` | `a room's unread counts what its feed shows` |

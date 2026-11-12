@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import type { Page } from "playwright-core";
-import { engineOf, frames, openStage, place, px, wheelUp } from "./feed-stage.ts";
+import { frames, px, rests, topRow, wheelUp } from "./feed-place.ts";
+import { engineOf, openStage } from "./feed-stage.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`A room's unread count is the lines that came while you were elsewhere, and reading them clears it.
@@ -46,15 +47,6 @@ const linesAfter = (page: Page, text: string): Promise<string[]> =>
     const at = rows.findLastIndex((row) => row.querySelector(".msg-text")?.textContent?.trim() === text);
     return rows.slice(at + 1).map((row) => `${row.dataset.seq} "${(row.querySelector(".msg-text")?.textContent ?? row.textContent ?? "").trim().slice(0, 40)}"`);
   }, text);
-
-const pill = (page: Page): Promise<string> =>
-  page.evaluate(
-    () =>
-      document
-        .querySelector(".main .feed-jump")
-        ?.textContent?.replace(/\s*↓\s*$/, "")
-        .trim() ?? "",
-  );
 
 interface NewLine {
   shown: boolean;
@@ -105,48 +97,30 @@ try {
   const read = await reads(page, "general", "");
   check(read === "", `reading them clears the count on #general's row (it reads ${said(read)})`);
 
-  await page.waitForFunction(
-    () => {
-      const feed = document.querySelector<HTMLElement>(".main .feed");
-      return !!feed && feed.scrollHeight - feed.scrollTop - feed.clientHeight <= 2;
-    },
-    undefined,
-    { timeout: WAIT_MS },
-  );
+  const home = await rests(page, (p) => p.pill === "");
   await wheelUp(page, 400);
-  await frames(page, SETTLE_FRAMES);
-  const before = await place(page);
+  const before = await rests(page, () => true, 10_000);
+  const reading = await topRow(page, null);
   for (let i = 1; i <= UP; i++) await stage.bot(`later news ${i}`);
   const want = `${UP} new messages`;
   const told = await page
     .waitForFunction((want) => document.querySelector(".main .feed-jump")?.textContent?.includes(want), want, { timeout: WAIT_MS })
     .then(() => true)
     .catch(() => false);
-  await frames(page, SETTLE_FRAMES);
-  const after = await place(page);
+  const after = await rests(page, () => true, 10_000);
+  const still = await topRow(page, reading.seq);
   check(
-    before.below > 100 && told,
-    `scrolled up ${px(before.below)} from the end, ${UP} lines arrive and the button reads ${want} (it reads "${await pill(page)}"; the rows after "news ${AWAY}" are ${(await linesAfter(page, `news ${AWAY}`)).join(", ") || "none"})`,
+    before.under > 100 && told,
+    `scrolled up, with the last line ${px(before.under)} under the view, ${UP} lines arrive and the button reads ${want} (it reads "${after.pill}"; the rows after "news ${AWAY}" are ${(await linesAfter(page, `news ${AWAY}`)).join(", ") || "none"})`,
   );
-  check(Math.abs(after.top - before.top) <= 2, `and the view stays where it was (scrollTop ${px(before.top)}, then ${px(after.top)})`);
+  check(Math.abs(still.top - reading.top) <= 2, `and the row at the top of the view stays on its pixel (row ${reading.seq} was ${px(reading.top)} from the top, now ${px(still.top)})`);
 
   await page.locator(".main .feed-jump").click();
-  const ended = await page
-    .waitForFunction(
-      () => {
-        const feed = document.querySelector<HTMLElement>(".main .feed");
-        return !!feed && feed.scrollHeight - feed.scrollTop - feed.clientHeight <= 2 && !document.querySelector(".main .feed-jump");
-      },
-      undefined,
-      { timeout: WAIT_MS },
-    )
-    .then(() => true)
-    .catch(() => false);
-  const end = await place(page);
+  const end = await rests(page, (p) => p.pill === "" && Math.abs(p.under - home.under) <= 2, WAIT_MS);
   const left = await reads(page, "general", "");
   check(
-    ended && left === "",
-    `a click on it ends at the bottom with the button gone and nothing unread on #general's row (${px(end.below)} below the view, the button reads "${await pill(page)}", the row reads ${said(left)})`,
+    end.pill === "" && Math.abs(end.under - home.under) <= 2 && left === "",
+    `a click on it ends at the bottom with the button gone and nothing unread on #general's row (the last line is ${px(end.under - home.under)} from the bottom line's place, the button reads "${end.pill}", the row reads ${said(left)})`,
   );
   for (const e of stage.threw) check(false, `the page threw: ${e}`);
 } finally {

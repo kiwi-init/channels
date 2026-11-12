@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { chromium, webkit, type Page } from "playwright-core";
+import { chromium, webkit } from "playwright-core";
+import { px, rests, serveDist } from "./feed-place.ts";
 import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
@@ -9,7 +10,7 @@ const flag = (name: string): string | undefined => {
 };
 if (process.argv.includes("--help")) {
   console.log(
-    "usage: bun scripts/ui-feed-latest.ts [--dist ui/dist] [--browser webkit|chromium]\n\nScrolled up a long feed, a little or far past the rows it holds, Jump to latest shows, takes a click, brings the feed to its end and goes.",
+    "usage: bun scripts/ui-feed-latest.ts [--dist ui/dist] [--browser webkit|chromium]\n\nScrolled up a long feed, a little or far past the rows it holds, Jump to latest shows, takes a click, brings the feed's last line back to the bottom of the view and goes.",
   );
   process.exit(0);
 }
@@ -20,17 +21,8 @@ if (engine !== "webkit" && engine !== "chromium") throw new Error(`--browser is 
 
 const WHEELS = [1, 6, 30] as const;
 const WHEEL = 1200;
-const STILL_FRAMES = 30;
 
-const server = Bun.serve({
-  port: 0,
-  hostname: "127.0.0.1",
-  async fetch(req) {
-    const path = decodeURIComponent(new URL(req.url).pathname);
-    const file = Bun.file(join(dist, path === "/" || !path.includes(".") ? "index.html" : path));
-    return (await file.exists()) ? new Response(file) : new Response("not found", { status: 404 });
-  },
-});
+const server = serveDist(dist);
 const browser = await (engine === "webkit" ? webkit : chromium).launch({ executablePath: engine === "chromium" ? process.env.SMOKE_CHROMIUM || undefined : undefined });
 const fails: string[] = [];
 const expect = (ok: boolean, what: string) => {
@@ -38,65 +30,16 @@ const expect = (ok: boolean, what: string) => {
   if (!ok) fails.push(what);
 };
 
-interface Place {
-  below: number;
-  first: number;
-  last: number;
-  rows: number;
-}
-
-const place = (page: Page): Promise<Place> =>
-  page.evaluate(() => {
-    const feed = document.querySelector<HTMLElement>(".main .feed");
-    if (!feed) throw new Error("no feed on screen");
-    const rows = [...feed.querySelectorAll<HTMLElement>(".feed-list > [data-seq]")];
-    return {
-      below: Math.round(feed.scrollHeight - feed.scrollTop - feed.clientHeight),
-      first: Number(rows[0]?.dataset.seq ?? -1),
-      last: Number(rows.at(-1)?.dataset.seq ?? -1),
-      rows: rows.length,
-    };
-  });
-
-const atEnd = (page: Page): Promise<boolean> =>
-  page
-    .waitForFunction(
-      () => {
-        const feed = document.querySelector<HTMLElement>(".main .feed");
-        return !!feed && feed.scrollHeight - feed.scrollTop - feed.clientHeight <= 2 && !document.querySelector(".main .feed-jump");
-      },
-      undefined,
-      { timeout: 30_000 },
-    )
-    .then(() => true)
-    .catch(() => false);
-
-const drifts = (page: Page, frames: number): Promise<number> =>
-  page.evaluate(
-    (frames) =>
-      new Promise<number>((done) => {
-        const feed = document.querySelector<HTMLElement>(".main .feed");
-        if (!feed) return done(-1);
-        let most = 0;
-        let left = frames;
-        const tick = () => {
-          most = Math.max(most, feed.scrollHeight - feed.scrollTop - feed.clientHeight);
-          if (--left > 0) return void requestAnimationFrame(tick);
-          done(Math.round(most));
-        };
-        requestAnimationFrame(tick);
-      }),
-    frames,
-  );
-
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
   await page.goto(`http://127.0.0.1:${server.port}/?shot=long-feed`);
   await page.waitForSelector(".main .feed-list > [data-seq]", { timeout: 15_000 });
-  const opened = (await atEnd(page)) ? await place(page) : null;
-  expect(opened !== null && opened.rows > 20, `the long feed opens at its end with no Jump to latest (${opened ? `${opened.rows} rows, ${opened.below}px below` : "it never rested at its end"})`);
-  const latest = opened?.last ?? -1;
+  const opened = await rests(page, (p) => p.pill === "" && p.rows > 20);
+  expect(
+    opened.pill === "" && opened.rows > 20 && opened.under <= 0.5 && opened.under > -200,
+    `the long feed opens on its last line with no Jump to latest (${opened.rows} rows, row ${opened.last} ends ${px(-opened.under)} above the bottom of the view)`,
+  );
   const box = await page.locator(".main .feed").boundingBox();
   if (!box) throw new Error("no feed box");
   for (const wheels of WHEELS) {
@@ -111,8 +54,11 @@ try {
       .waitFor({ timeout: 10_000 })
       .then(() => true)
       .catch(() => false);
-    const up = await place(page);
-    expect(shown && up.below > 100, `${at}: Jump to latest shows (${up.below}px above the end, first row ${up.first})`);
+    const up = await rests(page, () => true, 5_000);
+    expect(
+      shown && up.pill !== "" && (up.last !== opened.last || up.under > 100),
+      `${at}: Jump to latest shows (rows ${up.first} to ${up.last} are held, the last of them ends ${px(up.under)} under the view)`,
+    );
     if (!shown) continue;
     const onTop = await pill.evaluate((el) => {
       const r = el.getBoundingClientRect();
@@ -122,12 +68,12 @@ try {
     expect(onTop, `${at}: nothing covers it, a click at its middle lands on it`);
     const spot = await pill.boundingBox();
     if (spot) await page.mouse.click(spot.x + spot.width / 2, spot.y + spot.height / 2);
-    const rested = await atEnd(page);
-    const back = await place(page);
-    expect(rested, `${at}: a click brings the feed to its end and Jump to latest goes (${back.below}px below, ${await pill.count()} shown)`);
-    expect(back.last === latest, `${at}: the feed's last row is the one it opened on (row ${back.last}, it opened on ${latest})`);
-    const most = await drifts(page, STILL_FRAMES);
-    expect(most <= 2, `${at}: and it stays at its end for the next ${STILL_FRAMES} frames (${most}px below at most)`);
+    const back = await rests(page, (p) => p.pill === "" && p.last === opened.last && Math.abs(p.under - opened.under) <= 2);
+    expect(
+      back.last === opened.last && Math.abs(back.under - opened.under) <= 2,
+      `${at}: a click brings the feed's last line back to the bottom of the view (row ${back.last} of ${opened.last}, ${px(back.under - opened.under)} from where it opened)`,
+    );
+    expect(back.pill === "" && back.room <= 0.5, `${at}: and Jump to latest goes, with no blank room under the last line (it reads "${back.pill}", ${px(back.room)} of room)`);
   }
   await page.close();
 } finally {
@@ -135,7 +81,7 @@ try {
   await server.stop(true);
 }
 if (fails.length) {
-  console.error(`\n${fails.length} failed in ${engine}: Jump to latest left the feed away from its end`);
+  console.error(`\n${fails.length} failed in ${engine}: Jump to latest left the feed away from its last line`);
   process.exit(1);
 }
-console.log(`\nJump to latest brings the feed to its end from anywhere, in ${engine}`);
+console.log(`\nJump to latest brings the feed's last line back from anywhere, in ${engine}`);

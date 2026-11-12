@@ -2,7 +2,8 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "playwright-core";
-import { engineOf, frames, openStage, place, px, wheelUp } from "./feed-stage.ts";
+import { px, rests, topRow, wheelUp } from "./feed-place.ts";
+import { engineOf, openStage } from "./feed-stage.ts";
 import { say } from "./perf-ui.ts";
 
 if (process.argv.includes("--help")) {
@@ -17,7 +18,6 @@ const ENGINE = engineOf(process.argv);
 const SEEDS = 30;
 const AFTER = 34;
 const ABOVE = 80;
-const SETTLE_FRAMES = 40;
 
 const picture = (page: Page): Promise<string> =>
   page.evaluate(async () => {
@@ -38,22 +38,12 @@ const picture = (page: Page): Promise<string> =>
     return btoa(bin);
   });
 
-interface Reading {
-  seq: number;
-  top: number;
-  spot: number | null;
-}
-
-const reading = (page: Page, seq: number | null): Promise<Reading> =>
-  page.evaluate((seq) => {
+const spotAbove = (page: Page): Promise<number | null> =>
+  page.evaluate(() => {
     const feed = document.querySelector<HTMLElement>(".main .feed");
-    if (!feed) throw new Error("no feed on screen");
-    const edge = feed.getBoundingClientRect().top;
-    const rows = [...feed.querySelectorAll<HTMLElement>(".feed-list > [data-seq]")];
-    const row = seq === null ? rows.find((r) => r.getBoundingClientRect().top >= edge) : rows.find((r) => Number(r.dataset.seq) === seq);
-    const spot = feed.querySelector(".msg-image-spot")?.closest<HTMLElement>("[data-seq]");
-    return { seq: row ? Number(row.dataset.seq) : -1, top: row ? row.getBoundingClientRect().top - edge : Number.NaN, spot: spot ? edge - spot.getBoundingClientRect().bottom : null };
-  }, seq);
+    const row = feed?.querySelector(".msg-image-spot")?.closest<HTMLElement>("[data-seq]");
+    return feed && row ? feed.getBoundingClientRect().top - row.getBoundingClientRect().bottom : null;
+  });
 
 const shown = (page: Page, pictures: number): Promise<boolean> =>
   page
@@ -108,27 +98,29 @@ try {
   const { page } = stage;
   const shot = join(stage.dir, "shot.png");
   writeFileSync(shot, Buffer.from(await picture(page), "base64"));
-  const spot = page.locator(".main .feed .msg-image-spot").first();
+  const spot = page.locator(".main .feed .msg-image-spot");
+  const opened = await rests(page, (p) => p.pill === "");
 
   await hold(page);
   await stage.bot("the first shot", ["--image", shot]);
-  await spot.waitFor({ timeout: 30_000 });
-  await frames(page, SETTLE_FRAMES);
-  const bottom = await place(page);
+  await spot.first().waitFor({ timeout: 30_000 });
+  const bottom = await rests(page, () => true, 10_000);
   check(
-    bottom.below <= 2 && (await spot.count()) === 1,
-    `at the bottom: a line with a picture arrives and the view follows it while the picture is still on its way (${px(bottom.below)} below the view)`,
+    Math.abs(bottom.under - opened.under) <= 2 && (await spot.count()) === 1,
+    `at the bottom: a line with a picture arrives and the view follows it while the picture is still on its way (the last line is ${px(bottom.under - opened.under)} from where the bottom line sat)`,
   );
   await arrive(page);
   const first = await shown(page, 1);
-  await frames(page, SETTLE_FRAMES);
-  const grown = await place(page);
+  const grown = await rests(page, () => true, 10_000);
   check(first && grown.height - bottom.height > 20, `at the bottom: the picture arrives and its row grows (${px(grown.height - bottom.height)} taller)`);
-  check(grown.below <= 2, `at the bottom: a late picture leaves the feed at its end (${px(grown.below)} below the view)`);
+  check(
+    Math.abs(grown.under - opened.under) <= 2 && grown.pill === "",
+    `at the bottom: a late picture leaves the last line at the bottom of the view (${px(grown.under - opened.under)} from where it was)`,
+  );
 
   await hold(page);
   await stage.bot("the second shot", ["--image", shot]);
-  await spot.waitFor({ timeout: 30_000 });
+  await spot.first().waitFor({ timeout: 30_000 });
   for (let i = 0; i < AFTER; i++) {
     await say(page, `later line ${i}`);
     await page.waitForTimeout(70);
@@ -138,27 +130,23 @@ try {
     .filter({ hasText: `later line ${AFTER - 1}` })
     .first()
     .waitFor({ timeout: 30_000 });
-  await frames(page, SETTLE_FRAMES);
-  const gap = (await reading(page, null)).spot;
-  if (gap === null) throw new Error("the second picture's placeholder is gone before it was let through");
-  await wheelUp(page, Math.max(0, gap - ABOVE));
-  await frames(page, SETTLE_FRAMES);
-  const read = await reading(page, null);
-  const up = await place(page);
+  await rests(page, () => true, 10_000);
+  const far = await spotAbove(page);
+  if (far === null) throw new Error("the second picture's placeholder is gone before it was let through");
+  await wheelUp(page, Math.max(0, far - ABOVE));
+  const up = await rests(page, () => true, 10_000);
+  const read = await topRow(page, null);
+  const above = await spotAbove(page);
   check(
-    read.spot !== null && read.spot > 0 && read.spot < 400 && up.below > 100 && read.seq > 0,
-    `scrolled up: the picture's row ends ${read.spot === null ? "nowhere" : px(read.spot)} above the view with the picture still on its way, and row ${read.seq} is at the top (${px(up.below)} above the end)`,
+    above !== null && above > 0 && above < 400 && up.under > 100 && read.seq > 0,
+    `scrolled up: the picture's row ends ${above === null ? "nowhere" : px(above)} above the view with the picture still on its way, and row ${read.seq} is at the top (the last line ends ${px(up.under)} under the view)`,
   );
   await arrive(page);
   const second = await shown(page, 2);
-  await frames(page, SETTLE_FRAMES);
-  const after = await reading(page, read.seq);
-  const taller = (await place(page)).height - up.height;
-  check(second && taller > 20, `scrolled up: the picture arrives above the view and its row grows (${px(taller)} taller)`);
-  check(
-    Math.abs(after.top - read.top) <= 2,
-    `scrolled up: a late picture above the view leaves the row at the top on its pixel (row ${read.seq} was ${px(read.top)} from the top, now ${Number.isNaN(after.top) ? "gone" : px(after.top)})`,
-  );
+  const after = await rests(page, () => true, 10_000);
+  const now = await topRow(page, read.seq);
+  check(second && after.height - up.height > 20, `scrolled up: the picture arrives above the view and its row grows (${px(after.height - up.height)} taller)`);
+  check(Math.abs(now.top - read.top) <= 2, `scrolled up: a late picture above the view leaves the row at the top on its pixel (row ${read.seq} was ${px(read.top)} from the top, now ${px(now.top)})`);
   for (const e of stage.threw) check(false, `the page threw: ${e}`);
 } finally {
   await stage.close();
