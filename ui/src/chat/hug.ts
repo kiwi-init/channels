@@ -35,7 +35,16 @@ function widest(bubble: HTMLElement): number | null {
   return need > 0 && need + SLACK < box.width ? Math.ceil(need) + SLACK : null
 }
 
-const rows = new WeakMap<Element, HTMLElement>()
+const rows = new Map<Element, HTMLElement>()
+let fonts: Promise<unknown> | null = null
+
+function refitAfterFonts(): void {
+  if (!("fonts" in document) || document.fonts.status !== "loading") return
+  const ready = document.fonts.ready
+  if (ready === fonts) return
+  fonts = ready
+  void ready.then(() => fit([...rows.keys()]))
+}
 
 function fit(due: readonly Element[]): void {
   const pairs = due.flatMap((row) => {
@@ -46,6 +55,7 @@ function fit(due: readonly Element[]): void {
   const loose = pairs.map(({ row, bubble }) => ({ row, bubble, width: widest(bubble), height: row.offsetHeight }))
   for (const { bubble, width } of loose) if (width !== null) bubble.style.width = `${width}px`
   for (const { row, bubble, width, height } of loose) if (width !== null && row.offsetHeight !== height) bubble.style.width = ""
+  refitAfterFonts()
 }
 
 const watch = typeof ResizeObserver === "undefined" ? null : new ResizeObserver((entries) => fit(entries.map((e) => e.target)))
