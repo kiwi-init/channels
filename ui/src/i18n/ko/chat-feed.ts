@@ -46,6 +46,7 @@ export default {
   "chat.message.menu": "메시지",
   "chat.message.edited": "편집됨",
   "chat.message.on.spec": "스펙에도 있음",
+  "chat.message.ask.lead": "{name} 님에게 묻기",
   "chat.message.edited.at": "{time}에 편집됨",
   "chat.message.deleted": "삭제된 메시지입니다",
   "chat.message.not.sent": "보내지 못했습니다",
