@@ -106,17 +106,17 @@ try {
       await add.getByRole("combobox", { name: "Personality" }).selectOption({ label: personality });
       await command.getByText(/^--persona /).waitFor();
     }
-    const height = async () => Math.round((await add.boundingBox())?.height ?? 0);
+    const height = () => add.evaluate((el) => (el as HTMLElement).offsetHeight);
     const settled = new Set([await height()]);
     await page.evaluate(() => {
-      const open = document.querySelector("dialog.modal[open]");
+      const open = document.querySelector<HTMLElement>("dialog.modal[open]");
       if (!open) throw new Error("no open modal");
       const seen = document.documentElement.dataset;
       seen.blank = "0";
       seen.heights = "";
       new MutationObserver(() => {
         if (open.querySelector(".invite-box code")?.textContent === "…") seen.blank = String(Number(seen.blank) + 1);
-        seen.heights += `${Math.round(open.getBoundingClientRect().height)} `;
+        seen.heights += `${open.offsetHeight} `;
       }).observe(open, { childList: true, subtree: true, characterData: true });
     });
     await add.getByRole("textbox", { name: "Name" }).press("ControlOrMeta+a");
