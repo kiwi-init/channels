@@ -5,6 +5,7 @@ import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, DocEvent, F
 import { heldPipe } from "@kiwi/core/doc/held-pipe.ts";
 import type { FoldInputs } from "../../../desktop/src/search-types.ts";
 import { errorOf, remoteOps } from "./channel-remote.ts";
+import { inTasks } from "./in-tasks.ts";
 import { bridge } from "@kiwi/secrets/secrets.ts";
 import { refollowing } from "./refollow.ts";
 import { makeWatches, type Watches } from "./watch.ts";
@@ -43,11 +44,19 @@ function lazyLocalOps(): ChannelOps {
     },
     doc: (code, thread, th, on) => {
       const { pipe, attach } = heldPipe();
+      const page = inTasks(on);
       void local().then(
-        (o) => attach(o.doc(code, thread, th, on)),
-        (e: unknown) => on({ _tag: "Failed", error: { kind: "other", message: e instanceof Error ? e.message : String(e) } }),
+        (o) => attach(o.doc(code, thread, th, page.hand)),
+        (e: unknown) => page.hand({ _tag: "Failed", error: { kind: "other", message: e instanceof Error ? e.message : String(e) } }),
       );
-      return pipe;
+      return {
+        update: pipe.update,
+        aware: pipe.aware,
+        close: () => {
+          page.stop();
+          pipe.close();
+        },
+      };
     },
     follow: (code, since, on, opts) => {
       let stop: (() => void) | null = null;
