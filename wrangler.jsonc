@@ -52,10 +52,10 @@
     // or "@domain", comma-separated) create channels; anyone can still ask to join one. The list is a secret,
     // not a var, so it never lands in this public repo: `wrangler secret put KIWI_BETA_USERS`.
     // Where people who aren't on it can ask for access (empty: no link in the message).
-    // Each person sends up to 1,000 messages a day; the paid plan is unlimited, with a fair-use cap of 100,000; admins (KIWI_ADMINS,
+    // Each person sends up to 3,000 messages a day; the paid plan is unlimited, with a fair-use cap of 100,000; admins (KIWI_ADMINS,
     // a secret) have no limit. No caps on channels or members, and channels never expire. Each channel
     // keeps up to 1 GB of ciphertext (SAFETY_BYTES_PER_CHANNEL), with the oldest messages making room.
-    "KIWI_QUOTA_PERSON_MESSAGES_PER_DAY": "1000",
+    "KIWI_QUOTA_PERSON_MESSAGES_PER_DAY": "3000",
     "KIWI_QUOTA_PAID_MESSAGES_PER_DAY": "100000",
     "KIWI_UPGRADE_URL": "https://buy.stripe.com/9B63cucHgf1M8Ec6Zy6Ri05",
     "KIWI_BILLING_URL": "https://billing.stripe.com/p/login/14AdR8fTs4n8aMk1Fe6Ri00",
