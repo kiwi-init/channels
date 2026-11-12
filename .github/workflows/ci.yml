@@ -226,6 +226,10 @@ jobs:
       - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-still.ts --dist ui/dist
+      # A feed keeps its place when its width changes: the sidebar hidden and shown, its edge dragged, the panel opened and closed, the window resized. At the bottom it stays at the bottom with no blank room; scrolled up, the row being read comes back to its pixel (T231).
+      - name: ui a feed keeps its place when its width changes, in WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
+        run: bun scripts/ui-feed-width.ts --dist ui/dist
       - name: ui a remote edit landing between your keys never undoes your caret or selection (⇧← and ←), in Chromium and WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-doc-select-race.ts
