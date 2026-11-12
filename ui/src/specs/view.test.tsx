@@ -8,9 +8,33 @@ import { SpecsView } from "~/specs/view"
 import { wrote } from "~/words"
 
 const NOW = 1_800_000_000_000
-const person = (name: string, display: string): Person => ({ name, kind: "agent", display, owner: false, you: false, presence: "online", lastSeen: NOW, joined: NOW, messages: 0, harness: "astra", face: "coder" })
+const person = (name: string, display: string): Person => ({
+  name,
+  kind: "agent",
+  display,
+  owner: false,
+  you: false,
+  presence: "online",
+  lastSeen: NOW,
+  joined: NOW,
+  messages: 0,
+  harness: "astra",
+  face: "coder",
+})
 
-const owned = (id: number, owner: string): Task => ({ id, title: wrote("Build it"), status: "doing", owner, createdBy: "jow", createdAt: NOW, updatedAt: NOW, notes: [], rounds: [], history: [], archived: false })
+const owned = (id: number, owner: string): Task => ({
+  id,
+  title: wrote("Build it"),
+  status: "doing",
+  owner,
+  createdBy: "jow",
+  createdAt: NOW,
+  updatedAt: NOW,
+  notes: [],
+  rounds: [],
+  history: [],
+  archived: false,
+})
 
 const spec: Spec = {
   ask: 10,
@@ -29,7 +53,23 @@ const spec: Spec = {
 }
 
 const channelOf = (people: Person[], nicknames: [string, string][], tasks: Task[]): Channel =>
-  ({ code: "c", title: "c", youOwn: true, you: "jow", repos: [], rooms: [], directs: [], theirs: [], people, nicknames: new Map(nicknames), messages: [], tasks, asks: [], specs: [spec], connection: "live" } as unknown as Channel)
+  ({
+    code: "c",
+    title: "c",
+    youOwn: true,
+    you: "jow",
+    repos: [],
+    rooms: [],
+    directs: [],
+    theirs: [],
+    people,
+    nicknames: new Map(nicknames),
+    messages: [],
+    tasks,
+    asks: [],
+    specs: [spec],
+    connection: "live",
+  }) as unknown as Channel
 
 const providers = (channel: Channel) => (
   <AppContext.Provider value={{ app: { channel }, go: () => {} } as unknown as Ctx}>
@@ -48,7 +88,7 @@ const renderCard = (channel: Channel): string =>
       <ActContext.Provider value={{ actions: {}, go: () => {}, toast: () => {} } as unknown as Act}>
         <SpecCard channel={channel} spec={spec} />
       </ActContext.Provider>
-    </AppContext.Provider>,
+    </AppContext.Provider>
   )
 
 const element = (html: string, tag: string, at: number): string => {
@@ -87,7 +127,16 @@ describe("worker names on Specs avatars (#2335)", () => {
   })
 
   test("two workers with the same face keep their own names", () => {
-    const html = renderList(channelOf([person("gentle-otter", "opus-coder"), person("quiet-heron", "ds-reviewer")], [["gentle-otter", "opus-coder"], ["quiet-heron", "ds-reviewer"]], [owned(7, "gentle-otter"), owned(8, "quiet-heron")]))
+    const html = renderList(
+      channelOf(
+        [person("gentle-otter", "opus-coder"), person("quiet-heron", "ds-reviewer")],
+        [
+          ["gentle-otter", "opus-coder"],
+          ["quiet-heron", "ds-reviewer"],
+        ],
+        [owned(7, "gentle-otter"), owned(8, "quiet-heron")]
+      )
+    )
     const box = faces(html)
     expect(box.match(/class="spec-face"/g)?.length).toBe(2)
     expect(box).toContain(">opus-coder</span>")
@@ -109,7 +158,16 @@ describe("worker names on Specs avatars (#2335)", () => {
   })
 
   test("the row stays one button with no focusables inside", () => {
-    const html = renderList(channelOf([person("gentle-otter", "opus-coder"), person("quiet-heron", "ds-reviewer")], [["gentle-otter", "opus-coder"], ["quiet-heron", "ds-reviewer"]], [owned(7, "gentle-otter"), owned(8, "quiet-heron")]))
+    const html = renderList(
+      channelOf(
+        [person("gentle-otter", "opus-coder"), person("quiet-heron", "ds-reviewer")],
+        [
+          ["gentle-otter", "opus-coder"],
+          ["quiet-heron", "ds-reviewer"],
+        ],
+        [owned(7, "gentle-otter"), owned(8, "quiet-heron")]
+      )
+    )
     const row = rowButton(html)
     expect(row.slice(row.indexOf(">") + 1)).not.toContain("<button")
     expect(row).not.toContain("tabindex")
