@@ -5,6 +5,7 @@ import { rememberOnboarded } from "~/start/onboarded"
 import { DEMO_PREFS } from "~/demo/data"
 import { DEMO_HANDLES, navWithDemoHandles, renamedAgents, withDemoHandles } from "~/demo/handles"
 import { useDemo } from "~/demo/provider"
+import { pressCopyOnceReady, refuseCopies } from "~/demo/copy-refused"
 import { SHOTS } from "~/demo/shots"
 import { seedThreadDoc } from "~/demo/thread-doc"
 import { docThread } from "@kiwi/core/doc/threads.ts"
@@ -30,6 +31,7 @@ if (shot?.docs !== undefined && shot.channel && seeded && seeded.kind !== "dm" &
 if (!shot?.onboarding) rememberOnboarded(false)
 keepTab(shot?.track ?? "now")
 if (shot?.layout) setLayout(shot.layout)
+if (shot?.copyRefused) refuseCopies()
 
 const SWITCH_AFTER_MS = 400
 
@@ -46,6 +48,7 @@ export function DemoApp() {
   const go = useCallback((g: Go) => setNav((n) => navigate(n, g)), [])
   const [mended, setMended] = useState(false)
   useEffect(uiBooted, [])
+  useEffect(() => (shot?.copyRefused ? pressCopyOnceReady() : undefined), [])
   useKeepPlace(nav)
   useEffect(() => {
     const fromHash = () => {
