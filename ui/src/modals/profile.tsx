@@ -97,6 +97,13 @@ function Status({ person }: { person: Person }) {
         {t("modals.profile.overloaded")}
       </span>
     )
+  if (person.reset?.kind === "needs")
+    parts.push(
+      <span key="reset" className="tone-alert">
+        {t("modals.profile.needs.reset", { seq: String(person.reset.verdict) })}
+      </span>
+    )
+  if (person.sharesSession?.length) parts.push(<span key="shares">{t("modals.profile.shares.session", { names: person.sharesSession.map((n) => `@${n}`).join(", ") })}</span>)
   if (context)
     parts.push(
       <span key="context" className={context.over ? "tone-alert" : undefined}>
@@ -313,6 +320,11 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
           <Row label={t("modals.profile.read.only")} hint={agent ? t("modals.profile.read.only.agent") : t("modals.profile.read.only.person")}>
             <Toggle label={t("modals.profile.read.only")} on={!!person.readOnly} onChange={(on) => app.actions.setReadOnly(channel.code, person.name, on)} />
           </Row>
+          {agent && channel.reviewReset && (
+            <Row label={t("modals.profile.fresh.session")} hint={person.reset?.kind === "waived" ? t("modals.profile.fresh.session.off") : t("modals.profile.fresh.session.on")}>
+              <Toggle label={t("modals.profile.fresh.session")} on={person.reset?.kind !== "waived"} onChange={(on) => app.actions.setResetWaived(channel.code, person.name, !on)} />
+            </Row>
+          )}
           {agent && person.wakes !== undefined && (
             <Row label={t("modals.profile.wake")} hint={person.wakes ? t("modals.profile.wake.on") : t("modals.profile.wake.off")}>
               <Toggle label={t("modals.profile.wake")} on={person.wakes === true} onChange={(on) => app.actions.setWake(channel.code, person.name, on)} />

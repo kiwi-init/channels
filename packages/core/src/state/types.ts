@@ -32,7 +32,7 @@ export interface Member {
   reset?: ResetMark;
 }
 
-export type ResetMark = { kind: "waived" } | { kind: "needs"; verdict: number; session: string };
+type ResetMark = { kind: "waived" } | { kind: "needs"; verdict: number; session: string };
 
 export type FoldMember = Member & { role?: string; about?: string };
 

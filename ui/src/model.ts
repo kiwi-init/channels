@@ -83,7 +83,11 @@ export interface Person {
   joined: number
   messages: number
   left?: boolean
+  reset?: PersonReset
+  sharesSession?: string[]
 }
+
+type PersonReset = { kind: "waived" } | { kind: "needs"; verdict: number }
 
 export interface Check {
   name: string
@@ -625,6 +629,7 @@ export interface Channel {
   githubWrite?: boolean
   branchPrefix?: string
   quietMinutes?: number
+  reviewReset?: true
   landing?: string
   rooms: Room[]
   directs: Direct[]
@@ -820,6 +825,8 @@ export interface Actions {
   setGithubWrite(code: string, on: boolean): void
   setBranchPrefix(code: string, prefix: string | null): void
   setQuiet(code: string, minutes: string): void
+  setReviewReset(code: string, on: boolean): void
+  setResetWaived(code: string, name: string, waived: boolean): void
   setLanding(code: string, then: string | null): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void

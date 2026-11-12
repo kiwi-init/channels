@@ -100,6 +100,10 @@ const words = {
   "modals.channel.settings.quiet": "Quiet time, in minutes",
   "modals.channel.settings.quiet.hint":
     "A task with no progress for {minutes} min is marked quiet with whoever has the move, then with the lead after twice that, then with the owner after three times.",
+  "modals.channel.settings.review.reset": "Fresh session for reviewers",
+  "modals.channel.settings.review.reset.on":
+    "After each verdict, a reviewer reviews nothing more until it rejoins from a new session. Agents on kimi, zcode and gemini can't show a new session, so they're never held.",
+  "modals.channel.settings.review.reset.off": "A reviewer may give any number of verdicts from one session.",
   "modals.channel.settings.repo.remove": "Remove {repo}",
   "modals.channel.settings.repo.remove.ask": "Remove {repo} from {channel}?",
   "modals.channel.settings.repo.remove.sub": "The channel stops following it. The repository itself isn't touched.",
@@ -181,6 +185,11 @@ const words = {
   "modals.profile.presence.away": "away",
   "modals.profile.presence.offline": "offline",
   "modals.profile.overloaded": "overloaded",
+  "modals.profile.needs.reset": "needs a fresh session since verdict #{seq}",
+  "modals.profile.shares.session": "shares a session with {names}",
+  "modals.profile.fresh.session": "Fresh session after each verdict",
+  "modals.profile.fresh.session.on": "After a verdict, it reviews nothing more until it rejoins from a new session.",
+  "modals.profile.fresh.session.off": "Waived: it may review from one session.",
   "modals.profile.working.on": "Working on",
   "modals.profile.your.settings": "Your settings",
   "modals.profile.message": "Message",

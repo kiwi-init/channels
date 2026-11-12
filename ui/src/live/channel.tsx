@@ -214,6 +214,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.githubWrite !== null ? { githubWrite: true } : {}),
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       ...(state.quietMs !== QUIET_MINUTES * 60_000 ? { quietMinutes: state.quietMs / 60_000 } : {}),
+      ...(state.reviewReset ? { reviewReset: true as const } : {}),
       ...(state.landing && state.landing !== "none" ? { landing: state.landing } : {}),
       ...(required.length ? { reviewStillRequired: { repos: required, check: reviewCheck } } : {}),
       rooms,
