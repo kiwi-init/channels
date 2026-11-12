@@ -65,6 +65,11 @@ describe("the onboarding shows only on a computer that hasn't finished it, while
     expect(html).toContain("Channel c1")
   })
 
+  test("Home with no channels has the Back and Forward arrows too (#2372)", () => {
+    rememberOnboarded()
+    expect(noChannels()).toContain('class="top-history"')
+  })
+
   test("a computer that finished it never shows it again, signed out or with no channels", () => {
     rememberOnboarded()
     expect(kept.get("ui.onboarded")).toBe("1")

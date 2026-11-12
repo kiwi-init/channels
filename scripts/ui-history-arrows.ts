@@ -138,6 +138,22 @@ try {
   expect(fresh.back === false && fresh.forward === false, "a fresh window on Home has both arrows off");
   await home.close();
 
+  const empty = await open(1440, 900);
+  await empty.goto(`http://127.0.0.1:${server.port}/?shot=welcome`);
+  await empty.locator(".top-history").first().waitFor();
+  await settle(empty);
+  expect((await place(empty)) === "home" || (await empty.locator(".start-area").count()) > 0, "Home with no channels shows the arrows");
+  await empty.locator(".rail-gear").click();
+  await settle(empty);
+  expect((await place(empty)) === "settings", "from Home with no channels, Settings opens");
+  await arrow(empty, BACK).click();
+  await settle(empty);
+  expect((await empty.locator(".start-area .top-history").count()) === 1, "Back from Settings lands on Home with no channels, arrows and all");
+  await arrow(empty, FORWARD).click();
+  await settle(empty);
+  expect((await place(empty)) === "settings", "and Forward returns to Settings");
+  await empty.close();
+
   const modal = await open(1440, 900);
   await modal.goto(`http://127.0.0.1:${server.port}/?shot=channel`);
   await modal.locator(".top-history").first().waitFor();

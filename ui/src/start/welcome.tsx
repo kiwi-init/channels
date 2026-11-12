@@ -28,6 +28,9 @@ function Empty() {
     <main className="start-area">
       {intro && <Onboarding onDone={() => setIntro(false)} />}
       <div className="start-drag" />
+      <div className="home-history">
+        <HistoryArrows />
+      </div>
       <div className="start-welcome start-home">
         <h1 className="start-title">{t("start.welcome.no.channels")}</h1>
         <div className="start-choices">
