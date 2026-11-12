@@ -45,6 +45,7 @@ export default {
   "chat.message.an.image": "uma imagem",
   "chat.message.menu": "Mensagem",
   "chat.message.edited": "editada",
+  "chat.message.on.spec": "Também na especificação",
   "chat.message.edited.at": "Editada às {time}",
   "chat.message.deleted": "Mensagem excluída",
   "chat.message.not.sent": "Não foi enviada",

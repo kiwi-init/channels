@@ -407,6 +407,8 @@ export interface Message {
   replyTo?: number
   inThread?: number
   side?: true
+  onSpec?: number
+  specLine?: true
   thread?: { replies: number; last: number; people: string[] }
   task?: number
   prs?: PullRequest[]
@@ -933,8 +935,6 @@ export interface App {
 
 /** Signing in with GitHub, the first thing on a relay that takes it: where it stands. */
 export type GithubSignIn = { stage: "checking" } | { stage: "sign-in"; code: { code: string; url: string } | null; problem: string | null } | { stage: "signed-in"; login: string }
-
-export const inSpecThread = (m: Pick<Message, "inThread">, specAsks: ReadonlySet<number>): boolean => m.inThread !== undefined && specAsks.has(m.inThread)
 
 export function memberOf(channel: Pick<Channel, "people" | "former">, name: string): Person | undefined {
   return channel.people.find((p) => p.name === name) ?? channel.former?.find((p) => p.name === name)

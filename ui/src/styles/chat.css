@@ -1984,6 +1984,22 @@ button.msg-image-spot:hover {
   font: var(--t-stamp) var(--ui);
 }
 
+.msg-on-spec {
+  display: block;
+  padding: 0;
+  padding-block: calc((var(--slot) - 1lh) / 2);
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+}
+
+.msg-on-spec:hover {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .msg-deleted {
   margin: 0;
   color: var(--ink-3);

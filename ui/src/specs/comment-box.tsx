@@ -13,7 +13,7 @@ import { Icon } from "~/kit/icons"
 import type { Channel, Message, SendExtras, Spec, Upload, Where } from "~/model"
 import { nickname } from "~/names"
 import { useAct } from "~/nav"
-import { splitQuote } from "~/specs/read"
+import { splitQuote } from "~/specs/quote"
 import { wordsRaw } from "~/words"
 
 function whereOf(channel: Channel, ask: number): Where {
