@@ -318,8 +318,19 @@ export type Scenario =
   | "spec-changed"
   | "forgotten-computer"
   | "invite-failed"
+  | "review-reset"
   | "member"
   | "home-calm"
+
+function withReviewReset(c: Channel): Channel {
+  return {
+    ...c,
+    reviewReset: true,
+    people: c.people.map((p) =>
+      p.name === "atlas" ? { ...p, reset: { kind: "needs" as const, verdict: 4711 }, sharesSession: ["pixel"] } : p.name === "pixel" ? { ...p, sharesSession: ["atlas"] } : p
+    ),
+  }
+}
 
 const TASK_BODY = [
   'Channel settings: four save patterns in one dialog, the icon set in two places, "Access" holds non-access rows',
@@ -426,9 +437,11 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                                             ...DEMO_CHANNEL.asks,
                                           ],
                                         }
-                                      : scenario === "event-runs"
-                                        ? withEventRuns(DEMO_CHANNEL)
-                                        : DEMO_CHANNEL,
+                                      : scenario === "review-reset"
+                                        ? withReviewReset(DEMO_CHANNEL)
+                                        : scenario === "event-runs"
+                                          ? withEventRuns(DEMO_CHANNEL)
+                                          : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,
