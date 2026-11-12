@@ -112,7 +112,7 @@ The classification covers non-test `.ts/.tsx/.js/.mjs` files: 1,081 files scanne
 
 By area: `src` 208 lines, `ui` 165, `scripts` 96, `packages/core` 53, `desktop` 47, `packages/channel` 24, `ios` 14, `packages/app` 10, `site` 3, `android` 2. Classes that Temporal does not improve: timestamps (epoch ms is already the wire format) and durations (plain integer math, measured above as 15x to 126x cheaper).
 
-**Calendar and time zone math sites, reviewed by reading the code (an audit finding, not a proof; only `day()` was exercised by the harness):**
+**Calendar and time zone math sites, reviewed by reading the code (an audit finding, not a proof; the harness exercised only `clock()`, `ago()`, `day()`, `sameDay()` and the daemon clock math):**
 
 | site | what | correct on review? |
 |---|---|---|
@@ -191,7 +191,7 @@ The nearest real date fix is #570 `774672d79`: "A message dated past what a date
 - **No Bun-side move.** The daemon's clock math is pure integer arithmetic with no Date or Intl call. It is equal on every threshold case, and Temporal there is 15.8x slower in Bun with no readability gain. On review, the relay's UTC day keys look correct as written.
 - **Fix the one real calendar bug now, without Temporal.** `ui/src/kit/time.ts:44-50` `day()` mislabels "Yesterday" on the day after every DST change. Fix it with `setDate(getDate() - 1)` instead of `- DAY`. It costs 0 B and needs no engine support. It has not been run against the 49 differing inputs yet; the fix PR should add them as a test.
   - Native `Temporal` (`toZonedDateTimeISO(Temporal.Now.timeZoneId()).toPlainDate()` and `subtract({ days: 1 })`) is an option at this site only after macOS WKWebView and iOS WebKit are verified to expose it. The polyfill is not: it costs +18.9 KB gzip and fails the raw 800,000 B first-load gate.
-  - Keep `sameDay()` on `toDateString()`: it matched Date on every corpus input and is 1.9x to 7x faster.
+  - Keep `sameDay()` on `toDateString()`: Date and Temporal agreed on every corpus input, and Date is 1.9x to 7x faster.
   - The extra ~5 µs per `day()` call is invisible at day-separator frequency.
 
 ## What I could not measure
