@@ -16,7 +16,7 @@ import { markSeenIn, roomsFrom, seenIn, sendFrom, useSeen } from "@kiwi/app/thre
 import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { withReach } from "~/live/reach"
-import { capUnsent, changeUnsent, landedOut, newSendId, nextUnsentKey, resendDue, retryUnsent, unsentBlock, unsentIn } from "~/live/unsent"
+import { capUnsent, changeUnsent, landedOut, newSendId, nextUnsentKey, ownMedia, resendDue, retryUnsent, unsentBlock, unsentIn } from "~/live/unsent"
 import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, taskMentionsOf, theirsOf, type Pending } from "~/live/map"
 import { useTasksNow } from "~/live/tasks-now"
 import { iconUrl } from "~/live/icon"
@@ -77,6 +77,7 @@ export function sendOptions(state: ChannelState, messages: readonly Wire[], me: 
     ...(re !== undefined && opts.side ? { side: true } : {}),
     ...(to ? { to } : {}),
     ...(opts.block ? { block: opts.block } : {}),
+    ...ownMedia(opts.media),
     ...(opts.id ? { id: opts.id, cid: opts.id } : {}),
   }
   if (where.kind === "dm") return { ...base, ...sendFrom(state, dmPlace(me, where.with), me) }
@@ -333,6 +334,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
         ...(opts.replyTo !== undefined ? { replyTo: opts.replyTo } : {}),
         ...(opts.images?.length ? { images: opts.images } : {}),
         ...(opts.block ? { block: opts.block } : {}),
+        ...(opts.media ? { media: opts.media } : {}),
       }
       setPending((list) => capUnsent([...list.filter((p) => p.seq === undefined || !landed.has(p.seq)), next], PENDING_MAX))
       try {
@@ -349,6 +351,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
                   ...(re !== undefined ? { re: [re] } : {}),
                   ...(re !== undefined && opts.side ? { side: true } : {}),
                   ...(opts.block ? { block: opts.block } : {}),
+                  ...ownMedia(opts.media),
                   ...imgs,
                 }
               : plain

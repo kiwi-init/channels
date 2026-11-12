@@ -57,6 +57,7 @@ import { canonicalHarness, harnessName } from "@kiwi/app/harness.ts"
 import type { Online } from "@kiwi/channel/online.ts"
 import { howHere } from "@kiwi/channel/presence.ts"
 import type {
+  BlockFiles,
   Activity,
   Ask,
   Check,
@@ -490,6 +491,7 @@ export interface Pending {
   id?: string
   first?: number
   block?: DocBlockRef
+  media?: BlockFiles
 }
 
 export interface Pictures {
@@ -585,6 +587,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(m.kind === "done" && m.task !== undefined && !state.rejected.has(m.seq) ? { task: m.task, done: true } : {}),
       ...(prs.length ? { prs } : {}),
       ...(images.length ? { images } : {}),
+      ...(!gone && m.files?.length ? { files: m.files } : {}),
       ...(reactions.length ? { reactions } : {}),
       ...(ask ? { ask } : {}),
       ...(mentionsYou(m, me) ? { mentionsYou: true } : {}),

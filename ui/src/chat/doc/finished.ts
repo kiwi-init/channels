@@ -25,13 +25,18 @@ export const EMPTY_FEED: DocFeed = { lines: [], hidden: new Set(), media: new Ma
 const NO_FILES: BlockFiles = { imgs: [], files: [] }
 
 export function withDocMedia(m: Message, media: BlockFiles | undefined): Message {
-  if (!media) return m
-  const imgs = m.images?.length ? [] : media.imgs
-  return imgs.length || media.files.length ? { ...m, docMedia: { imgs, files: media.files } } : m
+  const imgs = m.images?.length ? [] : (media?.imgs ?? [])
+  const files = m.files?.length ? m.files : (media?.files ?? [])
+  return imgs.length || files.length ? { ...m, docMedia: { imgs, files } } : m
 }
 
-export function withoutMediaNames(text: string, media: BlockFiles): string {
-  const names = [...media.imgs.map((i) => `[image: ${i.name}]`), ...media.files.map((f) => `[file: ${f.name}]`)]
+export function mediaNames(m: Pick<Message, "block" | "images" | "docMedia">): string[] {
+  const own = m.block === undefined ? [] : (m.images ?? [])
+  return [...own.map((i) => `[image: ${i.alt}]`), ...(m.docMedia?.imgs ?? []).map((i) => `[image: ${i.name}]`), ...(m.docMedia?.files ?? []).map((f) => `[file: ${f.name}]`)]
+}
+
+export function withoutMediaNames(text: string, names: readonly string[]): string {
+  if (!names.length) return text
   return names
     .reduce((t, n) => t.split(n).join(""), text)
     .replace(/[ \t]+\n/g, "\n")

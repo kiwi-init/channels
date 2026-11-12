@@ -4,7 +4,7 @@ import { appendToBlock, blocksOf, markBack, markPosted, newBlock, richBlocks, ty
 import { prosemirrorToYDoc } from "y-prosemirror"
 import * as Y from "yjs"
 
-import { docFeed, withDocMedia, withLines, withoutMediaNames } from "~/chat/doc/finished"
+import { docFeed, mediaNames, withDocMedia, withLines, withoutMediaNames } from "~/chat/doc/finished"
 import { FRAGMENT, schema } from "~/chat/doc/schema"
 import type { Message } from "~/model"
 
@@ -97,8 +97,15 @@ describe("finished doc lines with no message sit in the feed at their time (T135
 
   test("a row drawing its images drops their [image: …] placeholders, and keeps the rest of the text", () => {
     const files = { imgs: [shot], files: [{ name: "r.pdf", mime: "application/pdf", size: 9, pieces: [] }] }
-    expect(withoutMediaNames("look [image: a.png]\n[file: r.pdf]\nsee [image: other.png]", files)).toBe("look\n\nsee [image: other.png]")
-    expect(withoutMediaNames("[image: a.png]", files)).toBe("")
+    expect(withoutMediaNames("look [image: a.png]\n[file: r.pdf]\nsee [image: other.png]", mediaNames({ block: "b", docMedia: files }))).toBe("look\n\nsee [image: other.png]")
+    expect(withoutMediaNames("[image: a.png]", mediaNames({ block: "b", docMedia: files }))).toBe("")
+  })
+
+  test("a line that carries its picture on the message drops the placeholder too, and a message that was never a line keeps what it says", () => {
+    const own = [{ spot: "s1", alt: "a.png", state: "waiting" as const }]
+    expect(withoutMediaNames("look [image: a.png]", mediaNames({ block: "b", images: own }))).toBe("look")
+    expect(withoutMediaNames("I typed [image: a.png] myself", mediaNames({ images: own }))).toBe("I typed [image: a.png] myself")
+    expect(withoutMediaNames("  untouched  ", mediaNames({}))).toBe("  untouched  ")
   })
 
   test("a feed row from an image line carries the image", () => {
@@ -114,6 +121,16 @@ describe("finished doc lines with no message sit in the feed at their time (T135
     const pasted: Message = { ...msg(4, T), block: "c" }
     expect(withDocMedia(pasted, { imgs: [shot], files: [] }).docMedia).toEqual({ imgs: [shot], files: [] })
     expect(withDocMedia(pasted, undefined)).toBe(pasted)
+  })
+
+  test("a message that brings its own files draws those, with or without its block, and never the block's copies too", () => {
+    const pdf = { name: "r.pdf", mime: "application/pdf", size: 9, pieces: [] }
+    const other = { name: "old.pdf", mime: "application/pdf", size: 7, pieces: [] }
+    const line: Message = { ...msg(5, T), block: "d", files: [pdf] }
+    expect(withDocMedia(line, undefined).docMedia).toEqual({ imgs: [], files: [pdf] })
+    expect(withDocMedia(line, { imgs: [shot], files: [other] }).docMedia).toEqual({ imgs: [shot], files: [pdf] })
+    const plain: Message = { ...msg(6, T), files: [pdf] }
+    expect(withDocMedia(plain, undefined).docMedia).toEqual({ imgs: [], files: [pdf] })
   })
 })
 

@@ -3,7 +3,7 @@ import { lazy, memo, Suspense, useCallback, useContext, useEffect, useLayoutEffe
 import { isGifReaction } from "@kiwi/core/protocol.ts"
 
 import { ShownImage } from "~/chat/feed-image"
-import { withoutMediaNames } from "~/chat/doc/finished"
+import { mediaNames, withoutMediaNames } from "~/chat/doc/finished"
 import { PrChip, TaskChip } from "~/chat/cards"
 import { EditHere, useEditing } from "~/chat/editing"
 import { quotedExcerpt } from "~/chat/quote"
@@ -219,7 +219,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const spec = channel.specs?.find((s) => s.ask === m.seq)
   const cited = useMemo(() => (typeof quote === "object" ? quotedExcerpt(m, quote) : null), [m, quote])
   const said = cited ? cited.rest : wordsRaw(m.text)
-  const body = m.docMedia ? withoutMediaNames(said, m.docMedia) : said
+  const body = withoutMediaNames(said, mediaNames(m))
   const threaded = !inThread && !older && !spec && m.onSpec === undefined && (m.where.kind === "room" || m.where.kind === "dm")
   const openThread = () => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })
   const onSpec = inThread || older ? undefined : m.onSpec

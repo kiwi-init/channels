@@ -9,12 +9,14 @@ import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
 import type { DocBlockRef } from "@kiwi/core/protocol.ts"
 import type { DocEvent, WireError } from "../../../../desktop/src/bridge.ts"
+import { filesOf } from "~/chat/doc/files-of"
 import { giveBackBlock } from "~/chat/doc/give-back"
 import { madeHere, thisWindow, type MadeLines } from "~/chat/doc/made"
 import { afterUploads, startUpload, uploading } from "~/chat/doc/uploads"
 import { postFinished, type Finished, type Posting } from "~/chat/doc/post"
 import { t } from "~/i18n/i18n"
 import { noteTyping, tracingTyping } from "~/kit/typing-hook"
+import type { BlockFiles } from "~/model"
 
 export interface Shared {
   doc: Y.Doc
@@ -28,7 +30,7 @@ export type FindDoc = () => Promise<string | null>
 
 export interface Poster {
   me: string
-  post: (text: string, block: DocBlockRef, reply?: { re: number; quote?: string }) => Promise<boolean>
+  post: (text: string, block: DocBlockRef, reply?: { re: number; quote?: string }, media?: BlockFiles) => Promise<boolean>
   posted?: (block: string) => boolean
 }
 
@@ -248,10 +250,14 @@ export class LiveDoc implements Shared {
     if (!this.poster) return
     if (this.gaveUp) failed()
     else if (this.opened === null) this.unposted.push({ b, failed })
-    else
-      void this.poster.post(b.text, { th: this.opened, id: b.id }, b.re ? { re: b.re, ...(b.quote ? { quote: b.quote } : {}) } : undefined).then((went) => {
-        if (!went) failed()
-      })
+    else {
+      const media = filesOf(this.doc, b.id)
+      void this.poster
+        .post(b.text, { th: this.opened, id: b.id }, b.re ? { re: b.re, ...(b.quote ? { quote: b.quote } : {}) } : undefined, media.imgs.length || media.files.length ? media : undefined)
+        .then((went) => {
+          if (!went) failed()
+        })
+    }
   }
 
   private readonly holdFloor = (): void => {
