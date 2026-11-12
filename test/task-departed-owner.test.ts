@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as Effect from "effect/Effect";
+import { AgentLive, AgentSession } from "../src/agent.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { received } from "@kiwi/core/client/history.ts";
 import { sign, verify, type Identity } from "@kiwi/core/identity.ts";
@@ -50,6 +52,10 @@ async function injected(who: Identity, ev: Event, seq: number): Promise<Message>
 }
 
 const claim = (task: number): Event => ({ op: "task.claim", task });
+
+const run = <A, E>(e: Effect.Effect<A, E, unknown>) => Effect.runPromise(e.pipe(Effect.provide(AgentLive)) as Effect.Effect<A, E, never>);
+
+const session = (who: typeof bo) => new AgentSession("departed-owner", { ...who.ch.access, relay: s.relay, code: s.code }, who.id, () => {});
 
 async function taskOwnedByBo(): Promise<number> {
   await s.ownerCh.send("a task for bo", { kind: "event", ev: { op: "task.add", title: "ship it", owner: "bo" } });
@@ -119,5 +125,26 @@ describe("a task whose owner left (#2320)", () => {
     const state = await judged([]);
     expect(state.rejected.get(seq)).toBeUndefined();
     expect(state.tasks.get(id)).toMatchObject({ owner: "cy" });
+  });
+
+  test("the lead assigns a departed owner's task to itself", async () => {
+    const id = await taskOwnedByBo();
+    await boGone();
+    const state = await run(session(lee).taskHandoff(id, "lee", undefined));
+    expect(state.tasks.get(id)).toMatchObject({ owner: "lee" });
+  });
+
+  test("the lead assigns a departed owner's task to another builder", async () => {
+    const id = await taskOwnedByBo();
+    await boGone();
+    const state = await run(session(lee).taskHandoff(id, "cy", undefined));
+    expect(state.tasks.get(id)).toMatchObject({ owner: "cy" });
+  });
+
+  test("the lead still can't hand its own task to itself", async () => {
+    await s.ownerCh.send("a task for lee", { kind: "event", ev: { op: "task.add", title: "lee's own", owner: "lee" } });
+    const id = [...(await judged([])).tasks.keys()].at(-1)!;
+    const refused = await run(Effect.flip(session(lee).taskHandoff(id, "lee", undefined)));
+    expect(String(refused)).toContain("hand it to someone else");
   });
 });
