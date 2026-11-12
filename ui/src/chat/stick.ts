@@ -1,10 +1,14 @@
 import { useCallback, useLayoutEffect, useRef } from "react"
 
+import { motionOk } from "~/kit/glide"
+
 const NEAR_BOTTOM = 48
 
 const WHEEL_MS = 400
 
 const RESTORE_HOLD_MS = 4_000
+
+const TOUCHES = ["pointerdown", "keydown", "touchstart"] as const
 
 interface Anchor {
   el: Element
@@ -240,11 +244,10 @@ export function useStick(following = true, still = false) {
       }
       touch()
     }
-    const kinds = ["pointerdown", "keydown", "touchstart"] as const
-    for (const kind of kinds) box.addEventListener(kind, touch, { passive: true })
+    for (const kind of TOUCHES) box.addEventListener(kind, touch, { passive: true })
     box.addEventListener("wheel", wheel, { passive: true })
     return () => {
-      for (const kind of kinds) box.removeEventListener(kind, touch)
+      for (const kind of TOUCHES) box.removeEventListener(kind, touch)
       box.removeEventListener("wheel", wheel)
     }
   }, [remember, still, pad])
@@ -256,7 +259,7 @@ export function useStick(following = true, still = false) {
       placed.current = null
       going.current = false
     }
-    const kinds = ["pointerdown", "keydown", "touchstart", "wheel"] as const
+    const kinds = [...TOUCHES, "wheel"] as const
     for (const kind of kinds) page.addEventListener(kind, reader, { passive: true })
     return () => {
       for (const kind of kinds) page.removeEventListener(kind, reader)
@@ -278,7 +281,7 @@ export function useStick(following = true, still = false) {
         reserve.current = 0
         pad()
       }
-      box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
+      box.scrollTo({ top: box.scrollHeight, behavior: smooth && motionOk() ? "smooth" : "auto" })
     },
     [pad]
   )
