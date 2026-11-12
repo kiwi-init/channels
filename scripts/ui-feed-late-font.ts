@@ -20,7 +20,6 @@ const engine = flag("--browser") ?? "webkit";
 if (engine !== "webkit" && engine !== "chromium") throw new Error(`--browser is webkit or chromium, not ${engine}`);
 
 const FONT = "lato";
-const FACE = '16px "Lato"';
 const UP = 1500;
 
 const server = serveDist(dist);
@@ -32,10 +31,10 @@ const expect = (ok: boolean, what: string) => {
 };
 
 const font = (page: Page): Promise<{ loaded: boolean; family: string }> =>
-  page.evaluate((face) => {
+  page.evaluate(() => {
     const text = document.querySelector<HTMLElement>(".main .feed .msg-text") ?? document.body;
-    return { loaded: document.fonts.check(face), family: getComputedStyle(text).fontFamily.split(",")[0]?.trim() ?? "" };
-  }, FACE);
+    return { loaded: [...document.fonts].some((face) => face.family.includes("Lato") && face.status === "loaded"), family: getComputedStyle(text).fontFamily.split(",")[0]?.trim() ?? "" };
+  });
 
 try {
   for (const mode of ["at the bottom", "scrolled up"] as const) {
@@ -63,7 +62,7 @@ try {
     );
     arrive();
     const came = await page
-      .waitForFunction((face) => document.fonts.check(face), FACE, { timeout: 15_000 })
+      .waitForFunction(() => [...document.fonts].some((face) => face.family.includes("Lato") && face.status === "loaded"), undefined, { timeout: 15_000 })
       .then(() => true)
       .catch(() => false);
     await page.evaluate(() => document.fonts.ready);
