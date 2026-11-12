@@ -3,6 +3,7 @@ import type { TextFont } from "@kiwi/app/theme.ts"
 import type { GithubHealth } from "@kiwi/core/github-health.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
+import type { SharedWith } from "@kiwi/core/shared-seats.ts"
 import type { Reason } from "@kiwi/core/routing.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import type { DocBlockRef, GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
@@ -83,7 +84,12 @@ export interface Person {
   joined: number
   messages: number
   left?: boolean
+  reset?: PersonReset
+  sharesSession?: string[]
+  sharesElsewhere?: readonly SharedWith[]
 }
+
+type PersonReset = { kind: "waived" } | { kind: "needs"; verdict: number }
 
 export interface Check {
   name: string
@@ -172,12 +178,12 @@ export interface TaskEvent {
   root?: number
 }
 
-export type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land"
+export type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land" | "reset"
 
 export type RunTrouble = "failed" | "unseen" | "overran"
 
 export type TaskMover =
-  | { kind: "member"; name: string; move: MoveFor; question?: number; trouble?: RunTrouble }
+  | { kind: "member"; name: string; move: MoveFor; question?: number; trouble?: RunTrouble; reviewer?: string }
   | { kind: "waiting"; owner: string; ahead: number }
   | { kind: "run"; behind: string; due: number }
   | { kind: "hold"; until: number; reason: Words }
@@ -625,6 +631,7 @@ export interface Channel {
   githubWrite?: boolean
   branchPrefix?: string
   quietMinutes?: number
+  reviewReset?: true
   landing?: string
   rooms: Room[]
   directs: Direct[]
@@ -820,6 +827,8 @@ export interface Actions {
   setGithubWrite(code: string, on: boolean): void
   setBranchPrefix(code: string, prefix: string | null): void
   setQuiet(code: string, minutes: string): void
+  setReviewReset(code: string, on: boolean): void
+  setResetWaived(code: string, name: string, waived: boolean): void
   setLanding(code: string, then: string | null): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
   setGoal(code: string, goal: string): void

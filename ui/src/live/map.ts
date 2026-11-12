@@ -12,6 +12,7 @@ import { clockOf } from "@kiwi/core/clock.ts"
 import { moverOf, type Mover } from "@kiwi/core/mover.ts"
 import { currentStep, stepMove, type LandingStep } from "@kiwi/core/steps.ts"
 import { runSight } from "@kiwi/core/state/landing-steps.ts"
+import { sharedWith } from "@kiwi/core/state/reset.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf, sentTo } from "@kiwi/core/room-rules.ts"
 import { dmDocOf, dmRoomWith } from "~/live/dm"
@@ -170,6 +171,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
   const reach = human ? null : howHere(here)
   const specs = m.card ? specsOf(m.card) : ""
   const load = loadOf(state, m)
+  const shares = human ? [] : sharedWith(state.members, m.name)
   return {
     name: m.name,
     kind: human ? "human" : "agent",
@@ -206,6 +208,8 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     lastSeen: here?.at ?? m.lastSeen,
     joined: m.joined,
     messages: m.messages,
+    ...(!human && m.reset ? { reset: m.reset.kind === "needs" ? { kind: "needs" as const, verdict: m.reset.verdict } : { kind: "waived" as const } } : {}),
+    ...(shares.length ? { sharesSession: shares } : {}),
   }
 }
 
@@ -699,7 +703,15 @@ const TROUBLE: Record<NonNullable<Extract<Mover, { kind: "member" }>["why"]>, Ru
 function moverFor(state: ChannelState, t: CoreTask, now: number): TaskMover | undefined {
   const m = moverOf(state, t, now)
   if (!m) return undefined
-  if (m.kind === "member") return { kind: "member", name: m.name, move: m.move, ...(m.question !== undefined ? { question: m.question } : {}), ...(m.why ? { trouble: TROUBLE[m.why] } : {}) }
+  if (m.kind === "member")
+    return {
+      kind: "member",
+      name: m.name,
+      move: m.move,
+      ...(m.question !== undefined ? { question: m.question } : {}),
+      ...(m.why ? { trouble: TROUBLE[m.why] } : {}),
+      ...(m.reviewer ? { reviewer: m.reviewer } : {}),
+    }
   if (m.kind === "waiting") return { kind: "waiting", owner: m.owner, ahead: m.ahead }
   if (m.kind === "run") return { kind: "run", behind: m.behind, due: m.due }
   if (m.kind === "nobody") return { kind: "nobody" }

@@ -273,6 +273,7 @@ export default {
   "tasks.move.assign": "{who} が担当者を決める番",
   "tasks.move.review": "{who} がレビューする番",
   "tasks.move.route": "{who} がレビュアーを決める番",
+  "tasks.move.reset": "{who} が {reviewer} のセッションをリセットするか、レビューを別の人に移す番",
   "tasks.move.revise": "{who} がもう一度レビューに出す番",
   "tasks.move.answer": "{who} が答える番",
   "tasks.move.land": "{who} が反映する番",

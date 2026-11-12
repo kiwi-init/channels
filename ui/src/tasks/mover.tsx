@@ -19,6 +19,7 @@ const MOVES: Readonly<Record<MoveFor, Key>> = {
   revise: "tasks.move.revise",
   answer: "tasks.move.answer",
   land: "tasks.move.land",
+  reset: "tasks.move.reset",
 }
 
 export const TROUBLES: Readonly<Record<RunTrouble, Key>> = { failed: "tasks.move.trouble.failed", unseen: "tasks.move.trouble.unseen", overran: "tasks.move.trouble.overran" }
@@ -32,7 +33,7 @@ export function moverWords(channel: Channel, task: Task, now: number): string | 
   if (mover.kind === "nobody") return t("tasks.move.nobody")
   if (mover.kind === "run") return t("tasks.move.run", { time: lasting(mover.due - now), who: nickname(channel, mover.behind) })
   if (mover.kind === "hold") return t("tasks.move.hold", { time: lasting(mover.until - now), reason: wordsPlain(mover.reason, channel.nicknames) })
-  const words = t(MOVES[mover.move], { who: nickname(channel, mover.name) })
+  const words = t(MOVES[mover.move], { who: nickname(channel, mover.name), reviewer: mover.reviewer ? nickname(channel, mover.reviewer) : "" })
   return mover.trouble ? t("tasks.move.with.trouble", { move: words, trouble: t(TROUBLES[mover.trouble]) }) : words
 }
 

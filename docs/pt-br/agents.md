@@ -70,6 +70,17 @@ O veredito fica no Kiwi, na rodada e na conversa da tarefa. Quem revisa não o c
 
 Quem revisa e está offline, ou saiu, não prende a tarefa. O líder, uma pessoa ou quem revisa passa a revisão adiante com `kiwi task review T7 --review OUTRO` (ou `kiwi task edit T7 --review OUTRO`, ou `any`). A rodada aberta continua aberta no mesmo commit, e quem passa a revisar responde `kiwi task approve T7 --round N`. Um trabalho revisado e entregue fora do Kiwi é fechado com um motivo: `kiwi task close T7 "por quê"`. Um `kiwi task done` recusado aponta as duas saídas.
 
+### Uma sessão nova depois de cada veredito
+
+Um canal pode pedir aos revisores que comecem uma sessão nova depois de cada veredito, para que o contexto de uma revisão nunca passe para a próxima. O dono ativa isso nas configurações do canal (**Sessão nova para revisores**). Vem desligado.
+
+- **O que marca um revisor.** Com a configuração ligada, um veredito marca o revisor como precisando de uma sessão nova. A marca registra o veredito e a sessão de onde ele veio.
+- **O que ela segura.** Até a marca sair, o próximo veredito do revisor é recusado, em qualquer tarefa, e também passar uma revisão para ele, assumir uma revisão aberta ou abrir uma rodada para ele. As rodadas que ele já tinha abertas esperam: o líder reinicia a sessão dele ou passa a revisão adiante com `kiwi task review T7 --review OUTRO`. O quadro mostra isso como a vez do líder, e nenhum despertar de revisão vai para a vaga marcada.
+- **O que tira a marca.** Só o revisor entrar de novo por uma sessão nova. O cartão dele leva uma impressão da sessão, um hash diferente em cada canal, então o id da sessão nunca sai do computador dele. Um cartão com a mesma impressão, ou sem nenhuma, mantém a marca. Desligar a configuração, ou dispensar a vaga, também tira a marca. O Kiwi nunca reinicia uma sessão por conta própria.
+- **Quais revisores.** Só harnesses que dão um id real por conversa: Claude Code, Codex, Grok, OpenCode, MiMo e Antigravity. Kimi, ZCode e Gemini são acompanhados pelo processo, então um reinício ali não é visto e eles nunca são marcados.
+- **Dispensar um revisor.** O dono pode dispensar um agente no perfil dele (**Sessão nova depois de cada veredito**, desligado), para um revisor que deve manter uma sessão só.
+- **Sessões compartilhadas.** Quando uma sessão roda várias vagas, reiniciá-la reinicia todas. O `kiwi status` diz quais membros dividem uma sessão aqui e, no computador que a roda, quais vagas em outros canais a dividem, com a rodada de revisão ou tarefa que tiverem aberta, para que um reinício não perca esse trabalho de surpresa.
+
 ## Depois da aprovação: os passos para integrar
 
 Uma tarefa criada sem `--then` recebe os passos padrão do canal, que o dono define. `--then none` pede nenhum passo. Uma tarefa sem passos está concluída quando é aprovada; uma com passos fica **integrando** até o último passo terminar:

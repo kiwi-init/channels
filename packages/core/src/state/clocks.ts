@@ -3,13 +3,14 @@ import { prOfTask } from "../prs.ts";
 import { currentStep, stepMove } from "../steps.ts";
 import { heldStep, pausingStep, runSight } from "./landing-steps.ts";
 import { landerOf, openRound, taskId } from "./tasks.ts";
+import { needsReset } from "./reset.ts";
 import type { ChannelState, Task, TaskClock, Woke } from "./types.ts";
 
 export const QUIET_MS = QUIET_MINUTES * 60_000;
 export const QUEUE_MS = 24 * 60 * 60_000;
 export const UNREAD_MS = 5 * 60_000;
 
-export type ClockView = Pick<ChannelState, "tasks" | "openAsks" | "github" | "branchPrefix" | "quietMs">;
+export type ClockView = Pick<ChannelState, "tasks" | "openAsks" | "github" | "branchPrefix" | "quietMs" | "members">;
 
 const WAITING = "~waiting|";
 const LEAD = "@lead";
@@ -47,6 +48,7 @@ function partyOf(view: ClockView, t: Task, now: number): Party {
   if (t.state === "landing") return landingParty(view, t, now);
   const round = openRound(t);
   if (!round) return t.owner ? member(t.owner, "revise") : lead("assign");
+  if (t.review && t.review !== "*" && needsReset(view.members, t.review)) return lead(`reset|${t.review}`);
   return t.review && t.review !== "*" ? member(t.review, "review", String(round.n)) : lead("route");
 }
 

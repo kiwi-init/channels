@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join as joinPath } from "node:path";
 import { home, Keystore, loadConfig, updateConfig } from "../../config.ts";
 import { taskId } from "@kiwi/core/state.ts";
+import { sharedLines, sharedSeats } from "../../shared-seats.ts";
 import { daemonSeat, type DaemonSeat } from "../../daemon.ts";
 import { isWakeVia, wakeKey, wakeWords } from "@kiwi/core/wake.ts";
 import { ago, holdLine, formatRooms, formatStatus, statusJson } from "@kiwi/core/format.ts";
@@ -126,6 +127,10 @@ export const channelCommands: Record<string, Command> = {
       const snap = { alias: s.alias, check: reviewCheckOf(s.ch.roomId), me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
       const all = !!opt.all;
       out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus({ ...snap, all }));
+      if (!opt.json) {
+        const shared = sharedLines(yield* sharedSeats(loadConfig(), s.alias));
+        if (shared.length) out(["", "sessions this machine shares with other channels:", ...shared.map((l) => `  ${l}`)].join("\n"));
+      }
       yield* noteRead(s);
     }),
 

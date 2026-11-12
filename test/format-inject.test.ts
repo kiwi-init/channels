@@ -41,6 +41,7 @@ function blank(): ChannelState {
     githubWrite: null,
     branchPrefix: null,
     quietMs: 20 * 60_000,
+    reviewReset: false,
     landing: null,
     landingSteps: null,
     reactions: new Map(),
