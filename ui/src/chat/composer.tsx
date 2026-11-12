@@ -18,7 +18,7 @@ import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { openMenu } from "~/kit/menu-open"
 import type { Channel, Upload, Where } from "~/model"
-import { useActions, useToast } from "~/nav"
+import { claimFocus, useActions, useToast } from "~/nav"
 import { nickname } from "~/names"
 import { withNames } from "~/chat/linked"
 import { listId, Suggestions, useSuggest } from "~/chat/suggest"
@@ -105,6 +105,14 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   useEffect(() => {
     if (quoting || inThread !== undefined) area.current?.focus()
   }, [quoting, inThread])
+
+  useEffect(() => {
+    const el = area.current
+    if (!el || !claimFocus(channel.code, where, inThread)) return
+    el.focus()
+    el.setSelectionRange(el.value.length, el.value.length)
+    moved(el.value.length)
+  }, [channel.code, where, inThread, moved])
 
   useLayoutEffect(() => {
     const el = box.current
