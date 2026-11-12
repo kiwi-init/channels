@@ -8,6 +8,7 @@ import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { composer, firstRun, letIn, newChannel } from "./perf-ui.ts";
 import { inOrder } from "./doc-oracle.ts";
+import { pageErrors } from "./page-errors.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const arg = (name: string): string | undefined => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -192,11 +193,15 @@ async function windowOf(label: string, from?: BrowserContext): Promise<Win> {
   page.on("console", (m) => {
     if (m.text().startsWith("RO-LOOP")) log(`${label} ${m.text()}`);
   });
-  page.on("pageerror", (e) => {
-    if (!live) return;
-    errors.push(`${label}: ${e.message}`);
-    log(`error ${label}: ${e.message}`);
-  });
+  await pageErrors(
+    page,
+    (e) => {
+      if (!live) return;
+      errors.push(`${label}: ${e}`);
+      log(`error ${label}: ${e}`);
+    },
+    { observers: false },
+  );
   await page.goto(BASE);
   if (!from) await firstRun(page, "jow");
   return { label, page, lag, want: "", sent: [] };

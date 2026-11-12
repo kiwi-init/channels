@@ -7,6 +7,7 @@ import { chromium, webkit } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { composer, firstRun, letIn, newChannel } from "./perf-ui.ts";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`An agent edits its message in #general three times, then grows it to six paragraphs, while jow writes in the composer below.
@@ -86,7 +87,7 @@ try {
   });
   const page = await context.newPage();
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  await pageErrors(page, (e) => errors.push(e));
   const probe = await context.newPage();
   await probe.route("**/resize-probe", (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><body></body>" }));
   await probe.goto(`${BASE}resize-probe`);

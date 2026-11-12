@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -106,7 +107,7 @@ try {
     console.log(`\n${width}×${height}`);
     const page = await browser.newPage({ viewport: { width, height } });
     const errors: string[] = [];
-    page.on("pageerror", (e) => errors.push(e.message));
+    await pageErrors(page, (e) => errors.push(e));
     await page.addInitScript(() => {
       const mark = (): void => void (document.documentElement.dataset["shell"] = "mac");
       if (document.documentElement) mark();

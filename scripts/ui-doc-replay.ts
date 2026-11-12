@@ -7,6 +7,7 @@ import { chromium, webkit, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { composer, firstRun, letIn, newChannel, SEND } from "./perf-ui.ts";
+import { pageErrors } from "./page-errors.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DIST = harnessDist(process.argv.find((a) => a.startsWith("--dist="))?.slice(7));
@@ -176,7 +177,7 @@ try {
     Object.defineProperty(navigator, "clipboard", { value: { writeText: async (t: string) => void ((window as unknown as { copied?: string }).copied = t) }, configurable: true });
   });
   const page = await context.newPage();
-  page.on("pageerror", (e) => errors.push(`page: ${e.message}`));
+  await pageErrors(page, (e) => errors.push(`page: ${e}`));
   await page.goto(BASE);
   await firstRun(page, "jow");
   const code = await newChannel(page, "replay");

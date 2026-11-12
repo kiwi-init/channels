@@ -7,6 +7,7 @@ import { chromium, webkit, type Locator, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { composer, firstRun, letIn, newChannel, SEND } from "./perf-ui.ts";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`A Retina screenshot posted in chat shows from a copy sized to its box (360 CSS px in the feed, 480 in the thread doc, at
@@ -150,7 +151,7 @@ function feedCopy(shown: Shown, original: string): string | null {
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: SCALE, acceptDownloads: true });
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  await pageErrors(page, (e) => errors.push(e));
   page.on("crash", () => errors.push("the page crashed"));
   browser.on("disconnected", () => void (closing || console.error("the browser went away")));
   await page.addInitScript(() => {

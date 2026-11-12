@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
@@ -364,7 +365,7 @@ async function fontRefit(page: Page, width: number): Promise<string> {
 try {
   for (const theme of ["dark", "light"]) {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-    page.on("pageerror", (e) => fails.push(`page threw in ${theme}: ${e.message}`));
+    await pageErrors(page, (e) => fails.push(`page threw in ${theme}: ${e}`));
     await page.addInitScript(watchPaints);
     await page.goto(`http://127.0.0.1:${server.port}/?shot=own-bubbles&theme=${theme}`);
     await page.locator(".main article.msg.is-mine .msg-thread").waitFor();
