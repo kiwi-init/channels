@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
@@ -245,7 +246,7 @@ async function keys(page: Page): Promise<string> {
 try {
   for (const width of [1440, 760]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
-    page.on("pageerror", (e) => fails.push(`page threw at ${width}: ${e.message}`));
+    await pageErrors(page, (e) => fails.push(`page threw at ${width}: ${e}`));
     await page.goto(`http://127.0.0.1:${server.port}/?shot=own-bubbles&theme=dark`);
     await page.locator(".main article.msg.is-mine .msg-thread").waitFor();
     await page.evaluate(() => document.fonts.ready);
