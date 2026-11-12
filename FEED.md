@@ -16,6 +16,7 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | The composer you type in stays put while lines arrive | `scripts/ui-doc-still.ts` | `the composer you type in stays put while lines arrive` |
 | Held, or reading an older stretch, the bottom does not pull you along | `ui/src/chat/stick.test.tsx` | `held, or reading an older window, the bottom does not pull you along` |
 | A sent line with an image stays above the lines sent after it | `scripts/ui-doc-image-order.ts` | `doc lines with images are drawn wrong` |
+| A line of yours that changes is laid out once, also while markdown is still loading: its row keeps the size the feed read | `scripts/ui-msg-edit.ts` | `no resize observer resizes its row from inside its own callback` |
 
 ## A change of width, and the sidebar toggle
 
@@ -34,6 +35,7 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | At the bottom, a font that arrives late and wraps the lines again leaves the last line at the bottom of the view | `scripts/ui-feed-late-font.ts` | `a late font leaves the last line at the bottom of the view` |
 | Scrolled up, it leaves the row you read on its pixel | `scripts/ui-feed-late-font.ts` | `a late font leaves the row at the top of the view on its pixel` |
 | A bubble fitted while a font was loading is fitted again when it arrives, and the fit never changes the message's height | `scripts/ui-own-bubble.ts` | `fitting a bubble to its text never changes the message's height` |
+| A line that arrives while the rest of the app's styles load in the background is laid out at once, never blank | `scripts/ui-doc-steady.ts` | `the stylesheets of lazy chunks load after the page, not in <head>` |
 
 ## Opening, and a reload
 
