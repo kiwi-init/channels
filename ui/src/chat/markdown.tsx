@@ -1,5 +1,5 @@
 import "~/i18n/en/chat-later"
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react"
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react"
 import type { MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
 import { normalizeMarkdownStyle } from "react-native-enriched-markdown/lib/module/normalizeMarkdownStyle.web.js"
 import { ENRM_TEXT_CLASS } from "react-native-enriched-markdown/lib/module/web/globalStyles.js"
@@ -138,7 +138,7 @@ const WRAP: CSSProperties = { display: "flex", flexDirection: "column" }
 
 const parsing = new Map<string, Promise<ASTNode>>()
 
-const OWN_LINK = /^kiwi-(?:mention|task|msg|page|do):/
+const OWN_LINK = /^kiwi-(?:mention|task|msg|page|do|pr|issue):/
 const OPENED = /^(?:https?:\/\/|mailto:)/i
 const LOCAL_PICTURE = /^(?:data|blob):/i
 
@@ -314,6 +314,14 @@ const COPYABLE = 16
 
 const scrollsOn = (pre: HTMLElement) => pre.classList.toggle("code-more", pre.scrollWidth - pre.clientWidth - pre.scrollLeft > 2)
 
+export interface DrawTools {
+  press: (url: string) => void
+  inline: (node: ASTNode) => ReactNode
+  block: (node: ASTNode, key: number) => ReactNode
+}
+
+export type Draw = (node: ASTNode, at: number, all: readonly ASTNode[], tools: DrawTools) => ReactNode | undefined
+
 export interface MarkdownProps {
   markdown: string
   onMention: (name: string) => void
@@ -322,9 +330,10 @@ export interface MarkdownProps {
   onImage: (url: string, alt: string) => void
   onShown: () => void
   onPage?: (url: string) => void
+  draw?: Draw
 }
 
-export default function Markdown({ markdown, onMention, onTask, onMessage, onImage, onShown, onPage }: MarkdownProps) {
+export default function Markdown({ markdown, onMention, onTask, onMessage, onImage, onShown, onPage, draw }: MarkdownProps) {
   const box = useRef<HTMLDivElement>(null)
   const [got, setGot] = useState<{ markdown: string; ast: ASTNode } | null>(() => {
     const cached = parsedFor(markdown)
@@ -416,7 +425,7 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       if (url.startsWith("kiwi-mention:")) return onMention(decodeURIComponent(url.slice("kiwi-mention:".length)))
       if (url.startsWith("kiwi-task:")) return onTask(Number(url.slice("kiwi-task:".length)))
       if (url.startsWith("kiwi-msg:")) return onMessage(Number(url.slice("kiwi-msg:".length)))
-      if (url.startsWith("kiwi-page:") || url.startsWith("kiwi-do:")) return onPage?.(url)
+      if (/^kiwi-(?:page|do|pr|issue):/.test(url)) return onPage?.(url)
       const at = messageAt(url)
       if (at) {
         location.hash = messageHash(at.code, at.seq)
@@ -437,6 +446,20 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
     }),
     [press, onImage]
   )
+  const tools = useMemo(
+    (): DrawTools => ({
+      press: (url) => press({ url }),
+      inline: (node) =>
+        node.children?.map((child, i) => <RenderNode key={i} node={child} style={NORMAL} styles={STYLES} callbacks={callbacks} capabilities={CAPABILITIES} parentType={node.type} index={i} />),
+      block: (node, key) =>
+        node.type === "Table" ? (
+          <Table key={key} node={node} style={NORMAL} styles={STYLES} callbacks={callbacks} />
+        ) : (
+          <RenderNode key={key} node={node} style={NORMAL} styles={STYLES} callbacks={callbacks} capabilities={CAPABILITIES} />
+        ),
+    }),
+    [press, callbacks]
+  )
   const children = ast?.children ?? []
 
   return (
@@ -445,6 +468,8 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
         <div className={ENRM_TEXT_CLASS} style={WRAP} ref={shown}>
           {children.map((child, i) => {
             const last = i === children.length - 1
+            const own = draw?.(child, i, children, tools)
+            if (own !== undefined) return <Fragment key={`own-${i}`}>{own}</Fragment>
             const source = mermaidSource(child)
             if (source !== undefined)
               return (

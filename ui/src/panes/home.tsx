@@ -4,7 +4,8 @@ import { useEffect, useMemo } from "react"
 import { Body } from "~/chat/body"
 import type { Actions, ChannelTile, HomeAsk, HomeChannel } from "~/model"
 import { useAct } from "~/nav"
-import { join, link, maker, type Maker } from "~/panes/page"
+import { NOTHING, pieces, type Lookup } from "~/panes/engine"
+import { join, link, main, maker, type Maker } from "~/panes/page"
 import { openImage } from "~/specs/comment-item"
 import { onboarded } from "~/start/onboarded"
 import { wrote } from "~/words"
@@ -13,13 +14,14 @@ import { t } from "~/i18n/i18n"
 const NO_NAMES: ReadonlyMap<string, string> = new Map()
 const NO_TASKS: ReadonlySet<number> = new Set()
 const CHANNEL = "kiwi-page:channel:"
+const AGENT = "kiwi-page:agent:"
 
 function answers(code: string, ask: HomeAsk, actions: Actions, m: Maker, open: () => void): string {
   const act = ask.act
-  if (act.kind === "options") return act.options.map((o) => m.act(o.shown.replace(/[[\]\\]/g, "\\$&"), () => actions.answerQuestion(code, ask.id, o.answer))).join(" ")
-  if (act.kind === "allow") return m.act(t("panes.page.allow"), () => actions.answerPermission(code, ask.id, true))
-  if (act.kind === "approve-spec") return m.act(t("panes.page.approve"), () => actions.approveSpec(code, act.ask, act.v))
-  if (act.kind === "approve-task") return m.act(t("panes.page.approve"), () => actions.approveTask(code, act.task, true))
+  if (act.kind === "options") return act.options.map((o) => `- ${m.act(o.shown, () => actions.answerQuestion(code, ask.id, o.answer))}`).join("\n")
+  if (act.kind === "allow") return main(m.act(t("panes.page.allow"), () => actions.answerPermission(code, ask.id, true)))
+  if (act.kind === "approve-spec") return main(m.act(t("panes.page.approve"), () => actions.approveSpec(code, act.ask, act.v)))
+  if (act.kind === "approve-task") return main(m.act(t("panes.page.approve"), () => actions.approveTask(code, act.task, true)))
   return m.act(t("panes.home.open"), open)
 }
 
@@ -36,10 +38,12 @@ function build(tiles: readonly ChannelTile[], home: readonly HomeChannel[], acti
       h?.doneToday ? t("panes.home.done", { count: h.doneToday }) : "",
       h?.red ? t("panes.home.red", { count: h.red }) : "",
     ].filter(Boolean)
-    const agents = (h?.agents ?? []).filter((a) => a.state === "working" || a.state === "waiting").map((a) => `- **${a.nick}** ${a.doing}${a.task ? ` · ${a.task.title}` : ""}`)
-    return join([`### ${link(c.title, `${CHANNEL}${c.code}`)}`, facts.join(" · "), agents.join("\n")])
+    const agents = (h?.agents ?? [])
+      .filter((a) => a.state === "working" || a.state === "waiting")
+      .map((a) => `  - ${link(a.nick, `${AGENT}${c.code}:${a.name}`)} · ${[a.doing, a.task?.title ?? ""].filter(Boolean).join(" · ")}`)
+    return [`- ${link(c.title, `${CHANNEL}${c.code}`)}${facts.length ? ` · ${facts.join(" · ")}` : ""}`, ...agents].join("\n")
   })
-  return { md: join([`# ${t("shell.rail.home")}`, asks.length ? `## ${t("start.welcome.waiting.on.you")}` : "", ...asks, `## ${t("shell.rail.channels")}`, ...channels]), acts: m.acts }
+  return { md: join([`# ${t("shell.rail.home")}`, asks.length ? `## ${t("start.welcome.waiting.on.you")}` : "", ...asks, `## ${t("shell.rail.channels")}`, channels.join("\n")]), acts: m.acts }
 }
 
 export function HomePage({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly HomeChannel[] }) {
@@ -54,15 +58,34 @@ export function HomePage({ tiles, home }: { tiles: readonly ChannelTile[]; home:
     [tiles, home, actions, go]
   )
   const text = useMemo(() => wrote(built.md), [built.md])
+  const draw = useMemo(() => {
+    const find: Lookup = {
+      ...NOTHING,
+      tile: (code) => tiles.find((c) => c.code === code),
+      person: (key) => {
+        const cut = key.indexOf(":")
+        return home.find((h) => h.code === key.slice(0, cut))?.agents.find((a) => a.name === key.slice(cut + 1))?.person
+      },
+    }
+    return pieces(find)
+  }, [tiles, home])
   const onPage = (url: string) => {
     if (url.startsWith("kiwi-do:")) return built.acts.get(url.slice("kiwi-do:".length))?.()
-    if (url.startsWith(CHANNEL)) go({ to: "channel", code: url.slice(CHANNEL.length) })
+    if (url.startsWith(CHANNEL)) return go({ to: "channel", code: url.slice(CHANNEL.length) })
+    if (!url.startsWith(AGENT)) return
+    const key = url.slice(AGENT.length)
+    const cut = key.indexOf(":")
+    const code = key.slice(0, cut)
+    const agent = home.find((h) => h.code === code)?.agents.find((a) => a.name === key.slice(cut + 1))
+    go({ to: "channel", code })
+    if (agent?.task) go({ to: "panel", panel: { kind: "task", task: agent.task.id } })
+    else if (agent) go({ to: "where", where: { kind: "dm", with: agent.person.seatOf ?? agent.name } })
   }
   return (
     <main className="main home-main">
       <div className="page is-home">
         <article className="page-text">
-          <Body text={text} seq={Number.MAX_SAFE_INTEGER} names={NO_NAMES} tasks={NO_TASKS} onImage={openImage} onMessage={() => {}} onPage={onPage} />
+          <Body text={text} seq={Number.MAX_SAFE_INTEGER} names={NO_NAMES} tasks={NO_TASKS} onImage={openImage} onMessage={() => {}} onPage={onPage} draw={draw} />
         </article>
       </div>
     </main>

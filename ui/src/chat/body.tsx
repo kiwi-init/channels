@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react"
 
 import { useHug } from "~/chat/hug"
 import { linked, useMentionParser } from "~/chat/linked"
+import type { Draw } from "~/chat/markdown"
 import { parsedFor } from "~/chat/parsed"
 import { useAct } from "~/nav"
 import { type Words, wordsPlain, wordsRaw } from "~/words"
@@ -17,6 +18,7 @@ export function Body({
   onImage,
   onMessage,
   onPage,
+  draw,
   hug = false,
 }: {
   text: Words
@@ -26,6 +28,7 @@ export function Body({
   onImage: (url: string, alt: string) => void
   onMessage: (seq: number) => void
   onPage?: (url: string) => void
+  draw?: Draw
   hug?: boolean
 }) {
   const { go, now } = useAct()
@@ -47,7 +50,7 @@ export function Body({
     <div className="msg-text" ref={box}>
       {!shown && !parsedFor(markdown) && <p className="md-plain">{wordsPlain(text, names)}</p>}
       <Suspense fallback={null}>
-        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} onPage={onPage} />
+        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} onPage={onPage} draw={draw} />
       </Suspense>
     </div>
   )

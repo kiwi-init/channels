@@ -6,10 +6,11 @@ import { useNames, useTaskIds } from "~/chat/conversation"
 import { STATUS_WORDS } from "~/kit/bits"
 import { later } from "~/kit/later"
 import { openMessage } from "~/live/open-message"
-import type { Actions, Ask, Channel, Spec, Task, TaskStatus } from "~/model"
+import type { Actions, Ask, Channel, PullRequest, Spec, Task, TaskStatus } from "~/model"
 import { useAct, type Nav } from "~/nav"
 import { openAsks } from "~/needs/open"
 import { lanesOf, nowOf } from "~/now"
+import { lookupOf, pieces } from "~/panes/engine"
 import { usePane } from "~/panes/scope"
 import type { Doc } from "~/panes/store"
 import { statusOf } from "~/shell/sidebar"
@@ -47,46 +48,57 @@ export function maker(): Maker {
     act(label, run) {
       const key = `a${acts.size}`
       acts.set(key, run)
-      return `[${label}](kiwi-do:${key})`
+      return `[${label.replace(/[[\]\\]/g, "\\$&")}](kiwi-do:${key})`
     },
   }
 }
 
 const ORDER: readonly TaskStatus[] = ["waiting", "doing", "review", "landing", "todo"]
+const BAR: readonly TaskStatus[] = ["done", "landing", "review", "doing", "waiting", "todo"]
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
 export const join = (parts: readonly string[]): string => parts.filter(Boolean).join("\n\n")
 const section = (title: string, lines: readonly string[], gap = "\n"): string => (lines.length ? `## ${title}\n\n${lines.join(gap)}` : "")
 const live = (channel: Channel): Task[] => channel.tasks.filter((x) => !x.archived && !x.cancelled)
-const named = (task: Task): string => `T${task.id} ${wordsRaw(task.title)}`
 const steps = (task: Task): string => {
   const all = task.steps?.filter((s) => s.state !== "skipped") ?? []
   return all.length ? ` · ${all.filter((s) => s.state === "done").length}/${all.length}` : ""
 }
-const boxed = (task: Task, more = ""): string => `- [${task.status === "done" ? "x" : " "}] ${named(task)}${more}`
 export const link = (label: string, url: string): string => `[${label.replace(/[[\]\\]/g, "\\$&")}](<${url}>)`
+export const main = (act: string): string => (act ? `**${act}**` : "")
+const card = (parts: readonly string[]): string =>
+  join(parts)
+    .split("\n")
+    .map((line) => (line ? `> ${line}` : ">"))
+    .join("\n")
+const taskRow = (channel: Channel, task: Task, more = ""): string => `- ${link(wordsPlain(task.title, channel.nicknames), `kiwi-task:${task.id}`)}${more}`
+const specRow = (channel: Channel, spec: Spec, more: string): string => `- ${link(wordsPlain(spec.title, channel.nicknames), `kiwi-msg:${spec.ask}`)} · ${more}`
+const prRow = (pr: PullRequest): string =>
+  `- ${link(`#${pr.number} ${pr.title}`, `kiwi-pr:${pr.repo}/${pr.number}`)}${pr.state === "draft" || pr.state === "closed" ? ` · ${pr.state}` : ""}${pr.checks === "none" || pr.state === "merged" ? "" : ` · ${pr.checks}`}`
 
 function nowPage(channel: Channel): string {
   const now = nowOf(channel)
   const open = live(channel).filter((x) => x.status !== "done")
   const working = now.working.length + now.more
   const counts = [working ? t("tasks.now.in.progress.count", { count: working }) : "", now.doneCount ? t("tasks.now.done.today.count", { count: now.doneCount }) : ""].filter(Boolean).join(" · ")
+  const count = (status: TaskStatus): number => (status === "done" ? now.doneCount : open.filter((x) => x.status === status).length)
+  const bar = open.length + now.doneCount ? ["```kiwi-bar", ...BAR.filter((status) => count(status)).map((status) => `${status} ${count(status)}`), "```"].join("\n") : ""
   const groups = ORDER.map((status) =>
     section(
       cap(STATUS_WORDS[status]),
       open
         .filter((x) => x.status === status)
         .sort((a, b) => b.updatedAt - a.updatedAt)
-        .map((x) => boxed(x, steps(x)))
+        .map((x) => taskRow(channel, x, steps(x)))
     )
   )
-  return join([`# ${t("panes.now")}`, counts, now.next ?? "", ...groups, open.length ? "" : t("panes.page.empty")])
+  return join([`# ${t("panes.now")}`, counts, bar, now.next ?? "", ...groups, open.length ? "" : t("panes.page.empty")])
 }
 
 function taskPage(channel: Channel, id: number, m: Maker, hooks: Hooks): string {
   const task = channel.tasks.find((x) => x.id === id)
   const crumb = `[${t("panes.now")}](kiwi-page:now)`
   if (!task) return join([crumb, `# T${id}`])
-  const facts = [`T${task.id}`, STATUS_WORDS[task.status], task.owner ? `@${task.owner}` : "", task.pr ? link(`PR #${task.pr.number}`, task.pr.url) : ""].filter(Boolean)
+  const facts = [`T${task.id}`, STATUS_WORDS[task.status], task.owner ? `@${task.owner}` : "", steps(task).replace(" · ", "")].filter(Boolean)
   const done = (task.steps ?? []).map((s) => `- [${s.state === "done" ? "x" : " "}] ${wordsRaw(s.words)}`)
   const notes = task.notes.map((n) => `**@${n.by}** ${wordsRaw(n.text)}`)
   return join([
@@ -95,6 +107,7 @@ function taskPage(channel: Channel, id: number, m: Maker, hooks: Hooks): string 
     facts.join(" · "),
     m.act(t("panes.page.details"), () => hooks.panel(task.id)),
     task.detail ? wordsRaw(task.detail) : "",
+    task.pr ? prRow(task.pr) : "",
     section(t("panes.page.steps"), done),
     section(t("panes.page.notes"), notes, "\n\n"),
   ])
@@ -118,14 +131,14 @@ function specPage(channel: Channel, ask: number, actions: Actions, m: Maker, hoo
       : spec.stage === "draft" || spec.changed
         ? m.act(t("panes.page.approve"), () => actions.approveSpec(channel.code, spec.ask, spec.v))
         : ""
-  const tasks = tasksOf(channel, spec).map((x) => boxed(x, ` · ${STATUS_WORDS[x.status]}`))
+  const tasks = tasksOf(channel, spec).map((x) => taskRow(channel, x, steps(x)))
   const edit = spec.result ? "" : m.act(t("panes.page.edit"), () => hooks.edit(wordsRaw(spec.text)))
   const comments = spec.comments.flatMap((seq) => channel.messages.filter((x) => x.seq === seq)).map((x) => `**@${x.from}** ${wordsRaw(x.text)}`)
   return join([
     crumb,
     `# ${title}`,
     [`#${spec.ask}`, spec.stage, `@${spec.by}`].join(" · "),
-    [judge, edit].filter(Boolean).join(" "),
+    [main(judge), edit].filter(Boolean).join(" "),
     text,
     section(t("panes.page.tasks"), tasks),
     section(t("panes.page.comments"), comments, "\n\n"),
@@ -134,13 +147,13 @@ function specPage(channel: Channel, ask: number, actions: Actions, m: Maker, hoo
 
 function specsPage(channel: Channel, m: Maker, hooks: Hooks): string {
   const specs = channel.specs ?? []
-  const row = (spec: Spec): string => [`- #${spec.ask} ${wordsRaw(spec.title)} · ${spec.stage}`, ...tasksOf(channel, spec).map((x) => `  ${boxed(x, ` · ${STATUS_WORDS[x.status]}`)}`)].join("\n")
+  const row = (spec: Spec): string => [specRow(channel, spec, spec.stage), ...tasksOf(channel, spec).map((x) => `  ${taskRow(channel, x, steps(x))}`)].join("\n")
   const held = new Set(specs.flatMap((s) => s.tasks))
   const loose = live(channel)
     .filter((x) => !held.has(x.id) && x.status !== "done")
-    .map((x) => boxed(x, ` · ${STATUS_WORDS[x.status]}`))
+    .map((x) => taskRow(channel, x, steps(x)))
   const open = specs.filter((s) => !s.result).map(row)
-  const done = specs.filter((s) => s.result).map((s) => `- #${s.ask} ${wordsRaw(s.title)}`)
+  const done = specs.filter((s) => s.result).map((s) => specRow(channel, s, s.result?.verdict ?? s.stage))
   return join([
     `# ${t("shell.channel.specs")}`,
     m.act(t("specs.view.new"), hooks.newSpec),
@@ -154,20 +167,17 @@ function specsPage(channel: Channel, m: Maker, hooks: Hooks): string {
 function agentsPage(channel: Channel): string {
   const lanes = lanesOf(channel).map((lane) =>
     join([
-      `## @${lane.person.name}`,
-      statusOf(lane.person, channel),
-      lane.current.map((x) => boxed(x, steps(x))).join("\n"),
-      lane.next.length ? `${t("panes.page.next")}: ${lane.next.map(named).join(", ")}` : "",
-      lane.watching.map((pr) => `- ${link(`PR #${pr.number} ${pr.title}`, pr.url)} · ${pr.checks}`).join("\n"),
+      `## @${lane.person.name} · ${statusOf(lane.person, channel)}`,
+      [...lane.current.map((x) => taskRow(channel, x, steps(x))), ...lane.next.map((x) => taskRow(channel, x, ` · ${t("panes.page.next").toLowerCase()}`)), ...lane.watching.map(prRow)].join("\n"),
     ])
   )
   return join([`# ${t("shell.channel.agents")}`, ...lanes, lanes.length ? "" : t("panes.page.empty")])
 }
 
 function githubPage(channel: Channel): string {
-  const prs = (channel.prs ?? []).filter((p) => p.state === "open" || p.state === "draft").map((p) => `- ${link(`#${p.number} ${p.title}`, p.url)} · ${p.state} · ${p.checks}`)
-  const merged = (channel.prs ?? []).filter((p) => p.state === "merged").map((p) => `- ${link(`#${p.number} ${p.title}`, p.url)}`)
-  const issues = (channel.issues ?? []).filter((i) => i.state === "open").map((i) => `- ${link(`#${i.number} ${i.title}`, i.url)}${i.task ? ` · T${i.task}` : ""}`)
+  const prs = (channel.prs ?? []).filter((p) => p.state === "open" || p.state === "draft").map(prRow)
+  const merged = (channel.prs ?? []).filter((p) => p.state === "merged").map(prRow)
+  const issues = (channel.issues ?? []).filter((i) => i.state === "open").map((i) => `- ${link(`#${i.number} ${i.title}`, `kiwi-issue:${i.repo}/${i.number}`)}${i.task ? ` · T${i.task}` : ""}`)
   return join([
     `# ${t("shell.channel.github")}`,
     section(t("panes.page.prs"), prs),
@@ -179,37 +189,40 @@ function githubPage(channel: Channel): string {
 
 function needsPage(channel: Channel, actions: Actions, m: Maker): string {
   const code = channel.code
-  const titled = (id: number): string => {
+  const held = (id: number): string => {
     const task = channel.tasks.find((x) => x.id === id)
-    return task ? named(task) : `T${id}`
+    return task ? taskRow(channel, task, steps(task)) : `T${id}`
   }
   const item = (a: Ask): string => {
     if (a.kind === "permission")
-      return join([
+      return card([
         `### ${t("panes.page.runs", { name: `@${a.from}`, tool: a.tool })}`,
         `\`${a.title.replaceAll("`", "'")}\``,
         a.summary ?? "",
         [
-          a.canAllow ? m.act(t("panes.page.allow"), () => actions.answerPermission(code, a.id, true)) : "",
+          a.canAllow ? main(m.act(t("panes.page.allow"), () => actions.answerPermission(code, a.id, true))) : "",
           a.canDeny ? m.act(t("panes.page.deny"), () => actions.answerPermission(code, a.id, false)) : "",
         ]
           .filter(Boolean)
           .join(" "),
       ])
     if (a.kind === "question")
-      return join([
+      return card([
         `### ${t("panes.page.asks", { name: `@${a.from}` })}`,
         wordsRaw(a.text),
-        a.options.map((o, i) => `${i + 1}. ${wordsRaw(o)} ${m.act(t("panes.page.choose"), () => actions.answerQuestion(code, a.id, wordsRaw(o)))}`).join("\n"),
+        a.options.map((o) => `- ${m.act(wordsRaw(o), () => actions.answerQuestion(code, a.id, wordsRaw(o)))}`).join("\n"),
       ])
     if (a.kind === "join")
-      return join([
+      return card([
         `### ${t("panes.page.joins", { name: a.name })}`,
-        `${m.act(t("panes.page.let.in"), () => actions.answerJoin(code, a.id, true))} ${m.act(t("panes.page.decline"), () => actions.answerJoin(code, a.id, false))}`,
+        `${main(m.act(t("panes.page.let.in"), () => actions.answerJoin(code, a.id, true)))} ${m.act(t("panes.page.decline"), () => actions.answerJoin(code, a.id, false))}`,
       ])
-    if (a.kind === "review") return join([`### ${t("panes.page.review", { name: `@${a.from}` })}`, titled(a.task)])
-    if (a.kind === "spec") return join([`### ${t("panes.page.spec")}`, `#${a.ask} ${wordsRaw(channel.specs?.find((s) => s.ask === a.ask)?.title ?? wrote(""))}`])
-    return join([`### ${t("panes.page.quiet", { name: `@${a.from}` })}`, titled(a.task)])
+    if (a.kind === "review") return card([`### ${t("panes.page.review", { name: `@${a.from}` })}`, held(a.task)])
+    if (a.kind === "spec") {
+      const spec = channel.specs?.find((s) => s.ask === a.ask)
+      return card([`### ${t("panes.page.spec")}`, spec ? specRow(channel, spec, spec.stage) : `#${a.ask}`])
+    }
+    return card([`### ${t("panes.page.quiet", { name: `@${a.from}` })}`, held(a.task)])
   }
   const asks = openAsks(channel).map(item)
   return join([`# ${t("shell.channel.needs.you")}`, ...asks, asks.length ? "" : t("panes.page.empty")])
@@ -259,6 +272,7 @@ export function Page({ channel, view }: { channel: Channel; view: View }) {
   )
   const built = useMemo(() => build(channel, key, actions, hooks), [channel, key, actions, hooks])
   const text = useMemo(() => wrote(built.md), [built.md])
+  const draw = useMemo(() => pieces(lookupOf(channel)), [channel])
   const code = channel.code
   const editing = draft?.key === key ? draft : null
   const save = () => {
@@ -267,6 +281,8 @@ export function Page({ channel, view }: { channel: Channel; view: View }) {
   }
   const onPage = (url: string) => {
     if (url.startsWith("kiwi-do:")) return built.acts.get(url.slice("kiwi-do:".length))?.()
+    const gh = /^kiwi-(pr|issue):(.+)\/(\d+)$/.exec(url)
+    if (gh) return go({ to: "panel", panel: { kind: gh[1] === "pr" ? "pr" : "issue", repo: gh[2]!, number: Number(gh[3]) } })
     const to = url.slice("kiwi-page:".length)
     if (to === "now") return pane?.show({ kind: "now" })
     if (to === "specs") return go({ to: "spec", ask: null })
@@ -289,7 +305,7 @@ export function Page({ channel, view }: { channel: Channel; view: View }) {
             </div>
           </>
         ) : (
-          <Body text={text} seq={Number.MAX_SAFE_INTEGER} names={names} tasks={tasks} onImage={openImage} onMessage={onMessage} onPage={onPage} />
+          <Body text={text} seq={Number.MAX_SAFE_INTEGER} names={names} tasks={tasks} onImage={openImage} onMessage={onMessage} onPage={onPage} draw={draw} />
         )}
       </article>
       {making && (
