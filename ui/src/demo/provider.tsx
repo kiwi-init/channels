@@ -18,6 +18,7 @@ import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
 import { muteKey } from "~/live/mute"
+import { specLineTest } from "~/specs/quote"
 import { wordsRaw, wrote } from "~/words"
 
 const unticked = (text: string): string => text.replace(/^(\s*[-*+]\s+)\[[xX]\]/gm, "$1[ ]").trim()
@@ -592,6 +593,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           const root = opts?.inThread ?? (target ? (target.inThread ?? target.seq) : undefined)
           const replyTo = opts?.replyTo !== undefined && opts.replyTo !== root ? opts.replyTo : undefined
           const images = opts?.images?.map((i) => ({ url: `data:${i.mime};base64,${i.data}`, width: 0, height: 0, alt: i.name }))
+          const spec = root === undefined ? undefined : c.specs?.find((x) => x.ask === root)
+          const asked = spec ? c.messages.find((m) => m.seq === spec.ask) : undefined
+          const line = spec && (replyTo !== undefined ? !!target?.specLine : specLineTest(wordsRaw(spec.text), asked ? wordsRaw(asked.text) : "")(text))
           const next = post(c, seq, {
             from: c.you,
             text: wrote(text),
@@ -601,6 +605,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             pending: true,
             canChange: true,
             ...(root !== undefined && opts?.side ? { side: true as const } : {}),
+            ...(spec ? (line ? { specLine: true as const } : { onSpec: spec.ask }) : {}),
             ...(images?.length ? { images } : {}),
             ...(opts?.block ? { block: opts.block.id } : {}),
           })

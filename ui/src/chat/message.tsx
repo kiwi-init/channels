@@ -222,6 +222,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const body = m.docMedia ? withoutMediaNames(said, m.docMedia) : said
   const threaded = !inThread && !older && !spec && (m.where.kind === "room" || m.where.kind === "dm")
   const openThread = () => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })
+  const onSpec = inThread || older ? undefined : m.onSpec
 
   if (m.system)
     return (
@@ -314,6 +315,11 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
         )}
         {m.leftOut && <p className="msg-left-out left-out-why">{m.leftOut}</p>}
         <Unsent channel={channel} m={m} />
+        {onSpec !== undefined && (
+          <button type="button" className="msg-on-spec" onClick={() => go({ to: "spec", ask: onSpec, part: "spec" })}>
+            {t("chat.message.on.spec")}
+          </button>
+        )}
         {m.task !== undefined && <TaskChip channel={channel} id={m.task} />}
         {spec && !inThread && (
           <Suspense fallback={null}>
