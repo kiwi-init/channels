@@ -29,16 +29,15 @@ blur, no gradients for show. Colour means a state, never decoration.
   `:root` (fonts, type steps, radii, sizes, motion, `shadow-pop`, `h-*`) is
   the same in every theme, except `float` and `shadow-float`, which each
   side sets (§5).
-- Two surfaces, the frame and the page (§5), are made of those tokens and
-  no new colour. Dark: the frame is `bg`, the page is `bg-3`. Light: the
-  frame is `bg-3`, the page is `bg`. So the page is the lighter one in
-  every theme. `tokens.css` names them `--frame` and `--page`, derives two
-  more steps from the theme (`bg-4` and `bg-5`: `bg-3` with 6% and 12% of
-  `ink`), and rebinds `--bg`, `--bg-2`, `--bg-3`, `plate` and `float` on
-  `body` to the page's steps and on the frame's parts (`.top`, `.rail`,
-  `.side`, `.set-nav`, `.track`) to the frame's. A rule that says `bg`
-  therefore means the surface it sits on, and a dialog, a card or a field
-  keeps its step above the page in every theme.
+- Two surfaces, the page and the frame (§5), are made of those tokens and
+  no new colour. The page is `bg` and the frame is `bg-3`, in every theme:
+  a lighter frame around a dark page, a grey frame around a white one.
+  `tokens.css` names them `--page` and `--frame` and rebinds `--bg`,
+  `--bg-2`, `--bg-3`, `plate` and `float` on the frame's parts (`.top`,
+  `.rail`, `.side`, `.set-nav`, `.track`), so a rule that says `bg` means
+  the surface it sits on. The frame's own two steps, for its fields, cards
+  and chips, are derived: `bg-3` with 6% and 12% of `ink` in dark, `bg-2`
+  and `bg-3` with 6% of `ink` in light.
 - Settings → Appearance picks system / light / dark, and a theme for each
   side. Built in (`channels.ts`): Channels Dark (`channels-dark`, the default
   dark), Cinder Peak (`cinder-peak`, warm), OLED Black (`channels-oled`, true
@@ -62,10 +61,9 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 
 | Token | Dark (Channels Dark) | OLED Black | Light |
 |---|---|---|---|
-| `bg` (dark: the frame; light: the page) | `#111113` | `#000000` | `#ffffff` |
+| `bg` (the page: canvas, panels) | `#111113` | `#000000` | `#ffffff` |
 | `bg-2` (raised: dialogs, cards) | `#18181b` | `#0c0c0d` | `#f7f7f8` |
-| `bg-3` (fills: buttons, fields, tiles, tracks; dark: the page; light: the frame) | `#212125` | `#18181a` | `#efeff1` |
-| `bg-4` / `bg-5` (derived: `bg-3` with 6 / 12% of `ink`) | `#2d2d31` / `#39393d` | `#252527` / `#313134` | `#e2e2e4` / `#d5d5d8` |
+| `bg-3` (fills: buttons, fields, tiles, tracks; the frame) | `#212125` | `#18181a` | `#efeff1` |
 | `ink` | `#ececef` | `#ececef` | `#18181b` |
 | `ink-2` (secondary text, idle controls) | `#a3a3ab` | `#a3a3ab` | `#56565e` |
 | `ink-3` (quiet floor: hints, placeholders, meta) | `#808089` | `#808089` | `#6c6c74` |
@@ -209,9 +207,9 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     shrinks to fit. The one exception is the image annotator's zoomed
     picture.
   - One frame, one page. The top bar, the sidebar and the second sidebar
-    are one surface, the frame. The work is the page, the lighter of the
-    two: the conversation or a view, Settings, Home, and a thread or task
-    opened in the right column. The page rounds its top corners (`r-ctl`)
+    are one surface, the frame. The work is the page: the conversation or
+    a view, Settings, Home, and a thread or task opened in the right
+    column. The page rounds its top corners (`r-ctl`)
     where it meets the frame and keeps them square against the window's
     edge (a hidden sidebar, an open panel, a window under 1180px, Home).
     What is open joins the page: the open tab from above and the open
@@ -279,7 +277,7 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   for what floats over the page: dialogs, menus, the palette, the stash
   list, Jump to latest. `--shadow-float` for the chrome's controls and the
   composer, which sit on the app like a Mac toolbar's buttons: a `float`
-  fill (`bg-3` in dark, the page's colour in light), a 1px `line-2` ring and a short
+  fill (`bg-3` in dark, `bg` in light), a 1px `line-2` ring and a short
   drop; dark adds a `line` highlight along the top edge. No coloured
   shadows.
 - Surfaces are told apart by a step of fill (`bg` → `bg-2` → `bg-3`, counted
