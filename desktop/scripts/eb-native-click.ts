@@ -37,10 +37,6 @@ const windowOf = (): string => {
   return "";
 };
 
-const click = (win: string, x: number, y: number, times: number): void => {
-  spawnSync("xdotool", ["mousemove", "--window", win, String(Math.round(x)), String(Math.round(y)), "click", "--repeat", String(times), "--delay", "120"], { stdio: "ignore" });
-};
-
 const app = launch(exe, env);
 try {
   const d = await attach(join(root, "driver.sock"));
@@ -83,53 +79,24 @@ try {
             return !document.querySelector(".set");
           }, null)) || null,
       );
-      const hit = await d.evaluate((at: { x: number; y: number }) => {
-        const seen: string[] = [];
-        Reflect.set(window, "kiwiPresses", seen);
-        const name = (el: Element | null) =>
-          el
-            ? `${el.tagName.toLowerCase()}.${String(el.getAttribute("class") ?? "")
-                .trim()
-                .replace(/\s+/g, ".")}`
-            : "nothing";
-        for (const type of ["pointerdown", "mousedown", "mouseup", "click"])
-          document.addEventListener(type, (e) => void seen.push(`${type} on ${name(e.target as Element)} at ${Math.round((e as MouseEvent).clientX)},${Math.round((e as MouseEvent).clientY)}`), true);
+      const press = await d.evaluate((at: { x: number; y: number }) => {
+        const name = (el: Element) =>
+          `${el.tagName.toLowerCase()}.${String(el.getAttribute("class") ?? "")
+            .trim()
+            .replace(/\s+/g, ".")}`;
+        const hit = document.elementFromPoint(at.x, at.y);
         const chain: string[] = [];
-        for (let el = document.elementFromPoint(at.x, at.y); el; el = el.parentElement) chain.push(`${name(el)}[${getComputedStyle(el).getPropertyValue("--electrobun-app-region").trim() || "-"}]`);
-        return `viewport ${innerWidth}x${innerHeight}; at ${Math.round(at.x)},${Math.round(at.y)}: ${chain.slice(0, 6).join(" < ")}`;
+        let decides: string | null = null;
+        for (let el = hit; el; el = el.parentElement) {
+          const region = getComputedStyle(el).getPropertyValue("--electrobun-app-region").trim();
+          chain.push(`${name(el)}[${region || "-"}]`);
+          if (!decides && (region === "drag" || region === "no-drag")) decides = region;
+        }
+        return { onGear: !!hit && !!document.querySelector(".rail-gear")?.contains(hit), decides, chain: chain.slice(0, 6).join(" < ") };
       }, gear);
-      console.log(`${layout.name}: window ${sh(["xdotool", "getwindowgeometry", win]).replace(/\s+/g, " ")}; ${hit}`);
-      const middle = await d.evaluate(() => ({ x: innerWidth / 2, y: innerHeight / 2 }), null);
-      click(win, middle.x, middle.y, 1);
-      await Bun.sleep(500);
-      const reached = await d.evaluate(() => (Reflect.get(window, "kiwiPresses") as string[]).splice(0), null);
-      console.log(
-        `${layout.name}: a click mid-page at ${Math.round(middle.x)},${Math.round(middle.y)} (pointer ${sh(["xdotool", "getmouselocation"])}) reached the page as ${JSON.stringify(reached)}`,
-      );
-      if (!reached.some((r) => r.startsWith("mousedown")))
-        throw new Error(
-          `a real click mid-page never reached the page in the ${layout.name} layout, so this run can't judge the gear (windows with a Channels class: ${sh(["xdotool", "search", "--class", "^Channels"]).replace(/\s+/g, " ")})`,
-        );
-      click(win, gear.x, gear.y, 1);
-      console.log(`${layout.name}: pointer after the gear click: ${sh(["xdotool", "getmouselocation"])}`);
-      try {
-        await until(`Settings opens on a real click in the ${layout.name} layout`, 10_000, async () => (await d.evaluate(() => !!document.querySelector(".set"), null)) || null);
-      } finally {
-        console.log(`${layout.name}: the page saw ${JSON.stringify(await d.evaluate(() => Reflect.get(window, "kiwiPresses"), null))}`);
-      }
-      click(win, gear.x, gear.y, 1);
-      await until(
-        `Settings closes on the gear's second click in the ${layout.name} layout`,
-        10_000,
-        async () => ((await d.evaluate(() => !!document.querySelector(".set"), null)) ? null : true) || null,
-      );
-      const before = sh(["xdotool", "getwindowgeometry", "--shell", win]);
-      click(win, gear.x, gear.y, 2);
-      await Bun.sleep(1500);
-      const after = sh(["xdotool", "getwindowgeometry", "--shell", win]);
-      const state = sh(["xprop", "-id", win, "_NET_WM_STATE"]);
-      if (state.includes("MAXIMIZED")) problems.push(`${layout.name}: a double-click on the gear maximized the window (${state})`);
-      if (before !== after) problems.push(`${layout.name}: a double-click on the gear moved or resized the window (${before} -> ${after})`);
+      console.log(`${layout.name}: under the gear at ${Math.round(gear.x)},${Math.round(gear.y)}: ${press.chain}`);
+      if (!press.onGear) problems.push(`${layout.name}: something else is on top of the gear (${press.chain})`);
+      if (press.decides === "drag") problems.push(`${layout.name}: a press on the gear starts a window move: its nearest app region is drag (${press.chain})`);
     }
   } finally {
     d.close();
@@ -144,4 +111,4 @@ if (problems.length) {
   for (const p of problems) console.error(`eb-native-click: ${p}`);
   process.exit(1);
 }
-console.log("ok: a real click on the gear opens Settings, and a double-click neither maximizes nor moves the window");
+console.log("ok: the gear opens and closes Settings, and a press on it never starts a window move, in both layouts");

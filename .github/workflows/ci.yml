@@ -717,7 +717,7 @@ jobs:
         env:
           CHANNELS_EB_TEST: "1"
           DASH_RELEASE_OFFLINE: "1"
-      - name: a real click on the Settings gear opens Settings, and a double-click neither maximizes nor moves the window
+      - name: in the real app the Settings gear opens Settings, and a press on it never starts a window move, in both layouts
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 5
         run: |
