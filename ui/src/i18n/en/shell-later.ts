@@ -207,6 +207,10 @@ const words = {
   "start.welcome.note.placeholder.general": "Write to #general…",
   "start.welcome.send": "Send",
   "start.welcome.send.title": "Send (Enter)",
+  "shell.history.back": "Back",
+  "shell.history.back.title": "Back ({keys})",
+  "shell.history.forward": "Forward",
+  "shell.history.forward.title": "Forward ({keys})",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

@@ -1,5 +1,4 @@
-import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react"
-import { HistoryArrows } from "~/shell/history-arrows"
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
@@ -53,6 +52,8 @@ const ChannelSettings = later(() => import("~/modals/channel-settings").then((m)
 const Invite = later(() => import("~/modals/invite").then((m) => m.Invite))
 const AddAgent = later(() => import("~/modals/add-agent").then((m) => m.AddAgent))
 const DocVersions = later(() => import("~/modals/doc-versions").then((m) => m.DocVersions))
+
+const HistoryArrows = lazy(() => import("~/shell/history-arrows").then((m) => ({ default: m.HistoryArrows })))
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const nav = useNav()
@@ -233,7 +234,9 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             <Icon name="sidebar" />
             {news && <span className={cx("top-drawer-dot", news === "loud" && "is-loud")} />}
           </button>
-          <HistoryArrows />
+          <Suspense fallback={null}>
+            <HistoryArrows />
+          </Suspense>
         </div>
         {!tabs && <h1 className="top-here">{title}</h1>}
         <div className={cx("top-tools", searching && "is-searching")}>
