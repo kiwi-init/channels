@@ -114,8 +114,16 @@
   --white: #fff;
   --img-edge: light-dark(oklch(0 0 0 / 0.1), oklch(1 0 0 / 0.1));
   --shadow-pop: 0 0 0 1px var(--line-2), 0 16px 48px rgb(0 0 0 / 0.32);
+  --bg-4: color-mix(in srgb, var(--bg-3) 94%, var(--ink));
+  --bg-5: color-mix(in srgb, var(--bg-3) 88%, var(--ink));
+  --frame: light-dark(var(--bg-3), var(--bg));
+  --frame-2: var(--bg-2);
+  --frame-3: light-dark(var(--bg-4), var(--bg-3));
+  --page: light-dark(var(--bg), var(--bg-3));
+  --page-2: light-dark(var(--bg-2), var(--bg-4));
+  --page-3: light-dark(var(--bg-3), var(--bg-5));
   --plate: var(--bg-2);
-  --float: var(--bg-3);
+  --float: light-dark(var(--bg), var(--bg-3));
   --float-2: color-mix(in srgb, var(--float) 90%, var(--ink));
   --float-3: color-mix(in srgb, var(--float) 80%, var(--ink));
   --shadow-float: 0 0 0 1px var(--line-2), inset 0 1px 0 var(--line), 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 12px rgb(0 0 0 / 0.3);
@@ -224,8 +232,6 @@
   --h-codex: #111;
   --h-gemini: #2f6fe4;
   --h-opencode: #444;
-  --plate: var(--bg-2);
-  --float: var(--bg);
   --shadow-float: 0 0 0 1px var(--line-2), 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 12px rgb(0 0 0 / 0.06);
 }
 
@@ -269,8 +275,6 @@
     --h-codex: #111;
     --h-gemini: #2f6fe4;
     --h-opencode: #444;
-    --plate: var(--bg-2);
-    --float: var(--bg);
     --shadow-float: 0 0 0 1px var(--line-2), 0 1px 2px rgb(0 0 0 / 0.08), 0 4px 12px rgb(0 0 0 / 0.06);
   }
 }
@@ -281,4 +285,42 @@
 
 :root:lang(ko) {
   --cjk: "Apple SD Gothic Neo", "Noto Sans CJK KR", "Malgun Gothic", "PingFang SC", "Hiragino Sans", "Noto Sans CJK SC", "Noto Sans CJK JP";
+}
+
+body {
+  --bg: var(--page);
+  --bg-2: var(--page-2);
+  --bg-3: var(--page-3);
+}
+
+.top,
+.rail,
+.side,
+.set-nav,
+.track {
+  --bg: var(--frame);
+  --bg-2: var(--frame-2);
+  --bg-3: var(--frame-3);
+  --raise: var(--bg-2);
+  --raise-2: var(--bg-3);
+}
+
+body,
+.top,
+.rail,
+.side,
+.set-nav,
+.track {
+  --plate: var(--bg-2);
+  --float: light-dark(var(--bg), var(--bg-3));
+  --float-2: color-mix(in srgb, var(--float) 90%, var(--ink));
+  --float-3: color-mix(in srgb, var(--float) 80%, var(--ink));
+}
+
+.top,
+.rail,
+.side,
+.set-nav,
+.track {
+  --float: light-dark(var(--page), var(--bg-3));
 }
