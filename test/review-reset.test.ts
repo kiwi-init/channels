@@ -90,12 +90,12 @@ describe("a verdict marks the reviewer, and the mark is enforced in the fold", (
 
   test("moving review to a marked seat, claiming an open review and opening a round for it are refused", async () => {
     const { t1, log } = await twoInReview();
+    const added = await ev("owl", { op: "task.add", title: "Five", owner: "win", review: "mac" });
     const pass = await approve("mac", t1, 1, "a1");
     const c = await ev("owl", { op: "task.add", title: "Three", owner: "win", review: "zed" });
     const toMac = await ev("owl", { op: "task.update", task: c.seq, review: "mac" });
     const open = await ev("owl", { op: "task.add", title: "Four", owner: "win", review: "*" });
     const claim = await ev("mac", { op: "task.update", task: open.seq, claim: true, review: "mac" });
-    const added = await ev("owl", { op: "task.add", title: "Five", owner: "win", review: "mac" });
     const round = await review(added.seq, "f1");
     const s = fold([...log, added, pass, c, toMac, open, claim, round], roster);
     expect(s.rejected.get(toMac.seq)).toBe(`mac needs a fresh session since verdict #${pass.seq}: T${c.seq}'s review goes to someone else until it rejoins from a new session`);
