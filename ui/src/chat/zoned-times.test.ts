@@ -35,6 +35,13 @@ describe("zoned times are recognized in prose (#2367)", () => {
     expect(zonedTimes("text [link](http://x.test/06:30Z) here", SENT)).toBe("text [link](http://x.test/06:30Z) here")
   })
 
+  test("markdown structure holds: code in a blockquote, code spans with inner backticks, and link labels stay as written", () => {
+    expect(zonedTimes("> ~~~\n> 06:30Z\n> ~~~", SENT)).toBe("> ~~~\n> 06:30Z\n> ~~~")
+    expect(zonedTimes("``a ` 06:30Z`` stays code", SENT)).toBe("``a ` 06:30Z`` stays code")
+    expect(zonedTimes("[06:30Z](https://example.com) stays one link", SENT)).toBe("[06:30Z](https://example.com) stays one link")
+    expect(zonedTimes("[see 06:30Z here](https://example.com)", SENT)).toBe("[see 06:30Z here](https://example.com)")
+  })
+
   test("a time-only token without a message date stays unconverted; a full timestamp still converts", () => {
     expect(zonedTimes("standup 06:30Z ok?", undefined)).toBe("standup 06:30Z ok?")
     expect(zonedTimes("meet 2030-01-16T01:15Z", undefined)).toBe("meet [2030-01-16T01:15Z](kiwi-utc:2030-01-16T01:15:00Z)")
@@ -67,5 +74,12 @@ describe("zoned times convert with fixed timezones (#2367)", () => {
     expect(tooltipOf("2030-01-16T06:30:00Z", true, assuming, "America/Sao_Paulo", "en")).toBe("03:30 GMT-3 · assuming 2030-01-16 UTC, the message date")
     expect(tooltipOf("2030-01-16T23:30:00Z", true, assuming, "Asia/Kathmandu", "en")).toBe("05:15 GMT+5:45 · Jan 17 · assuming 2030-01-16 UTC, the message date")
     expect(tooltipOf("2030-01-16T23:30:00Z", false, assuming, "Asia/Kathmandu", "en")).toBe("05:15 GMT+5:45 · Jan 17")
+  })
+
+  test("a malformed instant converts to nothing instead of throwing", () => {
+    const assuming = (date: string): string => `assuming ${date} UTC, the message date`
+    expect(localOf("garbage", "America/Sao_Paulo", "en")).toBe(null)
+    expect(tooltipOf("garbage", false, assuming, "America/Sao_Paulo", "en")).toBe(null)
+    expect(tooltipOf("", true, assuming, "UTC", "en")).toBe(null)
   })
 })

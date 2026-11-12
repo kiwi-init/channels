@@ -140,11 +140,13 @@ const WRAP: CSSProperties = { display: "flex", flexDirection: "column" }
 
 const parsing = new Map<string, Promise<ASTNode>>()
 
-const OWN_LINK = /^kiwi-(?:mention|task|msg|utc):/
+const OWN_LINK = /^kiwi-(?:mention|task|msg):/
 const OPENED = /^(?:https?:\/\/|mailto:)/i
 const LOCAL_PICTURE = /^(?:data|blob):/i
 
-const opened = (url: string): boolean => OWN_LINK.test(url) || !!messageAt(url) || (OPENED.test(url.trim()) && !!sanitizeMarkdownUrl(url))
+const utcLink = (url: string): boolean => url.startsWith("kiwi-utc:") && !Number.isNaN(new Date(url.slice("kiwi-utc:".length)).getTime())
+
+const opened = (url: string): boolean => OWN_LINK.test(url) || utcLink(url) || !!messageAt(url) || (OPENED.test(url.trim()) && !!sanitizeMarkdownUrl(url))
 
 function pictureLink(node: ASTNode, inLink: boolean): void {
   const url = node.attributes?.url ?? ""
@@ -382,6 +384,7 @@ export default function Markdown({ markdown, at, onMention, onTask, onMessage, o
       const alone = /^\d{2}:\d{2}/.test(zone.textContent ?? "")
       const lang = typeof document === "undefined" ? "en" : document.documentElement.lang || "en"
       const tip = tooltipOf(iso, alone, (date) => t("chat.markdown.utc.assuming", { date }), Intl.DateTimeFormat().resolvedOptions().timeZone, lang)
+      if (!tip) continue
       zone.dataset.local = tip
       if (!zone.hasAttribute("aria-label")) zone.setAttribute("aria-label", tip)
       const boxOf = zone.getBoundingClientRect()
@@ -414,6 +417,12 @@ export default function Markdown({ markdown, at, onMention, onTask, onMessage, o
     (e: MouseEvent<HTMLDivElement>) => {
       const selection = window.getSelection()
       if (selection && !selection.isCollapsed) return
+      const hit = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>('a[href^="kiwi-utc:"]') : null
+      for (const zone of box.current?.querySelectorAll<HTMLAnchorElement>('a[href^="kiwi-utc:"][data-open]') ?? []) if (zone !== hit) delete zone.dataset.open
+      if (hit && box.current?.contains(hit)) {
+        if (hit.hasAttribute("data-open")) delete hit.dataset.open
+        else hit.dataset.open = ""
+      }
       copyCode(e.target)
     },
     [copyCode]

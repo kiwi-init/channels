@@ -2327,3 +2327,8 @@ button.msg-image-spot:hover {
   left: auto;
   right: 0;
 }
+
+.md a[href^="kiwi-utc:"][data-open]::after {
+  opacity: 1;
+  clip-path: none;
+}

@@ -261,3 +261,12 @@ describe("a UTC time in prose shows its local time (#2367)", () => {
     expect(html.match(/kiwi-utc:/g)?.length).toBe(2)
   })
 })
+
+describe("a hand-written kiwi-utc link survives validation (#2367)", () => {
+  test("a malformed instant loses its href and renders as plain text", async () => {
+    const html = await rendered("[bad](kiwi-utc:garbage) and [ok](kiwi-utc:2030-01-16T01:15:00Z)")
+    expect(html).not.toContain("kiwi-utc:garbage")
+    expect(html).toContain("bad and ")
+    expect(html).toContain('href="kiwi-utc:2030-01-16T01:15:00Z"')
+  })
+})
