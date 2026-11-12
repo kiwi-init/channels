@@ -481,7 +481,10 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   with `r-tag` on the right corners that face each other. Everything a
   message carries besides its text (the quote, pictures, files, a task
   chip, reactions, the replies line) ends on the bubble's right edge,
-  outside the bubble.
+  outside the bubble. Its hover tools show while the pointer is over the
+  message itself (the bubble or what it carries) or over the tools, never
+  for the empty part of its line, and float above the bubble's right end,
+  never on its words; keyboard focus inside the message shows them too.
   A message is a 32px face, 16px of gap, then the name (600), the "to you" or
   "asks you" word when it's for you, and the mono time, and the text in
   `t-body` under it. Role and harness are not repeated on every message: the
