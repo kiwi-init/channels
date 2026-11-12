@@ -3,7 +3,7 @@ import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import type { ChannelTile } from "~/model"
-import { AppContext, type Ctx } from "~/nav"
+import { AppContext, startNav, type Ctx } from "~/nav"
 import { FirstRun } from "~/start/first-run"
 import { onboarded, rememberOnboarded } from "~/start/onboarded"
 import { Welcome } from "~/start/welcome"
@@ -25,7 +25,9 @@ const tile = (code: string): ChannelTile => ({ code, title: `Channel ${code}`, s
 
 const render = (page: ReactNode, app: { account: object | null; channels: ChannelTile[] }): string =>
   renderToStaticMarkup(
-    <AppContext.Provider value={{ app: { home: [], signIn: null, enrolling: null, actions: {}, prefs: { reduceMotion: true }, ...app }, go: () => {} } as unknown as Ctx}>{page}</AppContext.Provider>
+    <AppContext.Provider value={{ app: { home: [], signIn: null, enrolling: null, actions: {}, prefs: { reduceMotion: true }, ...app }, nav: startNav(null), go: () => {} } as unknown as Ctx}>
+      {page}
+    </AppContext.Provider>
   )
 
 const newPerson = (): string => render(<FirstRun />, { account: null, channels: [] })

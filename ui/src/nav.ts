@@ -106,6 +106,10 @@ export function historyStep(e: Pick<KeyboardEvent, "metaKey" | "ctrlKey" | "altK
   return null
 }
 
+export function historyCan(nav: Pick<Nav, "modal" | "back" | "ahead">): { back: boolean; forward: boolean } {
+  return { back: !!nav.modal || nav.back.length > 0, forward: !!nav.modal || nav.ahead.length > 0 }
+}
+
 function arrive(nav: Nav, to: Place): Nav {
   const shut = { modal: null, dialog: null, spec: undefined, part: undefined, visit: nav.visit + 1 }
   if (to.at === "settings") return { ...nav, ...shut, page: "settings", section: to.section, restore: undefined }

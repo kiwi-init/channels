@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { HistoryArrows } from "~/shell/history-arrows"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
@@ -232,6 +233,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             <Icon name="sidebar" />
             {news && <span className={cx("top-drawer-dot", news === "loud" && "is-loud")} />}
           </button>
+          <HistoryArrows />
         </div>
         {!tabs && <h1 className="top-here">{title}</h1>}
         <div className={cx("top-tools", searching && "is-searching")}>
