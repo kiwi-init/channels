@@ -1,9 +1,10 @@
 import "~/i18n/en/specs"
-import { useMemo } from "react"
+import { Suspense, useMemo, useState } from "react"
 
 import { Body } from "~/chat/body"
 import { useNames, useTaskIds } from "~/chat/conversation"
 import { STATUS_WORDS } from "~/kit/bits"
+import { later } from "~/kit/later"
 import { openMessage } from "~/live/open-message"
 import type { Actions, Ask, Channel, Spec, Task, TaskStatus } from "~/model"
 import { useAct, type Nav } from "~/nav"
@@ -15,6 +16,14 @@ import { statusOf } from "~/shell/sidebar"
 import { openImage } from "~/specs/comment-item"
 import { wordsPlain, wordsRaw, wrote } from "~/words"
 import { t } from "~/i18n/i18n"
+
+const NewSpec = later(() => import("~/specs/new").then((m) => m.NewSpec))
+
+interface Hooks {
+  newSpec: () => void
+  edit: (text: string) => void
+  panel: (task: number) => void
+}
 
 export type View = Doc | { kind: "specs" } | { kind: "spec"; ask: number } | { kind: "agents" } | { kind: "github" } | { kind: "needs" }
 
@@ -73,19 +82,27 @@ function nowPage(channel: Channel): string {
   return join([`# ${t("panes.now")}`, counts, now.next ?? "", ...groups, open.length ? "" : t("panes.page.empty")])
 }
 
-function taskPage(channel: Channel, id: number): string {
+function taskPage(channel: Channel, id: number, m: Maker, hooks: Hooks): string {
   const task = channel.tasks.find((x) => x.id === id)
   const crumb = `[${t("panes.now")}](kiwi-page:now)`
   if (!task) return join([crumb, `# T${id}`])
   const facts = [`T${task.id}`, STATUS_WORDS[task.status], task.owner ? `@${task.owner}` : "", task.pr ? link(`PR #${task.pr.number}`, task.pr.url) : ""].filter(Boolean)
   const done = (task.steps ?? []).map((s) => `- [${s.state === "done" ? "x" : " "}] ${wordsRaw(s.words)}`)
   const notes = task.notes.map((n) => `**@${n.by}** ${wordsRaw(n.text)}`)
-  return join([crumb, `# ${wordsRaw(task.title)}`, facts.join(" · "), task.detail ? wordsRaw(task.detail) : "", section(t("panes.page.steps"), done), section(t("panes.page.notes"), notes, "\n\n")])
+  return join([
+    crumb,
+    `# ${wordsRaw(task.title)}`,
+    facts.join(" · "),
+    m.act(t("panes.page.details"), () => hooks.panel(task.id)),
+    task.detail ? wordsRaw(task.detail) : "",
+    section(t("panes.page.steps"), done),
+    section(t("panes.page.notes"), notes, "\n\n"),
+  ])
 }
 
 const tasksOf = (channel: Channel, spec: Spec): Task[] => live(channel).filter((x) => spec.tasks.includes(x.id))
 
-function specPage(channel: Channel, ask: number, actions: Actions, m: Maker): string {
+function specPage(channel: Channel, ask: number, actions: Actions, m: Maker, hooks: Hooks): string {
   const spec = channel.specs?.find((s) => s.ask === ask)
   const crumb = `[${t("shell.channel.specs")}](kiwi-page:specs)`
   if (!spec) return join([crumb, `# #${ask}`])
@@ -102,11 +119,20 @@ function specPage(channel: Channel, ask: number, actions: Actions, m: Maker): st
         ? m.act(t("panes.page.approve"), () => actions.approveSpec(channel.code, spec.ask, spec.v))
         : ""
   const tasks = tasksOf(channel, spec).map((x) => boxed(x, ` · ${STATUS_WORDS[x.status]}`))
+  const edit = spec.result ? "" : m.act(t("panes.page.edit"), () => hooks.edit(wordsRaw(spec.text)))
   const comments = spec.comments.flatMap((seq) => channel.messages.filter((x) => x.seq === seq)).map((x) => `**@${x.from}** ${wordsRaw(x.text)}`)
-  return join([crumb, `# ${title}`, [`#${spec.ask}`, spec.stage, `@${spec.by}`].join(" · "), judge, text, section(t("panes.page.tasks"), tasks), section(t("panes.page.comments"), comments, "\n\n")])
+  return join([
+    crumb,
+    `# ${title}`,
+    [`#${spec.ask}`, spec.stage, `@${spec.by}`].join(" · "),
+    [judge, edit].filter(Boolean).join(" "),
+    text,
+    section(t("panes.page.tasks"), tasks),
+    section(t("panes.page.comments"), comments, "\n\n"),
+  ])
 }
 
-function specsPage(channel: Channel): string {
+function specsPage(channel: Channel, m: Maker, hooks: Hooks): string {
   const specs = channel.specs ?? []
   const row = (spec: Spec): string => [`- #${spec.ask} ${wordsRaw(spec.title)} · ${spec.stage}`, ...tasksOf(channel, spec).map((x) => `  ${boxed(x, ` · ${STATUS_WORDS[x.status]}`)}`)].join("\n")
   const held = new Set(specs.flatMap((s) => s.tasks))
@@ -117,6 +143,7 @@ function specsPage(channel: Channel): string {
   const done = specs.filter((s) => s.result).map((s) => `- #${s.ask} ${wordsRaw(s.title)}`)
   return join([
     `# ${t("shell.channel.specs")}`,
+    m.act(t("specs.view.new"), hooks.newSpec),
     section(t("panes.page.open"), open),
     section(t("panes.page.tasks"), loose),
     section(t("panes.page.done"), done),
@@ -188,18 +215,18 @@ function needsPage(channel: Channel, actions: Actions, m: Maker): string {
   return join([`# ${t("shell.channel.needs.you")}`, ...asks, asks.length ? "" : t("panes.page.empty")])
 }
 
-function build(channel: Channel, key: string, actions: Actions): { md: string; acts: Map<string, () => void> } {
+function build(channel: Channel, key: string, actions: Actions, hooks: Hooks): { md: string; acts: Map<string, () => void> } {
   const m = maker()
   const [kind, id] = key.split(":")
   const md =
     kind === "now"
       ? nowPage(channel)
       : kind === "task"
-        ? taskPage(channel, Number(id))
+        ? taskPage(channel, Number(id), m, hooks)
         : kind === "spec"
-          ? specPage(channel, Number(id), actions, m)
+          ? specPage(channel, Number(id), actions, m, hooks)
           : kind === "specs"
-            ? specsPage(channel)
+            ? specsPage(channel, m, hooks)
             : kind === "agents"
               ? agentsPage(channel)
               : kind === "github"
@@ -220,9 +247,24 @@ export function Page({ channel, view }: { channel: Channel; view: View }) {
   const { actions, go } = useAct()
   const pane = usePane()
   const key = viewKey(view)
-  const built = useMemo(() => build(channel, key, actions), [channel, key, actions])
+  const [making, setMaking] = useState(false)
+  const [draft, setDraft] = useState<{ key: string; text: string } | null>(null)
+  const hooks = useMemo(
+    (): Hooks => ({
+      newSpec: () => setMaking(true),
+      edit: (text) => setDraft({ key, text }),
+      panel: (task) => go({ to: "panel", panel: { kind: "task", task } }),
+    }),
+    [go, key]
+  )
+  const built = useMemo(() => build(channel, key, actions, hooks), [channel, key, actions, hooks])
   const text = useMemo(() => wrote(built.md), [built.md])
   const code = channel.code
+  const editing = draft?.key === key ? draft : null
+  const save = () => {
+    if (view.kind === "spec" && editing?.text.trim()) actions.writeSpec(code, view.ask, editing.text)
+    setDraft(null)
+  }
   const onPage = (url: string) => {
     if (url.startsWith("kiwi-do:")) return built.acts.get(url.slice("kiwi-do:".length))?.()
     const to = url.slice("kiwi-page:".length)
@@ -234,8 +276,27 @@ export function Page({ channel, view }: { channel: Channel; view: View }) {
   return (
     <div className={`page is-${view.kind}`}>
       <article className="page-text">
-        <Body text={text} seq={Number.MAX_SAFE_INTEGER} names={names} tasks={tasks} onImage={openImage} onMessage={onMessage} onPage={onPage} />
+        {editing ? (
+          <>
+            <textarea className="page-edit" value={editing.text} onChange={(e) => setDraft({ key, text: e.target.value })} autoFocus spellCheck={false} />
+            <div className="page-edit-acts">
+              <button type="button" className="btn is-primary" onClick={save}>
+                {t("panes.page.save")}
+              </button>
+              <button type="button" className="btn" onClick={() => setDraft(null)}>
+                {t("panes.page.cancel")}
+              </button>
+            </div>
+          </>
+        ) : (
+          <Body text={text} seq={Number.MAX_SAFE_INTEGER} names={names} tasks={tasks} onImage={openImage} onMessage={onMessage} onPage={onPage} />
+        )}
       </article>
+      {making && (
+        <Suspense fallback={null}>
+          <NewSpec channel={channel} onClose={() => setMaking(false)} />
+        </Suspense>
+      )}
     </div>
   )
 }

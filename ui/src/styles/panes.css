@@ -241,3 +241,22 @@
 .page .md a[href^="kiwi-page:"]:hover {
   color: var(--ink) !important;
 }
+
+.page-edit {
+  display: block;
+  width: 100%;
+  min-height: 60vh;
+  padding: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--wash);
+  color: var(--ink);
+  font: 13px / 20px var(--mono);
+  resize: vertical;
+}
+
+.page-edit-acts {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
