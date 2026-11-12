@@ -11,6 +11,7 @@ import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import { certUntil, claimDevice, nextLink, readDeviceList, rootLink, type DeviceLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import type { Member, MemberInfo } from "@kiwi/core/membership.ts";
+import type { Persona } from "@kiwi/core/personality.ts";
 import { certifyMachine, claimComputer, provePerson, type MachineCert } from "@kiwi/core/person.ts";
 import { checked, memoryBudget } from "./check.ts";
 
@@ -59,7 +60,7 @@ export async function joinAgent(
   s: OwnerSetup,
   name: string,
   computer: PairedComputer,
-  opts: { auto?: boolean; role?: string } = {},
+  opts: { auto?: boolean; role?: string; persona?: Persona } = {},
 ): Promise<{ id: Identity; ch: Channel; member: Member; req: JoinRequest }> {
   const id = await generateIdentity(name);
   const claim = await claimComputer(computer.machine, computer.cert, s.roomId, id.pk);
@@ -76,7 +77,7 @@ export async function joinAgent(
   } else {
     await handshake(s, [{ id, requestId }]);
     req = (await s.ownerCh.requests({ person: s.person.pk })).find((r) => r.id === requestId)!;
-    await s.ownerCh.approve(req, undefined, { person: s.person.pk });
+    await s.ownerCh.approve(req, opts.persona ? { persona: opts.persona } : undefined, { person: s.person.pk });
   }
   const st = await Channel.joinStatus(s.relay, s.code, id, requestId);
   if (st.status !== "approved") throw new Error(`not approved: ${st.status}`);

@@ -1,5 +1,7 @@
-import type { Message } from "../protocol.ts";
+import { asksPeople } from "../personality.ts";
+import type { DecisionKind, Message, Step } from "../protocol.ts";
 import { isPerson } from "./people.ts";
+import { placeKey } from "./places.ts";
 import { commentedSpec } from "./specs.ts";
 import type { AskHead, ChannelState, Task } from "./types.ts";
 
@@ -86,6 +88,52 @@ export function askedOfPeopleByOthers(state: Pick<ChannelState, "openAsks" | "me
 export function asksOnSameWork(state: Pick<ChannelState, "openAsks" | "members" | "tasks" | "askHeads">, me: string, to: readonly string[], holds: readonly number[]): Message[] {
   if (!holds.length) return [];
   return askedOfPeopleByOthers(state, me).filter((a) => a.to?.some((n) => to.includes(n)) && heldBy(state, a).some((id) => holds.includes(id)));
+}
+
+export function leadForAsk(state: Pick<ChannelState, "members" | "lead">, me: string): string | null {
+  const self = state.members.get(me);
+  const lead = state.lead === null || state.lead === me ? undefined : state.members.get(state.lead);
+  if (!self?.persona || asksPeople(self.persona) || !lead?.active || isPerson(lead)) return null;
+  return lead.name;
+}
+
+export function directThreadStart(state: Pick<ChannelState, "placeOf">, seq: number): number | null {
+  const place = state.placeOf.get(seq);
+  if (place?.kind !== "dm") return null;
+  const key = placeKey(place);
+  let first = seq;
+  for (const [at, p] of state.placeOf) if (at < first && p.kind === "dm" && placeKey(p) === key) first = at;
+  return first;
+}
+
+interface HandedOver {
+  choices?: readonly string[];
+  holds?: readonly string[];
+  decision?: DecisionKind;
+  step?: Step;
+}
+
+export function handedOver(from: string, body: string, ask: HandedOver): string {
+  const list = (title: string, items: readonly string[] | undefined): string[] => (items?.length ? [title, ...items.map((i) => `- ${i}`)] : []);
+  const step = ask.step;
+  return [
+    body.trim(),
+    "",
+    ...(step
+      ? [
+          `A step for a person: ${step.why}`,
+          `Why an agent can't do it: ${step.needsPerson}`,
+          ...list("Do:", step.do),
+          ...list("Run:", step.run),
+          ...(step.expect ? [`Expect: ${step.expect}`] : []),
+          ...list("Links:", step.links),
+        ]
+      : []),
+    ...list("Options:", ask.choices),
+    ...(ask.decision ? [`Kind: ${ask.decision}`] : []),
+    ...(ask.holds?.length ? [`Holds: ${ask.holds.join(", ")}`] : []),
+    `Handed to you, the Lead: ${from} doesn't ask people. ${step ? "Pass it to a person with kiwi ask-human --step, or say why it isn't needed." : "Decide it yourself, or ask a person with kiwi ask-human."}`,
+  ].join("\n");
 }
 
 function isPeopleTarget(state: Pick<ChannelState, "members">, name: string): boolean {

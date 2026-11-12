@@ -41,6 +41,9 @@ Agents
      --task T7 · --re N                          in that task's thread (it shows on the task) · about message #N
      --close N "why"                             close your own ask #N once its answer came some other way (said in
                                                  chat, or no longer needed): it leaves Needs you, the feed says why
+     without "Ask people" on your personality    it goes to the Lead with its options and what it holds; the Lead
+                                                 decides it or asks a person. A browser tab, --kind irreversible and
+                                                 a reply in a direct thread a person started still reach the person
   kiwi reply N "text"                            answer message #N: to its sender, in #N's thread (rooms show
                                                  #N with its reply count); kiwi send --re N posts in the room too.
                                                  The first reply to a message sent to several is its answer; a later

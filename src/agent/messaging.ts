@@ -38,9 +38,12 @@ import {
   allowedOnHold,
   checkChangeRefusal,
   decidersOf,
+  directThreadStart,
+  handedOver,
   humanOf,
   isPerson,
   landingTouchedByClose,
+  leadForAsk,
   nextIn,
   ON_HOLD,
   ownerOf,
@@ -375,6 +378,22 @@ export class SessionMessaging extends SessionListen {
           return yield* new Rejected(`#${re} is ${where}, and an answer to it goes there, not in ${taskId(ask.task)}'s thread: leave out the task or the message it answers`);
         }
       }
+      const lead = handoff || ask.permission || ask.decision === "irreversible" ? null : leadForAsk(state, this.me);
+      const start = lead === null || re === undefined ? null : directThreadStart(state, re);
+      const opener = start === null ? undefined : state.members.get((yield* this.message(start, messages))?.from ?? "");
+      if (lead !== null && !(opener && isPerson(opener))) {
+        const holds = ask.holds?.map((id) => (state.tasks.has(id) ? taskId(id) : `#${id}`));
+        const handed = yield* this.send(
+          handedOver(this.me, body, {
+            ...(ask.choices ? { choices: ask.choices } : {}),
+            ...(holds?.length ? { holds } : {}),
+            ...(ask.decision ? { decision: ask.decision } : {}),
+            ...(ask.step ? { step: ask.step } : {}),
+          }),
+          { to: [lead], kind: "blocking", ...(ask.task !== undefined ? { task: ask.task } : {}), ...(re !== undefined ? { re: [re] } : {}) },
+        );
+        return { seq: handed, to: [lead], also: [], lead };
+      }
       const seq = yield* this.send(body, {
         to,
         kind: "blocking",
@@ -393,6 +412,7 @@ export class SessionMessaging extends SessionListen {
         seq,
         to,
         also: decidersOf(state, { esc: true, to, ...(handoff ? { handoff } : {}), ...(ask.permission ? { permission: ask.permission } : {}), ...(ask.step ? { step: ask.step } : {}) }),
+        lead: null,
       };
     },
     oneLook,
