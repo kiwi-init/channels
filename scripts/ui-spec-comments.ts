@@ -131,14 +131,10 @@ try {
     );
     expect((await page.locator("article.msg", { hasText: "Own rows reads better in Numbers" }).count()) === 0, "a comment on one line of the spec stays out of the room");
     await reply.getByRole("button", { name: "Also on the spec" }).click();
-    const filed = await page
-      .locator(".spec-comment", { hasText: "Read AGENTS.md first, then the board." })
-      .waitFor({ timeout: 5000 })
-      .then(
-        () => true,
-        () => false,
-      );
-    expect(filed, "the tag opens the spec, where the same reply is a comment");
+    await page.locator(".spec-comment").first().waitFor();
+    const every = page.getByRole("button", { name: /^All \d+$/ });
+    if (await every.count()) await every.first().click();
+    expect((await page.locator(".spec-comment", { hasText: "Read AGENTS.md first, then the board." }).count()) === 1, "the tag opens the spec, where the same reply is a comment");
     await page.close();
   }
   {
