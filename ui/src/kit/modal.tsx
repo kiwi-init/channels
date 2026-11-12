@@ -63,8 +63,8 @@ export function Modal({
       tabIndex={-1}
       className={cx("modal", size && `is-${size}`, !!tabs && "has-tabs", !children && "is-bare")}
       aria-label={label}
-      onClose={() => {
-        if (wanted.current) onClose()
+      onClose={(e) => {
+        if (e.target === e.currentTarget && wanted.current) onClose()
       }}
       onPointerDown={(e) => {
         pressed.current = e.target
