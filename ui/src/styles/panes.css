@@ -212,9 +212,9 @@
   padding: 3px 12px;
   border-radius: var(--r-ctl);
   background: var(--wash-2);
-  color: var(--ink);
+  color: var(--ink) !important;
   font: 500 var(--t-ui) var(--ui);
-  text-decoration: none;
+  text-decoration: none !important;
   transition: background var(--fast);
 }
 
@@ -223,11 +223,11 @@
 }
 
 .page .md a[href^="kiwi-page:"] {
-  color: var(--ink-3);
+  color: var(--ink-3) !important;
   font: var(--t-ui) var(--ui);
-  text-decoration: none;
+  text-decoration: none !important;
 }
 
 .page .md a[href^="kiwi-page:"]:hover {
-  color: var(--ink);
+  color: var(--ink) !important;
 }

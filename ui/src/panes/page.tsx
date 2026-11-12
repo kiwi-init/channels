@@ -103,15 +103,7 @@ function specPage(channel: Channel, ask: number, actions: Actions, m: Maker): st
         : ""
   const tasks = tasksOf(channel, spec).map((x) => boxed(x, ` · ${STATUS_WORDS[x.status]}`))
   const comments = spec.comments.flatMap((seq) => channel.messages.filter((x) => x.seq === seq)).map((x) => `**@${x.from}** ${wordsRaw(x.text)}`)
-  return join([
-    crumb,
-    `# ${title}`,
-    [`#${spec.ask}`, spec.stage, `v${spec.v}`, `@${spec.by}`].join(" · "),
-    judge,
-    text,
-    section(t("panes.page.tasks"), tasks),
-    section(t("panes.page.comments"), comments, "\n\n"),
-  ])
+  return join([crumb, `# ${title}`, [`#${spec.ask}`, spec.stage, `@${spec.by}`].join(" · "), judge, text, section(t("panes.page.tasks"), tasks), section(t("panes.page.comments"), comments, "\n\n")])
 }
 
 function specsPage(channel: Channel): string {
