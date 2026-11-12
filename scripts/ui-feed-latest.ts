@@ -41,6 +41,7 @@ const expect = (ok: boolean, what: string) => {
 interface Place {
   below: number;
   first: number;
+  last: number;
   rows: number;
 }
 
@@ -48,10 +49,12 @@ const place = (page: Page): Promise<Place> =>
   page.evaluate(() => {
     const feed = document.querySelector<HTMLElement>(".main .feed");
     if (!feed) throw new Error("no feed on screen");
+    const rows = [...feed.querySelectorAll<HTMLElement>(".feed-list > [data-seq]")];
     return {
       below: Math.round(feed.scrollHeight - feed.scrollTop - feed.clientHeight),
-      first: Number(feed.querySelector("[data-seq]")?.getAttribute("data-seq") ?? -1),
-      rows: feed.querySelectorAll("[data-seq]").length,
+      first: Number(rows[0]?.dataset.seq ?? -1),
+      last: Number(rows.at(-1)?.dataset.seq ?? -1),
+      rows: rows.length,
     };
   });
 
@@ -90,10 +93,10 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
   await page.goto(`http://127.0.0.1:${server.port}/?shot=long-feed`);
-  await page.waitForSelector(".main .feed [data-seq]", { timeout: 15_000 });
+  await page.waitForSelector(".main .feed-list > [data-seq]", { timeout: 15_000 });
   const opened = (await atEnd(page)) ? await place(page) : null;
   expect(opened !== null && opened.rows > 20, `the long feed opens at its end with no Jump to latest (${opened ? `${opened.rows} rows, ${opened.below}px below` : "it never rested at its end"})`);
-  const latest = opened ? opened.first + opened.rows : -1;
+  const latest = opened?.last ?? -1;
   const box = await page.locator(".main .feed").boundingBox();
   if (!box) throw new Error("no feed box");
   for (const wheels of WHEELS) {
@@ -122,7 +125,7 @@ try {
     const rested = await atEnd(page);
     const back = await place(page);
     expect(rested, `${at}: a click brings the feed to its end and Jump to latest goes (${back.below}px below, ${await pill.count()} shown)`);
-    expect(back.first + back.rows >= latest, `${at}: the latest rows are the ones on screen (rows ${back.first} to ${back.first + back.rows - 1}, the feed ends at ${latest - 1})`);
+    expect(back.last === latest, `${at}: the feed's last row is the one it opened on (row ${back.last}, it opened on ${latest})`);
     const most = await drifts(page, STILL_FRAMES);
     expect(most <= 2, `${at}: and it stays at its end for the next ${STILL_FRAMES} frames (${most}px below at most)`);
   }

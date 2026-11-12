@@ -66,7 +66,7 @@ const seen = (page: Page, seq: number | null): Promise<Seen> =>
       const list = feed?.querySelector<HTMLElement>(".feed-list");
       if (!feed || !list) throw new Error("no feed on screen");
       const edge = feed.getBoundingClientRect().top;
-      const rows = [...list.querySelectorAll<HTMLElement>("[data-seq]")];
+      const rows = [...list.querySelectorAll<HTMLElement>(":scope > [data-seq]")];
       const row = seq === null ? rows.find((r) => r.getBoundingClientRect().bottom > edge + 1) : rows.find((r) => Number(r.getAttribute("data-seq")) === seq);
       const text = list.querySelector<HTMLElement>(".msg-text") ?? list;
       return {
@@ -91,12 +91,12 @@ try {
     const held = new Promise<void>((go) => {
       arrive = go;
     });
-    await page.route("**/fonts/*.woff2", async (route) => {
+    await page.route("**/fonts/Lato-*.woff2", async (route) => {
       await held;
       await route.continue();
     });
     await page.goto(`http://127.0.0.1:${server.port}/?shot=long-feed`);
-    await page.waitForSelector(".main .feed [data-seq]", { timeout: 15_000 });
+    await page.waitForSelector(".main .feed-list > [data-seq]", { timeout: 15_000 });
     await page.evaluate((font) => document.documentElement.setAttribute("data-font", font), FONT);
     await page.waitForFunction(
       () => {

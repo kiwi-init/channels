@@ -28,7 +28,7 @@ const ROOT = resolve(import.meta.dir, "..");
 
 export const engineOf = (argv: string[]): Engine => (argv.includes("--webkit") ? "webkit" : "chromium");
 
-export async function openStage(channel: string, engine: Engine, seeds: number): Promise<Stage> {
+export async function openStage(channel: string, engine: Engine, seeds: number, prepare?: (page: Page) => Promise<void>): Promise<Stage> {
   const dir = mkdtempSync(join(tmpdir(), `kiwi-feed-${channel}-`));
   const cli = join(dir, "cli");
   mkdirSync(join(cli, "bin"), { recursive: true });
@@ -70,6 +70,7 @@ export async function openStage(channel: string, engine: Engine, seeds: number):
     const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
     const threw: string[] = [];
     await pageErrors(page, (e) => threw.push(e));
+    await prepare?.(page);
     await page.goto(base);
     await firstRun(page, "jow");
     const code = await newChannel(page, channel);

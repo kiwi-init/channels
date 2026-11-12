@@ -75,38 +75,58 @@ const check = (ok: boolean, what: string): void => {
   if (!ok) failures.push(what);
 };
 
-const stage = await openStage("late", ENGINE, SEEDS);
+interface Gate {
+  holdPictures: () => void;
+  letPictures: () => void;
+}
+
+const gated = async (page: Page): Promise<void> => {
+  await page.addInitScript(() => {
+    const read = Blob.prototype.arrayBuffer;
+    let open: Promise<void> = Promise.resolve();
+    let go: () => void = () => {};
+    const gate: Gate = {
+      holdPictures: () => {
+        open = new Promise<void>((let_) => {
+          go = let_;
+        });
+      },
+      letPictures: () => go(),
+    };
+    Object.assign(window, gate);
+    Blob.prototype.arrayBuffer = function (this: Blob) {
+      return this.type.startsWith("image/") ? open.then(() => read.call(this)) : read.call(this);
+    };
+  });
+};
+
+const hold = (page: Page): Promise<void> => page.evaluate(() => (window as unknown as Gate).holdPictures());
+const arrive = (page: Page): Promise<void> => page.evaluate(() => (window as unknown as Gate).letPictures());
+
+const stage = await openStage("late", ENGINE, SEEDS, gated);
 try {
   const { page } = stage;
   const shot = join(stage.dir, "shot.png");
   writeFileSync(shot, Buffer.from(await picture(page), "base64"));
-  let arrive: () => void = () => {};
-  let gate: Promise<void> = Promise.resolve();
-  const hold = (): void => {
-    gate = new Promise<void>((go) => {
-      arrive = go;
-    });
-  };
-  await page.route("**/blobs/**", async (route) => {
-    if (route.request().method() === "GET") await gate;
-    await route.continue();
-  });
   const spot = page.locator(".main .feed .msg-image-spot").first();
 
-  hold();
+  await hold(page);
   await stage.bot("the first shot", ["--image", shot]);
   await spot.waitFor({ timeout: 30_000 });
   await frames(page, SETTLE_FRAMES);
   const bottom = await place(page);
-  check(bottom.below <= 2, `at the bottom: a line with a picture arrives and the view follows it while the picture is still on its way (${px(bottom.below)} below the view)`);
-  arrive();
+  check(
+    bottom.below <= 2 && (await spot.count()) === 1,
+    `at the bottom: a line with a picture arrives and the view follows it while the picture is still on its way (${px(bottom.below)} below the view)`,
+  );
+  await arrive(page);
   const first = await shown(page, 1);
   await frames(page, SETTLE_FRAMES);
   const grown = await place(page);
   check(first && grown.height - bottom.height > 20, `at the bottom: the picture arrives and its row grows (${px(grown.height - bottom.height)} taller)`);
   check(grown.below <= 2, `at the bottom: a late picture leaves the feed at its end (${px(grown.below)} below the view)`);
 
-  hold();
+  await hold(page);
   await stage.bot("the second shot", ["--image", shot]);
   await spot.waitFor({ timeout: 30_000 });
   for (let i = 0; i < AFTER; i++) {
@@ -129,7 +149,7 @@ try {
     read.spot !== null && read.spot > 0 && read.spot < 400 && up.below > 100 && read.seq > 0,
     `scrolled up: the picture's row ends ${read.spot === null ? "nowhere" : px(read.spot)} above the view with the picture still on its way, and row ${read.seq} is at the top (${px(up.below)} above the end)`,
   );
-  arrive();
+  await arrive(page);
   const second = await shown(page, 2);
   await frames(page, SETTLE_FRAMES);
   const after = await reading(page, read.seq);

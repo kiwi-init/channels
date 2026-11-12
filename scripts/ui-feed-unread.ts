@@ -40,6 +40,13 @@ async function reads(page: Page, name: string, want: string): Promise<string> {
 
 const said = (n: string): string => (n === "" ? "nothing" : n);
 
+const linesAfter = (page: Page, text: string): Promise<string[]> =>
+  page.evaluate((text) => {
+    const rows = [...document.querySelectorAll<HTMLElement>(".main .feed .feed-list > [data-seq]")];
+    const at = rows.findLastIndex((row) => row.querySelector(".msg-text")?.textContent?.trim() === text);
+    return rows.slice(at + 1).map((row) => `${row.dataset.seq} "${(row.querySelector(".msg-text")?.textContent ?? row.textContent ?? "").trim().slice(0, 40)}"`);
+  }, text);
+
 const pill = (page: Page): Promise<string> =>
   page.evaluate(
     () =>
@@ -117,7 +124,10 @@ try {
     .catch(() => false);
   await frames(page, SETTLE_FRAMES);
   const after = await place(page);
-  check(before.below > 100 && told, `scrolled up ${px(before.below)} from the end, ${UP} lines arrive and the button reads ${want} (it reads "${await pill(page)}")`);
+  check(
+    before.below > 100 && told,
+    `scrolled up ${px(before.below)} from the end, ${UP} lines arrive and the button reads ${want} (it reads "${await pill(page)}"; the rows after "news ${AWAY}" are ${(await linesAfter(page, `news ${AWAY}`)).join(", ") || "none"})`,
+  );
   check(Math.abs(after.top - before.top) <= 2, `and the view stays where it was (scrollTop ${px(before.top)}, then ${px(after.top)})`);
 
   await page.locator(".main .feed-jump").click();
