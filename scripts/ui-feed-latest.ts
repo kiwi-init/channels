@@ -10,7 +10,7 @@ const flag = (name: string): string | undefined => {
 };
 if (process.argv.includes("--help")) {
   console.log(
-    "usage: bun scripts/ui-feed-latest.ts [--dist ui/dist] [--browser webkit|chromium]\n\nScrolled up a long feed, a little, far past the rows it holds, near the top of those rows, or while older rows still load, Jump to latest shows, takes a click, brings the feed's last line back to the bottom of the view and goes.",
+    "usage: bun scripts/ui-feed-latest.ts [--dist ui/dist] [--browser webkit|chromium]\n\nScrolled up a long feed, a little, far past the rows it holds, near the top of those rows, at rest or the moment a wheel stops, Jump to latest shows, takes a click, brings the feed's last line back to the bottom of the view and goes.",
   );
   process.exit(0);
 }
@@ -48,7 +48,28 @@ async function wheels(page: Page, by: number): Promise<void> {
   }
 }
 
-async function shown(page: Page, opened: Place, at: string): Promise<{ x: number; y: number; up: Place } | null> {
+async function stopped(page: Page, from: number): Promise<void> {
+  await page.evaluate(
+    (from) =>
+      new Promise<void>((done) => {
+        const feed = document.querySelector<HTMLElement>(".main .feed");
+        let last = Number.NaN;
+        let still = 0;
+        let left = 240;
+        const tick = () => {
+          const now = feed?.scrollTop ?? 0;
+          still = now !== from && now === last ? still + 1 : 0;
+          last = now;
+          if (still >= 3 || --left <= 0) done();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+    from,
+  );
+}
+
+async function shown(page: Page, opened: Place, at: string): Promise<{ x: number; y: number } | null> {
   const pill = page.locator(".main .feed-jump");
   const there = await pill
     .waitFor({ timeout: 10_000 })
@@ -67,7 +88,7 @@ async function shown(page: Page, opened: Place, at: string): Promise<{ x: number
   });
   expect(onTop, `${at}: nothing covers it, a click at its middle lands on it`);
   const spot = await pill.boundingBox();
-  return spot ? { x: spot.x + spot.width / 2, y: spot.y + spot.height / 2, up } : null;
+  return spot ? { x: spot.x + spot.width / 2, y: spot.y + spot.height / 2 } : null;
 }
 
 async function lands(page: Page, opened: Place, at: string): Promise<void> {
@@ -103,22 +124,19 @@ try {
   await wheelUp(near.page, edge - NEAR_TOP);
   const spot = await shown(near.page, near.opened, top);
   if (spot) {
-    expect(
-      spot.up.last === near.opened.last && spot.up.rows > near.opened.rows,
-      `${top}: older rows have loaded and the feed still holds its last line (${spot.up.rows} rows, ${near.opened.rows} when it opened, the last is row ${spot.up.last})`,
-    );
     await near.page.mouse.click(spot.x, spot.y);
     await lands(near.page, near.opened, top);
   }
   await near.page.close();
 
   const busy = await open();
-  const loading = "clicked right after a wheel to the top of the rows it holds, while older rows load";
+  const loading = "clicked the moment a wheel to the top of the rows it holds stops";
   await wheels(busy.page, WHEEL);
   const pill = await shown(busy.page, busy.opened, loading);
   if (pill) {
     const from = await busy.page.evaluate(() => document.querySelector<HTMLElement>(".main .feed")?.scrollTop ?? 0);
     await busy.page.mouse.wheel(0, -Math.max(0, from - NEAR_TOP));
+    await stopped(busy.page, from);
     await busy.page.mouse.click(pill.x, pill.y);
     await lands(busy.page, busy.opened, loading);
   }

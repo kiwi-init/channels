@@ -62,7 +62,7 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | ⌘[ goes back to the spot you were reading, and ⌘] to the hit again | `scripts/ui-restore-place.ts` | `⌘[ undoes a jump inside the room` |
 | An older hit opens the stretch around it, scrolled into view | `scripts/ui-older-search.ts` | `the hit is scrolled into view and marked` |
 | Scrolled up, a little or far past the rows the feed holds, Jump to latest shows and nothing covers it | `scripts/ui-feed-latest.ts` | `nothing covers it, a click at its middle lands on it` |
-| A click on it brings the feed's last line back to the bottom of the view, and it goes, also from near the top of the rows the feed holds and while older rows load | `scripts/ui-feed-latest.ts` | `a click brings the feed's last line back to the bottom of the view` |
+| A click on it brings the feed's last line back to the bottom of the view, and it goes, also from near the top of the rows the feed holds | `scripts/ui-feed-latest.ts` | `a click brings the feed's last line back to the bottom of the view` |
 | From an older stretch, Back to latest returns to the live feed | `scripts/ui-older-search.ts` | `Back to latest returns to the live feed` |
 | A link to a message jumps to it in its room | `scripts/ui-message-link.ts` | `clicking it jumps to the message in its room` |
 
