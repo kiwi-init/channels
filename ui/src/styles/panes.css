@@ -25,6 +25,63 @@
 
 .panes > .pane {
   position: absolute;
+  transition:
+    left var(--slow) var(--ease),
+    top var(--slow) var(--ease),
+    width var(--slow) var(--ease),
+    height var(--slow) var(--ease);
+}
+
+:root:is([data-resizing], [data-side-move]) .panes > .pane {
+  transition: none;
+}
+
+.panes > .pane.is-new {
+  animation: pane-in var(--slow) var(--ease);
+}
+
+@keyframes pane-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+.pane-dim {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  background: var(--bg);
+  opacity: 0.32;
+  pointer-events: none;
+  transition: opacity var(--slow) var(--ease);
+}
+
+.pane.is-focus > .pane-dim {
+  opacity: 0;
+}
+
+.pane > .panel.is-pane {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  flex: 1;
+  width: auto;
+  min-height: 0;
+  background: none;
+  box-shadow: none;
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panes > .pane {
+    transition: none;
+  }
+
+  .panes > .pane.is-new {
+    animation: none;
+  }
 }
 
 .panes > .pane:not(.is-corner) {
@@ -471,4 +528,27 @@
 
 .pg-seg.is-waiting {
   background: var(--decide);
+}
+
+.pane .compose {
+  transition:
+    opacity var(--slow) var(--ease),
+    translate var(--slow) var(--ease),
+    visibility 0s;
+}
+
+.pane.is-quiet .compose {
+  visibility: hidden;
+  opacity: 0;
+  translate: 0 8px;
+  pointer-events: none;
+  transition:
+    opacity var(--fast) var(--ease),
+    translate var(--fast) var(--ease),
+    visibility 0s var(--fast);
+}
+
+.pane:has(> .panel.is-pane) > .pane-tools {
+  top: 12px;
+  right: 56px;
 }

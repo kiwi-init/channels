@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useLayoutEffect, useState } from "react"
+import { panelGo, useLayout } from "~/panes/store"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
@@ -19,7 +20,7 @@ import { Frame } from "~/shell/frame"
 import { useDrawer } from "~/shell/side"
 import { Content } from "~/shell/content"
 import { Page, viewOf } from "~/panes/page"
-import { FocusScope, Panes, placeName } from "~/panes/panes"
+import { FocusScope, Panes, placeName, roomiest } from "~/panes/panes"
 import { Sidebar, ViewsBar } from "~/shell/sidebar"
 import { useTabs, useTopLayout } from "~/shell/top-layout"
 import { ActivityButton } from "~/chat/events"
@@ -93,7 +94,13 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   }, [gone, go])
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
-  const panelOpen = !!nav.panel
+  const layout = useLayout(channel.code)
+  useLayoutEffect(() => {
+    if (!tabs || !nav.panel) return
+    panelGo(channel.code, layout.focus, nav.panel, roomiest(channel.code))
+    go({ to: "panel", panel: null })
+  }, [tabs, nav.panel, channel.code, layout.focus, go])
+  const panelOpen = !!nav.panel && !tabs
   const now = useMedia(WIDE) && !panelOpen
   const view = viewOf(nav)
   useLayoutEffect(() => {
@@ -130,7 +137,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
 
   return (
     <Frame
-      className={cx(nav.panel && "has-panel", top && "is-top")}
+      className={cx(panelOpen && "has-panel", top && "is-top")}
       news={news}
       title={title}
       tools={
@@ -178,7 +185,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
             {channel.connection === "connecting" ? t("shell.channel.connecting") : t("shell.channel.reconnecting")}
           </p>
         )}
-        {nav.panel && (
+        {panelOpen && (
           <aside className="panel" aria-label={t("shell.channel.details")}>
             <div
               className="panel-grip"

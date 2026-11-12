@@ -22,6 +22,7 @@ import { useLimitHit } from "~/usage/store"
 import { applyTheme, colorsOf, usePreview, useSystemDark } from "~/theme/apply"
 import { loadRex, useRex } from "~/theme/rex"
 import { activeTheme, wantsRex } from "~/theme/themes"
+import { closeFocused } from "~/panes/store"
 
 const Settings = later(() => import("~/settings/settings").then((m) => m.Settings))
 const FirstRun = later(() => import("~/start/first-run").then((m) => m.FirstRun))
@@ -86,8 +87,9 @@ function Shown({ app, nav, go, broken }: RootProps) {
         else if (c === "new-channel") go({ to: "dialog", dialog: "new-channel" })
         else if (c === "jump") togglePalette()
         else if (c === "back" || c === "forward") go({ to: "history", step: c })
+        else if (c === "close-pane" && !closeFocused()) app.actions.windowControl("close")
       }),
-    [go, togglePalette]
+    [go, togglePalette, app.actions]
   )
   useHistoryKeys(go, !!nav.modal)
   useTheme(app)

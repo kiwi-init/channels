@@ -26,7 +26,7 @@ interface Hooks {
   panel: (task: number) => void
 }
 
-export type View = Doc | { kind: "specs" } | { kind: "spec"; ask: number } | { kind: "agents" } | { kind: "github" } | { kind: "needs" }
+export type View = Exclude<Doc, { kind: "panel" }> | { kind: "specs" } | { kind: "spec"; ask: number } | { kind: "agents" } | { kind: "github" } | { kind: "needs" }
 
 export function viewOf(nav: Nav): View | null {
   if (nav.tab === "chat") return null
@@ -248,7 +248,7 @@ function build(channel: Channel, key: string, actions: Actions, hooks: Hooks): {
   return { md, acts: m.acts }
 }
 
-export function docName(channel: Channel, doc: Doc): string {
+export function docName(channel: Channel, doc: Exclude<Doc, { kind: "panel" }>): string {
   if (doc.kind === "now") return t("panes.now")
   const task = channel.tasks.find((x) => x.id === doc.task)
   return task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)}` : `T${doc.task}`

@@ -1,12 +1,15 @@
 import "~/styles/panes.css"
-import { Suspense, useMemo, useRef, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react"
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react"
 import { createPortal } from "react-dom"
 
 import { cx, IconButton } from "~/kit/bits"
 import { Boundary } from "~/kit/boundary"
+import { keyRan, onCommand, runCommand } from "~/kit/commands"
+import { dialogOpen, mod } from "~/kit/keys"
+import { later } from "~/kit/later"
 import type { Channel } from "~/model"
 import { between, nickname } from "~/names"
-import { ActContext, NavContext, useAct, useNav, type Act, type Go, type Nav } from "~/nav"
+import { ActContext, NavContext, useAct, useNav, type Act, type Go, type Nav, type Panel } from "~/nav"
 import { dragOut } from "~/panes/drag"
 import { docName, Page } from "~/panes/page"
 import { PaneContext, type PaneScope } from "~/panes/scope"
@@ -20,6 +23,10 @@ import {
   isNone,
   leafOf,
   MAIN,
+  pageOf,
+  panelGo,
+  setCloser,
+  splitAt,
   MIN_H,
   MIN_W,
   paneGo,
@@ -30,8 +37,10 @@ import {
   useLayout,
   without,
   type Box,
+  type Leaf,
   type Carry,
   type Doc,
+  type Edge,
   type Len,
   type Split,
 } from "~/panes/store"
@@ -54,7 +63,44 @@ export function placeName(channel: Channel, nav: Nav): string {
   return where.kind === "theirs" ? between(channel, where.between) : `T${where.task}`
 }
 
+const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
+const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
+const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
+const ThreadPanel = later(() => import("~/panels/thread").then((m) => m.ThreadPanel))
+
 const LINK = "a[href^='kiwi-']"
+
+export function roomiest(code: string): { id: string; edge: Edge } | undefined {
+  const panes = [...document.querySelectorAll<HTMLElement>(`[data-panes="${code}"] > [data-pane]`)].map((el) => ({ id: el.dataset.pane ?? "", r: el.getBoundingClientRect() }))
+  const best = panes.filter((p) => p.r.width >= 2 * MIN_W || p.r.height >= 2 * MIN_H).sort((a, b) => b.r.width * b.r.height - a.r.width * a.r.height)[0]
+  if (!best) return undefined
+  return { id: best.id, edge: best.r.width >= 2 * MIN_W && best.r.width >= best.r.height * 0.9 ? "right" : "bottom" }
+}
+
+function panelName(channel: Channel, panel: Panel): string {
+  if (panel.kind === "task") return docName(channel, { kind: "task", task: panel.task })
+  if (panel.kind === "thread") return t("panes.thread")
+  const item = panel.kind === "pr" ? channel.prs?.find((p) => p.repo === panel.repo && p.number === panel.number) : channel.issues?.find((i) => i.repo === panel.repo && i.number === panel.number)
+  return `#${panel.number}${item ? ` ${item.title}` : ""}`
+}
+
+const nameOf = (channel: Channel, doc: Doc): string => (doc.kind === "panel" ? panelName(channel, doc.panel) : docName(channel, doc))
+
+function PanelDoc({ channel, panel }: { channel: Channel; panel: Panel }) {
+  return (
+    <div className="panel is-pane">
+      {panel.kind === "thread" ? (
+        <ThreadPanel channel={channel} seq={panel.seq} focus={panel.focus} />
+      ) : panel.kind === "task" ? (
+        <TaskPanel channel={channel} id={panel.task} />
+      ) : panel.kind === "pr" ? (
+        <PrPanel channel={channel} repo={panel.repo} number={panel.number} />
+      ) : (
+        <IssuePanel channel={channel} repo={panel.repo} number={panel.number} />
+      )}
+    </div>
+  )
+}
 
 function carried(channel: Channel, href: string): { carry: Carry; label: string } | null {
   const cut = href.indexOf(":")
@@ -84,22 +130,21 @@ function goTo(nav: Nav): Go {
   return { to: "tab", tab: nav.tab }
 }
 
-function Scope({ code, id, nav, doc, shown, children }: { code: string; id: string | null; nav: Nav; doc: Doc | null; shown: boolean; children: ReactNode }) {
+function Scope({ code, id, nav, doc, shown, typing = true, children }: { code: string; id: string | null; nav: Nav; doc: Doc | null; shown: boolean; typing?: boolean; children: ReactNode }) {
   const act = useAct()
+  const tabs = useTabs()
   const scoped = useMemo(
-    (): Act =>
-      id === null
-        ? act
-        : {
-            ...act,
-            go: (go) => {
-              const rest = paneGo(code, id, go)
-              if (rest) act.go(rest)
-            },
-          },
-    [act, code, id]
+    (): Act => ({
+      ...act,
+      go: (go) => {
+        if (go.to === "panel" && tabs) return panelGo(code, id ?? MAIN, go.panel, go.panel ? roomiest(code) : undefined)
+        const rest = id === null ? go : paneGo(code, id, go)
+        if (rest) act.go(rest)
+      },
+    }),
+    [act, code, id, tabs]
   )
-  const pane = useMemo((): PaneScope => ({ doc, show: (next) => showDoc(code, id, next, shown) }), [code, id, doc, shown])
+  const pane = useMemo((): PaneScope => ({ doc, show: (next) => showDoc(code, id, next, shown), typing }), [code, id, doc, shown, typing])
   return (
     <NavContext value={nav}>
       <ActContext value={scoped}>
@@ -137,23 +182,95 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
   const root = !tabs ? ALONE.root : dock && !now ? without(layout.root, dock.id) : layout.root
   const { leaves, gaps } = boxes(root)
   const plain = leaves.length === 2 && !!dock && shown
+  const split = leaves.length > 1 && !plain
   const heir = leaves.find(({ leaf }) => leaf.nav && !leaf.doc)?.leaf
-  const close = (id: string) => {
-    if (id !== MAIN) return closePane(code, id)
-    if (!heir?.nav) return
+  const talks = (leaf: Leaf): boolean => (leaf.nav ? leaf.nav.tab === "chat" && !leaf.doc : nav.tab === "chat")
+  const pick = (id: string | undefined) => leaves.find(({ leaf }) => leaf.id === id && talks(leaf))?.leaf.id
+  const typing = pick(layout.focus) ?? pick(layout.typing) ?? leaves.find(({ leaf }) => talks(leaf))?.leaf.id ?? MAIN
+  const close = (id: string): boolean => {
+    if (id !== MAIN) return (closePane(code, id), true)
+    if (!heir?.nav) return false
     go(goTo(heir.nav))
     closePane(code, heir.id)
+    return true
   }
+  const live = useRef({ leaves, close, focus: layout.focus, nav })
+  useLayoutEffect(() => {
+    live.current = { leaves, close, focus: layout.focus, nav }
+  })
+  const [born] = useState(() => new Set(leaves.map(({ leaf }) => leaf.id)))
+  useEffect(() => {
+    const now = () => live.current
+    const focused = () => now().leaves.find(({ leaf }) => leaf.id === now().focus)?.leaf ?? now().leaves[0]?.leaf
+    setCloser(() => {
+      const leaf = focused()
+      return !!leaf && now().leaves.length > 1 && now().close(leaf.id)
+    })
+    const splitOut = (edge: "right" | "bottom") => {
+      const leaf = focused()
+      if (leaf) splitAt(code, leaf.id, edge, pageOf(leaf, now().nav))
+    }
+    const step = (dx: number, dy: number) => {
+      const from = host.current?.querySelector<HTMLElement>(`[data-pane="${now().focus}"]`)?.getBoundingClientRect()
+      if (!from) return
+      let best: { id: string; d: number } | null = null
+      for (const el of host.current?.querySelectorAll<HTMLElement>("[data-pane]") ?? []) {
+        const r = el.getBoundingClientRect()
+        const ahead = dx ? (r.left + r.right - from.left - from.right) * dx : (r.top + r.bottom - from.top - from.bottom) * dy
+        const overlap = dx ? Math.min(r.bottom, from.bottom) - Math.max(r.top, from.top) : Math.min(r.right, from.right) - Math.max(r.left, from.left)
+        if (ahead <= 0 || overlap <= 0 || !el.dataset.pane) continue
+        if (!best || ahead < best.d) best = { id: el.dataset.pane, d: ahead }
+      }
+      if (!best) return
+      focusPane(code, best.id)
+      host.current?.querySelector<HTMLElement>(`[data-pane="${best.id}"] :is(.compose textarea, .page, .feed)`)?.focus({ preventScroll: true })
+    }
+    const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
+    const onKey = (e: KeyboardEvent) => {
+      if (!mod(e) || dialogOpen()) return
+      const key = e.key.toLowerCase()
+      const arrow = ARROWS[e.key]
+      if (arrow && e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        step(...arrow)
+      } else if (key === "d" && !e.altKey) {
+        e.preventDefault()
+        const command = e.shiftKey ? "split-down" : "split-right"
+        runCommand(command)
+        keyRan(command)
+      } else if (key === "w" && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        runCommand("close-pane")
+        keyRan("close-pane")
+      }
+    }
+    const stop = onCommand((c) => {
+      if (c === "split-right") splitOut("right")
+      else if (c === "split-down") splitOut("bottom")
+    })
+    window.addEventListener("keydown", onKey)
+    return () => {
+      stop()
+      setCloser(null)
+      window.removeEventListener("keydown", onKey)
+    }
+  }, [code])
   return (
-    <div ref={host} className="panes" data-panes={code}>
+    <div ref={host} className={cx("panes", split && "is-split")} data-panes={code}>
       <i ref={probe} className="panes-probe" aria-hidden="true" />
       {leaves.map(({ leaf, box }) => {
         const Tag = leaf.nav ? "section" : "main"
-        const name = leaf.doc ? docName(channel, leaf.doc) : placeName(channel, leaf.nav ?? nav)
+        const name = leaf.doc ? nameOf(channel, leaf.doc) : placeName(channel, leaf.nav ?? nav)
         return (
           <Tag
             key={leaf.id}
-            className={cx("main pane", isNone(box.x) && isNone(box.y) && "is-corner")}
+            className={cx(
+              "main pane",
+              isNone(box.x) && isNone(box.y) && "is-corner",
+              leaf.id === layout.focus && "is-focus",
+              split && leaf.id !== typing && "is-quiet",
+              !born.has(leaf.id) && "is-new"
+            )}
             data-pane={leaf.id}
             aria-label={leaf.nav ? name : label}
             style={{ left: css(box.x), top: css(box.y), width: css(box.w), height: css(box.h) }}
@@ -167,19 +284,22 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
               if ((e.target as Element).closest?.(LINK)) e.preventDefault()
             }}
           >
-            <Scope code={code} id={leaf.nav ? leaf.id : null} nav={leaf.nav ?? nav} doc={leaf.doc ?? null} shown={shown}>
+            <Scope code={code} id={leaf.nav ? leaf.id : null} nav={leaf.nav ?? nav} doc={leaf.doc ?? null} shown={shown} typing={leaf.id === typing}>
               {leaf.nav ? (
-                <Boundary resetKey={`${leaf.nav.tab}\n${leaf.doc ? docName(channel, leaf.doc) : ""}`}>
-                  <Suspense fallback={null}>{leaf.doc ? <Page channel={channel} view={leaf.doc} /> : place}</Suspense>
+                <Boundary resetKey={`${leaf.nav.tab}\n${leaf.doc ? JSON.stringify(leaf.doc) : ""}`}>
+                  <Suspense fallback={null}>
+                    {leaf.doc?.kind === "panel" ? <PanelDoc channel={channel} panel={leaf.doc.panel} /> : leaf.doc ? <Page channel={channel} view={leaf.doc} /> : place}
+                  </Suspense>
                 </Boundary>
               ) : (
                 main
               )}
             </Scope>
+            {split && <i className="pane-dim" aria-hidden="true" />}
             {leaves.length > 1 && !(plain && !leaf.nav) && (
               <div className="pane-tools">
                 <button type="button" className="icon-btn pane-grip" aria-label={t("panes.move")} title={t("panes.move")} {...dragOut({ pane: leaf.id }, name)} />
-                {(leaf.nav || heir) && <IconButton icon="close" label={t("shell.rail.close")} onClick={() => close(leaf.id)} />}
+                {(leaf.nav || heir) && leaf.doc?.kind !== "panel" && <IconButton icon="close" label={t("shell.rail.close")} onClick={() => void close(leaf.id)} />}
               </div>
             )}
           </Tag>

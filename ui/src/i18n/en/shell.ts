@@ -79,6 +79,7 @@ export default {
   "panes.page.edit": "Edit",
   "panes.page.save": "Save",
   "panes.page.cancel": "Cancel",
+  "panes.thread": "Thread",
   "panes.page.steps": "Steps",
   "panes.page.notes": "Notes",
   "panes.page.tasks": "Tasks",

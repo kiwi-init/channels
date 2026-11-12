@@ -5,6 +5,7 @@ import type { Doc } from "~/panes/store"
 export interface PaneScope {
   doc: Doc | null
   show: (doc: Doc) => void
+  typing: boolean
 }
 
 export const PaneContext = createContext<PaneScope | null>(null)

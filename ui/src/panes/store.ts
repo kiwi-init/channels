@@ -1,10 +1,10 @@
 import { useSyncExternalStore } from "react"
 
 import type { Where } from "~/model"
-import { navigate, sameWhere, startNav, type Go, type Nav } from "~/nav"
+import { navigate, sameWhere, startNav, type Go, type Nav, type Panel } from "~/nav"
 import type { Tab } from "~/places"
 
-export type Doc = { kind: "task"; task: number } | { kind: "now" }
+export type Doc = { kind: "task"; task: number } | { kind: "now" } | { kind: "panel"; panel: Panel }
 
 export type Page = { at: "where"; where: Where } | { at: "tab"; tab: Exclude<Tab, "chat"> } | { at: "spec"; ask: number } | { at: "doc"; doc: Doc }
 
@@ -34,6 +34,7 @@ export type Node = Leaf | Split
 export interface Layout {
   root: Node
   focus: string
+  typing?: string
 }
 
 export interface Len {
@@ -66,9 +67,60 @@ export const pixels = (l: Len, whole: number, side: number): number => l.p * who
 const ONLY: Leaf = { kind: "leaf", id: MAIN, nav: null }
 export const ALONE: Layout = { root: ONLY, focus: MAIN }
 
-const layouts = new Map<string, Layout>()
+const KEY = "mc.panes"
 const listeners = new Set<() => void>()
 let made = 0
+
+type Kept = Pick<Nav, "where" | "tab" | "spec" | "part" | "github">
+
+const keptOf = (nav: Nav): Kept => ({ where: nav.where, tab: nav.tab, spec: nav.spec, part: nav.part, github: nav.github })
+
+function slim(node: Node): unknown {
+  if (node.kind === "split") return { ...node, a: slim(node.a), b: slim(node.b) }
+  return { ...node, nav: node.nav ? keptOf(node.nav) : null }
+}
+
+function grown(code: string, raw: unknown): Node | null {
+  if (!raw || typeof raw !== "object") return null
+  const node = raw as { kind?: unknown; id?: unknown; nav?: unknown; doc?: Doc; a?: unknown; b?: unknown }
+  if (typeof node.id !== "string") return null
+  const n = /^(?:pane|split)-(\d+)$/.exec(node.id)?.[1]
+  if (n) made = Math.max(made, Number(n))
+  if (node.kind === "split") {
+    const a = grown(code, node.a)
+    const b = grown(code, node.b)
+    return a && b ? { ...(raw as Split), a, b } : null
+  }
+  if (node.kind !== "leaf") return null
+  const nav = node.nav && typeof node.nav === "object" ? { ...startNav(code), ...(node.nav as Kept) } : null
+  return { kind: "leaf", id: node.id, nav, ...(node.doc ? { doc: node.doc } : {}) }
+}
+
+function load(): Map<string, Layout> {
+  const out = new Map<string, Layout>()
+  try {
+    const got: unknown = JSON.parse(localStorage.getItem(KEY) ?? "{}")
+    for (const [code, raw] of Object.entries(got as Record<string, { root?: unknown; focus?: unknown; typing?: unknown }>)) {
+      const root = grown(code, raw?.root)
+      if (root && leafOf(root, MAIN)) out.set(code, { root, focus: typeof raw.focus === "string" ? raw.focus : MAIN, typing: typeof raw.typing === "string" ? raw.typing : MAIN })
+    }
+  } catch {
+    // A damaged or missing saved layout starts every channel from the default one.
+  }
+  return out
+}
+
+let saving = 0
+function save(): void {
+  window.clearTimeout(saving)
+  saving = window.setTimeout(() => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(Object.fromEntries([...layouts].map(([code, l]) => [code, { ...l, root: slim(l.root) }]))))
+    } catch {
+      // Storage is off: the layout lasts until the app restarts.
+    }
+  }, 300)
+}
 
 const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.delete(l))
 
@@ -88,6 +140,7 @@ function layoutOf(code: string): Layout {
 
 function put(code: string, layout: Layout): void {
   layouts.set(code, layout)
+  save()
   for (const l of listeners) l()
 }
 
@@ -122,7 +175,7 @@ function fresh(code: string, page: Page): Leaf {
   if (page.at === "tab") return { kind: "leaf", id, nav: { ...base, tab: page.tab } }
   if (page.at === "spec") return { kind: "leaf", id, nav: { ...base, tab: "specs", spec: page.ask, part: "spec" } }
   if (page.doc.kind === "now") return nowLeaf(code)
-  return { kind: "leaf", id, nav: { ...base, where: { kind: "task", task: page.doc.task } }, doc: page.doc }
+  return { kind: "leaf", id, nav: { ...base, where: page.doc.kind === "task" ? { kind: "task", task: page.doc.task } : NOWHERE }, doc: page.doc }
 }
 
 const beside = (edge: Edge, leaf: Leaf, found: Node): Split => {
@@ -160,10 +213,48 @@ export function resizeSplit(code: string, id: string, size: { ratio: number } | 
   if (root && root !== layout.root) put(code, { ...layout, root })
 }
 
+const talks = (leaf: Leaf): boolean => !leaf.nav || (leaf.nav.tab === "chat" && !leaf.doc)
+
 export function focusPane(code: string, id: string): void {
   const layout = layoutOf(code)
-  if (layout.focus !== id) put(code, { ...layout, focus: id })
+  const leaf = leafOf(layout.root, id)
+  const typing = leaf && talks(leaf) ? id : layout.typing
+  if (layout.focus !== id || layout.typing !== typing) put(code, { ...layout, focus: id, typing })
 }
+
+export function panelGo(code: string, from: string, panel: Panel | null, room?: { id: string; edge: Edge }): void {
+  const layout = layoutOf(code)
+  const here = leafOf(layout.root, from)
+  if (!panel) {
+    if (here?.doc?.kind === "panel") closePane(code, from)
+    return
+  }
+  const doc: Doc = { kind: "panel", panel }
+  const held = here?.doc?.kind === "panel" ? here : findLeaf(layout.root, (leaf) => leaf.doc?.kind === "panel")
+  if (held?.nav) {
+    const root = swap(layout.root, held.id, () => ({ ...held, doc }))
+    if (root) put(code, { ...layout, root, focus: held.id })
+    return
+  }
+  if (room && leafOf(layout.root, room.id)) return splitAt(code, room.id, room.edge, { at: "doc", doc })
+  splitAt(code, dockedNow(layout.root)?.id === from || !here ? MAIN : from, "right", { at: "doc", doc })
+}
+
+export function pageOf(leaf: Leaf, nav: Nav): Page {
+  if (leaf.doc) return { at: "doc", doc: leaf.doc }
+  const at = leaf.nav ?? nav
+  if (at.tab === "chat") return { at: "where", where: at.where }
+  if (at.tab === "specs" && at.spec != null) return { at: "spec", ask: at.spec }
+  return { at: "tab", tab: at.tab }
+}
+
+let closer: (() => boolean) | null = null
+
+export function setCloser(next: (() => boolean) | null): void {
+  closer = next
+}
+
+export const closeFocused = (): boolean => closer?.() ?? false
 
 export function showDoc(code: string, id: string | null, doc: Doc, shown: boolean): void {
   const layout = layoutOf(code)
@@ -237,3 +328,5 @@ export function setDrag(next: Drag | null): void {
   drag = next
   for (const l of dragListeners) l()
 }
+
+const layouts = load()
