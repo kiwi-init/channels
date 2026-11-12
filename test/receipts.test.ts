@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Message } from "./protocol.ts";
-import type { ChannelState } from "./state.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
+import type { ChannelState } from "@kiwi/core/state.ts";
 
-import { addMarks, onIt, readAt, receipt, recipients, waitsLines, waitsOf, type Busy, type Marks, type Reached } from "./receipts.ts";
+import { addMarks, onIt, readAt, receipt, recipients, waitsLines, waitsOf, type Busy, type Marks, type Reached } from "@kiwi/core/receipts.ts";
 
 type Who = { kind?: string; owner?: boolean; active: boolean; joined: number };
 const members = new Map<string, Who>([
