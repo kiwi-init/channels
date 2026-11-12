@@ -1389,7 +1389,7 @@
   margin: 0;
   padding: 0;
   background: var(--decide);
-  box-shadow: 0 0 0 2px var(--bg-2);
+  box-shadow: 0 0 0 2px var(--bg);
   font-size: 0;
 }
 
