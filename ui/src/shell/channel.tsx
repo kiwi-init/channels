@@ -18,19 +18,11 @@ import { usePanelWidth } from "~/shell/panel-width"
 import { Frame } from "~/shell/frame"
 import { useDrawer } from "~/shell/side"
 import { Content } from "~/shell/content"
+import { FocusScope, Panes, placeName } from "~/panes/panes"
 import { Sidebar, ViewsBar } from "~/shell/sidebar"
 import { useTabs, useTopLayout } from "~/shell/top-layout"
 import { ActivityButton } from "~/chat/events"
-import { between, nickname } from "~/names"
 import { t } from "~/i18n/i18n"
-
-const VIEW_NAMES = {
-  chat: "shell.channel.views",
-  specs: "shell.channel.specs",
-  agents: "shell.channel.agents",
-  github: "shell.channel.github",
-  needs: "shell.channel.needs.you",
-} as const
 
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const OlderView = later(() => import("~/chat/older-view").then((m) => m.OlderView))
@@ -137,16 +129,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
     }
   }, [nav.panel, go, drawer])
 
-  const here =
-    nav.where.kind === "room"
-      ? `# ${channel.rooms.find((r) => r.id === (nav.where as { room: string }).room)?.name ?? "general"}`
-      : nav.where.kind === "dm"
-        ? `@ ${nickname(channel, nav.where.with)}`
-        : nav.where.kind === "theirs"
-          ? between(channel, nav.where.between)
-          : `T${nav.where.task}`
-
-  const title = nav.tab === "chat" ? here : t(VIEW_NAMES[nav.tab])
+  const title = placeName(channel, nav)
   const news = drawerNews(channel)
 
   return (
@@ -172,29 +155,38 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           <IconButton icon="search" label={t("shell.channel.search", { keys: keysHint("F") })} onClick={() => setSearching(true)} />
         </div>
       }
-      side={<Sidebar channel={channel} views={!top} />}
+      side={
+        <FocusScope code={channel.code}>
+          <Sidebar channel={channel} views={!top} />
+        </FocusScope>
+      }
     >
       <Content>
         {top && <ViewsBar channel={channel} />}
-        <main className="main" aria-label={tabs ? title : undefined}>
-          <Boundary resetKey={nav.tab}>
-            <Suspense fallback={null}>
-              {older ? (
-                <OlderView channel={channel} older={older} onBack={() => setOlder(null)} />
-              ) : nav.tab === "agents" ? (
-                <Lanes channel={channel} />
-              ) : nav.tab === "github" ? (
-                <GithubView channel={channel} />
-              ) : nav.tab === "specs" ? (
-                <SpecsView channel={channel} />
-              ) : nav.tab === "needs" ? (
-                <NeedsYou channel={channel} onJump={setJump} />
-              ) : (
-                <Conversation channel={channel} jump={jump} />
-              )}
-            </Suspense>
-          </Boundary>
-        </main>
+        <Panes
+          channel={channel}
+          label={tabs ? title : undefined}
+          place={<PlaceView channel={channel} />}
+          main={
+            <Boundary resetKey={nav.tab}>
+              <Suspense fallback={null}>
+                {older ? (
+                  <OlderView channel={channel} older={older} onBack={() => setOlder(null)} />
+                ) : nav.tab === "agents" ? (
+                  <Lanes channel={channel} />
+                ) : nav.tab === "github" ? (
+                  <GithubView channel={channel} />
+                ) : nav.tab === "specs" ? (
+                  <SpecsView channel={channel} />
+                ) : nav.tab === "needs" ? (
+                  <NeedsYou channel={channel} onJump={setJump} />
+                ) : (
+                  <Conversation channel={channel} jump={jump} />
+                )}
+              </Suspense>
+            </Boundary>
+          }
+        />
         {second && (
           <Suspense fallback={null}>
             <Tracker channel={channel} />
@@ -227,6 +219,16 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       <ModalView channel={channel} />
     </Frame>
   )
+}
+
+function PlaceView({ channel }: { channel: Channel }) {
+  const nav = useNav()
+  const [jump, setJump] = useState<Jump | null>(null)
+  if (nav.tab === "agents") return <Lanes channel={channel} />
+  if (nav.tab === "github") return <GithubView channel={channel} />
+  if (nav.tab === "specs") return <SpecsView channel={channel} />
+  if (nav.tab === "needs") return <NeedsYou channel={channel} onJump={setJump} />
+  return <Conversation channel={channel} jump={jump} />
 }
 
 function PanelView({ channel }: { channel: Channel }) {

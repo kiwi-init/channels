@@ -19,6 +19,7 @@ import { faceOf, needsYou, tasksOf, workersOf } from "~/specs/read"
 import { NowCard } from "~/tasks/now"
 import { TaskRow } from "~/tasks/row"
 import { wordsPlain } from "~/words"
+import { dragOut } from "~/panes/drag"
 
 const LOOSE_SHOWN = 3
 const DONE_PAGE = 20
@@ -176,7 +177,12 @@ function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
   const shown = unfolded && open.length > 0
   return (
     <li className={cx("gh-item", shown && "is-unfolded")}>
-      <button type="button" className="gh-row spec-row" onClick={() => go({ to: "spec", ask: spec.ask, part })}>
+      <button
+        type="button"
+        className="gh-row spec-row"
+        onClick={() => go({ to: "spec", ask: spec.ask, part })}
+        {...dragOut({ at: "doc", doc: { kind: "spec", ask: spec.ask } }, wordsPlain(spec.title, channel.nicknames))}
+      >
         <SpecMark spec={spec} />
         <span className="gh-title">
           <Shown value={spec.title} />
