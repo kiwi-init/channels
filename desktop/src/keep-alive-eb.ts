@@ -1,13 +1,17 @@
 import Electrobun, { Utils } from "electrobun/main";
 
 import { keepDaemon } from "./bundled-daemon.ts";
+import { stopCliWork } from "./cli.ts";
 import { ebHost } from "./host-eb.ts";
 import { logMainError } from "./main-log.ts";
 import { messageBox } from "./message-box-eb.ts";
 import { keepPageAlive } from "./page-crash.ts";
 
 let quitting = false;
-Electrobun.events.on("before-quit", () => void (quitting = true));
+Electrobun.events.on("before-quit", () => {
+  quitting = true;
+  stopCliWork();
+});
 
 export function watchPage(): void {
   const gone = keepPageAlive({
