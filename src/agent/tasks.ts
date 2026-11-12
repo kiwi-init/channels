@@ -325,11 +325,12 @@ export class SessionTasks extends SessionMessaging {
       const { state } = yield* this.state();
       const target = (yield* this.resolveTo([to], state))?.[0];
       if (!target || !state.members.get(target)?.active) return yield* new Rejected(`no member named ${to}`);
-      if (target === this.me) return yield* new Rejected("hand it to someone else");
+      const task = state.tasks.get(id);
+      if (target === this.me && !(task && !task.owner && task.leftBy)) return yield* new Rejected("hand it to someone else");
       const after = yield* this.taskUpdate(id, {
         owner: target,
         ...(next ? { note: next } : {}),
-        ...(state.tasks.get(id)?.state === "doing" ? { state: "todo" as const } : {}),
+        ...(task?.state === "doing" ? { state: "todo" as const } : {}),
       });
       return first ? yield* this.taskFirst(id) : after;
     },

@@ -154,6 +154,11 @@ function membersOnly(c: FoldCtx, member: FoldMember, m: Message, ev: { members: 
   return null;
 }
 
+const departed = (c: FoldCtx, name: string): boolean => {
+  const owner = c.members.get(name);
+  return !!owner && !owner.owner && c.gone.has(owner.pk);
+};
+
 const runsOf = (runs: number[]): { runs?: number[] } => (runs.length ? { runs } : {});
 
 function runsAtHead(c: FoldCtx, t: Task, at: string | undefined): number[] {
@@ -598,7 +603,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (!task) reject(`no task ${taskId(ev.task)}`);
       else if (task.state === "done") reject(`${taskId(task.id)} is already done`);
       else if (task.state === "landing") reject(`${taskId(task.id)} is approved: its lander lands it`);
-      else if (task.owner && task.owner !== m.from) reject(`${taskId(task.id)} is owned by ${task.owner}`);
+      else if (task.owner && task.owner !== m.from && !departed(c, task.owner)) reject(`${taskId(task.id)} is owned by ${task.owner}`);
       else {
         task.owner = m.from;
         if (task.state === "todo") task.state = "doing";
