@@ -62,6 +62,7 @@ interface Rig {
   hosts?: Name[];
   reachable?: boolean;
   lose?: "response" | "post";
+  staleAfter?: number;
 }
 
 function seat(c: Channel, agent: Name, rig: Rig = {}) {
@@ -77,7 +78,14 @@ function seat(c: Channel, agent: Name, rig: Rig = {}) {
       wanted: async () => set.wanted ?? true,
       wakes: async () => set.wakes ?? true,
       reachable: () => set.reachable ?? true,
-      stateOf: async () => c.state(),
+      stateOf: async () =>
+        set.staleAfter
+          ? fold(
+              c.log.filter((m) => m.seq <= set.staleAfter!),
+              roster,
+              c.now(),
+            )
+          : c.state(),
       nudge: async (ev, to) => {
         if (set.lose === "post") return null;
         const m = await c.ev(agent, ev, to);
@@ -435,5 +443,43 @@ describe("one waker (#3930 §2, cases 2 and 22)", () => {
     const posting = seat(c, "owl");
     await posting.w.look();
     expect(c.events("task.nudge").at(-1)!.ev).toEqual({ op: "task.nudge", task: id, mover: "mac", since: epoch, step: 2, wake: "read" });
+  });
+});
+
+describe("a refused quiet mark (#2319)", () => {
+  test("a mark the host refuses is not retried while the clock stays ahead of the daemon's view", async () => {
+    const c = channel();
+    const id = (await c.ev("owl", { op: "task.add", title: "ship" })).seq;
+    const lead = seat(c, "owl", { staleAfter: id });
+    await c.ev("owl", { op: "task.update", task: id, owner: "win" });
+    c.wait(2 * N + UNREAD_MS);
+    await lead.w.look();
+    const refused = c.log.filter((m) => m.ev?.op === "task.nudge");
+    expect(refused).toHaveLength(1);
+    expect(c.state().rejected.has(refused[0]!.seq)).toBe(true);
+    c.wait(61_000);
+    await lead.w.look();
+    c.wait(61_000);
+    await lead.w.look();
+    expect(c.log.filter((m) => m.ev?.op === "task.nudge")).toHaveLength(1);
+    lead.set.staleAfter = undefined;
+    c.wait(2 * N);
+    await lead.w.look();
+    const after = c.log.filter((m) => m.ev?.op === "task.nudge");
+    expect(after).toHaveLength(2);
+    expect(c.state().rejected.has(after[1]!.seq)).toBe(false);
+  });
+
+  test("a due escalation on another member's clock still posts once", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    const lead = seat(c, "owl");
+    c.wait(2 * N);
+    await lead.w.look();
+    expect(c.events("task.nudge").map((m) => m.ev)).toEqual([{ op: "task.nudge", task: id, mover: "mac", since: epoch, step: 2, wake: "none" }]);
+    c.wait(61_000);
+    await lead.w.look();
+    expect(c.events("task.nudge")).toHaveLength(1);
+    expect(c.state().rejected.size).toBe(0);
   });
 });
