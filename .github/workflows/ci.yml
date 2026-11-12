@@ -623,6 +623,7 @@ jobs:
         timeout-minutes: 8
         run: |
           ax() { osascript -l JavaScript -e 'ObjC.import("AppKit"); const w = $.NSWorkspace.sharedWorkspace; `reduce transparency ${w.accessibilityDisplayShouldReduceTransparency}, increase contrast ${w.accessibilityDisplayShouldIncreaseContrast}`'; }
+          echo "what draws this screen: $(system_profiler SPDisplaysDataType 2> /dev/null | grep -E 'Chipset Model|Vendor|Metal|Resolution' | sed -E 's/^ +//' | paste -sd ';' -), $(sysctl -n hw.model), macOS $(sw_vers -productVersion)"
           echo "this machine, as it comes: $(ax)"
           for key in reduceTransparency increaseContrast; do echo "com.apple.universalaccess $key: $(defaults read com.apple.universalaccess "$key" 2>&1 | tail -n 1), for every user: $(defaults read /Library/Preferences/com.apple.universalaccess "$key" 2>&1 | tail -n 1)"; done
           defaults write com.apple.universalaccess reduceTransparency -bool false || echo "the user's Reduce transparency can't be written"
