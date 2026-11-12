@@ -7,7 +7,7 @@ import { home } from "../config.ts";
 export function personaMark(p: Persona | undefined): string {
   if (!p) return "none";
   return createHash("sha256")
-    .update(JSON.stringify([p.name, p.role, p.capabilities, p.areas, p.instructions]))
+    .update(JSON.stringify([p.name, p.role, p.capabilities, p.areas, p.instructions, ...(p.askPeople === undefined ? [] : [p.askPeople])]))
     .digest("hex")
     .slice(0, 32);
 }
