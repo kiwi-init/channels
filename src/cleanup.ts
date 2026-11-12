@@ -1,15 +1,20 @@
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { delimiter, join, resolve, sep } from "node:path";
+import { delimiter, isAbsolute, join, resolve, sep } from "node:path";
 
 const OLD_PACKAGES = new Set(["kiwi", "channel-one", "modelchannel"]);
 const OLD_COMMANDS = ["mc", "kiwi", "mc.exe", "kiwi.exe"];
 const UPDATE_DIR = /^kiwi-update-/;
 const DAY_MS = 86_400_000;
+const UUID = "[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}";
+const HALF_MADE_CLI = new RegExp(`^kiwi(?:\\.exe)?\\.new-(\\d+)-${UUID}(?:\\.cstemp)?$`);
+const HALF_MADE_APP_CLI = new RegExp(`^kiwi-.+\\.new-(\\d+)-${UUID}(?:\\.cstemp)?$`);
+const APP_ID = /^com\.kiwiinit\.channels(?:\.[A-Za-z0-9.-]+)?$/;
 
 export interface CleanupPlaces {
   home: string;
   bin: string;
+  apps?: string;
   tmp?: string;
   bun?: string;
   path?: string;
@@ -48,10 +53,32 @@ function entries(dir: string): string[] {
   }
 }
 
+function halfMade(dir: string, name: RegExp, out: Cleaned): void {
+  for (const f of entries(dir)) {
+    const made = name.exec(f);
+    if (made && !alive(Number(made[1]))) remove(join(dir, f), out);
+  }
+}
+
 function updateDebris(bin: string, out: Cleaned): void {
   for (const f of entries(bin)) {
     const upgrade = /^\.kiwi-upgrade-(\d+)-[A-Za-z0-9]+$/.exec(f);
     if (/^kiwi(\.exe)?\.new-\d+$/.test(f) || (upgrade && !alive(Number(upgrade[1])))) remove(join(bin, f), out);
+  }
+  halfMade(bin, HALF_MADE_CLI, out);
+}
+
+function appsData(): string {
+  if (process.platform === "darwin") return join(homedir(), "Library", "Application Support");
+  const set = process.platform === "win32" ? process.env.LOCALAPPDATA : process.env.XDG_DATA_HOME;
+  if (set && isAbsolute(set)) return set;
+  return process.platform === "win32" ? join(homedir(), "AppData", "Local") : join(homedir(), ".local", "share");
+}
+
+function appDebris(apps: string, out: Cleaned): void {
+  for (const id of entries(apps)) {
+    if (!APP_ID.test(id)) continue;
+    for (const channel of entries(join(apps, id))) halfMade(join(apps, id, channel, "bin"), HALF_MADE_APP_CLI, out);
   }
 }
 
@@ -144,6 +171,7 @@ function shadowing(bin: string, path: string, out: Cleaned): void {
 export function cleanup(places: CleanupPlaces): Cleaned {
   const out: Cleaned = { removed: [], warnings: [] };
   updateDebris(places.bin, out);
+  appDebris(places.apps ?? appsData(), out);
   deadListenerFiles(places.home, out);
   oldUpdates(places.tmp ?? tmpdir(), places.now ?? Date.now(), out);
   bunShims(places.bun ?? process.env.BUN_INSTALL ?? join(homedir(), ".bun"), out);
