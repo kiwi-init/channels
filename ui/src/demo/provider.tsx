@@ -327,7 +327,16 @@ function withReviewReset(c: Channel): Channel {
     ...c,
     reviewReset: true,
     people: c.people.map((p) =>
-      p.name === "atlas" ? { ...p, reset: { kind: "needs" as const, verdict: 4711 }, sharesSession: ["pixel"] } : p.name === "pixel" ? { ...p, sharesSession: ["atlas"] } : p
+      p.name === "atlas"
+        ? {
+            ...p,
+            reset: { kind: "needs" as const, verdict: 4711 },
+            sharesSession: ["pixel"],
+            sharesElsewhere: [{ room: "ab".repeat(16), alias: "ops", agent: "sentry", work: [{ kind: "review" as const, task: 31, round: 2 }] }],
+          }
+        : p.name === "pixel"
+          ? { ...p, sharesSession: ["atlas"] }
+          : p
     ),
   }
 }

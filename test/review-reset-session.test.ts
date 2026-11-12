@@ -4,8 +4,9 @@ import { sessionFingerprint } from "@kiwi/core/session-print.ts";
 import { sameCard } from "../src/card.ts";
 import { realSession, sessionNeighbours } from "../src/seats.ts";
 import type { Config } from "../src/config.ts";
-import { inFlight } from "../src/cli/commands/channel.ts";
+import { inFlight, workText } from "../src/shared-seats.ts";
 import { resetLine } from "@kiwi/core/state/reset.ts";
+import { readSharedSeat } from "@kiwi/core/shared-seats.ts";
 import type { Task } from "@kiwi/core/state.ts";
 
 const ROOM_A = "ab".repeat(16);
@@ -69,7 +70,11 @@ describe("one session serving seats in more than one channel, as this machine se
       [8, task(8, { owner: "toucan" })],
       [9, task(9, { owner: "other" })],
     ]);
-    expect(inFlight({ tasks }, "toucan")).toEqual(["round 2 of T7 to review", "T8 in progress"]);
+    expect(inFlight({ tasks }, "toucan")).toEqual([
+      { kind: "review", task: 7, round: 2 },
+      { kind: "doing", task: 8 },
+    ]);
+    expect(inFlight({ tasks }, "toucan").map(workText)).toEqual(["round 2 of T7 to review", "T8 in progress"]);
     expect(inFlight({ tasks }, "nobody")).toEqual([]);
   });
 });
@@ -87,5 +92,36 @@ describe("the status line for a reviewer", () => {
     );
     expect(resetLine({ reviewReset: true, members }, "kim")).toBe("may review from one session (waived)");
     expect(resetLine({ reviewReset: false, members }, "kim")).toBe("");
+  });
+});
+
+describe("what the desktop app reads back from kiwi seat shared --json", () => {
+  test("keeps well-formed seats and work, and drops the rest", () => {
+    const room = "ab".repeat(16);
+    expect(
+      readSharedSeat({
+        room,
+        alias: "here",
+        agent: "wren",
+        with: [{ room, alias: "there", agent: "toucan", work: [{ kind: "review", task: 7, round: 2 }, { kind: "doing", task: 8 }, { kind: "x" }] }],
+      }),
+    ).toEqual({
+      room,
+      alias: "here",
+      agent: "wren",
+      with: [
+        {
+          room,
+          alias: "there",
+          agent: "toucan",
+          work: [
+            { kind: "review", task: 7, round: 2 },
+            { kind: "doing", task: 8 },
+          ],
+        },
+      ],
+    });
+    expect(readSharedSeat({ room: "nope", alias: "here", agent: "wren", with: [] })).toBeNull();
+    expect(readSharedSeat({ room, alias: "here", agent: "wren", with: [{ room: "bad", alias: "there", agent: "toucan" }] })).toBeNull();
   });
 });

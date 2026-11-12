@@ -3,6 +3,7 @@ import type { TextFont } from "@kiwi/app/theme.ts"
 import type { GithubHealth } from "@kiwi/core/github-health.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
+import type { SharedWith } from "@kiwi/core/shared-seats.ts"
 import type { Reason } from "@kiwi/core/routing.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import type { DocBlockRef, GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
@@ -85,6 +86,7 @@ export interface Person {
   left?: boolean
   reset?: PersonReset
   sharesSession?: string[]
+  sharesElsewhere?: readonly SharedWith[]
 }
 
 type PersonReset = { kind: "waived" } | { kind: "needs"; verdict: number }

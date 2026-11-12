@@ -1,6 +1,7 @@
 import "~/i18n/en/modals"
 import "~/styles/person.css"
 
+import type { SharedWork } from "@kiwi/core/shared-seats.ts"
 import { Fragment, useState, type ReactNode } from "react"
 
 import type { Key } from "~/i18n/en"
@@ -67,6 +68,13 @@ export function Profile({ channel, name, onClose }: { channel: Channel; name: st
       sub={<Status person={person} />}
     >
       {person.about && <p className="person-about">{person.about}</p>}
+      {person.sharesElsewhere?.map((o) => (
+        <p key={`${o.room}/${o.agent}`} className={o.work.length ? "person-about tone-alert" : "person-about"}>
+          {o.work.length
+            ? t("modals.profile.shares.elsewhere.work", { who: `@${o.agent}`, channel: o.alias, work: o.work.map(workWords).join(", ") })
+            : t("modals.profile.shares.elsewhere", { who: `@${o.agent}`, channel: o.alias })}
+        </p>
+      ))}
       {!person.left && <Doors channel={channel} person={person} />}
       <Tasks channel={channel} person={person} />
       <Facts channel={channel} person={person} />
@@ -74,6 +82,9 @@ export function Profile({ channel, name, onClose }: { channel: Channel; name: st
     </Modal>
   )
 }
+
+const workWords = (w: SharedWork): string =>
+  w.kind === "review" ? t("modals.profile.work.review", { round: String(w.round), task: String(w.task) }) : t("modals.profile.work.doing", { task: String(w.task) })
 
 function Status({ person }: { person: Person }) {
   const { app } = useApp()
