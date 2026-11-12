@@ -43,26 +43,41 @@ try {
     await until("the window on screen", 60_000, async () => ((await d.main("window")) as { visible?: unknown }).visible === true || null);
     const win = windowOf();
     if (!win) throw new Error(problems.join("; "));
-    const gear = await until("the Settings gear on screen", 30_000, async () => {
-      const r = await d.evaluate(() => {
-        const g = document.querySelector(".rail-gear");
-        if (!g) return null;
-        const b = g.getBoundingClientRect();
-        return b.width > 0 ? { x: b.x + b.width / 2, y: b.y + b.height / 2 } : null;
-      }, null);
-      return r ?? null;
-    });
-    click(win, gear.x, gear.y, 1);
-    await until("Settings opens on a real click", 10_000, async () => (await d.evaluate(() => !!document.querySelector(".set"), null)) || null);
-    click(win, gear.x, gear.y, 1);
-    await until("Settings closes on the gear's second click", 10_000, async () => ((await d.evaluate(() => !!document.querySelector(".set"), null)) ? null : true) || null);
-    const before = sh(["xdotool", "getwindowgeometry", "--shell", win]);
-    click(win, gear.x, gear.y, 2);
-    await Bun.sleep(1500);
-    const after = sh(["xdotool", "getwindowgeometry", "--shell", win]);
-    const state = sh(["xprop", "-id", win, "_NET_WM_STATE"]);
-    if (state.includes("MAXIMIZED")) problems.push(`a double-click on the gear maximized the window (${state})`);
-    if (before !== after) problems.push(`a double-click on the gear moved or resized the window (${before} -> ${after})`);
+    console.log(`session: X11 under Xvfb (${process.env.DISPLAY})`);
+    for (const layout of [
+      { name: "wide (tabs)", width: 1280, height: 800 },
+      { name: "narrow (sidebar)", width: 700, height: 800 },
+    ]) {
+      spawnSync("xdotool", ["windowsize", win, String(layout.width), String(layout.height)], { stdio: "ignore" });
+      await until(`the ${layout.name} layout settled`, 10_000, async () => {
+        const r = await d.evaluate(() => (document.documentElement.hasAttribute("data-tabs") ? "tabs" : "sidebar"), null);
+        return (layout.name.startsWith("wide") ? r === "tabs" : r === "sidebar") || null;
+      });
+      const gear = await until(`the Settings gear on screen in the ${layout.name} layout`, 30_000, async () => {
+        const r = await d.evaluate(() => {
+          const g = document.querySelector(".rail-gear");
+          if (!g) return null;
+          const b = g.getBoundingClientRect();
+          return b.width > 0 ? { x: b.x + b.width / 2, y: b.y + b.height / 2 } : null;
+        }, null);
+        return r ?? null;
+      });
+      click(win, gear.x, gear.y, 1);
+      await until(`Settings opens on a real click in the ${layout.name} layout`, 10_000, async () => (await d.evaluate(() => !!document.querySelector(".set"), null)) || null);
+      click(win, gear.x, gear.y, 1);
+      await until(
+        `Settings closes on the gear's second click in the ${layout.name} layout`,
+        10_000,
+        async () => ((await d.evaluate(() => !!document.querySelector(".set"), null)) ? null : true) || null,
+      );
+      const before = sh(["xdotool", "getwindowgeometry", "--shell", win]);
+      click(win, gear.x, gear.y, 2);
+      await Bun.sleep(1500);
+      const after = sh(["xdotool", "getwindowgeometry", "--shell", win]);
+      const state = sh(["xprop", "-id", win, "_NET_WM_STATE"]);
+      if (state.includes("MAXIMIZED")) problems.push(`${layout.name}: a double-click on the gear maximized the window (${state})`);
+      if (before !== after) problems.push(`${layout.name}: a double-click on the gear moved or resized the window (${before} -> ${after})`);
+    }
   } finally {
     d.close();
   }
