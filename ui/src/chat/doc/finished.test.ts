@@ -4,7 +4,8 @@ import { appendToBlock, blocksOf, markBack, markPosted, newBlock, richBlocks, ty
 import { prosemirrorToYDoc } from "y-prosemirror"
 import * as Y from "yjs"
 
-import { docFeed, withDocMedia, withLines, withoutMediaNames } from "~/chat/doc/finished"
+import { docFeed } from "~/chat/doc/feed-of"
+import { withDocMedia, withLines, withoutMediaNames } from "~/chat/doc/finished"
 import { FRAGMENT, schema } from "~/chat/doc/schema"
 import type { Message } from "~/model"
 
