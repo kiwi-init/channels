@@ -45,6 +45,22 @@ const expect = (ok: boolean, what: string): void => {
 };
 const near = (a: number, b: number, by = 1): boolean => Math.abs(a - b) <= by;
 
+const clashes = (page: Page): Promise<string[]> =>
+  page.evaluate(() => {
+    const parts = [...document.querySelectorAll(".top button, .top input, .rail .tile")].flatMap((el) => {
+      const box = el.getBoundingClientRect();
+      const shown = box.width > 0 && box.height > 0 && box.top < 48 && getComputedStyle(el).visibility !== "hidden";
+      return shown ? [{ name: (el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 24) || el.className.toString(), box }] : [];
+    });
+    return parts.flatMap((a, i) =>
+      parts.slice(i + 1).flatMap((b) => (a.box.left < b.box.right && b.box.left < a.box.right && a.box.top < b.box.bottom && b.box.top < a.box.bottom ? [`${a.name} on ${b.name}`] : [])),
+    );
+  });
+const nothingClashes = async (page: Page, where: string): Promise<void> => {
+  const on = await clashes(page);
+  expect(on.length === 0, `nothing in the top row sits on anything else, ${where}${on.length ? `: ${on.join("; ")}` : ""}`);
+};
+
 const boxOf = (page: Page, selector: string): Promise<Box | null> =>
   page.evaluate((s) => {
     const el = document.querySelector(s);
@@ -103,12 +119,12 @@ try {
       const side = box(".side");
       const gear = box(".rail-gear");
       const first = box(".side-chan");
-      const search = box(".top-tools .icon-btn:last-child");
-      return side && gear && first && search && tiles.length
+      const toggle = box(".top-drawer");
+      return side && gear && first && toggle && tiles.length
         ? {
             rows: new Set(tiles.map((tile) => Math.round(tile.top))).size,
             sizes: [...new Set(tiles.map((tile) => tile.height))],
-            left: tiles[0]!.left - search.right,
+            left: tiles[0]!.left - toggle.right,
             under: first.top - Math.max(...tiles.map((tile) => tile.bottom)),
             listEnd: side.bottom,
             gearTop: gear.top,
@@ -127,8 +143,9 @@ try {
     expect(!cropped, "a tab's badge is not cropped by the strip");
     expect(
       !!shell && shell.rows === 1 && shell.sizes.length === 1 && near(shell.left, 16),
-      `the channel tabs are one height, in one line, 16px after Search (${shell?.sizes.join(", ")} high, ${shell?.left} after)`,
+      `the channel tabs are one height, in one line, 16px after the sidebar button (${shell?.sizes.join(", ")} high, ${shell?.left} after)`,
     );
+    await nothingClashes(page, "on the Mac");
     expect(!!shell && near(shell.under, 8), `the channel's name starts 8px under the tabs (${shell?.under})`);
     expect(!!shell && shell.listEnd <= shell.gearTop && near(shell.gearFoot, 8), "Settings sits in the bottom-left corner, under the list");
 
@@ -182,12 +199,12 @@ try {
       expect(near(column.left, 0) && near(column.right, 0), `faces start on the composer's left edge and your bubbles end on its right edge (${column.left.toFixed(1)}, ${column.right.toFixed(1)})`);
 
     const HEAD = [".top-drawer", ".top-tools .icon-btn:last-child"];
-    const pair = await page.evaluate(() => {
-      const toggle = document.querySelector(".top-drawer")?.getBoundingClientRect();
-      const search = document.querySelector(".top-tools .icon-btn:last-child")?.getBoundingClientRect();
-      return toggle && search ? search.left - toggle.right : null;
+    const ends = await page.evaluate(() => {
+      const search = document.querySelector(".top-tools > .icon-btn:last-child")?.getBoundingClientRect();
+      const add = document.querySelector(".tile.is-add")?.getBoundingClientRect();
+      return search && add ? { search: innerWidth - search.right, after: search.left - add.right } : null;
     });
-    expect(pair !== null && near(pair, 8), `Search sits 8px after the sidebar button (${pair})`);
+    expect(!!ends && near(ends.search, 8) && ends.after >= 8, `Search sits at the far end of the top row, 8px in, after the tabs (${ends?.search} in, ${ends?.after} after)`);
     const before = await placesOf(page, HEAD);
     const sideBefore = await placesOf(page, SIDE);
     const tabsBefore = await placesOf(page, TABS);
@@ -238,11 +255,10 @@ try {
     await page.click(".top-tools .icon-btn:last-child");
     await page.waitForTimeout(1500);
     const find = await boxOf(page, ".top-find .search-field");
-    const toggle = await boxOf(page, ".top-drawer");
     const tools = await boxOf(page, ".top-tools");
     expect(
-      !!find && !!toggle && !!tools && near(find.left, toggle.right + 8) && near(tools.right - find.right, 8),
-      `search grows from its button, beside the sidebar button (${find?.left} to ${find?.right})`,
+      !!find && !!tools && near(find.right, width - 8) && near(tools.right - find.right, 8) && near(find.left - tools.left, 8),
+      `search grows from its button, at the row's far end (${find?.left} to ${find?.right})`,
     );
     await page.getByRole("combobox").first().fill("bundle");
     await page.waitForTimeout(900);
@@ -351,7 +367,8 @@ try {
     const page = await browser.newPage({ viewport: { width, height } });
     await open(page, "channel-top");
     const strip = await boxOf(page, ".top");
-    const search = await boxOf(page, ".top-tools .icon-btn:last-child");
+    const toggle = await boxOf(page, ".top-drawer");
+    const search = await boxOf(page, ".top-tools > .icon-btn:last-child");
     const home = await boxOf(page, ".tile.is-home");
     const tab = await boxOf(page, ".tile[data-code]");
     const add = await boxOf(page, ".tile.is-add");
@@ -368,7 +385,9 @@ try {
       !!strip && !!home && !!tab && !!add && home.bottom <= strip.bottom && near(home.y, tab.y) && near(tab.y, add.y),
       `the channels are one line of tabs in the top strip (${home?.y}, ${tab?.y}, ${add?.y} of ${strip?.bottom})`,
     );
-    expect(!!search && !!home && home.left >= search.right, `the tabs start after the search button (${home?.left} after ${search?.right})`);
+    expect(!!toggle && !!home && home.left >= toggle.right, `the tabs start after the sidebar button (${home?.left} after ${toggle?.right})`);
+    expect(!!search && !!add && add.right <= search.left && near(search.right, width - 8), `and end before Search, at the row's far end (${add?.right} before ${search?.left})`);
+    await nothingClashes(page, "in Top bar");
     expect(names.length > 0 && names.every(Boolean), `every tab shows its channel's whole name (${names.filter(Boolean).length} of ${names.length})`);
     expect(rows.length >= 3 && new Set(rows).size === 1, `the views are one row (${rows.length} in ${new Set(rows).size} row)`);
     expect(!!bar && !!strip && bar.top >= strip.bottom, `on their own line, under the tabs (${bar?.top} of ${strip?.bottom})`);
@@ -380,8 +399,9 @@ try {
     await page.locator(".top-tools .icon-btn").last().click();
     await page.waitForTimeout(500);
     const find = await boxOf(page, ".top-find");
-    const homeAside = await boxOf(page, ".tile.is-home");
-    expect(!!find && !!homeAside && homeAside.left >= find.right, `the tabs make room for the search field (${homeAside?.left} after ${find?.right})`);
+    const tabs = await boxOf(page, ".rail");
+    expect(!!find && !!tabs && tabs.right <= find.left && near(find.right, width - 8), `the search field opens at the far end and the tabs make room for it (${tabs?.right} before ${find?.left})`);
+    await nothingClashes(page, "while searching");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(500);
     await page.locator(".views-bar .side-row", { hasText: "Specs" }).click();
@@ -433,6 +453,27 @@ try {
     expect(over <= 0, `nothing scrolls sideways (${over}px over)`);
     expect(!!strip && tabs.length > 0 && tabs.every((bottom) => bottom <= strip.bottom), "the tabs are still one line");
     await page.close();
+  }
+  for (const mac of [false, true]) {
+    for (const shot of ["settings-devices", "home"]) {
+      console.log(`\n${shot}${mac ? ", on the Mac" : ""}`);
+      const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+      if (mac)
+        await page.addInitScript(() => {
+          const mark = (): void => void (document.documentElement.dataset["shell"] = "mac");
+          if (document.documentElement) mark();
+          else document.addEventListener("DOMContentLoaded", mark);
+        });
+      await page.goto(`${base}?shot=${shot}&theme=dark`);
+      await page.waitForSelector(".tile.is-home", { state: "attached" });
+      await page.waitForTimeout(900);
+      const back = await boxOf(page, ".set-back");
+      const home = await boxOf(page, ".tile.is-home");
+      expect(!!home && home.bottom <= 48, "the tabs are in the top row");
+      if (shot === "settings-devices") expect(!!back && !!home && home.left >= back.right, `the tabs start after the Settings title (${home?.left} after ${back?.right})`);
+      await nothingClashes(page, "here");
+      await page.close();
+    }
   }
   for (const [width, height] of [
     [1000, 760],

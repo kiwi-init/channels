@@ -225,8 +225,6 @@ try {
   await shot("search-jump");
   await page.keyboard.press("ControlOrMeta+f");
   if (!(await search.evaluate((el) => el === document.activeElement))) throw new Error("the search shortcut did not focus the open search field");
-  await search.blur();
-  await results.waitFor({ state: "detached" });
   await views.getByRole("button", { name: /^Specs/ }).click();
   await page.locator('section[aria-label="Rooms"] button').filter({ hasText: "general" }).click();
   await row("hello from bot").first().waitFor({ timeout: 15000 });
