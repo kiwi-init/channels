@@ -235,6 +235,31 @@ describe("the composer writes into the thread's doc (T5115)", () => {
     live.destroy()
   })
 
+  test("the post's words leave out the picture it carries and still name the file, and the block keeps both", async () => {
+    const { live, posts, open } = liveFor("jow")
+    const pdf: Upload = { name: "notes.pdf", mime: "application/pdf", data: "JVBERi0=" }
+    const png: Upload = { name: "shot.png", mime: "image/png", data: "iVBORw==" }
+    live.say("the notes", null, () => {}, putAll([pdf, png], media))
+    open()
+    await wait(5)
+    expect(posts[0]!.text.split("\n").toSorted()).toEqual(["[file: notes.pdf]", "the notes"])
+    expect(blocksOf(live.doc)[0]!.text).toContain("[image: shot.png]")
+    live.destroy()
+  })
+
+  test("a picture sent with no words posts no words", async () => {
+    const { live, posts, open } = liveFor("jow")
+    const png: Upload = { name: "shot.png", mime: "image/png", data: "iVBORw==" }
+    live.say("", null, () => {}, putAll([png], media))
+    await wait(5)
+    open()
+    await wait(5)
+    expect(posts).toHaveLength(1)
+    expect(posts[0]!.text).toBe("")
+    expect(posts[0]!.media?.imgs.map((i) => i.name)).toEqual(["shot.png"])
+    live.destroy()
+  })
+
   test("a line with no picture or file posts without any", async () => {
     const { live, posts, open } = liveFor("jow")
     live.say("just words", null, () => {})

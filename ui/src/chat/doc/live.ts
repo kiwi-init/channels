@@ -9,7 +9,7 @@ import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import { mirrorAware } from "@kiwi/core/doc/pipe.ts"
 import type { DocBlockRef } from "@kiwi/core/protocol.ts"
 import type { DocEvent, WireError } from "../../../../desktop/src/bridge.ts"
-import { filesOf } from "~/chat/doc/files-of"
+import { filesOf, withoutPictures } from "~/chat/doc/files-of"
 import { giveBackBlock } from "~/chat/doc/give-back"
 import { madeHere, thisWindow, type MadeLines } from "~/chat/doc/made"
 import { afterUploads, startUpload, uploading } from "~/chat/doc/uploads"
@@ -253,7 +253,12 @@ export class LiveDoc implements Shared {
     else {
       const media = filesOf(this.doc, b.id)
       void this.poster
-        .post(b.text, { th: this.opened, id: b.id }, b.re ? { re: b.re, ...(b.quote ? { quote: b.quote } : {}) } : undefined, media.imgs.length || media.files.length ? media : undefined)
+        .post(
+          withoutPictures(b.text, media.imgs),
+          { th: this.opened, id: b.id },
+          b.re ? { re: b.re, ...(b.quote ? { quote: b.quote } : {}) } : undefined,
+          media.imgs.length || media.files.length ? media : undefined
+        )
         .then((went) => {
           if (!went) failed()
         })

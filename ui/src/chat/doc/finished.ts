@@ -30,13 +30,8 @@ export function withDocMedia(m: Message, media: BlockFiles | undefined): Message
   return imgs.length || files.length ? { ...m, docMedia: { imgs, files } } : m
 }
 
-export function mediaNames(m: Pick<Message, "block" | "images" | "docMedia">): string[] {
-  const own = m.block === undefined ? [] : (m.images ?? [])
-  return [...own.map((i) => `[image: ${i.alt}]`), ...(m.docMedia?.imgs ?? []).map((i) => `[image: ${i.name}]`), ...(m.docMedia?.files ?? []).map((f) => `[file: ${f.name}]`)]
-}
-
-export function withoutMediaNames(text: string, names: readonly string[]): string {
-  if (!names.length) return text
+export function withoutMediaNames(text: string, media: BlockFiles): string {
+  const names = [...media.imgs.map((i) => `[image: ${i.name}]`), ...media.files.map((f) => `[file: ${f.name}]`)]
   return names
     .reduce((t, n) => t.split(n).join(""), text)
     .replace(/[ \t]+\n/g, "\n")
