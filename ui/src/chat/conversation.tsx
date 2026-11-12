@@ -7,7 +7,7 @@ import { showActivity } from "~/chat/activity"
 import { splitUpdates } from "~/chat/split-updates"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
 import { docFeeds, EMPTY_FEED, withDocMedia, withLines } from "~/chat/doc/finished"
-import { inFeed, postedBlocks } from "~/chat/doc/posted"
+import { arrivals, docLines, inFeed, postedBlocks } from "~/chat/doc/posted"
 import { chatterLine, chatterRuns, type ChatterRun } from "~/chat/chatter"
 import { MessageRow } from "~/chat/message"
 import { useStick } from "~/chat/stick"
@@ -402,14 +402,17 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
 
   const last = list.at(-1)
   const lastSeq = useRef(last?.seq ?? 0)
+  const lines = useRef(docLines(list))
   useLayoutEffect(() => {
     const before = lastSeq.current
+    const shown = lines.current
     lastSeq.current = last?.seq ?? 0
+    lines.current = docLines(list)
     if (!last || last.seq === before) {
       if (doc) settle()
       return
     }
-    const arriving = before ? list.filter((m) => m.seq > before) : []
+    const arriving = before ? arrivals(list, before, shown) : []
     if (arriving.length <= 3) {
       for (const m of arriving) {
         if (m.from === channel.you && !m.pending) continue
