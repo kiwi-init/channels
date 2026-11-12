@@ -498,6 +498,9 @@ jobs:
       - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
+      - name: ui Back and Forward in the top bar walk a room, a spec, Settings and Home and back, are off exactly when they can't move, and stay clear of the top bar at every size, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-history-arrows.ts --dist ui/dist
       - name: ui a refused copy selects the whole command and offers it by hand, and a landed one doesn't, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-copy-recovers.ts --dist ui/dist

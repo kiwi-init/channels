@@ -1,6 +1,7 @@
 import "~/i18n/en/shell-later"
 import "~/styles/start.css"
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
+import { HistoryArrows } from "~/shell/history-arrows"
 
 import { takeTurns } from "~/home"
 import { Avatar, cx } from "~/kit/bits"
@@ -27,6 +28,9 @@ function Empty() {
     <main className="start-area">
       {intro && <Onboarding onDone={() => setIntro(false)} />}
       <div className="start-drag" />
+      <div className="home-history">
+        <HistoryArrows />
+      </div>
       <div className="start-welcome start-home">
         <h1 className="start-title">{t("start.welcome.no.channels")}</h1>
         <div className="start-choices">
@@ -71,6 +75,9 @@ function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly Ho
   return (
     <main className="start-area home-area">
       <div className="start-drag" />
+      <div className="home-history">
+        <HistoryArrows />
+      </div>
       <div className="calm">
         {asks.length > 0 && (
           <section className="calm-sec" aria-label={t("start.welcome.waiting.on.you")}>

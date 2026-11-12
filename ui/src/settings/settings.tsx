@@ -1,4 +1,5 @@
 import "~/i18n/en/settings"
+import { HistoryArrows } from "~/shell/history-arrows"
 
 import { PaintBoardIcon } from "@hugeicons/core-free-icons"
 import { useEffect } from "react"
@@ -40,9 +41,11 @@ export function Settings() {
   return (
     <div className="set">
       <header className="top set-top">
+        <div className="set-top-lead">
+          <HistoryArrows />
+        </div>
         <h1 className="set-top-title">
           <button type="button" className="set-back" title={t("settings.settings.back")} onClick={() => go({ to: "back" })}>
-            <Icon name="back" size={14} />
             {t("settings.settings.title")}
           </button>
         </h1>
