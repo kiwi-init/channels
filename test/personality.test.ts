@@ -3,7 +3,7 @@ import { newChannelKey } from "@kiwi/core/crypto.ts";
 import { formatStatus } from "@kiwi/core/format.ts";
 import { generateIdentity, sign } from "@kiwi/core/identity.ts";
 import { makeRecord, openRecord, readRecord, sealRecord } from "@kiwi/core/membership.ts";
-import { asksPeople, CAPABILITIES, capabilityLine, cleanPersona, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, personaLines, personaOf, personaScopes } from "@kiwi/core/personality.ts";
+import { asksPeople, CAPABILITIES, cleanPersona, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, personaLines, personaOf, personaScopes } from "@kiwi/core/personality.ts";
 import { makePin, pinned, readPin } from "@kiwi/core/pin.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
 import { presetOf } from "@kiwi/core/scopes.ts";
@@ -67,12 +67,9 @@ describe("a personality", () => {
     expect(await pinned(pin, [{ ...mine, instructions: "Something else." }])).toBeNull();
   });
 
-  test("the brief and the one-line summary name it only for an agent that has it", () => {
+  test("the brief names it only for an agent that has it", () => {
     expect(personaLines(builder)[0]).toContain("You may write and ask, work tasks,");
     expect(personaLines({ ...builder, askPeople: true })[0]).toContain("You may write and ask, ask people, work tasks,");
-    expect(capabilityLine({ ...builder, askPeople: true })).toStartWith("write and ask · ask people · work tasks");
-    expect(capabilityLine(builder)).toStartWith("write and ask · work tasks");
-    expect(capabilityLine({ role: "lead", capabilities: [] })).toBe("reads only");
   });
 });
 

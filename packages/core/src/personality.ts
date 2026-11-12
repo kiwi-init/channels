@@ -26,14 +26,7 @@ const CAPABILITY_LABEL: Record<Capability, string> = {
   notes: "set notes",
 };
 
-const ASKS_PEOPLE: Record<Role, boolean> = {
-  builder: false,
-  reviewer: false,
-  "bug-hunter": false,
-  explorer: true,
-  releaser: true,
-  lead: true,
-};
+const ASKS_PEOPLE: readonly Role[] = ["explorer", "releaser", "lead"];
 
 export const MAX_NAME = 40;
 export const MAX_AREAS = 20;
@@ -79,7 +72,7 @@ export function personaOf(p: Personality): Persona {
 }
 
 export function asksPeople(p: Pick<Persona, "role" | "capabilities" | "askPeople">): boolean {
-  return p.capabilities.includes("write") && (p.askPeople ?? ASKS_PEOPLE[p.role]);
+  return p.capabilities.includes("write") && (p.askPeople ?? ASKS_PEOPLE.includes(p.role));
 }
 
 const mayOf = (p: Pick<Persona, "role" | "capabilities" | "askPeople">): string[] =>
@@ -110,10 +103,6 @@ export function personaLines(p: Persona, now = false): string[] {
     `You ${now ? "are now" : "join as"} ${oneLine(personaLabel(p) ?? "")}.${may.length ? ` You may ${may.join(", ")}.` : " You may only read."}${p.areas.length ? ` You work in ${p.areas.map(oneLine).join(", ")}.` : ""}`,
     ...(told ? [`Your instructions: ${told}`] : []),
   ];
-}
-
-export function capabilityLine(p: Pick<Persona, "role" | "capabilities" | "askPeople">): string {
-  return p.capabilities.length ? mayOf(p).join(" · ") : "reads only";
 }
 
 export function carriedPersona(lead: boolean, role: string | undefined, about: string | undefined, scopes: readonly Scope[]): Persona | undefined {

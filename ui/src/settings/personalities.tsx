@@ -8,7 +8,7 @@ import { asksPeople, CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NA
 import { PRESETS } from "@kiwi/core/presets.ts"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
-import { useAppSince } from "~/live/app-can"
+import { useAppSince } from "~/settings/app-since"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { RoleFace } from "~/kit/role-face"
