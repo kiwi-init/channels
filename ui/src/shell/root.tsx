@@ -138,7 +138,7 @@ function Shown({ app, nav, go, broken }: RootProps) {
             ) : app.channel ? (
               <ScreenOnce key={app.channel.code} channel={app.channel} />
             ) : opening(app, nav) ? (
-              <Plain />
+              <Plain bare />
             ) : (
               <Plain title={app.gone ? app.gone.title : t("shell.rail.home")}>
                 <Suspense fallback={null}>{app.gone ? <Gone gone={app.gone} /> : <Welcome />}</Suspense>
@@ -181,14 +181,19 @@ function Shown({ app, nav, go, broken }: RootProps) {
   )
 }
 
-function Plain({ title, children }: { title?: string; children?: ReactNode }) {
+function Plain({ title, bare, children }: { title?: string; bare?: boolean; children?: ReactNode }) {
+  const empty = <div className="side" />
   return (
     <Frame
       title={title}
       side={
-        <Suspense fallback={<div className="side" />}>
-          <AppSide />
-        </Suspense>
+        bare ? (
+          empty
+        ) : (
+          <Suspense fallback={empty}>
+            <AppSide />
+          </Suspense>
+        )
       }
     >
       <Content>{children}</Content>
