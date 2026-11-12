@@ -466,10 +466,16 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   A thread keeps its own composer.
 - **Conversation.** Everyone else on the left with no bubbles, in the
   `--col` column; your own messages on the right as bubbles (the text on
-  accent 20% over `bg-2`, `r-win`, no face and no name, the time above, at
-  most 36rem wide), the way Messages tells the two sides apart. Everything a
-  message carries besides its text (pictures, a task chip, reactions, the
-  replies line) lines up on the same side, outside the bubble.
+  `bg-3`, `r-win`, no face and no name, the time above, at most 36rem
+  wide), the way Messages tells the two sides apart. A bubble is as wide as
+  its longest line and its lines are balanced, so a wrapped one leaves no
+  empty corner; `chat/hug.ts` measures it, because CSS cannot shrink a
+  wrapped box, and a bubble holding a code block, a table, a picture or a
+  diagram keeps its width. A run of your messages is one group: 2px apart,
+  with `r-tag` on the right corners that face each other. Everything a
+  message carries besides its text (the quote, pictures, files, a task
+  chip, reactions, the replies line) ends on the bubble's right edge,
+  outside the bubble.
   A message is a 32px face, 16px of gap, then the name (600), the "to you" or
   "asks you" word when it's for you, and the mono time, and the text in
   `t-body` under it. Role and harness are not repeated on every message: the

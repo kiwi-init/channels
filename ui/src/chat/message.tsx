@@ -297,7 +297,9 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             <Changes kind="editor" channel={channel} m={m} />
           </Suspense>
         ) : (
-          <Clamp on={who?.kind === "agent" && !inThread}>{body && <Body text={wrote(body)} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} />}</Clamp>
+          <Clamp on={who?.kind === "agent" && !inThread}>
+            {body && <Body text={wrote(body)} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} hug={m.from === channel.you} />}
+          </Clamp>
         )}
         {compact && m.edited !== undefined && !editing && (
           <span className="msg-edited" title={t("chat.message.edited.at", { time: clock(m.edited) })}>
