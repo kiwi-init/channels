@@ -24,9 +24,13 @@ const sh = (args: string[]): string => {
 
 const windowOf = (): string => {
   for (let i = 0; i < 60; i++) {
-    const win = sh(["xdotool", "search", "--class", "^Channels$"]);
-    if (win) return win.split("\n")[0]!;
-    if (i === 59) problems.push("no window with WM_CLASS Channels within 30s");
+    const win = sh(["xdotool", "search", "--class", "^Channels"]);
+    if (win) {
+      const id = win.split("\n")[0]!;
+      console.log(`window: ${sh(["xprop", "-id", id, "WM_CLASS"])}`);
+      return id;
+    }
+    if (i === 59) problems.push("no window with a Channels WM_CLASS within 30s");
     else Bun.sleepSync(500);
   }
   return "";
