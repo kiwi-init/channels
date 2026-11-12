@@ -147,9 +147,12 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   - Channels are tabs. The top bar's row is a browser's tab strip (`.rail`
     on grid row 1): Home, then one tab per channel with a 16px icon, the
     channel's name and its count, then New channel. It starts after the
-    search button and stays there when the sidebar hides or its edge is
-    dragged; it moves aside only for the search field. The row has no
-    title. Tabs share the row equally: short names stay whole, long ones
+    sidebar button and ends before Search, which sits at the row's far end.
+    It stays there when the sidebar hides or its edge is dragged, makes
+    room for the open search field, and in Settings starts after the
+    sidebar's column, where the Settings title is. Nothing in the row sits
+    on anything else (`scripts/ui-layout.ts` checks every screen). The row
+    has no title. Tabs share the row equally: short names stay whole, long ones
     end in an ellipsis, and the open tab keeps its whole name; nothing
     wraps or scrolls. A window 760px wide or less, or a portrait one, keeps
     the title and a row of 40px tiles under it.
@@ -317,11 +320,12 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   `--ctl-sm`. There is no blue button.
 - `IconButton` (`.icon-btn`, 28px, `r-row`): `ink-2`, `wash-2` on hover and
   while pressed.
-- Chrome is flat. The channel tiles, the sidebar button, Search and
-  Settings' back button cast no shadow and have no raised fill: a tile rests
-  on `wash` and the open channel's tile is `ink` with `on-ink` text; the rest
-  have no fill at rest, hover is `wash`, chosen is `wash-2`.
-  A tile still waiting to be let in keeps its outline and no fill; + and the
+- Chrome is flat. The channel tabs, the sidebar button, Search and
+  Settings' back button cast no shadow and have no raised fill: Home rests
+  on `wash`; a tab's icon rests on `wash-2`, and the open channel's is `ink`
+  with `on-ink` text; the rest have no fill at rest, hover is `wash`, chosen
+  is `wash-2`.
+  A tab still waiting to be let in keeps its outline and no fill; + and the
   Settings gear are bare `ink-3` glyphs. What floats is what sits over the
   work: the composer, menus, dialogs.
 - Fields (`.input`, `.textarea`, `Field` with label and hint): `bg-3` fill,
@@ -384,21 +388,21 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 ## 9. App patterns
 
 - **Shell.** One grid on `bg`, three columns: the sidebar (`--side-w`), the
-  work, the second sidebar (`--side-w`). There are no tabs and no separate
-  rail. The top bar (`--top-h`) spans them and drags the window: at its left
-  the sidebar toggle and Search, side by side, in the same place whether the
-  sidebar is open or hidden (after the traffic lights on a Mac); on the
-  window's centre a quiet title in `ink-2` (the room, the person, or the
-  view's name). A `decide` "paused" chip joins Search while the agents are
-  paused, on every view but the conversation, whose banner already says it.
-  Search opens into a field that grows from its button to the sidebar's edge.
-  Under the bar the sidebar starts with the channels, in a row that wraps:
-  home, one 40px tile per channel (its icon or first letter, a `decide` badge
-  for what waits, a folder as a tile of four minis), then +. Pointing at a
-  tile drops its name under it. The Settings gear sits in the window's
-  bottom-left corner. ⌘\ hides the sidebar: its column goes to the work, the
-  toggle and Search stay where they are, and touching the window's left edge
-  slides the sidebar in over the work until the pointer leaves it. No borders
+  work, the second sidebar (`--side-w`). There is no separate rail. The top
+  bar (`--top-h`) spans them, drags the window and reads like a browser's:
+  at its left the sidebar toggle (after the traffic lights on a Mac), then
+  the channels as tabs (Home, one tab per channel with its icon or first
+  letter at 16px, its name and a `decide` count for what waits, a folder as
+  a tile of four minis, then +), and at its far right Search. They are in
+  the same place whether the sidebar is open or hidden. There is no title.
+  A `decide` "paused" chip joins Search while the agents are paused, on
+  every view but the conversation, whose banner already says it. Search
+  opens into a field a sidebar wide that grows from its button, and the
+  tabs make room for it. Pointing at a tab drops its name under it. The
+  Settings gear sits in the window's bottom-left corner. ⌘\ hides the
+  sidebar: its column goes to the work, the toggle, the tabs and Search
+  stay where they are, and touching the window's left edge slides the
+  sidebar in over the work until the pointer leaves it. No borders
   between the columns.
 - **Sidebar.** Under the tiles, the channel's name (its menu: settings,
   invite, mute, end), then the channel's views as rows with an icon: Needs

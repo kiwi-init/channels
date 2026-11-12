@@ -1157,22 +1157,22 @@
 :root[data-tabs] .app > .rail {
   --tile: var(--ctl);
   --lead-pad: 8px;
-  --lead-n: 2;
+  --tail-n: 1;
 
   grid-row: 1;
   grid-column: 1 / -1;
   z-index: 10;
   flex-wrap: nowrap;
   align-items: center;
-  margin-left: calc(var(--lead-pad) + var(--lead-n) * (var(--ctl) + 8px));
+  margin: 0 calc(8px + var(--tail-n) * (var(--ctl) + 8px)) 0 calc(var(--lead-pad) + var(--ctl) + 8px);
   padding: 0 8px;
   overflow: hidden;
-  transition: margin-left var(--slow) var(--ease);
+  transition: margin var(--slow) var(--ease);
   -webkit-app-region: drag;
 }
 
 :root[data-tabs]:has(.top-tools > .updates) .app > .rail {
-  --lead-n: 3;
+  --tail-n: 2;
 }
 
 :root[data-tabs]:is([data-shell="mac"], [data-wm="floating"]) .app > .rail {
@@ -1180,7 +1180,26 @@
 }
 
 :root[data-tabs]:has(.top-tools.is-searching, .top-hold) .app > .rail {
+  margin-right: var(--side-w);
+}
+
+:root[data-tabs]:has(.app > .set) .app > .rail {
   margin-left: var(--side-w);
+}
+
+:root[data-tabs] .top-tools {
+  justify-self: end;
+  width: auto;
+  padding: 0 8px;
+}
+
+:root[data-tabs] .top-tools.is-searching {
+  width: var(--side-w);
+}
+
+:root[data-tabs] .top-tools :is(.search-pop, .updates-panel) {
+  right: 0;
+  left: auto;
 }
 
 :root[data-tabs] .app > .rail .tile {
