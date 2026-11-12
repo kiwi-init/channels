@@ -1030,10 +1030,6 @@
   padding: 0 8px;
 }
 
-.app .set-nav {
-  padding-top: 16px;
-}
-
 .side {
   position: relative;
   z-index: 6;
@@ -1595,7 +1591,6 @@
   .app .set-nav {
     grid-row: 3;
     margin: 0;
-    padding-top: 0;
   }
 
   .app .set-main {
