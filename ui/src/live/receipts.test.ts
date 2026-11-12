@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts"
-import { addMarks } from "@kiwi/channel/receipts.ts"
+import { addMarks } from "@kiwi/core/receipts.ts"
 import { reachedOf, receiptsOf, withReceipts } from "~/live/receipts"
 import type { Message } from "~/model"
 

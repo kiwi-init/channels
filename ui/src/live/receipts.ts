@@ -1,6 +1,6 @@
 import { ignored, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { MAIN, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts"
-import { onItOf, receiptOf, waitsOf, type Behind, type Busy, type Marks, type OnIt, type Reached, type Receipt, type Waits } from "@kiwi/channel/receipts.ts"
+import { onItOf, receiptOf, waitsOf, type Behind, type Busy, type Marks, type OnIt, type Reached, type Receipt, type Waits } from "@kiwi/core/receipts.ts"
 import { roomOfMessage } from "@kiwi/app/rooms.ts"
 import { liveOf } from "~/doing"
 import { span, t } from "~/i18n/i18n"
