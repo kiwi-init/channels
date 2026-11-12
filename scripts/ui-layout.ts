@@ -18,6 +18,7 @@ const SIZES: readonly (readonly [number, number])[] = [
 const CONTROLS = [".top-drawer", ".top-tools .icon-btn:last-child", ".main .composer", ".rail-gear"];
 const SIDE = [".tile.is-home", ".tile[data-code]", ".side-chan"];
 const TABS = [".tile.is-home", ".tile[data-code]", ".tile.is-add"];
+const LAYER_SHOTS = ["channel", "home", "waiting", "settings", "channel-broken", "closed", "welcome", "task-waiting", "specs"];
 
 type Places = Record<string, readonly [number, number] | null>;
 interface Box {
@@ -539,8 +540,90 @@ try {
       const open = await page.evaluate(() => [...document.querySelectorAll(".rail .tile.is-on")].map((tile) => (tile.classList.contains("is-home") ? "Home" : "a channel")));
       if (shot === "home") expect(open.length === 1 && open[0] === "Home", `Home is the one open tab (${open.join(", ") || "none"})`);
       else expect(open.length === 0, `Settings is no channel, so no tab is open (${open.join(", ") || "none"})`);
-      if (shot === "settings-devices") expect(!!back && !!home && home.left >= back.right, `the tabs start after the Settings title (${home?.left} after ${back?.right})`);
+      const side = await boxOf(page, ".side");
+      if (shot === "settings-devices")
+        expect(
+          !!back && !!side && back.left >= side.left && back.right <= side.right && back.top >= 48,
+          `the Settings title heads the sidebar, under the top row (from ${back?.left} to ${back?.right}, ${back?.top} down)`,
+        );
       await nothingClashes(page, "here");
+      await page.close();
+    }
+  }
+  for (const [width, height] of [
+    [1440, 900],
+    [1000, 760],
+    [700, 760],
+  ] as const) {
+    for (const hidden of width > 760 ? [false, true] : [false]) {
+      console.log(`\nthe two layers, ${width}×${height}${hidden ? ", sidebar hidden" : ""}`);
+      const page = await browser.newPage({ viewport: { width, height } });
+      if (hidden) await page.addInitScript(() => localStorage.setItem("mc.sidebar-hidden", "1"));
+      const seen: { shot: string; area: string; top: string }[] = [];
+      for (const shot of LAYER_SHOTS) {
+        await open(page, shot);
+        const layers = await page.evaluate(() => {
+          const round = (r: DOMRect) => [r.left, r.top, r.right, r.bottom].map((n) => Math.round(n)).join(" ");
+          const areas = [...document.querySelectorAll(".content")];
+          const area = areas[0]?.getBoundingClientRect();
+          const strip = document.querySelector(".top")?.getBoundingClientRect();
+          const side = document.querySelector(".side");
+          const stray = [...document.querySelectorAll(".main, .views-bar, .track, .panel, .set-main, .start-area, .crash")]
+            .filter((el) => !el.closest(".content"))
+            .map((el) => el.className.toString().split(" ")[0]);
+          const shell = [...document.querySelectorAll(".top, .rail, .side")].filter((el) => el.closest(".content")).map((el) => el.className.toString().split(" ")[0]);
+          const sheet = (el: Element): boolean => {
+            const panel = el.closest(".panel");
+            return !!panel && getComputedStyle(panel).position === "fixed";
+          };
+          const bar = strip ? Array.from({ length: 12 }, (_, n) => [((n + 0.5) * innerWidth) / 12, strip.bottom / 2] as const) : [];
+          const column = area && area.left > 1 ? Array.from({ length: 8 }, (_, n) => [area.left / 2, area.top + ((n + 0.5) * (innerHeight - area.top)) / 8] as const) : [];
+          const spill = [...bar, ...column].flatMap(([x, y]) => {
+            const el = document.elementFromPoint(x, y);
+            return el?.closest(".content") && !sheet(el) ? [`${el.className.toString().split(" ")[0] || el.tagName.toLowerCase()} at ${Math.round(x)},${Math.round(y)}`] : [];
+          });
+          const painted = [...document.querySelectorAll(".top, .rail")].filter((el) => getComputedStyle(el).backgroundColor !== "rgba(0, 0, 0, 0)").map((el) => el.className.toString().split(" ")[0]);
+          return {
+            areas: areas.length,
+            area: area ? round(area) : "none",
+            areaLeft: area?.left ?? -1,
+            areaTop: area?.top ?? -1,
+            top: strip ? round(strip) : "none",
+            stripBottom: strip?.bottom ?? -1,
+            sideRight: side && getComputedStyle(side).display !== "none" && getComputedStyle(side).position !== "fixed" ? side.getBoundingClientRect().right : null,
+            hasSide: !!side,
+            toggle: !!document.querySelector(".top .top-drawer, .top .set-back"),
+            tools: document.querySelectorAll(".top .top-tools .icon-btn").length,
+            stray,
+            shell,
+            spill,
+            painted,
+          };
+        });
+        seen.push({ shot, area: layers.area, top: layers.top });
+        expect(
+          layers.areas === 1 && layers.stray.length === 0,
+          `${shot}: one content area holds everything on the page colour${layers.stray.length ? ` (outside it: ${layers.stray.join(", ")})` : ""}`,
+        );
+        expect(
+          layers.hasSide && layers.toggle && layers.tools > 0 && layers.shell.length === 0,
+          `${shot}: the shell has its top bar, its buttons and its sidebar, none of them inside the content area`,
+        );
+        expect(
+          layers.spill.length === 0 && layers.painted.length === 0,
+          `${shot}: nothing of the screen reaches into the shell${layers.spill.length ? ` (${layers.spill.join(", ")})` : ""}${layers.painted.length ? ` (painted: ${layers.painted.join(", ")})` : ""}`,
+        );
+        if (width > 760) {
+          expect(near(layers.areaTop, layers.stripBottom), `${shot}: the content area starts under the top bar (${layers.areaTop} of ${layers.stripBottom})`);
+          expect(
+            hidden ? near(layers.areaLeft, 0) : layers.sideRight !== null && near(layers.areaLeft, layers.sideRight),
+            `${shot}: and ${hidden ? "at the window's edge" : "where the sidebar ends"} (${layers.areaLeft})`,
+          );
+        }
+      }
+      const first = seen[0]!;
+      const off = seen.filter((s) => s.area !== first.area || s.top !== first.top).map((s) => `${s.shot} ${s.area}`);
+      if (width > 760) expect(off.length === 0, `the content area and the top bar are the same box on every screen (${first.area})${off.length ? `: ${off.join("; ")}` : ""}`);
       await page.close();
     }
   }
