@@ -40,9 +40,10 @@ const waitNamed = (page: Page, sel: string) =>
 
 async function tabTo(page: Page, sel: string, has: string): Promise<boolean> {
   await page.mouse.move(0, 0);
+  const want: [string, string] = [sel, has];
   for (let i = 0; i < 80; i++) {
     await page.keyboard.press("Tab");
-    if (await page.evaluate(([s, h]: [string, string]) => (document.activeElement?.matches(s) && !!document.activeElement.querySelector(h)) ?? false, [sel, has] as [string, string])) return true;
+    if (await page.evaluate(([s, h]: [string, string]) => (document.activeElement?.matches(s) && !!document.activeElement.querySelector(h)) ?? false, want)) return true;
   }
   return false;
 }
