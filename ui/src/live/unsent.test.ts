@@ -3,7 +3,7 @@ import { wordsRaw } from "~/words"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import { inFeed, postedBlocks } from "~/chat/doc/posted"
 import { messagesOf, type Pending } from "~/live/map"
-import { capUnsent, changeUnsent, landedOut, newSendId, nextUnsentKey, resendDue, resendOf, restoreUnsent, retryUnsent, unsentIn } from "~/live/unsent"
+import { capUnsent, changeUnsent, landedOut, newSendId, nextUnsentKey, ownMedia, resendDue, resendOf, restoreUnsent, retryUnsent, unsentIn } from "~/live/unsent"
 
 const where: Pending["where"] = { kind: "room", room: "general" }
 const pending = (key: number, text: string, failed?: string): Pending => ({ key, where, text, at: 1, ...(failed ? { failed } : {}) })
@@ -38,6 +38,16 @@ describe("retrying a failed doc line keeps its block (T1465)", () => {
   test("the retried line keeps everything it was sent with, its block too", () => {
     const failed: Pending = { key: 1, where, text: "ship it", at: 1, failed: "offline", inThread: 7, replyTo: 5, block }
     expect(resendOf(failed)).toEqual({ inThread: 7, replyTo: 5, block, first: 1 })
+  })
+
+  test("a line's pictures and files go on its message as pointers, and on its retry too", () => {
+    const ref = { id: "b".repeat(32), key: "k".repeat(43), size: 4 }
+    const media = { imgs: [{ name: "shot.png", mime: "image/png", ref }], files: [{ name: "notes.pdf", mime: "application/pdf", size: 4, pieces: [ref] }] }
+    expect(ownMedia(media)).toEqual({ imgs: [{ name: "shot.png", mime: "image/png", ref }], files: [{ name: "notes.pdf", mime: "application/pdf", size: 4, pieces: [ref] }] })
+    expect(ownMedia({ imgs: [], files: [] })).toEqual({})
+    expect(ownMedia(undefined)).toEqual({})
+    const failed: Pending = { key: 1, where, text: "the notes", at: 1, failed: "offline", block, media }
+    expect(resendOf(failed)).toEqual({ block, media, first: 1 })
   })
 
   test("the line shows in one place before, during and after the retry", () => {
