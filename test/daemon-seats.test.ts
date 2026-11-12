@@ -141,6 +141,13 @@ describe("seats always on", () => {
     const again = (await cli(["-c", "test", "--as", "gemini", "reply", String(told), "still nothing"])).trim().split("\n");
     expect(again[0]).toMatch(/^sent #\d+/);
     expect(again.slice(1)).toEqual(["@claude can't be woken: nothing reaches it until a person opens its session"]);
+    await ownerCh.send("made a room", { kind: "event", ev: { op: "room.create", id: "side0001", name: "side" } });
+    await cli(["-c", "test", "--as", "claude", "send", "--to", "#side", "I read this room"]);
+    const room = (await cli(["-c", "test", "--as", "gemini", "send", "--to", "#side", "anyone in this room?"])).trim().split("\n");
+    expect(room[0]).toMatch(/^sent #\d+/);
+    expect(room.slice(1)).toEqual(["@claude can't be woken: nothing reaches it until a person opens its session"]);
+    const mention = (await cli(["-c", "test", "--as", "gemini", "send", "--to", "#side", "@ghost you too"])).trim().split("\n");
+    expect(mention.slice(1)).toEqual(["@claude can't be woken: nothing reaches it until a person opens its session", "@ghost isn't listening: no computer answers for it"]);
   });
 
   test("a listener adds no presence of its own", async () => {

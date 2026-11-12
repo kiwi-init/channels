@@ -1,5 +1,5 @@
 import "~/i18n/en/modals"
-import { Fragment, useEffect, useState } from "react"
+import { Fragment, useEffect, useId, useRef, useState } from "react"
 
 import "~/styles/people-add.css"
 import { t } from "~/i18n/i18n"
@@ -40,35 +40,79 @@ function useInviteLink(code: string): { link: string | null; failed: boolean; re
   }
 }
 
-export function CopyBox({ text, label, disabled, wrap, onCopy }: { text: string | null; label: string; disabled?: boolean; wrap?: boolean; onCopy?: () => void }) {
+export type CopyResult = { kind: "copied" } | { kind: "failed"; text: string } | { kind: "dropped" }
+
+export const copyResult = (text: string): Promise<CopyResult> => copyText(text).then((ok) => (ok ? { kind: "copied" } : { kind: "failed", text }))
+
+export function CopyBox({ text, label, disabled, wrap, onCopy }: { text: string | null; label: string; disabled?: boolean; wrap?: boolean; onCopy?: () => Promise<CopyResult> }) {
+  const [manual, setManual] = useState<string | null>(null)
+  const busy = useRef(false)
+  const area = useRef<HTMLTextAreaElement>(null)
+  const hint = useId()
+  const shown = manual !== null && manual === text ? manual : null
+  useEffect(() => {
+    if (shown === null) return
+    area.current?.focus()
+    area.current?.select()
+  }, [shown])
+  const pick = () => {
+    area.current?.focus()
+    area.current?.select()
+  }
+  const copy = async () => {
+    if (busy.current || !text) return
+    busy.current = true
+    try {
+      const result = onCopy ? await onCopy() : await copyResult(text)
+      if (result.kind === "failed") {
+        setManual(result.text)
+        pick()
+      } else if (result.kind === "copied") setManual(null)
+    } finally {
+      busy.current = false
+    }
+  }
   return (
-    <div className={cx("codebox invite-box", disabled && "is-off", wrap && "is-wrap")}>
-      <code>
-        {text === null
-          ? "…"
-          : wrap
-            ? text.split(/\s(?=--)/).map((part, i) => (
-                <Fragment key={i}>
-                  {i > 0 && " "}
-                  <span className="invite-part">{part}</span>
-                </Fragment>
-              ))
-            : text}
-      </code>
-      <button
-        type="button"
-        className="icon-btn"
-        aria-label={label}
-        title={label}
-        disabled={!text || disabled}
-        onClick={() => {
-          if (onCopy) return onCopy()
-          if (text) copyText(text)
-        }}
-      >
-        <Icon name="copy" />
-      </button>
-    </div>
+    <>
+      <div className={cx("codebox invite-box", disabled && "is-off", wrap && "is-wrap")}>
+        <code>
+          {text === null
+            ? "…"
+            : wrap
+              ? text.split(/\s(?=--)/).map((part, i) => (
+                  <Fragment key={i}>
+                    {i > 0 && " "}
+                    <span className="invite-part">{part}</span>
+                  </Fragment>
+                ))
+              : text}
+        </code>
+        <button type="button" className="icon-btn" aria-label={label} title={label} disabled={!text || disabled} onClick={() => void copy()}>
+          <Icon name="copy" />
+        </button>
+      </div>
+      {shown !== null && (
+        <div className="copy-manual">
+          <p id={hint} className="copy-manual-hint" role="alert">
+            {t("modals.copy.manual")}
+          </p>
+          <textarea
+            ref={area}
+            className="input textarea is-mono copy-manual-text"
+            aria-label={t("modals.copy.manual.label")}
+            aria-describedby={hint}
+            readOnly
+            rows={3}
+            spellCheck={false}
+            value={shown}
+            onFocus={(e) => e.currentTarget.select()}
+          />
+          <button type="button" className="btn is-small" onClick={pick}>
+            {t("modals.copy.manual.select")}
+          </button>
+        </div>
+      )}
+    </>
   )
 }
 

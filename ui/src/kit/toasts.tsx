@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
+import { bridge, type KiwiBridge } from "@kiwi/secrets/secrets.ts"
+
 import { t } from "~/i18n/i18n"
 import { Icon } from "~/kit/icons"
 
@@ -25,12 +27,50 @@ export function onAnnounce(l: (text: string, tone: Tone) => void): () => void {
   return () => void heard.delete(l)
 }
 
-export function copyText(text: string, done = t("kit.toasts.copied")): void {
-  if (!navigator.clipboard) return announce(t("kit.toasts.not.copied"), "error")
-  void navigator.clipboard.writeText(text).then(
-    () => announce(done),
-    () => announce(t("kit.toasts.not.copied"), "error")
-  )
+type AppClipboard = Pick<KiwiBridge, "copyText">
+
+export type CopyOutcome = { kind: "copied"; by: "browser" | "app" } | { kind: "failed"; browser: "no-api" | "refused"; app: "no-bridge" | "refused" }
+
+function appClipboard(): AppClipboard | null {
+  const b = bridge()
+  return b && typeof b.copyText === "function" ? b : null
+}
+
+async function browserWrite(text: string): Promise<"copied" | "no-api" | "refused"> {
+  if (typeof navigator === "undefined" || typeof navigator.clipboard?.writeText !== "function") return "no-api"
+  try {
+    await navigator.clipboard.writeText(text)
+    return "copied"
+  } catch {
+    // The webview refuses a write without a recent user gesture or window focus; the app's own clipboard is tried next.
+    return "refused"
+  }
+}
+
+async function appWrite(text: string, app: AppClipboard | null): Promise<"copied" | "no-bridge" | "refused"> {
+  if (!app) return "no-bridge"
+  try {
+    await app.copyText(text)
+    return "copied"
+  } catch {
+    // An older app without copyText, or a system clipboard that didn't take it: the caller offers a manual copy.
+    return "refused"
+  }
+}
+
+export async function writeClipboard(text: string, app: AppClipboard | null = appClipboard()): Promise<CopyOutcome> {
+  const browser = await browserWrite(text)
+  if (browser === "copied") return { kind: "copied", by: "browser" }
+  const viaApp = await appWrite(text, app)
+  if (viaApp === "copied") return { kind: "copied", by: "app" }
+  return { kind: "failed", browser, app: viaApp }
+}
+
+export async function copyText(text: string, done = t("kit.toasts.copied"), app: AppClipboard | null = appClipboard()): Promise<boolean> {
+  const outcome = await writeClipboard(text, app)
+  if (outcome.kind === "copied") announce(done)
+  else announce(t("kit.toasts.not.copied"), "error")
+  return outcome.kind === "copied"
 }
 
 export function kept(list: Toast[], next: Toast): Toast[] {
