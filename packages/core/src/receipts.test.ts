@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { Message } from "./protocol.ts";
 import type { ChannelState } from "./state.ts";
 
-import { addMarks, onIt, readAt, receipt, recipients, waitsOf, type Busy, type Marks, type Reached } from "./receipts.ts";
+import { addMarks, onIt, readAt, receipt, recipients, waitsLines, waitsOf, type Busy, type Marks, type Reached } from "./receipts.ts";
 
 type Who = { kind?: string; owner?: boolean; active: boolean; joined: number };
 const members = new Map<string, Who>([
@@ -304,6 +304,25 @@ describe("what a person's message waits on: who can't be woken, who isn't listen
       { pk: "pk-dev", seq: 11, at: 1 },
     ]);
     expect(waitsOf(both, log, st(), unread, pks, here, doing({ win: { text: "thinking" }, dev: { text: "thinking" } }), none)?.behind?.name).toBe("dev");
+  });
+
+  test("the same states as lines for the command line, by handle", () => {
+    const at = (n: string) => `@${n}`;
+    const busy = waitsOf(mine, log, st(), marks, pks, here, doing({ win: { text: "running Bash" } }), none, at);
+    expect(waitsLines(busy!)).toEqual(["@win is busy on T31 · 2 messages ahead of yours · @atlas, the lead, can take it sooner"]);
+    const caught = addMarks(marks, [{ pk: "pk-dev", seq: 11, at: 200 }]);
+    const next = waitsOf(msg({ seq: 12, to: ["dev"] }), log, st(null), caught, pks, here, doing({ dev: { text: "thinking" } }), none, at);
+    expect(waitsLines(next!)).toEqual(["@dev is busy · thinking · yours is next"]);
+    const gone = waitsOf(msg({ seq: 12, to: ["win", "dev", "atlas"] }), log, st(), marks, pks, how({ win: "asleep", dev: "silent", atlas: "silent" }), doing({}), none, at);
+    expect(waitsLines(gone!)).toEqual(["@win can't be woken: nothing reaches it until a person opens its session", "@dev, @atlas aren't listening: no computer answers for them"]);
+  });
+
+  test("a long list of names is cut after three, with how many more", () => {
+    const w = { asleep: ["@a", "@b", "@c", "@d", "@e"], silent: ["@f", "@g", "@h", "@i"], read: [], behind: null, ask: null };
+    expect(waitsLines(w)).toEqual([
+      "@a, @b, @c and 2 more can't be woken: nothing reaches them until a person opens their sessions",
+      "@f, @g, @h and 1 more aren't listening: no computer answers for them",
+    ]);
   });
 
   test("people see nicknames", () => {

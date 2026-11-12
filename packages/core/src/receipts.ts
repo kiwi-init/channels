@@ -4,7 +4,7 @@
 // own recipients have read. People don't send marks, so only agents are counted.
 
 import type { Message, ReadMark } from "./protocol.ts";
-import { isPerson, threadMembers, type ChannelState } from "./state.ts";
+import { isPerson, taskId, threadMembers, type ChannelState } from "./state.ts";
 
 /**
  * A mark as this view heard it. One from the snapshot on connect (`snapshot`) says how far that member
@@ -182,6 +182,7 @@ export function waitsOf(
   reached: (name: string) => Reached | null,
   busy: (name: string) => Busy | null,
   replied: (from: readonly string[]) => boolean,
+  shown: (name: string) => string = (n) => nickOf(state, n),
 ): Waits | null {
   const to = recipients(m, state);
   if (!to.length || replied(to)) return null;
@@ -203,10 +204,29 @@ export function waitsOf(
   const task = first ? doingOf(state, first.n) : undefined;
   const lead = first && state.lead && state.lead !== first.n && state.lead !== m.from && (reached(state.lead) ?? "here") === "here" ? state.lead : null;
   return {
-    asleep: asleep.map((n) => nickOf(state, n)),
-    silent: silent.map((n) => nickOf(state, n)),
-    read: to.filter((n) => !unread.includes(n)).map((n) => nickOf(state, n)),
-    behind: first ? { name: nickOf(state, first.n), busy: first.b, ...(task === undefined ? {} : { task }), ahead: first.ahead } : null,
-    ask: lead ? { to: lead, name: nickOf(state, lead) } : null,
+    asleep: asleep.map(shown),
+    silent: silent.map(shown),
+    read: to.filter((n) => !unread.includes(n)).map(shown),
+    behind: first ? { name: shown(first.n), busy: first.b, ...(task === undefined ? {} : { task }), ahead: first.ahead } : null,
+    ask: lead ? { to: lead, name: shown(lead) } : null,
   };
+}
+
+const LISTED = 3;
+
+function listed(names: readonly string[]): string {
+  return names.length > LISTED ? `${names.slice(0, LISTED).join(", ")} and ${names.length - LISTED} more` : names.join(", ");
+}
+
+export function waitsLines(w: Waits): string[] {
+  const lines: string[] = [];
+  if (w.behind) {
+    const on = w.behind.task === undefined ? `${w.behind.name} is busy · ${w.behind.busy.text}` : `${w.behind.name} is busy on ${taskId(w.behind.task)}`;
+    const ahead = w.behind.ahead === 0 ? "yours is next" : `${w.behind.ahead} message${w.behind.ahead === 1 ? "" : "s"} ahead of yours`;
+    lines.push(`${on} · ${ahead}${w.ask ? ` · ${w.ask.name}, the lead, can take it sooner` : ""}`);
+  }
+  const one = (names: readonly string[]) => names.length === 1;
+  if (w.asleep.length) lines.push(`${listed(w.asleep)} can't be woken: nothing reaches ${one(w.asleep) ? "it" : "them"} until a person opens ${one(w.asleep) ? "its session" : "their sessions"}`);
+  if (w.silent.length) lines.push(`${listed(w.silent)} ${one(w.silent) ? "isn't" : "aren't"} listening: no computer answers for ${one(w.silent) ? "it" : "them"}`);
+  return lines;
 }
