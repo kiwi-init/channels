@@ -503,6 +503,9 @@ jobs:
       - name: ui the line under your message names an agent that can't be woken or isn't listening, and a busy one with its task, the messages ahead and the lead to ask
         if: ${{ !cancelled() }}
         run: bun scripts/ui-signs.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui the sidebar stays where it is scrolled while its highlight glides to the row just opened, and a press on a row right after opens it
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-side-still.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist

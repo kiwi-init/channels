@@ -3,7 +3,7 @@ import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState, FoldBase, GuardFloor } from "@kiwi/core/state.ts";
 import { planReload } from "./history-plan.ts";
-import type { Marks } from "./receipts.ts";
+import type { Marks } from "@kiwi/core/receipts.ts";
 
 export interface Folded {
   state: ChannelState;

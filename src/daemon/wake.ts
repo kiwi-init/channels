@@ -188,11 +188,23 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
   const logWake = (seat: Seat, w: DaemonWake, why: string | null, cursor: number): void =>
     appendWakeRow(dir, { at: w.at, alias: seat.alias, agent: seat.agent, via: w.via, unread: w.unread, result: w.ok ? "ok" : "failed", why, cursor });
 
+  const logGivenUp = (seat: Seat, err: unknown): void =>
+    appendWakeRow(dir, {
+      at: Date.now(),
+      alias: seat.alias,
+      agent: seat.agent,
+      via: seat.wakeVia ?? seat.lastWake?.via ?? "hooks",
+      unread: 0,
+      result: "failed",
+      why: `the wake attempt ended on an error: ${oneLine(err instanceof Error ? err.message : String(err))}`,
+      cursor: 0,
+    });
+
   const scheduleWake = (seat: Seat, delay = wakeDelayMs): void => {
     if (seat.wakeTimer || stopped()) return;
     seat.wakeTimer = setTimeout(() => {
       seat.wakeTimer = null;
-      void fireWake(seat).catch(() => {});
+      void fireWake(seat).catch((err: unknown) => logGivenUp(seat, err));
     }, delay);
   };
 

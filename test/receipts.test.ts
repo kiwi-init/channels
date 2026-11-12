@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
 
-import { addMarks, onIt, readAt, receipt, recipients, waitsOf, type Busy, type Marks, type Reached } from "./receipts.ts";
+import { addMarks, onIt, readAt, receipt, recipients, waitsLines, waitsOf, type Busy, type Marks, type Reach, type Reached } from "@kiwi/core/receipts.ts";
 
 type Who = { kind?: string; owner?: boolean; active: boolean; joined: number };
 const members = new Map<string, Who>([
@@ -16,7 +16,8 @@ const members = new Map<string, Who>([
   ["gone", { kind: "agent", active: false, joined: 0 }],
   ["mac", { kind: "computer", active: true, joined: 0 }],
 ]);
-const state = (over: Partial<Pick<ChannelState, "lead" | "tasks">> = {}) => ({ members, tasks: new Map(), lead: null, ...over }) as unknown as Pick<ChannelState, "members" | "tasks" | "lead">;
+const general = { rooms: new Map(), roomOf: new Map() };
+const state = (over: Partial<Pick<ChannelState, "lead" | "tasks">> = {}) => ({ members, tasks: new Map(), lead: null, ...general, ...over }) as unknown as Reach;
 const msg = (over: Partial<Message> = {}): Message => ({ v: 1, id: "x", from: "jon", kind: "msg", body: "hi", ts: 1_000, rts: 1_000, seq: 10, sigOk: true, ...over }) as Message;
 const pks = (n: string) => `pk-${n}`;
 const time = (ts: number) => `t${ts}`;
@@ -28,6 +29,63 @@ describe("who a message went to", () => {
   test("a person's word to everyone goes to every agent there when it was sent, lead or not", () => {
     expect(recipients(msg(), state({ lead: "atlas" })).sort()).toEqual(["atlas", "dev", "win"]);
     expect(recipients(msg(), state()).sort()).toEqual(["atlas", "dev", "win"]);
+  });
+});
+
+describe("a message in a room goes to the agents the room reaches (T1000)", () => {
+  const seats = new Map([...members].map(([name, who]) => [name, { ...who, name, pk: `pk-${name}` }]));
+  const rooms = new Map([
+    ["r-mobile", { id: "r-mobile", name: "mobile", createdBy: "jon", at: 0, posters: ["jon", "atlas"] }],
+    [
+      "r-ops",
+      {
+        id: "r-ops",
+        name: "ops",
+        createdBy: "jon",
+        at: 0,
+        posters: ["jon"],
+        members: [
+          { name: "jon", pk: "pk-jon" },
+          { name: "dev", pk: "pk-dev" },
+        ],
+      },
+    ],
+  ]);
+  const roomOf = new Map([
+    [10, "r-mobile"],
+    [11, "r-ops"],
+  ]);
+  const inRooms = (lead: string | null = null) => ({ members: seats, tasks: new Map(), lead, rooms, roomOf }) as unknown as Reach;
+
+  test("the agent that posted there, not the ones that never did", () => {
+    expect(recipients(msg(), inRooms())).toEqual(["atlas"]);
+  });
+  test("a mention reaches an agent that never posted there", () => {
+    expect(recipients(msg({ body: "@win can you look?" }), inRooms()).sort()).toEqual(["atlas", "win"]);
+  });
+  test("the lead hears a person there, not another agent", () => {
+    expect(recipients(msg(), inRooms("dev")).sort()).toEqual(["atlas", "dev"]);
+    expect(recipients(msg({ from: "win" }), inRooms("dev"))).toEqual(["atlas"]);
+  });
+  test("named, it goes to who it names; to everyone, to every agent", () => {
+    expect(recipients(msg({ to: ["win"] }), inRooms())).toEqual(["win"]);
+    expect(recipients(msg({ to: ["*"] }), inRooms()).sort()).toEqual(["atlas", "dev", "win"]);
+  });
+  test("a private room reaches its members only: not the lead, not an outsider it mentions or names", () => {
+    expect(recipients(msg({ seq: 11, body: "@win hello" }), inRooms("atlas"))).toEqual(["dev"]);
+    expect(recipients(msg({ seq: 11, to: ["win", "dev"] }), inRooms())).toEqual(["dev"]);
+    expect(recipients(msg({ seq: 11, to: ["*"] }), inRooms())).toEqual(["dev"]);
+  });
+  test("a message not placed yet is read by its own room; #general stays every agent", () => {
+    expect(recipients(msg({ seq: 99, room: "r-mobile" }), inRooms())).toEqual(["atlas"]);
+    expect(recipients(msg({ seq: 99 }), inRooms()).sort()).toEqual(["atlas", "dev", "win"]);
+    expect(recipients(msg({ seq: 99, room: "general" }), inRooms()).sort()).toEqual(["atlas", "dev", "win"]);
+  });
+  test("both offline: only the one the room reaches is named, and a mention names the other", () => {
+    const off = (): Reached => "asleep";
+    const none = () => null;
+    expect(waitsOf(msg(), [], inRooms(), new Map(), pks, off, none, () => false)?.asleep).toEqual(["atlas"]);
+    expect(waitsOf(msg({ body: "@win too" }), [], inRooms(), new Map(), pks, off, none, () => false)?.asleep.sort()).toEqual(["atlas", "win"]);
   });
 });
 
@@ -64,7 +122,7 @@ describe("the line under your message", () => {
   });
   test("an agent that has never sent a mark (an older kiwi) isn't counted: no false Delivered", () => {
     const quiet = new Map<string, Who>([...members, ["old", { kind: "agent", active: true, joined: 0 }]]);
-    const st = { members: quiet, tasks: new Map(), coordinator: null } as unknown as ReturnType<typeof state>;
+    const st = { members: quiet, tasks: new Map(), coordinator: null, ...general } as unknown as Reach;
     expect(receipt(msg({ to: ["old"] }), st, marks, pks, time)).toBeNull();
     expect(receipt(msg({ to: ["atlas", "old"] }), st, marks, pks, time)).toBe("Read t500");
   });
@@ -101,10 +159,7 @@ describe("a reply in a thread, with a lead", () => {
 describe("an automatic ack under a message: who is on it (T2035)", () => {
   const NOW = 1_000_000;
   const withFacts = (facts: [string, { value: string; expires?: number }][]) =>
-    ({ members, tasks: new Map(), lead: null, facts: new Map(facts.map(([k, f]) => [k, { key: k, by: f.value, ts: 0, seq: 1, ...f }])) }) as unknown as Pick<
-      ChannelState,
-      "members" | "tasks" | "lead" | "facts"
-    >;
+    ({ members, tasks: new Map(), lead: null, ...general, facts: new Map(facts.map(([k, f]) => [k, { key: k, by: f.value, ts: 0, seq: 1, ...f }])) }) as unknown as Reach & Pick<ChannelState, "facts">;
   const doing = (who: Record<string, Busy>) => (n: string) => who[n] ?? null;
   const none = () => false;
   const m = msg({ to: ["atlas", "win"] });
@@ -142,10 +197,8 @@ describe("people see agents by nickname in the ack and the receipt (#1681)", () 
     ["win", { kind: "agent", active: true, joined: 0, display: "coder" }],
   ]);
   const s = (facts: [string, { value: string }][] = []) =>
-    ({ members: nicked, tasks: new Map(), lead: null, facts: new Map(facts.map(([k, f]) => [k, { key: k, by: f.value, ts: 0, seq: 1, ...f }])) }) as unknown as Pick<
-      ChannelState,
-      "members" | "tasks" | "lead" | "facts"
-    >;
+    ({ members: nicked, tasks: new Map(), lead: null, ...general, facts: new Map(facts.map(([k, f]) => [k, { key: k, by: f.value, ts: 0, seq: 1, ...f }])) }) as unknown as Reach &
+      Pick<ChannelState, "facts">;
   const marks = addMarks(new Map(), [
     { pk: "pk-atlas", seq: 10, at: 500 },
     { pk: "pk-win", seq: 11, at: 700 },
@@ -200,7 +253,7 @@ describe("what a person's message waits on: who can't be woken, who isn't listen
     [40, { id: 40, owner: "win", state: "todo" }],
     [7, { id: 7, owner: "atlas", state: "doing" }],
   ]);
-  const st = (lead: string | null = "atlas") => ({ members, tasks, lead }) as unknown as Pick<ChannelState, "members" | "tasks" | "lead">;
+  const st = (lead: string | null = "atlas") => ({ members, tasks, lead, ...general }) as unknown as Reach;
   const how = (who: Record<string, Reached>) => (n: string) => who[n] ?? null;
   const doing = (who: Record<string, Busy>) => (n: string) => who[n] ?? null;
   const none = () => false;
@@ -306,13 +359,32 @@ describe("what a person's message waits on: who can't be woken, who isn't listen
     expect(waitsOf(both, log, st(), unread, pks, here, doing({ win: { text: "thinking" }, dev: { text: "thinking" } }), none)?.behind?.name).toBe("dev");
   });
 
+  test("the same states as lines for the command line, by handle", () => {
+    const at = (n: string) => `@${n}`;
+    const busy = waitsOf(mine, log, st(), marks, pks, here, doing({ win: { text: "running Bash" } }), none, at);
+    expect(waitsLines(busy!)).toEqual(["@win is busy on T31 · 2 messages ahead of yours · @atlas, the lead, can take it sooner"]);
+    const caught = addMarks(marks, [{ pk: "pk-dev", seq: 11, at: 200 }]);
+    const next = waitsOf(msg({ seq: 12, to: ["dev"] }), log, st(null), caught, pks, here, doing({ dev: { text: "thinking" } }), none, at);
+    expect(waitsLines(next!)).toEqual(["@dev is busy · thinking · yours is next"]);
+    const gone = waitsOf(msg({ seq: 12, to: ["win", "dev", "atlas"] }), log, st(), marks, pks, how({ win: "asleep", dev: "silent", atlas: "silent" }), doing({}), none, at);
+    expect(waitsLines(gone!)).toEqual(["@win can't be woken: nothing reaches it until a person opens its session", "@dev, @atlas aren't listening: no computer answers for them"]);
+  });
+
+  test("a long list of names is cut after three, with how many more", () => {
+    const w = { asleep: ["@a", "@b", "@c", "@d", "@e"], silent: ["@f", "@g", "@h", "@i"], read: [], behind: null, ask: null };
+    expect(waitsLines(w)).toEqual([
+      "@a, @b, @c and 2 more can't be woken: nothing reaches them until a person opens their sessions",
+      "@f, @g, @h and 1 more aren't listening: no computer answers for them",
+    ]);
+  });
+
   test("people see nicknames", () => {
     const nicked = new Map<string, Who & { display?: string }>([
       ...members,
       ["win", { kind: "agent", active: true, joined: 0, display: "coder" }],
       ["atlas", { kind: "agent", active: true, joined: 0, display: "lead" }],
     ]);
-    const s = { members: nicked, tasks, lead: "atlas" } as unknown as Pick<ChannelState, "members" | "tasks" | "lead">;
+    const s = { members: nicked, tasks, lead: "atlas", ...general } as unknown as Reach;
     expect(waitsOf(mine, log, s, marks, pks, how({ win: "asleep" }), doing({}), none)?.asleep).toEqual(["coder"]);
     expect(waitsOf(mine, log, s, marks, pks, here, doing({ win: { text: "thinking" } }), none)?.ask).toEqual({ to: "atlas", name: "lead" });
   });

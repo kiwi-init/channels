@@ -13,7 +13,7 @@ import type { Reach } from "./history-fill.ts";
 import { planCached, reopenCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
 import { markOnce } from "./marks.ts";
 import { ICON_LIVE } from "./icon-event.ts";
-import { addMarks, type Marks } from "./receipts.ts";
+import { addMarks, type Marks } from "@kiwi/core/receipts.ts";
 import { noteSignInGone } from "./session.ts";
 import { nextSnapshotTry } from "./snapshot-plan.ts";
 import { untilOpen } from "./until-open.ts";

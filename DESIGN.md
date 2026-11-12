@@ -493,8 +493,11 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   chip, reactions, the replies line) ends on the bubble's right edge,
   outside the bubble. Its hover tools show while the pointer is over the
   message itself (the bubble or what it carries) or over the tools, never
-  for the empty part of its line, and float above the bubble's right end,
-  never on its words; keyboard focus inside the message shows them too.
+  for the empty part of its line. They sit beside the bubble, 6px to its
+  left and level with its top, when its line has room, and float above
+  its right end when it has not, or where the engine has no anchor
+  positioning; never on its words. Keyboard focus inside the message
+  shows them too.
   A message is a 32px face, 16px of gap, then the name (600), the "to you" or
   "asks you" word when it's for you, and the mono time, and the text in
   `t-body` under it. Role and harness are not repeated on every message: the

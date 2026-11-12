@@ -107,26 +107,6 @@ function rowAt(box: HTMLElement, list: readonly Message[], at: number): HTMLElem
   return null
 }
 
-function keepFrom(box: HTMLElement, rows: HTMLElement, list: readonly Message[], start: number, wanted: number): number {
-  const room = Math.min(box.scrollHeight - box.scrollTop - box.clientHeight, box.scrollTop - box.clientHeight) - 1
-  const head = rows.getBoundingClientRect().top
-  const at = new Map<number, number>()
-  for (let i = start; i <= wanted; i++) {
-    const seq = list[i]?.seq
-    if (seq !== undefined) at.set(seq, i)
-  }
-  const shown = rows.querySelectorAll<HTMLElement>(":scope > [data-seq]")
-  let low = -1
-  let high = shown.length - 1
-  while (low < high) {
-    const mid = (low + high + 1) >> 1
-    const row = shown[mid]
-    if (row && at.has(Number(row.dataset.seq)) && row.getBoundingClientRect().top - head < room) low = mid
-    else high = mid - 1
-  }
-  return at.get(Number(shown[low]?.dataset.seq)) ?? start
-}
-
 function firstUnreadIn(channel: Channel, where: Where): number | undefined {
   const seen = where.kind === "room" ? channel.rooms.find((r) => r.id === where.room)?.seen : where.kind === "dm" ? channel.directs.find((d) => d.with === where.with)?.seen : undefined
   if (seen === undefined) return undefined
@@ -304,27 +284,6 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const following = end === list.length
   const latest = useRef(false)
   const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold } = useStick(following, !!doc)
-  const shownFrom = list[start]?.seq
-  const shownTo = list[end - 1]?.seq
-  const edges = useRef({ from: shownFrom, to: shownTo })
-  const dropped = useRef(false)
-  useLayoutEffect(() => {
-    const was = edges.current
-    edges.current = { from: shownFrom, to: shownTo }
-    if (dropped.current) {
-      dropped.current = false
-      settle()
-      return
-    }
-    const box = scroller.current
-    const rows = content.current
-    if (!box || !rows || following || end - start <= CAP) return
-    if (shownFrom !== was.from || shownTo === undefined || was.to === undefined || shownTo <= was.to) return
-    const from = keepFrom(box, rows, list, start, end - CAP)
-    if (from === start) return
-    dropped.current = true
-    setSpan(spanOf(list, from, end))
-  }, [shownFrom, shownTo, following, start, end, list, settle, scroller, content])
   const code = channel.code
   const holdEarlier = actions.holdEarlier
   const earlierPage = actions.earlier
