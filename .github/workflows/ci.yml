@@ -473,6 +473,9 @@ jobs:
       - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
+      - name: ui a refused copy selects the whole command and offers it by hand, and a landed one doesn't, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-copy-recovers.ts --dist ui/dist
       - name: ui the Tasks tab changes quiet time and where tasks land, and reads both back, with and without a repo, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-task-settings.ts --dist ui/dist --browser webkit
