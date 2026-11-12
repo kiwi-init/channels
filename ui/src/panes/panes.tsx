@@ -6,9 +6,9 @@ import { cx, IconButton } from "~/kit/bits"
 import { Boundary } from "~/kit/boundary"
 import type { Channel } from "~/model"
 import { between, nickname } from "~/names"
-import { ActContext, NavContext, useAct, useNav, type Act, type Nav } from "~/nav"
+import { ActContext, NavContext, useAct, useNav, type Act, type Go, type Nav } from "~/nav"
 import { docName, Page } from "~/panes/page"
-import { ALONE, boxes, closePane, focusPane, leafOf, MIN_H, MIN_W, paneGo, resizeSplit, useDrag, useLayout, type Box, type Split } from "~/panes/store"
+import { ALONE, boxes, closePane, focusPane, leafOf, MAIN, MIN_H, MIN_W, paneGo, resizeSplit, useDrag, useLayout, type Box, type Split } from "~/panes/store"
 import { useTabs } from "~/shell/top-layout"
 import { t } from "~/i18n/i18n"
 
@@ -28,6 +28,13 @@ export function placeName(channel: Channel, nav: Nav): string {
 }
 
 const pct = (n: number): string => `${n * 100}%`
+
+function goTo(nav: Nav): Go {
+  if (nav.tab === "chat") return { to: "where", where: nav.where }
+  if (nav.tab === "specs") return { to: "spec", ask: nav.spec ?? null, part: nav.part }
+  if (nav.tab === "github" && nav.github) return { to: "github", view: nav.github }
+  return { to: "tab", tab: nav.tab }
+}
 
 function usePaneAct(code: string, id: string | null): Act {
   const act = useAct()
@@ -76,6 +83,14 @@ export function Panes({ channel, label, main, place }: { channel: Channel; label
   const root = tabs ? layout.root : ALONE.root
   const { leaves, gaps } = useMemo(() => boxes(root), [root])
   const split = leaves.length > 1
+  const { go } = useAct()
+  const heir = leaves.find(({ leaf }) => leaf.nav && !leaf.doc)?.leaf
+  const close = (id: string) => {
+    if (id !== MAIN) return closePane(code, id)
+    if (!heir?.nav) return
+    go(goTo(heir.nav))
+    closePane(code, heir.id)
+  }
   return (
     <div ref={host} className={cx("panes", split && "is-split")} data-panes={code}>
       {leaves.map(({ leaf, box }) => {
@@ -93,7 +108,7 @@ export function Panes({ channel, label, main, place }: { channel: Channel; label
             {split && (
               <header className="pane-head">
                 <span className="pane-name">{name}</span>
-                {leaf.nav && <IconButton icon="close" label={t("shell.rail.close")} onClick={() => closePane(code, leaf.id)} />}
+                {(leaf.nav || heir) && <IconButton icon="close" label={t("shell.rail.close")} onClick={() => close(leaf.id)} />}
               </header>
             )}
             {leaf.nav ? (
