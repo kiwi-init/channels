@@ -177,23 +177,48 @@ try {
         ),
       ];
       const on = el.querySelector<HTMLElement>(".side-row.is-on");
-      const pill = new DOMMatrix(getComputedStyle(el, "::before").transform);
+      const glide = getComputedStyle(el, "::before");
+      const pill = new DOMMatrix(glide.transform);
+      const row = on?.getBoundingClientRect();
       return {
         text: edges(".side-label, .side-name", true),
         faces: edges(".side-member .av", false),
         sizes: [...new Set([...el.querySelectorAll(".side-member .av")].map((node) => Math.round(node.getBoundingClientRect().width * 10) / 10))],
         pillOff: on ? Math.round(el.getBoundingClientRect().top + pill.m42 - el.scrollTop - on.getBoundingClientRect().top) : 0,
+        pillOver: row ? [parseFloat(glide.width) - row.width, parseFloat(glide.height) - row.height].map((n) => Math.round(n * 2) / 2) : [],
+        pillRound: parseFloat(glide.borderTopLeftRadius) > 0 && glide.maskImage === "none",
+        pillEnd: row ? Math.round(el.getBoundingClientRect().right - row.right) : 0,
         headTop: el.querySelector(".heading")?.getBoundingClientRect().top ?? 0,
       };
     });
     expect(!!side && side.text.length === 1, `every sidebar row's text starts on one edge (${side?.text.join(", ")})`);
     expect(!!side && side.faces.length === 1 && side.sizes.length === 1, "every sidebar face sits in one column, at one size");
     expect(!!side && side.pillOff === 0, "the open row's pill sits on its row");
+    expect(
+      !!side && side.pillOver.length === 2 && side.pillOver.every((n) => n === 0) && side.pillRound && side.pillEnd > 0,
+      `and it is a pill the size of its row, ending before the sidebar's edge: nothing cuts into the page (${side?.pillOver.join(", ")} over, ${side?.pillEnd} before the edge)`,
+    );
 
     const tracker = await boxOf(page, ".track");
     if (tracker) {
       expect(near(width - tracker.right, 0), "the task tracker ends at the window's right edge");
       expect(!!composer && tracker.left >= composer.right + 8, "the task tracker clears the conversation");
+      const second = await page.evaluate(() => {
+        const fill = (selector: string, pseudo?: string): string => getComputedStyle(document.querySelector(selector)!, pseudo).backgroundColor;
+        const under = getComputedStyle(document.querySelector(".chan")!, "::after");
+        return {
+          under: under.backgroundColor,
+          column: under.gridColumnStart,
+          own: fill(".track"),
+          page: fill(".main"),
+          frame: fill(".app"),
+          corner: parseFloat(getComputedStyle(document.querySelector(".main")!).borderTopRightRadius),
+        };
+      });
+      expect(
+        second.column === "3" && second.under === second.page && second.page !== second.frame && second.own === "rgba(0, 0, 0, 0)" && second.corner === 0,
+        `the second sidebar sits on the page, not on the frame: the page's colour lies under its column, with no fill of its own and no corner between it and the work (${second.under} under it, page ${second.page}, frame ${second.frame}, a ${second.corner}px corner)`,
+      );
     }
     const mine = await page.evaluate(() => {
       const bubble = document.querySelector(".msg.is-mine .msg-text")?.getBoundingClientRect();

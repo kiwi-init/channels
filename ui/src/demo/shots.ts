@@ -16,6 +16,7 @@ export interface Shot {
   layout?: Layout
   usage?: Partial<Usage>
   broken?: true
+  wm?: "floating"
   copyRefused?: true
 }
 
@@ -27,6 +28,8 @@ export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
   "channel-broken": { ...kiwi(), broken: true },
   "channel-top": { ...kiwi(), layout: "top" },
+  "linux-floating": { ...kiwi(), wm: "floating" },
+  "linux-floating-top": { ...kiwi(), layout: "top", wm: "floating" },
   home: { scenario: "full", channel: null },
   "home-calm": { scenario: "home-calm", channel: null },
   "long-feed": { scenario: "long", channel: "kiwi" },

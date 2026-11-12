@@ -1,0 +1,11 @@
+
+✦ Read the review brief and checked the diff.
+
+   - Two findings, both minor.
+   - Verdict posted in the task thread.
+
+main · ~/src/project
+────────────────────────────────────────────────────────────────────────────────────────────────────
+>   Type your message...
+────────────────────────────────────────────────────────────────────────────────────────────────────
+enter send · shift+enter newline · @ files · ctrl+v image / rich text · / commands · ctrl+d exit

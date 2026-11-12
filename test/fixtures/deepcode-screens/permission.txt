@@ -1,0 +1,16 @@
+
+✦ Read the review brief and checked the diff.
+
+   - Two findings, both minor.
+   - Verdict posted in the task thread.
+
+Permission required
+
+  bash: rm -rf build
+
+Do you want to proceed?
+> Yes
+  Yes, and don't ask again for this command
+  No
+
+↑/↓ move · Enter select · Esc interrupt

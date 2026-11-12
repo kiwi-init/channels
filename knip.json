@@ -18,6 +18,8 @@
     "gdbus",
     "pgrep",
     "xdotool",
+    "openbox",
+    "wmctrl",
     "swaymsg",
     "grim",
     "plutil",
