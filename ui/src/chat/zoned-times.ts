@@ -1,3 +1,5 @@
+import type { ASTNode } from "react-native-enriched-markdown/lib/typescript/src/web/types"
+
 const TOKEN = /(?<![\d-])(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z)|(?<![\d:])(\d{2}):(\d{2})(Z| UTC)(?![\dA-Za-z])/g
 const BARE_URL = /https?:\/\/\S+/g
 const ANY_TIME = /\d:\d\d/
@@ -82,4 +84,22 @@ export function tooltipOf(iso: string, dateOnly: boolean, assuming: (date: strin
   if (local.date) parts.push(local.date)
   if (dateOnly) parts.push(assuming(iso.slice(0, 10)))
   return parts.join(" · ")
+}
+
+export function zonedLinks(node: ASTNode, at?: number, blocked = false): void {
+  const skip = blocked || node.type === "Link" || node.type === "Code" || node.type === "CodeBlock"
+  if (!skip && node.children?.length) {
+    const out: ASTNode[] = []
+    let grew = false
+    for (const child of node.children) {
+      const found = child.type === "Text" && child.content !== undefined ? segments(child.content, at) : null
+      if (found) {
+        grew = true
+        for (const seg of found)
+          out.push(typeof seg === "string" ? { type: "Text", content: seg } : { type: "Link", attributes: { url: `kiwi-utc:${seg.iso}` }, children: [{ type: "Text", content: seg.token }] })
+      } else out.push(child)
+    }
+    if (grew) node.children = out
+  }
+  for (const child of node.children ?? []) zonedLinks(child, at, skip)
 }

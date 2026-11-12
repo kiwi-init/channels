@@ -15,7 +15,7 @@ import { openOutside } from "~/kit/outside"
 
 import { MermaidBlock } from "~/chat/mermaid"
 import { keepParsed, parseKey, parsedFor } from "~/chat/parsed"
-import { segments, tooltipOf } from "~/chat/zoned-times"
+import { tooltipOf, zonedLinks } from "~/chat/zoned-times"
 import { copyText } from "~/kit/toasts"
 
 const TEXT = { fontSize: 15, fontFamily: "var(--sans)", color: "var(--ink)", lineHeight: 22, marginTop: 0, marginBottom: 8 }
@@ -201,25 +201,7 @@ export function blockGaps(markdown: string): string {
   return out.join("\n")
 }
 
-export function zonedLinks(node: ASTNode, at?: number, blocked = false): void {
-  const skip = blocked || node.type === "Link" || node.type === "Code" || node.type === "CodeBlock"
-  if (!skip && node.children?.length) {
-    const out: ASTNode[] = []
-    let grew = false
-    for (const child of node.children) {
-      const found = child.type === "Text" && child.content !== undefined ? segments(child.content, at) : null
-      if (found) {
-        grew = true
-        for (const seg of found)
-          out.push(typeof seg === "string" ? { type: "Text", content: seg } : { type: "Link", attributes: { url: `kiwi-utc:${seg.iso}` }, children: [{ type: "Text", content: seg.token }] })
-      } else out.push(child)
-    }
-    if (grew) node.children = out
-  }
-  for (const child of node.children ?? []) zonedLinks(child, at, skip)
-}
-
-export function parse(markdown: string, at?: number): Promise<ASTNode> {
+function parse(markdown: string, at?: number): Promise<ASTNode> {
   const key = parseKey(markdown, at)
   const done = parsedFor(key)
   if (done) return Promise.resolve(done)

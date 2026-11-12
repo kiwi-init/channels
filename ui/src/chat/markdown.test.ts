@@ -13,8 +13,9 @@ const { normalizeMarkdownStyle } = await import("react-native-enriched-markdown/
 const { buildStyles } = await import("react-native-enriched-markdown/lib/module/web/styles.js")
 const { parseMarkdown } = await import("react-native-enriched-markdown/lib/module/web/parseMarkdown.js")
 const { RenderNode } = await import("react-native-enriched-markdown/lib/module/web/renderers/index.js")
-const { default: Markdown, blockGaps, withTextSize, safeLinks, sortedRows, zonedLinks } = await import("~/chat/markdown")
+const { default: Markdown, blockGaps, withTextSize, safeLinks, sortedRows } = await import("~/chat/markdown")
 const { parseKey } = await import("~/chat/parsed")
+const { zonedLinks } = await import("~/chat/zoned-times")
 const { keepParsed } = await import("~/chat/parsed")
 
 const fixed = (name: string, s: CSSProperties): string[] => [
