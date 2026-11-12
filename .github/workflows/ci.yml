@@ -702,6 +702,20 @@ jobs:
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 5
         run: bash desktop/scripts/icon-theme-check/check.sh "$RUNNER_TEMP/appimage/squashfs-root" "$RUNNER_TEMP/icon-theme-check"
+      - name: test build (the test driver in, for the native click check)
+        if: ${{ !cancelled() && matrix.drive }}
+        working-directory: desktop
+        run: bun scripts/eb.ts build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          DASH_RELEASE_OFFLINE: "1"
+      - name: a real click on the Settings gear opens Settings, and a double-click neither maximizes nor moves the window
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 5
+        run: |
+          test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
+          [ -n "$test" ] || { echo "no dev-linux test build under desktop/release-eb/build"; exit 1; }
+          xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-native-click.ts "$test"
       - if: ${{ !cancelled() && matrix.drive }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
