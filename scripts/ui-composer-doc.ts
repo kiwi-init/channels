@@ -110,7 +110,7 @@ async function refusals(page: Page): Promise<void> {
   await say(page, "the doc opens with this line");
   const first = page.locator(".main article.msg", { hasText: "the doc opens with this line" }).last();
   await first.waitFor({ timeout: 15000 });
-  await first.hover();
+  await first.locator(".msg-body").hover();
   await first.getByRole("button", { name: "Edit" }).waitFor({ timeout: 15000 });
   await area.click();
   refusing.on = true;
@@ -194,7 +194,7 @@ async function edits(page: Page): Promise<void> {
   const row = page.locator(".main article.msg", { hasText: "edit me once" }).last();
   await row.waitFor({ timeout: 15000 });
   await area.fill("a half-typed draft");
-  await row.hover();
+  await row.locator(".msg-body").hover();
   await row.getByRole("button", { name: "Edit" }).click();
   await editor.waitFor({ timeout: 5000 }).catch(() => {});
   const opened = (await editor.count()) === 1 ? await editor.inputValue() : "no editor";
@@ -206,7 +206,7 @@ async function edits(page: Page): Promise<void> {
   await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
   check("Esc closes the box and changes nothing", !(await editor.count()) && (await area.inputValue()) === "a half-typed draft" ? null : `${await editor.count()} editor(s) open`);
-  await row.hover();
+  await row.locator(".msg-body").hover();
   await row.getByRole("button", { name: "Edit" }).click();
   await editor.waitFor({ timeout: 5000 }).catch(() => {});
   await switchTo(page, "away");

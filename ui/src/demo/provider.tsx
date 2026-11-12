@@ -14,6 +14,7 @@ import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf } from "~/home"
 import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
+import { TABS_3, TABS_8 } from "~/demo/tabs"
 import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, TaskStep, Usage } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
@@ -287,6 +288,8 @@ export type Scenario =
   | "doc-busy"
   | "event-runs"
   | "own-bubbles"
+  | "tabs-3"
+  | "tabs-8"
   | "signs"
   | "handoff"
   | "opening"
@@ -514,6 +517,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "github-signed-in") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, signIn: { stage: "signed-in", login: "ojowwalker77" } }
   if (scenario === "github-gate") return { ...initial("full", look), signIn: { stage: "sign-in", code: null, problem: null } }
   if (scenario === "no-channels") return { account: DEMO_ACCOUNT, tiles: [], channels: new Map(), prefs, seq: 1000 }
+  if (scenario === "tabs-3" || scenario === "tabs-8") return { ...initial("full", look), tiles: scenario === "tabs-3" ? TABS_3 : TABS_8 }
   if (scenario === "closed" || scenario === "removed")
     return { account: DEMO_ACCOUNT, tiles: DEMO_TILES.filter((t) => t.code !== "studio"), channels, prefs, seq: 1000, gone: { code: "studio", title: "studio", why: scenario } }
   return { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }

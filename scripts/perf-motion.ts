@@ -177,7 +177,13 @@ try {
   };
 
   const answer = page.locator("article.msg", { hasText: "p50 0.3ms" }).first();
-  const reply = { click: () => answer.hover().then(() => answer.getByRole("button", { name: "Reply in thread" }).click()) };
+  const reply = {
+    click: () =>
+      answer
+        .locator(".msg-body")
+        .hover()
+        .then(() => answer.getByRole("button", { name: "Reply in thread" }).click()),
+  };
   const closeThread = page.getByRole("complementary", { name: "Details" }).getByRole("button", { name: "Close", exact: true });
   await measure(
     "thread open",
