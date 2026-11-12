@@ -10,8 +10,8 @@ const MOST_ROWS = 400;
 if (process.argv.includes("--help")) {
   console.log(`Frame times while the new UI's conversation scrolls: the long-feed demo shot (1500 messages in #general) at 1440x900@2x,
 left idle (the noise floor), then scrolled up and down by script every frame (a trackpad pace, a short fling and a fling through
-48,000 px), PERF_RUNS times (3), and that long fling once more with every frame ${SLOW_MS} ms busier, the way a slow machine
-runs it. Reports the frame interval, the
+48,000 px), PERF_RUNS times (3), then that long fling once more with every frame ${SLOW_MS} ms busier, the way a slow machine
+runs it, and a scroll thrown to the end of the rows the feed holds on every frame. Reports the frame interval, the
 frames dropped at the display's rate, the main-thread work per frame (p50/p95/max) and how many frames' work misses the --hz budget
 (120: 8.3 ms, whatever rate the display gives WebKit), content that jumped on screen while scrolling, long tasks where the engine has
 them, how long the feed takes to show, and the frames after sending a message at the bottom and while scrolled up.
@@ -20,7 +20,7 @@ them, how long the feed takes to show, and the frames after sending a message at
 
 Without --dist it builds ui/ into a temporary folder first. --css adds a stylesheet before measuring, to try a change without
 a rebuild. --check fails when the page throws, renders the whole history at once or keeps hundreds of rows on a long fling
-at either pace, or the content jumps while scrolling; it never fails on timings, so it skips the timed runs, scrolls once to look and draws at 1x. WebKit is the engine of the Mac and Linux apps: bunx playwright-core install webkit.`);
+at either pace or when thrown to the end, or the content jumps while scrolling; it never fails on timings, so it skips the timed runs, scrolls once to look and draws at 1x. WebKit is the engine of the Mac and Linux apps: bunx playwright-core install webkit.`);
   process.exit(0);
 }
 
@@ -220,6 +220,22 @@ async function scroll(page: Page, phases: { dy: number; frames: number }[], jump
   );
 }
 
+async function toLatest(page: Page): Promise<void> {
+  const jump = page.locator(".main .feed-jump");
+  if (await jump.count()) await jump.first().click();
+  await page.waitForFunction(
+    () => {
+      const feed = document.querySelector<HTMLElement>(".main .feed");
+      if (!feed || document.querySelector(".main .feed-jump")) return false;
+      feed.scrollTo({ top: 1e9 });
+      return feed.scrollHeight - feed.scrollTop - feed.clientHeight < 2;
+    },
+    undefined,
+    { timeout: 30_000, polling: "raf" },
+  );
+  await page.waitForTimeout(300);
+}
+
 async function watch(page: Page, ms: number, act: () => Promise<void>): Promise<Frames> {
   await page.evaluate((span) => {
     const w = window as unknown as { __long: number[]; __watch: Promise<{ intervals: number[]; work: number[] }> };
@@ -280,6 +296,10 @@ try {
     { dy: -120, frames: 400 },
     { dy: 120, frames: 400 },
   ];
+  const thrown = [
+    { dy: -120, frames: 200 },
+    { dy: 1_000_000, frames: 240 },
+  ];
   const idles: Frames[] = [];
   const runs: Frames[] = [];
   const flings: Frames[] = [];
@@ -292,9 +312,13 @@ try {
     await page.waitForTimeout(300);
   }
   const jumps = [await scroll(page, trackpad, true), await scroll(page, fling, true)];
+  await toLatest(page);
   const long = await scroll(page, far, true);
+  await toLatest(page);
   const slow = await scroll(page, far, true, SLOW_MS);
-  jumps.push(long, slow);
+  await toLatest(page);
+  const end = await scroll(page, thrown, true);
+  jumps.push(long, slow, end);
   if (TIMED) {
     report.idle = stats(idles, longOn);
     report.trackpad = stats(runs, longOn);
@@ -303,7 +327,12 @@ try {
   }
   report.mostRows = Math.max(...[...fars, long].map((f) => f.most));
   report.mostRowsSlow = slow.most;
-  held.push({ pace: "the long fling", most: long.most, trace: long.trace }, { pace: `the long fling with every frame ${SLOW_MS} ms busier`, most: slow.most, trace: slow.trace });
+  report.mostRowsThrown = end.most;
+  held.push(
+    { pace: "the long fling", most: Number(report.mostRows), trace: long.trace },
+    { pace: `the long fling with every frame ${SLOW_MS} ms busier`, most: slow.most, trace: slow.trace },
+    { pace: "a scroll thrown to the end of the rows the feed holds, again and again", most: end.most, trace: end.trace },
+  );
   report.jumps = jumps.flatMap((f) => f.jumps).length;
   report.jumpMax = round(Math.max(0, ...jumps.flatMap((f) => f.jumps)));
 
@@ -338,7 +367,7 @@ for (const key of ["idle", "trackpad", "fling", "flingFar", "sendAtBottom", "sen
   const s = report[key];
   if (typeof s === "object") line(key, s);
 }
-console.log(`at most ${report.mostRows} children in the feed during the long fling, ${report.mostRowsSlow} with every frame ${SLOW_MS} ms busier`);
+for (const { pace, most } of held) console.log(`at most ${most} children in the feed during ${pace}`);
 for (const { pace, most, trace } of held) {
   if (most < MOST_ROWS) continue;
   console.log(`${pace}, each time the number of children changed:`);
@@ -350,10 +379,7 @@ if (out) writeFileSync(out, JSON.stringify({ engine, theme, ...report }, null, 2
 if (check) {
   const failed = [
     ...(typeof report.rows === "number" && report.rows < 1000 ? [] : [`the feed rendered ${report.rows} rows at once: it should render the latest ones and add older ones on the way up`]),
-    ...(typeof report.mostRows === "number" && report.mostRows < MOST_ROWS ? [] : [`the feed held ${report.mostRows} children during the long fling: it should drop rows far from the screen`]),
-    ...(typeof report.mostRowsSlow === "number" && report.mostRowsSlow < MOST_ROWS
-      ? []
-      : [`the feed held ${report.mostRowsSlow} children during the long fling with every frame ${SLOW_MS} ms busier: it should drop rows far from the screen on a slow machine too`]),
+    ...held.flatMap(({ pace, most }) => (most < MOST_ROWS ? [] : [`the feed held ${most} children during ${pace}: it should drop rows far from the screen`])),
     ...(report.jumpMax === 0 ? [] : [`the content jumped ${report.jumps} times while scrolling, up to ${report.jumpMax} px`]),
   ];
   if (failed.length) {
