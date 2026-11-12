@@ -11,6 +11,22 @@ interface Anchor {
   seq: number
   top: number
   at: number
+  under: number
+}
+
+const gapIn = (box: HTMLElement): number => box.scrollHeight - box.scrollTop - box.clientHeight
+
+const laidOut = (el: Element): boolean => el.isConnected && el.getClientRects().length > 0
+
+function endOf(list: HTMLElement): number {
+  let last = list.lastElementChild
+  while (last && !laidOut(last)) last = last.previousElementSibling
+  return (last ?? list).getBoundingClientRect().bottom
+}
+
+function spot(box: HTMLElement, list: HTMLElement, el: Element, seq: number): Anchor {
+  const top = el.getBoundingClientRect().top
+  return { el, seq, top: top - box.getBoundingClientRect().top, at: box.scrollTop, under: endOf(list) - top }
 }
 
 function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
@@ -25,19 +41,15 @@ function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
   }
   const el = rows[lo]
   const seq = Number(el?.dataset.seq)
-  return el && Number.isSafeInteger(seq) ? { el, seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop } : null
+  return el && Number.isSafeInteger(seq) ? spot(box, list, el, seq) : null
 }
-
-const gapIn = (box: HTMLElement): number => box.scrollHeight - box.scrollTop - box.clientHeight
-
-const laidOut = (el: Element): boolean => el.isConnected && el.getClientRects().length > 0
 
 function docIn(box: HTMLElement, list: HTMLElement): Anchor | null {
   const el = list.querySelector(".thread-doc")
   if (!el) return null
   const view = box.getBoundingClientRect()
   const at = el.getBoundingClientRect()
-  return at.bottom > view.top && at.top < view.bottom ? { el, seq: Number.NaN, top: at.top - view.top, at: box.scrollTop } : null
+  return at.bottom > view.top && at.top < view.bottom ? spot(box, list, el, Number.NaN) : null
 }
 
 function anchorRow(list: HTMLElement, seq: number): Element | null {
@@ -102,14 +114,16 @@ export function useStick(following = true, still = false) {
     }
     const top = box.getBoundingClientRect().top
     if (still && Date.now() - wheeled.current < WHEEL_MS) {
-      anchor.current = { el, seq: a.seq, top: el.getBoundingClientRect().top - top, at: box.scrollTop }
+      anchor.current = spot(box, list, el, a.seq)
       return
     }
     const holding = placed.current === a && Date.now() < holdUntil.current
     const clamped = still && box.scrollTop < a.at && box.scrollTop >= box.scrollHeight - box.clientHeight - 0.5
     const aim = clamped || holding ? a.top : a.top - (box.scrollTop - a.at)
-    const shift = el.getBoundingClientRect().top - top - aim
-    const short = still ? box.scrollTop + shift - (box.scrollHeight - box.clientHeight) : 0
+    const at = el.getBoundingClientRect().top
+    const shift = at - top - aim
+    const lost = el === a.el ? a.under - (endOf(list) - at) : Number.POSITIVE_INFINITY
+    const short = still ? Math.min(box.scrollTop + shift - (box.scrollHeight - box.clientHeight), lost) : 0
     if (short > 0.5) {
       room.current += short
       pad()
@@ -117,8 +131,8 @@ export function useStick(following = true, still = false) {
     if (Math.abs(shift) > 0.5) box.scrollTop += shift
     const gap = bottom(box) - box.scrollTop
     if (still && stuck.current && gap > 0.5 && gap < NEAR_BOTTOM) box.scrollTop = bottom(box)
-    const landed = el.getBoundingClientRect().top - top
-    anchor.current = { el, seq: a.seq, top: Math.abs(landed - aim) < 1 ? aim : landed, at: box.scrollTop }
+    const landed = spot(box, list, el, a.seq)
+    anchor.current = Math.abs(landed.top - aim) < 1 ? { ...landed, top: aim } : landed
     if (holding) placed.current = anchor.current
   }, [still, pad])
 
@@ -178,7 +192,7 @@ export function useStick(following = true, still = false) {
     }
     const wheel = (e: WheelEvent) => {
       wheeled.current = Date.now()
-      if (e.deltaY < 0 && reserve.current < box.clientHeight) {
+      if (e.deltaY < 0 && reserve.current < box.clientHeight && box.scrollTop > 0.5 && gapIn(box) > -0.5) {
         reserve.current = box.clientHeight
         pad()
       } else if (e.deltaY > 0 && reserve.current > 0) {
@@ -239,8 +253,9 @@ export function useStick(following = true, still = false) {
       box.scrollTop = Math.round(box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top - offset)
       remember()
       const seq = Number(el.dataset.seq)
-      if (stuck.current || !Number.isSafeInteger(seq)) return
-      anchor.current = { el, seq, top: el.getBoundingClientRect().top - box.getBoundingClientRect().top, at: box.scrollTop }
+      const list = content.current
+      if (stuck.current || !list || !Number.isSafeInteger(seq)) return
+      anchor.current = spot(box, list, el, seq)
       placed.current = anchor.current
       holdUntil.current = Date.now() + RESTORE_HOLD_MS
     },

@@ -22,6 +22,7 @@ type Stick = ReturnType<typeof useStick>
 class Feed {
   rows: { seq: number; h: number }[] = []
   lines = 10
+  pad = 0
   top = 0
   observers = new Set<() => void>()
   listeners = new Map<string, Set<Listener>>()
@@ -37,8 +38,16 @@ class Feed {
     return this.rows.reduce((sum, r) => sum + r.h, 0)
   }
 
+  get natural(): number {
+    return this.above + DOC_PAD + this.lines * LINE + this.pad
+  }
+
   get listH(): number {
-    return this.above + DOC_PAD + this.lines * LINE
+    return Math.max(VIEW_H, this.natural)
+  }
+
+  get lift(): number {
+    return this.listH - this.natural
   }
 
   get scrollHeight(): number {
@@ -50,7 +59,7 @@ class Feed {
   }
 
   get docTop(): number {
-    return VIEW_TOP + this.above - this.top
+    return VIEW_TOP + this.lift + this.above - this.top
   }
 
   scrollTo(v: number): void {
@@ -89,14 +98,23 @@ class Feed {
   readonly doc = {
     isConnected: true,
     classList: { contains: (c: string) => c === "thread-doc" },
+    previousElementSibling: null,
     getClientRects: () => [{}],
     getBoundingClientRect: () => ({ top: this.docTop, bottom: this.docTop + DOC_PAD + this.lines * LINE }),
+  }
+
+  readonly hidden = {
+    isConnected: true,
+    previousElementSibling: this.doc,
+    getClientRects: () => [],
+    getBoundingClientRect: () => ({ top: 0, bottom: 0 }),
   }
 
   readonly list = {
     get offsetHeight(): number {
       return Math.round(feed().listH)
     },
+    lastElementChild: this.hidden,
     querySelector: (sel: string) => (sel === ".thread-doc" ? this.doc : null),
     querySelectorAll: () => this.rows.map((r) => this.rowEl(r.seq)),
   }
@@ -105,7 +123,7 @@ class Feed {
     const known = this.rowEls.get(seq)
     if (known) return known
     const at = (): number => {
-      let y = VIEW_TOP - this.top
+      let y = VIEW_TOP + this.lift - this.top
       for (const r of this.rows) {
         if (r.seq === seq) return y
         y += r.h
@@ -391,6 +409,88 @@ describe("useStick in a thread doc", () => {
     docLine(f)
     expect(f.max - f.top).toBeLessThan(1)
     await act(async () => root.unmount())
+  })
+
+  test("a composer that grows and shrinks back under a thread shorter than the view leaves no blank space under it", async () => {
+    const f = new Feed(3)
+    const { root } = await mount(f, true, true)
+    f.fire("pointerdown")
+    const before = f.docTop
+    f.pad = 168
+    f.resized()
+    expect(f.docTop).toBe(before - 168)
+    f.pad = 0
+    f.resized()
+    expect(f.spacer.style.height).toBe("")
+    expect(f.top).toBe(0)
+    expect(f.docTop).toBe(before)
+    await act(async () => root.unmount())
+  })
+
+  test("in a thread shorter than the view, the doc you read stays put when a line under it leaves, with room under it", async () => {
+    const f = new Feed(3)
+    const { root } = await mount(f, true, true)
+    f.fire("pointerdown")
+    const before = f.docTop
+    f.lines--
+    f.resized()
+    expect(Math.abs(f.docTop - before)).toBeLessThan(1)
+    expect(Math.abs(Number.parseFloat(f.spacer.style.height) - LINE)).toBeLessThan(0.01)
+    await act(async () => root.unmount())
+  })
+
+  test("a trackpad pull past the bottom that springs back as the channel updates leaves no blank space", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    f.fire("wheel", 40)
+    f.top = f.max + 150
+    stick.remember()
+    later()
+    f.top = f.max
+    stick.settle()
+    expect(f.spacer.style.height).toBe("")
+    expect(f.top).toBe(f.max)
+    await act(async () => root.unmount())
+  })
+
+  test("a view left in the reserve, pulled back by the browser as the channel updates, leaves no blank space", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    const end = f.top
+    f.fire("wheel", -200)
+    f.scrollTo(end - 7)
+    stick.remember()
+    f.scrollTo(end + 120)
+    stick.remember()
+    expect(f.top).toBe(end + 120)
+    later()
+    stick.remember()
+    expect(f.spacer.style.height).toBe("")
+    expect(f.layout()).toBe(true)
+    stick.settle()
+    expect(f.spacer.style.height).toBe("")
+    expect(f.top).toBe(end)
+    await act(async () => root.unmount())
+  })
+
+  test("an upward wheel reserves no room where there is nothing above to scroll to, or from past the bottom", async () => {
+    const short = new Feed(3)
+    const a = await mount(short, true, true)
+    short.fire("wheel", -200)
+    expect(short.spacer.style.height).toBe("")
+    await act(async () => a.root.unmount())
+    const long = new Feed(100)
+    const b = await mount(long, true, true)
+    long.scrollTo(long.max)
+    b.stick.remember()
+    long.top = long.max + 120
+    long.fire("wheel", -30)
+    expect(long.spacer.style.height).toBe("")
+    await act(async () => b.root.unmount())
   })
 
   test("sitting at the bottom, you follow the doc as it grows", async () => {
