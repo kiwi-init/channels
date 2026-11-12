@@ -2,11 +2,14 @@ import { createContext, useContext } from "react"
 
 import type { Message } from "~/model"
 
+export type Quoting = { kind: "message"; to: Message; excerpt: string | null } | { kind: "task"; task: number; excerpt: string }
+
 export interface Replying {
-  to: Message | null
-  excerpt: string | null
-  set: (m: Message | null, excerpt?: string) => void
+  quoting: Quoting | null
+  set: (quoting: Quoting | null) => void
 }
+
+export const replyTo = (to: Message, excerpt: string | null = null): Quoting => ({ kind: "message", to, excerpt })
 
 export const ReplyContext = createContext<Replying | null>(null)
 

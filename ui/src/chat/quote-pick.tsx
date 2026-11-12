@@ -7,8 +7,10 @@ import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 
+type QuoteSource = { kind: "message"; seq: number } | { kind: "task"; task: number }
+
 interface Picked {
-  seq: number
+  source: QuoteSource
   excerpt: string
   x: number
   y: number
@@ -18,22 +20,35 @@ interface Picked {
 const ROOM_ABOVE = 64
 const MESSAGE_TEXT = ".msg-body .md"
 
-function seqOf(node: Node, root: HTMLElement, body: string): number | null {
-  const el = node instanceof Element ? node : node.parentElement
-  if (!el || !root.contains(el)) return null
-  const row = el.closest(body)?.closest<HTMLElement>("[data-seq]")
-  const seq = row ? Number(row.dataset.seq) : NaN
-  return Number.isInteger(seq) ? seq : null
+function numberIn(el: HTMLElement | null | undefined, key: "seq" | "quoteTask"): number | null {
+  const n = el ? Number(el.dataset[key]) : NaN
+  return Number.isInteger(n) ? n : null
 }
 
-function pickedIn(root: HTMLElement, body: string): Picked | null {
+function sourceOf(node: Node, root: HTMLElement, body: string): QuoteSource | null {
+  const el = node instanceof Element ? node : node.parentElement
+  if (!el || !root.contains(el)) return null
+  const text = el.closest(body)
+  if (!text) return null
+  const described = text.closest<HTMLElement>("[data-quote-task]")
+  if (described) {
+    const task = numberIn(described, "quoteTask")
+    return task === null ? null : { kind: "task", task }
+  }
+  const seq = numberIn(text.closest<HTMLElement>("[data-seq]"), "seq")
+  return seq === null ? null : { kind: "message", seq }
+}
+
+const sameSource = (a: QuoteSource, b: QuoteSource | null): boolean => b !== null && (a.kind === "message" ? b.kind === "message" && b.seq === a.seq : b.kind === "task" && b.task === a.task)
+
+function pickedIn(root: HTMLElement, body: string, tasks: boolean): Picked | null {
   const sel = document.getSelection()
   if (!sel || sel.isCollapsed || !sel.rangeCount) return null
   const range = sel.getRangeAt(0)
-  const seq = seqOf(range.startContainer, root, body)
-  if (seq === null) return null
-  const end = seqOf(range.endContainer, root, body)
-  if (end !== seq && !(range.endOffset === 0 && range.endContainer !== range.startContainer)) return null
+  const source = sourceOf(range.startContainer, root, body)
+  if (source === null || (source.kind === "task" && !tasks)) return null
+  const end = sourceOf(range.endContainer, root, body)
+  if (!sameSource(source, end) && !(range.endOffset === 0 && range.endContainer !== range.startContainer)) return null
   const excerpt = cleanExcerpt(sel.toString())
   if (!excerpt) return null
   const rect = range.getClientRects()[0] ?? range.getBoundingClientRect()
@@ -42,10 +57,21 @@ function pickedIn(root: HTMLElement, body: string): Picked | null {
   if (rect.bottom < scroller.top || rect.top > scroller.bottom || (!rect.width && !rect.height)) return null
   const below = rect.top - scroller.top < ROOM_ABOVE
   const x = Math.min(Math.max(rect.left + rect.width / 2, box.left + 48), box.right - 48)
-  return { seq, excerpt, x, y: below ? rect.bottom : rect.top, below }
+  return { source, excerpt, x, y: below ? rect.bottom : rect.top, below }
 }
 
-export function QuotePick({ root, onQuote, body = MESSAGE_TEXT }: { root: RefObject<HTMLElement | null>; onQuote: (seq: number, excerpt: string) => void; body?: string }) {
+export function QuotePick({
+  root,
+  onQuote,
+  onQuoteTask,
+  body = MESSAGE_TEXT,
+}: {
+  root: RefObject<HTMLElement | null>
+  onQuote: (seq: number, excerpt: string) => void
+  onQuoteTask?: (task: number, excerpt: string) => void
+  body?: string
+}) {
+  const tasks = onQuoteTask !== undefined
   const [picked, setPicked] = useState<Picked | null>(null)
   const showing = useRef(false)
   useEffect(() => {
@@ -57,7 +83,7 @@ export function QuotePick({ root, onQuote, body = MESSAGE_TEXT }: { root: RefObj
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
         const el = root.current
-        setPicked(el ? pickedIn(el, body) : null)
+        setPicked(el ? pickedIn(el, body, tasks) : null)
       })
     }
     const up = (e: PointerEvent) => {
@@ -67,15 +93,21 @@ export function QuotePick({ root, onQuote, body = MESSAGE_TEXT }: { root: RefObj
       if (e.key === "Escape") setPicked(null)
       else if (e.shiftKey || e.key === "Shift") look()
     }
+    const dismiss = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || !showing.current) return
+      e.preventDefault()
+      setPicked(null)
+    }
     const changed = () => {
       if (!showing.current) return
       const sel = document.getSelection()
       if (!sel || sel.isCollapsed) setPicked(null)
     }
-    const moved = () => setPicked((was) => (was ? (root.current ? pickedIn(root.current, body) : null) : null))
+    const moved = () => setPicked((was) => (was ? (root.current ? pickedIn(root.current, body, tasks) : null) : null))
     const away = () => setPicked(null)
     document.addEventListener("pointerup", up)
     document.addEventListener("keyup", key)
+    document.addEventListener("keydown", dismiss, true)
     document.addEventListener("selectionchange", changed)
     document.addEventListener("contextmenu", away, true)
     window.addEventListener("scroll", moved, true)
@@ -84,12 +116,13 @@ export function QuotePick({ root, onQuote, body = MESSAGE_TEXT }: { root: RefObj
       cancelAnimationFrame(frame)
       document.removeEventListener("pointerup", up)
       document.removeEventListener("keyup", key)
+      document.removeEventListener("keydown", dismiss, true)
       document.removeEventListener("selectionchange", changed)
       document.removeEventListener("contextmenu", away, true)
       window.removeEventListener("scroll", moved, true)
       window.removeEventListener("resize", away)
     }
-  }, [root, body])
+  }, [root, body, tasks])
   if (!picked) return null
   return createPortal(
     <button
@@ -99,7 +132,8 @@ export function QuotePick({ root, onQuote, body = MESSAGE_TEXT }: { root: RefObj
       title={t("chat.quote.pick.title")}
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => {
-        onQuote(picked.seq, picked.excerpt)
+        if (picked.source.kind === "message") onQuote(picked.source.seq, picked.excerpt)
+        else onQuoteTask?.(picked.source.task, picked.excerpt)
         setPicked(null)
         document.getSelection()?.removeAllRanges()
       }}
