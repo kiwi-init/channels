@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Temporal } from "temporal-polyfill"
 
 import { span, t } from "~/i18n/i18n"
 
@@ -41,15 +42,17 @@ export function lasting(ms: number): string {
   return span(Math.round(d / DAY), "day")
 }
 
+const dateOf = (ms: number) => Temporal.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(Temporal.Now.timeZoneId()).toPlainDate()
+
 export function day(at: number, now = Date.now()): string {
-  const start = new Date(now)
-  start.setHours(0, 0, 0, 0)
-  if (at >= start.getTime()) return t("kit.time.today")
-  if (at >= start.getTime() - DAY) return t("kit.time.yesterday")
+  const today = dateOf(now)
+  const d = dateOf(at)
+  if (Temporal.PlainDate.compare(d, today) >= 0) return t("kit.time.today")
+  if (d.equals(today.subtract({ days: 1 }))) return t("kit.time.yesterday")
   return new Date(at).toLocaleDateString(locales(), { weekday: "long", month: "short", day: "numeric" })
 }
 
-export const sameDay = (a: number, b: number): boolean => new Date(a).toDateString() === new Date(b).toDateString()
+export const sameDay = (a: number, b: number): boolean => dateOf(a).equals(dateOf(b))
 
 export function useNow(every: number | null): number {
   const [now, setNow] = useState(() => Date.now())
