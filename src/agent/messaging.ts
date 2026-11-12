@@ -3,6 +3,8 @@ import { personaAnswers } from "@kiwi/core/personality.ts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import { mergeCard, movedCard, sameCard, type Where } from "../card.ts";
+import { here, realSession, type Here } from "../seats.ts";
+import { sessionFingerprint } from "@kiwi/core/session-print.ts";
 import { eachLive, RelayError, type Live, type SendOptions } from "@kiwi/core/client.ts";
 import { Cursor } from "../config.ts";
 import { cardLine } from "@kiwi/core/format.ts";
@@ -451,11 +453,29 @@ export class SessionMessaging extends SessionListen {
     function* (this: SessionMessaging, detected: Card, given: { model?: string; note?: string; tools?: string[]; fresh?: number } = {}) {
       const { state } = yield* this.state();
       const me = state.members.get(this.me);
-      const merged = mergeCard(detected, me?.card, given);
+      const real = realSession(here());
+      const session = real ? yield* Effect.promise(() => sessionFingerprint(this.ch.roomId, real)) : me?.card?.session;
+      const merged = { ...mergeCard(detected, me?.card, given), ...(session ? { session } : {}) };
       const card = me?.runs ? omit(merged, "harness", "model") : merged;
       if (!me || isPerson(me) || !canPost(me.scopes) || state.hold || sameCard(me.card, card)) return { sent: false, card };
       yield* this.event({ op: "card", ...card }, `card: ${cardLine(card)}`);
       return { sent: true, card };
+    },
+    oneLook,
+  );
+
+  readonly refreshSession = Effect.fn("AgentSession.refreshSession")(
+    { self: this },
+    function* (this: SessionMessaging, who: Here) {
+      const real = realSession(who);
+      if (!real) return { sent: false };
+      const { state } = yield* this.state();
+      const me = state.members.get(this.me);
+      const session = yield* Effect.promise(() => sessionFingerprint(this.ch.roomId, real));
+      if (!me || isPerson(me) || !canPost(me.scopes) || state.hold || me.card?.session === session) return { sent: false };
+      const card = { ...(me.card ? omit(me.card, "at") : {}), session };
+      yield* this.event({ op: "card", ...card }, `card: ${cardLine(card)}`);
+      return { sent: true };
     },
     oneLook,
   );

@@ -106,6 +106,12 @@ function sameModel(seat: string | undefined, session: string | undefined): boole
   return !seat || !session || modelKey(seat) === modelKey(session);
 }
 
+const REAL_SESSIONS: ReadonlySet<string> = new Set(["claude", "codex", "grok", "opencode", "mimo", "agy"]);
+
+export function realSession(who: Here): string | undefined {
+  return who.harness && REAL_SESSIONS.has(who.harness) && who.session && !/-pid-\d+$/.test(who.session) ? who.session : undefined;
+}
+
 function heldByProcess(harness: "kimi" | "mimo" | "zcode" | "gemini", pid: number): Here {
   return { harness, session: `${harness}-pid-${pid}`, pid };
 }
