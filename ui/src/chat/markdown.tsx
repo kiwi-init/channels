@@ -14,8 +14,8 @@ import { t } from "~/i18n/i18n"
 import { openOutside } from "~/kit/outside"
 
 import { MermaidBlock } from "~/chat/mermaid"
-import { keepParsed, parsedFor } from "~/chat/parsed"
-import { tooltipOf, zonedTimes } from "~/chat/zoned-times"
+import { keepParsed, parseKey, parsedFor } from "~/chat/parsed"
+import { segments, tooltipOf } from "~/chat/zoned-times"
 import { copyText } from "~/kit/toasts"
 
 const TEXT = { fontSize: 15, fontFamily: "var(--sans)", color: "var(--ink)", lineHeight: 22, marginTop: 0, marginBottom: 8 }
@@ -201,22 +201,41 @@ export function blockGaps(markdown: string): string {
   return out.join("\n")
 }
 
-function parse(markdown: string, at?: number): Promise<ASTNode> {
-  const source = zonedTimes(markdown, at)
-  const done = parsedFor(source)
+export function zonedLinks(node: ASTNode, at?: number, blocked = false): void {
+  const skip = blocked || node.type === "Link" || node.type === "Code" || node.type === "CodeBlock"
+  if (!skip && node.children?.length) {
+    const out: ASTNode[] = []
+    let grew = false
+    for (const child of node.children) {
+      const found = child.type === "Text" && child.content !== undefined ? segments(child.content, at) : null
+      if (found) {
+        grew = true
+        for (const seg of found)
+          out.push(typeof seg === "string" ? { type: "Text", content: seg } : { type: "Link", attributes: { url: `kiwi-utc:${seg.iso}` }, children: [{ type: "Text", content: seg.token }] })
+      } else out.push(child)
+    }
+    if (grew) node.children = out
+  }
+  for (const child of node.children ?? []) zonedLinks(child, at, skip)
+}
+
+export function parse(markdown: string, at?: number): Promise<ASTNode> {
+  const key = parseKey(markdown, at)
+  const done = parsedFor(key)
   if (done) return Promise.resolve(done)
-  const pending = parsing.get(source)
+  const pending = parsing.get(key)
   if (pending) return pending
-  const next = parseMarkdown(blockGaps(source), FLAGS)
+  const next = parseMarkdown(blockGaps(markdown), FLAGS)
     .then((ast) => {
       indexTaskItems(ast)
       markInlineImages(ast)
+      zonedLinks(ast, at)
       safeLinks(ast)
-      keepParsed(source, ast)
+      keepParsed(key, ast)
       return ast
     })
-    .finally(() => parsing.delete(source))
-  parsing.set(source, next)
+    .finally(() => parsing.delete(key))
+  parsing.set(key, next)
   return next
 }
 
@@ -331,7 +350,7 @@ export interface MarkdownProps {
 
 export default function Markdown({ markdown, at, onMention, onTask, onMessage, onImage, onShown }: MarkdownProps) {
   const box = useRef<HTMLDivElement>(null)
-  const source = useMemo(() => zonedTimes(markdown, at), [markdown, at])
+  const source = useMemo(() => parseKey(markdown, at), [markdown, at])
   const [got, setGot] = useState<{ markdown: string; ast: ASTNode } | null>(() => {
     const cached = parsedFor(source)
     return cached ? { markdown: source, ast: cached } : null

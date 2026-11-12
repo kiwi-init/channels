@@ -3,6 +3,8 @@ import type { ASTNode } from "react-native-enriched-markdown/lib/typescript/src/
 const LIMIT = 800
 const parsed = new Map<string, ASTNode>()
 
+export const parseKey = (markdown: string, at?: number): string => (at === undefined ? markdown : `\u0000${at}\u0000${markdown}`)
+
 export const parsedFor = (markdown: string): ASTNode | undefined => parsed.get(markdown)
 
 export function keepParsed(markdown: string, ast: ASTNode): void {

@@ -1,7 +1,5 @@
 const TOKEN = /(?<![\d-])(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?Z)|(?<![\d:])(\d{2}):(\d{2})(Z| UTC)(?![\dA-Za-z])/g
-const FENCE = /^\s{0,3}(?:>\s?)*(?:`{3,}|~{3,})/
-const LINK = /\[[^\]]*\]\([^)]*\)/g
-const BARE_URL = /https?:\/\/[^\s)]*/g
+const BARE_URL = /https?:\/\/\S+/g
 const ANY_TIME = /\d:\d\d/
 
 const pad = (n: number): string => String(n).padStart(2, "0")
@@ -16,52 +14,14 @@ const utcSecond = (day: Date, hour: number, minute: number, second: number): str
   return `${day.getUTCFullYear()}-${pad(day.getUTCMonth() + 1)}-${pad(day.getUTCDate())}T${pad(hour)}:${pad(minute)}:${pad(second)}Z`
 }
 
-const codeSpans = (markdown: string): [number, number][] => {
-  const spans: [number, number][] = []
-  const runs = [...markdown.matchAll(/`+/g)]
-  for (let i = 0; i < runs.length; i++) {
-    const open = runs[i]!
-    let close: typeof open | undefined
-    for (let j = i + 1; j < runs.length && !close; j++) if (runs[j]![0].length === open[0].length) close = runs[j]
-    if (!close) continue
-    spans.push([open.index ?? 0, (close.index ?? 0) + close[0].length])
-    i = runs.indexOf(close)
-  }
-  return spans
-}
+export type Segment = string | { token: string; iso: string }
 
-function masked(markdown: string): [number, number][] {
-  const spans: [number, number][] = []
-  let fence = ""
-  let at = 0
-  for (const line of markdown.split("\n")) {
-    const from = at
-    at += line.length + 1
-    const mark = FENCE.test(line) ? line.trim().replace(/^>\s*/, "")[0] : ""
-    if (fence) {
-      spans.push([from, at - 1])
-      if (mark && mark === fence) fence = ""
-    } else if (mark) {
-      fence = mark
-      spans.push([from, at - 1])
-    }
-    FENCE.lastIndex = 0
-  }
-  for (const found of [LINK, BARE_URL]) {
-    for (const m of markdown.matchAll(found)) spans.push([m.index ?? 0, (m.index ?? 0) + m[0].length])
-    found.lastIndex = 0
-  }
-  return spans.concat(codeSpans(markdown))
-}
-
-export function zonedTimes(markdown: string, at?: number): string {
-  if (!ANY_TIME.test(markdown)) return markdown
-  const spans = masked(markdown)
-  const hidden = (from: number, to: number): boolean => spans.some(([a, b]) => from < b && to > a)
+function proseTimes(text: string, at?: number): Segment[] | null {
+  if (!ANY_TIME.test(text)) return null
   const day = at === undefined ? null : new Date(at)
-  let out = ""
+  const out: Segment[] = []
   let atPos = 0
-  for (const m of markdown.matchAll(TOKEN)) {
+  for (const m of text.matchAll(TOKEN)) {
     const whole = m[0]
     const from = m.index ?? 0
     let iso: string | null = null
@@ -71,12 +31,32 @@ export function zonedTimes(markdown: string, at?: number): string {
     } else if (day) {
       iso = utcSecond(day, Number(m[2]), Number(m[3]), 0)
     }
-    if (!iso || hidden(from, from + whole.length)) continue
-    out += markdown.slice(atPos, from) + `[${whole}](kiwi-utc:${iso})`
+    if (!iso) continue
+    out.push(text.slice(atPos, from), { token: whole, iso })
     atPos = from + whole.length
   }
   TOKEN.lastIndex = 0
-  return atPos === 0 ? markdown : out + markdown.slice(atPos)
+  return atPos === 0 ? null : out.concat(text.slice(atPos))
+}
+
+export function segments(text: string, at?: number): Segment[] | null {
+  if (!ANY_TIME.test(text)) return null
+  const parts: Segment[] = []
+  let found = false
+  let atPos = 0
+  for (const url of text.matchAll(BARE_URL)) {
+    const from = url.index ?? 0
+    const before = proseTimes(text.slice(atPos, from), at)
+    if (before) found = true
+    parts.push(...(before ?? [text.slice(atPos, from)]), url[0])
+    atPos = from + url[0].length
+  }
+  BARE_URL.lastIndex = 0
+  const rest = proseTimes(text.slice(atPos), at)
+  if (rest) found = true
+  if (!found) return null
+  parts.push(...(rest ?? [text.slice(atPos)]))
+  return parts
 }
 
 export interface LocalTime {

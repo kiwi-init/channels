@@ -1,50 +1,37 @@
 import { describe, expect, test } from "bun:test"
 
-import { localOf, tooltipOf, zonedTimes } from "~/chat/zoned-times"
+import { localOf, segments, tooltipOf } from "~/chat/zoned-times"
 
 const SENT = Date.UTC(2030, 0, 16, 22, 0, 0)
+const plain = (text: string, at: number | undefined = SENT): string => {
+  const found = segments(text, at)
+  return found === null ? text : found.map((s) => (typeof s === "string" ? s : `[${s.token}](kiwi-utc:${s.iso})`)).join("")
+}
 
 describe("zoned times are recognized in prose (#2367)", () => {
-  test("a full UTC timestamp becomes a kiwi link carrying its own instant", () => {
-    expect(zonedTimes("meet at 2030-01-16T01:15:00Z sharp", SENT)).toBe("meet at [2030-01-16T01:15:00Z](kiwi-utc:2030-01-16T01:15:00Z) sharp")
-    expect(zonedTimes("meet at 2030-01-16T01:15Z sharp", SENT)).toBe("meet at [2030-01-16T01:15Z](kiwi-utc:2030-01-16T01:15:00Z) sharp")
+  test("a full UTC timestamp carries its own instant", () => {
+    expect(plain("meet at 2030-01-16T01:15:00Z sharp")).toBe("meet at [2030-01-16T01:15:00Z](kiwi-utc:2030-01-16T01:15:00Z) sharp")
+    expect(plain("meet at 2030-01-16T01:15Z sharp")).toBe("meet at [2030-01-16T01:15Z](kiwi-utc:2030-01-16T01:15:00Z) sharp")
   })
 
   test("a time-only token takes the message's UTC date", () => {
-    expect(zonedTimes("standup 06:30Z ok?", SENT)).toBe("standup [06:30Z](kiwi-utc:2030-01-16T06:30:00Z) ok?")
-    expect(zonedTimes("standup 06:30 UTC ok?", SENT)).toBe("standup [06:30 UTC](kiwi-utc:2030-01-16T06:30:00Z) ok?")
+    expect(plain("standup 06:30Z ok?")).toBe("standup [06:30Z](kiwi-utc:2030-01-16T06:30:00Z) ok?")
+    expect(plain("standup 06:30 UTC ok?")).toBe("standup [06:30 UTC](kiwi-utc:2030-01-16T06:30:00Z) ok?")
   })
 
-  test("several times, bold text, list items and table cells all convert", () => {
-    expect(zonedTimes("a 06:30Z and 23:45Z pair", SENT)).toBe("a [06:30Z](kiwi-utc:2030-01-16T06:30:00Z) and [23:45Z](kiwi-utc:2030-01-16T23:45:00Z) pair")
-    expect(zonedTimes("**deal at 06:30Z**", SENT)).toBe("**deal at [06:30Z](kiwi-utc:2030-01-16T06:30:00Z)**")
-    expect(zonedTimes("- first 06:30Z\n- second 23:45Z", SENT)).toBe("- first [06:30Z](kiwi-utc:2030-01-16T06:30:00Z)\n- second [23:45Z](kiwi-utc:2030-01-16T23:45:00Z)")
-    expect(zonedTimes("| when |\n| --- |\n| 06:30Z |", SENT)).toBe("| when |\n| --- |\n| [06:30Z](kiwi-utc:2030-01-16T06:30:00Z) |")
+  test("several times in one text convert, and URLs around them stay whole", () => {
+    expect(plain("a 06:30Z and 23:45Z pair")).toBe("a [06:30Z](kiwi-utc:2030-01-16T06:30:00Z) and [23:45Z](kiwi-utc:2030-01-16T23:45:00Z) pair")
+    expect(plain("see https://x.test/06:30Z now")).toBe("see https://x.test/06:30Z now")
+    expect(plain("see https://x.test/06:30Z then 07:00Z after")).toBe("see https://x.test/06:30Z then [07:00Z](kiwi-utc:2030-01-16T07:00:00Z) after")
   })
 
-  test("invalid values and impossible dates stay as written", () => {
-    const keep = ["25:00Z is wrong", "12:60Z too", "2030-02-30T01:15Z no such day", "23:59:60Z never", "06:30 Z spaced"]
-    for (const text of keep) expect(zonedTimes(text, SENT)).toBe(text)
-  })
-
-  test("unzoned numbers, URLs, inline code and fenced code stay as written", () => {
-    expect(zonedTimes("06:30 plain", SENT)).toBe("06:30 plain")
-    expect(zonedTimes("see https://x.test/06:30Z now", SENT)).toBe("see https://x.test/06:30Z now")
-    expect(zonedTimes("run `06:30Z` locally", SENT)).toBe("run `06:30Z` locally")
-    expect(zonedTimes("```\n06:30Z\n```", SENT)).toBe("```\n06:30Z\n```")
-    expect(zonedTimes("text [link](http://x.test/06:30Z) here", SENT)).toBe("text [link](http://x.test/06:30Z) here")
-  })
-
-  test("markdown structure holds: code in a blockquote, code spans with inner backticks, and link labels stay as written", () => {
-    expect(zonedTimes("> ~~~\n> 06:30Z\n> ~~~", SENT)).toBe("> ~~~\n> 06:30Z\n> ~~~")
-    expect(zonedTimes("``a ` 06:30Z`` stays code", SENT)).toBe("``a ` 06:30Z`` stays code")
-    expect(zonedTimes("[06:30Z](https://example.com) stays one link", SENT)).toBe("[06:30Z](https://example.com) stays one link")
-    expect(zonedTimes("[see 06:30Z here](https://example.com)", SENT)).toBe("[see 06:30Z here](https://example.com)")
+  test("invalid values stay as written", () => {
+    for (const text of ["25:00Z is wrong", "12:60Z too", "2030-02-30T01:15Z no such day", "23:59:60Z never", "06:30 Z spaced", "06:30 plain"]) expect(plain(text)).toBe(text)
   })
 
   test("a time-only token without a message date stays unconverted; a full timestamp still converts", () => {
-    expect(zonedTimes("standup 06:30Z ok?", undefined)).toBe("standup 06:30Z ok?")
-    expect(zonedTimes("meet 2030-01-16T01:15Z", undefined)).toBe("meet [2030-01-16T01:15Z](kiwi-utc:2030-01-16T01:15:00Z)")
+    expect(segments("standup 06:30Z ok?", undefined)).toBe(null)
+    expect(plain("meet 2030-01-16T01:15Z", undefined)).toBe("meet [2030-01-16T01:15Z](kiwi-utc:2030-01-16T01:15:00Z)")
   })
 })
 

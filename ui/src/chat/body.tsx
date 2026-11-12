@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react"
 
 import { useHug } from "~/chat/hug"
 import { linked, useMentionParser } from "~/chat/linked"
-import { parsedFor } from "~/chat/parsed"
+import { parseKey, parsedFor } from "~/chat/parsed"
 import { useAct } from "~/nav"
 import { type Words, wordsPlain, wordsRaw } from "~/words"
 import { personGo } from "~/person-go"
@@ -45,7 +45,7 @@ export function Body({
   const onTask = useCallback((task: number) => go({ to: "task", task }), [go])
   return (
     <div className="msg-text" ref={box}>
-      {!shown && !parsedFor(markdown) && <p className="md-plain">{wordsPlain(text, names)}</p>}
+      {!shown && !parsedFor(parseKey(markdown, at)) && <p className="md-plain">{wordsPlain(text, names)}</p>}
       <Suspense fallback={null}>
         <Markdown markdown={markdown} at={at} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} />
       </Suspense>

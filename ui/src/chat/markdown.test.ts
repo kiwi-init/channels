@@ -13,9 +13,9 @@ const { normalizeMarkdownStyle } = await import("react-native-enriched-markdown/
 const { buildStyles } = await import("react-native-enriched-markdown/lib/module/web/styles.js")
 const { parseMarkdown } = await import("react-native-enriched-markdown/lib/module/web/parseMarkdown.js")
 const { RenderNode } = await import("react-native-enriched-markdown/lib/module/web/renderers/index.js")
-const { default: Markdown, blockGaps, withTextSize, safeLinks, sortedRows } = await import("~/chat/markdown")
+const { default: Markdown, blockGaps, withTextSize, safeLinks, sortedRows, zonedLinks } = await import("~/chat/markdown")
+const { parseKey } = await import("~/chat/parsed")
 const { keepParsed } = await import("~/chat/parsed")
-const { zonedTimes } = await import("~/chat/zoned-times")
 
 const fixed = (name: string, s: CSSProperties): string[] => [
   ...(typeof s.fontSize === "number" ? [`${name} fontSize ${s.fontSize}`] : []),
@@ -78,7 +78,7 @@ const shape = (node: Shape): string => (node.type === "Text" ? (node.content ?? 
 describe("a line after a list is its own paragraph, not glued onto the last item (T4145)", () => {
   test("an unindented line right after a bulleted or numbered list starts a new paragraph", async () => {
     const source = readFileSync(join(import.meta.dir, "markdown.tsx"), "utf8")
-    expect(source).toContain("parseMarkdown(blockGaps(source), FLAGS)")
+    expect(source).toContain("parseMarkdown(blockGaps(markdown), FLAGS)")
     const bullets = await parseMarkdown(blockGaps("Waits for:\n\n- #1713: rerun\n- T4114: red\nThen: full CI"), FLAGS)
     expect((bullets.children ?? []).map(shape)).toEqual(["Paragraph(Waits for:)", "UnorderedList(ListItem(Paragraph(#1713: rerun)) ListItem(Paragraph(T4114: red)))", "Paragraph(Then: full CI)"])
     const numbered = await parseMarkdown(blockGaps("1. build\n2. ship\nDone."), FLAGS)
@@ -142,11 +142,12 @@ describe("a code block copies when it's pressed", () => {
 const quiet = () => {}
 const FLAGS = { latexMath: false, underline: false, hardSoftBreaks: true }
 
-async function rendered(markdown: string): Promise<string> {
+async function rendered(markdown: string, at?: number): Promise<string> {
   const ast = await parseMarkdown(markdown, FLAGS)
+  zonedLinks(ast, at)
   safeLinks(ast)
-  keepParsed(markdown, ast)
-  return renderToStaticMarkup(createElement(Markdown, { markdown, onMention: quiet, onTask: quiet, onMessage: quiet, onImage: quiet, onShown: quiet, copied: quiet }))
+  keepParsed(parseKey(markdown, at), ast)
+  return renderToStaticMarkup(createElement(Markdown, { markdown, at, onMention: quiet, onTask: quiet, onMessage: quiet, onImage: quiet, onShown: quiet, copied: quiet }))
 }
 
 describe("a link that hides a user name or password stays text (T216)", () => {
@@ -248,17 +249,49 @@ describe("a link to a message keeps its href; other kiwi:// links don't (T987)",
 describe("a UTC time in prose shows its local time (#2367)", () => {
   test("recognized times become kiwi-utc links whose text stays the original token", async () => {
     const at = Date.UTC(2030, 0, 16, 22)
-    const markdown = "standup 06:30Z, review 2030-01-16T01:15:00Z, plain 06:30 stays, `07:00Z` too"
-    const source = zonedTimes(markdown, at)
-    const ast = await parseMarkdown(source, FLAGS)
-    safeLinks(ast)
-    keepParsed(source, ast)
-    const html = renderToStaticMarkup(createElement(Markdown, { markdown, at, onMention: quiet, onTask: quiet, onMessage: quiet, onImage: quiet, onShown: quiet, copied: quiet }))
+    const html = await rendered("standup 06:30Z, review 2030-01-16T01:15:00Z, plain 06:30 stays, `07:00Z` too, 25:00Z wrong", at)
     expect(html).toContain('href="kiwi-utc:2030-01-16T06:30:00Z"')
     expect(html).toContain('href="kiwi-utc:2030-01-16T01:15:00Z"')
     expect(html).toContain(">06:30Z</a>")
     expect(html).toContain(">2030-01-16T01:15:00Z</a>")
     expect(html.match(/kiwi-utc:/g)?.length).toBe(2)
+  })
+
+  test("bold text, list items and table cells convert; code and links hold their structure", async () => {
+    const at = Date.UTC(2030, 0, 16, 22)
+    const bold = await rendered("**deal at 06:30Z**", at)
+    expect(bold).toContain('href="kiwi-utc:2030-01-16T06:30:00Z"')
+    const list = await rendered("- first 06:30Z\n- second 23:45Z", at)
+    expect(list).toContain('href="kiwi-utc:2030-01-16T06:30:00Z"')
+    expect(list).toContain('href="kiwi-utc:2030-01-16T23:45:00Z"')
+    const table = await rendered("| when |\n| --- |\n| 06:30Z |", at)
+    expect(table).toContain('href="kiwi-utc:2030-01-16T06:30:00Z"')
+  })
+
+  test("code blocks hold their structure: plain, in a list, behind a shorter fence line, and in a blockquote", async () => {
+    const at = Date.UTC(2030, 0, 16, 22)
+    for (const text of ["```\n06:30Z\n```", "~~~~\n~~~\n06:30Z\n~~~~", "- ~~~\n  06:30Z\n  ~~~", "> ~~~\n> 06:30Z\n> ~~~", "run `06:30Z` locally", "``a ` 06:30Z`` stays code"]) {
+      const html = await rendered(text, at)
+      expect(html).toContain("06:30Z")
+      expect(html).not.toContain("kiwi-utc:")
+    }
+  })
+
+  test("links hold their structure: inline and reference links keep their labels and destinations", async () => {
+    const at = Date.UTC(2030, 0, 16, 22)
+    const inline = await rendered("[06:30Z](https://example.com) stays one link", at)
+    expect(inline).toContain('href="https://example.com"')
+    expect(inline).toContain(">06:30Z</a>")
+    expect(inline).not.toContain("kiwi-utc")
+    const reference = await rendered("[06:30Z][meeting]\n\n[meeting]: https://example.com", at)
+    expect(reference).toContain('href="https://example.com"')
+    expect(reference).not.toContain("kiwi-utc")
+  })
+
+  test("a time-only token without a message date stays unconverted", async () => {
+    const html = await rendered("standup 06:30Z ok?")
+    expect(html).toContain("06:30Z")
+    expect(html).not.toContain("kiwi-utc:")
   })
 })
 
