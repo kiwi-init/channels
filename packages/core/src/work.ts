@@ -191,6 +191,11 @@ function mentions(m: Message, id: number): boolean {
   return new RegExp(`\\bT${id}\\b`).test(textOf(m));
 }
 
+function inAnotherTask(state: ChannelState, seq: number, id: number): boolean {
+  const place = state.placeOf.get(seq);
+  return place?.kind === "task" && place.task !== id;
+}
+
 /**
  * Everything about one task, in log order: its own events (made, claimed, updated, noted), every
  * thread that mentions it (whole, as one card, in any room), and the pull requests linked there.
@@ -219,7 +224,7 @@ export function taskFeed(state: ChannelState, messages: Message[], id: number): 
     const room = state.roomOf.get(first.seq);
     items.push({ type: "thread", seq: first.seq, at: at(first), root, ...(room ? { room } : {}), messages: thread });
   }
-  const linked = (m: Message) => (m.ev?.op === "task.update" && m.ev.task === id) || (m.kind !== "event" && mentioning.has(state.threadOf.get(m.seq) ?? m.seq));
+  const linked = (m: Message) => (m.ev?.op === "task.update" && m.ev.task === id) || (m.kind !== "event" && mentioning.has(state.threadOf.get(m.seq) ?? m.seq) && !inAnotherTask(state, m.seq, id));
   const shown = new Set<string>();
   for (const pr of prsIn(state, messages, linked)) {
     const m = messages.find((x) => x.seq === pr.seq)!;
@@ -339,7 +344,7 @@ export function prsByTask(state: ChannelState, messages: Message[], ids: Iterabl
   }
   const out = new Map<number, PrRef[]>();
   for (const id of ids) {
-    const linked = [...(notes.get(id) ?? []), ...[...(rootsOf.get(id) ?? [])].flatMap((root) => linksIn.get(root) ?? [])].sort((a, b) => a.seq - b.seq);
+    const linked = [...(notes.get(id) ?? []), ...[...(rootsOf.get(id) ?? [])].flatMap((root) => linksIn.get(root) ?? []).filter((l) => !inAnotherTask(state, l.seq, id))].sort((a, b) => a.seq - b.seq);
     const prs = new Map<string, PrRef>();
     for (const { seq, links } of linked) for (const l of links) if (!prs.has(l.url)) prs.set(l.url, { ...l, state: "open", seq });
     const items: PrRef[] = [];
@@ -366,7 +371,7 @@ function ownPrs(state: ChannelState, messages: Message[], id: number): PrRef[] {
   const own = (m: Message): boolean => {
     if (m.kind === "event") return m.ev?.op === "task.update" && m.ev.task === id;
     const place = state.placeOf.get(m.seq);
-    return mentions(m, id) || (place?.kind === "task" && place.task === id);
+    return place?.kind === "task" ? place.task === id : mentions(m, id);
   };
   const prs = prsIn(state, messages, own);
   const shown = new Set(prs.map((p) => prKey(p.repo, p.number)));

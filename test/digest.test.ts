@@ -63,6 +63,41 @@ describe("a closed task's digest", () => {
     expect(taskDigest(s, log, s.tasks.get(t)!)).toBe(`T${t} done: Drop images · PR ojow/channels#21 · by mac · 3 messages in its threads`);
   });
 
+  test("a PR linked in another task's thread is that task's, even when the message names this one (T1607)", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Clean up leftovers", owner: "mac" });
+    const other = await ev("jon", { op: "task.add", title: "Ask people", owner: "mac" });
+    const t = add.seq;
+    const log = [
+      add,
+      other,
+      await msg("mac", "msg", `https://github.com/ojow/channels/pull/57 is up; its Mac run goes after T${t}'s`, { task: other.seq }),
+      await msg("mac", "msg", `T${t} is in https://github.com/ojow/channels/pull/56`),
+      await ev("mac", { op: "task.update", task: t, state: "done" }),
+    ];
+    const s = fold(log, roster);
+    expect(s.placeOf.get(log[2]!.seq)).toEqual({ kind: "task", task: other.seq });
+    expect(taskDigest(s, log, s.tasks.get(t)!)).toBe(`T${t} done: Clean up leftovers · PR ojow/channels#56 · by mac · 2 messages in its threads`);
+    const closed = [...log, await ev("mac", { op: "task.update", task: other.seq, state: "done" })];
+    const after = fold(closed, roster);
+    expect(taskDigest(after, closed, after.tasks.get(other.seq)!)).toBe(`T${other.seq} done: Ask people · PR ojow/channels#57 · by mac`);
+  });
+
+  test("with a branch prefix, the PR from the task's branch is named though nobody posted its link (T1607)", async () => {
+    const repos = await ev("jon", { op: "repos.set", repos: ["ojow/channels"] });
+    const prefix = await ev("jon", { op: "branch.prefix.set", prefix: "Channels" });
+    const add = await ev("jon", { op: "task.add", title: "Clean up leftovers", owner: "mac" });
+    const t = add.seq;
+    const opened = await ev("jon", {
+      op: "github",
+      items: [{ event: "pull_request", repo: "ojow/channels", number: 56, state: "open", merged: false, branch: `Channels${t}-cleanup`, sha: "a".repeat(40), at: seq }],
+    });
+    const log = [repos, prefix, add, opened, await msg("mac", "msg", "merged as #56", { task: t }), await ev("mac", { op: "task.update", task: t, state: "done" })];
+    const s = fold(log, roster);
+    expect(taskDigest(s, log, s.tasks.get(t)!)).toContain("· PR ojow/channels#56 ·");
+    const bare = [add, log[4]!, log[5]!];
+    expect(taskDigest(fold(bare, roster), bare, fold(bare, roster).tasks.get(t)!)).not.toContain("PR ");
+  });
+
   test("a cancelled one says why, and no approval", async () => {
     const add = await ev("jon", { op: "task.add", title: "Old idea", owner: "mac" });
     const log = [add, await ev("jon", { op: "task.update", task: add.seq, state: "cancelled", note: "superseded by T9" })];

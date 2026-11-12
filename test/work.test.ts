@@ -175,6 +175,28 @@ describe("a task's feed", () => {
   });
 });
 
+describe("a PR linked in another task's thread (T1607)", () => {
+  test("shows on neither the page nor the board of a task the message only names; outside a task thread a mention still counts", async () => {
+    const mine = await msg(coord, { ev: { op: "task.add", title: "Clean up leftovers", owner: "ann" } });
+    const other = await msg(coord, { ev: { op: "task.add", title: "Ask people", owner: "ann" } });
+    const lent = await msg(ann, { body: `T${other.seq}: https://github.com/o/r/pull/57 is up; its Mac run goes after T${mine.seq}'s`, task: other.seq });
+    const under = await msg(bob, { body: "and https://github.com/o/r/pull/58 stacks on it", re: [lent.seq] });
+    const main = await msg(ann, { body: `T${mine.seq} is in https://github.com/o/r/pull/56, T${other.seq} waits` });
+    const ms = [mine, other, lent, under, main];
+    const s = fold(ms, roster);
+    expect([s.placeOf.get(lent.seq), s.placeOf.get(under.seq)]).toEqual([
+      { kind: "task", task: other.seq },
+      { kind: "task", task: other.seq },
+    ]);
+    const board = prsByTask(s, ms);
+    expect(board.get(mine.seq)?.map((p) => p.number)).toEqual([56]);
+    expect(taskPrs(taskFeed(s, ms, mine.seq)).map((p) => p.number)).toEqual([56]);
+    expect(board.get(other.seq)?.map((p) => p.number)).toEqual([57, 58, 56]);
+    expect(taskPrs(taskFeed(s, ms, other.seq)).map((p) => p.number)).toEqual([57, 58, 56]);
+    expect(taskFeed(s, ms, mine.seq).some((i) => i.type === "thread" && i.root === lent.seq)).toBe(true);
+  });
+});
+
 describe("every task's PRs in one pass", () => {
   test("match each task's feed: notes, threads that name it, later merged or closed, GitHub branches, forged links", async () => {
     const mallory = await generateIdentity("mallory");
@@ -206,6 +228,7 @@ describe("every task's PRs in one pass", () => {
       if (!re) roots.push(m.seq);
       if (i % 6 === 0) await add(msg(who, { ev: { op: "task.update", task: t, note: `PR ${url(pr + 2)}` } }));
       if (i % 11 === 0) await add(msg(mallory, { body: `T${t} ${url(99)}` }));
+      if (i % 13 === 0) await add(msg(who, { body: `${url(pr * 10 + 7)} goes after T${t}`, task: tasks[(i + 1) % tasks.length]! }));
     }
     await add(
       msg(owner, {
