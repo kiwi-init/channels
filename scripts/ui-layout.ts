@@ -203,6 +203,22 @@ try {
     if (tracker) {
       expect(near(width - tracker.right, 0), "the task tracker ends at the window's right edge");
       expect(!!composer && tracker.left >= composer.right + 8, "the task tracker clears the conversation");
+      const second = await page.evaluate(() => {
+        const fill = (selector: string, pseudo?: string): string => getComputedStyle(document.querySelector(selector)!, pseudo).backgroundColor;
+        const under = getComputedStyle(document.querySelector(".chan")!, "::after");
+        return {
+          under: under.backgroundColor,
+          column: under.gridColumnStart,
+          own: fill(".track"),
+          page: fill(".main"),
+          frame: fill(".app"),
+          corner: parseFloat(getComputedStyle(document.querySelector(".main")!).borderTopRightRadius),
+        };
+      });
+      expect(
+        second.column === "3" && second.under === second.page && second.page !== second.frame && second.own === "rgba(0, 0, 0, 0)" && second.corner === 0,
+        `the second sidebar sits on the page, not on the frame: the page's colour lies under its column, with no fill of its own and no corner between it and the work (${second.under} under it, page ${second.page}, frame ${second.frame}, a ${second.corner}px corner)`,
+      );
     }
     const mine = await page.evaluate(() => {
       const bubble = document.querySelector(".msg.is-mine .msg-text")?.getBoundingClientRect();

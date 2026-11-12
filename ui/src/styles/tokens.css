@@ -290,8 +290,7 @@
 .top,
 .rail,
 .side,
-.set-nav,
-.track {
+.set-nav {
   --bg: var(--frame);
   --bg-2: var(--frame-2);
   --bg-3: var(--frame-3);
