@@ -90,6 +90,8 @@ export default {
   "shell.rail.minimize": "최소화",
   "shell.rail.maximize.window": "창 최대화",
   "shell.rail.maximize": "최대화",
+  "shell.rail.restore.window": "창 복원",
+  "shell.rail.restore": "복원",
   "shell.rail.home": "홈",
   "shell.rail.new.channel": "새 채널",
   "shell.rail.settings": "설정",

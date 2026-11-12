@@ -34,7 +34,7 @@ blur, no gradients for show. Colour means a state, never decoration.
   a lighter frame around a dark page, a grey frame around a white one.
   `tokens.css` names them `--page` and `--frame` and rebinds `--bg`,
   `--bg-2`, `--bg-3`, `plate` and `float` on the frame's parts (`.top`,
-  `.rail`, `.side`, `.set-nav`, `.track`), so a rule that says `bg` means
+  `.rail`, `.side`, `.set-nav`), so a rule that says `bg` means
   the surface it sits on. The frame's own two steps, for its fields, cards
   and chips, are derived: `bg-3` with 6% and 12% of `ink` in dark, `bg-2`
   and `bg-3` with 6% of `ink` in light.
@@ -206,14 +206,16 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     hidden auto`): strips wrap, long code and diff lines wrap, a diagram
     shrinks to fit. The one exception is the image annotator's zoomed
     picture.
-  - One frame, one page. The top bar, the sidebar and the second sidebar
-    are one surface, the frame. The work is the page: the conversation or
-    a view, Settings, Home, and a thread or task opened in the right
-    column. The page rounds its top corners (`r-ctl`)
-    where it meets the frame and keeps them square against the window's
-    edge (a hidden sidebar, an open panel, a window under 1180px, Home).
-    What is open joins the page: the open tab from above and the open
-    sidebar row from the side, each in the page's colour with 8px flares.
+  - One frame, one page. The top bar and the sidebar are one surface,
+    the frame. The work is the page: the conversation or a view, Settings,
+    Home, and the second sidebar with whatever opens in it. On a wide
+    window the page reaches the window's right edge under that column,
+    whether or not the column has anything to show. The page rounds its
+    top-left corner (`r-ctl`), where it meets the frame, and keeps it
+    square against the window's edge (a hidden sidebar, Home).
+    Only the open tab joins the page, from above, in the page's colour
+    with 8px flares. Nothing in the sidebar cuts across the frame: its
+    open row is a pill on it.
   - Nothing you click moves. Hiding the sidebar or opening the right panel
     changes no control's position. Content may: a hidden sidebar gives its
     column to the work.
@@ -465,14 +467,14 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   a count). A section's + (New
   room, Invite people, Add an agent) shows when the pointer is over the
   section; it becomes a row only while the section is empty. The open row
-  takes the page's colour and reaches the sidebar's edge, where it joins
-  the page like the open tab; a row with news is 600 with a count. Cards for what waits on
+  is a pill on `wash-2`; a row with news is 600 with a count. Cards for what waits on
   you (an update, a device) sit at the foot under a
   16px fade: the text, then the action on its line's end, or under it when
   the text needs the width.
 - **Second sidebar.** The right column (`--side-w`) is one place with two
-  states. At rest, on every view, it is part of the frame and holds Now
-  and Activity. Now is the task
+  states. At rest, on every view, it sits on the page, with no line and
+  no step of fill between it and the work, and holds Now and Activity.
+  Now is the task
   tracker: the counts (in progress, done today) in mono beside its name, or
   on their own line under the toggle, then a 4px bar with one
   segment per state in the state colours, the next step, and the open tasks
@@ -598,7 +600,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   its tasks with PR and check ticks, Up next, Watching, and its last moves
   with mono times.
 - **Settings.** The sidebar trades the channels for Settings' sections (the
-  open one joined to the page, like a sidebar row) under a `‹ Settings` back
+  open one on `wash-2`) under a `‹ Settings` back
   button. The page sits beside them and reaches the window's right edge, its
   content centred on the window, up to 720px: a `t-display` title (a quiet line under it only when it
   says a scope or a limit), then groups of rows on the page under mono group

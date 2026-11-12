@@ -16,7 +16,7 @@
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { agyHere, geminiAncestor, kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
+import { agyHere, deepcodeAncestor, geminiAncestor, kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord, type SeatTaken } from "./config.ts";
 import { pinnedFor } from "./harness-bin.ts";
 import { holdsSeat, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
@@ -82,7 +82,9 @@ function harnessHere(env: Record<string, string | undefined>, tree: ProcessTree,
   if (onGrokBot(env, host)) return { harness: "grok-bot" };
   if (env.CURSOR_AGENT) return { harness: "cursor", ...(env.CURSOR_CONVERSATION_ID ? { session: env.CURSOR_CONVERSATION_ID } : {}) };
   if (env.OPENCODE_SESSION_ID) return { harness: "opencode", session: env.OPENCODE_SESSION_ID };
-  return {};
+  if (env.KIWI_HARNESS?.trim().toLowerCase() === "deepcode") return deepcodeHere(tree);
+  const deepcode = deepcodeAncestor(tree);
+  return deepcode ? heldByProcess("deepcode", deepcode) : {};
 }
 
 export type NamedHookHarness = "codex" | "gemini" | "grok" | "agy";
@@ -92,6 +94,7 @@ export function hereAs(harness: string | undefined, env: Record<string, string |
   if (harness === "grok") return { harness: "grok", ...(env.GROK_SESSION_ID ? { session: env.GROK_SESSION_ID } : {}) };
   if (harness === "gemini") return geminiHere(tree);
   if (harness === "agy") return { harness: "agy", ...(env.ANTIGRAVITY_CONVERSATION_ID ? { session: env.ANTIGRAVITY_CONVERSATION_ID } : {}) };
+  if (harness === "deepcode") return deepcodeHere(tree);
   return here(env, tree, host);
 }
 
@@ -112,13 +115,18 @@ export function realSession(who: Here): string | undefined {
   return who.harness && REAL_SESSIONS.has(who.harness) && who.session && !/-pid-\d+$/.test(who.session) ? who.session : undefined;
 }
 
-function heldByProcess(harness: "kimi" | "mimo" | "zcode" | "gemini", pid: number): Here {
+function heldByProcess(harness: "kimi" | "mimo" | "zcode" | "gemini" | "deepcode", pid: number): Here {
   return { harness, session: `${harness}-pid-${pid}`, pid };
 }
 
 function geminiHere(tree: ProcessTree): Here {
   const pid = geminiAncestor(tree);
   return pid ? heldByProcess("gemini", pid) : { harness: "gemini" };
+}
+
+function deepcodeHere(tree: ProcessTree): Here {
+  const pid = deepcodeAncestor(tree);
+  return pid ? heldByProcess("deepcode", pid) : { harness: "deepcode" };
 }
 
 export function kimiHookHere(tree: ProcessTree = {}): Here {
@@ -424,6 +432,16 @@ export function notePlace(seats: readonly Binding[], env: Record<string, string 
       );
     }
   });
+}
+
+export function notePlainPlace(alias: string, as: string, who: Here, env: Record<string, string | undefined> = process.env): void {
+  if ((who.harness !== undefined && who.harness !== "deepcode") || !tmuxPlaceFrom(env).tmux) return;
+  const c = loadConfig();
+  const plain = (b: Binding) => b.alias === alias && b.as === as && b.harness === who.harness;
+  notePlace(
+    Object.keys(c.bindings ?? {}).flatMap((dir) => seatsAt(c, dir).filter(plain)),
+    env,
+  );
 }
 
 export function noteHarnessSession(seats: readonly Binding[], id: string): void {

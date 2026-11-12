@@ -386,6 +386,14 @@ export const messageCommands: Record<string, Command> = {
       const digestNote = () => {
         if (!named.length) process.stderr.write("kiwi: this holds nothing up, so it goes to the person's digest, not Needs you; name the task or message it holds with --holds T7,#18\n");
       };
+      const handed = (seq: number, lead: string, carries: string, next: string) =>
+        Effect.gen(function* () {
+          out(
+            `sent #${seq} to ${lead}, the Lead${carries}${heldText}: your personality doesn't ask people, so the Lead ${next}; wait for the answer before acting on it (if it comes some other way, close it: kiwi ask-human --close ${seq} "why")`,
+          );
+          const { state, messages } = yield* s.state();
+          for (const n of yield* waitingOn(s, state, messages, { seq, body, to: [lead], task, re })) out(n);
+        });
       const stepFlags = ["do", "run", "expect", "link", "why", "needs-person"] as const;
       if (!opt.step && stepFlags.some((f) => opt[f] !== undefined)) return yield* die(`--${stepFlags.find((f) => opt[f] !== undefined)} goes with --step`);
       if (opt.step) {
@@ -412,7 +420,8 @@ export const messageCommands: Record<string, Command> = {
           ...(expect ? { expect } : {}),
           ...(links?.length ? { links } : {}),
         };
-        const { seq, to, also } = yield* s.escalate(body, re, undefined, { ...(task !== undefined ? { task } : {}), ...hold, step });
+        const { seq, to, also, lead } = yield* s.escalate(body, re, undefined, { ...(task !== undefined ? { task } : {}), ...hold, step });
+        if (lead !== null) return yield* handed(seq, lead, ", with a step", "passes it to a person");
         out(
           `escalated #${seq} to ${to.join(" and ")} with a step${heldText}${alsoAnswers(also)}; wait for their answer before acting on it (if it comes some other way, close it: kiwi ask-human --close ${seq} "why")`,
         );
@@ -422,7 +431,8 @@ export const messageCommands: Record<string, Command> = {
         for (const f of ["vendor", "expires", "wait"] as const) if (opt[f] !== undefined) return yield* die(`--${f} goes with --handoff URL`);
         const choices = opt.option?.map((o) => o.trim());
         if (choices && !wellFormedChoices(choices)) return yield* die(`--option takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
-        const { seq, to, also } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}), ...hold });
+        const { seq, to, also, lead } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}), ...hold });
+        if (lead !== null) return yield* handed(seq, lead, choices ? `, with ${choices.length} options` : "", "decides it or asks a person");
         digestNote();
         out(
           `escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}${heldText}${alsoAnswers(also)}; wait for their answer before acting on it (if it comes some other way, close it: kiwi ask-human --close ${seq} "why")`,
