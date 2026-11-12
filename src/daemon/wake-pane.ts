@@ -10,7 +10,7 @@ const AGY_HINT = /\(shift\+tab to cycle\)$/;
 const DEEPCODE_FOOTER = /^enter send · shift\+enter newline · @ files · .+ image \/ rich text · \/ commands · ctrl\+d exit$/;
 const DEEPCODE_EMPTY = /^>\s+Type your message\.\.\.$/;
 const DEEPCODE_RULE = /^─{3,}$/;
-const DEEPCODE_STATUS = /^status: ([a-z_]+)\b/;
+const DEEPCODE_STATUS = /^(?:\S )?status: ([a-z_]+)\b/;
 const DEEPCODE_ASKING = /^Permission required$|Enter submit\/next|Enter select · Esc interrupt/m;
 const DEEPCODE_STATUSES: Readonly<Record<string, "ready" | "busy" | "asking">> = {
   completed: "ready",

@@ -134,7 +134,7 @@ describe("Deep Code's own screens, as deepcode-cli 0.6.0 draws them: only a reco
   });
 
   test("a turn in progress, thinking, running a command or quiet: busy", () => {
-    for (const name of ["thinking", "process", "processing-quiet"]) expect(deepcodeState(name)).toBe("busy");
+    for (const name of ["thinking", "process", "processing-quiet", "live-command", "live-thinking"]) expect(deepcodeState(name)).toBe("busy");
   });
 
   test("a permission prompt, a question, or a turn waiting for its person: asking", () => {

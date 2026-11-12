@@ -155,7 +155,7 @@ describe("a harness started from another harness's session", () => {
 });
 
 describe("a Deep Code seat (T7367)", () => {
-  test("joined with --harness deepcode it keeps that harness; a command in tmux records its pane, one outside leaves it, and the wake types there", async () => {
+  test("joined with --harness deepcode it keeps that harness; a Deep Code command in tmux records its pane, and a command outside tmux, from a plain terminal or from another harness leaves it", async () => {
     const owner = scratch("own-dc");
     const code = created(await ok(owner, ["create", "deep", "--as", "boss"]));
     const dc = scratch("dc");
@@ -173,10 +173,12 @@ describe("a Deep Code seat (T7367)", () => {
     expect(seat()?.tmux).toBeUndefined();
     expect(await ok(dc, ["wake"], plain)).toContain("can't be woken");
 
-    const inTmux = { ...plain, TMUX: `${join(dc, "tmux-sock")},1,0`, TMUX_PANE: "%9" };
+    const inTmux = { ...plain, TMUX: `${join(dc, "tmux-sock")},1,0`, TMUX_PANE: "%9", KIWI_HARNESS: "deepcode" };
     await ok(dc, ["send", "ready for reviews"], inTmux);
     expect(seat()?.tmux?.pane).toBe("%9");
     await ok(dc, ["send", "from another terminal"], plain);
+    expect(seat()?.tmux?.pane).toBe("%9");
+    await ok(dc, ["send", "from a plain terminal in another tmux pane"], { ...inTmux, TMUX_PANE: "%5", KIWI_HARNESS: "" });
     expect(seat()?.tmux?.pane).toBe("%9");
     await ok(dc, ["send", "from a Claude session in tmux"], { ...inTmux, TMUX_PANE: "%3", CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "other", CLAUDE_PID: String(process.pid), KIWI_AS: me });
     expect(seat()?.tmux?.pane).toBe("%9");

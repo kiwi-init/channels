@@ -437,7 +437,7 @@ export function notePlace(seats: readonly Binding[], env: Record<string, string 
 export function notePlainPlace(alias: string, as: string, who: Here, env: Record<string, string | undefined> = process.env): void {
   if ((who.harness !== undefined && who.harness !== "deepcode") || !tmuxPlaceFrom(env).tmux) return;
   const c = loadConfig();
-  const plain = (b: Binding) => b.alias === alias && b.as === as && (b.harness === undefined || b.harness === "deepcode");
+  const plain = (b: Binding) => b.alias === alias && b.as === as && b.harness === who.harness;
   notePlace(
     Object.keys(c.bindings ?? {}).flatMap((dir) => seatsAt(c, dir).filter(plain)),
     env,
