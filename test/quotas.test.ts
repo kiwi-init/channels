@@ -56,7 +56,7 @@ describe("settings", () => {
     });
   });
 
-  test("the hosted relay caps messages per person only: 1,000 a day free, a 100,000 fair-use cap paid; no cap on channels or members, no expiry, and the 1 GB safety floor for bytes (T21)", async () => {
+  test("the hosted relay caps messages per person only: 3,000 a day free, a 100,000 fair-use cap paid; no cap on channels or members, no expiry, and the 1 GB safety floor for bytes (T21)", async () => {
     const config = Bun.JSONC.parse(await Bun.file(join(import.meta.dir, "../wrangler.jsonc")).text()) as { vars: Record<string, string> };
     expect(
       Object.keys(config.vars)
@@ -65,7 +65,7 @@ describe("settings", () => {
     ).toEqual(["KIWI_QUOTA_PAID_MESSAGES_PER_DAY", "KIWI_QUOTA_PERSON_MESSAGES_PER_DAY"]);
     expect(policyFrom(config.vars)).toEqual({
       ...OPEN_POLICY,
-      personMessagesPerDay: 1000,
+      personMessagesPerDay: 3000,
       paidMessagesPerDay: 100000,
       upgradeUrl: "https://buy.stripe.com/9B63cucHgf1M8Ec6Zy6Ri05",
       billingUrl: "https://billing.stripe.com/p/login/14AdR8fTs4n8aMk1Fe6Ri00",
