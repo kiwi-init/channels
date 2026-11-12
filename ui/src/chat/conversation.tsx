@@ -474,8 +474,8 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     if (jumpTo(content.current, wanted.current)) wanted.current = null
   })
   const onQuote = useCallback(
-    (seq: number) => {
-      if (specAsks.has(seq)) return openMessage(channel.code, seq)
+    (seq: number, quoted = false) => {
+      if (!quoted && specAsks.has(seq)) return openMessage(channel.code, seq)
       if (jumpTo(content.current, seq)) return
       const { list, all } = known.current
       const at = list.findIndex((m) => m.seq === seq)

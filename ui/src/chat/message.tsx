@@ -173,7 +173,7 @@ interface RowProps {
   tasks: ReadonlySet<number>
   inThread?: boolean
   quote?: Message | number
-  onQuote?: (seq: number) => void
+  onQuote?: (seq: number, quoted?: boolean) => void
   older?: boolean
 }
 
@@ -220,7 +220,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const cited = useMemo(() => (typeof quote === "object" ? quotedExcerpt(m, quote) : null), [m, quote])
   const said = cited ? cited.rest : wordsRaw(m.text)
   const body = m.docMedia ? withoutMediaNames(said, m.docMedia) : said
-  const threaded = !inThread && !older && !spec && (m.where.kind === "room" || m.where.kind === "dm")
+  const threaded = !inThread && !older && !spec && m.onSpec === undefined && (m.where.kind === "room" || m.where.kind === "dm")
   const openThread = () => go({ to: "panel", panel: { kind: "thread", seq: m.inThread ?? m.seq } })
   const onSpec = inThread || older ? undefined : m.onSpec
 
@@ -289,7 +289,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </p>
         )}
         {typeof quote === "object" && (
-          <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} excerpt={cited?.excerpt ?? null} onClick={onQuote ? () => onQuote(quote.seq) : undefined} />
+          <Quote quoted={quote} who={nickname(channel, quote.from)} names={names} excerpt={cited?.excerpt ?? null} onClick={onQuote ? () => onQuote(quote.seq, true) : undefined} />
         )}
         {m.deleted ? (
           <p className="msg-deleted">{t("chat.message.deleted")}</p>
