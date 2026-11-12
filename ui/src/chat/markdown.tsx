@@ -384,6 +384,9 @@ export default function Markdown({ markdown, at, onMention, onTask, onMessage, o
       const tip = tooltipOf(iso, alone, (date) => t("chat.markdown.utc.assuming", { date }), Intl.DateTimeFormat().resolvedOptions().timeZone, lang)
       zone.dataset.local = tip
       if (!zone.hasAttribute("aria-label")) zone.setAttribute("aria-label", tip)
+      const boxOf = zone.getBoundingClientRect()
+      if (boxOf.left + boxOf.width / 2 > window.innerWidth * 0.75) zone.dataset.flip = ""
+      else delete zone.dataset.flip
     }
   }, [ast])
 
