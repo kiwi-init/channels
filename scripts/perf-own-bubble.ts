@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
@@ -53,7 +54,7 @@ const frame = (page: Page): Promise<void> => page.evaluate(() => new Promise<voi
 async function measure(width: number, height: number): Promise<void> {
   const page = await browser.newPage({ viewport: { width, height } });
   const threw: string[] = [];
-  page.on("pageerror", (e) => threw.push(e.message));
+  await pageErrors(page, (e) => threw.push(e), { observers: false });
   await page.addInitScript(() => {
     const cost: Cost = { on: false, fits: [], frames: [], last: 0, writes: 0 };
     (window as Window & { bubbleCost?: Cost }).bubbleCost = cost;

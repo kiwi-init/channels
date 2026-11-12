@@ -7,6 +7,7 @@ import { chromium, webkit, type BrowserContext, type Page, type WebSocketRoute }
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { composer, firstRun, letIn, newChannel, SEND } from "./perf-ui.ts";
+import { pageErrors } from "./page-errors.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const arg = (name: string): string | undefined => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
@@ -76,7 +77,7 @@ async function person(name: string, base: string, from?: Person): Promise<Person
     server.onMessage((m) => down(() => ws.send(m)));
   });
   const page = await context.newPage();
-  page.on("pageerror", (e) => errors.push(`${name}: ${e.message}`));
+  await pageErrors(page, (e) => errors.push(`${name}: ${e}`));
   await page.goto(base);
   if (!from) await firstRun(page, name);
   return { name, label: from ? `${name}'s other window` : name, page, slow };

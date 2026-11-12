@@ -152,10 +152,19 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     room for the open search field, and in Settings starts after the
     sidebar's column, where the Settings title is. Nothing in the row sits
     on anything else (`scripts/ui-layout.ts` checks every screen). The row
-    has no title. Tabs share the row equally: short names stay whole, long ones
-    end in an ellipsis, and the open tab keeps its whole name; nothing
-    wraps or scrolls. A window 760px wide or less, or a portrait one, keeps
-    the title and a row of 40px tiles under it.
+    has no title. The strip is a `bg-2` band. The open tab takes the page's
+    `bg`, rounds its top corners and stands on the band's bottom edge, so
+    it reads as joined to the page; Home is a small icon tab and can be the
+    open one, and Settings, which is no channel, has none. Tabs share the
+    strip equally, up to 15rem each, and + ends it, beside Search. A name
+    that needs more than its share takes the room its neighbours don't use
+    (`data-fit="roomy"`). When the names can't all fit, only the longest
+    are cut, to one width, with a short fade and no ellipsis (`tight`).
+    When a cut name would show less than 3em, every tab but the open one
+    is its icon (`icons`). `shell/rail.tsx` picks the mode from the
+    strip's own overflow; nothing wraps or scrolls. A window 760px wide or
+    less, or a portrait one, keeps the title and a row of 40px tiles under
+    it.
   - The sidebar's width is yours. Its right edge drags (`shell/side-width.ts`,
     `.side-grip`): 14rem to 28rem, snapped to 8px, kept in rem so it follows
     the text size, and never so wide that the work has under 480px. Arrow
@@ -327,10 +336,10 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 - `IconButton` (`.icon-btn`, 28px, `r-row`): `ink-2`, `wash-2` on hover and
   while pressed.
 - Chrome is flat. The channel tabs, the sidebar button, Search and
-  Settings' back button cast no shadow and have no raised fill: Home rests
-  on `wash`; a tab's icon rests on `wash-2`, and the open channel's is `ink`
-  with `on-ink` text; the rest have no fill at rest, hover is `wash`, chosen
-  is `wash-2`.
+  Settings' back button cast no shadow and have no raised fill: a tab's
+  icon rests on `wash-2`, and the open channel's is `ink` with `on-ink`
+  text; the open tab is `bg` on the strip's `bg-2` band; the rest have no
+  fill at rest, hover is `wash`, chosen is `wash-2`.
   A tab still waiting to be let in keeps its outline and no fill; + and the
   Settings gear are bare `ink-3` glyphs. What floats is what sits over the
   work: the composer, menus, dialogs.
@@ -398,8 +407,9 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   bar (`--top-h`) spans them, drags the window and reads like a browser's:
   at its left the sidebar toggle (after the traffic lights on a Mac), then
   the channels as tabs (Home, one tab per channel with its icon or first
-  letter at 16px, its name and a `decide` count for what waits, a folder as
-  a tile of four minis, then +), and at its far right Search. They are in
+  letter at 16px, its name and, after it, a quiet count for what waits,
+  `decide` on `decide-wash`, a folder as a tile of four minis, then + at
+  the strip's end), and at its far right Search. They are in
   the same place whether the sidebar is open or hidden. There is no title.
   A `decide` "paused" chip joins Search while the agents are paused, on
   every view but the conversation, whose banner already says it. Search
@@ -481,7 +491,13 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   with `r-tag` on the right corners that face each other. Everything a
   message carries besides its text (the quote, pictures, files, a task
   chip, reactions, the replies line) ends on the bubble's right edge,
-  outside the bubble.
+  outside the bubble. Its hover tools show while the pointer is over the
+  message itself (the bubble or what it carries) or over the tools, never
+  for the empty part of its line. They sit beside the bubble, 6px to its
+  left and level with its top, when its line has room, and float above
+  its right end when it has not, or where the engine has no anchor
+  positioning; never on its words. Keyboard focus inside the message
+  shows them too.
   A message is a 32px face, 16px of gap, then the name (600), the "to you" or
   "asks you" word when it's for you, and the mono time, and the text in
   `t-body` under it. Role and harness are not repeated on every message: the

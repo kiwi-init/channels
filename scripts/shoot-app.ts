@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import { chromium, webkit } from "playwright-core";
 
 import { reactionsOn, settleRequests, stopFetchOnLeave } from "./settle-requests.ts";
+import { pageErrors } from "./page-errors.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -56,9 +57,9 @@ try {
   const errors: string[] = [];
   let at = "";
   const isReaction = reactionsOn(base);
-  page.on("pageerror", (e) => {
-    trace(`page error: ${e.message}`);
-    errors.push(`${at}: ${e.message}\n  what led up to it:\n${trail.map((l) => `    ${l}`).join("\n")}`);
+  await pageErrors(page, (e) => {
+    trace(`page error: ${e.split("\n")[0]}`);
+    errors.push(`${at}: ${e}\n  what led up to it:\n${trail.map((l) => `    ${l}`).join("\n")}`);
   });
   page.on("request", (r) => isReaction(new URL(r.url())) && trace(`page: asks ${new URL(r.url()).pathname}`));
   page.on("response", (r) => isReaction(new URL(r.url())) && trace(`page: ${new URL(r.url()).pathname} answered ${r.status()}`));

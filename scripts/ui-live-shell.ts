@@ -7,6 +7,7 @@ import { chromium, webkit, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { channelSettings, docOpen, firstRun, letIn, newChannel, say } from "./perf-ui.ts";
+import { pageErrors } from "./page-errors.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DIST = harnessDist(process.argv.find((a) => a.startsWith("--dist="))?.slice(7));
@@ -72,7 +73,7 @@ const browser = await (ENGINE === "webkit" ? webkit.launch() : chromium.launch({
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
   const threw: string[] = [];
-  page.on("pageerror", (e) => threw.push(e.message));
+  await pageErrors(page, (e) => threw.push(e));
   await page.goto(BASE);
   await firstRun(page, "jow");
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { PROTOCOL_VERSION, type Presence } from "@kiwi/core/protocol.ts";
 
-import { hear, onlineByName, PRESENCE_TTL, sharedOnline, type Online } from "./online.ts";
+import { asleepNames, hear, onlineByName, PRESENCE_TTL, sharedOnline, type Online } from "./online.ts";
 
 const keyOf = new Map([
   ["win", "pk-win"],
@@ -87,5 +87,20 @@ describe("the people shown as here keep their identity while nothing about them 
     expect(sharedOnline(one, two)).not.toBe(one);
     expect(sharedOnline(two, one)).not.toBe(two);
     expect(sharedOnline(two, one).size).toBe(1);
+  });
+});
+
+describe("agents nothing can wake (T614)", () => {
+  test("a fresh beacon of its own key that says unreachable, with no way to wake it from outside, names the agent", () => {
+    const heard = heardAll([beacon("win", "pk-win", { reach: "unreachable" }), beacon("mac", "pk-mac", { reach: "unreachable", wake: "hooks" })]);
+    expect(asleepNames(heard, keyOf, 1_000)).toEqual(["mac", "win"]);
+  });
+
+  test("not one that listens, runs, or wakes from outside its session; not a stale beacon; not another key's word", () => {
+    const heard = heardAll([beacon("win", "pk-win", { reach: "unreachable", wake: "listener" }), beacon("mac", "pk-mac", { reach: "running" })]);
+    expect(asleepNames(heard, keyOf, 1_000)).toEqual([]);
+    const old = heardAll([beacon("win", "pk-win", { reach: "unreachable" })]);
+    expect(asleepNames(old, keyOf, 1_000 + PRESENCE_TTL)).toEqual([]);
+    expect(asleepNames(heardAll([beacon("win", "pk-mac", { reach: "unreachable" })]), keyOf, 1_000)).toEqual([]);
   });
 });

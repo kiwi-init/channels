@@ -1314,6 +1314,7 @@ html .md {
   background: var(--wash-2);
   transform: translate(var(--glide-x), var(--glide-y));
   pointer-events: none;
+  overflow-anchor: none;
 }
 
 .seg,

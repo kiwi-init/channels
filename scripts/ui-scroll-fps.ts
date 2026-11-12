@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`Frame times while the new UI's conversation scrolls: the long-feed demo shot (1500 messages in #general) at 1440x900@2x,
@@ -228,7 +229,7 @@ const report: Record<string, Stats | number> = {};
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: SCALE, colorScheme: theme === "light" ? "light" : "dark" });
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  await pageErrors(page, (e) => errors.push(e), { observers: false });
   await page.goto(`http://127.0.0.1:${server.port}/?shot=long-feed&theme=${theme}`);
   await page.waitForFunction(() => document.querySelectorAll(".main .feed article").length > 0 && !document.querySelector(".main .feed .md-plain"), undefined, { timeout: 120_000, polling: "raf" });
   report.readyMs = Math.round(await page.evaluate(() => performance.now()));

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
@@ -29,7 +30,7 @@ const expect = (ok: boolean, what: string) => {
 };
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
-  page.on("pageerror", (e) => fails.push(`page threw: ${e.message}`));
+  await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
   await page.goto(`http://127.0.0.1:${server.port}/?shot=channel`);
   const people = page.getByRole("region", { name: "People" });
   const rows = people.locator(".side-member");

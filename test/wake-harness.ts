@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { AgentSession, runAgent } from "../src/agent.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { loadConfig, saveConfig, saveIdentity, updateConfig, type SeatRecord } from "../src/config.ts";
-import { daemonListening, startDaemon, type Daemon } from "../src/daemon.ts";
+import { readCursor, readSeen } from "../src/config/cursors.ts";
+import { daemonListening, daemonPeek, startDaemon, type Daemon } from "../src/daemon.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { Presence } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -73,10 +74,40 @@ export function wakeHarness(): WakeHarness {
     });
   };
 
+  const record = async (): Promise<string> => {
+    const ran = calls().length;
+    const ended = new Date().toISOString();
+    await Bun.sleep(3_000);
+    const held = await daemonListening()
+      .then((seats) => seats.find((s) => s.agent === "claude"))
+      .catch(() => undefined);
+    const cfg = loadConfig().channels.test;
+    const peek = cfg ? await daemonPeek("test", "claude", cfg.roomId).catch(() => null) : null;
+    const unread = cfg
+      ? await AgentSession.open("test", cfg, "claude")
+          .then(async (s) => {
+            const { messages, state } = await runAgent(s.state());
+            return runAgent(s.unreadAt(state, messages));
+          })
+          .catch(() => null)
+      : null;
+    const log = existsSync(join(home, "wake.log")) ? readFileSync(join(home, "wake.log"), "utf8").trim().split("\n").slice(-6) : [];
+    return [
+      `the wait ended at ${ended}`,
+      `the daemon's seat says: ${held ? JSON.stringify(held.wake) : "no seat for claude"}`,
+      `the daemon has heard up to: ${peek ? `#${peek.head}` : "couldn't be asked"}`,
+      `unread for the agent now: ${unread === null ? "couldn't be read" : "cursor" in unread ? `[${unread.seqs.join(", ")}] past cursor ${unread.cursor}` : "none"}`,
+      `cursor file ${readCursor("test", "claude")}, seen ahead of it [${[...readSeen("test", "claude")].join(", ")}]`,
+      `wakes run: ${ran} when the wait ended, ${calls().length} three seconds later`,
+      `wake.log, its last ${log.length} lines:`,
+      ...log.map((line) => `  ${line}`),
+    ].join("\n");
+  };
+
   const until = async (what: string, ok: () => boolean | Promise<boolean>, ms = 15_000): Promise<void> => {
     const end = Date.now() + ms;
     while (!(await ok())) {
-      if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+      if (Date.now() > end) throw new Error(`timed out waiting for ${what}\n${await record().catch((err: unknown) => `the daemon's record couldn't be read: ${String(err)}`)}`);
       await Bun.sleep(50);
     }
   };

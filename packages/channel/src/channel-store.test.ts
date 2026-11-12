@@ -5,7 +5,7 @@ import { FOLD_RULES, PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type 
 import { fold, type FoldBase } from "@kiwi/core/state.ts";
 import type { ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts";
 import { ChannelLink } from "./channel-ops.ts";
-import { APP_BEACON_MS, ChannelStore, PAGE, REACH, WINDOW } from "./channel-store.ts";
+import { APP_BEACON_MS, ChannelStore, PAGE, PRESENCE_SETTLE_MS, REACH, WINDOW } from "./channel-store.ts";
 import { PRESENCE_TTL } from "./online.ts";
 import { REFOLLOW_MS } from "./refollow.ts";
 import type { StoredMember } from "./store.ts";
@@ -530,6 +530,23 @@ describe("a person's own presence (T560)", () => {
   test("it says so again well before others forget it", () => {
     expect(APP_BEACON_MS * 2).toBeLessThan(PRESENCE_TTL);
   });
+
+  test("an agent nothing can wake is listed as soon as its beacon says so; silence counts only once everyone had time to answer (T614)", async () => {
+    const r = relay(0);
+    const { store, close } = await opened(r);
+    r.say({ _tag: "Open" });
+    await sleep(40);
+    expect(store.handle.value.answered).toBe(false);
+    expect(store.handle.value.asleep).toEqual([]);
+    r.say({ _tag: "Presence", presence: { v: PROTOCOL_VERSION, type: "presence", from: "atlas", client: "daemon", reach: "unreachable", ts: Date.now(), pk: "pk-atlas", sigOk: true } });
+    expect(store.handle.value.asleep).toEqual(["atlas"]);
+    expect(store.handle.value.online.has("atlas")).toBe(false);
+    await sleep(PRESENCE_SETTLE_MS + 100);
+    expect(store.handle.value.answered).toBe(true);
+    r.say({ _tag: "Open" });
+    expect(store.handle.value.answered).toBe(false);
+    close();
+  });
 });
 
 describe("history from the relay is fetched only when asked (T977, #1944)", () => {
@@ -865,7 +882,7 @@ describe("the channel is folded when something changed, not on a clock (T1787)",
     const { store, close } = await opened(r);
     r.say({ _tag: "Open" });
     for (const seq of [1, 2, 3]) r.say({ _tag: "Message", message: msg(seq), row: null });
-    await sleep(40);
+    await sleep(PRESENCE_SETTLE_MS + 40);
     const before = store.handle.value;
     let notified = 0;
     const stop = store.subscribe(() => notified++);
@@ -875,7 +892,7 @@ describe("the channel is folded when something changed, not on a clock (T1787)",
     expect(notified).toBe(0);
     stop();
     close();
-  }, 20_000);
+  }, 25_000);
 
   test("a closed store folds at no expiry", async () => {
     const r = relay(0);

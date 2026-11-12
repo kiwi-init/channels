@@ -2,6 +2,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const dist = process.argv[2] ?? "ui/dist";
 const keys = Number(process.env.DOC_FEEL_KEYS ?? 120);
@@ -33,7 +34,7 @@ const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMI
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  await pageErrors(page, (e) => errors.push(e), { observers: false });
   const opened = Date.now();
   await page.goto(`http://127.0.0.1:${server.port}/?shot=${process.env.DOC_FEEL_SHOT ?? "thread-doc-1000"}`);
   await page.waitForFunction((n) => document.querySelectorAll(".thread-doc .blk").length >= n, Number(process.env.DOC_FEEL_MIN ?? 1000), { timeout: 30_000 });

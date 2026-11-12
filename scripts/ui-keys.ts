@@ -2,6 +2,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
@@ -43,7 +44,7 @@ async function keys(platform: "MacIntel" | "Linux x86_64"): Promise<void> {
   const other = mac ? "Control" : "Meta";
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await page.addInitScript((p) => Object.defineProperty(navigator, "platform", { get: () => p }), platform);
-  page.on("pageerror", (e) => fails.push(`page threw on ${on}: ${e.message}`));
+  await pageErrors(page, (e) => fails.push(`page threw on ${on}: ${e}`));
   await page.goto(`http://127.0.0.1:${server.port}/?shot=channel`);
   await page.locator(".main article.msg").first().waitFor();
   const composer = page.locator(".main .composer textarea").first();

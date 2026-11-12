@@ -2,6 +2,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { chromium, webkit, type Browser, type Page } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`A feed keeps its place when its width changes. Each demo feed is opened at the bottom and again scrolled up, then the
@@ -108,7 +109,7 @@ async function steps(page: Page, feed: string, height: number): Promise<[string,
 async function check(browser: Browser, target: (typeof FEEDS)[number], place: "at the bottom" | "scrolled up"): Promise<string[] | null> {
   const page = await browser.newPage({ viewport: { width: WIDTH, height: target.height } });
   const fails: string[] = [];
-  page.on("pageerror", (e) => fails.push(`the page threw: ${e.message}`));
+  await pageErrors(page, (e) => fails.push(`the page threw: ${e}`));
   try {
     await page.goto(`http://127.0.0.1:${server.port}/?shot=${target.shot}`);
     await page.waitForSelector(".main .feed", { timeout: 15_000 });
