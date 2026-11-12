@@ -345,12 +345,9 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
     }
   }, [markdown])
 
-  const shown = useCallback(
-    (el: HTMLDivElement | null) => {
-      if (el) onShown()
-    },
-    [onShown]
-  )
+  useLayoutEffect(() => {
+    if (ast) onShown()
+  }, [ast, onShown])
 
   useLayoutEffect(() => {
     for (const a of box.current?.querySelectorAll<HTMLAnchorElement>('a[href^="http"], a[href^="mailto:"]') ?? []) {
@@ -440,7 +437,7 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
   return (
     <div className="md" ref={box} onClick={clicked} onKeyDown={keyed} onScrollCapture={scrolled}>
       {ast && (
-        <div className={ENRM_TEXT_CLASS} style={WRAP} ref={shown}>
+        <div className={ENRM_TEXT_CLASS} style={WRAP}>
           {children.map((child, i) => {
             const last = i === children.length - 1
             const source = mermaidSource(child)

@@ -29,10 +29,10 @@ export function Body({
   const { go, now } = useAct()
   const parser = useMentionParser()
   const { markdown } = useMemo(() => ({ parser, markdown: linked(wordsRaw(text), names, tasks, seq) }), [parser, text, names, tasks, seq])
-  const [shown, setShown] = useState(false)
-  const onShown = useCallback(() => setShown(true), [])
+  const [shown, setShown] = useState(0)
+  const onShown = useCallback(() => setShown((times) => times + 1), [])
   const box = useRef<HTMLDivElement>(null)
-  useHug(box, hug, shown ? markdown : null)
+  useHug(box, hug, shown || markdown)
   const onMention = useCallback(
     (name: string) => {
       const open = now?.().channel ?? null
