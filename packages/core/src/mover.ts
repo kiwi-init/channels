@@ -1,16 +1,17 @@
 import { inlineText } from "./membership.ts";
 import { isPerson } from "./state/people.ts";
 import { landerOf, openRound } from "./state/tasks.ts";
+import { needsReset } from "./state/reset.ts";
 import type { ChannelState, Task } from "./state/types.ts";
 import { pausingStep, runSight } from "./state/landing-steps.ts";
 import { currentStep, spanText, stepMove, stepText, type LandingStep } from "./steps.ts";
 
-type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land";
+type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land" | "reset";
 
 type RunTrouble = "run failed" | "run can't be seen" | "run overran";
 
 export type Mover =
-  | { kind: "member"; name: string; move: MoveFor; question?: number; step?: string; why?: RunTrouble }
+  | { kind: "member"; name: string; move: MoveFor; question?: number; step?: string; why?: RunTrouble; reviewer?: string }
   | { kind: "waiting"; owner: string; ahead: number }
   | { kind: "run"; step: string; behind: string; due: number; left: number }
   | { kind: "hold"; step: string; until: number; left: number; reason: string }
@@ -73,6 +74,10 @@ export function moverOf(state: Board, t: Task, now: number = Date.now()): Mover 
   if (t.state === "todo") return t.owner && here(state, t.owner) ? queued(state, t, t.owner) : leadOr(state, t.owner, "start", "assign");
   if (t.state === "landing") return landingMover(state, t, now);
   if (!openRound(t)) return leadOr(state, t.owner, "revise", "assign");
+  if (t.review && t.review !== "*" && needsReset(state.members, t.review)) {
+    const lead = settle(state, state.lead, "reset");
+    return lead.kind === "member" ? { ...lead, reviewer: t.review } : lead;
+  }
   return t.review && t.review !== "*" ? settle(state, t.review, "review") : settle(state, state.lead, "route");
 }
 
@@ -85,9 +90,13 @@ const MOVE_WORDS: Record<MoveFor, string> = {
   revise: "to send it for review again",
   answer: "to answer",
   land: "to land it",
+  reset: "to reset its reviewer's session or move its review",
 };
 
-const memberWords = (m: Extract<Mover, { kind: "member" }>): string => `${inlineText(m.name, 40)} ${MOVE_WORDS[m.move]}${m.question !== undefined ? ` #${m.question}` : ""}`;
+const memberWords = (m: Extract<Mover, { kind: "member" }>): string =>
+  m.move === "reset" && m.reviewer
+    ? `${inlineText(m.name, 40)} to reset ${inlineText(m.reviewer, 40)}'s session or move its review`
+    : `${inlineText(m.name, 40)} ${MOVE_WORDS[m.move]}${m.question !== undefined ? ` #${m.question}` : ""}`;
 
 export function moverText(m: Mover): string {
   if (m.kind === "waiting") return `waiting, ${m.ahead} ahead of it for ${inlineText(m.owner, 40)}`;

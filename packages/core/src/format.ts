@@ -35,6 +35,7 @@ import { commentsLine, commentsWaiting, specLine } from "./spec-lines.ts";
 import { landingWaits, reviewStillRequired, rulesText } from "./prs.ts";
 import { currentStep, spanText, stepById, stepMove, type LandingStep, type StepEdit } from "./steps.ts";
 import { artifactWords, runSight } from "./state/landing-steps.ts";
+import { resetLine } from "./state/reset.ts";
 import { sayEvent, type EventKey, type EventSay } from "./event-words.ts";
 import { moverOf, moverTag, moverText } from "./mover.ts";
 import { clockOf, quietText } from "./clock.ts";
@@ -267,6 +268,10 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return ev.prefix ? say("branch.prefix.set", { prefix: ev.prefix }) : say("branch.prefix.cleared");
     case "quiet.set":
       return say("quiet.set", { time: spanText(ev.minutes * 60_000) });
+    case "review.reset.set":
+      return ev.on ? say("review.reset.on") : say("review.reset.off");
+    case "review.reset.waive":
+      return ev.waived ? say("review.reset.waived", { name: ev.member }) : say("review.reset.unwaived", { name: ev.member });
     case "merges.set":
       return ev.by === "people" ? say("merges.people") : say("merges.agents");
     case "landing.set":
@@ -717,6 +722,7 @@ export function formatStatus({ alias, check, me, state, online, unread, now = Da
   const charter = charterLines(state);
   if (charter) out.push(charter);
   if (state.repos.length) out.push(`repos: ${state.repos.join(", ")}`);
+  if (state.reviewReset) out.push("reviewers start a fresh session after each verdict: a reviewer that gave one reviews nothing more until it rejoins from a new session");
   const ruleWarning = reviewRuleWarning(state, check);
   if (ruleWarning) out.push(ruleWarning);
   const human = humanOf(state, me);
@@ -751,6 +757,8 @@ export function formatStatus({ alias, check, me, state, online, unread, now = Da
     // How busy they are, so work goes to whoever's free (people only when they hold tasks).
     const load = memberLoad(state, name);
     if (showsLoad(m, load)) out.push(`      ${loadSummary(load)}`);
+    const reset = resetLine(state, name);
+    if (reset) out.push(`      ${reset}`);
     const card = m?.card ? cardLine(m.card, m.runs, all) : "";
     if (m?.card && card) out.push(`      ${card}${outsideRepos(state, m.card) ? " · not one of this channel's repos" : ""}`);
     if (m?.runs) out.push(`      ${runsStatus(m.runs)}`);

@@ -6,6 +6,7 @@ import { t } from "~/i18n/i18n"
 import type { Channel, Message, Person, Spec, Task } from "~/model"
 import { memberOf } from "~/model"
 import { nickname } from "~/names"
+import { splitQuote } from "~/specs/quote"
 import { wordsPlain, wordsRaw } from "~/words"
 
 type Tone = "tone-quiet" | "tone-doing" | "tone-review" | "tone-decide" | "tone-live" | "tone-alert"
@@ -94,17 +95,6 @@ export interface Comment {
   text: string
 }
 
-const QUOTE_RE = /^>\s?(.*)$/
-
-export function splitQuote(text: string): { quote?: string; text: string } {
-  const lines = text.split("\n")
-  const quoted: string[] = []
-  let i = 0
-  while (i < lines.length && QUOTE_RE.test(lines[i]!)) quoted.push(QUOTE_RE.exec(lines[i++]!)![1]!)
-  if (!quoted.length) return { text }
-  return { quote: quoted.join("\n").trim(), text: lines.slice(i).join("\n").trim() }
-}
-
 type SpecThread = Pick<Spec, "ask" | "comments">
 
 function onSpecThread(channel: Pick<Channel, "specs">, spec: SpecThread): (m: Message) => boolean {
@@ -122,18 +112,6 @@ export function commentsOf(channel: Pick<Channel, "messages" | "specs">, spec: S
     if (m.replyTo !== undefined && seqs.has(m.replyTo)) return { m, re: m.replyTo, ...(quote ? { excerpt: quote } : {}), text }
     return { m, ...(quote ? { quote } : {}), text }
   })
-}
-
-const squash = (s: string): string =>
-  s
-    .replace(/[*_`~#>[\]()]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase()
-
-export function quoteIn(text: string, quote: string): boolean {
-  const q = squash(quote)
-  return !!q && squash(text).includes(q)
 }
 
 export type DiffLine = { kind: "same" | "add" | "del"; text: string }

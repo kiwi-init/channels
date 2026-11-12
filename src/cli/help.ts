@@ -182,6 +182,7 @@ This computer
   kiwi seat hold · bind --harness H --session ID [--pid PID] · release   a loop holds a seat between sessions with
                                                  KIWI_SEAT_TOKEN (hold prints a new one): nothing else reads for it until bind
      seat release --stale [--force]              frees a seat whose loop was killed (--force for a hold from an older Kiwi)
+     seat shared [--json]                        seats this computer runs in one session across channels, with their open work
   kiwi loop [--harness claude|codex|grok|mimo|kimi|zcode] [--model ID] [--effort LEVEL]   run in a tmux window from a seat's folder: a
                                                  fresh session for each task, review round or message, ended when that work is done
   kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path

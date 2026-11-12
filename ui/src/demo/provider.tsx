@@ -18,6 +18,7 @@ import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
 import { muteKey } from "~/live/mute"
+import { specLineTest } from "~/specs/quote"
 import { wordsRaw, wrote } from "~/words"
 
 const unticked = (text: string): string => text.replace(/^(\s*[-*+]\s+)\[[xX]\]/gm, "$1[ ]").trim()
@@ -320,8 +321,28 @@ export type Scenario =
   | "spec-changed"
   | "forgotten-computer"
   | "invite-failed"
+  | "review-reset"
   | "member"
   | "home-calm"
+
+function withReviewReset(c: Channel): Channel {
+  return {
+    ...c,
+    reviewReset: true,
+    people: c.people.map((p) =>
+      p.name === "atlas"
+        ? {
+            ...p,
+            reset: { kind: "needs" as const, verdict: 4711 },
+            sharesSession: ["pixel"],
+            sharesElsewhere: [{ room: "ab".repeat(16), alias: "ops", agent: "sentry", work: [{ kind: "review" as const, task: 31, round: 2 }] }],
+          }
+        : p.name === "pixel"
+          ? { ...p, sharesSession: ["atlas"] }
+          : p
+    ),
+  }
+}
 
 const TASK_BODY = [
   'Channel settings: four save patterns in one dialog, the icon set in two places, "Access" holds non-access rows',
@@ -428,11 +449,13 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                                             ...DEMO_CHANNEL.asks,
                                           ],
                                         }
-                                      : scenario === "event-runs"
-                                        ? withEventRuns(DEMO_CHANNEL)
-                                        : scenario === "own-bubbles"
-                                          ? withOwnBubbles(DEMO_CHANNEL)
-                                          : DEMO_CHANNEL,
+                                      : scenario === "review-reset"
+                                        ? withReviewReset(DEMO_CHANNEL)
+                                        : scenario === "event-runs"
+                                          ? withEventRuns(DEMO_CHANNEL)
+                                          : scenario === "own-bubbles"
+                                            ? withOwnBubbles(DEMO_CHANNEL)
+                                            : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,
@@ -570,6 +593,9 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           const root = opts?.inThread ?? (target ? (target.inThread ?? target.seq) : undefined)
           const replyTo = opts?.replyTo !== undefined && opts.replyTo !== root ? opts.replyTo : undefined
           const images = opts?.images?.map((i) => ({ url: `data:${i.mime};base64,${i.data}`, width: 0, height: 0, alt: i.name }))
+          const spec = root === undefined ? undefined : c.specs?.find((x) => x.ask === root)
+          const asked = spec ? c.messages.find((m) => m.seq === spec.ask) : undefined
+          const line = spec && (replyTo !== undefined ? !!target?.specLine : specLineTest(wordsRaw(spec.text), asked ? wordsRaw(asked.text) : "")(text))
           const next = post(c, seq, {
             from: c.you,
             text: wrote(text),
@@ -579,6 +605,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
             pending: true,
             canChange: true,
             ...(root !== undefined && opts?.side ? { side: true as const } : {}),
+            ...(spec ? (line ? { specLine: true as const } : { onSpec: spec.ask }) : {}),
             ...(images?.length ? { images } : {}),
             ...(opts?.block ? { block: opts.block.id } : {}),
           })
@@ -902,6 +929,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setGithubWrite: (code, on) => edit(code, (c) => ({ ...c, githubWrite: on || undefined })),
       setBranchPrefix: (code, prefix) => edit(code, (c) => ({ ...c, branchPrefix: prefix?.trim() || undefined })),
       setQuiet: (code, minutes) => edit(code, (c) => ({ ...c, quietMinutes: Number(minutes) })),
+      setReviewReset: (code, on) => edit(code, (c) => ({ ...c, reviewReset: on || undefined })),
+      setResetWaived: (code, name, waived) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, reset: waived ? { kind: "waived" as const } : undefined } : p)) })),
       setLanding: (code, then) => edit(code, (c) => ({ ...c, landing: then?.trim() && then.trim() !== "none" ? then.trim() : undefined })),
       setRoomMembers: async (code, id, members) => {
         edit(code, (c) => ({ ...c, rooms: c.rooms.map((r) => (r.id === id ? { ...r, members } : r)) }))

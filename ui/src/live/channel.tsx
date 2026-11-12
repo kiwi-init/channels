@@ -34,6 +34,7 @@ import { firstMarks, lastIn, seenByThread, seenKeyOf } from "~/live/seen-place"
 import { followsIn, threadSeenKey, threadsOf } from "~/live/threads"
 import { closeOpened, markGone, publish, type Run } from "~/live/store"
 import { useWakes } from "~/live/wakes"
+import { useSharedHere } from "~/live/shared"
 import { appCan } from "~/live/app-can"
 import { useMarksSync } from "~/live/read-sync"
 import { dailyLimit, refusal } from "~/live/refused"
@@ -124,6 +125,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const code = member.code
   const seen = useSeen(roomId)
   const wakes = useWakes(roomId)
+  const elsewhere = useSharedHere(roomId)
   const newMembers = useNewMembers(roomId)
   const newPowers = useNewPowers(roomId)
   const pictures = usePictures(code, ch, shownWire)
@@ -138,7 +140,10 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const shown = useShown()
 
   usePublishFace(state, me, connection === "live", send)
-  const people = useMemo(() => peopleOf(state, roster, online, me, wakes), [state, roster, online, me, wakes])
+  const people = useMemo(
+    () => peopleOf(state, roster, online, me, wakes).map((p) => (elsewhere.has(p.name) ? { ...p, sharesElsewhere: elsewhere.get(p.name) ?? [] } : p)),
+    [state, roster, online, me, wakes, elsewhere]
+  )
   const former = useMemo(() => formerOf(state, me), [state, me])
   const nicknameKey = [...state.members.values()].map((m) => `${m.name}\u0000${m.display ?? ""}`).join("\n")
   const nicknames = useMemo(() => nicknamesOf(nicknameKey ? nicknameKey.split("\n").map((line) => ({ name: line.split("\u0000")[0] ?? "", display: line.split("\u0000")[1] })) : []), [nicknameKey])
@@ -214,6 +219,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.githubWrite !== null ? { githubWrite: true } : {}),
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       ...(state.quietMs !== QUIET_MINUTES * 60_000 ? { quietMinutes: state.quietMs / 60_000 } : {}),
+      ...(state.reviewReset ? { reviewReset: true as const } : {}),
       ...(state.landing && state.landing !== "none" ? { landing: state.landing } : {}),
       ...(required.length ? { reviewStillRequired: { repos: required, check: reviewCheck } } : {}),
       rooms,
@@ -261,6 +267,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       state.githubWrite,
       state.branchPrefix,
       state.quietMs,
+      state.reviewReset,
       state.landing,
       required,
       reviewCheck,

@@ -48,6 +48,7 @@ import {
   verdictRefusal,
   worked,
 } from "./tasks.ts";
+import { addResetRefusal, clearOnCard, markReset, resetRefusal } from "./reset.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
 
@@ -86,6 +87,7 @@ export interface FoldCtx {
   githubWrite: number | null;
   branchPrefix: string | null;
   quietMs: number;
+  reviewReset: boolean;
   landing: Landing | null;
   landingSteps: StepSpec[] | null;
   passedAsks: Map<number, string>;
@@ -151,6 +153,11 @@ function membersOnly(c: FoldCtx, member: FoldMember, m: Message, ev: { members: 
   if (!inRoom(ev, member.name, m.pk)) return "whoever changes a members-only room stays in it";
   return null;
 }
+
+const departed = (c: FoldCtx, name: string): boolean => {
+  const owner = c.members.get(name);
+  return !!owner && !owner.owner && c.gone.has(owner.pk);
+};
 
 const runsOf = (runs: number[]): { runs?: number[] } => (runs.length ? { runs } : {});
 
@@ -427,6 +434,25 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     case "merges.set":
       break;
 
+    case "review.reset.set": {
+      if (!member.owner) {
+        reject("only the owner turns the fresh-session rule for reviewers on or off");
+        break;
+      }
+      c.reviewReset = ev.on;
+      if (!ev.on) for (const x of members.values()) if (x.reset?.kind === "needs") x.reset = undefined;
+      break;
+    }
+
+    case "review.reset.waive": {
+      const target = members.get(ev.member);
+      if (!target?.active) reject(`no member named ${ev.member}`);
+      else if (!member.owner) reject("only the owner waives the fresh-session rule for a reviewer");
+      else if (ev.waived) target.reset = { kind: "waived" };
+      else if (target.reset?.kind === "waived") target.reset = undefined;
+      break;
+    }
+
     case "landing.set": {
       if (!member.owner && !c.trusted(m.pk ?? "", member)) {
         reject(trustOnly("sets how tasks land"));
@@ -532,6 +558,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "task.add": {
+      const addWrong = addResetRefusal(members, ev.review);
+      if (addWrong) {
+        reject(addWrong);
+        break;
+      }
       const then = ev.steps ? undefined : (ev.then ?? (c.landingSteps ? undefined : (c.landing ?? undefined)));
       const added: Task = {
         id: m.seq,
@@ -563,6 +594,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     case "card": {
       const card = omit(ev, "op");
       member.card = { ...card, ...(card.tools ? { tools: normTags(card.tools) } : {}), at };
+      clearOnCard(member, card.session);
       break;
     }
 
@@ -571,7 +603,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (!task) reject(`no task ${taskId(ev.task)}`);
       else if (task.state === "done") reject(`${taskId(task.id)} is already done`);
       else if (task.state === "landing") reject(`${taskId(task.id)} is approved: its lander lands it`);
-      else if (task.owner && task.owner !== m.from) reject(`${taskId(task.id)} is owned by ${task.owner}`);
+      else if (task.owner && task.owner !== m.from && !departed(c, task.owner)) reject(`${taskId(task.id)} is owned by ${task.owner}`);
       else {
         task.owner = m.from;
         if (task.state === "todo") task.state = "doing";
@@ -725,6 +757,12 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const asked =
         ev.state === "cancelled" ? (cancel && (mayFinish || lead || (ev.round !== undefined && revisedOut(task, m.from, open) === ev.round)) ? "done" : undefined) : ev.state && currentState(ev.state);
       const state = reopens ? "review" : lands && asked === "done" ? "landing" : asked;
+      const judging = !!ev.verdict || (!!review && !!open && !cancel && ev.close === undefined && (state === "done" || state === "landing"));
+      const resetWrong = resetRefusal(members, task, { ...ev, judging }, m.from, review, state);
+      if (resetWrong) {
+        reject(resetWrong);
+        break;
+      }
       const happened = trustedAt(m);
       const rts = happened !== undefined ? { rts: happened } : {};
       if (open && state && state !== "review")
@@ -809,6 +847,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;
       if (task.state === "landing") advance(task, { seq: m.seq, by: m.from, at });
+      if (judging && mayFinish) markReset(c.reviewReset, member, m.seq);
       break;
     }
 

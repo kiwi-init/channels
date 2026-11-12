@@ -471,6 +471,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
   if (event === "session-start") {
     const fresh = freshAt(input, Date.now());
     if (fresh !== null) yield* Effect.ignoreCause(s.markFresh(detectWhere(input.cwd ?? process.cwd()), fresh));
+    yield* Effect.ignoreCause(s.refreshSession(who));
     const { state } = yield* s.state();
     const seat = state.members.get(b.as);
     const local = loadConfig();

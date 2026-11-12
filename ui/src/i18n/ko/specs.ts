@@ -273,6 +273,7 @@ export default {
   "tasks.move.assign": "{who} 차례: 담당자 정하기",
   "tasks.move.review": "{who} 차례: 리뷰하기",
   "tasks.move.route": "{who} 차례: 리뷰어 정하기",
+  "tasks.move.reset": "{who} 차례: {reviewer}의 세션을 초기화하거나 리뷰를 다른 사람에게 넘기기",
   "tasks.move.revise": "{who} 차례: 다시 리뷰 요청하기",
   "tasks.move.answer": "{who} 차례: 답하기",
   "tasks.move.land": "{who} 차례: 반영하기",
