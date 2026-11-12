@@ -29,6 +29,15 @@ blur, no gradients for show. Colour means a state, never decoration.
   `:root` (fonts, type steps, radii, sizes, motion, `shadow-pop`, `h-*`) is
   the same in every theme, except `float` and `shadow-float`, which each
   side sets (§5).
+- Two surfaces, the page and the frame (§5), are made of those tokens and
+  no new colour. The page is `bg` and the frame is `bg-3`, in every theme:
+  a lighter frame around a dark page, a grey frame around a white one.
+  `tokens.css` names them `--page` and `--frame` and rebinds `--bg`,
+  `--bg-2`, `--bg-3`, `plate` and `float` on the frame's parts (`.top`,
+  `.rail`, `.side`, `.set-nav`, `.track`), so a rule that says `bg` means
+  the surface it sits on. The frame's own two steps, for its fields, cards
+  and chips, are derived: `bg-3` with 6% and 12% of `ink` in dark, `bg-2`
+  and `bg-3` with 6% of `ink` in light.
 - Settings → Appearance picks system / light / dark, and a theme for each
   side. Built in (`channels.ts`): Channels Dark (`channels-dark`, the default
   dark), Cinder Peak (`cinder-peak`, warm), OLED Black (`channels-oled`, true
@@ -52,9 +61,9 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 
 | Token | Dark (Channels Dark) | OLED Black | Light |
 |---|---|---|---|
-| `bg` (canvas, sidebar, panels) | `#111113` | `#000000` | `#ffffff` |
+| `bg` (the page: canvas, panels) | `#111113` | `#000000` | `#ffffff` |
 | `bg-2` (raised: dialogs, cards) | `#18181b` | `#0c0c0d` | `#f7f7f8` |
-| `bg-3` (fills: buttons, fields, tiles, tracks) | `#212125` | `#18181a` | `#efeff1` |
+| `bg-3` (fills: buttons, fields, tiles, tracks; the frame) | `#212125` | `#18181a` | `#efeff1` |
 | `ink` | `#ececef` | `#ececef` | `#18181b` |
 | `ink-2` (secondary text, idle controls) | `#a3a3ab` | `#a3a3ab` | `#56565e` |
 | `ink-3` (quiet floor: hints, placeholders, meta) | `#808089` | `#808089` | `#6c6c74` |
@@ -146,16 +155,16 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     centres the work in what is left.
   - Channels are tabs. The top bar's row is a browser's tab strip (`.rail`
     on grid row 1): Home, then one tab per channel with a 16px icon, the
-    channel's name and its count, then New channel. It starts after the
-    sidebar button and ends before Search, which sits at the row's far end.
-    It stays there when the sidebar hides or its edge is dragged, makes
-    room for the open search field, and in Settings starts after the
-    sidebar's column, where the Settings title is. Nothing in the row sits
+    channel's name and its count, then New channel. It starts at the
+    page's left edge, 8px in, and ends before Search, which sits at the
+    row's far end. It stays there when the sidebar hides, follows the edge
+    when it is dragged, makes room for the open search field, and starts
+    at the same place in Settings and on Home. Nothing in the row sits
     on anything else (`scripts/ui-layout.ts` checks every screen). The row
-    has no title. The strip is a `bg-2` band. The open tab takes the page's
-    `bg`, rounds its top corners and stands on the band's bottom edge, so
-    it reads as joined to the page; Home is a small icon tab and can be the
-    open one, and Settings, which is no channel, has none. Tabs share the
+    has no title. The strip is part of the frame. The open tab takes the
+    page's colour, rounds its top corners and stands on the strip's bottom
+    edge, so it reads as joined to the page; Home is a small icon tab and
+    can be the open one, and Settings, which is no channel, has none. Tabs share the
     strip equally, up to 15rem each, and + ends it, beside Search. A name
     that needs more than its share takes the room its neighbours don't use
     (`data-fit="roomy"`). When the names can't all fit, only the longest
@@ -197,12 +206,20 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     hidden auto`): strips wrap, long code and diff lines wrap, a diagram
     shrinks to fit. The one exception is the image annotator's zoomed
     picture.
+  - One frame, one page. The top bar, the sidebar and the second sidebar
+    are one surface, the frame. The work is the page: the conversation or
+    a view, Settings, Home, and a thread or task opened in the right
+    column. The page rounds its top corners (`r-ctl`)
+    where it meets the frame and keeps them square against the window's
+    edge (a hidden sidebar, an open panel, a window under 1180px, Home).
+    What is open joins the page: the open tab from above and the open
+    sidebar row from the side, each in the page's colour with 8px flares.
   - Nothing you click moves. Hiding the sidebar or opening the right panel
     changes no control's position. Content may: a hidden sidebar gives its
     column to the work.
   - A hidden sidebar peeks. The pointer at the window's left edge slides it
-    in over the conversation as a raised sheet: `bg-2` with `shadow-pop`,
-    from under the tab row to the window's bottom, its rows where they are
+    in over the conversation as a raised sheet: the frame's colour with
+    `shadow-pop`, from under the tab row to the window's bottom, its rows where they are
     when it is pinned. It never crosses the tab row, and it slides out when
     the pointer leaves. A pinned sidebar never covers the conversation, at
     any width.
@@ -263,9 +280,9 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   fill (`bg-3` in dark, `bg` in light), a 1px `line-2` ring and a short
   drop; dark adds a `line` highlight along the top edge. No coloured
   shadows.
-- Surfaces are told apart by a step of fill (`bg` → `bg-2` → `bg-3`) and by
-  hairlines (`line`), not by shadows. Cards on the page are `bg` with a
-  `line` border.
+- Surfaces are told apart by a step of fill (`bg` → `bg-2` → `bg-3`, counted
+  from the surface they sit on, §2) and by hairlines (`line`), not by
+  shadows. Cards on the page are `bg` with a `line` border.
 - No glass, no `backdrop-filter`, no blur anywhere, with one exception: the
   composer (§10) is frosted, so the thread scrolls under it. Nothing else
   takes a blur.
@@ -338,7 +355,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 - Chrome is flat. The channel tabs, the sidebar button, Search and
   Settings' back button cast no shadow and have no raised fill: a tab's
   icon rests on `wash-2`, and the open channel's is `ink` with `on-ink`
-  text; the open tab is `bg` on the strip's `bg-2` band; the rest have no
+  text; the open tab is the page's colour on the frame; the rest have no
   fill at rest, hover is `wash`, chosen is `wash-2`.
   A tab still waiting to be let in keeps its outline and no fill; + and the
   Settings gear are bare `ink-3` glyphs. What floats is what sits over the
@@ -402,7 +419,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
 ## 9. App patterns
 
-- **Shell.** One grid on `bg`, three columns: the sidebar (`--side-w`), the
+- **Shell.** One grid on the frame, three columns: the sidebar (`--side-w`), the
   work, the second sidebar (`--side-w`). There is no separate rail. The top
   bar (`--top-h`) spans them, drags the window and reads like a browser's:
   at its left the sidebar toggle (after the traffic lights on a Mac), then
@@ -447,13 +464,15 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   others fold into one row under the agents ("Others' direct messages", with
   a count). A section's + (New
   room, Invite people, Add an agent) shows when the pointer is over the
-  section; it becomes a row only while the section is empty. The open row is
-  on `wash-2`; a row with news is 600 with a count. Cards for what waits on
+  section; it becomes a row only while the section is empty. The open row
+  takes the page's colour and reaches the sidebar's edge, where it joins
+  the page like the open tab; a row with news is 600 with a count. Cards for what waits on
   you (an update, a device) sit at the foot under a
   16px fade: the text, then the action on its line's end, or under it when
   the text needs the width.
 - **Second sidebar.** The right column (`--side-w`) is one place with two
-  states. At rest, on every view, it holds Now and Activity. Now is the task
+  states. At rest, on every view, it is part of the frame and holds Now
+  and Activity. Now is the task
   tracker: the counts (in progress, done today) in mono beside its name, or
   on their own line under the toggle, then a 4px bar with one
   segment per state in the state colours, the next step, and the open tasks
@@ -478,7 +497,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   log in a popover under it.
 - **Right panel** (`--side-w` to start, wider by its grip): a thread,
   a task, a PR or an issue slides in from the right (`panel-in`)
-  beside the conversation, with a title, a mono sub line and a close button.
+  beside the conversation, in the page's colour, with a title, a mono sub
+  line and a close button.
   A thread keeps its own composer.
 - **Conversation.** Everyone else on the left with no bubbles, in the
   `--col` column; your own messages on the right as bubbles (the text on
@@ -578,8 +598,9 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   its tasks with PR and check ticks, Up next, Watching, and its last moves
   with mono times.
 - **Settings.** The sidebar trades the channels for Settings' sections (the
-  open one on `wash-2`) under a `‹ Settings` back button. The page sits beside
-  them, up to 720px: a `t-display` title (a quiet line under it only when it
+  open one joined to the page, like a sidebar row) under a `‹ Settings` back
+  button. The page sits beside them and reaches the window's right edge, its
+  content centred on the window, up to 720px: a `t-display` title (a quiet line under it only when it
   says a scope or a limit), then groups of rows on the page under mono group
   heads, hairlines between rows: a title, a quiet line only when it says what
   the title can't, and the control on the right. No cards around groups.
