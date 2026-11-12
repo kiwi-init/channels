@@ -68,6 +68,21 @@ try {
         }, null);
         return r ?? null;
       });
+      await until(
+        `the gear works when the page dispatches its own click (${layout.name} control)`,
+        10_000,
+        async () => (await d.evaluate(() => !!document.querySelector(".rail-gear")?.dispatchEvent(new MouseEvent("click", { bubbles: true })) && !!document.querySelector(".set"), null)) || null,
+      );
+      await until(
+        `the control's Settings closes (${layout.name})`,
+        10_000,
+        async () =>
+          (await d.evaluate(() => {
+            const g = document.querySelector(".rail-gear");
+            if (g && document.querySelector(".set")) g.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            return !document.querySelector(".set");
+          }, null)) || null,
+      );
       click(win, gear.x, gear.y, 1);
       await until(`Settings opens on a real click in the ${layout.name} layout`, 10_000, async () => (await d.evaluate(() => !!document.querySelector(".set"), null)) || null);
       click(win, gear.x, gear.y, 1);
