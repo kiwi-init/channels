@@ -24,11 +24,6 @@ function apply(a: Appearance) {
     .catch(() => undefined);
 }
 
-export function showGlass(on: boolean) {
-  if (on) document.documentElement.dataset.glass = "material";
-  else delete document.documentElement.dataset.glass;
-}
-
 export function setAppearance(a: Appearance) {
   if (a === "system") localStorage.removeItem(KEY);
   else localStorage.setItem(KEY, a);
