@@ -10,8 +10,8 @@ const made: string[] = [];
 function sandbox() {
   const root = mkdtempSync(join(tmpdir(), "kiwi-cleanup-"));
   made.push(root);
-  const p = { home: join(root, "home"), bin: join(root, "home", "bin"), tmp: join(root, "tmp"), bun: join(root, "bun"), path: "" };
-  for (const d of [p.home, p.bin, p.tmp, p.bun]) mkdirSync(d, { recursive: true });
+  const p = { home: join(root, "home"), bin: join(root, "home", "bin"), apps: join(root, "apps"), tmp: join(root, "tmp"), bun: join(root, "bun"), path: "" };
+  for (const d of [p.home, p.bin, p.apps, p.tmp, p.bun]) mkdirSync(d, { recursive: true });
   writeFileSync(join(p.bin, "kiwi"), "#!/bin/sh\n");
   chmodSync(join(p.bin, "kiwi"), 0o755);
   p.path = p.bin;
@@ -34,6 +34,31 @@ describe("kiwi cleanup", () => {
     writeFileSync(join(s.bin, "kiwi.exe.new-9"), "x");
     expect(cleanup(s).removed.sort()).toEqual([join(s.bin, "kiwi.exe.new-9"), join(s.bin, "kiwi.new-123")]);
     expect(existsSync(join(s.bin, "kiwi"))).toBe(true);
+  });
+
+  test("a CLI the app left half-made goes once the app that made it is gone; one still being made stays", () => {
+    const s = sandbox();
+    const id = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const gone = [`kiwi.new-${DEAD}-${id}`, `kiwi.new-${DEAD}-${id}.cstemp`, `kiwi.exe.new-${DEAD}-${id}`];
+    const kept = ["kiwi", `kiwi.new-${process.pid}-${id}`, `kiwi.new-${process.pid}-${id}.cstemp`, `kiwi.new-${DEAD}-not-an-id`, `notes.new-${DEAD}-${id}`];
+    for (const name of [...gone, ...kept]) writeFileSync(join(s.bin, name), "x");
+    expect(cleanup(s).removed.sort()).toEqual(gone.map((name) => join(s.bin, name)).sort());
+    for (const name of kept) expect(existsSync(join(s.bin, name))).toBe(true);
+  });
+
+  test("the app's own half-made copy in its data folder goes the same way, and nothing else in there is touched", () => {
+    const s = sandbox();
+    const id = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    const dev = join(s.apps, "com.kiwiinit.channels.dev", "stable", "bin");
+    const release = join(s.apps, "com.kiwiinit.channels", "stable", "bin");
+    const other = join(s.apps, "com.example.notes", "stable", "bin");
+    for (const dir of [dev, release, other]) mkdirSync(dir, { recursive: true });
+    const gone = [join(dev, `kiwi-2026.11.19.new-${DEAD}-${id}`), join(dev, `kiwi-2026.11.19.new-${DEAD}-${id}.cstemp`), join(release, `kiwi-2026.11.19-c14930be.new-${DEAD}-${id}`)];
+    const kept = [join(dev, "kiwi-2026.11.19"), join(dev, `kiwi-2026.11.19.new-${process.pid}-${id}`), join(release, "settings.json"), join(other, `kiwi-2026.11.19.new-${DEAD}-${id}`)];
+    for (const file of [...gone, ...kept]) writeFileSync(file, "x");
+    writeFileSync(join(s.apps, "com.kiwiinit.channels", "a-file"), "x");
+    expect(cleanup(s).removed.sort()).toEqual([...gone].sort());
+    for (const file of kept) expect(existsSync(file)).toBe(true);
   });
 
   test("interrupted CLI upgrade staging goes while a running upgrade and other folders stay", () => {

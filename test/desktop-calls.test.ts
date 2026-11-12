@@ -4,6 +4,7 @@ import type { KeysPort, KiwiBridge, StoreSnapshot } from "../desktop/src/bridge.
 import { makeBridge, type BridgeTransport, type Call, type CallArgs, type CallValue, type Handlers, type Push, type Pushes } from "../desktop/src/calls.ts";
 import { useHost } from "../desktop/src/host.ts";
 import { handlers } from "../desktop/src/ipc/handlers.ts";
+import { MAX_SAVE_BYTES } from "../desktop/src/save-file.ts";
 import { openStore, store, type StoreFile } from "../desktop/src/store.ts";
 import { fakeHost } from "./fake-host.ts";
 
@@ -138,6 +139,14 @@ describe("main's handlers reach the shell only through the host", () => {
     did.length = 0;
     await expect(bridge.openExternal("file:///etc/passwd")).rejects.toThrow("only http(s) links open outside");
     expect(did).toEqual([]);
+  });
+
+  test("the page's copy reaches the host's own clipboard; text past the size cap or not text never does (#2322)", async () => {
+    did.length = 0;
+    await bridge.copyText("kiwi join https://relay.example/c --nick nova");
+    await expect(bridge.copyText("x".repeat(MAX_SAVE_BYTES + 1))).rejects.toThrow("that text is too big to copy");
+    await expect(bridge.copyText(42 as unknown as string)).rejects.toThrow("that text is too big to copy");
+    expect(did).toEqual(["copy"]);
   });
 
   test("a new relay is saved, told to the keys and reloads the page; a bad one changes nothing", async () => {

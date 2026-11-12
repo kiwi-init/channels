@@ -4,11 +4,10 @@ import { useEffect, useId, useRef, useState } from "react"
 import { t } from "~/i18n/i18n"
 import { wantPersona } from "~/live/persona-later"
 import { Icon } from "~/kit/icons"
-import { copyText } from "~/kit/toasts"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
 import { Modal } from "~/kit/modal"
-import { CopyBox } from "~/modals/invite"
+import { CopyBox, copyResult, type CopyResult } from "~/modals/invite"
 
 type Taken = Map<string, "in" | "asking">
 
@@ -110,12 +109,18 @@ function PersonaPick({ value, onPick, none }: { value: string; onPick: (id: stri
 
 type Got = { code: string; key: string; line: string } | { code: string; key: string; failed: true }
 
-export function useJoinCommand(code: string, nick: string, persona: string): { line: string | null; failed: boolean; copy: () => void; retry: () => void } {
+function drop(waiting: { current: ((result: CopyResult) => void) | null }): void {
+  const settle = waiting.current
+  waiting.current = null
+  settle?.({ kind: "dropped" })
+}
+
+export function useJoinCommand(code: string, nick: string, persona: string): { line: string | null; failed: boolean; copy: () => Promise<CopyResult>; retry: () => void } {
   const { app } = useApp()
   const key = JSON.stringify([code, nick, persona])
   const [got, setGot] = useState<Got | null>(null)
   const [attempt, setAttempt] = useState(0)
-  const copyWhenReady = useRef(false)
+  const copyWhenReady = useRef<((result: CopyResult) => void) | null>(null)
   useEffect(() => {
     let live = true
     const asked = JSON.stringify([code, nick, persona])
@@ -125,17 +130,18 @@ export function useJoinCommand(code: string, nick: string, persona: string): { l
       .then((line) => {
         if (!live) return
         setGot({ code, key: asked, line })
-        if (copyWhenReady.current) copyText(line)
-        copyWhenReady.current = false
+        const waiting = copyWhenReady.current
+        copyWhenReady.current = null
+        if (waiting) void copyResult(line).then(waiting)
       })
       .catch(() => {
         if (!live) return
         setGot({ code, key: asked, failed: true })
-        copyWhenReady.current = false
+        drop(copyWhenReady)
       })
     return () => {
       live = false
-      copyWhenReady.current = false
+      drop(copyWhenReady)
     }
   }, [app.actions, code, nick, persona, attempt])
   const last = got?.code === code ? got : null
@@ -145,8 +151,11 @@ export function useJoinCommand(code: string, nick: string, persona: string): { l
     line,
     failed: !!last && "failed" in last,
     copy: () => {
-      if (line && ready) copyText(line)
-      else copyWhenReady.current = true
+      if (line && ready) return copyResult(line)
+      drop(copyWhenReady)
+      return new Promise<CopyResult>((settle) => {
+        copyWhenReady.current = settle
+      })
     },
     retry: () => {
       setGot(null)

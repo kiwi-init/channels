@@ -470,6 +470,9 @@ jobs:
       - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
+      - name: ui a refused copy selects the whole command and offers it by hand, and a landed one doesn't, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-copy-recovers.ts --dist ui/dist
       - name: ui the Tasks tab changes quiet time and where tasks land, and reads both back, with and without a repo, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-task-settings.ts --dist ui/dist --browser webkit
@@ -581,6 +584,9 @@ jobs:
       - name: the launcher keeps BUN_*, NODE_*, DYLD_* and JSC_* out of the app
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-env-check.ts desktop/release-eb
+      - name: quitting during the first start leaves no CLI build running and no half-made CLI behind
+        if: ${{ !cancelled() }}
+        run: bun desktop/scripts/eb-quit-check.ts desktop/release-eb
       - name: the launcher holds the store key for one session, refuses a changed app, and its C runs clean under ASan and UBSan
         if: ${{ !cancelled() }}
         run: bun desktop/scripts/eb-keys-check.ts desktop/release-eb

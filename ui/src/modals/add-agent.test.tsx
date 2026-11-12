@@ -72,7 +72,16 @@ async function opened(nick: string, persona = "") {
     return ask
   }
   await show(nick, persona)
-  return { show, asks, last, shown: () => now().line, failed: () => now().failed, copy: () => act(async () => now().copy()), retry: () => act(async () => now().retry()) }
+  return {
+    show,
+    asks,
+    last,
+    shown: () => now().line,
+    failed: () => now().failed,
+    copy: () => act(async () => void now().copy()),
+    result: () => now().copy(),
+    retry: () => act(async () => now().retry()),
+  }
 }
 
 describe("Add an agent: the Command box holds still while the name is typed (T21)", () => {
@@ -160,6 +169,56 @@ describe("Add an agent: the Command box holds still while the name is typed (T21
     expect(box.asks).toHaveLength(2)
     await box.last().answer()
     expect(box.shown()).toBe(lineFor("mc2-x", "nova", ""))
+    expect(copied).toEqual([])
+  })
+})
+
+describe("Add an agent: Copy says how it went, so the box can offer the command by hand (#2322)", () => {
+  const refuse = (refused: boolean) =>
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (text: string) => (refused ? Promise.reject(new DOMException("denied", "NotAllowedError")) : void copied.push(text)) },
+    })
+
+  test("a copy that lands says copied", async () => {
+    const box = await opened("nova")
+    await box.last().answer()
+    expect(await box.result()).toEqual({ kind: "copied" })
+    expect(copied).toEqual([lineFor("mc2-x", "nova", "")])
+  })
+
+  test("a refused copy hands back the exact command it tried", async () => {
+    const box = await opened("nova")
+    await box.last().answer()
+    refuse(true)
+    try {
+      expect(await box.result()).toEqual({ kind: "failed", text: lineFor("mc2-x", "nova", "") })
+    } finally {
+      refuse(false)
+    }
+  })
+
+  test("a refused copy that waited for the new command hands back that command", async () => {
+    const box = await opened("nova")
+    await box.last().answer()
+    await box.show("scout")
+    refuse(true)
+    try {
+      const result = box.result()
+      await box.last().answer()
+      expect(await result).toEqual({ kind: "failed", text: lineFor("mc2-x", "scout", "") })
+    } finally {
+      refuse(false)
+    }
+  })
+
+  test("a copy dropped by typing on says dropped, so nothing is offered by hand", async () => {
+    const box = await opened("nova")
+    await box.last().answer()
+    await box.show("scout")
+    const result = box.result()
+    await box.show("scout-2")
+    expect(await result).toEqual({ kind: "dropped" })
     expect(copied).toEqual([])
   })
 })

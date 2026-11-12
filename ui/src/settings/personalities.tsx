@@ -49,7 +49,7 @@ const roleOptions = (): readonly (readonly [Role, string])[] => ROLES.map((r) =>
 
 const BLANK: Omit<Personality, "id" | "name"> = { glyph: "✳", role: "builder", capabilities: ["write", "tasks", "notes"], areas: [], instructions: "" }
 
-const ASK_PEOPLE_SINCE = "3.5.0"
+const ASK_PEOPLE_SINCE = "3.6.0"
 
 const SHOT = new URLSearchParams(location.search).get("shot")
 
