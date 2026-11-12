@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 
 import type { HarnessRow } from "@kiwi/core/harnesses.ts"
-import { capabilityLine, type Personality } from "@kiwi/core/personality.ts"
+import type { Personality } from "@kiwi/core/personality.ts"
 import { PRESETS } from "@kiwi/core/presets.ts"
 import { useAutoApproval } from "@kiwi/app/auto-approval.ts"
 import { parseHash } from "@kiwi/channel/hash.ts"
@@ -104,7 +104,7 @@ function useHarnesses(): App["harnesses"] {
 }
 
 function usePersonas(own: Personality[]): App["personas"] {
-  return useMemo(() => [...PRESETS, ...own].map((p) => ({ id: p.id, label: p.name, about: p.instructions.split(/(?<=\.)\s/)[0] ?? capabilityLine(p) })), [own])
+  return useMemo(() => [...PRESETS, ...own].map((p) => ({ id: p.id, label: p.name, about: p.instructions.split(/(?<=\.)\s/)[0] ?? "" })), [own])
 }
 
 function useDuties(rows: ChannelRow[], person: string | undefined) {

@@ -1,13 +1,14 @@
 import "~/i18n/en/settings"
 import "~/styles/personalities.css"
 
-import { useEffect, useRef, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 
 import { copyOf, freeId } from "@kiwi/core/personalities.ts"
-import { CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, ROLES, type Capability, type Personality, type Role } from "@kiwi/core/personality.ts"
+import { asksPeople, CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, ROLES, type Capability, type Personality, type Role } from "@kiwi/core/personality.ts"
 import { PRESETS } from "@kiwi/core/presets.ts"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
+import { useAppSince } from "~/settings/app-since"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { RoleFace } from "~/kit/role-face"
@@ -47,6 +48,8 @@ const ROLE_LABEL: Record<Role, Key> = {
 const roleOptions = (): readonly (readonly [Role, string])[] => ROLES.map((r) => [r, t(ROLE_LABEL[r])] as const)
 
 const BLANK: Omit<Personality, "id" | "name"> = { glyph: "✳", role: "builder", capabilities: ["write", "tasks", "notes"], areas: [], instructions: "" }
+
+const ASK_PEOPLE_SINCE = "3.6.0"
 
 const SHOT = new URLSearchParams(location.search).get("shot")
 
@@ -130,6 +133,7 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
   const ref = useRef<HTMLFormElement>(null)
   const discard = useDiscard(JSON.stringify(draft) !== JSON.stringify(start) || !!area.trim(), onDone)
   const own = app.ownPersonalities
+  const keepsAsk = useAppSince(ASK_PEOPLE_SINCE)
   const set = (patch: Partial<Personality>) => setDraft((d) => ({ ...d, ...patch }))
   const toggle = (c: Capability) => set({ capabilities: CAPABILITIES.filter((x) => (x === c ? !draft.capabilities.includes(c) : draft.capabilities.includes(x))) })
   const addArea = () => {
@@ -180,9 +184,22 @@ function Editor({ start, isNew, onDone }: { start: Personality; isNew: boolean; 
         <span className="persona-label">{t("settings.personalities.capabilities")}</span>
         <div className="set-rows">
           {CAPABILITIES.map((c) => (
-            <Row key={c} label={t(CAPABILITY_TEXT[c][0])} hint={t(CAPABILITY_TEXT[c][1])}>
-              <Toggle label={t(CAPABILITY_TEXT[c][0])} on={draft.capabilities.includes(c)} onChange={() => toggle(c)} />
-            </Row>
+            <Fragment key={c}>
+              <Row label={t(CAPABILITY_TEXT[c][0])} hint={t(CAPABILITY_TEXT[c][1])}>
+                <Toggle label={t(CAPABILITY_TEXT[c][0])} on={draft.capabilities.includes(c)} onChange={() => toggle(c)} />
+              </Row>
+              {c === "write" && (
+                <Row label={t("settings.personalities.can.ask.people")} hint={t(keepsAsk ? "settings.personalities.can.ask.people.hint" : "settings.personalities.can.ask.people.update")}>
+                  <Toggle
+                    label={t("settings.personalities.can.ask.people")}
+                    on={asksPeople(draft)}
+                    disabled={!keepsAsk || !draft.capabilities.includes("write")}
+                    why={keepsAsk ? undefined : t("settings.personalities.can.ask.people.update")}
+                    onChange={(on) => set({ askPeople: on })}
+                  />
+                </Row>
+              )}
+            </Fragment>
           ))}
         </div>
       </div>
