@@ -123,17 +123,21 @@ try {
     );
     const shell = await page.evaluate(() => {
       const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect();
-      const tiles = [...document.querySelectorAll(".rail .tile")].map((tile) => tile.getBoundingClientRect());
+      const tiles = [...document.querySelectorAll(".rail :is(.tile.is-home, .tile[data-code])")].map((tile) => tile.getBoundingClientRect());
       const side = box(".side");
       const gear = box(".rail-gear");
       const first = box(".side-chan");
       const toggle = box(".top-drawer");
-      return side && gear && first && toggle && tiles.length
+      const strip = box(".top");
+      const add = box(".tile.is-add");
+      return side && gear && first && toggle && strip && add && tiles.length
         ? {
-            rows: new Set(tiles.map((tile) => Math.round(tile.top))).size,
+            rows: new Set(tiles.map((tile) => Math.round(tile.bottom))).size,
             sizes: [...new Set(tiles.map((tile) => tile.height))],
             left: tiles[0]!.left - toggle.right,
-            under: first.top - Math.max(...tiles.map((tile) => tile.bottom)),
+            foot: strip.bottom - Math.max(...tiles.map((tile) => tile.bottom)),
+            add: add.top >= strip.top && add.bottom <= strip.bottom,
+            under: first.top - strip.bottom,
             listEnd: side.bottom,
             gearTop: gear.top,
             gearFoot: innerHeight - gear.bottom,
@@ -151,10 +155,11 @@ try {
     expect(!cropped, "a tab's badge is not cropped by the strip");
     expect(
       !!shell && shell.rows === 1 && shell.sizes.length === 1 && near(shell.left, 16),
-      `the channel tabs are one height, in one line, 16px after the sidebar button (${shell?.sizes.join(", ")} high, ${shell?.left} after)`,
+      `Home and the channel tabs are one height, in one line, 16px after the sidebar button (${shell?.sizes.join(", ")} high, ${shell?.left} after)`,
     );
+    expect(!!shell && near(shell.foot, 0) && shell.add, `standing on the strip's bottom edge, with + inside the strip (${shell?.foot} above it)`);
     await nothingClashes(page, "on the Mac");
-    expect(!!shell && near(shell.under, 8), `the channel's name starts 8px under the tabs (${shell?.under})`);
+    expect(!!shell && near(shell.under, 0), `the channel's name starts right under the tab strip (${shell?.under})`);
     expect(!!shell && shell.listEnd <= shell.gearTop && near(shell.gearFoot, 8), "Settings sits in the bottom-left corner, under the list");
 
     const side = await page.evaluate(() => {
@@ -412,8 +417,8 @@ try {
     const names = await named();
     const rows = await page.evaluate(() => [...document.querySelectorAll(".views-bar .side-row")].map((row) => Math.round(row.getBoundingClientRect().top)));
     expect(
-      !!strip && !!home && !!tab && !!add && home.bottom <= strip.bottom && near(home.y, tab.y) && near(tab.y, add.y),
-      `the channels are one line of tabs in the top strip (${home?.y}, ${tab?.y}, ${add?.y} of ${strip?.bottom})`,
+      !!strip && !!home && !!tab && !!add && home.bottom <= strip.bottom && near(home.y, tab.y) && add.top >= strip.top && add.bottom <= strip.bottom,
+      `the channels are one line of tabs in the top strip (${home?.y}, ${tab?.y}, + from ${add?.top} to ${add?.bottom} of ${strip?.bottom})`,
     );
     expect(!!toggle && !!home && home.left >= toggle.right, `the tabs start after the sidebar button (${home?.left} after ${toggle?.right})`);
     expect(!!search && !!add && add.right <= search.left && near(search.right, width - 8), `and end before Search, at the row's far end (${add?.right} before ${search?.left})`);
@@ -505,10 +510,114 @@ try {
       const back = await boxOf(page, ".set-back");
       const home = await boxOf(page, ".tile.is-home");
       expect(!!home && home.bottom <= 48, "the tabs are in the top row");
+      const open = await page.evaluate(() => [...document.querySelectorAll(".rail .tile.is-on")].map((tile) => (tile.classList.contains("is-home") ? "Home" : "a channel")));
+      if (shot === "home") expect(open.length === 1 && open[0] === "Home", `Home is the one open tab (${open.join(", ") || "none"})`);
+      else expect(open.length === 0, `Settings is no channel, so no tab is open (${open.join(", ") || "none"})`);
       if (shot === "settings-devices") expect(!!back && !!home && home.left >= back.right, `the tabs start after the Settings title (${home?.left} after ${back?.right})`);
       await nothingClashes(page, "here");
       await page.close();
     }
+  }
+  for (const [shot, width, fit] of [
+    ["tabs-3", 1710, "roomy"],
+    ["tabs-8", 1710, "roomy"],
+    ["tabs-8", 1280, "roomy"],
+    ["tabs-8-top", 1280, "roomy"],
+    ["tabs-8", 1100, "tight"],
+    ["tabs-8", 900, "icons"],
+  ] as const) {
+    console.log(`\nthe tab strip, ${shot} at ${width} wide`);
+    const page = await browser.newPage({ viewport: { width, height: 800 } });
+    await page.goto(`${base}?shot=${shot}&theme=dark`);
+    await page.waitForSelector(".rail .tile[data-code]");
+    await page.waitForTimeout(900);
+    const strip = await page.evaluate(() => {
+      const rail = document.querySelector<HTMLElement>(".rail");
+      const add = document.querySelector(".tile.is-add")?.getBoundingClientRect();
+      const search = document.querySelector(".top-tools > .icon-btn:last-child")?.getBoundingClientRect();
+      const top = document.querySelector(".top")?.getBoundingClientRect();
+      const open = [...document.querySelectorAll<HTMLElement>(".rail .tile.is-on")];
+      if (!rail || !add || !search || !top) return null;
+      const tabs = [...rail.querySelectorAll<HTMLElement>(".tile[data-code]")].map((tab) => {
+        const box = tab.getBoundingClientRect();
+        const name = tab.querySelector<HTMLElement>(".tile-name");
+        const last = tab.lastElementChild as HTMLElement;
+        const icon = tab.firstElementChild?.getBoundingClientRect();
+        return {
+          name: name?.textContent ?? "",
+          on: tab.classList.contains("is-on"),
+          left: box.left,
+          right: box.right,
+          width: box.width,
+          shown: !!name && name.clientWidth > 0,
+          whole: !!name && name.clientWidth > 0 && name.scrollWidth <= name.clientWidth,
+          spare: box.right - last.getBoundingClientRect().right - Number.parseFloat(getComputedStyle(last).marginRight),
+          icon: icon ? Math.round(icon.width) : 0,
+        };
+      });
+      const shade = (el: Element): string => getComputedStyle(el).backgroundColor;
+      return {
+        fit: rail.dataset["fit"],
+        over: rail.scrollWidth - rail.clientWidth,
+        page: (document.scrollingElement?.scrollWidth ?? 0) - innerWidth,
+        rem: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+        tabs,
+        addLeft: add.left,
+        addRight: add.right,
+        search: search.left,
+        foot: top.bottom,
+        open: open.map((tab) => ({ bottom: tab.getBoundingClientRect().bottom, shade: shade(tab) })),
+        ground: shade(document.body),
+        band: getComputedStyle(document.querySelector(".app")!).backgroundImage,
+      };
+    });
+    const tabs = strip?.tabs ?? [];
+    const widths = tabs.map((tab) => tab.width);
+    const least = Math.min(...widths);
+    const even = tabs.filter((tab) => near(tab.width, least, 1));
+    const wider = tabs.filter((tab) => !near(tab.width, least, 1));
+    expect(strip?.fit === fit, `the strip is ${fit} here (${strip?.fit})`);
+    expect(!!strip && strip.over <= 1 && strip.page <= 0, `nothing scrolls sideways (${strip?.over}px over in the strip, ${strip?.page}px in the page)`);
+    expect(
+      !!strip && strip.open.length === 1 && near(strip.open[0]!.bottom, strip.foot) && strip.open[0]!.shade === strip.ground && strip.band.includes("gradient"),
+      `one tab is open, in the page's colour and joined to it, on a band (${strip?.open.length} open, ${strip?.open[0]?.bottom} of ${strip?.foot})`,
+    );
+    expect(!!strip && near(strip.addRight + 8, strip.search, 9) && tabs.every((tab) => tab.right <= strip.addLeft + 1), `+ ends the strip, beside Search (${strip?.addRight} before ${strip?.search})`);
+    expect(tabs.length > 0 && tabs.every((tab) => tab.icon === 16), `every tab's icon is 16px (${[...new Set(tabs.map((tab) => tab.icon))].join(", ")})`);
+    await nothingClashes(page, `with ${shot} at ${width}`);
+    if (fit === "roomy") {
+      expect(
+        tabs.every((tab) => tab.whole),
+        `every name is whole (${
+          tabs
+            .filter((tab) => !tab.whole)
+            .map((tab) => tab.name)
+            .join(", ") || "all"
+        })`,
+      );
+      expect(even.length >= 2 && wider.every((tab) => tab.spare <= 13), `tabs are equal shares, and a wider one is only as wide as its name needs (${widths.map((w) => Math.round(w)).join(", ")})`);
+      if (shot === "tabs-3") expect(!!strip && wider.length === 0 && near(least, 15 * strip.rem, 1), `with room to spare a tab stops at 15rem (${Math.round(least)})`);
+      else
+        expect(
+          !!strip && near(tabs.at(-1)!.right, strip.addLeft, 1) && wider.length > 0,
+          `the tabs fill the strip, and a long name takes the room its neighbours don't use (${wider.map((tab) => tab.name).join(", ")})`,
+        );
+    }
+    if (fit === "tight") {
+      const cut = tabs.filter((tab) => !tab.whole);
+      const whole = tabs.filter((tab) => tab.whole);
+      expect(
+        cut.length > 0 && whole.length > 0 && Math.min(...cut.map((tab) => tab.width)) >= Math.max(...whole.map((tab) => tab.width)) - 1,
+        `out of room, only the longest names are cut, to one width (${cut.map((tab) => `${tab.name} ${Math.round(tab.width)}`).join(", ")}; whole up to ${Math.round(Math.max(...whole.map((tab) => tab.width)))})`,
+      );
+      expect(!!strip && near(tabs.at(-1)!.right, strip.addLeft, 1), "and the tabs still fill the strip");
+    }
+    if (fit === "icons") {
+      const rest = tabs.filter((tab) => !tab.on);
+      expect(rest.length > 0 && rest.every((tab) => !tab.shown) && tabs.filter((tab) => tab.on).every((tab) => tab.whole), "too many to name: tabs are their icons, and the open one keeps its name");
+      expect(Math.max(...rest.map((tab) => tab.width)) - Math.min(...rest.map((tab) => tab.width)) <= 1, `in equal shares (${rest.map((tab) => Math.round(tab.width)).join(", ")})`);
+    }
+    await page.close();
   }
   for (const [width, height] of [
     [1000, 760],
