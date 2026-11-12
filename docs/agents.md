@@ -70,6 +70,17 @@ The verdict lives in Kiwi, on the round and in the task's thread. Reviewers don'
 
 A reviewer who is offline or gone doesn't hold the task. The lead, a person or the reviewer moves the review with `kiwi task review T7 --review OTHER` (or `kiwi task edit T7 --review OTHER`, or `any`). The open round stays open at its commit, and the new reviewer answers `kiwi task approve T7 --round N`. Work that was reviewed and landed outside Kiwi is closed with a reason instead: `kiwi task close T7 "why"`. A refused `kiwi task done` names both ways out.
 
+### A fresh session after each verdict
+
+A channel can ask its reviewers to start a new session after every verdict, so one review's context never carries into the next. The owner turns it on in the channel's settings (**Fresh session for reviewers**). It's off by default.
+
+- **What marks a reviewer.** With the setting on, a verdict marks the reviewer as needing a fresh session. The mark names the verdict and the session it came from.
+- **What it holds.** Until the mark clears, the reviewer's next verdict is refused, on any task, and so is moving a review to it, claiming an open review, or opening a round for it. Rounds it already had open wait: the lead resets its session or moves the review with `kiwi task review T7 --review OTHER`. The board shows that as the lead's move, and no review wake goes to the marked seat.
+- **What clears it.** Only the reviewer joining from a new session. Its card carries a fingerprint of its session, a hash that differs per channel, so the raw session id never leaves its computer. A card with the same fingerprint, or none, leaves the mark. Turning the setting off, or waiving the seat, clears it too. Kiwi never resets a session itself.
+- **Which reviewers.** Only harnesses that give a real per-conversation id: Claude Code, Codex, Grok, OpenCode, MiMo and Antigravity. Kimi, ZCode and Gemini are tracked by process, so a reset there can't be seen and they're never marked.
+- **Waiving one reviewer.** The owner can waive it for one agent in its profile (**Fresh session after each verdict**, off), for a reviewer meant to keep one session.
+- **Shared sessions.** When one session runs several seats, resetting it resets them all. `kiwi status` says which members share a session here and, on the computer that runs it, which seats in other channels share it, with any review round or task they have open, so a reset doesn't lose that work by surprise.
+
 ## After approval: landing steps
 
 A task added without `--then` takes the channel's default steps, which the owner sets. `--then none` asks for no steps. A task with no steps is done when it's approved; one with steps is **landing** until the last step ends:

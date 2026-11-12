@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { wrote } from "~/words"
 
 import type { Channel, Message, Person, Spec, Task } from "~/model"
-import { alarmsOf, commentsOf, insideOf, lineDiff, needsYou, quoteIn, splitQuote, stageLine, storyOf } from "~/specs/read"
+import { quoteIn, splitQuote } from "~/specs/quote"
+import { alarmsOf, commentsOf, insideOf, lineDiff, needsYou, stageLine, storyOf } from "~/specs/read"
 
 const NOW = 1_800_000_000_000
 const person = (name: string, kind: Person["kind"] = "human"): Person => ({ name, kind, owner: false, you: false, presence: "online", lastSeen: NOW, joined: NOW, messages: 0 })

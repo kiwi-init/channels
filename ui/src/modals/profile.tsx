@@ -1,6 +1,7 @@
 import "~/i18n/en/modals"
 import "~/styles/person.css"
 
+import type { SharedWork } from "@kiwi/core/shared-seats.ts"
 import { Fragment, useState, type ReactNode } from "react"
 
 import type { Key } from "~/i18n/en"
@@ -67,6 +68,13 @@ export function Profile({ channel, name, onClose }: { channel: Channel; name: st
       sub={<Status person={person} />}
     >
       {person.about && <p className="person-about">{person.about}</p>}
+      {person.sharesElsewhere?.map((o) => (
+        <p key={`${o.room}/${o.agent}`} className={o.work.length ? "person-about tone-alert" : "person-about"}>
+          {o.work.length
+            ? t("modals.profile.shares.elsewhere.work", { who: `@${o.agent}`, channel: o.alias, work: o.work.map(workWords).join(", ") })
+            : t("modals.profile.shares.elsewhere", { who: `@${o.agent}`, channel: o.alias })}
+        </p>
+      ))}
       {!person.left && <Doors channel={channel} person={person} />}
       <Tasks channel={channel} person={person} />
       <Facts channel={channel} person={person} />
@@ -74,6 +82,9 @@ export function Profile({ channel, name, onClose }: { channel: Channel; name: st
     </Modal>
   )
 }
+
+const workWords = (w: SharedWork): string =>
+  w.kind === "review" ? t("modals.profile.work.review", { round: String(w.round), task: String(w.task) }) : t("modals.profile.work.doing", { task: String(w.task) })
 
 function Status({ person }: { person: Person }) {
   const { app } = useApp()
@@ -97,6 +108,13 @@ function Status({ person }: { person: Person }) {
         {t("modals.profile.overloaded")}
       </span>
     )
+  if (person.reset?.kind === "needs")
+    parts.push(
+      <span key="reset" className="tone-alert">
+        {t("modals.profile.needs.reset", { seq: String(person.reset.verdict) })}
+      </span>
+    )
+  if (person.sharesSession?.length) parts.push(<span key="shares">{t("modals.profile.shares.session", { names: person.sharesSession.map((n) => `@${n}`).join(", ") })}</span>)
   if (context)
     parts.push(
       <span key="context" className={context.over ? "tone-alert" : undefined}>
@@ -313,6 +331,11 @@ function Manage({ channel, person }: { channel: Channel; person: Person }) {
           <Row label={t("modals.profile.read.only")} hint={agent ? t("modals.profile.read.only.agent") : t("modals.profile.read.only.person")}>
             <Toggle label={t("modals.profile.read.only")} on={!!person.readOnly} onChange={(on) => app.actions.setReadOnly(channel.code, person.name, on)} />
           </Row>
+          {agent && channel.reviewReset && (
+            <Row label={t("modals.profile.fresh.session")} hint={person.reset?.kind === "waived" ? t("modals.profile.fresh.session.off") : t("modals.profile.fresh.session.on")}>
+              <Toggle label={t("modals.profile.fresh.session")} on={person.reset?.kind !== "waived"} onChange={(on) => app.actions.setResetWaived(channel.code, person.name, !on)} />
+            </Row>
+          )}
           {agent && person.wakes !== undefined && (
             <Row label={t("modals.profile.wake")} hint={person.wakes ? t("modals.profile.wake.on") : t("modals.profile.wake.off")}>
               <Toggle label={t("modals.profile.wake")} on={person.wakes === true} onChange={(on) => app.actions.setWake(channel.code, person.name, on)} />

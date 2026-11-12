@@ -1,5 +1,6 @@
 import { isHookHarness, readHookRow, type HookHarness, type HookRow } from "@kiwi/core/harnesses.ts";
 import { readWakeSeat, type WakeSeat } from "@kiwi/core/wake.ts";
+import { readSharedSeat, type SharedSeat } from "@kiwi/core/shared-seats.ts";
 import type { Serves } from "../calls.ts";
 import { daemonHarnesses } from "../daemon-client.ts";
 import { runKiwi } from "./kiwi.ts";
@@ -53,6 +54,12 @@ function wakeSeatsOf(stdout: string): WakeSeat[] {
   return Array.isArray(listed) ? listed.map(readWakeSeat).filter((s): s is WakeSeat => s !== null) : [];
 }
 
+function sharedSeatsOf(stdout: string): SharedSeat[] {
+  const parsed = answer(stdout);
+  const listed = parsed && typeof parsed === "object" ? (parsed as { seats?: unknown }).seats : undefined;
+  return Array.isArray(listed) ? listed.map(readSharedSeat).filter((s): s is SharedSeat => s !== null) : [];
+}
+
 function answer(stdout: string): unknown {
   try {
     return JSON.parse(stdout) as unknown;
@@ -70,7 +77,7 @@ async function contextLine(args: string[]): Promise<"on" | "off" | null> {
   return isSwitch(on) ? on : null;
 }
 
-export function hooksCalls(): Serves<"contextLine" | "setContextLine" | "hooks" | "setHooks" | "wakeSeats" | "setWake"> {
+export function hooksCalls(): Serves<"contextLine" | "setContextLine" | "hooks" | "setHooks" | "wakeSeats" | "setWake" | "sharedSeats"> {
   return {
     contextLine: () => contextLine(["context-line", "status", "--json"]),
     setContextLine: (to: unknown) => {
@@ -78,6 +85,7 @@ export function hooksCalls(): Serves<"contextLine" | "setContextLine" | "hooks" 
       return contextLine(["context-line", to, "--json"]);
     },
     wakeSeats: async () => wakeSeatsOf(await must(["wake", "seats", "--json"])),
+    sharedSeats: async () => sharedSeatsOf(await must(["seat", "shared", "--json"])),
     setWake: async (room: unknown, agent: unknown, to: unknown) => {
       if (typeof room !== "string" || !ROOM_ID.test(room) || !isAgentName(agent) || !isSwitch(to)) throw new Error("setWake takes a room id, an agent's name, and on or off");
       return wakeSeatsOf(await must(["wake", "seat", room, agent, to, "--json"]));

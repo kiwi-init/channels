@@ -116,6 +116,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     hooks: () => t.call("hooks"),
     setHooks: (harness, to) => t.call("setHooks", harness, to),
     wakeSeats: () => t.call("wakeSeats"),
+    sharedSeats: () => t.call("sharedSeats"),
     setWake: (room, agent, to) => t.call("setWake", room, agent, to),
     harnesses: () => t.call("harnesses"),
     machines: () => t.call("machines"),

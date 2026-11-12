@@ -472,6 +472,15 @@ function GitHub({ channel }: { channel: Channel }) {
             <span className="cset-mono">{quiet}</span>
           )}
         </Row>
+        <Row label={t("modals.channel.settings.review.reset")} hint={channel.reviewReset ? t("modals.channel.settings.review.reset.on") : t("modals.channel.settings.review.reset.off")}>
+          <Toggle
+            on={!!channel.reviewReset}
+            label={t("modals.channel.settings.review.reset")}
+            disabled={!own}
+            why={t("modals.channel.settings.owner.only")}
+            onChange={(on) => app.actions.setReviewReset(channel.code, on)}
+          />
+        </Row>
         <Row label={t("modals.channel.settings.landing")} hint={landing ? t("modals.channel.settings.landing.set") : t("modals.channel.settings.landing.none")}>
           {sets ? <LandingPick value={landing} onPick={(then) => app.actions.setLanding(channel.code, then)} /> : <span>{landingWord(landing)}</span>}
         </Row>

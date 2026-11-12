@@ -120,6 +120,31 @@ const imeEnter = (page: Page, box: "plain" | "anchored") =>
 try {
   {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    page.on("pageerror", (e) => fails.push(`page threw: ${e.message}`));
+    await page.goto(`http://127.0.0.1:${server.port}/?shot=specs-general`);
+    const reply = page.locator("article.msg", { hasText: "Read AGENTS.md first, then the board." });
+    await reply.waitFor();
+    const earlier = page.locator("article.msg", { hasText: "Drafted it. Two open questions inside." });
+    expect(
+      (await reply.getByRole("button", { name: "Also on the spec" }).count()) === 1 && (await earlier.getByRole("button", { name: "Also on the spec" }).count()) === 1,
+      "a plain reply to a message with a spec shows in its room, tagged Also on the spec",
+    );
+    expect((await page.locator("article.msg", { hasText: "Own rows reads better in Numbers" }).count()) === 0, "a comment on one line of the spec stays out of the room");
+    const own = page.locator("article.msg", { hasText: "Maya's first-hour spec is approved and next in line." });
+    const threadTool = '.msg-tool[aria-label="Reply in thread"]';
+    expect((await own.locator(threadTool).count()) === 1 && (await reply.locator(threadTool).count()) === 0, "a reply that is on a spec offers no thread of its own: its thread is the spec");
+    await page.locator("article.msg", { hasText: "A sketch of the first-hour page" }).locator(".msg-quote").click();
+    await page.waitForTimeout(300);
+    expect((await page.locator(".spec-doc-wrap").count()) === 0 && (await reply.count()) === 1, "the quote line of a reply goes to the message it answers and stays in the room");
+    await reply.getByRole("button", { name: "Also on the spec" }).click();
+    await page.locator(".spec-comment").first().waitFor();
+    const every = page.getByRole("button", { name: /^All \d+$/ });
+    if (await every.count()) await every.first().click();
+    expect((await page.locator(".spec-comment", { hasText: "Read AGENTS.md first, then the board." }).count()) === 1, "the tag opens the spec, where the same reply is a comment");
+    await page.close();
+  }
+  {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     await page.goto(`http://127.0.0.1:${server.port}/?shot=channel`);
     const area = page.getByRole("textbox", { name: "Message" });
     await area.fill("Ask @ma");

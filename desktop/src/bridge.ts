@@ -8,6 +8,7 @@ import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { HarnessRow, HookHarness, HookRow } from "@kiwi/core/harnesses.ts";
 import type { WakeSeat } from "@kiwi/core/wake.ts";
+import type { SharedSeat } from "@kiwi/core/shared-seats.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedKept, CachedRow, Reopened, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
@@ -474,6 +475,7 @@ export interface KiwiBridge {
   hooks(): Promise<HookRow[]>;
   setHooks(harness: HookHarness, to: "on" | "off"): Promise<HookRow[]>;
   wakeSeats(): Promise<WakeSeat[]>;
+  sharedSeats(): Promise<SharedSeat[]>;
   setWake(room: string, agent: string, to: "on" | "off"): Promise<WakeSeat[]>;
   harnesses(): Promise<HarnessRow[]>;
   machines(): Promise<MachineView[]>;

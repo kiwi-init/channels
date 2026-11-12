@@ -69,6 +69,14 @@ const boxOf = (page: Page, selector: string): Promise<Box | null> =>
     return { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2, left: r.left, top: r.top, right: r.right, bottom: r.bottom };
   }, selector);
 
+const peekSheet = (page: Page): Promise<{ top: number; side: number; tabs: number } | null> =>
+  page.evaluate(() => {
+    const app = document.querySelector(".app");
+    const tabs = document.querySelector(".top")?.getBoundingClientRect();
+    const side = document.querySelector(".side")?.getBoundingClientRect();
+    return app && tabs && side ? { top: Number.parseFloat(getComputedStyle(app, "::before").top), side: side.top, tabs: tabs.bottom } : null;
+  });
+
 const placesOf = (page: Page, selectors: readonly string[] = CONTROLS): Promise<Places> =>
   page.evaluate(
     (selectors) =>
@@ -225,6 +233,11 @@ try {
       return box && main && side ? { on: !!document.querySelector(".chan.is-peek"), left: box.left, right: box.right, shown: getComputedStyle(side).visibility === "visible", main: main.left } : null;
     });
     expect(!!peek && peek.on && peek.shown && near(peek.left, 0) && near(peek.main, 0), `touching the left edge slides the hidden sidebar in over the conversation (${JSON.stringify(peek)})`);
+    const sheet = await peekSheet(page);
+    expect(
+      !!sheet && sheet.top >= sheet.tabs && sheet.side >= sheet.tabs,
+      `as a sheet that starts under the tab row, so its edge never crosses a tab (from ${sheet?.top}, the tabs end at ${sheet?.tabs}) (T339)`,
+    );
     await page.mouse.move(width / 2, height / 2);
     await page.waitForTimeout(900);
     expect(!(await page.$(".chan.is-peek")), "moving away slides it out again");
@@ -335,6 +348,11 @@ try {
       const side = await boxOf(page, ".side");
       return side ? side.right - side.left : 0;
     };
+    const covered = async (): Promise<number> => {
+      const side = await boxOf(page, ".side");
+      const feed = await boxOf(page, ".main .feed");
+      return side && feed ? Math.max(0, side.right - feed.left) : Number.NaN;
+    };
     const grip = page.getByRole("separator", { name: "Resize the sidebar" });
     const gripBox = await grip.boundingBox();
     const sideBefore = await sideWidth();
@@ -352,14 +370,26 @@ try {
     expect(!!composerWide && near(composerWide.x, width / 2), `the composer stays on the window's centre with a wider sidebar (${composerWide?.x.toFixed(1)} of ${width / 2})`);
     expect(!trackWide || near(trackWide.right - trackWide.left, sideWide), "and the second sidebar takes the same width");
     await grip.focus();
+    const under = [await covered()];
     await page.keyboard.press("Home");
+    under.push(await covered());
     const sideLeast = await sideWidth();
     expect(sideLeast < sideBefore && sideLeast % 8 === 0, `Home takes it to its narrowest, on the grid (${sideLeast})`);
     await page.keyboard.press("End");
+    under.push(await covered());
     const sideMost = await sideWidth();
     expect(sideMost > sideBefore && sideMost % 8 === 0 && width - 2 * sideMost >= 480, `End takes it to its widest, and the work keeps 480px (${sideMost})`);
     await grip.dblclick();
     expect((await sideWidth()) === sideBefore, "a double-click puts it back");
+    await page.click(".top-drawer");
+    await page.waitForTimeout(900);
+    await page.click(".top-drawer");
+    await page.waitForTimeout(900);
+    under.push(await covered());
+    expect(
+      under.every((px) => px === 0),
+      `at every width, and after hiding and showing it, no part of the conversation is under the sidebar (${under.join(", ")}px) (T339)`,
+    );
     await page.close();
   }
   for (const [width, height] of SIZES) {
@@ -441,6 +471,11 @@ try {
     await bare.waitForTimeout(700);
     const peeked = await taken();
     expect(peeked.length > 0 && peeked.every(Boolean), `and the tabs take the click under the peek too (${peeked.filter(Boolean).length} of ${peeked.length})`);
+    const sheetBare = await peekSheet(bare);
+    expect(
+      !!sheetBare && sheetBare.top >= sheetBare.tabs && sheetBare.side >= sheetBare.tabs,
+      `the peeked sidebar starts under the tab row here too (from ${sheetBare?.top}, the tabs end at ${sheetBare?.tabs}) (T339)`,
+    );
     await bare.close();
   }
   for (const [width, height] of [[900, 700]] as const) {

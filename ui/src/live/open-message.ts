@@ -48,3 +48,8 @@ export function findWanted(want: Wanted | null, code: string, messages: readonly
   if (m) return { kind: "found", m }
   return messages.some((x) => x.seq > want.seq) ? { kind: "missing" } : { kind: "waiting" }
 }
+
+export function specOfWanted(want: Wanted | null, code: string, target: Pick<Message, "inThread" | "specLine"> | null, hasSpec: (seq: number) => boolean): number | undefined {
+  if (want?.code === code && hasSpec(want.seq)) return want.seq
+  return target?.specLine && target.inThread !== undefined && hasSpec(target.inThread) ? target.inThread : undefined
+}
