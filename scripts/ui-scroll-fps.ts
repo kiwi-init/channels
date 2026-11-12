@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
 import { pageErrors } from "./page-errors.ts";
 
-const SLOW_MS = Number(process.env.SLOW_MS ?? 16);
+const SLOW_MS = 16;
 const MOST_ROWS = 400;
 
 if (process.argv.includes("--help")) {
@@ -161,7 +161,8 @@ async function scroll(page: Page, phases: { dy: number; frames: number; rest?: n
       let held = -1;
       const trace: Step[] = [];
       const px = (n: number): string => String(Math.round(n * 10) / 10);
-      const name = (el: Element): string => (el instanceof HTMLElement && el.dataset.seq ? `#${el.dataset.seq}` : `${el.className || el.tagName.toLowerCase()} "${(el.textContent ?? "").slice(0, 16)}"`);
+      const name = (el: Element): string =>
+        el instanceof HTMLElement && el.dataset.seq ? `#${el.dataset.seq}` : `${el.className || el.tagName.toLowerCase()} "${(el.textContent ?? "").slice(0, 16)}"`;
       const laid = (): Map<string, { top: number; tall: number }> => {
         const rows = new Map<string, { top: number; tall: number }>();
         for (const el of list.children) {
@@ -222,7 +223,7 @@ async function scroll(page: Page, phases: { dy: number; frames: number; rest?: n
           }
         }
         shown = { rows: kids, scrolled: feed.scrollTop, blank: blankNow() };
-        const rows = list.children;
+        const rows = list.querySelectorAll(":scope > [data-seq]");
         const line = box.top + box.height / 3;
         let lo = 0;
         let hi = rows.length - 1;
@@ -232,7 +233,7 @@ async function scroll(page: Page, phases: { dy: number; frames: number; rest?: n
           else lo = mid + 1;
         }
         const el = rows[lo];
-        watched = el ? { el, top: el.getBoundingClientRect().top } : null;
+        watched = el && el.getBoundingClientRect().bottom > line ? { el, top: el.getBoundingClientRect().top } : null;
       });
       if (jumpy) painted.observe(probe);
       await new Promise<void>((done) => {
