@@ -152,7 +152,7 @@ export async function detectRuns(env: Record<string, string | undefined> = proce
 /** Whether two cards say the same thing (tool order aside). */
 export function sameCard(a: Card | undefined, b: Card): boolean {
   if (!a) return false;
-  const keys: (keyof Card)[] = ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch", "note", "fresh"];
+  const keys: (keyof Card)[] = ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch", "note", "fresh", "session"];
   if (keys.some((k) => (a[k] ?? undefined) !== (b[k] ?? undefined))) return false;
   const ta = [...(a.tools ?? [])].sort().join(",");
   const tb = [...(b.tools ?? [])]

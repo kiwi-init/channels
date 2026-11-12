@@ -273,6 +273,7 @@ const words = {
   "tasks.move.assign": "{who} to give it an owner",
   "tasks.move.review": "{who} to review it",
   "tasks.move.route": "{who} to give it a reviewer",
+  "tasks.move.reset": "{who} to reset {reviewer}'s session or move its review",
   "tasks.move.revise": "{who} to send it for review again",
   "tasks.move.answer": "{who} to answer",
   "tasks.move.land": "{who} to land it",

@@ -40,7 +40,7 @@ function useInviteLink(code: string): { link: string | null; failed: boolean; re
   }
 }
 
-export function CopyBox({ text, label, disabled, wrap }: { text: string | null; label: string; disabled?: boolean; wrap?: boolean }) {
+export function CopyBox({ text, label, disabled, wrap, onCopy }: { text: string | null; label: string; disabled?: boolean; wrap?: boolean; onCopy?: () => void }) {
   return (
     <div className={cx("codebox invite-box", disabled && "is-off", wrap && "is-wrap")}>
       <code>
@@ -62,8 +62,8 @@ export function CopyBox({ text, label, disabled, wrap }: { text: string | null; 
         title={label}
         disabled={!text || disabled}
         onClick={() => {
-          if (!text) return
-          copyText(text)
+          if (onCopy) return onCopy()
+          if (text) copyText(text)
         }}
       >
         <Icon name="copy" />

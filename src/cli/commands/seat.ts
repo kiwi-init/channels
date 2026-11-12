@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
-import { Keystore } from "../../config.ts";
+import { Keystore, loadConfig } from "../../config.ts";
+import { sharedLines, sharedSeats } from "../../shared-seats.ts";
 import { bindHeldSeat, holdSeat, isSeatHarness, newSeatToken, releaseSeat, releaseStale, SEAT_TOKEN, type HeldSession, type HoldChange } from "../../hold.ts";
 import { args, opt } from "../args.ts";
 import { agentName, channelAlias, type Command, config, die, out, type Quit } from "../context.ts";
@@ -52,6 +53,10 @@ export const seatCommands: Record<string, Command> = {
   seat: () =>
     Effect.gen(function* () {
       const sub = args[1];
+      if (sub === "shared") {
+        const seats = yield* sharedSeats(loadConfig());
+        return out(opt.json ? JSON.stringify({ seats }) : sharedLines(seats).join("\n") || "no session on this computer runs seats in more than one channel");
+      }
       if (sub === "hold") {
         const given = process.env[SEAT_TOKEN];
         const token = given || newSeatToken();

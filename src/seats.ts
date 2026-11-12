@@ -106,6 +106,12 @@ function sameModel(seat: string | undefined, session: string | undefined): boole
   return !seat || !session || modelKey(seat) === modelKey(session);
 }
 
+const REAL_SESSIONS: ReadonlySet<string> = new Set(["claude", "codex", "grok", "opencode", "mimo", "agy"]);
+
+export function realSession(who: Here): string | undefined {
+  return who.harness && REAL_SESSIONS.has(who.harness) && who.session && !/-pid-\d+$/.test(who.session) ? who.session : undefined;
+}
+
 function heldByProcess(harness: "kimi" | "mimo" | "zcode" | "gemini", pid: number): Here {
   return { harness, session: `${harness}-pid-${pid}`, pid };
 }
@@ -465,6 +471,22 @@ export function seatsHeldAnywhere(who: Here = here(), opts: Pick<SeatOptions, "c
     const mine = seatsAt(cfg, d).filter((b) => b.session === who.session && cfg.channels[b.alias] && !seatHeldAway(cfg, b.alias, b.as));
     return opts.claim !== false ? keepSeen(d, mine, who) : mine;
   });
+}
+
+export function sessionNeighbours(cfg: Config, alias: string): Map<string, Binding[]> {
+  const all = Object.keys(cfg.bindings ?? {})
+    .flatMap((d) => seatsAt(cfg, d))
+    .filter((b) => realSession({ ...(b.harness ? { harness: b.harness } : {}), ...(b.session ? { session: b.session } : {}) }) && cfg.channels[b.alias]);
+  const out = new Map<string, Binding[]>();
+  for (const b of all.filter((x) => x.alias === alias)) {
+    const others = all.filter((o) => o.session === b.session && o.alias !== alias).filter((o, i, list) => list.findIndex((x) => sameSeat(x, o)) === i);
+    if (others.length)
+      out.set(
+        b.as,
+        [...(out.get(b.as) ?? []), ...others].filter((o, i, list) => list.findIndex((x) => sameSeat(x, o)) === i),
+      );
+  }
+  return out;
 }
 
 export function sameSeat(a: Pick<Binding, "alias" | "as">, b: Pick<Binding, "alias" | "as">): boolean {

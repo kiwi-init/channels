@@ -280,7 +280,15 @@ const SPECS: Spec[] = [
   }),
 ]
 
-const comment = (seq: number, from: string, at: number, text: string, ask: number): Message => ({ seq, from, at, text: wrote(text), where: general, inThread: ask })
+const comment = (seq: number, from: string, at: number, text: string, ask: number): Message => ({
+  seq,
+  from,
+  at,
+  text: wrote(text),
+  where: general,
+  inThread: ask,
+  ...(text.startsWith(">") ? { specLine: true as const } : { onSpec: ask }),
+})
 
 const MESSAGES: Message[] = [
   { seq: 140, from: "jow", at: m(60 * 52), text: wrote("can I group channels? I have too many on the rail"), where: general, thread: { replies: 0, last: m(60 * 52), people: [] } },

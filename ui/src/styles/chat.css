@@ -1984,6 +1984,22 @@ button.msg-image-spot:hover {
   font: var(--t-stamp) var(--ui);
 }
 
+.msg-on-spec {
+  display: block;
+  padding: 0;
+  padding-block: calc((var(--slot) - 1lh) / 2);
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+}
+
+.msg-on-spec:hover {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .msg-deleted {
   margin: 0;
   color: var(--ink-3);
@@ -2117,6 +2133,14 @@ button.msg-image-spot:hover {
   margin-top: 0;
 }
 
+.msg.is-mine.is-compact:not(.is-failed) {
+  padding-top: 0;
+}
+
+.msg.is-mine:has(+ .msg.is-mine.is-compact) {
+  padding-bottom: 2px;
+}
+
 .msg.is-mine:not(.is-failed):hover {
   background: none;
 }
@@ -2147,10 +2171,35 @@ button.msg-image-spot:hover {
   margin: 0 0 4px;
 }
 
+.msg.is-mine .msg-quote:not(.is-excerpt) {
+  max-width: calc(100% + 8px);
+  margin-right: -8px;
+}
+
 .msg.is-mine .msg-text {
-  padding: 4px 16px;
+  padding: 4px 12px;
   border-radius: var(--r-win);
-  background: color-mix(in srgb, var(--accent) 20%, var(--bg-2));
+  background: var(--bg-3);
+}
+
+.msg.is-mine.is-compact .msg-text {
+  border-start-end-radius: var(--r-tag);
+}
+
+.msg.is-mine:has(+ .msg.is-mine.is-compact) .msg-text {
+  border-end-end-radius: var(--r-tag);
+}
+
+.msg.is-mine .msg-text :is(p, li, dd, blockquote) {
+  text-wrap-style: balance;
+}
+
+.msg.is-mine :is(.msg-images, .msg-files, .reacts) {
+  justify-content: flex-end;
+}
+
+.msg.is-mine .msg-images {
+  margin-top: 4px;
 }
 
 .md-mermaid-drawn svg {

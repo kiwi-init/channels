@@ -12,22 +12,27 @@ interface Anchor {
   top: number
   at: number
   under: number
+  tall: number
 }
 
 const gapIn = (box: HTMLElement): number => box.scrollHeight - box.scrollTop - box.clientHeight
 
 const laidOut = (el: Element): boolean => el.isConnected && el.getClientRects().length > 0
 
+const aside = (el: Element): boolean => el.hasAttribute("data-aside")
+
 function endOf(list: HTMLElement): number {
   let last = list.lastElementChild
-  while (last && !laidOut(last)) last = last.previousElementSibling
+  while (last && (!laidOut(last) || aside(last))) last = last.previousElementSibling
   return (last ?? list).getBoundingClientRect().bottom
 }
 
 function spot(box: HTMLElement, list: HTMLElement, el: Element, seq: number): Anchor {
-  const top = el.getBoundingClientRect().top
-  return { el, seq, top: top - box.getBoundingClientRect().top, at: box.scrollTop, under: endOf(list) - top }
+  const { top, bottom } = el.getBoundingClientRect()
+  return { el, seq, top: top - box.getBoundingClientRect().top, at: box.scrollTop, under: endOf(list) - top, tall: bottom - top }
 }
+
+const aimOf = (a: Anchor, now: DOMRect): number => (a.top < 0 && a.tall > 0 ? (a.top * (now.bottom - now.top)) / a.tall : a.top)
 
 function anchorIn(box: HTMLElement, list: HTMLElement): Anchor | null {
   const rows = list.querySelectorAll<HTMLElement>(":scope > [data-seq]")
@@ -79,71 +84,98 @@ export function useStick(following = true, still = false) {
   const held = useRef(false)
   const touched = useRef(false)
   const room = useRef(0)
+  const width = useRef(0)
   const seen = useRef(Number.NaN)
   const wheeled = useRef(Number.NEGATIVE_INFINITY)
   const reserve = useRef(0)
   const placed = useRef<Anchor | null>(null)
   const holdUntil = useRef(0)
+  const parked = useRef<Anchor | null>(null)
   const pad = useCallback(() => {
     const h = room.current + reserve.current
     if (spacer.current) spacer.current.style.height = h > 0 ? `${h}px` : ""
   }, [])
   const bottom = (box: HTMLElement): number => box.scrollHeight - box.clientHeight - reserve.current
 
-  const correct = useCallback(() => {
-    const box = scroller.current
-    const list = content.current
-    if (!box || !list) return
-    height.current = list.offsetHeight
-    if (stuck.current && !(still && anchor.current)) {
-      box.scrollTop = bottom(box)
-      return
-    }
-    const a = anchor.current
-    if (!a) return
-    if (still && a.el.isConnected && !laidOut(a.el)) {
-      anchor.current = null
-      box.scrollTop = stuck.current ? bottom(box) : a.at
-      return
-    }
-    const el = a.el.isConnected ? a.el : anchorRow(list, a.seq)
-    if (!el) {
-      anchor.current = null
-      if (stuck.current) box.scrollTop = bottom(box)
-      return
-    }
-    const top = box.getBoundingClientRect().top
-    if (still && Date.now() - wheeled.current < WHEEL_MS) {
-      anchor.current = spot(box, list, el, a.seq)
-      return
-    }
-    const holding = placed.current === a && Date.now() < holdUntil.current
-    const clamped = still && box.scrollTop < a.at && box.scrollTop >= box.scrollHeight - box.clientHeight - 0.5
-    const aim = clamped || holding ? a.top : a.top - (box.scrollTop - a.at)
-    const at = el.getBoundingClientRect().top
-    const shift = at - top - aim
-    const lost = el === a.el ? a.under - (endOf(list) - at) : Number.POSITIVE_INFINITY
-    const short = still ? Math.min(box.scrollTop + shift - (box.scrollHeight - box.clientHeight), lost) : 0
-    if (short > 0.5) {
-      room.current += short
-      pad()
-    }
-    if (Math.abs(shift) > 0.5) box.scrollTop += shift
-    const gap = bottom(box) - box.scrollTop
-    if (still && stuck.current && gap > 0.5 && gap < NEAR_BOTTOM) box.scrollTop = bottom(box)
-    const landed = spot(box, list, el, a.seq)
-    anchor.current = Math.abs(landed.top - aim) < 1 ? { ...landed, top: aim } : landed
-    if (holding) placed.current = anchor.current
-  }, [still, pad])
+  const correct = useCallback(
+    (reflow: boolean) => {
+      const box = scroller.current
+      const list = content.current
+      if (!box || !list) return
+      height.current = list.offsetHeight
+      if (reflow && stuck.current && room.current > 0) {
+        room.current = 0
+        pad()
+      }
+      const back = parked.current
+      if (back && !laidOut(back.el)) parked.current = null
+      else if (back && reflow) {
+        const now = back.el.getBoundingClientRect()
+        const to = box.scrollTop + now.top - box.getBoundingClientRect().top - aimOf(back, now)
+        if (to > -0.5 && to < box.scrollHeight - box.clientHeight + 0.5) {
+          parked.current = null
+          stuck.current = false
+          anchor.current = back
+        }
+      }
+      const a = anchor.current
+      if (stuck.current && (reflow || !(still && a))) {
+        box.scrollTop = bottom(box)
+        if (reflow) anchor.current = a && laidOut(a.el) ? spot(box, list, a.el, a.seq) : null
+        return
+      }
+      if (!a) return
+      if (still && a.el.isConnected && !laidOut(a.el)) {
+        anchor.current = null
+        box.scrollTop = stuck.current ? bottom(box) : a.at
+        return
+      }
+      const el = a.el.isConnected ? a.el : anchorRow(list, a.seq)
+      if (!el) {
+        anchor.current = null
+        if (stuck.current) box.scrollTop = bottom(box)
+        return
+      }
+      const top = box.getBoundingClientRect().top
+      if (still && Date.now() - wheeled.current < WHEEL_MS) {
+        anchor.current = spot(box, list, el, a.seq)
+        return
+      }
+      const holding = placed.current === a && Date.now() < holdUntil.current
+      const clamped = still && box.scrollTop < a.at && box.scrollTop >= box.scrollHeight - box.clientHeight - 0.5
+      const now = el.getBoundingClientRect()
+      const at = now.top
+      const aim = reflow ? aimOf(a, now) : clamped || holding ? a.top : a.top - (box.scrollTop - a.at)
+      const shift = at - top - aim
+      const lost = el === a.el ? a.under - (endOf(list) - at) : Number.POSITIVE_INFINITY
+      const short = still && !reflow ? Math.min(box.scrollTop + shift - (box.scrollHeight - box.clientHeight), lost) : 0
+      if (short > 0.5) {
+        room.current += short
+        pad()
+      }
+      if (Math.abs(shift) > 0.5) box.scrollTop += shift
+      const gap = bottom(box) - box.scrollTop
+      if (still && stuck.current && gap > 0.5 && gap < NEAR_BOTTOM) box.scrollTop = bottom(box)
+      const landed = spot(box, list, el, a.seq)
+      const reached = Math.abs(landed.top - aim) < 1
+      if (reflow && !reached) parked.current ??= a
+      anchor.current = reached ? { ...landed, top: aim } : landed
+      if (holding) placed.current = anchor.current
+    },
+    [still, pad]
+  )
 
   const settle = useCallback(() => {
     const box = scroller.current
     const list = content.current
     if (!box || !list) return
-    if (still && box.scrollTop < seen.current - 0.5 && gapIn(box) > 0.5) stuck.current = false
+    const reflow = width.current > 0 && box.clientWidth !== width.current
+    width.current = box.clientWidth
+    if (!reflow && still && box.scrollTop < seen.current - 0.5 && gapIn(box) > 0.5) stuck.current = false
     const from = box.scrollTop
-    correct()
-    if (box.scrollTop !== from) seen.current = box.scrollTop
+    correct(reflow)
+    if (!reflow && box.scrollTop !== from) parked.current = null
+    if (reflow || box.scrollTop !== from) seen.current = box.scrollTop
   }, [correct, still])
 
   const remember = useCallback(() => {
@@ -163,10 +195,14 @@ export function useStick(following = true, still = false) {
     const gap = gapIn(box)
     const up = box.scrollTop < seen.current - 0.5
     const down = box.scrollTop > seen.current + 0.5
+    if (up || down) parked.current = null
     const near = !still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !up && (stuck.current || down)
     stuck.current = live.current && !held.current && near
     const kept = placed.current && placed.current === anchor.current && Date.now() < holdUntil.current && anchor.current?.el.isConnected ? anchor.current : null
-    anchor.current = (still && touched.current ? docIn(box, list) : null) ?? (stuck.current ? null : (kept ?? anchorIn(box, list)))
+    const was = anchor.current
+    const next = (still && touched.current ? docIn(box, list) : null) ?? (stuck.current ? null : (kept ?? anchorIn(box, list)))
+    const sameSpot = next && was && next !== was && next.el === was.el && !up && !down && Math.abs(next.top - was.top) < 1
+    anchor.current = sameSpot ? { ...next, top: was.top } : next
     height.current = list.offsetHeight
     seen.current = box.scrollTop
   }, [settle, still, pad])
@@ -175,6 +211,7 @@ export function useStick(following = true, still = false) {
     const box = scroller.current
     const list = content.current
     if (!box || !list) return
+    width.current = box.clientWidth
     const watch = new ResizeObserver(settle)
     watch.observe(list)
     watch.observe(box)
@@ -229,6 +266,7 @@ export function useStick(following = true, still = false) {
       if (!box) return
       stuck.current = true
       placed.current = null
+      parked.current = null
       anchor.current = null
       if (room.current || reserve.current) {
         room.current = 0
@@ -243,6 +281,7 @@ export function useStick(following = true, still = false) {
   const toOffset = useCallback((top: number) => {
     const box = scroller.current
     placed.current = null
+    parked.current = null
     if (box) box.scrollTop = top
   }, [])
 
@@ -250,6 +289,7 @@ export function useStick(following = true, still = false) {
     (el: HTMLElement, offset: number) => {
       const box = scroller.current
       if (!box) return
+      parked.current = null
       box.scrollTop = Math.round(box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top - offset)
       remember()
       const seq = Number(el.dataset.seq)
@@ -264,6 +304,7 @@ export function useStick(following = true, still = false) {
 
   const unstick = useCallback(() => {
     placed.current = null
+    parked.current = null
     stuck.current = false
     anchor.current = null
   }, [])
@@ -277,6 +318,7 @@ export function useStick(following = true, still = false) {
         const list = content.current
         stuck.current = false
         placed.current = null
+        parked.current = null
         anchor.current = box && list ? anchorIn(box, list) : null
       } else remember()
     },

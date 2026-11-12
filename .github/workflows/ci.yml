@@ -226,12 +226,20 @@ jobs:
       - name: ui a thread, a thread doc and a feed hold still once they open, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-still.ts --dist ui/dist
+      # A feed keeps its place when its width changes: the sidebar hidden and shown, its edge dragged, the panel opened and closed, the window resized. At the bottom it stays at the bottom with no blank room; scrolled up, the row being read comes back to its pixel (T231).
+      - name: ui a feed keeps its place when its width changes, in WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
+        run: bun scripts/ui-feed-width.ts --dist ui/dist
       - name: ui a remote edit landing between your keys never undoes your caret or selection (⇧← and ←), in Chromium and WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-doc-select-race.ts
       - name: ui people see agents by nickname, never by handle, on the main screens (demo agents get real-looking handles)
         if: ${{ !cancelled() && matrix.part == 'ui-b' }}
         run: bun scripts/ui-handles.ts --dist ui/dist
+      # DESIGN.md's rules of place, measured in the built page at two window sizes and in both layouts: the centre, the sidebar's edges and width, the tabs, hiding and peeking the sidebar, search, the panel (T339).
+      - name: ui the layout rules hold, in WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-b' }}
+        run: bun scripts/ui-layout.ts --dist ui/dist
       - name: cli build
         if: ${{ !cancelled() && matrix.part == 'app' }}
         run: |
@@ -480,6 +488,9 @@ jobs:
       - name: ui a click on a mention opens the direct conversation with that person, and their name inside it opens the profile
         if: ${{ !cancelled() }}
         run: bun scripts/ui-person-click.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui your own message is a bubble as wide as its longest line, with its picture, chip, reactions and replies on one right edge, and a run of them reads as one group
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-own-bubble.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist

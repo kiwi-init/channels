@@ -191,6 +191,12 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   - Nothing you click moves. Hiding the sidebar or opening the right panel
     changes no control's position. Content may: a hidden sidebar gives its
     column to the work.
+  - A hidden sidebar peeks. The pointer at the window's left edge slides it
+    in over the conversation as a raised sheet: `bg-2` with `shadow-pop`,
+    from under the tab row to the window's bottom, its rows where they are
+    when it is pinned. It never crosses the tab row, and it slides out when
+    the pointer leaves. A pinned sidebar never covers the conversation, at
+    any width.
   ⌥⌘B (Ctrl+Alt+B) lays a blueprint over the app (`kit/blueprint.tsx`, loaded
   only when asked for): an 8px grid, a line on every measured column and row
   edge, a ruler with each column's width, the window's centre line with how
@@ -217,7 +223,7 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   `bun scripts/ui-layout.ts --dist ui/dist` measures these rules in the built
   page (the centre, the sidebar's edges, the tracker's place, the two sides
   of the conversation, hiding and peeking the sidebar, search, a wide panel)
-  at four window sizes; run it after any layout change.
+  at four window sizes; CI runs it on every push to main.
 - Spacing: padding, margin and gap sit on one scale: 0, 1, 2, 4, 6, 8, 10, 12,
   16, 20, 24, 32, 40, 48, 64. `test/ui-design-scale.test.ts` fails on anything
   else.
@@ -466,10 +472,16 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   A thread keeps its own composer.
 - **Conversation.** Everyone else on the left with no bubbles, in the
   `--col` column; your own messages on the right as bubbles (the text on
-  accent 20% over `bg-2`, `r-win`, no face and no name, the time above, at
-  most 36rem wide), the way Messages tells the two sides apart. Everything a
-  message carries besides its text (pictures, a task chip, reactions, the
-  replies line) lines up on the same side, outside the bubble.
+  `bg-3`, `r-win`, no face and no name, the time above, at most 36rem
+  wide), the way Messages tells the two sides apart. A bubble is as wide as
+  its longest line and its lines are balanced, so a wrapped one leaves no
+  empty corner; `chat/hug.ts` measures it, because CSS cannot shrink a
+  wrapped box, and a bubble holding a code block, a table, a picture or a
+  diagram keeps its width. A run of your messages is one group: 2px apart,
+  with `r-tag` on the right corners that face each other. Everything a
+  message carries besides its text (the quote, pictures, files, a task
+  chip, reactions, the replies line) ends on the bubble's right edge,
+  outside the bubble.
   A message is a 32px face, 16px of gap, then the name (600), the "to you" or
   "asks you" word when it's for you, and the mono time, and the text in
   `t-body` under it. Role and harness are not repeated on every message: the

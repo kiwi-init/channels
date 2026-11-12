@@ -134,3 +134,19 @@ describe("landing steps on the task (#3930 §3)", () => {
     expect(after.steps?.[0]?.wait).toBeUndefined()
   })
 })
+
+describe("a reviewer that needs a fresh session (#6005)", () => {
+  test("its open round is the lead's move, worded with the reviewer to reset", () => {
+    const wires = [
+      ...inReview(),
+      event(4, "jow", { op: "review.reset.set", on: true }),
+      event(5, "mac", { op: "card", harness: "codex", session: "sessionAAAAAAAA1" }),
+      event(6, "jow", { op: "task.add", title: "other", owner: "win", review: "mac" }),
+      event(7, "win", { op: "task.update", task: 6, state: "review", at: HEAD }),
+      event(8, "mac", { op: "task.update", task: 6, state: "done", verdict: "approved", round: 1, at: HEAD }),
+    ]
+    const task = shown(wires, 10_000)
+    expect(task.mover).toEqual({ kind: "member", name: "owl", move: "reset", reviewer: "mac" })
+    expect(moverWords(channel([task]), task, 10_000)).toBe("owl to reset mac's session or move its review")
+  })
+})
