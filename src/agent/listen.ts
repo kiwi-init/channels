@@ -8,6 +8,7 @@ import { Channel, eachLive, QUIET_DROP_MS, reason, type ChannelGone, type Live, 
 import { Cache, Cursor, Keystore } from "../config.ts";
 import { daemonPresence, daemonSeat } from "../daemon/rpc.ts";
 import { isReach, PROTOCOL_VERSION, type Message, type Presence } from "@kiwi/core/protocol.ts";
+import { addMarks, type Marks } from "@kiwi/core/receipts.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
@@ -17,6 +18,15 @@ import { SessionState } from "./state.ts";
 import { narrows } from "./wants.ts";
 
 const BEACON_SLACK_MS = 5_000;
+
+function kept(p: Presence & { sigOk: boolean }): Presence {
+  const { readAt, wake, ...rest } = p;
+  return {
+    ...rest,
+    ...(typeof readAt === "number" && Number.isFinite(readAt) ? { readAt } : {}),
+    ...(isWakeVia(wake) ? { wake } : {}),
+  };
+}
 
 export class SessionListen extends SessionState {
   listen<R = never>(onMessage: (m: Message, state: ChannelState) => Effect.Effect<void | boolean, unknown, R>, opts: Delivery & Hearing<R>): Effect.Effect<void, Refused | ChannelGone, Agent | R> {
@@ -147,23 +157,39 @@ export class SessionListen extends SessionState {
     });
   }
 
-  readonly who = Effect.fn("AgentSession.who")({ self: this }, function* (this: SessionListen, waitMs = 1_500) {
-    const found = new Map<string, Presence>();
+  private signed(roster: readonly { name: string; pk: string; active: boolean }[]) {
+    return (p: Presence & { sigOk: boolean }) => p.client !== "probe" && p.from !== this.me && p.sigOk && roster.find((r) => r.name === p.from && r.active)?.pk === p.pk;
+  }
+
+  readonly heard = Effect.fn("AgentSession.heard")({ self: this }, function* (this: SessionListen) {
     const [cached, roster] = yield* Effect.all([Effect.promise(() => daemonPresence(this.alias, this.me)), this.members()], { concurrency: "unbounded" });
-    const signed = (p: Presence & { sigOk: boolean }) => p.client !== "probe" && p.from !== this.me && p.sigOk && roster.find((r) => r.name === p.from && r.active)?.pk === p.pk;
-    const keep = (p: Presence & { sigOk: boolean }) => {
-      const { readAt, wake, ...rest } = p;
-      found.set(p.from, {
-        ...rest,
-        ...(typeof readAt === "number" && Number.isFinite(readAt) ? { readAt } : {}),
-        ...(isWakeVia(wake) ? { wake } : {}),
-      });
-    };
     const now = Date.now();
-    if (cached && now - cached.since >= cached.beaconMs + BEACON_SLACK_MS) {
-      for (const { presence, at } of cached.presence) if (signed(presence) && now - at <= 2 * cached.beaconMs + BEACON_SLACK_MS) keep(presence);
-      return yield* this.withMine(found);
-    }
+    if (!cached || now - cached.since < cached.beaconMs + BEACON_SLACK_MS) return null;
+    const signed = this.signed(roster);
+    const found = new Map<string, Presence>();
+    for (const { presence, at } of cached.presence) if (signed(presence) && now - at <= 2 * cached.beaconMs + BEACON_SLACK_MS) found.set(presence.from, kept(presence));
+    return found;
+  });
+
+  readonly reads = Effect.fn("AgentSession.reads")({ self: this }, function* (this: SessionListen, since: number, waitMs = 1_500) {
+    let marks: Marks = new Map();
+    const got = yield* Deferred.make<void>();
+    const handle = (ev: Live) =>
+      Effect.gen(function* () {
+        if (ev._tag === "Read") marks = addMarks(marks, ev.reads, ev.snapshot);
+        if (ev._tag === "Ready" || (ev._tag === "Read" && ev.snapshot)) yield* Deferred.succeed(got, undefined);
+      });
+    const listening = eachLive(this.ch.fx.live(since, { presence: false, reads: true }), handle, () => Effect.void);
+    yield* Effect.raceFirst(listening, Effect.raceFirst(Deferred.await(got), Effect.sleep(waitMs))).pipe(Effect.ignoreCause, Effect.scoped);
+    return marks;
+  });
+
+  readonly who = Effect.fn("AgentSession.who")({ self: this }, function* (this: SessionListen, waitMs = 1_500) {
+    const near = yield* this.heard();
+    if (near) return yield* this.withMine(near);
+    const found = new Map<string, Presence>();
+    const signed = this.signed(yield* this.members());
+    const keep = (p: Presence & { sigOk: boolean }) => found.set(p.from, kept(p));
     const head = yield* this.ch.fx.head();
     const quiet = yield* Deferred.make<void>();
     let window: Fiber.Fiber<unknown> | null = null;

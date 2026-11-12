@@ -117,6 +117,32 @@ describe("seats always on", () => {
     await until("claude not listening in gemini's status", async () => /claude.* · not listening · /.test(await cli(["-c", "test", "--as", "gemini", "status"])));
   });
 
+  test("send says, under its sent line, which agent it addressed can't be woken and which one no computer answers for (T616)", async () => {
+    const ghost = await generateIdentity("ghost");
+    const ask = await Channel.requestJoin(relay, code, ghost, { name: "ghost" });
+    await ownerCh.approve((await checked(ownerCh, relay, code, [{ id: ghost, requestId: ask.requestId }]))[0]!);
+    const s = await AgentSession.open("test", loadConfig().channels.test!, "gemini");
+    expect(await runAgent(s.heard())).toBeNull();
+    const early = (await cli(["-c", "test", "--as", "gemini", "send", "--to", "@claude", "are you there?"])).trim().split("\n");
+    expect(early).toHaveLength(1);
+    expect(early[0]).toMatch(/^sent #\d+/);
+    await until("the daemon to have heard a full beat for gemini", async () => (await runAgent(s.heard())) !== null, 20_000);
+    const asleep = (await cli(["-c", "test", "--as", "gemini", "send", "--to", "@claude", "and now?"])).trim().split("\n");
+    expect(asleep[0]).toMatch(/^sent #\d+/);
+    expect(asleep.slice(1)).toEqual(["@claude can't be woken: nothing reaches it until a person opens its session"]);
+    const silent = (await cli(["-c", "test", "--as", "gemini", "send", "--to", "@ghost", "and you?"])).trim().split("\n");
+    expect(silent[0]).toMatch(/^sent #\d+/);
+    expect(silent.slice(1)).toEqual(["@ghost isn't listening: no computer answers for it"]);
+    const person = (await cli(["-c", "test", "--as", "gemini", "send", "--to", "@human", "nobody is there"])).trim().split("\n");
+    expect(person).toHaveLength(1);
+    const all = (await cli(["-c", "test", "--as", "gemini", "send", "--to", "all", "anyone?"])).trim().split("\n");
+    expect(all.slice(1)).toEqual(["@claude can't be woken: nothing reaches it until a person opens its session", "@ghost isn't listening: no computer answers for it"]);
+    const told = Number(/^sent #(\d+)/.exec(asleep[0]!)?.[1]);
+    const again = (await cli(["-c", "test", "--as", "gemini", "reply", String(told), "still nothing"])).trim().split("\n");
+    expect(again[0]).toMatch(/^sent #\d+/);
+    expect(again.slice(1)).toEqual(["@claude can't be woken: nothing reaches it until a person opens its session"]);
+  });
+
   test("a listener adds no presence of its own", async () => {
     const s = await AgentSession.open("test", loadConfig().channels.test!, "claude");
     const seen = from(claudePk).length;
@@ -259,6 +285,7 @@ describe("seats always on", () => {
   test("a live Claude seat that is idle with no hook listener says not listening, and one at work stays reachable (#1676)", async () => {
     const claudeDir = mkdtempSync(join(tmpdir(), "kiwi-daemon-seats-unheard-"));
     mkdirSync(join(claudeDir, "sessions"), { recursive: true });
+    mkdirSync(join(claudeDir, "projects"), { recursive: true });
     const registry = join(claudeDir, "sessions", `${process.pid}.json`);
     writeFileSync(registry, JSON.stringify({ status: "idle", statusUpdatedAt: 123 }));
     const prev = process.env.CLAUDE_CONFIG_DIR;
@@ -283,6 +310,15 @@ describe("seats always on", () => {
         return p?.activity?.state !== "idle" && p?.reach === "running" && p.wake === "hooks";
       });
       expect(presenceWords(last()!)).toStartWith("reachable · wakes via");
+      const gemini = await AgentSession.open("test", loadConfig().channels.test!, "gemini");
+      const claude = await AgentSession.open("test", loadConfig().channels.test!, "claude");
+      await runAgent(claude.ch.fx.markRead(await claude.ch.head()));
+      await until("gemini's daemon to hear claude at work", async () => (await runAgent(gemini.heard()))?.get("claude")?.activity?.state === "working");
+      const next = (await cli(["-c", "test", "--as", "gemini", "send", "--to", "@claude", "one for you"])).trim().split("\n");
+      expect(next[0]).toMatch(/^sent #\d+/);
+      expect(next.slice(1)).toEqual(["@claude is busy · thinking · yours is next"]);
+      const behind = (await cli(["-c", "test", "--as", "gemini", "send", "--to", "@claude", "and one more"])).trim().split("\n");
+      expect(behind.slice(1)).toEqual(["@claude is busy · thinking · 1 message ahead of yours"]);
     } finally {
       saveConfig({ ...loadConfig(), bindings: omit(loadConfig().bindings ?? {}, "/unheard") });
       if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;

@@ -1,10 +1,11 @@
 import * as Effect from "effect/Effect";
 import { join as joinPath } from "node:path";
-import { oneLook } from "../../agent.ts";
+import { oneLook, type AgentSession } from "../../agent.ts";
 import { saveImages } from "../../attach.ts";
 import { keepFiles } from "../../received-files.ts";
 import { home } from "../../config.ts";
-import { alsoAnswers, formatShown, missingImages, parseDuration } from "@kiwi/core/format.ts";
+import { alsoAnswers, formatShown, missingImages, parseDuration, presenceAnswers } from "@kiwi/core/format.ts";
+import { inlineText } from "@kiwi/core/membership.ts";
 import { messageAt } from "@kiwi/core/message-link.ts";
 import reactionPack from "../../../site/reactions/index.json";
 import {
@@ -23,12 +24,14 @@ import {
   isGifReaction,
   wellFormedChoices,
   isQuiet,
+  PROTOCOL_VERSION,
   type InlineImage,
   type Kind,
   type Message,
   type Step,
 } from "@kiwi/core/protocol.ts";
-import { asksOnSameWork, chooseThread, inGeneral, longForGeneral, parseTaskId, taskId, wentTo } from "@kiwi/core/state.ts";
+import { recipients, waitsLines, waitsOf, type Busy, type Marks, type Reached } from "@kiwi/core/receipts.ts";
+import { asksOnSameWork, chooseThread, inGeneral, longForGeneral, parseTaskId, taskId, wentTo, type ChannelState } from "@kiwi/core/state.ts";
 import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
@@ -45,6 +48,51 @@ function refuseUnused(command: string, allowed: readonly string[]): Effect.Effec
   return extra.length ? die(`kiwi ${command} doesn't take ${extra.map((o) => `--${o}`).join(", ")}: nothing was sent (see kiwi help ${command})`) : Effect.void;
 }
 
+type Sent = { seq: number; to?: readonly string[] | undefined; task?: number | undefined };
+
+const waitingOn = (s: AgentSession, state: ChannelState, messages: readonly Message[], sent: Sent) =>
+  Effect.gen(function* () {
+    const near = yield* s.heard();
+    if (!near) return [];
+    const to = yield* s.resolveTo(sent.to ? [...sent.to] : undefined, state);
+    const m = {
+      v: PROTOCOL_VERSION,
+      id: "",
+      from: s.me,
+      kind: "msg",
+      body: "",
+      ts: Date.now(),
+      seq: sent.seq,
+      sigOk: true,
+      ...(to?.length ? { to } : {}),
+      ...(sent.task === undefined ? {} : { task: sent.task }),
+    } as Message;
+    const reached = (n: string): Reached => {
+      const p = near.get(n);
+      return !p ? "silent" : presenceAnswers(p) ? "here" : "asleep";
+    };
+    const busy = (n: string): Busy | null => {
+      const a = near.get(n)?.activity;
+      if (a?.state !== "working") return null;
+      return { text: a.tool ? `running ${inlineText(a.tool.replace(/^mcp__.+?__/, ""), 40)}` : "thinking", ...(a.since ? { since: a.since } : {}) };
+    };
+    const there = recipients(m, state).filter((n) => reached(n) === "here");
+    const queued = there.length > 0 && (to?.length && !to.includes("*") ? there.some((n) => busy(n) !== null) : there.every((n) => busy(n) !== null));
+    const marks: Marks = queued ? yield* s.reads(sent.seq) : new Map();
+    const waits = waitsOf(
+      m,
+      messages,
+      state,
+      marks,
+      (n) => state.members.get(n)?.pk,
+      reached,
+      busy,
+      () => false,
+      (n) => `@${n}`,
+    );
+    return waits ? waitsLines(waits) : [];
+  }).pipe(Effect.orElseSucceed((): string[] => []));
+
 export const messageCommands: Record<string, Command> = {
   send: () =>
     oneLook(
@@ -59,7 +107,7 @@ export const messageCommands: Record<string, Command> = {
         if (opt.dm && opt.to) return yield* die("--dm NAME already says where it goes; leave out --to (or use --to @NAME alone)");
         const where = parseWhere(opt.to);
         if (typeof where === "string") return yield* die(where);
-        const { state } = yield* s.state();
+        const { messages, state } = yield* s.state();
         const named = opt.task === undefined ? where.task : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
         const dm = opt.dm ?? where.dm;
         const reArgs = [...(list(opt.re) ?? []), ...(where.re ?? []).map(String)];
@@ -77,6 +125,7 @@ export const messageCommands: Record<string, Command> = {
           !asking && kind === "msg" ? docPlaceOf(state, { ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}), ...(room ? { room } : {}), re }) : null;
         const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
         const notes = [general ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
+        const thread = re.length ? undefined : chosen.task;
         if (doc) {
           const seq = yield* s.sendToDoc(body, doc, {
             to,
@@ -87,7 +136,7 @@ export const messageCommands: Record<string, Command> = {
             ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           });
           out(`sent #${seq}${wentTo(chosen)}, into its shared doc`);
-          for (const n of notes) out(n);
+          for (const n of [...notes, ...(yield* waitingOn(s, state, messages, { seq, to, task: thread }))]) out(n);
           return;
         }
         const head = asking && opt.wait ? yield* s.ch.fx.head() : 0;
@@ -101,12 +150,13 @@ export const messageCommands: Record<string, Command> = {
           ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           ...(chosen.dm ? { dm: true } : {}),
         });
+        const waits = yield* waitingOn(s, state, messages, { seq, to, task: thread });
         if (!asking || !opt.wait) {
           out(`${asking ? "asked" : "sent"} #${seq}${wentTo(chosen)}`);
-          for (const n of notes) out(n);
+          for (const n of [...notes, ...waits]) out(n);
           return;
         }
-        for (const n of notes) out(n);
+        for (const n of [...notes, ...waits]) out(n);
         const replies = yield* s.awaitReplies(seq, head, parseDuration(opt.wait));
         if (!replies.length) return yield* die(`no answer to #${seq} within ${opt.wait}; replies will still arrive when you listen`, 2);
         for (const r of replies) out(render(r));
@@ -125,12 +175,14 @@ export const messageCommands: Record<string, Command> = {
         if (!CHAT_KINDS.includes(kind)) return yield* die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
         const imgs = yield* images;
         const files = yield* attachments(s);
-        const { state } = yield* s.state();
+        const { messages, state } = yield* s.state();
         const placed = yield* s.replyPlaced(seq, body, kind, imgs, files?.length ? { files } : {}, kind === "msg" ? docPlaceOf(state, { re: [seq] }) : null);
         out(`sent #${placed.seq}`);
         if (placed.under) out(`${placed.under.by} answered #${seq} first (#${placed.under.answer}): yours went under that answer`);
         const notes = [inGeneral(state, seq) ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
-        for (const n of notes) out(n);
+        const orig = messages.find((m) => m.seq === seq);
+        const waits = orig ? yield* waitingOn(s, state, messages, { seq: placed.seq, to: orig.from === s.me ? orig.to : [orig.from], task: orig.task }) : [];
+        for (const n of [...notes, ...waits]) out(n);
       }),
     ),
 
