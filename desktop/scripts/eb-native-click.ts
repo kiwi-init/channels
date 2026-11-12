@@ -25,7 +25,7 @@ const sh = (args: string[]): string => {
 
 const windowOf = (): string => {
   for (let i = 0; i < 60; i++) {
-    const win = sh(["xdotool", "search", "--class", "^Channels"]);
+    const win = sh(["xdotool", "search", "--onlyvisible", "--class", "^Channels"]);
     if (win) {
       const id = win.split("\n")[0]!;
       console.log(`window: ${sh(["xprop", "-id", id, "WM_CLASS"])}`);
@@ -102,9 +102,14 @@ try {
       const middle = await d.evaluate(() => ({ x: innerWidth / 2, y: innerHeight / 2 }), null);
       click(win, middle.x, middle.y, 1);
       await Bun.sleep(500);
+      const reached = await d.evaluate(() => (Reflect.get(window, "kiwiPresses") as string[]).splice(0), null);
       console.log(
-        `${layout.name}: a click mid-page at ${Math.round(middle.x)},${Math.round(middle.y)} (pointer ${sh(["xdotool", "getmouselocation"])}) reached the page as ${JSON.stringify(await d.evaluate(() => (Reflect.get(window, "kiwiPresses") as string[]).splice(0), null))}`,
+        `${layout.name}: a click mid-page at ${Math.round(middle.x)},${Math.round(middle.y)} (pointer ${sh(["xdotool", "getmouselocation"])}) reached the page as ${JSON.stringify(reached)}`,
       );
+      if (!reached.some((r) => r.startsWith("mousedown")))
+        throw new Error(
+          `a real click mid-page never reached the page in the ${layout.name} layout, so this run can't judge the gear (windows with a Channels class: ${sh(["xdotool", "search", "--class", "^Channels"]).replace(/\s+/g, " ")})`,
+        );
       click(win, gear.x, gear.y, 1);
       console.log(`${layout.name}: pointer after the gear click: ${sh(["xdotool", "getmouselocation"])}`);
       try {
