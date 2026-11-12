@@ -107,7 +107,7 @@ function rowAt(box: HTMLElement, list: readonly Message[], at: number): HTMLElem
   return null
 }
 
-function keepFrom(box: HTMLElement, rows: HTMLElement, list: readonly Message[], start: number, wanted: number): number {
+function keepFrom(box: HTMLElement, rows: HTMLElement, list: readonly Message[], start: number, wanted: number): { from: number; row: HTMLElement; tall: number } | null {
   const room = Math.min(box.scrollHeight - box.scrollTop - box.clientHeight, box.scrollTop - box.clientHeight) - 1
   const head = rows.getBoundingClientRect().top
   const at = new Map<number, number>()
@@ -124,7 +124,9 @@ function keepFrom(box: HTMLElement, rows: HTMLElement, list: readonly Message[],
     if (row && at.has(Number(row.dataset.seq)) && row.getBoundingClientRect().top - head < room) low = mid
     else high = mid - 1
   }
-  return at.get(Number(shown[low]?.dataset.seq)) ?? start
+  const row = shown[low]
+  const from = at.get(Number(row?.dataset.seq))
+  return row && from !== undefined && from > start ? { from, row, tall: row.getBoundingClientRect().top - head } : null
 }
 
 function firstUnreadIn(channel: Channel, where: Where): number | undefined {
@@ -303,16 +305,18 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
   const following = end === list.length
   const latest = useRef(false)
-  const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold } = useStick(following, !!doc)
+  const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift } = useStick(following, !!doc)
   const shownFrom = list[start]?.seq
   const shownTo = list[end - 1]?.seq
   const edges = useRef({ from: shownFrom, to: shownTo })
-  const dropped = useRef(false)
+  const dropped = useRef<{ row: HTMLElement; top: number } | null>(null)
   useLayoutEffect(() => {
     const was = edges.current
     edges.current = { from: shownFrom, to: shownTo }
-    if (dropped.current) {
-      dropped.current = false
+    const kept = dropped.current
+    if (kept) {
+      dropped.current = null
+      if (kept.row.isConnected) lift(kept.top - kept.row.getBoundingClientRect().top)
       settle()
       return
     }
@@ -320,11 +324,12 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     const rows = content.current
     if (!box || !rows || following || end - start <= CAP) return
     if (shownFrom !== was.from || shownTo === undefined || was.to === undefined || shownTo <= was.to) return
-    const from = keepFrom(box, rows, list, start, end - CAP)
-    if (from === start) return
-    dropped.current = true
-    setSpan(spanOf(list, from, end))
-  }, [shownFrom, shownTo, following, start, end, list, settle, scroller, content])
+    const cut = keepFrom(box, rows, list, start, end - CAP)
+    if (!cut) return
+    dropped.current = { row: cut.row, top: cut.row.getBoundingClientRect().top }
+    lift(cut.tall)
+    setSpan(spanOf(list, cut.from, end))
+  }, [shownFrom, shownTo, following, start, end, list, settle, lift, scroller, content])
   const code = channel.code
   const holdEarlier = actions.holdEarlier
   const earlierPage = actions.earlier

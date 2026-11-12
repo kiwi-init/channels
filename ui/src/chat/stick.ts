@@ -309,6 +309,19 @@ export function useStick(following = true, still = false) {
     anchor.current = null
   }, [])
 
+  const lift = useCallback((by: number) => {
+    const box = scroller.current
+    if (!box) return
+    const from = box.scrollTop
+    box.scrollTop = from - by
+    const moved = from - box.scrollTop
+    const a = anchor.current
+    const back = parked.current
+    if (a) a.at -= moved
+    if (back && back !== a) back.at -= moved
+    seen.current -= moved
+  }, [])
+
   const hold = useCallback(
     (on: boolean) => {
       if (held.current === on) return
@@ -325,5 +338,5 @@ export function useStick(following = true, still = false) {
     [remember]
   )
 
-  return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold }
+  return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift }
 }
