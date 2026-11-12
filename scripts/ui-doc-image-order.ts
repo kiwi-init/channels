@@ -4,6 +4,8 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
+import { AgentSession, runAgent } from "../src/agent.ts";
+import { loadConfig } from "../src/config.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { composer, firstRun, letIn, newChannel, SEND } from "./perf-ui.ts";
@@ -21,6 +23,7 @@ writeFileSync(join(cli, "bin", "open"), "#!/bin/sh\nexit 0\n");
 writeFileSync(join(cli, "bin", "xdg-open"), "#!/bin/sh\nexit 0\n");
 chmodSync(join(cli, "bin", "open"), 0o755);
 chmodSync(join(cli, "bin", "xdg-open"), 0o755);
+process.env.KIWI_HOME = join(cli, "home");
 const picture = join(data, "agent.png");
 writeFileSync(picture, Buffer.from(PNG, "base64"));
 const cliEnv = { KIWI_MODEL: "test-model", ...process.env, KIWI_HOME: join(cli, "home"), CLAUDE_CONFIG_DIR: join(cli, "no-claude"), PATH: `${join(cli, "bin")}:${process.env.PATH}` };
@@ -119,6 +122,39 @@ try {
   await page.waitForTimeout(3500);
   const agent = await seen(page, "an agent's picture");
   check("an agent's --image send into a doc shows its image once", !agent ? "the agent's line isn't on screen" : agent.images !== 1 ? `its row shows ${agent.images} images` : null);
+
+  await composer(page).click();
+  await paste(page, "plan.png");
+  await page
+    .locator(".main .composer input[type=file]")
+    .setInputFiles({ name: "notes.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n") });
+  await page.locator(".main .composer .compose-file", { hasText: "notes.pdf" }).waitFor({ timeout: 10000 });
+  await page.keyboard.type("a line with a picture and a file");
+  await page.keyboard.press(SEND);
+  await page.waitForTimeout(3500);
+  const both = await seen(page, "a line with a picture and a file");
+  const chips = await page.locator(".main [data-seq]", { hasText: "a line with a picture and a file" }).getByText("notes.pdf", { exact: true }).count();
+  check(
+    "a sent line with a picture and a file shows each once",
+    !both ? "the line isn't on screen" : both.images !== 1 ? `its row shows ${both.images} images` : chips !== 1 ? `its row names notes.pdf ${chips} times` : null,
+  );
+  const bot = await AgentSession.open("order", loadConfig().channels["order"]!, "bot");
+  const { messages } = await runAgent(bot.state());
+  const sent = messages.find((m) => m.body?.includes("a line with a picture and a file"));
+  const pointers = (sent?.imgs ?? []).filter((i) => i.ref && i.data === undefined).map((i) => i.name);
+  const files = (sent?.files ?? []).map((f) => f.name);
+  check(
+    "another member reads that line's picture and file from the message itself, as pointers, with no doc",
+    !sent
+      ? "the agent never got the line"
+      : !sent.block
+        ? "the message names no block"
+        : pointers.join() !== "plan.png"
+          ? `the message carries the pictures [${pointers.join(", ")}] of ${sent.imgs?.length ?? 0}`
+          : files.join() !== "notes.pdf"
+            ? `the message carries the files [${files.join(", ")}]`
+            : null,
+  );
 } finally {
   await browser.close();
   relay.kill();
