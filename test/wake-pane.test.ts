@@ -124,3 +124,85 @@ describe("the wake route for an agent in its own tmux pane", () => {
     expect(howMessagesReachYou("kiwi", true, { harness: "agy", session: "c" }, false, undefined)).toContain("Kiwi wakes it only in tmux");
   });
 });
+
+const deepcode = (name: string): string => readFileSync(join(import.meta.dir, "fixtures", "deepcode-screens", `${name}.txt`), "utf8");
+const deepcodeState = (name: string) => promptState(deepcode(name), deepcode(name), "deepcode");
+
+describe("Deep Code's own screens, as deepcode-cli 0.6.0 draws them: only a recognized empty prompt is ready", () => {
+  test("its empty prompt after a finished or interrupted turn, with or without its default status line: ready", () => {
+    for (const name of ["idle", "interrupted", "custom-status"]) expect(deepcodeState(name)).toBe("ready");
+  });
+
+  test("a turn in progress, thinking, running a command or quiet: busy", () => {
+    for (const name of ["thinking", "process", "processing-quiet", "live-command", "live-thinking"]) expect(deepcodeState(name)).toBe("busy");
+  });
+
+  test("a permission prompt, a question, or a turn waiting for its person: asking", () => {
+    for (const name of ["permission", "question", "waiting"]) expect(deepcodeState(name)).toBe("asking");
+  });
+
+  test("a half-typed prompt, on one line or several, is a draft", () => {
+    for (const name of ["draft", "draft-multiline"]) expect(deepcodeState(name)).toBe("draft");
+  });
+
+  test("any screen it doesn't recognize as its empty prompt is not ready, even a still one", () => {
+    expect(deepcodeState("unrecognized")).toBe("unknown");
+    expect(deepcodeState("status-message")).toBe("busy");
+    expect(promptState("> \n", "> \n", "deepcode")).toBe("unknown");
+    expect(promptState("", "", "deepcode")).toBe("unknown");
+    const busyFooter = deepcode("custom-status").replace(/enter send · .*$/m, "esc to stop the stream");
+    expect(promptState(busyFooter, busyFooter, "deepcode")).not.toBe("ready");
+    const unknownStatus = deepcode("idle").replace("status: completed", "status: compacting");
+    expect(promptState(unknownStatus, unknownStatus, "deepcode")).toBe("unknown");
+  });
+
+  test("the same screens without the harness keep the generic reading", () => {
+    expect(promptState(deepcode("draft"), deepcode("draft"))).toBe("ready");
+    expect(promptState(deepcode("unrecognized"), deepcode("unrecognized"))).toBe("ready");
+  });
+
+  test("a screen still changing is moving", () => {
+    expect(promptState(deepcode("thinking"), deepcode("idle"), "deepcode")).toBe("moving");
+  });
+});
+
+describe("typing a wake into a Deep Code pane", () => {
+  test("an empty prompt gets the prompt pasted and Enter pressed", async () => {
+    const pane = fakePane([deepcode("idle"), deepcode("idle")]);
+    expect(await typeWake(pane, "You have new messages", "deepcode", 0)).toEqual({ ok: true });
+    expect(pane.typed).toEqual(["You have new messages"]);
+    expect(pane.entered).toBe(1);
+  });
+
+  test("a draft is never typed over or submitted, and an unrecognized screen is never typed into", async () => {
+    for (const [name, why] of [
+      ["draft", "someone has started typing at its prompt"],
+      ["draft-multiline", "someone has started typing at its prompt"],
+      ["unrecognized", "its screen isn't an empty prompt Kiwi recognizes"],
+      ["status-message", "it's in the middle of a turn"],
+      ["thinking", "it's in the middle of a turn"],
+      ["permission", "it's asking a question on its screen"],
+      ["question", "it's asking a question on its screen"],
+    ] as const) {
+      const pane = fakePane([deepcode(name), deepcode(name)]);
+      expect(await typeWake(pane, "wake", "deepcode", 0)).toEqual({ ok: false, why, retry: true });
+      expect(pane.typed).toEqual([]);
+      expect(pane.entered).toBe(0);
+    }
+  });
+});
+
+describe("the wake route for a Deep Code seat", () => {
+  test("in tmux it's woken by typing into its pane, and status says so", () => {
+    const path = wakePath({ harness: "deepcode", tmux: { pane: "%16" } }, false);
+    expect(path).toEqual({ kind: "command", via: "tmux-typing", session: "%16" });
+    expect(path.kind === "command" ? `wakes via ${wakeWords(path.via)}` : "").toBe("wakes via typing into its tmux pane");
+  });
+
+  test("outside tmux it can't be woken, and a seat whose harness is unknown still can't be woken in tmux", () => {
+    const outside = wakePath({ harness: "deepcode" }, false);
+    expect(outside.kind === "none" ? outside.why : "").toContain("only in tmux");
+    expect(wakePath({ tmux: { pane: "%16" } }, false).kind).toBe("none");
+    expect(wakePath({ harness: "deepcode", tmux: { pane: "%16" }, held: true }, false).kind).toBe("none");
+  });
+});
