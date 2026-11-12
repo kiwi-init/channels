@@ -34,7 +34,7 @@ blur, no gradients for show. Colour means a state, never decoration.
   a lighter frame around a dark page, a grey frame around a white one.
   `tokens.css` names them `--page` and `--frame` and rebinds `--bg`,
   `--bg-2`, `--bg-3`, `plate` and `float` on the frame's parts (`.top`,
-  `.rail`, `.side`, `.set-nav`, `.track`), so a rule that says `bg` means
+  `.rail`, `.side`, `.set-nav`), so a rule that says `bg` means
   the surface it sits on. The frame's own two steps, for its fields, cards
   and chips, are derived: `bg-3` with 6% and 12% of `ink` in dark, `bg-2`
   and `bg-3` with 6% of `ink` in light.
@@ -206,12 +206,13 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     hidden auto`): strips wrap, long code and diff lines wrap, a diagram
     shrinks to fit. The one exception is the image annotator's zoomed
     picture.
-  - One frame, one page. The top bar, the sidebar and the second sidebar
-    are one surface, the frame. The work is the page: the conversation or
-    a view, Settings, Home, and a thread or task opened in the right
-    column. The page rounds its top corners (`r-ctl`)
-    where it meets the frame and keeps them square against the window's
-    edge (a hidden sidebar, an open panel, a window under 1180px, Home).
+  - One frame, one page. The top bar and the sidebar are one surface,
+    the frame. The work is the page: the conversation or a view, Settings,
+    Home, and the second sidebar with whatever opens in it. On a wide
+    window the page reaches the window's right edge under that column,
+    whether or not the column has anything to show. The page rounds its
+    top-left corner (`r-ctl`), where it meets the frame, and keeps it
+    square against the window's edge (a hidden sidebar, Home).
     Only the open tab joins the page, from above, in the page's colour
     with 8px flares. Nothing in the sidebar cuts across the frame: its
     open row is a pill on it.
@@ -471,8 +472,9 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   16px fade: the text, then the action on its line's end, or under it when
   the text needs the width.
 - **Second sidebar.** The right column (`--side-w`) is one place with two
-  states. At rest, on every view, it is part of the frame and holds Now
-  and Activity. Now is the task
+  states. At rest, on every view, it sits on the page, with no line and
+  no step of fill between it and the work, and holds Now and Activity.
+  Now is the task
   tracker: the counts (in progress, done today) in mono beside its name, or
   on their own line under the toggle, then a 4px bar with one
   segment per state in the state colours, the next step, and the open tasks

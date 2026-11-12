@@ -1169,13 +1169,7 @@
 
 .main,
 .chan.is-top .views-bar {
-  border-radius: var(--r-ctl) var(--r-ctl) 0 0;
-}
-
-.chan.is-top .main,
-.chan.has-panel :is(.main, .views-bar),
-.chan.is-reading :is(.main, .views-bar) {
-  border-top-right-radius: 0;
+  border-top-left-radius: var(--r-ctl);
 }
 
 .chan.is-top .main,
@@ -1449,6 +1443,14 @@
 }
 
 @media (min-width: 1180px) and (orientation: landscape) {
+  .chan::after {
+    content: "";
+    grid-row: 2 / -1;
+    grid-column: 3;
+    order: -1;
+    background: var(--bg);
+  }
+
   .chan.is-reading .main {
     grid-column: 2 / -1;
   }
@@ -1487,11 +1489,6 @@
 
   .app .set-main {
     padding-right: 0;
-  }
-
-  .main,
-  .chan.is-top .views-bar {
-    border-top-right-radius: 0;
   }
 
   .panel {
