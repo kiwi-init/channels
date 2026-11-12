@@ -40,6 +40,7 @@ describe("a page error in a harness says where it came from", () => {
         after: "ok   the comments keep their place",
         observers: {
           late: ["div.msg-text 355x56 -> 355x84, watched by observer 3 (made at assets/index-abc.js:9:1)"],
+          untold: [],
           ran: ["observer 3 (made at assets/index-abc.js:9:1): div.msg-text 355x56", "observer 5: div.feed 900x600"],
         },
       }),
@@ -58,8 +59,38 @@ describe("a page error in a harness says where it came from", () => {
   });
 
   test("a loop with nothing recorded says that instead of an empty list", () => {
-    expect(describePageError({ message: "ResizeObserver loop limit exceeded", after: "ok   first", observers: { late: [], ran: [] } })).toBe(
-      told(["ResizeObserver loop limit exceeded", "after: ok   first", "stack: the engine gave none", "no watched element had changed size when the error came", "no resize observer ran just before"]),
+    expect(describePageError({ message: "ResizeObserver loop limit exceeded", after: "ok   first", observers: { late: [], untold: [], ran: [] } })).toBe(
+      told([
+        "ResizeObserver loop limit exceeded",
+        "after: ok   first",
+        "stack: the engine gave none",
+        "no watched element had changed size or was new when the error came",
+        "no resize observer ran just before",
+      ]),
+    );
+  });
+
+  test("a loop from an element put under watch too late names it, with no line about a size change", () => {
+    expect(
+      describePageError({
+        message: "ResizeObserver loop completed with undelivered notifications.",
+        after: "ok   first",
+        observers: {
+          late: [],
+          untold: ["article.msg 592x36, put under watch 4 ms before by observer 1 (made at assets/index-abc.js:29:1)"],
+          ran: ["observer 1 (made at assets/index-abc.js:29:1): article.msg 592x36"],
+        },
+      }),
+    ).toBe(
+      told([
+        "ResizeObserver loop completed with undelivered notifications.",
+        "after: ok   first",
+        "stack: the engine gave none",
+        "put under watch, and its observer was not told its size yet:",
+        "  article.msg 592x36, put under watch 4 ms before by observer 1 (made at assets/index-abc.js:29:1)",
+        "resize observers that ran just before:",
+        "  observer 1 (made at assets/index-abc.js:29:1): article.msg 592x36",
+      ]),
     );
   });
 });
