@@ -6,6 +6,7 @@ import { chromium, webkit, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { docOpen, firstRun, newChannel, say } from "./perf-ui.ts";
+import { pageErrors } from "./page-errors.ts";
 
 const DIST = harnessDist(process.argv.find((a) => a.startsWith("--dist="))?.slice(7));
 const ENGINE = process.argv.includes("--webkit") ? "webkit" : "chromium";
@@ -89,7 +90,7 @@ try {
   });
   const page = await context.newPage();
   const threw: string[] = [];
-  page.on("pageerror", (e) => threw.push(e.message));
+  await pageErrors(page, (e) => threw.push(e));
   page.on("console", (m) => void said.push(`${new Date().toISOString().slice(11, 19)} [${m.type()}] ${m.text().slice(0, 220)}`));
   page.on("requestfailed", (r) => void said.push(`${new Date().toISOString().slice(11, 19)} [request failed] ${r.method()} ${new URL(r.url()).pathname} ${r.failure()?.errorText ?? ""}`));
   await page.goto(BASE);

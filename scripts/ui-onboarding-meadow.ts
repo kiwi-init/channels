@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
@@ -28,7 +29,7 @@ const browser = await engine.launch();
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  await pageErrors(page, (e) => errors.push(e));
   await page.goto(`http://127.0.0.1:${server.port}/?shot=onboarding-still`);
   const drawn = await page
     .waitForSelector("canvas[data-meadow]", { state: "attached", timeout: 20_000 })

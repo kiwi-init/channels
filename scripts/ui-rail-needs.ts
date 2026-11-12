@@ -12,6 +12,7 @@ import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { firstRun, letIn, newChannel, say } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`A channel's needs-you badge on the rail moves while you sit in another channel. Three channels; an agent in alpha.
@@ -94,7 +95,7 @@ const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMI
 });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  page.on("pageerror", (e) => console.log(`page error: ${e.message}`));
+  await pageErrors(page, (e) => console.log(`page error: ${e}`));
   await page.goto(BASE);
   await firstRun(page, "Jonatas");
   const code = await newChannel(page, "alpha");

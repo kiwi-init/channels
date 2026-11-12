@@ -6,6 +6,7 @@ import { chromium, webkit, type Browser, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { composer, firstRun, newChannel, say, SEND } from "./perf-ui.ts";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`The composer in a thread doc keeps what writing in the doc had (T5115). In a fresh channel's #general:
@@ -364,7 +365,7 @@ try {
   });
   const page = await context.newPage();
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  await pageErrors(page, (e) => errors.push(e));
   await page.goto(BASE);
   await firstRun(page, "jow");
   await newChannel(page, "away");

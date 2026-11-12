@@ -6,6 +6,7 @@ import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { approveSpec, docOpen, passOnboarding, unfold, writeBlock } from "./perf-ui.ts";
 import { CallExited, poll, runCall } from "./smoke-calls.ts";
+import { pageErrors } from "./page-errors.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const DIST = harnessDist(process.argv[2]);
@@ -54,7 +55,7 @@ const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMI
   throw e;
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-page.on("pageerror", (e) => errors.push(`${at}: ${e.message}`));
+await pageErrors(page, (e) => errors.push(`${at}: ${e}`));
 page.on("console", (m) => {
   if (m.type() === "error" && !m.text().startsWith("Failed to load resource")) errors.push(`${at}: console: ${m.text()}`);
 });

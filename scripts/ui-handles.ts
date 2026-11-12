@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { chromium, webkit, type Browser, type Page } from "playwright-core";
 import { DEMO_AGENT_HANDLES } from "../ui/src/demo/handle-names.ts";
+import { pageErrors } from "./page-errors.ts";
 
 const at = process.argv.indexOf("--dist");
 const dist = at > 0 ? (process.argv[at + 1] ?? "ui/dist") : "ui/dist";
@@ -106,7 +107,7 @@ async function scan(page: Page): Promise<{ hits: string[]; renamed: number; agen
 async function check(browser: Browser, shot: string, screen: Screen, sabotage?: Sabotage): Promise<Seen> {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  await pageErrors(page, (e) => errors.push(e));
   try {
     await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}&handles=1`);
     const ready = await page

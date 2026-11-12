@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Browser, type Page } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`The meadow (#5411), the scene behind onboarding and the site's landing, in a bare page. It checks that the meadow draws and moves, that its
@@ -82,7 +83,7 @@ const brightness = (page: Page, png: Buffer): Promise<{ sky: number; spread: num
 
 const open = async (browser: Browser, at: string, still: boolean, errors: string[]): Promise<{ page: Page; drew: boolean }> => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, timezoneId: "UTC", reducedMotion: still ? "reduce" : "no-preference" });
-  page.on("pageerror", (e) => errors.push(e.message));
+  await pageErrors(page, (e) => errors.push(e));
   await page.clock.setFixedTime(new Date(at));
   await page.goto(`http://127.0.0.1:${server.port}/`);
   await page.waitForFunction(() => "meadow" in window);

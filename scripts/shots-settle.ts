@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
 
 import { reactionsOn, settleRequests, stopFetchOnLeave, type Settle } from "./settle-requests.ts";
+import { pageErrors } from "./page-errors.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
@@ -55,7 +56,7 @@ const fresh = async (): Promise<{ page: Page; errors: string[]; settle: Settle; 
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
   if (engine === "chromium") await (await page.context().newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: CPU_SLOWDOWN });
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  await pageErrors(page, (e) => errors.push(e));
   let asked = false;
   page.on("request", (r) => {
     if (new URL(r.url()).pathname === "/reactions/index.json") asked = true;

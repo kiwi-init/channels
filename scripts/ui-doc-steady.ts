@@ -6,6 +6,7 @@ import { chromium, webkit, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { firstRun, newChannel, say } from "./perf-ui.ts";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`Two windows of jow in one channel. The second sends tall lines from its composer that land below the fold of the
@@ -73,13 +74,13 @@ const check = (what: string, why: string | null): void => {
 try {
   const reader = await browser.newContext({ viewport: { width: 1280, height: 700 } });
   const a = await reader.newPage();
-  a.on("pageerror", (e) => errors.push(`reader: ${e.message}`));
+  await pageErrors(a, (e) => errors.push(`reader: ${e}`));
   await a.goto(BASE);
   await firstRun(a, "jow");
   await newChannel(a, "steady");
   const writer = await browser.newContext({ viewport: { width: 1280, height: 700 }, storageState: await reader.storageState({ indexedDB: true }) });
   const b = await writer.newPage();
-  b.on("pageerror", (e) => errors.push(`writer: ${e.message}`));
+  await pageErrors(b, (e) => errors.push(`writer: ${e}`));
   await b.goto(BASE);
   await switchTo(b, "steady");
   for (let n = 1; n <= 36; n++) await say(a, `line ${n}, sent so the feed is taller than the window`);

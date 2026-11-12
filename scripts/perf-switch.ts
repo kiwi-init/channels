@@ -16,6 +16,7 @@ import { chromium, type CDPSession, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { firstRun, letIn, newChannel, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
+import { pageErrors } from "./page-errors.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const MESSAGES = Number(process.env.PERF_MESSAGES ?? 400);
@@ -139,7 +140,7 @@ const report: Record<string, unknown> = { messages: MESSAGES };
 let failed = false;
 try {
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
-  page.on("pageerror", (e) => console.log(`page error: ${e.message}`));
+  await pageErrors(page, (e) => console.log(`page error: ${e}`), { observers: false });
   await page.goto(BASE);
   await firstRun(page, "Jonatas");
 

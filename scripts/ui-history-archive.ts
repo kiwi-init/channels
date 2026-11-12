@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, webkit } from "playwright-core";
+import { pageErrors } from "./page-errors.ts";
 
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
@@ -26,7 +27,7 @@ const browser = await (engine === "webkit" ? webkit : chromium).launch();
 const fails: string[] = [];
 try {
   const page = await browser.newPage();
-  page.on("pageerror", (e) => fails.push(`page threw: ${e.message}`));
+  await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
   await page.goto(`http://127.0.0.1:${server.port}/`);
   await page.waitForFunction(() => "archiveCheck" in window);
   const results = await page.evaluate(() => (window as unknown as { archiveCheck: () => Promise<Record<string, boolean>> }).archiveCheck());
