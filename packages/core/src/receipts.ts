@@ -3,8 +3,11 @@
 // hand messages on), the relay passes each mark to every client, and this works out what a message's
 // own recipients have read. People don't send marks, so only agents are counted.
 
-import type { Message, ReadMark } from "./protocol.ts";
+import { mentionsOf } from "./changes.ts";
+import { GENERAL_ROOM, type Message, type ReadMark } from "./protocol.ts";
+import { sentTo } from "./room-rules.ts";
 import { isPerson, taskId, threadMembers, type ChannelState } from "./state.ts";
+import type { Room } from "./state/types.ts";
 
 /**
  * A mark as this view heard it. One from the snapshot on connect (`snapshot`) says how far that member
@@ -37,17 +40,35 @@ export function readAt(marks: Marks, pk: string | undefined, seq: number): { at:
   return null;
 }
 
+export type Reach = Pick<ChannelState, "members" | "tasks" | "lead" | "rooms" | "roomOf">;
+
+function roomReach(m: Message, here: Room, state: Reach): string[] {
+  const sender = state.members.get(m.from);
+  const said = mentionsOf(m.body);
+  const mentioned = [...state.members.keys()].filter((n) => said.has(n.toLowerCase()));
+  if (m.to?.length) return [...m.to, ...mentioned];
+  if (here.members) return [...state.members.keys()];
+  const lead = state.lead && sender && isPerson(sender) ? [state.lead] : [];
+  return [...(here.posters ?? []), ...lead, ...mentioned];
+}
+
 /**
  * The agents a message went to: the ones it names, else a task's agents for a word in its thread,
- * else every agent. Only agents that were in the channel when it was sent, and never its sender.
+ * else the agents its room reaches, else every agent. Only agents that were in the channel when it
+ * was sent, and never its sender.
  */
-export function recipients(m: Message, state: Pick<ChannelState, "members" | "tasks" | "lead">): string[] {
-  const named = m.to?.length && !m.to.includes("*") ? m.to : null;
-  const base = named ? named : m.task !== undefined && state.tasks.has(m.task) ? threadMembers(state, { kind: "task", task: m.task }) : [...state.members.keys()];
+export function recipients(m: Message, state: Reach): string[] {
+  const room = state.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM;
+  const here = room === GENERAL_ROOM ? undefined : state.rooms.get(room);
+  const everyone = !!m.to?.includes("*");
+  const named = m.to?.length && !everyone ? m.to : null;
+  const inTask = m.task !== undefined && state.tasks.has(m.task);
+  const base = here && !inTask && !everyone ? roomReach(m, here, state) : named ? named : inTask ? threadMembers(state, { kind: "task", task: m.task! }) : [...state.members.keys()];
   const at = m.rts ?? m.ts;
   return [...new Set(base)].filter((n) => {
     const who = state.members.get(n);
-    return n !== m.from && !!who && who.active && !isPerson(who) && (who.kind as string | undefined) !== "computer" && who.joined <= at;
+    if (n === m.from || !who || !who.active || isPerson(who) || (who.kind as string | undefined) === "computer" || who.joined > at) return false;
+    return !here?.members || sentTo(here, n, state.members);
   });
 }
 
@@ -60,7 +81,7 @@ const nickOf = (state: Pick<ChannelState, "members">, name: string): string => s
  */
 export type Receipt = { kind: "delivered" } | { kind: "read"; at?: number } | { kind: "everyone"; at?: number } | { kind: "some"; names: string[] } | { kind: "count"; read: number; of: number };
 
-export function receiptOf(m: Message, state: Pick<ChannelState, "members" | "tasks" | "lead">, marks: Marks, pkOf: (name: string) => string | undefined): Receipt | null {
+export function receiptOf(m: Message, state: Reach, marks: Marks, pkOf: (name: string) => string | undefined): Receipt | null {
   const to = recipients(m, state).filter((n) => {
     const pk = pkOf(n);
     return !!pk && marks.has(pk);
@@ -76,7 +97,7 @@ export function receiptOf(m: Message, state: Pick<ChannelState, "members" | "tas
   return read.length <= 3 ? { kind: "some", names: read.map((x) => nickOf(state, x.n)) } : { kind: "count", read: read.length, of: to.length };
 }
 
-export function receipt(m: Message, state: Pick<ChannelState, "members" | "tasks" | "lead">, marks: Marks, pkOf: (name: string) => string | undefined, time: (ts: number) => string): string | null {
+export function receipt(m: Message, state: Reach, marks: Marks, pkOf: (name: string) => string | undefined, time: (ts: number) => string): string | null {
   const r = receiptOf(m, state, marks, pkOf);
   if (!r) return null;
   const when = "at" in r && r.at !== undefined ? ` ${time(r.at)}` : "";
@@ -118,7 +139,7 @@ function lasted(minutes: number): string {
  */
 export function onItOf(
   m: Message,
-  state: Pick<ChannelState, "members" | "tasks" | "lead" | "facts">,
+  state: Reach & Pick<ChannelState, "facts">,
   marks: Marks,
   pkOf: (name: string) => string | undefined,
   busy: (name: string) => Busy | null,
@@ -158,7 +179,7 @@ export interface Waits {
   ask: { to: string; name: string } | null;
 }
 
-function aheadOf(m: Message, name: string, read: number, messages: readonly Message[], state: Pick<ChannelState, "members" | "tasks" | "lead">): number {
+function aheadOf(m: Message, name: string, read: number, messages: readonly Message[], state: Reach): number {
   let ahead = 0;
   for (const x of messages) {
     if (x.seq <= read || x.seq >= m.seq || x.kind === "event" || x.kind === "done" || x.from === name) continue;
@@ -176,7 +197,7 @@ function doingOf(state: Pick<ChannelState, "tasks">, name: string): number | und
 export function waitsOf(
   m: Message,
   messages: readonly Message[],
-  state: Pick<ChannelState, "members" | "tasks" | "lead">,
+  state: Reach,
   marks: Marks,
   pkOf: (name: string) => string | undefined,
   reached: (name: string) => Reached | null,

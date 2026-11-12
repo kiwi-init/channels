@@ -57,6 +57,31 @@ describe("the line under a person's message says who is not there (T614)", () =>
   })
 })
 
+describe("a message in a room counts only the agents the room reaches (T1000)", () => {
+  const made = wire({ from: "jow", kind: "event", body: "", ev: { op: "room.create", id: "side0001", name: "side" } })
+  const posted = wire({ from: "win", room: "side0001", body: "I read this room" })
+  const off = reachedOf(new Map(), ["win", "dev", "atlas"], true)
+
+  test("an agent that posted there is named, one that never did is not", () => {
+    const m = wire({ from: "jow", room: "side0001", body: "anyone in this room?" })
+    const log = [made, posted, m]
+    expect(under(log, fold(log, roster, 0), new Map(), {}, off)).toEqual([[m.seq, { sign: { gone: "win can't be woken" } }]])
+  })
+
+  test("a mention names one that never posted there, and the lead hears a person", () => {
+    const m = wire({ from: "jow", room: "side0001", body: "@dev you too" })
+    const log = [made, posted, m]
+    expect(under(log, fold(log, roster, 0), new Map(), {}, off)).toEqual([[m.seq, { sign: { gone: "win, dev can't be woken" } }]])
+    expect(under(log, led(log), new Map(), {}, off)).toEqual([[m.seq, { sign: { gone: "win, atlas, dev can't be woken" } }]])
+  })
+
+  test("#general still counts every agent", () => {
+    const m = wire({ from: "jow", body: "anyone?" })
+    const log = [made, posted, m]
+    expect(under(log, fold(log, roster, 0), new Map(), {}, off)).toEqual([[m.seq, { sign: { gone: "win, dev, atlas can't be woken" } }]])
+  })
+})
+
 describe("the line under a person's message says who is busy, and how far back the message is (T614)", () => {
   test("its task, the messages that reach it first, and the lead to ask", () => {
     const before = [wire({ from: "jow", to: ["win"], body: "one" }), wire({ from: "atlas", to: ["win"], body: "two" })]
