@@ -72,6 +72,10 @@ export const ebHost: Host = {
   openExternal: async (url) => {
     if (!Utils.openExternal(url)) throw new Error("the system browser didn't open the link");
   },
+  copyText: async (text) => {
+    Utils.clipboardWriteText(text);
+    if (Utils.clipboardReadText() !== text) throw new Error("the system clipboard didn't take the text");
+  },
   droppedFiles: () => readDropped(droppedPaths()),
   pastedImage: async () => {
     const png = pastedPng(MAX_PASTED_BYTES);
