@@ -138,7 +138,7 @@ const WRAP: CSSProperties = { display: "flex", flexDirection: "column" }
 
 const parsing = new Map<string, Promise<ASTNode>>()
 
-const OWN_LINK = /^kiwi-(?:mention|task|msg):/
+const OWN_LINK = /^kiwi-(?:mention|task|msg|page|do):/
 const OPENED = /^(?:https?:\/\/|mailto:)/i
 const LOCAL_PICTURE = /^(?:data|blob):/i
 
@@ -321,9 +321,10 @@ export interface MarkdownProps {
   onMessage: (seq: number) => void
   onImage: (url: string, alt: string) => void
   onShown: () => void
+  onPage?: (url: string) => void
 }
 
-export default function Markdown({ markdown, onMention, onTask, onMessage, onImage, onShown }: MarkdownProps) {
+export default function Markdown({ markdown, onMention, onTask, onMessage, onImage, onShown, onPage }: MarkdownProps) {
   const box = useRef<HTMLDivElement>(null)
   const [got, setGot] = useState<{ markdown: string; ast: ASTNode } | null>(() => {
     const cached = parsedFor(markdown)
@@ -415,6 +416,7 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       if (url.startsWith("kiwi-mention:")) return onMention(decodeURIComponent(url.slice("kiwi-mention:".length)))
       if (url.startsWith("kiwi-task:")) return onTask(Number(url.slice("kiwi-task:".length)))
       if (url.startsWith("kiwi-msg:")) return onMessage(Number(url.slice("kiwi-msg:".length)))
+      if (url.startsWith("kiwi-page:") || url.startsWith("kiwi-do:")) return onPage?.(url)
       const at = messageAt(url)
       if (at) {
         location.hash = messageHash(at.code, at.seq)
@@ -423,7 +425,7 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       if (!sanitizeMarkdownUrl(url) || (!/^https?:\/\//i.test(url) && !url.startsWith("mailto:"))) return
       openOutside(url)
     },
-    [onMention, onTask, onMessage]
+    [onMention, onTask, onMessage, onPage]
   )
   const callbacks = useMemo(
     () => ({

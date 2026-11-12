@@ -181,7 +181,7 @@ function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
         type="button"
         className="gh-row spec-row"
         onClick={() => go({ to: "spec", ask: spec.ask, part })}
-        {...dragOut({ at: "doc", doc: { kind: "spec", ask: spec.ask } }, wordsPlain(spec.title, channel.nicknames))}
+        {...dragOut({ page: { at: "spec", ask: spec.ask } }, wordsPlain(spec.title, channel.nicknames))}
       >
         <SpecMark spec={spec} />
         <span className="gh-title">

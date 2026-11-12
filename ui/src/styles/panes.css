@@ -1,6 +1,6 @@
 .panes {
   grid-row: 1 / -1;
-  grid-column: 1;
+  grid-column: 1 / -1;
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -11,59 +11,62 @@
 }
 
 @media (min-width: 1180px) and (orientation: landscape) {
-  .chan.is-reading .panes {
-    grid-column: 1 / -1;
+  .chan.has-panel .panes {
+    grid-column: 1;
   }
+}
+
+.panes-probe {
+  position: absolute;
+  width: var(--side-w);
+  height: 0;
+  visibility: hidden;
 }
 
 .panes > .pane {
   position: absolute;
 }
 
-.panes.is-split > .pane {
-  animation: fade var(--slow) var(--ease);
-}
-
-.panes.is-split > .pane:not(.is-corner) {
+.panes > .pane:not(.is-corner) {
   border-radius: 0;
 }
 
-.pane-head {
-  flex: none;
+.pane-tools {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  height: calc(var(--ctl) + 8px);
-  padding: 0 8px 0 16px;
-  font: var(--t-ui) var(--ui);
-  color: var(--ink-3);
-}
-
-.pane-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: color var(--fast);
-}
-
-.pane.is-focus .pane-name {
-  color: var(--ink);
-}
-
-.pane-head > .icon-btn {
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  box-shadow: 0 0 0 1px var(--line-2);
   opacity: 0;
   transition: opacity var(--fast);
 }
 
-.pane:hover > .pane-head > .icon-btn,
-.pane-head > .icon-btn:focus-visible {
+.pane:hover > .pane-tools,
+.pane-tools:focus-within,
+:root[data-dragging] .pane-tools:has(.pane-grip:active) {
   opacity: 1;
 }
 
-.panes.is-split > .pane::before {
-  top: calc(var(--ctl) + 8px);
+.pane-tools > .icon-btn {
+  width: 24px;
+  height: 24px;
+}
+
+.pane-grip {
+  cursor: grab;
+  touch-action: none;
+}
+
+.pane-grip::before {
+  content: "";
+  width: 8px;
+  height: 13px;
+  background: radial-gradient(circle, currentColor 1px, transparent 1.4px) 0 0 / 5px 5px;
 }
 
 .pane-gap {
@@ -80,6 +83,10 @@
 
 .pane-gap::before {
   background: var(--line-2);
+}
+
+.pane-gap.is-dock::before {
+  content: none;
 }
 
 .pane-gap::after {
@@ -188,11 +195,39 @@
 .page {
   flex: 1;
   min-height: 0;
-  padding: 8px var(--gutter) 40px;
+  padding: 20px 16px 40px;
   overflow: hidden auto;
+  scrollbar-gutter: stable;
 }
 
 .page-text {
-  max-width: var(--spec-max, 46rem);
+  max-width: 46rem;
   margin: 0 auto;
+  padding: 0 clamp(0px, calc((100% - 400px) * 0.1), 24px);
+}
+
+.page .md a[href^="kiwi-do:"] {
+  display: inline-block;
+  margin: 2px 4px 2px 0;
+  padding: 3px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--wash-2);
+  color: var(--ink);
+  font: 500 var(--t-ui) var(--ui);
+  text-decoration: none;
+  transition: background var(--fast);
+}
+
+.page .md a[href^="kiwi-do:"]:hover {
+  background: var(--line-3);
+}
+
+.page .md a[href^="kiwi-page:"] {
+  color: var(--ink-3);
+  font: var(--t-ui) var(--ui);
+  text-decoration: none;
+}
+
+.page .md a[href^="kiwi-page:"]:hover {
+  color: var(--ink);
 }

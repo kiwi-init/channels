@@ -16,6 +16,7 @@ export function Body({
   tasks,
   onImage,
   onMessage,
+  onPage,
   hug = false,
 }: {
   text: Words
@@ -24,6 +25,7 @@ export function Body({
   tasks: ReadonlySet<number>
   onImage: (url: string, alt: string) => void
   onMessage: (seq: number) => void
+  onPage?: (url: string) => void
   hug?: boolean
 }) {
   const { go, now } = useAct()
@@ -45,7 +47,7 @@ export function Body({
     <div className="msg-text" ref={box}>
       {!shown && !parsedFor(markdown) && <p className="md-plain">{wordsPlain(text, names)}</p>}
       <Suspense fallback={null}>
-        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} />
+        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} onPage={onPage} />
       </Suspense>
     </div>
   )

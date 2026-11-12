@@ -7,9 +7,36 @@ import { Boundary } from "~/kit/boundary"
 import type { Channel } from "~/model"
 import { between, nickname } from "~/names"
 import { ActContext, NavContext, useAct, useNav, type Act, type Go, type Nav } from "~/nav"
+import { dragOut } from "~/panes/drag"
 import { docName, Page } from "~/panes/page"
-import { ALONE, boxes, closePane, focusPane, leafOf, MAIN, MIN_H, MIN_W, paneGo, resizeSplit, useDrag, useLayout, type Box, type Split } from "~/panes/store"
+import { PaneContext, type PaneScope } from "~/panes/scope"
+import {
+  ALONE,
+  boxes,
+  closePane,
+  css,
+  dockedNow,
+  focusPane,
+  isNone,
+  leafOf,
+  MAIN,
+  MIN_H,
+  MIN_W,
+  paneGo,
+  pixels,
+  resizeSplit,
+  showDoc,
+  useDrag,
+  useLayout,
+  without,
+  type Box,
+  type Carry,
+  type Doc,
+  type Len,
+  type Split,
+} from "~/panes/store"
 import { useTabs } from "~/shell/top-layout"
+import { wordsPlain } from "~/words"
 import { t } from "~/i18n/i18n"
 
 const VIEW_NAMES = {
@@ -27,7 +54,28 @@ export function placeName(channel: Channel, nav: Nav): string {
   return where.kind === "theirs" ? between(channel, where.between) : `T${where.task}`
 }
 
-const pct = (n: number): string => `${n * 100}%`
+const LINK = "a[href^='kiwi-']"
+
+function carried(channel: Channel, href: string): { carry: Carry; label: string } | null {
+  const cut = href.indexOf(":")
+  const kind = href.slice(0, cut)
+  const rest = href.slice(cut + 1)
+  if (kind === "kiwi-task") {
+    const doc: Doc = { kind: "task", task: Number(rest) }
+    return { carry: { page: { at: "doc", doc } }, label: docName(channel, doc) }
+  }
+  if (kind === "kiwi-msg") {
+    const spec = channel.specs?.find((s) => s.ask === Number(rest))
+    return spec ? { carry: { page: { at: "spec", ask: spec.ask } }, label: wordsPlain(spec.title, channel.nicknames) } : null
+  }
+  if (kind === "kiwi-mention") {
+    const name = decodeURIComponent(rest)
+    return { carry: { page: { at: "where", where: { kind: "dm", with: name } } }, label: `@ ${nickname(channel, name)}` }
+  }
+  if (kind !== "kiwi-page") return null
+  if (rest === "now") return { carry: { page: { at: "doc", doc: { kind: "now" } } }, label: t("panes.now") }
+  return rest === "specs" || rest === "agents" || rest === "github" || rest === "needs" ? { carry: { page: { at: "tab", tab: rest } }, label: t(VIEW_NAMES[rest]) } : null
+}
 
 function goTo(nav: Nav): Go {
   if (nav.tab === "chat") return { to: "where", where: nav.where }
@@ -36,10 +84,10 @@ function goTo(nav: Nav): Go {
   return { to: "tab", tab: nav.tab }
 }
 
-function usePaneAct(code: string, id: string | null): Act {
+function Scope({ code, id, nav, doc, shown, children }: { code: string; id: string | null; nav: Nav; doc: Doc | null; shown: boolean; children: ReactNode }) {
   const act = useAct()
-  return useMemo(
-    () =>
+  const scoped = useMemo(
+    (): Act =>
       id === null
         ? act
         : {
@@ -51,39 +99,44 @@ function usePaneAct(code: string, id: string | null): Act {
           },
     [act, code, id]
   )
-}
-
-function Scope({ code, id, nav, children }: { code: string; id: string | null; nav: Nav; children: ReactNode }) {
-  const act = usePaneAct(code, id)
+  const pane = useMemo((): PaneScope => ({ doc, show: (next) => showDoc(code, id, next, shown) }), [code, id, doc, shown])
   return (
     <NavContext value={nav}>
-      <ActContext value={act}>{children}</ActContext>
+      <ActContext value={scoped}>
+        <PaneContext value={pane}>{children}</PaneContext>
+      </ActContext>
     </NavContext>
   )
 }
 
-export function FocusScope({ code, children }: { code: string; children: ReactNode }) {
+export function FocusScope({ code, now, children }: { code: string; now: boolean; children: ReactNode }) {
   const layout = useLayout(code)
   const nav = useNav()
   const tabs = useTabs()
-  const leaf = tabs ? leafOf(layout.root, layout.focus) : null
+  const dock = dockedNow(layout.root)
+  const shown = !dock || now
+  const focus = tabs ? leafOf(layout.root, layout.focus) : null
+  const leaf = focus?.nav && (shown || focus.id !== dock?.id) ? focus : null
   return (
-    <Scope code={code} id={leaf?.nav ? leaf.id : null} nav={leaf?.nav ?? nav}>
+    <Scope code={code} id={leaf?.id ?? null} nav={leaf?.nav ?? nav} doc={leaf?.doc ?? null} shown={shown}>
       {children}
     </Scope>
   )
 }
 
-export function Panes({ channel, label, main, place }: { channel: Channel; label?: string; main: ReactNode; place: ReactNode }) {
+export function Panes({ channel, label, main, place, now }: { channel: Channel; label?: string; main: ReactNode; place: ReactNode; now: boolean }) {
   const code = channel.code
   const layout = useLayout(code)
   const nav = useNav()
   const tabs = useTabs()
-  const host = useRef<HTMLDivElement>(null)
-  const root = tabs ? layout.root : ALONE.root
-  const { leaves, gaps } = useMemo(() => boxes(root), [root])
-  const split = leaves.length > 1
   const { go } = useAct()
+  const host = useRef<HTMLDivElement>(null)
+  const probe = useRef<HTMLElement>(null)
+  const dock = dockedNow(layout.root)
+  const shown = !dock || now
+  const root = !tabs ? ALONE.root : dock && !now ? without(layout.root, dock.id) : layout.root
+  const { leaves, gaps } = boxes(root)
+  const plain = leaves.length === 2 && !!dock && shown
   const heir = leaves.find(({ leaf }) => leaf.nav && !leaf.doc)?.leaf
   const close = (id: string) => {
     if (id !== MAIN) return closePane(code, id)
@@ -92,46 +145,55 @@ export function Panes({ channel, label, main, place }: { channel: Channel; label
     closePane(code, heir.id)
   }
   return (
-    <div ref={host} className={cx("panes", split && "is-split")} data-panes={code}>
+    <div ref={host} className="panes" data-panes={code}>
+      <i ref={probe} className="panes-probe" aria-hidden="true" />
       {leaves.map(({ leaf, box }) => {
         const Tag = leaf.nav ? "section" : "main"
         const name = leaf.doc ? docName(channel, leaf.doc) : placeName(channel, leaf.nav ?? nav)
         return (
           <Tag
             key={leaf.id}
-            className={cx("main pane", split && layout.focus === leaf.id && "is-focus", box.x === 0 && box.y === 0 && "is-corner")}
+            className={cx("main pane", isNone(box.x) && isNone(box.y) && "is-corner")}
             data-pane={leaf.id}
             aria-label={leaf.nav ? name : label}
-            style={{ left: pct(box.x), top: pct(box.y), width: pct(box.w), height: pct(box.h) }}
+            style={{ left: css(box.x), top: css(box.y), width: css(box.w), height: css(box.h) }}
             onPointerDownCapture={() => focusPane(code, leaf.id)}
+            onPointerDown={(e) => {
+              const href = (e.target as Element).closest?.(LINK)?.getAttribute("href")
+              const out = href ? carried(channel, href) : null
+              if (out) dragOut(out.carry, out.label).onPointerDown(e)
+            }}
+            onDragStart={(e) => {
+              if ((e.target as Element).closest?.(LINK)) e.preventDefault()
+            }}
           >
-            {split && (
-              <header className="pane-head">
-                <span className="pane-name">{name}</span>
-                {(leaf.nav || heir) && <IconButton icon="close" label={t("shell.rail.close")} onClick={() => close(leaf.id)} />}
-              </header>
-            )}
-            {leaf.nav ? (
-              <Scope code={code} id={leaf.id} nav={leaf.nav}>
-                <Boundary resetKey={`${leaf.nav.tab}\n${leaf.doc ? `${leaf.doc.kind}${leaf.doc.kind === "task" ? leaf.doc.task : leaf.doc.ask}` : ""}`}>
-                  <Suspense fallback={null}>{leaf.doc ? <Page channel={channel} doc={leaf.doc} /> : place}</Suspense>
+            <Scope code={code} id={leaf.nav ? leaf.id : null} nav={leaf.nav ?? nav} doc={leaf.doc ?? null} shown={shown}>
+              {leaf.nav ? (
+                <Boundary resetKey={`${leaf.nav.tab}\n${leaf.doc ? docName(channel, leaf.doc) : ""}`}>
+                  <Suspense fallback={null}>{leaf.doc ? <Page channel={channel} view={leaf.doc} /> : place}</Suspense>
                 </Boundary>
-              </Scope>
-            ) : (
-              main
+              ) : (
+                main
+              )}
+            </Scope>
+            {leaves.length > 1 && !(plain && !leaf.nav) && (
+              <div className="pane-tools">
+                <button type="button" className="icon-btn pane-grip" aria-label={t("panes.move")} title={t("panes.move")} {...dragOut({ pane: leaf.id }, name)} />
+                {(leaf.nav || heir) && <IconButton icon="close" label={t("shell.rail.close")} onClick={() => close(leaf.id)} />}
+              </div>
             )}
           </Tag>
         )
       })}
-      {gaps.map(({ split: s, box }) => (
-        <Gap key={s.id} code={code} split={s} box={box} host={host} />
+      {gaps.map(({ split, box, at }) => (
+        <Gap key={split.id} code={code} split={split} box={box} at={at} host={host} probe={probe} />
       ))}
       <DragLayer />
     </div>
   )
 }
 
-function Gap({ code, split, box, host }: { code: string; split: Split; box: Box; host: RefObject<HTMLDivElement | null> }) {
+function Gap({ code, split, box, at, host, probe }: { code: string; split: Split; box: Box; at: Len; host: RefObject<HTMLDivElement | null>; probe: RefObject<HTMLElement | null> }) {
   const row = split.dir === "row"
   const down = (e: ReactPointerEvent<HTMLDivElement>) => {
     const el = host.current
@@ -140,12 +202,18 @@ function Gap({ code, split, box, host }: { code: string; split: Split; box: Box;
     const grip = e.currentTarget
     grip.setPointerCapture(e.pointerId)
     const r = el.getBoundingClientRect()
-    const from = row ? r.left + box.x * r.width : r.top + box.y * r.height
-    const size = row ? box.w * r.width : box.h * r.height
-    const least = Math.min(0.5, (row ? MIN_W : MIN_H) / size)
+    const side = probe.current?.offsetWidth ?? 0
+    const whole = row ? r.width : r.height
+    const from = (row ? r.left : r.top) + pixels(row ? box.x : box.y, whole, side)
+    const size = pixels(row ? box.w : box.h, whole, side)
+    const least = Math.min(size / 2, row ? MIN_W : MIN_H)
+    const fix = split.fix
     const root = document.documentElement
     root.dataset.resizing = row ? "panes-row" : "panes-column"
-    const move = (m: PointerEvent) => resizeSplit(code, split.id, Math.min(1 - least, Math.max(least, ((row ? m.clientX : m.clientY) - from) / size)))
+    const move = (m: PointerEvent) => {
+      const first = Math.min(size - least, Math.max(least, (row ? m.clientX : m.clientY) - from))
+      resizeSplit(code, split.id, fix ? { px: fix.side === "a" ? first : size - first } : { ratio: first / size })
+    }
     const end = () => {
       grip.removeEventListener("pointermove", move)
       grip.removeEventListener("pointerup", end)
@@ -156,13 +224,12 @@ function Gap({ code, split, box, host }: { code: string; split: Split; box: Box;
     grip.addEventListener("pointerup", end)
     grip.addEventListener("pointercancel", end)
   }
-  const at = row ? box.x + box.w * split.ratio : box.y + box.h * split.ratio
   return (
     <div
-      className={cx("pane-gap", row ? "is-row" : "is-column")}
+      className={cx("pane-gap", row ? "is-row" : "is-column", split.fix && "is-dock")}
       role="separator"
       aria-orientation={row ? "vertical" : "horizontal"}
-      style={row ? { left: pct(at), top: pct(box.y), height: pct(box.h) } : { top: pct(at), left: pct(box.x), width: pct(box.w) }}
+      style={row ? { left: css(at), top: css(box.y), height: css(box.h) } : { top: css(at), left: css(box.x), width: css(box.w) }}
       onPointerDown={down}
     />
   )

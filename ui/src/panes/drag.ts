@@ -1,13 +1,13 @@
 import type { PointerEvent as ReactPointerEvent } from "react"
 
-import { MIN_H, MIN_W, setDrag, splitAt, type Drag, type Edge, type Page } from "~/panes/store"
+import { MIN_H, MIN_W, movePane, setDrag, splitAt, type Carry, type Drag, type Edge } from "~/panes/store"
 
 const START = 6
 
-function targetAt(x: number, y: number): Drag["target"] {
+function targetAt(x: number, y: number, carry: Carry): Drag["target"] {
   const pane = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-pane]")
   const host = pane?.closest<HTMLElement>("[data-panes]")
-  if (!pane || !host) return null
+  if (!pane || !host || ("pane" in carry && pane.dataset.pane === carry.pane)) return null
   const r = pane.getBoundingClientRect()
   const dx = (x - r.left) / r.width - 0.5
   const dy = (y - r.top) / r.height - 0.5
@@ -34,7 +34,7 @@ function swallowClick(): void {
   window.setTimeout(() => window.removeEventListener("click", stop, true), 0)
 }
 
-export function dragOut(page: Page, label: string): { onPointerDown: (e: ReactPointerEvent) => void } {
+export function dragOut(carry: Carry, label: string): { onPointerDown: (e: ReactPointerEvent) => void } {
   return {
     onPointerDown(e) {
       if (e.button !== 0 || e.pointerType === "touch") return
@@ -43,7 +43,7 @@ export function dragOut(page: Page, label: string): { onPointerDown: (e: ReactPo
       const root = document.documentElement
       const move = (m: PointerEvent) => {
         if (!now && Math.hypot(m.clientX - from.x, m.clientY - from.y) < START) return
-        now = { page, label, x: m.clientX, y: m.clientY, target: targetAt(m.clientX, m.clientY) }
+        now = { carry, label, x: m.clientX, y: m.clientY, target: targetAt(m.clientX, m.clientY, carry) }
         root.toggleAttribute("data-dragging", true)
         setDrag(now)
       }
@@ -59,7 +59,9 @@ export function dragOut(page: Page, label: string): { onPointerDown: (e: ReactPo
         const target = now?.target
         if (now) swallowClick()
         stop()
-        if (target) splitAt(target.code, target.id, target.edge, page)
+        if (!target) return
+        if ("pane" in carry) movePane(target.code, carry.pane, target.id, target.edge)
+        else splitAt(target.code, target.id, target.edge, carry.page)
       }
       const cancel = () => stop()
       const key = (k: KeyboardEvent) => {
