@@ -1,9 +1,9 @@
 import type { Catalog } from "~/i18n/i18n"
 
 export default {
-  "shell.channel.drawer.label": "Salas e pessoas ({keys})",
-  "shell.channel.drawer.label.news": "Salas e pessoas, mensagens novas ({keys})",
-  "shell.channel.drawer.title": "Mostrar ou ocultar salas e pessoas ({keys})",
+  "shell.channel.drawer.label": "Barra lateral ({keys})",
+  "shell.channel.drawer.label.news": "Barra lateral, mensagens novas ({keys})",
+  "shell.channel.drawer.title": "Mostrar ou ocultar a barra lateral ({keys})",
   "shell.channel.menu.label": "{name}: menu do canal",
   "shell.channel.settings": "Configurações do canal",
   "shell.channel.views": "Visões",

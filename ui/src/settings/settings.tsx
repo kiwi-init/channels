@@ -13,6 +13,9 @@ import { AgentsSection } from "~/settings/agents"
 import { ComputersSection } from "~/settings/computers"
 import { AboutSection, AccountSection, AppearanceSection } from "~/settings/sections"
 import { useSideways } from "~/kit/sideways"
+import { Content } from "~/shell/content"
+import { Frame } from "~/shell/frame"
+import { useTabs } from "~/shell/top-layout"
 import { SideCards } from "~/shell/updates"
 
 const SECTIONS: readonly (readonly [Section, Key, IconName | Glyph])[] = [
@@ -27,6 +30,7 @@ export function Settings() {
   const navRef = useGlide<HTMLElement>(".side-row.is-on")
   const nav = useNav()
   const go = useGo()
+  const tabs = useTabs()
   useSideways(navRef, nav.section)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -37,38 +41,44 @@ export function Settings() {
     return () => window.removeEventListener("keydown", onKey)
   }, [go])
 
+  const back = (
+    <button type="button" className="set-back" title={t("settings.settings.back")} onClick={() => go({ to: "back" })}>
+      <Icon name="back" size={14} />
+      {t("settings.settings.title")}
+    </button>
+  )
   return (
-    <div className="set">
-      <header className="top set-top">
-        <h1 className="set-top-title">
-          <button type="button" className="set-back" title={t("settings.settings.back")} onClick={() => go({ to: "back" })}>
-            <Icon name="back" size={14} />
-            {t("settings.settings.title")}
-          </button>
-        </h1>
-      </header>
-      <nav ref={navRef} className="set-nav" aria-label={t("settings.settings.sections")}>
-        <ul>
-          {SECTIONS.map(([id, label, icon]) => {
-            const on = nav.section === id
-            return (
-              <li key={id}>
-                <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "settings", section: id })}>
-                  <span className="side-icon">{typeof icon === "string" ? <Icon name={icon} /> : <GlyphIcon glyph={icon} />}</span>
-                  <span className="side-label">{t(label)}</span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-        <SideCards />
-      </nav>
-      <main className="set-main">
-        <div className="set-body" key={nav.section}>
-          <Current section={nav.section} />
-        </div>
-      </main>
-    </div>
+    <Frame
+      className="set"
+      lead={tabs ? undefined : <h1 className="set-lead">{back}</h1>}
+      side={
+        <nav ref={navRef} className="side set-nav" aria-label={t("settings.settings.sections")}>
+          {tabs && <h1 className="set-lead">{back}</h1>}
+          <ul>
+            {SECTIONS.map(([id, label, icon]) => {
+              const on = nav.section === id
+              return (
+                <li key={id}>
+                  <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "settings", section: id })}>
+                    <span className="side-icon">{typeof icon === "string" ? <Icon name={icon} /> : <GlyphIcon glyph={icon} />}</span>
+                    <span className="side-label">{t(label)}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <SideCards />
+        </nav>
+      }
+    >
+      <Content>
+        <main className="set-main">
+          <div className="set-body" key={nav.section}>
+            <Current section={nav.section} />
+          </div>
+        </main>
+      </Content>
+    </Frame>
   )
 }
 

@@ -58,7 +58,7 @@ export function Rail() {
     root.toggleAttribute("data-tabs", tabs)
     return () => root.removeAttribute("data-tabs")
   }, [tabs])
-  const cardsHere = onChannel && (home || sidebarHidden)
+  const cardsHere = sidebarHidden || (home && !tabs)
   const on = onChannel ? nav.channel : null
   const folders = prefs.folders
   const items = railItems(tiles, folders)

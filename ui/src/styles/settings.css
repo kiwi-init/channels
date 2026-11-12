@@ -6,13 +6,13 @@
   min-height: 0;
 }
 
-.top.set-top {
-  grid-template-columns: var(--side-w) minmax(0, 1fr);
+.set-lead {
+  margin: 0;
+  font: inherit;
 }
 
-.set-top-title {
-  padding: 0 12px;
-  font: inherit;
+.set-nav > .set-lead {
+  margin-bottom: 16px;
 }
 
 .set-nav {
@@ -592,14 +592,6 @@ html .set-body {
   .set {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: var(--top-h) auto minmax(0, 1fr);
-  }
-
-  .top.set-top {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .set-top > span {
-    display: none;
   }
 
   .set-nav {

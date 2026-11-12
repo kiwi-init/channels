@@ -1,9 +1,9 @@
 import type { Msg } from "~/i18n/en"
 
 export default {
-  "shell.channel.drawer.label": "Rooms and people ({keys})",
-  "shell.channel.drawer.label.news": "Rooms and people, new messages ({keys})",
-  "shell.channel.drawer.title": "Show or hide rooms and people ({keys})",
+  "shell.channel.drawer.label": "Sidebar ({keys})",
+  "shell.channel.drawer.label.news": "Sidebar, new messages ({keys})",
+  "shell.channel.drawer.title": "Show or hide the sidebar ({keys})",
   "shell.channel.menu.label": "{name}: channel menu",
   "shell.channel.settings": "Channel settings",
   "shell.channel.views": "Views",

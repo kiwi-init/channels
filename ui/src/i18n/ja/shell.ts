@@ -1,9 +1,9 @@
 import type { Catalog } from "~/i18n/i18n"
 
 export default {
-  "shell.channel.drawer.label": "ルームと人（{keys}）",
-  "shell.channel.drawer.label.news": "ルームと人、新しいメッセージあり（{keys}）",
-  "shell.channel.drawer.title": "ルームと人を表示/非表示（{keys}）",
+  "shell.channel.drawer.label": "サイドバー（{keys}）",
+  "shell.channel.drawer.label.news": "サイドバー、新しいメッセージあり（{keys}）",
+  "shell.channel.drawer.title": "サイドバーを表示/非表示（{keys}）",
   "shell.channel.menu.label": "{name}: チャンネルメニュー",
   "shell.channel.settings": "チャンネル設定",
   "shell.channel.views": "表示",
