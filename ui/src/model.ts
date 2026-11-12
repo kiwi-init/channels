@@ -426,6 +426,7 @@ export interface Message {
   forged?: true
   fromDoc?: true
   receipt?: string
+  sign?: Sign
   edited?: number
   deleted?: true
   canChange?: true
@@ -752,6 +753,11 @@ export interface Prefs {
   lightTheme: string
   customThemes: CustomTheme[]
   folders: Folder[]
+}
+
+export interface Sign {
+  gone?: string
+  ask?: { to: string; name: string; about: string }
 }
 
 export interface SendExtras {
