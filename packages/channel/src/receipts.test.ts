@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
 
-import { addMarks, onIt, readAt, receipt, recipients, type Busy, type Marks } from "./receipts.ts";
+import { addMarks, onIt, readAt, receipt, recipients, waitsOf, type Busy, type Marks, type Reached } from "./receipts.ts";
 
 type Who = { kind?: string; owner?: boolean; active: boolean; joined: number };
 const members = new Map<string, Who>([
@@ -191,5 +191,129 @@ describe("people see agents by nickname in the ack and the receipt (#1681)", () 
         NOW,
       ),
     ).toBe("coder is on it · running Bash");
+  });
+});
+
+describe("what a person's message waits on: who can't be woken, who isn't listening, who is busy (T614)", () => {
+  const tasks = new Map([
+    [31, { id: 31, owner: "win", state: "doing" }],
+    [40, { id: 40, owner: "win", state: "todo" }],
+    [7, { id: 7, owner: "atlas", state: "doing" }],
+  ]);
+  const st = (lead: string | null = "atlas") => ({ members, tasks, lead }) as unknown as Pick<ChannelState, "members" | "tasks" | "lead">;
+  const how = (who: Record<string, Reached>) => (n: string) => who[n] ?? null;
+  const doing = (who: Record<string, Busy>) => (n: string) => who[n] ?? null;
+  const none = () => false;
+  const here = how({ atlas: "here", win: "here", dev: "here" });
+  const log = [
+    msg({ seq: 4, to: ["win"] }),
+    msg({ seq: 6, to: ["win"] }),
+    msg({ seq: 7, from: "win", to: ["jon"] }),
+    msg({ seq: 8, to: ["atlas"] }),
+    msg({ seq: 9, kind: "event" as Message["kind"] }),
+    msg({ seq: 10, from: "ana" }),
+    msg({ seq: 12, to: ["win"] }),
+  ];
+  const mine = log.at(-1)!;
+  const marks = addMarks(new Map(), [
+    { pk: "pk-win", seq: 5, at: 100 },
+    { pk: "pk-atlas", seq: 11, at: 100 },
+    { pk: "pk-dev", seq: 11, at: 100 },
+  ]);
+
+  test("an agent that can't be woken, or that nothing answers for, is named", () => {
+    expect(waitsOf(mine, log, st(), marks, pks, how({ win: "asleep" }), doing({}), none)).toEqual({ asleep: ["win"], silent: [], read: [], behind: null, ask: null });
+    expect(waitsOf(mine, log, st(), marks, pks, how({ win: "silent" }), doing({}), none)).toEqual({ asleep: [], silent: ["win"], read: [], behind: null, ask: null });
+  });
+
+  test("an agent that never sent a mark is named too: it is gone whatever its kiwi", () => {
+    expect(waitsOf(msg({ seq: 12, to: ["win"] }), log, st(), new Map(), pks, how({ win: "silent" }), doing({}), none)?.silent).toEqual(["win"]);
+  });
+
+  test("nothing once it has read the message, or once someone it went to has replied", () => {
+    const read = addMarks(marks, [{ pk: "pk-win", seq: 12, at: 200 }]);
+    expect(waitsOf(mine, log, st(), read, pks, how({ win: "asleep" }), doing({}), none)).toBeNull();
+    expect(waitsOf(mine, log, st(), marks, pks, how({ win: "asleep" }), doing({}), (from) => from.includes("win"))).toBeNull();
+  });
+
+  test("nothing while reach is not known yet, and nothing for an agent that is free", () => {
+    expect(waitsOf(mine, log, st(), marks, pks, how({}), doing({}), none)).toBeNull();
+    expect(waitsOf(mine, log, st(), marks, pks, here, doing({}), none)).toBeNull();
+  });
+
+  test("a busy agent that has not read it: its task, the messages that reach it first, and the lead to ask", () => {
+    const busy = doing({ win: { text: "running Bash", since: 1 } });
+    expect(waitsOf(mine, log, st(), marks, pks, here, busy, none)).toEqual({
+      asleep: [],
+      silent: [],
+      read: [],
+      behind: { name: "win", busy: { text: "running Bash", since: 1 }, task: 31, ahead: 2 },
+      ask: { to: "atlas", name: "atlas" },
+    });
+  });
+
+  test("yours is next when nothing else went to it since it last read", () => {
+    const caught = addMarks(marks, [{ pk: "pk-win", seq: 11, at: 200 }]);
+    expect(waitsOf(mine, log, st(), caught, pks, here, doing({ win: { text: "thinking" } }), none)?.behind?.ahead).toBe(0);
+  });
+
+  test("no task to name when it is doing none", () => {
+    const dev = msg({ seq: 12, to: ["dev"] });
+    const behind = addMarks(new Map(), [{ pk: "pk-dev", seq: 11, at: 100 }]);
+    expect(waitsOf(dev, log, st(), behind, pks, here, doing({ dev: { text: "thinking" } }), none)?.behind).toEqual({ name: "dev", busy: { text: "thinking" }, ahead: 0 });
+  });
+
+  test("an older kiwi sends no marks, so busy says nothing about it", () => {
+    expect(waitsOf(mine, log, st(), new Map(), pks, here, doing({ win: { text: "thinking" } }), none)).toBeNull();
+  });
+
+  test("nobody to ask when there is no lead, the lead is the busy one, the lead is gone, or the lead wrote it", () => {
+    const busy = doing({ win: { text: "thinking" }, atlas: { text: "thinking" } });
+    expect(waitsOf(mine, log, st(null), marks, pks, here, busy, none)?.ask).toBeNull();
+    expect(waitsOf(mine, log, st("win"), marks, pks, here, busy, none)?.ask).toBeNull();
+    expect(waitsOf(mine, log, st(), marks, pks, how({ win: "here", atlas: "asleep" }), busy, none)?.ask).toBeNull();
+    expect(waitsOf(msg({ seq: 12, from: "atlas", to: ["win"] }), log, st(), marks, pks, here, busy, none)?.ask).toBeNull();
+  });
+
+  test("a word to everyone: busy is said only when nobody has it and nobody is free, and it names the lead first", () => {
+    const all = msg({ seq: 12 });
+    const unread = addMarks(new Map(), [
+      { pk: "pk-atlas", seq: 5, at: 1 },
+      { pk: "pk-win", seq: 5, at: 1 },
+      { pk: "pk-dev", seq: 5, at: 1 },
+    ]);
+    const everyone = doing({ atlas: { text: "thinking" }, win: { text: "thinking" }, dev: { text: "thinking" } });
+    expect(waitsOf(all, log, st(), unread, pks, here, everyone, none)?.behind?.name).toBe("atlas");
+    expect(waitsOf(all, log, st(), unread, pks, here, everyone, none)?.ask).toBeNull();
+    expect(waitsOf(all, log, st(), unread, pks, here, doing({ win: { text: "thinking" }, dev: { text: "thinking" } }), none)).toBeNull();
+    const leadHasIt = addMarks(unread, [{ pk: "pk-atlas", seq: 12, at: 2 }]);
+    expect(waitsOf(all, log, st(), leadHasIt, pks, here, everyone, none)).toBeNull();
+    expect(waitsOf(all, log, st(), leadHasIt, pks, how({ atlas: "here", win: "here", dev: "asleep" }), everyone, none)).toEqual({
+      asleep: ["dev"],
+      silent: [],
+      read: ["atlas"],
+      behind: null,
+      ask: null,
+    });
+  });
+
+  test("named to several: the one that gets to it first is shown", () => {
+    const both = msg({ seq: 12, to: ["win", "dev"] });
+    const unread = addMarks(new Map(), [
+      { pk: "pk-win", seq: 5, at: 1 },
+      { pk: "pk-dev", seq: 11, at: 1 },
+    ]);
+    expect(waitsOf(both, log, st(), unread, pks, here, doing({ win: { text: "thinking" }, dev: { text: "thinking" } }), none)?.behind?.name).toBe("dev");
+  });
+
+  test("people see nicknames", () => {
+    const nicked = new Map<string, Who & { display?: string }>([
+      ...members,
+      ["win", { kind: "agent", active: true, joined: 0, display: "coder" }],
+      ["atlas", { kind: "agent", active: true, joined: 0, display: "lead" }],
+    ]);
+    const s = { members: nicked, tasks, lead: "atlas" } as unknown as Pick<ChannelState, "members" | "tasks" | "lead">;
+    expect(waitsOf(mine, log, s, marks, pks, how({ win: "asleep" }), doing({}), none)?.asleep).toEqual(["coder"]);
+    expect(waitsOf(mine, log, s, marks, pks, here, doing({ win: { text: "thinking" } }), none)?.ask).toEqual({ to: "atlas", name: "lead" });
   });
 });

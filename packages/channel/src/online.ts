@@ -48,3 +48,10 @@ export function sharedOnline(was: Map<string, Online>, next: Map<string, Online>
 export function onlineByName(heard: ReadonlyMap<string, Online>, keyOf: ReadonlyMap<string, string>, now: number): Map<string, Online> {
   return new Map([...heard].filter(([pk, o]) => keyOf.get(o.from) === pk && now - o.at < PRESENCE_TTL && howHere(o) !== null).map(([, o]) => [o.from, o]));
 }
+
+export function asleepNames(heard: ReadonlyMap<string, Online>, keyOf: ReadonlyMap<string, string>, now: number): string[] {
+  return [...heard]
+    .filter(([pk, o]) => keyOf.get(o.from) === pk && now - o.at < PRESENCE_TTL && howHere(o) === null)
+    .map(([, o]) => o.from)
+    .sort();
+}
