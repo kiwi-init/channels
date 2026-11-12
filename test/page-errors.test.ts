@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { describePageError } from "../scripts/page-errors.ts";
+import { describePageError } from "../scripts/page-error-lines.ts";
 
 const told = (lines: string[]): string => lines.join("\n    ");
 

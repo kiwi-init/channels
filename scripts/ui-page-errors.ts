@@ -71,14 +71,16 @@ try {
 
   const before = printed.length;
   await page.evaluate(() => (window as Window & Probes).loopNow?.());
-  await until(() => told.length > 1);
+  await until(() => told.length > 1 || engine !== "webkit");
   await new Promise((next) => setTimeout(next, 500));
   const loop = told.slice(1).find((t) => t.includes("ResizeObserver")) ?? "";
   const all = `${told.slice(1).join("\n")}\n${printed.slice(before).join("\n")}`;
-  expect(loop !== "", `a resize observer that loops is told (${loop.split("\n")[0]})`);
-  expect(loop.includes("after: ok   it carries its stack"), "it names the check it came after too");
-  expect(/div#box\.grows \d+x\d+ -> \d+x\d+, watched by observer \d+/.test(all), "it names the element that changed size after its observer ran, with both sizes");
-  expect(/observer \d+ \(made at .*loop\.js:\d+/.test(all), "it names where that observer was made");
+  if (engine === "webkit" || loop) {
+    expect(loop !== "", `a resize observer that loops is told (${loop.split("\n")[0]})`);
+    expect(loop.includes("after: ok   it carries its stack"), "it names the check it came after too");
+    expect(/div#box\.grows \d+x\d+ -> \d+x\d+, watched by observer \d+/.test(all), "it names the element that changed size after its observer ran, with both sizes");
+    expect(/observer \d+ \(made at .*loop\.js:\d+/.test(all), "it names where that observer was made");
+  } else console.log(`note ${engine} does not raise a resize observer loop as a page error, so there is nothing to tell here: WebKit runs these four`);
   await page.close();
 } finally {
   await browser.close();
