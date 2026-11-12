@@ -191,6 +191,12 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   - Nothing you click moves. Hiding the sidebar or opening the right panel
     changes no control's position. Content may: a hidden sidebar gives its
     column to the work.
+  - A hidden sidebar peeks. The pointer at the window's left edge slides it
+    in over the conversation as a raised sheet: `bg-2` with `shadow-pop`,
+    from under the tab row to the window's bottom, its rows where they are
+    when it is pinned. It never crosses the tab row, and it slides out when
+    the pointer leaves. A pinned sidebar never covers the conversation, at
+    any width.
   ⌥⌘B (Ctrl+Alt+B) lays a blueprint over the app (`kit/blueprint.tsx`, loaded
   only when asked for): an 8px grid, a line on every measured column and row
   edge, a ruler with each column's width, the window's centre line with how
@@ -217,7 +223,7 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   `bun scripts/ui-layout.ts --dist ui/dist` measures these rules in the built
   page (the centre, the sidebar's edges, the tracker's place, the two sides
   of the conversation, hiding and peeking the sidebar, search, a wide panel)
-  at four window sizes; run it after any layout change.
+  at four window sizes; CI runs it on every push to main.
 - Spacing: padding, margin and gap sit on one scale: 0, 1, 2, 4, 6, 8, 10, 12,
   16, 20, 24, 32, 40, 48, 64. `test/ui-design-scale.test.ts` fails on anything
   else.
