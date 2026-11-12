@@ -13,10 +13,10 @@ const { normalizeMarkdownStyle } = await import("react-native-enriched-markdown/
 const { buildStyles } = await import("react-native-enriched-markdown/lib/module/web/styles.js")
 const { parseMarkdown } = await import("react-native-enriched-markdown/lib/module/web/parseMarkdown.js")
 const { RenderNode } = await import("react-native-enriched-markdown/lib/module/web/renderers/index.js")
-const { default: Markdown, blockGaps, withTextSize, safeLinks, sortedRows } = await import("~/chat/markdown")
+const { default: Markdown, blockGaps, withTextSize, safeLinks, sortedRows, warm } = await import("~/chat/markdown")
 const { parseKey } = await import("~/chat/parsed")
 const { zonedLinks } = await import("~/chat/zoned-times")
-const { keepParsed } = await import("~/chat/parsed")
+const { keepParsed, parsedFor } = await import("~/chat/parsed")
 
 const fixed = (name: string, s: CSSProperties): string[] => [
   ...(typeof s.fontSize === "number" ? [`${name} fontSize ${s.fontSize}`] : []),
@@ -302,5 +302,20 @@ describe("a hand-written kiwi-utc link survives validation (#2367)", () => {
     expect(html).not.toContain("kiwi-utc:garbage")
     expect(html).toContain("bad and ")
     expect(html).toContain('href="kiwi-utc:2030-01-16T01:15:00Z"')
+  })
+})
+
+describe("a warmed message is parsed under the key its render looks up (T7429)", () => {
+  test("warming with each message's time fills parseKey(markdown, at), with or without a UTC time in it", async () => {
+    const at = Date.UTC(2026, 10, 12, 15, 0)
+    const messages = [
+      { markdown: "Deploy at 14:00 UTC, then tell the room.", at },
+      { markdown: "No times here, just a warmed note.", at: at + 1 },
+    ]
+    expect(messages.map((m) => parsedFor(parseKey(m.markdown, m.at)))).toEqual([undefined, undefined])
+    warm(messages, (m) => m)
+    const done = () => messages.every((m) => parsedFor(parseKey(m.markdown, m.at)) !== undefined)
+    for (let i = 0; i < 400 && !done(); i++) await Bun.sleep(5)
+    expect(messages.map((m) => parsedFor(parseKey(m.markdown, m.at)) !== undefined)).toEqual([true, true])
   })
 })

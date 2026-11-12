@@ -221,24 +221,25 @@ function parse(markdown: string, at?: number): Promise<ASTNode> {
   return next
 }
 
-export function warm<T>(texts: readonly T[], link: (text: T) => string): () => void {
+export function warm<T>(texts: readonly T[], source: (text: T) => { markdown: string; at: number }): () => void {
   const queue = [...texts]
-  let timer = 0
+  let timer: ReturnType<typeof setTimeout> | undefined
   const step = () => {
     const text = queue.shift()
     if (text === undefined) return
-    void parse(link(text))
+    const { markdown, at } = source(text)
+    void parse(markdown, at)
       .catch(() => {
         // A message that doesn't parse shows its plain text when it's rendered; warming skips it.
       })
       .finally(() => {
-        timer = window.setTimeout(step, 0)
+        timer = setTimeout(step, 0)
       })
   }
-  timer = window.setTimeout(step, 0)
+  timer = setTimeout(step, 0)
   return () => {
     queue.length = 0
-    window.clearTimeout(timer)
+    clearTimeout(timer)
   }
 }
 
