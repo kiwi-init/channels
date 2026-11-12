@@ -48,7 +48,7 @@ import {
   verdictRefusal,
   worked,
 } from "./tasks.ts";
-import { clearOnCard, markReset, resetRefusal } from "./reset.ts";
+import { addResetRefusal, clearOnCard, markReset, resetRefusal } from "./reset.ts";
 import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
 
@@ -553,6 +553,11 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "task.add": {
+      const addWrong = addResetRefusal(members, ev.review);
+      if (addWrong) {
+        reject(addWrong);
+        break;
+      }
       const then = ev.steps ? undefined : (ev.then ?? (c.landingSteps ? undefined : (c.landing ?? undefined)));
       const added: Task = {
         id: m.seq,
@@ -747,7 +752,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const asked =
         ev.state === "cancelled" ? (cancel && (mayFinish || lead || (ev.round !== undefined && revisedOut(task, m.from, open) === ev.round)) ? "done" : undefined) : ev.state && currentState(ev.state);
       const state = reopens ? "review" : lands && asked === "done" ? "landing" : asked;
-      const resetWrong = resetRefusal(members, task, ev, m.from, review, state);
+      const judging = !!ev.verdict || (!!review && !!open && !cancel && ev.close === undefined && (state === "done" || state === "landing"));
+      const resetWrong = resetRefusal(members, task, { ...ev, judging }, m.from, review, state);
       if (resetWrong) {
         reject(resetWrong);
         break;
@@ -836,7 +842,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;
       if (task.state === "landing") advance(task, { seq: m.seq, by: m.from, at });
-      if (ev.verdict && mayFinish) markReset(c.reviewReset, member, m.seq);
+      if (judging && mayFinish) markReset(c.reviewReset, member, m.seq);
       break;
     }
 

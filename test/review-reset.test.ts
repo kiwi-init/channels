@@ -97,10 +97,42 @@ describe("a verdict marks the reviewer, and the mark is enforced in the fold", (
     const claim = await ev("mac", { op: "task.update", task: open.seq, claim: true, review: "mac" });
     const added = await ev("owl", { op: "task.add", title: "Five", owner: "win", review: "mac" });
     const round = await review(added.seq, "f1");
-    const s = fold([...log, pass, c, toMac, open, claim, added, round], roster);
+    const s = fold([...log, added, pass, c, toMac, open, claim, round], roster);
     expect(s.rejected.get(toMac.seq)).toBe(`mac needs a fresh session since verdict #${pass.seq}: T${c.seq}'s review goes to someone else until it rejoins from a new session`);
     expect(s.rejected.get(claim.seq)).toBe(`mac needs a fresh session since verdict #${pass.seq}: it takes T${open.seq}'s review from a new session`);
     expect(s.rejected.get(round.seq)).toBe(`mac needs a fresh session since verdict #${pass.seq}: T${added.seq} opens no round for it until it rejoins from a new session`);
+  });
+});
+
+describe("an approval without a verdict field counts as a verdict (review round 1)", () => {
+  test("a marked reviewer's implicit approval is refused, and an implicit approval marks the reviewer", async () => {
+    const { t1, t2, log } = await twoInReview();
+    const implicit = await ev("mac", { op: "task.update", task: t1, state: "done", round: 1, at: "a1" });
+    const marked = fold([...log, implicit], roster);
+    expect(marked.rejected.has(implicit.seq)).toBe(false);
+    expect(markOf(marked, "mac")).toEqual({ kind: "needs", verdict: implicit.seq, session: S1 });
+    const again = await ev("mac", { op: "task.update", task: t2, state: "done", round: 1, at: "b1" });
+    const s = fold([...log, implicit, again], roster);
+    expect(s.rejected.get(again.seq)).toBe(`mac needs a fresh session since verdict #${implicit.seq}: it gives T${t2}'s verdict from a new session, or the lead moves the review`);
+    expect(s.tasks.get(t2)!.state).toBe("review");
+  });
+
+  test("closing a task with a reason or cancelling it isn't a verdict", async () => {
+    const { t1, t2, log } = await twoInReview();
+    const pass = await approve("mac", t1, 1, "a1");
+    const closed = await ev("owl", { op: "task.update", task: t2, state: "done", close: "landed outside Kiwi" });
+    const s = fold([...log, pass, closed], roster);
+    expect(s.rejected.has(closed.seq)).toBe(false);
+    expect(markOf(s, "owl")).toBeUndefined();
+  });
+
+  test("a new task naming a marked reviewer is refused at task.add", async () => {
+    const { t1, log } = await twoInReview();
+    const pass = await approve("mac", t1, 1, "a1");
+    const added = await ev("owl", { op: "task.add", title: "Six", owner: "win", review: "mac" });
+    const s = fold([...log, pass, added], roster);
+    expect(s.rejected.get(added.seq)).toBe(`mac needs a fresh session since verdict #${pass.seq}: a new task's review goes to someone else until it rejoins from a new session`);
+    expect(s.tasks.has(added.seq)).toBe(false);
   });
 });
 

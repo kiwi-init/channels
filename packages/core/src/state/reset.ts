@@ -14,13 +14,13 @@ const since = (name: string, mark: Needs) => `${name} needs a fresh session sinc
 export function resetRefusal(
   members: ReadonlyMap<string, Pick<Member, "reset">>,
   task: Task,
-  ev: { claim?: true; review?: string | null; verdict?: string },
+  ev: { claim?: true; review?: string | null; judging: boolean },
   from: string,
   review: string | undefined,
   state: string | undefined,
 ): string | null {
   const id = taskId(task.id);
-  const giver = ev.claim || ev.verdict ? needsReset(members, from) : undefined;
+  const giver = ev.claim || ev.judging ? needsReset(members, from) : undefined;
   if (giver && ev.claim) return `${since(from, giver)}: it takes ${id}'s review from a new session`;
   if (giver) return `${since(from, giver)}: it gives ${id}'s verdict from a new session, or the lead moves the review`;
   const moved = ev.review?.trim();
@@ -29,6 +29,12 @@ export function resetRefusal(
   const reviewer = state === "review" && review && review !== "*" ? needsReset(members, review) : undefined;
   if (review && reviewer) return `${since(review, reviewer)}: ${id} opens no round for it until it rejoins from a new session`;
   return null;
+}
+
+export function addResetRefusal(members: ReadonlyMap<string, Pick<Member, "reset">>, review: string | undefined): string | null {
+  const named = review?.trim();
+  const mark = named && named !== "*" ? needsReset(members, named) : undefined;
+  return named && mark ? `${since(named, mark)}: a new task's review goes to someone else until it rejoins from a new session` : null;
 }
 
 export function markReset(on: boolean, giver: Pick<Member, "reset" | "card">, verdict: number): void {
