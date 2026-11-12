@@ -27,7 +27,7 @@ const BOX = `${PANEL} .composer textarea`;
 const BAR = `${PANEL} .compose-reply`;
 const PICK = ".quote-pick";
 
-type Span = { sel: string; from: string; to: string; endSel?: string };
+type Span = { sel: string; from: string; to: string; endSel?: string; endAt?: "after" | "start" | "next" };
 
 const select = (page: Page, span: Span) =>
   page.evaluate((s: Span) => {
@@ -46,8 +46,15 @@ const select = (page: Page, span: Span) =>
         }
       return null;
     };
+    const nextText = (el: Element): { node: Text; offset: number } | null => {
+      const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n; n = walk.nextNode())
+        if (!el.contains(n) && el.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING && (n as Text).data.trim()) return { node: n as Text, offset: 0 };
+      return null;
+    };
     const a = find(s.sel, s.from, false);
-    const b = find(s.endSel ?? s.sel, s.to, true);
+    const after = s.endAt === "next" ? document.querySelector(s.endSel ?? s.sel) : null;
+    const b = after ? nextText(after) : find(s.endSel ?? s.sel, s.to, s.endAt !== "start");
     if (!a || !b) return false;
     a.node.parentElement?.scrollIntoView({ block: "center" });
     const range = document.createRange();
@@ -59,6 +66,15 @@ const select = (page: Page, span: Span) =>
     document.dispatchEvent(new PointerEvent("pointerup", { button: 0, bubbles: true }));
     return true;
   }, span);
+
+const openChannel = (page: Page, name: string) =>
+  page.evaluate((want: string) => {
+    const hit = [...document.querySelectorAll<HTMLElement>("button, a, [role=tab]")].find(
+      (el) => !el.closest(".panel") && !el.closest(".msg-body") && ((el.getAttribute("aria-label") ?? "").trim() === want || [...el.childNodes].some((n) => (n.textContent ?? "").trim() === want)),
+    );
+    hit?.click();
+    return !!hit;
+  }, name);
 
 const shown = (page: Page, sel: string) => page.evaluate((s: string) => !!document.querySelector(s), sel);
 
@@ -178,12 +194,22 @@ async function run(browser: Browser): Promise<string | null> {
     await page.press(BOX, "Enter");
     await page.waitForFunction((s: string) => !document.querySelector(s), BAR, { timeout: 5_000 });
     const reply = await lastMessage(page);
-    if (!reply?.cited?.includes("Agreed on the Icon row")) return `a message quote doesn't keep its message reference (cited "${reply?.cited}")`;
+    if (!reply?.cited?.includes("Agreed on the Icon row") || !reply.cited.includes("same PR."))
+      return `a multiline message quote doesn't keep its message reference and both paragraphs (cited "${reply?.cited}")`;
 
     await select(page, { sel: DETAIL, from: "plain words", to: "Keep Rename", endSel: TALK });
     if (!(await pickStaysAway(page))) return "a selection from the description into a message offers Quote";
     await select(page, { sel: TALK, from: "Keep Rename", to: "Agreed on the Icon" });
     if (!(await pickStaysAway(page))) return "a selection over two messages offers Quote";
+    if (!(await select(page, { sel: DETAIL, from: "One save pattern", to: "Agreed on the Icon row", endSel: TALK, endAt: "start" })))
+      return "couldn't select from the description to the start of a message";
+    if (!(await pickStaysAway(page))) return "a selection from the description ending at the very start of a message offers Quote";
+    if (!(await select(page, { sel: TALK, from: "Keep Rename", to: "Agreed on the Icon row", endAt: "start" }))) return "couldn't select from one message to the start of the next";
+    if (!(await pickStaysAway(page))) return "a selection from one message ending at the very start of the next offers Quote";
+    if (!(await select(page, { sel: DETAIL, from: "From the desktop audit.", to: "", endAt: "next" }))) return "couldn't select the description's last paragraph to the next line";
+    if (!(await pickAppears(page))) return "a selection of the description's last paragraph ending at the start of the next line (a triple click) offers no Quote";
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => document.getSelection()?.removeAllRanges());
 
     await select(page, { sel: DETAIL, from: "Toggles disabled", to: "give no reason." });
     if (!(await pickAppears(page))) return "selecting description text again offers no Quote";
@@ -208,6 +234,26 @@ async function run(browser: Browser): Promise<string | null> {
     if (!reopened) return "couldn't find T12 in the specs list to go back to it";
     await page.waitForSelector(".panel .task-detail[data-quote-task='12']", { timeout: 5_000 });
     if (await shown(page, BAR)) return "coming back to the task brings the old quote back";
+
+    await select(page, { sel: DETAIL, from: "Toggles disabled", to: "give no reason." });
+    if (!(await pickAppears(page))) return "selecting description text before a channel switch offers no Quote";
+    await page.click(PICK);
+    if (!(await shown(page, BAR))) return "the quote before a channel switch didn't reach the composer";
+    if (!(await openChannel(page, "landing"))) return "couldn't find the landing channel to switch to";
+    await page.waitForFunction(() => !document.querySelector(".panel .task-detail[data-quote-task='12']"), undefined, { timeout: 5_000 });
+    if (!(await openChannel(page, "kiwi"))) return "couldn't find the kiwi channel to switch back to";
+    if (!(await page.locator(".panel .task-detail[data-quote-task='12']").count())) {
+      const back = await page.evaluate(() => {
+        const hit = [...document.querySelectorAll<HTMLElement>("button, a, [role=button]")].find(
+          (el) => !el.closest(".panel") && (el.textContent ?? "").includes("Channel settings: four save patterns"),
+        );
+        hit?.click();
+        return !!hit;
+      });
+      if (!back) return "couldn't find T12 again after switching channels";
+    }
+    await page.waitForSelector(".panel .task-detail[data-quote-task='12']", { timeout: 5_000 });
+    if (await shown(page, BAR)) return "switching to another channel and back keeps the pending quote";
 
     await open(page, "task-quote-read-only");
     await select(page, { sel: DETAIL, from: "One save pattern", to: "one place per setting" });

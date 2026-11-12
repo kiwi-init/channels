@@ -393,7 +393,7 @@ function withTaskQuote(c: Channel, readOnly: boolean): Channel {
     messages: [
       ...c.messages,
       { seq, from: "atlas", at, text: wrote("Keep Rename inline, but save the Goal box on blur like the pause note, as T10 did."), where },
-      { seq: seq + 1, from: "win", at: at + 60_000, text: wrote("Agreed on the Icon row: the header tile is enough.\nI'll drop the row in the same PR."), where },
+      { seq: seq + 1, from: "win", at: at + 60_000, text: wrote("Agreed on the Icon row: the header tile is enough.\n\nI'll drop the row in the same PR."), where },
     ],
   }
 }

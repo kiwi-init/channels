@@ -25,7 +25,7 @@ function numberIn(el: HTMLElement | null | undefined, key: "seq" | "quoteTask"):
   return Number.isInteger(n) ? n : null
 }
 
-function sourceOf(node: Node, root: HTMLElement, body: string): QuoteSource | null {
+function sourceOf(node: Node, root: HTMLElement, body: string): { source: QuoteSource; text: Element } | null {
   const el = node instanceof Element ? node : node.parentElement
   if (!el || !root.contains(el)) return null
   const text = el.closest(body)
@@ -33,10 +33,19 @@ function sourceOf(node: Node, root: HTMLElement, body: string): QuoteSource | nu
   const described = text.closest<HTMLElement>("[data-quote-task]")
   if (described) {
     const task = numberIn(described, "quoteTask")
-    return task === null ? null : { kind: "task", task }
+    return task === null ? null : { source: { kind: "task", task }, text }
   }
   const seq = numberIn(text.closest<HTMLElement>("[data-seq]"), "seq")
-  return seq === null ? null : { kind: "message", seq }
+  return seq === null ? null : { source: { kind: "message", seq }, text }
+}
+
+function onlyIn(range: Range, text: Element): boolean {
+  const inside = document.createRange()
+  inside.selectNodeContents(text)
+  if (range.compareBoundaryPoints(Range.START_TO_START, inside) < 0) return false
+  const clipped = range.cloneRange()
+  if (clipped.compareBoundaryPoints(Range.END_TO_END, inside) > 0) clipped.setEnd(inside.endContainer, inside.endOffset)
+  return clipped.toString().trim() === range.toString().trim()
 }
 
 const sameSource = (a: QuoteSource, b: QuoteSource | null): boolean => b !== null && (a.kind === "message" ? b.kind === "message" && b.seq === a.seq : b.kind === "task" && b.task === a.task)
@@ -45,10 +54,11 @@ function pickedIn(root: HTMLElement, body: string, tasks: boolean): Picked | nul
   const sel = document.getSelection()
   if (!sel || sel.isCollapsed || !sel.rangeCount) return null
   const range = sel.getRangeAt(0)
-  const source = sourceOf(range.startContainer, root, body)
-  if (source === null || (source.kind === "task" && !tasks)) return null
+  const start = sourceOf(range.startContainer, root, body)
+  if (start === null || (start.source.kind === "task" && !tasks)) return null
+  const source = start.source
   const end = sourceOf(range.endContainer, root, body)
-  if (!sameSource(source, end) && !(range.endOffset === 0 && range.endContainer !== range.startContainer)) return null
+  if (!sameSource(source, end?.source ?? null) && !(range.endOffset === 0 && onlyIn(range, start.text))) return null
   const excerpt = cleanExcerpt(sel.toString())
   if (!excerpt) return null
   const rect = range.getClientRects()[0] ?? range.getBoundingClientRect()
