@@ -74,21 +74,22 @@ try {
     return { ok: wm === "floating", detail: { wm } };
   });
 
-  await step("close, minimize and maximize show at the top left, with no GTK title bar (floating.png)", async () => {
+  await step("minimize, maximize and close show at the top right, in that order, with no GTK title bar (floating.png)", async () => {
     await driver.evaluate(() => void (document.documentElement.dataset["theme"] = "dark"), null, 5_000);
     await painted();
     await later(2_500);
     const buttons = await driver.evaluate(
       () =>
-        ["Close window", "Minimize window", "Maximize window"].map((label) => {
+        ["Minimize window", "Maximize window", "Close window"].map((label) => {
           const r = document.querySelector(`button[aria-label="${label}"]`)?.getBoundingClientRect();
-          return r && r.width > 0 ? { label, x: Math.round(r.x), y: Math.round(r.y) } : null;
+          return r && r.width > 0 ? { label, x: Math.round(r.x), y: Math.round(r.y), fromRight: Math.round(innerWidth - r.right) } : null;
         }),
       null,
       5_000,
     );
     const taken = shot("floating");
-    return { ok: buttons.every((b) => b !== null && b.x < 120 && b.y < 60) && taken, detail: { buttons, screenshot: taken } };
+    const ordered = buttons.every((b, i) => b !== null && (i === 0 || b.x > (buttons[i - 1]?.x ?? Infinity)));
+    return { ok: ordered && buttons.every((b) => b !== null && b.fromRight < 120 && b.y < 60) && taken, detail: { buttons, screenshot: taken } };
   });
 
   await step("Maximize fills the screen (maximized.png)", async () => {

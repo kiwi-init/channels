@@ -8,6 +8,7 @@ import type { ChannelTile } from "~/model"
 import { channelOf, onCommand } from "~/kit/commands"
 import { inText } from "~/kit/keys"
 import { useNav, useGo, useActions, useTiles, useAppPrefs } from "~/nav"
+import { useWindowMaximized } from "~/live/window-state"
 import { openMenu } from "~/kit/menu-open"
 import { railItems, type DropTarget } from "~/shell/rail-items"
 import { useTabs } from "~/shell/top-layout"
@@ -122,19 +123,7 @@ export function Rail() {
   const tile = (c: ChannelTile) => <Tile key={c.code} tile={c} on={on === c.code} drop={over === `c:${c.code}`} moving={moving === c.code} onClick={() => go({ to: "channel", code: c.code })} />
   return (
     <nav ref={strip} className="rail" aria-label={t("shell.rail.channels")}>
-      {document.documentElement.dataset["wm"] === "floating" && (
-        <div className="wm-controls">
-          <button type="button" className="wm-btn is-close" aria-label={t("shell.rail.close.window")} title={t("shell.rail.close")} onClick={() => actions.windowControl("close")}>
-            <Icon name="close" size={10} />
-          </button>
-          <button type="button" className="wm-btn" aria-label={t("shell.rail.minimize.window")} title={t("shell.rail.minimize")} onClick={() => actions.windowControl("minimize")}>
-            <Icon name="minus" size={10} />
-          </button>
-          <button type="button" className="wm-btn" aria-label={t("shell.rail.maximize.window")} title={t("shell.rail.maximize")} onClick={() => actions.windowControl("maximize")}>
-            <Icon name="expand" size={10} />
-          </button>
-        </div>
-      )}
+      {document.documentElement.dataset["wm"] === "floating" && <WindowControls control={actions.windowControl} />}
       <button
         type="button"
         className={cx("tile is-home", home && "is-on")}
@@ -269,6 +258,29 @@ export function Rail() {
         </button>
       </div>
     </nav>
+  )
+}
+
+function WindowControls({ control }: { control: (action: "minimize" | "maximize" | "close") => void }) {
+  const maximized = useWindowMaximized()
+  return (
+    <div className="wm-controls">
+      <button type="button" className="wm-btn" aria-label={t("shell.rail.minimize.window")} title={t("shell.rail.minimize")} onClick={() => control("minimize")}>
+        <Icon name="minus" size={14} />
+      </button>
+      <button
+        type="button"
+        className="wm-btn"
+        aria-label={maximized ? t("shell.rail.restore.window") : t("shell.rail.maximize.window")}
+        title={maximized ? t("shell.rail.restore") : t("shell.rail.maximize")}
+        onClick={() => control("maximize")}
+      >
+        <Icon name={maximized ? "restore" : "expand"} size={14} />
+      </button>
+      <button type="button" className="wm-btn is-close" aria-label={t("shell.rail.close.window")} title={t("shell.rail.close")} onClick={() => control("close")}>
+        <Icon name="close" size={14} />
+      </button>
+    </div>
   )
 }
 

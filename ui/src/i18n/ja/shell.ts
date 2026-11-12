@@ -90,6 +90,8 @@ export default {
   "shell.rail.minimize": "最小化",
   "shell.rail.maximize.window": "ウィンドウを最大化",
   "shell.rail.maximize": "最大化",
+  "shell.rail.restore.window": "ウィンドウを元のサイズに戻す",
+  "shell.rail.restore": "元に戻す",
   "shell.rail.home": "ホーム",
   "shell.rail.new.channel": "新しいチャンネル",
   "shell.rail.settings": "設定",

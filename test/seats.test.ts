@@ -179,6 +179,29 @@ test("Pi: its marker names the harness; its extension's process and session hold
   expect(canonicalHarness("pi")).toBe("pi");
 });
 
+test("Deep Code: declared by KIWI_HARNESS or --harness, or found as a deepcode process above the command; its process holds the seat", () => {
+  const chain = (...procs: (readonly [string, readonly string[]])[]) => {
+    const tree = new Map(procs.map(([name, argv], i) => [100 - i, { ppid: i === procs.length - 1 ? 1 : 99 - i, name, argv }]));
+    return { from: 100, lookup: (pid: number) => tree.get(pid) ?? null, args: (pid: number) => tree.get(pid)?.argv ?? null };
+  };
+  const zsh = ["zsh", ["/bin/zsh", "-c", "kiwi send hi"]] as const;
+  const deepcode = ["node-MainThread", ["node", "/home/u/.local/bin/deepcode"]] as const;
+  const direct = ["deepcode", ["/usr/local/bin/deepcode", "--resume"]] as const;
+  const tmux = ["tmux: server", ["tmux"]] as const;
+  expect(here({}, chain(zsh, deepcode, tmux))).toEqual({ harness: "deepcode", session: "deepcode-pid-99", pid: 99 });
+  expect(here({}, chain(zsh, direct))).toEqual({ harness: "deepcode", session: "deepcode-pid-99", pid: 99 });
+  expect(here({}, chain(zsh, ["node", ["node", "/srv/app/deepcode-notes.js"]], tmux))).toEqual({});
+  expect(here({}, chain(zsh, ["claude", ["claude"]], deepcode))).toEqual({});
+  expect(here({ CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "c1" }, chain(zsh, deepcode))).toEqual({ harness: "claude", session: "c1" });
+  expect(here({ KIWI_HARNESS: "deepcode" }, chain(zsh, tmux))).toEqual({ harness: "deepcode" });
+  expect(here({ KIWI_HARNESS: " DeepCode " }, chain(zsh, deepcode))).toEqual({ harness: "deepcode", session: "deepcode-pid-99", pid: 99 });
+  expect(hereAs("deepcode", {}, chain(zsh, tmux))).toEqual({ harness: "deepcode" });
+  expect(hereAs("deepcode", {}, chain(zsh, deepcode))).toEqual({ harness: "deepcode", session: "deepcode-pid-99", pid: 99 });
+  expect(here({}, chain(zsh, tmux))).toEqual({});
+  expect(here({}, { from: 100, lookup: (pid: number) => (pid === 100 ? { ppid: 99, name: "zsh" } : { ppid: 1, name: "node-MainThread" }) })).toEqual({});
+  expect(baseName(here({ KIWI_HARNESS: "deepcode" }, chain(zsh)))).toBe("deepcode");
+});
+
 test("the nearest harness process decides when one harness runs inside another", () => {
   const chain = (...names: string[]) => {
     const procs = new Map(names.map((name, i) => [100 - i, { ppid: i === names.length - 1 ? 1 : 99 - i, name }]));

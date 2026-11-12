@@ -57,6 +57,7 @@ const GLYPHS = {
   minus: MinusSignIcon,
   more: MoreHorizontalIcon,
   expand: SquareIcon,
+  restore: Copy01Icon,
   close: Cancel01Icon,
   search: Search01Icon,
   updates: Activity01Icon,
