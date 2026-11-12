@@ -35,10 +35,19 @@ export function SpecCard({ channel, spec }: { channel: Channel; spec: Spec }) {
         <span className="spec-card-title">
           <Shown value={spec.title} />
         </span>
-        <span className="spec-card-faces" aria-hidden="true">
+        <span className="spec-card-faces">
           {who.slice(0, 3).map((n) => (
-            <Avatar key={n} person={faceOf(channel, n)} size="sm" />
+            <span key={n} className="spec-face">
+              <Avatar person={faceOf(channel, n)} size="sm" />
+              <span className="spec-face-name">{nickname(channel, n)}</span>
+            </span>
           ))}
+          <span className="spec-faces-all" aria-hidden="true">
+            {who
+              .slice(0, 3)
+              .map((n) => nickname(channel, n))
+              .join(", ")}
+          </span>
         </span>
         <Icon name="chevron" size={12} />
         <span className="spec-card-meta">

@@ -229,6 +229,10 @@ jobs:
       - name: ui removing a repo from channel settings keeps the settings dialog open, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-settings-remove.ts --dist ui/dist
+      # A specs row's and a spec card's worker avatars carry their names: hidden at rest, shown on hover and on the row's keyboard focus, with the buttons still one button (#2335).
+      - name: ui specs worker avatars name themselves on hover and keyboard focus, in WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
+        run: bun scripts/ui-spec-names.ts --dist ui/dist
       # A feed keeps its place when its width changes: the sidebar hidden and shown, its edge dragged, the panel opened and closed, the window resized. At the bottom it stays at the bottom with no blank room; scrolled up, the row being read comes back to its pixel (T231).
       - name: ui a feed keeps its place when its width changes, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
