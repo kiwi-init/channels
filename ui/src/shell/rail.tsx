@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useEffectEvent, useLayoutEffect, useState, type CSSProperties, type DragEvent } from "react"
+import { Suspense, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent } from "react"
 
 import { nextWithNews } from "@kiwi/channel/news.ts"
 import { cx } from "~/kit/bits"
@@ -28,6 +28,20 @@ const spot = (e: { target: EventTarget }): DropTarget => {
 }
 const keyOf = (target: DropTarget): string => (target.kind === "channel" ? `c:${target.code}` : target.kind === "folder" ? `f:${target.id}` : "rail")
 
+const CUT_NAME_EMS = 3
+
+function fitTabs(strip: HTMLElement) {
+  strip.setAttribute("data-fit", "roomy")
+  if (strip.scrollWidth <= strip.clientWidth + 1) return
+  strip.setAttribute("data-fit", "tight")
+  for (const name of strip.querySelectorAll<HTMLElement>(".tile[data-code]:not(.is-on) > .tile-name")) {
+    if (name.scrollWidth <= name.clientWidth) continue
+    if (name.clientWidth >= CUT_NAME_EMS * Number.parseFloat(getComputedStyle(name).fontSize)) continue
+    strip.setAttribute("data-fit", "icons")
+    return
+  }
+}
+
 export function Rail() {
   const nav = useNav()
   const go = useGo()
@@ -48,6 +62,20 @@ export function Rail() {
   const folders = prefs.folders
   const items = railItems(tiles, folders)
   const ordered = items.flatMap((i) => (i.kind === "channel" ? [i.tile] : i.tiles))
+  const strip = useRef<HTMLElement>(null)
+  const shown = `${on}|${items.map((i) => (i.kind === "channel" ? `${i.tile.title}:${i.tile.needsYou}:${i.tile.unread > 0}` : `${i.folder.id}:${i.folder.open}:${i.tiles.map((c) => c.title).join()}`)).join("|")}`
+  useLayoutEffect(() => {
+    const el = strip.current
+    if (!el || !tabs) return
+    const fit = () => fitTabs(el)
+    fit()
+    const watch = new ResizeObserver(fit)
+    watch.observe(el)
+    return () => {
+      watch.disconnect()
+      el.removeAttribute("data-fit")
+    }
+  }, [tabs, shown])
   const [over, setOver] = useState<string | null>(null)
   const [moving, setMoving] = useState<string | null>(null)
   const [fresh, setFresh] = useState<string | null>(null)
@@ -93,7 +121,7 @@ export function Rail() {
   }
   const tile = (c: ChannelTile) => <Tile key={c.code} tile={c} on={on === c.code} drop={over === `c:${c.code}`} moving={moving === c.code} onClick={() => go({ to: "channel", code: c.code })} />
   return (
-    <nav className="rail" aria-label={t("shell.rail.channels")}>
+    <nav ref={strip} className="rail" aria-label={t("shell.rail.channels")}>
       {document.documentElement.dataset["wm"] === "floating" && (
         <div className="wm-controls">
           <button type="button" className="wm-btn is-close" aria-label={t("shell.rail.close.window")} title={t("shell.rail.close")} onClick={() => actions.windowControl("close")}>

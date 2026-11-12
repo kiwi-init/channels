@@ -92,9 +92,9 @@ describe("read receipts under your newest message (T641)", () => {
     const state = fold(log, roster, 0)
     const pkOf = (n: string) => `pk-${n}`
     const unread = receiptsOf(state, log, "jow", addMarks(new Map(), [{ pk: "pk-win", seq: first.seq, at: 1 }]), pkOf, (t) => `t${t}`)
-    expect([...unread]).toEqual([[last.seq, "Delivered"]])
+    expect([...unread]).toEqual([[last.seq, { receipt: "Delivered" }]])
     const read = receiptsOf(state, log, "jow", addMarks(new Map(), [{ pk: "pk-win", seq: last.seq, at: 42 }]), pkOf, (t) => `t${t}`)
-    expect([...read]).toEqual([[last.seq, "Read t42"]])
+    expect([...read]).toEqual([[last.seq, { receipt: "Read t42" }]])
     const shown = withReceipts(rows(log), read)
     expect(shown.find((m) => m.seq === last.seq)?.receipt).toBe("Read t42")
     expect(shown.find((m) => m.seq === first.seq)?.receipt).toBeUndefined()
@@ -105,9 +105,9 @@ describe("read receipts under your newest message (T641)", () => {
     const marks = addMarks(new Map(), [{ pk: "pk-win", seq: ask.seq, at: 1 }])
     const busy = (n: string) => (n === "win" ? { text: "running Bash", since: 1_000 } : null)
     const working = [ask]
-    expect([...receiptsOf(fold(working, roster, 0), working, "jow", marks, (n) => `pk-${n}`, String, busy, 181_000)]).toEqual([[ask.seq, "win is on it · running Bash 3m"]])
+    expect([...receiptsOf(fold(working, roster, 0), working, "jow", marks, (n) => `pk-${n}`, String, busy, 181_000)]).toEqual([[ask.seq, { receipt: "win is on it · running Bash 3m" }]])
     const answered = [ask, wire({ from: "win", to: ["jow"], body: "done", re: [ask.seq] })]
-    expect([...receiptsOf(fold(answered, roster, 0), answered, "jow", marks, (n) => `pk-${n}`, String, busy, 181_000)]).toEqual([[ask.seq, "Read 1"]])
+    expect([...receiptsOf(fold(answered, roster, 0), answered, "jow", marks, (n) => `pk-${n}`, String, busy, 181_000)]).toEqual([[ask.seq, { receipt: "Read 1" }]])
   })
 
   test("nothing when no recipient has ever sent a mark", () => {

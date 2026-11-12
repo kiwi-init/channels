@@ -8,6 +8,7 @@ import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { approveSpec, firstRun, letIn, newChannel, unfold, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`Frames while each of the app's animations runs: a thread and a task opening and closing in the panel, a task moving on the board,
@@ -119,7 +120,7 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript(FRAMES);
   const page = await context.newPage();
-  page.on("pageerror", (e) => console.log(`page error: ${e.message}`));
+  await pageErrors(page, (e) => console.log(`page error: ${e}`), { observers: false });
   await page.goto(BASE);
   await firstRun(page, "Jonatas");
   const code = await newChannel(page, "motion");
@@ -176,7 +177,13 @@ try {
   };
 
   const answer = page.locator("article.msg", { hasText: "p50 0.3ms" }).first();
-  const reply = { click: () => answer.hover().then(() => answer.getByRole("button", { name: "Reply in thread" }).click()) };
+  const reply = {
+    click: () =>
+      answer
+        .locator(".msg-body")
+        .hover()
+        .then(() => answer.getByRole("button", { name: "Reply in thread" }).click()),
+  };
   const closeThread = page.getByRole("complementary", { name: "Details" }).getByRole("button", { name: "Close", exact: true });
   await measure(
     "thread open",

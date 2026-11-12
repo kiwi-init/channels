@@ -14,7 +14,7 @@ import { t } from "~/i18n/i18n"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, clock } from "~/kit/time"
-import { memberOf, type Channel, type Image, type ImageSpot, type Message, type Person } from "~/model"
+import { memberOf, type Channel, type Image, type ImageSpot, type Message, type Person, type Sign } from "~/model"
 import { openMessage as showMessage } from "~/live/open-message"
 import { limitWords } from "~/live/refused"
 import { useAct } from "~/nav"
@@ -25,6 +25,7 @@ import { showMenu } from "~/kit/menu-open"
 import { later } from "~/kit/later"
 import { copyText } from "~/kit/toasts"
 import { personGo } from "~/person-go"
+import { SENT } from "~/sent"
 
 const Annotator = lazy(() => import("~/chat/annotator"))
 const Gifs = lazy(() => import("~/chat/gif-picker"))
@@ -140,6 +141,19 @@ export function Unsent({ channel, m }: { channel: Channel; m: Message }) {
         {m.block !== undefined ? t("chat.message.back.to.draft") : t("chat.message.delete")}
       </button>
     </p>
+  )
+}
+
+function AskLead({ channel, m, ask }: { channel: Channel; m: Message; ask: NonNullable<Sign["ask"]> }) {
+  const { actions } = useAct()
+  return (
+    <button
+      type="button"
+      className="msg-receipt-act"
+      onClick={() => actions.send(channel.code, m.where, `@${ask.to} ${ask.about} ${SENT.busyAsk}`, { replyTo: m.seq, ...(m.inThread === undefined ? {} : { inThread: m.inThread }) })}
+    >
+      {t("chat.message.ask.lead", { name: ask.name })}
+    </button>
   )
 }
 
@@ -348,9 +362,12 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             </span>
           </button>
         )}
-        {m.receipt && (
+        {(m.receipt || m.sign) && (
           <p className="msg-receipt" aria-live="polite">
+            {m.sign?.gone && <span className="tone-decide">{m.sign.gone}</span>}
+            {m.sign?.gone && m.receipt && " · "}
             {m.receipt}
+            {m.sign?.ask && <AskLead channel={channel} m={m} ask={m.sign.ask} />}
           </p>
         )}
       </div>

@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { chromium, type BrowserContext, type Page } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help") || !process.argv.some((a) => a.startsWith("--old="))) {
   console.log(`An older release's data opened by this build. --old is a checkout of the older release with its own harness build
@@ -52,7 +53,7 @@ const last = `line ${LINES} of ${LINES}: written by the old release`;
 const open = async (): Promise<{ context: BrowserContext; page: Page }> => {
   const context = await chromium.launchPersistentContext(profile, { executablePath: process.env.SMOKE_CHROMIUM || undefined, viewport: { width: 1280, height: 860 } });
   const page = context.pages()[0] ?? (await context.newPage());
-  page.on("pageerror", (e) => errors.push(e.message));
+  await pageErrors(page, (e) => errors.push(e));
   return { context, page };
 };
 const rows = (page: Page): Promise<number> => page.evaluate(() => new Set([...document.querySelectorAll<HTMLElement>(".main .feed-list > [data-seq]")].map((r) => r.dataset.seq)).size);

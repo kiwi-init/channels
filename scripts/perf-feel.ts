@@ -9,6 +9,7 @@ import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { approveSpec, composer, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, SEND, unfold, view, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
+import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`What a person feels, measured: one channel with PERF_MESSAGES messages (400) and PERF_TASKS tasks (12), behind a relay PERF_RTT_MS away (0).
@@ -374,7 +375,7 @@ try {
     `M${MESSAGES - 1}: `,
   );
   const page = await context.newPage();
-  page.on("pageerror", (e) => log(`page error: ${e.message}`));
+  await pageErrors(page, (e) => log(`page error: ${e}`), { observers: false });
   const cdp = await context.newCDPSession(page);
 
   const coldAt = performance.now();

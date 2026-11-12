@@ -1156,16 +1156,24 @@
   grid-column: 2;
 }
 
+:root[data-tabs] .app {
+  background-image: linear-gradient(var(--bg-2), var(--bg-2));
+  background-size: 100% var(--top-h);
+  background-repeat: no-repeat;
+}
+
 :root[data-tabs] .app > .rail {
   --tile: var(--ctl);
   --lead-pad: 8px;
   --tail-n: 1;
+  --tab-h: calc(var(--top-h) - 8px);
 
   grid-row: 1;
   grid-column: 1 / -1;
   z-index: 10;
   flex-wrap: nowrap;
-  align-items: center;
+  align-items: flex-end;
+  gap: 0;
   margin: 0 calc(8px + var(--tail-n) * (var(--ctl) + 8px)) 0 calc(var(--lead-pad) + var(--ctl) + 8px);
   padding: 0 8px;
   overflow: hidden;
@@ -1224,28 +1232,78 @@
   translate: none;
 }
 
+:root[data-tabs] .app > .rail :is(.tile[data-code], .tile.is-home) {
+  height: var(--tab-h);
+  border-radius: var(--r-ctl) var(--r-ctl) 0 0;
+  background: none;
+  box-shadow: none;
+}
+
+:root[data-tabs] .app > .rail .tile.is-home {
+  width: calc(var(--ctl) + 8px);
+}
+
+:root[data-tabs] .app > .rail :is(.tile.is-add, .tile.is-folder, .wm-controls) {
+  align-self: center;
+}
+
+:root[data-tabs] .app > .rail .tile.is-add {
+  margin-left: auto;
+}
+
 :root[data-tabs] .app > .rail .tile[data-code] {
   display: flex;
   flex: 1 1 0;
-  gap: 8px;
+  justify-content: flex-start;
+  align-items: center;
   width: auto;
-  min-width: var(--ctl);
+  min-width: calc(var(--ctl) + 8px);
   max-width: max-content;
-  padding: 0 8px;
-  background: none;
   font: var(--t-ui) var(--ui);
 }
 
-:root[data-tabs] .app > .rail .tile[data-code]:hover {
+:root[data-tabs] .app > .rail[data-fit="roomy"] .tile[data-code] {
+  min-width: max-content;
+  max-width: 15rem;
+}
+
+:root[data-tabs] .app > .rail[data-fit="icons"] .tile[data-code]:not(.is-on) {
+  max-width: 15rem;
+}
+
+:root[data-tabs] .app > .rail :is(.tile[data-code], .tile.is-home):hover {
   background: var(--wash);
 }
 
-:root[data-tabs] .app > .rail .tile[data-code].is-on {
-  flex: none;
+:root[data-tabs] .app > .rail :is(.tile[data-code], .tile.is-home).is-on {
   outline: 0;
-  background: var(--wash-2);
+  background: var(--bg);
   color: var(--ink);
+}
+
+:root[data-tabs] .app > .rail .tile[data-code].is-on {
+  min-width: max-content;
   font-weight: 500;
+}
+
+:root[data-tabs] .app > .rail .tile.is-on::before,
+:root[data-tabs] .app > .rail .tile.is-on::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+}
+
+:root[data-tabs] .app > .rail .tile.is-on::before {
+  right: 100%;
+  background: radial-gradient(circle at 0 0, transparent 7.5px, var(--bg) 8px);
+}
+
+:root[data-tabs] .app > .rail .tile.is-on::after {
+  left: 100%;
+  background: radial-gradient(circle at 100% 0, transparent 7.5px, var(--bg) 8px);
 }
 
 :root[data-tabs] .tile[data-code] > :first-child {
@@ -1254,6 +1312,7 @@
   place-items: center;
   width: calc(var(--slot) - 8px);
   height: calc(var(--slot) - 8px);
+  margin: 0 8px 0 12px;
   border-radius: var(--r-tick);
   background: var(--wash-2);
   font: 600 var(--t-stamp) / 1 var(--ui);
@@ -1266,18 +1325,56 @@
 
 :root[data-tabs] .tile[data-code] .tile-name {
   display: block;
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: 10rem;
+  padding-right: 8px;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  mask-image: linear-gradient(to right, #000 calc(100% - 8px), transparent);
 }
 
 :root[data-tabs] .tile[data-code] :is(.tile-badge, .tile-dot) {
   position: static;
   flex: none;
-  margin: 0;
+  margin: 0 10px 0 0;
   box-shadow: none;
+}
+
+:root[data-tabs] .tile[data-code] .tile-badge {
+  background: var(--decide-wash);
+  color: var(--decide);
+}
+
+:root[data-tabs] .tile[data-code] .tile-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  background: var(--ink-3);
+}
+
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code]:not(.is-on) > :first-child {
+  margin: 0 auto;
+}
+
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code]:not(.is-on) .tile-name {
+  display: none;
+}
+
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code]:not(.is-on) :is(.tile-badge, .tile-dot) {
+  position: absolute;
+  top: calc(50% - 0.5rem - 3px);
+  left: calc(50% + 0.5rem - 3px);
+  width: 0.375rem;
+  min-width: 0;
+  height: 0.375rem;
+  margin: 0;
+  padding: 0;
+  background: var(--decide);
+  box-shadow: 0 0 0 2px var(--bg-2);
+  font-size: 0;
+}
+
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code]:not(.is-on) .tile-dot {
+  background: var(--ink-3);
 }
 
 :root[data-tabs] .tile.is-folder .tile-dot {
