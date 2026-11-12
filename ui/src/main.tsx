@@ -22,7 +22,7 @@ import { ops } from "@kiwi/channel/channel-ops.ts"
 import { hasBridge } from "@kiwi/secrets/relay.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { noteSignInGone } from "@kiwi/channel/session.ts"
-import { applyStoredAppearance, stepTextSize } from "@kiwi/app/theme.ts"
+import { applyStoredAppearance, showGlass, stepTextSize } from "@kiwi/app/theme.ts"
 import { rememberChannel } from "@kiwi/app/last-channel.ts"
 import { uiBooted, watchUiBoot } from "@kiwi/app/ui-boot.ts"
 import { nudgeOnWake } from "@kiwi/app/wake.ts"
@@ -70,6 +70,7 @@ if (!demo) {
   applyStoredAppearance()
   bootSideWidth()
   bridge()?.onTextStep(stepTextSize)
+  bridge()?.onFrost(showGlass)
   const menus = bridge()
   if (menus && typeof menus.onCommand === "function") menus.onCommand((c) => runCommand(c))
   void migrateChannelsToStore().catch(() => {})

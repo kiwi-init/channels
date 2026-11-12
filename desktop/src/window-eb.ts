@@ -3,7 +3,7 @@ import path from "node:path";
 import Electrobun, { BrowserWindow, PATHS, Utils, type BrowserView } from "electrobun/main";
 
 import { onOurPage, preloadSource, toPageScript } from "./eb-bridge.ts";
-import { lookMarks } from "./frost-eb.ts";
+import { glassWindow, lookMarks } from "./frost-eb.ts";
 import { keys, keysToPage } from "./keys-start-eb.ts";
 import { cString, committedPage, mac, setPageHtml, setPreload, windowLook } from "./native-eb.ts";
 import { navigation, openedUrl, PAGE_RULES, PAGE_TEMPLATE, PAGE_URL, pageWithCsp, RULES_CANARY } from "./eb-page.ts";
@@ -208,6 +208,7 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
   webview.on("did-commit-navigation", () => mark("committed"));
   const look = win.ptr;
   if (look) windowLook(look, minWindowWidth(process.platform), WINDOW_SIZE.minHeight, rgb(windowBackground(false)), rgb(windowBackground(true)));
+  if (look) glassWindow(look, (on) => bridge.push("frost", on));
   if (mac) win.setWindowButtonPosition(TRAFFIC_LIGHTS.x, TRAFFIC_LIGHTS.y);
   Electrobun.events.on(`new-window-open-${webview.id}`, (e: { data?: { detail?: unknown } }) => {
     const url = openedUrl(e.data?.detail);

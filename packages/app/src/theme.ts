@@ -24,9 +24,9 @@ function apply(a: Appearance) {
     .catch(() => undefined);
 }
 
-export function showFrost(on: boolean) {
-  if (on) document.documentElement.dataset.frost = "";
-  else delete document.documentElement.dataset.frost;
+export function showGlass(on: boolean) {
+  if (on) document.documentElement.dataset.glass = "material";
+  else delete document.documentElement.dataset.glass;
 }
 
 export function setAppearance(a: Appearance) {
