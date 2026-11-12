@@ -275,6 +275,7 @@ function withCompact(c: Channel, approved: boolean): Channel {
 
 export type Scenario =
   | "full"
+  | "slow-open"
   | "specs-behind"
   | "compact"
   | "compacted"
@@ -544,11 +545,20 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   return { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
 }
 
+const SLOW_OPEN_MS = 1500
+
 export function useDemo(scenario: Scenario, open: string | null, look: Partial<Prefs> = {}, usage: Partial<Usage> = {}): App {
   const [state, setState] = useState(() => initial(scenario, look))
   const [shownUsage] = useState(usage)
   const [ownPersonalities, setOwnPersonalities] = useState<Personality[]>([])
   const [computer, setComputer] = useState(COMPUTER)
+  const [arrived, setArrived] = useState(open)
+  useEffect(() => {
+    if (scenario !== "slow-open") return
+    const late = window.setTimeout(() => setArrived(open), SLOW_OPEN_MS)
+    return () => window.clearTimeout(late)
+  }, [scenario, open])
+  const shown = scenario !== "slow-open" || arrived === open ? open : null
 
   useEffect(() => {
     if (scenario !== "ci-live") return
@@ -1120,7 +1130,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     account: state.account,
     channels: tiles,
     home,
-    channel: open && state.gone?.code !== open ? (state.channels.get(open) ?? null) : null,
+    channel: shown && state.gone?.code !== shown ? (state.channels.get(shown) ?? null) : null,
     ...(state.gone && state.gone.code === open ? { gone: state.gone } : {}),
     prefs: state.prefs,
     harnesses: HARNESSES,

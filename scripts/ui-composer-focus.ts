@@ -148,6 +148,76 @@ try {
   expect(now.tag === "INPUT" && !now.composer, `with search open, draft sync and re-renders leave focus in search (focus on ${now.tag} ${now.label})`);
   await live.close();
 
+  const reader = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  await pageErrors(reader, (e) => fails.push(`page threw: ${e}`));
+  await reader.goto(`http://127.0.0.1:${server.port}/?shot=task-quote-read-only`);
+  await row(reader, "design").waitFor();
+  await row(reader, "design").click();
+  await settle(reader);
+  now = await focus(reader);
+  expect(!now.composer, `a member who can only read: opening #design doesn't focus its composer (focus on ${now.tag} ${now.label})`);
+  await row(reader, "atlas").click();
+  await settle(reader);
+  now = await focus(reader);
+  expect(!now.composer, `nor opening a DM (focus on ${now.tag} ${now.label})`);
+  await tile(reader, "landing").click();
+  await settle(reader);
+  expect((await focus(reader)).composer, "landing, where they can post, still does");
+  await tile(reader, "kiwi").click();
+  await settle(reader);
+  now = await focus(reader);
+  expect(!now.composer, `and switching back into the channel they only read doesn't (focus on ${now.tag} ${now.label})`);
+  await reader.close();
+
+  const slow = async (what: string, between: (page: Page) => Promise<void>, focused: boolean, check?: (page: Page) => Promise<void>) => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
+    await page.goto(`http://127.0.0.1:${server.port}/?shot=slow-open`);
+    await tile(page, "landing").waitFor();
+    await settle(page);
+    await tile(page, "landing").click();
+    await page.waitForTimeout(150);
+    const early = await page.locator(".main textarea").count();
+    await between(page);
+    await page.locator(".main textarea").first().waitFor();
+    await settle(page);
+    await page.waitForTimeout(200);
+    const at = await focus(page);
+    expect(early === 0, `slow open, ${what}: landing's composer isn't there yet right after the click`);
+    expect(at.composer === focused, `slow open, ${what}: ${focused ? "the composer takes focus once it's ready" : "focus stays where the person put it"} (focus on ${at.tag} ${at.label})`);
+    await check?.(page);
+    await page.close();
+  };
+  await slow("nothing in between", async () => {}, true);
+  await slow(
+    "a dialog opened while it loads",
+    async (page) => {
+      await page.keyboard.press("Control+k");
+      await page.locator("dialog[open]").first().waitFor();
+    },
+    false,
+    async (page) =>
+      expect(
+        (await page.locator("dialog[open]").count()) > 0 && (await page.evaluate(() => !!document.activeElement?.closest("dialog[open]"))),
+        "slow open: the dialog stays open with focus inside it",
+      ),
+  );
+  await slow(
+    "another control focused while it loads",
+    async (page) => {
+      await page.evaluate(() => document.querySelector<HTMLElement>(".rail-gear")?.focus());
+    },
+    false,
+    async (page) => expect(await page.evaluate(() => !!document.activeElement?.closest(".rail-gear")), "slow open: the focused control keeps focus"),
+  );
+  await slow(
+    "Tab pressed while it loads",
+    async (page) => {
+      await page.keyboard.press("Tab");
+    },
+    false,
+  );
+
   const touch = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: true });
   const tap = await touch.newPage();
   await pageErrors(tap, (e) => fails.push(`page threw: ${e}`));

@@ -274,14 +274,12 @@ export function useAct(): Act {
 
 export type Intent = { channel: string; where: string | null; from: unknown; at: number }
 
-export type Desk = { active: unknown; dialog: boolean; now: number }
-
 export const INTENT_MS = 10_000
 
-export function wantsFocus(intent: Intent | null, channel: string, where: Where, inThread: number | undefined, desk: Desk): boolean {
-  if (!intent || inThread !== undefined || desk.dialog || desk.now - intent.at > INTENT_MS) return false
+export function wantsFocus(intent: Intent | null, channel: string, where: Where, writable: boolean, active: unknown, dialog: boolean, now: number): boolean {
+  if (!intent || !writable || dialog || now - intent.at > INTENT_MS) return false
   if (intent.channel !== channel || (intent.where !== null && intent.where !== whereKey(where))) return false
-  return desk.active === null || desk.active === intent.from
+  return active === null || active === intent.from
 }
 
 let intent: Intent | null = null
@@ -292,9 +290,9 @@ function forget() {
   stop.abort()
 }
 
-export function claimFocus(channel: string, where: Where, inThread: number | undefined): boolean {
+export function claimFocus(channel: string, where: Where, writable: boolean): boolean {
   const active = document.activeElement === document.body ? null : document.activeElement
-  if (!wantsFocus(intent, channel, where, inThread, { active, dialog: !!document.querySelector("dialog[open]"), now: performance.now() })) return false
+  if (!wantsFocus(intent, channel, where, writable, active, !!document.querySelector("dialog[open]"), performance.now())) return false
   forget()
   return true
 }
