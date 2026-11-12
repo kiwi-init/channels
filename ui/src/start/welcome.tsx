@@ -8,6 +8,7 @@ import { Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
 import type { ChannelTile, HomeAgent, HomeAsk, HomeChannel } from "~/model"
 import { useApp, useGo } from "~/nav"
+import { HomePage } from "~/panes/home"
 import { onboarded } from "~/start/onboarded"
 import { Onboarding } from "~/start/onboarding"
 import type { Key } from "~/i18n/en"
@@ -18,7 +19,7 @@ export function Welcome() {
   const { app } = useApp()
   const tiles = app.channels.filter((c) => c.state !== "gone")
   if (!tiles.length) return <Empty />
-  return <Hud tiles={tiles} home={app.home} />
+  return <HomePage tiles={tiles} home={app.home} />
 }
 
 function Empty() {
@@ -56,7 +57,7 @@ function Starts({ quiet }: { quiet?: true }) {
 
 const ASKS_SHOWN = 4
 
-function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly HomeChannel[] }) {
+export function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly HomeChannel[] }) {
   const [all, setAll] = useState(false)
   useEffect(() => void onboarded(true), [])
   const now = useNow(60_000)

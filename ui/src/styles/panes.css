@@ -222,6 +222,16 @@
   background: var(--line-3);
 }
 
+.content > .home-main {
+  grid-column: 1 / -1;
+}
+
+.page .md a[href^="kiwi-page:channel:"] {
+  color: inherit !important;
+  font: inherit !important;
+  text-decoration: none !important;
+}
+
 .page .md a[href^="kiwi-page:"] {
   color: var(--ink-3) !important;
   font: var(--t-ui) var(--ui);

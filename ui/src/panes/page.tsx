@@ -26,12 +26,12 @@ export function viewOf(nav: Nav): View | null {
 
 const viewKey = (view: View): string => `${view.kind}:${view.kind === "task" ? view.task : view.kind === "spec" ? view.ask : ""}`
 
-interface Maker {
+export interface Maker {
   acts: Map<string, () => void>
   act: (label: string, run: () => void) => string
 }
 
-function maker(): Maker {
+export function maker(): Maker {
   const acts = new Map<string, () => void>()
   return {
     acts,
@@ -45,7 +45,7 @@ function maker(): Maker {
 
 const ORDER: readonly TaskStatus[] = ["waiting", "doing", "review", "landing", "todo"]
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
-const join = (parts: readonly string[]): string => parts.filter(Boolean).join("\n\n")
+export const join = (parts: readonly string[]): string => parts.filter(Boolean).join("\n\n")
 const section = (title: string, lines: readonly string[], gap = "\n"): string => (lines.length ? `## ${title}\n\n${lines.join(gap)}` : "")
 const live = (channel: Channel): Task[] => channel.tasks.filter((x) => !x.archived && !x.cancelled)
 const named = (task: Task): string => `T${task.id} ${wordsRaw(task.title)}`
@@ -54,7 +54,7 @@ const steps = (task: Task): string => {
   return all.length ? ` · ${all.filter((s) => s.state === "done").length}/${all.length}` : ""
 }
 const boxed = (task: Task, more = ""): string => `- [${task.status === "done" ? "x" : " "}] ${named(task)}${more}`
-const link = (label: string, url: string): string => `[${label.replace(/[[\]\\]/g, "\\$&")}](<${url}>)`
+export const link = (label: string, url: string): string => `[${label.replace(/[[\]\\]/g, "\\$&")}](<${url}>)`
 
 function nowPage(channel: Channel): string {
   const now = nowOf(channel)
