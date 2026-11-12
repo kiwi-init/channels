@@ -9,9 +9,9 @@ import { cx } from "~/kit/bits"
 import { useGlide } from "~/kit/glide"
 import { GlyphIcon, Icon, type Glyph, type IconName } from "~/kit/icons"
 import { type Section, useGo, useNav } from "~/nav"
-import { AgentsSection } from "~/settings/agents"
-import { ComputersSection } from "~/settings/computers"
-import { AboutSection, AccountSection, AppearanceSection } from "~/settings/sections"
+import { AgentsPage } from "~/settings/agents"
+import { ComputersPage } from "~/settings/computers"
+import { AboutPage, AccountPage, AppearancePage } from "~/settings/pages"
 import { useSideways } from "~/kit/sideways"
 import { Content } from "~/shell/content"
 import { Frame } from "~/shell/frame"
@@ -85,14 +85,14 @@ export function Settings() {
 function Current({ section }: { section: Section }) {
   switch (section) {
     case "account":
-      return <AccountSection />
+      return <AccountPage />
     case "appearance":
-      return <AppearanceSection />
+      return <AppearancePage />
     case "computers":
-      return <ComputersSection />
+      return <ComputersPage />
     case "agents":
-      return <AgentsSection />
+      return <AgentsPage />
     case "about":
-      return <AboutSection />
+      return <AboutPage />
   }
 }

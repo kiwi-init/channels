@@ -45,7 +45,7 @@ function since(at: number): string {
   return age === "recent" ? t("panels.task.ago", { time: ago(at) }) : ago(at)
 }
 
-const holds = (a: Ask, id: number): a is PermissionAsk | QuestionAsk =>
+export const holds = (a: Ask, id: number): a is PermissionAsk | QuestionAsk =>
   a.kind === "permission" ? a.task === id && !a.answer : a.kind === "question" ? (a.task === id || a.holds.includes(id)) && !a.answer && !a.closed : false
 
 const openImage = viewImage
@@ -135,7 +135,7 @@ function Who({ channel, name }: { channel: Channel; name: string }) {
   )
 }
 
-function stepState(step: TaskStep, now: number): string | null {
+export function stepState(step: TaskStep, now: number): string | null {
   if (step.state === "done") return t("panels.task.step.done")
   if (step.state === "skipped") return t("panels.task.step.skipped")
   if (step.state !== "current") return null
@@ -300,7 +300,7 @@ const aboutOf = (p: Person): string =>
     .filter(Boolean)
     .join(" · ")
 
-function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
+export function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
   const actions = useActions()
   const toast = useToast()
   const [why, setWhy] = useState("")
@@ -351,7 +351,7 @@ function Assign({ channel, task, open, onClose }: { channel: Channel; task: Task
   )
 }
 
-function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
+export function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
   const actions = useActions()
   const toast = useToast()
   const people = channel.people.filter((p) => !p.left && !p.readOnly && p.name !== task.owner).sort(agentsFirst)
@@ -521,7 +521,7 @@ function TaskMenu({ channel, task }: { channel: Channel; task: Task }) {
   )
 }
 
-function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
+export function EditTask({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
   const actions = useActions()
   const [title, setTitle] = useState(wordsRaw(task.title))
   const [detail, setDetail] = useState(task.detail ? wordsRaw(task.detail) : "")
@@ -604,7 +604,7 @@ function State({ channel, task, may }: { channel: Channel; task: Task; may: bool
   )
 }
 
-function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
+export function Cancel({ channel, task, open, onClose }: { channel: Channel; task: Task; open: boolean; onClose: () => void }) {
   const actions = useActions()
   const toast = useToast()
   const [why, setWhy] = useState("")

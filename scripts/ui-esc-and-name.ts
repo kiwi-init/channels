@@ -49,7 +49,7 @@ try {
   expect((await panel.count()) === 0, "Esc anywhere else still closes the panel");
 
   await page.goto(`http://127.0.0.1:${server.port}/?shot=settings`);
-  const name = page.locator(".set-row", { hasText: "Name" }).first();
+  const name = page.locator(".ctl-row", { hasText: "Name" }).first();
   await name.waitFor();
   expect((await name.getByRole("button", { name: "Change" }).count()) === 0, "Settings shows your name without a Change it can't keep");
 } finally {

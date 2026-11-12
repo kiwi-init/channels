@@ -53,6 +53,17 @@ function unled(nodes: readonly ASTNode[]): ASTNode[] {
 
 const held = (e: MouseEvent) => e.preventDefault()
 
+function propOf(item: ASTNode): { label: string; rest: ASTNode[] } | null {
+  const [para, ...below] = item.children ?? []
+  if (para?.type !== "Paragraph" || below.length) return null
+  const kids = para.children ?? []
+  const at = kids.findIndex((c) => !isGap(c))
+  const head = kids[at]
+  const next = kids[at + 1]
+  if (head?.type !== "Strong" || next?.type !== "Text" || !/^\s*·/.test(next.content ?? "")) return null
+  return { label: textOf(head), rest: unled(kids.slice(at + 1)) }
+}
+
 function toneOf(url: string, find: Lookup): string | undefined {
   const pr = url.startsWith("kiwi-pr:") ? find.pr(after(url, "kiwi-pr:")) : undefined
   const ci = pr && (pr.state === "open" || pr.state === "draft") ? ciOf(pr) : "none"
@@ -186,6 +197,18 @@ export function pieces(find: Lookup): Draw {
               </button>
             ))}
           </div>
+        )
+      const props = items.map(propOf)
+      if (items.length && props.every(Boolean))
+        return (
+          <dl className="pg-props">
+            {props.map((p, i) => (
+              <Fragment key={i}>
+                <dt>{p?.label}</dt>
+                <dd>{tools.inline({ type: "Paragraph", children: p?.rest ?? [] })}</dd>
+              </Fragment>
+            ))}
+          </dl>
         )
       if (items.length && items.every((item) => item.children?.[0]?.type === "Paragraph") && heads.every((h) => ROW.test(urlOf(h[0]))))
         return <ul className="pg-rows">{items.map((item, i) => row(item, i, tools, inCard))}</ul>

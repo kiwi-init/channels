@@ -63,9 +63,6 @@ export function placeName(channel: Channel, nav: Nav): string {
   return where.kind === "theirs" ? between(channel, where.between) : `T${where.task}`
 }
 
-const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
-const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
-const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
 const ThreadPanel = later(() => import("~/panels/thread").then((m) => m.ThreadPanel))
 
 const LINK = "a[href^='kiwi-']"
@@ -105,19 +102,13 @@ function panelName(channel: Channel, panel: Panel): string {
 const nameOf = (channel: Channel, doc: Doc): string => (doc.kind === "panel" ? panelName(channel, doc.panel) : docName(channel, doc))
 
 function PanelDoc({ channel, panel }: { channel: Channel; panel: Panel }) {
-  return (
-    <div className="panel is-pane">
-      {panel.kind === "thread" ? (
+  if (panel.kind === "thread")
+    return (
+      <div className="panel is-pane">
         <ThreadPanel channel={channel} seq={panel.seq} focus={panel.focus} />
-      ) : panel.kind === "task" ? (
-        <TaskPanel channel={channel} id={panel.task} />
-      ) : panel.kind === "pr" ? (
-        <PrPanel channel={channel} repo={panel.repo} number={panel.number} />
-      ) : (
-        <IssuePanel channel={channel} repo={panel.repo} number={panel.number} />
-      )}
-    </div>
-  )
+      </div>
+    )
+  return <Page channel={channel} view={panel.kind === "task" ? { kind: "task", task: panel.task } : panel} />
 }
 
 function carried(channel: Channel, href: string): { carry: Carry; label: string } | null {
@@ -331,7 +322,9 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
             {leaves.length > 1 && !(plain && !leaf.nav) && (
               <div className="pane-tools">
                 <button type="button" className="icon-btn pane-grip" aria-label={t("panes.move")} title={t("panes.move")} {...dragOut({ pane: leaf.id }, name)} />
-                {(leaf.nav || heir) && leaf.doc?.kind !== "panel" && <IconButton icon="close" label={t("shell.rail.close")} onClick={() => void close(leaf.id)} />}
+                {(leaf.nav || heir) && !(leaf.doc?.kind === "panel" && leaf.doc.panel.kind === "thread") && (
+                  <IconButton icon="close" label={t("shell.rail.close")} onClick={() => void close(leaf.id)} />
+                )}
               </div>
             )}
           </Tag>

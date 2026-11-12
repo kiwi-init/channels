@@ -1,0 +1,292 @@
+.md .ctl-rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.md .ctl-rows + .ctl-rows {
+  margin-top: 32px;
+}
+
+.ctl-row + .ctl-row {
+  border-top: 1px solid var(--line);
+}
+
+.ctl-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+  min-height: 3.5rem;
+  padding: 12px 0;
+}
+
+.ctl-head {
+  display: flex;
+  flex: 1 1 220px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ctl-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 1.25rem;
+  color: var(--ink-3);
+}
+
+.ctl-mark.is-inline {
+  display: inline-flex;
+  min-width: 0;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.ctl-dot {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.ctl-dot.is-new {
+  background: var(--accent);
+}
+
+.ctl-dot.is-bad {
+  background: var(--alert);
+}
+
+.ctl-dot.is-online {
+  background: var(--live);
+}
+
+.ctl-dot.is-offline {
+  box-shadow: inset 0 0 0 1px var(--ink-3);
+}
+
+.ctl-dot.is-doing,
+.ctl-dot.is-waiting {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--doing);
+  border-right-color: transparent;
+}
+
+.ctl-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ctl-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+  color: var(--ink);
+  font: var(--t-ui) var(--ui);
+}
+
+.ctl-tag {
+  padding: 0;
+  background: none;
+  color: var(--ink-3);
+  font: var(--t-stamp) var(--mono);
+  letter-spacing: -0.01em;
+}
+
+.ctl-hint {
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.45 var(--ui);
+  overflow-wrap: anywhere;
+}
+
+.ctl-hint .ctl-code {
+  font-size: var(--t-meta);
+}
+
+.ctl-ctl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.ctl-ctl > .btn.is-quiet:last-child,
+.ctl-ctl > .ctl-chip:last-child {
+  margin-right: -8px;
+}
+
+.ctl-value {
+  min-width: 0;
+  color: var(--ink);
+  font: var(--t-ui) var(--ui);
+  overflow-wrap: anywhere;
+}
+
+.ctl-code {
+  padding: 0;
+  background: none;
+  color: var(--ink);
+  font: var(--t-ui) var(--mono);
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+.ctl-loud {
+  color: var(--decide);
+  font-weight: inherit;
+}
+
+.ctl-ctl .ctl-loud {
+  font: var(--t-meta) var(--ui);
+}
+
+.ctl-quiet {
+  color: var(--ink-3);
+}
+
+.ctl-ctl .ctl-quiet {
+  font: var(--t-meta) var(--ui);
+}
+
+.ctl-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.ctl-link:hover {
+  text-decoration: underline;
+}
+
+.ctl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-height: var(--ctl-sm);
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--r-row);
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--fast),
+    transform var(--pop);
+}
+
+.ctl-chip .icon {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.ctl-chip:hover {
+  background: var(--wash);
+}
+
+.ctl-chip:hover .icon {
+  color: var(--ink);
+}
+
+.ctl-chip:active {
+  transform: scale(0.96);
+}
+
+.ctl-chip .ctl-code {
+  overflow: hidden;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.md .theme-grid {
+  list-style: none;
+}
+
+.ctl-below {
+  display: grid;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+
+.ctl-row:has(> .ctl-line > .ctl-head > .ctl-mark) > .ctl-below {
+  padding-left: calc(1.25rem + 12px);
+}
+
+.ctl-below .ctl-rows {
+  margin: 0;
+}
+
+.ctl-below .ctl-row + .ctl-row {
+  border-top: 0;
+}
+
+.ctl-below .ctl-line {
+  min-height: 0;
+  padding: 4px 0;
+}
+
+.ctl-below .ctl-label {
+  font: var(--t-meta) / 1.45 var(--ui);
+}
+
+.ctl-choices {
+  margin: 0 0 12px;
+}
+
+.ctl-note {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--wash);
+  color: var(--ink-2);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.ctl-note.is-warning,
+.ctl-note.is-caution {
+  background: var(--alert-wash);
+}
+
+.ctl-fine {
+  margin: 16px 0 0;
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.ctl-below > .ctl-nest > .ctl-fine,
+.pg-label + .ctl-fine {
+  margin: 0 0 4px;
+}
+
+.ctl-card {
+  display: grid;
+  gap: 12px;
+  animation: rise var(--slow) var(--ease);
+}
+
+.ctl-card > * {
+  margin: 0;
+}
+
+.ctl-row.is-switch .toggle {
+  flex: none;
+}

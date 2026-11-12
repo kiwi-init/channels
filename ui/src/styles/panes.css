@@ -492,6 +492,25 @@
   margin: 12px 0;
 }
 
+.pg-props {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 12px 0 16px;
+  font: var(--t-ui) / 1.4 var(--ui);
+}
+
+.pg-props dt {
+  color: var(--ink-3);
+}
+
+.pg-props dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
 .pg-opts {
   display: flex;
   flex-direction: column;
@@ -560,4 +579,15 @@
 .pane:has(> .panel.is-pane) > .pane-tools {
   top: 12px;
   right: 56px;
+}
+
+.page-text .md ul:not([class]) {
+  list-style: none;
+  padding-inline-start: 0;
+}
+
+.page-text .md ul:not([class]) > li {
+  padding: 3px 0 3px 14px;
+  border-inline-start: 1px solid var(--line);
+  color: var(--ink-2);
 }

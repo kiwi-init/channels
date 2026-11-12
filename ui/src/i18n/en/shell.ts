@@ -75,7 +75,7 @@ export default {
   "panes.home.done": "{count} done today",
   "panes.home.red": "{count} red",
   "panes.home.open": "Open",
-  "panes.page.details": "Details",
+  "panes.page.archived": "archived",
   "panes.page.edit": "Edit",
   "panes.page.save": "Save",
   "panes.page.cancel": "Cancel",
