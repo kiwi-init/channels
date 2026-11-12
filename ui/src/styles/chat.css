@@ -2195,7 +2195,7 @@ button.msg-image-spot:hover {
   anchor-name: --own-bubble, --own-body;
 }
 
-@supports (anchor-name: --a) and (position-try-fallbacks: --a) {
+@supports (anchor-name: --a) and (anchor-scope: --a) and (position-try-fallbacks: --a) {
   .msg.is-mine > .msg-tools,
   .msg.is-mine.is-compact > .msg-tools,
   .panel .msg.is-mine > .msg-tools {
