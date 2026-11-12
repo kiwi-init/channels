@@ -189,6 +189,12 @@ function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
                 <span className="spec-face-name">{nickname(channel, n)}</span>
               </span>
             ))}
+            <span className="spec-faces-all" aria-hidden="true">
+              {who
+                .slice(0, 3)
+                .map((n) => nickname(channel, n))
+                .join(", ")}
+            </span>
           </span>
         )}
       </button>
