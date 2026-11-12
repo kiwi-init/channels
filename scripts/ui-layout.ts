@@ -135,7 +135,7 @@ try {
         ? {
             rows: new Set(tiles.map((tile) => Math.round(tile.bottom))).size,
             sizes: [...new Set(tiles.map((tile) => tile.height))],
-            left: tiles[0]!.left - toggle.right,
+            left: tiles[0]!.left - side.right,
             foot: strip.bottom - Math.max(...tiles.map((tile) => tile.bottom)),
             add: add.top >= strip.top && add.bottom <= strip.bottom,
             under: first.top - strip.bottom,
@@ -155,8 +155,8 @@ try {
     });
     expect(!cropped, "a tab's badge is not cropped by the strip");
     expect(
-      !!shell && shell.rows === 1 && shell.sizes.length === 1 && near(shell.left, 16),
-      `Home and the channel tabs are one height, in one line, 16px after the sidebar button (${shell?.sizes.join(", ")} high, ${shell?.left} after)`,
+      !!shell && shell.rows === 1 && shell.sizes.length === 1 && near(shell.left, 8),
+      `Home and the channel tabs are one height, in one line, 8px after the page's left edge (${shell?.sizes.join(", ")} high, ${shell?.left} after)`,
     );
     expect(!!shell && near(shell.foot, 0) && shell.add, `standing on the strip's bottom edge, with + inside the strip (${shell?.foot} above it)`);
     await nothingClashes(page, "on the Mac");
@@ -453,7 +453,7 @@ try {
     const sideAfter = await boxOf(page, ".side");
     const homeAfter = await boxOf(page, ".tile.is-home");
     expect(!!edge && !!side && !!sideAfter && sideAfter.right === side.right + 64, `the sidebar's edge drags (${side?.right} → ${sideAfter?.right})`);
-    expect(!!home && !!homeAfter && homeAfter.left === home.left, `and the tabs stay where they are (${homeAfter?.left})`);
+    expect(!!home && !!homeAfter && homeAfter.left === home.left + 64, `and the tabs start at the page's edge still (${home?.left} → ${homeAfter?.left})`);
     await page.close();
     const bare = await browser.newPage({ viewport: { width, height } });
     await bare.addInitScript(() => localStorage.setItem("mc.sidebar-hidden", "1"));
@@ -522,9 +522,9 @@ try {
   for (const [shot, width, fit] of [
     ["tabs-3", 1710, "roomy"],
     ["tabs-8", 1710, "roomy"],
-    ["tabs-8", 1280, "roomy"],
-    ["tabs-8-top", 1280, "roomy"],
-    ["tabs-8", 1100, "tight"],
+    ["tabs-8", 1560, "roomy"],
+    ["tabs-8-top", 1560, "roomy"],
+    ["tabs-8", 1280, "tight"],
     ["tabs-8", 900, "icons"],
   ] as const) {
     console.log(`\nthe tab strip, ${shot} at ${width} wide`);
@@ -568,8 +568,8 @@ try {
         search: search.left,
         foot: top.bottom,
         open: open.map((tab) => ({ bottom: tab.getBoundingClientRect().bottom, shade: shade(tab) })),
-        ground: shade(document.body),
-        band: getComputedStyle(document.querySelector(".app")!).backgroundImage,
+        ground: shade(document.querySelector(".main")!),
+        frame: shade(document.querySelector(".app")!),
       };
     });
     const tabs = strip?.tabs ?? [];
@@ -580,8 +580,8 @@ try {
     expect(strip?.fit === fit, `the strip is ${fit} here (${strip?.fit})`);
     expect(!!strip && strip.over <= 1 && strip.page <= 0, `nothing scrolls sideways (${strip?.over}px over in the strip, ${strip?.page}px in the page)`);
     expect(
-      !!strip && strip.open.length === 1 && near(strip.open[0]!.bottom, strip.foot) && strip.open[0]!.shade === strip.ground && strip.band.includes("gradient"),
-      `one tab is open, in the page's colour and joined to it, on a band (${strip?.open.length} open, ${strip?.open[0]?.bottom} of ${strip?.foot})`,
+      !!strip && strip.open.length === 1 && near(strip.open[0]!.bottom, strip.foot) && strip.open[0]!.shade === strip.ground && strip.frame !== strip.ground,
+      `one tab is open, in the page's colour and joined to it, on the frame's (${strip?.open.length} open, ${strip?.open[0]?.bottom} of ${strip?.foot}, ${strip?.ground} on ${strip?.frame})`,
     );
     expect(!!strip && near(strip.addRight + 8, strip.search, 9) && tabs.every((tab) => tab.right <= strip.addLeft + 1), `+ ends the strip, beside Search (${strip?.addRight} before ${strip?.search})`);
     expect(tabs.length > 0 && tabs.every((tab) => tab.icon === 16), `every tab's icon is 16px (${[...new Set(tabs.map((tab) => tab.icon))].join(", ")})`);

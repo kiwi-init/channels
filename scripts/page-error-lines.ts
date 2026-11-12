@@ -2,6 +2,7 @@ const FRAMES = 8;
 
 export interface Observers {
   late: string[];
+  untold: string[];
   ran: string[];
 }
 
@@ -22,7 +23,9 @@ function frames(message: string, stack: string | undefined): string[] {
 
 export function observerLines(seen: Observers): string[] {
   return [
-    ...(seen.late.length ? ["changed size after its observer last ran:", ...seen.late.map((l) => `  ${l}`)] : ["no watched element had changed size when the error came"]),
+    ...(seen.late.length ? ["changed size after its observer last ran:", ...seen.late.map((l) => `  ${l}`)] : []),
+    ...(seen.untold.length ? ["put under watch, and its observer was not told its size yet:", ...seen.untold.map((l) => `  ${l}`)] : []),
+    ...(seen.late.length || seen.untold.length ? [] : ["no watched element had changed size or was new when the error came"]),
     ...(seen.ran.length ? ["resize observers that ran just before:", ...seen.ran.map((l) => `  ${l}`)] : ["no resize observer ran just before"]),
   ];
 }
