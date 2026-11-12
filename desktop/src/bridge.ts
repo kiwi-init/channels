@@ -443,6 +443,7 @@ export interface KiwiBridge {
   movedApp(): Promise<MovedView | null>;
   dismissMovedApp(): Promise<void>;
   openExternal(url: string): Promise<void>;
+  copyText(text: string): Promise<void>;
   saveFile(name: string, text: string): Promise<string>;
   takeDroppedFiles(): Promise<DroppedFile[]>;
   takePastedImage(): Promise<PastedImage | null>;
