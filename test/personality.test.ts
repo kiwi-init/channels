@@ -3,7 +3,8 @@ import { newChannelKey } from "@kiwi/core/crypto.ts";
 import { formatStatus } from "@kiwi/core/format.ts";
 import { generateIdentity, sign } from "@kiwi/core/identity.ts";
 import { makeRecord, openRecord, readRecord, sealRecord } from "@kiwi/core/membership.ts";
-import { CAPABILITIES, cleanPersona, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, personaLines, personaOf, personaScopes } from "@kiwi/core/personality.ts";
+import { asksPeople, CAPABILITIES, capabilityLine, cleanPersona, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, personaLines, personaOf, personaScopes } from "@kiwi/core/personality.ts";
+import { makePin, pinned, readPin } from "@kiwi/core/pin.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
 import { presetOf } from "@kiwi/core/scopes.ts";
 import { fold, toRoster } from "@kiwi/core/state.ts";
@@ -34,6 +35,44 @@ describe("a personality", () => {
     expect(presetOf(personaScopes(builder))).toBe("full");
     expect(presetOf(personaScopes({ capabilities: [] }))).toBe("read-only");
     expect(personaScopes({ capabilities: ["write"] })).toEqual(["post", "ask"]);
+  });
+
+  test("asking people is a power of its own: on for Lead, Explorer and Releaser, off for Builder, Reviewer and Bug hunter, until the owner says otherwise", () => {
+    expect(Object.fromEntries(PRESETS.map((p) => [p.id, asksPeople(personaOf(p))]))).toEqual({ builder: false, reviewer: false, "bug-hunter": false, explorer: true, releaser: true, lead: true });
+    const lead = personaOf(PRESETS.find((p) => p.id === "lead")!);
+    expect(asksPeople({ ...builder, askPeople: true })).toBe(true);
+    expect(asksPeople({ ...lead, askPeople: false })).toBe(false);
+    expect(asksPeople({ ...lead, capabilities: ["tasks"] })).toBe(false);
+    const told = { ...builder, askPeople: false };
+    expect(personaScopes(told)).toEqual(personaScopes(builder));
+    expect(personaScopes(builder)).toContain("ask");
+  });
+
+  test("the power travels beside the capabilities, in a shape a core that doesn't know it reads past", () => {
+    expect(CAPABILITIES as readonly string[]).not.toContain("askPeople");
+    expect(cleanPersona({ ...builder, askPeople: true })).toEqual({ ...builder, askPeople: true });
+    expect(cleanPersona({ ...builder, askPeople: false })).toEqual({ ...builder, askPeople: false });
+    expect("askPeople" in cleanPersona(builder)!).toBe(false);
+    expect(cleanPersona({ ...builder, askPeople: "yes" })).toBeNull();
+    expect(personaOf({ id: "b", glyph: "⌘", ...builder, askPeople: true }).askPeople).toBe(true);
+    expect("askPeople" in personaOf({ id: "b", glyph: "⌘", ...builder })).toBe(false);
+  });
+
+  test("a join link made before the owner changed the power still names its personality, and gives it as it is now", async () => {
+    const owner = await generateIdentity("boss");
+    const mine = { id: "helper", glyph: "✳", ...builder };
+    const pin = await readPin(await makePin(owner, "room-1", mine), "room-1", owner.pk);
+    if (!pin || "invalid" in pin) throw new Error("the pin didn't read back");
+    expect(await pinned(pin, [{ ...mine, askPeople: true }])).toEqual({ ...builder, askPeople: true });
+    expect(await pinned(pin, [{ ...mine, instructions: "Something else." }])).toBeNull();
+  });
+
+  test("the brief and the one-line summary name it only for an agent that has it", () => {
+    expect(personaLines(builder)[0]).toContain("You may write and ask, work tasks,");
+    expect(personaLines({ ...builder, askPeople: true })[0]).toContain("You may write and ask, ask people, work tasks,");
+    expect(capabilityLine({ ...builder, askPeople: true })).toStartWith("write and ask · ask people · work tasks");
+    expect(capabilityLine(builder)).toStartWith("write and ask · work tasks");
+    expect(capabilityLine({ role: "lead", capabilities: [] })).toBe("reads only");
   });
 });
 
