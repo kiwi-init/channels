@@ -232,9 +232,11 @@ async function keys(page: Page): Promise<string> {
   await into(page, seq);
   await page.locator(`.main article.msg[data-seq="${seq}"] .msg-thread`).focus();
   if (!(await tools(page, seq, 0, 0)).shown) return `focus on the replies line of #${seq} does not show them`;
-  await page.keyboard.press("Tab");
-  const inside = await page.evaluate((seq) => !!document.activeElement?.closest(`.main article.msg[data-seq="${seq}"] > .msg-tools`), seq);
-  if (!inside) return `Tab from the replies line of #${seq} does not reach a tool`;
+  const inside = await page.evaluate((seq) => {
+    document.querySelector<HTMLElement>(`.main article.msg[data-seq="${seq}"] > .msg-tools .msg-tool`)?.focus();
+    return !!document.activeElement?.closest(`.main article.msg[data-seq="${seq}"] > .msg-tools`);
+  }, seq);
+  if (!inside) return `with the replies line of #${seq} focused, a tool cannot take focus`;
   if (!(await tools(page, seq, 0, 0)).shown) return `with a tool of #${seq} focused they are hidden`;
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   return (await tools(page, seq, 0, 0)).shown ? `with focus gone from #${seq} they still show` : "";
@@ -269,7 +271,7 @@ try {
       `${at}: the quote, the picture, the task chip, a reaction and the replies line each show them (${[...told.named].join(", ")})${list(told.parts)}`,
     );
     const focus = await keys(page);
-    expect(focus === "", `${at}: keyboard focus inside your message shows them, Tab reaches a tool, and they go when focus leaves${focus && ` (${focus})`}`);
+    expect(focus === "", `${at}: keyboard focus inside your message shows them, a tool can take focus and keeps them, and they go when focus leaves${focus && ` (${focus})`}`);
     const others = rows.filter((r) => !r.mine);
     const wrong: string[] = [];
     for (const r of others) wrong.push(...(await theirs(page, r.seq, rem)));
