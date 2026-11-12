@@ -931,7 +931,7 @@ export function asksOf(
         who: r.kind === "human" ? "human" : "agent",
         ...(harness ? { harness } : {}),
         ...(r.kind === "human" ? (r.person ? { key: r.person.slice(0, 8) } : {}) : { said: saidOf(state, r.card) }),
-        ...(r.pin ? { pin: { name: r.pin.name, persona: pins.get(r.id) } } : {}),
+        ...(r.pin ? { pin: "invalid" in r.pin ? { failed: true as const } : { name: r.pin.name, persona: pins.get(r.id) } } : {}),
         ...(taken
           ? {
               freeName: freeHandle(

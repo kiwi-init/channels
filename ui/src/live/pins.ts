@@ -9,7 +9,7 @@ import { useSecrets } from "@kiwi/secrets/secrets.ts"
 export function usePinsHere(requests: readonly JoinRequest[]): ReadonlyMap<string, string | null> {
   const kept = useSecrets().personalities
   const [found, setFound] = useState<ReadonlyMap<string, string | null>>(new Map())
-  const wanted = JSON.stringify(requests.flatMap((r) => (r.pin ? [[r.id, r.pin.id, r.pin.hash]] : [])))
+  const wanted = JSON.stringify(requests.flatMap((r) => (r.pin && !("invalid" in r.pin) ? [[r.id, r.pin.id, r.pin.hash]] : [])))
   useEffect(() => {
     let live = true
     const all = [...PRESETS, ...cleanPersonalities(kept)]

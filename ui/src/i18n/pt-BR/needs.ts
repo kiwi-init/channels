@@ -63,6 +63,7 @@ export default {
   "needs.join.forgotten": "Roda em {machine}, um computador que você esqueceu, então não entrou sozinho. Deixe entrar só se você quis trazer esse computador de volta.",
   "needs.join.invited.as": "Convidado como {name}",
   "needs.join.invited.gone": ", que não está mais neste computador",
+  "needs.join.invite.failed": "O token do convite não passou na verificação, então nenhuma personalidade vem com ele. Escolha uma, ou recuse e envie o convite de novo.",
   "needs.join.check.agent": "O terminal dele mostra este código?",
   "needs.join.check.person": "A tela dessa pessoa mostra este código?",
   "needs.join.check.hint": "Se não bater, outra pessoa tem o link. Recuse.",

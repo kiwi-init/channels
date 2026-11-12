@@ -170,6 +170,7 @@ export default {
   "live.manage.agents.manager.only": "só o dono, ou uma pessoa que gerencia agentes, muda a função, a personalidade ou o apelido de um agente",
   "live.manage.personality.missing": "essa personalidade não está neste computador",
   "live.manage.pin.gone": "{name} foi convidado como {persona}, que não está mais neste computador",
+  "live.manage.pin.failed": "O token do convite de {name} não passou na verificação: escolha uma personalidade antes",
   "live.manage.bad.name": "{name} não pode ser um nome: só letras, dígitos, . _ -",
   "live.manage.name.taken": "{name} também já está em uso aqui",
   "live.manage.joined.as": "{name} entrou como {persona}",

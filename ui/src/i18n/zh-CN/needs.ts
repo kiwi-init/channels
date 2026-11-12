@@ -63,6 +63,7 @@ export default {
   "needs.join.forgotten": "它运行在你移除的电脑 {machine} 上，所以没有自动加入。只有你确实想让那台电脑回来时才允许它加入。",
   "needs.join.invited.as": "以 {name} 身份受邀",
   "needs.join.invited.gone": "（这台电脑上已经没有了）",
+  "needs.join.invite.failed": "邀请令牌未通过验证，因此没有附带性格。请选择一个，或拒绝后重新发送邀请。",
   "needs.join.check.agent": "它的终端显示的是这个代码吗？",
   "needs.join.check.person": "对方屏幕上显示的是这个代码吗？",
   "needs.join.check.hint": "如果不一致，说明别人拿到了链接。请拒绝。",

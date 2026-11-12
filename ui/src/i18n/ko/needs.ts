@@ -63,6 +63,7 @@ export default {
   "needs.join.forgotten": "내가 삭제한 컴퓨터 {machine}에서 실행되어 자동으로 참여하지 않았습니다. 그 컴퓨터를 다시 쓰려는 경우에만 입장을 허용하세요.",
   "needs.join.invited.as": "{name}(으)로 초대됨",
   "needs.join.invited.gone": "(이 컴퓨터에 더 이상 없음)",
+  "needs.join.invite.failed": "초대 토큰 검증에 실패해 성격이 함께 오지 않았습니다. 성격을 고르거나, 거절하고 초대를 다시 보내세요.",
   "needs.join.check.agent": "터미널에 이 코드가 보이나요?",
   "needs.join.check.person": "상대 화면에 이 코드가 보이나요?",
   "needs.join.check.hint": "일치하지 않으면 다른 사람이 링크를 가지고 있습니다. 거절하세요.",

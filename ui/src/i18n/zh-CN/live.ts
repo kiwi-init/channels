@@ -170,6 +170,7 @@ export default {
   "live.manage.agents.manager.only": "只有所有者或管理智能体的人可以更改智能体的角色、性格或昵称",
   "live.manage.personality.missing": "这台电脑上没有该性格",
   "live.manage.pin.gone": "{name}以{persona}身份受邀，但这台电脑上已没有该性格",
+  "live.manage.pin.failed": "{name}的邀请令牌未通过验证：请先为其选择性格",
   "live.manage.bad.name": "{name}不能用作名字：只能包含字母、数字和 . _ -",
   "live.manage.name.taken": "{name}在这里也已被占用",
   "live.manage.joined.as": "{name}以{persona}身份加入",

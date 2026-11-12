@@ -301,7 +301,7 @@ describe("scopes at the relay", () => {
       { id: plain, requestId: askPlain.requestId },
     ]);
     expect(reqs.find((r) => r.pk === id.pk)?.pin).toMatchObject({ id: "reviewer", name: "Reviewer" });
-    expect(reqs.find((r) => r.pk === plain.pk)?.pin).toBeUndefined();
+    expect(reqs.find((r) => r.pk === plain.pk)?.pin).toEqual({ invalid: true });
     for (const r of reqs.filter((x) => x.pk === id.pk || x.pk === plain.pk)) await ownerCh.deny(r.id);
   });
 

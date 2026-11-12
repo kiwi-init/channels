@@ -317,6 +317,7 @@ export type Scenario =
   | "specs"
   | "spec-changed"
   | "forgotten-computer"
+  | "invite-failed"
   | "member"
   | "home-calm"
 
@@ -406,9 +407,28 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                                           ...DEMO_CHANNEL.asks,
                                         ],
                                       }
-                                    : scenario === "event-runs"
-                                      ? withEventRuns(DEMO_CHANNEL)
-                                      : DEMO_CHANNEL,
+                                    : scenario === "invite-failed"
+                                      ? {
+                                          ...DEMO_CHANNEL,
+                                          asks: [
+                                            {
+                                              kind: "join" as const,
+                                              id: "join-quill",
+                                              at: Date.now() - 5 * 60_000,
+                                              name: "quill",
+                                              who: "agent" as const,
+                                              harness: "claude" as const,
+                                              runs: "Claude Code · claude-opus-5-5",
+                                              said: { machine: "Linux x64 · 8 cores · 16 GB", repo: "interlinked/site@main", outside: true },
+                                              pin: { failed: true as const },
+                                              code: "317-552",
+                                            },
+                                            ...DEMO_CHANNEL.asks,
+                                          ],
+                                        }
+                                      : scenario === "event-runs"
+                                        ? withEventRuns(DEMO_CHANNEL)
+                                        : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,

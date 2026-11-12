@@ -479,7 +479,7 @@ export interface JoinAsk {
   sponsor?: string
   key?: string
   said?: { machine?: string; tools?: string[]; repo?: string; outside: boolean } | "nothing"
-  pin?: { name: string; persona: string | null | undefined }
+  pin?: { name: string; persona: string | null | undefined } | { failed: true }
   freeName?: string
   code: string
   check?: "unchecked" | "waiting" | "ready"

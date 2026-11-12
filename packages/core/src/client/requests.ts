@@ -250,6 +250,7 @@ export class ChannelRequests {
           }
           if (!(req.computer?.joinsOnItsOwn && req.check === "ready" && req.code)) continue;
           const pin = req.pin;
+          if (pin && "invalid" in pin) continue;
           let as: Partial<MemberInfo> | undefined;
           if (req.computer.own) {
             const persona = pin ? yield* Effect.promise(() => pinned(pin, personalities)) : undefined;

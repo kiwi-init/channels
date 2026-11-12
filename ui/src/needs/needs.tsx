@@ -366,9 +366,11 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
   ]
     .filter(Boolean)
     .join(" · ")
-  const chosen = agent ? (persona === undefined ? (ask.pin?.persona ?? null) : persona) : null
-  const pinWaits = agent && persona === undefined && !!ask.pin && ask.pin.persona === undefined
-  const pinGone = agent && persona === undefined && !!ask.pin && ask.pin.persona === null
+  const named = ask.pin && "name" in ask.pin ? ask.pin : undefined
+  const pinFailed = !!ask.pin && "failed" in ask.pin
+  const chosen = agent ? (persona === undefined ? (named?.persona ?? null) : persona) : null
+  const pinWaits = agent && persona === undefined && !!named && named.persona === undefined
+  const pinGone = agent && persona === undefined && ((!!named && named.persona === null) || pinFailed)
   const label = app.personas.find((p) => p.id === chosen)?.label
   const only = readOnly ?? channel.newMembers === "read"
   const can = powers ?? channel.newPowers ?? NO_POWERS
@@ -415,12 +417,13 @@ function JoinAskCard({ channel, ask, link }: { channel: Channel; ask: JoinAsk; l
       {ask.revoked && <p className="needs-warn">{tr("needs.join.revoked", { who: ask.sponsor ?? t("needs.join.its.person"), machine: ask.machine ?? "", command: <code>kiwi login</code> })}</p>}
       {ask.forgotten && !ask.revoked && <p className="needs-warn">{t("needs.join.forgotten", { machine: ask.machine ?? "" })}</p>}
       {ask.said && <Said said={ask.said} />}
-      {ask.pin && (
+      {named && (
         <p className="needs-line">
-          {tr("needs.join.invited.as", { name: <span className="needs-strong">{ask.pin.name}</span> })}
-          {ask.pin.persona === null && <span className="needs-warn">{t("needs.join.invited.gone")}</span>}
+          {tr("needs.join.invited.as", { name: <span className="needs-strong">{named.name}</span> })}
+          {named.persona === null && <span className="needs-warn">{t("needs.join.invited.gone")}</span>}
         </p>
       )}
+      {pinFailed && <p className="needs-warn">{t("needs.join.invite.failed")}</p>}
       {!ask.revoked && (
         <div className="needs-check">
           {ready ? (
