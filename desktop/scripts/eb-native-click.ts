@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
+import { firstChannel } from "./eb-first-run.ts";
 
 const linux = process.platform === "linux";
 if (!process.argv[2] || !linux || !process.env.DISPLAY) {
@@ -48,6 +49,7 @@ try {
     const win = windowOf();
     if (!win) throw new Error(problems.join("; "));
     console.log(`session: X11 under Xvfb (${process.env.DISPLAY})`);
+    await firstChannel(d, 0);
     for (const layout of [
       { name: "wide (tabs)", width: 1280, height: 800 },
       { name: "narrow (sidebar)", width: 700, height: 800 },
