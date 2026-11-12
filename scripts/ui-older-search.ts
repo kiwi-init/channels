@@ -109,7 +109,7 @@ try {
   expect(!!shown && shown.y > 100 && shown.y < 700 && (await hit.innerText()).includes("Keep the relay dumb"), "the hit is scrolled into view and marked");
   expect((await page.locator("article.msg").count()) > 10, "the stretch around the hit is shown, not just the hit");
 
-  await hit.hover();
+  await hit.locator(".msg-body").hover();
   expect((await hit.getByRole("button", { name: "React 👍" }).count()) === 1, "an older message can still be reacted to");
   expect((await hit.getByRole("button", { name: "Copy text" }).count()) === 1, "and copied");
   expect((await hit.getByRole("button", { name: "Reply" }).count()) === 0, "but not replied to, since the quote couldn't show it");

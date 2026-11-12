@@ -41,7 +41,7 @@ try {
   expect((await theirs.getByRole("button", { name: "Delete" }).count()) === 0, "someone else's message offers no Delete");
 
   await composer.fill("a draft from before");
-  await mine.hover();
+  await mine.locator(".msg-body").hover();
   await mine.getByRole("button", { name: "Edit" }).click();
   await mine.getByRole("textbox", { name: "Edit message" }).waitFor();
   expect(
@@ -72,7 +72,7 @@ try {
   );
 
   await page.locator(".side-row", { hasText: "general" }).first().click();
-  await mine.hover();
+  await mine.locator(".msg-body").hover();
   await mine.getByRole("button", { name: "Delete" }).click();
   const dialog = page.getByRole("dialog", { name: "Delete this message?" });
   await dialog.waitFor();
@@ -90,7 +90,7 @@ try {
   const line = panel.locator("article.msg", { hasText: "a line from the task panel" }).last();
   await line.waitFor();
   await page.waitForTimeout(900);
-  await line.hover();
+  await line.locator(".msg-body").hover();
   await line.getByRole("button", { name: "Edit" }).click();
   const inRow = line.getByRole("textbox", { name: "Edit message" });
   await inRow.waitFor({ timeout: 5000 }).catch(() => {});
