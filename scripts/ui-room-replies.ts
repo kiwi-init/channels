@@ -50,16 +50,16 @@ try {
   expect(shown[0] === ROOT && shown.includes(SIDE_REPLY) && shown.includes(LATER_REPLY), `"N replies" opens the thread: the message, then its replies (${shown.join(", ")})`);
   await panel.getByRole("button", { name: "Close" }).click();
   await panel.waitFor({ state: "detached" });
-  await root.hover();
+  await root.locator(".msg-body").hover();
   expect((await root.getByRole("button", { name: "Reply in thread" }).count()) === 1, 'a hovered message has a "Reply in thread" button');
-  await feed.locator(`[data-seq="${LATER_REPLY}"]`).hover();
+  await feed.locator(`[data-seq="${LATER_REPLY}"] .msg-body`).hover();
   await feed.locator(`[data-seq="${LATER_REPLY}"]`).getByRole("button", { name: "Reply in thread" }).click();
   await panel.locator(`[data-seq="${ROOT}"]`).waitFor();
   expect((await inPanel())[0] === ROOT, "on a reply, Reply in thread opens the thread of the message it answers");
   expect((await panel.getByRole("button", { name: "Reply in thread" }).count()) === 0 && (await panel.locator(".msg-thread").count()) === 0, "inside the thread, no row offers a thread of its own");
   await panel.getByRole("button", { name: "Close" }).click();
   await panel.waitFor({ state: "detached" });
-  await root.hover();
+  await root.locator(".msg-body").hover();
   expect((await root.getByRole("button", { name: "Reply", exact: true }).count()) === 1, "a hovered message has a Reply button that quotes it");
 
   const reply = feed.locator(`[data-seq="${SIDE_REPLY}"]`);
