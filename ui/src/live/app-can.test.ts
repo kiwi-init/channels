@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { callsServedBy } from "~/live/app-can"
+import { callsServedBy, contractOf } from "~/live/app-can"
 
 describe("a newer UI asks the installed app what it serves (#1118)", () => {
   test("in a plain browser there's no app, so the UI's own calls all work", async () => {
@@ -19,5 +19,12 @@ describe("a newer UI asks the installed app what it serves (#1118)", () => {
 
   test("an app whose answer fails is treated as the oldest", async () => {
     expect(await callsServedBy({ capabilities: async () => Promise.reject(new Error("no such call")) })).toEqual(new Set())
+  })
+
+  test("an app says which contract it speaks, so the UI can hold back what an older one would drop", async () => {
+    expect(await contractOf(null)).toBeNull()
+    expect(await contractOf({} as Parameters<typeof contractOf>[0])).toBe("0.0.0")
+    expect(await contractOf({ capabilities: async () => ({ contract: "3.5.0", channelCalls: [] }) })).toBe("3.5.0")
+    expect(await contractOf({ capabilities: async () => Promise.reject(new Error("no such call")) })).toBe("0.0.0")
   })
 })
