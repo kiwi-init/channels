@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
+import { TEST_ID } from "./bundle-ids.ts";
 import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 import { firstChannel, sendMessage } from "./eb-first-run.ts";
 
@@ -19,11 +20,16 @@ const env = testEnv(root, join(root, "driver.sock"), `http://127.0.0.1:${port}`)
 const problems: string[] = [];
 const later = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const MESSAGES = 30;
-const ROUNDS = 4;
+const ROUNDS = 8;
 const STEP = 30;
 const FRAMES = 150;
+const MODES = ["opaque", "glass"] as const;
+const SHOWN = ["glass", "opaque", "reduced"] as const;
+const PARTS = ["top", "side", "page"] as const;
 
-type Mode = "opaque" | "glass" | "reduced";
+type Mode = (typeof SHOWN)[number];
+type Part = (typeof PARTS)[number];
+type Rect = { x: number; y: number; width: number; height: number };
 interface Scrolled {
   frames: number;
   moved: number;
@@ -42,15 +48,8 @@ interface Run extends Scrolled, Cpu {
   mode: Mode;
   what: "scroll" | "still";
 }
-interface Placed {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  screen: number;
-  page: { x: number; y: number; width: number; height: number } | null;
-  top: number;
-}
+type Parts = Record<Part, Rect | null> & { screen: number };
+type Means = Record<Part | "screen", number>;
 
 async function run<T>(what: (d: Driver) => Promise<T>): Promise<T> {
   const app = launch(exe, env);
@@ -77,17 +76,7 @@ const pickTheme = (): boolean => {
 
 const themeKept = (): string => `${localStorage.getItem("mc.appearance")} ${localStorage.getItem("ui.prefs")}`;
 
-const standIn = ({ on }: { on: boolean }): string => {
-  const page = document.documentElement;
-  if (on) {
-    page.style.setProperty("--frame", "color-mix(in srgb, var(--bg-3) 55%, transparent)");
-    document.body.style.setProperty("background", "transparent");
-  } else {
-    page.style.removeProperty("--frame");
-    document.body.style.removeProperty("background");
-  }
-  return page.dataset.glass ?? "none";
-};
+const marked = (): string => document.documentElement.dataset.glass ?? "none";
 
 const feedHeight = (): { travel: number; rows: number } | null => {
   let feed = document.querySelector<HTMLElement>(".main article.msg")?.parentElement ?? null;
@@ -126,18 +115,12 @@ const scrolled = async ({ dy, frames }: { dy: number; frames: number }): Promise
   return { frames: gaps.length, moved, ms: at.at(-1)! - at[0]!, p50: pct(50), p95: pct(95), max: gaps.at(-1) ?? 0, late: gaps.filter((g) => g > pct(50) * 1.5).length };
 };
 
-const placed = (): Placed => {
-  const card = document.querySelector<HTMLElement>(".main");
-  const r = card?.getBoundingClientRect();
-  return {
-    x: window.screenX,
-    y: window.screenY,
-    width: window.innerWidth,
-    height: window.innerHeight,
-    screen: screen.width,
-    page: r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null,
-    top: parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--top-h")) || 0,
+const partsOf = (): Parts => {
+  const rect = (selector: string): Rect | null => {
+    const r = document.querySelector<HTMLElement>(selector)?.getBoundingClientRect();
+    return r && r.width > 0 && r.height > 0 ? { x: r.x, y: r.y, width: r.width, height: r.height } : null;
   };
+  return { top: rect(".top"), side: rect(".side"), page: rect(".main"), screen: screen.width };
 };
 
 function cpu(): Cpu {
@@ -159,18 +142,12 @@ async function looksLike(d: Driver, want: string): Promise<void> {
 }
 
 async function show(d: Driver, mode: Mode): Promise<void> {
-  if (mode === "glass") {
-    await d.main("frostForTest");
-    await d.main("clearForTest");
-    await looksLike(d, "frost clear");
-    await until('the page marked data-glass="material"', 10_000, async () => ((await d.evaluate(standIn, { on: true })) === "material" ? true : null));
-  } else {
-    await d.main("solidForTest");
-    await d.main(mode === "opaque" ? "opaqueForTest" : "clearForTest");
-    await looksLike(d, mode === "opaque" ? "solid drawn" : "solid clear");
-    await until("the page without its glass mark", 10_000, async () => ((await d.evaluate(standIn, { on: false })) === "none" ? true : null));
-  }
-  await later(600);
+  await d.main(mode === "glass" ? "frostForTest" : "solidForTest");
+  await d.main(mode === "opaque" ? "opaqueForTest" : "clearForTest");
+  await looksLike(d, mode === "glass" ? "frost clear" : mode === "opaque" ? "solid drawn" : "solid clear");
+  const mark = mode === "glass" ? "material" : "none";
+  await until(`the page's glass mark: ${mark}`, 10_000, async () => ((await d.evaluate(marked, null)) === mark ? true : null));
+  await later(800);
 }
 
 async function measured(d: Driver, mode: Mode, what: "scroll" | "still", frames: number): Promise<Run | null> {
@@ -220,18 +197,39 @@ function run(argv) {
 }
 `;
 
-function wallpaper(path: string): string {
-  const script = join(root, "wallpaper.js");
-  writeFileSync(script, WALLPAPER_SCRIPT);
-  const done = spawnSync("osascript", ["-l", "JavaScript", script, path], { encoding: "utf8" });
-  if (done.status !== 0) throw new Error(`the wallpaper can't be set: ${done.stderr.trim()}`);
+const WINDOW_SCRIPT = `ObjC.import("CoreGraphics");
+function run(argv) {
+  const all = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0)));
+  const ours = all.filter((w) => argv.includes(String(w.kCGWindowOwnerPID)) && w.kCGWindowLayer === 0).sort((a, b) => b.kCGWindowBounds.Width - a.kCGWindowBounds.Width)[0];
+  return ours ? JSON.stringify(ours.kCGWindowBounds) : "";
+}
+`;
+
+function script(name: string, source: string, args: readonly string[]): string {
+  const file = join(root, name);
+  writeFileSync(file, source);
+  const done = spawnSync("osascript", ["-l", "JavaScript", file, ...args], { encoding: "utf8" });
+  if (done.status !== 0) throw new Error(`${name}: ${done.stderr.trim()}`);
   return done.stdout.trim();
+}
+
+const wallpaper = (path: string): string => script("wallpaper.js", WALLPAPER_SCRIPT, [path]);
+
+function windowOnScreen(): Rect {
+  const pids = execFileSync("ps", ["-Ao", "pid=,command="], { encoding: "utf8" })
+    .split("\n")
+    .filter((l) => l.includes(bundle))
+    .map((l) => l.trim().split(/\s+/)[0]!);
+  const found = script("window.js", WINDOW_SCRIPT, pids);
+  if (!found) throw new Error(`none of the app's processes (${pids.join(", ")}) has a window on screen`);
+  const b = JSON.parse(found) as { X: number; Y: number; Width: number; Height: number };
+  return { x: b.X, y: b.Y, width: b.Width, height: b.Height };
 }
 
 interface Shot {
   width: number;
   height: number;
-  mean: (x: number, y: number, w: number, h: number) => number;
+  mean: (r: Rect) => number;
 }
 
 function capture(name: string): Shot | null {
@@ -250,11 +248,11 @@ function capture(name: string): Shot | null {
   const bytes = bmp.readUInt16LE(28) / 8;
   const row = (width * bytes + 3) & ~3;
   const height = Math.abs(tall);
-  const mean = (x: number, y: number, w: number, h: number): number => {
+  const mean = (r: Rect): number => {
     let sum = 0;
     let n = 0;
-    for (let py = Math.max(0, Math.round(y)); py < Math.min(height, Math.round(y + h)); py += 2)
-      for (let px = Math.max(0, Math.round(x)); px < Math.min(width, Math.round(x + w)); px += 2) {
+    for (let py = Math.max(0, Math.round(r.y)); py < Math.min(height, Math.round(r.y + r.height)); py += 2)
+      for (let px = Math.max(0, Math.round(r.x)); px < Math.min(width, Math.round(r.x + r.width)); px += 2) {
         const at = start + (tall > 0 ? height - 1 - py : py) * row + px * bytes;
         sum += (bmp[at]! + bmp[at + 1]! + bmp[at + 2]!) / 3;
         n += 1;
@@ -264,18 +262,18 @@ function capture(name: string): Shot | null {
   return { width, height, mean };
 }
 
-function patches(shot: Shot, at: Placed): { frame: number; page: number; desk: number } {
-  const k = shot.width / at.screen;
-  const frame = shot.mean((at.x + at.width * 0.3) * k, (at.y + 2) * k, at.width * 0.4 * k, Math.max(4, at.top - 4) * k);
-  const page = at.page ? shot.mean((at.x + at.page.x + 8) * k, (at.y + at.page.y + 8) * k, (at.page.width - 16) * k, (at.page.height - 16) * k) : -1;
-  const desk = shot.mean(0, 0, shot.width, shot.height);
-  return { frame, page, desk };
+function meansOf(shot: Shot, win: Rect, parts: Parts): Means {
+  const k = shot.width / parts.screen;
+  const inset = 8;
+  const on = (r: Rect | null): number => (r ? shot.mean({ x: (win.x + r.x + inset) * k, y: (win.y + r.y + inset) * k, width: (r.width - inset * 2) * k, height: (r.height - inset * 2) * k }) : -1);
+  return { top: on(parts.top), side: on(parts.side), page: on(parts.page), screen: shot.mean({ x: 0, y: 0, width: shot.width, height: shot.height }) };
 }
 
 const round = (n: number, digits = 1): number => Number(n.toFixed(digits));
 const mid = (list: readonly number[]): number => [...list].sort((a, b) => a - b)[Math.floor(list.length / 2)] ?? 0;
 
 mkdirSync(out, { recursive: true });
+spawnSync("defaults", ["delete", TEST_ID, "NSWindow Frame Channels"], { stdio: "ignore" });
 let before = "";
 try {
   await run(async (d) => {
@@ -285,6 +283,13 @@ try {
   await run(async (d) => {
     const kept = await d.evaluate(themeKept, null);
     if (!kept.includes("channels-oled") || !kept.startsWith("dark")) problems.push(`the theme picked before the restart wasn't kept (${kept}), so the captures aren't in OLED Black`);
+    const allowed = (await d.main("frostAllowed")) === true;
+    const first = await d.evaluate(marked, null);
+    console.log(
+      `the system's own setting ${allowed ? "allows glass" : "does not allow glass (Reduce transparency or Increase contrast is on here)"}; the page starts marked "${first}"; window: ${String(await d.main("looks"))}`,
+    );
+    if (allowed !== (first === "material")) problems.push(`the page starts marked "${first}" while the system ${allowed ? "allows" : "doesn't allow"} glass`);
+    if (!allowed) problems.push("Reduce transparency is on for this machine, so the system draws its material solid and the captures can't show glass");
     await firstChannel(d, 0);
     for (let i = 1; i <= MESSAGES; i++) {
       const shows = `Glass ${i}:`;
@@ -295,15 +300,12 @@ try {
     const frames = Math.min(FRAMES, Math.floor(feed.travel / STEP));
     console.log(`the conversation: ${feed.rows} rows, ${feed.travel} px to scroll; each run goes ${frames * STEP} px up and back, ${STEP} px a frame`);
     if (frames < 60) problems.push(`the conversation only scrolls ${feed.travel} px: too short to measure`);
-    console.log(
-      `with the system's own setting, glass is ${(await d.main("frostAllowed")) ? "allowed" : "not allowed (Reduce transparency or Increase contrast is on here)"}; window: ${String(await d.main("looks"))}`,
-    );
 
     await show(d, "glass");
     await measured(d, "glass", "scroll", frames);
     const runs: Run[] = [];
     for (let i = 0; i < ROUNDS; i++)
-      for (const mode of ["opaque", "glass"] as const) {
+      for (const mode of MODES) {
         await show(d, mode);
         for (const what of ["scroll", "still"] as const) {
           const got = await measured(d, mode, what, what === "scroll" ? frames : 90);
@@ -313,21 +315,21 @@ try {
       }
     writeFileSync(join(out, "scroll.json"), JSON.stringify(runs, null, 2));
     console.log("\nscrolling, today's opaque window and the glass one in turn (ms between frames; CPU seconds used while it ran):");
-    console.log("| run | window | frames | px moved | fps | p50 | p95 | max | late frames | WindowServer | WebKit | app |");
+    console.log("| round | window | frames | px moved | fps | p50 | p95 | longest | late frames | WindowServer | WebKit | app |");
     console.log("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
     for (const [i, r] of runs.entries())
       if (r.what === "scroll")
         console.log(
           `| ${Math.floor(i / 4) + 1} | ${r.mode} | ${r.frames} | ${Math.round(r.moved)} | ${round((r.frames / r.ms) * 1000)} | ${round(r.p50)} | ${round(r.p95)} | ${round(r.max)} | ${r.late} | ${round(r.server, 2)} | ${round(r.web, 2)} | ${round(r.app, 2)} |`,
         );
-    console.log("\n| median of the runs | window | fps | p95 | late frames | WindowServer CPU s | WebKit CPU s | app CPU s |");
-    console.log("| --- | --- | --- | --- | --- | --- | --- | --- |");
+    console.log(`\n| median of ${ROUNDS} | window | fps | p95 | longest | late frames | late frames in all | WindowServer CPU s | WebKit CPU s | app CPU s |`);
+    console.log("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
     for (const what of ["scroll", "still"] as const)
-      for (const mode of ["opaque", "glass"] as const) {
+      for (const mode of MODES) {
         const of = runs.filter((r) => r.mode === mode && r.what === what);
         const m = (pick: (r: Run) => number) => mid(of.map(pick));
         console.log(
-          `| ${what} | ${mode} | ${round(m((r) => (r.frames / r.ms) * 1000))} | ${round(m((r) => r.p95))} | ${m((r) => r.late)} | ${round(
+          `| ${what} | ${mode} | ${round(m((r) => (r.frames / r.ms) * 1000))} | ${round(m((r) => r.p95))} | ${round(m((r) => r.max))} | ${m((r) => r.late)} | ${of.reduce((n, r) => n + r.late, 0)} of ${of.reduce((n, r) => n + r.frames, 0)} | ${round(
             m((r) => r.server),
             2,
           )} | ${round(
@@ -340,8 +342,9 @@ try {
         );
       }
 
-    const at = await d.evaluate(placed, null);
-    console.log(`\nthe window on screen: ${JSON.stringify(at)}`);
+    const win = windowOnScreen();
+    const parts = await d.evaluate(partsOf, null);
+    console.log(`\nthe window on screen: ${JSON.stringify(win)}; in it: ${JSON.stringify(parts)}`);
     const bright = wallpaperImage("bright", [
       [255, 255, 255],
       [255, 214, 10],
@@ -356,40 +359,42 @@ try {
       [30, 8, 36],
     ]);
     before = wallpaper(bright);
-    await later(3_000);
-    const seen: Record<string, { frame: number; page: number; desk: number }> = {};
+    const seen: Record<string, Means> = {};
     for (const [paper, image] of [
       ["bright", bright],
       ["dark", dark],
     ] as const) {
       wallpaper(image);
       await later(3_000);
-      for (const mode of ["glass", "opaque", "reduced"] as const) {
+      for (const mode of SHOWN) {
         await show(d, mode);
-        await later(600);
         const shot = capture(`mac-${mode}-${paper}`);
-        if (shot) seen[`${mode} ${paper}`] = patches(shot, at);
+        if (shot) seen[`${mode} ${paper}`] = meansOf(shot, win, parts);
       }
     }
-    console.log("\nmean brightness (0 to 255) in each capture: the top bar, the page, the whole screen:");
-    for (const [name, p] of Object.entries(seen)) console.log(`  ${name}: frame ${round(p.frame)} · page ${round(p.page)} · screen ${round(p.desk)}`);
-    writeFileSync(join(out, "captures.json"), JSON.stringify({ window: at, seen }, null, 2));
-    const gap = (mode: Mode, part: "frame" | "page" | "desk"): number | null => {
+    console.log("\nmean brightness (0 to 255) of each part in each capture:");
+    for (const [name, p] of Object.entries(seen)) console.log(`  ${name}: top bar ${round(p.top)} · sidebar ${round(p.side)} · page ${round(p.page)} · whole screen ${round(p.screen)}`);
+    writeFileSync(join(out, "captures.json"), JSON.stringify({ window: win, parts, seen }, null, 2));
+    const gap = (mode: Mode, part: Part | "screen"): number | null => {
       const a = seen[`${mode} bright`];
       const b = seen[`${mode} dark`];
-      return a && b ? Math.abs(a[part] - b[part]) : null;
+      return a && b && a[part] >= 0 && b[part] >= 0 ? Math.abs(a[part] - b[part]) : null;
     };
-    const desk = gap("glass", "desk");
-    if (desk !== null && desk < 25) problems.push(`the screen reads the same with the bright and the dark wallpaper (${round(desk)} apart), so the captures prove nothing`);
-    const glass = gap("glass", "frame");
-    if (glass !== null && glass < 6) problems.push(`the glass frame reads the same over a bright and a dark wallpaper (${round(glass)} apart): nothing shows through`);
-    for (const mode of ["glass", "opaque", "reduced"] as const) {
-      const page = gap(mode, "page");
-      if (page !== null && page > 2) problems.push(`the page changes with the wallpaper in the ${mode} window (${round(page)} apart): it must stay solid`);
+    const screen = gap("glass", "screen");
+    if (screen !== null && screen < 25) problems.push(`the screen reads the same with the bright and the dark wallpaper (${round(screen)} apart), so the captures prove nothing`);
+    for (const part of ["top", "side"] as const) {
+      const glass = gap("glass", part);
+      if (glass === null) problems.push(`the ${part} of the frame wasn't found in the glass captures`);
+      else if (glass < 6) problems.push(`the glass frame's ${part} reads the same over a bright and a dark wallpaper (${round(glass)} apart): nothing shows through`);
+      for (const mode of ["opaque", "reduced"] as const) {
+        const solid = gap(mode, part);
+        if (solid !== null && solid > 2) problems.push(`the frame's ${part} changes with the wallpaper in the ${mode} window (${round(solid)} apart): it must be solid there`);
+      }
     }
-    for (const mode of ["opaque", "reduced"] as const) {
-      const frame = gap(mode, "frame");
-      if (frame !== null && frame > 2) problems.push(`the frame changes with the wallpaper in the ${mode} window (${round(frame)} apart): it must be solid there`);
+    for (const mode of SHOWN) {
+      const page = gap(mode, "page");
+      if (page === null) problems.push(`the page wasn't found in the ${mode} captures`);
+      else if (page > 2) problems.push(`the page changes with the wallpaper in the ${mode} window (${round(page)} apart): it must stay solid`);
     }
   });
 } catch (e) {

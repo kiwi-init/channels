@@ -621,7 +621,15 @@ jobs:
       - name: the frame is the window's own glass over a bright and a dark wallpaper, solid with Reduce transparency, and scrolling next to an opaque window (T2107)
         if: ${{ !cancelled() }}
         timeout-minutes: 8
-        run: bun desktop/scripts/eb-glass-check.ts desktop/release-eb/build/dev-macos-*/*.app "$RUNNER_TEMP/glass"
+        run: |
+          ax() { osascript -l JavaScript -e 'ObjC.import("AppKit"); const w = $.NSWorkspace.sharedWorkspace; `reduce transparency ${w.accessibilityDisplayShouldReduceTransparency}, increase contrast ${w.accessibilityDisplayShouldIncreaseContrast}`'; }
+          echo "this machine, as it comes: $(ax)"
+          for key in reduceTransparency increaseContrast; do echo "com.apple.universalaccess $key: $(defaults read com.apple.universalaccess "$key" 2>&1 | tail -n 1), for every user: $(defaults read /Library/Preferences/com.apple.universalaccess "$key" 2>&1 | tail -n 1)"; done
+          defaults write com.apple.universalaccess reduceTransparency -bool false || echo "the user's Reduce transparency can't be written"
+          echo "after the user's setting: $(ax)"
+          sudo defaults write /Library/Preferences/com.apple.universalaccess reduceTransparency -bool false || echo "the machine's Reduce transparency can't be written"
+          echo "after the machine's setting: $(ax)"
+          bun desktop/scripts/eb-glass-check.ts desktop/release-eb/build/dev-macos-*/*.app "$RUNNER_TEMP/glass"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
