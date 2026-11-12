@@ -8,6 +8,7 @@ import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
 import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_INTERLINKED, DEMO_LAUNCHED, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
+import { withOwnBubbles } from "~/demo/own-bubbles"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf } from "~/home"
@@ -283,6 +284,7 @@ export type Scenario =
   | "ci-live"
   | "doc-busy"
   | "event-runs"
+  | "own-bubbles"
   | "handoff"
   | "opening"
   | "held"
@@ -428,7 +430,9 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                                         }
                                       : scenario === "event-runs"
                                         ? withEventRuns(DEMO_CHANNEL)
-                                        : DEMO_CHANNEL,
+                                        : scenario === "own-bubbles"
+                                          ? withOwnBubbles(DEMO_CHANNEL)
+                                          : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,

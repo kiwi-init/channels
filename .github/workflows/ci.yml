@@ -480,6 +480,9 @@ jobs:
       - name: ui a click on a mention opens the direct conversation with that person, and their name inside it opens the profile
         if: ${{ !cancelled() }}
         run: bun scripts/ui-person-click.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui your own message is a bubble as wide as its longest line, with its picture, chip, reactions and replies on one right edge, and a run of them reads as one group
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-own-bubble.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist
