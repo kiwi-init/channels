@@ -134,7 +134,7 @@ async function arm(page: Page): Promise<boolean> {
   });
 }
 
-async function scroll(page: Page, phases: { dy: number; frames: number }[], jumpy = false, busy = 0): Promise<Frames> {
+async function scroll(page: Page, phases: { dy: number; frames: number; rest?: number }[], jumpy = false, busy = 0): Promise<Frames> {
   return page.evaluate(
     async ({ steps, jumpy, busy }) => {
       const w = window as unknown as { __long: number[] };
@@ -178,6 +178,7 @@ async function scroll(page: Page, phases: { dy: number; frames: number }[], jump
       await new Promise<void>((done) => {
         let phase = 0;
         let left = steps[0]?.frames ?? 0;
+        let rested = 0;
         let last = 0;
         const frame = (t: number) => {
           started = performance.now();
@@ -200,10 +201,12 @@ async function scroll(page: Page, phases: { dy: number; frames: number }[], jump
           const before = feed.scrollTop;
           feed.scrollTop += step.dy;
           applied = feed.scrollTop - before;
+          rested = applied === 0 ? rested + 1 : 0;
           probe.style.width = probe.style.width === "1px" ? "2px" : "1px";
           channel.port2.postMessage(0);
           if (busy) for (const until = performance.now() + busy; performance.now() < until;);
-          if (--left <= 0) {
+          if (--left <= 0 || (step.rest !== undefined && rested >= step.rest)) {
+            rested = 0;
             phase++;
             left = steps[phase]?.frames ?? 0;
           }
@@ -298,7 +301,7 @@ try {
   ];
   const thrown = [
     { dy: -120, frames: 400 },
-    { dy: 1_000_000, frames: 800 },
+    { dy: 1_000_000, frames: 1200, rest: 120 },
   ];
   const idles: Frames[] = [];
   const runs: Frames[] = [];
