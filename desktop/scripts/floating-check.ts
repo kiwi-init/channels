@@ -1,10 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 import { firstChannel } from "./eb-first-run.ts";
+import { glassParts, markedOrigin, originMark, tints, type GlassParts, type Tints } from "./glass-shot.ts";
+import { png } from "./shot-pixels.ts";
 
 const appDir = process.argv[2] ?? "";
 const out = process.argv[3] ?? "";
@@ -56,12 +58,32 @@ for (let y = 0; y < height; y++)
   }
 const wall = join(root, "wall.ppm");
 writeFileSync(wall, Buffer.concat([Buffer.from(`P6\n${width} ${height}\n255\n`), Buffer.from(px)]));
+const flipped = new Uint8Array(px.length);
+for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) flipped.set(px.subarray((y * width + (width - 1 - x)) * 3, (y * width + (width - 1 - x)) * 3 + 3), (y * width + x) * 3);
+const kdeWall = join(root, "wall-kde.ppm");
+writeFileSync(kdeWall, Buffer.concat([Buffer.from(`P6\n${width} ${height}\n255\n`), Buffer.from(flipped)]));
 
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const env = testEnv(root, join(root, "driver.sock"), `http://127.0.0.1:${port}`, { GSETTINGS_BACKEND: "keyfile" });
 for (const key of ["picture-uri", "picture-uri-dark"]) execFileSync("gsettings", ["set", "org.gnome.desktop.background", key, `file://${wall}`], { env });
-const app = launch(appExecutable(appDir), env);
+let app = launch(appExecutable(appDir), env);
 let d: Driver | null = null;
+
+async function glassShot(driver: Driver, name: string): Promise<{ parts: GlassParts | null; tints: Tints | null; why?: string }> {
+  const parts = await until("the wallpaper under the frame", 20_000, async () => {
+    const p = await driver.evaluate(glassParts, null, 5_000);
+    return p.glass === "image" && p.wallpaper && p.top ? p : null;
+  }).catch(() => null);
+  if (!parts) return { parts: await driver.evaluate(glassParts, null, 5_000).catch(() => null), tints: null, why: "the page never drew a wallpaper under its frame" };
+  await later(1_500);
+  if (!shot(name)) return { parts, tints: null, why: "no screenshot" };
+  await driver.evaluate(originMark, true, 5_000);
+  await later(500);
+  const located = shot(`${name}-origin`) ? markedOrigin(png(readFileSync(join(out, `${name}-origin.png`)))) : null;
+  await driver.evaluate(originMark, false, 5_000);
+  if (!located) return { parts, tints: null, why: "the window wasn't found in the screenshot" };
+  return { parts, tints: tints(png(readFileSync(join(out, `${name}.png`))), located, parts) };
+}
 try {
   d = await attach(join(root, "driver.sock"));
   const driver = d;
@@ -102,6 +124,27 @@ try {
     await later(1_500);
     const taken = shot("maximized");
     return { ok: after !== null && taken, detail: { before, after, screenshot: taken } };
+  });
+
+  await step("the frame shows GNOME's wallpaper under it, warm on the left and cool on the right, and the page stays solid (glass-gnome.png)", async () => {
+    const got = await glassShot(driver, "glass-gnome");
+    const t = got.tints;
+    return { ok: !!t && (t.left ?? 0) > 15 && (t.right ?? 0) < -15 && (t.side === null || t.side > 15) && (t.page ?? 0) < 12, detail: got };
+  });
+
+  await step("on KDE the frame shows the wallpaper from Plasma's own settings, the other way round: cool on the left, warm on the right (glass-kde.png)", async () => {
+    driver.close();
+    d = null;
+    await stop(app);
+    const config = join(root, "home", ".config");
+    mkdirSync(config, { recursive: true });
+    writeFileSync(join(config, "plasma-org.kde.plasma.desktop-appletsrc"), `[Containments][1][Wallpaper][org.kde.image][General]\nImage=file://${kdeWall}\n`);
+    app = launch(appExecutable(appDir), { ...env, XDG_CURRENT_DESKTOP: "KDE" });
+    const again = await attach(join(root, "driver.sock"));
+    d = again;
+    const got = await glassShot(again, "glass-kde");
+    const t = got.tints;
+    return { ok: !!t && (t.left ?? 0) < -15 && (t.right ?? 0) > 15 && (t.page === null || t.page < 12), detail: got };
   });
 } catch (e) {
   record("the check set up", false, e instanceof Error ? e.message : String(e));

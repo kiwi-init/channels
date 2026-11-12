@@ -910,11 +910,11 @@ jobs:
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 12
         run: bash desktop/scripts/wayland-check/kwin.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/wayland-check"
-      - name: tiling, scale and closing on wlroots as Hyprland and sway run it (headless sway with no XWayland), with screenshots
+      - name: tiling, scale, closing and the wallpaper under the glass frame on wlroots as Hyprland and sway run it (headless sway with no XWayland), with screenshots
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 12
         run: bash desktop/scripts/wlroots-check/sway.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/wlroots-check"
-      - name: on a floating desktop (headless weston) the shell draws GNOME's wallpaper, with no GTK title bar and close, minimize and maximize top left, with screenshots
+      - name: on a floating desktop (headless weston) the glass frame shows GNOME's wallpaper and then KDE's, with no GTK title bar and close, minimize and maximize top left, with screenshots
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 8
         run: bash desktop/scripts/floating-check/weston.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/floating-check"
