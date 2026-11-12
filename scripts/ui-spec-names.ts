@@ -42,7 +42,7 @@ async function tabTo(page: Page, sel: string, has: string): Promise<boolean> {
   await page.mouse.move(0, 0);
   for (let i = 0; i < 80; i++) {
     await page.keyboard.press("Tab");
-    if (await page.evaluate(([s, h]) => (document.activeElement?.matches(s) && !!document.activeElement.querySelector(h)) ?? false, [sel, has])) return true;
+    if (await page.evaluate(([s, h]: [string, string]) => (document.activeElement?.matches(s) && !!document.activeElement.querySelector(h)) ?? false, [sel, has] as [string, string])) return true;
   }
   return false;
 }
@@ -84,7 +84,7 @@ async function run(browser: Browser): Promise<string | null> {
       return `keyboard focus on the row leaves the names hidden (opacity ${keyed?.opacity}, clip ${keyed?.clip})`;
     }
     const keyed = await nameState(page, `${ROW} .spec-faces-all`);
-    if (!keyed.text.includes(",")) return `keyboard focus shows one combined line, not each avatar's tag (got "${keyed.text}")`;
+    if (!keyed?.text.includes(",")) return `keyboard focus shows one combined line, not each avatar's tag (got "${keyed?.text}")`;
     const single = await nameState(page, `${ROW} .spec-face-name`);
     if (single && single.opacity !== "0") return "keyboard focus on the row reveals the per-avatar tags, which stamp over each other";
 
