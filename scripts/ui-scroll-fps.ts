@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
 import { pageErrors } from "./page-errors.ts";
 
-const SLOW_MS = 16;
+const SLOW_MS = Number(process.env.SLOW_MS ?? 16);
 const MOST_ROWS = 400;
 
 if (process.argv.includes("--help")) {
@@ -170,7 +170,12 @@ async function scroll(page: Page, phases: { dy: number; frames: number; rest?: n
         }
         return rows;
       };
-      let shown: { rows: Map<string, { top: number; tall: number }>; scrolled: number } | null = null;
+      let shown: { rows: Map<string, { top: number; tall: number }>; scrolled: number; blank: number } | null = null;
+      const blankNow = (): number => {
+        let end = box.top;
+        for (const el of list.children) if (el.getClientRects().length) end = Math.max(end, el.getBoundingClientRect().bottom);
+        return Math.round(box.bottom - end);
+      };
       const painted = new ResizeObserver(() => {
         const kids = laid();
         if (watched?.el.isConnected) {
@@ -211,11 +216,12 @@ async function scroll(page: Page, phases: { dy: number; frames: number; rest?: n
                 `The feed held ${shown?.rows.size ?? 0} then ${kids.size} children, from ${[...(shown?.rows.keys() ?? [])][0] ?? "none"} then ${[...kids.keys()][0] ?? "none"}. ` +
                 `Above that row: ${gone.length} gone${gone.length ? ` (${gone[0]} to ${gone.at(-1)})` : ""}, ${fresh.length} new${fresh.length ? ` (${fresh[0]} to ${fresh.at(-1)})` : ""}, ` +
                 `${resized.length} resized${resized.length ? ` (${resized.slice(0, 4).join(", ")})` : ""}, ${px(above)} px in all; the feed moved its own scroll by ${px(feed.scrollTop - (shown?.scrolled ?? feed.scrollTop) - applied)} px. ` +
-                `Of the rows in both frames, ${moved.length} moved (${moved[0]} to ${moved.at(-1)}) and ${stayed} stayed; the row at the top edge is ${name([...list.children].find((el) => el.getBoundingClientRect().bottom > box.top) ?? list)}`,
+                `Of the rows in both frames, ${moved.length} moved (${moved[0]} to ${moved.at(-1)}) and ${stayed} stayed; the row at the top edge is ${name([...list.children].find((el) => el.getBoundingClientRect().bottom > box.top) ?? list)}. ` +
+                `Under the last row the feed was empty for ${shown?.blank ?? 0} px, now ${blankNow()} px; the watched row ${watched.el.getClientRects().length ? "is laid out" : "has no box"}`,
             );
           }
         }
-        shown = { rows: kids, scrolled: feed.scrollTop };
+        shown = { rows: kids, scrolled: feed.scrollTop, blank: blankNow() };
         const rows = list.children;
         const line = box.top + box.height / 3;
         let lo = 0;
