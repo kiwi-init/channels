@@ -669,6 +669,14 @@
   background: color-mix(in srgb, var(--frame) var(--glass), transparent);
 }
 
+:root[data-glass] {
+  --ink-3-glass: color-mix(in srgb, var(--ink-3) 75%, var(--ink));
+}
+
+:root[data-glass] :is(.rail, .top, .side) {
+  --ink-3: var(--ink-3-glass);
+}
+
 @media (min-width: 761px) and (orientation: landscape) {
   :root[data-glass] :is(.side, .side-foot) {
     background: none;
