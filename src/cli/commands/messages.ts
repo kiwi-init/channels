@@ -48,22 +48,24 @@ function refuseUnused(command: string, allowed: readonly string[]): Effect.Effec
   return extra.length ? die(`kiwi ${command} doesn't take ${extra.map((o) => `--${o}`).join(", ")}: nothing was sent (see kiwi help ${command})`) : Effect.void;
 }
 
-type Sent = { seq: number; to?: readonly string[] | undefined; task?: number | undefined };
+type Sent = { seq: number; body: string; to?: readonly string[] | undefined; task?: number | undefined; room?: string | undefined; re?: number | undefined };
 
 const waitingOn = (s: AgentSession, state: ChannelState, messages: readonly Message[], sent: Sent) =>
   Effect.gen(function* () {
     const near = yield* s.heard();
     if (!near) return [];
     const to = yield* s.resolveTo(sent.to ? [...sent.to] : undefined, state);
+    const parent = !sent.room && sent.re !== undefined ? state.roomOf.get(sent.re) : undefined;
     const m = {
       v: PROTOCOL_VERSION,
       id: "",
       from: s.me,
       kind: "msg",
-      body: "",
+      body: sent.body,
       ts: Date.now(),
       seq: sent.seq,
       sigOk: true,
+      room: parent ?? (yield* s.roomId(sent.room, state)),
       ...(to?.length ? { to } : {}),
       ...(sent.task === undefined ? {} : { task: sent.task }),
     } as Message;
@@ -136,7 +138,7 @@ export const messageCommands: Record<string, Command> = {
             ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           });
           out(`sent #${seq}${wentTo(chosen)}, into its shared doc`);
-          for (const n of [...notes, ...(yield* waitingOn(s, state, messages, { seq, to, task: thread }))]) out(n);
+          for (const n of [...notes, ...(yield* waitingOn(s, state, messages, { seq, body, to, task: thread, room, re: re[0] }))]) out(n);
           return;
         }
         const head = asking && opt.wait ? yield* s.ch.fx.head() : 0;
@@ -150,7 +152,7 @@ export const messageCommands: Record<string, Command> = {
           ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           ...(chosen.dm ? { dm: true } : {}),
         });
-        const waits = yield* waitingOn(s, state, messages, { seq, to, task: thread });
+        const waits = yield* waitingOn(s, state, messages, { seq, body, to, task: thread, room, re: re[0] });
         if (!asking || !opt.wait) {
           out(`${asking ? "asked" : "sent"} #${seq}${wentTo(chosen)}`);
           for (const n of [...notes, ...waits]) out(n);
@@ -181,7 +183,7 @@ export const messageCommands: Record<string, Command> = {
         if (placed.under) out(`${placed.under.by} answered #${seq} first (#${placed.under.answer}): yours went under that answer`);
         const notes = [inGeneral(state, seq) ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
         const orig = messages.find((m) => m.seq === seq);
-        const waits = orig ? yield* waitingOn(s, state, messages, { seq: placed.seq, to: orig.from === s.me ? orig.to : [orig.from], task: orig.task }) : [];
+        const waits = orig ? yield* waitingOn(s, state, messages, { seq: placed.seq, body, to: orig.from === s.me ? orig.to : [orig.from], task: orig.task, re: seq }) : [];
         for (const n of [...notes, ...waits]) out(n);
       }),
     ),
