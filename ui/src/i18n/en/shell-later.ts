@@ -242,10 +242,6 @@ const words = {
   "panes.page.notes": "Notes",
   "panes.page.tasks": "Tasks",
   "panes.page.comments": "Comments",
-  "shell.channel.details": "Details",
-  "shell.channel.resize": "Resize the panel",
-  "panes.blank.name": "Empty",
-  "panes.thread": "Thread",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

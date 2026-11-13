@@ -1,4 +1,3 @@
-import "~/i18n/en/shell-later"
 import { Suspense, useLayoutEffect } from "react"
 
 import { t } from "~/i18n/i18n"

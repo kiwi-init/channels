@@ -1,4 +1,3 @@
-import "~/i18n/en/chat-later"
 import { MAX_FILE_BYTES, MAX_IMAGE_BYTES } from "@kiwi/core/protocol.ts"
 import { IMAGE_TYPES } from "~/chat/attach"
 import { t } from "~/i18n/i18n"

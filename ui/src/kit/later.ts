@@ -7,10 +7,6 @@ export function later<P extends object>(load: () => Promise<ComponentType<P>>): 
   return lazy(() => load().then((c) => ({ default: c })))
 }
 
-export function warmToo(load: () => Promise<unknown>): void {
-  loads.push(load)
-}
-
 export function warmLater(): void {
   window.setTimeout(() => {
     for (const load of loads)

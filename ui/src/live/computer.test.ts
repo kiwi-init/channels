@@ -34,8 +34,7 @@ const fake = {
   doctor: async () => [{ ok: false as const, what: "Codex's hooks are from an older kiwi", how: "Update them" }],
 }
 mock.module("@kiwi/secrets/secrets.ts", () => ({ bridge: () => fake }))
-const { computerNow, loadComputer } = await import("~/live/computer")
-const { checkComputer, computerSettings, setContextLine, setHooks } = await import("~/live/computer-later")
+const { checkComputer, computerNow, computerSettings, loadComputer, setContextLine, setHooks } = await import("~/live/computer")
 
 describe("Settings > Agents shows this computer", () => {
   test("kiwi's version, and the hooks of every harness that takes them", async () => {

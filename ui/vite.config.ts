@@ -32,8 +32,30 @@ function lazyLinksAfterThePage(): Plugin {
   }
 }
 
+const firstLoad = new Set<string>()
+
+function firstLoadChunks(): Plugin {
+  return {
+    name: "first-load-chunks",
+    apply: "build",
+    enforce: "pre",
+    generateBundle(_, bundle) {
+      firstLoad.clear()
+      const add = (fileName: string): void => {
+        const chunk = bundle[fileName]
+        if (firstLoad.has(fileName) || chunk?.type !== "chunk") return
+        firstLoad.add(fileName)
+        for (const next of chunk.imports) add(next)
+      }
+      for (const chunk of Object.values(bundle)) if (chunk.type === "chunk" && chunk.isEntry) add(chunk.fileName)
+      if (!firstLoad.size) this.error("first-load-chunks found no entry chunk, so lazy imports would list the first load as preload deps again")
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), compactIcons(), lazyLinksAfterThePage()],
+  plugins: [react(), compactIcons(), lazyLinksAfterThePage(), firstLoadChunks()],
+  build: { modulePreload: { resolveDependencies: (_file, deps, { hostType }) => (hostType === "js" ? deps.filter((dep) => !firstLoad.has(dep)) : deps) } },
   define: { __DEV__: "false", ...(mode === "harness" ? { "import.meta.env.DEV": "true" } : {}) },
   resolve: {
     alias: {

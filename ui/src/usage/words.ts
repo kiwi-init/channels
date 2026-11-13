@@ -1,4 +1,3 @@
-import "~/i18n/en/usage"
 import { span, t } from "~/i18n/i18n"
 import type { Usage } from "~/model"
 

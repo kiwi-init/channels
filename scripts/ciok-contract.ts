@@ -11,10 +11,6 @@ const DOC_TESTS: [name: string, command: string][] = [
   ["doc follow, at the bottom the view follows an agent's lines, also right after you send while it posts and edits, in Chromium and WebKit", "bun scripts/ui-doc-follow.ts"],
   ["rail needs-you, an agent's ask in another channel shows on its tile, stays 1 through a visit, and goes when the ask closes, while you sit in a channel", "bun scripts/ui-rail-needs.ts"],
   [
-    "cold actions, a new room, a rename, the first @ and an invite link work with the later actions chunk held back, with no raw words, moved layout or lost draft, in Chromium and WebKit",
-    "bun scripts/ui-cold-actions.ts --browser chromium && bun scripts/ui-cold-actions.ts --browser webkit",
-  ],
-  [
     "meadow, the scene behind onboarding and the site draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer, in WebKit",
     "bun scripts/ui-meadow.ts",
   ],

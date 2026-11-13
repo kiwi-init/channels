@@ -211,9 +211,9 @@ jobs:
       - name: ui bundle budget
         if: ${{ !cancelled() && matrix.part == 'app' }}
         run: bun scripts/ui-bundle.ts
-      - name: ui the actions and words people rarely use are out of the first load and in chunks that load later
+      - name: ui lazy imports preload only what the first load doesn't already have, and index.html preloads the entry's whole static graph
         if: ${{ !cancelled() && matrix.part == 'app' }}
-        run: bun scripts/ui-lazy-actions.ts --dist ui/dist
+        run: bun scripts/ui-preload-deps.ts --dist ui/dist
       - name: ui harness build, with the plain-browser key store
         if: ${{ !cancelled() }}
         run: bun scripts/ui-harness.ts
@@ -315,9 +315,6 @@ jobs:
       - name: rail needs-you, an agent's ask in another channel shows on its tile, stays 1 through a visit, and goes when the ask closes, while you sit in a channel
         if: ${{ !cancelled() && matrix.part == 'view' }}
         run: bun scripts/ui-rail-needs.ts
-      - name: cold actions, a new room, a rename, the first @ and an invite link work with the later actions chunk held back, with no raw words, moved layout or lost draft, in Chromium and WebKit
-        if: ${{ !cancelled() && matrix.part == 'view' }}
-        run: bun scripts/ui-cold-actions.ts --browser chromium && bun scripts/ui-cold-actions.ts --browser webkit
       - name: meadow, the scene behind onboarding and the site draws and moves, follows the clock, rests while hidden, holds still for reduced motion and reuses its renderer, in WebKit
         if: ${{ !cancelled() && matrix.part == 'view' }}
         run: bun scripts/ui-meadow.ts
