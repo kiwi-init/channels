@@ -96,6 +96,7 @@ export function useStick(following = true, still = false) {
   const holdUntil = useRef(0)
   const parked = useRef<Anchor | null>(null)
   const going = useRef(false)
+  const older = useRef(false)
   const acted = useRef(Number.NEGATIVE_INFINITY)
   const pressed = useRef(false)
   const person = () => pressed.current || Date.now() - Math.max(acted.current, wheeled.current) < WHEEL_MS
@@ -145,7 +146,7 @@ export function useStick(following = true, still = false) {
         return
       }
       const top = box.getBoundingClientRect().top
-      if (still && Date.now() - wheeled.current < WHEEL_MS) {
+      if (still && !older.current && Date.now() - wheeled.current < WHEEL_MS) {
         anchor.current = spot(box, list, el, a.seq)
         return
       }
@@ -182,6 +183,7 @@ export function useStick(following = true, still = false) {
     if (!reflow && still && box.scrollTop < seen.current - 0.5 && gapIn(box) > 0.5 && person()) stuck.current = false
     const from = box.scrollTop
     correct(reflow)
+    older.current = false
     if (!reflow && box.scrollTop !== from) parked.current = null
     if (reflow || box.scrollTop !== from) seen.current = box.scrollTop
   }, [correct, still])
@@ -315,6 +317,10 @@ export function useStick(following = true, still = false) {
     [remember]
   )
 
+  const prepended = useCallback(() => {
+    older.current = true
+  }, [])
+
   const unstick = useCallback(() => {
     placed.current = null
     parked.current = null
@@ -349,5 +355,5 @@ export function useStick(following = true, still = false) {
     [remember, unstick]
   )
 
-  return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift }
+  return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift, prepended }
 }
