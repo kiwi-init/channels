@@ -15,7 +15,6 @@ import { dropMessage, findWanted, specOfWanted, useWantedMessage } from "~/live/
 import { sameWhere, useGo, useNav, useActions } from "~/nav"
 import { whereKey } from "~/places"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
-import { usePanelWidth } from "~/shell/panel-width"
 import { Frame } from "~/shell/frame"
 import { useDrawer } from "~/shell/side"
 import { Content } from "~/shell/content"
@@ -30,10 +29,7 @@ const Panes = later(() => import("~/panes/panes").then((m) => m.Panes))
 const Page = later(() => import("~/panes/page").then((m) => m.Page))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const OlderView = later(() => import("~/chat/older-view").then((m) => m.OlderView))
-const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
-const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
-const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
-const ThreadPanel = later(() => import("~/panels/thread").then((m) => m.ThreadPanel))
+const NarrowPanel = later(() => import("~/shell/narrow-panel").then((m) => m.NarrowPanel))
 const Profile = later(() => import("~/modals/profile").then((m) => m.Profile))
 const ChannelSettings = later(() => import("~/modals/channel-settings").then((m) => m.ChannelSettings))
 const Invite = later(() => import("~/modals/invite").then((m) => m.Invite))
@@ -47,12 +43,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const hidden = useSidebarHidden()
   const tabs = useTabs()
   const top = useTopLayout()
-  const panel = usePanelWidth(hidden)
-  useLayoutEffect(() => {
-    const root = document.documentElement
-    root.style.setProperty("--panel-w", `${panel.width}px`)
-    return () => void root.style.removeProperty("--panel-w")
-  }, [panel.width])
   const [jumpAt, setJumpAt] = useState<{ jump: Jump; visit: number } | null>(null)
   const jump = jumpAt?.visit === nav.visit ? jumpAt.jump : null
   const setJump = (j: Jump | null) => setJumpAt(j ? { jump: j, visit: nav.visit } : null)
@@ -190,21 +180,9 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           </p>
         )}
         {panelOpen && (
-          <aside className="panel" aria-label={t("shell.channel.details")}>
-            <div
-              className="panel-grip"
-              role="separator"
-              aria-orientation="vertical"
-              aria-label={t("shell.channel.resize")}
-              aria-valuemin={panel.min}
-              aria-valuemax={panel.max}
-              aria-valuenow={panel.width}
-              tabIndex={0}
-              title={t("shell.channel.resize.title")}
-              {...panel.grip}
-            />
-            <PanelView channel={channel} />
-          </aside>
+          <Suspense fallback={null}>
+            <NarrowPanel channel={channel} hidden={hidden} />
+          </Suspense>
         )}
       </Content>
       <ModalView channel={channel} />
@@ -215,26 +193,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
 function PlaceView({ channel }: { channel: Channel }) {
   const view = viewOf(useNav())
   return view ? <Page channel={channel} view={view} /> : <Conversation channel={channel} jump={null} />
-}
-
-function PanelView({ channel }: { channel: Channel }) {
-  const nav = useNav()
-  if (!nav.panel) return null
-  return (
-    <Boundary panel resetKey={JSON.stringify(nav.panel)}>
-      <Suspense fallback={null}>
-        {nav.panel.kind === "thread" ? (
-          <ThreadPanel channel={channel} seq={nav.panel.seq} focus={nav.panel.focus} />
-        ) : nav.panel.kind === "task" ? (
-          <TaskPanel channel={channel} id={nav.panel.task} />
-        ) : nav.panel.kind === "pr" ? (
-          <PrPanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
-        ) : (
-          <IssuePanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
-        )}
-      </Suspense>
-    </Boundary>
-  )
 }
 
 function ModalView({ channel }: { channel: Channel }) {

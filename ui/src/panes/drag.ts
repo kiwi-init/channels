@@ -1,5 +1,6 @@
 import { fillPane, movePane, splitAt } from "~/panes/ops"
-import { MIN_H, MIN_W, setDrag, type Carry, type Drag, type Edge } from "~/panes/store"
+import { setDrag, type Drag } from "~/panes/drag-state"
+import { MIN_H, MIN_W, type Carry, type Edge } from "~/panes/store"
 
 const START = 6
 

@@ -21,7 +21,6 @@ import {
   setCloser,
   MIN_H,
   MIN_W,
-  useDrag,
   useLayout,
   type Box,
   type Leaf,
@@ -32,8 +31,8 @@ import {
   type Split,
   homeFrom,
   PANE_DRAG,
-  setDrag,
 } from "~/panes/store"
+import { setDrag, useDrag } from "~/panes/drag-state"
 import { boxes, closePane, css, fillPane, focusPane, isNone, pixels, resizeSplit, splitAt, without } from "~/panes/ops"
 import { useTabs } from "~/shell/top-layout"
 import { wordsPlain } from "~/words"
