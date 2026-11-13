@@ -2,6 +2,27 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.21 — 2026-11-13
+
+- **Chat: local time on hover for UTC times in messages (#2367)** ([#2375](https://github.com/kiwi-init/channels/pull/2375))
+- **Consolidate exact-copy helpers and constants (T8832, #2400)** ([#2403](https://github.com/kiwi-init/channels/pull/2403))
+- **test: share isolated hooks fixtures** ([#2404](https://github.com/kiwi-init/channels/pull/2404))
+- **Desktop: UI contract history comes from per-version deltas (#2401, T8833)** ([#2406](https://github.com/kiwi-init/channels/pull/2406))
+- **refactor: share scripts GitHub transport with caller policies** ([#2409](https://github.com/kiwi-init/channels/pull/2409))
+- **Theme: tokens.css takes its built-in colours from channels.ts (T8978, #2407)** ([#2410](https://github.com/kiwi-init/channels/pull/2410))
+- **Feed: a move up counts as yours only if you touched something (T2635)** ([#2405](https://github.com/kiwi-init/channels/pull/2405))
+- **Desktop: the native gear check uses real X clicks again (#2364)** ([#2411](https://github.com/kiwi-init/channels/pull/2411))
+- **Harness: model and activity readers share their lookups (#2414)** ([#2415](https://github.com/kiwi-init/channels/pull/2415))
+- **refactor: share loop adapter helpers** ([#2417](https://github.com/kiwi-init/channels/pull/2417))
+- **Hooks: one module for the Claude-shaped installers (T9137)** ([#2416](https://github.com/kiwi-init/channels/pull/2416))
+- **Own bubble check: count only frames WebKit painted, at the width it painted (T933)** ([#2418](https://github.com/kiwi-init/channels/pull/2418))
+- **Feed: older rows that load above you mid-wheel are made up for (T2559)** ([#2424](https://github.com/kiwi-init/channels/pull/2424))
+- **UI: change-block and restore-version share one LiveDoc lifecycle (#2422, T9300)** ([#2425](https://github.com/kiwi-init/channels/pull/2425))
+- **refactor: share member record reseal mechanics** ([#2426](https://github.com/kiwi-init/channels/pull/2426))
+- **Glass shell, split panes and markdown pages (T2107, T2427, T2631, T2632)** ([#2397](https://github.com/kiwi-init/channels/pull/2397))
+- **Feed: each open conversation keeps its own older rows, so two panes of one room stop trimming each other (#3652)** ([#2428](https://github.com/kiwi-init/channels/pull/2428))
+- **UI: one dismissal hook for the GIF pickers, updates panel and usage card (T9299, #2421)** ([#2427](https://github.com/kiwi-init/channels/pull/2427))
+
 ## 2026.11.20 — 2026-11-13
 
 - **Tests: a channel-store test that fails can't leave its store open into the next one (#2261)** ([#2294](https://github.com/kiwi-init/channels/pull/2294))
