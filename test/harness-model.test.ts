@@ -201,9 +201,9 @@ describe("harnessActivity", () => {
   const DEAD = 2 ** 22 + 4242;
   const ticks = (): string => {
     const started = processStart(LIVE) ?? "";
-    return started.slice(started.lastIndexOf(":") + 1);
+    return existsSync("/proc/self/stat") ? started.slice(started.lastIndexOf(":") + 1) : started;
   };
-  const started = existsSync("/proc/self/stat") ? { procStart: ticks() } : {};
+  const started = { procStart: ticks() };
   const claude = (status: unknown, lines: object[], over: { pid?: number; record?: object | string; session?: string } = {}) => {
     const home = dir();
     const pid = over.pid ?? LIVE;
@@ -300,10 +300,11 @@ describe("harnessActivity", () => {
       expect(await state({ sessionId: "s-a", procStart: {} })).toBe("unknown");
       expect(await state({ sessionId: "s-a", procStart: 12345 })).toBe("unknown");
       expect(await state({ sessionId: "s-a", procStart: "" })).toBe("unknown");
-      expect(await state({ sessionId: "s-a", procStart: "x1" })).toBe("unknown");
+      expect(await state({ sessionId: "s-a", procStart: "  " })).toBe("unknown");
+      expect(await state({ sessionId: "s-a", procStart: "Thu Jan  1 00:00:00 1970" })).toBe("unknown");
     });
 
-    test.skipIf(!existsSync("/proc/self/stat"))("where /proc tells a process's start, a record without procStart can't prove its process and is unknown", async () => {
+    test.skipIf(process.platform === "win32")("off Windows, where Claude Code always writes procStart, a record without it can't prove its process and is unknown", async () => {
       const a = await harnessActivity(claude("busy", [asked], { record: { pid: LIVE, sessionId: "s-a", status: "busy", statusUpdatedAt: 1000 }, session: "s-a" }));
       expect(a?.state).toBe("unknown");
     });

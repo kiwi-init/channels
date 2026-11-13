@@ -78,8 +78,8 @@ async function seatOf(agent: string) {
 
 const from = (pk: string) => heard.filter((p) => p.pk === pk && !p.query);
 
-const started = (processStart(process.pid) ?? "").split(":").at(-1);
-const claudeRegistry = (record: object): string => JSON.stringify({ pid: process.pid, sessionId: "s", ...(existsSync("/proc/self/stat") ? { procStart: started } : {}), ...record });
+const started = existsSync("/proc/self/stat") ? (processStart(process.pid) ?? "").split(":").at(-1) : processStart(process.pid);
+const claudeRegistry = (record: object): string => JSON.stringify({ pid: process.pid, sessionId: "s", procStart: started, ...record });
 
 describe("seats always on", () => {
   test("with no subscriber, a joined agent's seat is open and the relay sees it as the daemon", async () => {

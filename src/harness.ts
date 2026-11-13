@@ -369,7 +369,7 @@ function claudeRecord(file: string): ClaudeRecord | null {
   const sessionId = "sessionId" in r ? r.sessionId : undefined;
   const procStart = "procStart" in r ? r.procStart : undefined;
   if (typeof sessionId !== "string" || !sessionId) return null;
-  if (procStart !== undefined && (typeof procStart !== "string" || !/^\d+$/.test(procStart))) return null;
+  if (procStart !== undefined && (typeof procStart !== "string" || !procStart.trim())) return null;
   const status = "status" in r && isClaudeStatus(r.status) ? r.status : undefined;
   const since = "statusUpdatedAt" in r && typeof r.statusUpdatedAt === "number" && Number.isFinite(r.statusUpdatedAt) ? r.statusUpdatedAt : undefined;
   return { sessionId, procStart, status, since };
@@ -379,9 +379,10 @@ const HAS_PROC = existsSync("/proc/self/stat");
 
 function sameProcess(pid: number, procStart: string | undefined): boolean {
   if (!pidAlive(pid)) return false;
-  if (!HAS_PROC) return true;
+  if (procStart === undefined) return process.platform === "win32";
   const started = processStart(pid);
-  return started !== null && procStart !== undefined && started.slice(started.lastIndexOf(":") + 1) === procStart;
+  if (started === null) return false;
+  return (HAS_PROC ? started.slice(started.lastIndexOf(":") + 1) : started) === procStart;
 }
 
 const UNKNOWN: Activity = { state: "unknown" };
