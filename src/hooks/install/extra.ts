@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { agyHere, kimiCodePid, mimoHere, piHere, zcodePid } from "../../ancestry.ts";
@@ -8,7 +8,8 @@ import { isRecord, readJson, writeJson } from "../files.ts";
 import { EVENTS, hookCommand, isOurHook, isOurHookCommand } from "../self.ts";
 import type { HookRow } from "@kiwi/core/harnesses.ts";
 import { agyInstalled, installAgy, uninstallAgy } from "./agy.ts";
-import { claudeHooksRow, hooksInstalled, installHooks, uninstallHooks, withoutOurs, type Settings } from "./claude.ts";
+import { claudeHooksRow, hooksInstalled, installHooks, uninstallHooks } from "./claude.ts";
+import { claudeShapedInstalled, installClaudeShaped, stripClaudeShaped } from "./claude-shaped.ts";
 import { editKimiConfig, kimiConfigInstalled } from "./kimi-toml.ts";
 import { installMimo, mimoConfigRoot, mimoInstalled, mimoPluginPath, uninstallMimo } from "./mimo.ts";
 import { installPi, piExtensionPath, piInstalled, piRoot, uninstallPi } from "./pi.ts";
@@ -79,37 +80,6 @@ function harnessPresent(h: ExtraHarness): boolean {
 }
 
 const GEMINI_EVENTS = { SessionStart: "session-start", BeforeAgent: "prompt", AfterAgent: "stop" } as const;
-
-function installClaudeShaped(path: string, harness: NamedHookHarness, events: Record<string, string>, timeoutFor: (event: string) => number, matcher?: string): void {
-  const s = readJson(path) as Settings;
-  s.hooks ??= {};
-  for (const [event, arg] of Object.entries(events)) {
-    s.hooks[event] = [...withoutOurs(s.hooks[event]), { ...(matcher ? { matcher } : {}), hooks: [{ type: "command", command: hookCommand(arg, harness), timeout: timeoutFor(event) }] }];
-  }
-  writeJson(path, s);
-}
-
-function stripClaudeShaped(path: string): void {
-  if (!existsSync(path)) return;
-  const s = readJson(path) as Settings;
-  for (const event of Object.keys(s.hooks ?? {})) {
-    const kept = withoutOurs(s.hooks![event]);
-    if (kept.length) s.hooks![event] = kept;
-    else delete s.hooks![event];
-  }
-  if (s.hooks && !Object.keys(s.hooks).length) delete s.hooks;
-  if (!Object.keys(s).length) {
-    rmSync(path, { force: true });
-    return;
-  }
-  writeJson(path, s);
-}
-
-function claudeShapedInstalled(path: string, harness: NamedHookHarness, events: Record<string, string>): boolean {
-  if (!existsSync(path)) return false;
-  const s = readJson(path) as Settings;
-  return Object.entries(events).every(([event, arg]) => s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, arg, harness))));
-}
 
 type CursorHook = { command?: string; timeout?: number; loop_limit?: number | null };
 type CursorFile = { version?: number; hooks?: Record<string, CursorHook[]> } & Record<string, unknown>;
