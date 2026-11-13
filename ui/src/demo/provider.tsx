@@ -122,7 +122,7 @@ function withEventRuns(c: Channel): Channel {
       ...c.messages,
       ...Array.from({ length: 900 }, (_, i): Message =>
         i % 12 === 11
-          ? { seq: seq + i, from: "atlas", at: at + i * 20_000, text: wrote(`Run ${(i + 1) / 12} is green.`), where: general }
+          ? { seq: seq + i, from: "atlas", at: at + i * 20_000, text: wrote(`Run ${(i + 1) / 12} is green. @pixel it's yours to ship.`), where: general }
           : {
               seq: seq + i,
               from: "github",
