@@ -1,4 +1,5 @@
 import { lazy, memo, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react"
+import { flushSync } from "react-dom"
 
 import { isGifReaction } from "@kiwi/core/protocol.ts"
 
@@ -38,6 +39,20 @@ const BlockFilesView = later(() => import("~/chat/block-files").then((m) => m.Bl
 export const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
 
+const clampDue = new Map<HTMLElement, (over: boolean) => void>()
+
+function clampSoon(el: HTMLElement, set: (over: boolean) => void): void {
+  const first = clampDue.size === 0
+  clampDue.set(el, set)
+  if (!first) return
+  queueMicrotask(() => {
+    const due = [...clampDue]
+    clampDue.clear()
+    const over = due.map(([box]) => box.isConnected && box.scrollHeight > CLAMP_PX + 44)
+    flushSync(() => due.forEach(([, apply], i) => apply(over[i] ?? false)))
+  })
+}
+
 function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null)
   const [over, setOver] = useState(false)
@@ -45,9 +60,8 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
   useLayoutEffect(() => {
     const el = box.current
     if (!on || !el) return
-    const check = () => setOver(el.scrollHeight > CLAMP_PX + 44)
-    check()
-    const watch = new ResizeObserver(check)
+    clampSoon(el, setOver)
+    const watch = new ResizeObserver(() => setOver(el.scrollHeight > CLAMP_PX + 44))
     for (const child of el.children) watch.observe(child)
     watch.observe(el)
     return () => watch.disconnect()
