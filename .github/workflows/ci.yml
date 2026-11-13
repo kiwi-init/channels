@@ -800,7 +800,7 @@ jobs:
         env:
           CHANNELS_EB_TEST: "1"
           DASH_RELEASE_OFFLINE: "1"
-      - name: in the real app the Settings gear opens Settings, and a press on it never starts a window move, in both layouts
+      - name: with real X clicks under openbox, the Settings gear opens and closes Settings, a double-click or a drag on it leaves the window still, and a drag on the empty tabs rail moves it, in both layouts
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 5
         run: |
