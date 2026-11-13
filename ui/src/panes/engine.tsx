@@ -1,4 +1,5 @@
 import "~/styles/github.css"
+import { CancelCircleIcon, CheckmarkCircle02Icon, CircleDashedIcon, Loading03Icon, MinusSignCircleIcon } from "@hugeicons/core-free-icons"
 import { Fragment, type MouseEvent, type ReactNode } from "react"
 import type { ASTNode } from "react-native-enriched-markdown/lib/typescript/src/web/types"
 
@@ -6,7 +7,7 @@ import type { Draw, DrawTools } from "~/chat/markdown"
 import { ciOf } from "~/github/groups"
 import { IssueMark, PrMark } from "~/github/parts"
 import { Avatar, cx, Dot } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon, Icon, type Glyph } from "~/kit/icons"
 import { memberOf, type Channel, type ChannelTile, type Issue, type Person, type PullRequest, type Task } from "~/model"
 import { Face } from "~/shell/rail"
 
@@ -32,16 +33,76 @@ const ROW = /^kiwi-(?:task|msg|pr|issue|mention):|^kiwi-page:(?:channel|agent):/
 const DO = "kiwi-do:"
 const BAR = "kiwi-bar"
 
+const TONES = new Set(["alert", "decide", "doing", "live", "review", "quiet"])
+const MORE = ["tip", "label", "tone"] as const
+
+export interface DoMore {
+  tip?: string | undefined
+  label?: string | undefined
+  tone?: string | undefined
+}
+
+export interface Did extends DoMore {
+  url: string
+  act: boolean
+}
+
+export function doUrl(key: string, more: DoMore = {}): string {
+  const query = new URLSearchParams(
+    MORE.flatMap((name) => {
+      const value = more[name]
+      return value ? [[name, value]] : []
+    })
+  ).toString()
+  return `${DO}${key}${query ? `?${query}` : ""}`
+}
+
+export function doOf(url: string): Did {
+  if (!url.startsWith(DO)) return { url, act: false }
+  const at = url.indexOf("?")
+  const bare = at < 0 ? url : url.slice(0, at)
+  const query = new URLSearchParams(at < 0 ? "" : url.slice(at + 1))
+  const tone = query.get("tone") ?? ""
+  return { url: bare, act: bare.length > DO.length, tip: query.get("tip") ?? undefined, label: query.get("label") ?? undefined, tone: TONES.has(tone) ? `tone-${tone}` : undefined }
+}
+
+type Mark = (name: string) => ReactNode | undefined
+
+const CHECKS = new Map<string, readonly [Glyph, string]>([
+  ["check:pass", [CheckmarkCircle02Icon, "tone-live"]],
+  ["check:fail", [CancelCircleIcon, "tone-alert"]],
+  ["check:running", [Loading03Icon, "tone-doing"]],
+  ["check:waiting", [CircleDashedIcon, "tone-quiet"]],
+  ["check:skipped", [MinusSignCircleIcon, "tone-quiet"]],
+])
+
+function checkMark(name: string): ReactNode | undefined {
+  const check = CHECKS.get(name)
+  return check ? (
+    <span className={check[1]}>
+      <GlyphIcon glyph={check[0]} size={14} />
+    </span>
+  ) : undefined
+}
+
+const NO_MARK: Mark = () => undefined
+
 const textOf = (node: ASTNode): string => node.content ?? (node.children ?? []).map(textOf).join("")
 const urlOf = (node: ASTNode | undefined): string => (node?.type === "Link" ? (node.attributes?.url ?? "") : "")
 const isGap = (node: ASTNode): boolean => node.type === "SoftBreak" || node.type === "LineBreak" || (node.type === "Text" && !node.content?.trim())
 const solid = (node: ASTNode | undefined): ASTNode[] => (node?.children ?? []).filter((c) => !isGap(c))
 const after = (url: string, lead: string): string => decodeURIComponent(url.slice(lead.length))
 
-function actOf(node: ASTNode): { url: string; label: string; main: boolean } | null {
+function actOf(node: ASTNode): { did: Did; nodes: ASTNode[]; main: boolean } | null {
   const inner = node.type === "Strong" ? solid(node) : [node]
-  const url = inner.length === 1 ? urlOf(inner[0]) : ""
-  return url.startsWith(DO) ? { url, label: textOf(node), main: node.type === "Strong" } : null
+  const link = inner.length === 1 ? inner[0] : undefined
+  const did = doOf(urlOf(link))
+  return did.act ? { did, nodes: link?.children ?? [], main: node.type === "Strong" } : null
+}
+
+function personOf(url: string): string | null {
+  if (url.startsWith("kiwi-mention:")) return after(url, "kiwi-mention:")
+  return url.startsWith("kiwi-page:agent:") ? after(url, "kiwi-page:agent:") : null
 }
 
 function unled(nodes: readonly ASTNode[]): ASTNode[] {
@@ -99,31 +160,80 @@ function Trail({ url, find }: { url: string; find: Lookup }) {
   return person ? <Avatar person={person} size="sm" /> : null
 }
 
-export function pieces(find: Lookup): Draw {
+export function pieces(find: Lookup, mark: Mark = NO_MARK): Draw {
   const open = (tools: DrawTools, url: string) => (e: MouseEvent) => {
     e.preventDefault()
     tools.press(url)
   }
 
-  const row = (item: ASTNode, key: number, tools: DrawTools, inCard: boolean): ReactNode => {
+  const markOf = (node: ASTNode | undefined): ReactNode | undefined => (node?.type === "Code" ? (checkMark(textOf(node)) ?? mark(textOf(node))) : undefined)
+
+  const face = (nodes: readonly ASTNode[]): ReactNode => {
+    const marks = nodes.map(markOf)
+    if (marks.every((m) => m === undefined)) return textOf({ type: "Paragraph", children: [...nodes] })
+    return nodes.map((n, i) => <Fragment key={i}>{marks[i] ?? textOf(n).trim()}</Fragment>)
+  }
+
+  const say = (nodes: readonly ASTNode[], tools: DrawTools): ReactNode =>
+    nodes.map((node, i) => {
+      const url = urlOf(node)
+      const who = personOf(url)
+      if (who !== null)
+        return (
+          <a key={i} className="pg-who-link" href={url} onClick={open(tools, url)} onAuxClick={held}>
+            <Avatar person={find.person(who)} size="sm" />
+            <span className="pg-who-link-name">{textOf(node)}</span>
+          </a>
+        )
+      const did = doOf(url)
+      if (url.startsWith(DO) && !did.act)
+        return (
+          <span key={i} className={did.tone} title={did.tip}>
+            {say(node.children ?? [], tools)}
+          </span>
+        )
+      return <Fragment key={i}>{tools.inline({ type: "Paragraph", children: [node] })}</Fragment>
+    })
+
+  const headOf = (item: ASTNode) => {
     const [para, ...below] = item.children ?? []
-    const kids = para?.children ?? []
+    const kids = para?.type === "Paragraph" ? (para.children ?? []) : []
     const start = kids.findIndex((c) => !isGap(c))
-    const head = kids[start]
-    const rest = kids.slice(start + 1)
+    const lead = start < 0 ? undefined : markOf(kids[start])
+    const at = lead === undefined ? start : kids.findIndex((c, i) => i > start && !isGap(c))
+    return { lead, head: at < 0 ? undefined : kids[at], rest: at < 0 ? [] : kids.slice(at + 1), below }
+  }
+
+  const isRow = (item: ASTNode): boolean => {
+    if (item.children?.[0]?.type !== "Paragraph") return false
+    const { lead, head } = headOf(item)
+    return lead === undefined ? ROW.test(urlOf(head)) : head?.type === "Link" || head?.type === "Code"
+  }
+
+  const row = (item: ASTNode, key: number, tools: DrawTools, inCard: boolean): ReactNode => {
+    const { lead, head, rest, below } = headOf(item)
     const url = urlOf(head)
     const label = head ? textOf(head) : ""
     const more = unled(rest)
+    const inner = (
+      <>
+        <span className={cx("side-icon", url.startsWith("kiwi-page:channel:") && "side-face")}>{lead ?? <Lead url={url} find={find} />}</span>
+        <span className="pg-name">{label}</span>
+      </>
+    )
     return (
       <li key={key} className="pg-item">
         <div className="pg-row">
-          <a className="pg-main" href={url} title={label} onClick={open(tools, url)} onAuxClick={held}>
-            <span className={cx("side-icon", url.startsWith("kiwi-page:channel:") && "side-face")}>
-              <Lead url={url} find={find} />
+          {url ? (
+            <a className="pg-main" href={url} title={label} onClick={open(tools, url)} onAuxClick={held}>
+              {inner}
+            </a>
+          ) : (
+            <span className="pg-main" title={label}>
+              {inner}
             </span>
-            <span className="pg-name">{label}</span>
-          </a>
-          {more.length > 0 && <span className={cx("pg-meta num", toneOf(url, find))}>{tools.inline({ type: "Paragraph", children: more })}</span>}
+          )}
+          {more.length > 0 && <span className={cx("pg-meta num", toneOf(url, find))}>{say(more, tools)}</span>}
           <Trail url={url} find={find} />
         </div>
         {below.length > 0 && (
@@ -166,8 +276,8 @@ export function pieces(find: Lookup): Draw {
         return (
           <div className="pg-acts">
             {acts.map((a, i) => (
-              <button key={i} type="button" className={cx("btn", a?.main && "is-primary")} onClick={() => a && tools.press(a.url)}>
-                {a?.label}
+              <button key={i} type="button" className={cx("btn", a?.main && "is-primary")} title={a?.did.tip} aria-label={a?.did.label} onClick={() => a && tools.press(a.did.url)}>
+                {a && face(a.nodes)}
               </button>
             ))}
           </div>
@@ -181,18 +291,18 @@ export function pieces(find: Lookup): Draw {
           </a>
         )
       const before = all[at - 1]
-      if (before?.type === "Heading" && before.attributes?.level === "1") return <p className="pg-facts">{tools.inline(node)}</p>
+      if (before?.type === "Heading" && before.attributes?.level === "1") return <p className="pg-facts">{say(node.children ?? [], tools)}</p>
       if (before?.type === "CodeBlock" && before.attributes?.language?.trim() === BAR) return <p className="pg-note">{tools.inline(node)}</p>
       return undefined
     }
     if (node.type === "UnorderedList" || node.type === "OrderedList") {
       const items = node.children ?? []
       const heads = items.map((item) => solid(item.children?.[0]))
-      if (items.length && heads.every((h) => h.length === 1 && urlOf(h[0]).startsWith(DO)))
+      if (items.length && heads.every((h) => h.length === 1 && doOf(urlOf(h[0])).act))
         return (
           <div className="pg-opts">
             {heads.map((h, i) => (
-              <button key={i} type="button" className="btn pg-opt" onClick={() => tools.press(urlOf(h[0]))}>
+              <button key={i} type="button" className="btn pg-opt" onClick={() => tools.press(doOf(urlOf(h[0])).url)}>
                 {h[0] ? textOf(h[0]) : ""}
               </button>
             ))}
@@ -205,13 +315,12 @@ export function pieces(find: Lookup): Draw {
             {props.map((p, i) => (
               <Fragment key={i}>
                 <dt>{p?.label}</dt>
-                <dd>{tools.inline({ type: "Paragraph", children: p?.rest ?? [] })}</dd>
+                <dd>{say(p?.rest ?? [], tools)}</dd>
               </Fragment>
             ))}
           </dl>
         )
-      if (items.length && items.every((item) => item.children?.[0]?.type === "Paragraph") && heads.every((h) => ROW.test(urlOf(h[0]))))
-        return <ul className="pg-rows">{items.map((item, i) => row(item, i, tools, inCard))}</ul>
+      if (items.length && items.every(isRow)) return <ul className="pg-rows">{items.map((item, i) => row(item, i, tools, inCard))}</ul>
       return undefined
     }
     if (node.type === "Blockquote") {

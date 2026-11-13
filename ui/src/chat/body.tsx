@@ -48,7 +48,7 @@ export function Body({
   const onTask = useCallback((task: number) => go({ to: "task", task }), [go])
   return (
     <div className="msg-text" ref={box}>
-      {!shown && !parsedFor(markdown) && <p className="md-plain">{wordsPlain(text, names)}</p>}
+      {!draw && !shown && !parsedFor(markdown) && <p className="md-plain">{wordsPlain(text, names)}</p>}
       <Suspense fallback={null}>
         <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} onPage={onPage} draw={draw} />
       </Suspense>

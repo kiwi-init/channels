@@ -10,15 +10,15 @@ import { RoleFace } from "~/kit/role-face"
 import type { Finding, Harness, ThisComputer } from "~/model"
 import { useApp } from "~/nav"
 import { Personalities } from "~/settings/personalities"
-import { acts, esc, field, fine, join, row, say, Sheet, toggle, type Acts } from "~/settings/sheet"
+import { acts, esc, field, fine, join, row, say, Sheet, toggle, words, type Acts } from "~/settings/sheet"
 
 type Hook = ThisComputer["hooks"][number]
 
-const REMOVE = { action: "settings.agents.hooks.remove" } as const
-const UPDATE = { action: "settings.agents.hooks.update" } as const
-const ADD = { action: "settings.agents.hooks.add" } as const
+const REMOVE = { action: "settings.agents.hooks.remove", label: "settings.agents.hooks.remove.for" } as const
+const UPDATE = { action: "settings.agents.hooks.update", label: "settings.agents.hooks.update.for" } as const
+const ADD = { action: "settings.agents.hooks.add", label: "settings.agents.hooks.add.for" } as const
 
-const HOOK_SAYS: Record<Hook["state"], { state: Key; action: Key; loud?: boolean; why?: Key }> = {
+const HOOK_SAYS: Record<Hook["state"], { state: Key; action: Key; label: Key; loud?: boolean; why?: Key }> = {
   installed: { state: "settings.agents.hooks.on", ...REMOVE },
   partial: { state: "settings.agents.hooks.old", ...UPDATE, loud: true, why: "settings.agents.hooks.why.partial" },
   outdated: { state: "settings.agents.hooks.old", ...UPDATE, loud: true, why: "settings.agents.hooks.why.outdated" },
@@ -59,13 +59,14 @@ function findingRow(f: Finding): string {
 
 function hookRow(harness: Harness, label: string, version: string | undefined, path: string | undefined, hook: Hook | undefined, a: Acts, change: (hook: Hook) => void): string {
   const says = hook ? HOOK_SAYS[hook.state] : undefined
-  const state = says ? (says.loud ? `**${esc(t(says.state))}**` : `*${esc(t(says.state))}*`) : ""
+  const shown = says ? (says.why ? words(esc(t(says.state)), { tip: t(says.why) }) : esc(t(says.state))) : ""
+  const state = says?.loud ? `**${shown}**` : `*${shown}*`
   return row({
     mark: `harness:${harness}`,
     label,
     tag: version,
-    hint: [path ? esc(path) : "", says?.why ? say(says.why) : ""].filter(Boolean).join(" · "),
-    line: hook && says ? `${state} ${a.act(t(says.action), () => change(hook))}` : "",
+    hint: path ? esc(path) : "",
+    line: hook && says ? `${state} ${a.act(t(says.action), () => change(hook), { tip: t("settings.agents.hooks.do"), label: t(says.label, { harness: hook.label }) })}` : "",
   })
 }
 
@@ -130,7 +131,6 @@ export function AgentsPage() {
     `# ${esc(t("settings.settings.agents"))}`,
     field("personalities"),
     `## ${esc(t("settings.agents.harnesses"))}${kiwi ? ` · ${esc(kiwi)}` : ""}`,
-    hooks.length ? fine(say("settings.agents.hooks.do")) : "",
     [
       ...here.map((h) =>
         hookRow(

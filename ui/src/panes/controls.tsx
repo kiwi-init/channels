@@ -10,6 +10,7 @@ import { cx } from "~/kit/bits"
 import { Toggle } from "~/kit/form"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
+import { doOf } from "~/panes/engine"
 
 export interface Parts {
   field: (name: string) => ReactNode | undefined
@@ -43,9 +44,13 @@ const urlOf = (node: ASTNode | undefined): string => (node?.type === "Link" ? (n
 const isBreak = (node: ASTNode): boolean => node.type === "SoftBreak" || node.type === "LineBreak"
 const isGap = (node: ASTNode): boolean => isBreak(node) || (node.type === "Text" && !node.content?.trim())
 const solid = (nodes: readonly ASTNode[] | undefined): ASTNode[] => (nodes ?? []).filter((c) => !isGap(c))
-const isDo = (node: ASTNode | undefined): boolean => urlOf(node).startsWith(DO)
+const isDo = (node: ASTNode | undefined): boolean => doOf(urlOf(node)).act
 const isList = (node: ASTNode | undefined): boolean => node?.type === "UnorderedList" || node?.type === "OrderedList"
 const words = (content: string): ASTNode => ({ type: "Text", content })
+const isChip = (node: ASTNode): boolean => {
+  const kids = solid(node.children)
+  return node.type === "Link" && isDo(node) && kids.length === 1 && kids[0]?.type === "Code"
+}
 const held = (e: MouseEvent) => e.preventDefault()
 
 function choiceOf(node: ASTNode | undefined): Choice | null {
@@ -117,29 +122,48 @@ export function withControls(draw: Draw, parts: Parts): Draw {
 
   const inline = (nodes: readonly ASTNode[], tools: DrawTools, tone: Tone): ReactNode[] => nodes.map((node, key) => one(node, key, tools, tone))
 
+  const face = (nodes: readonly ASTNode[]): ReactNode => {
+    const marks = nodes.map((n) => (n.type === "Code" ? parts.mark(textOf(n)) : undefined))
+    if (marks.every((m) => m === undefined)) return textOf({ type: "Paragraph", children: [...nodes] })
+    return nodes.map((n, i) => <Fragment key={i}>{marks[i] ?? textOf(n).trim()}</Fragment>)
+  }
+
   const link = (node: ASTNode, key: number, tools: DrawTools, tone: Tone, loud: boolean): ReactNode => {
     const url = urlOf(node)
+    const did = doOf(url)
     const label = textOf(node)
-    const kids = solid(node.children)
-    if (!url || tone === "label") return <Fragment key={key}>{label}</Fragment>
-    if (url.startsWith(DO) && kids.length === 1 && kids[0]?.type === "Code")
+    if (url.startsWith(DO) && !did.act)
       return (
-        <button key={key} type="button" className="ctl-chip" aria-label={t("chat.markdown.copy.text", { text: label })} title={t("chat.markdown.copy")} onClick={() => tools.press(url)}>
+        <span key={key} className={cx(did.tone, loud && tone !== "label" && "ctl-loud") || undefined} title={did.tip}>
+          {inline(node.children ?? [], tools, tone === "label" ? "label" : "hint")}
+        </span>
+      )
+    if (!url || tone === "label") return <Fragment key={key}>{label}</Fragment>
+    if (isChip(node))
+      return (
+        <button
+          key={key}
+          type="button"
+          className="ctl-chip"
+          aria-label={did.label ?? t("chat.markdown.copy.text", { text: label })}
+          title={did.tip ?? did.label ?? t("chat.markdown.copy")}
+          onClick={() => tools.press(did.url)}
+        >
           <span className="ctl-code">{label}</span>
           <Icon name="copy" size={14} />
         </button>
       )
     if (tone === "hint")
       return (
-        <a key={key} className="ctl-link" href={url} onClick={go(tools, url)} onAuxClick={held}>
+        <a key={key} className="ctl-link" href={did.url} title={did.tip} aria-label={did.label} onClick={go(tools, did.url)} onAuxClick={held}>
           {label}
         </a>
       )
     const look = cx("btn is-small", loud ? "is-primary" : "is-quiet")
-    if (url.startsWith(DO))
+    if (did.act)
       return (
-        <button key={key} type="button" className={look} onClick={() => tools.press(url)}>
-          {label}
+        <button key={key} type="button" className={look} title={did.tip} aria-label={did.label} onClick={() => tools.press(did.url)}>
+          {face(node.children ?? [])}
         </button>
       )
     return (
@@ -261,6 +285,7 @@ export function withControls(draw: Draw, parts: Parts): Draw {
       )
     if (node.type === "Paragraph") {
       const kids = solid(node.children)
+      if (kids.length && kids.every(isChip)) return <p className="ctl-chips">{kids.map((k, i) => link(k, i, tools, "line", false))}</p>
       const only = kids.length === 1 ? kids[0] : undefined
       return only?.type === "Emphasis" ? <p className="ctl-fine">{inline(only.children ?? [], tools, "hint")}</p> : undefined
     }

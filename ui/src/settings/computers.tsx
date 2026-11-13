@@ -7,15 +7,18 @@ import { cx } from "~/kit/bits"
 import { Details, failure, type Failure } from "~/kit/failed"
 import { Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
+import { copyText } from "~/kit/toasts"
 import type { Account, Computer, Device, LaunchedAgent } from "~/model"
 import { useApp } from "~/nav"
 import { Confirm } from "~/settings/controls"
-import { acts, card, code, esc, field, join, note, row, say, Sheet, type Acts } from "~/settings/sheet"
+import { acts, card, code, esc, field, join, note, row, say, Sheet, words, type Acts } from "~/settings/sheet"
 
 type Kind = "computer" | "phone"
 
 const SHOT = new URLSearchParams(location.search).get("shot")
 const PRESET: Kind | null = SHOT === "settings-link-phone" || SHOT === "settings-link-phone-stuck" ? "phone" : SHOT === "settings-add-computer" ? "computer" : null
+
+const LOGIN = "kiwi login"
 
 const isPhone = (c: Computer): boolean => c.os === "iphone" || c.os === "android"
 
@@ -212,7 +215,7 @@ function deviceRows(devices: readonly Device[], now: number, a: Acts, hooks: Hoo
         mark: d.as === "phone" ? "phone" : "computer",
         label: d.label,
         tag: d.thisOne ? t("settings.computers.this.app") : undefined,
-        hint: [...about, soonest === undefined ? "" : `**${esc(expiry(soonest, now))}**`].filter(Boolean).join(" · "),
+        hint: [...about, soonest === undefined ? "" : soonest <= now ? words(esc(expiry(soonest, now)), { tone: "alert" }) : `**${esc(expiry(soonest, now))}**`].filter(Boolean).join(" · "),
         line: [
           renew.length ? a.act(t("settings.computers.renew"), () => hooks.renew(...renew)) : "",
           d.thisOne ? "" : a.act(t("settings.computers.forget"), () => hooks.forgetDevice({ row: d, runner })),
@@ -241,12 +244,16 @@ function computerRow(c: Computer, shown: string | null, a: Acts, hooks: Hooks): 
 }
 
 function pairing(linking: Kind | null, a: Acts, hooks: Hooks): string {
-  if (!linking) return [a.act(t("settings.computers.add.computer"), () => hooks.link("computer")), a.act(t("settings.computers.link.phone"), () => hooks.link("phone"))].join(" ")
+  if (!linking)
+    return [
+      a.act(t("settings.computers.add.computer"), () => hooks.link("computer"), { mark: "computer" }),
+      a.act(t("settings.computers.link.phone"), () => hooks.link("phone"), { mark: "phone" }),
+    ].join(" ")
   const phone = linking === "phone"
   return card([
     `### ${esc(phone ? t("settings.computers.link.phone") : t("settings.computers.add.computer"))}`,
     say(phone ? "settings.computers.how.phone" : "settings.computers.how.computer"),
-    phone ? "" : ["```", "kiwi login", "```"].join("\n"),
+    phone ? "" : a.chip(LOGIN, () => void copyText(LOGIN), t("settings.computers.copy.command")),
     field("pair-status"),
     a.act(t("settings.controls.cancel"), () => hooks.link(null)),
   ])

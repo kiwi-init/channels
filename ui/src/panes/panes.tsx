@@ -117,6 +117,7 @@ function PanelDoc({ channel, panel }: { channel: Channel; panel: Panel }) {
   return <Page channel={channel} view={panel.kind === "task" ? { kind: "task", task: panel.task } : panel} />
 }
 
+const ActivityPage = later(() => import("~/panes/activity").then((m) => m.ActivityPage))
 const HomePage = later(() => import("~/panes/home").then((m) => m.HomePage))
 
 function HomeDoc({ only }: { only?: string }) {
@@ -155,7 +156,7 @@ function DocView({ channel, id, doc }: { channel: Channel; id: string; doc: Doc 
   if (doc.kind === "panel") return <PanelDoc channel={channel} panel={doc.panel} />
   if (doc.kind === "blank") return <BlankPane code={channel.code} id={id} />
   if (doc.kind === "home") return <HomeDoc only={doc.only} />
-  if (doc.kind === "activity") return <div className="pane-blank" />
+  if (doc.kind === "activity") return <ActivityPage channel={channel} />
   return <Page channel={channel} view={doc} />
 }
 
@@ -201,7 +202,7 @@ function Scope({ code, id, nav, doc, shown, typing = true, children }: { code: s
     }),
     [act, code, id, tabs]
   )
-  const pane = useMemo((): PaneScope => ({ doc, show: (next) => showDoc(code, id, next, shown), typing }), [code, id, doc, shown, typing])
+  const pane = useMemo((): PaneScope => ({ doc, show: (next) => showDoc(code, id, next, shown, roomiest(code)), typing }), [code, id, doc, shown, typing])
   return (
     <NavContext value={nav}>
       <ActContext value={scoped}>
@@ -235,13 +236,17 @@ function useTiny(host: RefObject<HTMLDivElement | null>, ids: string): ReadonlyS
     const el = host.current
     if (!el) return
     const small = new Map<string, boolean>()
+    let frame = 0
     const watch = new ResizeObserver((entries) => {
       for (const e of entries) small.set((e.target as HTMLElement).dataset.pane ?? "", e.contentRect.width < TINY_W || e.contentRect.height < TINY_H)
-      const next = new Set([...small].filter(([id, is]) => is && ids.split(" ").includes(id)).map(([id]) => id))
-      setTiny((was) => (was.size === next.size && [...next].every((id) => was.has(id)) ? was : next))
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const next = new Set([...small].filter(([id, is]) => is && ids.split(" ").includes(id)).map(([id]) => id))
+        setTiny((was) => (was.size === next.size && [...next].every((id) => was.has(id)) ? was : next))
+      })
     })
     for (const pane of el.querySelectorAll(":scope > [data-pane]")) watch.observe(pane)
-    return () => watch.disconnect()
+    return () => (watch.disconnect(), cancelAnimationFrame(frame))
   }, [host, ids])
   return tiny
 }

@@ -72,6 +72,20 @@ function ViewRows({ channel }: { channel: Channel }) {
           <span className="side-label">{t("panes.now")}</span>
         </button>
       </li>
+      <li>
+        <button
+          type="button"
+          className={cx("side-row", pane?.doc?.kind === "activity" && "is-on")}
+          aria-pressed={pane?.doc?.kind === "activity"}
+          onClick={() => pane?.show({ kind: "activity" })}
+          {...dragOut({ page: { at: "doc", doc: { kind: "activity" } } }, t("panes.activity"))}
+        >
+          <span className="side-icon">
+            <Icon name="updates" />
+          </span>
+          <span className="side-label">{t("panes.activity")}</span>
+        </button>
+      </li>
       {view(
         "specs",
         "spec",

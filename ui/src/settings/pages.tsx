@@ -15,7 +15,7 @@ import { copyText } from "~/kit/toasts"
 import type { Account, Prefs, Theme, UpdateCheck } from "~/model"
 import { useApp } from "~/nav"
 import { Confirm, InlineEdit } from "~/settings/controls"
-import { acts, choices, code, esc, field, fine, join, link, main, note, row, say, Sheet, toggle, type Acts } from "~/settings/sheet"
+import { acts, choices, code, esc, field, fine, join, link, main, note, row, say, Sheet, toggle, words, type Acts } from "~/settings/sheet"
 import { Themes } from "~/settings/themes"
 import { uiVersion } from "~/settings/ui-version"
 import { updateFound } from "~/settings/update-check"
@@ -70,7 +70,7 @@ function accountPage(account: Account, usage: SeenUsage | null, loginKey: string
   const ghCode = !github ? account.githubCode : undefined
   const key = account.key
   const rows = [
-    row({ label: t("settings.sections.name"), hint: say("settings.sections.name.tip"), line: esc(account.name) }),
+    row({ label: t("settings.sections.name"), tip: t("settings.sections.name.tip"), line: esc(account.name) }),
     row({
       label: "GitHub",
       hint: account.githubSignIn ? say("settings.sections.github.sign.in") : github ? "" : say("settings.sections.github.why"),
@@ -82,10 +82,16 @@ function accountPage(account: Account, usage: SeenUsage | null, loginKey: string
       ? row({
           label: t("settings.sections.github.code"),
           hint: say("settings.sections.github.code.hint"),
-          line: `${a.chip(ghCode.code, () => void copyText(ghCode.code, t("settings.sections.github.code.copied")))} ${link(t("settings.sections.github.open"), ghCode.url)}`,
+          line: `${a.chip(ghCode.code, () => void copyText(ghCode.code, t("settings.sections.github.code.copied")), t("settings.sections.github.code.copy"))} ${link(t("settings.sections.github.open"), ghCode.url)}`,
         })
       : "",
-    key ? row({ label: t("settings.sections.key"), hint: say("settings.sections.key.hint"), line: a.chip(key, () => void copyText(key, t("settings.sections.key.copied"))) }) : "",
+    key
+      ? row({
+          label: t("settings.sections.key"),
+          hint: say("settings.sections.key.hint"),
+          line: a.chip(key, () => void copyText(key, t("settings.sections.key.copied")), t("settings.sections.key.copy")),
+        })
+      : "",
     loginKey ? row({ label: t("settings.sections.login.key"), hint: say("settings.sections.login.key.hint"), line: code(loginKey) }) : "",
     ...usageRows(usage),
   ]
@@ -264,7 +270,7 @@ function versionRow(account: Account, a: Acts, check: { busy: boolean; result: U
   return row({
     mark: "fine",
     label: t("settings.sections.up.to.date"),
-    hint: check.busy ? say("settings.sections.checking") : check.result?.state === "failed" ? `**${found}**` : found || code(account.version),
+    hint: check.busy ? say("settings.sections.checking") : check.result?.state === "failed" ? words(found, { tone: "alert" }) : found || code(account.version),
     line: a.act(t("settings.sections.check.now"), () => {
       if (!check.busy) check.run()
     }),
@@ -276,7 +282,7 @@ function aboutPage(account: Account, a: Acts, debug: boolean, relayFailed: Failu
   const relay = account.desktop
     ? row({
         label: t("settings.sections.relay"),
-        hint: relayFailed ? `**${esc(relayFailed.said)}**` : say("settings.sections.relay.hint"),
+        hint: relayFailed ? words(esc(relayFailed.said), { tone: "alert" }) : say("settings.sections.relay.hint"),
         nested: [field("relay"), relayFailed?.raw ? field("relay-failed") : ""],
       })
     : row({ label: t("settings.sections.relay"), line: account.relay ? code(account.relay) : esc(t("settings.sections.relay.none")) })
@@ -288,7 +294,7 @@ function aboutPage(account: Account, a: Acts, debug: boolean, relayFailed: Failu
       row({
         label: t("settings.sections.interface"),
         hint: say("settings.sections.interface.hint"),
-        line: a.chip(version, () => void copyText(version, t("settings.sections.interface.copied"))),
+        line: a.chip(version, () => void copyText(version, t("settings.sections.interface.copied")), t("settings.sections.interface.copy")),
       }),
       relay,
     ].join("\n"),

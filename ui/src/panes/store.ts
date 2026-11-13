@@ -289,9 +289,18 @@ export function setCloser(next: (() => boolean) | null): void {
 
 export const closeFocused = (): boolean => closer?.() ?? false
 
-export function showDoc(code: string, id: string | null, doc: Doc, shown: boolean): void {
+export function showDoc(code: string, id: string | null, doc: Doc, shown: boolean, room?: { id: string; edge: Edge }): void {
   const layout = layoutOf(code)
   const here = id ? leafOf(layout.root, id) : null
+  if (doc.kind === "activity" || doc.kind === "home") {
+    const open = findLeaf(layout.root, (leaf) => leaf.doc?.kind === doc.kind)
+    if (open) return focusPane(code, open.id)
+    if (here && isBlank(here)) return fillPane(code, here.id, { page: { at: "doc", doc } })
+    const blank = findLeaf(layout.root, isBlank)
+    if (blank) return fillPane(code, blank.id, { page: { at: "doc", doc } })
+    const at = room && leafOf(layout.root, room.id) ? room : { id: here?.id ?? MAIN, edge: "right" as const }
+    return splitAt(code, at.id, at.edge, { at: "doc", doc })
+  }
   const other = doc.kind === "now" ? findLeaf(layout.root, isNow) : null
   if (other && other.id !== here?.id) return shown ? focusPane(code, other.id) : movePane(code, other.id, MAIN, "right")
   if (here?.nav) {

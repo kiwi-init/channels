@@ -238,6 +238,9 @@ function build(channel: Channel, key: string, actions: Actions, hooks: Hooks): {
 
 export function docName(channel: Channel, doc: Exclude<Doc, { kind: "panel" }>): string {
   if (doc.kind === "now") return t("panes.now")
+  if (doc.kind === "blank") return t("panes.blank.name")
+  if (doc.kind === "home") return t("panes.home")
+  if (doc.kind === "activity") return t("panes.activity")
   const task = channel.tasks.find((x) => x.id === doc.task)
   return task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)}` : `T${doc.task}`
 }

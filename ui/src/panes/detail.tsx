@@ -21,6 +21,7 @@ import { useAct, type Go } from "~/nav"
 import { Assign, Cancel, EditTask, holds, PickReviewer, stepState } from "~/panels/task"
 import { detailParts } from "~/panels/task-detail"
 import { moveWords } from "~/panels/task-moves"
+import { doUrl } from "~/panes/engine"
 import { askCard, card, join, link, main, maker, PageFrame, PageText, prRow, section, steps, taskRow, type DetailView, type Maker } from "~/panes/page"
 import { SENT } from "~/sent"
 import { moverWords, quietWords, useTaskNow } from "~/tasks/mover"
@@ -53,6 +54,8 @@ const FOLD = 8
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
 const mention = (channel: Channel, name: string): string => link(nickname(channel, name), `kiwi-mention:${encodeURIComponent(name)}`)
 const prop = (label: string, ...value: string[]): string => `- **${label}** · ${value.filter(Boolean).join(" · ")}`
+const toned = (s: string, tone: string): string => (s && tone ? link(s, doUrl("", { tone: tone.replace(/^tone-/, "") })) : s)
+const CHECK_TONES: Partial<Record<Check["state"], string>> = { fail: "alert", running: "doing" }
 const mono = (s: string): string => `\`${s.replaceAll("`", "'")}\``
 const loose = (s: string): string =>
   s
@@ -164,7 +167,7 @@ function taskPage(channel: Channel, id: number, m: Maker, x: Ctx): string {
             m.act(t("panels.task.ask.review"), () => x.open("reviewer"))
           )
         : "",
-    move ? prop(t("panels.task.move"), move, quietWords(channel, task, x.now) ?? "") : "",
+    move ? prop(t("panels.task.move"), move, toned(quietWords(channel, task, x.now) ?? "", "alert")) : "",
     task.closedWith ? prop(t("panels.task.closed"), t("panels.task.closed.without", { why: wordsPlain(task.closedWith, channel.nicknames) })) : "",
     prop(t("panels.task.asked.by"), mention(channel, task.createdBy)),
   ]
@@ -228,7 +231,8 @@ function checks(list: readonly Check[], m: Maker, x: Ctx): string {
   ]
     .filter(Boolean)
     .join(" · ")
-  const row = (c: Check): string => `- ${c.url ? link(c.name, c.url) : mono(c.name)} · ${c.word}${c.required ? ` · ${t("github.parts.required")}` : ""}`
+  const row = (c: Check): string =>
+    `- ${mono(`check:${c.state}`)} ${c.url ? link(c.name, c.url) : mono(c.name)} · ${toned(c.word, CHECK_TONES[c.state] ?? "")}${c.required ? ` · ${t("github.parts.required")}` : ""}`
   const toggle = fold && quiet.length ? m.act(`${summary} · ${t(x.ui.checks ? "github.parts.hide" : "github.parts.show")}`, () => x.setUi((u) => ({ ...u, checks: !u.checks }))) : ""
   return join([`## ${t("github.panel.checks")}`, [...loud, ...(!fold || x.ui.checks ? quiet : [])].map(row).join("\n"), toggle])
 }
@@ -240,7 +244,7 @@ function prPage(channel: Channel, repo: string, number: number, m: Maker, x: Ctx
   const line = checksLine(pr)
   const closed = pr.state === "merged" || pr.state === "closed"
   const branch = pr.branch
-  const facts = [link(`#${pr.number}`, pr.url), t(PR_WORDS[pr.state]), line && !closed ? line.text : "", pr.release ? t("github.panel.shipped.in", { release: pr.release }) : ""]
+  const facts = [link(`#${pr.number}`, pr.url), t(PR_WORDS[pr.state]), line && !closed ? toned(line.text, line.tone) : "", pr.release ? t("github.panel.shipped.in", { release: pr.release }) : ""]
   const acts = [
     main(m.act(t("github.panel.open.on.github"), () => openOutside(pr.url))),
     m.act(t("github.panel.files.changed"), () => openOutside(`${pr.url}/files`)),

@@ -8,14 +8,13 @@ import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { Icon } from "~/kit/icons"
 import { withControls } from "~/panes/controls"
-import { NOTHING, pieces } from "~/panes/engine"
+import { doOf, doUrl, NOTHING, pieces, type DoMore } from "~/panes/engine"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 
 const DO = "kiwi-do:"
 const SPOT = ""
 const PUNCT = /[!-/:-@[-`{-~]/g
-const BASE = pieces(NOTHING)
 
 type Vars = Readonly<Record<string, string | number>>
 
@@ -40,6 +39,7 @@ export const link = (label: string, url: string): string => `[${esc(label)}](<${
 export const field = (name: string): string => ["```kiwi-field", name, "```"].join("\n")
 export const fine = (text: string): string => (text ? `*${text}*` : "")
 export const note = (text: string): string => `> [!WARNING]\n> ${text}`
+export const words = (md: string, more: DoMore): string => `[${md}](${doUrl("", more)})`
 
 export function card(parts: readonly string[]): string {
   return join(parts)
@@ -48,29 +48,34 @@ export function card(parts: readonly string[]): string {
     .join("\n")
 }
 
+export interface ActMore extends DoMore {
+  mark?: string
+}
+
 export interface Acts {
   acts: Map<string, () => void>
-  act: (label: string, run: () => void) => string
-  chip: (value: string, run: () => void) => string
+  act: (label: string, run: () => void, more?: ActMore) => string
+  chip: (value: string, run: () => void, label?: string) => string
 }
 
 export function acts(): Acts {
   const acts = new Map<string, () => void>()
-  const key = (run: () => void): string => {
+  const key = (run: () => void, more: DoMore = {}): string => {
     const id = `a${acts.size}`
     acts.set(id, run)
-    return `${DO}${id}`
+    return doUrl(id, more)
   }
   return {
     acts,
-    act: (label, run) => `[${esc(label)}](${key(run)})`,
-    chip: (value, run) => `[${code(value)}](${key(run)})`,
+    act: (label, run, more = {}) => `[${more.mark ? `${code(more.mark)} ` : ""}${esc(label)}](${key(run, more)})`,
+    chip: (value, run, label) => `[${code(value)}](${key(run, { label })})`,
   }
 }
 
 interface RowSpec {
   mark?: string
   label: string
+  tip?: string
   tag?: string | undefined
   hint?: string
   line?: string
@@ -79,8 +84,8 @@ interface RowSpec {
 
 const indent = (block: string): string[] => block.split("\n").map((line) => (line ? `  ${line}` : ""))
 
-export function row({ mark, label, tag, hint, line, nested = [] }: RowSpec): string {
-  const head = [mark ? code(mark) : "", `**${esc(label)}**`, tag ? code(tag) : ""].filter(Boolean).join(" ")
+export function row({ mark, label, tip, tag, hint, line, nested = [] }: RowSpec): string {
+  const head = [mark ? code(mark) : "", `**${tip ? words(esc(label), { tip }) : esc(label)}**`, tag ? code(tag) : ""].filter(Boolean).join(" ")
   return [`- ${head}${hint ? ` · ${hint}` : ""}`, line ? `  ${line}` : "", ...nested.filter(Boolean).flatMap(indent)].filter(Boolean).join("\n")
 }
 
@@ -131,9 +136,13 @@ export function Sheet({
   field?: (name: string) => ReactNode | undefined
   mark?: (name: string) => ReactNode | undefined
 }) {
-  const draw = useMemo(() => withControls(BASE, { field, mark: (name) => mark(name) ?? common(name) }), [field, mark])
+  const draw = useMemo(() => {
+    const marks = (name: string): ReactNode | undefined => mark(name) ?? common(name)
+    return withControls(pieces(NOTHING, marks), { field, mark: marks })
+  }, [field, mark])
   const onPage = (url: string) => {
-    if (url.startsWith(DO)) acts.get(url.slice(DO.length))?.()
+    const did = doOf(url)
+    if (did.act) acts.get(did.url.slice(DO.length))?.()
   }
   return (
     <div className="ctl-page">

@@ -1,0 +1,28 @@
+.activity .pg-row {
+  align-items: flex-start;
+  padding-block: calc((var(--row) - var(--row-text)) / 2);
+}
+
+.activity .pg-main {
+  align-items: flex-start;
+}
+
+.activity .side-icon {
+  height: var(--row-text);
+}
+
+.activity .pg-name {
+  display: -webkit-box;
+  line-height: var(--row-text);
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.activity .pg-meta {
+  line-height: var(--row-text);
+}
+
+.updates-log .activity .md > div > .pg-label:first-child {
+  margin-top: 0;
+}
