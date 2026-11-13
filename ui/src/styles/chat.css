@@ -1791,6 +1791,8 @@ button.msg-image-spot:hover {
   grid-template-columns: minmax(0, 1fr);
   width: 280px;
   padding: 4px;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
   border: 0;
   border-radius: var(--r-ctl);
   background: var(--bg-2);
