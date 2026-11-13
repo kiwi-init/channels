@@ -248,6 +248,7 @@ async function sweep(page: Page): Promise<{ steps: number; wrong: string[] }> {
 
 interface Painted {
   frames: number;
+  unseen: number;
   loose: number;
   run: number;
   longest: number;
@@ -256,7 +257,7 @@ interface Painted {
 }
 
 function watchPaints(): void {
-  const painted: Painted = { frames: 0, loose: 0, run: 0, longest: 0, first: "", worst: "" };
+  const painted: Painted = { frames: 0, unseen: 0, loose: 0, run: 0, longest: 0, first: "", worst: "" };
   (window as Window & { bubblePaints?: Painted }).bubblePaints = painted;
   const slack = (bubble: HTMLElement): number => {
     if (bubble.style.width || bubble.querySelector("pre, table, img, svg, hr")) return 0;
@@ -274,10 +275,15 @@ function watchPaints(): void {
     }
     return tops.size > 1 ? bubble.getBoundingClientRect().right - Number.parseFloat(getComputedStyle(bubble).paddingRight) - right : 0;
   };
+  const drawn = { frame: 0, width: 0 };
   const after = new MessageChannel();
-  after.port1.onmessage = () => {
+  after.port1.onmessage = (said: MessageEvent<number>) => {
     const mine = [...document.querySelectorAll<HTMLElement>(".main article.msg.is-mine .msg-text")];
     if (mine.length === 0) return;
+    if (said.data !== drawn.frame || window.innerWidth !== drawn.width) {
+      painted.unseen += 1;
+      return;
+    }
     painted.frames += 1;
     const wide = mine.map((bubble) => ({ bubble, by: slack(bubble) })).find((b) => b.by > 2.5);
     if (!wide) {
@@ -294,7 +300,9 @@ function watchPaints(): void {
     }
   };
   const tick = () => {
-    after.port2.postMessage(0);
+    drawn.frame += 1;
+    drawn.width = window.innerWidth;
+    after.port2.postMessage(drawn.frame);
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
@@ -396,7 +404,7 @@ try {
     await page.waitForTimeout(300);
     await checks(page, `${theme}, back at 1440`);
     const painted = await page.evaluate(() => (window as Window & { bubblePaints?: Painted }).bubblePaints ?? null);
-    const frames = `${painted?.frames ?? 0} frames read after paint, ${painted?.loose ?? 0} with a wrapped bubble wider than its longest line, ${painted?.longest ?? 0} in a row at most${painted?.worst ? ` (${painted.worst})` : ""}`;
+    const frames = `${painted?.frames ?? 0} frames read after paint, ${painted?.loose ?? 0} with a wrapped bubble wider than its longest line, ${painted?.longest ?? 0} in a row at most${painted?.worst ? ` (${painted.worst})` : ""}; ${painted?.unseen ?? 0} reads left out, taken after the window changed or a later frame was drawn`;
     expect(painted !== null && painted.frames > 30 && painted.longest <= 1, `${theme}: from first load through every resize, no wrapped bubble of yours stays too wide on screen: ${frames}`);
     await page.close();
   }
