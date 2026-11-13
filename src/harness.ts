@@ -18,6 +18,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 
 import { agyHere, kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
+import { pidAlive, processStart } from "./pid.ts";
 import type { Activity, ContextUse } from "@kiwi/core/protocol.ts";
 
 type Env = Record<string, string | undefined>;
@@ -321,6 +322,7 @@ function claudeTranscript(dir: string, session: string | undefined): string | un
   const known = transcripts.get(key);
   if (known && existsSync(known)) return known;
   const projects = join(dir, "projects");
+  if (!existsSync(projects)) return undefined;
   const found = readdirSync(projects)
     .map((p) => join(projects, p, `${session}.jsonl`))
     .find((f) => existsSync(f));
@@ -349,20 +351,57 @@ function runningTool(file: string): string | undefined {
   return undefined;
 }
 
+const CLAUDE_STATES = { busy: "working", idle: "idle", shell: "idle", waiting: "waiting" } as const;
+type ClaudeStatus = keyof typeof CLAUDE_STATES;
+type ClaudeRecord = { sessionId: string; procStart: string | undefined; status: ClaudeStatus | undefined; since: number | undefined };
+
+const isClaudeStatus = (s: unknown): s is ClaudeStatus => typeof s === "string" && Object.hasOwn(CLAUDE_STATES, s);
+
+function claudeRecord(file: string): ClaudeRecord | null {
+  let r: unknown;
+  try {
+    r = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    // A record that can't be read or parsed says nothing about what the session is doing.
+    return null;
+  }
+  if (!r || typeof r !== "object" || Array.isArray(r)) return null;
+  const sessionId = "sessionId" in r ? r.sessionId : undefined;
+  const procStart = "procStart" in r ? r.procStart : undefined;
+  if (typeof sessionId !== "string" || !sessionId) return null;
+  if (procStart !== undefined && (typeof procStart !== "string" || !procStart.trim())) return null;
+  const status = "status" in r && isClaudeStatus(r.status) ? r.status : undefined;
+  const since = "statusUpdatedAt" in r && typeof r.statusUpdatedAt === "number" && Number.isFinite(r.statusUpdatedAt) ? r.statusUpdatedAt : undefined;
+  return { sessionId, procStart, status, since };
+}
+
+const HAS_PROC = existsSync("/proc/self/stat");
+
+function sameProcess(pid: number, procStart: string | undefined): boolean {
+  if (!pidAlive(pid)) return false;
+  if (procStart === undefined) return process.platform === "win32";
+  const started = processStart(pid);
+  if (started === null) return false;
+  return (HAS_PROC ? started.slice(started.lastIndexOf(":") + 1) : started) === procStart;
+}
+
+const UNKNOWN: Activity = { state: "unknown" };
+
 /** Claude Code: its process's registry says busy or idle; the transcript's newest lines say which tool is running. */
 function claudeActivity(env: Env): Activity | undefined {
   const dir = env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
   const pid = Number(env.CLAUDE_PID);
   if (!Number.isInteger(pid) || pid <= 0) return undefined;
-  const reg = join(dir, "sessions", `${pid}.json`);
-  if (!existsSync(reg)) return undefined;
-  const r = JSON.parse(readFileSync(reg, "utf8")) as { sessionId?: string; status?: string; statusUpdatedAt?: number };
-  const since = typeof r.statusUpdatedAt === "number" ? r.statusUpdatedAt : undefined;
-  const file = claudeTranscript(dir, env.CLAUDE_CODE_SESSION_ID || r.sessionId);
+  const r = claudeRecord(join(dir, "sessions", `${pid}.json`));
+  if (!r || !sameProcess(pid, r.procStart)) return UNKNOWN;
+  const seat = env.CLAUDE_CODE_SESSION_ID;
+  if (seat && r.sessionId !== seat) return UNKNOWN;
+  const file = claudeTranscript(dir, seat || r.sessionId);
   const context = file ? whileUnchanged(claudeContexts, file, () => claudeContext(file)) : undefined;
-  const extra = { ...(since ? { since } : {}), ...(context ? { context } : {}) };
-  if (r.status === "idle") return { state: "idle", ...extra };
-  if (r.status && /wait|permission|input/i.test(r.status)) return { state: "waiting", ...extra };
+  const extra = { ...(r.since ? { since: r.since } : {}), ...(context ? { context } : {}) };
+  if (!r.status) return { ...UNKNOWN, ...extra };
+  const state = CLAUDE_STATES[r.status];
+  if (state !== "working") return { state, ...extra };
   const tool = file ? whileUnchanged(claudeTools, file, () => runningTool(file)) : undefined;
   return { state: "working", ...(tool ? { tool } : {}), ...extra };
 }
@@ -438,6 +477,7 @@ async function opencodeActivity(env: Env): Promise<Activity | undefined> {
   if (!row) return undefined;
   const idle = Number(row.time_idle);
   const updated = Number(row.time_updated);
+  if (row.time_updated === null || row.time_updated === undefined || !Number.isFinite(updated)) return UNKNOWN;
   return Number.isFinite(idle) && idle > 0 && idle >= updated ? { state: "idle", since: idle } : { state: "working" };
 }
 

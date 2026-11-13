@@ -22,7 +22,7 @@ type Kind = "human" | "agent"
 export type Color = "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "indigo" | "violet" | "pink" | "brown"
 
 export interface Activity {
-  state: "working" | "waiting" | "idle"
+  state: "working" | "waiting" | "idle" | "unknown"
   tool?: string
   since?: number
   context?: { used: number; window?: number }

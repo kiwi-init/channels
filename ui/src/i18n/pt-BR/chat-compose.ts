@@ -101,6 +101,7 @@ export default {
   "chat.composer.stashed.title": "Rascunhos guardados ({keys} traz de volta o mais recente)",
   "chat.composer.stashed.count": "{n} guardados",
   "chat.composer.quoting": "Citando {name}",
+  "chat.composer.quoting.task": "Citando a descrição de {task}",
   "chat.composer.replying.to": "Respondendo a {name}",
   "chat.composer.cancel.reply": "Cancelar resposta",
   "chat.composer.cancel.reply.esc": "Cancelar resposta (Esc)",
@@ -187,6 +188,7 @@ export default {
   "chat.markdown.copy.text": "Copiar {text}",
   "chat.markdown.code.block": "Bloco de código",
   "chat.markdown.code.block.lang": "Bloco de código: {lang}",
+  "chat.markdown.utc.assuming": "assumindo {date} UTC, a data da mensagem",
   "chat.markdown.task": "Tarefa: {text}",
   "chat.doc.media.didnt.load": "{name} não carregou",
 } satisfies Catalog

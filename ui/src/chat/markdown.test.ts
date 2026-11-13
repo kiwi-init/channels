@@ -13,8 +13,10 @@ const { normalizeMarkdownStyle } = await import("react-native-enriched-markdown/
 const { buildStyles } = await import("react-native-enriched-markdown/lib/module/web/styles.js")
 const { parseMarkdown } = await import("react-native-enriched-markdown/lib/module/web/parseMarkdown.js")
 const { RenderNode } = await import("react-native-enriched-markdown/lib/module/web/renderers/index.js")
-const { default: Markdown, blockGaps, withTextSize, safeLinks, sortedRows } = await import("~/chat/markdown")
-const { keepParsed } = await import("~/chat/parsed")
+const { default: Markdown, blockGaps, withTextSize, safeLinks, sortedRows, warm } = await import("~/chat/markdown")
+const { parseKey } = await import("~/chat/parsed")
+const { zonedLinks } = await import("~/chat/zoned-times")
+const { keepParsed, parsedFor } = await import("~/chat/parsed")
 
 const fixed = (name: string, s: CSSProperties): string[] => [
   ...(typeof s.fontSize === "number" ? [`${name} fontSize ${s.fontSize}`] : []),
@@ -35,7 +37,7 @@ describe("message text follows Settings > Appearance > Text size", () => {
     const html = renderToStaticMarkup(
       createElement(RenderNode, { node: ast.children?.[0] ?? ast, style, styles: withTextSize(buildStyles(style)), callbacks: {}, capabilities: { katex: null, enableTaskListItemToggle: false } })
     )
-    expect(html).toMatch(/<div class="enrm-admonition"[^>]*><div style="[^"]*font-size:15px[^"]*"><svg[\s\S]*?<\/svg><span>Warning<\/span><\/div>/)
+    expect(html).toMatch(/<div class="enrm-admonition"[^>]*><div style="[^"]*font-size:15px[^"]*"><svg[\s\S]*?<\/svg><span dir="ltr">Warning<\/span><\/div>/)
     const css = readFileSync(join(import.meta.dir, "../styles/chat.css"), "utf8")
     expect(css).toContain(".md .enrm-admonition > div:first-child > span {\n  font-size: var(--t-body);\n}")
   })
@@ -126,7 +128,7 @@ describe("a code block copies when it's pressed", () => {
     keepParsed(markdown, ast)
     const quiet = () => {}
     const html = renderToStaticMarkup(createElement(Markdown, { markdown, onMention: quiet, onTask: quiet, onMessage: quiet, onImage: quiet, onShown: quiet, copied: quiet }))
-    expect(html).toMatch(/<pre style="[^"]*cursor:pointer[^"]*" aria-label="Code block: sh" role="button" tabindex="0"><code[^>]*>bun test/)
+    expect(html).toMatch(/<pre style="[^"]*cursor:pointer[^"]*" dir="ltr" aria-label="Code block: sh" role="button" tabindex="0"><code[^>]*>bun test/)
     expect(html).not.toContain("md-copy")
   })
 
@@ -141,11 +143,12 @@ describe("a code block copies when it's pressed", () => {
 const quiet = () => {}
 const FLAGS = { latexMath: false, underline: false, hardSoftBreaks: true }
 
-async function rendered(markdown: string): Promise<string> {
+async function rendered(markdown: string, at?: number): Promise<string> {
   const ast = await parseMarkdown(markdown, FLAGS)
+  zonedLinks(ast, at)
   safeLinks(ast)
-  keepParsed(markdown, ast)
-  return renderToStaticMarkup(createElement(Markdown, { markdown, onMention: quiet, onTask: quiet, onMessage: quiet, onImage: quiet, onShown: quiet, copied: quiet }))
+  keepParsed(parseKey(markdown, at), ast)
+  return renderToStaticMarkup(createElement(Markdown, { markdown, at, onMention: quiet, onTask: quiet, onMessage: quiet, onImage: quiet, onShown: quiet, copied: quiet }))
 }
 
 describe("a link that hides a user name or password stays text (T216)", () => {
@@ -241,5 +244,124 @@ describe("a link to a message keeps its href; other kiwi:// links don't (T987)",
     expect(html).toContain(`href="kiwi://join/${code}?m=12"`)
     expect(html).not.toContain(`href="kiwi://join/${code}"`)
     expect(html).not.toContain('href="kiwi://other')
+  })
+})
+
+describe("a UTC time in prose shows its local time (#2367)", () => {
+  test("recognized times become kiwi-utc links whose text stays the original token", async () => {
+    const at = Date.UTC(2030, 0, 16, 22)
+    const html = await rendered("standup 06:30Z, review 2030-01-16T01:15:00Z, plain 06:30 stays, `07:00Z` too, 25:00Z wrong", at)
+    expect(html).toContain('href="kiwi-utc:2030-01-16T06:30:00Z"')
+    expect(html).toContain('href="kiwi-utc:2030-01-16T01:15:00Z"')
+    expect(html).toContain(">06:30Z</a>")
+    expect(html).toContain(">2030-01-16T01:15:00Z</a>")
+    expect(html.match(/kiwi-utc:/g)?.length).toBe(2)
+  })
+
+  test("bold text, list items and table cells convert; code and links hold their structure", async () => {
+    const at = Date.UTC(2030, 0, 16, 22)
+    const bold = await rendered("**deal at 06:30Z**", at)
+    expect(bold).toContain('href="kiwi-utc:2030-01-16T06:30:00Z"')
+    const list = await rendered("- first 06:30Z\n- second 23:45Z", at)
+    expect(list).toContain('href="kiwi-utc:2030-01-16T06:30:00Z"')
+    expect(list).toContain('href="kiwi-utc:2030-01-16T23:45:00Z"')
+    const table = await rendered("| when |\n| --- |\n| 06:30Z |", at)
+    expect(table).toContain('href="kiwi-utc:2030-01-16T06:30:00Z"')
+  })
+
+  test("code blocks hold their structure: plain, in a list, behind a shorter fence line, and in a blockquote", async () => {
+    const at = Date.UTC(2030, 0, 16, 22)
+    for (const text of ["```\n06:30Z\n```", "~~~~\n~~~\n06:30Z\n~~~~", "- ~~~\n  06:30Z\n  ~~~", "> ~~~\n> 06:30Z\n> ~~~", "run `06:30Z` locally", "``a ` 06:30Z`` stays code"]) {
+      const html = await rendered(text, at)
+      expect(html).toContain("06:30Z")
+      expect(html).not.toContain("kiwi-utc:")
+    }
+  })
+
+  test("links hold their structure: inline and reference links keep their labels and destinations", async () => {
+    const at = Date.UTC(2030, 0, 16, 22)
+    const inline = await rendered("[06:30Z](https://example.com) stays one link", at)
+    expect(inline).toContain('href="https://example.com"')
+    expect(inline).toContain(">06:30Z</a>")
+    expect(inline).not.toContain("kiwi-utc")
+    const reference = await rendered("[06:30Z][meeting]\n\n[meeting]: https://example.com", at)
+    expect(reference).toContain('href="https://example.com"')
+    expect(reference).not.toContain("kiwi-utc")
+  })
+
+  test("a time-only token without a message date stays unconverted", async () => {
+    const html = await rendered("standup 06:30Z ok?")
+    expect(html).toContain("06:30Z")
+    expect(html).not.toContain("kiwi-utc:")
+  })
+})
+
+describe("a hand-written kiwi-utc link survives validation (#2367)", () => {
+  test("a malformed instant loses its href and renders as plain text", async () => {
+    const html = await rendered("[bad](kiwi-utc:garbage) and [ok](kiwi-utc:2030-01-16T01:15:00Z)")
+    expect(html).not.toContain("kiwi-utc:garbage")
+    expect(html).toContain("bad and ")
+    expect(html).toContain('href="kiwi-utc:2030-01-16T01:15:00Z"')
+  })
+})
+
+describe("a warmed message is parsed under the key its render looks up (T7429)", () => {
+  test("warming with each message's time fills parseKey(markdown, at), with or without a UTC time in it", async () => {
+    const at = Date.UTC(2026, 10, 12, 15, 0)
+    const messages = [
+      { markdown: "Deploy at 14:00 UTC, then tell the room.", at },
+      { markdown: "No times here, just a warmed note.", at: at + 1 },
+    ]
+    expect(messages.map((m) => parsedFor(parseKey(m.markdown, m.at)))).toEqual([undefined, undefined])
+    warm(messages, (m) => m)
+    const done = () => messages.every((m) => parsedFor(parseKey(m.markdown, m.at)) !== undefined)
+    for (let i = 0; i < 400 && !done(); i++) await Bun.sleep(5)
+    expect(messages.map((m) => parsedFor(parseKey(m.markdown, m.at)) !== undefined)).toEqual([true, true])
+  })
+
+  test("the key carries the message's UTC day only when a bare time needs it, so repeated text shares one parse", () => {
+    const morning = Date.UTC(2026, 10, 12, 1, 0)
+    const evening = Date.UTC(2026, 10, 12, 23, 0)
+    const nextDay = Date.UTC(2026, 10, 13, 1, 0)
+    const plain = "Same words in many messages."
+    expect([parseKey(plain, morning), parseKey(plain, nextDay), parseKey(plain)]).toEqual([plain, plain, plain])
+    const full = "Shipped at 2026-11-12T14:00Z."
+    expect([parseKey(full, morning), parseKey(full, nextDay)]).toEqual([full, full])
+    const bare = "Deploy at 14:00 UTC."
+    expect(parseKey(bare, morning)).toBe(parseKey(bare, evening))
+    expect(parseKey(bare, morning)).not.toBe(parseKey(bare, nextDay))
+    expect(parseKey(bare, morning)).not.toBe(bare)
+    expect(parseKey("Deploy at 14:00Z.", morning)).not.toBe(parseKey("Deploy at 14:00Z.", nextDay))
+  })
+
+  test("a bare time the parser only sees after decoding an escape or dropping an entity still gets its own date", async () => {
+    const one = Date.UTC(2026, 10, 12, 2, 0)
+    const two = Date.UTC(2026, 10, 13, 2, 0)
+    const forms = ["Call at 06\\:30Z.", "Call at 06:30\\Z.", "Call at 06:30&amp;Z.", "Call at 06&#58;30Z.", "Call at 06&colon;30 UTC.", "Call at &#48;6:30Z.", "Call at 06:30Z.", "Call at 06:30 UTC."]
+    for (const text of forms) {
+      expect([text, parseKey(text, one) === parseKey(text, two)]).toEqual([text, false])
+      const [first, second] = [await rendered(text, one), await rendered(text, two)]
+      expect([text, first.includes("kiwi-utc:2026-11-13"), second.includes("kiwi-utc:2026-11-12")]).toEqual([text, false, false])
+    }
+    for (const text of ["Call at 06\\:30Z.", "Call at 06:30Z.", "Call at 06:30 UTC."]) {
+      expect([text, await rendered(text, one)]).toEqual([text, expect.stringContaining('href="kiwi-utc:2026-11-12T06:30:00Z"')])
+      expect([text, await rendered(text, two)]).toEqual([text, expect.stringContaining('href="kiwi-utc:2026-11-13T06:30:00Z"')])
+    }
+  })
+
+  test("without a message time, a bare time stays text and keeps a key apart from any dated render", async () => {
+    const bare = "Call at 06:30Z."
+    expect(parseKey(bare)).not.toBe(parseKey(bare, Date.UTC(2026, 10, 12)))
+    expect(await rendered(bare)).not.toContain("kiwi-utc:")
+    expect(await rendered(bare, Date.UTC(2026, 10, 12))).toContain('href="kiwi-utc:2026-11-12T06:30:00Z"')
+  })
+
+  test("same-day messages with a bare time render the same instant from one shared parse", async () => {
+    const bare = "Standup moved to 09:30 UTC."
+    const first = await rendered(bare, Date.UTC(2026, 10, 12, 2, 0))
+    const later = await rendered(bare, Date.UTC(2026, 10, 12, 22, 0))
+    expect(first).toContain('href="kiwi-utc:2026-11-12T09:30:00Z"')
+    expect(later).toBe(first)
+    expect(await rendered(bare, Date.UTC(2026, 10, 13, 2, 0))).toContain('href="kiwi-utc:2026-11-13T09:30:00Z"')
   })
 })

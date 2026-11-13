@@ -89,6 +89,30 @@ try {
       if (!(c.xs[0]! < c.xs[1]! && c.xs[1]! < c.xs[2]!)) problems.push(`${size.name}: controls aren't ordered left to right (${c.xs.join(", ")})`);
       if (c.regions.some((r) => r === "drag")) problems.push(`${size.name}: a control sits in a drag region (${c.regions.join(", ")})`);
       if (c.overlaps.length) problems.push(`${size.name}: the controls overlap ${c.overlaps.join(", ")}`);
+      const arrows = await d.evaluate(() => {
+        const box = document.querySelector(".top-history");
+        if (!box) return null;
+        const r = box.getBoundingClientRect();
+        const hit = (o: DOMRect) => o.width > 0 && o.left < r.right && o.right > r.left && o.top < r.bottom && o.bottom > r.top;
+        const name = (el: Element) =>
+          `${el.tagName.toLowerCase()}.${String(el.getAttribute("class") ?? "")
+            .trim()
+            .replace(/\s+/g, ".")}`;
+        const regions = [...box.querySelectorAll("button")].map((b) => {
+          const c = b.getBoundingClientRect();
+          for (let el = document.elementFromPoint(c.x + c.width / 2, c.y + c.height / 2); el; el = el.parentElement) {
+            const v = getComputedStyle(el).getPropertyValue("--electrobun-app-region").trim();
+            if (v === "drag" || v === "no-drag") return v;
+          }
+          return "-";
+        });
+        const overlaps = [...document.querySelectorAll(".wm-controls, .top-tools > *, .rail .tile, .top-here")].filter((el) => !box.contains(el) && hit(el.getBoundingClientRect())).map(name);
+        return { regions, overlaps };
+      }, null);
+      console.log(`${size.name}: Back and Forward ${arrows ? `regions ${arrows.regions.join(", ")}` : "missing"}`);
+      if (!arrows) problems.push(`${size.name}: no Back and Forward arrows in the top bar`);
+      else if (arrows.regions.includes("drag")) problems.push(`${size.name}: a history arrow sits in a drag region (${arrows.regions.join(", ")})`);
+      else if (arrows.overlaps.length) problems.push(`${size.name}: the history arrows overlap ${arrows.overlaps.join(", ")}`);
       const right = await d.evaluate(() => innerWidth - (document.querySelector(".wm-controls")?.getBoundingClientRect().right ?? 0), null);
       if (right > 16) problems.push(`${size.name}: the controls aren't at the top-right (${right}px from the right edge)`);
     }

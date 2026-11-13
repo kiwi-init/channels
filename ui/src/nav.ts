@@ -106,6 +106,10 @@ export function historyStep(e: Pick<KeyboardEvent, "metaKey" | "ctrlKey" | "altK
   return null
 }
 
+export function historyCan(nav: Pick<Nav, "modal" | "back" | "ahead">): { back: boolean; forward: boolean } {
+  return { back: !!nav.modal || nav.back.length > 0, forward: !!nav.modal || nav.ahead.length > 0 }
+}
+
 function arrive(nav: Nav, to: Place): Nav {
   const shut = { modal: null, dialog: null, spec: undefined, part: undefined, visit: nav.visit + 1 }
   if (to.at === "settings") return { ...nav, ...shut, page: "settings", section: to.section, restore: undefined }
@@ -266,4 +270,46 @@ export function useAct(): Act {
   const act = useContext(ActContext)
   if (!act) throw new Error("useAct outside the app")
   return act
+}
+
+export type Intent = { channel: string; where: string | null; from: unknown; at: number }
+
+export const INTENT_MS = 10_000
+
+export function wantsFocus(intent: Intent | null, channel: string, where: Where, writable: boolean, active: unknown, dialog: boolean, now: number): boolean {
+  if (!intent || !writable || dialog || now - intent.at > INTENT_MS) return false
+  if (intent.channel !== channel || (intent.where !== null && intent.where !== whereKey(where))) return false
+  return active === null || active === intent.from
+}
+
+let intent: Intent | null = null
+let stop = new AbortController()
+
+function forget() {
+  intent = null
+  stop.abort()
+}
+
+export function claimFocus(channel: string, where: Where, writable: boolean): boolean {
+  const active = document.activeElement === document.body ? null : document.activeElement
+  if (!wantsFocus(intent, channel, where, writable, active, !!document.querySelector("dialog[open]"), performance.now())) return false
+  forget()
+  return true
+}
+
+export function useOpenToType(): (channel: string, where?: Where) => void {
+  const go = useGo()
+  return (channel, where) => {
+    forget()
+    if (!matchMedia("(pointer: coarse)").matches) {
+      const from = document.activeElement
+      intent = { channel, where: where ? whereKey(where) : null, from, at: performance.now() }
+      stop = new AbortController()
+      const on = { capture: true, signal: stop.signal }
+      addEventListener("pointerdown", forget, on)
+      addEventListener("keydown", forget, on)
+      addEventListener("focusin", (e) => e.target !== from && forget(), on)
+    }
+    go(where ? { to: "where", where } : { to: "channel", code: channel })
+  }
 }

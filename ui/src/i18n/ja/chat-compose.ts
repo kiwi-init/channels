@@ -101,6 +101,7 @@ export default {
   "chat.composer.stashed.title": "退避した下書き（{keys} で最新を戻す）",
   "chat.composer.stashed.count": "{n} 件退避中",
   "chat.composer.quoting": "{name} を引用",
+  "chat.composer.quoting.task": "{task} の説明を引用",
   "chat.composer.replying.to": "{name} に返信",
   "chat.composer.cancel.reply": "返信をキャンセル",
   "chat.composer.cancel.reply.esc": "返信をキャンセル（Esc）",
@@ -187,6 +188,7 @@ export default {
   "chat.markdown.copy.text": "{text} をコピー",
   "chat.markdown.code.block": "コードブロック",
   "chat.markdown.code.block.lang": "コードブロック: {lang}",
+  "chat.markdown.utc.assuming": "メッセージの日付 {date}（UTC）として解釈",
   "chat.markdown.task": "タスク: {text}",
   "chat.doc.media.didnt.load": "{name} を読み込めませんでした",
 } satisfies Catalog

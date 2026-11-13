@@ -101,6 +101,7 @@ export default {
   "chat.composer.stashed.title": "보관한 초안({keys}로 최신 초안 복원)",
   "chat.composer.stashed.count": "{n}개 보관됨",
   "chat.composer.quoting": "{name} 인용 중",
+  "chat.composer.quoting.task": "{task} 설명 인용 중",
   "chat.composer.replying.to": "{name}에게 답장 중",
   "chat.composer.cancel.reply": "답장 취소",
   "chat.composer.cancel.reply.esc": "답장 취소 (Esc)",
@@ -187,6 +188,7 @@ export default {
   "chat.markdown.copy.text": "{text} 복사",
   "chat.markdown.code.block": "코드 블록",
   "chat.markdown.code.block.lang": "코드 블록: {lang}",
+  "chat.markdown.utc.assuming": "메시지 날짜 {date}(UTC) 기준",
   "chat.markdown.task": "작업: {text}",
   "chat.doc.media.didnt.load": "{name}을(를) 불러오지 못했습니다",
 } satisfies Catalog

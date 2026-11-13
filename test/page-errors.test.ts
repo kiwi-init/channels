@@ -42,6 +42,7 @@ describe("a page error in a harness says where it came from", () => {
           late: ["div.msg-text 355x56 -> 355x84, watched by observer 3 (made at assets/index-abc.js:9:1)"],
           untold: [],
           ran: ["observer 3 (made at assets/index-abc.js:9:1): div.msg-text 355x56", "observer 5: div.feed 900x600"],
+          loading: [],
         },
       }),
     ).toBe(
@@ -59,7 +60,7 @@ describe("a page error in a harness says where it came from", () => {
   });
 
   test("a loop with nothing recorded says that instead of an empty list", () => {
-    expect(describePageError({ message: "ResizeObserver loop limit exceeded", after: "ok   first", observers: { late: [], untold: [], ran: [] } })).toBe(
+    expect(describePageError({ message: "ResizeObserver loop limit exceeded", after: "ok   first", observers: { late: [], untold: [], ran: [], loading: [] } })).toBe(
       told([
         "ResizeObserver loop limit exceeded",
         "after: ok   first",
@@ -79,6 +80,7 @@ describe("a page error in a harness says where it came from", () => {
           late: [],
           untold: ["article.msg 592x36, put under watch 4 ms before by observer 1 (made at assets/index-abc.js:29:1)"],
           ran: ["observer 1 (made at assets/index-abc.js:29:1): article.msg 592x36"],
+          loading: [],
         },
       }),
     ).toBe(
@@ -92,5 +94,33 @@ describe("a page error in a harness says where it came from", () => {
         "  observer 1 (made at assets/index-abc.js:29:1): article.msg 592x36",
       ]),
     );
+  });
+
+  test("a loop while stylesheets load in <head> names them first, as what held the layout back", () => {
+    const lines = describePageError({
+      message: "ResizeObserver loop completed with undelivered notifications.",
+      after: "ok   first",
+      observers: {
+        late: ["div.feed-list 560x902 -> 560x926, watched by observer 7"],
+        untold: [],
+        ran: ["observer 1: article.msg 560x8"],
+        loading: ["assets/card-abc.css", "assets/tasks-def.css"],
+      },
+    }).split("\n    ");
+    expect(lines.slice(3, 7)).toEqual([
+      "2 stylesheets were still loading in <head>, and WebKit lays out nothing new until they arrive, so what the page added meanwhile is sized late:",
+      "  assets/card-abc.css, assets/tasks-def.css",
+      "changed size after its observer last ran:",
+      "  div.feed-list 560x902 -> 560x926, watched by observer 7",
+    ]);
+  });
+
+  test("one stylesheet reads as one", () => {
+    const told = describePageError({
+      message: "ResizeObserver loop completed with undelivered notifications.",
+      after: "ok   first",
+      observers: { late: [], untold: [], ran: [], loading: ["assets/card-abc.css"] },
+    });
+    expect(told).toContain("1 stylesheet was still loading in <head>");
   });
 });

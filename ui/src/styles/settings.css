@@ -10,9 +10,29 @@
   grid-template-columns: var(--side-w) minmax(0, 1fr);
 }
 
+.set-top-lead {
+  grid-row: 1;
+  grid-column: 1;
+  justify-self: start;
+  padding-left: 8px;
+}
+
 .set-top-title {
+  grid-row: 1;
+  grid-column: 1;
+  justify-self: start;
+  margin-left: calc(8px + var(--history-w) + 4px);
   padding: 0 12px;
   font: inherit;
+}
+
+:root[data-shell="mac"] .set-top-lead {
+  padding-left: calc(64px + 16px);
+}
+
+:root[data-shell="mac"] .top.set-top .set-top-title {
+  margin-left: calc(64px + 16px + var(--history-w) + 4px);
+  padding-left: 12px;
 }
 
 .set-nav {

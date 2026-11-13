@@ -7,7 +7,7 @@ import { withoutMediaNames } from "~/chat/doc/finished"
 import { PrChip, TaskChip } from "~/chat/cards"
 import { EditHere, useEditing } from "~/chat/editing"
 import { quotedExcerpt } from "~/chat/quote"
-import { preview, useReplying } from "~/chat/reply"
+import { preview, replyTo, useReplying } from "~/chat/reply"
 import { Body } from "~/chat/body"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
@@ -251,7 +251,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const onMenu = (e: MouseEvent<HTMLElement>) => {
     if (m.pending || m.failed !== undefined || m.leftOut || m.fromDoc || m.deleted || editing) return
     const target = e.target
-    const reply = replying && quoting ? () => replying.set(m) : null
+    const reply = replying && quoting ? () => replying.set(replyTo(m)) : null
     showMenu(e, t("chat.message.menu"), (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, thread: threaded ? openThread : null, at }))
   }
 
@@ -313,7 +313,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </Suspense>
         ) : (
           <Clamp on={who?.kind === "agent" && !inThread}>
-            {body && <Body text={wrote(body)} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} hug={m.from === channel.you} />}
+            {body && <Body text={wrote(body)} seq={m.seq} at={m.at} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} hug={m.from === channel.you} />}
           </Clamp>
         )}
         {compact && m.edited !== undefined && !editing && (
@@ -390,7 +390,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             </Suspense>
           )}
           {replying && quoting && (
-            <button type="button" className="msg-tool" aria-label={t("chat.message.reply")} title={t("chat.message.reply")} onClick={() => replying.set(m)}>
+            <button type="button" className="msg-tool" aria-label={t("chat.message.reply")} title={t("chat.message.reply")} onClick={() => replying.set(replyTo(m))}>
               <Icon name="reply" size={14} />
             </button>
           )}

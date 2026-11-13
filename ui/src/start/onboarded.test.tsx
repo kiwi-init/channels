@@ -3,7 +3,7 @@ import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import type { ChannelTile } from "~/model"
-import { AppContext, type Ctx } from "~/nav"
+import { AppContext, startNav, type Ctx } from "~/nav"
 import { FirstRun } from "~/start/first-run"
 import { onboarded, rememberOnboarded } from "~/start/onboarded"
 import { Welcome } from "~/start/welcome"
@@ -25,7 +25,9 @@ const tile = (code: string): ChannelTile => ({ code, title: `Channel ${code}`, s
 
 const render = (page: ReactNode, app: { account: object | null; channels: ChannelTile[] }): string =>
   renderToStaticMarkup(
-    <AppContext.Provider value={{ app: { home: [], signIn: null, enrolling: null, actions: {}, prefs: { reduceMotion: true }, ...app }, go: () => {} } as unknown as Ctx}>{page}</AppContext.Provider>
+    <AppContext.Provider value={{ app: { home: [], signIn: null, enrolling: null, actions: {}, prefs: { reduceMotion: true }, ...app }, nav: startNav(null), go: () => {} } as unknown as Ctx}>
+      {page}
+    </AppContext.Provider>
   )
 
 const newPerson = (): string => render(<FirstRun />, { account: null, channels: [] })
@@ -61,6 +63,11 @@ describe("the onboarding shows only on a computer that hasn't finished it, while
     const html = withChannels()
     expect(html).not.toContain(ONBOARDING)
     expect(html).toContain("Channel c1")
+  })
+
+  test("Home with no channels has the Back and Forward arrows too (#2372)", () => {
+    rememberOnboarded()
+    expect(noChannels()).toContain('class="top-history"')
   })
 
   test("a computer that finished it never shows it again, signed out or with no channels", () => {

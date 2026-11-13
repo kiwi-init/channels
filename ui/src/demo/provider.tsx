@@ -10,6 +10,9 @@ import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_
 import { longFeed } from "~/demo/long"
 import { withOwnBubbles } from "~/demo/own-bubbles"
 import { withSigns } from "~/demo/signs"
+import { withTheirs } from "~/demo/theirs"
+import { withDepartedDms } from "./departed-dms.ts"
+import { withDepartedReviewer } from "./departed-reviewer.ts"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf } from "~/home"
@@ -275,6 +278,7 @@ function withCompact(c: Channel, approved: boolean): Channel {
 
 export type Scenario =
   | "full"
+  | "slow-open"
   | "specs-behind"
   | "compact"
   | "compacted"
@@ -291,6 +295,7 @@ export type Scenario =
   | "tabs-3"
   | "tabs-8"
   | "signs"
+  | "theirs"
   | "handoff"
   | "opening"
   | "held"
@@ -319,6 +324,9 @@ export type Scenario =
   | "github-signed-in"
   | "github-gate"
   | "task-body"
+  | "activity-unknown"
+  | "task-quote"
+  | "task-quote-read-only"
   | "github-checking"
   | "thread-fetching"
   | "thread-unloaded"
@@ -329,6 +337,9 @@ export type Scenario =
   | "review-reset"
   | "member"
   | "home-calm"
+  | "departed-dms"
+  | "departed-reviewer"
+  | "departed-reviewer-readonly"
 
 function withReviewReset(c: Channel): Channel {
   return {
@@ -372,6 +383,30 @@ const TASK_BODY = [
 
 const TASK_BRANCH = "Channels12-channel-settings-one-save-pattern-per-setting"
 
+function withTaskBody(c: Channel): Channel {
+  return {
+    ...c,
+    tasks: c.tasks.map((k) =>
+      k.id === 12 ? { ...k, title: wrote("Channel settings: four save patterns in one dialog, the…"), detail: wrote(TASK_BODY), ...(k.pr && { pr: { ...k.pr, branch: TASK_BRANCH } }) } : k
+    ),
+  }
+}
+
+function withTaskQuote(c: Channel, readOnly: boolean): Channel {
+  const seq = Math.max(...c.messages.map((m) => m.seq)) + 1
+  const where = { kind: "task", task: 12 } as const
+  const at = Date.now() - 20 * 60_000
+  return {
+    ...withTaskBody(c),
+    people: readOnly ? c.people.map((p) => (p.name === c.you ? { ...p, readOnly: true } : p)) : c.people,
+    messages: [
+      ...c.messages,
+      { seq, from: "atlas", at, text: wrote("Keep Rename inline, but save the Goal box on blur like the pause note, as T10 did."), where },
+      { seq: seq + 1, from: "win", at: at + 60_000, text: wrote("Agreed on the Icon row: the header tile is enough.\n\nI'll drop the row in the same PR."), where },
+    ],
+  }
+}
+
 const behindOf = (c: Channel): Channel => ({ ...c, behind: true, specs: c.specs?.filter((s) => !!s.result), tasks: c.tasks.filter((k) => k.status === "done") })
 
 function initial(scenario: Scenario, look: Partial<Prefs>): State {
@@ -395,80 +430,82 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                     ? withHandoff(DEMO_CHANNEL)
                     : scenario === "thread-fetching" || scenario === "thread-unloaded"
                       ? { ...DEMO_CHANNEL, since: 1_000_000 }
-                      : scenario === "task-body"
-                        ? {
-                            ...DEMO_CHANNEL,
-                            tasks: DEMO_CHANNEL.tasks.map((k) =>
-                              k.id === 12
-                                ? { ...k, title: wrote("Channel settings: four save patterns in one dialog, the…"), detail: wrote(TASK_BODY), ...(k.pr && { pr: { ...k.pr, branch: TASK_BRANCH } }) }
-                                : k
-                            ),
-                          }
-                        : scenario === "opening"
-                          ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-                          : scenario === "held"
-                            ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                            : scenario === "compact" || scenario === "compacted"
-                              ? withCompact(DEMO_CHANNEL, scenario === "compacted")
-                              : scenario === "specs-behind"
-                                ? behindOf(withSpecs(DEMO_CHANNEL, false))
-                                : scenario === "specs" || scenario === "spec-changed"
-                                  ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
-                                  : scenario === "forgotten-computer"
-                                    ? {
-                                        ...DEMO_CHANNEL,
-                                        asks: [
-                                          {
-                                            kind: "join" as const,
-                                            id: "join-dudu",
-                                            at: Date.now() - 30 * 60_000,
-                                            name: "dudu",
-                                            who: "agent" as const,
-                                            harness: "claude" as const,
-                                            runs: "Claude Code · claude-opus-5-5",
-                                            machine: "MacBook-Pro-de-Davi",
-                                            sponsor: "harry",
-                                            revoked: true as const,
-                                            said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
-                                            code: "604-218",
-                                          },
-                                          ...DEMO_CHANNEL.asks,
-                                        ],
-                                      }
-                                    : scenario === "invite-failed"
-                                      ? {
-                                          ...DEMO_CHANNEL,
-                                          asks: [
-                                            {
-                                              kind: "join" as const,
-                                              id: "join-quill",
-                                              at: Date.now() - 5 * 60_000,
-                                              name: "quill",
-                                              who: "agent" as const,
-                                              harness: "claude" as const,
-                                              runs: "Claude Code · claude-opus-5-5",
-                                              said: { machine: "Linux x64 · 8 cores · 16 GB", repo: "interlinked/site@main", outside: true },
-                                              pin: { failed: true as const },
-                                              code: "317-552",
-                                            },
-                                            ...DEMO_CHANNEL.asks,
-                                          ],
-                                        }
-                                      : scenario === "review-reset"
-                                        ? withReviewReset(DEMO_CHANNEL)
-                                        : scenario === "event-runs"
-                                          ? withEventRuns(DEMO_CHANNEL)
-                                          : scenario === "own-bubbles"
-                                            ? withOwnBubbles(DEMO_CHANNEL)
-                                            : scenario === "signs"
-                                              ? withSigns(DEMO_CHANNEL)
-                                              : DEMO_CHANNEL,
+                      : scenario === "activity-unknown"
+                        ? { ...DEMO_CHANNEL, people: DEMO_CHANNEL.people.map((p) => (p.name === "pixel" ? { ...p, activity: { state: "unknown" as const } } : p)) }
+                        : scenario === "task-body"
+                          ? withTaskBody(DEMO_CHANNEL)
+                          : scenario === "task-quote" || scenario === "task-quote-read-only"
+                            ? withTaskQuote(DEMO_CHANNEL, scenario === "task-quote-read-only")
+                            : scenario === "opening"
+                              ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+                              : scenario === "held"
+                                ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+                                : scenario === "compact" || scenario === "compacted"
+                                  ? withCompact(DEMO_CHANNEL, scenario === "compacted")
+                                  : scenario === "specs-behind"
+                                    ? behindOf(withSpecs(DEMO_CHANNEL, false))
+                                    : scenario === "specs" || scenario === "spec-changed"
+                                      ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
+                                      : scenario === "forgotten-computer"
+                                        ? {
+                                            ...DEMO_CHANNEL,
+                                            asks: [
+                                              {
+                                                kind: "join" as const,
+                                                id: "join-dudu",
+                                                at: Date.now() - 30 * 60_000,
+                                                name: "dudu",
+                                                who: "agent" as const,
+                                                harness: "claude" as const,
+                                                runs: "Claude Code · claude-opus-5-5",
+                                                machine: "MacBook-Pro-de-Davi",
+                                                sponsor: "harry",
+                                                revoked: true as const,
+                                                said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
+                                                code: "604-218",
+                                              },
+                                              ...DEMO_CHANNEL.asks,
+                                            ],
+                                          }
+                                        : scenario === "invite-failed"
+                                          ? {
+                                              ...DEMO_CHANNEL,
+                                              asks: [
+                                                {
+                                                  kind: "join" as const,
+                                                  id: "join-quill",
+                                                  at: Date.now() - 5 * 60_000,
+                                                  name: "quill",
+                                                  who: "agent" as const,
+                                                  harness: "claude" as const,
+                                                  runs: "Claude Code · claude-opus-5-5",
+                                                  said: { machine: "Linux x64 · 8 cores · 16 GB", repo: "interlinked/site@main", outside: true },
+                                                  pin: { failed: true as const },
+                                                  code: "317-552",
+                                                },
+                                                ...DEMO_CHANNEL.asks,
+                                              ],
+                                            }
+                                          : scenario === "review-reset"
+                                            ? withReviewReset(DEMO_CHANNEL)
+                                            : scenario === "event-runs"
+                                              ? withEventRuns(DEMO_CHANNEL)
+                                              : scenario === "own-bubbles"
+                                                ? withOwnBubbles(DEMO_CHANNEL)
+                                                : scenario === "signs"
+                                                  ? withSigns(DEMO_CHANNEL)
+                                                  : scenario === "theirs"
+                                                    ? withTheirs(DEMO_CHANNEL)
+                                                    : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,
       scenario === "member" ? DEMO_GUEST_MEMBER : DEMO_GUEST,
     ].map((c) => [c.code, { ...c, docs: demoDocs(c.code) }])
   )
+  if (scenario === "departed-dms") channels.set("kiwi", { ...withDepartedDms(DEMO_CHANNEL), docs: demoDocs("kiwi") })
+  if (scenario === "departed-reviewer" || scenario === "departed-reviewer-readonly")
+    channels.set("kiwi", { ...withDepartedReviewer(DEMO_CHANNEL, scenario === "departed-reviewer-readonly"), docs: demoDocs("kiwi") })
   if (scenario === "updates")
     return { account: { ...DEMO_ACCOUNT, uiUpdate: { version: "dev-1542" }, update: { version: "2026.10.7", ready: true, state: "ready" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-ready") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.7", ready: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
@@ -523,11 +560,20 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   return { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
 }
 
+const SLOW_OPEN_MS = 1500
+
 export function useDemo(scenario: Scenario, open: string | null, look: Partial<Prefs> = {}, usage: Partial<Usage> = {}): App {
   const [state, setState] = useState(() => initial(scenario, look))
   const [shownUsage] = useState(usage)
   const [ownPersonalities, setOwnPersonalities] = useState<Personality[]>([])
   const [computer, setComputer] = useState(COMPUTER)
+  const [arrived, setArrived] = useState(open)
+  useEffect(() => {
+    if (scenario !== "slow-open") return
+    const late = window.setTimeout(() => setArrived(open), SLOW_OPEN_MS)
+    return () => window.clearTimeout(late)
+  }, [scenario, open])
+  const shown = scenario !== "slow-open" || arrived === open ? open : null
 
   useEffect(() => {
     if (scenario !== "ci-live") return
@@ -1099,7 +1145,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     account: state.account,
     channels: tiles,
     home,
-    channel: open && state.gone?.code !== open ? (state.channels.get(open) ?? null) : null,
+    channel: shown && state.gone?.code !== shown ? (state.channels.get(shown) ?? null) : null,
     ...(state.gone && state.gone.code === open ? { gone: state.gone } : {}),
     prefs: state.prefs,
     harnesses: HARNESSES,

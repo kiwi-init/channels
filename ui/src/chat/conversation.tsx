@@ -12,7 +12,7 @@ import { chatterLine, chatterRuns, type ChatterRun } from "~/chat/chatter"
 import { MessageRow } from "~/chat/message"
 import { useStick } from "~/chat/stick"
 import { linked } from "~/chat/linked"
-import { flash, jumpTo, ReplyContext, useReplying, type Replying } from "~/chat/reply"
+import { flash, jumpTo, ReplyContext, replyTo, useReplying, type Quoting, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
 import { t } from "~/i18n/i18n"
@@ -169,10 +169,10 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
     }
   }, [target, visit, code, earlierTo])
   const waiting = target !== null && reached !== visit
-  const [reply, setReply] = useState<{ key: string; to: Message; excerpt: string | null } | null>(null)
+  const [reply, setReply] = useState<{ key: string; quoting: Quoting } | null>(null)
   const replying = useMemo((): Replying => {
     const here = reply?.key === key ? reply : null
-    return { to: here?.to ?? null, excerpt: here?.excerpt ?? null, set: (to, excerpt) => setReply(to ? { key, to, excerpt: excerpt ?? null } : null) }
+    return { quoting: here?.quoting ?? null, set: (quoting) => setReply(quoting ? { key, quoting } : null) }
   }, [reply, key])
   const doc = docOf(channel, where)
   const placeName =
@@ -356,19 +356,19 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     (seq: number, excerpt: string) => {
       const m = list.find((x) => x.seq === seq)
       if (!m) return
-      replying?.set(m, excerpt)
+      replying?.set(replyTo(m, excerpt))
     },
     [list, replying]
   )
 
   useEffect(() => {
     const near = [...list.slice(Math.max(0, start - MORE), start), ...list.slice(end, end + MORE)]
-    const texts = near.flatMap((m) => (wordsRaw(m.text) && !m.system ? [{ text: wordsRaw(m.text), seq: m.seq }] : []))
+    const texts = near.flatMap((m) => (wordsRaw(m.text) && !m.system ? [{ text: wordsRaw(m.text), seq: m.seq, at: m.at }] : []))
     let stop = () => {}
     let live = true
     const timer = window.setTimeout(() => {
       void import("~/chat/markdown").then(({ warm }) => {
-        if (live) stop = warm(texts, ({ text, seq }) => linked(text, names, tasks, seq))
+        if (live) stop = warm(texts, ({ text, seq, at }) => ({ markdown: linked(text, names, tasks, seq), at }))
       })
     }, 150)
     return () => {
