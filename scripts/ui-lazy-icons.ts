@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
 import { pageErrors } from "./page-errors.ts";
@@ -27,6 +27,24 @@ const expect = (ok: boolean, what: string) => {
   console.log(`${ok ? "ok  " : "FAIL"} ${what}`);
   if (!ok) fails.push(what);
 };
+
+const LATER = ["Gif01Icon", "LinkSquare02Icon", "Link01Icon", "AtIcon", "Download01Icon", "UserCircleIcon", "ComputerPhoneSyncIcon", "ComputerIcon", "SmartPhone01Icon"];
+const GONE = ["Sun03Icon", "Moon02Icon", "TaskDone01Icon"];
+const icons = join(import.meta.dir, "../ui/node_modules/@hugeicons/core-free-icons/dist/esm");
+const html = readFileSync(join(dist, "index.html"), "utf8");
+const firstFiles = [...html.matchAll(/<script type="module"[^>]*src="\/([^"]+)"|<link rel="modulepreload"[^>]*href="\/([^"]+)"/g)].map(([, a, b]) => a ?? b ?? "");
+const firstLoad = firstFiles.map((f) => readFileSync(join(dist, f), "utf8")).join("\n");
+const later = readdirSync(join(dist, "assets"))
+  .filter((f) => f.endsWith(".js") && !firstFiles.includes(`assets/${f}`))
+  .map((f) => readFileSync(join(dist, "assets", f), "utf8"))
+  .join("\n");
+const path = (name: string) => /d: "([^"]+)"/.exec(readFileSync(join(icons, `${name}.js`), "utf8"))?.[1] ?? `missing path for ${name}`;
+expect(firstFiles.length > 1, `read the first load from index.html: the entry plus ${firstFiles.length - 1} preloaded files`);
+for (const name of LATER) {
+  const d = path(name);
+  expect(!firstLoad.includes(d) && later.includes(d), `${name} is in a chunk that loads later, not in the first load`);
+}
+for (const name of GONE) expect(!firstLoad.includes(path(name)), `${name}, which nothing used, is out of the first load`);
 
 const drawn = (page: Page, scope: string) =>
   page.evaluate((sel) => {
