@@ -4,7 +4,8 @@ import { dirname, join } from "node:path";
 import type { HookRow } from "@kiwi/core/harnesses.ts";
 import { loadConfig } from "../../config.ts";
 import { here } from "../../seats.ts";
-import { EVENTS, hookCommand, isOurHook, isOurHookCommand, LISTEN, LISTEN_SECONDS, PERMISSION } from "../self.ts";
+import { EVENTS, hookCommand, isOurHook, LISTEN, LISTEN_SECONDS, PERMISSION } from "../self.ts";
+import { replaceOurs, stripOurs, type HookEntry, type Settings } from "./claude-shaped.ts";
 
 const PERMISSION_EVENT = "PermissionRequest";
 export const PERMISSION_SECONDS = 1_800;
@@ -13,9 +14,6 @@ const PERMISSION_TOOLS = "Bash|Edit|Write|MultiEdit|NotebookEdit|WebFetch|mcp__.
 function settingsPath(): string {
   return join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), "settings.json");
 }
-
-type HookEntry = { matcher?: string; hooks: { type: "command"; command: string; timeout?: number; async?: boolean; asyncRewake?: boolean }[] };
-export type Settings = { hooks?: Record<string, HookEntry[]> } & Record<string, unknown>;
 
 function readSettings(): Settings {
   const p = settingsPath();
@@ -28,34 +26,26 @@ function writeSettings(s: Settings): void {
   writeFileSync(p, JSON.stringify(s, null, 2) + "\n");
 }
 
-export function withoutOurs(entries: HookEntry[] | undefined): HookEntry[] {
-  return (entries ?? []).map((e) => ({ ...e, hooks: e.hooks.filter((h) => !isOurHookCommand(h.command)) })).filter((e) => e.hooks.length > 0);
-}
-
 export function installHooks(keepListen = false, addListen = true): string {
   const s = readSettings();
   s.hooks ??= {};
   const listen = keepListen || (addListen && (claudeVersion() ? rewakeCapable() : listenHooksOf(s) !== "absent"));
   for (const [event, arg] of Object.entries(EVENTS)) {
-    s.hooks[event] = [
-      ...withoutOurs(s.hooks[event]),
+    replaceOurs(
+      s,
+      event,
       { hooks: [{ type: "command", command: hookCommand(arg), timeout: event === "UserPromptSubmit" ? 20 : 30 }] },
       ...(listen ? [{ hooks: [{ type: "command" as const, command: hookCommand(LISTEN), async: true, asyncRewake: true, timeout: LISTEN_SECONDS + 60 }] }] : []),
-    ];
+    );
   }
-  s.hooks[PERMISSION_EVENT] = [...withoutOurs(s.hooks[PERMISSION_EVENT]), { matcher: PERMISSION_TOOLS, hooks: [{ type: "command", command: hookCommand(PERMISSION), timeout: PERMISSION_SECONDS }] }];
+  replaceOurs(s, PERMISSION_EVENT, { matcher: PERMISSION_TOOLS, hooks: [{ type: "command", command: hookCommand(PERMISSION), timeout: PERMISSION_SECONDS }] });
   writeSettings(s);
   return settingsPath();
 }
 
 export function uninstallHooks(): string {
   const s = readSettings();
-  for (const event of Object.keys(s.hooks ?? {})) {
-    const kept = withoutOurs(s.hooks![event]);
-    if (kept.length) s.hooks![event] = kept;
-    else delete s.hooks![event];
-  }
-  if (s.hooks && !Object.keys(s.hooks).length) delete s.hooks;
+  stripOurs(s);
   writeSettings(s);
   return settingsPath();
 }

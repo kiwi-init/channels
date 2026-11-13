@@ -1,0 +1,148 @@
+{
+  "base": "2b432da8176794d724301530cc546675d580973d",
+  "outcomes": [
+    {
+      "scenario": "claude install fresh, keeping listen",
+      "result": "ok \"<DIR>/claude/settings.json\"",
+      "files": {
+        "claude/settings.json": "{\n  \"hooks\": {\n    \"SessionStart\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' hook session-start # kiwi\",\n            \"timeout\": 30\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' hook listen # kiwi\",\n            \"async\": true,\n            \"asyncRewake\": true,\n            \"timeout\": 604860\n          }\n        ]\n      }\n    ],\n    \"UserPromptSubmit\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' hook prompt # kiwi\",\n            \"timeout\": 20\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' hook listen # kiwi\",\n            \"async\": true,\n            \"asyncRewake\": true,\n            \"timeout\": 604860\n          }\n        ]\n      }\n    ],\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' hook stop # kiwi\",\n            \"timeout\": 30\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' hook listen # kiwi\",\n            \"async\": true,\n            \"asyncRewake\": true,\n            \"timeout\": 604860\n          }\n        ]\n      }\n    ],\n    \"PermissionRequest\": [\n      {\n        \"matcher\": \"Bash|Edit|Write|MultiEdit|NotebookEdit|WebFetch|mcp__.*\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' hook permission # kiwi\",\n            \"timeout\": 1800\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+      }
+    },
+    {
+      "scenario": "claude install over foreign and stale hooks, no listen",
+      "result": "ok \"<DIR>/claude/settings.json\"",
+      "files": {
+        "claude/settings.json": "{\n  \"theme\": \"dark\",\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo someone-else\"\n          }\n        ]\n      },\n      {\n        \"matcher\": \"m\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo someone-else\"\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' hook stop # kiwi\",\n            \"timeout\": 30\n          }\n        ]\n      }\n    ],\n    \"Other\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo someone-else\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' hook session-start # kiwi\",\n            \"timeout\": 30\n          }\n        ]\n      }\n    ],\n    \"UserPromptSubmit\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' hook prompt # kiwi\",\n            \"timeout\": 20\n          }\n        ]\n      }\n    ],\n    \"PermissionRequest\": [\n      {\n        \"matcher\": \"Bash|Edit|Write|MultiEdit|NotebookEdit|WebFetch|mcp__.*\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' hook permission # kiwi\",\n            \"timeout\": 1800\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+      }
+    },
+    {
+      "scenario": "claude uninstall with no settings file",
+      "result": "ok \"<DIR>/claude/settings.json\"",
+      "files": {
+        "claude/settings.json": "{}\n"
+      }
+    },
+    {
+      "scenario": "claude uninstall keeps foreign hooks and drops emptied groups",
+      "result": "ok \"<DIR>/claude/settings.json\"",
+      "files": {
+        "claude/settings.json": "{\n  \"theme\": \"dark\",\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo someone-else\"\n          }\n        ]\n      },\n      {\n        \"matcher\": \"m\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo someone-else\"\n          }\n        ]\n      }\n    ],\n    \"Other\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo someone-else\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+      }
+    },
+    {
+      "scenario": "claude uninstall of only ours",
+      "result": "ok \"<DIR>/claude/settings.json\"",
+      "files": {
+        "claude/settings.json": "{}\n"
+      }
+    },
+    {
+      "scenario": "claude install over a malformed group",
+      "result": "threw TypeError: undefined is not an object (evaluating 'e.hooks.filter')",
+      "files": {
+        "claude/settings.json": "{\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"m\"\n      }\n    ]\n  }\n}\n"
+      }
+    },
+    {
+      "scenario": "claude uninstall over a malformed group",
+      "result": "threw TypeError: undefined is not an object (evaluating 'e.hooks.filter')",
+      "files": {
+        "claude/settings.json": "{\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"m\"\n      }\n    ]\n  }\n}\n"
+      }
+    },
+    {
+      "scenario": "claude install over a JSON array",
+      "result": "ok \"<DIR>/claude/settings.json\"",
+      "files": {
+        "claude/settings.json": "[]\n"
+      }
+    },
+    {
+      "scenario": "claude uninstall over JSON null",
+      "result": "threw TypeError: null is not an object (evaluating 's.hooks')",
+      "files": {
+        "claude/settings.json": "null\n"
+      }
+    },
+    {
+      "scenario": "codex install fresh",
+      "result": "ok [\"<DIR>/codex/hooks.json\",true]",
+      "files": {
+        "codex/hooks.json": "{\n  \"hooks\": {\n    \"SessionStart\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' --harness codex hook session-start # kiwi\",\n            \"timeout\": 30\n          }\n        ]\n      }\n    ],\n    \"UserPromptSubmit\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' --harness codex hook prompt # kiwi\",\n            \"timeout\": 20\n          }\n        ]\n      }\n    ],\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' --harness codex hook stop # kiwi\",\n            \"timeout\": 30\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+      }
+    },
+    {
+      "scenario": "gemini install over foreign hooks",
+      "result": "ok [\"<DIR>/gemini/settings.json\",true]",
+      "files": {
+        "gemini/settings.json": "{\n  \"theme\": \"dark\",\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo someone-else\"\n          }\n        ]\n      },\n      {\n        \"hooks\": []\n      },\n      {\n        \"matcher\": \"m\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' --harness gemini hook stop # kiwi\"\n          },\n          {\n            \"type\": \"command\",\n            \"command\": \"echo someone-else\"\n          }\n        ]\n      },\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' --harness gemini hook stop # kiwi\"\n          }\n        ]\n      }\n    ],\n    \"Other\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo someone-else\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"matcher\": \"*\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' --harness gemini hook session-start # kiwi\",\n            \"timeout\": 30000\n          }\n        ]\n      }\n    ],\n    \"BeforeAgent\": [\n      {\n        \"matcher\": \"*\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' --harness gemini hook prompt # kiwi\",\n            \"timeout\": 20000\n          }\n        ]\n      }\n    ],\n    \"AfterAgent\": [\n      {\n        \"matcher\": \"*\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' --harness gemini hook stop # kiwi\",\n            \"timeout\": 30000\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+      }
+    },
+    {
+      "scenario": "grok install fresh",
+      "result": "ok [\"<DIR>/grok/hooks/kiwi.json\",true]",
+      "files": {
+        "grok/hooks/kiwi.json": "{\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"'<BUN>' '<RUNNER>' --harness grok hook stop # kiwi\",\n            \"timeout\": 30\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+      }
+    },
+    {
+      "scenario": "codex uninstall with no file",
+      "result": "ok [\"<DIR>/codex/hooks.json\",false]",
+      "files": {}
+    },
+    {
+      "scenario": "gemini uninstall keeps foreign hooks",
+      "result": "ok [\"<DIR>/gemini/settings.json\",false]",
+      "files": {
+        "gemini/settings.json": "{\n  \"theme\": \"dark\",\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo someone-else\"\n          }\n        ]\n      },\n      {\n        \"matcher\": \"m\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo someone-else\"\n          }\n        ]\n      }\n    ],\n    \"Other\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo someone-else\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+      }
+    },
+    {
+      "scenario": "grok uninstall of only ours removes the file",
+      "result": "ok [\"<DIR>/grok/hooks/kiwi.json\",false]",
+      "files": {}
+    },
+    {
+      "scenario": "codex uninstall of only ours keeps other keys",
+      "result": "ok \"<DIR>/codex/hooks.json\"",
+      "files": {
+        "codex/hooks.json": "{\n  \"version\": 2\n}\n"
+      }
+    },
+    {
+      "scenario": "codex uninstall over a malformed group",
+      "result": "threw TypeError: undefined is not an object (evaluating 'e.hooks.filter')",
+      "files": {
+        "codex/hooks.json": "{\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"m\"\n      }\n    ]\n  }\n}\n"
+      }
+    },
+    {
+      "scenario": "gemini install over a JSON array",
+      "result": "threw Error: not a JSON object",
+      "files": {
+        "gemini/settings.json": "[]\n"
+      }
+    },
+    {
+      "scenario": "zcode install fresh, then uninstall",
+      "result": "ok [true,false]",
+      "files": {
+        "kiwi/config.json": "{\n  \"channels\": {}\n}\n"
+      }
+    },
+    {
+      "scenario": "zcode install and uninstall keep malformed and empty foreign groups",
+      "result": "ok [true,false]",
+      "files": {
+        "zcode/config.json": "{\n  \"other\": 1,\n  \"hooks\": {\n    \"events\": {\n      \"Stop\": [\n        \"text\",\n        {\n          \"hooks\": []\n        },\n        {\n          \"hooks\": [\n            {\n              \"type\": \"command\",\n              \"command\": \"echo someone-else\"\n            }\n          ]\n        },\n        {\n          \"name\": \"x\",\n          \"hooks\": [\n            {\n              \"type\": \"command\",\n              \"command\": \"echo someone-else\"\n            }\n          ]\n        }\n      ],\n      \"Start\": []\n    },\n    \"enabled\": true\n  }\n}\n"
+      }
+    },
+    {
+      "scenario": "zcode install refused when hooks are off",
+      "result": "threw Error: ZCode's hooks are off in <DIR>/zcode/config.json (hooks.enabled is false): turn them on, then run kiwi hooks install zcode",
+      "files": {
+        "zcode/config.json": "{\n  \"hooks\": {\n    \"enabled\": false\n  }\n}\n"
+      }
+    }
+  ]
+}
