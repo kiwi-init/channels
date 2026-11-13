@@ -108,7 +108,7 @@ export class ChannelStore {
   private readonly human: HumanSession | null | undefined;
   private readonly lend: Watches["lend"];
   private readonly was: Warm | undefined;
-  private readonly light: boolean;
+  private warmAs: "full" | "light";
   private readonly keep: number;
 
   private readonly connection = signal<Connection>("connecting");
@@ -168,7 +168,7 @@ export class ChannelStore {
     this.lend = deps?.lend ?? ((code) => watches().lend(code));
     this.code = member.code;
     this.human = human;
-    this.light = light;
+    this.warmAs = light ? "light" : "full";
     this.keep = light ? LIGHT : WINDOW;
     const was = warmOf(member.code);
     this.was = was;
@@ -271,6 +271,10 @@ export class ChannelStore {
   };
 
   snapshot = (): ChannelHandle => this.handle.value;
+
+  serve(as: "full" | "light"): void {
+    this.warmAs = as;
+  }
 
   readonly older: OlderHistory = {
     reach: () => import("./history-fill.ts").then((f) => f.reach(this.ch.roomId, this.ch.pk)),
@@ -399,7 +403,7 @@ export class ChannelStore {
         partial: this.partial.value,
         folded: { state, messages, roster, guardFloor, roomsFloor, base, until: nextExpiry(state, Date.now()) },
       },
-      this.light ? "light" : "full",
+      this.warmAs,
     );
   }
 
