@@ -1,5 +1,6 @@
-import { Database } from "bun:sqlite";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { realDir, withDb as readDb } from "./sqlite.ts";
+import type { Database } from "bun:sqlite";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
@@ -43,27 +44,7 @@ export function mimoArgv({ bin, model, permission, prompt }: MimoStart, env: Env
 }
 
 function withDb<A>(env: Env, read: (db: Database) => A, none: A): A {
-  const file = join(mimoRoot("data", env), "mimocode.db");
-  if (!existsSync(file)) return none;
-  let db: Database | null = null;
-  try {
-    db = new Database(file, { readonly: true });
-    return read(db);
-  } catch {
-    // MiMoCode is migrating or writing its database: read again on the next poll.
-    return none;
-  } finally {
-    db?.close();
-  }
-}
-
-function realDir(dir: string): string {
-  try {
-    return realpathSync(dir);
-  } catch {
-    // A folder that can't be resolved is matched as given.
-    return dir;
-  }
+  return readDb(join(mimoRoot("data", env), "mimocode.db"), read, none);
 }
 
 export function mimoSession(nonce: string, since: number, cwd: string = process.cwd(), env: Env = process.env): string | null {
