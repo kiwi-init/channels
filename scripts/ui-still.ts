@@ -8,7 +8,7 @@ const dist = at > 0 ? (process.argv[at + 1] ?? "ui/dist") : "ui/dist";
 if (!existsSync(join(dist, "index.html"))) throw new Error(`no index.html in ${dist}: run bun run ui:build first`);
 const engine = process.argv.includes("--chromium") ? "chromium" : "webkit";
 
-const SHOTS = ["thread-doc", "thread-doc-1000", "thread-doc-events", "long-feed", "channel", "ci-live", "event-runs", "dm"] as const;
+const SHOTS = ["thread-doc", "thread-doc-1000", "thread-doc-events", "long-feed", "channel", "ci-live", "event-runs", "dm", "flicker", "flicker@up"] as const;
 const SIZES = [
   [1440, 900],
   [900, 1400],
@@ -30,9 +30,15 @@ const server = Bun.serve({
 async function moves(browser: Browser, shot: string, width: number, height: number): Promise<string | null> {
   const page = await browser.newPage({ viewport: { width, height } });
   try {
-    await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
+    const [name, place] = shot.split("@");
+    await page.goto(`http://127.0.0.1:${server.port}/?shot=${name}`);
     await page.waitForSelector(".feed", { timeout: 15_000 });
     await page.waitForTimeout(SETTLE_MS);
+    if (place === "up") {
+      await page.locator(".main .feed").hover();
+      await page.mouse.wheel(0, -600);
+      await page.waitForTimeout(SETTLE_MS);
+    }
     return await page.evaluate(
       (frames) =>
         new Promise<string | null>((done) => {
