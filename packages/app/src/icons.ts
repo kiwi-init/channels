@@ -61,27 +61,23 @@ export function useIcons(): Map<string, ChannelIcon | null> {
   return icons;
 }
 
-/** Load icons for the channels this browser is in. Others stay letters. */
-export function useMemberIcons(codes: string[]): void {
-  const list = codes.join("\n");
-  useEffect(() => {
-    for (const code of list.split("\n")) {
-      if (!code) continue;
-      const member = loadMember(code);
-      if (member) void refreshIcon(member).catch(() => {});
-    }
-  }, [list]);
+export function followIcons(codes: readonly string[], refresh: (code: string) => void): () => void {
+  const listed = new Set(codes);
+  for (const code of listed) refresh(code);
+  const on = (e: Event) => {
+    const code = (e as CustomEvent<string>).detail;
+    if (listed.has(code)) refresh(code);
+  };
+  window.addEventListener(ICON_LIVE, on);
+  return () => window.removeEventListener(ICON_LIVE, on);
 }
 
-/** The open channel refetches when the relay says the icon changed. */
-export function useLiveIcon(member: StoredMember): void {
-  useEffect(() => {
-    const load = () => void refreshIcon(member).catch(() => {});
-    load();
-    const on = (e: Event) => {
-      if ((e as CustomEvent<string>).detail === member.code) load();
-    };
-    window.addEventListener(ICON_LIVE, on);
-    return () => window.removeEventListener(ICON_LIVE, on);
-  }, [member]);
+const refreshCode = (code: string): void => {
+  const member = loadMember(code);
+  if (member) void refreshIcon(member).catch(() => {});
+};
+
+export function useMemberIcons(codes: string[]): void {
+  const list = codes.join("\n");
+  useEffect(() => followIcons(list.split("\n").filter(Boolean), refreshCode), [list]);
 }
