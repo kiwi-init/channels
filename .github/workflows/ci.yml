@@ -236,6 +236,10 @@ jobs:
       - name: ui specs worker avatars name themselves on hover and keyboard focus, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-spec-names.ts --dist ui/dist
+      # Selecting text in a task's description or its messages offers Quote; the excerpt lands in the task's composer next to the draft, a description quote cites the task and a message quote its message, mixed selections and read-only members get no Quote, and switching tasks clears it (#2374).
+      - name: ui a task panel quotes its description and its messages, in WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
+        run: bun scripts/ui-task-quote.ts --dist ui/dist
       # A feed keeps its place when its width changes: the sidebar hidden and shown, its edge dragged, the panel opened and closed, the window resized. At the bottom it stays at the bottom with no blank room; scrolled up, the row being read comes back to its pixel (T231).
       - name: ui a feed keeps its place when its width changes, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
@@ -491,9 +495,27 @@ jobs:
       - name: ui the composer keeps each room's draft and images to itself, and an image sends without a file name as text, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-composer-rooms.ts --dist ui/dist
+      - name: ui opening a room, a DM or a channel focuses its composer, with the draft kept and the caret at its end, and never steals focus or opens a touch keyboard, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-composer-focus.ts --dist ui/dist
+      - name: ui the icons only later screens use come with those screens and still draw where they're first used, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-lazy-icons.ts --dist ui/dist
       - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
+      - name: ui room membership agrees across summary, editor and saves, including live updates
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-room-members.ts ${{ matrix.engine == 'chromium' && '--chromium' || '' }}
+      - name: ui departed human DMs keep their left label and human conversation wording
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-departed-dms.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui departed reviewers are identified in task details and picker context without rewriting history
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-departed-reviewer.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui Back and Forward in the top bar walk a room, a spec, Settings and Home and back, are off exactly when they can't move, and stay clear of the top bar at every size, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-history-arrows.ts --dist ui/dist
       - name: ui a refused copy selects the whole command and offers it by hand, and a landed one doesn't, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-copy-recovers.ts --dist ui/dist
@@ -533,6 +555,9 @@ jobs:
       - name: ui the sidebar stays where it is scrolled while its highlight glides to the row just opened, and a press on a row right after opens it
         if: ${{ !cancelled() }}
         run: bun scripts/ui-side-still.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui Others' direct messages keeps its heading in place while one of its conversations is open, collapsed or expanded (#2386)
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-theirs-heading.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Jump to latest shows when you scroll up a long feed, takes a click and brings the feed to its end, from a little up, from far past the rows it holds and from near their top, at rest or the moment a wheel stops
         if: ${{ !cancelled() }}
         run: bun scripts/ui-feed-latest.ts --dist ui/dist --browser ${{ matrix.engine }}

@@ -35,7 +35,7 @@ describe("message text follows Settings > Appearance > Text size", () => {
     const html = renderToStaticMarkup(
       createElement(RenderNode, { node: ast.children?.[0] ?? ast, style, styles: withTextSize(buildStyles(style)), callbacks: {}, capabilities: { katex: null, enableTaskListItemToggle: false } })
     )
-    expect(html).toMatch(/<div class="enrm-admonition"[^>]*><div style="[^"]*font-size:15px[^"]*"><svg[\s\S]*?<\/svg><span>Warning<\/span><\/div>/)
+    expect(html).toMatch(/<div class="enrm-admonition"[^>]*><div style="[^"]*font-size:15px[^"]*"><svg[\s\S]*?<\/svg><span dir="ltr">Warning<\/span><\/div>/)
     const css = readFileSync(join(import.meta.dir, "../styles/chat.css"), "utf8")
     expect(css).toContain(".md .enrm-admonition > div:first-child > span {\n  font-size: var(--t-body);\n}")
   })
@@ -126,7 +126,7 @@ describe("a code block copies when it's pressed", () => {
     keepParsed(markdown, ast)
     const quiet = () => {}
     const html = renderToStaticMarkup(createElement(Markdown, { markdown, onMention: quiet, onTask: quiet, onMessage: quiet, onImage: quiet, onShown: quiet, copied: quiet }))
-    expect(html).toMatch(/<pre style="[^"]*cursor:pointer[^"]*" aria-label="Code block: sh" role="button" tabindex="0"><code[^>]*>bun test/)
+    expect(html).toMatch(/<pre style="[^"]*cursor:pointer[^"]*" dir="ltr" aria-label="Code block: sh" role="button" tabindex="0"><code[^>]*>bun test/)
     expect(html).not.toContain("md-copy")
   })
 
