@@ -13,8 +13,27 @@ function compactIcons(): Plugin {
   }
 }
 
+const LINK_IN_HEAD = "document.head.appendChild(link)"
+
+function lazyLinksAfterThePage(): Plugin {
+  let moved = false
+  return {
+    name: "lazy-links-after-the-page",
+    apply: "build",
+    transform(code, id) {
+      if (!id.includes("vite/preload-helper") || !code.includes(LINK_IN_HEAD)) return null
+      moved = true
+      return { code: code.replace(LINK_IN_HEAD, "document.body.appendChild(link)"), map: null }
+    },
+    buildEnd(error) {
+      if (!error && !moved)
+        this.error(`Vite's preload helper no longer has "${LINK_IN_HEAD}", so a lazy chunk's stylesheet would load in <head> again, where WebKit lays out no new element until it arrives`)
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), compactIcons()],
+  plugins: [react(), compactIcons(), lazyLinksAfterThePage()],
   define: { __DEV__: "false", ...(mode === "harness" ? { "import.meta.env.DEV": "true" } : {}) },
   resolve: {
     alias: {

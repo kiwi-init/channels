@@ -17,6 +17,17 @@ export async function say(page: Page, text: string): Promise<void> {
   await area.press(SEND);
 }
 
+export async function switchTo(page: Page, name: string): Promise<void> {
+  await page.evaluate((title) => {
+    const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === title);
+    if (!tile) throw new Error(`no ${title} tile in the rail`);
+    tile.click();
+  }, name);
+  await page.waitForFunction((title) => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] === title, name, {
+    timeout: 15000,
+  });
+}
+
 export async function writeBlock(page: Page, text: string): Promise<void> {
   await say(page, text);
   await page.locator(`.thread-doc .blk, ${ROWS}`).filter({ hasText: text, visible: true }).first().waitFor({ timeout: 15000 });
