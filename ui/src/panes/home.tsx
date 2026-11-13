@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import "~/styles/panes.css"
 import { useEffect, useMemo } from "react"
 

@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import "~/i18n/en/specs"
 import { Suspense, useMemo, useState, type ReactNode } from "react"
 

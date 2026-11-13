@@ -1,5 +1,6 @@
+import "~/i18n/en/shell-later"
 import "~/styles/panes.css"
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react"
+import { Suspense, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react"
 import { createPortal } from "react-dom"
 
 import { cx, IconButton } from "~/kit/bits"
@@ -8,40 +9,25 @@ import { keyRan, onCommand, runCommand } from "~/kit/commands"
 import { dialogOpen, mod } from "~/kit/keys"
 import { later } from "~/kit/later"
 import type { Channel } from "~/model"
-import { between, nickname } from "~/names"
-import { ActContext, NavContext, useAct, useApp, useNav, type Act, type Go, type Nav, type Panel } from "~/nav"
+import { nickname } from "~/names"
+import { useAct, useApp, useNav, type Go, type Nav, type Panel } from "~/nav"
 import { dragOut, dropOn, targetAt } from "~/panes/drag"
 import { docName } from "~/panes/view"
-import { PaneContext, type PaneScope } from "~/panes/scope"
+import { panelName, placeName, Scope, VIEW_NAMES } from "~/panes/place"
 import {
   ALONE,
   BLANK,
-  boxes,
-  fillPane,
-  closePane,
-  css,
   dockedNow,
-  focusPane,
-  isNone,
-  leafOf,
   MAIN,
-  panelGo,
   setCloser,
-  splitAt,
   MIN_H,
   MIN_W,
-  paneGo,
-  pixels,
-  resizeSplit,
-  showDoc,
   useDrag,
   useLayout,
-  without,
   type Box,
   type Leaf,
   type Carry,
   type Doc,
-  type Edge,
   type Len,
   type Page as PanePage,
   type Split,
@@ -49,25 +35,11 @@ import {
   PANE_DRAG,
   setDrag,
 } from "~/panes/store"
+import { boxes, closePane, css, fillPane, focusPane, isNone, pixels, resizeSplit, splitAt, without } from "~/panes/ops"
 import { useTabs } from "~/shell/top-layout"
 import { wordsPlain } from "~/words"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
-
-const VIEW_NAMES = {
-  specs: "shell.channel.specs",
-  agents: "shell.channel.agents",
-  github: "shell.channel.github",
-  needs: "shell.channel.needs.you",
-} as const
-
-export function placeName(channel: Channel, nav: Nav): string {
-  if (nav.tab !== "chat") return t(VIEW_NAMES[nav.tab])
-  const where = nav.where
-  if (where.kind === "room") return `# ${channel.rooms.find((r) => r.id === where.room)?.name ?? "general"}`
-  if (where.kind === "dm") return `@ ${nickname(channel, where.with)}`
-  return where.kind === "theirs" ? between(channel, where.between) : `T${where.task}`
-}
 
 const ThreadPanel = later(() => import("~/panels/thread").then((m) => m.ThreadPanel))
 
@@ -90,20 +62,6 @@ function spaced(box: Box): CSSProperties {
     width: `calc(${css(box.w)} - ${l} - ${r})`,
     height: `calc(${css(box.h)} - ${t} - ${b})`,
   }
-}
-
-export function roomiest(code: string): { id: string; edge: Edge } | undefined {
-  const panes = [...document.querySelectorAll<HTMLElement>(`[data-panes="${code}"] > [data-pane]`)].map((el) => ({ id: el.dataset.pane ?? "", r: el.getBoundingClientRect() }))
-  const best = panes.filter((p) => p.r.width >= 2 * MIN_W || p.r.height >= 2 * MIN_H).sort((a, b) => b.r.width * b.r.height - a.r.width * a.r.height)[0]
-  if (!best) return undefined
-  return { id: best.id, edge: best.r.width >= 2 * MIN_W && best.r.width >= best.r.height * 0.9 ? "right" : "bottom" }
-}
-
-function panelName(channel: Channel, panel: Panel): string {
-  if (panel.kind === "task") return docName(channel, { kind: "task", task: panel.task })
-  if (panel.kind === "thread") return t("panes.thread")
-  const item = panel.kind === "pr" ? channel.prs?.find((p) => p.repo === panel.repo && p.number === panel.number) : channel.issues?.find((i) => i.repo === panel.repo && i.number === panel.number)
-  return `#${panel.number}${item ? ` ${item.title}` : ""}`
 }
 
 const nameOf = (channel: Channel, doc: Doc): string => (doc.kind === "panel" ? panelName(channel, doc.panel) : docName(channel, doc))
@@ -188,45 +146,6 @@ function goTo(nav: Nav): Go {
   if (nav.tab === "specs") return { to: "spec", ask: nav.spec ?? null, part: nav.part }
   if (nav.tab === "github" && nav.github) return { to: "github", view: nav.github }
   return { to: "tab", tab: nav.tab }
-}
-
-function Scope({ code, id, nav, doc, shown, typing = true, children }: { code: string; id: string | null; nav: Nav; doc: Doc | null; shown: boolean; typing?: boolean; children: ReactNode }) {
-  const act = useAct()
-  const tabs = useTabs()
-  const scoped = useMemo(
-    (): Act => ({
-      ...act,
-      go: (go) => {
-        if (go.to === "panel" && tabs) return panelGo(code, id ?? MAIN, go.panel, go.panel ? roomiest(code) : undefined)
-        const rest = id === null ? go : paneGo(code, id, go)
-        if (rest) act.go(rest)
-      },
-    }),
-    [act, code, id, tabs]
-  )
-  const pane = useMemo((): PaneScope => ({ doc, show: (next) => showDoc(code, id, next, shown, roomiest(code)), typing }), [code, id, doc, shown, typing])
-  return (
-    <NavContext value={nav}>
-      <ActContext value={scoped}>
-        <PaneContext value={pane}>{children}</PaneContext>
-      </ActContext>
-    </NavContext>
-  )
-}
-
-export function FocusScope({ code, now, children }: { code: string; now: boolean; children: ReactNode }) {
-  const layout = useLayout(code)
-  const nav = useNav()
-  const tabs = useTabs()
-  const dock = dockedNow(layout.root)
-  const shown = !dock || now
-  const focus = tabs ? leafOf(layout.root, layout.focus) : null
-  const leaf = focus?.nav && (shown || focus.id !== dock?.id) ? focus : null
-  return (
-    <Scope code={code} id={leaf?.id ?? null} nav={leaf?.nav ?? nav} doc={leaf?.doc ?? null} shown={shown}>
-      {children}
-    </Scope>
-  )
 }
 
 const TINY_W = MIN_W * 0.9

@@ -1,6 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from "react"
 
-import { fillPane, MIN_H, MIN_W, movePane, setDrag, splitAt, type Carry, type Drag, type Edge } from "~/panes/store"
+import { MIN_H, MIN_W, setDrag, type Carry, type Drag, type Edge } from "~/panes/store"
 
 const START = 6
 
@@ -27,9 +27,11 @@ export function targetAt(x: number, y: number, carry: Carry): Drag["target"] {
 }
 
 export function dropOn(target: NonNullable<Drag["target"]>, carry: Carry): void {
-  if (target.fill) fillPane(target.code, target.id, carry)
-  else if ("pane" in carry) movePane(target.code, carry.pane, target.id, target.edge)
-  else splitAt(target.code, target.id, target.edge, carry.page)
+  void import("~/panes/ops").then(({ fillPane, movePane, splitAt }) => {
+    if (target.fill) fillPane(target.code, target.id, carry)
+    else if ("pane" in carry) movePane(target.code, carry.pane, target.id, target.edge)
+    else splitAt(target.code, target.id, target.edge, carry.page)
+  })
 }
 
 function swallowClick(): void {

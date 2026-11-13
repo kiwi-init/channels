@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import "~/i18n/en/github-later"
 import "~/i18n/en/needs"
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react"

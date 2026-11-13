@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useLayoutEffect, useState } from "react"
-import { panelGo, useLayout } from "~/panes/store"
+import { useLayout } from "~/panes/store"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
@@ -20,12 +20,13 @@ import { Frame } from "~/shell/frame"
 import { useDrawer } from "~/shell/side"
 import { Content } from "~/shell/content"
 import { viewOf } from "~/panes/view"
-import { FocusScope, Panes, placeName, roomiest } from "~/panes/panes"
+import { FocusScope, placeName, roomiest } from "~/panes/place"
 import { Sidebar, ViewsBar } from "~/shell/sidebar"
 import { useTabs, useTopLayout } from "~/shell/top-layout"
 import { ActivityButton } from "~/chat/events"
 import { t } from "~/i18n/i18n"
 
+const Panes = later(() => import("~/panes/panes").then((m) => m.Panes))
 const Page = later(() => import("~/panes/page").then((m) => m.Page))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const OlderView = later(() => import("~/chat/older-view").then((m) => m.OlderView))
@@ -98,7 +99,9 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const layout = useLayout(channel.code)
   useLayoutEffect(() => {
     if (!tabs || !nav.panel) return
-    panelGo(channel.code, layout.focus, nav.panel, roomiest(channel.code))
+    const panel = nav.panel
+    const room = roomiest(channel.code)
+    void import("~/panes/ops").then((m) => m.panelGo(channel.code, layout.focus, panel, room))
     go({ to: "panel", panel: null })
   }, [tabs, nav.panel, channel.code, layout.focus, go])
   const panelOpen = !!nav.panel && !tabs

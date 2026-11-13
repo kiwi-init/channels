@@ -5,8 +5,7 @@ import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits
 import { openMenu, showMenu } from "~/kit/menu-open"
 import { useAppCan } from "~/live/app-can"
 import { useGlide } from "~/kit/glide"
-import { TaskDone01Icon } from "@hugeicons/core-free-icons"
-import { GlyphIcon, Icon } from "~/kit/icons"
+import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Direct, type Person } from "~/model"
@@ -68,7 +67,7 @@ function ViewRows({ channel }: { channel: Channel }) {
           {...dragOut({ page: { at: "doc", doc: { kind: "now" } } }, t("panes.now"))}
         >
           <span className="side-icon">
-            <GlyphIcon glyph={TaskDone01Icon} />
+            <Icon name="check" />
           </span>
           <span className="side-label">{t("panes.now")}</span>
         </button>

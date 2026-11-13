@@ -1,3 +1,4 @@
+import "~/i18n/en/shell-later"
 import "~/i18n/en/chat-later"
 import "~/i18n/en/specs"
 import "~/styles/activity.css"
