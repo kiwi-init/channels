@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import type {} from "./room-members-api.ts"
 import { createRoot } from "react-dom/client"
 import "~/styles/tokens.css"
 import "~/styles/base.css"
@@ -7,17 +8,6 @@ import { useDemo } from "./provider.tsx"
 import type { Channel } from "../model.ts"
 import { ChannelSettings } from "../modals/channel-settings.tsx"
 import { AppContext, startNav } from "../nav.ts"
-
-declare global {
-  interface Window {
-    roomCheck: {
-      update: (members: string[]) => void
-      leave: (name: string, left: boolean) => void
-      fail: (on: boolean) => void
-      saved: string[][]
-    }
-  }
-}
 
 const saved: string[][] = []
 

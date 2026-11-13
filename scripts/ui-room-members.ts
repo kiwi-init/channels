@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, webkit } from "playwright-core";
+import type {} from "../ui/src/demo/room-members-api.ts";
 
 const engine = process.argv.includes("--chromium") ? chromium : webkit;
 const before = process.argv.includes("--before");
