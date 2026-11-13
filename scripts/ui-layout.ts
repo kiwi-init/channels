@@ -63,6 +63,14 @@ const nothingClashes = async (page: Page, where: string): Promise<void> => {
   expect(on.length === 0, `nothing in the top row sits on anything else, ${where}${on.length ? `: ${on.join("; ")}` : ""}`);
 };
 
+const NOW_PANE = ".panes > .pane:has(> .page.is-now)";
+const NOW_ROW = ".page.is-now a[href^='kiwi-task:']";
+const TASK_PANE = ".panes > .pane:has(.task-page)";
+const gapOf = (page: Page): Promise<number> =>
+  page.evaluate(() => {
+    const panes = document.querySelector(".panes");
+    return panes ? parseFloat(getComputedStyle(panes).getPropertyValue("--pane-gap")) || 0 : 0;
+  });
 const boxOf = (page: Page, selector: string): Promise<Box | null> =>
   page.evaluate((s) => {
     const el = document.querySelector(s);
@@ -200,26 +208,18 @@ try {
       `and it is a pill the size of its row, ending before the sidebar's edge: nothing cuts into the page (${side?.pillOver.join(", ")} over, ${side?.pillEnd} before the edge)`,
     );
 
-    const tracker = await boxOf(page, ".track");
+    const tracker = await boxOf(page, NOW_PANE);
+    const gap = await gapOf(page);
+    expect(!!tracker, "a wide window shows Now beside the conversation");
     if (tracker) {
-      expect(near(width - tracker.right, 0), "the task tracker ends at the window's right edge");
-      expect(!!composer && tracker.left >= composer.right + 8, "the task tracker clears the conversation");
-      const second = await page.evaluate(() => {
-        const fill = (selector: string, pseudo?: string): string => getComputedStyle(document.querySelector(selector)!, pseudo).backgroundColor;
-        const under = getComputedStyle(document.querySelector(".chan")!, "::after");
-        return {
-          under: under.backgroundColor,
-          column: under.gridColumnStart,
-          own: fill(".track"),
-          page: fill(".main"),
-          frame: fill(".app"),
-          corner: parseFloat(getComputedStyle(document.querySelector(".main")!).borderTopRightRadius),
-        };
-      });
-      expect(
-        second.column === "3" && second.under === second.page && second.page !== second.frame && second.own === "rgba(0, 0, 0, 0)" && second.corner === 0,
-        `the second sidebar sits on the page, not on the frame: the page's colour lies under its column, with no fill of its own and no corner between it and the work (${second.under} under it, page ${second.page}, frame ${second.frame}, a ${second.corner}px corner)`,
-      );
+      expect(near(width - tracker.right, gap), `Now ends one pane gap from the window's right edge (${width - tracker.right} of ${gap})`);
+      expect(!!composer && tracker.left >= composer.right + 8, "Now clears the conversation");
+      const second = await page.evaluate((sel) => {
+        const now = document.querySelector(sel);
+        const main = document.querySelector(".panes > .pane:not(:has(> .page.is-now))");
+        return { onPage: !!now?.closest(".content"), fill: now ? getComputedStyle(now).backgroundColor : "", page: main ? getComputedStyle(main).backgroundColor : "" };
+      }, NOW_PANE);
+      expect(second.onPage && second.fill === second.page, `Now sits on the page, not on the frame, in the page's colour (${second.fill}, page ${second.page})`);
     }
     const mine = await page.evaluate(() => {
       const bubble = document.querySelector(".msg.is-mine .msg-text")?.getBoundingClientRect();
@@ -264,7 +264,10 @@ try {
       const main = document.querySelector(".main")?.getBoundingClientRect();
       return box && main && side ? { on: !!document.querySelector(".chan.is-peek"), left: box.left, right: box.right, shown: getComputedStyle(side).visibility === "visible", main: main.left } : null;
     });
-    expect(!!peek && peek.on && peek.shown && near(peek.left, 0) && near(peek.main, 0), `touching the left edge slides the hidden sidebar in over the conversation (${JSON.stringify(peek)})`);
+    expect(
+      !!peek && peek.on && peek.shown && near(peek.left, 0) && near(peek.main, await gapOf(page)),
+      `touching the left edge slides the hidden sidebar in over the conversation (${JSON.stringify(peek)})`,
+    );
     const sheet = await peekSheet(page);
     expect(
       !!sheet && sheet.top >= sheet.tabs && sheet.side >= sheet.tabs,
@@ -282,7 +285,7 @@ try {
     });
     expect(!clash, "with the sidebar hidden, nothing sits on the composer's controls");
     expect(
-      !!chatHidden && !!chatBefore && near(chatHidden.left, 0) && near(chatHidden.right, chatBefore.right),
+      !!chatHidden && !!chatBefore && near(chatHidden.left, await gapOf(page)) && near(chatHidden.right, chatBefore.right),
       `hiding the sidebar gives its column to the conversation (${chatBefore?.left} → ${chatHidden?.left})`,
     );
     await page.click(".top-drawer");
@@ -317,42 +320,47 @@ try {
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
-    const slot = await boxOf(page, ".track");
-    await page.click(".track-row");
-    await page.waitForSelector("aside.panel");
+    const slot = await boxOf(page, NOW_PANE);
+    await page.locator(NOW_ROW).first().click();
+    await page.waitForSelector(TASK_PANE);
     await page.waitForTimeout(900);
-    const panel = await boxOf(page, "aside.panel");
+    const panel = await boxOf(page, TASK_PANE);
     expect(
       !!slot && !!panel && near(slot.left, panel.left) && near(slot.top, panel.top) && near(slot.right, panel.right) && near(slot.bottom, panel.bottom),
       "a task opens in the very area the tracker was in",
     );
     const opened = moved(all, await placesOf(page));
     expect(opened.length === 0, `opening it moves nothing you click, the composer included${opened.length ? `: ${opened.join("; ")}` : ""}`);
-    await page.click("aside.panel .panel-head .icon-btn:last-child");
+    await page.click(`${TASK_PANE} .icon-btn[aria-label="Close"]`);
     await page.waitForTimeout(900);
-    expect(!!(await page.$(".track")), "closing it brings the tracker back");
+    expect(!!(await page.$(NOW_PANE)), "closing it brings Now back");
     expect(errors.length === 0, `no page errors${errors.length ? `: ${errors.join(" | ")}` : ""}`);
     await page.close();
   }
   {
     console.log("\na panel dragged wider than its column");
     const page = await browser.newPage({ viewport: { width: 1710, height: 1074 } });
-    await page.addInitScript(() => {
-      try {
-        localStorage.setItem("channels.panel.width", "490");
-      } catch {
-        // No storage in this browser: the default width is checked by the runs above.
-      }
-    });
     await open(page, "channel");
-    await page.click(".track-row");
-    await page.waitForSelector("aside.panel");
+    const gap = await gapOf(page);
+    const dock = await boxOf(page, NOW_PANE);
+    const grip = await page.locator(".pane-gap.is-dock").boundingBox();
+    if (dock && grip) {
+      const [gx, gy] = [grip.x + grip.width / 2, grip.y + grip.height / 2];
+      await page.mouse.move(gx, gy);
+      await page.mouse.down();
+      await page.mouse.move(gx - (490 - (dock.right - dock.left)), gy, { steps: 8 });
+      await page.mouse.up();
+    }
+    await page.waitForTimeout(400);
+    await open(page, "channel");
+    await page.locator(NOW_ROW).first().click();
+    await page.waitForSelector(TASK_PANE);
     await page.waitForTimeout(900);
-    const panel = await boxOf(page, "aside.panel");
+    const panel = await boxOf(page, TASK_PANE);
     const chat = await boxOf(page, ".main");
     const composer = await boxOf(page, ".main .composer");
-    expect(!!panel && near(panel.right - panel.left, 490) && near(1710 - panel.right, 0), `the panel keeps the width it was dragged to (${panel ? panel.right - panel.left : "?"})`);
-    expect(!!panel && !!chat && !!composer && near(chat.right, panel.left) && composer.right <= panel.left, "the conversation and its composer end where the panel starts");
+    expect(!!panel && near(panel.right - panel.left, 490, 2) && near(1710 - panel.right, gap), `the panel keeps the width it was dragged to (${panel ? panel.right - panel.left : "?"})`);
+    expect(!!panel && !!chat && !!composer && near(chat.right + gap, panel.left) && composer.right <= panel.left, "the conversation and its composer end where the panel starts");
     await page.close();
   }
   {
@@ -397,10 +405,10 @@ try {
     }
     const sideWide = await sideWidth();
     const composerWide = await boxOf(page, ".main .composer");
-    const trackWide = await boxOf(page, ".track");
+    const trackWide = await boxOf(page, NOW_PANE);
     expect(!!gripBox && sideWide === sideBefore + 64, `dragging the sidebar's edge 61px widens it by 64, on the grid (${sideBefore} → ${sideWide})`);
     expect(!!composerWide && near(composerWide.x, width / 2), `the composer stays on the window's centre with a wider sidebar (${composerWide?.x.toFixed(1)} of ${width / 2})`);
-    expect(!trackWide || near(trackWide.right - trackWide.left, sideWide), "and the second sidebar takes the same width");
+    expect(!!trackWide && near(width - trackWide.left, sideWide), `and Now takes the same width on the right (${trackWide ? width - trackWide.left : "?"} of ${sideWide})`);
     await grip.focus();
     const under = [await covered()];
     await page.keyboard.press("Home");
@@ -637,11 +645,12 @@ try {
     console.log(`\n${width}×${height}`);
     const page = await browser.newPage({ viewport: { width, height } });
     await open(page, "channel");
-    const tracker = await boxOf(page, ".track");
+    const tracker = await boxOf(page, NOW_PANE);
     const composer = await boxOf(page, ".main .composer");
     const main = await boxOf(page, ".main");
-    expect(!tracker || tracker.right - tracker.left === 0, "a window too narrow for three columns has no task tracker");
-    expect(!!main && near(main.right, width), "the conversation runs to the window's right edge");
+    const edge = (await page.$(".panes")) ? await gapOf(page) : 0;
+    expect(!tracker || tracker.right - tracker.left === 0, "a window too narrow for three columns has no Now column");
+    expect(!!main && near(main.right, width - edge), `the conversation runs to the window's right edge (${main?.right} of ${width - edge})`);
     expect(!!composer && !!main && near(composer.left - main.left, main.right - composer.right, 1), "the composer is centred in the conversation");
     await page.close();
   }

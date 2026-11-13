@@ -33,7 +33,7 @@ const FORWARD = "Forward";
 const place = (page: Page) =>
   page.evaluate(() => {
     if (document.querySelector(".set")) return "settings";
-    if (document.querySelector(".home-area")) return "home";
+    if (document.querySelector(".home-area, .home-main")) return "home";
     if (document.querySelector(".spec-doc-wrap")) return "spec";
     const box = document.querySelector<HTMLTextAreaElement>(".main .composer textarea");
     if (box) return box.getAttribute("placeholder") ?? "a room";
@@ -148,7 +148,7 @@ try {
   expect((await place(empty)) === "settings", "from Home with no channels, Settings opens");
   await arrow(empty, BACK).click();
   await settle(empty);
-  expect((await empty.locator(".start-area .top-history").count()) === 1, "Back from Settings lands on Home with no channels, arrows and all");
+  expect((await empty.locator(".start-area").count()) === 1 && (await empty.locator(".top-history").count()) === 1, "Back from Settings lands on Home with no channels, arrows and all");
   await arrow(empty, FORWARD).click();
   await settle(empty);
   expect((await place(empty)) === "settings", "and Forward returns to Settings");

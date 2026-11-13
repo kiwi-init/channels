@@ -1,10 +1,12 @@
 import "~/i18n/en/shell-later"
 import "~/i18n/en/specs"
+import { LinkSquare02Icon } from "@hugeicons/core-free-icons"
 import { Suspense, useMemo, type ReactNode } from "react"
 
 import { Body } from "~/chat/body"
 import { useNames, useTaskIds } from "~/chat/conversation"
 import { STATUS_WORDS } from "~/kit/bits"
+import { GlyphIcon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import { openMessage } from "~/live/open-message"
 import type { Actions, Ask, Channel, PullRequest, Spec, Task, TaskStatus } from "~/model"
@@ -31,14 +33,18 @@ const viewKey = (view: View): string =>
 
 export interface Maker {
   seal: Seal
-  act: (label: string, run: () => void) => string
+  act: (label: string, run: () => void, mark?: typeof OUT) => string
 }
+
+export const OUT = "kiwi:out"
+
+const pageMark = (name: string): ReactNode | undefined => (name === OUT ? <GlyphIcon glyph={LinkSquare02Icon} size={12} /> : undefined)
 
 export function maker(): Maker {
   const s = seal()
   return {
     seal: s,
-    act: (label, run) => `[${inert(label).replace(/[[\]\\]/g, "\\$&")}](${s.key(run)})`,
+    act: (label, run, mark) => `[${mark ? `\`${mark}\` ` : ""}${inert(label).replace(/[[\]\\]/g, "\\$&")}](${s.key(run)})`,
   }
 }
 
@@ -156,7 +162,7 @@ export function PageText({ channel, md, seal }: { channel: Channel; md: string; 
   const { go } = useAct()
   const pane = usePane()
   const text = useMemo(() => wrote(md), [md])
-  const draw = useMemo(() => pieces(lookupOf(channel), undefined, seal.owns), [channel, seal])
+  const draw = useMemo(() => pieces(lookupOf(channel), pageMark, seal.owns), [channel, seal])
   const code = channel.code
   const onPage = (url: string) => {
     if (url.startsWith("kiwi-do:")) return seal.run(url)

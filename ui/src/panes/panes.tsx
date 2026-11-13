@@ -237,6 +237,14 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
     panelGo(code, layout.focus, nav.panel, roomiest(code))
     go({ to: "panel", panel: null })
   }, [tabs, nav.panel, code, layout.focus, go])
+  const held = findLeaf(layout.root, (leaf) => leaf.doc?.kind === "panel")?.doc
+  const heldPanel = held?.kind === "panel" ? held.panel : null
+  const wasTabs = useRef(tabs)
+  useLayoutEffect(() => {
+    const narrowed = wasTabs.current && !tabs
+    wasTabs.current = tabs
+    if (narrowed && heldPanel && !nav.panel) go({ to: "panel", panel: heldPanel })
+  }, [tabs, heldPanel, nav.panel, go])
   useEffect(() => {
     if (!tabs) return
     const onKey = (e: KeyboardEvent) => {
@@ -257,6 +265,7 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
   const talks = (leaf: Leaf): boolean => (leaf.nav ? leaf.nav.tab === "chat" && composes(leaf.doc) : nav.tab === "chat")
   const pick = (id: string | undefined) => leaves.find(({ leaf }) => leaf.id === id && talks(leaf))?.leaf.id
   const typing = pick(layout.typing) ?? pick(layout.focus) ?? leaves.find(({ leaf }) => talks(leaf))?.leaf.id ?? MAIN
+  const typingDoc = !!leaves.find(({ leaf }) => leaf.id === typing)?.leaf.doc
   const close = (id: string): boolean => {
     if (id !== MAIN) return (closePane(code, id), true)
     if (!heir?.nav) return false
@@ -294,6 +303,23 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
       window.clearTimeout(hovering.current)
       window.removeEventListener("pointermove", moved, { capture: true })
       window.removeEventListener("keydown", typed, true)
+    }
+  }, [])
+  useEffect(() => {
+    const root = document.documentElement
+    let done = 0
+    const resized = () => {
+      root.dataset.resizing ||= "window"
+      window.clearTimeout(done)
+      done = window.setTimeout(() => {
+        if (root.dataset.resizing === "window") delete root.dataset.resizing
+      }, 200)
+    }
+    window.addEventListener("resize", resized)
+    return () => {
+      window.clearTimeout(done)
+      window.removeEventListener("resize", resized)
+      if (root.dataset.resizing === "window") delete root.dataset.resizing
     }
   }, [])
   useEffect(() => {
@@ -412,7 +438,7 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
               "main pane",
               isNone(box.x) && isNone(box.y) && "is-corner",
               leaf.id === layout.focus && "is-focus",
-              split && leaf.id !== typing && "is-quiet",
+              split && leaf.id !== typing && !leaf.doc && !typingDoc && "is-quiet",
               !born.has(leaf.id) && "is-new",
               tiny.has(leaf.id) && "is-tiny",
               leaf.doc?.kind === "blank" && "is-blank"

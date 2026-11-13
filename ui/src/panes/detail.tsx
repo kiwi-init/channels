@@ -27,7 +27,7 @@ import { Assign, Cancel, EditTask, holds, PickReviewer, stepState } from "~/pane
 import { detailParts } from "~/panels/task-detail"
 import { moveWords } from "~/panels/task-moves"
 import { doUrl, inert } from "~/panes/engine"
-import { askCard, card, join, link, main, maker, PageFrame, PageText, prRow, section, steps, taskRow, type Maker } from "~/panes/page"
+import { askCard, card, join, link, main, maker, OUT, PageFrame, PageText, prRow, section, steps, taskRow, type Maker } from "~/panes/page"
 import type { DetailView } from "~/panes/place"
 import { SENT } from "~/sent"
 import { openImage } from "~/specs/comment-item"
@@ -85,6 +85,8 @@ function since(at: number, now: string, recent: (time: string) => string): strin
 
 const taskSince = (at: number): string => since(at, t("panels.task.just.now"), (time) => t("panels.task.ago", { time }))
 const ghSince = (at: number): string => since(at, t("github.panel.just.now"), (time) => t("github.panel.ago", { time }))
+
+const ownList = (md: string): string => md.replace(/^- /gm, "* ")
 
 const issueRow = (issue: Issue): string => `- ${link(`#${issue.number} ${issue.title}`, `kiwi-issue:${issue.repo}/${issue.number}`)} · ${issueWord(issue)}`
 
@@ -203,7 +205,7 @@ export function taskPage(channel: Channel, id: number, m: Maker, x: Ctx): TaskTe
       ])
     : ""
   const issue = channel.issues?.find((i) => i.task === id)
-  const links = [task.pr ? prRow(task.pr) : "", issue ? issueRow(issue) : ""].filter(Boolean).join("\n")
+  const links = ownList([task.pr ? prRow(task.pr) : "", issue ? issueRow(issue) : ""].filter(Boolean).join("\n"))
   const landing = (task.steps ?? []).map((s) => {
     const meta = [s.by ? nickname(channel, s.by) : "", stepState(s, x.now) ?? ""].filter(Boolean).join(" · ")
     const wait = s.wait ? `: ${inert(wordsPlain(s.wait.reason, channel.nicknames))}` : ""
@@ -263,7 +265,7 @@ function prPage(channel: Channel, repo: string, number: number, m: Maker, x: Ctx
   const branch = pr.branch
   const facts = [link(`#${pr.number}`, pr.url), t(PR_WORDS[pr.state]), line && !closed ? toned(line.text, line.tone) : "", pr.release ? t("github.panel.shipped.in", { release: pr.release }) : ""]
   const acts = [
-    main(m.act(t("github.panel.open.on.github"), () => openOutside(pr.url))),
+    main(m.act(t("github.panel.open.on.github"), () => openOutside(pr.url), OUT)),
     m.act(t("github.panel.files.changed"), () => openOutside(`${pr.url}/files`)),
     closed ? "" : m.act(t("github.panel.checks"), () => openOutside(`${pr.url}/checks`)),
   ]
@@ -307,7 +309,7 @@ function issuePage(channel: Channel, repo: string, number: number, m: Maker, x: 
     crumb,
     `# ${inert(issue.title)}`,
     [link(`#${issue.number}`, issue.url), cap(issueWord(issue))].join(" · "),
-    main(m.act(t("github.panel.open.on.github"), () => openOutside(issue.url))),
+    main(m.act(t("github.panel.open.on.github"), () => openOutside(issue.url), OUT)),
     props.filter(Boolean).join("\n"),
     taskSection(channel, issue.task, m, x),
   ])

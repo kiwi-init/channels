@@ -61,7 +61,7 @@ page.on("console", (m) => {
 });
 
 const views = page.getByRole("navigation", { name: "Views" });
-const row = (text: string) => page.locator("article, .thread-doc section.blk").filter({ hasText: text });
+const row = (text: string) => page.locator("article.msg, .thread-doc section.blk").filter({ hasText: text });
 
 try {
   at = "first run";

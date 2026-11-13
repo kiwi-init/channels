@@ -78,7 +78,7 @@ export function FocusScope({ code, now, children }: { code: string; now: boolean
   const dock = dockedNow(layout.root)
   const shown = !dock || now
   const focus = tabs ? leafOf(layout.root, layout.focus) : null
-  const leaf = focus?.nav && (shown || focus.id !== dock?.id) ? focus : null
+  const leaf = focus?.nav && focus.id !== dock?.id ? focus : null
   return (
     <Scope code={code} id={leaf?.id ?? null} nav={leaf?.nav ?? nav} doc={leaf?.doc ?? null} shown={shown}>
       {children}

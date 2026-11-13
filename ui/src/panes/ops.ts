@@ -56,6 +56,7 @@ function put(code: string, layout: Layout): void {
 
 const isBlank = (leaf: Leaf): boolean => leaf.doc?.kind === "blank"
 
+const HALF_GAP = 3
 const NONE: Len = { p: 0, px: 0, side: 0 }
 const ALL: Len = { p: 1, px: 0, side: 0 }
 const plus = (a: Len, b: Len): Len => ({ p: a.p + b.p, px: a.px + b.px, side: a.side + b.side })
@@ -121,7 +122,10 @@ export function movePane(code: string, id: string, target: string, edge: Edge): 
 export function closePane(code: string, id: string): void {
   const layout = layoutOf(code)
   if (id === MAIN || !leafOf(layout.root, id)) return
-  put(code, { root: without(layout.root, id), focus: layout.focus === id ? MAIN : layout.focus, typing: layout.typing === id ? MAIN : layout.typing })
+  const top = layout.root
+  const borrowed = top.kind === "split" && top.fix?.side === "b" && top.b.kind === "leaf" && top.b.id === id && !isNow(top.b)
+  const root = borrowed ? { ...top, b: nowLeaf(code) } : without(top, id)
+  put(code, { root, focus: layout.focus === id ? MAIN : layout.focus, typing: layout.typing === id ? MAIN : layout.typing })
 }
 
 export function resizeSplit(code: string, id: string, size: { ratio: number } | { px: number }): void {
@@ -153,13 +157,11 @@ export function panelGo(code: string, from: string, panel: Panel | null, room?: 
   const held = here?.doc?.kind === "panel" ? here : findLeaf(layout.root, (leaf) => leaf.doc?.kind === "panel")
   if (held?.nav) {
     const root = swap(layout.root, held.id, () => ({ ...held, doc }))
-    if (root) put(code, { ...layout, root, focus: held.id, typing: composes(doc) ? held.id : layout.typing })
+    if (root) put(code, { ...layout, root, focus: held.id })
     return
   }
-  if (room && leafOf(layout.root, room.id)) splitAt(code, room.id, room.edge, { at: "doc", doc })
-  else splitAt(code, dockedNow(layout.root)?.id === from || !here ? MAIN : from, "right", { at: "doc", doc })
-  const after = layoutOf(code)
-  if (composes(doc) && leafOf(after.root, after.focus)?.doc?.kind === "panel") put(code, { ...after, typing: after.focus })
+  if (room && leafOf(layout.root, room.id)) return splitAt(code, room.id, room.edge, { at: "doc", doc })
+  splitAt(code, dockedNow(layout.root)?.id === from || !here ? MAIN : from, "right", { at: "doc", doc })
 }
 
 export function showDoc(code: string, id: string | null, doc: Doc, shown: boolean, room?: { id: string; edge: Edge }): void {
@@ -216,7 +218,7 @@ export function boxes(root: Node): { leaves: { leaf: Leaf; box: Box }[]; gaps: {
     if (node.kind === "leaf") return void leaves.push({ leaf: node, box })
     const row = node.dir === "row"
     const size = row ? box.w : box.h
-    const fixed: Len | null = node.fix ? (node.fix.px === null ? { p: 0, px: 0, side: 1 } : { p: 0, px: node.fix.px, side: 0 }) : null
+    const fixed: Len | null = node.fix ? (node.fix.px === null ? { p: 0, px: HALF_GAP, side: 1 } : { p: 0, px: node.fix.px, side: 0 }) : null
     const first = !fixed ? times(size, node.ratio) : node.fix?.side === "a" ? fixed : plus(size, times(fixed, -1))
     const rest = plus(size, times(first, -1))
     gaps.push({ split: node, box, at: plus(row ? box.x : box.y, first) })

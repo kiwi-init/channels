@@ -85,7 +85,8 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
   const panelOpen = !!nav.panel && !tabs
-  const now = useMedia(WIDE) && !panelOpen
+  const reading = nav.tab === "specs" && nav.spec != null && !panelOpen
+  const now = useMedia(WIDE) && !panelOpen && !older && !reading
   const view = viewOf(nav)
   useLayoutEffect(() => {
     const root = document.documentElement
