@@ -23,7 +23,7 @@ default_border none
 output HEADLESS-1 resolution 1440x900 scale $scale
 exec "$out/run.sh"
 EOF
-timeout 3600 dbus-run-session -- env WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=sway \
+timeout "${FLICKER_SWAY_TIMEOUT:-3600}" dbus-run-session -- env WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=sway \
   sway -c "$out/sway.config" > "$out/sway.log" 2>&1
 echo "sway (scale $scale) exited $?"
 tail -n 40 "$out/probe.log"

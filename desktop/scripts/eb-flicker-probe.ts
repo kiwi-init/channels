@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
@@ -14,6 +14,15 @@ if (!appPath || !outDir || (session !== "x11" && session !== "wayland")) {
 const windows = Number(process.env["FLICKER_WINDOWS"] ?? "3");
 const seconds = Number(process.env["FLICKER_SECONDS"] ?? "30");
 mkdirSync(outDir, { recursive: true });
+const t0 = Date.now();
+const step = (what: string) => console.log(`${((Date.now() - t0) / 1000).toFixed(1)}s ${what}`);
+setTimeout(
+  () => {
+    step("deadline reached, exiting");
+    process.exit(3);
+  },
+  Number(process.env["FLICKER_DEADLINE"] ?? "2400") * 1000,
+).unref();
 
 const sh = (args: string[]): string => {
   const r = spawnSync(args[0]!, args.slice(1), { encoding: "utf8" });
@@ -141,9 +150,29 @@ const recorder = (region: { x: number; y: number; w: number; h: number }, file: 
         "ultrafast",
         file,
       ],
-      { stdio: "ignore" },
+      { stdio: ["ignore", "ignore", openSync(file.replace(/\.mkv$/, "-rec.log"), "w")] },
     );
-  return spawn("wf-recorder", ["-y", "-g", `${region.x},${region.y} ${even(region.w)}x${even(region.h)}`, "-r", "60", "-c", "libx264rgb", "-p", "qp=0", "-f", file], { stdio: "ignore" });
+  return spawn("wf-recorder", ["-y", "-g", `${region.x},${region.y} ${even(region.w)}x${even(region.h)}`, "-r", "60", "-c", "libx264rgb", "-p", "qp=0", "-f", file], {
+    stdio: ["ignore", "ignore", openSync(file.replace(/\.mkv$/, "-rec.log"), "w")],
+  });
+};
+
+const finish = async (rec: ChildProcess): Promise<number | null> => {
+  if (rec.exitCode === null && rec.signalCode === null) {
+    rec.kill("SIGINT");
+    const exited = await Promise.race([new Promise((r) => rec.once("exit", () => r(true))), Bun.sleep(10_000).then(() => false)]);
+    if (!exited) rec.kill("SIGKILL");
+  }
+  return rec.exitCode;
+};
+
+const drain = async (d: Driver): Promise<Record<string, unknown>[]> => {
+  const all: Record<string, unknown>[] = [];
+  for (;;) {
+    const part = (await d.evaluate(() => (Reflect.get(window, "flickerLog") as unknown[]).splice(0, 300), null)) as Record<string, unknown>[];
+    all.push(...part);
+    if (part.length < 300) return all;
+  }
 };
 
 const origin = (): { x: number; y: number } => {
@@ -178,9 +207,13 @@ const app = launch(appExecutable(appPath), env);
 try {
   const d: Driver = await attach(join(root, "driver.sock"));
   try {
+    step("attached");
     await until("the window on screen", 60_000, async () => ((await d.main("window")) as { visible?: unknown }).visible === true || null);
+    step("window visible");
     await firstChannel(d, 0);
+    step("first channel open");
     for (const text of FIXTURE) await until(`fixture message sent`, 60_000, () => d.evaluate(sendMessage, { text, shows: text.split("\n")[0]! }, 2_000).then((ok) => (ok ? true : null)));
+    step("fixture sent");
     await d.evaluate(() => document.fonts.ready.then(() => true), null);
     await d.evaluate(HOOKS, null);
     const env0 = await d.evaluate(() => ({ dpr: devicePixelRatio, inner: `${innerWidth}x${innerHeight}`, ua: navigator.userAgent }), null);
@@ -188,6 +221,7 @@ try {
     for (const scroll of ["bottom", "up"]) {
       for (const focus of ["off", "on"]) {
         const state = `${scroll}-focus${focus}`;
+        step(`${state}: set state`);
         await d.evaluate(
           ({ scroll: s, focus: f }) => {
             const feed = document.querySelector<HTMLElement>(".feed");
@@ -207,6 +241,7 @@ try {
           { scroll, focus },
         );
         await Bun.sleep(2000);
+        step(`${state}: read box`);
         const box = await d.evaluate(() => {
           const b = document.querySelector(".feed")?.getBoundingClientRect();
           return b ? { x: b.x + 72, y: b.y, w: b.width - 72, h: b.height, dpr: devicePixelRatio } : null;
@@ -222,7 +257,9 @@ try {
         for (let w = 1; w <= windows + 1; w++) {
           const control = w === windows + 1;
           const file = join(outDir, `${state}-${control ? "control" : `w${w}`}.mkv`);
-          await d.evaluate(() => (Reflect.get(window, "flickerLog") as unknown[]).splice(0).length, null);
+          step(`${state} ${control ? "control" : `w${w}`}: drop old trace`);
+          await drain(d);
+          step(`${state} ${control ? "control" : `w${w}`}: record ${JSON.stringify(region)}`);
           const rec = recorder(region, file);
           const started = Date.now();
           await Bun.sleep(1500);
@@ -250,9 +287,9 @@ try {
               await Bun.sleep(1000);
             }
           } else await Bun.sleep(seconds * 1000);
-          rec.kill("SIGINT");
-          await new Promise((r) => rec.once("exit", r));
-          const trace = (await d.evaluate(() => Reflect.get(window, "flickerLog"), null)) as Record<string, unknown>[];
+          const code = await finish(rec);
+          step(`${state} ${control ? "control" : `w${w}`}: recorder exited ${code}; dump trace`);
+          const trace = await drain(d);
           writeFileSync(file.replace(/\.mkv$/, "-trace.json"), JSON.stringify(trace));
           const writes = trace.filter((e) => e["kind"] === "scrollTop" && Math.abs(Number(e["after"]) - Number(e["before"])) > 0.001);
           const resizes = trace.filter((e) => e["kind"] === "resize");
@@ -269,6 +306,7 @@ try {
             window: control ? "control" : w,
             region,
             recordStart: started,
+            recorderExit: code,
             rafSamples: samples.length,
             geometryMoves: moved,
             scrollTopWritesThatMoved: writes.length,
