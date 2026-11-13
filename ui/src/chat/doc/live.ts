@@ -327,3 +327,30 @@ export function holdDoc(key: string, make: () => LiveDoc): { live: LiveDoc; rele
     },
   }
 }
+
+export interface LiveDocTimes {
+  wait: number
+  linger: number
+}
+
+export function withLiveDoc(open: OpenDoc, th: string, times: LiveDocTimes, run: (doc: Y.Doc) => boolean): Promise<boolean> {
+  return new Promise((done) => {
+    let failed = false
+    let settled = false
+    let late: ReturnType<typeof setTimeout> | null = null
+    let off: (() => void) | null = null
+    const live = new LiveDoc(open, th, () => void (failed = true))
+    const finish = (changed: boolean): void => {
+      if (settled) return
+      settled = true
+      if (late) clearTimeout(late)
+      off?.()
+      setTimeout(() => live.destroy(), changed ? times.linger : 0)
+      done(changed)
+    }
+    const ready = (): void => finish(!failed && run(live.doc))
+    if (live.isReady) return ready()
+    late = setTimeout(() => finish(false), times.wait)
+    off = live.whenReady(ready)
+  })
+}
