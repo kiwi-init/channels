@@ -14,6 +14,7 @@ import { callUnlessUnchanged, type Relay } from "./relay.ts";
 import { freshInfo, newestEpoch, noteSeen, notOlder, openSealed, ownerSigned, sealFor, signedAt, type SealedBlob } from "./sealed.ts";
 
 export const INFO_MAX_AGE_MS = 30_000;
+const ROWS_REUSE_MS = 1_000;
 
 export interface Info {
   ownerPk: string;
@@ -40,13 +41,14 @@ export interface InfoFx {
   setIcon(icon: ChannelIcon | null): Effect.Effect<void, Refused, Relay>;
   resealTitle(): Effect.Effect<void, Refused, Relay>;
   resealIcon(): Effect.Effect<void, Refused, Relay>;
-  members(rows?: readonly MemberRow[]): Effect.Effect<Member[], MemberRefusal, Relay>;
-  memberRows(): Effect.Effect<MemberRow[], MemberRefusal, Relay>;
+  members(rows?: readonly MemberRow[], reuse?: boolean): Effect.Effect<Member[], MemberRefusal, Relay>;
+  memberRows(reuse?: boolean): Effect.Effect<MemberRow[], MemberRefusal, Relay>;
 }
 
 export class ChannelInfo {
   private infoShared: Fiber.Fiber<Info, Refusal> | null = null;
   private infoExpires: number | null = null;
+  private rows: { fiber: Fiber.Fiber<MemberRow[], MemberRefusal>; wrote: number; done: number | null } | null = null;
 
   constructor(
     private readonly ch: ChannelCore,
@@ -56,6 +58,10 @@ export class ChannelInfo {
   forgetInfo(): void {
     this.infoShared = null;
     this.infoExpires = null;
+  }
+
+  forgetMembers(): void {
+    this.rows = null;
   }
 
   markGone(pk: string): void {
@@ -169,13 +175,28 @@ export class ChannelInfo {
       if (icon) yield* this.ch.fx.setIcon(icon);
     }),
 
-    memberRows: Effect.fn("Channel.memberRows")({ self: this }, function* (this: ChannelInfo) {
-      const { members } = yield* callUnlessUnchanged<{ members: MemberRow[] }>(this.ch.relay, this.ch.roomId, "members", "/members", { identity: this.ch.identity }).pipe(Effect.mapError(gone));
-      return members;
+    memberRows: Effect.fn("Channel.memberRows")({ self: this }, function* (this: ChannelInfo, reuse?: boolean) {
+      const was = this.rows;
+      const reusable = reuse && was && was.wrote === this.ch.wrote && (was.done === null || Date.now() - was.done < ROWS_REUSE_MS);
+      if (reusable) return structuredClone(yield* Fiber.join(was.fiber));
+      const fiber = yield* Effect.forkDetach(
+        callUnlessUnchanged<{ members: MemberRow[] }>(this.ch.relay, this.ch.roomId, "members", "/members", { identity: this.ch.identity }).pipe(
+          Effect.map((r) => r.members),
+          Effect.mapError(gone),
+        ),
+      );
+      const mine = { fiber, wrote: this.ch.wrote, done: null as number | null };
+      this.rows = mine;
+      fiber.addObserver((exit) => {
+        if (this.rows !== mine) return;
+        if (Exit.isFailure(exit)) this.rows = null;
+        else mine.done = Date.now();
+      });
+      return structuredClone(yield* Fiber.join(fiber));
     }),
 
-    members: Effect.fn("Channel.members")({ self: this }, function* (this: ChannelInfo, rows?: readonly MemberRow[]) {
-      const members = rows ?? (yield* this.ch.fx.memberRows());
+    members: Effect.fn("Channel.members")({ self: this }, function* (this: ChannelInfo, rows?: readonly MemberRow[], reuse?: boolean) {
+      const members = rows ?? (yield* this.ch.fx.memberRows(reuse));
       const out: Member[] = [];
       for (const m of members) {
         if (!this.ch.access.keys[String(m.e)]) yield* this.ch.fx.refreshKeys();
