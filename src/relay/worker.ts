@@ -8,7 +8,7 @@
 import { DurableObject } from "cloudflare:workers";
 import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "@kiwi/core/protocol.ts";
-import { ChannelGone, NotFound, Refused, TooMany, UpdateRequired } from "./failures.ts";
+import { NotFound, Refused, TooMany, UpdateRequired } from "./failures.ts";
 import { githubHumanAuth, Human, NO_ONE, type HumanAuth } from "./human.ts";
 import { isAdminPath, onAdminHttp, type PeopleAdmin } from "./admin.ts";
 import { onStripeHttp, STRIPE_PATH, type StripeBook } from "./stripe.ts";
@@ -45,6 +45,7 @@ import {
   type Sql,
   type SqlParam,
   leaseTake,
+  gone,
 } from "./room.ts";
 import { corsPreflight, onMailboxHttp, sqlMailboxStore, withCors } from "./mailbox.ts";
 import {
@@ -209,7 +210,7 @@ export class Channel extends DurableObject<Env> {
       if (route.rest === "/ws") {
         if (db.isLegacy()) {
           await this.apply({ wipe: true });
-          return errorResponse(new ChannelGone({ message: "no such channel" }));
+          return errorResponse(gone());
         }
         if (req.headers.get("upgrade") !== "websocket") return errorResponse(new UpdateRequired({ message: "expected websocket" }));
         const pk = await runRoom(this.relay, db, authenticateSocket(req));

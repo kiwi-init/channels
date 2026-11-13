@@ -25,6 +25,7 @@ import { stepEditRefusal } from "@kiwi/core/state/landing-steps.ts";
 import {
   isPerson,
   openRound,
+  reviewerTitle,
   reviewWaysOut,
   landingRefusal,
   reviewClaimRefusal,
@@ -253,13 +254,12 @@ export class SessionTasks extends SessionMessaging {
         const what = change.state === "cancelled" ? "cancelled" : "done";
         if (gate === t.review && reviewerLeft)
           return yield* new Rejected(`${taskId(id)}'s reviewer ${gate} left the channel: the lead or a person opens its review (kiwi task review ${taskId(id)} --review any), then it can be ${what}`);
-        if (open && change.state !== "cancelled")
-          return yield* new Rejected(`${taskId(id)} needs review by ${gate === "*" ? "someone who hasn't worked on it" : gate} before it's done: ${reviewWaysOut(id, gate, open.n)}`);
+        if (open && change.state !== "cancelled") return yield* new Rejected(`${taskId(id)} needs review by ${reviewerTitle(gate)} before it's done: ${reviewWaysOut(id, gate, open.n)}`);
         return yield* new Rejected(
-          `${taskId(id)} needs review by ${gate === "*" ? "someone who hasn't worked on it" : gate} before it's ${what}: ${change.state === "cancelled" ? "ask a person or its reviewer to cancel it, or cancel it yourself once a review round has rejected it" : `send it for review (kiwi task review ${taskId(id)})`}`,
+          `${taskId(id)} needs review by ${reviewerTitle(gate)} before it's ${what}: ${change.state === "cancelled" ? "ask a person or its reviewer to cancel it, or cancel it yourself once a review round has rejected it" : `send it for review (kiwi task review ${taskId(id)})`}`,
         );
       }
-      if (change.verdict && notReviewer) return yield* new Rejected(`only ${gate === "*" ? "someone who hasn't worked on it" : gate} gives ${taskId(id)}'s verdict`);
+      if (change.verdict && notReviewer) return yield* new Rejected(`only ${reviewerTitle(gate)} gives ${taskId(id)}'s verdict`);
       const judged = change.verdict && t.rounds.length ? yield* judgedRound(t, open, change.round, change.at) : null;
       const round = judged ? { round: judged.n, ...(judged.at ? { at: judged.at } : {}) } : revised !== null && notReviewer ? { round: revised } : {};
       const body = change.verdict && reviewText?.trim() ? { body: "review" as const } : {};
