@@ -1,11 +1,12 @@
 import "~/i18n/en/shell-later"
 import "~/styles/start.css"
+import { Link01Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 import { HistoryArrows } from "~/shell/history-arrows"
 
 import { takeTurns } from "~/home"
 import { Avatar, cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
 import type { ChannelTile, HomeAgent, HomeAsk, HomeChannel } from "~/model"
 import { useApp, useGo, useOpenToType } from "~/nav"
@@ -51,7 +52,7 @@ function Starts({ quiet }: { quiet?: true }) {
       </button>
       {quiet && <span aria-hidden="true">·</span>}
       <button type="button" className={quiet ? undefined : "btn"} onClick={() => go({ to: "dialog", dialog: "join" })}>
-        {!quiet && <Icon name="link" size={14} />}
+        {!quiet && <GlyphIcon glyph={Link01Icon} size={14} />}
         {t("start.welcome.join")}
       </button>
     </>

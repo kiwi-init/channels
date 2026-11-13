@@ -1,7 +1,7 @@
 import "~/i18n/en/settings"
 import { HistoryArrows } from "~/shell/history-arrows"
 
-import { PaintBoardIcon } from "@hugeicons/core-free-icons"
+import { ComputerPhoneSyncIcon, PaintBoardIcon, UserCircleIcon } from "@hugeicons/core-free-icons"
 import { useEffect } from "react"
 
 import type { Key } from "~/i18n/en"
@@ -17,9 +17,9 @@ import { useSideways } from "~/kit/sideways"
 import { SideCards } from "~/shell/updates"
 
 const SECTIONS: readonly (readonly [Section, Key, IconName | Glyph])[] = [
-  ["account", "settings.settings.account", "account"],
+  ["account", "settings.settings.account", UserCircleIcon],
   ["appearance", "settings.settings.appearance", PaintBoardIcon],
-  ["computers", "settings.settings.computers", "devices"],
+  ["computers", "settings.settings.computers", ComputerPhoneSyncIcon],
   ["agents", "settings.settings.agents", "agent"],
   ["about", "settings.settings.about", "info"],
 ]
