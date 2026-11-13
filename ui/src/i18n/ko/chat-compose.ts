@@ -188,6 +188,7 @@ export default {
   "chat.markdown.copy.text": "{text} 복사",
   "chat.markdown.code.block": "코드 블록",
   "chat.markdown.code.block.lang": "코드 블록: {lang}",
+  "chat.markdown.utc.assuming": "메시지 날짜 {date}(UTC) 기준",
   "chat.markdown.task": "작업: {text}",
   "chat.doc.media.didnt.load": "{name}을(를) 불러오지 못했습니다",
 } satisfies Catalog

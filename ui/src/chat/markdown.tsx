@@ -14,7 +14,8 @@ import { t } from "~/i18n/i18n"
 import { openOutside } from "~/kit/outside"
 
 import { MermaidBlock } from "~/chat/mermaid"
-import { keepParsed, parsedFor } from "~/chat/parsed"
+import { keepParsed, parseKey, parsedFor } from "~/chat/parsed"
+import { tooltipOf, zonedLinks } from "~/chat/zoned-times"
 import { copyText } from "~/kit/toasts"
 
 const TEXT = { fontSize: 15, fontFamily: "var(--sans)", color: "var(--ink)", lineHeight: 22, marginTop: 0, marginBottom: 8 }
@@ -63,6 +64,7 @@ const STYLE: MarkdownStyle = {
     "^kiwi-mention:": { color: "var(--accent)", underline: false },
     "^kiwi-task:": { color: "var(--ink)", underline: true },
     "^kiwi-msg:": { color: "var(--ink)", underline: true },
+    "^kiwi-utc:": { color: "var(--ink)", underline: false },
   },
   strong: { color: "var(--ink)" },
   em: { color: "var(--ink)" },
@@ -142,7 +144,9 @@ const OWN_LINK = /^kiwi-(?:mention|task|msg):/
 const OPENED = /^(?:https?:\/\/|mailto:)/i
 const LOCAL_PICTURE = /^(?:data|blob):/i
 
-const opened = (url: string): boolean => OWN_LINK.test(url) || !!messageAt(url) || (OPENED.test(url.trim()) && !!sanitizeMarkdownUrl(url))
+const utcLink = (url: string): boolean => url.startsWith("kiwi-utc:") && !Number.isNaN(new Date(url.slice("kiwi-utc:".length)).getTime())
+
+const opened = (url: string): boolean => OWN_LINK.test(url) || utcLink(url) || !!messageAt(url) || (OPENED.test(url.trim()) && !!sanitizeMarkdownUrl(url))
 
 function pictureLink(node: ASTNode, inLink: boolean): void {
   const url = node.attributes?.url ?? ""
@@ -197,42 +201,45 @@ export function blockGaps(markdown: string): string {
   return out.join("\n")
 }
 
-function parse(markdown: string): Promise<ASTNode> {
-  const done = parsedFor(markdown)
+function parse(markdown: string, at?: number): Promise<ASTNode> {
+  const key = parseKey(markdown, at)
+  const done = parsedFor(key)
   if (done) return Promise.resolve(done)
-  const pending = parsing.get(markdown)
+  const pending = parsing.get(key)
   if (pending) return pending
   const next = parseMarkdown(blockGaps(markdown), FLAGS)
     .then((ast) => {
       indexTaskItems(ast)
       markInlineImages(ast)
+      zonedLinks(ast, at)
       safeLinks(ast)
-      keepParsed(markdown, ast)
+      keepParsed(key, ast)
       return ast
     })
-    .finally(() => parsing.delete(markdown))
-  parsing.set(markdown, next)
+    .finally(() => parsing.delete(key))
+  parsing.set(key, next)
   return next
 }
 
-export function warm<T>(texts: readonly T[], link: (text: T) => string): () => void {
+export function warm<T>(texts: readonly T[], source: (text: T) => { markdown: string; at: number }): () => void {
   const queue = [...texts]
-  let timer = 0
+  let timer: ReturnType<typeof setTimeout> | undefined
   const step = () => {
     const text = queue.shift()
     if (text === undefined) return
-    void parse(link(text))
+    const { markdown, at } = source(text)
+    void parse(markdown, at)
       .catch(() => {
         // A message that doesn't parse shows its plain text when it's rendered; warming skips it.
       })
       .finally(() => {
-        timer = window.setTimeout(step, 0)
+        timer = setTimeout(step, 0)
       })
   }
-  timer = window.setTimeout(step, 0)
+  timer = setTimeout(step, 0)
   return () => {
     queue.length = 0
-    window.clearTimeout(timer)
+    clearTimeout(timer)
   }
 }
 
@@ -316,6 +323,7 @@ const scrollsOn = (pre: HTMLElement) => pre.classList.toggle("code-more", pre.sc
 
 export interface MarkdownProps {
   markdown: string
+  at?: number
   onMention: (name: string) => void
   onTask: (id: number) => void
   onMessage: (seq: number) => void
@@ -323,19 +331,20 @@ export interface MarkdownProps {
   onShown: () => void
 }
 
-export default function Markdown({ markdown, onMention, onTask, onMessage, onImage, onShown }: MarkdownProps) {
+export default function Markdown({ markdown, at, onMention, onTask, onMessage, onImage, onShown }: MarkdownProps) {
   const box = useRef<HTMLDivElement>(null)
+  const source = useMemo(() => parseKey(markdown, at), [markdown, at])
   const [got, setGot] = useState<{ markdown: string; ast: ASTNode } | null>(() => {
-    const cached = parsedFor(markdown)
-    return cached ? { markdown, ast: cached } : null
+    const cached = parsedFor(source)
+    return cached ? { markdown: source, ast: cached } : null
   })
-  const ast = got?.markdown === markdown ? got.ast : (parsedFor(markdown) ?? got?.ast ?? null)
+  const ast = got?.markdown === source ? got.ast : (parsedFor(source) ?? got?.ast ?? null)
 
   useEffect(() => {
     let live = true
-    parse(markdown)
+    parse(markdown, at)
       .then((next) => {
-        if (live) setGot((was) => (was?.markdown === markdown ? was : { markdown, ast: next }))
+        if (live) setGot((was) => (was?.markdown === source ? was : { markdown: source, ast: next }))
       })
       .catch(() => {
         // The plain text stays on screen when the markdown doesn't parse.
@@ -343,7 +352,7 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
     return () => {
       live = false
     }
-  }, [markdown])
+  }, [markdown, at, source])
 
   useLayoutEffect(() => {
     if (ast) onShown()
@@ -368,6 +377,18 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       code.tabIndex = 0
       code.title = t("chat.markdown.copy")
       code.setAttribute("aria-label", t("chat.markdown.copy.text", { text }))
+    }
+    for (const zone of box.current?.querySelectorAll<HTMLAnchorElement>('a[href^="kiwi-utc:"]') ?? []) {
+      const iso = zone.getAttribute("href")?.slice("kiwi-utc:".length) ?? ""
+      const alone = /^\d{2}:\d{2}/.test(zone.textContent ?? "")
+      const lang = typeof document === "undefined" ? "en" : document.documentElement.lang || "en"
+      const tip = tooltipOf(iso, alone, (date) => t("chat.markdown.utc.assuming", { date }), Intl.DateTimeFormat().resolvedOptions().timeZone, lang)
+      if (!tip) continue
+      zone.dataset.local = tip
+      if (!zone.hasAttribute("aria-label")) zone.setAttribute("aria-label", tip)
+      const boxOf = zone.getBoundingClientRect()
+      if (boxOf.left + boxOf.width / 2 > window.innerWidth * 0.75) zone.dataset.flip = ""
+      else delete zone.dataset.flip
     }
   }, [ast])
 
@@ -395,6 +416,12 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
     (e: MouseEvent<HTMLDivElement>) => {
       const selection = window.getSelection()
       if (selection && !selection.isCollapsed) return
+      const hit = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>('a[href^="kiwi-utc:"]') : null
+      for (const zone of box.current?.querySelectorAll<HTMLAnchorElement>('a[href^="kiwi-utc:"][data-open]') ?? []) if (zone !== hit) delete zone.dataset.open
+      if (hit && box.current?.contains(hit)) {
+        if (hit.hasAttribute("data-open")) delete hit.dataset.open
+        else hit.dataset.open = ""
+      }
       copyCode(e.target)
     },
     [copyCode]
@@ -412,6 +439,7 @@ export default function Markdown({ markdown, onMention, onTask, onMessage, onIma
       if (url.startsWith("kiwi-mention:")) return onMention(decodeURIComponent(url.slice("kiwi-mention:".length)))
       if (url.startsWith("kiwi-task:")) return onTask(Number(url.slice("kiwi-task:".length)))
       if (url.startsWith("kiwi-msg:")) return onMessage(Number(url.slice("kiwi-msg:".length)))
+      if (url.startsWith("kiwi-utc:")) return
       const at = messageAt(url)
       if (at) {
         location.hash = messageHash(at.code, at.seq)
