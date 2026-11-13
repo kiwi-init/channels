@@ -185,7 +185,7 @@ export function useStick(following = true, still = false) {
     correct(reflow)
     older.current = false
     if (!reflow && box.scrollTop !== from) parked.current = null
-    if (reflow || box.scrollTop !== from) seen.current = box.scrollTop
+    if (reflow || box.scrollTop !== from || (stuck.current && gapIn(box) <= 0.5)) seen.current = box.scrollTop
   }, [correct, still])
 
   const remember = useCallback(() => {
