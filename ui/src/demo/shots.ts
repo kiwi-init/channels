@@ -96,6 +96,7 @@ export const SHOTS: Record<string, Shot> = {
   "needs-invite-failed": { scenario: "invite-failed", channel: "kiwi", nav: { tab: "needs" } },
   "needs-asked-of": { scenario: "asked-of", channel: "kiwi", nav: { tab: "needs" } },
   "step-card": { scenario: "step", channel: "kiwi" },
+  flicker: { scenario: "flicker", channel: "kiwi" },
   "left-out": { scenario: "left-out", channel: "kiwi" },
   compact: { scenario: "compact", channel: "kiwi" },
   compacted: { scenario: "compacted", channel: "kiwi" },
