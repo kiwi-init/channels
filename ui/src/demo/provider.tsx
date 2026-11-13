@@ -12,6 +12,7 @@ import { withOwnBubbles } from "~/demo/own-bubbles"
 import { withSigns } from "~/demo/signs"
 import { withTheirs } from "~/demo/theirs"
 import { withDepartedDms } from "./departed-dms.ts"
+import { withDepartedReviewer } from "./departed-reviewer.ts"
 import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf } from "~/home"
@@ -337,6 +338,8 @@ export type Scenario =
   | "member"
   | "home-calm"
   | "departed-dms"
+  | "departed-reviewer"
+  | "departed-reviewer-readonly"
 
 function withReviewReset(c: Channel): Channel {
   return {
@@ -501,6 +504,8 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
     ].map((c) => [c.code, { ...c, docs: demoDocs(c.code) }])
   )
   if (scenario === "departed-dms") channels.set("kiwi", { ...withDepartedDms(DEMO_CHANNEL), docs: demoDocs("kiwi") })
+  if (scenario === "departed-reviewer" || scenario === "departed-reviewer-readonly")
+    channels.set("kiwi", { ...withDepartedReviewer(DEMO_CHANNEL, scenario === "departed-reviewer-readonly"), docs: demoDocs("kiwi") })
   if (scenario === "updates")
     return { account: { ...DEMO_ACCOUNT, uiUpdate: { version: "dev-1542" }, update: { version: "2026.10.7", ready: true, state: "ready" } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-ready") return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.7", ready: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
