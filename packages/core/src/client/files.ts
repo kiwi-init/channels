@@ -1,10 +1,10 @@
 import * as Effect from "effect/Effect";
-import { openBlob, sealBlob } from "../crypto.ts";
 import { FILE_PIECE_BYTES, fileAttachment, filePieceSizes, MAX_FILE_BYTES, type FileAttachment, type FilePiece } from "../protocol.ts";
 import { Rejected } from "../refusals.ts";
+import { fetchBlob, openSized, storeSealed } from "./blob-io.ts";
 import type { ChannelCore } from "./core.ts";
-import { gone, RelayError, type MemberRefusal } from "./errors.ts";
-import { Relay } from "./relay.ts";
+import { gone, type MemberRefusal } from "./errors.ts";
+import type { Relay } from "./relay.ts";
 
 const NO_FILES = "this channel's relay doesn't hold files yet: it needs an update";
 
@@ -24,14 +24,12 @@ export class ChannelFiles {
       if (bytes.length > MAX_FILE_BYTES) return yield* new Rejected(`${name} is ${mb(bytes.length)}; a file is at most ${mb(MAX_FILE_BYTES)}`);
       const info = yield* this.ch.fx.info();
       if (info.files !== true) return yield* new Rejected(NO_FILES);
-      const relay = yield* Relay;
       const pieces = yield* Effect.forEach(
         filePieceSizes(bytes.length),
         (size, i) =>
           Effect.gen({ self: this }, function* () {
             const at = i * FILE_PIECE_BYTES;
-            const { id, key, blob } = yield* Effect.promise(() => sealBlob(bytes.slice(at, at + size)));
-            yield* relay.blob(this.ch.relay, this.ch.roomId, id, this.ch.identity, blob).pipe(Effect.mapError(gone));
+            const { id, key } = yield* storeSealed(this.ch, bytes.slice(at, at + size)).pipe(Effect.mapError(gone));
             const piece: FilePiece = { id, key, size };
             return piece;
           }),
@@ -43,21 +41,7 @@ export class ChannelFiles {
     }),
 
     file: Effect.fn("Channel.file")({ self: this }, function* (this: ChannelFiles, f: FileAttachment) {
-      const relay = yield* Relay;
-      const parts = yield* Effect.forEach(
-        f.pieces,
-        (piece) =>
-          relay.blob(this.ch.relay, this.ch.roomId, piece.id, this.ch.identity).pipe(
-            Effect.mapError(gone),
-            Effect.catchIf(
-              (err) => err instanceof RelayError && err.status === 404,
-              () => Effect.succeed(null),
-            ),
-            Effect.flatMap((blob) => (blob ? Effect.promise(() => openBlob(piece, blob)) : Effect.succeed(null))),
-            Effect.map((raw) => (raw && raw.length === piece.size ? raw : null)),
-          ),
-        { concurrency: 4 },
-      );
+      const parts = yield* Effect.forEach(f.pieces, (piece) => fetchBlob(this.ch, piece.id).pipe(Effect.flatMap((blob) => (blob ? openSized(piece, blob) : Effect.succeed(null)))), { concurrency: 4 });
       const whole = parts.filter((p): p is Uint8Array<ArrayBuffer> => p !== null);
       if (whole.length !== parts.length) return null;
       const out = new Uint8Array(f.size);
