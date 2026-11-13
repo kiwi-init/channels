@@ -16,6 +16,7 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | The composer you type in stays put while lines arrive | `scripts/ui-doc-still.ts` | `the composer you type in stays put while lines arrive` |
 | Held, or reading an older stretch, the bottom does not pull you along | `ui/src/chat/stick.test.tsx` | `held, or reading an older window, the bottom does not pull you along` |
 | A sent line with an image stays above the lines sent after it | `scripts/ui-doc-image-order.ts` | `doc lines with images are drawn wrong` |
+| A line of yours that changes is laid out once, also while markdown is still loading: its row keeps the size the feed read | `scripts/ui-msg-edit.ts` | `no resize observer resizes its row from inside its own callback` |
 
 ## A change of width, and the sidebar toggle
 
@@ -31,7 +32,10 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | --- | --- | --- |
 | At the bottom, a picture that arrives after its line leaves the last line at the bottom of the view | `scripts/ui-feed-late-image.ts` | `a late picture leaves the last line at the bottom of the view` |
 | Scrolled up, a picture that arrives above the view leaves the row you read on its pixel | `scripts/ui-feed-late-image.ts` | `a late picture above the view leaves the row at the top on its pixel` |
+| At the bottom, a font that arrives late and wraps the lines again leaves the last line at the bottom of the view | `scripts/ui-feed-late-font.ts` | `a late font leaves the last line at the bottom of the view` |
+| Scrolled up, it leaves the row you read on its pixel | `scripts/ui-feed-late-font.ts` | `a late font leaves the row at the top of the view on its pixel` |
 | A bubble fitted while a font was loading is fitted again when it arrives, and the fit never changes the message's height | `scripts/ui-own-bubble.ts` | `fitting a bubble to its text never changes the message's height` |
+| A line that arrives while the rest of the app's styles load in the background is laid out at once, never blank | `scripts/ui-doc-steady.ts` | `the stylesheets of lazy chunks load after the page, not in <head>` |
 
 ## Opening, and a reload
 
@@ -78,9 +82,3 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | Each room has its own unread count and read mark | `packages/app/src/rooms.test.ts` | `each room has its own unread count and read mark` |
 | A room's unread counts what its feed shows | `ui/src/live/side-replies.test.ts` | `a room's unread counts what its feed shows` |
 | Another channel's needs-you badge arrives, stays exactly 1 through a visit, and goes when the ask closes | `scripts/ui-rail-needs.ts` | `still shows exactly 1 need you` |
-
-## Waiting on a fix
-
-Not checked on CI right now. Each line goes back to its table with its fix.
-
-- A font that arrives late and wraps the lines again leaves the conversation where it was, at the bottom and scrolled up: `scripts/ui-feed-late-font.ts`. At the bottom it failed at random in WebKit, with the view 38.7 px above the end (T2635).

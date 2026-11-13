@@ -212,7 +212,11 @@ try {
   await openSearch();
   await search.fill("smok tas");
   await results.getByRole("option", { name: /Smoke task/ }).click();
-  await page.getByRole("region", { name: /Smoke task/ }).getByText("Smoke task").first().waitFor({ timeout: 15000 });
+  await page
+    .getByRole("region", { name: /Smoke task/ })
+    .getByText("Smoke task")
+    .first()
+    .waitFor({ timeout: 15000 });
   if (await results.count()) throw new Error("picking a task left the results open");
   await page.keyboard.press("Escape");
   await search.fill("hel bot");

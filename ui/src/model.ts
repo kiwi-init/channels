@@ -1,6 +1,7 @@
 import type { Words } from "./words.ts"
 import type { TextFont } from "@kiwi/app/theme.ts"
 import type { GithubHealth } from "@kiwi/core/github-health.ts"
+import type { Activity as CoreActivity, COLORS } from "@kiwi/core/protocol.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { SharedWith } from "@kiwi/core/shared-seats.ts"
@@ -19,10 +20,10 @@ type Stage = "open" | "building" | "proving" | "red" | "yours" | "done" | "dropp
 
 type Kind = "human" | "agent"
 
-export type Color = "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "indigo" | "violet" | "pink" | "brown"
+export type Color = (typeof COLORS)[number]
 
 export interface Activity {
-  state: "working" | "waiting" | "idle" | "unknown"
+  state: CoreActivity["state"]
   tool?: string
   since?: number
   context?: { used: number; window?: number }
@@ -358,6 +359,9 @@ export interface Upload {
   mime: string
   data: string
 }
+
+export const isUpload = (v: unknown): v is Upload =>
+  typeof v === "object" && v !== null && "name" in v && "mime" in v && "data" in v && typeof v.name === "string" && typeof v.mime === "string" && typeof v.data === "string"
 
 export interface Image {
   url: string

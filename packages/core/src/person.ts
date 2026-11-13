@@ -12,6 +12,7 @@
 // Nothing here touches the file system or the network: the CLI, the daemon, the desktop app and the
 // tests share it. Statements name what they are for, so a signature over one can't pass as another.
 
+import { clean } from "./cert-text.ts";
 import { sign, signText, verify, verifyText, type Identity } from "./identity.ts";
 
 const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
@@ -53,15 +54,6 @@ const vouchStatement = (roomId: string, agentPk: string) => `kiwi-vouch\n${roomI
 
 /** What a person signs when they join: this member key, in this channel, is me. */
 const personStatement = (roomId: string, memberPk: string) => `kiwi-person\n${roomId}\n${memberPk}`;
-
-/** Text a person or a computer chose, bounded and on one line, for a cert. */
-function clean(s: string, max: number): string {
-  return s
-    .replace(/[\u0000-\u001f\u007f-\u009f\u2028-\u202e\u2060-\u2069]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, max);
-}
 
 /** The person's cert for one computer. */
 export function certifyMachine(person: Identity, m: { pk: string; xpk: string; label: string }, at = Date.now()): Promise<MachineCert> {

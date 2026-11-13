@@ -363,12 +363,12 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
 
   useEffect(() => {
     const near = [...list.slice(Math.max(0, start - MORE), start), ...list.slice(end, end + MORE)]
-    const texts = near.flatMap((m) => (wordsRaw(m.text) && !m.system ? [{ text: wordsRaw(m.text), seq: m.seq }] : []))
+    const texts = near.flatMap((m) => (wordsRaw(m.text) && !m.system ? [{ text: wordsRaw(m.text), seq: m.seq, at: m.at }] : []))
     let stop = () => {}
     let live = true
     const timer = window.setTimeout(() => {
       void import("~/chat/markdown").then(({ warm }) => {
-        if (live) stop = warm(texts, ({ text, seq }) => linked(text, names, tasks, seq))
+        if (live) stop = warm(texts, ({ text, seq, at }) => ({ markdown: linked(text, names, tasks, seq), at }))
       })
     }, 150)
     return () => {

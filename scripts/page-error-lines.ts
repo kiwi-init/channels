@@ -4,6 +4,7 @@ export interface Observers {
   late: string[];
   untold: string[];
   ran: string[];
+  loading: string[];
 }
 
 export interface PageError {
@@ -23,6 +24,12 @@ function frames(message: string, stack: string | undefined): string[] {
 
 export function observerLines(seen: Observers): string[] {
   return [
+    ...(seen.loading.length
+      ? [
+          `${seen.loading.length === 1 ? "1 stylesheet was" : `${seen.loading.length} stylesheets were`} still loading in <head>, and WebKit lays out nothing new until they arrive, so what the page added meanwhile is sized late:`,
+          `  ${seen.loading.join(", ")}`,
+        ]
+      : []),
     ...(seen.late.length ? ["changed size after its observer last ran:", ...seen.late.map((l) => `  ${l}`)] : []),
     ...(seen.untold.length ? ["put under watch, and its observer was not told its size yet:", ...seen.untold.map((l) => `  ${l}`)] : []),
     ...(seen.late.length || seen.untold.length ? [] : ["no watched element had changed size or was new when the error came"]),

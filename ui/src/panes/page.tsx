@@ -144,7 +144,7 @@ export function askCard(channel: Channel, a: Ask, actions: Actions, m: Maker): s
   return card([`### ${t("panes.page.quiet", { name: `@${a.from}` })}`, held(channel, a.task)])
 }
 
-export function boardText(channel: Channel, view: BoardView): { md: string; seal: Seal } {
+function boardText(channel: Channel, view: BoardView): { md: string; seal: Seal } {
   const m = maker()
   const md = view.kind === "now" ? nowPage(channel) : view.kind === "agents" ? agentsPage(channel) : githubPage(channel)
   return { md, seal: m.seal }

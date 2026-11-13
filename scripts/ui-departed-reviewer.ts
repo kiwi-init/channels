@@ -74,7 +74,15 @@ try {
   await reviewer.waitFor();
   expect((await reviewer.innerText()).includes("Sage"), "a completed task retains its reviewer name");
   expect((await reviewer.getByRole("button", { name: "Change", exact: true }).count()) === 0, "completed tasks do not gain a Change action");
-  expect((await panel.locator(".pg-label", { hasText: /^Activity$/ }).locator("xpath=following-sibling::*[1]").innerText()).includes("Sage approved"), "completed review history retains the departed judge's attribution");
+  expect(
+    (
+      await panel
+        .locator(".pg-label", { hasText: /^Activity$/ })
+        .locator("xpath=following-sibling::*[1]")
+        .innerText()
+    ).includes("Sage approved"),
+    "completed review history retains the departed judge's attribution",
+  );
   await page.goto(`http://127.0.0.1:${server.port}/?shot=task-departed-reviewer-readonly`);
   await reviewer.waitFor();
   expect((await reviewer.innerText()).includes("Sage") && (await reviewer.innerText()).includes("left"), "a read-only viewer sees the same departed reviewer disclosure");

@@ -146,6 +146,9 @@ jobs:
       - name: ui css units
         if: ${{ !cancelled() }}
         run: bun scripts/css-units.ts
+      - name: ui theme colours in tokens.css come from channels.ts
+        if: ${{ !cancelled() }}
+        run: bun scripts/theme-tokens.ts
       - name: ui words in catalogs
         if: ${{ !cancelled() }}
         run: bun scripts/ui-english.ts
@@ -236,6 +239,10 @@ jobs:
       - name: ui specs worker avatars name themselves on hover and keyboard focus, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-spec-names.ts --dist ui/dist
+      # A UTC time written in chat prose names its local time on hover, keyboard focus and a press, and copying the message keeps the original text (#2367).
+      - name: ui a UTC time in chat prose names its local time, in WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
+        run: bun scripts/ui-utc-times.ts --dist ui/dist
       # Selecting text in a task's description or its messages offers Quote; the excerpt lands in the task's composer next to the draft, a description quote cites the task and a message quote its message, mixed selections and read-only members get no Quote, and switching tasks clears it (#2374).
       - name: ui a task panel quotes its description and its messages, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
@@ -561,6 +568,9 @@ jobs:
       - name: ui Jump to latest shows when you scroll up a long feed, takes a click and brings the feed to its end, from a little up, from far past the rows it holds and from near their top, at rest or the moment a wheel stops
         if: ${{ !cancelled() }}
         run: bun scripts/ui-feed-latest.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui a font that arrives late leaves the conversation where it was, at the bottom and scrolled up
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-feed-late-font.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist

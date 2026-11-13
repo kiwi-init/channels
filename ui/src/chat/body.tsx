@@ -3,7 +3,7 @@ import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react"
 import { useHug } from "~/chat/hug"
 import { linked, useMentionParser } from "~/chat/linked"
 import type { Draw } from "~/chat/markdown"
-import { parsedFor } from "~/chat/parsed"
+import { parseKey, parsedFor } from "~/chat/parsed"
 import { useAct } from "~/nav"
 import { type Words, wordsPlain, wordsRaw } from "~/words"
 import { personGo } from "~/person-go"
@@ -20,6 +20,7 @@ export function Body({
   onPage,
   draw,
   hug = false,
+  at,
 }: {
   text: Words
   seq: number
@@ -30,14 +31,15 @@ export function Body({
   onPage?: (url: string) => void
   draw?: Draw
   hug?: boolean
+  at?: number
 }) {
   const { go, now } = useAct()
   const parser = useMentionParser()
   const { markdown } = useMemo(() => ({ parser, markdown: linked(wordsRaw(text), names, tasks, seq) }), [parser, text, names, tasks, seq])
-  const [shown, setShown] = useState(false)
-  const onShown = useCallback(() => setShown(true), [])
+  const [shown, setShown] = useState(0)
+  const onShown = useCallback(() => setShown((times) => times + 1), [])
   const box = useRef<HTMLDivElement>(null)
-  useHug(box, hug, shown ? markdown : null)
+  useHug(box, hug, shown || markdown)
   const onMention = useCallback(
     (name: string) => {
       const open = now?.().channel ?? null
@@ -48,9 +50,9 @@ export function Body({
   const onTask = useCallback((task: number) => go({ to: "task", task }), [go])
   return (
     <div className="msg-text" ref={box}>
-      {!draw && !shown && !parsedFor(markdown) && <p className="md-plain">{wordsPlain(text, names)}</p>}
+      {!draw && !shown && !parsedFor(parseKey(markdown, at)) && <p className="md-plain">{wordsPlain(text, names)}</p>}
       <Suspense fallback={null}>
-        <Markdown markdown={markdown} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} onPage={onPage} draw={draw} />
+        <Markdown markdown={markdown} at={at} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} onPage={onPage} draw={draw} />
       </Suspense>
     </div>
   )

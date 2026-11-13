@@ -313,7 +313,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </Suspense>
         ) : (
           <Clamp on={who?.kind === "agent" && !inThread}>
-            {body && <Body text={wrote(body)} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} hug={m.from === channel.you} />}
+            {body && <Body text={wrote(body)} seq={m.seq} at={m.at} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} hug={m.from === channel.you} />}
           </Clamp>
         )}
         {compact && m.edited !== undefined && !editing && (
