@@ -83,7 +83,7 @@ try {
   expect((await mine.locator(".msg-deleted").count()) === 1 && !(await mine.innerText()).includes("v1.0.1"), "a deleted message reads as deleted, in place");
 
   await page.goto(`http://127.0.0.1:${server.port}/?shot=task-working`);
-  const panel = page.locator("aside.panel");
+  const panel = page.locator(".panel.is-pane");
   const inPanel = panel.locator(".composer textarea");
   await inPanel.waitFor();
   await inPanel.fill("a line from the task panel");

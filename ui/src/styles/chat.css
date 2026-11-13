@@ -1537,6 +1537,12 @@ button.msg-image-spot:hover {
   transition: box-shadow var(--fast);
 }
 
+:root.reduce-transparency .composer {
+  background: var(--bg-3);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 .composer:focus-within {
   box-shadow:
     var(--shadow-float),

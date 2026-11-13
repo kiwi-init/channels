@@ -753,6 +753,7 @@ export interface Prefs {
   textSize: number
   font: TextFont
   reduceMotion: boolean
+  reduceTransparency: boolean
   muted: string[]
   darkTheme: string
   lightTheme: string

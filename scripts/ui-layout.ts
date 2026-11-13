@@ -18,6 +18,7 @@ const SIZES: readonly (readonly [number, number])[] = [
 const CONTROLS = [".top-drawer", ".top-tools .icon-btn:last-child", ".main .composer", ".rail-gear"];
 const SIDE = [".tile.is-home", ".tile[data-code]", ".side-chan"];
 const TABS = [".tile.is-home", ".tile[data-code]", ".tile.is-add"];
+const LAYER_SHOTS = ["channel", "home", "waiting", "settings", "channel-broken", "closed", "welcome", "task-waiting", "specs"];
 
 type Places = Record<string, readonly [number, number] | null>;
 interface Box {
@@ -62,6 +63,14 @@ const nothingClashes = async (page: Page, where: string): Promise<void> => {
   expect(on.length === 0, `nothing in the top row sits on anything else, ${where}${on.length ? `: ${on.join("; ")}` : ""}`);
 };
 
+const NOW_PANE = ".panes > .pane:has(> .page.is-now)";
+const NOW_ROW = ".page.is-now a[href^='kiwi-task:']";
+const TASK_PANE = ".panes > .pane:has(.task-page)";
+const gapOf = (page: Page): Promise<number> =>
+  page.evaluate(() => {
+    const panes = document.querySelector(".panes");
+    return panes ? parseFloat(getComputedStyle(panes).getPropertyValue("--pane-gap")) || 0 : 0;
+  });
 const boxOf = (page: Page, selector: string): Promise<Box | null> =>
   page.evaluate((s) => {
     const el = document.querySelector(s);
@@ -199,26 +208,18 @@ try {
       `and it is a pill the size of its row, ending before the sidebar's edge: nothing cuts into the page (${side?.pillOver.join(", ")} over, ${side?.pillEnd} before the edge)`,
     );
 
-    const tracker = await boxOf(page, ".track");
+    const tracker = await boxOf(page, NOW_PANE);
+    const gap = await gapOf(page);
+    expect(!!tracker, "a wide window shows Now beside the conversation");
     if (tracker) {
-      expect(near(width - tracker.right, 0), "the task tracker ends at the window's right edge");
-      expect(!!composer && tracker.left >= composer.right + 8, "the task tracker clears the conversation");
-      const second = await page.evaluate(() => {
-        const fill = (selector: string, pseudo?: string): string => getComputedStyle(document.querySelector(selector)!, pseudo).backgroundColor;
-        const under = getComputedStyle(document.querySelector(".chan")!, "::after");
-        return {
-          under: under.backgroundColor,
-          column: under.gridColumnStart,
-          own: fill(".track"),
-          page: fill(".main"),
-          frame: fill(".app"),
-          corner: parseFloat(getComputedStyle(document.querySelector(".main")!).borderTopRightRadius),
-        };
-      });
-      expect(
-        second.column === "3" && second.under === second.page && second.page !== second.frame && second.own === "rgba(0, 0, 0, 0)" && second.corner === 0,
-        `the second sidebar sits on the page, not on the frame: the page's colour lies under its column, with no fill of its own and no corner between it and the work (${second.under} under it, page ${second.page}, frame ${second.frame}, a ${second.corner}px corner)`,
-      );
+      expect(near(width - tracker.right, gap), `Now ends one pane gap from the window's right edge (${width - tracker.right} of ${gap})`);
+      expect(!!composer && tracker.left >= composer.right + 8, "Now clears the conversation");
+      const second = await page.evaluate((sel) => {
+        const now = document.querySelector(sel);
+        const main = document.querySelector(".panes > .pane:not(:has(> .page.is-now))");
+        return { onPage: !!now?.closest(".content"), fill: now ? getComputedStyle(now).backgroundColor : "", page: main ? getComputedStyle(main).backgroundColor : "" };
+      }, NOW_PANE);
+      expect(second.onPage && second.fill === second.page, `Now sits on the page, not on the frame, in the page's colour (${second.fill}, page ${second.page})`);
     }
     const mine = await page.evaluate(() => {
       const bubble = document.querySelector(".msg.is-mine .msg-text")?.getBoundingClientRect();
@@ -263,7 +264,10 @@ try {
       const main = document.querySelector(".main")?.getBoundingClientRect();
       return box && main && side ? { on: !!document.querySelector(".chan.is-peek"), left: box.left, right: box.right, shown: getComputedStyle(side).visibility === "visible", main: main.left } : null;
     });
-    expect(!!peek && peek.on && peek.shown && near(peek.left, 0) && near(peek.main, 0), `touching the left edge slides the hidden sidebar in over the conversation (${JSON.stringify(peek)})`);
+    expect(
+      !!peek && peek.on && peek.shown && near(peek.left, 0) && near(peek.main, await gapOf(page)),
+      `touching the left edge slides the hidden sidebar in over the conversation (${JSON.stringify(peek)})`,
+    );
     const sheet = await peekSheet(page);
     expect(
       !!sheet && sheet.top >= sheet.tabs && sheet.side >= sheet.tabs,
@@ -281,7 +285,7 @@ try {
     });
     expect(!clash, "with the sidebar hidden, nothing sits on the composer's controls");
     expect(
-      !!chatHidden && !!chatBefore && near(chatHidden.left, 0) && near(chatHidden.right, chatBefore.right),
+      !!chatHidden && !!chatBefore && near(chatHidden.left, await gapOf(page)) && near(chatHidden.right, chatBefore.right),
       `hiding the sidebar gives its column to the conversation (${chatBefore?.left} → ${chatHidden?.left})`,
     );
     await page.click(".top-drawer");
@@ -316,42 +320,47 @@ try {
     await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(400);
-    const slot = await boxOf(page, ".track");
-    await page.click(".track-row");
-    await page.waitForSelector("aside.panel");
+    const slot = await boxOf(page, NOW_PANE);
+    await page.locator(NOW_ROW).first().click();
+    await page.waitForSelector(TASK_PANE);
     await page.waitForTimeout(900);
-    const panel = await boxOf(page, "aside.panel");
+    const panel = await boxOf(page, TASK_PANE);
     expect(
       !!slot && !!panel && near(slot.left, panel.left) && near(slot.top, panel.top) && near(slot.right, panel.right) && near(slot.bottom, panel.bottom),
       "a task opens in the very area the tracker was in",
     );
     const opened = moved(all, await placesOf(page));
     expect(opened.length === 0, `opening it moves nothing you click, the composer included${opened.length ? `: ${opened.join("; ")}` : ""}`);
-    await page.click("aside.panel .panel-head .icon-btn:last-child");
+    await page.click(`${TASK_PANE} .icon-btn[aria-label="Close"]`);
     await page.waitForTimeout(900);
-    expect(!!(await page.$(".track")), "closing it brings the tracker back");
+    expect(!!(await page.$(NOW_PANE)), "closing it brings Now back");
     expect(errors.length === 0, `no page errors${errors.length ? `: ${errors.join(" | ")}` : ""}`);
     await page.close();
   }
   {
     console.log("\na panel dragged wider than its column");
     const page = await browser.newPage({ viewport: { width: 1710, height: 1074 } });
-    await page.addInitScript(() => {
-      try {
-        localStorage.setItem("channels.panel.width", "490");
-      } catch {
-        // No storage in this browser: the default width is checked by the runs above.
-      }
-    });
     await open(page, "channel");
-    await page.click(".track-row");
-    await page.waitForSelector("aside.panel");
+    const gap = await gapOf(page);
+    const dock = await boxOf(page, NOW_PANE);
+    const grip = await page.locator(".pane-gap.is-dock").boundingBox();
+    if (dock && grip) {
+      const [gx, gy] = [grip.x + grip.width / 2, grip.y + grip.height / 2];
+      await page.mouse.move(gx, gy);
+      await page.mouse.down();
+      await page.mouse.move(gx - (490 - (dock.right - dock.left)), gy, { steps: 8 });
+      await page.mouse.up();
+    }
+    await page.waitForTimeout(400);
+    await open(page, "channel");
+    await page.locator(NOW_ROW).first().click();
+    await page.waitForSelector(TASK_PANE);
     await page.waitForTimeout(900);
-    const panel = await boxOf(page, "aside.panel");
+    const panel = await boxOf(page, TASK_PANE);
     const chat = await boxOf(page, ".main");
     const composer = await boxOf(page, ".main .composer");
-    expect(!!panel && near(panel.right - panel.left, 490) && near(1710 - panel.right, 0), `the panel keeps the width it was dragged to (${panel ? panel.right - panel.left : "?"})`);
-    expect(!!panel && !!chat && !!composer && near(chat.right, panel.left) && composer.right <= panel.left, "the conversation and its composer end where the panel starts");
+    expect(!!panel && near(panel.right - panel.left, 490, 2) && near(1710 - panel.right, gap), `the panel keeps the width it was dragged to (${panel ? panel.right - panel.left : "?"})`);
+    expect(!!panel && !!chat && !!composer && near(chat.right + gap, panel.left) && composer.right <= panel.left, "the conversation and its composer end where the panel starts");
     await page.close();
   }
   {
@@ -396,10 +405,10 @@ try {
     }
     const sideWide = await sideWidth();
     const composerWide = await boxOf(page, ".main .composer");
-    const trackWide = await boxOf(page, ".track");
+    const trackWide = await boxOf(page, NOW_PANE);
     expect(!!gripBox && sideWide === sideBefore + 64, `dragging the sidebar's edge 61px widens it by 64, on the grid (${sideBefore} → ${sideWide})`);
     expect(!!composerWide && near(composerWide.x, width / 2), `the composer stays on the window's centre with a wider sidebar (${composerWide?.x.toFixed(1)} of ${width / 2})`);
-    expect(!trackWide || near(trackWide.right - trackWide.left, sideWide), "and the second sidebar takes the same width");
+    expect(!!trackWide && near(width - trackWide.left, sideWide), `and Now takes the same width on the right (${trackWide ? width - trackWide.left : "?"} of ${sideWide})`);
     await grip.focus();
     const under = [await covered()];
     await page.keyboard.press("Home");
@@ -423,103 +432,6 @@ try {
     );
     await page.close();
   }
-  for (const [width, height] of SIZES) {
-    console.log(`\nthe top bar layout, ${width}×${height}`);
-    const page = await browser.newPage({ viewport: { width, height } });
-    await open(page, "channel-top");
-    const strip = await boxOf(page, ".top");
-    const toggle = await boxOf(page, ".top-drawer");
-    const search = await boxOf(page, ".top-tools > .icon-btn:last-child");
-    const home = await boxOf(page, ".tile.is-home");
-    const tab = await boxOf(page, ".tile[data-code]");
-    const add = await boxOf(page, ".tile.is-add");
-    const bar = await boxOf(page, ".views-bar ul");
-    const icon = await boxOf(page, ".views-bar .side-icon");
-    const main = await boxOf(page, ".main");
-    const side = await boxOf(page, ".side");
-    const title = await boxOf(page, ".top-here");
-    const named = (): Promise<boolean[]> =>
-      page.evaluate(() => [...document.querySelectorAll(".tile[data-code] .tile-name")].map((name) => name.clientWidth > 0 && name.scrollWidth <= name.clientWidth));
-    const names = await named();
-    const rows = await page.evaluate(() => [...document.querySelectorAll(".views-bar .side-row")].map((row) => Math.round(row.getBoundingClientRect().top)));
-    expect(
-      !!strip && !!home && !!tab && !!add && home.bottom <= strip.bottom && near(home.y, tab.y) && add.top >= strip.top && add.bottom <= strip.bottom,
-      `the channels are one line of tabs in the top strip (${home?.y}, ${tab?.y}, + from ${add?.top} to ${add?.bottom} of ${strip?.bottom})`,
-    );
-    expect(!!toggle && !!home && home.left >= toggle.right, `the tabs start after the sidebar button (${home?.left} after ${toggle?.right})`);
-    expect(!!search && !!add && add.right <= search.left && near(search.right, width - 8), `and end before Search, at the row's far end (${add?.right} before ${search?.left})`);
-    await nothingClashes(page, "in Top bar");
-    expect(names.length > 0 && names.every(Boolean), `every tab shows its channel's whole name (${names.filter(Boolean).length} of ${names.length})`);
-    expect(rows.length >= 3 && new Set(rows).size === 1, `the views are one row (${rows.length} in ${new Set(rows).size} row)`);
-    expect(!!bar && !!strip && bar.top >= strip.bottom, `on their own line, under the tabs (${bar?.top} of ${strip?.bottom})`);
-    expect(!!icon && !!side && near(icon.left, side.right + 40), `starting on the work's gutter line (${icon?.left} after ${side?.right})`);
-    expect(!!bar && !!main && near(main.top, bar.bottom + 8), `the work starts right under them (${main?.top} after ${bar?.bottom})`);
-    expect(!!side && !!strip && near(side.top, strip.bottom), `the sidebar starts right under the tabs (${side?.top} of ${strip?.bottom})`);
-    expect((await page.locator(".side .side-views .side-row").count()) === 0 && (await page.locator(".side .side-chan").count()) === 1, "the sidebar keeps the channel's name and loses the view rows");
-    expect(title === null, "the strip has no title");
-    await page.locator(".top-tools .icon-btn").last().click();
-    await page.waitForTimeout(500);
-    const find = await boxOf(page, ".top-find");
-    const tabs = await boxOf(page, ".rail");
-    expect(!!find && !!tabs && tabs.right <= find.left && near(find.right, width - 8), `the search field opens at the far end and the tabs make room for it (${tabs?.right} before ${find?.left})`);
-    await nothingClashes(page, "while searching");
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(500);
-    await page.locator(".views-bar .side-row", { hasText: "Specs" }).click();
-    await page.waitForTimeout(300);
-    expect((await page.locator('.views-bar .side-row[aria-pressed="true"]').innerText()).includes("Specs"), "a view opens from its row and shows as chosen");
-    const edge = await boxOf(page, ".side-grip");
-    if (edge) {
-      await page.mouse.move(edge.x, edge.y);
-      await page.mouse.down();
-      await page.mouse.move(edge.x + 61, edge.y, { steps: 6 });
-      await page.mouse.up();
-    }
-    const sideAfter = await boxOf(page, ".side");
-    const homeAfter = await boxOf(page, ".tile.is-home");
-    expect(!!edge && !!side && !!sideAfter && sideAfter.right === side.right + 64, `the sidebar's edge drags (${side?.right} → ${sideAfter?.right})`);
-    expect(!!home && !!homeAfter && homeAfter.left === home.left + 64, `and the tabs start at the page's edge still (${home?.left} → ${homeAfter?.left})`);
-    await page.close();
-    const bare = await browser.newPage({ viewport: { width, height } });
-    await bare.addInitScript(() => localStorage.setItem("mc.sidebar-hidden", "1"));
-    await open(bare, "channel-top");
-    const taken = (): Promise<boolean[]> =>
-      bare.evaluate(() =>
-        [...document.querySelectorAll(".rail .tile")].map((tile) => {
-          const r = tile.getBoundingClientRect();
-          return tile.contains(document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2));
-        }),
-      );
-    const hidden = await taken();
-    const work = await boxOf(bare, ".main");
-    const homeBare = await boxOf(bare, ".tile.is-home");
-    const iconBare = await boxOf(bare, ".views-bar .side-icon");
-    expect(hidden.length > 0 && hidden.every(Boolean), `with the sidebar hidden, the tabs stay and take the click (${hidden.filter(Boolean).length} of ${hidden.length})`);
-    expect(!!home && !!homeBare && homeBare.left === home.left, `where they were (${homeBare?.left})`);
-    expect(!!work && near(work.left, 0) && !!iconBare && near(iconBare.left, 40), `the work and the views take the sidebar's place (${work?.left} and ${iconBare?.left})`);
-    await bare.mouse.move(400, 500);
-    await bare.mouse.move(3, 500, { steps: 6 });
-    await bare.waitForTimeout(700);
-    const peeked = await taken();
-    expect(peeked.length > 0 && peeked.every(Boolean), `and the tabs take the click under the peek too (${peeked.filter(Boolean).length} of ${peeked.length})`);
-    const sheetBare = await peekSheet(bare);
-    expect(
-      !!sheetBare && sheetBare.top >= sheetBare.tabs && sheetBare.side >= sheetBare.tabs,
-      `the peeked sidebar starts under the tab row here too (from ${sheetBare?.top}, the tabs end at ${sheetBare?.tabs}) (T339)`,
-    );
-    await bare.close();
-  }
-  for (const [width, height] of [[900, 700]] as const) {
-    console.log(`\nthe top bar layout, ${width}×${height}`);
-    const page = await browser.newPage({ viewport: { width, height } });
-    await open(page, "channel-top");
-    const over = await page.evaluate(() => (document.scrollingElement?.scrollWidth ?? 0) - innerWidth);
-    const strip = await boxOf(page, ".top");
-    const tabs = await page.evaluate(() => [...document.querySelectorAll(".rail .tile")].map((tile) => Math.round(tile.getBoundingClientRect().bottom)));
-    expect(over <= 0, `nothing scrolls sideways (${over}px over)`);
-    expect(!!strip && tabs.length > 0 && tabs.every((bottom) => bottom <= strip.bottom), "the tabs are still one line");
-    await page.close();
-  }
   for (const mac of [false, true]) {
     for (const shot of ["settings-devices", "home"]) {
       console.log(`\n${shot}${mac ? ", on the Mac" : ""}`);
@@ -539,8 +451,90 @@ try {
       const open = await page.evaluate(() => [...document.querySelectorAll(".rail .tile.is-on")].map((tile) => (tile.classList.contains("is-home") ? "Home" : "a channel")));
       if (shot === "home") expect(open.length === 1 && open[0] === "Home", `Home is the one open tab (${open.join(", ") || "none"})`);
       else expect(open.length === 0, `Settings is no channel, so no tab is open (${open.join(", ") || "none"})`);
-      if (shot === "settings-devices") expect(!!back && !!home && home.left >= back.right, `the tabs start after the Settings title (${home?.left} after ${back?.right})`);
+      const side = await boxOf(page, ".side");
+      if (shot === "settings-devices")
+        expect(
+          !!back && !!side && back.left >= side.left && back.right <= side.right && back.top >= 48,
+          `the Settings title heads the sidebar, under the top row (from ${back?.left} to ${back?.right}, ${back?.top} down)`,
+        );
       await nothingClashes(page, "here");
+      await page.close();
+    }
+  }
+  for (const [width, height] of [
+    [1440, 900],
+    [1000, 760],
+    [700, 760],
+  ] as const) {
+    for (const hidden of width > 760 ? [false, true] : [false]) {
+      console.log(`\nthe two layers, ${width}×${height}${hidden ? ", sidebar hidden" : ""}`);
+      const page = await browser.newPage({ viewport: { width, height } });
+      if (hidden) await page.addInitScript(() => localStorage.setItem("mc.sidebar-hidden", "1"));
+      const seen: { shot: string; area: string; top: string }[] = [];
+      for (const shot of LAYER_SHOTS) {
+        await open(page, shot);
+        const layers = await page.evaluate(() => {
+          const round = (r: DOMRect) => [r.left, r.top, r.right, r.bottom].map((n) => Math.round(n)).join(" ");
+          const areas = [...document.querySelectorAll(".content")];
+          const area = areas[0]?.getBoundingClientRect();
+          const strip = document.querySelector(".top")?.getBoundingClientRect();
+          const side = document.querySelector(".side");
+          const stray = [...document.querySelectorAll(".main, .views-bar, .track, .panel, .set-main, .start-area, .crash")]
+            .filter((el) => !el.closest(".content"))
+            .map((el) => el.className.toString().split(" ")[0]);
+          const shell = [...document.querySelectorAll(".top, .rail, .side")].filter((el) => el.closest(".content")).map((el) => el.className.toString().split(" ")[0]);
+          const sheet = (el: Element): boolean => {
+            const panel = el.closest(".panel");
+            return !!panel && getComputedStyle(panel).position === "fixed";
+          };
+          const bar = strip ? Array.from({ length: 12 }, (_, n) => [((n + 0.5) * innerWidth) / 12, strip.bottom / 2] as const) : [];
+          const column = area && area.left > 1 ? Array.from({ length: 8 }, (_, n) => [area.left / 2, area.top + ((n + 0.5) * (innerHeight - area.top)) / 8] as const) : [];
+          const spill = [...bar, ...column].flatMap(([x, y]) => {
+            const el = document.elementFromPoint(x, y);
+            return el?.closest(".content") && !sheet(el) ? [`${el.className.toString().split(" ")[0] || el.tagName.toLowerCase()} at ${Math.round(x)},${Math.round(y)}`] : [];
+          });
+          const painted = [...document.querySelectorAll(".top, .rail")].filter((el) => getComputedStyle(el).backgroundColor !== "rgba(0, 0, 0, 0)").map((el) => el.className.toString().split(" ")[0]);
+          return {
+            areas: areas.length,
+            area: area ? round(area) : "none",
+            areaLeft: area?.left ?? -1,
+            areaTop: area?.top ?? -1,
+            top: strip ? round(strip) : "none",
+            stripBottom: strip?.bottom ?? -1,
+            sideRight: side && getComputedStyle(side).display !== "none" && getComputedStyle(side).position !== "fixed" ? side.getBoundingClientRect().right : null,
+            hasSide: !!side,
+            toggle: !!document.querySelector(".top .top-drawer, .top .set-back"),
+            tools: document.querySelectorAll(".top .top-tools .icon-btn").length,
+            stray,
+            shell,
+            spill,
+            painted,
+          };
+        });
+        seen.push({ shot, area: layers.area, top: layers.top });
+        expect(
+          layers.areas === 1 && layers.stray.length === 0,
+          `${shot}: one content area holds everything on the page colour${layers.stray.length ? ` (outside it: ${layers.stray.join(", ")})` : ""}`,
+        );
+        expect(
+          layers.hasSide && layers.toggle && layers.tools > 0 && layers.shell.length === 0,
+          `${shot}: the shell has its top bar, its buttons and its sidebar, none of them inside the content area`,
+        );
+        expect(
+          layers.spill.length === 0 && layers.painted.length === 0,
+          `${shot}: nothing of the screen reaches into the shell${layers.spill.length ? ` (${layers.spill.join(", ")})` : ""}${layers.painted.length ? ` (painted: ${layers.painted.join(", ")})` : ""}`,
+        );
+        if (width > 760) {
+          expect(near(layers.areaTop, layers.stripBottom), `${shot}: the content area starts under the top bar (${layers.areaTop} of ${layers.stripBottom})`);
+          expect(
+            hidden ? near(layers.areaLeft, 0) : layers.sideRight !== null && near(layers.areaLeft, layers.sideRight),
+            `${shot}: and ${hidden ? "at the window's edge" : "where the sidebar ends"} (${layers.areaLeft})`,
+          );
+        }
+      }
+      const first = seen[0]!;
+      const off = seen.filter((s) => s.area !== first.area || s.top !== first.top).map((s) => `${s.shot} ${s.area}`);
+      if (width > 760) expect(off.length === 0, `the content area and the top bar are the same box on every screen (${first.area})${off.length ? `: ${off.join("; ")}` : ""}`);
       await page.close();
     }
   }
@@ -548,7 +542,6 @@ try {
     ["tabs-3", 1710, "roomy"],
     ["tabs-8", 1710, "roomy"],
     ["tabs-8", 1560, "roomy"],
-    ["tabs-8-top", 1560, "roomy"],
     ["tabs-8", 1280, "tight"],
     ["tabs-8", 900, "icons"],
   ] as const) {
@@ -652,11 +645,12 @@ try {
     console.log(`\n${width}×${height}`);
     const page = await browser.newPage({ viewport: { width, height } });
     await open(page, "channel");
-    const tracker = await boxOf(page, ".track");
+    const tracker = await boxOf(page, NOW_PANE);
     const composer = await boxOf(page, ".main .composer");
     const main = await boxOf(page, ".main");
-    expect(!tracker || tracker.right - tracker.left === 0, "a window too narrow for three columns has no task tracker");
-    expect(!!main && near(main.right, width), "the conversation runs to the window's right edge");
+    const edge = (await page.$(".panes")) ? await gapOf(page) : 0;
+    expect(!tracker || tracker.right - tracker.left === 0, "a window too narrow for three columns has no Now column");
+    expect(!!main && near(main.right, width - edge), `the conversation runs to the window's right edge (${main?.right} of ${width - edge})`);
     expect(!!composer && !!main && near(composer.left - main.left, main.right - composer.right, 1), "the composer is centred in the conversation");
     await page.close();
   }

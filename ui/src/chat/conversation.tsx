@@ -305,7 +305,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
   const following = end === list.length
   const latest = useRef(false)
-  const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift } = useStick(following, !!doc)
+  const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift, prepended } = useStick(following, !!doc)
   const shownFrom = list[start]?.seq
   const shownTo = list[end - 1]?.seq
   const edges = useRef({ from: shownFrom, to: shownTo })
@@ -313,6 +313,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   useLayoutEffect(() => {
     const was = edges.current
     edges.current = { from: shownFrom, to: shownTo }
+    if (shownFrom !== undefined && was.from !== undefined && shownFrom < was.from) prepended()
     const kept = dropped.current
     if (kept) {
       dropped.current = null
@@ -329,7 +330,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     dropped.current = { row: cut.row, top: cut.row.getBoundingClientRect().top }
     lift(cut.tall)
     setSpan(spanOf(list, cut.from, end))
-  }, [shownFrom, shownTo, following, start, end, list, settle, lift, scroller, content])
+  }, [shownFrom, shownTo, following, start, end, list, settle, lift, prepended, scroller, content])
   const code = channel.code
   const holdEarlier = actions.holdEarlier
   const earlierPage = actions.earlier

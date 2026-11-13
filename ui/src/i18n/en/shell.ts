@@ -1,9 +1,9 @@
 import type { Msg } from "~/i18n/en"
 
 export default {
-  "shell.channel.drawer.label": "Rooms and people ({keys})",
-  "shell.channel.drawer.label.news": "Rooms and people, new messages ({keys})",
-  "shell.channel.drawer.title": "Show or hide rooms and people ({keys})",
+  "shell.channel.drawer.label": "Sidebar ({keys})",
+  "shell.channel.drawer.label.news": "Sidebar, new messages ({keys})",
+  "shell.channel.drawer.title": "Show or hide the sidebar ({keys})",
   "shell.channel.menu.label": "{name}: channel menu",
   "shell.channel.views": "Views",
   "shell.channel.specs.need": { one: "{count} needs you", other: "{count} need you" },
@@ -50,6 +50,13 @@ export default {
   "shell.sidebar.needs.person": "needs a person",
   "shell.rail.channels": "Channels",
   "shell.rail.close.window": "Close window",
+  "panes.now": "Now",
+  "panes.home": "Home",
+  "panes.activity": "Activity",
+  "panes.blank.name": "Empty",
+  "panes.page.choose": "Choose",
+  "panes.thread": "Thread",
+  "panes.page.steps": "Steps",
   "shell.rail.close": "Close",
   "shell.rail.minimize.window": "Minimize window",
   "shell.rail.minimize": "Minimize",

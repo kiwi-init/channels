@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react"
 
 import { useHug } from "~/chat/hug"
 import { linked, useMentionParser } from "~/chat/linked"
+import type { Draw } from "~/chat/markdown"
 import { parseKey, parsedFor } from "~/chat/parsed"
 import { useAct } from "~/nav"
 import { type Words, wordsPlain, wordsRaw } from "~/words"
@@ -16,6 +17,8 @@ export function Body({
   tasks,
   onImage,
   onMessage,
+  onPage,
+  draw,
   hug = false,
   at,
 }: {
@@ -25,6 +28,8 @@ export function Body({
   tasks: ReadonlySet<number>
   onImage: (url: string, alt: string) => void
   onMessage: (seq: number) => void
+  onPage?: (url: string) => void
+  draw?: Draw
   hug?: boolean
   at?: number
 }) {
@@ -45,9 +50,9 @@ export function Body({
   const onTask = useCallback((task: number) => go({ to: "task", task }), [go])
   return (
     <div className="msg-text" ref={box}>
-      {!shown && !parsedFor(parseKey(markdown, at)) && <p className="md-plain">{wordsPlain(text, names)}</p>}
+      {!draw && !shown && !parsedFor(parseKey(markdown, at)) && <p className="md-plain">{wordsPlain(text, names)}</p>}
       <Suspense fallback={null}>
-        <Markdown markdown={markdown} at={at} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} />
+        <Markdown markdown={markdown} at={at} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} onPage={onPage} draw={draw} />
       </Suspense>
     </div>
   )

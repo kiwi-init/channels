@@ -43,6 +43,7 @@ export const DEMO_PREFS: Prefs = {
   textSize: 0,
   font: "system",
   reduceMotion: false,
+  reduceTransparency: false,
   muted: ["interlinked", "kiwi/releases"],
   darkTheme: "channels-dark",
   lightTheme: "channels-light",

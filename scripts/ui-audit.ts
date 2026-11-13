@@ -7,7 +7,6 @@ import { pageErrors } from "./page-errors.ts";
 
 const SHOTS = [
   "channel",
-  "channel-top",
   "dm",
   "thread-doc",
   "task",

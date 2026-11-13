@@ -14,8 +14,9 @@ Canonical sources: `ui/src/styles/tokens.css` (`:root`), `ui/src/theme/`
 
 Quiet and fast. A near-black canvas, Channels Dark (Channels Light in light), ink
 for what matters and greys for the rest, the system font for what people read and
-Paper Mono for the machine's words (times, ids, counts, code). No glass, no
-blur, no gradients for show. Colour means a state, never decoration.
+Paper Mono for the machine's words (times, ids, counts, code). The frame is
+glass where the desktop allows it; nothing else is. No gradients for show.
+Colour means a state, never decoration.
 
 ## 2. Theme architecture
 
@@ -206,16 +207,27 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     hidden auto`): strips wrap, long code and diff lines wrap, a diagram
     shrinks to fit. The one exception is the image annotator's zoomed
     picture.
-  - One frame, one page. The top bar and the sidebar are one surface,
-    the frame. The work is the page: the conversation or a view, Settings,
-    Home, and the second sidebar with whatever opens in it. On a wide
-    window the page reaches the window's right edge under that column,
-    whether or not the column has anything to show. The page rounds its
-    top-left corner (`r-ctl`), where it meets the frame, and keeps it
-    square against the window's edge (a hidden sidebar, Home).
-    Only the open tab joins the page, from above, in the page's colour
-    with 8px flares. Nothing in the sidebar cuts across the frame: its
-    open row is a pill on it.
+  - Two layers: one frame below, the page above. The tab row, the top bar
+    and the sidebar are one surface, the frame (glass, below). The work is
+    the page: panes laid on the frame as rounded cards (`r-card`) with
+    `--pane-gap` (6px) between them and around them, at the top, the
+    bottom and both sides. Only the open tab joins the page, from above, in
+    the page's colour with 8px flares. Nothing in the sidebar cuts across
+    the frame: its open row is a pill on it.
+  - The page is panes (`panes/`). A channel starts as the conversation
+    with Now docked on the right. ⌘D splits right, ⇧⌘D splits down, ⌘W
+    closes the focused pane (the window when one is left), and ⌥⌘ arrows
+    move the focus. A new pane is empty and says so ("Drag something
+    here", with a few picks). A sidebar row, a link, a channel tab or Home
+    dropped on a pane splits it or fills an empty one; a pane's grip moves
+    it. Dragging a gap resizes. Focus follows the pointer after 70ms, never
+    while a button is held; a composer with text keeps the typing. A pane too small to use
+    (under 216×160) folds to its name.
+  - Every view is a markdown page in one renderer (`panes/engine.tsx`):
+    Now, a task, a PR or an issue, Specs, Agents, GitHub, Needs you,
+    Activity, Home, Settings and channel settings. Its controls are
+    markdown conventions (`kiwi-do:` buttons, `check:` marks, a
+    `**Label** · value` list for properties). Only the chat feed is not.
   - Nothing you click moves. Hiding the sidebar or opening the right panel
     changes no control's position. Content may: a hidden sidebar gives its
     column to the work.
@@ -285,7 +297,10 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 - Surfaces are told apart by a step of fill (`bg` → `bg-2` → `bg-3`, counted
   from the surface they sit on, §2) and by hairlines (`line`), not by
   shadows. Cards on the page are `bg` with a `line` border.
-- No glass, no `backdrop-filter`, no blur anywhere, with one exception: the
+- Glass in two places only. The frame shows the window's frost: the Mac's
+  material, a compositor blur on Hyprland, and the wallpaper image on other
+  Linux desktops; the app sets `data-glass` to the kind, and without it
+  the frame stays solid `bg-3`. Labels on glass use `--ink-3-glass`. And the
   composer (§10) is frosted, so the thread scrolls under it. Nothing else
   takes a blur.
 - Sizes on `:root`: `--side-w 18rem` (the sidebar and the second sidebar),
@@ -308,7 +323,11 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   and the work slides with it (`main-fill`, `main-yield`); the grid itself
   never animates.
 - Motion moves `transform`, `translate`, `opacity` and `clip-path` only.
-  Nothing animates a width, a height, a position or a grid.
+  Nothing animates a width, a height, a position or a grid, except panes:
+  when the layout changes, a pane's box glides (`--pane-move` 0.34s), never
+  while a gap or the sidebar is being dragged. A new pane grows in from the
+  side it split from (`pane-in-*`, a clip) and a closed one fades where it
+  was (`pane-gone`).
 - Motion answers an action: something opens, arrives or moves because someone
   did something. It is felt, never watched: short, soft, and nothing plays
   twice for the same event. Two things loop: the working dots under the

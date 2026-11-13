@@ -7,7 +7,7 @@ type Stashes = Readonly<Record<string, readonly Stashed[]>>
 
 const KEY = "kiwi:stash"
 const KEEP = 20
-const SHOT = new URLSearchParams(location.search).get("shot")
+const SHOT = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("shot")
 export const STASH_SHOT = SHOT === "stash" || SHOT === "stash-open" ? SHOT : null
 
 const MIN = 60_000

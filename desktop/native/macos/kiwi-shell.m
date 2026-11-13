@@ -260,6 +260,16 @@ void kiwi_frost_force_for_test(int32_t frost) {
   });
 }
 
+void kiwi_frost_opaque_for_test(int32_t opaque) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSWindow *shown = frosted;
+    if (!shown) return;
+    WKWebView *web = (WKWebView *)findWebView(shown.contentView);
+    [web setValue:(opaque ? @YES : @NO) forKey:@"drawsBackground"];
+    noteLook(shown);
+  });
+}
+
 void kiwi_window_appearance(void *ptr, int32_t appearance) {
   NSWindow *window = (__bridge NSWindow *)ptr;
   if (!window) return;
