@@ -801,6 +801,12 @@ jobs:
           test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
           [ -n "$test" ] || { echo "no dev-linux test build under desktop/release-eb/build"; exit 1; }
           xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-native-click.ts "$test"
+      - name: PROBE real clicks under openbox (T8818)
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 5
+        run: |
+          test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
+          xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-native-click.ts "$test" --wm
       - name: Linux window controls sit at the top-right, act on the window under openbox, and their label follows the window manager
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 5

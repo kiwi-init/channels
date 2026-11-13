@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +11,17 @@ if (!process.argv[2] || !linux || !process.env.DISPLAY) {
   console.error("usage (on Linux under Xvfb): xvfb-run -a -s '-screen 0 1280x800x24' bun desktop/scripts/eb-native-click.ts <Channels built with CHANNELS_EB_TEST=1>");
   process.exit(2);
 }
+
+const sh0 = (args: string[]): string => {
+  const r = spawnSync(args[0]!, args.slice(1), { encoding: "utf8" });
+  return r.status === 0 ? r.stdout.trim() : "";
+};
+const withWm = process.argv.includes("--wm");
+if (withWm) {
+  spawn("openbox", [], { stdio: "ignore", detached: true });
+  await until("openbox managing the screen", 15_000, async () => (sh0(["xprop", "-root", "_NET_SUPPORTING_WM_CHECK"]).includes("window id") ? true : null));
+}
+console.log(`window manager: ${withWm ? "openbox" : "none"}`);
 
 const exe = appExecutable(process.argv[2]);
 const root = mkdtempSync(join(tmpdir(), "kiwi-native-click-"));
@@ -46,6 +57,23 @@ try {
     if (!win) throw new Error(problems.join("; "));
     console.log(`session: X11 under Xvfb (${process.env.DISPLAY})`);
     await firstChannel(d, 0);
+    await d.evaluate(() => {
+      const root = document.documentElement;
+      root.dataset.heard = "";
+      for (const type of ["pointerdown", "mousedown", "click"])
+        addEventListener(type, (e) => (root.dataset.heard += ` ${type}@${Math.round((e as MouseEvent).clientX)},${Math.round((e as MouseEvent).clientY)}`), true);
+    }, null);
+    console.log(`probe xwininfo:\n${sh(["xwininfo", "-id", win])}`);
+    console.log(`probe root children:\n${sh(["xwininfo", "-root", "-children"])}`);
+    console.log(`probe WM_STATE / _NET_WM_STATE: ${sh(["xprop", "-id", win, "WM_STATE", "_NET_WM_STATE", "_NET_WM_WINDOW_TYPE"])}`);
+    spawnSync("xdotool", ["mousemove", "--window", win, "640", "400"], { stdio: "ignore" });
+    Bun.sleepSync(200);
+    console.log(`probe pointer after mousemove: ${sh(["xdotool", "getmouselocation", "--shell"]).replace(/\n/g, " ")}`);
+    spawnSync("xdotool", ["click", "1"], { stdio: "ignore" });
+    Bun.sleepSync(600);
+    const heard = await d.evaluate(() => document.documentElement.dataset.heard ?? "", null);
+    console.log(`probe the page heard: ${heard.trim() || "nothing"}`);
+    if (!heard.includes("click@")) problems.push(`harness: a real mid-page click never reached the page (heard: ${heard.trim() || "nothing"})`);
     for (const layout of [
       { name: "wide (tabs)", width: 1280, height: 800 },
       { name: "narrow (sidebar)", width: 700, height: 800 },
