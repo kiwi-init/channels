@@ -21,9 +21,11 @@ export function worked(task: Task, name: string): void {
   if (!task.workedBy.includes(name)) task.workedBy.push(name);
 }
 
+export const reviewerTitle = (review: string | undefined): string => (review === "*" ? "someone who hasn't worked on it" : String(review));
+
 export function reviewWaysOut(id: number, review: string, round: number): string {
   const t = taskId(id);
-  return `${review === "*" ? "someone who hasn't worked on it" : review} answers kiwi task approve ${t} --round ${round}; the lead or a person can move the review (kiwi task review ${t} --review OTHER) or close the task (kiwi task close ${t} "why")`;
+  return `${reviewerTitle(review)} answers kiwi task approve ${t} --round ${round}; the lead or a person can move the review (kiwi task review ${t} --review OTHER) or close the task (kiwi task close ${t} "why")`;
 }
 
 export function openRound(task: Task): ReviewRound | undefined {
@@ -48,7 +50,7 @@ export function verdictRefusal(task: Task, verdict: Verdict, ev: { state?: strin
   if (task.state === "landing") return `${id} is already approved: it lands next`;
   if (ev.round === undefined) return (verdict === "approved" || ev.body) && task.rounds.length ? `a verdict on ${id} names the round it judges` : null;
   if (task.state === "done") return `${id} is already done`;
-  if (!mayFinish) return `only ${task.review === "*" ? "someone who hasn't worked on it" : task.review} gives ${id}'s verdict`;
+  if (!mayFinish) return `only ${reviewerTitle(task.review)} gives ${id}'s verdict`;
   if (!open) return `${id} has no review round open`;
   if (open.n !== ev.round) return `round ${ev.round} of ${id} isn't the open one: round ${open.n} is`;
   if (ev.at !== undefined && ev.at.trim() !== open.at) return `round ${open.n} of ${id} is ${open.at ? `at ${open.at}` : "at no commit"}, not at ${ev.at.trim()}`;

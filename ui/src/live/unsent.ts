@@ -3,7 +3,7 @@ import type { SendOptions } from "@kiwi/core/client.ts"
 import { t } from "~/i18n/i18n"
 import type { Pending } from "~/live/map"
 import { limitWords, refusal } from "~/live/refused"
-import type { BlockFiles, SendExtras, Upload, Where } from "~/model"
+import { isUpload, type BlockFiles, type SendExtras, type Where } from "~/model"
 
 type Shelf = Pick<Storage, "getItem" | "setItem">
 
@@ -23,9 +23,6 @@ function storage(): Shelf | null {
     return null
   }
 }
-
-const isUpload = (v: unknown): v is Upload =>
-  typeof v === "object" && v !== null && "name" in v && "mime" in v && "data" in v && typeof v.name === "string" && typeof v.mime === "string" && typeof v.data === "string"
 
 const isWhere = (v: unknown): v is Where => {
   if (typeof v !== "object" || v === null || !("kind" in v)) return false

@@ -9,6 +9,7 @@ import { seatsFor } from "../hooks.ts";
 import { heardFrom } from "../hooks/delivered.ts";
 import { heldAway, heldText, seatHeldAway } from "../hold.ts";
 import { BadName } from "@kiwi/core/refusals.ts";
+import { NAME_RE } from "@kiwi/core/membership.ts";
 import { args, opt } from "./args.ts";
 
 export class Quit extends Data.TaggedError("Quit")<{ readonly message: string; readonly code: number }> {}
@@ -19,7 +20,7 @@ export function out(line: string): void {
   process.stdout.write(line + "\n");
 }
 
-export const NAME_RE = /^[\p{L}\p{N}_.-]{1,32}$/u;
+export { NAME_RE };
 
 export function relayUrl(): string {
   return (opt.relay ?? process.env.KIWI_RELAY ?? DEFAULT_RELAY).replace(/\/+$/, "");

@@ -1,3 +1,4 @@
+import { githubClient, text, list } from "./github.ts";
 import Anthropic from "@anthropic-ai/sdk";
 import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
@@ -86,16 +87,8 @@ function isRecord(x: unknown): x is Record<string, unknown> {
   return x !== null && typeof x === "object" && !Array.isArray(x);
 }
 
-function text(x: unknown): string {
-  return typeof x === "string" ? x : "";
-}
-
 function num(x: unknown): number {
   return typeof x === "number" ? x : 0;
-}
-
-function list(x: unknown): unknown[] {
-  return Array.isArray(x) ? x : [];
 }
 
 function bucket<K, V>(map: Map<K, Set<V>>, key: K): Set<V> {
@@ -572,22 +565,12 @@ export function measure(base: string, head: string): { facts: Facts; diff: strin
   return { facts: f, diff };
 }
 
-function github(repo: string, token: string, dryRun: boolean): Api {
-  const root = `${process.env.GITHUB_API_URL ?? "https://api.github.com"}/repos/${repo}`;
-  const headers: Record<string, string> = { accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28", "content-type": "application/json" };
-  if (token) headers.authorization = `Bearer ${token}`;
-  return {
-    rest: async (method, path, body) => {
-      if (dryRun && method !== "GET") {
-        console.log(`would ${method} ${path}`);
-        return null;
-      }
-      const res = await fetch(`${root}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-      if (res.status === 404 && (method === "GET" || method === "DELETE")) return null;
-      if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${await res.text()}`);
-      return res.status === 204 ? null : res.json();
-    },
-  };
+export function github(repo: string, token: string, dryRun: boolean): Api {
+  return githubClient(repo, {
+    credentials: { kind: "single", token },
+    dryRun,
+    policy: { contentType: "always", dryRunBody: false, notFound: "null", errorPath: "route", graphql: "skip", getBody: "send" },
+  });
 }
 
 if (import.meta.main) {

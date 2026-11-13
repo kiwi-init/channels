@@ -9,7 +9,7 @@ const VIEW_H = 700
 const LINE = 26.4
 const DOC_PAD = 40
 
-type Listener = (e: { deltaY: number }) => void
+type Listener = (e: { deltaY: number; type: string }) => void
 
 let clock = Date.parse("2026-01-01T00:00:00Z")
 
@@ -158,11 +158,12 @@ class Feed {
   }
 
   fireDoc(kind: string): void {
-    for (const f of this.docListeners.get(kind) ?? []) f({ deltaY: 0 })
+    for (const f of this.docListeners.get(kind) ?? []) f({ deltaY: 0, type: kind })
   }
 
   fire(kind: string, deltaY = 0): void {
-    for (const f of this.listeners.get(kind) ?? []) f({ deltaY })
+    for (const f of this.listeners.get(kind) ?? []) f({ deltaY, type: kind })
+    this.fireDoc(kind)
   }
 
   layout(): boolean {
@@ -553,6 +554,59 @@ describe("useStick in a thread doc", () => {
       docLine(f)
       expect(f.top).toBe(f.max)
     }
+    await act(async () => root.unmount())
+  })
+
+  test("at the bottom, rows that shrink twice and grow back, as a late font does, keep you at the bottom (T2635)", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    for (const r of f.rows) r.h -= 2.4
+    stick.settle()
+    expect(f.top).toBe(f.max)
+    for (const r of f.rows) r.h -= 0.6
+    f.scrollTo(f.top)
+    stick.settle()
+    expect(f.top).toBe(f.max)
+    for (const r of f.rows) r.h += 0.4
+    stick.remember()
+    expect(f.top).toBe(f.max)
+    docLine(f)
+    expect(f.top).toBe(f.max)
+    await act(async () => root.unmount())
+  })
+
+  test("at the bottom, rows that shrink a lot as the conversation opens, then grow a little, keep you at the bottom (T2635)", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    stick.settle()
+    for (const r of f.rows) r.h -= 17
+    f.layout()
+    for (const r of f.rows) r.h += 1.7
+    stick.remember()
+    expect(f.top).toBe(f.max)
+    docLine(f)
+    expect(f.top).toBe(f.max)
+    await act(async () => root.unmount())
+  })
+
+  test("a scrollbar held longer than a wheel lasts still leaves follow when it drags up from the bottom (T2635)", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    f.fireDoc("pointerdown")
+    later(2_000)
+    f.scrollTo(f.top - 20)
+    const reading = f.top
+    docLine(f)
+    expect(f.top).toBe(reading)
+    stick.remember()
+    for (let i = 0; i < 3; i++) docLine(f)
+    expect(f.top).toBe(reading)
     await act(async () => root.unmount())
   })
 
