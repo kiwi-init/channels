@@ -192,7 +192,10 @@ const poke = () =>
 const drain = async (d: Driver): Promise<Record<string, unknown>[]> => {
   const all: Record<string, unknown>[] = [];
   for (;;) {
-    const part = (await d.evaluate(() => (Reflect.get(window, "flickerLog") as unknown[]).splice(0, 300), null)) as Record<string, unknown>[];
+    const part = (await d.evaluate(() => {
+      const log: unknown = Reflect.get(window, "flickerLog");
+      return Array.isArray(log) ? log.splice(0, 300) : [];
+    }, null)) as Record<string, unknown>[];
     all.push(...part);
     if (part.length < 300) return all;
   }
@@ -238,7 +241,9 @@ try {
     for (const text of FIXTURE) await until(`fixture message sent`, 60_000, () => d.evaluate(sendMessage, { text, shows: text.split("\n")[0]! }, 2_000).then((ok) => (ok ? true : null)));
     step("fixture sent");
     await d.evaluate(() => document.fonts.ready.then(() => true), null);
-    await d.evaluate(HOOKS, null);
+    const hooks = process.env["FLICKER_HOOKS"] !== "off";
+    if (hooks) await d.evaluate(HOOKS, null);
+    step(`hooks ${hooks ? "on" : "off"}`);
     const env0 = await d.evaluate(() => ({ dpr: devicePixelRatio, inner: `${innerWidth}x${innerHeight}`, ua: navigator.userAgent }), null);
     console.log(`session ${session}; page ${JSON.stringify(env0)}`);
     for (const scroll of ["bottom", "up"]) {
@@ -331,6 +336,7 @@ try {
             window: control ? "control" : w,
             region,
             recordStart: started,
+            hooks,
             recorderExit: code,
             stopAt,
             rafSamples: samples.filter((e) => e["kind"] === "frame").length,

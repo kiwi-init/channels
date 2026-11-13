@@ -815,7 +815,7 @@ jobs:
           test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
           out="$RUNNER_TEMP/flicker"
           mkdir -p "$out"
-          export FLICKER_WINDOWS=3 FLICKER_SECONDS=30 FLICKER_DEADLINE=1500 FLICKER_SWAY_TIMEOUT=1600
+          export FLICKER_WINDOWS=3 FLICKER_SECONDS=30 FLICKER_DEADLINE=1500 FLICKER_SWAY_TIMEOUT=1600 FLICKER_HOOKS=off
           git rev-parse HEAD | tee "$out/sha.txt"
           xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-flicker-probe.ts "$test" "$out/b1-x11-scale1" x11 > "$out/b1-scale1.log" 2>&1 || echo "b1 scale 1 exited $?"
           tail -n 30 "$out/b1-scale1.log"
