@@ -193,6 +193,12 @@ const motions = () =>
     ["reduced", t("settings.sections.motion.reduced")],
   ] as const
 
+const transparencies = () =>
+  [
+    ["full", t("settings.sections.transparency.full")],
+    ["reduced", t("settings.sections.transparency.reduced")],
+  ] as const
+
 function LanguageSelect() {
   const { pref } = useLanguage()
   return (
@@ -234,6 +240,10 @@ export function AppearancePage() {
       row({ label: t("settings.sections.font"), nested: [choices(a, fonts(), prefs.font, (font) => set({ font }))] }),
       row({ label: t("settings.sections.layout"), hint: say("settings.sections.layout.hint"), nested: [choices(a, layouts(), layout, setLayout)] }),
       row({ label: t("settings.sections.motion"), nested: [choices(a, motions(), prefs.reduceMotion ? "reduced" : "full", (m) => set({ reduceMotion: m === "reduced" }))] }),
+      row({
+        label: t("settings.sections.transparency"),
+        nested: [choices(a, transparencies(), prefs.reduceTransparency ? "reduced" : "full", (m) => set({ reduceTransparency: m === "reduced" }))],
+      }),
       row({ label: t("settings.language"), nested: [field("language")] }),
     ].join("\n"),
     field("themes"),

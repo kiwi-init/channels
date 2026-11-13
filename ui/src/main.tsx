@@ -23,6 +23,7 @@ import { hasBridge } from "@kiwi/secrets/relay.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import { noteSignInGone } from "@kiwi/channel/session.ts"
 import { applyStoredAppearance, stepTextSize } from "@kiwi/app/theme.ts"
+import { initAccessibility } from "@kiwi/app/accessibility.ts"
 import { rememberChannel } from "@kiwi/app/last-channel.ts"
 import { uiBooted, watchUiBoot } from "@kiwi/app/ui-boot.ts"
 import { nudgeOnWake } from "@kiwi/app/wake.ts"
@@ -69,6 +70,7 @@ if (hasBridge()) void import("~/kit/desktop").then((m) => m.bootDesktop())
 if (!demo) {
   applyStoredAppearance()
   bootSideWidth()
+  initAccessibility()
   bridge()?.onTextStep(stepTextSize)
   const menus = bridge()
   if (menus && typeof menus.onCommand === "function") menus.onCommand((c) => runCommand(c))

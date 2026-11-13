@@ -657,36 +657,36 @@
   translate: 0 0;
 }
 
-:root[data-glass] body {
+:root[data-glass]:not(.reduce-transparency) body {
   background: none;
 }
 
-:root[data-glass="image"] body {
+:root[data-glass="image"]:not(.reduce-transparency) body {
   background: var(--backdrop, var(--frame)) center / cover no-repeat;
 }
 
-:root[data-glass] .app {
+:root[data-glass]:not(.reduce-transparency) .app {
   background: color-mix(in srgb, var(--frame) var(--glass), transparent);
 }
 
-:root[data-glass] {
+:root[data-glass]:not(.reduce-transparency) {
   --ink-3-glass: color-mix(in srgb, var(--ink-3) 75%, var(--ink));
 }
 
-:root[data-glass] :is(.rail, .top, .side) {
+:root[data-glass]:not(.reduce-transparency) :is(.rail, .top, .side) {
   --ink-3: var(--ink-3-glass);
 }
 
 @media (min-width: 761px) and (orientation: landscape) {
-  :root[data-glass] :is(.side, .side-foot) {
+  :root[data-glass]:not(.reduce-transparency) :is(.side, .side-foot) {
     background: none;
   }
 
-  :root[data-glass] .side {
+  :root[data-glass]:not(.reduce-transparency) .side {
     clip-path: inset(0 0 12px);
   }
 
-  :root[data-glass] .side-foot::before {
+  :root[data-glass]:not(.reduce-transparency) .side-foot::before {
     content: none;
   }
 }
