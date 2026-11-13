@@ -12,10 +12,23 @@ function useFit(pick: number, count: number) {
   const ref = useRef<HTMLUListElement>(null)
   useLayoutEffect(() => {
     const list = ref.current
-    if (!list) return
-    const pane = list.closest(".pane")
-    list.style.maxHeight = pane ? `${Math.max(0, list.getBoundingClientRect().bottom - pane.getBoundingClientRect().top - EDGE)}px` : ""
-    list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" })
+    const pane = list?.closest(".pane")
+    if (!list || !pane) return
+    const fit = () => {
+      list.style.maxHeight = `${Math.max(0, list.getBoundingClientRect().bottom - pane.getBoundingClientRect().top - EDGE)}px`
+    }
+    fit()
+    const watch = new ResizeObserver(fit)
+    watch.observe(pane)
+    if (list.parentElement) watch.observe(list.parentElement)
+    return () => watch.disconnect()
+  }, [count])
+  useLayoutEffect(() => {
+    const list = ref.current
+    const row = list?.querySelector<HTMLElement>('[aria-selected="true"]')
+    if (!list || !row) return
+    if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop
+    else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight
   }, [pick, count])
   return ref
 }
