@@ -34,6 +34,8 @@ const viewKey = (view: View): string =>
 export interface Maker {
   seal: Seal
   act: (label: string, run: () => void, mark?: typeof OUT) => string
+  field: (render: () => ReactNode) => string
+  fields: ReadonlyMap<string, () => ReactNode>
 }
 
 export const OUT = "kiwi:out"
@@ -42,11 +44,21 @@ const pageMark = (name: string): ReactNode | undefined => (name === OUT ? <Glyph
 
 export function maker(): Maker {
   const s = seal()
+  const tag = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("")
+  const fields = new Map<string, () => ReactNode>()
   return {
     seal: s,
     act: (label, run, mark) => `[${mark ? `\`${mark}\` ` : ""}${inert(label).replace(/[[\]\\]/g, "\\$&")}](${s.key(run)})`,
+    field: (render) => {
+      const name = `${tag}-${fields.size}`
+      fields.set(name, render)
+      return ["```kiwi-field", name, "```"].join("\n")
+    },
+    fields,
   }
 }
+
+const NO_FIELDS: ReadonlyMap<string, () => ReactNode> = new Map()
 
 const ORDER: readonly TaskStatus[] = ["waiting", "doing", "review", "landing", "todo"]
 const BAR: readonly TaskStatus[] = ["done", "landing", "review", "doing", "waiting", "todo"]
@@ -156,13 +168,13 @@ function boardText(channel: Channel, view: BoardView): { md: string; seal: Seal 
   return { md, seal: m.seal }
 }
 
-export function PageText({ channel, md, seal }: { channel: Channel; md: string; seal: Seal }) {
+export function PageText({ channel, md, seal, fields = NO_FIELDS }: { channel: Channel; md: string; seal: Seal; fields?: ReadonlyMap<string, () => ReactNode> }) {
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
   const { go } = useAct()
   const pane = usePane()
   const text = useMemo(() => wrote(md), [md])
-  const draw = useMemo(() => pieces(lookupOf(channel), pageMark, seal.owns), [channel, seal])
+  const draw = useMemo(() => pieces(lookupOf(channel), pageMark, seal.owns, (name) => fields.get(name)?.()), [channel, seal, fields])
   const code = channel.code
   const onPage = (url: string) => {
     if (url.startsWith("kiwi-do:")) return seal.run(url)
@@ -190,7 +202,7 @@ export function Page({ channel, view }: { channel: Channel; view: View }) {
   if (view.kind === "needs")
     return (
       <Suspense fallback={null}>
-        <NeedsYou channel={channel} onJump={(jump) => openMessage(channel.code, jump.m.seq)} />
+        <NeedsYou channel={channel} />
       </Suspense>
     )
   if (view.kind === "specs" || view.kind === "spec")

@@ -32,6 +32,7 @@ export const lookupOf = (channel: Channel): Lookup => ({
 const ROW = /^kiwi-(?:task|msg|pr|issue|mention):|^kiwi-page:(?:channel|agent):/
 const DO = "kiwi-do:"
 const BAR = "kiwi-bar"
+const FIELD = "kiwi-field"
 
 const TONES = new Set(["alert", "decide", "doing", "live", "review", "quiet"])
 const MORE = ["tip", "label", "tone"] as const
@@ -74,6 +75,10 @@ const spelled = (c: string): string => {
 const ACTION = new RegExp([..."kiwi-do:"].map(spelled).join(""), "gi")
 
 export const inert = (md: string): string => md.replace(ACTION, "kiwi-off:")
+
+const PUNCT = /[!-/:-@[-`{-~]/g
+
+export const esc = (text: string): string => inert(text).replace(/\s+/g, " ").trim().replace(PUNCT, "\\$&")
 
 export interface Seal {
   key: (run: () => void, more?: DoMore) => string
@@ -119,6 +124,10 @@ function checkMark(name: string): ReactNode | undefined {
 }
 
 const NO_MARK: Mark = () => undefined
+
+export type Field = (name: string) => ReactNode | undefined
+
+const NO_FIELD: Field = () => undefined
 
 const textOf = (node: ASTNode): string => node.content ?? (node.children ?? []).map(textOf).join("")
 const urlOf = (node: ASTNode | undefined): string => (node?.type === "Link" ? (node.attributes?.url ?? "") : "")
@@ -195,7 +204,7 @@ function Trail({ url, find }: { url: string; find: Lookup }) {
 
 const NOT_OURS = (): boolean => false
 
-export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) => boolean = NOT_OURS): Draw {
+export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) => boolean = NOT_OURS, field: Field = NO_FIELD): Draw {
   const didOf = (url: string): Did => {
     const did = doOf(url)
     return did.act && !owns(url) ? { url, act: false } : did
@@ -379,6 +388,7 @@ export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) =
         </section>
       )
     }
+    if (node.type === "CodeBlock" && node.attributes?.language?.trim() === FIELD) return field(textOf(node).trim()) ?? null
     if (node.type === "CodeBlock" && node.attributes?.language?.trim() === BAR) {
       const segs = textOf(node)
         .split("\n")

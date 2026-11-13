@@ -9,16 +9,15 @@ import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { GlyphIcon, Icon } from "~/kit/icons"
 import { withControls } from "~/panes/controls"
-import { doUrl, inert, NOTHING, pieces, seal, type DoMore, type Seal } from "~/panes/engine"
+import { doUrl, esc, NOTHING, pieces, seal, type DoMore, type Seal } from "~/panes/engine"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 
 const SPOT = ""
-const PUNCT = /[!-/:-@[-`{-~]/g
 
 type Vars = Readonly<Record<string, string | number>>
 
-export const esc = (text: string): string => inert(text).replace(/\s+/g, " ").trim().replace(PUNCT, "\\$&")
+export { esc }
 
 export function code(text: string): string {
   const flat = text.replace(/\s+/g, " ").trim()
