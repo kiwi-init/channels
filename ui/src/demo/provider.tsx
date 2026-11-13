@@ -322,6 +322,7 @@ export type Scenario =
   | "github-signed-in"
   | "github-gate"
   | "task-body"
+  | "activity-unknown"
   | "task-quote"
   | "task-quote-read-only"
   | "github-checking"
@@ -424,71 +425,73 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                     ? withHandoff(DEMO_CHANNEL)
                     : scenario === "thread-fetching" || scenario === "thread-unloaded"
                       ? { ...DEMO_CHANNEL, since: 1_000_000 }
-                      : scenario === "task-body"
-                        ? withTaskBody(DEMO_CHANNEL)
-                        : scenario === "task-quote" || scenario === "task-quote-read-only"
-                          ? withTaskQuote(DEMO_CHANNEL, scenario === "task-quote-read-only")
-                          : scenario === "opening"
-                            ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
-                            : scenario === "held"
-                              ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
-                              : scenario === "compact" || scenario === "compacted"
-                                ? withCompact(DEMO_CHANNEL, scenario === "compacted")
-                                : scenario === "specs-behind"
-                                  ? behindOf(withSpecs(DEMO_CHANNEL, false))
-                                  : scenario === "specs" || scenario === "spec-changed"
-                                    ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
-                                    : scenario === "forgotten-computer"
-                                      ? {
-                                          ...DEMO_CHANNEL,
-                                          asks: [
-                                            {
-                                              kind: "join" as const,
-                                              id: "join-dudu",
-                                              at: Date.now() - 30 * 60_000,
-                                              name: "dudu",
-                                              who: "agent" as const,
-                                              harness: "claude" as const,
-                                              runs: "Claude Code · claude-opus-5-5",
-                                              machine: "MacBook-Pro-de-Davi",
-                                              sponsor: "harry",
-                                              revoked: true as const,
-                                              said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
-                                              code: "604-218",
-                                            },
-                                            ...DEMO_CHANNEL.asks,
-                                          ],
-                                        }
-                                      : scenario === "invite-failed"
+                      : scenario === "activity-unknown"
+                        ? { ...DEMO_CHANNEL, people: DEMO_CHANNEL.people.map((p) => (p.name === "pixel" ? { ...p, activity: { state: "unknown" as const } } : p)) }
+                        : scenario === "task-body"
+                          ? withTaskBody(DEMO_CHANNEL)
+                          : scenario === "task-quote" || scenario === "task-quote-read-only"
+                            ? withTaskQuote(DEMO_CHANNEL, scenario === "task-quote-read-only")
+                            : scenario === "opening"
+                              ? { ...DEMO_CHANNEL, messages: [], tasks: [], asks: [], connection: "connecting" as const, loading: true }
+                              : scenario === "held"
+                                ? { ...DEMO_CHANNEL, hold: { note: "Waiting on the release key.", by: "jow", at: Date.now() - 40 * 60_000 } }
+                                : scenario === "compact" || scenario === "compacted"
+                                  ? withCompact(DEMO_CHANNEL, scenario === "compacted")
+                                  : scenario === "specs-behind"
+                                    ? behindOf(withSpecs(DEMO_CHANNEL, false))
+                                    : scenario === "specs" || scenario === "spec-changed"
+                                      ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
+                                      : scenario === "forgotten-computer"
                                         ? {
                                             ...DEMO_CHANNEL,
                                             asks: [
                                               {
                                                 kind: "join" as const,
-                                                id: "join-quill",
-                                                at: Date.now() - 5 * 60_000,
-                                                name: "quill",
+                                                id: "join-dudu",
+                                                at: Date.now() - 30 * 60_000,
+                                                name: "dudu",
                                                 who: "agent" as const,
                                                 harness: "claude" as const,
                                                 runs: "Claude Code · claude-opus-5-5",
-                                                said: { machine: "Linux x64 · 8 cores · 16 GB", repo: "interlinked/site@main", outside: true },
-                                                pin: { failed: true as const },
-                                                code: "317-552",
+                                                machine: "MacBook-Pro-de-Davi",
+                                                sponsor: "harry",
+                                                revoked: true as const,
+                                                said: { machine: "macOS arm64 · 10 cores · 16 GB", repo: "Davi-Vicente/D2N@main", outside: true },
+                                                code: "604-218",
                                               },
                                               ...DEMO_CHANNEL.asks,
                                             ],
                                           }
-                                        : scenario === "review-reset"
-                                          ? withReviewReset(DEMO_CHANNEL)
-                                          : scenario === "event-runs"
-                                            ? withEventRuns(DEMO_CHANNEL)
-                                            : scenario === "own-bubbles"
-                                              ? withOwnBubbles(DEMO_CHANNEL)
-                                              : scenario === "signs"
-                                                ? withSigns(DEMO_CHANNEL)
-                                                : scenario === "theirs"
-                                                  ? withTheirs(DEMO_CHANNEL)
-                                                  : DEMO_CHANNEL,
+                                        : scenario === "invite-failed"
+                                          ? {
+                                              ...DEMO_CHANNEL,
+                                              asks: [
+                                                {
+                                                  kind: "join" as const,
+                                                  id: "join-quill",
+                                                  at: Date.now() - 5 * 60_000,
+                                                  name: "quill",
+                                                  who: "agent" as const,
+                                                  harness: "claude" as const,
+                                                  runs: "Claude Code · claude-opus-5-5",
+                                                  said: { machine: "Linux x64 · 8 cores · 16 GB", repo: "interlinked/site@main", outside: true },
+                                                  pin: { failed: true as const },
+                                                  code: "317-552",
+                                                },
+                                                ...DEMO_CHANNEL.asks,
+                                              ],
+                                            }
+                                          : scenario === "review-reset"
+                                            ? withReviewReset(DEMO_CHANNEL)
+                                            : scenario === "event-runs"
+                                              ? withEventRuns(DEMO_CHANNEL)
+                                              : scenario === "own-bubbles"
+                                                ? withOwnBubbles(DEMO_CHANNEL)
+                                                : scenario === "signs"
+                                                  ? withSigns(DEMO_CHANNEL)
+                                                  : scenario === "theirs"
+                                                    ? withTheirs(DEMO_CHANNEL)
+                                                    : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,
