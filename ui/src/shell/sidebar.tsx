@@ -9,7 +9,7 @@ import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Direct, type Person } from "~/model"
-import { sameWhere, useAct, useGo, useNav } from "~/nav"
+import { sameWhere, useAct, useGo, useNav, useOpenToType } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
 import { comingBack, hiddenKey, hiddenPlaces, setHidden } from "~/shell/hidden-places"
 import { leftDirects } from "~/shell/left-directs"
@@ -85,6 +85,7 @@ export function ViewsBar({ channel }: { channel: Channel }) {
 export function Sidebar({ channel, views = true }: { channel: Channel; views?: boolean }) {
   const nav = useNav()
   const go = useGo()
+  const open = useOpenToType()
   const { actions, now } = useAct()
   const people = onePerPerson(channel.people.filter((p) => p.kind === "human")).filter((p) => !p.left)
   const me = people.find((p) => p.you)
@@ -172,7 +173,7 @@ export function Sidebar({ channel, views = true }: { channel: Channel; views?: b
                   className={cx("side-row", on && "is-on", (r.muted ? r.mentions : r.unread) > 0 && "is-news", r.muted && "is-muted")}
                   aria-current={on ? "page" : undefined}
                   title={r.muted ? t("shell.sidebar.room.muted", { name: r.name }) : undefined}
-                  onClick={() => go({ to: "where", where })}
+                  onClick={() => open(channel.code, where)}
                   onContextMenu={(e) => showMenu(e, `#${r.name}`, (x) => x.roomGroups({ channel, go }, actions, on, canLeave, r))}
                 >
                   <span className="side-hash">{r.members ? <Icon name="people" size={12} label={t("shell.sidebar.members.only")} /> : "#"}</span>
@@ -309,6 +310,7 @@ function HiddenRows({ count, news = 0, open, toggle }: { count: number; news?: n
 function Former({ channel, direct }: { channel: Channel; direct: Direct }) {
   const nav = useNav()
   const go = useGo()
+  const open = useOpenToType()
   const { actions } = useAct()
   const where = { kind: "dm", with: direct.with } as const
   const on = nav.tab === "chat" && sameWhere(nav.where, where)
@@ -321,7 +323,7 @@ function Former({ channel, direct }: { channel: Channel; direct: Direct }) {
         className={cx("side-row", agent && "side-member is-off", on && "is-on", direct.unread > 0 && "is-news")}
         aria-current={on ? "page" : undefined}
         title={agent ? t("shell.sidebar.left.channel") : undefined}
-        onClick={() => go({ to: "where", where })}
+        onClick={() => open(channel.code, where)}
         onContextMenu={(e) => showMenu(e, nickname(channel, direct.with), (x) => x.directGroups({ channel, go }, actions, direct, who))}
       >
         <Avatar person={who} size="sm" />
@@ -349,6 +351,7 @@ function You({ person }: { person: Person }) {
 function Member({ person, channel, direct }: { person: Person; channel: Channel; direct: Direct | undefined }) {
   const nav = useNav()
   const go = useGo()
+  const open = useOpenToType()
   const { actions } = useAct()
   const where = { kind: "dm", with: person.name } as const
   const on = nav.tab === "chat" && sameWhere(nav.where, where)
@@ -363,7 +366,7 @@ function Member({ person, channel, direct }: { person: Person; channel: Channel;
         className={cx("side-row side-member", live && "is-live", live && !live.busy && "is-waiting", on && "is-on", unread > 0 && "is-news", person.presence === "offline" && "is-off")}
         aria-current={on ? "page" : undefined}
         title={task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)} · ${statusOf(person, channel)}` : statusOf(person, channel)}
-        onClick={() => go({ to: "where", where })}
+        onClick={() => open(channel.code, where)}
         onContextMenu={(e) =>
           showMenu(e, shown(person), (x) => [unread > 0 ? [{ label: t("shell.sidebar.mark.read"), run: () => actions.markRead(channel.code, where) }] : [], x.personItems({ channel, go }, person)])
         }

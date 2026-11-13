@@ -39,6 +39,7 @@ export const SHOTS: Record<string, Shot> = {
   "tabs-8-top": { scenario: "tabs-8", channel: "kiwi", layout: "top" },
   signs: { scenario: "signs", channel: "kiwi" },
   opening: { scenario: "opening", channel: "kiwi" },
+  "slow-open": { scenario: "slow-open", channel: "kiwi" },
   "opening-tasks": { scenario: "opening", channel: "kiwi", nav: { tab: "specs" } },
   "opening-needs": { scenario: "opening", channel: "kiwi", nav: { tab: "needs" } },
   dm: kiwi({ where: { kind: "dm", with: "atlas" } }),

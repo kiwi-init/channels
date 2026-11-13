@@ -211,6 +211,7 @@ const words = {
   "shell.history.back.title": "Back ({keys})",
   "shell.history.forward": "Forward",
   "shell.history.forward.title": "Forward ({keys})",
+  "shell.channel.settings": "Channel settings",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

@@ -18,7 +18,7 @@ import { cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { openMenu } from "~/kit/menu-open"
 import type { Channel, Upload, Where } from "~/model"
-import { useActions, useToast } from "~/nav"
+import { claimFocus, useActions, useToast } from "~/nav"
 import { nickname } from "~/names"
 import { withNames } from "~/chat/linked"
 import { listId, Suggestions, useSuggest } from "~/chat/suggest"
@@ -44,6 +44,7 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   const replyTo = quoting?.kind === "message" ? quoting.to : null
   const excerpt = quoting?.excerpt ?? null
   const key = composerKey(channel.code, where, inThread)
+  const posts = !channel.people.find((p) => p.you)?.readOnly
   const [text, setText] = useState(() => drafts.get(key) ?? "")
   const area = useRef<HTMLTextAreaElement>(null)
   const s = useSuggest({ channel, id: key, text, area, onText: (value, at) => update(value, at) })
@@ -105,6 +106,14 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
   useEffect(() => {
     if (quoting || inThread !== undefined) area.current?.focus()
   }, [quoting, inThread])
+
+  useEffect(() => {
+    const el = area.current
+    if (!el || !claimFocus(channel.code, where, inThread === undefined && posts)) return
+    el.focus()
+    el.setSelectionRange(el.value.length, el.value.length)
+    moved(el.value.length)
+  }, [channel.code, where, inThread, posts, moved])
 
   useLayoutEffect(() => {
     const el = box.current
