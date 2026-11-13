@@ -152,19 +152,38 @@ const recorder = (region: { x: number; y: number; w: number; h: number }, file: 
       ],
       { stdio: ["ignore", "ignore", openSync(file.replace(/\.mkv$/, "-rec.log"), "w")] },
     );
-  return spawn("wf-recorder", ["-y", "-g", `${region.x},${region.y} ${even(region.w)}x${even(region.h)}`, "-r", "60", "-c", "libx264rgb", "-p", "qp=0", "-f", file], {
+  return spawn("wf-recorder", ["-y", "-g", `${region.x},${region.y} ${even(region.w)}x${even(region.h)}`, "-r", "60", "-c", "libx264rgb", "-p", "crf=0", "-p", "qp=0", "-f", file], {
     stdio: ["ignore", "ignore", openSync(file.replace(/\.mkv$/, "-rec.log"), "w")],
   });
 };
 
-const finish = async (rec: ChildProcess): Promise<number | null> => {
+const finish = async (rec: ChildProcess, wake: () => Promise<unknown>): Promise<number | null> => {
   if (rec.exitCode === null && rec.signalCode === null) {
+    const exit = new Promise((r) => rec.once("exit", () => r(true)));
     rec.kill("SIGINT");
-    const exited = await Promise.race([new Promise((r) => rec.once("exit", () => r(true))), Bun.sleep(10_000).then(() => false)]);
+    await Bun.sleep(300);
+    if (rec.exitCode === null) await wake();
+    const exited = await Promise.race([exit, Bun.sleep(30_000).then(() => false)]);
     if (!exited) rec.kill("SIGKILL");
   }
   return rec.exitCode;
 };
+
+const poke = () =>
+  new Promise<boolean>((done) => {
+    const feed = document.querySelector<HTMLElement>(".feed");
+    if (!feed) return done(false);
+    feed.style.outline = "2px solid #f0f";
+    feed.style.outlineOffset = "-2px";
+    let left = 6;
+    const tick = () => {
+      if (--left > 0) return void requestAnimationFrame(tick);
+      feed.style.outline = "";
+      feed.style.outlineOffset = "";
+      done(true);
+    };
+    requestAnimationFrame(tick);
+  });
 
 const drain = async (d: Driver): Promise<Record<string, unknown>[]> => {
   const all: Record<string, unknown>[] = [];
@@ -272,22 +291,24 @@ try {
                   new Promise<boolean>((done) => {
                     const list = document.querySelector<HTMLElement>(".feed > *");
                     if (!list) return done(false);
-                    list.style.transform = "translateY(1px)";
-                    let left = n;
-                    const tick = () => {
-                      left--;
-                      if (left > 0) return void requestAnimationFrame(tick);
-                      list.style.transform = "";
-                      done(true);
-                    };
-                    requestAnimationFrame(tick);
+                    requestAnimationFrame(() => {
+                      list.style.transform = "translateY(1px)";
+                      let left = n;
+                      const tick = () => {
+                        if (--left > 0) return void requestAnimationFrame(tick);
+                        list.style.transform = "";
+                        done(true);
+                      };
+                      requestAnimationFrame(tick);
+                    });
                   }),
                 frames,
               );
               await Bun.sleep(1000);
             }
           } else await Bun.sleep(seconds * 1000);
-          const code = await finish(rec);
+          const stopAt = (Date.now() - started) / 1000;
+          const code = await finish(rec, () => d.evaluate(poke, null));
           step(`${state} ${control ? "control" : `w${w}`}: recorder exited ${code}; dump trace`);
           const trace = await drain(d);
           writeFileSync(file.replace(/\.mkv$/, "-trace.json"), JSON.stringify(trace));
@@ -307,6 +328,7 @@ try {
             region,
             recordStart: started,
             recorderExit: code,
+            stopAt,
             rafSamples: samples.length,
             geometryMoves: moved,
             scrollTopWritesThatMoved: writes.length,
