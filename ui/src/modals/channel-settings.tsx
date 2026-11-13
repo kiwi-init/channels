@@ -18,7 +18,8 @@ import { GlyphIcon, Icon } from "~/kit/icons"
 import { choreLine } from "~/github/health"
 import { ageOf, ago } from "~/kit/time"
 import type { Channel, Room } from "~/model"
-import { nickname, roomPeople, seatRoot, shown } from "~/names"
+import { nickname, roomPeople, shown } from "~/names"
+import { roomSelection } from "./room-selection.ts"
 import { useApp, type ChannelTab, useGo } from "~/nav"
 import { repoOffers } from "~/modals/repo-offers"
 import { LandingPick, landingWord } from "~/modals/landing-pick"
@@ -335,10 +336,11 @@ function Rooms({ channel }: { channel: Channel }) {
 
 function RoomRow({ channel, room, sets }: { channel: Channel; room: Room; sets: boolean }) {
   const { app } = useApp()
-  const [editing, setEditing] = useState<ReadonlySet<string> | null>(null)
+  const [editing, setEditing] = useState<ReadonlyMap<string, boolean> | null>(null)
   const canChange = useAppCan("changeRoom")
-  const mine = seatRoot(channel, channel.you)
-  const roots = room.members ? [...new Set(room.members.map((m) => seatRoot(channel, m)))].filter((m) => m !== mine) : []
+  const people = roomPeople(channel)
+  const roots = roomSelection(channel, room.members ?? [])
+  const picked = roomSelection(channel, room.members ?? [], editing ?? new Map())
   const who = room.members
     ? [t("modals.channel.settings.room.you"), ...roots.map((m) => nickname(channel, m))].join(t("modals.channel.settings.room.list.sep"))
     : t("modals.channel.settings.room.everyone")
@@ -364,7 +366,7 @@ function RoomRow({ channel, room, sets }: { channel: Channel; room: Room; sets: 
           </span>
         </div>
         {room.members && sets && canChange && !editing && (
-          <button type="button" className="btn is-quiet is-small cset-on-hover" onClick={() => setEditing(new Set(roots))}>
+          <button type="button" className="btn is-quiet is-small cset-on-hover" onClick={() => setEditing(new Map())}>
             {t("modals.channel.settings.room.change.members")}
           </button>
         )}
@@ -379,40 +381,59 @@ function RoomRow({ channel, room, sets }: { channel: Channel; room: Room; sets: 
           {room.muted ? <GlyphIcon glyph={NotificationOff01Icon} /> : <GlyphIcon glyph={Notification01Icon} />}
         </button>
       </div>
-      {editing && <PickMembers channel={channel} id={room.id} roots={roots} picked={editing} setPicked={setEditing} />}
+      {editing && <PickMembers channel={channel} id={room.id} people={people} roots={roots} picked={picked} editing={editing} setEditing={setEditing} />}
     </div>
   )
 }
 
-function PickMembers({ channel, id, roots, picked, setPicked }: { channel: Channel; id: string; roots: string[]; picked: ReadonlySet<string>; setPicked: (next: ReadonlySet<string> | null) => void }) {
+function PickMembers({
+  channel,
+  id,
+  people,
+  roots,
+  picked,
+  editing,
+  setEditing,
+}: {
+  channel: Channel
+  id: string
+  people: ReturnType<typeof roomPeople>
+  roots: string[]
+  picked: string[]
+  editing: ReadonlyMap<string, boolean>
+  setEditing: (next: ReadonlyMap<string, boolean> | null) => void
+}) {
   const { app } = useApp()
+  const [saving, setSaving] = useState(false)
   const flip = (name: string, on: boolean) => {
-    const next = new Set(picked)
-    if (on) next.add(name)
-    else next.delete(name)
-    setPicked(next)
+    setEditing(new Map(editing).set(name, on))
   }
-  const out = roots.some((m) => !picked.has(m))
+  const out = roots.some((m) => !picked.includes(m))
   return (
     <div className="room-pick cset-pick">
-      {roomPeople(channel).map((p) => (
-        <label key={p.name} className={cx("room-member", picked.has(p.name) && "is-on")}>
-          <input type="checkbox" checked={picked.has(p.name)} onChange={(e) => flip(p.name, e.target.checked)} />
+      {people.map((p) => (
+        <label key={p.name} className={cx("room-member", picked.includes(p.name) && "is-on")}>
+          <input type="checkbox" checked={picked.includes(p.name)} disabled={saving} onChange={(e) => flip(p.name, e.target.checked)} />
           <Avatar person={p} size="sm" />
           <span className="room-member-name">{shown(p)}</span>
         </label>
       ))}
       <p className="cset-hint">{out ? t("modals.channel.settings.room.take.out") : t("modals.channel.settings.room.add")}</p>
       <div className="room-edit-foot">
-        <button type="button" className="btn is-quiet is-small" onClick={() => setPicked(null)}>
+        <button type="button" className="btn is-quiet is-small" disabled={saving} onClick={() => setEditing(null)}>
           {t("modals.channel.settings.cancel")}
         </button>
         <button
           type="button"
           className="btn is-primary is-small"
-          onClick={() => {
-            void app.actions.setRoomMembers(channel.code, id, [...picked])
-            setPicked(null)
+          disabled={saving}
+          onClick={async () => {
+            setSaving(true)
+            try {
+              if (await app.actions.setRoomMembers(channel.code, id, picked)) setEditing(null)
+            } finally {
+              setSaving(false)
+            }
           }}
         >
           {t("modals.channel.settings.save")}
