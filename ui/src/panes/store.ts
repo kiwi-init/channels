@@ -4,17 +4,9 @@ import type { Where } from "~/model"
 import { startNav, type Nav, type Panel } from "~/nav"
 import type { Tab } from "~/places"
 
-export type Doc = { kind: "task"; task: number } | { kind: "now" } | { kind: "panel"; panel: Panel } | { kind: "blank" } | { kind: "home"; only?: string } | { kind: "activity" }
+export type Doc = { kind: "task"; task: number } | { kind: "now" } | { kind: "panel"; panel: Panel } | { kind: "blank" } | { kind: "activity" }
 
 export const BLANK: Page = { at: "doc", doc: { kind: "blank" } }
-
-export const PANE_DRAG = "application/x-kiwi-pane"
-
-export function homeFrom(raw: string): Page | null {
-  if (raw === "home") return { at: "doc", doc: { kind: "home" } }
-  const only = /^channel:(.+)$/.exec(raw)?.[1]
-  return only ? { at: "doc", doc: { kind: "home", only } } : null
-}
 
 export type Page = { at: "where"; where: Where } | { at: "tab"; tab: Exclude<Tab, "chat"> } | { at: "spec"; ask: number } | { at: "doc"; doc: Doc }
 
@@ -80,7 +72,7 @@ export type Kept = Pick<Nav, "where" | "tab" | "spec" | "part" | "github">
 
 function grown(code: string, raw: unknown): Node | null {
   if (!raw || typeof raw !== "object") return null
-  const node = raw as { kind?: unknown; id?: unknown; nav?: unknown; doc?: Doc; a?: unknown; b?: unknown }
+  const node = raw as { kind?: unknown; id?: unknown; nav?: unknown; doc?: unknown; a?: unknown; b?: unknown }
   if (typeof node.id !== "string") return null
   const n = /^(?:pane|split)-(\d+)$/.exec(node.id)?.[1]
   if (n) made = Math.max(made, Number(n))
@@ -91,13 +83,17 @@ function grown(code: string, raw: unknown): Node | null {
   }
   if (node.kind !== "leaf") return null
   const nav = node.nav && typeof node.nav === "object" ? { ...startNav(code), ...(node.nav as Kept) } : null
-  return { kind: "leaf", id: node.id, nav, ...(node.doc ? { doc: node.doc } : {}) }
+  return { kind: "leaf", id: node.id, nav, ...(node.doc ? { doc: keptDoc(node.doc) } : {}) }
 }
 
-function load(): Map<string, Layout> {
+const DOCS: ReadonlySet<unknown> = new Set<Doc["kind"]>(["task", "now", "panel", "blank", "activity"])
+
+const keptDoc = (doc: unknown): Doc => (doc && typeof doc === "object" && DOCS.has((doc as { kind?: unknown }).kind) ? (doc as Doc) : { kind: "blank" })
+
+export function savedLayouts(text: string): Map<string, Layout> {
   const out = new Map<string, Layout>()
   try {
-    const got: unknown = JSON.parse(localStorage.getItem(KEY) ?? "{}")
+    const got: unknown = JSON.parse(text)
     for (const [code, raw] of Object.entries(got as Record<string, { root?: unknown; focus?: unknown; typing?: unknown }>)) {
       const root = grown(code, raw?.root)
       if (root && leafOf(root, MAIN)) out.set(code, { root, focus: typeof raw.focus === "string" ? raw.focus : MAIN, typing: typeof raw.typing === "string" ? raw.typing : MAIN })
@@ -106,6 +102,15 @@ function load(): Map<string, Layout> {
     // A damaged or missing saved layout starts every channel from the default one.
   }
   return out
+}
+
+function load(): Map<string, Layout> {
+  try {
+    return savedLayouts(localStorage.getItem(KEY) ?? "{}")
+  } catch {
+    // Storage that can't be read starts every channel from the default layout.
+    return new Map()
+  }
 }
 
 const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.delete(l))

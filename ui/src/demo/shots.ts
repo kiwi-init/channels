@@ -26,8 +26,6 @@ export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
   "channel-broken": { ...kiwi(), broken: true },
   "linux-floating": { ...kiwi(), wm: "floating" },
-  home: { scenario: "full", channel: null },
-  "home-calm": { scenario: "home-calm", channel: null },
   "long-feed": { scenario: "long", channel: "kiwi" },
   "own-bubbles": { scenario: "own-bubbles", channel: "kiwi" },
   "tabs-3": { scenario: "tabs-3", channel: "kiwi" },

@@ -118,6 +118,29 @@ try {
     `at the bottom: a late picture leaves the last line at the bottom of the view (${px(grown.under - opened.under)} from where it was)`,
   );
 
+  await page.keyboard.press("Shift");
+  await page.evaluate(
+    () =>
+      new Promise<void>((done) => {
+        const feed = document.querySelector<HTMLElement>(".main .feed");
+        const row = feed?.querySelector<HTMLElement>(".msg-image")?.closest<HTMLElement>("[data-seq]");
+        if (!feed || !row) throw new Error("no picture row");
+        const was = row.getBoundingClientRect().height;
+        requestAnimationFrame(() => {
+          row.style.height = `${was - 120}px`;
+          setTimeout(() => {
+            row.style.height = `${was - 120 + 34}px`;
+            setTimeout(done, 120);
+          });
+        });
+      }),
+  );
+  const kept = await rests(page, () => true, 10_000);
+  check(
+    Math.abs(kept.under - grown.under) <= 2 && kept.pill === "",
+    `at the bottom: a row that collapses to its placeholder while a line lands in the same breath keeps the view at the bottom (the last line is ${px(kept.under - grown.under)} from where the bottom line sat)`,
+  );
+
   await hold(page);
   await stage.bot("the second shot", ["--image", shot]);
   await spot.first().waitFor({ timeout: 30_000 });
@@ -130,7 +153,11 @@ try {
     .filter({ hasText: `later line ${AFTER - 1}` })
     .first()
     .waitFor({ timeout: 30_000 });
-  await rests(page, () => true, 10_000);
+  const burst = await rests(page, () => true, 10_000);
+  check(
+    Math.abs(burst.under - grown.under) <= 2 && burst.pill === "",
+    `at the bottom: ${AFTER} lines later the view still follows the newest line (the last line is ${px(burst.under - grown.under)} from where the bottom line sat, pill "${burst.pill}")`,
+  );
   const far = await spotAbove(page);
   if (far === null) throw new Error("the second picture's placeholder is gone before it was let through");
   await wheelUp(page, Math.max(0, far - ABOVE));

@@ -329,8 +329,8 @@ async function lifecycle(page: Page, spec: Spec, rerender: Change, unmount: Chan
 }
 
 const click = (selector: string) => (page: Page) => page.evaluate((s) => document.querySelector<HTMLElement>(s)?.click(), selector);
-const view = (page: Page) => page.evaluate(() => (document.querySelector(".tile.is-home.is-on") ? "home" : document.querySelector(".rail") ? "channel" : "signed out"));
-const toHome: Change = { name: "Home in the rail", act: click(".tile.is-home"), observe: view };
+const view = (page: Page) => page.evaluate(() => (document.querySelector(".set") ? "settings" : document.querySelector(".rail") ? "channel" : "signed out"));
+const toSettings: Change = { name: "Settings from the rail", act: click(".rail-gear"), observe: view };
 const gifTab: Change = {
   name: "another GIF tab",
   act: (page) => page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".gifs-tab")].find((b) => b.textContent?.includes("wow"))?.click()),
@@ -405,7 +405,7 @@ const SPECS: Spec[] = [
         .first()
         .evaluate((el) => (el as HTMLElement).click()),
     rerender: gifTab,
-    unmount: toHome,
+    unmount: toSettings,
   },
   {
     name: "composer GIF picker",
@@ -417,7 +417,7 @@ const SPECS: Spec[] = [
       await page.locator("[role=menu].is-at-pointer button", { hasText: "GIF" }).first().click();
     },
     rerender: gifTab,
-    unmount: toHome,
+    unmount: toSettings,
   },
   {
     name: "composer + menu",
@@ -443,7 +443,7 @@ const SPECS: Spec[] = [
       undo: (page) => page.keyboard.press("Escape"),
       observe: (page) => page.evaluate(() => (document.querySelector(".search-field") ? "search open" : "search closed")),
     },
-    unmount: toHome,
+    unmount: toSettings,
   },
   {
     name: "usage card",
@@ -453,7 +453,7 @@ const SPECS: Spec[] = [
     open: (page) => page.locator(".rail-usage").first().click(),
     rerender: {
       name: "the rail's hint over a channel",
-      act: (page) => page.locator(".rail .tile").nth(2).hover(),
+      act: (page) => page.locator(".rail .tile").nth(1).hover(),
       observe: (page) => page.evaluate(() => document.querySelector(".rail-hint")?.textContent ?? "no hint"),
     },
     unmount: { name: "signing out", act: signOut, observe: view },

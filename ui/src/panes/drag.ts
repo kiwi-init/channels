@@ -4,7 +4,7 @@ import { MIN_H, MIN_W, type Carry, type Edge } from "~/panes/store"
 
 const START = 6
 
-export function targetAt(x: number, y: number, carry: Carry): Drag["target"] {
+function targetAt(x: number, y: number, carry: Carry): Drag["target"] {
   const pane = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-pane]")
   const host = pane?.closest<HTMLElement>("[data-panes]")
   if (!pane || !host || ("pane" in carry && pane.dataset.pane === carry.pane)) return null
@@ -26,7 +26,7 @@ export function targetAt(x: number, y: number, carry: Carry): Drag["target"] {
   return { code: host.dataset.panes ?? "", id: pane.dataset.pane ?? "", edge, box }
 }
 
-export function dropOn(target: NonNullable<Drag["target"]>, carry: Carry): void {
+function dropOn(target: NonNullable<Drag["target"]>, carry: Carry): void {
   if (target.fill) fillPane(target.code, target.id, carry)
   else if ("pane" in carry) movePane(target.code, carry.pane, target.id, target.edge)
   else splitAt(target.code, target.id, target.edge, carry.page)
