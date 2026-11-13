@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Where } from "~/model"
-import { historyStep, navigate, startNav, type Go, type Nav } from "~/nav"
+import { historyCan, historyStep, navigate, startNav, type Go, type Nav } from "~/nav"
 import { keepPlace, keepSpot, spotKey, whereOf } from "~/places"
 
 const room = (id: string): Where => ({ kind: "room", room: id })
@@ -226,5 +226,41 @@ describe("⌘[ and ⌘] (Ctrl on Linux) are the keys (T978)", () => {
     expect(key({ metaKey: true, shiftKey: true, key: "{", code: "BracketLeft" })).toBeNull()
     expect(key({ metaKey: true, altKey: true, key: "[", code: "BracketLeft" })).toBeNull()
     expect(key({ metaKey: true, key: "k", code: "KeyK" })).toBeNull()
+  })
+})
+
+describe("the top bar's Back and Forward arrows are on exactly when their history step would move (#2372)", () => {
+  const moves = (nav: Nav, step: "back" | "forward") => navigate(nav, { to: "history", step }) !== nav
+
+  test("with nothing behind or ahead both are off, and each step would leave the nav as it is", () => {
+    const start = startNav("a")
+    expect(historyCan(start)).toEqual({ back: false, forward: false })
+    expect(moves(start, "back")).toBe(false)
+    expect(moves(start, "forward")).toBe(false)
+  })
+
+  test("after a step somewhere Back is on, and after Back, Forward is on too", () => {
+    const there = run(startNav("a"), { to: "where", where: room("design") })
+    expect(historyCan(there)).toEqual({ back: true, forward: false })
+    expect(moves(there, "back")).toBe(true)
+    const back = navigate(there, { to: "history", step: "back" })
+    expect(historyCan(back)).toEqual({ back: false, forward: true })
+    expect(moves(back, "forward")).toBe(true)
+  })
+
+  test("going somewhere new after Back turns Forward off again", () => {
+    const back = run(startNav("a"), { to: "where", where: room("design") }, { to: "history", step: "back" })
+    expect(historyCan(navigate(back, { to: "tab", tab: "specs" })).forward).toBe(false)
+  })
+
+  test("with a modal open both are on even with empty stacks, because each step first closes the modal", () => {
+    const open = navigate(startNav("a"), { to: "modal", modal: { kind: "person", name: "maya" } })
+    expect(open.back).toEqual([])
+    expect(open.ahead).toEqual([])
+    expect(historyCan(open)).toEqual({ back: true, forward: true })
+    expect(moves(open, "back")).toBe(true)
+    expect(moves(open, "forward")).toBe(true)
+    expect(navigate(open, { to: "history", step: "back" }).modal).toBeNull()
+    expect(navigate(open, { to: "history", step: "forward" }).modal).toBeNull()
   })
 })

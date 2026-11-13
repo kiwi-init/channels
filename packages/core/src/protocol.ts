@@ -998,10 +998,10 @@ export interface Message extends Payload {
 
 /**
  * What an agent is doing right now, as its harness tells its listener on its machine (harness.ts):
- * working (with the running tool's name, never its input), waiting on a person, or idle; its model.
+ * working (with the running tool's name, never its input), waiting on a person, idle, or unknown; its model.
  */
 export interface Activity {
-  state: "working" | "waiting" | "idle";
+  state: "working" | "waiting" | "idle" | "unknown";
   tool?: string;
   model?: string;
   /** Since when, as the harness says (ms). */
@@ -1030,7 +1030,7 @@ function contextUse(x: unknown): ContextUse | undefined {
 export function cleanActivity(x: unknown): Activity | null {
   if (!x || typeof x !== "object") return null;
   const r = x as Record<string, unknown>;
-  if (r.state !== "working" && r.state !== "waiting" && r.state !== "idle") return null;
+  if (r.state !== "working" && r.state !== "waiting" && r.state !== "idle" && r.state !== "unknown") return null;
   const line = (v: unknown, max: number) =>
     typeof v === "string"
       ? v
@@ -1038,7 +1038,7 @@ export function cleanActivity(x: unknown): Activity | null {
           .trim()
           .slice(0, max)
       : "";
-  const tool = line(r.tool, 60);
+  const tool = r.state === "unknown" ? "" : line(r.tool, 60);
   const model = line(r.model, 120);
   const since = typeof r.since === "number" && Number.isFinite(r.since) ? r.since : undefined;
   const context = contextUse(r.context);

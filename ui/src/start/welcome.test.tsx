@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import type { ChannelTile, HomeAgent, HomeChannel, Person } from "~/model"
-import { AppContext, type Ctx } from "~/nav"
+import { AppContext, startNav, type Ctx } from "~/nav"
 import { Welcome } from "~/start/welcome"
 
 const tile = (code: string, title: string, needsYou = 0): ChannelTile => ({ code, title, state: "member", unread: 0, needsYou, last: 0 })
@@ -57,6 +57,7 @@ const page = (): string =>
             actions: {},
             prefs: { reduceMotion: true },
           },
+          nav: startNav(null),
           go: () => {},
         } as unknown as Ctx
       }

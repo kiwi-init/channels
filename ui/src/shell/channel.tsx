@@ -38,6 +38,7 @@ const Invite = later(() => import("~/modals/invite").then((m) => m.Invite))
 const AddAgent = later(() => import("~/modals/add-agent").then((m) => m.AddAgent))
 const DocVersions = later(() => import("~/modals/doc-versions").then((m) => m.DocVersions))
 
+
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const nav = useNav()
   const go = useGo()

@@ -55,7 +55,7 @@
       "project": ["src/**/*.ts", "scripts/**/*.ts"]
     },
     "ui": {
-      "entry": ["src/chat/react-native.ts", "src/chat/no-elk.ts", "src/chat/doc/screen-selection.page.ts", "src/meadow/meadow.page.ts", "src/meadow/scene.page.ts", "stubs/react-native/index.js", "src/**/*.test.{ts,tsx}"]
+      "entry": ["src/chat/react-native.ts", "src/chat/no-elk.ts", "src/chat/doc/screen-selection.page.ts", "src/meadow/meadow.page.ts", "src/meadow/scene.page.ts", "src/demo/room-members-page.tsx", "stubs/react-native/index.js", "src/**/*.test.{ts,tsx}"]
     }
   }
 }

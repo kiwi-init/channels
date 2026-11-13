@@ -1,10 +1,14 @@
 import { useCallback, useLayoutEffect, useRef } from "react"
 
+import { motionOk } from "~/kit/glide"
+
 const NEAR_BOTTOM = 48
 
 const WHEEL_MS = 400
 
 const RESTORE_HOLD_MS = 4_000
+
+const TOUCHES = ["pointerdown", "keydown", "touchstart"] as const
 
 interface Anchor {
   el: Element
@@ -91,6 +95,7 @@ export function useStick(following = true, still = false) {
   const placed = useRef<Anchor | null>(null)
   const holdUntil = useRef(0)
   const parked = useRef<Anchor | null>(null)
+  const going = useRef(false)
   const pad = useCallback(() => {
     const h = room.current + reserve.current
     if (spacer.current) spacer.current.style.height = h > 0 ? `${h}px` : ""
@@ -196,7 +201,8 @@ export function useStick(following = true, still = false) {
     const up = box.scrollTop < seen.current - 0.5
     const down = box.scrollTop > seen.current + 0.5
     if (up || down) parked.current = null
-    const near = !still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !up && (stuck.current || down)
+    going.current &&= !up && gap >= NEAR_BOTTOM
+    const near = going.current || (!still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !up && (stuck.current || down))
     stuck.current = live.current && !held.current && near
     const kept = placed.current && placed.current === anchor.current && Date.now() < holdUntil.current && anchor.current?.el.isConnected ? anchor.current : null
     const was = anchor.current
@@ -238,11 +244,10 @@ export function useStick(following = true, still = false) {
       }
       touch()
     }
-    const kinds = ["pointerdown", "keydown", "touchstart"] as const
-    for (const kind of kinds) box.addEventListener(kind, touch, { passive: true })
+    for (const kind of TOUCHES) box.addEventListener(kind, touch, { passive: true })
     box.addEventListener("wheel", wheel, { passive: true })
     return () => {
-      for (const kind of kinds) box.removeEventListener(kind, touch)
+      for (const kind of TOUCHES) box.removeEventListener(kind, touch)
       box.removeEventListener("wheel", wheel)
     }
   }, [remember, still, pad])
@@ -252,8 +257,9 @@ export function useStick(following = true, still = false) {
     if (!page) return
     const reader = () => {
       placed.current = null
+      going.current = false
     }
-    const kinds = ["pointerdown", "keydown", "touchstart", "wheel"] as const
+    const kinds = [...TOUCHES, "wheel"] as const
     for (const kind of kinds) page.addEventListener(kind, reader, { passive: true })
     return () => {
       for (const kind of kinds) page.removeEventListener(kind, reader)
@@ -265,6 +271,8 @@ export function useStick(following = true, still = false) {
       const box = scroller.current
       if (!box) return
       stuck.current = true
+      going.current = smooth
+      seen.current = box.scrollTop
       placed.current = null
       parked.current = null
       anchor.current = null
@@ -273,7 +281,7 @@ export function useStick(following = true, still = false) {
         reserve.current = 0
         pad()
       }
-      box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
+      box.scrollTo({ top: box.scrollHeight, behavior: smooth && motionOk() ? "smooth" : "auto" })
     },
     [pad]
   )

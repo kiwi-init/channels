@@ -7,7 +7,7 @@ import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
 import { channelOf, onCommand } from "~/kit/commands"
 import { inText } from "~/kit/keys"
-import { useNav, useGo, useActions, useTiles, useAppPrefs } from "~/nav"
+import { useNav, useGo, useActions, useTiles, useAppPrefs, useOpenToType } from "~/nav"
 import { useWindowMaximized } from "~/live/window-state"
 import { openMenu } from "~/kit/menu-open"
 import { PANE_DRAG } from "~/panes/store"
@@ -47,6 +47,7 @@ function fitTabs(strip: HTMLElement) {
 export function Rail() {
   const nav = useNav()
   const go = useGo()
+  const enter = useOpenToType()
   const actions = useActions()
   const tiles = useTiles()
   const prefs = useAppPrefs()
@@ -94,11 +95,11 @@ export function Rail() {
     const from = ordered.findIndex((c) => c.code === on)
     const news = ordered.map((c, i) => ({ open: i === from, fresh: c.unread > 0, needs: c.needsYou, count: c.unread }))
     const next = nextWithNews(ordered, news, from, dir)
-    if (next) go({ to: "channel", code: next.code })
+    if (next) enter(next.code)
   })
   const pick = useEffectEvent((n: number | null) => {
     const tile = n === null ? undefined : ordered[n - 1]
-    if (tile) go({ to: "channel", code: tile.code })
+    if (tile) enter(tile.code)
   })
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -121,7 +122,7 @@ export function Rail() {
     const target = spot(e)
     setOver(target.kind === "channel" && target.code === moving ? null : keyOf(target))
   }
-  const tile = (c: ChannelTile) => <Tile key={c.code} tile={c} on={on === c.code} drop={over === `c:${c.code}`} moving={moving === c.code} onClick={() => go({ to: "channel", code: c.code })} />
+  const tile = (c: ChannelTile) => <Tile key={c.code} tile={c} on={on === c.code} drop={over === `c:${c.code}`} moving={moving === c.code} onClick={() => enter(c.code)} />
   return (
     <nav ref={strip} className="rail" aria-label={t("shell.rail.channels")}>
       {document.documentElement.dataset["wm"] === "floating" && <WindowControls control={actions.windowControl} />}

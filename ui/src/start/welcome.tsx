@@ -1,13 +1,14 @@
 import "~/i18n/en/shell-later"
 import "~/styles/start.css"
+import { Link01Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 
 import { takeTurns } from "~/home"
 import { Avatar, cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
 import type { ChannelTile, HomeAgent, HomeAsk, HomeChannel } from "~/model"
-import { useApp, useGo } from "~/nav"
+import { useApp, useGo, useOpenToType } from "~/nav"
 import { HomePage } from "~/panes/home"
 import { onboarded } from "~/start/onboarded"
 import { Onboarding } from "~/start/onboarding"
@@ -48,7 +49,7 @@ function Starts({ quiet }: { quiet?: true }) {
       </button>
       {quiet && <span aria-hidden="true">·</span>}
       <button type="button" className={quiet ? undefined : "btn"} onClick={() => go({ to: "dialog", dialog: "join" })}>
-        {!quiet && <Icon name="link" size={14} />}
+        {!quiet && <GlyphIcon glyph={Link01Icon} size={14} />}
         {t("start.welcome.join")}
       </button>
     </>
@@ -203,9 +204,9 @@ function MessageLead({ tile, summary, writing, onWriting }: { tile: ChannelTile;
 }
 
 function ChannelPart({ tile, summary }: { tile: ChannelTile; summary: HomeChannel | undefined }) {
-  const go = useGo()
+  const enter = useOpenToType()
   const needs = summary ? summary.asks.length : tile.needsYou
-  const open = () => go({ to: "channel", code: tile.code })
+  const open = () => enter(tile.code)
   const agents = summary?.agents ?? []
   const active = agents.filter((a) => a.state === "working" || a.state === "waiting")
   const rest = restLine(agents)
@@ -234,14 +235,14 @@ function ChannelPart({ tile, summary }: { tile: ChannelTile; summary: HomeChanne
 }
 
 function QuietRow({ tile, summary }: { tile: ChannelTile; summary: HomeChannel | undefined }) {
-  const go = useGo()
+  const enter = useOpenToType()
   const needs = summary ? summary.asks.length : tile.needsYou
   const [writing, setWriting] = useState(false)
   const status = stateOf(tile, summary) || restLine(summary?.agents ?? [])
   return (
     <li className={cx("calm-quiet", writing && "is-writing")}>
       <div className="calm-chan-row">
-        <button type="button" className="calm-chan" onClick={() => go({ to: "channel", code: tile.code })}>
+        <button type="button" className="calm-chan" onClick={() => enter(tile.code)}>
           <span className="calm-chan-name">{tile.title}</span>
           {status && <span className="calm-meta">{status}</span>}
           <Red summary={summary} />

@@ -776,11 +776,31 @@
   -webkit-app-region: drag;
 }
 
+:root {
+  --history-w: calc(4px + 2 * var(--row) + 2px);
+}
+
 .top-lead {
   grid-row: 1;
   grid-column: 1 / -1;
   justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   padding-left: 8px;
+}
+
+.top-history {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.top-history-btn:disabled {
+  color: var(--ink-3);
+  background: none;
+  opacity: 0.5;
+  cursor: default;
 }
 
 :root[data-shell="mac"] .top-lead {
@@ -839,12 +859,12 @@
   align-items: center;
   gap: 8px;
   width: var(--side-w);
-  padding: 0 8px 0 calc(8px + var(--ctl) + 8px);
+  padding: 0 8px 0 calc(8px + var(--ctl) + 8px + var(--history-w));
   pointer-events: none;
 }
 
 :root[data-shell="mac"] .top-tools {
-  padding-left: calc(64px + 16px + var(--ctl) + 8px);
+  padding-left: calc(64px + 16px + var(--ctl) + 8px + var(--history-w));
 }
 
 .top-tools > * {
@@ -1272,7 +1292,7 @@
   flex-wrap: nowrap;
   align-items: flex-end;
   gap: 0;
-  margin: 0 calc(8px + var(--tail-n) * (var(--ctl) + 8px)) 0 max(var(--side-w), calc(var(--lead-pad) + var(--ctl) + 8px));
+  margin: 0 calc(8px + var(--tail-n) * (var(--ctl) + 8px)) 0 max(var(--side-w), calc(var(--lead-pad) + var(--ctl) + 8px + var(--history-w)));
   padding: 0 8px;
   overflow: hidden;
   transition: margin var(--slow) var(--ease);

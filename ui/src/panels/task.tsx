@@ -1,6 +1,7 @@
 import "~/i18n/en/needs"
 import "~/styles/task-panel.css"
 
+import { AtIcon } from "@hugeicons/core-free-icons"
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { EditHere } from "~/chat/editing"
@@ -9,13 +10,14 @@ import { compactAt, quoteOf, useNames, useTaskIds } from "~/chat/conversation"
 import { named } from "~/chat/linked"
 import { MessageRow } from "~/chat/message"
 import { preview } from "~/chat/preview"
-import { jumpTo } from "~/chat/reply"
+import { jumpTo, ReplyContext, replyTo, type Quoting, type Replying } from "~/chat/reply"
+import { QuotePick } from "~/chat/quote-pick"
 import { useWhole } from "~/chat/whole"
 import { ANYONE } from "@kiwi/channel/task-actions.ts"
 import { autofocus, Avatar, cx, Dot, Heading, statusWord } from "~/kit/bits"
 import { Empty } from "~/kit/empty"
 import { Modal } from "~/kit/modal"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { MoreButton } from "~/kit/menu-open"
 import { ageOf, ago, lasting } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent, type TaskStep } from "~/model"
@@ -50,6 +52,8 @@ export const holds = (a: Ask, id: number): a is PermissionAsk | QuestionAsk =>
 
 const openImage = viewImage
 
+const QUOTABLE = ".msg-body .md, .task-detail"
+
 export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const task = channel.tasks.find((k) => k.id === id)
   const talk = useMemo(() => channel.messages.filter((m) => m.where.kind === "task" && m.where.task === id), [channel.messages, id])
@@ -64,6 +68,18 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
     },
     [channel.code]
   )
+  const where = `${channel.code}\n${id}`
+  const [reply, setReply] = useState<{ where: string; quoting: Quoting } | null>(null)
+  if (reply && reply.where !== where) setReply(null)
+  const replying = useMemo((): Replying => ({ quoting: reply?.where === where ? reply.quoting : null, set: (quoting) => setReply(quoting ? { where, quoting } : null) }), [reply, where])
+  const quoteMessage = useCallback(
+    (seq: number, excerpt: string) => {
+      const m = talk.find((x) => x.seq === seq)
+      if (m) setReply({ where, quoting: replyTo(m, excerpt) })
+    },
+    [talk, where]
+  )
+  const quoteTask = useCallback((task: number, excerpt: string) => setReply({ where, quoting: { kind: "task", task, excerpt } }), [where])
   const last = talk.at(-1)?.seq
   const seen = useRef({ id, last })
   useLayoutEffect(() => {
@@ -82,54 +98,58 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   const parts = detailParts(wordsRaw(task.title), task.detail ? wordsRaw(task.detail) : undefined)
   const may = !memberOf(channel, channel.you)?.readOnly
   return (
-    <EditHere.Provider value="panel">
-      <PanelHead title={`T${task.id}`}>{may && <TaskMenu key={`menu-${task.id}`} channel={channel} task={task} />}</PanelHead>
-      <div key={task.id} ref={body} className="panel-body task-body tp">
-        <section className="panel-section tp-top">
-          <h3 className="task-title">
-            <Shown value={wrote(parts.title)} />
-          </h3>
-          {parts.body && (
-            <div className="task-detail">
-              <Body text={wrote(parts.body)} seq={0} names={names} tasks={tasks} onImage={openImage} onMessage={onQuote} />
-            </div>
+    <ReplyContext.Provider value={may ? replying : null}>
+      <EditHere.Provider value="panel">
+        <PanelHead title={`T${task.id}`}>{may && <TaskMenu key={`menu-${task.id}`} channel={channel} task={task} />}</PanelHead>
+        {may && <QuotePick root={body} body={QUOTABLE} onQuote={quoteMessage} onQuoteTask={quoteTask} />}
+        <div key={task.id} ref={body} className="panel-body task-body tp">
+          <section className="panel-section tp-top">
+            <h3 className="task-title">
+              <Shown value={wrote(parts.title)} />
+            </h3>
+            {parts.body && (
+              <div className="task-detail" data-quote-task={task.id}>
+                <Body text={wrote(parts.body)} seq={0} names={names} tasks={tasks} onImage={openImage} onMessage={onQuote} />
+              </div>
+            )}
+            <State key={`state-${task.id}`} channel={channel} task={task} may={may} />
+          </section>
+          <section className="panel-section">
+            <Props key={`props-${task.id}`} channel={channel} task={task} may={may} />
+            {may && task.suggested && !task.owner && <Suggested channel={channel} task={task} suggested={task.suggested} />}
+          </section>
+          {waits.length > 0 && <Waits channel={channel} waits={waits} />}
+          <Review key={`review-${task.id}`} channel={channel} task={task} />
+          {(task.pr || channel.issues?.some((i) => i.task === task.id)) && (
+            <section className="panel-section tp-links">
+              {task.pr && <PrCard pr={task.pr} />}
+              <LinkedIssue channel={channel} id={task.id} />
+            </section>
           )}
-          <State key={`state-${task.id}`} channel={channel} task={task} may={may} />
-        </section>
-        <section className="panel-section">
-          <Props key={`props-${task.id}`} channel={channel} task={task} may={may} />
-          {may && task.suggested && !task.owner && <Suggested channel={channel} task={task} suggested={task.suggested} />}
-        </section>
-        {waits.length > 0 && <Waits channel={channel} waits={waits} />}
-        <Review key={`review-${task.id}`} channel={channel} task={task} />
-        {(task.pr || channel.issues?.some((i) => i.task === task.id)) && (
-          <section className="panel-section tp-links">
-            {task.pr && <PrCard pr={task.pr} />}
-            <LinkedIssue channel={channel} id={task.id} />
-          </section>
-        )}
-        {task.history.length > 0 && <Activity key={`activity-${task.id}`} channel={channel} history={task.history} />}
-        {talk.length > 0 && (
-          <section className="panel-section task-talk">
-            <Heading>{t("panels.task.conversation")}</Heading>
-            {talk.map((m, i) => (
-              <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} tasks={tasks} inThread quote={quoteOf(talk, i, bySeq)} onQuote={onQuote} />
-            ))}
-          </section>
-        )}
-      </div>
-      <Composer key={`compose-${task.id}`} channel={channel} where={{ kind: "task", task: task.id }} placeholder={t("panels.task.message.in", { task: String(task.id) })} />
-    </EditHere.Provider>
+          {task.history.length > 0 && <Activity key={`activity-${task.id}`} channel={channel} history={task.history} />}
+          {talk.length > 0 && (
+            <section className="panel-section task-talk">
+              <Heading>{t("panels.task.conversation")}</Heading>
+              {talk.map((m, i) => (
+                <MessageRow key={m.seq} channel={channel} m={m} compact={compactAt(talk, i)} names={names} tasks={tasks} inThread quote={quoteOf(talk, i, bySeq)} onQuote={onQuote} />
+              ))}
+            </section>
+          )}
+        </div>
+        <Composer key={`compose-${task.id}`} channel={channel} where={{ kind: "task", task: task.id }} placeholder={t("panels.task.message.in", { task: String(task.id) })} />
+      </EditHere.Provider>
+    </ReplyContext.Provider>
   )
 }
 
-function Who({ channel, name }: { channel: Channel; name: string }) {
+function Who({ channel, name, markLeft = false }: { channel: Channel; name: string; markLeft?: boolean }) {
   const go = useGo()
   const person = memberOf(channel, name)
   return (
-    <button type="button" className="task-who" onClick={() => go(personGo(channel, name))}>
+    <button type="button" className="task-who" title={markLeft && person?.left ? t("shell.sidebar.left.channel") : undefined} onClick={() => go(personGo(channel, name))}>
       <Avatar person={person} size="sm" />
       <span className="task-who-name">{nickname(channel, name)}</span>
+      {markLeft && person?.left && <span className="dimmer mono">{t("shell.sidebar.left")}</span>}
       {name === channel.you && <span className="dimmer">{t("panels.task.you")}</span>}
     </button>
   )
@@ -205,7 +225,7 @@ function Props({ channel, task, may }: { channel: Channel; task: Task; may: bool
                 </button>
               ) : (
                 <>
-                  {task.reviewer === ANYONE ? <span>{t("panels.task.anyone.unworked")}</span> : <Who channel={channel} name={task.reviewer} />}
+                  {task.reviewer === ANYONE ? <span>{t("panels.task.anyone.unworked")}</span> : <Who channel={channel} name={task.reviewer} markLeft />}
                   {open && (
                     <button type="button" className="task-change" onClick={() => setPicking("reviewer")}>
                       {t("panels.task.change")}
@@ -360,7 +380,9 @@ export function PickReviewer({ channel, task, open, onClose }: { channel: Channe
     toast(name === ANYONE ? t("panels.task.anyone.reviews", { task: String(task.id) }) : t("panels.task.reviews", { name: nickname(channel, name), task: String(task.id) }))
     onClose()
   }
-  const now = task.reviewer ? (task.reviewer === ANYONE ? t("panels.task.reviewer.now.anyone") : t("panels.task.reviewer.now", { name: someone(channel, task.reviewer) })) : ""
+  const name = task.reviewer ? someone(channel, task.reviewer) : ""
+  const current = task.reviewer && memberOf(channel, task.reviewer)?.left ? `${name} (${t("shell.sidebar.left")})` : name
+  const now = task.reviewer ? (task.reviewer === ANYONE ? t("panels.task.reviewer.now.anyone") : t("panels.task.reviewer.now", { name: current })) : ""
   const verdict = task.status === "review" ? t("panels.task.reviewer.open") : t("panels.task.reviewer.later")
   return (
     <Modal
@@ -373,7 +395,7 @@ export function PickReviewer({ channel, task, open, onClose }: { channel: Channe
       <div className="task-pick-list">
         <button type="button" className="task-pick-row" aria-pressed={task.reviewer === ANYONE} disabled={task.reviewer === ANYONE} onClick={() => pick(ANYONE)}>
           <span className="task-pick-glyph">
-            <Icon name="at" size={14} />
+            <GlyphIcon glyph={AtIcon} size={14} />
           </span>
           <span className="task-pick-text">
             <span className="task-pick-name">{t("panels.task.anyone")}</span>

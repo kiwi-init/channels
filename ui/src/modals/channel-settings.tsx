@@ -17,7 +17,8 @@ import { GlyphIcon, Icon } from "~/kit/icons"
 import { choreLine } from "~/github/health"
 import { ageOf, ago } from "~/kit/time"
 import type { Channel, Room } from "~/model"
-import { nickname, roomPeople, seatRoot, shown } from "~/names"
+import { nickname, roomPeople, shown } from "~/names"
+import { roomSelection } from "./room-selection.ts"
 import { useApp, type ChannelTab, useGo } from "~/nav"
 import { repoOffers } from "~/modals/repo-offers"
 import { LandingPick, landingWord } from "~/modals/landing-pick"
@@ -254,7 +255,7 @@ function ChannelIcon({ channel, own }: { channel: Channel; own: boolean }) {
 
 interface Picking {
   id: string
-  picked: ReadonlySet<string>
+  edits: ReadonlyMap<string, boolean>
 }
 
 function Rooms({ channel }: { channel: Channel }) {
@@ -266,40 +267,42 @@ function Rooms({ channel }: { channel: Channel }) {
   const [picking, setPicking] = useState<Picking | null>(null)
   const rooms = channel.rooms.filter((r) => r.name.trim())
   const people = roomPeople(channel)
-  const mine = seatRoot(channel, channel.you)
+  const [saving, setSaving] = useState(false)
   const p = page()
   const { a } = p
 
-  const members = (room: Room, roots: readonly string[], picked: ReadonlySet<string>): string => {
+  const members = (room: Room, roots: readonly string[], edits: ReadonlyMap<string, boolean>): string => {
+    const picked = roomSelection(channel, room.members ?? [], edits)
     const flipOne = (name: string) => {
-      const next = new Set(picked)
-      if (next.has(name)) next.delete(name)
-      else next.add(name)
-      setPicking({ id: room.id, picked: next })
+      if (!saving) setPicking({ id: room.id, edits: new Map(edits).set(name, !picked.includes(name)) })
     }
-    const out = roots.some((m) => !picked.has(m))
+    const out = roots.some((m) => !picked.includes(m))
+    const save = async () => {
+      if (saving) return
+      setSaving(true)
+      try {
+        if (await app.actions.setRoomMembers(channel.code, room.id, picked)) setPicking(null)
+      } finally {
+        setSaving(false)
+      }
+    }
     return join([
-      people.map((person, i) => `- [${picked.has(person.name) ? "x" : " "}] ${code(`cs:face:${i}`)} ${a.act(shown(person), () => flipOne(person.name))}`).join("\n"),
+      people.map((person, i) => `- [${picked.includes(person.name) ? "x" : " "}] ${code(`cs:face:${i}`)} ${a.act(shown(person), () => flipOne(person.name))}`).join("\n"),
       fine(say(out ? "modals.channel.settings.room.take.out" : "modals.channel.settings.room.add")),
-      `${a.act(t("modals.channel.settings.cancel"), () => setPicking(null))} ${main(
-        a.act(t("modals.channel.settings.save"), () => {
-          void app.actions.setRoomMembers(channel.code, room.id, [...picked])
-          setPicking(null)
-        })
-      )}`,
+      `${a.act(t("modals.channel.settings.cancel"), () => !saving && setPicking(null))} ${main(a.act(t("modals.channel.settings.save"), () => void save()))}`,
     ])
   }
 
   const roomRow = (room: Room, i: number): string => {
-    const roots = room.members ? [...new Set(room.members.map((m) => seatRoot(channel, m)))].filter((m) => m !== mine) : []
+    const roots = roomSelection(channel, room.members ?? [])
     const who = room.members
       ? [t("modals.channel.settings.room.you"), ...roots.map((m) => nickname(channel, m))].join(t("modals.channel.settings.room.list.sep"))
       : t("modals.channel.settings.room.everyone")
-    const picked = picking?.id === room.id ? picking.picked : null
+    const picked = picking?.id === room.id ? picking.edits : null
     const naming = renaming === room.id
     const line = [
       sets ? a.act(t("modals.channel.settings.rename"), () => setRenaming(room.id)) : "",
-      room.members && sets && canChange && !picked ? a.act(t("modals.channel.settings.room.change.members"), () => setPicking({ id: room.id, picked: new Set(roots) })) : "",
+      room.members && sets && canChange && !picked ? a.act(t("modals.channel.settings.room.change.members"), () => setPicking({ id: room.id, edits: new Map() })) : "",
       a.act(t(room.muted ? "modals.channel.settings.room.unmute" : "modals.channel.settings.room.mute", { room: room.name }), () => app.actions.setMute(channel.code, room.id, !room.muted)),
     ]
     const head = row({

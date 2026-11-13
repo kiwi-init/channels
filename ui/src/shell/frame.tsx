@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
 import { cx, IconButton } from "~/kit/bits"
@@ -10,6 +10,8 @@ import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
 import { useSideWidth } from "~/shell/side-width"
 import { useTabs } from "~/shell/top-layout"
 import { t } from "~/i18n/i18n"
+
+const HistoryArrows = lazy(() => import("~/shell/history-arrows").then((m) => ({ default: m.HistoryArrows })))
 
 const PEEK_SLACK = 24
 const SIDE_MOVE_MS = 320
@@ -118,6 +120,9 @@ export function Frame({ className, news = null, lead, title, tools, side, childr
               {news && <span className={cx("top-drawer-dot", news === "loud" && "is-loud")} />}
             </button>
           )}
+          <Suspense fallback={null}>
+            <HistoryArrows />
+          </Suspense>
         </div>
         {!tabs && title && <h1 className="top-here">{title}</h1>}
         {tools ?? <JumpTools />}

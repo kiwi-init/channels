@@ -9,7 +9,7 @@ import { MessageRow } from "~/chat/message"
 import { threadReply } from "~/chat/quote"
 import { threadRoot } from "~/chat/thread-root"
 import { QuotePick } from "~/chat/quote-pick"
-import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
+import { jumpTo, ReplyContext, replyTo, type Replying } from "~/chat/reply"
 import { t } from "~/i18n/i18n"
 import { Empty } from "~/kit/empty"
 import { useLate } from "~/kit/late"
@@ -28,10 +28,10 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
   const reply = useSyncExternalStore(threadReply.subscribe, threadReply.get)
   const replying = useMemo((): Replying => {
     const here = reply?.code === channel.code && reply.root === seq ? reply : null
+    const to = (here && (here.to === seq ? root : replies.find((m) => m.seq === here.to))) ?? null
     return {
-      to: (here && (here.to === seq ? root : replies.find((m) => m.seq === here.to))) ?? null,
-      excerpt: here?.excerpt ?? null,
-      set: (to, excerpt) => threadReply.set(to ? { code: channel.code, root: seq, to: to.seq, excerpt: excerpt ?? null } : null),
+      quoting: to ? replyTo(to, here?.excerpt ?? null) : null,
+      set: (quoting) => threadReply.set(quoting?.kind === "message" ? { code: channel.code, root: seq, to: quoting.to.seq, excerpt: quoting.excerpt } : null),
     }
   }, [reply, channel.code, seq, root, replies])
   const { actions } = useAct()

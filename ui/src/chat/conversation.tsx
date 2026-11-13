@@ -13,7 +13,7 @@ import { chatterLine, chatterRuns, type ChatterRun } from "~/chat/chatter"
 import { MessageRow } from "~/chat/message"
 import { useStick } from "~/chat/stick"
 import { linked } from "~/chat/linked"
-import { flash, jumpTo, ReplyContext, useReplying, type Replying } from "~/chat/reply"
+import { flash, jumpTo, ReplyContext, replyTo, useReplying, type Quoting, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
 import { t } from "~/i18n/i18n"
@@ -170,10 +170,10 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
     }
   }, [target, visit, code, earlierTo])
   const waiting = target !== null && reached !== visit
-  const [reply, setReply] = useState<{ key: string; to: Message; excerpt: string | null } | null>(null)
+  const [reply, setReply] = useState<{ key: string; quoting: Quoting } | null>(null)
   const replying = useMemo((): Replying => {
     const here = reply?.key === key ? reply : null
-    return { to: here?.to ?? null, excerpt: here?.excerpt ?? null, set: (to, excerpt) => setReply(to ? { key, to, excerpt: excerpt ?? null } : null) }
+    return { quoting: here?.quoting ?? null, set: (quoting) => setReply(quoting ? { key, quoting } : null) }
   }, [reply, key])
   const doc = docOf(channel, where)
   const typing = usePane()?.typing ?? true
@@ -382,7 +382,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     (seq: number, excerpt: string) => {
       const m = list.find((x) => x.seq === seq)
       if (!m) return
-      replying?.set(m, excerpt)
+      replying?.set(replyTo(m, excerpt))
     },
     [list, replying]
   )
@@ -531,7 +531,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const toLatest = () => {
     setFresh(0)
     setFar(false)
-    if (following) return toBottom(true)
+    if (following) {
+      setSpan((s) => ({ ...s, bottom: null }))
+      return toBottom(true)
+    }
     latest.current = true
     setSpan({ top: null, bottom: null })
   }

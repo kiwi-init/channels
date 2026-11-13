@@ -2,11 +2,12 @@ import "~/i18n/en/settings"
 import "~/styles/panes.css"
 import "~/styles/settings.css"
 
+import { ComputerIcon, SmartPhone01Icon } from "@hugeicons/core-free-icons"
 import { lazy, Suspense, useMemo, type ReactNode } from "react"
 
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { withControls } from "~/panes/controls"
 import { doOf, doUrl, NOTHING, pieces, type DoMore } from "~/panes/engine"
 
@@ -103,8 +104,9 @@ export function choices<T>(a: Acts, options: readonly (readonly [T, string])[], 
 function common(name: string): ReactNode | undefined {
   switch (name) {
     case "computer":
+      return <GlyphIcon glyph={ComputerIcon} />
     case "phone":
-      return <Icon name={name} />
+      return <GlyphIcon glyph={SmartPhone01Icon} />
     case "fine":
       return (
         <span className="tone-live">
