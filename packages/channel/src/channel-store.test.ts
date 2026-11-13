@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
+import { join } from "node:path";
 
 import type { Member } from "@kiwi/core/membership.ts";
 import { FOLD_RULES, PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
@@ -295,11 +296,24 @@ describe("a channel store", () => {
     close();
   });
 
-  test("the lean folder is already loading before any window trim needs it (#2261)", async () => {
+  test("a window trim lands inside its wait even when the lean folder is slow to load (#2261)", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((done) => (release = done));
+    mock.module(join(import.meta.dir, "lean.ts"), async () => {
+      await held;
+      return await import("./lean.ts?real");
+    });
     const r = relay(0);
-    const { close } = await opened(r);
-    await until(() => leanNow() !== null);
+    const { store, close } = await opened(r);
+    const all = Array.from({ length: 2_600 }, (_, i) => msg(i + 1));
+    for (const m of all) r.say({ _tag: "Message", message: m, row: null });
+    await sleep(40);
+    for (let i = 0; i < 200 && store.handle.value.messages.length === all.length; i++) await sleep(1);
+    const inTime = store.handle.value.messages.length < all.length;
+    release();
+    await until(() => store.handle.value.messages.length < all.length);
     close();
+    expect(inTime).toBe(true);
   });
 
   test(`past the ${WINDOW}-message window plus slack, the oldest fold into a base, lean copies keep the reach, and the state stays whole`, async () => {
