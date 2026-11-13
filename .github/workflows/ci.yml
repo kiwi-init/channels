@@ -683,7 +683,7 @@ jobs:
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['desktop-linux']
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -816,7 +816,9 @@ jobs:
           out="$RUNNER_TEMP/flicker"
           mkdir -p "$out"
           xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-flicker-probe.ts "$test" "$out/b1-x11-scale1" x11 > "$out/b1-scale1.log" 2>&1 || echo "b1 scale 1 exited $?"
+          tail -n 25 "$out/b1-scale1.log"
           GDK_SCALE=2 xvfb-run -a -s "-screen 0 2560x1600x24" bun desktop/scripts/eb-flicker-probe.ts "$test" "$out/b1-x11-scale2" x11 > "$out/b1-scale2.log" 2>&1 || echo "b1 scale 2 exited $?"
+          tail -n 25 "$out/b1-scale2.log"
           bash desktop/scripts/flicker-sway.sh "$test" "$out/b2-sway-scale1.25" 1.25 || true
           bash desktop/scripts/flicker-sway.sh "$test" "$out/b2-sway-scale1.5" 1.5 || true
           tail -n 5 "$out"/b1-scale*.log
