@@ -101,6 +101,7 @@ export default {
   "chat.composer.stashed.title": "Rascunhos guardados ({keys} traz de volta o mais recente)",
   "chat.composer.stashed.count": "{n} guardados",
   "chat.composer.quoting": "Citando {name}",
+  "chat.composer.quoting.task": "Citando a descrição de {task}",
   "chat.composer.replying.to": "Respondendo a {name}",
   "chat.composer.cancel.reply": "Cancelar resposta",
   "chat.composer.cancel.reply.esc": "Cancelar resposta (Esc)",

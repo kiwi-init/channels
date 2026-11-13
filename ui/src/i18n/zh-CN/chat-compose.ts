@@ -101,6 +101,7 @@ export default {
   "chat.composer.stashed.title": "暂存的草稿（{keys} 取回最新一条）",
   "chat.composer.stashed.count": "已暂存 {n} 条",
   "chat.composer.quoting": "引用 {name}",
+  "chat.composer.quoting.task": "引用 {task} 的描述",
   "chat.composer.replying.to": "回复 {name}",
   "chat.composer.cancel.reply": "取消回复",
   "chat.composer.cancel.reply.esc": "取消回复（Esc）",

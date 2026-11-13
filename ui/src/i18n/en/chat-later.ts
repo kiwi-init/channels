@@ -245,6 +245,7 @@ const words = {
   "chat.fold.check": "{name} {word}",
   "chat.doc.channel.removed": "the channel was removed",
   "chat.doc.channel.closed": "the channel was closed",
+  "chat.composer.edit.not.loaded": "The whole message couldn't be loaded, so it can't be edited right now",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

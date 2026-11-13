@@ -1,3 +1,4 @@
+import "~/i18n/en/settings"
 import "~/styles/settings.css"
 
 import { useState, type ReactNode } from "react"

@@ -67,6 +67,7 @@ const GLYPHS = {
   chevron: ArrowRight01Icon,
   down: ArrowDown01Icon,
   back: ArrowLeft01Icon,
+  forward: ArrowRight01Icon,
   external: LinkSquare02Icon,
   computer: ComputerIcon,
   phone: SmartPhone01Icon,

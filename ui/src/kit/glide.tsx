@@ -74,7 +74,7 @@ export function useMoved<T>(value: T): boolean {
   return moved
 }
 
-const motionOk = (): boolean => document.documentElement.dataset.motion !== "reduced" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+export const motionOk = (): boolean => document.documentElement.dataset.motion !== "reduced" && !matchMedia("(prefers-reduced-motion: reduce)").matches
 
 export function land(el: Element | null | undefined, from: number): void {
   if (!el || !motionOk()) return

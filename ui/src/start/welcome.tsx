@@ -1,13 +1,14 @@
 import "~/i18n/en/shell-later"
 import "~/styles/start.css"
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
+import { HistoryArrows } from "~/shell/history-arrows"
 
 import { takeTurns } from "~/home"
 import { Avatar, cx } from "~/kit/bits"
 import { Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
 import type { ChannelTile, HomeAgent, HomeAsk, HomeChannel } from "~/model"
-import { useApp, useGo } from "~/nav"
+import { useApp, useGo, useOpenToType } from "~/nav"
 import { onboarded } from "~/start/onboarded"
 import { Onboarding } from "~/start/onboarding"
 import type { Key } from "~/i18n/en"
@@ -27,6 +28,9 @@ function Empty() {
     <main className="start-area">
       {intro && <Onboarding onDone={() => setIntro(false)} />}
       <div className="start-drag" />
+      <div className="home-history">
+        <HistoryArrows />
+      </div>
       <div className="start-welcome start-home">
         <h1 className="start-title">{t("start.welcome.no.channels")}</h1>
         <div className="start-choices">
@@ -71,6 +75,9 @@ function Hud({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly Ho
   return (
     <main className="start-area home-area">
       <div className="start-drag" />
+      <div className="home-history">
+        <HistoryArrows />
+      </div>
       <div className="calm">
         {asks.length > 0 && (
           <section className="calm-sec" aria-label={t("start.welcome.waiting.on.you")}>
@@ -202,9 +209,9 @@ function MessageLead({ tile, summary, writing, onWriting }: { tile: ChannelTile;
 }
 
 function ChannelPart({ tile, summary }: { tile: ChannelTile; summary: HomeChannel | undefined }) {
-  const go = useGo()
+  const enter = useOpenToType()
   const needs = summary ? summary.asks.length : tile.needsYou
-  const open = () => go({ to: "channel", code: tile.code })
+  const open = () => enter(tile.code)
   const agents = summary?.agents ?? []
   const active = agents.filter((a) => a.state === "working" || a.state === "waiting")
   const rest = restLine(agents)
@@ -233,14 +240,14 @@ function ChannelPart({ tile, summary }: { tile: ChannelTile; summary: HomeChanne
 }
 
 function QuietRow({ tile, summary }: { tile: ChannelTile; summary: HomeChannel | undefined }) {
-  const go = useGo()
+  const enter = useOpenToType()
   const needs = summary ? summary.asks.length : tile.needsYou
   const [writing, setWriting] = useState(false)
   const status = stateOf(tile, summary) || restLine(summary?.agents ?? [])
   return (
     <li className={cx("calm-quiet", writing && "is-writing")}>
       <div className="calm-chan-row">
-        <button type="button" className="calm-chan" onClick={() => go({ to: "channel", code: tile.code })}>
+        <button type="button" className="calm-chan" onClick={() => enter(tile.code)}>
           <span className="calm-chan-name">{tile.title}</span>
           {status && <span className="calm-meta">{status}</span>}
           <Red summary={summary} />

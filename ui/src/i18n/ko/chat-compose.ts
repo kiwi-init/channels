@@ -101,6 +101,7 @@ export default {
   "chat.composer.stashed.title": "보관한 초안({keys}로 최신 초안 복원)",
   "chat.composer.stashed.count": "{n}개 보관됨",
   "chat.composer.quoting": "{name} 인용 중",
+  "chat.composer.quoting.task": "{task} 설명 인용 중",
   "chat.composer.replying.to": "{name}에게 답장 중",
   "chat.composer.cancel.reply": "답장 취소",
   "chat.composer.cancel.reply.esc": "답장 취소 (Esc)",
