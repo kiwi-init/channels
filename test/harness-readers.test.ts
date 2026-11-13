@@ -64,6 +64,20 @@ function grokInOrder(first: GrokSession, second: GrokSession): string {
   return home;
 }
 
+function countingOpencode(base: Record<string, string>): { env: Record<string, string | undefined>; reads: () => number } {
+  const data = opencode("full", { model: opencodeModelJson("gpt-5"), idle: 200, updated: 100 });
+  let count = 0;
+  const env: Record<string, string | undefined> = { ...base, OPENCODE_SESSION_ID: "ses-1" };
+  Object.defineProperty(env, "XDG_DATA_HOME", {
+    enumerable: true,
+    get: () => {
+      count++;
+      return data;
+    },
+  });
+  return { env, reads: () => count };
+}
+
 const summary = (id: string): string => JSON.stringify({ current_model_id: id });
 const opencodeModelJson = (id: string): string => JSON.stringify({ id, providerID: "anthropic" });
 
@@ -112,9 +126,25 @@ describe("harnessModel at base 2b432da (#2414)", () => {
   });
 
   test("a rejecting reader is followed by the next one", async () => {
-    const env = { GROK_SESSION_ID: "grok-1", GROK_HOME: grok([{ summary: summary("grok-4") }]), OPENCODE_SESSION_ID: "ses-1", XDG_DATA_HOME: opencode("activity-only", { idle: 5, updated: 4 }) };
-    expect(await harnessModel({ ...env, GROK_HOME: fresh() }, { tree: {} })).toBeUndefined();
+    const env = { CODEX_THREAD_ID: "thread-1", CODEX_HOME: join(fresh(), "missing"), OPENCODE_SESSION_ID: "ses-1", XDG_DATA_HOME: opencode("full", { model: opencodeModelJson("gpt-5") }) };
+    expect(await harnessModel(env, { tree: {} })).toBe("gpt-5");
+  });
+
+  test("a throwing reader, then a rejecting last reader, can't tell", async () => {
+    const env = { GROK_SESSION_ID: "grok-1", GROK_HOME: fresh(), OPENCODE_SESSION_ID: "ses-1", XDG_DATA_HOME: opencode("activity-only", { idle: 5, updated: 4 }) };
+    expect(await harnessModel(env, { tree: {} })).toBeUndefined();
+  });
+
+  test("after the first answer, later readers never run", async () => {
+    const { env, reads } = countingOpencode({ GROK_SESSION_ID: "grok-1", GROK_HOME: grok([{ summary: summary("grok-4") }]) });
     expect(await harnessModel(env, { tree: {} })).toBe("grok-4");
+    expect(reads()).toBe(0);
+  });
+
+  test("the counter does see OpenCode run when it is reached", async () => {
+    const { env, reads } = countingOpencode({ GROK_SESSION_ID: "grok-1", GROK_HOME: grok([{}]) });
+    expect(await harnessModel(env, { tree: {} })).toBe("gpt-5");
+    expect(reads()).toBeGreaterThan(0);
   });
 });
 
@@ -179,6 +209,29 @@ describe("harnessActivity at base 2b432da (#2414)", () => {
     const env = { GROK_SESSION_ID: "grok-1", GROK_HOME: fresh(), OPENCODE_SESSION_ID: "ses-1", XDG_DATA_HOME: opencode("full", { model: opencodeModelJson("gpt-5"), idle: 200, updated: 100 }) };
     expect(await harnessActivity(env)).toEqual({ state: "idle", since: 200, model: "gpt-5" });
     expect(await harnessActivity({ ...env, GROK_HOME: grok([{}]) })).toEqual({ state: "idle", since: 200, model: "gpt-5" });
+  });
+
+  test("a rejecting reader is followed by the next one, which still gets its model", async () => {
+    const env = {
+      CODEX_THREAD_ID: "thread-1",
+      CODEX_HOME: join(fresh(), "missing"),
+      OPENCODE_SESSION_ID: "ses-1",
+      XDG_DATA_HOME: opencode("full", { model: opencodeModelJson("gpt-5"), idle: 200, updated: 100 }),
+    };
+    expect(await harnessActivity(env)).toEqual({ state: "idle", since: 200, model: "gpt-5" });
+  });
+
+  test("after the first answer, later readers never run, for the activity or its model", async () => {
+    setSystemTime(new Date(NOW));
+    const { env, reads } = countingOpencode({ GROK_SESSION_ID: "grok-1", GROK_HOME: grok([{ summary: summary("grok-4"), updatedAt: NOW - 30_000 }]) });
+    expect(await harnessActivity(env)).toEqual({ state: "working", model: "grok-4" });
+    expect(reads()).toBe(0);
+  });
+
+  test("the counter does see OpenCode run when activity reaches it", async () => {
+    const { env, reads } = countingOpencode({ GROK_SESSION_ID: "grok-1", GROK_HOME: grok([{}]) });
+    expect(await harnessActivity(env)).toEqual({ state: "idle", since: 200, model: "gpt-5" });
+    expect(reads()).toBeGreaterThan(0);
   });
 
   test("a rejecting reader with nothing after it can't tell", async () => {
