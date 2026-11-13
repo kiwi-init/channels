@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "
 import { linesOf, type EventLine, type TaskRun } from "~/chat/fold-events"
 import { t } from "~/i18n/i18n"
 import { cx, Dot, statusWord } from "~/kit/bits"
+import { useDismiss } from "~/kit/dismiss"
 import { OutsideLink } from "~/kit/outside"
 import { clock, day, sameDay } from "~/kit/time"
 import type { Channel, Message, Task } from "~/model"
@@ -24,23 +25,7 @@ interface Shown {
 
 export function Panel({ onClose, ...shown }: Shown & { onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return
-      e.stopPropagation()
-      onClose()
-    }
-    const outside = (e: PointerEvent) => {
-      if (!(e.target instanceof Element) || box.current?.contains(e.target) || e.target.closest("[data-updates-toggle]")) return
-      onClose()
-    }
-    document.addEventListener("keydown", esc, true)
-    document.addEventListener("pointerdown", outside, true)
-    return () => {
-      document.removeEventListener("keydown", esc, true)
-      document.removeEventListener("pointerdown", outside, true)
-    }
-  }, [onClose])
+  useDismiss(onClose, { on: "document", keys: "capture", escape: "stop", ignore: { box, toggle: "[data-updates-toggle]" } })
   return (
     <div ref={box} role="dialog" aria-label={t("chat.updates.panel.label")} className="updates-panel">
       <Log {...shown} />

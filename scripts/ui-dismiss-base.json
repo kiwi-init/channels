@@ -1,0 +1,2192 @@
+{
+  "chromium": [
+    {
+      "popover": "message GIF picker",
+      "steps": [
+        {
+          "step": "opened",
+          "open": true,
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "ArrowDown",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "a letter",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Tab",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape on body",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer inside",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on the toggle",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on document",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on window",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer outside with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "window blur",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "window resize",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "toggle clicked while open",
+          "open": false,
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened",
+          "open": true,
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        }
+      ]
+    },
+    {
+      "popover": "composer GIF picker",
+      "steps": [
+        {
+          "step": "opened",
+          "open": true,
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "ArrowDown",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "a letter",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Tab",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape on body",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer inside",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on the toggle",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on document",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on window",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer outside with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "window blur",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "window resize",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "toggle clicked while open",
+          "open": false,
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened",
+          "open": true,
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        }
+      ]
+    },
+    {
+      "popover": "composer + menu",
+      "steps": [
+        {
+          "step": "opened",
+          "open": true,
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "ArrowDown",
+          "open": true,
+          "prevented": true,
+          "seen": ["window capture", "window capture", "html capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "a letter",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "Tab",
+          "open": false,
+          "prevented": true,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape",
+          "open": false,
+          "prevented": true,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape on body",
+          "open": false,
+          "prevented": true,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer inside",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "pointer on the toggle",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on document",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on window",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape with a dialog open",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "pointer outside with a dialog open",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "window blur",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "window resize",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "toggle clicked while open",
+          "open": true,
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 2,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "reopened",
+          "open": true,
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 2,
+            "window resize bubble": 1
+          }
+        }
+      ]
+    },
+    {
+      "popover": "updates panel",
+      "steps": [
+        {
+          "step": "opened",
+          "open": true,
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "ArrowDown",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "a letter",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Tab",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape on body",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer inside",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on the toggle",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on document",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on window",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer outside with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "window blur",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "window resize",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "toggle clicked while open",
+          "open": false,
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened",
+          "open": true,
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        }
+      ]
+    },
+    {
+      "popover": "usage card",
+      "steps": [
+        {
+          "step": "opened",
+          "open": true,
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "ArrowDown",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "a letter",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Tab",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape on body",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer inside",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on the toggle",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on document",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on window",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": ["Uncaught TypeError: Failed to execute 'contains' on 'Node': parameter 1 is not of type 'Node'."],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer outside with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "window blur",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "window resize",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "toggle clicked while open",
+          "open": false,
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened",
+          "open": true,
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 2
+          }
+        }
+      ]
+    },
+    {
+      "popover": "rail folder menu",
+      "steps": [
+        {
+          "step": "opened",
+          "open": true,
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "ArrowDown",
+          "open": true,
+          "prevented": true,
+          "seen": ["window capture", "window capture", "html capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "a letter",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "Tab",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "Escape",
+          "open": false,
+          "prevented": true,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape on body",
+          "open": false,
+          "prevented": true,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer inside",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "pointer on the toggle",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on document",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on window",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape with a dialog open",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "pointer outside with a dialog open",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "window blur",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "window resize",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "toggle clicked while open",
+          "open": true,
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 2,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "reopened",
+          "open": true,
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 2,
+            "window resize bubble": 1
+          }
+        }
+      ]
+    },
+    {
+      "popover": "rail folder menu field",
+      "steps": [
+        {
+          "step": "typed, then pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {},
+          "folder": "renamed by a click outside folder, 3 channels, closed"
+        },
+        {
+          "step": "typed, then Escape",
+          "open": false,
+          "prevented": true,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          },
+          "folder": "renamed by a click outside folder, 3 channels, closed"
+        },
+        {
+          "step": "typed, then window blur",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          },
+          "folder": "renamed by a click outside folder, 3 channels, closed"
+        },
+        {
+          "step": "typed, then Tab",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 2,
+            "window resize bubble": 1
+          },
+          "folder": "renamed by a click outside folder, 3 channels, closed"
+        }
+      ]
+    }
+  ],
+  "webkit": [
+    {
+      "popover": "message GIF picker",
+      "steps": [
+        {
+          "step": "opened",
+          "open": true,
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "ArrowDown",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "a letter",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Tab",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape on body",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer inside",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on the toggle",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on document",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on window",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer outside with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "window blur",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "window resize",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "toggle clicked while open",
+          "open": false,
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened",
+          "open": true,
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        }
+      ]
+    },
+    {
+      "popover": "composer GIF picker",
+      "steps": [
+        {
+          "step": "opened",
+          "open": true,
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "ArrowDown",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "a letter",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Tab",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape on body",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer inside",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on the toggle",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on document",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on window",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer outside with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "window blur",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "window resize",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "toggle clicked while open",
+          "open": false,
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened",
+          "open": true,
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        }
+      ]
+    },
+    {
+      "popover": "composer + menu",
+      "steps": [
+        {
+          "step": "opened",
+          "open": true,
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "ArrowDown",
+          "open": true,
+          "prevented": true,
+          "seen": ["window capture", "window capture", "html capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "a letter",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "Tab",
+          "open": false,
+          "prevented": true,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape",
+          "open": false,
+          "prevented": true,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape on body",
+          "open": false,
+          "prevented": true,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer inside",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "pointer on the toggle",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on document",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on window",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape with a dialog open",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "pointer outside with a dialog open",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "window blur",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "window resize",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "toggle clicked while open",
+          "open": true,
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 2,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "reopened",
+          "open": true,
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 2,
+            "window resize bubble": 1
+          }
+        }
+      ]
+    },
+    {
+      "popover": "updates panel",
+      "steps": [
+        {
+          "step": "opened",
+          "open": true,
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "ArrowDown",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "a letter",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Tab",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape on body",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer inside",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on the toggle",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on document",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on window",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer outside with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "window blur",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "window resize",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          }
+        },
+        {
+          "step": "toggle clicked while open",
+          "open": false,
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened",
+          "open": true,
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        }
+      ]
+    },
+    {
+      "popover": "usage card",
+      "steps": [
+        {
+          "step": "opened",
+          "open": true,
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "ArrowDown",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "a letter",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Tab",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape on body",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer inside",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer on the toggle",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on document",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on window",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": ["TypeError: Argument 1 ('other') to Node.contains must be an instance of Node"],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer outside with a dialog open",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "window blur",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "window resize",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "toggle clicked while open",
+          "open": false,
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened",
+          "open": true,
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 2
+          }
+        }
+      ]
+    },
+    {
+      "popover": "rail folder menu",
+      "steps": [
+        {
+          "step": "opened",
+          "open": true,
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "ArrowDown",
+          "open": true,
+          "prevented": true,
+          "seen": ["window capture", "window capture", "html capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "a letter",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "Tab",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "Escape",
+          "open": false,
+          "prevented": true,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape on body",
+          "open": false,
+          "prevented": true,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer inside",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "pointer on the toggle",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on document",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "pointer on window",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "Escape with a dialog open",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "pointer outside with a dialog open",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 1,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "window blur",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "window resize",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {}
+        },
+        {
+          "step": "toggle clicked while open",
+          "open": true,
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 2,
+            "window resize bubble": 1
+          }
+        },
+        {
+          "step": "reopened",
+          "open": true,
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 2,
+            "window resize bubble": 1
+          }
+        }
+      ]
+    },
+    {
+      "popover": "rail folder menu field",
+      "steps": [
+        {
+          "step": "typed, then pointer outside",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {},
+          "folder": "renamed by a click outside folder, 3 channels, closed"
+        },
+        {
+          "step": "typed, then Escape",
+          "open": false,
+          "prevented": true,
+          "seen": ["window capture"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          },
+          "folder": "renamed by a click outside folder, 3 channels, closed"
+        },
+        {
+          "step": "typed, then window blur",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window pointerdown capture": 1
+          },
+          "folder": "renamed by a click outside folder, 3 channels, closed"
+        },
+        {
+          "step": "typed, then Tab",
+          "open": true,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "listeners": {
+            "window blur bubble": 1,
+            "window keydown capture": 1,
+            "window pointerdown capture": 2,
+            "window resize bubble": 1
+          },
+          "folder": "renamed by a click outside folder, 3 channels, closed"
+        }
+      ]
+    }
+  ]
+}
