@@ -63,7 +63,14 @@ export function appMenu(platform: NodeJS.Platform, packaged = false): AppMenuIte
       : []),
     {
       label: "File",
-      submenu: [{ label: "New Channel…", action: ui("new-channel"), accelerator: "n" }, SEPARATOR, { role: "close", label: "Close Window", accelerator: "w" }],
+      submenu: [
+        { label: "New Channel…", action: ui("new-channel"), accelerator: "n" },
+        SEPARATOR,
+        { label: "Split Right", action: ui("split-right"), accelerator: "d" },
+        { label: "Split Down", action: ui("split-down"), accelerator: "Cmd+Shift+d" },
+        SEPARATOR,
+        { label: "Close", action: ui("close-pane"), accelerator: "w" },
+      ],
     },
     {
       label: "Edit",

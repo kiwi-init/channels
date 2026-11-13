@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { appExecutable, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
 import { firstChannel } from "./eb-first-run.ts";
+import { glassParts, tints } from "./glass-shot.ts";
+import { ppm } from "./shot-pixels.ts";
 
 const appDir = process.argv[2] ?? "";
 const out = process.argv[3] ?? "";
@@ -117,6 +119,23 @@ try {
     const { n, p } = await settled("the page at the tile's size", follows);
     const px = await shot("tiled", n.rect, painted);
     return { ok: follows(n, p) && drawn(px), detail: { tile: n.window_rect, page: p, pixels: px } };
+  });
+
+  await step("the frame shows sway's wallpaper under it, warm on the left and cool on the right, and the page stays solid (glass-sway.png)", async () => {
+    const parts = await until("the wallpaper under the frame", 20_000, async () => {
+      const p = await driver.evaluate(glassParts, null, 5_000);
+      return p.glass === "image" && p.wallpaper && p.top ? p : null;
+    }).catch(() => null);
+    const n = windowOf("channels-desktop");
+    if (!parts || !n) return { ok: false, detail: { parts: await driver.evaluate(glassParts, null, 5_000).catch(() => null), why: "the page never drew a wallpaper under its frame" } };
+    await painted();
+    await later(1_500);
+    execFileSync("grim", [join(out, "glass-sway.png")]);
+    const t = tints(ppm(execFileSync("grim", ["-t", "ppm", "-"], { maxBuffer: 256 * 1024 * 1024 })), { x: n.rect.x + n.window_rect.x, y: n.rect.y + n.window_rect.y }, parts);
+    return {
+      ok: (t.left ?? 0) > 15 && (t.right ?? 0) < -15 && (t.side === null || t.side > 15) && (t.page ?? 0) < 12,
+      detail: { tints: t, parts, window: { rect: n.rect, window_rect: n.window_rect } },
+    };
   });
 
   await step("floating at 1000x700, the page follows the window and is drawn (floating.png)", async () => {

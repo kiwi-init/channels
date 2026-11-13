@@ -680,6 +680,26 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: bun desktop/scripts/eb-unreadable-check.ts desktop/release-eb/build/dev-macos-*/*.app
+      - name: the frame is the window's own glass over a bright and a dark wallpaper, solid with Reduce transparency, and scrolling next to an opaque window (T2107)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: |
+          ax() { osascript -l JavaScript -e 'ObjC.import("AppKit"); const w = $.NSWorkspace.sharedWorkspace; `reduce transparency ${w.accessibilityDisplayShouldReduceTransparency}, increase contrast ${w.accessibilityDisplayShouldIncreaseContrast}`'; }
+          echo "what draws this screen: $(system_profiler SPDisplaysDataType 2> /dev/null | grep -E 'Chipset Model|Vendor|Metal|Resolution' | sed -E 's/^ +//' | paste -sd ';' -), $(sysctl -n hw.model), macOS $(sw_vers -productVersion)"
+          echo "this machine, as it comes: $(ax)"
+          for key in reduceTransparency increaseContrast; do echo "com.apple.universalaccess $key: $(defaults read com.apple.universalaccess "$key" 2>&1 | tail -n 1), for every user: $(defaults read /Library/Preferences/com.apple.universalaccess "$key" 2>&1 | tail -n 1)"; done
+          defaults write com.apple.universalaccess reduceTransparency -bool false || echo "the user's Reduce transparency can't be written"
+          echo "after the user's setting: $(ax)"
+          sudo defaults write /Library/Preferences/com.apple.universalaccess reduceTransparency -bool false || echo "the machine's Reduce transparency can't be written"
+          echo "after the machine's setting: $(ax)"
+          bun desktop/scripts/eb-glass-check.ts desktop/release-eb/build/dev-macos-*/*.app "$RUNNER_TEMP/glass"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: glass-mac
+          path: ${{ runner.temp }}/glass
+          if-no-files-found: ignore
+          overwrite: true
 
   desktop-linux:
     name: desktop / linux, ${{ matrix.os }}
@@ -952,11 +972,11 @@ jobs:
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 12
         run: bash desktop/scripts/wayland-check/kwin.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/wayland-check"
-      - name: tiling, scale and closing on wlroots as Hyprland and sway run it (headless sway with no XWayland), with screenshots
+      - name: tiling, scale, closing and the wallpaper under the glass frame on wlroots as Hyprland and sway run it (headless sway with no XWayland), with screenshots
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 12
         run: bash desktop/scripts/wlroots-check/sway.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/wlroots-check"
-      - name: on a floating desktop (headless weston) the shell draws GNOME's wallpaper, with no GTK title bar and close, minimize and maximize top left, with screenshots
+      - name: on a floating desktop (headless weston) the glass frame shows GNOME's wallpaper and then KDE's, with no GTK title bar and close, minimize and maximize top left, with screenshots
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 8
         run: bash desktop/scripts/floating-check/weston.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/floating-check"

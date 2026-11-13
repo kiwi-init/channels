@@ -29,11 +29,11 @@ const SHOTS: Record<string, Screen> = {
   "step-card": { ready: ".feed .ask", mentions: true },
   "handoff-card": { ready: ".feed .ask", mentions: true },
   tasks: { ready: ".board" },
-  task: { ready: ".panel-body .tp-brief" },
-  "task-working": { ready: ".panel-body", mentions: true },
-  "task-review": { ready: ".panel-body" },
-  "task-waiting": { ready: ".panel-body" },
-  "task-done": { ready: ".panel-body" },
+  task: { ready: ".task-page .pg-title" },
+  "task-working": { ready: ".task-page .pg-title", mentions: true },
+  "task-review": { ready: ".task-page .pg-title" },
+  "task-waiting": { ready: ".task-page .pg-title" },
+  "task-done": { ready: ".task-page .pg-title" },
   needs: { ready: ".needs-card" },
   "needs-asked-of": { ready: ".needs-card" },
   "needs-step": { ready: ".needs-card .ask" },
@@ -47,7 +47,7 @@ const SHOTS: Record<string, Screen> = {
   "agent-working": { ready: ".person-name-text", mentions: true },
   "agent-offline": { ready: ".person-name-text", mentions: true },
   "needs-panel": { ready: ".person-name-text" },
-  agents: { ready: ".lane" },
+  agents: { ready: ".page.is-agents .pg-title" },
 };
 
 const SETTLE_MS = 1200;

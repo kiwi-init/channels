@@ -33,7 +33,7 @@ const expect = (ok: boolean, what: string) => {
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
   page.on("pageerror", (e) => fails.push(e.message));
-  const panel = page.locator(".panel");
+  const panel = page.locator(".panel.is-pane");
   const reviewer = panel.locator("dt", { hasText: /^Reviewer$/ }).locator("+ dd");
   const screenshot = async (suffix: string) => {
     if (!shots) return;
@@ -74,7 +74,15 @@ try {
   await reviewer.waitFor();
   expect((await reviewer.innerText()).includes("Sage"), "a completed task retains its reviewer name");
   expect((await reviewer.getByRole("button", { name: "Change", exact: true }).count()) === 0, "completed tasks do not gain a Change action");
-  expect((await panel.locator(".task-history").innerText()).includes("Sage approved"), "completed review history retains the departed judge's attribution");
+  expect(
+    (
+      await panel
+        .locator(".pg-label", { hasText: /^Activity$/ })
+        .locator("xpath=following-sibling::*[1]")
+        .innerText()
+    ).includes("Sage approved"),
+    "completed review history retains the departed judge's attribution",
+  );
   await page.goto(`http://127.0.0.1:${server.port}/?shot=task-departed-reviewer-readonly`);
   await reviewer.waitFor();
   expect((await reviewer.innerText()).includes("Sage") && (await reviewer.innerText()).includes("left"), "a read-only viewer sees the same departed reviewer disclosure");

@@ -598,6 +598,7 @@ typedef struct {
 } Look;
 
 static GtkCssProvider *look_css = NULL;
+static GtkWidget *look_window = NULL;
 static guint32 look_light = 0;
 static gboolean look_clear = FALSE;
 static guint32 look_dark = 0;
@@ -647,6 +648,8 @@ static bool look_on_main(gconstpointer arg) {
     fit_to_screen(window, look->min_width, look->min_height);
     look_light = look->light;
     look_dark = look->dark;
+    look_window = GTK_WIDGET(window);
+    g_object_add_weak_pointer(G_OBJECT(window), (gpointer *)&look_window);
     if (!look_css) {
       look_css = gtk_css_provider_new();
       gtk_style_context_add_provider(gtk_widget_get_style_context(GTK_WIDGET(window)), GTK_STYLE_PROVIDER(look_css), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
@@ -720,10 +723,24 @@ size_t kiwi_image_pixels_sized(const char *path, int width, int height, uint8_t 
   return ok ? need : 0;
 }
 
+static void find_web_view(GtkWidget *widget, gpointer found) {
+  GtkWidget **view = found;
+  if (*view) return;
+  if (WEBKIT_IS_WEB_VIEW(widget)) *view = widget;
+  else if (GTK_IS_CONTAINER(widget)) gtk_container_forall(GTK_CONTAINER(widget), find_web_view, found);
+}
+
 static bool clear_on_main(gconstpointer arg) {
   (void)arg;
   look_clear = TRUE;
   if (look_css) paint_background();
+  if (look_window) {
+    GtkWidget *view = NULL;
+    find_web_view(look_window, &view);
+    GdkRGBA none = {0, 0, 0, 0};
+    if (view) webkit_web_view_set_background_color(WEBKIT_WEB_VIEW(view), &none);
+    gtk_widget_set_app_paintable(look_window, TRUE);
+  }
   return true;
 }
 

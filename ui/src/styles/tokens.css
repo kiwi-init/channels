@@ -117,6 +117,7 @@
   --plate: var(--bg-2);
   --page: var(--bg);
   --frame: var(--bg-3);
+  --glass: 60%;
   --frame-2: light-dark(var(--bg-2), color-mix(in srgb, var(--bg-3) 94%, var(--ink)));
   --frame-3: light-dark(color-mix(in srgb, var(--bg-3) 94%, var(--ink)), color-mix(in srgb, var(--bg-3) 88%, var(--ink)));
   --float: var(--bg-3);

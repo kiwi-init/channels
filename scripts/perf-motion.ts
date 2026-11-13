@@ -184,7 +184,7 @@ try {
         .hover()
         .then(() => answer.getByRole("button", { name: "Reply in thread" }).click()),
   };
-  const closeThread = page.getByRole("complementary", { name: "Details" }).getByRole("button", { name: "Close", exact: true });
+  const closeThread = page.getByRole("region", { name: "Thread" }).getByRole("button", { name: "Close", exact: true });
   await measure(
     "thread open",
     async () => undefined,

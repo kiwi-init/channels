@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { Suspense, useEffect, useLayoutEffect, useState } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
@@ -6,7 +6,6 @@ import { cx, IconButton, useLate } from "~/kit/bits"
 import { keyRan, onCommand } from "~/kit/commands"
 import { dialogOpen, keysHint, mod } from "~/kit/keys"
 import { Boundary } from "~/kit/boundary"
-import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import { useMedia, WIDE } from "~/kit/media"
 import type { Channel } from "~/model"
@@ -15,45 +14,26 @@ import { dropMessage, findWanted, specOfWanted, useWantedMessage } from "~/live/
 import { sameWhere, useGo, useNav, useActions } from "~/nav"
 import { whereKey } from "~/places"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
-import { usePanelWidth } from "~/shell/panel-width"
-import { useSideWidth } from "~/shell/side-width"
-import { isSideKey, setDrawer, toggleSide, useDrawer } from "~/shell/side"
-import { Sidebar, ViewsBar } from "~/shell/sidebar"
-import { useTabs, useTopLayout } from "~/shell/top-layout"
+import { Frame } from "~/shell/frame"
+import { useDrawer } from "~/shell/side"
+import { Content } from "~/shell/content"
+import { viewOf } from "~/panes/place"
+import { FocusScope, placeName } from "~/panes/place"
+import { Sidebar } from "~/shell/sidebar"
+import { useTabs } from "~/shell/top-layout"
 import { ActivityButton } from "~/chat/events"
-import { between, nickname } from "~/names"
 import { t } from "~/i18n/i18n"
 
-const PEEK_SLACK = 24
-const SIDE_MOVE_MS = 320
-
-const VIEW_NAMES = {
-  chat: "shell.channel.views",
-  specs: "shell.channel.specs",
-  agents: "shell.channel.agents",
-  github: "shell.channel.github",
-  needs: "shell.channel.needs.you",
-} as const
-
-const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
+const Panes = later(() => import("~/panes/panes").then((m) => m.Panes))
+const Page = later(() => import("~/panes/page").then((m) => m.Page))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const OlderView = later(() => import("~/chat/older-view").then((m) => m.OlderView))
-const Lanes = later(() => import("~/tasks/lanes").then((m) => m.Lanes))
-const GithubView = later(() => import("~/github/view").then((m) => m.GithubView))
-const SpecsView = later(() => import("~/specs/view").then((m) => m.SpecsView))
-const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
-const IssuePanel = later(() => import("~/github/panel").then((m) => m.IssuePanel))
-const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
-const Tracker = later(() => import("~/tasks/tracker").then((m) => m.Tracker))
-const TaskPanel = later(() => import("~/panels/task").then((m) => m.TaskPanel))
-const ThreadPanel = later(() => import("~/panels/thread").then((m) => m.ThreadPanel))
+const NarrowPanel = later(() => import("~/shell/narrow-panel").then((m) => m.NarrowPanel))
 const Profile = later(() => import("~/modals/profile").then((m) => m.Profile))
 const ChannelSettings = later(() => import("~/modals/channel-settings").then((m) => m.ChannelSettings))
 const Invite = later(() => import("~/modals/invite").then((m) => m.Invite))
 const AddAgent = later(() => import("~/modals/add-agent").then((m) => m.AddAgent))
 const DocVersions = later(() => import("~/modals/doc-versions").then((m) => m.DocVersions))
-
-const HistoryArrows = lazy(() => import("~/shell/history-arrows").then((m) => ({ default: m.HistoryArrows })))
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const nav = useNav()
@@ -61,14 +41,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const actions = useActions()
   const hidden = useSidebarHidden()
   const tabs = useTabs()
-  const top = useTopLayout()
-  const panel = usePanelWidth(hidden)
-  const side = useSideWidth()
-  useLayoutEffect(() => {
-    const root = document.documentElement
-    root.style.setProperty("--panel-w", `${panel.width}px`)
-    return () => void root.style.removeProperty("--panel-w")
-  }, [panel.width])
   const [jumpAt, setJumpAt] = useState<{ jump: Jump; visit: number } | null>(null)
   const jump = jumpAt?.visit === nav.visit ? jumpAt.jump : null
   const setJump = (j: Jump | null) => setJumpAt(j ? { jump: j, visit: nav.visit } : null)
@@ -112,58 +84,19 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   }, [gone, go])
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
-  const [peek, setPeek] = useState(false)
-  if (!hidden && peek) setPeek(false)
-  const peeking = hidden && peek
-  useEffect(() => {
-    if (!peeking) return
-    const onMove = (e: MouseEvent) => {
-      const edge = document.querySelector(".side")?.getBoundingClientRect().right ?? 0
-      if (e.clientX > edge + PEEK_SLACK) setPeek(false)
-    }
-    window.addEventListener("mousemove", onMove)
-    return () => window.removeEventListener("mousemove", onMove)
-  }, [peeking])
-  const panelOpen = !!nav.panel
+  const panelOpen = !!nav.panel && !tabs
   const reading = nav.tab === "specs" && nav.spec != null && !panelOpen
-  const second = useMedia(WIDE) && !panelOpen && !older && !reading
+  const now = useMedia(WIDE) && !panelOpen && !older && !reading
+  const view = viewOf(nav)
   useLayoutEffect(() => {
     const root = document.documentElement
-    root.toggleAttribute("data-bare", hidden)
-    root.toggleAttribute("data-peek", peeking)
     root.toggleAttribute("data-panel", panelOpen)
-    return () => {
-      for (const name of ["data-bare", "data-peek", "data-panel"]) root.removeAttribute(name)
-    }
-  }, [hidden, peeking, panelOpen])
-  const wasHidden = useRef(hidden)
-  useLayoutEffect(() => {
-    if (wasHidden.current === hidden) return
-    wasHidden.current = hidden
-    const root = document.documentElement
-    root.dataset.sideMove = hidden ? "out" : "in"
-    const timer = window.setTimeout(() => delete root.dataset.sideMove, SIDE_MOVE_MS)
-    return () => {
-      window.clearTimeout(timer)
-      delete root.dataset.sideMove
-    }
-  }, [hidden])
+    return () => root.removeAttribute("data-panel")
+  }, [panelOpen])
   const offline = useLate(channel.connection !== "live", 1000)
   useEffect(() => {
-    setDrawer(false)
-    return () => setDrawer(false)
-  }, [nav.where])
-  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isSideKey(e)) {
-        e.preventDefault()
-        keyRan("sidebar")
-        toggleSide()
-      }
-      if (e.key === "Escape" && !e.defaultPrevented && !dialogOpen()) {
-        if (drawer) setDrawer(false)
-        else if (nav.panel) go({ to: "panel", panel: null })
-      }
+      if (e.key === "Escape" && !e.defaultPrevented && !dialogOpen() && !drawer && nav.panel) go({ to: "panel", panel: null })
       if (mod(e) && !e.altKey && e.key.toLowerCase() === "f" && !dialogOpen()) {
         e.preventDefault()
         keyRan("find")
@@ -172,7 +105,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       }
     }
     const stop = onCommand((c) => {
-      if (c === "sidebar") toggleSide()
       if (c === "find" && !dialogOpen()) {
         setSearching(true)
         setFocusAsk((n) => n + 1)
@@ -185,60 +117,15 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
     }
   }, [nav.panel, go, drawer])
 
-  if (channel.waiting)
-    return (
-      <Suspense fallback={null}>
-        <Waiting channel={channel} />
-      </Suspense>
-    )
-
-  const here =
-    nav.where.kind === "room"
-      ? `# ${channel.rooms.find((r) => r.id === (nav.where as { room: string }).room)?.name ?? "general"}`
-      : nav.where.kind === "dm"
-        ? `@ ${nickname(channel, nav.where.with)}`
-        : nav.where.kind === "theirs"
-          ? between(channel, nav.where.between)
-          : `T${nav.where.task}`
-
-  const title = nav.tab === "chat" ? here : t(VIEW_NAMES[nav.tab])
+  const title = placeName(channel, nav)
   const news = drawerNews(channel)
 
   return (
-    <div className={cx("chan", nav.panel && "has-panel", drawer && "is-drawer", hidden && "is-bare", top && "is-top", peeking && "is-peek", reading && "is-reading")}>
-      {hidden && !peek && <div className="side-edge" onMouseEnter={() => setPeek(true)} />}
-      {!hidden && (
-        <div
-          className="side-grip"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label={t("shell.channel.resize.side")}
-          aria-valuemin={side.min}
-          aria-valuemax={side.max}
-          aria-valuenow={side.width}
-          tabIndex={0}
-          title={t("shell.channel.resize.title")}
-          {...side.grip}
-        />
-      )}
-      <header className="top">
-        <div className="top-lead">
-          <button
-            type="button"
-            className="icon-btn top-drawer"
-            aria-label={t(news ? "shell.channel.drawer.label.news" : "shell.channel.drawer.label", { keys: keysHint("\\") })}
-            title={t("shell.channel.drawer.title", { keys: keysHint("\\") })}
-            aria-pressed={drawer}
-            onClick={toggleSide}
-          >
-            <Icon name="sidebar" />
-            {news && <span className={cx("top-drawer-dot", news === "loud" && "is-loud")} />}
-          </button>
-          <Suspense fallback={null}>
-            <HistoryArrows />
-          </Suspense>
-        </div>
-        {!tabs && <h1 className="top-here">{title}</h1>}
+    <Frame
+      className={cx(panelOpen && "has-panel")}
+      news={news}
+      title={title}
+      tools={
         <div className={cx("top-tools", searching && "is-searching")}>
           {channel.hold && nav.tab !== "chat" && (
             <span className="top-hold" title={channel.hold.note}>
@@ -252,82 +139,50 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               </Suspense>
             </div>
           )}
-          {!second && <ActivityButton channel={channel} />}
+          {!tabs && <ActivityButton channel={channel} />}
           <IconButton icon="search" label={t("shell.channel.search", { keys: keysHint("F") })} onClick={() => setSearching(true)} />
         </div>
-      </header>
-      {top && <ViewsBar channel={channel} />}
-      <Sidebar channel={channel} views={!top} />
-      <main className="main" aria-label={tabs ? title : undefined}>
-        <Boundary resetKey={nav.tab}>
+      }
+      side={
+        <FocusScope code={channel.code} now={now}>
+          <Sidebar channel={channel} />
+        </FocusScope>
+      }
+    >
+      <Content>
+        <Panes
+          channel={channel}
+          label={tabs ? title : undefined}
+          now={now}
+          place={<PlaceView channel={channel} />}
+          main={
+            <Boundary resetKey={nav.tab}>
+              <Suspense fallback={null}>
+                {older ? <OlderView channel={channel} older={older} onBack={() => setOlder(null)} /> : view ? <Page channel={channel} view={view} /> : <Conversation channel={channel} jump={jump} />}
+              </Suspense>
+            </Boundary>
+          }
+        />
+        {offline && (
+          <p className="conn" role="status">
+            <span className="dot is-doing" aria-hidden="true" />
+            {channel.connection === "connecting" ? t("shell.channel.connecting") : t("shell.channel.reconnecting")}
+          </p>
+        )}
+        {panelOpen && (
           <Suspense fallback={null}>
-            {older ? (
-              <OlderView channel={channel} older={older} onBack={() => setOlder(null)} />
-            ) : nav.tab === "agents" ? (
-              <Lanes channel={channel} />
-            ) : nav.tab === "github" ? (
-              <GithubView channel={channel} />
-            ) : nav.tab === "specs" ? (
-              <SpecsView channel={channel} />
-            ) : nav.tab === "needs" ? (
-              <NeedsYou channel={channel} onJump={setJump} />
-            ) : (
-              <Conversation channel={channel} jump={jump} />
-            )}
+            <NarrowPanel channel={channel} hidden={hidden} />
           </Suspense>
-        </Boundary>
-      </main>
-      {second && (
-        <Suspense fallback={null}>
-          <Tracker channel={channel} />
-        </Suspense>
-      )}
-      {offline && (
-        <p className="conn" role="status">
-          <span className="dot is-doing" aria-hidden="true" />
-          {channel.connection === "connecting" ? t("shell.channel.connecting") : t("shell.channel.reconnecting")}
-        </p>
-      )}
-      {nav.panel && (
-        <aside className="panel" aria-label={t("shell.channel.details")}>
-          <div
-            className="panel-grip"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label={t("shell.channel.resize")}
-            aria-valuemin={panel.min}
-            aria-valuemax={panel.max}
-            aria-valuenow={panel.width}
-            tabIndex={0}
-            title={t("shell.channel.resize.title")}
-            {...panel.grip}
-          />
-          <PanelView channel={channel} />
-        </aside>
-      )}
+        )}
+      </Content>
       <ModalView channel={channel} />
-    </div>
+    </Frame>
   )
 }
 
-function PanelView({ channel }: { channel: Channel }) {
-  const nav = useNav()
-  if (!nav.panel) return null
-  return (
-    <Boundary panel resetKey={JSON.stringify(nav.panel)}>
-      <Suspense fallback={null}>
-        {nav.panel.kind === "thread" ? (
-          <ThreadPanel channel={channel} seq={nav.panel.seq} focus={nav.panel.focus} />
-        ) : nav.panel.kind === "task" ? (
-          <TaskPanel channel={channel} id={nav.panel.task} />
-        ) : nav.panel.kind === "pr" ? (
-          <PrPanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
-        ) : (
-          <IssuePanel channel={channel} repo={nav.panel.repo} number={nav.panel.number} />
-        )}
-      </Suspense>
-    </Boundary>
-  )
+function PlaceView({ channel }: { channel: Channel }) {
+  const view = viewOf(useNav())
+  return view ? <Page channel={channel} view={view} /> : <Conversation channel={channel} jump={null} />
 }
 
 function ModalView({ channel }: { channel: Channel }) {

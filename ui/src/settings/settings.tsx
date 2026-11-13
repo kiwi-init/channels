@@ -1,5 +1,4 @@
 import "~/i18n/en/settings"
-import { HistoryArrows } from "~/shell/history-arrows"
 
 import { ComputerPhoneSyncIcon, PaintBoardIcon, UserCircleIcon } from "@hugeicons/core-free-icons"
 import { useEffect } from "react"
@@ -10,10 +9,13 @@ import { cx } from "~/kit/bits"
 import { useGlide } from "~/kit/glide"
 import { GlyphIcon, Icon, type Glyph, type IconName } from "~/kit/icons"
 import { type Section, useGo, useNav } from "~/nav"
-import { AgentsSection } from "~/settings/agents"
-import { ComputersSection } from "~/settings/computers"
-import { AboutSection, AccountSection, AppearanceSection } from "~/settings/sections"
+import { AgentsPage } from "~/settings/agents"
+import { ComputersPage } from "~/settings/computers"
+import { AboutPage, AccountPage, AppearancePage } from "~/settings/pages"
 import { useSideways } from "~/kit/sideways"
+import { Content } from "~/shell/content"
+import { Frame } from "~/shell/frame"
+import { useTabs } from "~/shell/top-layout"
 import { SideCards } from "~/shell/updates"
 
 const SECTIONS: readonly (readonly [Section, Key, IconName | Glyph])[] = [
@@ -28,6 +30,7 @@ export function Settings() {
   const navRef = useGlide<HTMLElement>(".side-row.is-on")
   const nav = useNav()
   const go = useGo()
+  const tabs = useTabs()
   useSideways(navRef, nav.section)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -38,54 +41,58 @@ export function Settings() {
     return () => window.removeEventListener("keydown", onKey)
   }, [go])
 
+  const back = (
+    <button type="button" className="set-back" title={t("settings.settings.back")} onClick={() => go({ to: "back" })}>
+      <Icon name="back" size={14} />
+      {t("settings.settings.title")}
+    </button>
+  )
   return (
-    <div className="set">
-      <header className="top set-top">
-        <div className="set-top-lead">
-          <HistoryArrows />
-        </div>
-        <h1 className="set-top-title">
-          <button type="button" className="set-back" title={t("settings.settings.back")} onClick={() => go({ to: "back" })}>
-            {t("settings.settings.title")}
-          </button>
-        </h1>
-      </header>
-      <nav ref={navRef} className="set-nav" aria-label={t("settings.settings.sections")}>
-        <ul>
-          {SECTIONS.map(([id, label, icon]) => {
-            const on = nav.section === id
-            return (
-              <li key={id}>
-                <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "settings", section: id })}>
-                  <span className="side-icon">{typeof icon === "string" ? <Icon name={icon} /> : <GlyphIcon glyph={icon} />}</span>
-                  <span className="side-label">{t(label)}</span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-        <SideCards />
-      </nav>
-      <main className="set-main">
-        <div className="set-body" key={nav.section}>
-          <Current section={nav.section} />
-        </div>
-      </main>
-    </div>
+    <Frame
+      className="set"
+      lead={tabs ? undefined : <h1 className="set-lead">{back}</h1>}
+      side={
+        <nav ref={navRef} className="side set-nav" aria-label={t("settings.settings.sections")}>
+          {tabs && <h1 className="set-lead">{back}</h1>}
+          <ul>
+            {SECTIONS.map(([id, label, icon]) => {
+              const on = nav.section === id
+              return (
+                <li key={id}>
+                  <button type="button" className={cx("side-row", on && "is-on")} aria-current={on ? "page" : undefined} onClick={() => go({ to: "settings", section: id })}>
+                    <span className="side-icon">{typeof icon === "string" ? <Icon name={icon} /> : <GlyphIcon glyph={icon} />}</span>
+                    <span className="side-label">{t(label)}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <SideCards />
+        </nav>
+      }
+    >
+      <Content>
+        <main className="set-main">
+          <div className="set-body" key={nav.section}>
+            <Current section={nav.section} />
+          </div>
+        </main>
+      </Content>
+    </Frame>
   )
 }
 
 function Current({ section }: { section: Section }) {
   switch (section) {
     case "account":
-      return <AccountSection />
+      return <AccountPage />
     case "appearance":
-      return <AppearanceSection />
+      return <AppearancePage />
     case "computers":
-      return <ComputersSection />
+      return <ComputersPage />
     case "agents":
-      return <AgentsSection />
+      return <AgentsPage />
     case "about":
-      return <AboutSection />
+      return <AboutPage />
   }
 }

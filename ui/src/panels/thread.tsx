@@ -18,6 +18,8 @@ import { nickname } from "~/names"
 import { useAct } from "~/nav"
 import { PanelHead } from "~/panels/frame"
 
+const KEPT = new Map<string, { seq: number; offset: number }>()
+
 export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: Channel; seq: number; focus?: number | undefined }) {
   const { seq, focus } = threadRoot(channel.messages, opened, asked)
   const root = channel.messages.find((m) => m.seq === seq)
@@ -57,17 +59,41 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
       live = false
     }
   }, [early, code, seq, loadKey, earlierTo])
-  const { scroller, content, remember, toBottom, unstick } = useStick()
+  const { scroller, content, remember, toBottom, unstick, toRow, stuck } = useStick()
+  const keepKey = `${code}\n${seq}`
   const last = replies.at(-1)?.seq
   const shown = useRef({ seq, last })
+  const restored = useRef<{ kept: { seq: number; offset: number }; at: number } | null>(null)
   useLayoutEffect(() => {
     if (waiting) return
     if (focus !== undefined) {
       unstick()
       if (jumpTo(content.current, focus, "instant")) return
     }
+    const kept = KEPT.get(keepKey)
+    const row = kept && content.current?.querySelector<HTMLElement>(`[data-seq="${kept.seq}"]`)
+    restored.current = null
+    if (kept && row) {
+      unstick()
+      toRow(row, kept.offset)
+      restored.current = { kept, at: scroller.current?.scrollTop ?? Number.NaN }
+      return
+    }
     toBottom(false)
-  }, [seq, focus, content, toBottom, unstick, waiting])
+  }, [seq, focus, content, scroller, toBottom, unstick, waiting, keepKey, toRow])
+  useLayoutEffect(() => {
+    const box = scroller.current
+    const list = content.current
+    if (waiting || !box || !list) return
+    return () => {
+      if (stuck.current) return void KEPT.delete(keepKey)
+      const was = restored.current
+      if (was && Math.abs(box.scrollTop - was.at) < 1) return void KEPT.set(keepKey, was.kept)
+      const top = box.getBoundingClientRect().top
+      const row = [...list.querySelectorAll<HTMLElement>("[data-seq]")].find((r) => r.getBoundingClientRect().bottom > top)
+      if (row) KEPT.set(keepKey, { seq: Number(row.dataset.seq), offset: row.getBoundingClientRect().top - top })
+    }
+  }, [waiting, keepKey, scroller, content, stuck])
   useLayoutEffect(() => {
     const was = shown.current
     shown.current = { seq, last }

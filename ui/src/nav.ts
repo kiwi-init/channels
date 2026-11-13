@@ -6,7 +6,7 @@ import { keepPlace, keptPlace, spotAt, spotKey, whereKey, type Spot, type Tab } 
 
 export type SpecPart = "spec" | "inside" | "result"
 
-export type GithubView = "prs" | "issues"
+type GithubView = "prs" | "issues"
 
 export type Panel = { kind: "task"; task: number } | { kind: "pr"; repo: string; number: number } | { kind: "issue"; repo: string; number: number } | { kind: "thread"; seq: number; focus?: number }
 

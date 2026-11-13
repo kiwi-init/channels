@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { demoFile, demoImage, putDemoFile, putDemoImage } from "~/demo/doc-media"
+import { setAccessibilityOption } from "@kiwi/app/accessibility.ts"
 import { inviteLine } from "@kiwi/app/join-line.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import { HANDOFF_DONE } from "@kiwi/core/protocol.ts"
@@ -1045,7 +1046,10 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         return code
       },
       setName: (name) => setState((s) => (s.account ? { ...s, account: { ...s.account, name } } : { ...s, account: { ...DEMO_ACCOUNT, name } })),
-      setPrefs: (p) => setState((s) => ({ ...s, prefs: { ...s.prefs, ...p } })),
+      setPrefs: (p) => {
+        if (p.reduceTransparency !== undefined) setAccessibilityOption("reduce-transparency", p.reduceTransparency)
+        setState((s) => ({ ...s, prefs: { ...s.prefs, ...p } }))
+      },
       searchOlder: async (...[, query, before]: Parameters<Actions["searchOlder"]>) => demoOlder(query, before),
       olderAround: async (...[, seq]: Parameters<Actions["olderAround"]>) => demoAround(seq),
       fetchOlder: (...[, got]: Parameters<Actions["fetchOlder"]>) => demoFetchOlder(got),

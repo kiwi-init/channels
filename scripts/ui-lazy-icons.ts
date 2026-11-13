@@ -66,10 +66,10 @@ async function visit(shot: string, checks: (page: Page) => Promise<void>) {
 }
 
 await visit("settings-devices", async (page) => {
-  await page.locator(".set-device-icon svg.icon").first().waitFor();
-  const devices = await drawn(page, ".set-device-icon");
+  await page.locator(".ctl-head > .ctl-mark svg.icon").first().waitFor();
+  const devices = await drawn(page, ".ctl-head > .ctl-mark");
   expect(devices.all > 0 && devices.drawn === devices.all, `Settings, Computers: each computer and phone has its icon drawn (${devices.drawn} of ${devices.all})`);
-  const add = await drawn(page, ".set-device-actions");
+  const add = await drawn(page, ".pg-acts");
   expect(add.all === 2 && add.drawn === 2, `the add-a-computer and link-a-phone buttons have theirs (${add.drawn} of ${add.all})`);
   const sections = await drawn(page, ".side-icon");
   expect(sections.all >= 5 && sections.drawn === sections.all, `every Settings section, Account and Computers included, has its icon (${sections.drawn} of ${sections.all})`);

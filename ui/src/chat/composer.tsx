@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useContext, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react"
 
-import { AttachedFiles, DropHint, IMAGE_TYPES, useAttach } from "~/chat/attach"
+import { IMAGE_TYPES, useAttach } from "~/chat/attach"
 import { matchCommands, parseCommand } from "~/chat/commands"
 import { useCommands } from "~/chat/use-commands"
 import { EditHere, startEditing } from "~/chat/editing"
@@ -21,12 +21,15 @@ import type { Channel, Upload, Where } from "~/model"
 import { claimFocus, useActions, useToast } from "~/nav"
 import { nickname } from "~/names"
 import { withNames } from "~/chat/linked"
-import { listId, Suggestions, useSuggest } from "~/chat/suggest"
+import { listId, useSuggest } from "~/chat/suggest"
 import { wordsRaw } from "~/words"
 import { keysHint } from "~/kit/keys"
 
 const Gifs = lazy(() => import("~/chat/gif-picker"))
 const StashList = lazy(() => import("~/chat/stash-list"))
+const Suggestions = lazy(() => import("~/chat/suggestions").then((m) => ({ default: m.Suggestions })))
+const DropHint = lazy(() => import("~/chat/attached").then((m) => ({ default: m.DropHint })))
+const AttachedFiles = lazy(() => import("~/chat/attached").then((m) => ({ default: m.AttachedFiles })))
 
 type Cue = { key: string; back: boolean; left: number; lost?: number }
 
@@ -232,7 +235,11 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
           ))}
         </ul>
       )}
-      <Suggestions channel={channel} s={s} />
+      {listId(s) && (
+        <Suspense fallback={null}>
+          <Suggestions channel={channel} s={s} />
+        </Suspense>
+      )}
       <form
         ref={form}
         className={cx("composer", quoting && "is-replying", dropping && "is-dropping")}
@@ -276,8 +283,12 @@ function ComposerIn({ channel, where, placeholder, inThread, doc }: ComposerProp
             </button>
           </div>
         )}
-        {dropping && <DropHint anyFile={!!doc} />}
-        <AttachedFiles files={files} anyFile={!!doc} onRemove={(i) => setFiles((now) => now.filter((_, j) => j !== i))} />
+        {(dropping || files.length > 0) && (
+          <Suspense fallback={null}>
+            {dropping && <DropHint anyFile={!!doc} />}
+            <AttachedFiles files={files} anyFile={!!doc} onRemove={(i) => setFiles((now) => now.filter((_, j) => j !== i))} />
+          </Suspense>
+        )}
         {quoting && (
           <div className={cx("compose-reply", excerpt && "is-excerpt")}>
             <Icon name="reply" size={13} />

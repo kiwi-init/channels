@@ -2,7 +2,6 @@ import type { Scenario } from "~/demo/provider"
 import type { Prefs, Usage } from "~/model"
 import type { Nav } from "~/nav"
 import type { TrackTab } from "~/tasks/track-tab"
-import type { Layout } from "@kiwi/app/layout.ts"
 
 export interface Shot {
   scenario: Scenario
@@ -13,7 +12,6 @@ export interface Shot {
   streams?: boolean
   onboarding?: true
   track?: TrackTab
-  layout?: Layout
   usage?: Partial<Usage>
   broken?: true
   wm?: "floating"
@@ -27,16 +25,13 @@ const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "ki
 export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
   "channel-broken": { ...kiwi(), broken: true },
-  "channel-top": { ...kiwi(), layout: "top" },
   "linux-floating": { ...kiwi(), wm: "floating" },
-  "linux-floating-top": { ...kiwi(), layout: "top", wm: "floating" },
   home: { scenario: "full", channel: null },
   "home-calm": { scenario: "home-calm", channel: null },
   "long-feed": { scenario: "long", channel: "kiwi" },
   "own-bubbles": { scenario: "own-bubbles", channel: "kiwi" },
   "tabs-3": { scenario: "tabs-3", channel: "kiwi" },
   "tabs-8": { scenario: "tabs-8", channel: "kiwi" },
-  "tabs-8-top": { scenario: "tabs-8", channel: "kiwi", layout: "top" },
   signs: { scenario: "signs", channel: "kiwi" },
   "theirs-many": { scenario: "theirs", channel: "kiwi" },
   opening: { scenario: "opening", channel: "kiwi" },

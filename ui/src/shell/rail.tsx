@@ -10,6 +10,7 @@ import { inText } from "~/kit/keys"
 import { useNav, useGo, useActions, useTiles, useAppPrefs, useOpenToType } from "~/nav"
 import { useWindowMaximized } from "~/live/window-state"
 import { openMenu } from "~/kit/menu-open"
+import { PANE_DRAG } from "~/panes/store"
 import { railItems, type DropTarget } from "~/shell/rail-items"
 import { useTabs } from "~/shell/top-layout"
 import { t } from "~/i18n/i18n"
@@ -59,7 +60,7 @@ export function Rail() {
     root.toggleAttribute("data-tabs", tabs)
     return () => root.removeAttribute("data-tabs")
   }, [tabs])
-  const cardsHere = onChannel && (home || sidebarHidden)
+  const cardsHere = sidebarHidden || (home && !tabs)
   const on = onChannel ? nav.channel : null
   const folders = prefs.folders
   const items = railItems(tiles, folders)
@@ -131,6 +132,11 @@ export function Rail() {
         aria-label={t("shell.rail.home")}
         aria-current={home ? "page" : undefined}
         title={t("shell.rail.home")}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData(PANE_DRAG, "home")
+          e.dataTransfer.effectAllowed = "copy"
+        }}
         onClick={() => go({ to: "home" })}
       >
         <Icon name="home" size={18} />
@@ -145,7 +151,8 @@ export function Rail() {
           const target = spot(e)
           if (target.kind !== "channel") return
           e.dataTransfer.setData(DRAG, target.code)
-          e.dataTransfer.effectAllowed = "move"
+          e.dataTransfer.setData(PANE_DRAG, `channel:${target.code}`)
+          e.dataTransfer.effectAllowed = "copyMove"
           setMoving(target.code)
         }}
         onDragEnd={() => (setMoving(null), setOver(null))}

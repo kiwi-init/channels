@@ -40,7 +40,7 @@ try {
   await settings.waitFor();
   expect((await panel.count()) === 0, "channel settings open in a modal, not the side panel");
   await settings.getByRole("button", { name: "Rooms", exact: true }).click();
-  expect((await settings.getByText("launch-plan").count()) === 1, "its Rooms section lists the rooms");
+  expect((await settings.getByText("launch-plan", { exact: true }).count()) === 1, "its Rooms section lists the rooms");
   expect((await settings.getByText("you, maya, atlas").count()) === 1, "a members-only room shows who's in on one line");
   await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
