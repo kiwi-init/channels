@@ -155,7 +155,7 @@ function activityText(x: Ctx, runs: readonly Message[][], titled: boolean): { md
 function build(channel: Channel, runs: readonly Message[][], target: number | null, titled: boolean, ui: Ui = FRESH, setUi: Dispatch<SetStateAction<Ui>> = () => {}) {
   const m = maker()
   const tasks = new Map(channel.tasks.map((k) => [k.id, k]))
-  return { ...activityText({ channel, tasks, m, ui, target, setUi }, runs, titled), acts: m.acts }
+  return { ...activityText({ channel, tasks, m, ui, target, setUi }, runs, titled), seal: m.seal }
 }
 
 export function activityMarkdown(channel: Channel, runs: readonly Message[][], target: number | null = null): string {
@@ -187,7 +187,7 @@ export function ActivityText({ channel, runs, target, titled = false }: { channe
   }, [target])
   return (
     <div ref={box} className="activity">
-      <PageText channel={channel} md={built.md} acts={built.acts} />
+      <PageText channel={channel} md={built.md} seal={built.seal} />
     </div>
   )
 }

@@ -57,11 +57,11 @@ const page = () =>
 
 describe("Home is a markdown page (#509, T2632)", () => {
   test("a question comes first, its answers each a whole button that answers it", () => {
-    const { md, acts } = page()
+    const { md, seal } = page()
     expect(md.indexOf("### OmniRad · hyper asks")).toBeLessThan(md.indexOf("## Channels"))
-    expect(md).toContain(`- [${LONG_A}](kiwi-do:a0)`)
-    expect(md).toContain(`- [${LONG_B}](kiwi-do:a1)`)
-    acts.get("a1")?.()
+    const buttons = Array.from(md.matchAll(/^- \[(.+)\]\((kiwi-do:[^)]+)\)$/gm), (m) => ({ label: m[1], url: m[2] ?? "" }))
+    expect(buttons.map((b) => b.label)).toEqual([LONG_A, LONG_B])
+    seal.run(buttons[1]?.url ?? "")
     expect(answered).toEqual([LONG_B])
   })
 

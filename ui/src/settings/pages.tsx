@@ -119,7 +119,7 @@ export function AccountPage() {
     <>
       <Sheet
         md={md}
-        acts={a.acts}
+        seal={a.seal}
         field={(name) =>
           name === "usage" && usage ? (
             <span className="set-usage">
@@ -248,7 +248,7 @@ export function AppearancePage() {
     ].join("\n"),
     field("themes"),
   ])
-  return <Sheet md={md} acts={a.acts} field={appearanceFields} />
+  return <Sheet md={md} seal={a.seal} field={appearanceFields} />
 }
 
 function versionRow(account: Account, a: Acts, check: { busy: boolean; result: UpdateCheck | null; run: () => void; install: () => void }): string {
@@ -342,7 +342,7 @@ export function AboutPage() {
     <>
       <Sheet
         md={md}
-        acts={a.acts}
+        seal={a.seal}
         field={(name) =>
           name === "relay" ? (
             <InlineEdit value={relay} label={t("settings.sections.relay")} verb={t("settings.sections.relay.change")} onSave={(url) => (url.trim() === relay ? undefined : setMoving(url))} />

@@ -9,17 +9,16 @@ import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { GlyphIcon, Icon } from "~/kit/icons"
 import { withControls } from "~/panes/controls"
-import { doOf, doUrl, NOTHING, pieces, type DoMore } from "~/panes/engine"
+import { doUrl, inert, NOTHING, pieces, seal, type DoMore, type Seal } from "~/panes/engine"
 
 const Markdown = lazy(() => import("~/chat/markdown"))
 
-const DO = "kiwi-do:"
 const SPOT = ""
 const PUNCT = /[!-/:-@[-`{-~]/g
 
 type Vars = Readonly<Record<string, string | number>>
 
-export const esc = (text: string): string => text.replace(/\s+/g, " ").trim().replace(PUNCT, "\\$&")
+export const esc = (text: string): string => inert(text).replace(/\s+/g, " ").trim().replace(PUNCT, "\\$&")
 
 export function code(text: string): string {
   const flat = text.replace(/\s+/g, " ").trim()
@@ -54,20 +53,16 @@ interface ActMore extends DoMore {
 }
 
 export interface Acts {
-  acts: Map<string, () => void>
+  seal: Seal
   act: (label: string, run: () => void, more?: ActMore) => string
   chip: (value: string, run: () => void, label?: string) => string
 }
 
 export function acts(): Acts {
-  const acts = new Map<string, () => void>()
-  const key = (run: () => void, more: DoMore = {}): string => {
-    const id = `a${acts.size}`
-    acts.set(id, run)
-    return doUrl(id, more)
-  }
+  const s = seal()
+  const key = (run: () => void, more: DoMore = {}): string => s.key(run, more)
   return {
-    acts,
+    seal: s,
     act: (label, run, more = {}) => `[${more.mark ? `${code(more.mark)} ` : ""}${esc(label)}](${key(run, more)})`,
     chip: (value, run, label) => `[${code(value)}](${key(run, { label })})`,
   }
@@ -127,25 +122,12 @@ function common(name: string): ReactNode | undefined {
 const NONE = (): undefined => undefined
 const QUIET = () => {}
 
-export function Sheet({
-  md,
-  acts,
-  field = NONE,
-  mark = NONE,
-}: {
-  md: string
-  acts: ReadonlyMap<string, () => void>
-  field?: (name: string) => ReactNode | undefined
-  mark?: (name: string) => ReactNode | undefined
-}) {
+export function Sheet({ md, seal, field = NONE, mark = NONE }: { md: string; seal: Seal; field?: (name: string) => ReactNode | undefined; mark?: (name: string) => ReactNode | undefined }) {
   const draw = useMemo(() => {
     const marks = (name: string): ReactNode | undefined => mark(name) ?? common(name)
-    return withControls(pieces(NOTHING, marks), { field, mark: marks })
-  }, [field, mark])
-  const onPage = (url: string) => {
-    const did = doOf(url)
-    if (did.act) acts.get(did.url.slice(DO.length))?.()
-  }
+    return withControls(pieces(NOTHING, marks, seal.owns), { field, mark: marks, owns: seal.owns })
+  }, [field, mark, seal])
+  const onPage = (url: string) => seal.run(url)
   return (
     <div className="ctl-page">
       <Suspense fallback={null}>

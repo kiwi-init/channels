@@ -22,7 +22,7 @@ import { useAct, type Go } from "~/nav"
 import { Assign, Cancel, EditTask, holds, PickReviewer, stepState } from "~/panels/task"
 import { detailParts } from "~/panels/task-detail"
 import { moveWords } from "~/panels/task-moves"
-import { doUrl } from "~/panes/engine"
+import { doUrl, inert } from "~/panes/engine"
 import { askCard, card, join, link, main, maker, PageFrame, PageText, prRow, section, steps, taskRow, type Maker } from "~/panes/page"
 import type { DetailView } from "~/panes/place"
 import { SENT } from "~/sent"
@@ -106,7 +106,7 @@ function review(channel: Channel, task: Task, m: Maker, x: Ctx): string {
   return card([
     `### ${t("panels.task.review.label")}`,
     yours ? ask : "",
-    brief && last ? `**${t("panels.task.round.short", { n: last.n })}** ${wordsPlain(brief, channel.nicknames)}` : "",
+    brief && last ? `**${t("panels.task.round.short", { n: last.n })}** ${inert(wordsPlain(brief, channel.nicknames))}` : "",
     yours ? [task.youReview === "verdict" ? main(m.act(t("panels.task.approve"), approve)) : "", m.act(t("panels.task.send.back"), () => x.open("send-back"))].filter(Boolean).join(" ") : "",
   ])
 }
@@ -124,7 +124,7 @@ function activity(channel: Channel, history: readonly TaskEvent[], m: Maker, x: 
       root === undefined
         ? what
         : m.act(what, () => x.go((channel.specs ?? []).some((s) => s.ask === root) ? { to: "spec", ask: root, part: "spec" } : { to: "panel", panel: { kind: "thread", seq: root } }))
-    const note = e.note ? loose(named(e.what === "mention" ? preview(wordsRaw(e.note)) : wordsRaw(e.note), channel.nicknames)) : ""
+    const note = e.note ? inert(loose(named(e.what === "mention" ? preview(wordsRaw(e.note)) : wordsRaw(e.note), channel.nicknames))) : ""
     const long = note.length > LONG
     const full = x.ui.full.has(key)
     const toggle = long ? ` ${m.act(full ? t("panels.task.show.less") : t("panels.task.show.all"), () => x.setUi((u) => ({ ...u, full: flip(u.full, key) })))}` : ""
@@ -142,7 +142,7 @@ function taskPage(channel: Channel, id: number, m: Maker, x: Ctx): string {
   const { actions } = x
   const may = !memberOf(channel, channel.you)?.readOnly
   const open = may && task.status !== "done"
-  const parts = detailParts(wordsRaw(task.title), task.detail ? wordsRaw(task.detail) : undefined)
+  const parts = detailParts(inert(wordsRaw(task.title)), task.detail ? inert(wordsRaw(task.detail)) : undefined)
   const facts = [`T${task.id}`, statusWord(task), task.archived ? t("panes.page.archived") : "", taskSince(task.updatedAt)]
   const status =
     task.status === "done" ? m.act(t("panels.task.reopen"), () => actions.setTaskStatus(code, id, "todo")) : m.act(t("panels.task.mark.done"), () => actions.setTaskStatus(code, id, "done"))
@@ -170,7 +170,7 @@ function taskPage(channel: Channel, id: number, m: Maker, x: Ctx): string {
           )
         : "",
     move ? prop(t("panels.task.move"), move, toned(quietWords(channel, task, x.now) ?? "", "alert")) : "",
-    task.closedWith ? prop(t("panels.task.closed"), t("panels.task.closed.without", { why: wordsPlain(task.closedWith, channel.nicknames) })) : "",
+    task.closedWith ? prop(t("panels.task.closed"), t("panels.task.closed.without", { why: inert(wordsPlain(task.closedWith, channel.nicknames)) })) : "",
     prop(t("panels.task.asked.by"), mention(channel, task.createdBy)),
   ]
   const suggested = may && !task.owner ? task.suggested : undefined
@@ -188,11 +188,11 @@ function taskPage(channel: Channel, id: number, m: Maker, x: Ctx): string {
   const links = [task.pr ? prRow(task.pr) : "", issue ? issueRow(issue) : ""].filter(Boolean).join("\n")
   const landing = (task.steps ?? []).map((s) => {
     const meta = [s.by ? nickname(channel, s.by) : "", stepState(s, x.now) ?? ""].filter(Boolean).join(" · ")
-    const wait = s.wait ? `: ${wordsPlain(s.wait.reason, channel.nicknames)}` : ""
+    const wait = s.wait ? `: ${inert(wordsPlain(s.wait.reason, channel.nicknames))}` : ""
     const end = s.yours ? ` · ${m.act(t("panels.task.step.end"), () => actions.endStep(code, id, s.id))}` : ""
-    return `- [${s.state === "done" ? "x" : " "}] ${wordsRaw(s.words)}${meta ? ` · ${meta}${wait}` : ""}${end}`
+    return `- [${s.state === "done" ? "x" : " "}] ${inert(wordsRaw(s.words))}${meta ? ` · ${meta}${wait}` : ""}${end}`
   })
-  const notes = task.notes.map((n) => `**@${n.by}** ${wordsRaw(n.text)}`)
+  const notes = task.notes.map((n) => `**@${n.by}** ${inert(wordsRaw(n.text))}`)
   return join([
     crumb,
     `# ${parts.title}`,
@@ -261,7 +261,7 @@ function prPage(channel: Channel, repo: string, number: number, m: Maker, x: Ctx
           m.act(t("github.parts.copy.branch"), () => void copyText(branch, t("github.parts.branch.copied")))
         )
       : "",
-    pr.by ? prop(t("github.panel.author"), pr.by) : "",
+    pr.by ? prop(t("github.panel.author"), inert(pr.by)) : "",
     pr.additions !== undefined && pr.deletions !== undefined
       ? prop(t("github.panel.size"), `+${pr.additions} −${pr.deletions}`, pr.files !== undefined ? t("github.parts.files", { count: String(pr.files) }) : "")
       : "",
@@ -269,7 +269,7 @@ function prPage(channel: Channel, repo: string, number: number, m: Maker, x: Ctx
   ]
   return join([
     crumb,
-    `# ${pr.title}`,
+    `# ${inert(pr.title)}`,
     facts.filter(Boolean).join(" · "),
     acts.filter(Boolean).join(" "),
     props.filter(Boolean).join("\n"),
@@ -285,12 +285,12 @@ function issuePage(channel: Channel, repo: string, number: number, m: Maker, x: 
   const open = issue.state === "open"
   const props = [
     prop(t("github.panel.repo"), mono(issue.repo)),
-    issue.by ? prop(t(open ? "github.panel.opened.by" : "github.panel.closed.by"), issue.by) : "",
+    issue.by ? prop(t(open ? "github.panel.opened.by" : "github.panel.closed.by"), inert(issue.by)) : "",
     prop(t(open ? "github.panel.updated" : "github.panel.closed"), ghSince(issue.at)),
   ]
   return join([
     crumb,
-    `# ${issue.title}`,
+    `# ${inert(issue.title)}`,
     [link(`#${issue.number}`, issue.url), cap(issueWord(issue))].join(" · "),
     main(m.act(t("github.panel.open.on.github"), () => openOutside(issue.url))),
     props.filter(Boolean).join("\n"),
@@ -311,7 +311,7 @@ export function Detail({ channel, view }: { channel: Channel; view: DetailView }
   const built = useMemo(() => {
     const m = maker()
     const md = kind === "task" ? taskPage(channel, id, m, x) : kind === "pr" ? prPage(channel, repo, number, m, x) : issuePage(channel, repo, number, m, x)
-    return { md, acts: m.acts }
+    return { md, seal: m.seal }
   }, [channel, kind, id, repo, number, x])
   const task = kind === "task" ? channel.tasks.find((k) => k.id === id) : undefined
   const close = () => setDialog(null)
@@ -345,7 +345,7 @@ export function Detail({ channel, view }: { channel: Channel; view: DetailView }
   )
   return (
     <PageFrame kind={kind} more={more}>
-      <PageText channel={channel} md={built.md} acts={built.acts} />
+      <PageText channel={channel} md={built.md} seal={built.seal} />
     </PageFrame>
   )
 }

@@ -15,6 +15,7 @@ import { doOf } from "~/panes/engine"
 export interface Parts {
   field: (name: string) => ReactNode | undefined
   mark: (name: string) => ReactNode | undefined
+  owns: (url: string) => boolean
 }
 
 type Tone = "label" | "hint" | "line"
@@ -44,28 +45,30 @@ const urlOf = (node: ASTNode | undefined): string => (node?.type === "Link" ? (n
 const isBreak = (node: ASTNode): boolean => node.type === "SoftBreak" || node.type === "LineBreak"
 const isGap = (node: ASTNode): boolean => isBreak(node) || (node.type === "Text" && !node.content?.trim())
 const solid = (nodes: readonly ASTNode[] | undefined): ASTNode[] => (nodes ?? []).filter((c) => !isGap(c))
-const isDo = (node: ASTNode | undefined): boolean => doOf(urlOf(node)).act
+type Owns = (url: string) => boolean
+
+const isDo = (node: ASTNode | undefined, owns: Owns): boolean => owns(urlOf(node))
 const isList = (node: ASTNode | undefined): boolean => node?.type === "UnorderedList" || node?.type === "OrderedList"
 const words = (content: string): ASTNode => ({ type: "Text", content })
-const isChip = (node: ASTNode): boolean => {
+const isChip = (node: ASTNode, owns: Owns): boolean => {
   const kids = solid(node.children)
-  return node.type === "Link" && isDo(node) && kids.length === 1 && kids[0]?.type === "Code"
+  return node.type === "Link" && isDo(node, owns) && kids.length === 1 && kids[0]?.type === "Code"
 }
 const held = (e: MouseEvent) => e.preventDefault()
 
-function choiceOf(node: ASTNode | undefined): Choice | null {
-  if (node && isDo(node)) return { url: urlOf(node), label: textOf(node), on: false }
+function choiceOf(node: ASTNode | undefined, owns: Owns): Choice | null {
+  if (node && isDo(node, owns)) return { url: urlOf(node), label: textOf(node), on: false }
   const inner = node?.type === "Strong" ? solid(node.children) : []
-  return inner.length === 1 && isDo(inner[0]) ? { url: urlOf(inner[0]), label: textOf(inner[0]), on: true } : null
+  return inner.length === 1 && isDo(inner[0], owns) ? { url: urlOf(inner[0]), label: textOf(inner[0]), on: true } : null
 }
 
-function choicesOf(node: ASTNode | undefined): Choice[] | null {
+function choicesOf(node: ASTNode | undefined, owns: Owns): Choice[] | null {
   if (!node || !isList(node)) return null
   const items = node.children ?? []
   const picked = items.flatMap((item) => {
     const kids = item.children ?? []
     const head = solid(kids[0]?.children)
-    const choice = kids.length === 1 && item.attributes?.isTask !== "true" && head.length === 1 ? choiceOf(head[0]) : null
+    const choice = kids.length === 1 && item.attributes?.isTask !== "true" && head.length === 1 ? choiceOf(head[0], owns) : null
     return choice ? [choice] : []
   })
   return picked.length && picked.length === items.length && picked.some((c) => c.on) ? picked : null
@@ -106,10 +109,10 @@ function rowOf(item: ASTNode, parts: Parts): Row | null {
   const marks = first.slice(0, at).filter(isMark).map(textOf)
   const line = rest.flat()
   if (item.attributes?.isTask === "true") {
-    if (!head || !isDo(head)) return null
+    if (!head || !isDo(head, parts.owns)) return null
     return { on: item.attributes.taskChecked === "true", url: urlOf(head), marks, label: head.children ?? [], hint: cut(first.slice(at + 1))[1], line, nested }
   }
-  if (head?.type !== "Strong" || choiceOf(head)) return null
+  if (head?.type !== "Strong" || choiceOf(head, parts.owns)) return null
   const [label, hint] = cut(first.slice(at))
   return { on: null, url: "", marks, label, hint, line, nested }
 }
@@ -130,7 +133,8 @@ export function withControls(draw: Draw, parts: Parts): Draw {
 
   const link = (node: ASTNode, key: number, tools: DrawTools, tone: Tone, loud: boolean): ReactNode => {
     const url = urlOf(node)
-    const did = doOf(url)
+    const raw = doOf(url)
+    const did = raw.act && !parts.owns(url) ? { url, act: false } : raw
     const label = textOf(node)
     if (url.startsWith(DO) && !did.act)
       return (
@@ -139,7 +143,7 @@ export function withControls(draw: Draw, parts: Parts): Draw {
         </span>
       )
     if (!url || tone === "label") return <Fragment key={key}>{label}</Fragment>
-    if (isChip(node))
+    if (isChip(node, parts.owns))
       return (
         <button
           key={key}
@@ -228,7 +232,7 @@ export function withControls(draw: Draw, parts: Parts): Draw {
   )
 
   const controlOf = (node: ASTNode | undefined, label: string, tools: DrawTools): ReactNode | undefined => {
-    const choices = choicesOf(node)
+    const choices = choicesOf(node, parts.owns)
     if (choices) return seg(choices, label, tools)
     const name = fieldOf(node)
     return name === null ? undefined : (parts.field(name) ?? null)
@@ -265,7 +269,7 @@ export function withControls(draw: Draw, parts: Parts): Draw {
   const mine = (node: ASTNode, tools: DrawTools): ReactNode | undefined => {
     const name = fieldOf(node)
     if (name !== null) return parts.field(name) ?? null
-    const choices = choicesOf(node)
+    const choices = choicesOf(node, parts.owns)
     if (choices) return <div className="ctl-choices">{seg(choices, undefined, tools)}</div>
     if (isList(node)) {
       const items = node.children ?? []
@@ -285,7 +289,7 @@ export function withControls(draw: Draw, parts: Parts): Draw {
       )
     if (node.type === "Paragraph") {
       const kids = solid(node.children)
-      if (kids.length && kids.every(isChip)) return <p className="ctl-chips">{kids.map((k, i) => link(k, i, tools, "line", false))}</p>
+      if (kids.length && kids.every((k) => isChip(k, parts.owns))) return <p className="ctl-chips">{kids.map((k, i) => link(k, i, tools, "line", false))}</p>
       const only = kids.length === 1 ? kids[0] : undefined
       return only?.type === "Emphasis" ? <p className="ctl-fine">{inline(only.children ?? [], tools, "hint")}</p> : undefined
     }

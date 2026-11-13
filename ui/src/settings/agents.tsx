@@ -166,5 +166,5 @@ export function AgentsPage() {
     const harness = marks.get(name)
     return harness ? <HarnessMark harness={harness} /> : undefined
   }
-  return <Sheet md={md} acts={a.acts} field={(name) => (name === "personalities" ? <Personalities /> : undefined)} mark={mark} />
+  return <Sheet md={md} seal={a.seal} field={(name) => (name === "personalities" ? <Personalities /> : undefined)} mark={mark} />
 }

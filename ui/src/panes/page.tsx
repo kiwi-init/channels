@@ -11,7 +11,7 @@ import type { Actions, Ask, Channel, PullRequest, Spec, Task, TaskStatus } from 
 import { useAct } from "~/nav"
 import { openAsks } from "~/needs/open"
 import { lanesOf, nowOf } from "~/now"
-import { lookupOf, pieces } from "~/panes/engine"
+import { inert, lookupOf, pieces, seal, type Seal } from "~/panes/engine"
 import { usePane } from "~/panes/place"
 import type { DetailView, View } from "~/panes/place"
 import { statusOf } from "~/shell/sidebar"
@@ -35,19 +35,15 @@ const viewKey = (view: View): string =>
   `${view.kind}:${view.kind === "task" ? view.task : view.kind === "spec" ? view.ask : view.kind === "pr" || view.kind === "issue" ? `${view.repo}/${view.number}` : ""}`
 
 export interface Maker {
-  acts: Map<string, () => void>
+  seal: Seal
   act: (label: string, run: () => void) => string
 }
 
 export function maker(): Maker {
-  const acts = new Map<string, () => void>()
+  const s = seal()
   return {
-    acts,
-    act(label, run) {
-      const key = `a${acts.size}`
-      acts.set(key, run)
-      return `[${label.replace(/[[\]\\]/g, "\\$&")}](kiwi-do:${key})`
-    },
+    seal: s,
+    act: (label, run) => `[${inert(label).replace(/[[\]\\]/g, "\\$&")}](${s.key(run)})`,
   }
 }
 
@@ -61,7 +57,7 @@ export const steps = (task: Task): string => {
   const all = task.steps?.filter((s) => s.state !== "skipped") ?? []
   return all.length ? ` · ${all.filter((s) => s.state === "done").length}/${all.length}` : ""
 }
-export const link = (label: string, url: string): string => `[${label.replace(/[[\]\\]/g, "\\$&")}](<${url}>)`
+export const link = (label: string, url: string): string => `[${inert(label).replace(/[[\]\\]/g, "\\$&")}](<${url}>)`
 export const main = (act: string): string => (act ? `**${act}**` : "")
 export const card = (parts: readonly string[]): string =>
   join(parts)
@@ -98,8 +94,8 @@ function specPage(channel: Channel, ask: number, actions: Actions, m: Maker, hoo
   const spec = channel.specs?.find((s) => s.ask === ask)
   const crumb = `[${t("shell.channel.specs")}](kiwi-page:specs)`
   if (!spec) return join([crumb, `# #${ask}`])
-  const title = wordsRaw(spec.title)
-  const lines = wordsRaw(spec.text).split("\n")
+  const title = inert(wordsRaw(spec.title))
+  const lines = inert(wordsRaw(spec.text)).split("\n")
   const first = lines.findIndex((l) => l.trim() !== "")
   const headed = first >= 0 && /^#\s+/.test(lines[first]!) && lines[first]!.replace(/^#\s+/, "").trim() === title
   const text = (headed ? lines.slice(first + 1) : lines).join("\n").trim()
@@ -112,7 +108,7 @@ function specPage(channel: Channel, ask: number, actions: Actions, m: Maker, hoo
         : ""
   const tasks = tasksOf(channel, spec).map((x) => taskRow(channel, x, steps(x)))
   const edit = spec.result ? "" : m.act(t("panes.page.edit"), () => hooks.edit(wordsRaw(spec.text)))
-  const comments = spec.comments.flatMap((seq) => channel.messages.filter((x) => x.seq === seq)).map((x) => `**@${x.from}** ${wordsRaw(x.text)}`)
+  const comments = spec.comments.flatMap((seq) => channel.messages.filter((x) => x.seq === seq)).map((x) => `**@${x.from}** ${inert(wordsRaw(x.text))}`)
   return join([
     crumb,
     `# ${title}`,
@@ -177,7 +173,7 @@ export function askCard(channel: Channel, a: Ask, actions: Actions, m: Maker): s
     return card([
       `### ${t("panes.page.runs", { name: `@${a.from}`, tool: a.tool })}`,
       `\`${a.title.replaceAll("`", "'")}\``,
-      a.summary ?? "",
+      inert(a.summary ?? ""),
       [
         a.canAllow ? main(m.act(t("panes.page.allow"), () => actions.answerPermission(code, a.id, true))) : "",
         a.canDeny ? m.act(t("panes.page.deny"), () => actions.answerPermission(code, a.id, false)) : "",
@@ -188,7 +184,7 @@ export function askCard(channel: Channel, a: Ask, actions: Actions, m: Maker): s
   if (a.kind === "question")
     return card([
       `### ${t("panes.page.asks", { name: `@${a.from}` })}`,
-      wordsRaw(a.text),
+      inert(wordsRaw(a.text)),
       a.options.map((o) => `- ${m.act(wordsRaw(o), () => actions.answerQuestion(code, a.id, wordsRaw(o)))}`).join("\n"),
     ])
   if (a.kind === "join")
@@ -209,7 +205,7 @@ function needsPage(channel: Channel, actions: Actions, m: Maker): string {
   return join([`# ${t("shell.channel.needs.you")}`, ...asks, asks.length ? "" : t("panes.page.empty")])
 }
 
-function build(channel: Channel, key: string, actions: Actions, hooks: Hooks): { md: string; acts: Map<string, () => void> } {
+export function boardText(channel: Channel, key: string, actions: Actions, hooks: Hooks): { md: string; seal: Seal } {
   const m = maker()
   const [kind, id] = key.split(":")
   const md =
@@ -224,19 +220,19 @@ function build(channel: Channel, key: string, actions: Actions, hooks: Hooks): {
             : kind === "github"
               ? githubPage(channel)
               : needsPage(channel, actions, m)
-  return { md, acts: m.acts }
+  return { md, seal: m.seal }
 }
 
-export function PageText({ channel, md, acts }: { channel: Channel; md: string; acts: ReadonlyMap<string, () => void> }) {
+export function PageText({ channel, md, seal }: { channel: Channel; md: string; seal: Seal }) {
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
   const { go } = useAct()
   const pane = usePane()
   const text = useMemo(() => wrote(md), [md])
-  const draw = useMemo(() => pieces(lookupOf(channel)), [channel])
+  const draw = useMemo(() => pieces(lookupOf(channel), undefined, seal.owns), [channel, seal])
   const code = channel.code
   const onPage = (url: string) => {
-    if (url.startsWith("kiwi-do:")) return acts.get(url.slice("kiwi-do:".length))?.()
+    if (url.startsWith("kiwi-do:")) return seal.run(url)
     const gh = /^kiwi-(pr|issue):(.+)\/(\d+)$/.exec(url)
     if (gh) return go({ to: "panel", panel: { kind: gh[1] === "pr" ? "pr" : "issue", repo: gh[2]!, number: Number(gh[3]) } })
     const to = url.slice("kiwi-page:".length)
@@ -278,7 +274,7 @@ function Board({ channel, view }: { channel: Channel; view: BoardView }) {
     }),
     [key]
   )
-  const built = useMemo(() => build(channel, key, actions, hooks), [channel, key, actions, hooks])
+  const built = useMemo(() => boardText(channel, key, actions, hooks), [channel, key, actions, hooks])
   const editing = draft?.key === key ? draft : null
   const save = () => {
     if (view.kind === "spec" && editing?.text.trim()) actions.writeSpec(channel.code, view.ask, editing.text)
@@ -308,7 +304,7 @@ function Board({ channel, view }: { channel: Channel; view: BoardView }) {
           </div>
         </>
       ) : (
-        <PageText channel={channel} md={built.md} acts={built.acts} />
+        <PageText channel={channel} md={built.md} seal={built.seal} />
       )}
     </PageFrame>
   )

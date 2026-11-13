@@ -123,7 +123,7 @@ function lockOf(p: Page, name: string): ReactNode | undefined {
 function ChannelSheet({ md, p, field: own, mark, calm }: { md: string; p: Page; field?: (name: string) => ReactNode | undefined; mark?: (name: string) => ReactNode | undefined; calm?: boolean }) {
   return (
     <div className={cx("csheet", calm && "is-calm")}>
-      <Sheet md={md} acts={p.a.acts} field={(name) => lockOf(p, name) ?? own?.(name)} mark={(name) => (name === "cs:github" ? <Icon name="github" /> : mark?.(name))} />
+      <Sheet md={md} seal={p.a.seal} field={(name) => lockOf(p, name) ?? own?.(name)} mark={(name) => (name === "cs:github" ? <Icon name="github" /> : mark?.(name))} />
     </div>
   )
 }

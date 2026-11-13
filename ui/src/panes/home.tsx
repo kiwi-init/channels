@@ -5,7 +5,7 @@ import { useEffect, useMemo } from "react"
 import { Body } from "~/chat/body"
 import type { Actions, ChannelTile, HomeAsk, HomeChannel } from "~/model"
 import { useAct } from "~/nav"
-import { NOTHING, pieces, type Lookup } from "~/panes/engine"
+import { inert, NOTHING, pieces, type Lookup, type Seal } from "~/panes/engine"
 import { join, link, main, maker, type Maker } from "~/panes/page"
 import { openImage } from "~/specs/comment-item"
 import { onboarded } from "~/start/onboarded"
@@ -26,12 +26,12 @@ function answers(code: string, ask: HomeAsk, actions: Actions, m: Maker, open: (
   return m.act(t("panes.home.open"), open)
 }
 
-export function homeText(tiles: readonly ChannelTile[], home: readonly HomeChannel[], actions: Actions, toNeeds: (code: string) => void): { md: string; acts: Map<string, () => void> } {
+export function homeText(tiles: readonly ChannelTile[], home: readonly HomeChannel[], actions: Actions, toNeeds: (code: string) => void): { md: string; seal: Seal } {
   const m = maker()
   const byCode = new Map(home.map((h) => [h.code, h]))
   const asks = tiles
     .filter((c) => c.state === "member")
-    .flatMap((c) => (byCode.get(c.code)?.asks ?? []).map((ask) => join([`### ${c.title} · ${ask.what}`, ask.text, answers(c.code, ask, actions, m, () => toNeeds(c.code))])))
+    .flatMap((c) => (byCode.get(c.code)?.asks ?? []).map((ask) => join([inert(`### ${c.title} · ${ask.what}`), inert(ask.text), answers(c.code, ask, actions, m, () => toNeeds(c.code))])))
   const channels = tiles.map((c) => {
     const h = byCode.get(c.code)
     const facts = [
@@ -41,10 +41,10 @@ export function homeText(tiles: readonly ChannelTile[], home: readonly HomeChann
     ].filter(Boolean)
     const agents = (h?.agents ?? [])
       .filter((a) => a.state === "working" || a.state === "waiting")
-      .map((a) => `  - ${link(a.nick, `${AGENT}${c.code}:${a.name}`)} · ${[a.doing, a.task?.title ?? ""].filter(Boolean).join(" · ")}`)
+      .map((a) => `  - ${link(a.nick, `${AGENT}${c.code}:${a.name}`)} · ${inert([a.doing, a.task?.title ?? ""].filter(Boolean).join(" · "))}`)
     return [`- ${link(c.title, `${CHANNEL}${c.code}`)}${facts.length ? ` · ${facts.join(" · ")}` : ""}`, ...agents].join("\n")
   })
-  return { md: join([`# ${t("shell.rail.home")}`, asks.length ? `## ${t("start.welcome.waiting.on.you")}` : "", ...asks, `## ${t("shell.rail.channels")}`, channels.join("\n")]), acts: m.acts }
+  return { md: join([`# ${t("shell.rail.home")}`, asks.length ? `## ${t("start.welcome.waiting.on.you")}` : "", ...asks, `## ${t("shell.rail.channels")}`, channels.join("\n")]), seal: m.seal }
 }
 
 export function HomePage({ tiles, home }: { tiles: readonly ChannelTile[]; home: readonly HomeChannel[] }) {
@@ -68,10 +68,10 @@ export function HomePage({ tiles, home }: { tiles: readonly ChannelTile[]; home:
         return home.find((h) => h.code === key.slice(0, cut))?.agents.find((a) => a.name === key.slice(cut + 1))?.person
       },
     }
-    return pieces(find)
-  }, [tiles, home])
+    return pieces(find, undefined, built.seal.owns)
+  }, [tiles, home, built.seal])
   const onPage = (url: string) => {
-    if (url.startsWith("kiwi-do:")) return built.acts.get(url.slice("kiwi-do:".length))?.()
+    if (url.startsWith("kiwi-do:")) return built.seal.run(url)
     if (url.startsWith(CHANNEL)) return go({ to: "channel", code: url.slice(CHANNEL.length) })
     if (!url.startsWith(AGENT)) return
     const key = url.slice(AGENT.length)

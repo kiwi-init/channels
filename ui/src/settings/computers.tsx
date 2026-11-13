@@ -314,7 +314,7 @@ export function ComputersPage() {
   }
   return (
     <>
-      <Sheet md={md} acts={a.acts} field={fields} />
+      <Sheet md={md} seal={a.seal} field={fields} />
       <ForgetDevice forget={forgetting} onClose={() => setForgetting(null)} />
       <Confirm
         open={!!forget}

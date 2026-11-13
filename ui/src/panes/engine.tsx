@@ -66,6 +66,39 @@ export function doOf(url: string): Did {
   return { url: bare, act: bare.length > DO.length, tip: query.get("tip") ?? undefined, label: query.get("label") ?? undefined, tone: TONES.has(tone) ? `tone-${tone}` : undefined }
 }
 
+const NAMED: Readonly<Record<string, string>> = { "-": "|&hyphen;|&dash;", ":": "|&colon;" }
+const spelled = (c: string): string => {
+  const n = c.charCodeAt(0)
+  return `(?:${c.replace(/[-:]/, "\\$&")}|\\\\${/[a-z]/i.test(c) ? "(?!)" : c}|&#0*${n};|&#x0*${n.toString(16)};${NAMED[c] ?? ""})`
+}
+const ACTION = new RegExp([..."kiwi-do:"].map(spelled).join(""), "gi")
+
+export const inert = (md: string): string => md.replace(ACTION, "kiwi-off:")
+
+export interface Seal {
+  key: (run: () => void, more?: DoMore) => string
+  owns: (url: string) => boolean
+  run: (url: string) => void
+}
+
+export function seal(): Seal {
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("")
+  const acts = new Map<string, () => void>()
+  const find = (url: string): (() => void) | undefined => {
+    const did = doOf(url)
+    return did.act ? acts.get(did.url.slice(DO.length)) : undefined
+  }
+  return {
+    key(run, more) {
+      const key = `${token}-${acts.size}`
+      acts.set(key, run)
+      return doUrl(key, more)
+    },
+    owns: (url) => find(url) !== undefined,
+    run: (url) => find(url)?.(),
+  }
+}
+
 type Mark = (name: string) => ReactNode | undefined
 
 const CHECKS = new Map<string, readonly [Glyph, string]>([
@@ -93,10 +126,10 @@ const isGap = (node: ASTNode): boolean => node.type === "SoftBreak" || node.type
 const solid = (node: ASTNode | undefined): ASTNode[] => (node?.children ?? []).filter((c) => !isGap(c))
 const after = (url: string, lead: string): string => decodeURIComponent(url.slice(lead.length))
 
-function actOf(node: ASTNode): { did: Did; nodes: ASTNode[]; main: boolean } | null {
+function actOf(node: ASTNode, didOf: (url: string) => Did): { did: Did; nodes: ASTNode[]; main: boolean } | null {
   const inner = node.type === "Strong" ? solid(node) : [node]
   const link = inner.length === 1 ? inner[0] : undefined
-  const did = doOf(urlOf(link))
+  const did = didOf(urlOf(link))
   return did.act ? { did, nodes: link?.children ?? [], main: node.type === "Strong" } : null
 }
 
@@ -160,7 +193,14 @@ function Trail({ url, find }: { url: string; find: Lookup }) {
   return person ? <Avatar person={person} size="sm" /> : null
 }
 
-export function pieces(find: Lookup, mark: Mark = NO_MARK): Draw {
+const NOT_OURS = (): boolean => false
+
+export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) => boolean = NOT_OURS): Draw {
+  const didOf = (url: string): Did => {
+    const did = doOf(url)
+    return did.act && !owns(url) ? { url, act: false } : did
+  }
+
   const open = (tools: DrawTools, url: string) => (e: MouseEvent) => {
     e.preventDefault()
     tools.press(url)
@@ -185,7 +225,7 @@ export function pieces(find: Lookup, mark: Mark = NO_MARK): Draw {
             <span className="pg-who-link-name">{textOf(node)}</span>
           </a>
         )
-      const did = doOf(url)
+      const did = didOf(url)
       if (url.startsWith(DO) && !did.act)
         return (
           <span key={i} className={did.tone} title={did.tip}>
@@ -271,7 +311,7 @@ export function pieces(find: Lookup, mark: Mark = NO_MARK): Draw {
     }
     if (node.type === "Paragraph") {
       const kids = solid(node)
-      const acts = kids.map(actOf)
+      const acts = kids.map((k) => actOf(k, didOf))
       if (kids.length && acts.every(Boolean))
         return (
           <div className="pg-acts">
@@ -298,11 +338,11 @@ export function pieces(find: Lookup, mark: Mark = NO_MARK): Draw {
     if (node.type === "UnorderedList" || node.type === "OrderedList") {
       const items = node.children ?? []
       const heads = items.map((item) => solid(item.children?.[0]))
-      if (items.length && heads.every((h) => h.length === 1 && doOf(urlOf(h[0])).act))
+      if (items.length && heads.every((h) => h.length === 1 && didOf(urlOf(h[0])).act))
         return (
           <div className="pg-opts">
             {heads.map((h, i) => (
-              <button key={i} type="button" className="btn pg-opt" onClick={() => tools.press(doOf(urlOf(h[0])).url)}>
+              <button key={i} type="button" className="btn pg-opt" onClick={() => tools.press(didOf(urlOf(h[0])).url)}>
                 {h[0] ? textOf(h[0]) : ""}
               </button>
             ))}
