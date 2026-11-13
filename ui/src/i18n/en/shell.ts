@@ -51,7 +51,6 @@ export default {
   "shell.rail.channels": "Channels",
   "shell.rail.close.window": "Close window",
   "panes.now": "Now",
-  "panes.home": "Home",
   "panes.activity": "Activity",
   "panes.blank.name": "Empty",
   "panes.page.choose": "Choose",

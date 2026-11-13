@@ -167,7 +167,7 @@ export function panelGo(code: string, from: string, panel: Panel | null, room?: 
 export function showDoc(code: string, id: string | null, doc: Doc, shown: boolean, room?: { id: string; edge: Edge }): void {
   const layout = layoutOf(code)
   const here = id ? leafOf(layout.root, id) : null
-  if (doc.kind === "activity" || doc.kind === "home") {
+  if (doc.kind === "activity") {
     const open = findLeaf(layout.root, (leaf) => leaf.doc?.kind === doc.kind)
     if (open) return focusPane(code, open.id)
     if (here && isBlank(here)) return fillPane(code, here.id, { page: { at: "doc", doc } })

@@ -105,15 +105,12 @@ describe("every place you can go to is a step back (T1848)", () => {
   const back: Go = { to: "history", step: "back" }
   const forward: Go = { to: "history", step: "forward" }
 
-  test("Home is a place: back from a channel returns to it, and forward returns to the channel", () => {
+  test("The screen with no channel open is never a step back", () => {
     const inChannel = run(startNav(null), { to: "channel", code: "a" })
-    const home = navigate(inChannel, back)
-    expect(home.page).toBe("channel")
-    expect(home.channel).toBeNull()
-    expect(navigate(home, forward).channel).toBe("a")
-    const viaHome = run(startNav("a"), { to: "home" }, { to: "channel", code: "b" }, back)
-    expect(viaHome.channel).toBeNull()
-    expect(navigate(viaHome, back).channel).toBe("a")
+    expect(navigate(inChannel, back).channel).toBe("a")
+    const viaEmpty = run(startNav("a"), { to: "home" }, { to: "channel", code: "b" }, back)
+    expect(viaEmpty.channel).toBe("a")
+    expect(navigate(viaEmpty, forward).channel).toBe("b")
   })
 
   test("Settings is a place, section by section, and closing it leaves it one step back", () => {

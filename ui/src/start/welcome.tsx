@@ -1,26 +1,22 @@
 import "~/i18n/en/shell-later"
 import "~/styles/start.css"
 import { Link01Icon } from "@hugeicons/core-free-icons"
-import { Suspense, useState } from "react"
+import { useEffect, useState } from "react"
 
 import { GlyphIcon, Icon } from "~/kit/icons"
 import { useApp, useGo } from "~/nav"
-import { later } from "~/kit/later"
 import { onboarded } from "~/start/onboarded"
 import { Onboarding } from "~/start/onboarding"
 import { t } from "~/i18n/i18n"
 
-const HomePage = later(() => import("~/panes/home").then((m) => m.HomePage))
-
 export function Welcome() {
   const { app } = useApp()
-  const tiles = app.channels.filter((c) => c.state !== "gone")
-  if (!tiles.length) return <Empty />
-  return (
-    <Suspense fallback={null}>
-      <HomePage tiles={tiles} home={app.home} />
-    </Suspense>
-  )
+  const go = useGo()
+  const first = app.channels.find((c) => c.state !== "gone")?.code
+  useEffect(() => {
+    if (first) go({ to: "channel", code: first })
+  }, [first, go])
+  return first ? null : <Empty />
 }
 
 function Empty() {

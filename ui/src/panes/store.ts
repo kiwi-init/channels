@@ -4,17 +4,9 @@ import type { Where } from "~/model"
 import { startNav, type Nav, type Panel } from "~/nav"
 import type { Tab } from "~/places"
 
-export type Doc = { kind: "task"; task: number } | { kind: "now" } | { kind: "panel"; panel: Panel } | { kind: "blank" } | { kind: "home"; only?: string } | { kind: "activity" }
+export type Doc = { kind: "task"; task: number } | { kind: "now" } | { kind: "panel"; panel: Panel } | { kind: "blank" } | { kind: "activity" }
 
 export const BLANK: Page = { at: "doc", doc: { kind: "blank" } }
-
-export const PANE_DRAG = "application/x-kiwi-pane"
-
-export function homeFrom(raw: string): Page | null {
-  if (raw === "home") return { at: "doc", doc: { kind: "home" } }
-  const only = /^channel:(.+)$/.exec(raw)?.[1]
-  return only ? { at: "doc", doc: { kind: "home", only } } : null
-}
 
 export type Page = { at: "where"; where: Where } | { at: "tab"; tab: Exclude<Tab, "chat"> } | { at: "spec"; ask: number } | { at: "doc"; doc: Doc }
 

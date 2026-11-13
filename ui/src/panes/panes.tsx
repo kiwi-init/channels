@@ -10,8 +10,7 @@ import { dialogOpen, mod } from "~/kit/keys"
 import { later } from "~/kit/later"
 import type { Channel } from "~/model"
 import { nickname } from "~/names"
-import { useAct, useApp, useNav, type Go, type Nav, type Panel } from "~/nav"
-import { dropOn, targetAt } from "~/panes/drag"
+import { useAct, useNav, type Go, type Nav, type Panel } from "~/nav"
 import { dragOut, placeName, roomiest, Scope, VIEW_NAMES } from "~/panes/place"
 import {
   ALONE,
@@ -31,8 +30,6 @@ import {
   type Len,
   type Page as PanePage,
   type Split,
-  homeFrom,
-  PANE_DRAG,
 } from "~/panes/store"
 import { setDrag, useDrag } from "~/panes/drag-state"
 import { boxes, closePane, css, fillPane, focusPane, isNone, panelGo, pixels, resizeSplit, splitAt, without } from "~/panes/ops"
@@ -75,7 +72,6 @@ function panelName(channel: Channel, panel: Panel): string {
 function docName(channel: Channel, doc: Exclude<Doc, { kind: "panel" }>): string {
   if (doc.kind === "now") return t("panes.now")
   if (doc.kind === "blank") return t("panes.blank.name")
-  if (doc.kind === "home") return t("panes.home")
   if (doc.kind === "activity") return t("panes.activity")
   const task = channel.tasks.find((x) => x.id === doc.task)
   return task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)}` : `T${doc.task}`
@@ -95,19 +91,10 @@ function PanelDoc({ channel, panel }: { channel: Channel; panel: Panel }) {
 
 const Page = later(() => import("~/panes/page").then((m) => m.Page))
 const ActivityPage = later(() => import("~/panes/activity").then((m) => m.ActivityPage))
-const HomePage = later(() => import("~/panes/home").then((m) => m.HomePage))
-
-function HomeDoc({ only }: { only?: string }) {
-  const { app } = useApp()
-  const tiles = app.channels.filter((c) => c.state !== "gone" && (!only || c.code === only))
-  const home = only ? app.home.filter((h) => h.code === only) : app.home
-  return <HomePage tiles={tiles} home={home} />
-}
 
 const PICKS: readonly { key: Key; page: PanePage }[] = [
   { key: "panes.now", page: { at: "doc", doc: { kind: "now" } } },
   { key: "panes.activity", page: { at: "doc", doc: { kind: "activity" } } },
-  { key: "panes.home", page: { at: "doc", doc: { kind: "home" } } },
   { key: "panes.blank.specs", page: { at: "tab", tab: "specs" } },
   { key: "panes.blank.agents", page: { at: "tab", tab: "agents" } },
   { key: "panes.blank.github", page: { at: "tab", tab: "github" } },
@@ -132,7 +119,6 @@ function BlankPane({ code, id }: { code: string; id: string }) {
 function DocView({ channel, id, doc }: { channel: Channel; id: string; doc: Doc }) {
   if (doc.kind === "panel") return <PanelDoc channel={channel} panel={doc.panel} />
   if (doc.kind === "blank") return <BlankPane code={channel.code} id={id} />
-  if (doc.kind === "home") return <HomeDoc only={doc.only} />
   if (doc.kind === "activity") return <ActivityPage channel={channel} />
   return <Page channel={channel} view={doc} />
 }
@@ -401,29 +387,7 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
     }
   }, [code])
   return (
-    <div
-      ref={host}
-      className={cx("panes", split && "is-split")}
-      data-panes={code}
-      onDragOver={(e) => {
-        if (!tabs || !e.dataTransfer.types.includes(PANE_DRAG)) return
-        e.preventDefault()
-        e.dataTransfer.dropEffect = "copy"
-        const carry = { page: BLANK }
-        setDrag({ carry, label: "", x: e.clientX, y: e.clientY, target: targetAt(e.clientX, e.clientY, carry) })
-      }}
-      onDragLeave={(e) => {
-        if (!host.current?.contains(e.relatedTarget as globalThis.Node | null)) setDrag(null)
-      }}
-      onDrop={(e) => {
-        setDrag(null)
-        const page = homeFrom(e.dataTransfer.getData(PANE_DRAG))
-        const target = page && targetAt(e.clientX, e.clientY, { page })
-        if (!page || !target) return
-        e.preventDefault()
-        dropOn(target, { page })
-      }}
-    >
+    <div ref={host} className={cx("panes", split && "is-split")} data-panes={code}>
       <i ref={probe} className="panes-probe" aria-hidden="true" />
       {leaving.map(({ id, style }) => (
         <i key={`gone-${id}`} className="pane-gone" style={style} aria-hidden="true" />
