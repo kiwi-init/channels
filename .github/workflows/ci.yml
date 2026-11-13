@@ -546,6 +546,9 @@ jobs:
       - name: ui the sidebar stays where it is scrolled while its highlight glides to the row just opened, and a press on a row right after opens it
         if: ${{ !cancelled() }}
         run: bun scripts/ui-side-still.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui Others' direct messages keeps its heading in place while one of its conversations is open, collapsed or expanded (#2386)
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-theirs-heading.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Jump to latest shows when you scroll up a long feed, takes a click and brings the feed to its end, from a little up, from far past the rows it holds and from near their top, at rest or the moment a wheel stops
         if: ${{ !cancelled() }}
         run: bun scripts/ui-feed-latest.ts --dist ui/dist --browser ${{ matrix.engine }}
