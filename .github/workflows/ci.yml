@@ -211,6 +211,9 @@ jobs:
       - name: ui bundle budget
         if: ${{ !cancelled() && matrix.part == 'app' }}
         run: bun scripts/ui-bundle.ts
+      - name: ui lazy imports preload only what the first load doesn't already have, and index.html preloads the entry's whole static graph
+        if: ${{ !cancelled() && matrix.part == 'app' }}
+        run: bun scripts/ui-preload-deps.ts --dist ui/dist
       - name: ui harness build, with the plain-browser key store
         if: ${{ !cancelled() }}
         run: bun scripts/ui-harness.ts
