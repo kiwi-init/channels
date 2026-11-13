@@ -1,6 +1,7 @@
 import "~/i18n/en/needs"
 import "~/styles/task-panel.css"
 
+import { AtIcon } from "@hugeicons/core-free-icons"
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { EditHere } from "~/chat/editing"
@@ -16,7 +17,7 @@ import { ANYONE } from "@kiwi/channel/task-actions.ts"
 import { autofocus, Avatar, cx, Dot, Heading, statusWord } from "~/kit/bits"
 import { Empty } from "~/kit/empty"
 import { Modal } from "~/kit/modal"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { MoreButton } from "~/kit/menu-open"
 import { ageOf, ago, lasting } from "~/kit/time"
 import { memberOf, type Ask, type Channel, type PermissionAsk, type Person, type QuestionAsk, type ReviewRound, type Task, type TaskEvent, type TaskStep } from "~/model"
@@ -391,7 +392,7 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
       <div className="task-pick-list">
         <button type="button" className="task-pick-row" aria-pressed={task.reviewer === ANYONE} disabled={task.reviewer === ANYONE} onClick={() => pick(ANYONE)}>
           <span className="task-pick-glyph">
-            <Icon name="at" size={14} />
+            <GlyphIcon glyph={AtIcon} size={14} />
           </span>
           <span className="task-pick-text">
             <span className="task-pick-name">{t("panels.task.anyone")}</span>
