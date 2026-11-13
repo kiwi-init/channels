@@ -1265,18 +1265,15 @@
 }
 
 .main,
-.views-bar,
 .app .set-main {
   background: var(--bg);
 }
 
-.main,
-.chan.is-top .views-bar {
+.main {
   border-top-left-radius: var(--r-ctl);
 }
 
-.chan.is-top .main,
-.chan.is-bare :is(.main, .views-bar) {
+.chan.is-bare .main {
   border-top-left-radius: 0;
 }
 
@@ -1512,35 +1509,6 @@
   grid-auto-rows: 0.75rem;
 }
 
-.views-bar {
-  grid-row: 1;
-  grid-column: 1;
-  position: relative;
-  z-index: 4;
-  align-self: start;
-  min-width: 0;
-  padding: 0 32px 8px;
-}
-
-.views-bar ul {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.views-bar .side-row {
-  width: auto;
-}
-
-.chan.is-top .main {
-  grid-row: 2 / -1;
-}
-
-.chan.is-top .side {
-  grid-row: 2 / -1;
-}
-
 @media (min-width: 1180px) and (orientation: landscape) {
   .chan.is-reading .main {
     grid-column: 1 / -1;
@@ -1740,11 +1708,11 @@
   }
 }
 
-:root[data-side-move="out"] :is(.main, .views-bar) {
+:root[data-side-move="out"] .main {
   animation: main-fill var(--slow) var(--ease);
 }
 
-:root[data-side-move="in"] :is(.main, .views-bar) {
+:root[data-side-move="in"] .main {
   animation: main-yield var(--slow) var(--ease);
 }
 

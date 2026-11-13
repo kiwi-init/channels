@@ -7,10 +7,6 @@
   overflow: clip;
 }
 
-.chan.is-top .panes {
-  grid-row: 2 / -1;
-}
-
 @media (min-width: 1180px) and (orientation: landscape) {
   .chan.has-panel .panes {
     grid-column: 1;

@@ -9,7 +9,6 @@ import { later } from "~/kit/later"
 import { openMessage } from "~/live/open-message"
 import type { Actions, Ask, Channel, PullRequest, Spec, Task, TaskStatus } from "~/model"
 import { useAct } from "~/nav"
-import { openAsks } from "~/needs/open"
 import { lanesOf, nowOf } from "~/now"
 import { inert, lookupOf, pieces, seal, type Seal } from "~/panes/engine"
 import { usePane } from "~/panes/place"
@@ -21,13 +20,14 @@ import { t } from "~/i18n/i18n"
 
 const NewSpec = later(() => import("~/specs/new").then((m) => m.NewSpec))
 const Detail = later(() => import("~/panes/detail").then((m) => m.Detail))
+const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
 
 interface Hooks {
   newSpec: () => void
   edit: (text: string) => void
 }
 
-type BoardView = Exclude<View, DetailView>
+type BoardView = Exclude<View, DetailView | { kind: "needs" }>
 
 const isDetail = (view: View): view is DetailView => view.kind === "task" || view.kind === "pr" || view.kind === "issue"
 
@@ -200,11 +200,6 @@ export function askCard(channel: Channel, a: Ask, actions: Actions, m: Maker): s
   return card([`### ${t("panes.page.quiet", { name: `@${a.from}` })}`, held(channel, a.task)])
 }
 
-function needsPage(channel: Channel, actions: Actions, m: Maker): string {
-  const asks = openAsks(channel).map((a) => askCard(channel, a, actions, m))
-  return join([`# ${t("shell.channel.needs.you")}`, ...asks, asks.length ? "" : t("panes.page.empty")])
-}
-
 export function boardText(channel: Channel, key: string, actions: Actions, hooks: Hooks): { md: string; seal: Seal } {
   const m = maker()
   const [kind, id] = key.split(":")
@@ -217,9 +212,7 @@ export function boardText(channel: Channel, key: string, actions: Actions, hooks
           ? specsPage(channel, m, hooks)
           : kind === "agents"
             ? agentsPage(channel)
-            : kind === "github"
-              ? githubPage(channel)
-              : needsPage(channel, actions, m)
+            : githubPage(channel)
   return { md, seal: m.seal }
 }
 
@@ -254,6 +247,12 @@ export function PageFrame({ kind, children, more }: { kind: string; children: Re
 }
 
 export function Page({ channel, view }: { channel: Channel; view: View }) {
+  if (view.kind === "needs")
+    return (
+      <Suspense fallback={null}>
+        <NeedsYou channel={channel} onJump={(jump) => openMessage(channel.code, jump.m.seq)} />
+      </Suspense>
+    )
   if (!isDetail(view)) return <Board channel={channel} view={view} />
   return (
     <Suspense fallback={null}>

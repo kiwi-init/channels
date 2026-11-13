@@ -1,6 +1,5 @@
 import "~/i18n/en/settings"
 
-import { setLayout, useLayout, type Layout } from "@kiwi/app/layout.ts"
 import type { TextFont } from "@kiwi/app/theme.ts"
 import { personFingerprint } from "@kiwi/core/fingerprint.ts"
 import { KEYS_UNSEALED } from "@kiwi/secrets/keys-at-rest.ts"
@@ -181,12 +180,6 @@ const fonts = () =>
     ["atkinson", "Atkinson"],
   ] as const satisfies readonly (readonly [TextFont, string])[]
 
-const layouts = () =>
-  [
-    ["side", t("settings.sections.layout.side")],
-    ["top", t("settings.sections.layout.top")],
-  ] as const satisfies readonly (readonly [Layout, string])[]
-
 const motions = () =>
   [
     ["full", t("settings.sections.motion.full")],
@@ -228,7 +221,6 @@ const appearanceFields = (name: string): ReactNode | undefined =>
 export function AppearancePage() {
   const { app } = useApp()
   const { prefs, actions } = app
-  const layout = useLayout()
   const set = (p: Partial<Prefs>) => actions.setPrefs(p)
   const a = acts()
   const md = join([
@@ -238,7 +230,6 @@ export function AppearancePage() {
       row({ label: t("settings.sections.mode"), nested: [choices(a, themes(), prefs.theme, (theme) => set({ theme }))] }),
       row({ label: t("settings.sections.text.size"), nested: [choices<number>(a, sizes(), prefs.textSize, (textSize) => set({ textSize }))] }),
       row({ label: t("settings.sections.font"), nested: [choices(a, fonts(), prefs.font, (font) => set({ font }))] }),
-      row({ label: t("settings.sections.layout"), hint: say("settings.sections.layout.hint"), nested: [choices(a, layouts(), layout, setLayout)] }),
       row({ label: t("settings.sections.motion"), nested: [choices(a, motions(), prefs.reduceMotion ? "reduced" : "full", (m) => set({ reduceMotion: m === "reduced" }))] }),
       row({
         label: t("settings.sections.transparency"),

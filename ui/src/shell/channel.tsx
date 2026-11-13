@@ -20,8 +20,8 @@ import { useDrawer } from "~/shell/side"
 import { Content } from "~/shell/content"
 import { viewOf } from "~/panes/place"
 import { FocusScope, placeName, roomiest } from "~/panes/place"
-import { Sidebar, ViewsBar } from "~/shell/sidebar"
-import { useTabs, useTopLayout } from "~/shell/top-layout"
+import { Sidebar } from "~/shell/sidebar"
+import { useTabs } from "~/shell/top-layout"
 import { ActivityButton } from "~/chat/events"
 import { t } from "~/i18n/i18n"
 
@@ -42,7 +42,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const actions = useActions()
   const hidden = useSidebarHidden()
   const tabs = useTabs()
-  const top = useTopLayout()
   const [jumpAt, setJumpAt] = useState<{ jump: Jump; visit: number } | null>(null)
   const jump = jumpAt?.visit === nav.visit ? jumpAt.jump : null
   const setJump = (j: Jump | null) => setJumpAt(j ? { jump: j, visit: nav.visit } : null)
@@ -131,7 +130,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
 
   return (
     <Frame
-      className={cx(panelOpen && "has-panel", top && "is-top")}
+      className={cx(panelOpen && "has-panel")}
       news={news}
       title={title}
       tools={
@@ -154,12 +153,11 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       }
       side={
         <FocusScope code={channel.code} now={now}>
-          <Sidebar channel={channel} views={!top} />
+          <Sidebar channel={channel} />
         </FocusScope>
       }
     >
       <Content>
-        {top && <ViewsBar channel={channel} />}
         <Panes
           channel={channel}
           label={tabs ? title : undefined}

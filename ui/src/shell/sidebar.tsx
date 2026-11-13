@@ -105,15 +105,7 @@ function ViewRows({ channel }: { channel: Channel }) {
   )
 }
 
-export function ViewsBar({ channel }: { channel: Channel }) {
-  return (
-    <nav className="views-bar" aria-label={t("shell.channel.views")}>
-      <ViewRows channel={channel} />
-    </nav>
-  )
-}
-
-export function Sidebar({ channel, views = true }: { channel: Channel; views?: boolean }) {
+export function Sidebar({ channel }: { channel: Channel }) {
   const nav = useNav()
   const go = useGo()
   const open = useOpenToType()
@@ -184,7 +176,7 @@ export function Sidebar({ channel, views = true }: { channel: Channel; views?: b
           <span className="side-chan-name">{channel.title}</span>
           <Icon name="down" size={14} />
         </button>
-        {views && <ViewRows channel={channel} />}
+        <ViewRows channel={channel} />
       </nav>
       <section aria-label={t("shell.sidebar.rooms")}>
         <Heading action={channel.youOwn || channel.youTrusted ? <IconButton icon="plus" label={t("shell.sidebar.new.room")} onClick={() => go({ to: "dialog", dialog: "new-room" })} /> : undefined}>

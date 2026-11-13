@@ -424,103 +424,6 @@ try {
     );
     await page.close();
   }
-  for (const [width, height] of SIZES) {
-    console.log(`\nthe top bar layout, ${width}×${height}`);
-    const page = await browser.newPage({ viewport: { width, height } });
-    await open(page, "channel-top");
-    const strip = await boxOf(page, ".top");
-    const toggle = await boxOf(page, ".top-drawer");
-    const search = await boxOf(page, ".top-tools > .icon-btn:last-child");
-    const home = await boxOf(page, ".tile.is-home");
-    const tab = await boxOf(page, ".tile[data-code]");
-    const add = await boxOf(page, ".tile.is-add");
-    const bar = await boxOf(page, ".views-bar ul");
-    const icon = await boxOf(page, ".views-bar .side-icon");
-    const main = await boxOf(page, ".main");
-    const side = await boxOf(page, ".side");
-    const title = await boxOf(page, ".top-here");
-    const named = (): Promise<boolean[]> =>
-      page.evaluate(() => [...document.querySelectorAll(".tile[data-code] .tile-name")].map((name) => name.clientWidth > 0 && name.scrollWidth <= name.clientWidth));
-    const names = await named();
-    const rows = await page.evaluate(() => [...document.querySelectorAll(".views-bar .side-row")].map((row) => Math.round(row.getBoundingClientRect().top)));
-    expect(
-      !!strip && !!home && !!tab && !!add && home.bottom <= strip.bottom && near(home.y, tab.y) && add.top >= strip.top && add.bottom <= strip.bottom,
-      `the channels are one line of tabs in the top strip (${home?.y}, ${tab?.y}, + from ${add?.top} to ${add?.bottom} of ${strip?.bottom})`,
-    );
-    expect(!!toggle && !!home && home.left >= toggle.right, `the tabs start after the sidebar button (${home?.left} after ${toggle?.right})`);
-    expect(!!search && !!add && add.right <= search.left && near(search.right, width - 8), `and end before Search, at the row's far end (${add?.right} before ${search?.left})`);
-    await nothingClashes(page, "in Top bar");
-    expect(names.length > 0 && names.every(Boolean), `every tab shows its channel's whole name (${names.filter(Boolean).length} of ${names.length})`);
-    expect(rows.length >= 3 && new Set(rows).size === 1, `the views are one row (${rows.length} in ${new Set(rows).size} row)`);
-    expect(!!bar && !!strip && bar.top >= strip.bottom, `on their own line, under the tabs (${bar?.top} of ${strip?.bottom})`);
-    expect(!!icon && !!side && near(icon.left, side.right + 40), `starting on the work's gutter line (${icon?.left} after ${side?.right})`);
-    expect(!!bar && !!main && near(main.top, bar.bottom + 8), `the work starts right under them (${main?.top} after ${bar?.bottom})`);
-    expect(!!side && !!strip && near(side.top, strip.bottom), `the sidebar starts right under the tabs (${side?.top} of ${strip?.bottom})`);
-    expect((await page.locator(".side .side-views .side-row").count()) === 0 && (await page.locator(".side .side-chan").count()) === 1, "the sidebar keeps the channel's name and loses the view rows");
-    expect(title === null, "the strip has no title");
-    await page.locator(".top-tools .icon-btn").last().click();
-    await page.waitForTimeout(500);
-    const find = await boxOf(page, ".top-find");
-    const tabs = await boxOf(page, ".rail");
-    expect(!!find && !!tabs && tabs.right <= find.left && near(find.right, width - 8), `the search field opens at the far end and the tabs make room for it (${tabs?.right} before ${find?.left})`);
-    await nothingClashes(page, "while searching");
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(500);
-    await page.locator(".views-bar .side-row", { hasText: "Specs" }).click();
-    await page.waitForTimeout(300);
-    expect((await page.locator('.views-bar .side-row[aria-pressed="true"]').innerText()).includes("Specs"), "a view opens from its row and shows as chosen");
-    const edge = await boxOf(page, ".side-grip");
-    if (edge) {
-      await page.mouse.move(edge.x, edge.y);
-      await page.mouse.down();
-      await page.mouse.move(edge.x + 61, edge.y, { steps: 6 });
-      await page.mouse.up();
-    }
-    const sideAfter = await boxOf(page, ".side");
-    const homeAfter = await boxOf(page, ".tile.is-home");
-    expect(!!edge && !!side && !!sideAfter && sideAfter.right === side.right + 64, `the sidebar's edge drags (${side?.right} → ${sideAfter?.right})`);
-    expect(!!home && !!homeAfter && homeAfter.left === home.left + 64, `and the tabs start at the page's edge still (${home?.left} → ${homeAfter?.left})`);
-    await page.close();
-    const bare = await browser.newPage({ viewport: { width, height } });
-    await bare.addInitScript(() => localStorage.setItem("mc.sidebar-hidden", "1"));
-    await open(bare, "channel-top");
-    const taken = (): Promise<boolean[]> =>
-      bare.evaluate(() =>
-        [...document.querySelectorAll(".rail .tile")].map((tile) => {
-          const r = tile.getBoundingClientRect();
-          return tile.contains(document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2));
-        }),
-      );
-    const hidden = await taken();
-    const work = await boxOf(bare, ".main");
-    const homeBare = await boxOf(bare, ".tile.is-home");
-    const iconBare = await boxOf(bare, ".views-bar .side-icon");
-    expect(hidden.length > 0 && hidden.every(Boolean), `with the sidebar hidden, the tabs stay and take the click (${hidden.filter(Boolean).length} of ${hidden.length})`);
-    expect(!!home && !!homeBare && homeBare.left === home.left, `where they were (${homeBare?.left})`);
-    expect(!!work && near(work.left, 0) && !!iconBare && near(iconBare.left, 40), `the work and the views take the sidebar's place (${work?.left} and ${iconBare?.left})`);
-    await bare.mouse.move(400, 500);
-    await bare.mouse.move(3, 500, { steps: 6 });
-    await bare.waitForTimeout(700);
-    const peeked = await taken();
-    expect(peeked.length > 0 && peeked.every(Boolean), `and the tabs take the click under the peek too (${peeked.filter(Boolean).length} of ${peeked.length})`);
-    const sheetBare = await peekSheet(bare);
-    expect(
-      !!sheetBare && sheetBare.top >= sheetBare.tabs && sheetBare.side >= sheetBare.tabs,
-      `the peeked sidebar starts under the tab row here too (from ${sheetBare?.top}, the tabs end at ${sheetBare?.tabs}) (T339)`,
-    );
-    await bare.close();
-  }
-  for (const [width, height] of [[900, 700]] as const) {
-    console.log(`\nthe top bar layout, ${width}×${height}`);
-    const page = await browser.newPage({ viewport: { width, height } });
-    await open(page, "channel-top");
-    const over = await page.evaluate(() => (document.scrollingElement?.scrollWidth ?? 0) - innerWidth);
-    const strip = await boxOf(page, ".top");
-    const tabs = await page.evaluate(() => [...document.querySelectorAll(".rail .tile")].map((tile) => Math.round(tile.getBoundingClientRect().bottom)));
-    expect(over <= 0, `nothing scrolls sideways (${over}px over)`);
-    expect(!!strip && tabs.length > 0 && tabs.every((bottom) => bottom <= strip.bottom), "the tabs are still one line");
-    await page.close();
-  }
   for (const mac of [false, true]) {
     for (const shot of ["settings-devices", "home"]) {
       console.log(`\n${shot}${mac ? ", on the Mac" : ""}`);
@@ -631,7 +534,6 @@ try {
     ["tabs-3", 1710, "roomy"],
     ["tabs-8", 1710, "roomy"],
     ["tabs-8", 1560, "roomy"],
-    ["tabs-8-top", 1560, "roomy"],
     ["tabs-8", 1280, "tight"],
     ["tabs-8", 900, "icons"],
   ] as const) {
