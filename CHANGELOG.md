@@ -22,6 +22,7 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
 - **Glass shell, split panes and markdown pages (T2107, T2427, T2631, T2632)** ([#2397](https://github.com/kiwi-init/channels/pull/2397))
 - **Feed: each open conversation keeps its own older rows, so two panes of one room stop trimming each other (#3652)** ([#2428](https://github.com/kiwi-init/channels/pull/2428))
 - **UI: one dismissal hook for the GIF pickers, updates panel and usage card (T9299, #2421)** ([#2427](https://github.com/kiwi-init/channels/pull/2427))
+- **Feed: a reader at the bottom stays there while lines arrive, whatever the timing (#2399, T8812)** ([#2419](https://github.com/kiwi-init/channels/pull/2419))
 
 ## 2026.11.20 — 2026-11-13
 
