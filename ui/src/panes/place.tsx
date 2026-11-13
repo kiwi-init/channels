@@ -111,7 +111,13 @@ export function dragOut(carry: Carry, label: string): { onPointerDown: (e: React
     onPointerDown(e) {
       if (e.button !== 0 || e.pointerType === "touch") return
       const from = { x: e.clientX, y: e.clientY }
-      void import("~/panes/drag").then((m) => m.follow(carry, label, from))
+      let held = true
+      const up = () => void (held = false)
+      window.addEventListener("pointerup", up, { capture: true, once: true })
+      void import("~/panes/drag").then((m) => {
+        window.removeEventListener("pointerup", up, true)
+        if (held) m.follow(carry, label, from)
+      })
     },
   }
 }

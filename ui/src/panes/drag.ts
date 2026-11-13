@@ -45,6 +45,7 @@ export function follow(carry: Carry, label: string, from: { x: number; y: number
   let now: Drag | null = null
   const root = document.documentElement
   const move = (m: PointerEvent) => {
+    if (m.buttons === 0) return stop()
     if (!now && Math.hypot(m.clientX - from.x, m.clientY - from.y) < START) return
     now = { carry, label, x: m.clientX, y: m.clientY, target: targetAt(m.clientX, m.clientY, carry) }
     root.toggleAttribute("data-dragging", true)
