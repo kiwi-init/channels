@@ -8,5 +8,6 @@ import needs from "~/i18n/en/needs"
 import settings from "~/i18n/en/settings"
 import shellLater from "~/i18n/en/shell-later"
 import specs from "~/i18n/en/specs"
+import usage from "~/i18n/en/usage"
 
-export const english = { ...en, ...liveLater, ...settings, ...chatLater, ...specs, ...modals, ...needs, ...shellLater, ...githubLater, ...kitLater } as const
+export const english = { ...en, ...liveLater, ...settings, ...chatLater, ...specs, ...modals, ...needs, ...shellLater, ...githubLater, ...kitLater, ...usage } as const

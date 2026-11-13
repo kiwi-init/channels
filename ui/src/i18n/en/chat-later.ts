@@ -246,6 +246,22 @@ const words = {
   "chat.doc.channel.removed": "the channel was removed",
   "chat.doc.channel.closed": "the channel was closed",
   "chat.composer.edit.not.loaded": "The whole message couldn't be loaded, so it can't be edited right now",
+  "chat.attach.up.to": "Up to {count} images in one message",
+  "chat.attach.up.to.files": "Up to {count} files in one message",
+  "chat.attach.not.image": "{name} isn't a PNG, JPEG, GIF or WebP",
+  "chat.attach.too.big": "{name} is empty or too big to send",
+  "chat.attach.unreadable": "{name} couldn't be read",
+  "chat.attach.drop": "Drop images to attach",
+  "chat.attach.drop.files": "Drop files to attach",
+  "chat.attach.attached": "Attached images",
+  "chat.attach.attached.files": "Attached files",
+  "chat.attach.remove.name": "Remove {name}",
+  "chat.attach.remove": "Remove",
+  "chat.suggest.tasks": "Tasks and specs",
+  "chat.suggest.spec": "spec",
+  "chat.suggest.people": "People",
+  "chat.suggest.person": "person",
+  "chat.suggest.agent": "agent",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

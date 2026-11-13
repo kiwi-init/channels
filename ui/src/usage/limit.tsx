@@ -1,3 +1,4 @@
+import "~/i18n/en/usage"
 import { t } from "~/i18n/i18n"
 import { Modal } from "~/kit/modal"
 import { openOutside } from "~/kit/outside"

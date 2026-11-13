@@ -1,3 +1,4 @@
+import "~/i18n/en/chat-later"
 import type { Suggest } from "~/chat/suggest"
 import { t } from "~/i18n/i18n"
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"

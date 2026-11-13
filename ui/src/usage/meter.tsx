@@ -1,3 +1,4 @@
+import "~/i18n/en/usage"
 import "~/styles/usage.css"
 
 import { useEffect, useRef, useState } from "react"
