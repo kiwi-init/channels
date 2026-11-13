@@ -35,24 +35,52 @@ const CATALOG = [
 const INSTRUMENT = `(() => {
   const watched = new Set(["keydown", "pointerdown", "blur", "resize"]);
   const live = new Map();
+  const calls = new Map();
   const where = (t) => (t === window ? "window" : t === document ? "document" : null);
   const phase = (o) => (typeof o === "boolean" ? o : !!(o && o.capture)) ? "capture" : "bubble";
   const add = EventTarget.prototype.addEventListener;
   const remove = EventTarget.prototype.removeEventListener;
   EventTarget.prototype.addEventListener = function (type, fn, opts) {
     const w = where(this);
-    if (w && watched.has(type) && fn) {
+    if (w && watched.has(type) && typeof fn === "function") {
       const key = w + " " + type + " " + phase(opts);
-      if (!live.has(key)) live.set(key, new Set());
-      live.get(key).add(fn);
+      if (!live.has(key)) live.set(key, new Map());
+      const fns = live.get(key);
+      let wrapped = fns.get(fn);
+      if (!wrapped) {
+        wrapped = function (e) {
+          calls.set(fn, (calls.get(fn) || 0) + 1);
+          return fn.call(this, e);
+        };
+        fns.set(fn, wrapped);
+      }
+      return add.call(this, type, wrapped, opts);
     }
     return add.call(this, type, fn, opts);
   };
   EventTarget.prototype.removeEventListener = function (type, fn, opts) {
     const w = where(this);
-    if (w && watched.has(type) && fn) live.get(w + " " + type + " " + phase(opts))?.delete(fn);
+    if (w && watched.has(type) && typeof fn === "function") {
+      const fns = live.get(w + " " + type + " " + phase(opts));
+      const wrapped = fns && fns.get(fn);
+      if (wrapped) {
+        fns.delete(fn);
+        return remove.call(this, type, wrapped, opts);
+      }
+    }
     return remove.call(this, type, fn, opts);
   };
+  const entries = () => [...live].flatMap(([key, fns]) => [...fns.keys()].map((fn) => [key, fn]));
+  let baseline = new Set();
+  let owned = [];
+  const ids = new WeakMap();
+  let next = 0;
+  const idOf = (o) => {
+    if (o === null || typeof o !== "object") return String(o);
+    if (!ids.has(o)) ids.set(o, ++next);
+    return "#" + ids.get(o);
+  };
+  const tally = (list) => Object.fromEntries(Object.entries(list.reduce((acc, [key]) => ({ ...acc, [key]: (acc[key] || 0) + 1 }), {})).sort(([a], [b]) => (a < b ? -1 : 1)));
   const seen = [];
   const probe = (name) => () => seen.push(name);
   for (const type of watched) {
@@ -63,6 +91,23 @@ const INSTRUMENT = `(() => {
   add.call(window, "error", (e) => errors.push(String(e.message)), false);
   window.__dismiss = {
     listeners: () => Object.fromEntries([...live].filter(([, fns]) => fns.size).map(([k, fns]) => [k, fns.size]).sort(([a], [b]) => (a < b ? -1 : 1))),
+    mark: () => {
+      baseline = new Set(entries().map(([, fn]) => fn));
+    },
+    own: () => {
+      owned = entries().filter(([, fn]) => !baseline.has(fn));
+      for (const [, fn] of owned) calls.set(fn, 0);
+      return tally(owned);
+    },
+    ownedLive: () => tally(owned.filter(([key, fn]) => live.get(key)?.has(fn))),
+    ownedCalls: () => owned.reduce((n, [, fn]) => n + (calls.get(fn) || 0), 0),
+    renders: (selector) => {
+      const el = document.querySelector(selector);
+      const key = el && Object.keys(el).find((k) => k.startsWith("__reactFiber$"));
+      let fiber = key ? el[key] : null;
+      while (fiber && fiber.tag !== 0) fiber = fiber.return;
+      return fiber ? [fiber, fiber.alternate].filter(Boolean).map((f) => idOf(f.memoizedState)).sort().join(",") : null;
+    },
     htmlProbe: () => {
       for (const type of watched) {
         add.call(document.documentElement, type, probe("html capture"), true);
@@ -75,7 +120,19 @@ const INSTRUMENT = `(() => {
 })()`;
 
 type Listeners = Record<string, number>;
-type Step = { step: string; open: boolean; prevented?: boolean; seen?: string[]; errors?: string[]; listeners: Listeners; folder?: string };
+type Step = {
+  step: string;
+  open: boolean;
+  prevented?: boolean;
+  seen?: string[];
+  errors?: string[];
+  listeners: Listeners;
+  folder?: string;
+  rendered?: boolean;
+  changed?: string;
+  owned?: Listeners;
+  calls?: number;
+};
 type Popover = { popover: string; steps: Step[] };
 
 const delta = (now: Listeners, before: Listeners): Listeners =>
@@ -100,7 +157,8 @@ const server = Bun.serve({
 const settle = (page: Page) => page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 30)))));
 
 type Target = "active" | "inside" | "outside" | "toggle" | "document" | "window";
-type Spec = { name: string; shot: string; popover: string; toggle: string; open: (page: Page) => Promise<void> };
+type Change = { name: string; act: (page: Page) => Promise<unknown>; observe: (page: Page) => Promise<string> };
+type Spec = { name: string; shot: string; popover: string; toggle: string; open: (page: Page) => Promise<void>; rerender?: Change; unmount?: Change };
 
 async function dispatch(page: Page, spec: Spec, kind: "keydown" | "pointerdown" | "blur" | "resize", target: Target, key = ""): Promise<{ prevented: boolean; seen: string[] }> {
   return page.evaluate(
@@ -189,7 +247,103 @@ async function drive(page: Page, spec: Spec): Promise<Popover> {
   await ensureOpen(page, spec);
   await ensureOpen(page, spec);
   steps.push({ step: "reopened", open: await isOpen(page, spec), listeners: delta(await listeners(page), before) });
+  if (spec.rerender && spec.unmount) steps.push(...(await lifecycle(page, spec, spec.rerender, spec.unmount, before)));
   return { popover: spec.name, steps };
+}
+
+const ownedLive = (page: Page) => page.evaluate("window.__dismiss.ownedLive()") as Promise<Listeners>;
+const ownedCalls = (page: Page) => page.evaluate("window.__dismiss.ownedCalls()") as Promise<number>;
+const renders = (page: Page, spec: Spec) => page.evaluate(`window.__dismiss.renders(${JSON.stringify(spec.popover)})`) as Promise<string | null>;
+
+async function openOwning(page: Page, spec: Spec): Promise<Listeners> {
+  await page.evaluate("window.__dismiss.mark()");
+  await spec.open(page);
+  await page.locator(spec.popover).first().waitFor({ timeout: 10_000 });
+  await settle(page);
+  return page.evaluate("window.__dismiss.own()") as Promise<Listeners>;
+}
+
+async function lifecycle(page: Page, spec: Spec, rerender: Change, unmount: Change, before: Listeners): Promise<Step[]> {
+  const steps: Step[] = [];
+  await dispatch(page, spec, "keydown", "outside", "Escape");
+  await settle(page);
+  const owned = await openOwning(page, spec);
+  steps.push({ step: "opened, owning its listeners", open: await isOpen(page, spec), owned, listeners: delta(await listeners(page), before) });
+  const was = await renders(page, spec);
+  const from = await rerender.observe(page);
+  await rerender.act(page);
+  await settle(page);
+  await page.waitForTimeout(200);
+  steps.push({
+    step: `re-rendered while open: ${rerender.name}`,
+    open: await isOpen(page, spec),
+    rendered: was !== null && was !== (await renders(page, spec)),
+    changed: `${from} -> ${await rerender.observe(page)}`,
+    errors: await errors(page),
+    owned: await ownedLive(page),
+    listeners: delta(await listeners(page), before),
+  });
+  const esc = await dispatch(page, spec, "keydown", "active", "Escape");
+  await settle(page);
+  steps.push({ step: "Escape after the re-render", open: await isOpen(page, spec), ...esc, errors: await errors(page), owned: await ownedLive(page), listeners: delta(await listeners(page), before) });
+  const again = await openOwning(page, spec);
+  steps.push({ step: "reopened before unmounting", open: await isOpen(page, spec), owned: again, listeners: delta(await listeners(page), before) });
+  const at = await unmount.observe(page);
+  await unmount.act(page);
+  await settle(page);
+  await page.waitForTimeout(300);
+  steps.push({
+    step: `unmounted while open: ${unmount.name}`,
+    open: await isOpen(page, spec),
+    changed: `${at} -> ${await unmount.observe(page)}`,
+    errors: await errors(page),
+    owned: await ownedLive(page),
+    calls: await ownedCalls(page),
+    listeners: delta(await listeners(page), before),
+  });
+  const key = await dispatch(page, spec, "keydown", "outside", "Escape");
+  await settle(page);
+  steps.push({
+    step: "Escape after unmounting",
+    open: await isOpen(page, spec),
+    ...key,
+    errors: await errors(page),
+    owned: await ownedLive(page),
+    calls: await ownedCalls(page),
+    listeners: delta(await listeners(page), before),
+  });
+  const press = await dispatch(page, spec, "pointerdown", "outside");
+  await settle(page);
+  steps.push({
+    step: "pointer outside after unmounting",
+    open: await isOpen(page, spec),
+    ...press,
+    errors: await errors(page),
+    owned: await ownedLive(page),
+    calls: await ownedCalls(page),
+    listeners: delta(await listeners(page), before),
+  });
+  return steps;
+}
+
+const click = (selector: string) => (page: Page) => page.evaluate((s) => document.querySelector<HTMLElement>(s)?.click(), selector);
+const view = (page: Page) => page.evaluate(() => (document.querySelector(".tile.is-home.is-on") ? "home" : document.querySelector(".rail") ? "channel" : "signed out"));
+const toHome: Change = { name: "Home in the rail", act: click(".tile.is-home"), observe: view };
+const gifTab: Change = {
+  name: "another GIF tab",
+  act: (page) => page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".gifs-tab")].find((b) => b.textContent?.includes("wow"))?.click()),
+  observe: (page) => page.evaluate(() => document.querySelector(".gifs-tab[aria-selected=true]")?.textContent ?? "none"),
+};
+
+async function signOut(page: Page): Promise<void> {
+  await click(".rail-gear")(page);
+  await settle(page);
+  await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("button, a")].find((b) => b.textContent?.trim() === "Account")?.click());
+  await settle(page);
+  await click(".set-forget")(page);
+  await settle(page);
+  await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("dialog[open] button")].find((b) => b.textContent?.trim() === "Sign out")?.click());
+  await page.waitForTimeout(500);
 }
 
 async function driveField(page: Page): Promise<Popover> {
@@ -245,6 +399,8 @@ const SPECS: Spec[] = [
         .locator("button.msg-tool[data-gif-toggle]")
         .first()
         .evaluate((el) => (el as HTMLElement).click()),
+    rerender: gifTab,
+    unmount: toHome,
   },
   {
     name: "composer GIF picker",
@@ -255,6 +411,8 @@ const SPECS: Spec[] = [
       await page.locator(".compose-attach[data-gif-toggle]").first().click();
       await page.locator("[role=menu].is-at-pointer button", { hasText: "GIF" }).first().click();
     },
+    rerender: gifTab,
+    unmount: toHome,
   },
   {
     name: "composer + menu",
@@ -269,6 +427,8 @@ const SPECS: Spec[] = [
     popover: ".updates-panel",
     toggle: "[data-updates-toggle]",
     open: (page) => page.locator("[data-updates-toggle]").first().click(),
+    rerender: { name: "a wider window", act: (page) => page.setViewportSize({ width: 960, height: 800 }), observe: (page) => page.evaluate(() => `${innerWidth}px`) },
+    unmount: toHome,
   },
   {
     name: "usage card",
@@ -276,6 +436,12 @@ const SPECS: Spec[] = [
     popover: ".usage-card",
     toggle: ".rail-usage",
     open: (page) => page.locator(".rail-usage").first().click(),
+    rerender: {
+      name: "the rail's hint over a channel",
+      act: (page) => page.locator(".rail .tile").nth(2).hover(),
+      observe: (page) => page.evaluate(() => document.querySelector(".rail-hint")?.textContent ?? "no hint"),
+    },
+    unmount: { name: "signing out", act: signOut, observe: view },
   },
   { name: "rail folder menu", shot: "rail-folder", popover: "[role=menu].is-at-pointer", toggle: ".rail-folder", open: openFolderMenu },
 ];

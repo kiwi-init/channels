@@ -186,6 +186,109 @@
             "document pointerdown capture": 1,
             "window pointerdown capture": 1
           }
+        },
+        {
+          "step": "opened, owning its listeners",
+          "open": true,
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "re-rendered while open: another GIF tab",
+          "open": true,
+          "rendered": true,
+          "changed": "yes1 -> wow1",
+          "errors": [],
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape after the re-render",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "owned": {},
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened before unmounting",
+          "open": true,
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "unmounted while open: Home in the rail",
+          "open": false,
+          "changed": "channel -> home",
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "Escape after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "pointer outside after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
         }
       ]
     },
@@ -354,6 +457,109 @@
             "document keydown capture": 1,
             "document pointerdown capture": 1,
             "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "opened, owning its listeners",
+          "open": true,
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "re-rendered while open: another GIF tab",
+          "open": true,
+          "rendered": true,
+          "changed": "yes1 -> wow1",
+          "errors": [],
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape after the re-render",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "owned": {},
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened before unmounting",
+          "open": true,
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "unmounted while open: Home in the rail",
+          "open": false,
+          "changed": "channel -> home",
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "Escape after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "pointer outside after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
           }
         }
       ]
@@ -697,6 +903,109 @@
             "document pointerdown capture": 1,
             "window pointerdown capture": 1
           }
+        },
+        {
+          "step": "opened, owning its listeners",
+          "open": true,
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "re-rendered while open: a wider window",
+          "open": true,
+          "rendered": true,
+          "changed": "900px -> 960px",
+          "errors": [],
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape after the re-render",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "owned": {},
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened before unmounting",
+          "open": true,
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "unmounted while open: Home in the rail",
+          "open": false,
+          "changed": "channel -> home",
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "Escape after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "pointer outside after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
         }
       ]
     },
@@ -861,6 +1170,109 @@
           "listeners": {
             "window keydown bubble": 1,
             "window pointerdown capture": 2
+          }
+        },
+        {
+          "step": "opened, owning its listeners",
+          "open": true,
+          "owned": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          },
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 2
+          }
+        },
+        {
+          "step": "re-rendered while open: the rail's hint over a channel",
+          "open": true,
+          "rendered": true,
+          "changed": "no hint -> interlinked",
+          "errors": [],
+          "owned": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          },
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 2
+          }
+        },
+        {
+          "step": "Escape after the re-render",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened before unmounting",
+          "open": true,
+          "owned": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          },
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 2
+          }
+        },
+        {
+          "step": "unmounted while open: signing out",
+          "open": false,
+          "changed": "channel -> signed out",
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window keydown capture": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "Escape after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window keydown capture": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "pointer outside after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window keydown capture": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
           }
         }
       ]
@@ -1281,6 +1693,109 @@
             "document pointerdown capture": 1,
             "window pointerdown capture": 1
           }
+        },
+        {
+          "step": "opened, owning its listeners",
+          "open": true,
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "re-rendered while open: another GIF tab",
+          "open": true,
+          "rendered": true,
+          "changed": "yes1 -> wow1",
+          "errors": [],
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape after the re-render",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "owned": {},
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened before unmounting",
+          "open": true,
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "unmounted while open: Home in the rail",
+          "open": false,
+          "changed": "channel -> home",
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "Escape after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "pointer outside after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
         }
       ]
     },
@@ -1449,6 +1964,109 @@
             "document keydown capture": 1,
             "document pointerdown capture": 1,
             "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "opened, owning its listeners",
+          "open": true,
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "re-rendered while open: another GIF tab",
+          "open": true,
+          "rendered": true,
+          "changed": "yes1 -> wow1",
+          "errors": [],
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape after the re-render",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "owned": {},
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened before unmounting",
+          "open": true,
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "unmounted while open: Home in the rail",
+          "open": false,
+          "changed": "channel -> home",
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "Escape after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "pointer outside after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
           }
         }
       ]
@@ -1792,6 +2410,109 @@
             "document pointerdown capture": 1,
             "window pointerdown capture": 1
           }
+        },
+        {
+          "step": "opened, owning its listeners",
+          "open": true,
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "re-rendered while open: a wider window",
+          "open": true,
+          "rendered": true,
+          "changed": "900px -> 960px",
+          "errors": [],
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "Escape after the re-render",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture"],
+          "errors": [],
+          "owned": {},
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened before unmounting",
+          "open": true,
+          "owned": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1
+          },
+          "listeners": {
+            "document keydown capture": 1,
+            "document pointerdown capture": 1,
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "unmounted while open: Home in the rail",
+          "open": false,
+          "changed": "channel -> home",
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "Escape after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "pointer outside after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
         }
       ]
     },
@@ -1956,6 +2677,109 @@
           "listeners": {
             "window keydown bubble": 1,
             "window pointerdown capture": 2
+          }
+        },
+        {
+          "step": "opened, owning its listeners",
+          "open": true,
+          "owned": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          },
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 2
+          }
+        },
+        {
+          "step": "re-rendered while open: the rail's hint over a channel",
+          "open": true,
+          "rendered": true,
+          "changed": "no hint -> interlinked",
+          "errors": [],
+          "owned": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          },
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 2
+          }
+        },
+        {
+          "step": "Escape after the re-render",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "listeners": {
+            "window pointerdown capture": 1
+          }
+        },
+        {
+          "step": "reopened before unmounting",
+          "open": true,
+          "owned": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 1
+          },
+          "listeners": {
+            "window keydown bubble": 1,
+            "window pointerdown capture": 2
+          }
+        },
+        {
+          "step": "unmounted while open: signing out",
+          "open": false,
+          "changed": "channel -> signed out",
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window keydown capture": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "Escape after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window keydown capture": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
+          }
+        },
+        {
+          "step": "pointer outside after unmounting",
+          "open": false,
+          "prevented": false,
+          "seen": ["window capture", "html capture", "html bubble", "window bubble"],
+          "errors": [],
+          "owned": {},
+          "calls": 0,
+          "listeners": {
+            "document keydown bubble": -1,
+            "document keydown capture": -1,
+            "document pointerdown bubble": -1,
+            "window keydown bubble": -1,
+            "window keydown capture": -1,
+            "window pointerdown capture": 1,
+            "window resize bubble": -2
           }
         }
       ]
