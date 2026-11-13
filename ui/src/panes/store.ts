@@ -4,7 +4,19 @@ import type { Where } from "~/model"
 import { navigate, sameWhere, startNav, type Go, type Nav, type Panel } from "~/nav"
 import type { Tab } from "~/places"
 
-export type Doc = { kind: "task"; task: number } | { kind: "now" } | { kind: "panel"; panel: Panel }
+export type Doc = { kind: "task"; task: number } | { kind: "now" } | { kind: "panel"; panel: Panel } | { kind: "blank" } | { kind: "home"; only?: string } | { kind: "activity" }
+
+export const BLANK: Page = { at: "doc", doc: { kind: "blank" } }
+
+export const isBlank = (leaf: Leaf): boolean => leaf.doc?.kind === "blank"
+
+export const PANE_DRAG = "application/x-kiwi-pane"
+
+export function homeFrom(raw: string): Page | null {
+  if (raw === "home") return { at: "doc", doc: { kind: "home" } }
+  const only = /^channel:(.+)$/.exec(raw)?.[1]
+  return only ? { at: "doc", doc: { kind: "home", only } } : null
+}
 
 export type Page = { at: "where"; where: Where } | { at: "tab"; tab: Exclude<Tab, "chat"> } | { at: "spec"; ask: number } | { at: "doc"; doc: Doc }
 
@@ -192,6 +204,25 @@ export function splitAt(code: string, target: string, edge: Edge, page: Page): v
   if (root && root !== layout.root) put(code, { ...layout, root, focus: leaf.id })
 }
 
+export function fillPane(code: string, target: string, carry: Carry): void {
+  const layout = layoutOf(code)
+  const blank = leafOf(layout.root, target)
+  if (!blank || !isBlank(blank)) return
+  const moved = "pane" in carry ? leafOf(layout.root, carry.pane) : null
+  const now = "page" in carry && carry.page.at === "doc" && carry.page.doc.kind === "now" ? findLeaf(layout.root, isNow) : null
+  const into = moved ?? now
+  if (into) {
+    if (into.id === target) return
+    const root = swap(without(layout.root, into.id), target, () => into)
+    if (root) put(code, { ...layout, root, focus: into.id })
+    return
+  }
+  if (!("page" in carry)) return
+  const leaf = { ...fresh(code, carry.page), id: target }
+  const root = swap(layout.root, target, () => leaf)
+  if (root) put(code, { ...layout, root, focus: target })
+}
+
 export function movePane(code: string, id: string, target: string, edge: Edge): void {
   const layout = layoutOf(code)
   const leaf = leafOf(layout.root, id)
@@ -319,7 +350,7 @@ export interface Drag {
   label: string
   x: number
   y: number
-  target: { code: string; id: string; edge: Edge; box: { x: number; y: number; w: number; h: number } } | null
+  target: { code: string; id: string; edge: Edge; fill?: true; box: { x: number; y: number; w: number; h: number } } | null
 }
 
 let drag: Drag | null = null

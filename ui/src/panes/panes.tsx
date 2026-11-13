@@ -9,13 +9,15 @@ import { dialogOpen, mod } from "~/kit/keys"
 import { later } from "~/kit/later"
 import type { Channel } from "~/model"
 import { between, nickname } from "~/names"
-import { ActContext, NavContext, useAct, useNav, type Act, type Go, type Nav, type Panel } from "~/nav"
-import { dragOut } from "~/panes/drag"
+import { ActContext, NavContext, useAct, useApp, useNav, type Act, type Go, type Nav, type Panel } from "~/nav"
+import { dragOut, dropOn, targetAt } from "~/panes/drag"
 import { docName, Page } from "~/panes/page"
 import { PaneContext, type PaneScope } from "~/panes/scope"
 import {
   ALONE,
+  BLANK,
   boxes,
+  fillPane,
   closePane,
   css,
   dockedNow,
@@ -23,7 +25,6 @@ import {
   isNone,
   leafOf,
   MAIN,
-  pageOf,
   panelGo,
   setCloser,
   splitAt,
@@ -42,10 +43,15 @@ import {
   type Doc,
   type Edge,
   type Len,
+  type Page as PanePage,
   type Split,
+  homeFrom,
+  PANE_DRAG,
+  setDrag,
 } from "~/panes/store"
 import { useTabs } from "~/shell/top-layout"
 import { wordsPlain } from "~/words"
+import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 
 const VIEW_NAMES = {
@@ -109,6 +115,48 @@ function PanelDoc({ channel, panel }: { channel: Channel; panel: Panel }) {
       </div>
     )
   return <Page channel={channel} view={panel.kind === "task" ? { kind: "task", task: panel.task } : panel} />
+}
+
+const HomePage = later(() => import("~/panes/home").then((m) => m.HomePage))
+
+function HomeDoc({ only }: { only?: string }) {
+  const { app } = useApp()
+  const tiles = app.channels.filter((c) => c.state !== "gone" && (!only || c.code === only))
+  const home = only ? app.home.filter((h) => h.code === only) : app.home
+  return <HomePage tiles={tiles} home={home} />
+}
+
+const PICKS: readonly { key: Key; page: PanePage }[] = [
+  { key: "panes.now", page: { at: "doc", doc: { kind: "now" } } },
+  { key: "panes.activity", page: { at: "doc", doc: { kind: "activity" } } },
+  { key: "panes.home", page: { at: "doc", doc: { kind: "home" } } },
+  { key: "panes.blank.specs", page: { at: "tab", tab: "specs" } },
+  { key: "panes.blank.agents", page: { at: "tab", tab: "agents" } },
+  { key: "panes.blank.github", page: { at: "tab", tab: "github" } },
+]
+
+function BlankPane({ code, id }: { code: string; id: string }) {
+  return (
+    <div className="pane-blank">
+      <p className="pane-blank-title">{t("panes.blank.title")}</p>
+      <p className="pane-blank-hint">{t("panes.blank.hint")}</p>
+      <div className="pane-blank-picks">
+        {PICKS.map((p) => (
+          <button key={p.key} type="button" className="btn is-quiet" onClick={() => fillPane(code, id, { page: p.page })}>
+            {t(p.key)}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DocView({ channel, id, doc }: { channel: Channel; id: string; doc: Doc }) {
+  if (doc.kind === "panel") return <PanelDoc channel={channel} panel={doc.panel} />
+  if (doc.kind === "blank") return <BlankPane code={channel.code} id={id} />
+  if (doc.kind === "home") return <HomeDoc only={doc.only} />
+  if (doc.kind === "activity") return <div className="pane-blank" />
+  return <Page channel={channel} view={doc} />
 }
 
 function carried(channel: Channel, href: string): { carry: Carry; label: string } | null {
@@ -239,6 +287,11 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
     }, 70)
   }
   useEffect(() => () => window.clearTimeout(hovering.current), [])
+  useEffect(() => {
+    const clear = () => setDrag(null)
+    window.addEventListener("dragend", clear)
+    return () => window.removeEventListener("dragend", clear)
+  }, [])
   const tiny = useTiny(host, leaves.map(({ leaf }) => leaf.id).join(" "))
   const [born] = useState(() => new Set(leaves.map(({ leaf }) => leaf.id)))
   useEffect(() => {
@@ -254,7 +307,7 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
       if (!leaf || !r) return
       const fits = (edge: "right" | "bottom") => (edge === "right" ? r.width / 2 >= MIN_W : r.height / 2 >= MIN_H)
       const edge = fits(want) ? want : fits(want === "right" ? "bottom" : "right") ? (want === "right" ? "bottom" : "right") : null
-      if (edge) splitAt(code, leaf.id, edge, pageOf(leaf, now().nav))
+      if (edge) splitAt(code, leaf.id, edge, BLANK)
     }
     const step = (dx: number, dy: number) => {
       const from = host.current?.querySelector<HTMLElement>(`[data-pane="${now().focus}"]`)?.getBoundingClientRect()
@@ -302,7 +355,29 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
     }
   }, [code])
   return (
-    <div ref={host} className={cx("panes", split && "is-split")} data-panes={code}>
+    <div
+      ref={host}
+      className={cx("panes", split && "is-split")}
+      data-panes={code}
+      onDragOver={(e) => {
+        if (!tabs || !e.dataTransfer.types.includes(PANE_DRAG)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = "copy"
+        const carry = { page: BLANK }
+        setDrag({ carry, label: "", x: e.clientX, y: e.clientY, target: targetAt(e.clientX, e.clientY, carry) })
+      }}
+      onDragLeave={(e) => {
+        if (!host.current?.contains(e.relatedTarget as globalThis.Node | null)) setDrag(null)
+      }}
+      onDrop={(e) => {
+        setDrag(null)
+        const page = homeFrom(e.dataTransfer.getData(PANE_DRAG))
+        const target = page && targetAt(e.clientX, e.clientY, { page })
+        if (!page || !target) return
+        e.preventDefault()
+        dropOn(target, { page })
+      }}
+    >
       <i ref={probe} className="panes-probe" aria-hidden="true" />
       {leaves.map(({ leaf, box }) => {
         const Tag = leaf.nav ? "section" : "main"
@@ -316,7 +391,8 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
               leaf.id === layout.focus && "is-focus",
               split && leaf.id !== typing && "is-quiet",
               !born.has(leaf.id) && "is-new",
-              tiny.has(leaf.id) && "is-tiny"
+              tiny.has(leaf.id) && "is-tiny",
+              leaf.doc?.kind === "blank" && "is-blank"
             )}
             data-pane={leaf.id}
             aria-label={leaf.nav ? name : label}
@@ -336,9 +412,7 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
             <Scope code={code} id={leaf.nav ? leaf.id : null} nav={leaf.nav ?? nav} doc={leaf.doc ?? null} shown={shown} typing={leaf.id === typing}>
               {leaf.nav ? (
                 <Boundary resetKey={`${leaf.nav.tab}\n${leaf.doc ? JSON.stringify(leaf.doc) : ""}`}>
-                  <Suspense fallback={null}>
-                    {leaf.doc?.kind === "panel" ? <PanelDoc channel={channel} panel={leaf.doc.panel} /> : leaf.doc ? <Page channel={channel} view={leaf.doc} /> : place}
-                  </Suspense>
+                  <Suspense fallback={null}>{leaf.doc ? <DocView channel={channel} id={leaf.id} doc={leaf.doc} /> : place}</Suspense>
                 </Boundary>
               ) : (
                 main
@@ -417,10 +491,12 @@ function DragLayer() {
   const box = drag.target?.box
   return createPortal(
     <>
-      {box && <div className="pane-drop" style={{ left: box.x, top: box.y, width: box.w, height: box.h }} />}
-      <div className="pane-ghost" style={{ left: drag.x, top: drag.y }}>
-        {drag.label}
-      </div>
+      {box && <div className={cx("pane-drop", drag.target?.fill && "is-fill")} style={{ left: box.x, top: box.y, width: box.w, height: box.h }} />}
+      {drag.label && (
+        <div className="pane-ghost" style={{ left: drag.x, top: drag.y }}>
+          {drag.label}
+        </div>
+      )}
     </>,
     document.body
   )

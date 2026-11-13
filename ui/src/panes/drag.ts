@@ -1,14 +1,15 @@
 import type { PointerEvent as ReactPointerEvent } from "react"
 
-import { MIN_H, MIN_W, movePane, setDrag, splitAt, type Carry, type Drag, type Edge } from "~/panes/store"
+import { fillPane, MIN_H, MIN_W, movePane, setDrag, splitAt, type Carry, type Drag, type Edge } from "~/panes/store"
 
 const START = 6
 
-function targetAt(x: number, y: number, carry: Carry): Drag["target"] {
+export function targetAt(x: number, y: number, carry: Carry): Drag["target"] {
   const pane = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-pane]")
   const host = pane?.closest<HTMLElement>("[data-panes]")
   if (!pane || !host || ("pane" in carry && pane.dataset.pane === carry.pane)) return null
   const r = pane.getBoundingClientRect()
+  if (pane.classList.contains("is-blank")) return { code: host.dataset.panes ?? "", id: pane.dataset.pane ?? "", edge: "right", fill: true, box: { x: r.left, y: r.top, w: r.width, h: r.height } }
   const dx = (x - r.left) / r.width - 0.5
   const dy = (y - r.top) / r.height - 0.5
   const wide = r.width / 2 >= MIN_W
@@ -23,6 +24,12 @@ function targetAt(x: number, y: number, carry: Carry): Drag["target"] {
     h: across ? r.height : r.height / 2,
   }
   return { code: host.dataset.panes ?? "", id: pane.dataset.pane ?? "", edge, box }
+}
+
+export function dropOn(target: NonNullable<Drag["target"]>, carry: Carry): void {
+  if (target.fill) fillPane(target.code, target.id, carry)
+  else if ("pane" in carry) movePane(target.code, carry.pane, target.id, target.edge)
+  else splitAt(target.code, target.id, target.edge, carry.page)
 }
 
 function swallowClick(): void {
@@ -60,8 +67,7 @@ export function dragOut(carry: Carry, label: string): { onPointerDown: (e: React
         if (now) swallowClick()
         stop()
         if (!target) return
-        if ("pane" in carry) movePane(target.code, carry.pane, target.id, target.edge)
-        else splitAt(target.code, target.id, target.edge, carry.page)
+        dropOn(target, carry)
       }
       const cancel = () => stop()
       const key = (k: KeyboardEvent) => {
