@@ -1,4 +1,5 @@
 import "~/i18n/en/chat-later"
+import { LinkSquare02Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useMemo, useState } from "react"
 
 import { HANDOFF_DONE, HANDOFF_FAILED } from "@kiwi/core/protocol.ts"
@@ -11,7 +12,7 @@ import { StepAnswer, StepHow } from "~/chat/step"
 import { t } from "~/i18n/i18n"
 import { tr } from "~/i18n/rich"
 import { cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import { announce } from "~/kit/toasts"
 import type { Channel, QuestionAsk } from "~/model"
@@ -43,7 +44,7 @@ function HandoffLink({ handoff, now }: { handoff: Handoff; now: number }) {
   return (
     <div className="ask-handoff">
       <button type="button" className="btn is-primary is-small" onClick={() => openBrowser(handoff)}>
-        <Icon name="external" size={14} />
+        <GlyphIcon glyph={LinkSquare02Icon} size={14} />
         {t("chat.question.card.open.browser")}
       </button>
       <span className="ask-state">{t("chat.question.card.expires.in", { label: handoff.label, minutes })}</span>

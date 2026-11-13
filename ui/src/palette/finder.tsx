@@ -1,9 +1,10 @@
 import "~/i18n/en/shell-later"
+import { ComputerIcon, Link01Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 
 import { Avatar, cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { useDebugOptions } from "~/kit/debug"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { docOf } from "~/chat/doc-of"
 import type { App, Channel, Task, Where } from "~/model"
 import { useApp, type Go, type Nav, type Panel } from "~/nav"
@@ -303,7 +304,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       group: "actions",
       label: t("palette.finder.join"),
       keys: ["invite", "link"],
-      lead: <Icon name="link" size={14} />,
+      lead: <GlyphIcon glyph={Link01Icon} size={14} />,
       run: () => go({ to: "dialog", dialog: "join" }),
     },
     {
@@ -311,7 +312,7 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
       group: "actions",
       label: t("palette.finder.computers"),
       keys: ["phones", "devices", "machines"],
-      lead: <Icon name="computer" size={14} />,
+      lead: <GlyphIcon glyph={ComputerIcon} size={14} />,
       run: () => go({ to: "settings", section: "computers" }),
     },
     {
