@@ -6,7 +6,7 @@ import { hookCommand, isOurHook, isOurHookCommand } from "../self.ts";
 export type HookEntry = { matcher?: string; hooks: { type: "command"; command: string; timeout?: number; async?: boolean; asyncRewake?: boolean }[] };
 export type Settings = { hooks?: Record<string, HookEntry[]> } & Record<string, unknown>;
 
-function withoutOurs(entries: HookEntry[] | undefined): HookEntry[] {
+export function withoutOurs(entries: HookEntry[] | undefined): HookEntry[] {
   return (entries ?? []).map((e) => ({ ...e, hooks: e.hooks.filter((h) => !isOurHookCommand(h.command)) })).filter((e) => e.hooks.length > 0);
 }
 

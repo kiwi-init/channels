@@ -7,6 +7,8 @@ import { here } from "../../seats.ts";
 import { EVENTS, hookCommand, isOurHook, LISTEN, LISTEN_SECONDS, PERMISSION } from "../self.ts";
 import { replaceOurs, stripOurs, type HookEntry, type Settings } from "./claude-shaped.ts";
 
+export { withoutOurs, type Settings } from "./claude-shaped.ts";
+
 const PERMISSION_EVENT = "PermissionRequest";
 export const PERMISSION_SECONDS = 1_800;
 const PERMISSION_TOOLS = "Bash|Edit|Write|MultiEdit|NotebookEdit|WebFetch|mcp__.*";
