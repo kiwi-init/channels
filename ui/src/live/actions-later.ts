@@ -5,7 +5,7 @@ import { assignTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { forgetChannel, forgetPending, loadMember, loadPending, renameChannel } from "@kiwi/channel/store.ts"
 import { relayUrl } from "@kiwi/secrets/relay.ts"
 import { savePersonalities } from "@kiwi/app/personalities.ts"
-import { createPerson, bridge, secrets } from "@kiwi/secrets/secrets.ts"
+import { bridge } from "@kiwi/secrets/secrets.ts"
 import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { appCan } from "~/live/app-can"
@@ -63,6 +63,10 @@ export type LaterName = Exclude<
   | "saveTheme"
   | "deleteTheme"
   | "myUsage"
+  | "newChannel"
+  | "inviteInfo"
+  | "joinChannel"
+  | "setName"
 >
 
 export const laterActions: Pick<Actions, LaterName> = {
@@ -202,14 +206,6 @@ export const laterActions: Pick<Actions, LaterName> = {
       await run.ch.close()
       closeOpened(code)
       await forgetChannel(code)
-    }),
-  newChannel: async (title) => (await joining()).newChannel(title),
-  inviteInfo: async (typed) => (await joining()).lookUpInvite(typed),
-  joinChannel: async (typed, name) => (await joining()).joinChannel(typed, name),
-  setName: (name) =>
-    attempt(t("live.actions.name.not.saved"), async () => {
-      if (secrets().person) throw new Error(t("live.actions.name.stays"))
-      await createPerson(name.trim())
     }),
   forgetComputer: (id) => void manage().then((m) => m.forgetComputer(id)),
   linkGithub: () => attempt(t("live.actions.github.not.linked"), async () => (await account()).linkGithub()),

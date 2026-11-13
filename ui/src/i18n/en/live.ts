@@ -76,4 +76,6 @@ export default {
   "live.map.left.out.not.signed": "not signed by {who}'s key",
   "live.map.left.out.not.allowed": "not allowed here",
   "live.channel.recent.you": "You",
+  "live.actions.name.stays": "your name stays the one your key was made with",
+  "live.actions.name.not.saved": "Name not saved",
 } as const satisfies Record<string, Msg>

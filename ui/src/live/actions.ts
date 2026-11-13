@@ -1,5 +1,5 @@
 import { loadMember } from "@kiwi/channel/store.ts"
-import { bridge } from "@kiwi/secrets/secrets.ts"
+import { bridge, createPerson, secrets } from "@kiwi/secrets/secrets.ts"
 import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { loadPicture } from "~/live/pictures"
@@ -23,6 +23,7 @@ type Later = Pick<Actions, LaterName>
 
 const later = (): Promise<Later> => import("~/live/actions-later").then((m) => m.laterActions)
 warmToo(later)
+const joining = () => import("~/live/join-rare")
 
 const go = (run: (l: Later) => unknown): void => attempt(t("live.actions.change.failed"), async () => run(await later()))
 
@@ -159,10 +160,14 @@ export function makeActions(): Actions {
     inviteLink: async (...a) => (await later()).inviteLink(...a),
     leaveChannel: (...a) => go((l) => l.leaveChannel(...a)),
     closeChannel: (...a) => go((l) => l.closeChannel(...a)),
-    newChannel: async (...a) => (await later()).newChannel(...a),
-    inviteInfo: async (...a) => (await later()).inviteInfo(...a),
-    joinChannel: async (...a) => (await later()).joinChannel(...a),
-    setName: (...a) => go((l) => l.setName(...a)),
+    newChannel: async (title) => (await joining()).newChannel(title),
+    inviteInfo: async (typed) => (await joining()).lookUpInvite(typed),
+    joinChannel: async (typed, name) => (await joining()).joinChannel(typed, name),
+    setName: (name) =>
+      attempt(t("live.actions.name.not.saved"), async () => {
+        if (secrets().person) throw new Error(t("live.actions.name.stays"))
+        await createPerson(name.trim())
+      }),
     forgetComputer: (...a) => go((l) => l.forgetComputer(...a)),
     linkGithub: () => go((l) => l.linkGithub()),
     signInWithGithub: () => go((l) => l.signInWithGithub()),
