@@ -16,9 +16,9 @@ const SIZES: readonly (readonly [number, number])[] = [
   [1280, 800],
 ];
 const CONTROLS = [".top-drawer", ".top-tools .icon-btn:last-child", ".main .composer", ".rail-gear"];
-const SIDE = [".tile.is-home", ".tile[data-code]", ".side-chan"];
-const TABS = [".tile.is-home", ".tile[data-code]", ".tile.is-add"];
-const LAYER_SHOTS = ["channel", "home", "waiting", "settings", "channel-broken", "closed", "welcome", "task-waiting", "specs"];
+const SIDE = [".tile[data-code]", ".side-chan"];
+const TABS = [".tile[data-code]", ".tile.is-add"];
+const LAYER_SHOTS = ["channel", "waiting", "settings", "channel-broken", "closed", "welcome", "task-waiting", "specs"];
 
 type Places = Record<string, readonly [number, number] | null>;
 interface Box {
@@ -133,7 +133,7 @@ try {
     );
     const shell = await page.evaluate(() => {
       const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect();
-      const tiles = [...document.querySelectorAll(".rail :is(.tile.is-home, .tile[data-code])")].map((tile) => tile.getBoundingClientRect());
+      const tiles = [...document.querySelectorAll(".rail .tile[data-code]")].map((tile) => tile.getBoundingClientRect());
       const side = box(".side");
       const gear = box(".rail-gear");
       const first = box(".side-chan");
@@ -433,7 +433,7 @@ try {
     await page.close();
   }
   for (const mac of [false, true]) {
-    for (const shot of ["settings-devices", "home"]) {
+    for (const shot of ["settings-devices"]) {
       console.log(`\n${shot}${mac ? ", on the Mac" : ""}`);
       const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
       if (mac)
@@ -443,14 +443,13 @@ try {
           else document.addEventListener("DOMContentLoaded", mark);
         });
       await page.goto(`${base}?shot=${shot}&theme=dark`);
-      await page.waitForSelector(".tile.is-home", { state: "attached" });
+      await page.waitForSelector(".tile[data-code]", { state: "attached" });
       await page.waitForTimeout(900);
       const back = await boxOf(page, ".set-back");
-      const home = await boxOf(page, ".tile.is-home");
-      expect(!!home && home.bottom <= 48, "the tabs are in the top row");
-      const open = await page.evaluate(() => [...document.querySelectorAll(".rail .tile.is-on")].map((tile) => (tile.classList.contains("is-home") ? "Home" : "a channel")));
-      if (shot === "home") expect(open.length === 1 && open[0] === "Home", `Home is the one open tab (${open.join(", ") || "none"})`);
-      else expect(open.length === 0, `Settings is no channel, so no tab is open (${open.join(", ") || "none"})`);
+      const tab = await boxOf(page, ".tile[data-code]");
+      expect(!!tab && tab.bottom <= 48, "the tabs are in the top row");
+      const open = await page.evaluate(() => document.querySelectorAll(".rail .tile.is-on").length);
+      expect(open === 0, `Settings is no channel, so no tab is open (${open} open)`);
       const side = await boxOf(page, ".side");
       if (shot === "settings-devices")
         expect(

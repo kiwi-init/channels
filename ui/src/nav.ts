@@ -95,7 +95,7 @@ export function navigate(nav: Nav, go: Go): Nav {
   const restore = next.restore === undefined ? next : { ...next, restore: undefined }
   if (go.to === "where" && go.replace) return restore
   const jumped = (go.to === "where" || go.to === "channel") && !!go.jump
-  if (was.at === "home" || (!jumped && samePlace(was, placeOf(next)))) return restore
+  if ((was.at === "home" && next.channel) || (!jumped && samePlace(was, placeOf(next)))) return restore
   return { ...restore, back: [...nav.back, was].slice(-HISTORY), ahead: [] }
 }
 

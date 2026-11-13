@@ -96,19 +96,15 @@ try {
   await page.locator(".rail-gear").click();
   await settle(page);
   expect((await place(page)) === "settings" && (await arrows(page)).count === 1, "Settings shows the arrows");
-
-  await page.locator(".tile.is-home").first().click();
-  await settle(page);
-  expect((await place(page)) === "home" && (await arrows(page)).count === 1, "Home shows the arrows");
   expect((await arrows(page)).forward === false, "at the newest place Forward is off");
 
   const walk: string[] = [];
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 4; i++) {
     await arrow(page, BACK).click();
     await settle(page);
     walk.push(await place(page));
   }
-  expect(walk.join(" > ") === `settings > spec > specs > ${design} > ${start}`, `Back walks Home > ${walk.join(" > ")}`);
+  expect(walk.join(" > ") === `spec > specs > ${design} > ${start}`, `Back walks Settings > ${walk.join(" > ")}`);
   const backTop = await feedTop(page);
   expect(backTop > 0 && Math.abs(backTop - startTop) <= 24, `back in ${start} the conversation is where it was (${backTop}px vs ${startTop}px)`);
   expect((await arrows(page)).forward === true, "after Back, Forward is on");
@@ -130,13 +126,13 @@ try {
   expect((await arrows(page)).forward === false, "going somewhere new after Back turns Forward off");
   await page.close();
 
-  const home = await open(1440, 900);
-  await home.goto(`http://127.0.0.1:${server.port}/?shot=home`);
-  await home.locator(".top-history").first().waitFor();
-  await settle(home);
-  const fresh = await arrows(home);
-  expect(fresh.back === false && fresh.forward === false, "a fresh window on Home has both arrows off");
-  await home.close();
+  const fresh = await open(1440, 900);
+  await fresh.goto(`http://127.0.0.1:${server.port}/?shot=channel`);
+  await fresh.locator(".top-history").first().waitFor();
+  await settle(fresh);
+  const off = await arrows(fresh);
+  expect(off.back === false && off.forward === false, "a fresh window on a channel has both arrows off");
+  await fresh.close();
 
   const empty = await open(1440, 900);
   await empty.goto(`http://127.0.0.1:${server.port}/?shot=welcome`);
