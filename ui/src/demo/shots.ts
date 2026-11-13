@@ -74,6 +74,7 @@ export const SHOTS: Record<string, Shot> = {
   task: kiwi({ tab: "specs", panel: { kind: "task", task: 12 } }),
   "task-working": kiwi({ panel: { kind: "task", task: 10 } }),
   "task-body": { scenario: "task-body", channel: "kiwi", nav: { tab: "specs", panel: { kind: "task", task: 12 } } },
+  "activity-unknown": { scenario: "activity-unknown", channel: "kiwi" },
   "task-quote": { scenario: "task-quote", channel: "kiwi", nav: { tab: "specs", panel: { kind: "task", task: 12 } } },
   "task-quote-read-only": { scenario: "task-quote-read-only", channel: "kiwi", nav: { tab: "specs", panel: { kind: "task", task: 12 } } },
   "task-review": kiwi({ tab: "specs", panel: { kind: "task", task: 14 } }),

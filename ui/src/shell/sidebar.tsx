@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
-import { liveOf, restOf } from "~/doing"
+import { liveOf, restOf, unsureOf } from "~/doing"
 
 import { Avatar, Count, cx, Heading, IconButton, STATUS_WORDS } from "~/kit/bits"
 import { openMenu, showMenu } from "~/kit/menu-open"
@@ -378,6 +378,7 @@ function Member({ person, channel, direct }: { person: Person; channel: Channel;
             {live.busy ? live.text : t("shell.sidebar.needs.person")}
           </span>
         )}
+        {!live && unsureOf(person) && <span className="side-state">{t("doing.unknown")}</span>}
         <Count n={unread} loud />
       </button>
     </li>

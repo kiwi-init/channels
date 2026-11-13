@@ -3,12 +3,13 @@
 
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { detectModel } from "../src/card.ts";
 import { harnessActivity, harnessModel } from "../src/harness.ts";
+import { processStart } from "../src/pid.ts";
 import { cleanActivity, cleanCard } from "@kiwi/core/protocol.ts";
 
 const dir = () => mkdtempSync(join(tmpdir(), "kiwi-harness-"));
@@ -196,13 +197,21 @@ describe("cleanCard", () => {
 });
 
 describe("harnessActivity", () => {
-  const claude = (status: string, lines: object[]) => {
+  const LIVE = process.pid;
+  const DEAD = 2 ** 22 + 4242;
+  const claude = (status: unknown, lines: object[], over: { pid?: number; record?: object | string; session?: string } = {}) => {
     const home = dir();
+    const pid = over.pid ?? LIVE;
     mkdirSync(join(home, "projects", "p"), { recursive: true });
     mkdirSync(join(home, "sessions"));
-    writeFileSync(join(home, "sessions", "77.json"), JSON.stringify({ pid: 77, sessionId: "s-a", status, statusUpdatedAt: 1000 }));
+    const record = over.record ?? { pid, sessionId: "s-a", status, statusUpdatedAt: 1000 };
+    writeFileSync(join(home, "sessions", `${pid}.json`), typeof record === "string" ? record : JSON.stringify(record));
     writeFileSync(join(home, "projects", "p", "s-a.jsonl"), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
-    return { CLAUDECODE: "1", CLAUDE_PID: "77", CLAUDE_CONFIG_DIR: home };
+    return { CLAUDECODE: "1", CLAUDE_PID: String(pid), CLAUDE_CONFIG_DIR: home, ...(over.session ? { CLAUDE_CODE_SESSION_ID: over.session } : {}) };
+  };
+  const ticks = (): string => {
+    const started = processStart(LIVE) ?? "";
+    return started.slice(started.lastIndexOf(":") + 1);
   };
   const asked = {
     type: "assistant",
@@ -241,6 +250,51 @@ describe("harnessActivity", () => {
 
   test("Claude Code, idle", async () => {
     expect((await harnessActivity(claude("idle", [asked])))?.state).toBe("idle");
+  });
+
+  describe("Claude Code: working only while its own process runs the seat's session (#2382)", () => {
+    test("a busy record whose process is gone is unknown, not working", async () => {
+      const a = await harnessActivity(claude("busy", [asked], { pid: DEAD }));
+      expect(a?.state).toBe("unknown");
+      expect(a?.tool).toBeUndefined();
+    });
+
+    test.skipIf(!existsSync("/proc/self/stat"))("a busy record whose pid is alive but started at another time (a reused pid) is unknown", async () => {
+      const a = await harnessActivity(claude("busy", [asked], { record: { pid: LIVE, sessionId: "s-a", status: "busy", statusUpdatedAt: 1000, procStart: "1" } }));
+      expect(a?.state).toBe("unknown");
+    });
+
+    test("a busy record of the same process, started when it says, is working however long the turn has run", async () => {
+      const record = { pid: LIVE, sessionId: "s-a", status: "busy", statusUpdatedAt: 1000, ...(existsSync("/proc/self/stat") ? { procStart: ticks() } : {}) };
+      expect(await harnessActivity(claude("busy", [asked], { record }))).toEqual({ state: "working", tool: "Bash", since: 1000, model: "claude-opus-5-5" });
+    });
+
+    test("a busy record for another session than the seat's is unknown; the seat's own session is working", async () => {
+      expect((await harnessActivity(claude("busy", [asked], { session: "s-other" })))?.state).toBe("unknown");
+      expect((await harnessActivity(claude("busy", [asked], { session: "s-a" })))?.state).toBe("working");
+    });
+
+    test("a missing, unknown or malformed status is unknown, never working", async () => {
+      expect((await harnessActivity(claude(undefined, [asked])))?.state).toBe("unknown");
+      expect((await harnessActivity(claude("compacting", [asked])))?.state).toBe("unknown");
+      expect((await harnessActivity(claude(5, [asked])))?.state).toBe("unknown");
+      expect((await harnessActivity(claude("busy", [asked], { record: ["busy"] })))?.state).toBe("unknown");
+    });
+
+    test("an unreadable or missing registry is unknown", async () => {
+      expect((await harnessActivity(claude("busy", [asked], { record: "{not json" })))?.state).toBe("unknown");
+      const env = claude("busy", [asked]);
+      rmSync(join(env.CLAUDE_CONFIG_DIR, "sessions", `${LIVE}.json`));
+      expect((await harnessActivity(env))?.state).toBe("unknown");
+    });
+
+    test("a finished turn is idle, and a session that exits and restarts is unknown, then working under its new process", async () => {
+      expect((await harnessActivity(claude("idle", [asked])))?.state).toBe("idle");
+      const exited = claude("busy", [asked], { pid: DEAD, session: "s-a" });
+      expect((await harnessActivity(exited))?.state).toBe("unknown");
+      const restarted = claude("busy", [asked], { record: { pid: LIVE, sessionId: "s-b", status: "busy", statusUpdatedAt: 2000 }, session: "s-b" });
+      expect((await harnessActivity(restarted))?.state).toBe("working");
+    });
   });
 
   const usage = (input: number, read: number, created: number, extra: object = {}) => ({
@@ -295,6 +349,17 @@ describe("harnessActivity", () => {
     expect(await harnessActivity({ OPENCODE_SESSION_ID: "b", XDG_DATA_HOME: data })).toEqual({ state: "working", model: "m-1" });
   });
 
+  test("OpenCode: a session row with no readable last change is unknown, never working (#2382)", async () => {
+    const data = dir();
+    mkdirSync(join(data, "opencode"));
+    const db = new Database(join(data, "opencode", "opencode.db"));
+    db.run("CREATE TABLE session_v2 (id TEXT, model TEXT, time_idle INTEGER, time_updated)");
+    db.run("INSERT INTO session_v2 VALUES ('c', ?, NULL, NULL), ('d', ?, NULL, 'soon')", [JSON.stringify({ id: "m-1" }), JSON.stringify({ id: "m-1" })]);
+    db.close();
+    expect((await harnessActivity({ OPENCODE_SESSION_ID: "c", XDG_DATA_HOME: data }))?.state).toBe("unknown");
+    expect((await harnessActivity({ OPENCODE_SESSION_ID: "d", XDG_DATA_HOME: data }))?.state).toBe("unknown");
+  });
+
   test("no harness: nothing to say", async () => {
     expect(await harnessActivity({})).toBeUndefined();
   });
@@ -304,6 +369,7 @@ describe("cleanActivity", () => {
   test("keeps an activity's fields, short; anything that isn't one is null", () => {
     expect(cleanActivity({ state: "working", tool: "Bash\nrm -rf", model: "m", extra: "x", since: 5 })).toEqual({ state: "working", tool: "Bash rm -rf", model: "m", since: 5 });
     expect(cleanActivity({ state: "hacking" })).toBeNull();
+    expect(cleanActivity({ state: "unknown", tool: "Bash", since: 7 })).toEqual({ state: "unknown", since: 7 });
     expect(cleanActivity(null)).toBeNull();
   });
 });

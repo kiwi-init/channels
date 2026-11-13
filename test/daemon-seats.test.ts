@@ -274,15 +274,49 @@ describe("seats always on", () => {
   test("the daemon reports a Claude seat's activity from its record, even with no session id", async () => {
     const claudeDir = mkdtempSync(join(tmpdir(), "kiwi-daemon-seats-claude-"));
     mkdirSync(join(claudeDir, "sessions"), { recursive: true });
-    writeFileSync(join(claudeDir, "sessions", "4242.json"), JSON.stringify({ status: "idle", statusUpdatedAt: 123 }));
+    writeFileSync(join(claudeDir, "sessions", `${process.pid}.json`), JSON.stringify({ status: "idle", statusUpdatedAt: 123 }));
     const prev = process.env.CLAUDE_CONFIG_DIR;
     process.env.CLAUDE_CONFIG_DIR = claudeDir;
     try {
-      saveConfig({ ...loadConfig(), bindings: { "/work": { alias: "test", as: "claude", harness: "claude", pid: 4242 } } });
+      saveConfig({ ...loadConfig(), bindings: { "/work": { alias: "test", as: "claude", harness: "claude", pid: process.pid } } });
       await until("idle activity in claude's presence", () => from(claudePk).some((p) => p.activity?.state === "idle"));
     } finally {
       const bindings = omit(loadConfig().bindings ?? {}, "/work");
       saveConfig({ ...loadConfig(), bindings });
+      if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = prev;
+      rmSync(claudeDir, { recursive: true, force: true });
+    }
+  });
+
+  test("a Claude seat at work whose record stops matching its session goes to unknown end to end, with no tool, and stays reachable (#2382)", async () => {
+    const claudeDir = mkdtempSync(join(tmpdir(), "kiwi-daemon-seats-unsure-"));
+    mkdirSync(join(claudeDir, "sessions"), { recursive: true });
+    mkdirSync(join(claudeDir, "projects"), { recursive: true });
+    const registry = join(claudeDir, "sessions", `${process.pid}.json`);
+    writeFileSync(registry, JSON.stringify({ sessionId: "s-unsure", status: "busy", statusUpdatedAt: 300 }));
+    const prev = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = claudeDir;
+    try {
+      saveConfig({ ...loadConfig(), bindings: { "/unsure": { alias: "test", as: "claude", harness: "claude", session: "s-unsure", pid: process.pid } } });
+      const last = () => from(claudePk).at(-1);
+      const gemini = await AgentSession.open("test", loadConfig().channels.test!, "gemini");
+      const heard = async () => (await runAgent(gemini.heard()))?.get("claude");
+      await until("claude at work in its presence", () => last()?.activity?.state === "working");
+      await until("gemini's daemon to hear claude at work", async () => (await heard())?.activity?.state === "working");
+      writeFileSync(registry, JSON.stringify({ sessionId: "s-someone-else", status: "busy", statusUpdatedAt: 301 }));
+      await until("claude's presence to say unknown", () => last()?.activity?.state === "unknown");
+      expect(last()?.activity?.tool).toBeUndefined();
+      expect(last()?.reach).not.toBe("unreachable");
+      await until("gemini's daemon to hear claude as unknown", async () => (await heard())?.activity?.state === "unknown");
+      const got = await heard();
+      expect({ state: got?.activity?.state, tool: got?.activity?.tool, reach: got?.reach === "unreachable" ? "unreachable" : "reachable" }).toEqual({
+        state: "unknown",
+        tool: undefined,
+        reach: "reachable",
+      });
+    } finally {
+      saveConfig({ ...loadConfig(), bindings: omit(loadConfig().bindings ?? {}, "/unsure") });
       if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
       else process.env.CLAUDE_CONFIG_DIR = prev;
       rmSync(claudeDir, { recursive: true, force: true });
