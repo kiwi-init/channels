@@ -1,5 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
-import { join } from "node:path";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import type { Member } from "@kiwi/core/membership.ts";
 import { FOLD_RULES, PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
@@ -10,7 +9,7 @@ import { APP_BEACON_MS, ChannelStore, PAGE, PRESENCE_SETTLE_MS, REACH, WINDOW } 
 import { PRESENCE_TTL } from "./online.ts";
 import { REFOLLOW_MS } from "./refollow.ts";
 import type { StoredMember } from "./store.ts";
-import { dropWarm, foldedFor, keepWarm, LEAN, leanNow, LIGHT, warmOf, type Warm } from "./warm.ts";
+import { dropWarm, foldedFor, keepWarm, LEAN, leanLoadsThrough, leanNow, LIGHT, warmOf, type Warm } from "./warm.ts";
 import { useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts";
 
 const CODE = "mc2-store-test";
@@ -299,21 +298,25 @@ describe("a channel store", () => {
   test("a window trim lands inside its wait even when the lean folder is slow to load (#2261)", async () => {
     let release!: () => void;
     const held = new Promise<void>((done) => (release = done));
-    mock.module(join(import.meta.dir, "lean.ts"), async () => {
+    leanLoadsThrough(async () => {
       await held;
-      return await import("./lean.ts?real");
+      return await import("./lean.ts");
     });
-    const r = relay(0);
-    const { store, close } = await opened(r);
-    const all = Array.from({ length: 2_600 }, (_, i) => msg(i + 1));
-    for (const m of all) r.say({ _tag: "Message", message: m, row: null });
-    await sleep(40);
-    for (let i = 0; i < 200 && store.handle.value.messages.length === all.length; i++) await sleep(1);
-    const inTime = store.handle.value.messages.length < all.length;
-    release();
-    await until(() => store.handle.value.messages.length < all.length);
-    close();
-    expect(inTime).toBe(true);
+    try {
+      const r = relay(0);
+      const { store, close } = await opened(r);
+      const all = Array.from({ length: 2_600 }, (_, i) => msg(i + 1));
+      for (const m of all) r.say({ _tag: "Message", message: m, row: null });
+      await sleep(40);
+      for (let i = 0; i < 200 && store.handle.value.messages.length === all.length; i++) await sleep(1);
+      const inTime = store.handle.value.messages.length < all.length;
+      release();
+      await until(() => store.handle.value.messages.length < all.length);
+      close();
+      expect(inTime).toBe(true);
+    } finally {
+      leanLoadsThrough(null);
+    }
   });
 
   test(`past the ${WINDOW}-message window plus slack, the oldest fold into a base, lean copies keep the reach, and the state stays whole`, async () => {
