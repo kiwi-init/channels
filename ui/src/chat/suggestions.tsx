@@ -8,6 +8,13 @@ import { nickname, roleWord, shown, Shown } from "~/names"
 
 const EDGE = 8
 
+function showPick(list: HTMLElement): void {
+  const row = list.querySelector<HTMLElement>('[aria-selected="true"]')
+  if (!row) return
+  if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop
+  else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight
+}
+
 function useFit(pick: number, count: number) {
   const ref = useRef<HTMLUListElement>(null)
   useLayoutEffect(() => {
@@ -16,6 +23,7 @@ function useFit(pick: number, count: number) {
     if (!list || !pane) return
     const fit = () => {
       list.style.maxHeight = `${Math.max(0, list.getBoundingClientRect().bottom - pane.getBoundingClientRect().top - EDGE)}px`
+      showPick(list)
     }
     fit()
     const watch = new ResizeObserver(fit)
@@ -24,11 +32,7 @@ function useFit(pick: number, count: number) {
     return () => watch.disconnect()
   }, [count])
   useLayoutEffect(() => {
-    const list = ref.current
-    const row = list?.querySelector<HTMLElement>('[aria-selected="true"]')
-    if (!list || !row) return
-    if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop
-    else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight
+    if (ref.current) showPick(ref.current)
   }, [pick, count])
   return ref
 }
