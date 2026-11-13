@@ -50,7 +50,15 @@ let lean: typeof import("./lean.ts") | null = null;
 
 export const leanNow = (): typeof import("./lean.ts") | null => lean;
 
-export const leanLoaded = (): Promise<typeof import("./lean.ts")> => import("./lean.ts").then((m) => (lean = m));
+let loadsThrough: (() => Promise<typeof import("./lean.ts")>) | null = null;
+
+export const leanLoaded = (): Promise<typeof import("./lean.ts")> => (loadsThrough ? loadsThrough() : import("./lean.ts")).then((m) => (lean = m));
+
+export const leanLoadsThrough = (through: (() => Promise<typeof import("./lean.ts")>) | null): void => {
+  loadsThrough = through;
+};
+
+void leanLoaded().catch(() => {});
 
 function keepLight(code: string, w: Warm): void {
   light.delete(code);
