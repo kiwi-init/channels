@@ -163,6 +163,7 @@ class Feed {
 
   fire(kind: string, deltaY = 0): void {
     for (const f of this.listeners.get(kind) ?? []) f({ deltaY, type: kind })
+    this.fireDoc(kind)
   }
 
   layout(): boolean {

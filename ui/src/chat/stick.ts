@@ -258,23 +258,16 @@ export function useStick(following = true, still = false) {
   useLayoutEffect(() => {
     const page = scroller.current?.ownerDocument
     if (!page) return
-    const reader = (e: Event) => {
+    const reader = ({ type }: Event) => {
       placed.current = null
       going.current = false
       acted.current = Date.now()
-      pressed.current ||= e.type === "pointerdown"
+      pressed.current = type === "pointerdown" || (pressed.current && !type.startsWith("pointer"))
     }
-    const release = () => {
-      pressed.current = false
-    }
-    const kinds = [...TOUCHES, "wheel"] as const
+    const kinds = [...TOUCHES, "wheel", "pointerup", "pointercancel"] as const
     for (const kind of kinds) page.addEventListener(kind, reader, { passive: true })
-    page.addEventListener("pointerup", release)
-    page.addEventListener("pointercancel", release)
     return () => {
       for (const kind of kinds) page.removeEventListener(kind, reader)
-      page.removeEventListener("pointerup", release)
-      page.removeEventListener("pointercancel", release)
     }
   }, [])
 
@@ -349,13 +342,11 @@ export function useStick(following = true, still = false) {
       if (on) {
         const box = scroller.current
         const list = content.current
-        stuck.current = false
-        placed.current = null
-        parked.current = null
+        unstick()
         anchor.current = box && list ? anchorIn(box, list) : null
       } else remember()
     },
-    [remember]
+    [remember, unstick]
   )
 
   return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift }
