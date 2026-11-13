@@ -1,6 +1,3 @@
-// Blob seal, store and read, pinned against the original files.ts and images.ts callers (#2434, spec #9645).
-// Every expectation here was first run on base c0b633e00 before the shared helper existed.
-
 import { beforeEach, describe, expect, test } from "bun:test";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -290,17 +287,28 @@ describe("file", () => {
     }
   });
 
-  test("a wrong key, a mismatched id, tampered bytes or a wrong declared size each read as null", async () => {
+  test("intact ciphertext with its own key and size reads as null when served under a different id", async () => {
+    const s = await scene();
+    const other = await sealBlob(noise(100));
+    const wrongId = "e".repeat(64);
+    s.stored.set(other.id, other.blob);
+    s.stored.set(wrongId, other.blob);
+    const piece = { key: other.key, size: 100 };
+    const right: FileAttachment = { name: "o", mime: "x/y", size: 100, pieces: [{ ...piece, id: other.id }] };
+    expect(value(await s.run(s.files.fx.file(right)))).not.toBeNull();
+    expect(value(await s.run(s.files.fx.file({ ...right, pieces: [{ ...piece, id: wrongId }] })))).toBeNull();
+    expect(s.calls.at(-1)!.id).toBe(wrongId);
+  });
+
+  test("a wrong key, tampered bytes or a wrong declared size each read as null", async () => {
     const s = await scene();
     const { f } = await stored(s, 100);
     const p = f.pieces[0]!;
     const other = await sealBlob(noise(100));
-    s.stored.set(other.id, other.blob);
     const tampered = s.stored.get(p.id)!.slice();
     tampered[tampered.length - 1]! ^= 1;
     const variants: FileAttachment[] = [
       { ...f, pieces: [{ ...p, key: other.key }] },
-      { ...f, pieces: [{ ...other, size: 100, id: p.id, key: other.key }] },
       { ...f, pieces: [{ ...p, size: 99 }] },
     ];
     for (const v of variants) expect(value(await s.run(s.files.fx.file(v)))).toBeNull();
@@ -433,15 +441,28 @@ describe("image", () => {
     }
   });
 
-  test("a wrong key, a mismatched id, tampered bytes or a wrong declared size read as null and cache nothing", async () => {
+  test("intact ciphertext with its own key and size reads as null and caches nothing when served under a different id", async () => {
+    const s = await scene();
+    const other = await sealBlob(noise(200));
+    const wrongId = "e".repeat(64);
+    s.stored.set(other.id, other.blob);
+    s.stored.set(wrongId, other.blob);
+    const right: ImageAttachment = { name: "o.png", mime: "image/png", ref: { id: other.id, key: other.key, size: 200 } };
+    expect(value(await s.run(s.images.fx.image(right)))).not.toBeNull();
+    s.cache.clear();
+    s.cacheLog.length = 0;
+    expect(value(await s.run(s.images.fx.image({ ...right, ref: { ...right.ref!, id: wrongId } })))).toBeNull();
+    expect(s.calls.at(-1)!.id).toBe(wrongId);
+    expect(s.cacheLog).toEqual([`get room ${wrongId}`]);
+  });
+
+  test("a wrong key, tampered bytes or a wrong declared size read as null and cache nothing", async () => {
     const s = await scene();
     const { img } = await uploaded(s, 200);
     const ref = img.ref!;
     const other = await sealBlob(noise(200));
-    s.stored.set(other.id, other.blob);
     const variants: ImageAttachment[] = [
       { ...img, ref: { ...ref, key: other.key } },
-      { ...img, ref: { ...ref, id: other.id } },
       { ...img, ref: { ...ref, size: 199 } },
     ];
     for (const v of variants) {
