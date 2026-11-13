@@ -40,10 +40,7 @@ for (const { what, markers } of MOVED) {
   const homes = markers.map((m) => laterFiles.find((l) => l.text.includes(m))?.f);
   for (const f of homes) if (f) deferred.add(f);
   expect(out.length === 0, `${what}: out of the first load${out.length ? ` (still there: ${out.join(", ")})` : ""}`);
-  expect(
-    homes.every(Boolean),
-    `${what}: in a chunk that loads later${homes.some((h) => !h) ? ` (nowhere: ${markers.filter((_, i) => !homes[i]).join(", ")})` : ""}`,
-  );
+  expect(homes.every(Boolean), `${what}: in a chunk that loads later${homes.some((h) => !h) ? ` (nowhere: ${markers.filter((_, i) => !homes[i]).join(", ")})` : ""}`);
 }
 
 for (const f of [...deferred].sort()) console.log(`deferred, not counted in the first load: ${readFileSync(join(dist, "assets", f)).length} bytes  assets/${f}`);
