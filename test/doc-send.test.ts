@@ -1,11 +1,14 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { attachToBlock, blocksOf, markPosted, newBlock } from "@kiwi/core/doc/blocks.ts";
 import type { ThreadDoc } from "@kiwi/core/doc/thread-doc.ts";
-import { saveIdentity, updateConfig } from "../src/config.ts";
+import type { Identity } from "@kiwi/core/identity.ts";
+import { fileDocStore } from "@kiwi/core/node/doc-store.ts";
+import * as Y from "yjs";
+import { docsDir, saveIdentity, updateConfig } from "../src/config.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { addressed } from "../src/agent/docs.ts";
 import { joinAgent, kiwiCmd, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
@@ -20,6 +23,7 @@ const stop = new AbortController();
 let server: ReturnType<typeof startRelay>;
 let owner: OwnerSetup;
 let general: ThreadDoc;
+let devId: Identity;
 const procs: { kill: () => void }[] = [];
 
 const env = () => ({ ...process.env, KIWI_HOME: agent, KIWI_RELAY: server.url.origin, KIWI_NO_HOOKS: "1", KIWI_CHANNEL: "docsend", KIWI_AS: "dev" });
@@ -50,6 +54,7 @@ beforeAll(async () => {
   const computer = await pairComputer(owner.person);
   const dev = await joinAgent(owner, "dev", computer);
   await joinAgent(owner, "rev", computer);
+  devId = dev.id;
   saveIdentity(dev.id, owner.roomId);
   updateConfig((c) => {
     c.channels.docsend = { ...dev.ch.access, relay: server.url.origin, code: owner.code, as: "dev" };
@@ -137,5 +142,25 @@ describe("an image pasted in the doc reaches agents through show and save (T2037
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("kiwi send keeps a sealed copy of the thread's doc, so the next send fetches only what's new (#3909)", () => {
+  const kept = async (): Promise<string[]> => {
+    const saved = await fileDocStore(docsDir(owner.roomId, "dev"), { roomId: owner.roomId, sk: devId.sk }).load(general.th);
+    if (!saved) return [];
+    expect(saved.unsent).toBeNull();
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, saved.state);
+    return blocksOf(doc).flatMap((b) => (/KEPT/.test(b.text) ? [b.text] : []));
+  };
+
+  test("after a send the seat's copy holds the line, and a torn copy is fetched again", async () => {
+    expect(await cli("send", "--to", "#general", "KEPT one")).toMatchObject({ code: 0 });
+    expect(await kept()).toEqual(["KEPT one"]);
+    writeFileSync(join(docsDir(owner.roomId, "dev"), `${general.th}.doc`), "torn");
+    expect(await cli("send", "--to", "#general", "KEPT two")).toMatchObject({ code: 0 });
+    await message((m) => m.body.includes("KEPT two"));
+    expect(await kept()).toEqual(["KEPT one", "KEPT two"]);
   });
 });
