@@ -17,7 +17,10 @@ const sh = (args: string[]): string => {
   const r = spawnSync(args[0]!, args.slice(1), { encoding: "utf8" });
   return r.status === 0 ? r.stdout.trim() : "";
 };
-const xdo = (...args: string[]): void => void spawnSync("xdotool", args, { stdio: "ignore" });
+const xdo = (...args: string[]): void => {
+  const r = spawnSync("xdotool", args, { encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`harness: xdotool ${args.join(" ")} exited ${r.status}: ${(r.stderr || r.stdout).trim().split("\n").pop() ?? ""}`);
+};
 
 const wm = spawn("openbox", [], { stdio: "ignore", detached: true });
 await until("openbox managing the screen", 15_000, async () => (sh(["xprop", "-root", "_NET_SUPPORTING_WM_CHECK"]).includes("window id") ? true : null));
