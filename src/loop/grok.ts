@@ -1,4 +1,5 @@
-import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
+import { names, holds, tailLines } from "./fs.ts";
+import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Permission } from "@kiwi/core/launch-options.ts";
@@ -19,7 +20,6 @@ export type GrokSession = { session: string; dir: string };
 
 const SESSION = /^([0-9a-f]{8})-([0-9a-f]{4})-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CLOCK_MS = 2_000;
-const TAIL_BYTES = 64 * 1024;
 const WORKING = new Set(["tool_call", "tool_call_update", "agent_thought_chunk", "agent_message_chunk", "user_message_chunk", "plan"]);
 
 export function grokArgv({ bin, model, effort, permission, prompt }: GrokStart): string[] {
@@ -31,24 +31,6 @@ function sessionsOf(cwd: string, env: Env): string {
   return join(env.GROK_HOME || join(homedir(), ".grok"), "sessions", encodeURIComponent(cwd));
 }
 
-function names(dir: string): string[] {
-  try {
-    return readdirSync(dir);
-  } catch {
-    // No Grok session in this folder yet.
-    return [];
-  }
-}
-
-function holds(file: string, nonce: string): boolean {
-  try {
-    return readFileSync(file, "utf8").includes(nonce);
-  } catch {
-    // Not written yet, or gone between the listing and the read.
-    return false;
-  }
-}
-
 export function grokSession(nonce: string, since: number, cwd: string = process.cwd(), env: Env = process.env): GrokSession | null {
   const root = sessionsOf(cwd, env);
   for (const name of names(root)) {
@@ -58,24 +40,6 @@ export function grokSession(nonce: string, since: number, cwd: string = process.
     if (holds(join(dir, "chat_history.jsonl"), nonce) || holds(join(dir, "updates.jsonl"), nonce)) return { session: name, dir };
   }
   return null;
-}
-
-function tail(file: string): string[] {
-  let fd: number | null = null;
-  try {
-    const size = statSync(file).size;
-    const from = Math.max(0, size - TAIL_BYTES);
-    const buf = Buffer.alloc(size - from);
-    fd = openSync(file, "r");
-    readSync(fd, buf, 0, buf.length, from);
-    const lines = buf.toString("utf8").split("\n");
-    return from > 0 ? lines.slice(1) : lines;
-  } catch {
-    // No update stream yet: nothing to read a turn from.
-    return [];
-  } finally {
-    if (fd !== null) closeSync(fd);
-  }
 }
 
 function updateOf(line: string): { kind: string; event?: string } | null {
@@ -95,7 +59,7 @@ function updateOf(line: string): { kind: string; event?: string } | null {
 export function grokIdle(dir: string): { idle: boolean; since: number | null } {
   const file = join(dir, "updates.jsonl");
   const since = statSync(file, { throwIfNoEntry: false })?.mtimeMs ?? null;
-  for (const line of tail(file).reverse()) {
+  for (const line of tailLines(file).reverse()) {
     const u = updateOf(line);
     if (!u) continue;
     if (u.kind === "turn_completed" || (u.kind === "hook_execution" && u.event === "stop")) return { idle: true, since };
