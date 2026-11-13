@@ -1,11 +1,12 @@
 import "~/i18n/en/settings"
 
+import { ComputerIcon, SmartPhone01Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useId, useState } from "react"
 
 import { t } from "~/i18n/i18n"
 import { cx, IconButton } from "~/kit/bits"
 import { Details, failure, type Failure } from "~/kit/failed"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { ago, useNow } from "~/kit/time"
 import type { Account, Computer, Device, LaunchedAgent } from "~/model"
 import { useApp } from "~/nav"
@@ -224,7 +225,7 @@ function SignedDevices({ devices }: { devices: Device[] }) {
           return (
             <li key={d.id} className="set-device">
               <span className="set-device-icon" aria-hidden="true">
-                <Icon name={d.as === "phone" ? "phone" : "computer"} />
+                <GlyphIcon glyph={d.as === "phone" ? SmartPhone01Icon : ComputerIcon} />
               </span>
               <span className="set-device-text">
                 <span className="set-device-name">
@@ -308,7 +309,7 @@ export function ComputersSection() {
         {computers.map((c) => (
           <li key={c.id} className="set-device">
             <span className="set-device-icon" aria-hidden="true">
-              <Icon name={isPhone(c) ? "phone" : "computer"} />
+              <GlyphIcon glyph={isPhone(c) ? SmartPhone01Icon : ComputerIcon} />
             </span>
             <span className="set-device-text">
               <span className="set-device-name">
@@ -370,11 +371,11 @@ export function ComputersSection() {
       ) : (
         <div className="actions set-device-actions">
           <button type="button" className="btn" onClick={() => setLinking("computer")}>
-            <Icon name="computer" size={14} />
+            <GlyphIcon glyph={ComputerIcon} size={14} />
             {t("settings.computers.add.computer")}
           </button>
           <button type="button" className="btn" onClick={() => setLinking("phone")}>
-            <Icon name="phone" size={14} />
+            <GlyphIcon glyph={SmartPhone01Icon} size={14} />
             {t("settings.computers.link.phone")}
           </button>
         </div>

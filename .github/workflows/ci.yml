@@ -502,6 +502,9 @@ jobs:
       - name: ui opening a room, a DM or a channel focuses its composer, with the draft kept and the caret at its end, and never steals focus or opens a touch keyboard, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-composer-focus.ts --dist ui/dist
+      - name: ui the icons only later screens use come with those screens and still draw where they're first used, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-lazy-icons.ts --dist ui/dist
       - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
