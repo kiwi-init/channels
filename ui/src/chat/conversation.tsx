@@ -40,6 +40,7 @@ const Start = later(() => import("~/chat/feed-notes").then((m) => m.Start))
 
 const GROUP_MS = 5 * 60_000
 const TAIL = 100
+const FIRST = 50
 const MORE = 40
 const CAP = 160
 const PREFETCH = 120
@@ -303,7 +304,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const lastAt = span.bottom === null ? -1 : list.findIndex((m) => m.seq === span.bottom)
   const end = lastAt >= 0 ? lastAt + 1 : list.length
   const firstAt = span.top === null ? -1 : list.findIndex((m) => m.seq === span.top)
-  const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
+  const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - FIRST)
   const following = end === list.length
   const latest = useRef(false)
   const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift, prepended } = useStick(following, !!doc)
@@ -493,6 +494,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     const box = scroller.current
     if (box && top !== undefined && !stuck.current && box.scrollTop < box.clientHeight * 3) scrolled.current()
   }, [top, scroller, stuck])
+  useEffect(() => {
+    const box = scroller.current
+    if (box && start > 0 && stuck.current && box.scrollHeight < box.clientHeight * 2) scrolled.current()
+  }, [start, scroller, stuck])
 
   const toggleEarlier = () => {
     if (earlier) return setEarlier(false)

@@ -336,7 +336,7 @@ export interface MarkdownProps {
   onTask: (id: number) => void
   onMessage: (seq: number) => void
   onImage: (url: string, alt: string) => void
-  onShown: () => void
+  onShown: (ast: ASTNode) => void
   onPage?: (url: string) => void
   draw?: Draw
 }
@@ -365,10 +365,10 @@ export default function Markdown({ markdown, at, onMention, onTask, onMessage, o
   }, [markdown, at, source])
 
   useLayoutEffect(() => {
-    if (ast) onShown()
+    if (ast) onShown(ast)
   }, [ast, onShown])
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     for (const a of box.current?.querySelectorAll<HTMLAnchorElement>('a[href^="http"], a[href^="mailto:"]') ?? []) {
       const href = a.getAttribute("href") ?? ""
       if (!a.title && a.textContent?.trim() !== href) a.title = href
