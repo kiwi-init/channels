@@ -153,8 +153,8 @@ export class Channel {
     return this.live.docs.open(thread, th);
   }
 
-  closeDoc(thread: string): void {
-    this.live.docs.close(thread);
+  closeDoc(thread: string): Promise<void> {
+    return this.live.docs.close(thread);
   }
 
   async docVersionState(thread: string, th: string, upto: number): Promise<string | null> {
@@ -165,7 +165,7 @@ export class Channel {
       const update = td.th === th ? await td.version(env) : null;
       return update && b64url(update);
     } finally {
-      if (!had) this.live.docs.close(thread);
+      if (!had) void this.live.docs.close(thread);
     }
   }
 
@@ -175,7 +175,7 @@ export class Channel {
     try {
       return td.th === th && (await Promise.race([td.compactNow(), new Promise<boolean>((done) => setTimeout(() => done(false), COMPACT_WAIT_MS))]));
     } finally {
-      if (!had) this.live.docs.close(thread);
+      if (!had) void this.live.docs.close(thread);
     }
   }
 

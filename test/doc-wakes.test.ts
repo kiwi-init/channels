@@ -156,7 +156,7 @@ describe("the daemon's follower queues a wake for a finished block (T606)", () =
     let woke = 0;
     let state = { docs: new Map([["task:9", th]]), tasks: new Map([[9, task(9, { owner: "olivia" })]]) } as unknown as ChannelState;
     const f = followDocs(
-      { alias: "follow", agent: "olivia", ch: { threadDoc: async () => td, closeDoc: (k: string) => void closed.push(k) } },
+      { alias: "follow", agent: "olivia", ch: { threadDoc: async () => td, closeDoc: async (k: string) => void closed.push(k) } },
       async () => state,
       () => void woke++,
     );
@@ -179,7 +179,7 @@ describe("the daemon's follower queues a wake for a finished block (T606)", () =
     let reads = 0;
     let wanted = false;
     const f = followDocs(
-      { alias: "unwoken", agent: "olivia", ch: { threadDoc: async () => ({}) as ThreadDoc, closeDoc: () => {} } },
+      { alias: "unwoken", agent: "olivia", ch: { threadDoc: async () => ({}) as ThreadDoc, closeDoc: async () => {} } },
       async () => (reads++, { docs: new Map(), tasks: new Map() } as unknown as ChannelState),
       () => {},
       async () => wanted,
@@ -206,7 +206,7 @@ describe("the daemon's doc cursor survives a restart (T1741)", async () => {
   };
   const run = async (alias: string, td: ThreadDoc, state: ChannelState, at: number) => {
     const f = followDocs(
-      { alias, agent: "olivia", ch: { threadDoc: async () => td, closeDoc: () => {} } },
+      { alias, agent: "olivia", ch: { threadDoc: async () => td, closeDoc: async () => {} } },
       async () => state,
       () => {},
       async () => true,
@@ -284,7 +284,7 @@ describe("the wake's 'before it' (T1741)", () => {
     const state = { docs: new Map([["main", th]]), tasks: new Map() } as unknown as ChannelState;
     const T0 = 1_000_000;
     const f = followDocs(
-      { alias: "context", agent: "olivia", ch: { threadDoc: async () => td, closeDoc: () => {} } },
+      { alias: "context", agent: "olivia", ch: { threadDoc: async () => td, closeDoc: async () => {} } },
       async () => state,
       () => {},
       async () => true,
@@ -323,7 +323,7 @@ describe("a task doc wakes everyone working the task, as its thread's messages d
         tasks: new Map([[9, task(9, t)]]),
       } as unknown as ChannelState;
       const f = followDocs(
-        { alias, agent: "olivia", ch: { threadDoc: async (k: string) => (k === "main" ? gd : td), closeDoc: () => {} } },
+        { alias, agent: "olivia", ch: { threadDoc: async (k: string) => (k === "main" ? gd : td), closeDoc: async () => {} } },
         async () => state,
         () => {},
       );

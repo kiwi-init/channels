@@ -98,16 +98,17 @@ export class DocHub {
     return made;
   }
 
-  close(thread: string): void {
+  close(thread: string): Promise<void> {
     const open = this.byThread.get(thread);
-    if (!open) return;
-    this.drop(open);
+    if (!open) return Promise.resolve();
+    const saved = this.drop(open);
     this.byThread.delete(thread);
     this.byTh.delete(open.td.th);
+    return saved;
   }
 
   closeAll(): void {
-    for (const thread of [...this.byThread.keys()]) this.close(thread);
+    for (const thread of [...this.byThread.keys()]) void this.close(thread);
     if (this.awareTimer) clearTimeout(this.awareTimer);
     this.awareTimer = null;
   }
@@ -205,7 +206,7 @@ export class DocHub {
     td.doc.on("update", open.onUpdate);
     if (had) {
       Y.applyUpdate(td.doc, Y.encodeStateAsUpdate(had.td.doc));
-      this.drop(had);
+      void this.drop(had);
       this.byTh.delete(had.td.th);
     }
     this.byThread.set(thread, open);
@@ -231,11 +232,12 @@ export class DocHub {
     }
   }
 
-  private drop(open: Open): void {
+  private drop(open: Open): Promise<void> {
     if (open.saving) clearTimeout(open.saving);
     open.saving = null;
-    void this.persist(open);
+    const saved = this.persist(open);
     open.td.doc.off("update", open.onUpdate);
     open.td.destroy();
+    return saved;
   }
 }

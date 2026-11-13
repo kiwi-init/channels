@@ -4,7 +4,7 @@
 //   cursors/<ch>/<agent>   last sequence number each agent has consumed
 //   cache/<room>.jsonl     decrypted, verified messages (so state folds are fast)
 
-export { appendCache, fileBlobs, readCache } from "./config/cache.ts";
+export { appendCache, docsDir, fileBlobs, readCache } from "./config/cache.ts";
 export { writeCursor } from "./config/cursors.ts";
 export { allSeats, contextLineOn, loadConfig, saveAccess, saveConfig, updateConfig, type ChannelConfig, type Config, type SeatRecord, type SeatTaken, type WakeHook } from "./config/file.ts";
 export { forgetIdentity, identitiesIn, loadIdentity, saveIdentity } from "./config/identities.ts";
