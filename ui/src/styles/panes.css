@@ -167,6 +167,7 @@
 }
 
 .panes > .pane {
+  overflow: clip;
   border-radius: var(--r-ctl);
   background: var(--bg);
 }
