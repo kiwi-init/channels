@@ -19,7 +19,8 @@ const server = Bun.serve({
 });
 
 const openDialogs = (page: Page) => page.evaluate(() => [...document.querySelectorAll("dialog[open]")].map((d) => d.getAttribute("aria-label")));
-const repos = (page: Page) => page.evaluate(() => [...(document.querySelector("dialog[open]")?.querySelectorAll(".cset-repo-name") ?? [])].map((n) => n.textContent?.trim()));
+const repos = (page: Page) =>
+  page.evaluate(() => [...(document.querySelector("dialog[open]")?.querySelectorAll(".ctl-label") ?? [])].map((n) => n.textContent?.trim() ?? "").filter((label) => /^[\w.-]+\/[\w.-]+$/.test(label)));
 const settingsStays = async (page: Page, what: string, want: string[]): Promise<string | null> => {
   await page.waitForTimeout(400);
   const open = await openDialogs(page);
