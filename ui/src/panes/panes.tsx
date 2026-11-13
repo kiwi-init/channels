@@ -230,6 +230,40 @@ export function FocusScope({ code, now, children }: { code: string; now: boolean
 const TINY_W = MIN_W * 0.9
 const TINY_H = MIN_H
 
+let pointerAt = ""
+
+function useLeaving(leaves: readonly { leaf: Leaf; box: Box }[]): readonly { id: string; style: CSSProperties }[] {
+  const [leaving, setLeaving] = useState<readonly { id: string; style: CSSProperties }[]>([])
+  const last = useRef(new Map<string, CSSProperties>())
+  const timers = useRef(new Set<number>())
+  const shape = leaves.map(({ leaf, box }) => `${leaf.id}=${JSON.stringify(box)}`).join(" ")
+  useLayoutEffect(() => {
+    const now = new Map(
+      shape
+        .split(" ")
+        .filter(Boolean)
+        .map((part) => {
+          const cut = part.indexOf("=")
+          return [part.slice(0, cut), spaced(JSON.parse(part.slice(cut + 1)) as Box)] as const
+        })
+    )
+    const gone = [...last.current].filter(([id]) => !now.has(id)).map(([id, style]) => ({ id, style }))
+    last.current = now
+    if (!gone.length || matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    setLeaving((was) => [...was.filter((x) => !gone.some((g) => g.id === x.id)), ...gone])
+    const timer = window.setTimeout(() => {
+      timers.current.delete(timer)
+      setLeaving((was) => was.filter((x) => !gone.some((g) => g.id === x.id && g.style === x.style)))
+    }, 240)
+    timers.current.add(timer)
+  }, [shape])
+  useEffect(() => {
+    const all = timers.current
+    return () => all.forEach((timer) => window.clearTimeout(timer))
+  }, [])
+  return leaving
+}
+
 function useTiny(host: RefObject<HTMLDivElement | null>, ids: string): ReadonlySet<string> {
   const [tiny, setTiny] = useState<ReadonlySet<string>>(() => new Set())
   useLayoutEffect(() => {
@@ -281,17 +315,32 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
     live.current = { leaves, close, focus: layout.focus, nav }
   })
   const hovering = useRef(0)
-  const hover = (id: string, buttons: number) => {
+  const hover = (id: string, e: ReactPointerEvent) => {
     window.clearTimeout(hovering.current)
     const root = document.documentElement
-    if (buttons || leaves.length < 2 || root.hasAttribute("data-dragging") || root.dataset.resizing) return
+    const here = `${e.clientX},${e.clientY}`
+    const still = here === pointerAt
+    pointerAt = here
+    if (still || e.buttons || leaves.length < 2 || root.hasAttribute("data-dragging") || root.dataset.resizing) return
     hovering.current = window.setTimeout(() => {
       const at = document.activeElement
       const busy = at instanceof HTMLTextAreaElement && at.closest(".compose") && at.value.trim() !== ""
       focusPane(code, id, !busy)
     }, 70)
   }
-  useEffect(() => () => window.clearTimeout(hovering.current), [])
+  useEffect(() => {
+    const moved = (e: PointerEvent) => {
+      pointerAt = `${e.clientX},${e.clientY}`
+    }
+    const typed = () => window.clearTimeout(hovering.current)
+    window.addEventListener("pointermove", moved, { capture: true, passive: true })
+    window.addEventListener("keydown", typed, true)
+    return () => {
+      window.clearTimeout(hovering.current)
+      window.removeEventListener("pointermove", moved, { capture: true })
+      window.removeEventListener("keydown", typed, true)
+    }
+  }, [])
   useEffect(() => {
     const clear = () => setDrag(null)
     window.addEventListener("dragend", clear)
@@ -299,6 +348,17 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
   }, [])
   const tiny = useTiny(host, leaves.map(({ leaf }) => leaf.id).join(" "))
   const [born] = useState(() => new Set(leaves.map(({ leaf }) => leaf.id)))
+  const [froms, setFroms] = useState<ReadonlyMap<string, string>>(() => new Map())
+  const arrived = leaves.filter(({ leaf }) => !born.has(leaf.id) && !froms.has(leaf.id))
+  if (arrived.length) {
+    const next = new Map(froms)
+    for (const { leaf } of arrived) {
+      const parent = gaps.find(({ split }) => split.a.id === leaf.id || split.b.id === leaf.id)?.split
+      next.set(leaf.id, !parent ? "" : parent.dir === "row" ? (parent.b.id === leaf.id ? "right" : "left") : parent.b.id === leaf.id ? "bottom" : "top")
+    }
+    setFroms(next)
+  }
+  const leaving = useLeaving(leaves)
   useEffect(() => {
     const now = () => live.current
     const focused = () => now().leaves.find(({ leaf }) => leaf.id === now().focus)?.leaf ?? now().leaves[0]?.leaf
@@ -384,6 +444,9 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
       }}
     >
       <i ref={probe} className="panes-probe" aria-hidden="true" />
+      {leaving.map(({ id, style }) => (
+        <i key={`gone-${id}`} className="pane-gone" style={style} aria-hidden="true" />
+      ))}
       {leaves.map(({ leaf, box }) => {
         const Tag = leaf.nav ? "section" : "main"
         const name = leaf.doc ? nameOf(channel, leaf.doc) : placeName(channel, leaf.nav ?? nav)
@@ -400,10 +463,11 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
               leaf.doc?.kind === "blank" && "is-blank"
             )}
             data-pane={leaf.id}
+            data-from={froms.get(leaf.id) || undefined}
             aria-label={leaf.nav ? name : label}
             style={spaced(box)}
             onPointerDownCapture={() => focusPane(code, leaf.id)}
-            onPointerEnter={(e) => hover(leaf.id, e.buttons)}
+            onPointerEnter={(e) => hover(leaf.id, e)}
             onPointerLeave={() => window.clearTimeout(hovering.current)}
             onPointerDown={(e) => {
               const href = (e.target as Element).closest?.(LINK)?.getAttribute("href")

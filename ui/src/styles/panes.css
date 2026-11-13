@@ -24,13 +24,17 @@
   visibility: hidden;
 }
 
+.panes {
+  --pane-move: 0.34s;
+}
+
 .panes > .pane {
   position: absolute;
   transition:
-    left var(--slow) var(--ease),
-    top var(--slow) var(--ease),
-    width var(--slow) var(--ease),
-    height var(--slow) var(--ease);
+    left var(--pane-move) var(--ease),
+    top var(--pane-move) var(--ease),
+    width var(--pane-move) var(--ease),
+    height var(--pane-move) var(--ease);
 }
 
 :root:is([data-resizing], [data-side-move]) .panes > .pane {
@@ -38,13 +42,82 @@
 }
 
 .panes > .pane.is-new {
-  animation: pane-in var(--slow) var(--ease);
+  animation: pane-in var(--pane-move) var(--ease);
+}
+
+.panes > .pane.is-new[data-from="right"] {
+  animation-name: pane-in-right;
+}
+
+.panes > .pane.is-new[data-from="left"] {
+  animation-name: pane-in-left;
+}
+
+.panes > .pane.is-new[data-from="bottom"] {
+  animation-name: pane-in-bottom;
+}
+
+.panes > .pane.is-new[data-from="top"] {
+  animation-name: pane-in-top;
+}
+
+.panes > .pane.is-new > :not(.pane-dim) {
+  animation: pane-fill var(--pane-move) var(--ease);
 }
 
 @keyframes pane-in {
   from {
     opacity: 0;
     transform: scale(0.985);
+  }
+}
+
+@keyframes pane-in-right {
+  from {
+    clip-path: inset(0 0 0 100% round var(--r-ctl));
+  }
+}
+
+@keyframes pane-in-left {
+  from {
+    clip-path: inset(0 100% 0 0 round var(--r-ctl));
+  }
+}
+
+@keyframes pane-in-bottom {
+  from {
+    clip-path: inset(100% 0 0 0 round var(--r-ctl));
+  }
+}
+
+@keyframes pane-in-top {
+  from {
+    clip-path: inset(0 0 100% 0 round var(--r-ctl));
+  }
+}
+
+@keyframes pane-fill {
+  from {
+    opacity: 0;
+  }
+
+  40% {
+    opacity: 0;
+  }
+}
+
+.pane-gone {
+  position: absolute;
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  pointer-events: none;
+  animation: pane-out 0.24s var(--ease) forwards;
+}
+
+@keyframes pane-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
   }
 }
 
@@ -80,7 +153,11 @@
     transition: none;
   }
 
-  .panes > .pane.is-new {
+  .panes > .pane.is-new,
+  .panes > .pane.is-new > *,
+  .pane-drop,
+  .pane-tiny,
+  .pane-blank {
     animation: none;
   }
 }
@@ -149,10 +226,6 @@
 }
 
 .pane-gap::before {
-  background: var(--line-2);
-}
-
-.pane-gap.is-dock::before {
   content: none;
 }
 
@@ -229,6 +302,7 @@
 }
 
 .pane-drop {
+  animation: drop-in var(--fast) var(--ease);
   position: fixed;
   z-index: 40;
   border: 1px solid var(--line-3);
@@ -687,4 +761,22 @@
 .pg-acts > .btn > .icon {
   width: 0.875rem;
   height: 0.875rem;
+}
+
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes pane-soft {
+  from {
+    opacity: 0;
+  }
+}
+
+.pane-tiny,
+.pane-blank {
+  animation: pane-soft var(--slow) var(--ease);
 }
