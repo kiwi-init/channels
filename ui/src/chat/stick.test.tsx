@@ -293,6 +293,23 @@ describe("useStick in a thread doc", () => {
     await act(async () => root.unmount())
   })
 
+  test("older rows that load above you mid-wheel are made up for, so the wheel skips no rows (T2559)", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    userScroll(f, stick, -200)
+    f.fire("wheel", -100)
+    f.scrollTo(f.top - 100)
+    stick.remember()
+    const before = f.docTop
+    for (let seq = 0; seq > -40; seq--) f.rows.unshift({ seq, h: 52.8 })
+    stick.prepended()
+    stick.settle()
+    expect(Math.abs(f.docTop - before)).toBeLessThan(1)
+    await act(async () => root.unmount())
+  })
+
   test("a doc line that grows while you start scrolling up from the bottom does not pull you back down", async () => {
     const f = new Feed(100)
     const { stick, root } = await mount(f, true, true)

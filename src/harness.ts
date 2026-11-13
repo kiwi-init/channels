@@ -124,29 +124,51 @@ async function codexModel(env: Env): Promise<string | undefined> {
   }
 }
 
-async function opencodeModel(env: Env): Promise<string | undefined> {
+function opencodeDb(env: Env): { file: string; session: string } | undefined {
   const session = env.OPENCODE_SESSION_ID;
   if (!session) return undefined;
   const file = join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "opencode", "opencode.db");
-  if (!existsSync(file)) return undefined;
-  const row = (await sqliteOne(file, "SELECT model FROM session_v2 WHERE id = ?", session)) as { model?: unknown } | null;
+  return existsSync(file) ? { file, session } : undefined;
+}
+
+function grokSessionFile(env: Env, name: string): string | undefined {
+  const session = env.GROK_SESSION_ID;
+  if (!session || !/^[\w-]+$/.test(session)) return undefined;
+  const sessions = join(env.GROK_HOME || join(homedir(), ".grok"), "sessions");
+  for (const ws of readdirSync(sessions)) {
+    const file = join(sessions, ws, session, name);
+    if (existsSync(file)) return file;
+  }
+  return undefined;
+}
+
+async function firstDefined<T>(tries: readonly (() => T | undefined | Promise<T | undefined>)[]): Promise<T | undefined> {
+  for (const t of tries) {
+    try {
+      const found = await t();
+      if (found) return found;
+    } catch {
+      // Their files, their format: anything unexpected is "can't tell".
+    }
+  }
+  return undefined;
+}
+
+async function opencodeModel(env: Env): Promise<string | undefined> {
+  const db = opencodeDb(env);
+  if (!db) return undefined;
+  const row = (await sqliteOne(db.file, "SELECT model FROM session_v2 WHERE id = ?", db.session)) as { model?: unknown } | null;
   // Stored as JSON: {"id": "claude-sonnet-4-5", "providerID": "anthropic"}.
   const raw = typeof row?.model === "string" ? (JSON.parse(row.model) as { id?: unknown }) : (row?.model as { id?: unknown } | undefined);
   return slug(raw?.id);
 }
 
 function grokModel(env: Env): string | undefined {
-  const session = env.GROK_SESSION_ID;
-  if (!session || !/^[\w-]+$/.test(session)) return undefined;
-  const sessions = join(env.GROK_HOME || join(homedir(), ".grok"), "sessions");
-  for (const ws of readdirSync(sessions)) {
-    const file = join(sessions, ws, session, "summary.json");
-    if (!existsSync(file)) continue;
-    const summary = JSON.parse(readFileSync(file, "utf8")) as { current_model_id?: unknown; model?: unknown };
-    const m = summary.current_model_id ?? summary.model;
-    return slug(typeof m === "object" && m ? ((m as { id?: unknown; name?: unknown }).id ?? (m as { name?: unknown }).name) : m);
-  }
-  return undefined;
+  const file = grokSessionFile(env, "summary.json");
+  if (!file) return undefined;
+  const summary = JSON.parse(readFileSync(file, "utf8")) as { current_model_id?: unknown; model?: unknown };
+  const m = summary.current_model_id ?? summary.model;
+  return slug(typeof m === "object" && m ? ((m as { id?: unknown; name?: unknown }).id ?? (m as { name?: unknown }).name) : m);
 }
 
 function kimiModel(env: Env): string | undefined {
@@ -278,15 +300,7 @@ export async function harnessModel(env: Env = process.env, where: HarnessWhere =
     if (env.CODEX_THREAD_ID) tries.push(() => codexModel(env));
     if (env.OPENCODE_SESSION_ID) tries.push(() => opencodeModel(env));
   }
-  for (const t of tries) {
-    try {
-      const m = await t();
-      if (m) return m;
-    } catch {
-      // Their files, their format: anything unexpected is "can't tell".
-    }
-  }
-  return undefined;
+  return firstDefined(tries);
 }
 
 // ---------- what it's doing now ----------
@@ -469,11 +483,9 @@ async function codexActivity(env: Env): Promise<Activity | undefined> {
 
 /** OpenCode: the session row says when it last went idle and when it last changed. */
 async function opencodeActivity(env: Env): Promise<Activity | undefined> {
-  const session = env.OPENCODE_SESSION_ID;
-  if (!session) return undefined;
-  const file = join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "opencode", "opencode.db");
-  if (!existsSync(file)) return undefined;
-  const row = (await sqliteOne(file, "SELECT time_idle, time_updated FROM session_v2 WHERE id = ?", session)) as { time_idle?: unknown; time_updated?: unknown } | null;
+  const db = opencodeDb(env);
+  if (!db) return undefined;
+  const row = (await sqliteOne(db.file, "SELECT time_idle, time_updated FROM session_v2 WHERE id = ?", db.session)) as { time_idle?: unknown; time_updated?: unknown } | null;
   if (!row) return undefined;
   const idle = Number(row.time_idle);
   const updated = Number(row.time_updated);
@@ -483,16 +495,10 @@ async function opencodeActivity(env: Env): Promise<Activity | undefined> {
 
 /** Grok Build: its session's update stream; quiet for a minute reads as idle. */
 function grokActivity(env: Env): Activity | undefined {
-  const session = env.GROK_SESSION_ID;
-  if (!session || !/^[\w-]+$/.test(session)) return undefined;
-  const sessions = join(env.GROK_HOME || join(homedir(), ".grok"), "sessions");
-  for (const ws of readdirSync(sessions)) {
-    const file = join(sessions, ws, session, "updates.jsonl");
-    if (!existsSync(file)) continue;
-    const at = statSync(file).mtimeMs;
-    return Date.now() - at > 60_000 ? { state: "idle", since: at } : { state: "working" };
-  }
-  return undefined;
+  const file = grokSessionFile(env, "updates.jsonl");
+  if (!file) return undefined;
+  const at = statSync(file).mtimeMs;
+  return Date.now() - at > 60_000 ? { state: "idle", since: at } : { state: "working" };
 }
 
 /** What the harness running this process is doing right now, with its model; undefined when it can't be told. */
@@ -502,16 +508,12 @@ export async function harnessActivity(env: Env = process.env): Promise<Activity 
   if (env.CLAUDECODE) tries.push(() => claudeActivity(env));
   if (env.CODEX_THREAD_ID) tries.push(() => codexActivity(env));
   if (env.OPENCODE_SESSION_ID) tries.push(() => opencodeActivity(env));
-  for (const t of tries) {
-    try {
+  return firstDefined(
+    tries.map((t) => async () => {
       const a = await t();
-      if (a) {
-        const model = await harnessModel(env);
-        return { ...a, ...(model ? { model } : {}) };
-      }
-    } catch {
-      // Their files, their format: anything unexpected is "can't tell".
-    }
-  }
-  return undefined;
+      if (!a) return undefined;
+      const model = await harnessModel(env);
+      return { ...a, ...(model ? { model } : {}) };
+    }),
+  );
 }
