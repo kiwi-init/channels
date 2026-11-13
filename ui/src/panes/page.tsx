@@ -7,12 +7,12 @@ import { STATUS_WORDS } from "~/kit/bits"
 import { later } from "~/kit/later"
 import { openMessage } from "~/live/open-message"
 import type { Actions, Ask, Channel, PullRequest, Spec, Task, TaskStatus } from "~/model"
-import { useAct, type Nav } from "~/nav"
+import { useAct } from "~/nav"
 import { openAsks } from "~/needs/open"
 import { lanesOf, nowOf } from "~/now"
 import { lookupOf, pieces } from "~/panes/engine"
 import { usePane } from "~/panes/scope"
-import type { Doc } from "~/panes/store"
+import type { DetailView, View } from "~/panes/view"
 import { statusOf } from "~/shell/sidebar"
 import { openImage } from "~/specs/comment-item"
 import { wordsPlain, wordsRaw, wrote } from "~/words"
@@ -26,19 +26,9 @@ interface Hooks {
   edit: (text: string) => void
 }
 
-export type DetailView = Extract<Doc, { kind: "task" }> | { kind: "pr"; repo: string; number: number } | { kind: "issue"; repo: string; number: number }
-
-export type View = DetailView | { kind: "now" } | { kind: "specs" } | { kind: "spec"; ask: number } | { kind: "agents" } | { kind: "github" } | { kind: "needs" }
-
 type BoardView = Exclude<View, DetailView>
 
 const isDetail = (view: View): view is DetailView => view.kind === "task" || view.kind === "pr" || view.kind === "issue"
-
-export function viewOf(nav: Nav): View | null {
-  if (nav.tab === "chat") return null
-  if (nav.tab === "specs") return nav.spec == null ? { kind: "specs" } : { kind: "spec", ask: nav.spec }
-  return { kind: nav.tab }
-}
 
 const viewKey = (view: View): string =>
   `${view.kind}:${view.kind === "task" ? view.task : view.kind === "spec" ? view.ask : view.kind === "pr" || view.kind === "issue" ? `${view.repo}/${view.number}` : ""}`
@@ -234,15 +224,6 @@ function build(channel: Channel, key: string, actions: Actions, hooks: Hooks): {
               ? githubPage(channel)
               : needsPage(channel, actions, m)
   return { md, acts: m.acts }
-}
-
-export function docName(channel: Channel, doc: Exclude<Doc, { kind: "panel" }>): string {
-  if (doc.kind === "now") return t("panes.now")
-  if (doc.kind === "blank") return t("panes.blank.name")
-  if (doc.kind === "home") return t("panes.home")
-  if (doc.kind === "activity") return t("panes.activity")
-  const task = channel.tasks.find((x) => x.id === doc.task)
-  return task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)}` : `T${doc.task}`
 }
 
 export function PageText({ channel, md, acts }: { channel: Channel; md: string; acts: ReadonlyMap<string, () => void> }) {

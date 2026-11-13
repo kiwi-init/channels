@@ -25,7 +25,7 @@ function answers(code: string, ask: HomeAsk, actions: Actions, m: Maker, open: (
   return m.act(t("panes.home.open"), open)
 }
 
-function build(tiles: readonly ChannelTile[], home: readonly HomeChannel[], actions: Actions, toNeeds: (code: string) => void): { md: string; acts: Map<string, () => void> } {
+export function homeText(tiles: readonly ChannelTile[], home: readonly HomeChannel[], actions: Actions, toNeeds: (code: string) => void): { md: string; acts: Map<string, () => void> } {
   const m = maker()
   const byCode = new Map(home.map((h) => [h.code, h]))
   const asks = tiles
@@ -51,7 +51,7 @@ export function HomePage({ tiles, home }: { tiles: readonly ChannelTile[]; home:
   useEffect(() => void onboarded(true), [])
   const built = useMemo(
     () =>
-      build(tiles, home, actions, (code) => {
+      homeText(tiles, home, actions, (code) => {
         go({ to: "channel", code })
         go({ to: "tab", tab: "needs" })
       }),

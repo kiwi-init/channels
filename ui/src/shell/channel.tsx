@@ -19,13 +19,14 @@ import { usePanelWidth } from "~/shell/panel-width"
 import { Frame } from "~/shell/frame"
 import { useDrawer } from "~/shell/side"
 import { Content } from "~/shell/content"
-import { Page, viewOf } from "~/panes/page"
+import { viewOf } from "~/panes/view"
 import { FocusScope, Panes, placeName, roomiest } from "~/panes/panes"
 import { Sidebar, ViewsBar } from "~/shell/sidebar"
 import { useTabs, useTopLayout } from "~/shell/top-layout"
 import { ActivityButton } from "~/chat/events"
 import { t } from "~/i18n/i18n"
 
+const Page = later(() => import("~/panes/page").then((m) => m.Page))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const OlderView = later(() => import("~/chat/older-view").then((m) => m.OlderView))
 const PrPanel = later(() => import("~/github/panel").then((m) => m.PrPanel))
@@ -37,7 +38,6 @@ const ChannelSettings = later(() => import("~/modals/channel-settings").then((m)
 const Invite = later(() => import("~/modals/invite").then((m) => m.Invite))
 const AddAgent = later(() => import("~/modals/add-agent").then((m) => m.AddAgent))
 const DocVersions = later(() => import("~/modals/doc-versions").then((m) => m.DocVersions))
-
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const nav = useNav()

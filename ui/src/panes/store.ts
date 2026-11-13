@@ -8,7 +8,7 @@ export type Doc = { kind: "task"; task: number } | { kind: "now" } | { kind: "pa
 
 export const BLANK: Page = { at: "doc", doc: { kind: "blank" } }
 
-export const isBlank = (leaf: Leaf): boolean => leaf.doc?.kind === "blank"
+const isBlank = (leaf: Leaf): boolean => leaf.doc?.kind === "blank"
 
 export const PANE_DRAG = "application/x-kiwi-pane"
 
@@ -142,7 +142,7 @@ const isNow = (leaf: Leaf): boolean => leaf.doc?.kind === "now"
 
 const docked = (code: string, root: Node): Node => ({ kind: "split", id: `split-${++made}`, dir: "row", ratio: 0.7, fix: { side: "b", px: null }, a: root, b: nowLeaf(code) })
 
-export function layoutOf(code: string): Layout {
+function layoutOf(code: string): Layout {
   const held = layouts.get(code)
   if (held) return held
   const first: Layout = { root: docked(code, ONLY), focus: MAIN }
@@ -271,14 +271,6 @@ export function panelGo(code: string, from: string, panel: Panel | null, room?: 
   }
   if (room && leafOf(layout.root, room.id)) return splitAt(code, room.id, room.edge, { at: "doc", doc })
   splitAt(code, dockedNow(layout.root)?.id === from || !here ? MAIN : from, "right", { at: "doc", doc })
-}
-
-export function pageOf(leaf: Leaf, nav: Nav): Page {
-  if (leaf.doc) return { at: "doc", doc: leaf.doc }
-  const at = leaf.nav ?? nav
-  if (at.tab === "chat") return { at: "where", where: at.where }
-  if (at.tab === "specs" && at.spec != null) return { at: "spec", ask: at.spec }
-  return { at: "tab", tab: at.tab }
 }
 
 let closer: (() => boolean) | null = null

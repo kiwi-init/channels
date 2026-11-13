@@ -263,13 +263,16 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
     expect(labels(sub(appMenu("darwin"), "Edit"))).toEqual(["undo", "redo", "-", "cut", "copy", "paste", "pasteAndMatchStyle", "delete", "selectAll", "-", "Find…"]);
   });
 
-  test("every in-app shortcut has a menu item with its key: Settings ⌘, New Channel ⌘N, Find ⌘F, Toggle Sidebar ⌘\\, Jump to ⌘K, Back ⌘[, Forward ⌘], Channel 1 to 9 on ⌘1 to ⌘9 (T1851)", () => {
+  test("every in-app shortcut has a menu item with its key: Settings ⌘, New Channel ⌘N, Split Right ⌘D, Split Down ⇧⌘D, Close ⌘W, Find ⌘F, Toggle Sidebar ⌘\\, Jump to ⌘K, Back ⌘[, Forward ⌘], Channel 1 to 9 on ⌘1 to ⌘9 (T1851)", () => {
     const keyed = appMenu("darwin")
       .flatMap((m) => ("submenu" in m ? m.submenu : []))
       .flatMap((i) => ("action" in i && i.action.startsWith("ui-") ? [[i.label, i.action, i.accelerator ?? ""]] : []));
     expect(keyed).toEqual([
       ["Settings…", "ui-settings", ","],
       ["New Channel…", "ui-new-channel", "n"],
+      ["Split Right", "ui-split-right", "d"],
+      ["Split Down", "ui-split-down", "Cmd+Shift+d"],
+      ["Close", "ui-close-pane", "w"],
       ["Find…", "ui-find", "f"],
       ["Toggle Sidebar", "ui-sidebar", "\\"],
       ["Jump to…", "ui-jump", "k"],
@@ -316,7 +319,7 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
     expect(sub(appMenu("linux", true), "View").some((i) => "action" in i && i.action === "devtools")).toBe(false);
   });
 
-  test("the Mac's app and window roles carry their keys, which Electrobun gives only the edit roles: ⌘Q quits, ⌘W closes, ⌘H hides (T970)", () => {
+  test("the Mac's app and window roles carry their keys, which Electrobun gives only the edit roles: ⌘Q quits, ⌘H hides; ⌘W is the app's own Close, for the focused pane (T970)", () => {
     const keys = appMenu("darwin")
       .flatMap((m) => ("submenu" in m ? m.submenu : []))
       .flatMap((i) => ("role" in i && i.accelerator ? [[i.role, i.accelerator]] : []));
@@ -324,7 +327,6 @@ describe("the tray and the app menu say what Electron's did (T438)", () => {
       ["hide", "h"],
       ["hideOthers", "Cmd+Alt+h"],
       ["quit", "q"],
-      ["close", "w"],
       ["toggleFullScreen", "Ctrl+Cmd+f"],
       ["minimize", "m"],
     ]);

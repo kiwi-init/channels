@@ -49,7 +49,7 @@ export function card(parts: readonly string[]): string {
     .join("\n")
 }
 
-export interface ActMore extends DoMore {
+interface ActMore extends DoMore {
   mark?: string
 }
 

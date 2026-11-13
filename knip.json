@@ -1,6 +1,8 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": [
+    "hyprctl",
+    "swaybg",
     "gsettings",
     "xdg-user-dir",
     "weston-screenshooter",

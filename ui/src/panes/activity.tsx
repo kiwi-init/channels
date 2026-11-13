@@ -151,13 +151,19 @@ function activityText(x: Ctx, runs: readonly Message[][], titled: boolean): { md
   return { md, at }
 }
 
+function build(channel: Channel, runs: readonly Message[][], target: number | null, titled: boolean, ui: Ui = FRESH, setUi: Dispatch<SetStateAction<Ui>> = () => {}) {
+  const m = maker()
+  const tasks = new Map(channel.tasks.map((k) => [k.id, k]))
+  return { ...activityText({ channel, tasks, m, ui, target, setUi }, runs, titled), acts: m.acts }
+}
+
+export function activityMarkdown(channel: Channel, runs: readonly Message[][], target: number | null = null): string {
+  return build(channel, runs, target, false).md
+}
+
 export function ActivityText({ channel, runs, target, titled = false }: { channel: Channel; runs: readonly Message[][]; target: number | null; titled?: boolean }) {
   const [ui, setUi] = useState<Ui>(FRESH)
-  const built = useMemo(() => {
-    const m = maker()
-    const tasks = new Map(channel.tasks.map((k) => [k.id, k]))
-    return { ...activityText({ channel, tasks, m, ui, target, setUi }, runs, titled), acts: m.acts }
-  }, [channel, runs, target, ui, titled])
+  const built = useMemo(() => build(channel, runs, target, titled, ui, setUi), [channel, runs, target, ui, titled])
   const box = useRef<HTMLDivElement>(null)
   const spot = useRef(-1)
   useLayoutEffect(() => {

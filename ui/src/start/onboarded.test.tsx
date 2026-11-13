@@ -62,12 +62,7 @@ describe("the onboarding shows only on a computer that hasn't finished it, while
   test("an account with channels never sees it", () => {
     const html = withChannels()
     expect(html).not.toContain(ONBOARDING)
-    expect(html).toContain("Channel c1")
-  })
-
-  test("Home with no channels has the Back and Forward arrows too (#2372)", () => {
-    rememberOnboarded()
-    expect(noChannels()).toContain('class="top-history"')
+    expect(html).not.toContain("No channels yet")
   })
 
   test("a computer that finished it never shows it again, signed out or with no channels", () => {

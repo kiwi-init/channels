@@ -11,7 +11,7 @@ import type { Channel } from "~/model"
 import { between, nickname } from "~/names"
 import { ActContext, NavContext, useAct, useApp, useNav, type Act, type Go, type Nav, type Panel } from "~/nav"
 import { dragOut, dropOn, targetAt } from "~/panes/drag"
-import { docName, Page } from "~/panes/page"
+import { docName } from "~/panes/view"
 import { PaneContext, type PaneScope } from "~/panes/scope"
 import {
   ALONE,
@@ -118,6 +118,7 @@ function PanelDoc({ channel, panel }: { channel: Channel; panel: Panel }) {
   return <Page channel={channel} view={panel.kind === "task" ? { kind: "task", task: panel.task } : panel} />
 }
 
+const Page = later(() => import("~/panes/page").then((m) => m.Page))
 const ActivityPage = later(() => import("~/panes/activity").then((m) => m.ActivityPage))
 const HomePage = later(() => import("~/panes/home").then((m) => m.HomePage))
 
