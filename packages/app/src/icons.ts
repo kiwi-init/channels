@@ -76,10 +76,8 @@ export function useMemberIcons(codes: string[]): void {
 /** The open channel refetches when the relay says the icon changed. */
 export function useLiveIcon(member: StoredMember): void {
   useEffect(() => {
-    const load = () => void refreshIcon(member).catch(() => {});
-    load();
     const on = (e: Event) => {
-      if ((e as CustomEvent<string>).detail === member.code) load();
+      if ((e as CustomEvent<string>).detail === member.code) void refreshIcon(member).catch(() => {});
     };
     window.addEventListener(ICON_LIVE, on);
     return () => window.removeEventListener(ICON_LIVE, on);
