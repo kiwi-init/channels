@@ -7,9 +7,9 @@ import subprocess
 import sys
 
 
-def ymax_of(video):
-    log = video + ".diff.txt"
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", video, "-vf", f"tblend=all_mode=difference,signalstats,metadata=print:file={log}", "-f", "null", "-"], check=False)
+def ymax_of(video, crop=""):
+    log = video + (".inner" if crop else "") + ".diff.txt"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", video, "-vf", f"{crop}tblend=all_mode=difference,signalstats,metadata=print:file={log}", "-f", "null", "-"], check=False)
     t = None
     out = []
     if not os.path.exists(log):
@@ -53,7 +53,11 @@ for d in sys.argv[1:]:
         floor = min((v for _, v in frames), default=0)
         above = [(round(t, 3), v) for t, v in frames if v > floor]
         line = f"  {name}: {len(frames)} frames (~{fps} fps, {dropped} after stop dropped), YMAX min {floor} max {max((v for _, v in frames), default=0)}, frames above min: {len(above)}, histogram {sorted(hist.items())}, frames with YMAX>=48: {len(big)}"
-        line += f"; trace: {row['rafSamples']} rAF samples, {row['geometryMoves']} geometry moves, {row['scrollTopWritesThatMoved']} moving scrollTop writes, {row['resizeCallbacks']} resize callbacks"
+        if above and row["window"] != "control":
+            inner = dict(ymax_of(video, "crop=iw-32:ih:0:0,"))
+            outside = [(t0, v) for t0, v in above if inner.get(t0, floor) > floor]
+            line += f"; of those, outside the right 32px scrollbar strip: {len(outside)} {outside[:6]}"
+        line += f"; trace: {row['rafSamples']} rAF + {row.get('timerSamples', 0)} timer samples, {row['geometryMoves']} geometry moves, {row['scrollTopWritesThatMoved']} moving scrollTop writes, {row['resizeCallbacks']} resize callbacks"
         print(line)
         if row["window"] == "control":
             print(f"    control pulses (seconds from record start, frames): {[(round(p['at'], 2), p['frames']) for p in row['pulses']]}")

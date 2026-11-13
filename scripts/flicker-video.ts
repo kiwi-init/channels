@@ -68,15 +68,16 @@ try {
           new Promise<void>((done) => {
             const list = document.querySelector<HTMLElement>(".feed > *");
             if (!list) return done();
-            list.style.transform = "translateY(1px)";
-            let left = n;
-            const tick = () => {
-              left--;
-              if (left > 0) return requestAnimationFrame(tick);
-              list.style.transform = "";
-              done();
-            };
-            requestAnimationFrame(tick);
+            requestAnimationFrame(() => {
+              list.style.transform = "translateY(1px)";
+              let left = n;
+              const tick = () => {
+                if (--left > 0) return void requestAnimationFrame(tick);
+                list.style.transform = "";
+                done();
+              };
+              requestAnimationFrame(tick);
+            });
           }),
         frames,
       );

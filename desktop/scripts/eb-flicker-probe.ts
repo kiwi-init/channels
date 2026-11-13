@@ -86,8 +86,7 @@ const HOOKS = () => {
     const r = el.getBoundingClientRect();
     return [Number(r.top.toFixed(3)), Number(r.height.toFixed(3))];
   };
-  const sample = () => {
-    frame++;
+  const measure = (kind: string) => {
     const feed = document.querySelector<HTMLElement>(".feed");
     if (feed) {
       const rows = [...feed.querySelectorAll<HTMLElement>("[data-seq]")].filter((r) => {
@@ -98,7 +97,7 @@ const HOOKS = () => {
         t: performance.now(),
         wall: Date.now(),
         frame,
-        kind: "frame",
+        kind,
         scrollTop: feed.scrollTop,
         scrollHeight: feed.scrollHeight,
         clientHeight: feed.clientHeight,
@@ -107,9 +106,14 @@ const HOOKS = () => {
         shell: rect(document.querySelector(".rail")),
       });
     }
+  };
+  const sample = () => {
+    frame++;
+    measure("frame");
     requestAnimationFrame(sample);
   };
   requestAnimationFrame(sample);
+  setInterval(() => measure("tick"), 50);
   Object.assign(window, { flickerLog: log });
 };
 
@@ -152,7 +156,7 @@ const recorder = (region: { x: number; y: number; w: number; h: number }, file: 
       ],
       { stdio: ["ignore", "ignore", openSync(file.replace(/\.mkv$/, "-rec.log"), "w")] },
     );
-  return spawn("wf-recorder", ["-y", "-g", `${region.x},${region.y} ${even(region.w)}x${even(region.h)}`, "-r", "60", "-c", "libx264rgb", "-p", "crf=0", "-p", "qp=0", "-f", file], {
+  return spawn("wf-recorder", ["-y", "-D", "-g", `${region.x},${region.y} ${even(region.w)}x${even(region.h)}`, "-r", "60", "-c", "libx264rgb", "-p", "crf=0", "-p", "qp=0", "-f", file], {
     stdio: ["ignore", "ignore", openSync(file.replace(/\.mkv$/, "-rec.log"), "w")],
   });
 };
@@ -314,7 +318,7 @@ try {
           writeFileSync(file.replace(/\.mkv$/, "-trace.json"), JSON.stringify(trace));
           const writes = trace.filter((e) => e["kind"] === "scrollTop" && Math.abs(Number(e["after"]) - Number(e["before"])) > 0.001);
           const resizes = trace.filter((e) => e["kind"] === "resize");
-          const samples = trace.filter((e) => e["kind"] === "frame");
+          const samples = trace.filter((e) => e["kind"] === "frame" || e["kind"] === "tick").sort((a, b) => Number(a["t"]) - Number(b["t"]));
           let moved = 0;
           for (let i = 1; i < samples.length; i++) {
             const a = samples[i - 1]!["rows"] as Record<string, number[]>;
@@ -329,7 +333,8 @@ try {
             recordStart: started,
             recorderExit: code,
             stopAt,
-            rafSamples: samples.length,
+            rafSamples: samples.filter((e) => e["kind"] === "frame").length,
+            timerSamples: samples.filter((e) => e["kind"] === "tick").length,
             geometryMoves: moved,
             scrollTopWritesThatMoved: writes.length,
             resizeCallbacks: resizes.length,

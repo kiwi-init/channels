@@ -809,21 +809,21 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-native-click.ts "$test"
       - name: THROWAWAY flicker probe, native rigs B1 and B2 (T9337, not for merge)
         if: ${{ !cancelled() && matrix.drive }}
-        timeout-minutes: 40
+        timeout-minutes: 110
         run: |
           sudo apt-get install -y --no-install-recommends ffmpeg wf-recorder
           test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
           out="$RUNNER_TEMP/flicker"
           mkdir -p "$out"
-          export FLICKER_WINDOWS=1 FLICKER_SECONDS=5 FLICKER_DEADLINE=900 FLICKER_SWAY_TIMEOUT=960
+          export FLICKER_WINDOWS=3 FLICKER_SECONDS=30 FLICKER_DEADLINE=1500 FLICKER_SWAY_TIMEOUT=1600
+          git rev-parse HEAD | tee "$out/sha.txt"
           xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-flicker-probe.ts "$test" "$out/b1-x11-scale1" x11 > "$out/b1-scale1.log" 2>&1 || echo "b1 scale 1 exited $?"
-          cat "$out/b1-scale1.log"
-          cat "$out"/b1-x11-scale1/*-rec.log || true
+          tail -n 30 "$out/b1-scale1.log"
+          GDK_SCALE=2 xvfb-run -a -s "-screen 0 2560x1600x24" bun desktop/scripts/eb-flicker-probe.ts "$test" "$out/b1-x11-scale2" x11 > "$out/b1-scale2.log" 2>&1 || echo "b1 scale 2 exited $?"
+          tail -n 30 "$out/b1-scale2.log"
           bash desktop/scripts/flicker-sway.sh "$test" "$out/b2-sway-scale1.25" 1.25 || true
-          cat "$out"/b2-sway-scale1.25/probe.log || true
-          cat "$out"/b2-sway-scale1.25/*-rec.log || true
-          tail -n 30 "$out"/b2-sway-scale1.25/sway.log || true
-          python3 scripts/flicker-native-stats.py "$out"/b1-x11-scale1 "$out"/b2-sway-scale1.25 | tee "$out/summary.txt"
+          bash desktop/scripts/flicker-sway.sh "$test" "$out/b2-sway-scale1.5" 1.5 || true
+          python3 scripts/flicker-native-stats.py "$out"/b1-x11-scale1 "$out"/b1-x11-scale2 "$out"/b2-sway-scale1.25 "$out"/b2-sway-scale1.5 | tee "$out/summary.txt"
       - if: ${{ !cancelled() && matrix.drive }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -832,7 +832,7 @@ jobs:
             ${{ runner.temp }}/flicker/**/*.json
             ${{ runner.temp }}/flicker/**/*.txt
             ${{ runner.temp }}/flicker/**/*.log
-            ${{ runner.temp }}/flicker/**/*control.mkv
+            ${{ runner.temp }}/flicker/**/*.mkv
       - name: Linux window controls sit at the top-right, act on the window under openbox, and their label follows the window manager
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 5
