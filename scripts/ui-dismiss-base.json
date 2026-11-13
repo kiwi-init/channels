@@ -251,7 +251,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -3,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -268,7 +269,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -3,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -285,7 +287,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -3,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -523,7 +526,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -3,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -540,7 +544,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -3,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -557,7 +562,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -3,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -918,10 +924,10 @@
           }
         },
         {
-          "step": "re-rendered while open: a wider window",
+          "step": "re-rendered while open: the channel's search opening",
           "open": true,
           "rendered": true,
-          "changed": "900px -> 960px",
+          "changed": "search closed -> search open",
           "errors": [],
           "owned": {
             "document keydown capture": 1,
@@ -968,7 +974,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -2,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -985,7 +992,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -2,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -1002,7 +1010,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -2,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -1233,8 +1242,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
-            "window keydown capture": -1,
+            "window keydown bubble": -4,
+            "window keydown capture": -2,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -1251,8 +1260,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
-            "window keydown capture": -1,
+            "window keydown bubble": -4,
+            "window keydown capture": -2,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -1269,8 +1278,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
-            "window keydown capture": -1,
+            "window keydown bubble": -4,
+            "window keydown capture": -2,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -1758,7 +1767,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -3,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -1775,7 +1785,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -3,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -1792,7 +1803,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -3,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -2030,7 +2042,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -3,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -2047,7 +2060,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -3,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -2064,7 +2078,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -3,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -2425,10 +2440,10 @@
           }
         },
         {
-          "step": "re-rendered while open: a wider window",
+          "step": "re-rendered while open: the channel's search opening",
           "open": true,
           "rendered": true,
-          "changed": "900px -> 960px",
+          "changed": "search closed -> search open",
           "errors": [],
           "owned": {
             "document keydown capture": 1,
@@ -2475,7 +2490,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -2,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -2492,7 +2508,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -2,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -2509,7 +2526,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
+            "window keydown bubble": -2,
+            "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -2740,8 +2758,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
-            "window keydown capture": -1,
+            "window keydown bubble": -4,
+            "window keydown capture": -2,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -2758,8 +2776,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
-            "window keydown capture": -1,
+            "window keydown bubble": -4,
+            "window keydown capture": -2,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }
@@ -2776,8 +2794,8 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -1,
-            "window keydown capture": -1,
+            "window keydown bubble": -4,
+            "window keydown capture": -2,
             "window pointerdown capture": 1,
             "window resize bubble": -2
           }

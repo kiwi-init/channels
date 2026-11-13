@@ -157,8 +157,8 @@ const server = Bun.serve({
 const settle = (page: Page) => page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 30)))));
 
 type Target = "active" | "inside" | "outside" | "toggle" | "document" | "window";
-type Change = { name: string; act: (page: Page) => Promise<unknown>; observe: (page: Page) => Promise<string> };
-type Spec = { name: string; shot: string; popover: string; toggle: string; open: (page: Page) => Promise<void>; rerender?: Change; unmount?: Change };
+type Change = { name: string; act: (page: Page) => Promise<unknown>; observe: (page: Page) => Promise<string>; undo?: (page: Page) => Promise<unknown> };
+type Spec = { name: string; shot: string; popover: string; toggle: string; open: (page: Page) => Promise<void>; rerender?: Change; unmount?: Change; width?: number; height?: number };
 
 async function dispatch(page: Page, spec: Spec, kind: "keydown" | "pointerdown" | "blur" | "resize", target: Target, key = ""): Promise<{ prevented: boolean; seen: string[] }> {
   return page.evaluate(
@@ -286,6 +286,8 @@ async function lifecycle(page: Page, spec: Spec, rerender: Change, unmount: Chan
   const esc = await dispatch(page, spec, "keydown", "active", "Escape");
   await settle(page);
   steps.push({ step: "Escape after the re-render", open: await isOpen(page, spec), ...esc, errors: await errors(page), owned: await ownedLive(page), listeners: delta(await listeners(page), before) });
+  await rerender.undo?.(page);
+  await settle(page);
   const again = await openOwning(page, spec);
   steps.push({ step: "reopened before unmounting", open: await isOpen(page, spec), owned: again, listeners: delta(await listeners(page), before) });
   const at = await unmount.observe(page);
@@ -335,15 +337,18 @@ const gifTab: Change = {
   observe: (page) => page.evaluate(() => document.querySelector(".gifs-tab[aria-selected=true]")?.textContent ?? "none"),
 };
 
+const pressWhenThere = async (page: Page, find: () => HTMLElement | undefined): Promise<void> => {
+  const handle = await page.waitForFunction(find, undefined, { timeout: 10_000 });
+  await handle.evaluate((el) => (el as HTMLElement).click());
+  await settle(page);
+};
+
 async function signOut(page: Page): Promise<void> {
   await click(".rail-gear")(page);
-  await settle(page);
-  await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("button, a")].find((b) => b.textContent?.trim() === "Account")?.click());
-  await settle(page);
-  await click(".set-forget")(page);
-  await settle(page);
-  await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("dialog[open] button")].find((b) => b.textContent?.trim() === "Sign out")?.click());
-  await page.waitForTimeout(500);
+  await pressWhenThere(page, () => [...document.querySelectorAll<HTMLElement>("button, a")].find((b) => b.textContent?.trim() === "Account" && !b.closest(".usage-card")));
+  await pressWhenThere(page, () => [...document.querySelectorAll<HTMLElement>("button, a")].find((b) => b.textContent?.trim() === "Sign out" && !b.closest("dialog")));
+  await pressWhenThere(page, () => [...document.querySelectorAll<HTMLElement>("dialog[open] button")].find((b) => b.textContent?.trim() === "Sign out"));
+  await page.locator(".rail").waitFor({ state: "detached", timeout: 10_000 });
 }
 
 async function driveField(page: Page): Promise<Popover> {
@@ -426,8 +431,18 @@ const SPECS: Spec[] = [
     shot: "thread-doc-events",
     popover: ".updates-panel",
     toggle: "[data-updates-toggle]",
+    width: 720,
+    height: 600,
     open: (page) => page.locator("[data-updates-toggle]").first().click(),
-    rerender: { name: "a wider window", act: (page) => page.setViewportSize({ width: 960, height: 800 }), observe: (page) => page.evaluate(() => `${innerWidth}px`) },
+    rerender: {
+      name: "the channel's search opening",
+      act: async (page) => {
+        await page.keyboard.press("Control+f");
+        await page.locator(".search-field").waitFor({ timeout: 10_000 });
+      },
+      undo: (page) => page.keyboard.press("Escape"),
+      observe: (page) => page.evaluate(() => (document.querySelector(".search-field") ? "search open" : "search closed")),
+    },
     unmount: toHome,
   },
   {
@@ -450,7 +465,7 @@ const browser = await (engine === "webkit" ? webkit : chromium).launch();
 const result: Popover[] = [];
 try {
   for (const spec of SPECS) {
-    const page = await browser.newPage({ viewport: { width: 900, height: 800 } });
+    const page = await browser.newPage({ viewport: { width: spec.width ?? 900, height: spec.height ?? 800 } });
     await page.addInitScript(INSTRUMENT);
     result.push(await drive(page, spec));
     await page.close();
