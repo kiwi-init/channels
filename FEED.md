@@ -32,6 +32,8 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | --- | --- | --- |
 | At the bottom, a picture that arrives after its line leaves the last line at the bottom of the view | `scripts/ui-feed-late-image.ts` | `a late picture leaves the last line at the bottom of the view` |
 | Scrolled up, a picture that arrives above the view leaves the row you read on its pixel | `scripts/ui-feed-late-image.ts` | `a late picture above the view leaves the row at the top on its pixel` |
+| At the bottom, a row that collapses to its placeholder while a line lands in the same breath keeps the view at the bottom | `scripts/ui-feed-late-image.ts` | `a row that collapses to its placeholder while a line lands in the same breath keeps the view at the bottom` |
+| At the bottom, a burst of lines is still followed at its end | `scripts/ui-feed-late-image.ts` | `the view still follows the newest line` |
 | At the bottom, a font that arrives late and wraps the lines again leaves the last line at the bottom of the view | `scripts/ui-feed-late-font.ts` | `a late font leaves the last line at the bottom of the view` |
 | Scrolled up, it leaves the row you read on its pixel | `scripts/ui-feed-late-font.ts` | `a late font leaves the row at the top of the view on its pixel` |
 | A bubble fitted while a font was loading is fitted again when it arrives, and the fit never changes the message's height | `scripts/ui-own-bubble.ts` | `fitting a bubble to its text never changes the message's height` |
