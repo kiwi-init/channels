@@ -443,7 +443,7 @@ describe("useStick in a thread doc", () => {
     await act(async () => root.unmount())
   })
 
-  test("a picture row that collapses to its placeholder at the bottom, with a line landing before the clamp's scroll event, is still followed (#2399)", async () => {
+  test("a picture row that collapses to its placeholder at the bottom, with your Enter's line landing before the clamp's scroll event, is still followed (#2399)", async () => {
     const f = new Feed(100)
     const { stick, root } = await mount(f, true, true)
     f.scrollTo(f.max)
@@ -455,6 +455,7 @@ describe("useStick in a thread doc", () => {
     picture.h -= 120
     expect(f.layout()).toBe(true)
     f.resized()
+    f.fireDoc("keydown")
     arrive(f, stick, 102, 52.8)
     expect(f.max - f.top).toBeLessThan(1)
     arrive(f, stick, 103, 52.8)

@@ -118,6 +118,7 @@ try {
     `at the bottom: a late picture leaves the last line at the bottom of the view (${px(grown.under - opened.under)} from where it was)`,
   );
 
+  await page.keyboard.press("Shift");
   await page.evaluate(
     () =>
       new Promise<void>((done) => {
