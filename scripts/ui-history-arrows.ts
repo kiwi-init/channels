@@ -180,7 +180,7 @@ try {
   ];
   for (const look of looks) {
     for (const size of sizes) {
-      for (const shot of ["channel", "settings", "home"]) {
+      for (const shot of ["channel", "settings", "welcome"]) {
         const p = await open(size.width, size.height, look.init);
         await p.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
         await p.locator(".top-history").first().waitFor();
