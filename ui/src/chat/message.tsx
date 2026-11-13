@@ -60,9 +60,8 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
   useLayoutEffect(() => {
     const el = box.current
     if (!on || !el) return
-    const check = () => clampSoon(el, setOver)
-    check()
-    const watch = new ResizeObserver(check)
+    clampSoon(el, setOver)
+    const watch = new ResizeObserver(() => setOver(el.scrollHeight > CLAMP_PX + 44))
     for (const child of el.children) watch.observe(child)
     watch.observe(el)
     return () => watch.disconnect()
