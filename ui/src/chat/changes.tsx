@@ -54,7 +54,7 @@ function Whole({ channel, m }: { channel: Channel; m: Message }) {
   const code = channel.code
   const seq = m.seq
   const partial = !!m.partial
-  const holdKey = `edit ${useId()}`
+  const holdKey = useId()
   useEffect(() => {
     if (!partial) return
     let live = true
