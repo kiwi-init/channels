@@ -498,6 +498,9 @@ jobs:
       - name: ui opening a room, a DM or a channel focuses its composer, with the draft kept and the caret at its end, and never steals focus or opens a touch keyboard, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-composer-focus.ts --dist ui/dist
+      - name: ui the icons only later screens use come with those screens and still draw where they're first used, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-lazy-icons.ts --dist ui/dist
       - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
@@ -543,6 +546,9 @@ jobs:
       - name: ui the sidebar stays where it is scrolled while its highlight glides to the row just opened, and a press on a row right after opens it
         if: ${{ !cancelled() }}
         run: bun scripts/ui-side-still.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui Others' direct messages keeps its heading in place while one of its conversations is open, collapsed or expanded (#2386)
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-theirs-heading.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Jump to latest shows when you scroll up a long feed, takes a click and brings the feed to its end, from a little up, from far past the rows it holds and from near their top, at rest or the moment a wheel stops
         if: ${{ !cancelled() }}
         run: bun scripts/ui-feed-latest.ts --dist ui/dist --browser ${{ matrix.engine }}
