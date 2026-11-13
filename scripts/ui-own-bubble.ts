@@ -405,6 +405,7 @@ try {
     await checks(page, `${theme}, back at 1440`);
     const painted = await page.evaluate(() => (window as Window & { bubblePaints?: Painted }).bubblePaints ?? null);
     const frames = `${painted?.frames ?? 0} frames read after paint, ${painted?.loose ?? 0} with a wrapped bubble wider than its longest line, ${painted?.longest ?? 0} in a row at most${painted?.worst ? ` (${painted.worst})` : ""}; ${painted?.unseen ?? 0} reads left out, taken after the window changed or a later frame was drawn`;
+    console.log(`     ${theme}, painted frames: ${frames}`);
     expect(painted !== null && painted.frames > 30 && painted.longest <= 1, `${theme}: from first load through every resize, no wrapped bubble of yours stays too wide on screen: ${frames}`);
     await page.close();
   }
