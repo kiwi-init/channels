@@ -68,20 +68,13 @@ export const NOWHERE: Where = { kind: "task", task: 0 }
 export const ONLY: Leaf = { kind: "leaf", id: MAIN, nav: null }
 export const ALONE: Layout = { root: ONLY, focus: MAIN }
 
-const KEY = "mc.panes"
+export const KEY = "mc.panes"
 const listeners = new Set<() => void>()
 let made = 0
 
 export const nextId = (kind: "pane" | "split"): string => `${kind}-${++made}`
 
-type Kept = Pick<Nav, "where" | "tab" | "spec" | "part" | "github">
-
-const keptOf = (nav: Nav): Kept => ({ where: nav.where, tab: nav.tab, spec: nav.spec, part: nav.part, github: nav.github })
-
-function slim(node: Node): unknown {
-  if (node.kind === "split") return { ...node, a: slim(node.a), b: slim(node.b) }
-  return { ...node, nav: node.nav ? keptOf(node.nav) : null }
-}
+export type Kept = Pick<Nav, "where" | "tab" | "spec" | "part" | "github">
 
 function grown(code: string, raw: unknown): Node | null {
   if (!raw || typeof raw !== "object") return null
@@ -113,18 +106,6 @@ function load(): Map<string, Layout> {
   return out
 }
 
-let saving = 0
-function save(): void {
-  window.clearTimeout(saving)
-  saving = window.setTimeout(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(Object.fromEntries([...layouts].map(([code, l]) => [code, { ...l, root: slim(l.root) }]))))
-    } catch {
-      // Storage is off: the layout lasts until the app restarts.
-    }
-  }, 300)
-}
-
 const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.delete(l))
 
 export const nowLeaf = (code: string): Leaf => ({ kind: "leaf", id: `pane-${++made}`, nav: { ...startNav(code), where: NOWHERE }, doc: { kind: "now" } })
@@ -141,11 +122,12 @@ export function layoutOf(code: string): Layout {
   return first
 }
 
-export function put(code: string, layout: Layout): void {
+export function setLayout(code: string, layout: Layout): void {
   layouts.set(code, layout)
-  save()
   for (const l of listeners) l()
 }
+
+export const allLayouts = (): ReadonlyMap<string, Layout> => layouts
 
 export const useLayout = (code: string): Layout => useSyncExternalStore(subscribe, () => layoutOf(code))
 

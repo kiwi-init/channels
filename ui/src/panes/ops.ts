@@ -1,5 +1,5 @@
 import type { Where } from "~/model"
-import { navigate, sameWhere, startNav, type Go, type Panel } from "~/nav"
+import { navigate, sameWhere, startNav, type Go, type Nav, type Panel } from "~/nav"
 import {
   docked,
   dockedNow,
@@ -12,7 +12,11 @@ import {
   nowLeaf,
   NOWHERE,
   ONLY,
-  put,
+  allLayouts,
+  KEY,
+  setLayout,
+  type Kept,
+  type Layout,
   swap,
   type Box,
   type Carry,
@@ -24,6 +28,30 @@ import {
   type Page,
   type Split,
 } from "~/panes/store"
+
+const keptOf = (nav: Nav): Kept => ({ where: nav.where, tab: nav.tab, spec: nav.spec, part: nav.part, github: nav.github })
+
+function slim(node: Node): unknown {
+  if (node.kind === "split") return { ...node, a: slim(node.a), b: slim(node.b) }
+  return { ...node, nav: node.nav ? keptOf(node.nav) : null }
+}
+
+let saving = 0
+function save(): void {
+  window.clearTimeout(saving)
+  saving = window.setTimeout(() => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(Object.fromEntries([...allLayouts()].map(([code, l]) => [code, { ...l, root: slim(l.root) }]))))
+    } catch {
+      // Storage is off: the layout lasts until the app restarts.
+    }
+  }, 300)
+}
+
+function put(code: string, layout: Layout): void {
+  setLayout(code, layout)
+  save()
+}
 
 const isBlank = (leaf: Leaf): boolean => leaf.doc?.kind === "blank"
 

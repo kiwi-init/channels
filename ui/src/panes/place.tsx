@@ -2,10 +2,9 @@ import { createContext, use, useMemo, type PointerEvent as ReactPointerEvent, ty
 
 import type { Channel } from "~/model"
 import { between, nickname } from "~/names"
-import { ActContext, NavContext, useAct, useNav, type Act, type Nav, type Panel } from "~/nav"
+import { ActContext, NavContext, useAct, useNav, type Act, type Nav } from "~/nav"
 import { dockedNow, leafOf, MAIN, MIN_H, MIN_W, useLayout, type Carry, type Doc, type Edge } from "~/panes/store"
 import { useTabs } from "~/shell/top-layout"
-import { wordsPlain } from "~/words"
 import { t } from "~/i18n/i18n"
 
 const ops = () => import("~/panes/ops")
@@ -30,13 +29,6 @@ export function roomiest(code: string): { id: string; edge: Edge } | undefined {
   const best = panes.filter((p) => p.r.width >= 2 * MIN_W || p.r.height >= 2 * MIN_H).sort((a, b) => b.r.width * b.r.height - a.r.width * a.r.height)[0]
   if (!best) return undefined
   return { id: best.id, edge: best.r.width >= 2 * MIN_W && best.r.width >= best.r.height * 0.9 ? "right" : "bottom" }
-}
-
-export function panelName(channel: Channel, panel: Panel): string {
-  if (panel.kind === "task") return docName(channel, { kind: "task", task: panel.task })
-  if (panel.kind === "thread") return t("panes.thread")
-  const item = panel.kind === "pr" ? channel.prs?.find((p) => p.repo === panel.repo && p.number === panel.number) : channel.issues?.find((i) => i.repo === panel.repo && i.number === panel.number)
-  return `#${panel.number}${item ? ` ${item.title}` : ""}`
 }
 
 export function Scope({ code, id, nav, doc, shown, typing = true, children }: { code: string; id: string | null; nav: Nav; doc: Doc | null; shown: boolean; typing?: boolean; children: ReactNode }) {
@@ -112,15 +104,6 @@ export function viewOf(nav: Nav): View | null {
   if (nav.tab === "chat") return null
   if (nav.tab === "specs") return nav.spec == null ? { kind: "specs" } : { kind: "spec", ask: nav.spec }
   return { kind: nav.tab }
-}
-
-export function docName(channel: Channel, doc: Exclude<Doc, { kind: "panel" }>): string {
-  if (doc.kind === "now") return t("panes.now")
-  if (doc.kind === "blank") return t("panes.blank.name")
-  if (doc.kind === "home") return t("panes.home")
-  if (doc.kind === "activity") return t("panes.activity")
-  const task = channel.tasks.find((x) => x.id === doc.task)
-  return task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)}` : `T${doc.task}`
 }
 
 export function dragOut(carry: Carry, label: string): { onPointerDown: (e: ReactPointerEvent) => void } {

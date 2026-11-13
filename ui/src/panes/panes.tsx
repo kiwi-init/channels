@@ -12,8 +12,7 @@ import type { Channel } from "~/model"
 import { nickname } from "~/names"
 import { useAct, useApp, useNav, type Go, type Nav, type Panel } from "~/nav"
 import { dropOn, targetAt } from "~/panes/drag"
-import { docName } from "~/panes/place"
-import { dragOut, panelName, placeName, Scope, VIEW_NAMES } from "~/panes/place"
+import { dragOut, placeName, Scope, VIEW_NAMES } from "~/panes/place"
 import {
   ALONE,
   BLANK,
@@ -62,6 +61,22 @@ function spaced(box: Box): CSSProperties {
     width: `calc(${css(box.w)} - ${l} - ${r})`,
     height: `calc(${css(box.h)} - ${t} - ${b})`,
   }
+}
+
+function panelName(channel: Channel, panel: Panel): string {
+  if (panel.kind === "task") return docName(channel, { kind: "task", task: panel.task })
+  if (panel.kind === "thread") return t("panes.thread")
+  const item = panel.kind === "pr" ? channel.prs?.find((p) => p.repo === panel.repo && p.number === panel.number) : channel.issues?.find((i) => i.repo === panel.repo && i.number === panel.number)
+  return `#${panel.number}${item ? ` ${item.title}` : ""}`
+}
+
+function docName(channel: Channel, doc: Exclude<Doc, { kind: "panel" }>): string {
+  if (doc.kind === "now") return t("panes.now")
+  if (doc.kind === "blank") return t("panes.blank.name")
+  if (doc.kind === "home") return t("panes.home")
+  if (doc.kind === "activity") return t("panes.activity")
+  const task = channel.tasks.find((x) => x.id === doc.task)
+  return task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)}` : `T${doc.task}`
 }
 
 const nameOf = (channel: Channel, doc: Doc): string => (doc.kind === "panel" ? panelName(channel, doc.panel) : docName(channel, doc))
@@ -231,6 +246,7 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
     closePane(code, heir.id)
     return true
   }
+  useTypingFocus(typing)
   const live = useRef({ leaves, close, focus: layout.focus, nav })
   useLayoutEffect(() => {
     live.current = { leaves, close, focus: layout.focus, nav }
@@ -490,4 +506,27 @@ function DragLayer() {
     </>,
     document.body
   )
+}
+
+function useTypingFocus(typing: string): void {
+  const was = useRef(typing)
+  useEffect(() => {
+    const gained = typing !== was.current
+    was.current = typing
+    if (!gained) return
+    const put = () => {
+      const pane = document.querySelector<HTMLElement>(".pane.is-focus")
+      const field = pane?.querySelector<HTMLElement>(".compose textarea")
+      const at = document.activeElement
+      if (!field || !window.getSelection()?.isCollapsed || (at instanceof HTMLElement && at !== document.body && pane?.contains(at) && at.matches("input, textarea, [contenteditable='true']"))) return
+      field.focus({ preventScroll: true })
+    }
+    const frame = window.requestAnimationFrame(() => window.addEventListener("pointerup", put, { once: true }))
+    const late = window.setTimeout(put, 120)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(late)
+      window.removeEventListener("pointerup", put)
+    }
+  }, [typing])
 }

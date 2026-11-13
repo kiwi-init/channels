@@ -1,7 +1,6 @@
 import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import { Composer } from "~/chat/composer"
-import { usePane } from "~/panes/place"
 import { docOf } from "~/chat/doc-of"
 import { EditHere } from "~/chat/editing"
 import { showActivity } from "~/chat/activity"
@@ -176,8 +175,6 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
     return { quoting: here?.quoting ?? null, set: (quoting) => setReply(quoting ? { key, quoting } : null) }
   }, [reply, key])
   const doc = docOf(channel, where)
-  const typing = usePane()?.typing ?? true
-  useTypingFocus(typing)
   const placeName =
     where.kind === "room"
       ? `#${channel.rooms.find((r) => r.id === where.room)?.name ?? where.room}`
@@ -210,29 +207,6 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
       </EditHere.Provider>
     </ReplyContext.Provider>
   )
-}
-
-function useTypingFocus(typing: boolean): void {
-  const was = useRef(typing)
-  useEffect(() => {
-    const gained = typing && !was.current
-    was.current = typing
-    if (!gained) return
-    const put = () => {
-      const pane = document.querySelector<HTMLElement>(".pane.is-focus")
-      const field = pane?.querySelector<HTMLElement>(".compose textarea")
-      const at = document.activeElement
-      if (!field || !window.getSelection()?.isCollapsed || (at instanceof HTMLElement && at !== document.body && pane?.contains(at) && at.matches("input, textarea, [contenteditable='true']"))) return
-      field.focus({ preventScroll: true })
-    }
-    const frame = window.requestAnimationFrame(() => window.addEventListener("pointerup", put, { once: true }))
-    const late = window.setTimeout(put, 120)
-    return () => {
-      window.cancelAnimationFrame(frame)
-      window.clearTimeout(late)
-      window.removeEventListener("pointerup", put)
-    }
-  }, [typing])
 }
 
 function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Where; spot: Spot | null; jump: Jump | null; doc: string | null }) {
