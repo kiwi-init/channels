@@ -96,6 +96,9 @@ export function useStick(following = true, still = false) {
   const holdUntil = useRef(0)
   const parked = useRef<Anchor | null>(null)
   const going = useRef(false)
+  const acted = useRef(Number.NEGATIVE_INFINITY)
+  const pressed = useRef(false)
+  const person = () => pressed.current || Date.now() - Math.max(acted.current, wheeled.current) < WHEEL_MS
   const pad = useCallback(() => {
     const h = room.current + reserve.current
     if (spacer.current) spacer.current.style.height = h > 0 ? `${h}px` : ""
@@ -176,7 +179,7 @@ export function useStick(following = true, still = false) {
     if (!box || !list) return
     const reflow = width.current > 0 && box.clientWidth !== width.current
     width.current = box.clientWidth
-    if (!reflow && still && box.scrollTop < seen.current - 0.5 && gapIn(box) > 0.5) stuck.current = false
+    if (!reflow && still && box.scrollTop < seen.current - 0.5 && gapIn(box) > 0.5 && person()) stuck.current = false
     const from = box.scrollTop
     correct(reflow)
     if (!reflow && box.scrollTop !== from) parked.current = null
@@ -202,7 +205,7 @@ export function useStick(following = true, still = false) {
     const down = box.scrollTop > seen.current + 0.5
     if (up || down) parked.current = null
     going.current &&= !up && gap >= NEAR_BOTTOM
-    const near = going.current || (!still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !up && (stuck.current || down))
+    const near = going.current || (!still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !(up && person()) && (stuck.current || down))
     stuck.current = live.current && !held.current && near
     const kept = placed.current && placed.current === anchor.current && Date.now() < holdUntil.current && anchor.current?.el.isConnected ? anchor.current : null
     const was = anchor.current
@@ -255,11 +258,13 @@ export function useStick(following = true, still = false) {
   useLayoutEffect(() => {
     const page = scroller.current?.ownerDocument
     if (!page) return
-    const reader = () => {
+    const reader = ({ type }: Event) => {
       placed.current = null
       going.current = false
+      acted.current = Date.now()
+      pressed.current = type === "pointerdown" || (pressed.current && !type.startsWith("pointer"))
     }
-    const kinds = [...TOUCHES, "wheel"] as const
+    const kinds = [...TOUCHES, "wheel", "pointerup", "pointercancel"] as const
     for (const kind of kinds) page.addEventListener(kind, reader, { passive: true })
     return () => {
       for (const kind of kinds) page.removeEventListener(kind, reader)
@@ -337,13 +342,11 @@ export function useStick(following = true, still = false) {
       if (on) {
         const box = scroller.current
         const list = content.current
-        stuck.current = false
-        placed.current = null
-        parked.current = null
+        unstick()
         anchor.current = box && list ? anchorIn(box, list) : null
       } else remember()
     },
-    [remember]
+    [remember, unstick]
   )
 
   return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift }
