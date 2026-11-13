@@ -1,6 +1,7 @@
 import "~/i18n/en/needs"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
+import { useHold } from "~/chat/whole"
 import { Composer } from "~/chat/composer"
 import { compactAt, quoteOf, ReadOnly, useNames, useTaskIds } from "~/chat/conversation"
 import { useStick } from "~/chat/stick"
@@ -37,7 +38,7 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
     }
   }, [reply, channel.code, seq, root, replies])
   const { actions } = useAct()
-  const { holdEarlier, earlierTo } = actions
+  const { earlierTo } = actions
   const code = channel.code
   const early = channel.since !== undefined && seq > 0 && seq < channel.since
   const [tried, setTried] = useState<string | null>(null)
@@ -45,10 +46,7 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
   const loadKey = `${code}:${seq}:${again}`
   const waiting = early && tried !== loadKey
   const late = useLate(waiting)
-  useEffect(() => {
-    holdEarlier(code, "thread", seq)
-    return () => holdEarlier(code, "thread", null)
-  }, [code, seq, holdEarlier])
+  useHold(code, "thread", seq)
   useEffect(() => {
     if (!early) return
     let live = true

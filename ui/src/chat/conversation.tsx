@@ -1,5 +1,6 @@
 import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
+import { useHold } from "~/chat/whole"
 import { Composer } from "~/chat/composer"
 import { docOf } from "~/chat/doc-of"
 import { EditHere } from "~/chat/editing"
@@ -335,8 +336,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const holdEarlier = actions.holdEarlier
   const earlierPage = actions.earlier
   const holdFrom = list.length ? (list[Math.max(0, start - HOLD)]?.seq ?? null) : olderHere ? (since ?? null) : null
-  useEffect(() => holdEarlier(code, "feed", holdFrom), [code, holdFrom, holdEarlier])
-  useEffect(() => () => holdEarlier(code, "feed", null), [code, holdEarlier])
+  useHold(code, "feed", holdFrom)
   const paging = useRef({ busy: false, done: false, dry: 0, length: -1 })
   const [paged, setPaged] = useState(0)
   useEffect(() => {
