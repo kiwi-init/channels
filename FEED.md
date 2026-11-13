@@ -57,6 +57,7 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | A long feed opens on its latest rows | `scripts/ui-scroll-fps.ts` | `rows at once: it should render the latest ones` |
 | Scrolling up keeps loading, to the first message | `scripts/ui-scroll-up.ts` | `loads back to its first row while scrolling up` |
 | A tall line keeps its height as it scrolls into view | `scripts/ui-doc-steady.ts` | `a line changed size as it scrolled into view` |
+| A long wheel up while older rows load above, and the same wheel back down, bring the last line back to the bottom of the view: no load skips rows | `scripts/ui-feed-wheel-up.ts` | `the same wheel back down brings the feed's last line back to the bottom of the view` |
 
 ## Jumps
 
