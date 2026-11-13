@@ -77,12 +77,13 @@ const isAll = (l: Len): boolean => l.p === 1 && l.px === 0 && l.side === 0
 
 function spaced(box: Box): CSSProperties {
   const half = "var(--pane-gap) / 2"
+  const whole = "var(--pane-gap)"
   const right = { p: box.x.p + box.w.p, px: box.x.px + box.w.px, side: box.x.side + box.w.side }
   const bottom = { p: box.y.p + box.h.p, px: box.y.px + box.h.px, side: box.y.side + box.h.side }
-  const l = isNone(box.x) ? "0px" : half
-  const t = isNone(box.y) ? "0px" : half
-  const r = isAll(right) ? "0px" : half
-  const b = isAll(bottom) ? "0px" : half
+  const l = isNone(box.x) ? whole : half
+  const t = isNone(box.y) ? whole : half
+  const r = isAll(right) ? whole : half
+  const b = isAll(bottom) ? whole : half
   return {
     left: `calc(${css(box.x)} + ${l})`,
     top: `calc(${css(box.y)} + ${t})`,
