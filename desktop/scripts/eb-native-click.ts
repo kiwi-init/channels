@@ -66,13 +66,25 @@ try {
     console.log(`probe xwininfo:\n${sh(["xwininfo", "-id", win])}`);
     console.log(`probe root children:\n${sh(["xwininfo", "-root", "-children"])}`);
     console.log(`probe WM_STATE / _NET_WM_STATE: ${sh(["xprop", "-id", win, "WM_STATE", "_NET_WM_STATE", "_NET_WM_WINDOW_TYPE"])}`);
+    const heardNow = async (): Promise<string> => {
+      const got = await d.evaluate(() => {
+        const root = document.documentElement;
+        const was = root.dataset.heard ?? "";
+        root.dataset.heard = "";
+        return was;
+      }, null);
+      return got.trim() || "nothing";
+    };
+    spawnSync("xdotool", ["mousemove", "--window", win, "600", "380", "click", "1"], { stdio: "ignore" });
+    Bun.sleepSync(600);
+    console.log(`probe A, chained (mousemove --window <win> 600 380 click 1): the page heard ${await heardNow()}`);
     spawnSync("xdotool", ["mousemove", "--window", win, "640", "400"], { stdio: "ignore" });
     Bun.sleepSync(200);
     console.log(`probe pointer after mousemove: ${sh(["xdotool", "getmouselocation", "--shell"]).replace(/\n/g, " ")}`);
     spawnSync("xdotool", ["click", "1"], { stdio: "ignore" });
     Bun.sleepSync(600);
-    const heard = await d.evaluate(() => document.documentElement.dataset.heard ?? "", null);
-    console.log(`probe the page heard: ${heard.trim() || "nothing"}`);
+    const heard = await heardNow();
+    console.log(`probe B, separate (mousemove --window <win> 640 400, then click 1): the page heard ${heard}`);
     if (!heard.includes("click@")) problems.push(`harness: a real mid-page click never reached the page (heard: ${heard.trim() || "nothing"})`);
     for (const layout of [
       { name: "wide (tabs)", width: 1280, height: 800 },
