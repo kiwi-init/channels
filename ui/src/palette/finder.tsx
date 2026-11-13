@@ -325,16 +325,6 @@ function collect(app: App, nav: Nav, go: (go: Go) => void, debug: boolean): Item
     }
   )
 
-  if (nav.page !== "channel" || nav.channel !== null)
-    items.push({
-      id: "action:home",
-      group: "actions",
-      label: t("palette.finder.home"),
-      keys: ["start", "channels"],
-      lead: <Icon name="home" size={14} />,
-      run: () => go({ to: "home" }),
-    })
-
   if (channel && nav.page === "channel")
     items.push(
       {

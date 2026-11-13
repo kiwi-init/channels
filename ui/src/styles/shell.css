@@ -1355,15 +1355,11 @@
   translate: none;
 }
 
-:root[data-tabs] .app > .rail :is(.tile[data-code], .tile.is-home) {
+:root[data-tabs] .app > .rail .tile[data-code] {
   height: var(--tab-h);
   border-radius: var(--r-ctl) var(--r-ctl) 0 0;
   background: none;
   box-shadow: none;
-}
-
-:root[data-tabs] .app > .rail .tile.is-home {
-  width: calc(var(--ctl) + 8px);
 }
 
 :root[data-tabs] .app > .rail :is(.tile.is-add, .tile.is-folder, .wm-controls) {
@@ -1394,11 +1390,11 @@
   max-width: 15rem;
 }
 
-:root[data-tabs] .app > .rail :is(.tile[data-code], .tile.is-home):hover {
+:root[data-tabs] .app > .rail .tile[data-code]:hover {
   background: var(--wash);
 }
 
-:root[data-tabs] .app > .rail :is(.tile[data-code], .tile.is-home).is-on {
+:root[data-tabs] .app > .rail .tile[data-code].is-on {
   outline: 0;
   background: var(--page);
   color: var(--ink);

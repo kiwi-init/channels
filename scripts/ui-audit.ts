@@ -24,7 +24,6 @@ const SHOTS = [
   "settings-devices",
   "settings-agents",
   "invite",
-  "home",
 ];
 const SIZES = ["1710x1074", "1280x800"];
 

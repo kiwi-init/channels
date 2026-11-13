@@ -241,9 +241,9 @@
           }
         },
         {
-          "step": "unmounted while open: Home in the rail",
+          "step": "unmounted while open: Settings from the rail",
           "open": false,
-          "changed": "channel -> home",
+          "changed": "channel -> settings",
           "errors": [],
           "owned": {},
           "calls": 0,
@@ -251,7 +251,7 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -3,
+            "window keydown bubble": -2,
             "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
@@ -266,13 +266,7 @@
           "owned": {},
           "calls": 0,
           "listeners": {
-            "document keydown bubble": -1,
-            "document keydown capture": -1,
-            "document pointerdown bubble": -1,
-            "window keydown bubble": -3,
-            "window keydown capture": -1,
-            "window pointerdown capture": 1,
-            "window resize bubble": -2
+            "window pointerdown capture": 1
           }
         },
         {
@@ -284,13 +278,7 @@
           "owned": {},
           "calls": 0,
           "listeners": {
-            "document keydown bubble": -1,
-            "document keydown capture": -1,
-            "document pointerdown bubble": -1,
-            "window keydown bubble": -3,
-            "window keydown capture": -1,
-            "window pointerdown capture": 1,
-            "window resize bubble": -2
+            "window pointerdown capture": 1
           }
         }
       ]
@@ -516,9 +504,9 @@
           }
         },
         {
-          "step": "unmounted while open: Home in the rail",
+          "step": "unmounted while open: Settings from the rail",
           "open": false,
-          "changed": "channel -> home",
+          "changed": "channel -> settings",
           "errors": [],
           "owned": {},
           "calls": 0,
@@ -526,7 +514,7 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -3,
+            "window keydown bubble": -2,
             "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
@@ -541,13 +529,7 @@
           "owned": {},
           "calls": 0,
           "listeners": {
-            "document keydown bubble": -1,
-            "document keydown capture": -1,
-            "document pointerdown bubble": -1,
-            "window keydown bubble": -3,
-            "window keydown capture": -1,
-            "window pointerdown capture": 1,
-            "window resize bubble": -2
+            "window pointerdown capture": 1
           }
         },
         {
@@ -559,13 +541,7 @@
           "owned": {},
           "calls": 0,
           "listeners": {
-            "document keydown bubble": -1,
-            "document keydown capture": -1,
-            "document pointerdown bubble": -1,
-            "window keydown bubble": -3,
-            "window keydown capture": -1,
-            "window pointerdown capture": 1,
-            "window resize bubble": -2
+            "window pointerdown capture": 1
           }
         }
       ]
@@ -964,9 +940,9 @@
           }
         },
         {
-          "step": "unmounted while open: Home in the rail",
+          "step": "unmounted while open: Settings from the rail",
           "open": false,
-          "changed": "channel -> home",
+          "changed": "channel -> settings",
           "errors": [],
           "owned": {},
           "calls": 0,
@@ -974,7 +950,7 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -2,
+            "window keydown bubble": -1,
             "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
@@ -989,13 +965,7 @@
           "owned": {},
           "calls": 0,
           "listeners": {
-            "document keydown bubble": -1,
-            "document keydown capture": -1,
-            "document pointerdown bubble": -1,
-            "window keydown bubble": -2,
-            "window keydown capture": -1,
-            "window pointerdown capture": 1,
-            "window resize bubble": -2
+            "window pointerdown capture": 1
           }
         },
         {
@@ -1007,13 +977,7 @@
           "owned": {},
           "calls": 0,
           "listeners": {
-            "document keydown bubble": -1,
-            "document keydown capture": -1,
-            "document pointerdown bubble": -1,
-            "window keydown bubble": -2,
-            "window keydown capture": -1,
-            "window pointerdown capture": 1,
-            "window resize bubble": -2
+            "window pointerdown capture": 1
           }
         }
       ]
@@ -1757,9 +1721,9 @@
           }
         },
         {
-          "step": "unmounted while open: Home in the rail",
+          "step": "unmounted while open: Settings from the rail",
           "open": false,
-          "changed": "channel -> home",
+          "changed": "channel -> settings",
           "errors": [],
           "owned": {},
           "calls": 0,
@@ -1767,7 +1731,7 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -3,
+            "window keydown bubble": -2,
             "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
@@ -1782,13 +1746,7 @@
           "owned": {},
           "calls": 0,
           "listeners": {
-            "document keydown bubble": -1,
-            "document keydown capture": -1,
-            "document pointerdown bubble": -1,
-            "window keydown bubble": -3,
-            "window keydown capture": -1,
-            "window pointerdown capture": 1,
-            "window resize bubble": -2
+            "window pointerdown capture": 1
           }
         },
         {
@@ -1800,13 +1758,7 @@
           "owned": {},
           "calls": 0,
           "listeners": {
-            "document keydown bubble": -1,
-            "document keydown capture": -1,
-            "document pointerdown bubble": -1,
-            "window keydown bubble": -3,
-            "window keydown capture": -1,
-            "window pointerdown capture": 1,
-            "window resize bubble": -2
+            "window pointerdown capture": 1
           }
         }
       ]
@@ -2032,9 +1984,9 @@
           }
         },
         {
-          "step": "unmounted while open: Home in the rail",
+          "step": "unmounted while open: Settings from the rail",
           "open": false,
-          "changed": "channel -> home",
+          "changed": "channel -> settings",
           "errors": [],
           "owned": {},
           "calls": 0,
@@ -2042,7 +1994,7 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -3,
+            "window keydown bubble": -2,
             "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
@@ -2057,13 +2009,7 @@
           "owned": {},
           "calls": 0,
           "listeners": {
-            "document keydown bubble": -1,
-            "document keydown capture": -1,
-            "document pointerdown bubble": -1,
-            "window keydown bubble": -3,
-            "window keydown capture": -1,
-            "window pointerdown capture": 1,
-            "window resize bubble": -2
+            "window pointerdown capture": 1
           }
         },
         {
@@ -2075,13 +2021,7 @@
           "owned": {},
           "calls": 0,
           "listeners": {
-            "document keydown bubble": -1,
-            "document keydown capture": -1,
-            "document pointerdown bubble": -1,
-            "window keydown bubble": -3,
-            "window keydown capture": -1,
-            "window pointerdown capture": 1,
-            "window resize bubble": -2
+            "window pointerdown capture": 1
           }
         }
       ]
@@ -2480,9 +2420,9 @@
           }
         },
         {
-          "step": "unmounted while open: Home in the rail",
+          "step": "unmounted while open: Settings from the rail",
           "open": false,
-          "changed": "channel -> home",
+          "changed": "channel -> settings",
           "errors": [],
           "owned": {},
           "calls": 0,
@@ -2490,7 +2430,7 @@
             "document keydown bubble": -1,
             "document keydown capture": -1,
             "document pointerdown bubble": -1,
-            "window keydown bubble": -2,
+            "window keydown bubble": -1,
             "window keydown capture": -1,
             "window pointerdown capture": 1,
             "window resize bubble": -2
@@ -2505,13 +2445,7 @@
           "owned": {},
           "calls": 0,
           "listeners": {
-            "document keydown bubble": -1,
-            "document keydown capture": -1,
-            "document pointerdown bubble": -1,
-            "window keydown bubble": -2,
-            "window keydown capture": -1,
-            "window pointerdown capture": 1,
-            "window resize bubble": -2
+            "window pointerdown capture": 1
           }
         },
         {
@@ -2523,13 +2457,7 @@
           "owned": {},
           "calls": 0,
           "listeners": {
-            "document keydown bubble": -1,
-            "document keydown capture": -1,
-            "document pointerdown bubble": -1,
-            "window keydown bubble": -2,
-            "window keydown capture": -1,
-            "window pointerdown capture": 1,
-            "window resize bubble": -2
+            "window pointerdown capture": 1
           }
         }
       ]
