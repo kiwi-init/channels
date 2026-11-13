@@ -1,6 +1,6 @@
 import "~/i18n/en/chat-later"
 import { Delete02Icon, PencilEdit02Icon } from "@hugeicons/core-free-icons"
-import { useContext, useEffect, useRef, useState } from "react"
+import { useContext, useEffect, useId, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { askDelete, EditHere, startEditing, stopAskingDelete, stopEditing, useAskingDelete } from "~/chat/editing"
@@ -54,10 +54,11 @@ function Whole({ channel, m }: { channel: Channel; m: Message }) {
   const code = channel.code
   const seq = m.seq
   const partial = !!m.partial
+  const holdKey = useId()
   useEffect(() => {
     if (!partial) return
     let live = true
-    holdEarlier(code, "edit", seq)
+    holdEarlier(code, holdKey, seq)
     void earlierTo(code, seq).then((ok) => {
       if (!live || ok) return
       announce(t("chat.composer.edit.not.loaded"), "error")
@@ -65,9 +66,9 @@ function Whole({ channel, m }: { channel: Channel; m: Message }) {
     })
     return () => {
       live = false
-      holdEarlier(code, "edit", null)
+      holdEarlier(code, holdKey, null)
     }
-  }, [code, seq, partial, holdEarlier, earlierTo])
+  }, [code, holdKey, seq, partial, holdEarlier, earlierTo])
   return partial ? null : <Editor channel={channel} m={m} />
 }
 
