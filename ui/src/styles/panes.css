@@ -776,3 +776,11 @@
 .pane-blank {
   animation: pane-soft var(--slow) var(--ease);
 }
+
+.task-page:has(> .compose) > .page {
+  padding-bottom: max(var(--compose-space), calc(var(--compose-h, 0px) + 40px));
+}
+
+.task-page .task-talk {
+  margin-top: 28px;
+}

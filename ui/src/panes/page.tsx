@@ -1,6 +1,6 @@
 import "~/i18n/en/shell-later"
 import "~/i18n/en/specs"
-import { Suspense, useMemo, useState, type ReactNode } from "react"
+import { Suspense, useMemo, type ReactNode } from "react"
 
 import { Body } from "~/chat/body"
 import { useNames, useTaskIds } from "~/chat/conversation"
@@ -18,16 +18,11 @@ import { openImage } from "~/specs/comment-item"
 import { wordsPlain, wordsRaw, wrote } from "~/words"
 import { t } from "~/i18n/i18n"
 
-const NewSpec = later(() => import("~/specs/new").then((m) => m.NewSpec))
 const Detail = later(() => import("~/panes/detail").then((m) => m.Detail))
 const NeedsYou = later(() => import("~/needs/needs").then((m) => m.NeedsYou))
+const SpecsView = later(() => import("~/specs/view").then((m) => m.SpecsView))
 
-interface Hooks {
-  newSpec: () => void
-  edit: (text: string) => void
-}
-
-type BoardView = Exclude<View, DetailView | { kind: "needs" }>
+type BoardView = Extract<View, { kind: "now" } | { kind: "agents" } | { kind: "github" }>
 
 const isDetail = (view: View): view is DetailView => view.kind === "task" || view.kind === "pr" || view.kind === "issue"
 
@@ -86,57 +81,6 @@ function nowPage(channel: Channel): string {
     )
   )
   return join([`# ${t("panes.now")}`, counts, bar, now.next ?? "", ...groups, open.length ? "" : t("panes.page.empty")])
-}
-
-const tasksOf = (channel: Channel, spec: Spec): Task[] => live(channel).filter((x) => spec.tasks.includes(x.id))
-
-function specPage(channel: Channel, ask: number, actions: Actions, m: Maker, hooks: Hooks): string {
-  const spec = channel.specs?.find((s) => s.ask === ask)
-  const crumb = `[${t("shell.channel.specs")}](kiwi-page:specs)`
-  if (!spec) return join([crumb, `# #${ask}`])
-  const title = inert(wordsRaw(spec.title))
-  const lines = inert(wordsRaw(spec.text)).split("\n")
-  const first = lines.findIndex((l) => l.trim() !== "")
-  const headed = first >= 0 && /^#\s+/.test(lines[first]!) && lines[first]!.replace(/^#\s+/, "").trim() === title
-  const text = (headed ? lines.slice(first + 1) : lines).join("\n").trim()
-  const judge = !spec.canJudge
-    ? ""
-    : spec.stage === "delivered"
-      ? m.act(t("panes.page.accept"), () => actions.judgeSpec(channel.code, spec.ask, "accepted"))
-      : spec.stage === "draft" || spec.changed
-        ? m.act(t("panes.page.approve"), () => actions.approveSpec(channel.code, spec.ask, spec.v))
-        : ""
-  const tasks = tasksOf(channel, spec).map((x) => taskRow(channel, x, steps(x)))
-  const edit = spec.result ? "" : m.act(t("panes.page.edit"), () => hooks.edit(wordsRaw(spec.text)))
-  const comments = spec.comments.flatMap((seq) => channel.messages.filter((x) => x.seq === seq)).map((x) => `**@${x.from}** ${inert(wordsRaw(x.text))}`)
-  return join([
-    crumb,
-    `# ${title}`,
-    [`#${spec.ask}`, spec.stage, `@${spec.by}`].join(" · "),
-    [main(judge), edit].filter(Boolean).join(" "),
-    text,
-    section(t("panes.page.tasks"), tasks),
-    section(t("panes.page.comments"), comments, "\n\n"),
-  ])
-}
-
-function specsPage(channel: Channel, m: Maker, hooks: Hooks): string {
-  const specs = channel.specs ?? []
-  const row = (spec: Spec): string => [specRow(channel, spec, spec.stage), ...tasksOf(channel, spec).map((x) => `  ${taskRow(channel, x, steps(x))}`)].join("\n")
-  const held = new Set(specs.flatMap((s) => s.tasks))
-  const loose = live(channel)
-    .filter((x) => !held.has(x.id) && x.status !== "done")
-    .map((x) => taskRow(channel, x, steps(x)))
-  const open = specs.filter((s) => !s.result).map(row)
-  const done = specs.filter((s) => s.result).map((s) => specRow(channel, s, s.result?.verdict ?? s.stage))
-  return join([
-    `# ${t("shell.channel.specs")}`,
-    m.act(t("specs.view.new"), hooks.newSpec),
-    section(t("panes.page.open"), open),
-    section(t("panes.page.tasks"), loose),
-    section(t("panes.page.done"), done),
-    open.length + loose.length + done.length ? "" : t("panes.page.empty"),
-  ])
 }
 
 function agentsPage(channel: Channel): string {
@@ -200,19 +144,9 @@ export function askCard(channel: Channel, a: Ask, actions: Actions, m: Maker): s
   return card([`### ${t("panes.page.quiet", { name: `@${a.from}` })}`, held(channel, a.task)])
 }
 
-export function boardText(channel: Channel, key: string, actions: Actions, hooks: Hooks): { md: string; seal: Seal } {
+export function boardText(channel: Channel, view: BoardView): { md: string; seal: Seal } {
   const m = maker()
-  const [kind, id] = key.split(":")
-  const md =
-    kind === "now"
-      ? nowPage(channel)
-      : kind === "spec"
-        ? specPage(channel, Number(id), actions, m, hooks)
-        : kind === "specs"
-          ? specsPage(channel, m, hooks)
-          : kind === "agents"
-            ? agentsPage(channel)
-            : githubPage(channel)
+  const md = view.kind === "now" ? nowPage(channel) : view.kind === "agents" ? agentsPage(channel) : githubPage(channel)
   return { md, seal: m.seal }
 }
 
@@ -253,6 +187,12 @@ export function Page({ channel, view }: { channel: Channel; view: View }) {
         <NeedsYou channel={channel} onJump={(jump) => openMessage(channel.code, jump.m.seq)} />
       </Suspense>
     )
+  if (view.kind === "specs" || view.kind === "spec")
+    return (
+      <Suspense fallback={null}>
+        <SpecsView channel={channel} />
+      </Suspense>
+    )
   if (!isDetail(view)) return <Board channel={channel} view={view} />
   return (
     <Suspense fallback={null}>
@@ -262,49 +202,10 @@ export function Page({ channel, view }: { channel: Channel; view: View }) {
 }
 
 function Board({ channel, view }: { channel: Channel; view: BoardView }) {
-  const { actions } = useAct()
-  const key = viewKey(view)
-  const [making, setMaking] = useState(false)
-  const [draft, setDraft] = useState<{ key: string; text: string } | null>(null)
-  const hooks = useMemo(
-    (): Hooks => ({
-      newSpec: () => setMaking(true),
-      edit: (text) => setDraft({ key, text }),
-    }),
-    [key]
-  )
-  const built = useMemo(() => boardText(channel, key, actions, hooks), [channel, key, actions, hooks])
-  const editing = draft?.key === key ? draft : null
-  const save = () => {
-    if (view.kind === "spec" && editing?.text.trim()) actions.writeSpec(channel.code, view.ask, editing.text)
-    setDraft(null)
-  }
+  const built = useMemo(() => boardText(channel, view), [channel, view])
   return (
-    <PageFrame
-      kind={view.kind}
-      more={
-        making && (
-          <Suspense fallback={null}>
-            <NewSpec channel={channel} onClose={() => setMaking(false)} />
-          </Suspense>
-        )
-      }
-    >
-      {editing ? (
-        <>
-          <textarea className="page-edit" value={editing.text} onChange={(e) => setDraft({ key, text: e.target.value })} autoFocus spellCheck={false} />
-          <div className="page-edit-acts">
-            <button type="button" className="btn is-primary" onClick={save}>
-              {t("panes.page.save")}
-            </button>
-            <button type="button" className="btn" onClick={() => setDraft(null)}>
-              {t("panes.page.cancel")}
-            </button>
-          </div>
-        </>
-      ) : (
-        <PageText channel={channel} md={built.md} seal={built.seal} />
-      )}
+    <PageFrame kind={view.kind}>
+      <PageText channel={channel} md={built.md} seal={built.seal} />
     </PageFrame>
   )
 }

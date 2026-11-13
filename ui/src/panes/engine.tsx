@@ -226,6 +226,12 @@ export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) =
           </a>
         )
       const did = didOf(url)
+      if (did.act)
+        return (
+          <button key={i} type="button" className="btn is-small is-quiet" title={did.tip} aria-label={did.label} onClick={() => tools.press(did.url)}>
+            {face(node.children ?? [])}
+          </button>
+        )
       if (url.startsWith(DO) && !did.act)
         return (
           <span key={i} className={did.tone} title={did.tip}>

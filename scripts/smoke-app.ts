@@ -167,14 +167,14 @@ try {
   await row("hello from bot").first().waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: "Activity", exact: true }).click();
   await page
-    .getByRole("complementary", { name: "Activity" })
+    .getByRole("region", { name: "Activity" })
     .getByText(/added task T\d+ “Smoke task”/)
     .first()
     .waitFor({ timeout: 30000 });
   if (await row("Smoke task").count()) throw new Error("the task's update stayed in the thread instead of Activity");
   await shot("general");
   await page.getByRole("button", { name: "Now", exact: true }).click();
-  await page.getByRole("complementary", { name: "Now" }).waitFor();
+  await page.getByRole("region", { name: "Now" }).waitFor();
   await views.getByRole("button", { name: /^Specs/ }).click();
   await unfold(page, "Smoke");
   await page.getByRole("main").getByText("Smoke task").first().waitFor({ timeout: 15000 });
@@ -212,7 +212,7 @@ try {
   await openSearch();
   await search.fill("smok tas");
   await results.getByRole("option", { name: /Smoke task/ }).click();
-  await page.getByRole("complementary", { name: "Details" }).getByText("Smoke task").first().waitFor({ timeout: 15000 });
+  await page.getByRole("region", { name: /Smoke task/ }).getByText("Smoke task").first().waitFor({ timeout: 15000 });
   if (await results.count()) throw new Error("picking a task left the results open");
   await page.keyboard.press("Escape");
   await search.fill("hel bot");

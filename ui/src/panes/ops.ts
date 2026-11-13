@@ -18,6 +18,7 @@ import {
   type Kept,
   type Layout,
   swap,
+  composes,
   type Box,
   type Carry,
   type Doc,
@@ -132,7 +133,7 @@ export function resizeSplit(code: string, id: string, size: { ratio: number } | 
   if (root && root !== layout.root) put(code, { ...layout, root })
 }
 
-const talks = (leaf: Leaf): boolean => !leaf.nav || (leaf.nav.tab === "chat" && !leaf.doc)
+const talks = (leaf: Leaf): boolean => !leaf.nav || (leaf.nav.tab === "chat" && composes(leaf.doc))
 
 export function focusPane(code: string, id: string, moveTyping = true): void {
   const layout = layoutOf(code)
@@ -152,11 +153,13 @@ export function panelGo(code: string, from: string, panel: Panel | null, room?: 
   const held = here?.doc?.kind === "panel" ? here : findLeaf(layout.root, (leaf) => leaf.doc?.kind === "panel")
   if (held?.nav) {
     const root = swap(layout.root, held.id, () => ({ ...held, doc }))
-    if (root) put(code, { ...layout, root, focus: held.id })
+    if (root) put(code, { ...layout, root, focus: held.id, typing: composes(doc) ? held.id : layout.typing })
     return
   }
-  if (room && leafOf(layout.root, room.id)) return splitAt(code, room.id, room.edge, { at: "doc", doc })
-  splitAt(code, dockedNow(layout.root)?.id === from || !here ? MAIN : from, "right", { at: "doc", doc })
+  if (room && leafOf(layout.root, room.id)) splitAt(code, room.id, room.edge, { at: "doc", doc })
+  else splitAt(code, dockedNow(layout.root)?.id === from || !here ? MAIN : from, "right", { at: "doc", doc })
+  const after = layoutOf(code)
+  if (composes(doc) && leafOf(after.root, after.focus)?.doc?.kind === "panel") put(code, { ...after, typing: after.focus })
 }
 
 export function showDoc(code: string, id: string | null, doc: Doc, shown: boolean, room?: { id: string; edge: Edge }): void {

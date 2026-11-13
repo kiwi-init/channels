@@ -68,7 +68,7 @@ async function run(browser: Browser): Promise<string | null> {
     bad = await settingsStays(page, "cancelling the delete-channel confirm", []);
     if (bad) return bad;
 
-    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await page.getByRole("dialog", { name: "Channel settings" }).getByRole("button", { name: "Close", exact: true }).click();
     await page.waitForTimeout(400);
     const shut = await openDialogs(page);
     if (shut.length !== 0) return `after the settings dialog's own Close, open dialogs are [${shut.join(", ")}]`;

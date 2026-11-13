@@ -16,6 +16,7 @@ import { dragOut, placeName, Scope, VIEW_NAMES } from "~/panes/place"
 import {
   ALONE,
   BLANK,
+  composes,
   dockedNow,
   MAIN,
   setCloser,
@@ -235,7 +236,7 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
   const plain = leaves.length === 2 && !!dock && shown
   const split = leaves.length > 1 && !plain
   const heir = leaves.find(({ leaf }) => leaf.nav && !leaf.doc)?.leaf
-  const talks = (leaf: Leaf): boolean => (leaf.nav ? leaf.nav.tab === "chat" && !leaf.doc : nav.tab === "chat")
+  const talks = (leaf: Leaf): boolean => (leaf.nav ? leaf.nav.tab === "chat" && composes(leaf.doc) : nav.tab === "chat")
   const pick = (id: string | undefined) => leaves.find(({ leaf }) => leaf.id === id && talks(leaf))?.leaf.id
   const typing = pick(layout.typing) ?? pick(layout.focus) ?? leaves.find(({ leaf }) => talks(leaf))?.leaf.id ?? MAIN
   const close = (id: string): boolean => {

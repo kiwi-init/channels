@@ -16,7 +16,16 @@ const built = await Bun.build({
   target: "browser",
   minify: true,
   external: ["/fonts/*"],
-  define: { "process.env.NODE_ENV": '"production"', "import.meta.env.DEV": "false", "import.meta.env.PROD": "true" },
+  plugins: [
+    {
+      name: "web-markdown",
+      setup(build) {
+        const web = join(import.meta.dir, "../ui/src/chat/react-native.ts");
+        build.onResolve({ filter: /^(react-native|katex)$/ }, () => ({ path: web }));
+      },
+    },
+  ],
+  define: { __DEV__: "false", "process.env.NODE_ENV": '"production"', "import.meta.env.DEV": "false", "import.meta.env.PROD": "true" },
 });
 if (!built.success) throw new Error(built.logs.map(String).join("\n"));
 const server = Bun.serve({
@@ -45,13 +54,15 @@ try {
   page.on("pageerror", (e) => fails.push(`page threw: ${e.message}`));
   await page.goto(`http://127.0.0.1:${server.port}/`);
   const dialog = page.getByRole("dialog", { name: "Channel settings" });
-  const summary = dialog.locator(".cset-room-who");
+  const roomRow = dialog.locator(".ctl-row", { has: page.locator(".ctl-label", { hasText: /^launch-plan$/ }) });
+  const summary = roomRow.locator(".ctl-hint").first();
   const change = dialog.getByRole("button", { name: "Change who's in" });
-  const pick = dialog.locator(".room-pick");
-  const checked = () => pick.locator("label").evaluateAll((labels) => labels.filter((l) => l.querySelector("input")?.checked).map((l) => l.querySelector(".room-member-name")?.textContent));
+  const pick = roomRow.locator(".ctl-below");
+  const checked = () => pick.getByRole("switch").evaluateAll((switches) => switches.filter((s) => s.getAttribute("aria-checked") === "true").map((s) => s.getAttribute("aria-label")));
+  const member = (name: string) => pick.getByRole("switch", { name, exact: true });
   await change.click();
   expect(!(await summary.innerText()).includes("scout"), "summary excludes the departed stored agent");
-  expect((await pick.locator("label", { hasText: "scout" }).count()) === 0, "departed agent is absent from the picker");
+  expect((await pick.locator(".ctl-row", { hasText: "scout" }).count()) === 0, "departed agent is absent from the picker");
   expect(JSON.stringify(await checked()) === JSON.stringify(["maya", "atlas"]), "opening normalizes the phone seat and checks current members");
   await page.locator(".av-face svg").first().waitFor();
   if (shots) await page.screenshot({ path: join(shots, `${before ? "before" : "after"}.png`) });
@@ -69,20 +80,14 @@ try {
     await page.evaluate(() => window.roomCheck.update(["jow", "maya-phone", "atlas", "win"]));
     await page.waitForTimeout(50);
     expect((await checked()).includes("win"), "an incoming member becomes checked while the editor is open");
-    await pick
-      .locator("label", { hasText: /^atlas$/ })
-      .getByRole("checkbox")
-      .uncheck();
+    await member("atlas").click();
     await page.evaluate(() => window.roomCheck.update(["jow", "atlas", "win", "pixel"]));
     await page.waitForTimeout(50);
     expect(
       !(await checked()).includes("atlas") && !(await checked()).includes("maya") && (await checked()).includes("pixel"),
       "incoming additions and removals apply without overwriting an explicit uncheck",
     );
-    await pick
-      .locator("label", { hasText: /^maya$/ })
-      .getByRole("checkbox")
-      .check();
+    await member("maya").click();
     await page.evaluate(() => window.roomCheck.update(["jow", "atlas", "win", "pixel"]));
     await page.waitForTimeout(50);
     expect((await checked()).includes("maya"), "an explicit addition survives another membership update");

@@ -30,7 +30,7 @@ const expect = (ok: boolean, what: string) => {
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
-  const panel = page.locator("aside.panel");
+  const panel = page.locator(".panel.is-pane");
   const search = page.locator('input[aria-label="Search this channel"]');
 
   await page.goto(`http://127.0.0.1:${server.port}/?shot=task-working`);

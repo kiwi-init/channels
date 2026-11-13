@@ -29,6 +29,8 @@ export interface Leaf {
   doc?: Doc
 }
 
+export const composes = (doc: Doc | undefined): boolean => !doc || doc.kind === "task" || (doc.kind === "panel" && (doc.panel.kind === "thread" || doc.panel.kind === "task"))
+
 export interface Split {
   kind: "split"
   id: string

@@ -1,10 +1,12 @@
 import "~/i18n/en/shell-later"
 import "~/i18n/en/github-later"
 import "~/i18n/en/needs"
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react"
+import { Suspense, useMemo, useState, type Dispatch, type SetStateAction } from "react"
 
 import { ANYONE } from "@kiwi/channel/task-actions.ts"
 import { reasonText } from "@kiwi/core/routing-text.ts"
+import { Body } from "~/chat/body"
+import { useNames, useTaskIds } from "~/chat/conversation"
 import { named } from "~/chat/linked"
 import { preview } from "~/chat/preview"
 import { checksLine, issueWord, PR_WORDS } from "~/github/parts"
@@ -12,9 +14,11 @@ import { t } from "~/i18n/i18n"
 import { statusWord } from "~/kit/bits"
 import { Confirm } from "~/kit/confirm"
 import { Modal } from "~/kit/modal"
+import { later } from "~/kit/later"
 import { openOutside } from "~/kit/outside"
 import { ageOf, ago } from "~/kit/time"
 import { copyText } from "~/kit/toasts"
+import { openMessage } from "~/live/open-message"
 import { reasonWords } from "~/live/reason-words"
 import { memberOf, type Actions, type Channel, type Check, type Issue, type Task, type TaskEvent } from "~/model"
 import { nickname } from "~/names"
@@ -26,9 +30,12 @@ import { doUrl, inert } from "~/panes/engine"
 import { askCard, card, join, link, main, maker, PageFrame, PageText, prRow, section, steps, taskRow, type Maker } from "~/panes/page"
 import type { DetailView } from "~/panes/place"
 import { SENT } from "~/sent"
+import { openImage } from "~/specs/comment-item"
 import { moverWords, quietWords, useTaskNow } from "~/tasks/mover"
 import { SendBack } from "~/tasks/send-back"
-import { wordsPlain, wordsRaw } from "~/words"
+import { wordsPlain, wordsRaw, wrote } from "~/words"
+
+const TaskTalk = later(() => import("~/panes/task-talk").then((m) => m.TaskTalk))
 
 type Dialog = "assign" | "reviewer" | "edit" | "cancel" | "delete" | "send-back"
 
@@ -38,7 +45,7 @@ interface Ui {
   checks: boolean
 }
 
-interface Ctx {
+export interface Ctx {
   actions: Actions
   go: (go: Go) => void
   toast: (text: string) => void
@@ -134,10 +141,16 @@ function activity(channel: Channel, history: readonly TaskEvent[], m: Maker, x: 
   return join([`## ${t("panels.task.activity")}`, hidden ? m.act(t("panels.task.show.earlier", { count: hidden }), () => x.setUi((u) => ({ ...u, all: true }))) : "", shown.map(line).join("\n")])
 }
 
-function taskPage(channel: Channel, id: number, m: Maker, x: Ctx): string {
+export interface TaskText {
+  head: string
+  body: string
+  rest: string
+}
+
+export function taskPage(channel: Channel, id: number, m: Maker, x: Ctx): TaskText {
   const crumb = `[${t("panes.now")}](kiwi-page:now)`
   const task = channel.tasks.find((k) => k.id === id)
-  if (!task) return join([crumb, `# T${id}`, t("panels.task.gone")])
+  if (!task) return { head: join([crumb, `# T${id}`, t("panels.task.gone")]), body: "", rest: "" }
   const code = channel.code
   const { actions } = x
   const may = !memberOf(channel, channel.you)?.readOnly
@@ -162,7 +175,12 @@ function taskPage(channel: Channel, id: number, m: Maker, x: Ctx): string {
       open ? m.act(task.owner ? t("panels.task.reassign") : t("panels.task.assign"), () => x.open("assign")) : ""
     ),
     reviewer
-      ? prop(t("panels.task.reviewer"), reviewer === ANYONE ? t("panels.task.anyone.unworked") : mention(channel, reviewer), open ? m.act(t("panels.task.change"), () => x.open("reviewer")) : "")
+      ? prop(
+          t("panels.task.reviewer"),
+          reviewer === ANYONE ? t("panels.task.anyone.unworked") : mention(channel, reviewer),
+          reviewer !== ANYONE && memberOf(channel, reviewer)?.left ? t("shell.sidebar.left") : "",
+          open ? m.act(t("panels.task.change"), () => x.open("reviewer")) : ""
+        )
       : open
         ? prop(
             t("panels.task.reviewer"),
@@ -193,12 +211,8 @@ function taskPage(channel: Channel, id: number, m: Maker, x: Ctx): string {
     return `- [${s.state === "done" ? "x" : " "}] ${inert(wordsRaw(s.words))}${meta ? ` · ${meta}${wait}` : ""}${end}`
   })
   const notes = task.notes.map((n) => `**@${n.by}** ${inert(wordsRaw(n.text))}`)
-  return join([
-    crumb,
-    `# ${parts.title}`,
-    facts.filter(Boolean).join(" · "),
-    acts.filter(Boolean).join(" "),
-    parts.body,
+  const head = join([crumb, `# ${parts.title}`, facts.filter(Boolean).join(" · "), acts.filter(Boolean).join(" ")])
+  const rest = join([
     ...channel.asks.filter((a) => holds(a, id)).map((a) => askCard(channel, a, actions, m)),
     review(channel, task, m, x),
     props.filter(Boolean).join("\n"),
@@ -208,6 +222,7 @@ function taskPage(channel: Channel, id: number, m: Maker, x: Ctx): string {
     section(t("panes.page.notes"), notes, "\n\n"),
     activity(channel, task.history, m, x),
   ])
+  return { head, body: parts.body, rest }
 }
 
 function taskSection(channel: Channel, id: number | undefined, m: Maker, x: Ctx): string {
@@ -310,8 +325,8 @@ export function Detail({ channel, view }: { channel: Channel; view: DetailView }
   const number = view.kind === "task" ? 0 : view.number
   const built = useMemo(() => {
     const m = maker()
-    const md = kind === "task" ? taskPage(channel, id, m, x) : kind === "pr" ? prPage(channel, repo, number, m, x) : issuePage(channel, repo, number, m, x)
-    return { md, seal: m.seal }
+    const text = kind === "task" ? taskPage(channel, id, m, x) : { head: kind === "pr" ? prPage(channel, repo, number, m, x) : issuePage(channel, repo, number, m, x), body: "", rest: "" }
+    return { ...text, seal: m.seal }
   }, [channel, kind, id, repo, number, x])
   const task = kind === "task" ? channel.tasks.find((k) => k.id === id) : undefined
   const close = () => setDialog(null)
@@ -343,9 +358,30 @@ export function Detail({ channel, view }: { channel: Channel; view: DetailView }
       </Modal>
     </>
   )
+  if (!task)
+    return (
+      <PageFrame kind={kind}>
+        <PageText channel={channel} md={built.head} seal={built.seal} />
+      </PageFrame>
+    )
   return (
-    <PageFrame kind={kind} more={more}>
-      <PageText channel={channel} md={built.md} seal={built.seal} />
-    </PageFrame>
+    <Suspense fallback={null}>
+      <TaskTalk channel={channel} task={task} more={more}>
+        <PageText channel={channel} md={built.head} seal={built.seal} />
+        {built.body && <TaskBody channel={channel} id={task.id} text={built.body} />}
+        <PageText channel={channel} md={built.rest} seal={built.seal} />
+      </TaskTalk>
+    </Suspense>
+  )
+}
+
+function TaskBody({ channel, id, text }: { channel: Channel; id: number; text: string }) {
+  const names = useNames(channel)
+  const tasks = useTaskIds(channel)
+  const shown = useMemo(() => wrote(text), [text])
+  return (
+    <div className="task-detail" data-quote-task={id}>
+      <Body text={shown} seq={0} names={names} tasks={tasks} onImage={openImage} onMessage={(seq) => openMessage(channel.code, seq)} />
+    </div>
   )
 }

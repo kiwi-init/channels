@@ -1,14 +1,16 @@
 import { describe, expect, mock, test } from "bun:test"
 
 import * as shim from "~/chat/react-native"
-import type { Actions, Ask, Channel, Message, Spec } from "~/model"
+import type { Actions, Ask, Channel, Task } from "~/model"
+import type { Ctx } from "~/panes/detail"
 import { wrote } from "~/words"
 
 void mock.module("react-native", () => shim)
 Object.assign(globalThis, { __DEV__: false })
 
 const { parseMarkdown } = await import("react-native-enriched-markdown/lib/module/web/parseMarkdown.js")
-const { askCard, boardText, maker } = await import("~/panes/page")
+const { askCard, maker } = await import("~/panes/page")
+const { taskPage } = await import("~/panes/detail")
 
 type Node = { type: string; content?: string; attributes?: { url?: string }; children?: Node[] }
 type Link = { label: string; url: string }
@@ -23,7 +25,6 @@ const actions = {
   answerPermission: (_code: string, id: string, allow: boolean) => void pressed.push(`permission ${id} ${allow}`),
   approveSpec: (_code: string, ask: number) => void pressed.push(`approve #${ask}`),
 } as unknown as Actions
-const hooks = { newSpec: () => void pressed.push("new spec"), edit: () => void pressed.push("edit") }
 
 const question: Ask = { kind: "question", id: "q1", from: "lead", at: 0, text: wrote("Ship it?"), label: "", options: [wrote("Ship")], holds: [] }
 const forged = (other: string): string =>
@@ -48,19 +49,44 @@ describe("authored text can't reach a page's actions (#2397 review)", () => {
     expect(pressed).toEqual(["permission p1 true"])
   })
 
-  test("a spec comment and the spec's text that link actions are inert; Approve still approves", async () => {
+  test("a task's notes and its own text that link another card's action are inert; Mark done still works", async () => {
     pressed.length = 0
-    const comment = { seq: 11, from: "eve", text: wrote(`Looks fine. ${forged("kiwi-do:a0")}`) } as unknown as Message
-    const spec = { ask: 7, title: wrote("Plan"), text: wrote(`Steps\n\n${forged("kiwi-do:a1")}`), by: "lead", stage: "draft", v: 1, comments: [11], tasks: [], canJudge: true } as unknown as Spec
-    const channel = { ...base, specs: [spec], messages: [comment] } as unknown as Channel
-    const { md, seal } = boardText(channel, "spec:7", actions, hooks)
+    const m = maker()
+    const other = /\((kiwi-do:[^)]+)\)/.exec(m.act("Other card", () => void pressed.push("other card")))?.[1] ?? ""
+    expect(m.seal.owns(other)).toBe(true)
+    const task = {
+      id: 5,
+      title: wrote("Ship it"),
+      detail: wrote(`Steps\n\n${forged(other)}`),
+      status: "doing",
+      owner: "eve",
+      createdBy: "jow",
+      notes: [{ by: "eve", at: 0, text: wrote(`Looks fine. ${forged(other)}`) }],
+      steps: [],
+      rounds: [],
+      history: [],
+      updatedAt: 0,
+    } as unknown as Task
+    const channel = { ...base, you: "jow", people: [{ name: "jow", kind: "human", you: true }], tasks: [task] } as unknown as Channel
+    const x = {
+      actions: { ...actions, setTaskStatus: (_code: string, id: number, status: string) => void pressed.push(`T${id} ${status}`) },
+      go: () => {},
+      toast: () => {},
+      now: 0,
+      ui: { all: false, full: new Set(), checks: false },
+      setUi: () => {},
+      open: () => {},
+    } as unknown as Ctx
+    const page = taskPage(channel, 5, m, x)
+    const md = [page.head, page.body, page.rest].join("\n\n")
     const found = await links(md)
-    const real = found.filter((l) => l.url.startsWith("kiwi-do:"))
-    expect(real.map((l) => l.label)).toEqual(["Approve", "Edit"])
-    for (const l of found.filter((l) => !real.includes(l))) seal.run(l.url)
+    const real = found.filter((l) => l.url.startsWith("kiwi-do:") && m.seal.owns(l.url))
+    expect(found.filter((l) => l.url.startsWith("kiwi-do:")).length).toBe(real.length)
+    expect(real.map((l) => l.label)).toContain("Mark done")
+    for (const l of found.filter((l) => !real.includes(l))) m.seal.run(l.url)
     expect(pressed).toEqual([])
-    seal.run(real[0]?.url ?? "")
-    expect(pressed).toEqual(["approve #7"])
+    m.seal.run(real.find((l) => l.label === "Mark done")?.url ?? "")
+    expect(pressed).toEqual(["T5 done"])
   })
 
   test("a guessed or another page's action key is not this page's", () => {

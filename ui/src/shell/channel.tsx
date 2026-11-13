@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useLayoutEffect, useState } from "react"
-import { useLayout } from "~/panes/store"
+import { findLeaf, useLayout } from "~/panes/store"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
@@ -104,7 +104,11 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const offline = useLate(channel.connection !== "live", 1000)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented && !dialogOpen() && !drawer && nav.panel) go({ to: "panel", panel: null })
+      if (e.key === "Escape" && !e.defaultPrevented && !dialogOpen() && !drawer) {
+        const held = tabs ? findLeaf(layout.root, (leaf) => leaf.doc?.kind === "panel") : null
+        if (nav.panel) go({ to: "panel", panel: null })
+        else if (held) void import("~/panes/ops").then((m) => m.closePane(channel.code, held.id))
+      }
       if (mod(e) && !e.altKey && e.key.toLowerCase() === "f" && !dialogOpen()) {
         e.preventDefault()
         keyRan("find")
@@ -123,7 +127,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       stop()
       window.removeEventListener("keydown", onKey)
     }
-  }, [nav.panel, go, drawer])
+  }, [nav.panel, go, drawer, tabs, layout.root, channel.code])
 
   const title = placeName(channel, nav)
   const news = drawerNews(channel)
@@ -147,7 +151,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
               </Suspense>
             </div>
           )}
-          <ActivityButton channel={channel} />
+          {!tabs && <ActivityButton channel={channel} />}
           <IconButton icon="search" label={t("shell.channel.search", { keys: keysHint("F") })} onClick={() => setSearching(true)} />
         </div>
       }

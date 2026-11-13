@@ -49,7 +49,7 @@ interface Run extends Scrolled, Cpu {
   what: "scroll" | "still";
 }
 type Parts = Record<Part, Rect | null> & { screen: number };
-type Means = Record<Part | "screen", number>;
+type Means = Record<Part | "screen" | "wallpaper", number>;
 
 async function run<T>(what: (d: Driver) => Promise<T>): Promise<T> {
   const app = launch(exe, env);
@@ -266,7 +266,9 @@ function meansOf(shot: Shot, win: Rect, parts: Parts): Means {
   const k = shot.width / parts.screen;
   const inset = 8;
   const on = (r: Rect | null): number => (r ? shot.mean({ x: (win.x + r.x + inset) * k, y: (win.y + r.y + inset) * k, width: (r.width - inset * 2) * k, height: (r.height - inset * 2) * k }) : -1);
-  return { top: on(parts.top), side: on(parts.side), page: on(parts.page), screen: shot.mean({ x: 0, y: 0, width: shot.width, height: shot.height }) };
+  const below = Math.round((win.y + win.height) * k);
+  const bare = shot.height - below >= 16 ? shot.mean({ x: 0, y: below, width: shot.width, height: shot.height - below }) : -1;
+  return { top: on(parts.top), side: on(parts.side), page: on(parts.page), screen: shot.mean({ x: 0, y: 0, width: shot.width, height: shot.height }), wallpaper: bare };
 }
 
 const round = (n: number, digits = 1): number => Number(n.toFixed(digits));
@@ -373,15 +375,17 @@ try {
       }
     }
     console.log("\nmean brightness (0 to 255) of each part in each capture:");
-    for (const [name, p] of Object.entries(seen)) console.log(`  ${name}: top bar ${round(p.top)} · sidebar ${round(p.side)} · page ${round(p.page)} · whole screen ${round(p.screen)}`);
+    for (const [name, p] of Object.entries(seen))
+      console.log(`  ${name}: top bar ${round(p.top)} · sidebar ${round(p.side)} · page ${round(p.page)} · whole screen ${round(p.screen)} · wallpaper below the window ${round(p.wallpaper)}`);
     writeFileSync(join(out, "captures.json"), JSON.stringify({ window: win, parts, seen }, null, 2));
-    const gap = (mode: Mode, part: Part | "screen"): number | null => {
+    const gap = (mode: Mode, part: Part | "screen" | "wallpaper"): number | null => {
       const a = seen[`${mode} bright`];
       const b = seen[`${mode} dark`];
       return a && b && a[part] >= 0 && b[part] >= 0 ? Math.abs(a[part] - b[part]) : null;
     };
-    const screen = gap("glass", "screen");
-    if (screen !== null && screen < 25) problems.push(`the screen reads the same with the bright and the dark wallpaper (${round(screen)} apart), so the captures prove nothing`);
+    const uncovered = gap("glass", "wallpaper");
+    if (uncovered === null) problems.push("the window leaves no wallpaper uncovered below it, so the captures can't show the wallpaper changed");
+    else if (uncovered < 25) problems.push(`the wallpaper left uncovered reads the same bright and dark (${round(uncovered)} apart), so the captures prove nothing`);
     for (const part of ["top", "side"] as const) {
       const glass = gap("glass", part);
       if (glass === null) problems.push(`the ${part} of the frame wasn't found in the glass captures`);
