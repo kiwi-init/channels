@@ -311,20 +311,20 @@ function Former({ channel, direct }: { channel: Channel; direct: Direct }) {
   const where = { kind: "dm", with: direct.with } as const
   const on = nav.tab === "chat" && sameWhere(nav.where, where)
   const who = memberOf(channel, direct.with)
-  const agent = who?.kind === "agent"
+  const left = !!who?.left
   return (
     <li>
       <button
         type="button"
-        className={cx("side-row", agent && "side-member is-off", on && "is-on", direct.unread > 0 && "is-news")}
+        className={cx("side-row", left && "side-member is-off", on && "is-on", direct.unread > 0 && "is-news")}
         aria-current={on ? "page" : undefined}
-        title={agent ? t("shell.sidebar.left.channel") : undefined}
+        title={left ? t("shell.sidebar.left.channel") : undefined}
         onClick={() => open(channel.code, where)}
         onContextMenu={(e) => showMenu(e, nickname(channel, direct.with), (x) => x.directGroups({ channel, go }, actions, direct, who))}
       >
         <Avatar person={who} size="sm" />
-        <span className={agent ? "side-name" : "side-label"}>{nickname(channel, direct.with)}</span>
-        {agent && <span className="side-state">{t("shell.sidebar.left")}</span>}
+        <span className={left ? "side-name" : "side-label"}>{nickname(channel, direct.with)}</span>
+        {left && <span className="side-state">{t("shell.sidebar.left")}</span>}
         <Count n={direct.unread} loud />
       </button>
     </li>

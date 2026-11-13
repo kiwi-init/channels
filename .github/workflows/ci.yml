@@ -507,6 +507,9 @@ jobs:
       - name: ui room membership agrees across summary, editor and saves, including live updates
         if: ${{ !cancelled() }}
         run: bun scripts/ui-room-members.ts ${{ matrix.engine == 'chromium' && '--chromium' || '' }}
+      - name: ui departed human DMs keep their left label and human conversation wording
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-departed-dms.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Back and Forward in the top bar walk a room, a spec, Settings and Home and back, are off exactly when they can't move, and stay clear of the top bar at every size, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-history-arrows.ts --dist ui/dist
