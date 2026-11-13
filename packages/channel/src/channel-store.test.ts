@@ -295,6 +295,13 @@ describe("a channel store", () => {
     close();
   });
 
+  test("the lean folder is already loading before any window trim needs it (#2261)", async () => {
+    const r = relay(0);
+    const { close } = await opened(r);
+    await until(() => leanNow() !== null);
+    close();
+  });
+
   test(`past the ${WINDOW}-message window plus slack, the oldest fold into a base, lean copies keep the reach, and the state stays whole`, async () => {
     const r = relay(0);
     const { store, close } = await opened(r);

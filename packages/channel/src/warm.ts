@@ -52,6 +52,8 @@ export const leanNow = (): typeof import("./lean.ts") | null => lean;
 
 export const leanLoaded = (): Promise<typeof import("./lean.ts")> => import("./lean.ts").then((m) => (lean = m));
 
+void leanLoaded().catch(() => {});
+
 function keepLight(code: string, w: Warm): void {
   light.delete(code);
   light.set(code, w);
