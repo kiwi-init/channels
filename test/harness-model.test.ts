@@ -199,19 +199,20 @@ describe("cleanCard", () => {
 describe("harnessActivity", () => {
   const LIVE = process.pid;
   const DEAD = 2 ** 22 + 4242;
+  const ticks = (): string => {
+    const started = processStart(LIVE) ?? "";
+    return started.slice(started.lastIndexOf(":") + 1);
+  };
+  const started = existsSync("/proc/self/stat") ? { procStart: ticks() } : {};
   const claude = (status: unknown, lines: object[], over: { pid?: number; record?: object | string; session?: string } = {}) => {
     const home = dir();
     const pid = over.pid ?? LIVE;
     mkdirSync(join(home, "projects", "p"), { recursive: true });
     mkdirSync(join(home, "sessions"));
-    const record = over.record ?? { pid, sessionId: "s-a", status, statusUpdatedAt: 1000 };
+    const record = over.record ?? { pid, sessionId: "s-a", status, statusUpdatedAt: 1000, ...started };
     writeFileSync(join(home, "sessions", `${pid}.json`), typeof record === "string" ? record : JSON.stringify(record));
     writeFileSync(join(home, "projects", "p", "s-a.jsonl"), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
     return { CLAUDECODE: "1", CLAUDE_PID: String(pid), CLAUDE_CONFIG_DIR: home, ...(over.session ? { CLAUDE_CODE_SESSION_ID: over.session } : {}) };
-  };
-  const ticks = (): string => {
-    const started = processStart(LIVE) ?? "";
-    return started.slice(started.lastIndexOf(":") + 1);
   };
   const asked = {
     type: "assistant",
@@ -265,7 +266,7 @@ describe("harnessActivity", () => {
     });
 
     test("a busy record of the same process, started when it says, is working however long the turn has run", async () => {
-      const record = { pid: LIVE, sessionId: "s-a", status: "busy", statusUpdatedAt: 1000, ...(existsSync("/proc/self/stat") ? { procStart: ticks() } : {}) };
+      const record = { pid: LIVE, sessionId: "s-a", status: "busy", statusUpdatedAt: 1000, ...started };
       expect(await harnessActivity(claude("busy", [asked], { record }))).toEqual({ state: "working", tool: "Bash", since: 1000, model: "claude-opus-5-5" });
     });
 
@@ -281,6 +282,32 @@ describe("harnessActivity", () => {
       expect((await harnessActivity(claude("busy", [asked], { record: ["busy"] })))?.state).toBe("unknown");
     });
 
+    test("only Claude Code's own statuses count, matched whole: a status that merely contains one is unknown", async () => {
+      const state = async (status: string) => (await harnessActivity(claude(status, [asked], { session: "s-a" })))?.state;
+      expect([await state("busy"), await state("idle"), await state("shell"), await state("waiting")]).toEqual(["working", "idle", "idle", "waiting"]);
+      const lookalikes = ["not_waiting_anymore", "waiting_for_input", "permission", "awaiting_input", "input", "Busy", "busy ", "idle_soon", "__proto__", "toString"];
+      for (const status of lookalikes) expect([status, await state(status)]).toEqual([status, "unknown"]);
+    });
+
+    test("a known seat session is verified only by a well-formed record naming it", async () => {
+      const state = async (record: object) =>
+        (await harnessActivity(claude("busy", [asked], { record: { pid: LIVE, status: "busy", statusUpdatedAt: 1000, ...started, ...record }, session: "s-a" })))?.state;
+      expect(await state({ sessionId: "s-a" })).toBe("working");
+      expect(await state({})).toBe("unknown");
+      expect(await state({ sessionId: 17 })).toBe("unknown");
+      expect(await state({ sessionId: "" })).toBe("unknown");
+      expect(await state({ sessionId: ["s-a"] })).toBe("unknown");
+      expect(await state({ sessionId: "s-a", procStart: {} })).toBe("unknown");
+      expect(await state({ sessionId: "s-a", procStart: 12345 })).toBe("unknown");
+      expect(await state({ sessionId: "s-a", procStart: "" })).toBe("unknown");
+      expect(await state({ sessionId: "s-a", procStart: "x1" })).toBe("unknown");
+    });
+
+    test.skipIf(!existsSync("/proc/self/stat"))("where /proc tells a process's start, a record without procStart can't prove its process and is unknown", async () => {
+      const a = await harnessActivity(claude("busy", [asked], { record: { pid: LIVE, sessionId: "s-a", status: "busy", statusUpdatedAt: 1000 }, session: "s-a" }));
+      expect(a?.state).toBe("unknown");
+    });
+
     test("an unreadable or missing registry is unknown", async () => {
       expect((await harnessActivity(claude("busy", [asked], { record: "{not json" })))?.state).toBe("unknown");
       const env = claude("busy", [asked]);
@@ -292,7 +319,7 @@ describe("harnessActivity", () => {
       expect((await harnessActivity(claude("idle", [asked])))?.state).toBe("idle");
       const exited = claude("busy", [asked], { pid: DEAD, session: "s-a" });
       expect((await harnessActivity(exited))?.state).toBe("unknown");
-      const restarted = claude("busy", [asked], { record: { pid: LIVE, sessionId: "s-b", status: "busy", statusUpdatedAt: 2000 }, session: "s-b" });
+      const restarted = claude("busy", [asked], { record: { pid: LIVE, sessionId: "s-b", status: "busy", statusUpdatedAt: 2000, ...started }, session: "s-b" });
       expect((await harnessActivity(restarted))?.state).toBe("working");
     });
   });

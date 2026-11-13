@@ -322,6 +322,7 @@ function claudeTranscript(dir: string, session: string | undefined): string | un
   const known = transcripts.get(key);
   if (known && existsSync(known)) return known;
   const projects = join(dir, "projects");
+  if (!existsSync(projects)) return undefined;
   const found = readdirSync(projects)
     .map((p) => join(projects, p, `${session}.jsonl`))
     .find((f) => existsSync(f));
@@ -350,23 +351,37 @@ function runningTool(file: string): string | undefined {
   return undefined;
 }
 
-type ClaudeRecord = { sessionId?: string; status?: string; statusUpdatedAt?: number; procStart?: string };
+const CLAUDE_STATES = { busy: "working", idle: "idle", shell: "idle", waiting: "waiting" } as const;
+type ClaudeStatus = keyof typeof CLAUDE_STATES;
+type ClaudeRecord = { sessionId: string; procStart: string | undefined; status: ClaudeStatus | undefined; since: number | undefined };
+
+const isClaudeStatus = (s: unknown): s is ClaudeStatus => typeof s === "string" && Object.hasOwn(CLAUDE_STATES, s);
 
 function claudeRecord(file: string): ClaudeRecord | null {
+  let r: unknown;
   try {
-    const r: unknown = JSON.parse(readFileSync(file, "utf8"));
-    return r && typeof r === "object" && !Array.isArray(r) ? (r as ClaudeRecord) : null;
+    r = JSON.parse(readFileSync(file, "utf8"));
   } catch {
     // A record that can't be read or parsed says nothing about what the session is doing.
     return null;
   }
+  if (!r || typeof r !== "object" || Array.isArray(r)) return null;
+  const sessionId = "sessionId" in r ? r.sessionId : undefined;
+  const procStart = "procStart" in r ? r.procStart : undefined;
+  if (typeof sessionId !== "string" || !sessionId) return null;
+  if (procStart !== undefined && (typeof procStart !== "string" || !/^\d+$/.test(procStart))) return null;
+  const status = "status" in r && isClaudeStatus(r.status) ? r.status : undefined;
+  const since = "statusUpdatedAt" in r && typeof r.statusUpdatedAt === "number" && Number.isFinite(r.statusUpdatedAt) ? r.statusUpdatedAt : undefined;
+  return { sessionId, procStart, status, since };
 }
 
-function sameProcess(pid: number, procStart: unknown): boolean {
+const HAS_PROC = existsSync("/proc/self/stat");
+
+function sameProcess(pid: number, procStart: string | undefined): boolean {
   if (!pidAlive(pid)) return false;
-  if (typeof procStart !== "string" || !procStart) return true;
+  if (!HAS_PROC) return true;
   const started = processStart(pid);
-  return started === null || !started.includes(":") || started.slice(started.lastIndexOf(":") + 1) === procStart;
+  return started !== null && procStart !== undefined && started.slice(started.lastIndexOf(":") + 1) === procStart;
 }
 
 const UNKNOWN: Activity = { state: "unknown" };
@@ -379,15 +394,13 @@ function claudeActivity(env: Env): Activity | undefined {
   const r = claudeRecord(join(dir, "sessions", `${pid}.json`));
   if (!r || !sameProcess(pid, r.procStart)) return UNKNOWN;
   const seat = env.CLAUDE_CODE_SESSION_ID;
-  if (seat && typeof r.sessionId === "string" && r.sessionId !== seat) return UNKNOWN;
-  const status = typeof r.status === "string" ? r.status : undefined;
-  const since = typeof r.statusUpdatedAt === "number" ? r.statusUpdatedAt : undefined;
+  if (seat && r.sessionId !== seat) return UNKNOWN;
   const file = claudeTranscript(dir, seat || r.sessionId);
   const context = file ? whileUnchanged(claudeContexts, file, () => claudeContext(file)) : undefined;
-  const extra = { ...(since ? { since } : {}), ...(context ? { context } : {}) };
-  if (status === "idle") return { state: "idle", ...extra };
-  if (status && /wait|permission|input/i.test(status)) return { state: "waiting", ...extra };
-  if (status !== "busy") return { ...UNKNOWN, ...extra };
+  const extra = { ...(r.since ? { since: r.since } : {}), ...(context ? { context } : {}) };
+  if (!r.status) return { ...UNKNOWN, ...extra };
+  const state = CLAUDE_STATES[r.status];
+  if (state !== "working") return { state, ...extra };
   const tool = file ? whileUnchanged(claudeTools, file, () => runningTool(file)) : undefined;
   return { state: "working", ...(tool ? { tool } : {}), ...extra };
 }
