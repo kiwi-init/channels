@@ -40,6 +40,8 @@ const PAIRS = [
   ["lena", "nova"],
   ["orbit", "flint"],
 ] as const;
+type Pair = (typeof PAIRS)[number];
+const [ATLAS_WIN, PIXEL_RIDGE, LENA_NOVA, ORBIT_FLINT] = PAIRS;
 
 interface Group {
   heading: { top: number; expanded: string | null; focused: boolean } | null;
@@ -73,13 +75,12 @@ async function settle(page: Page): Promise<void> {
   await page.waitForTimeout(250);
 }
 
-const pairRow = (page: Page, i: number) => {
-  const [a, b] = PAIRS[i]!;
+const pairRow = (page: Page, [a, b]: Pair) => {
   return page.locator(`${GROUP} .side-row:not([aria-expanded])`).filter({ hasText: a }).filter({ hasText: b }).first();
 };
 const heading = (page: Page) => page.locator(`${GROUP} button[aria-expanded]`);
 const room = (page: Page) => page.locator(".side-row:has(.side-hash)").first();
-const has = (g: Group, i: number) => g.rows.some((r) => r.label.includes(PAIRS[i]![0]) && r.label.includes(PAIRS[i]![1]));
+const has = (g: Group, [a, b]: Pair) => g.rows.some((r) => r.label.includes(a) && r.label.includes(b));
 const onRow = (g: Group): number => g.rows.findIndex((r) => r.on);
 const tops = (g: Group) => JSON.stringify([g.heading?.top, ...g.rows.map((r) => r.top)]);
 
@@ -102,9 +103,9 @@ try {
   );
   expect(!!expanded.heading?.focused, "focus stays on the disclosure after expanding");
   await page.keyboard.press("Tab");
-  expect(await pairRow(page, 0).evaluate((el) => el === document.activeElement), "Tab moves from the disclosure to the first conversation");
+  expect(await pairRow(page, ATLAS_WIN).evaluate((el) => el === document.activeElement), "Tab moves from the disclosure to the first conversation");
 
-  await pairRow(page, 1).click();
+  await pairRow(page, PIXEL_RIDGE).click();
   await settle(page);
   g = await group(page);
   expect(!!g.heading, "selecting a conversation keeps the heading");
@@ -112,7 +113,7 @@ try {
   expect(tops(g) === tops(expanded), `selecting moves nothing: ${tops(g)} vs ${tops(expanded)}`);
   expect(onRow(g) === 1, "the selected conversation is the active row");
 
-  await pairRow(page, 2).click();
+  await pairRow(page, LENA_NOVA).click();
   await settle(page);
   g = await group(page);
   expect(!!g.heading && tops(g) === tops(expanded), `switching conversations keeps the heading and moves nothing: ${tops(g)}`);
@@ -124,14 +125,14 @@ try {
   expect(!!g.heading && tops(g) === tops(expanded), `back in a room the heading and rows stay put: ${tops(g)}`);
   expect(onRow(g) === -1, "back in a room no conversation is active");
 
-  await pairRow(page, 3).click();
+  await pairRow(page, ORBIT_FLINT).click();
   await settle(page);
   await heading(page).focus();
   await page.keyboard.press("Enter");
   await settle(page);
   g = await group(page);
   expect(g.heading?.expanded === "false", `collapsing with a conversation open sets aria-expanded false (${g.heading?.expanded})`);
-  expect(g.rows.length === 1 && has(g, 3) && onRow(g) === 0, `collapsed, only the open conversation stays under the heading (${g.rows.map((r) => r.label).join(", ")})`);
+  expect(g.rows.length === 1 && has(g, ORBIT_FLINT) && onRow(g) === 0, `collapsed, only the open conversation stays under the heading (${g.rows.map((r) => r.label).join(", ")})`);
   expect(g.heading?.top === expanded.heading?.top, `collapsing leaves the heading in place (${g.heading?.top} vs ${expanded.heading?.top})`);
   expect(!!g.heading?.focused, "focus stays on the disclosure after collapsing with the keyboard");
 
@@ -144,7 +145,7 @@ try {
   await settle(page);
   g = await group(page);
   expect(
-    g.heading?.expanded === "false" && g.rows.length === 1 && has(g, 3) && onRow(g) === 0,
+    g.heading?.expanded === "false" && g.rows.length === 1 && has(g, ORBIT_FLINT) && onRow(g) === 0,
     `Back, from outside the sidebar, opens the conversation under the collapsed heading (${g.heading?.expanded}, ${g.rows.map((r) => r.label).join(", ")})`,
   );
 
@@ -157,7 +158,7 @@ try {
   await settle(page);
   g = await group(page);
   expect(
-    g.heading?.expanded === "false" && g.rows.length === 1 && has(g, 2) && onRow(g) === 0,
+    g.heading?.expanded === "false" && g.rows.length === 1 && has(g, LENA_NOVA) && onRow(g) === 0,
     `Back once more switches to the earlier conversation with no stale row left (${g.rows.map((r) => r.label).join(", ")})`,
   );
 
