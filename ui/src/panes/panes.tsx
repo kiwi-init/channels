@@ -12,12 +12,13 @@ import type { Channel } from "~/model"
 import { nickname } from "~/names"
 import { useAct, useApp, useNav, type Go, type Nav, type Panel } from "~/nav"
 import { dropOn, targetAt } from "~/panes/drag"
-import { dragOut, placeName, Scope, VIEW_NAMES } from "~/panes/place"
+import { dragOut, placeName, roomiest, Scope, VIEW_NAMES } from "~/panes/place"
 import {
   ALONE,
   BLANK,
   composes,
   dockedNow,
+  findLeaf,
   MAIN,
   setCloser,
   MIN_H,
@@ -34,7 +35,8 @@ import {
   PANE_DRAG,
 } from "~/panes/store"
 import { setDrag, useDrag } from "~/panes/drag-state"
-import { boxes, closePane, css, fillPane, focusPane, isNone, pixels, resizeSplit, splitAt, without } from "~/panes/ops"
+import { boxes, closePane, css, fillPane, focusPane, isNone, panelGo, pixels, resizeSplit, splitAt, without } from "~/panes/ops"
+import { useDrawer } from "~/shell/side"
 import { useTabs } from "~/shell/top-layout"
 import { wordsPlain } from "~/words"
 import type { Key } from "~/i18n/en"
@@ -229,6 +231,22 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
   const { go } = useAct()
   const host = useRef<HTMLDivElement>(null)
   const probe = useRef<HTMLElement>(null)
+  const drawer = useDrawer()
+  useLayoutEffect(() => {
+    if (!tabs || !nav.panel) return
+    panelGo(code, layout.focus, nav.panel, roomiest(code))
+    go({ to: "panel", panel: null })
+  }, [tabs, nav.panel, code, layout.focus, go])
+  useEffect(() => {
+    if (!tabs) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || dialogOpen() || drawer) return
+      const held = findLeaf(layout.root, (leaf) => leaf.doc?.kind === "panel")
+      if (held) closePane(code, held.id)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [tabs, drawer, layout.root, code])
   const dock = dockedNow(layout.root)
   const shown = !dock || now
   const root = !tabs ? ALONE.root : dock && !now ? without(layout.root, dock.id) : layout.root

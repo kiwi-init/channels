@@ -1,5 +1,4 @@
 import { Suspense, useEffect, useLayoutEffect, useState } from "react"
-import { findLeaf, useLayout } from "~/panes/store"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
@@ -19,7 +18,7 @@ import { Frame } from "~/shell/frame"
 import { useDrawer } from "~/shell/side"
 import { Content } from "~/shell/content"
 import { viewOf } from "~/panes/place"
-import { FocusScope, placeName, roomiest } from "~/panes/place"
+import { FocusScope, placeName } from "~/panes/place"
 import { Sidebar } from "~/shell/sidebar"
 import { useTabs } from "~/shell/top-layout"
 import { ActivityButton } from "~/chat/events"
@@ -85,14 +84,6 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   }, [gone, go])
   const [searching, setSearching] = useState(false)
   const drawer = useDrawer()
-  const layout = useLayout(channel.code)
-  useLayoutEffect(() => {
-    if (!tabs || !nav.panel) return
-    const panel = nav.panel
-    const room = roomiest(channel.code)
-    void import("~/panes/ops").then((m) => m.panelGo(channel.code, layout.focus, panel, room))
-    go({ to: "panel", panel: null })
-  }, [tabs, nav.panel, channel.code, layout.focus, go])
   const panelOpen = !!nav.panel && !tabs
   const now = useMedia(WIDE) && !panelOpen
   const view = viewOf(nav)
@@ -104,11 +95,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const offline = useLate(channel.connection !== "live", 1000)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented && !dialogOpen() && !drawer) {
-        const held = tabs ? findLeaf(layout.root, (leaf) => leaf.doc?.kind === "panel") : null
-        if (nav.panel) go({ to: "panel", panel: null })
-        else if (held) void import("~/panes/ops").then((m) => m.closePane(channel.code, held.id))
-      }
+      if (e.key === "Escape" && !e.defaultPrevented && !dialogOpen() && !drawer && nav.panel) go({ to: "panel", panel: null })
       if (mod(e) && !e.altKey && e.key.toLowerCase() === "f" && !dialogOpen()) {
         e.preventDefault()
         keyRan("find")
@@ -127,7 +114,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
       stop()
       window.removeEventListener("keydown", onKey)
     }
-  }, [nav.panel, go, drawer, tabs, layout.root, channel.code])
+  }, [nav.panel, go, drawer])
 
   const title = placeName(channel, nav)
   const news = drawerNews(channel)
