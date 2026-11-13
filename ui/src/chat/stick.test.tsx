@@ -442,6 +442,26 @@ describe("useStick in a thread doc", () => {
     await act(async () => root.unmount())
   })
 
+  test("a picture row that collapses to its placeholder at the bottom, with a line landing before the clamp's scroll event, is still followed (#2399)", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    arrive(f, stick, 101, 172.8)
+    expect(f.max - f.top).toBeLessThan(1)
+    const picture = f.rows.at(-1)
+    if (!picture) throw new Error("no picture row")
+    picture.h -= 120
+    expect(f.layout()).toBe(true)
+    f.resized()
+    arrive(f, stick, 102, 52.8)
+    expect(f.max - f.top).toBeLessThan(1)
+    arrive(f, stick, 103, 52.8)
+    docLine(f)
+    expect(f.max - f.top).toBeLessThan(1)
+    await act(async () => root.unmount())
+  })
+
   test("a composer that grows and shrinks back under a thread shorter than the view leaves no blank space under it", async () => {
     const f = new Feed(3)
     const { root } = await mount(f, true, true)
