@@ -106,7 +106,7 @@ const moved = (a: Places, b: Places, skip: readonly string[] = []): string[] =>
 
 const open = async (page: Page, shot: string): Promise<void> => {
   await page.goto(`${base}?shot=${shot}&theme=dark`);
-  await page.waitForSelector(".side-row", { state: "attached" });
+  await page.waitForSelector(".side", { state: "attached" });
   await page.waitForTimeout(900);
 };
 

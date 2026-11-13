@@ -453,7 +453,7 @@ const SPECS: Spec[] = [
     open: (page) => page.locator(".rail-usage").first().click(),
     rerender: {
       name: "the rail's hint over a channel",
-      act: (page) => page.locator(".rail .tile").nth(2).hover(),
+      act: (page) => page.locator(".rail .tile").nth(1).hover(),
       observe: (page) => page.evaluate(() => document.querySelector(".rail-hint")?.textContent ?? "no hint"),
     },
     unmount: { name: "signing out", act: signOut, observe: view },
