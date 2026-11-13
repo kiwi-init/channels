@@ -118,6 +118,7 @@
 
 .ctl-ctl {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
