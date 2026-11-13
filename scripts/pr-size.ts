@@ -1,3 +1,4 @@
+import { githubClient, record, text, list } from "./github.ts";
 import { Glob } from "bun";
 import { execFileSync } from "node:child_process";
 
@@ -99,18 +100,6 @@ export function diffFiles(cwd: string, base: string, head: string): FileChange[]
   return parseNumstat(git(cwd, args));
 }
 
-function record(x: unknown): Record<string, unknown> {
-  return x !== null && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x)) : {};
-}
-
-function text(x: unknown): string {
-  return typeof x === "string" ? x : "";
-}
-
-function list(x: unknown): unknown[] {
-  return Array.isArray(x) ? x : [];
-}
-
 const enc = (name: string): string => encodeURIComponent(name);
 
 export async function syncLabels(api: Api): Promise<void> {
@@ -149,21 +138,12 @@ async function openPrs(api: Api): Promise<number[]> {
   }
 }
 
-function github(repo: string, token: string, dryRun: boolean): Api {
-  const root = `${process.env.GITHUB_API_URL ?? "https://api.github.com"}/repos/${repo}`;
-  return async (method, route, body) => {
-    if (dryRun && method !== "GET") {
-      console.log(`would ${method} ${route}${body === undefined ? "" : ` ${JSON.stringify(body)}`}`);
-      return null;
-    }
-    const headers: Record<string, string> = { accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28" };
-    if (token) headers.authorization = `Bearer ${token}`;
-    if (body !== undefined) headers["content-type"] = "application/json";
-    const res = await fetch(`${root}${route}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-    if (res.status === 404 && (method === "GET" || method === "DELETE")) return null;
-    if (!res.ok) throw new Error(`${method} ${route}: ${res.status} ${await res.text()}`);
-    return res.status === 204 ? null : res.json();
-  };
+export function github(repo: string, token: string, dryRun: boolean): Api {
+  return githubClient(repo, {
+    credentials: { kind: "single", token },
+    dryRun,
+    policy: { contentType: "body", dryRunBody: true, notFound: "null", errorPath: "route", graphql: "skip", getBody: "send" },
+  }).rest;
 }
 
 if (import.meta.main) {

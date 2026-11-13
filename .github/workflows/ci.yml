@@ -146,6 +146,9 @@ jobs:
       - name: ui css units
         if: ${{ !cancelled() }}
         run: bun scripts/css-units.ts
+      - name: ui theme colours in tokens.css come from channels.ts
+        if: ${{ !cancelled() }}
+        run: bun scripts/theme-tokens.ts
       - name: ui words in catalogs
         if: ${{ !cancelled() }}
         run: bun scripts/ui-english.ts
