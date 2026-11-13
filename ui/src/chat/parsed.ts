@@ -3,7 +3,12 @@ import type { ASTNode } from "react-native-enriched-markdown/lib/typescript/src/
 const LIMIT = 800
 const parsed = new Map<string, ASTNode>()
 
-export const parseKey = (markdown: string, at?: number): string => (at === undefined ? markdown : `\u0000${at}\u0000${markdown}`)
+const DAYLESS = /(?<!\d{4}-\d{2}-\d{2}T)(?<![\d:])\d{2}:\d{2}(?:Z| UTC)(?![\dA-Za-z])/
+
+const ENCODED = /[&\\]/
+
+export const parseKey = (markdown: string, at?: number): string =>
+  at === undefined || !(DAYLESS.test(markdown) || ENCODED.test(markdown)) ? markdown : `\u0000${new Date(at).toISOString().slice(0, 10)}\u0000${markdown}`
 
 export const parsedFor = (markdown: string): ASTNode | undefined => parsed.get(markdown)
 

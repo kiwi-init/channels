@@ -318,4 +318,50 @@ describe("a warmed message is parsed under the key its render looks up (T7429)",
     for (let i = 0; i < 400 && !done(); i++) await Bun.sleep(5)
     expect(messages.map((m) => parsedFor(parseKey(m.markdown, m.at)) !== undefined)).toEqual([true, true])
   })
+
+  test("the key carries the message's UTC day only when a bare time needs it, so repeated text shares one parse", () => {
+    const morning = Date.UTC(2026, 10, 12, 1, 0)
+    const evening = Date.UTC(2026, 10, 12, 23, 0)
+    const nextDay = Date.UTC(2026, 10, 13, 1, 0)
+    const plain = "Same words in many messages."
+    expect([parseKey(plain, morning), parseKey(plain, nextDay), parseKey(plain)]).toEqual([plain, plain, plain])
+    const full = "Shipped at 2026-11-12T14:00Z."
+    expect([parseKey(full, morning), parseKey(full, nextDay)]).toEqual([full, full])
+    const bare = "Deploy at 14:00 UTC."
+    expect(parseKey(bare, morning)).toBe(parseKey(bare, evening))
+    expect(parseKey(bare, morning)).not.toBe(parseKey(bare, nextDay))
+    expect(parseKey(bare, morning)).not.toBe(bare)
+    expect(parseKey("Deploy at 14:00Z.", morning)).not.toBe(parseKey("Deploy at 14:00Z.", nextDay))
+  })
+
+  test("a bare time the parser only sees after decoding an escape or dropping an entity still gets its own date", async () => {
+    const one = Date.UTC(2026, 10, 12, 2, 0)
+    const two = Date.UTC(2026, 10, 13, 2, 0)
+    const forms = ["Call at 06\\:30Z.", "Call at 06:30\\Z.", "Call at 06:30&amp;Z.", "Call at 06&#58;30Z.", "Call at 06&colon;30 UTC.", "Call at &#48;6:30Z.", "Call at 06:30Z.", "Call at 06:30 UTC."]
+    for (const text of forms) {
+      expect([text, parseKey(text, one) === parseKey(text, two)]).toEqual([text, false])
+      const [first, second] = [await rendered(text, one), await rendered(text, two)]
+      expect([text, first.includes("kiwi-utc:2026-11-13"), second.includes("kiwi-utc:2026-11-12")]).toEqual([text, false, false])
+    }
+    for (const text of ["Call at 06\\:30Z.", "Call at 06:30Z.", "Call at 06:30 UTC."]) {
+      expect([text, await rendered(text, one)]).toEqual([text, expect.stringContaining('href="kiwi-utc:2026-11-12T06:30:00Z"')])
+      expect([text, await rendered(text, two)]).toEqual([text, expect.stringContaining('href="kiwi-utc:2026-11-13T06:30:00Z"')])
+    }
+  })
+
+  test("without a message time, a bare time stays text and keeps a key apart from any dated render", async () => {
+    const bare = "Call at 06:30Z."
+    expect(parseKey(bare)).not.toBe(parseKey(bare, Date.UTC(2026, 10, 12)))
+    expect(await rendered(bare)).not.toContain("kiwi-utc:")
+    expect(await rendered(bare, Date.UTC(2026, 10, 12))).toContain('href="kiwi-utc:2026-11-12T06:30:00Z"')
+  })
+
+  test("same-day messages with a bare time render the same instant from one shared parse", async () => {
+    const bare = "Standup moved to 09:30 UTC."
+    const first = await rendered(bare, Date.UTC(2026, 10, 12, 2, 0))
+    const later = await rendered(bare, Date.UTC(2026, 10, 12, 22, 0))
+    expect(first).toContain('href="kiwi-utc:2026-11-12T09:30:00Z"')
+    expect(later).toBe(first)
+    expect(await rendered(bare, Date.UTC(2026, 10, 13, 2, 0))).toContain('href="kiwi-utc:2026-11-13T09:30:00Z"')
+  })
 })
