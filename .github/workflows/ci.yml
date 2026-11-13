@@ -499,6 +499,9 @@ jobs:
       - name: ui Esc in search keeps the panel, and Settings doesn't offer a name change, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-esc-and-name.ts --dist ui/dist
+      - name: ui the GIF pickers, updates panel, usage card and menus close on Escape, Tab, presses outside, blur and resize exactly as they did before sharing one dismissal hook
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-dismiss.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui the composer keeps each room's draft and images to itself, and an image sends without a file name as text, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-composer-rooms.ts --dist ui/dist

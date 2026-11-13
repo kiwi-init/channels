@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { gifFile, gifHost, useCatalog, useGifSrc, type Catalog, type Gif } from "~/chat/gifs"
 import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
+import { useDismiss } from "~/kit/dismiss"
 import { GlyphIcon } from "~/kit/icons"
 import type { Channel, Message, Reaction } from "~/model"
 import { useAct } from "~/nav"
@@ -51,23 +52,7 @@ function GifTool({ channel, m, catalog }: { channel: Channel; m: Message; catalo
 function GifPicker({ catalog, className, onClose, onPick }: { catalog: Catalog; className: string; onClose: () => void; onPick: (g: Gif) => void }) {
   const [tab, setTab] = useState(catalog.groups[0]?.reaction ?? "")
   const box = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return
-      e.stopPropagation()
-      onClose()
-    }
-    const outside = (e: PointerEvent) => {
-      if (!(e.target instanceof Element) || box.current?.contains(e.target) || e.target.closest("[data-gif-toggle]")) return
-      onClose()
-    }
-    document.addEventListener("keydown", esc, true)
-    document.addEventListener("pointerdown", outside, true)
-    return () => {
-      document.removeEventListener("keydown", esc, true)
-      document.removeEventListener("pointerdown", outside, true)
-    }
-  }, [onClose])
+  useDismiss(onClose, { on: "document", keys: "capture", escape: "stop", ignore: { box, toggle: "[data-gif-toggle]" } })
   const group = catalog.groups.find((g) => g.reaction === tab)
   return (
     <div ref={box} role="dialog" aria-label={t("chat.gif.picker.gifs")} className={cx("gifs", className)}>

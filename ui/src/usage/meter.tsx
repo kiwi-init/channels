@@ -3,6 +3,7 @@ import "~/styles/usage.css"
 import { useEffect, useRef, useState } from "react"
 
 import { cx } from "~/kit/bits"
+import { useDismiss } from "~/kit/dismiss"
 import { OutsideLink } from "~/kit/outside"
 import type { Usage } from "~/model"
 import { t } from "~/i18n/i18n"
@@ -54,20 +55,16 @@ export function UsageMeter() {
   useEffect(() => {
     if (full && !shownToday(utcDay(Date.now()))) showLimit(null)
   }, [full])
-  useEffect(() => {
-    if (!open) return
-    const away = (e: PointerEvent) => {
-      const t = e.target as Node
-      if (!card.current?.contains(t) && !button.current?.contains(t)) setOpen(false)
-    }
-    const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false)
-    window.addEventListener("pointerdown", away, true)
-    window.addEventListener("keydown", key)
-    return () => {
-      window.removeEventListener("pointerdown", away, true)
-      window.removeEventListener("keydown", key)
-    }
-  }, [open])
+  useDismiss(() => setOpen(false), {
+    on: "window",
+    keys: "bubble",
+    escape: "pass",
+    when: open,
+    ignore: (target) => {
+      const t = target as Node
+      return card.current?.contains(t) || button.current?.contains(t)
+    },
+  })
   if (!usage || usage.limit === null || seemsUnlimited(usage)) return null
   const label = t("usage.today.label", { used: usedOf(usage) })
   return (
