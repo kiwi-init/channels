@@ -133,7 +133,7 @@ const NORMAL = normalizeMarkdownStyle(STYLE)
 const LAST = zeroTrailingMargins(NORMAL)
 const STYLES = withTextSize(buildStyles(NORMAL))
 const LAST_STYLES = withTextSize(buildStyles(LAST))
-const CAPABILITIES = { katex: null, enableTaskListItemToggle: false }
+const CAPABILITIES = { katex: null, enableTaskListItemToggle: false, blockDir: "auto" as const }
 const WRAP: CSSProperties = { display: "flex", flexDirection: "column" }
 
 const parsing = new Map<string, Promise<ASTNode>>()
