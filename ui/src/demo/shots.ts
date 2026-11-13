@@ -38,6 +38,7 @@ export const SHOTS: Record<string, Shot> = {
   "tabs-8": { scenario: "tabs-8", channel: "kiwi" },
   "tabs-8-top": { scenario: "tabs-8", channel: "kiwi", layout: "top" },
   signs: { scenario: "signs", channel: "kiwi" },
+  "theirs-many": { scenario: "theirs", channel: "kiwi" },
   opening: { scenario: "opening", channel: "kiwi" },
   "slow-open": { scenario: "slow-open", channel: "kiwi" },
   "opening-tasks": { scenario: "opening", channel: "kiwi", nav: { tab: "specs" } },
