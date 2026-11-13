@@ -178,6 +178,26 @@ export function FocusScope({ code, now, children }: { code: string; now: boolean
   )
 }
 
+const TINY_W = MIN_W * 0.9
+const TINY_H = MIN_H
+
+function useTiny(host: RefObject<HTMLDivElement | null>, ids: string): ReadonlySet<string> {
+  const [tiny, setTiny] = useState<ReadonlySet<string>>(() => new Set())
+  useLayoutEffect(() => {
+    const el = host.current
+    if (!el) return
+    const small = new Map<string, boolean>()
+    const watch = new ResizeObserver((entries) => {
+      for (const e of entries) small.set((e.target as HTMLElement).dataset.pane ?? "", e.contentRect.width < TINY_W || e.contentRect.height < TINY_H)
+      const next = new Set([...small].filter(([id, is]) => is && ids.split(" ").includes(id)).map(([id]) => id))
+      setTiny((was) => (was.size === next.size && [...next].every((id) => was.has(id)) ? was : next))
+    })
+    for (const pane of el.querySelectorAll(":scope > [data-pane]")) watch.observe(pane)
+    return () => watch.disconnect()
+  }, [host, ids])
+  return tiny
+}
+
 export function Panes({ channel, label, main, place, now }: { channel: Channel; label?: string; main: ReactNode; place: ReactNode; now: boolean }) {
   const code = channel.code
   const layout = useLayout(code)
@@ -219,6 +239,7 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
     }, 70)
   }
   useEffect(() => () => window.clearTimeout(hovering.current), [])
+  const tiny = useTiny(host, leaves.map(({ leaf }) => leaf.id).join(" "))
   const [born] = useState(() => new Set(leaves.map(({ leaf }) => leaf.id)))
   useEffect(() => {
     const now = () => live.current
@@ -227,9 +248,13 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
       const leaf = focused()
       return !!leaf && now().leaves.length > 1 && now().close(leaf.id)
     })
-    const splitOut = (edge: "right" | "bottom") => {
+    const splitOut = (want: "right" | "bottom") => {
       const leaf = focused()
-      if (leaf) splitAt(code, leaf.id, edge, pageOf(leaf, now().nav))
+      const r = leaf && host.current?.querySelector(`[data-pane="${leaf.id}"]`)?.getBoundingClientRect()
+      if (!leaf || !r) return
+      const fits = (edge: "right" | "bottom") => (edge === "right" ? r.width / 2 >= MIN_W : r.height / 2 >= MIN_H)
+      const edge = fits(want) ? want : fits(want === "right" ? "bottom" : "right") ? (want === "right" ? "bottom" : "right") : null
+      if (edge) splitAt(code, leaf.id, edge, pageOf(leaf, now().nav))
     }
     const step = (dx: number, dy: number) => {
       const from = host.current?.querySelector<HTMLElement>(`[data-pane="${now().focus}"]`)?.getBoundingClientRect()
@@ -290,7 +315,8 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
               isNone(box.x) && isNone(box.y) && "is-corner",
               leaf.id === layout.focus && "is-focus",
               split && leaf.id !== typing && "is-quiet",
-              !born.has(leaf.id) && "is-new"
+              !born.has(leaf.id) && "is-new",
+              tiny.has(leaf.id) && "is-tiny"
             )}
             data-pane={leaf.id}
             aria-label={leaf.nav ? name : label}
@@ -319,6 +345,11 @@ export function Panes({ channel, label, main, place, now }: { channel: Channel; 
               )}
             </Scope>
             {split && <i className="pane-dim" aria-hidden="true" />}
+            {tiny.has(leaf.id) && (
+              <button type="button" className="pane-tiny" onClick={() => focusPane(code, leaf.id)}>
+                {name}
+              </button>
+            )}
             {leaves.length > 1 && !(plain && !leaf.nav) && (
               <div className="pane-tools">
                 <button type="button" className="icon-btn pane-grip" aria-label={t("panes.move")} title={t("panes.move")} {...dragOut({ pane: leaf.id }, name)} />

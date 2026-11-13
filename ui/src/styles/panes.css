@@ -4,6 +4,7 @@
   position: relative;
   min-width: 0;
   min-height: 0;
+  overflow: clip;
 }
 
 .chan.is-top .panes {
@@ -589,5 +590,34 @@
 .page-text .md ul:not([class]) > li {
   padding: 3px 0 3px 14px;
   border-inline-start: 1px solid var(--line);
+  color: var(--ink-2);
+}
+
+.pane.is-tiny {
+  overflow: clip;
+}
+
+.pane.is-tiny > :not(.pane-tiny, .pane-dim) {
+  visibility: hidden;
+}
+
+.pane-tiny {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--t-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pane-tiny:hover {
   color: var(--ink-2);
 }
