@@ -23,6 +23,7 @@ type Later = Pick<Actions, LaterName>
 
 const later = (): Promise<Later> => import("~/live/actions-later").then((m) => m.laterActions)
 warmToo(later)
+for (const kind of ["pointerdown", "keydown"]) addEventListener(kind, () => void later().catch(() => {}), { once: true, capture: true })
 const joining = () => import("~/live/join-rare")
 
 const go = (run: (l: Later) => unknown): void => attempt(t("live.actions.change.failed"), async () => run(await later()))
