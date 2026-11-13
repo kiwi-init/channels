@@ -142,13 +142,14 @@ export function TaskPanel({ channel, id }: { channel: Channel; id: number }) {
   )
 }
 
-function Who({ channel, name }: { channel: Channel; name: string }) {
+function Who({ channel, name, markLeft = false }: { channel: Channel; name: string; markLeft?: boolean }) {
   const go = useGo()
   const person = memberOf(channel, name)
   return (
-    <button type="button" className="task-who" onClick={() => go(personGo(channel, name))}>
+    <button type="button" className="task-who" title={markLeft && person?.left ? t("shell.sidebar.left.channel") : undefined} onClick={() => go(personGo(channel, name))}>
       <Avatar person={person} size="sm" />
       <span className="task-who-name">{nickname(channel, name)}</span>
+      {markLeft && person?.left && <span className="dimmer mono">{t("shell.sidebar.left")}</span>}
       {name === channel.you && <span className="dimmer">{t("panels.task.you")}</span>}
     </button>
   )
@@ -224,7 +225,7 @@ function Props({ channel, task, may }: { channel: Channel; task: Task; may: bool
                 </button>
               ) : (
                 <>
-                  {task.reviewer === ANYONE ? <span>{t("panels.task.anyone.unworked")}</span> : <Who channel={channel} name={task.reviewer} />}
+                  {task.reviewer === ANYONE ? <span>{t("panels.task.anyone.unworked")}</span> : <Who channel={channel} name={task.reviewer} markLeft />}
                   {open && (
                     <button type="button" className="task-change" onClick={() => setPicking("reviewer")}>
                       {t("panels.task.change")}
@@ -379,7 +380,9 @@ function PickReviewer({ channel, task, open, onClose }: { channel: Channel; task
     toast(name === ANYONE ? t("panels.task.anyone.reviews", { task: String(task.id) }) : t("panels.task.reviews", { name: nickname(channel, name), task: String(task.id) }))
     onClose()
   }
-  const now = task.reviewer ? (task.reviewer === ANYONE ? t("panels.task.reviewer.now.anyone") : t("panels.task.reviewer.now", { name: someone(channel, task.reviewer) })) : ""
+  const name = task.reviewer ? someone(channel, task.reviewer) : ""
+  const current = task.reviewer && memberOf(channel, task.reviewer)?.left ? `${name} (${t("shell.sidebar.left")})` : name
+  const now = task.reviewer ? (task.reviewer === ANYONE ? t("panels.task.reviewer.now.anyone") : t("panels.task.reviewer.now", { name: current })) : ""
   const verdict = task.status === "review" ? t("panels.task.reviewer.open") : t("panels.task.reviewer.later")
   return (
     <Modal
