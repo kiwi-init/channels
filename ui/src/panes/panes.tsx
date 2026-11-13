@@ -11,9 +11,9 @@ import { later } from "~/kit/later"
 import type { Channel } from "~/model"
 import { nickname } from "~/names"
 import { useAct, useApp, useNav, type Go, type Nav, type Panel } from "~/nav"
-import { dragOut, dropOn, targetAt } from "~/panes/drag"
-import { docName } from "~/panes/view"
-import { panelName, placeName, Scope, VIEW_NAMES } from "~/panes/place"
+import { dropOn, targetAt } from "~/panes/drag"
+import { docName } from "~/panes/place"
+import { dragOut, panelName, placeName, Scope, VIEW_NAMES } from "~/panes/place"
 import {
   ALONE,
   BLANK,

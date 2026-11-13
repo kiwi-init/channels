@@ -19,7 +19,7 @@ import { faceOf, needsYou, tasksOf, workersOf } from "~/specs/read"
 import { NowCard } from "~/tasks/now"
 import { TaskRow } from "~/tasks/row"
 import { wordsPlain } from "~/words"
-import { dragOut } from "~/panes/drag"
+import { dragOut } from "~/panes/place"
 
 const LOOSE_SHOWN = 3
 const DONE_PAGE = 20

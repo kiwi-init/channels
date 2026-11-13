@@ -1,7 +1,7 @@
 import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
 import { Composer } from "~/chat/composer"
-import { usePane } from "~/panes/scope"
+import { usePane } from "~/panes/place"
 import { docOf } from "~/chat/doc-of"
 import { EditHere } from "~/chat/editing"
 import { showActivity } from "~/chat/activity"

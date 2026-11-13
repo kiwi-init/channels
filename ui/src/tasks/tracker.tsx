@@ -14,7 +14,7 @@ import { nickname, Shown } from "~/names"
 import { nowOf } from "~/now"
 import { keepTab, readTab, type TrackTab } from "~/tasks/track-tab"
 import { wordsPlain } from "~/words"
-import { dragOut } from "~/panes/drag"
+import { dragOut } from "~/panes/place"
 
 const Log = later(() => import("~/chat/updates-panel").then((m) => m.Log))
 

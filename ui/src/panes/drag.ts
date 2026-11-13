@@ -1,5 +1,4 @@
-import type { PointerEvent as ReactPointerEvent } from "react"
-
+import { fillPane, movePane, splitAt } from "~/panes/ops"
 import { MIN_H, MIN_W, setDrag, type Carry, type Drag, type Edge } from "~/panes/store"
 
 const START = 6
@@ -27,11 +26,9 @@ export function targetAt(x: number, y: number, carry: Carry): Drag["target"] {
 }
 
 export function dropOn(target: NonNullable<Drag["target"]>, carry: Carry): void {
-  void import("~/panes/ops").then(({ fillPane, movePane, splitAt }) => {
-    if (target.fill) fillPane(target.code, target.id, carry)
-    else if ("pane" in carry) movePane(target.code, carry.pane, target.id, target.edge)
-    else splitAt(target.code, target.id, target.edge, carry.page)
-  })
+  if (target.fill) fillPane(target.code, target.id, carry)
+  else if ("pane" in carry) movePane(target.code, carry.pane, target.id, target.edge)
+  else splitAt(target.code, target.id, target.edge, carry.page)
 }
 
 function swallowClick(): void {
@@ -43,46 +40,40 @@ function swallowClick(): void {
   window.setTimeout(() => window.removeEventListener("click", stop, true), 0)
 }
 
-export function dragOut(carry: Carry, label: string): { onPointerDown: (e: ReactPointerEvent) => void } {
-  return {
-    onPointerDown(e) {
-      if (e.button !== 0 || e.pointerType === "touch") return
-      const from = { x: e.clientX, y: e.clientY }
-      let now: Drag | null = null
-      const root = document.documentElement
-      const move = (m: PointerEvent) => {
-        if (!now && Math.hypot(m.clientX - from.x, m.clientY - from.y) < START) return
-        now = { carry, label, x: m.clientX, y: m.clientY, target: targetAt(m.clientX, m.clientY, carry) }
-        root.toggleAttribute("data-dragging", true)
-        setDrag(now)
-      }
-      const stop = () => {
-        window.removeEventListener("pointermove", move)
-        window.removeEventListener("pointerup", up)
-        window.removeEventListener("pointercancel", cancel)
-        window.removeEventListener("keydown", key, true)
-        root.removeAttribute("data-dragging")
-        setDrag(null)
-      }
-      const up = () => {
-        const target = now?.target
-        if (now) swallowClick()
-        stop()
-        if (!target) return
-        dropOn(target, carry)
-      }
-      const cancel = () => stop()
-      const key = (k: KeyboardEvent) => {
-        if (k.key !== "Escape") return
-        k.preventDefault()
-        k.stopPropagation()
-        if (now) swallowClick()
-        stop()
-      }
-      window.addEventListener("pointermove", move)
-      window.addEventListener("pointerup", up)
-      window.addEventListener("pointercancel", cancel)
-      window.addEventListener("keydown", key, true)
-    },
+export function follow(carry: Carry, label: string, from: { x: number; y: number }): void {
+  let now: Drag | null = null
+  const root = document.documentElement
+  const move = (m: PointerEvent) => {
+    if (!now && Math.hypot(m.clientX - from.x, m.clientY - from.y) < START) return
+    now = { carry, label, x: m.clientX, y: m.clientY, target: targetAt(m.clientX, m.clientY, carry) }
+    root.toggleAttribute("data-dragging", true)
+    setDrag(now)
   }
+  const stop = () => {
+    window.removeEventListener("pointermove", move)
+    window.removeEventListener("pointerup", up)
+    window.removeEventListener("pointercancel", cancel)
+    window.removeEventListener("keydown", key, true)
+    root.removeAttribute("data-dragging")
+    setDrag(null)
+  }
+  const up = () => {
+    const target = now?.target
+    if (now) swallowClick()
+    stop()
+    if (!target) return
+    dropOn(target, carry)
+  }
+  const cancel = () => stop()
+  const key = (k: KeyboardEvent) => {
+    if (k.key !== "Escape") return
+    k.preventDefault()
+    k.stopPropagation()
+    if (now) swallowClick()
+    stop()
+  }
+  window.addEventListener("pointermove", move)
+  window.addEventListener("pointerup", up)
+  window.addEventListener("pointercancel", cancel)
+  window.addEventListener("keydown", key, true)
 }

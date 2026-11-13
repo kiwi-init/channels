@@ -1,12 +1,11 @@
-import { useMemo, type ReactNode } from "react"
+import { createContext, use, useMemo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
 
 import type { Channel } from "~/model"
 import { between, nickname } from "~/names"
 import { ActContext, NavContext, useAct, useNav, type Act, type Nav, type Panel } from "~/nav"
-import { PaneContext, type PaneScope } from "~/panes/scope"
-import { dockedNow, leafOf, MAIN, MIN_H, MIN_W, useLayout, type Doc, type Edge } from "~/panes/store"
-import { docName } from "~/panes/view"
+import { dockedNow, leafOf, MAIN, MIN_H, MIN_W, useLayout, type Carry, type Doc, type Edge } from "~/panes/store"
 import { useTabs } from "~/shell/top-layout"
+import { wordsPlain } from "~/words"
 import { t } from "~/i18n/i18n"
 
 const ops = () => import("~/panes/ops")
@@ -93,4 +92,43 @@ export function FocusScope({ code, now, children }: { code: string; now: boolean
       {children}
     </Scope>
   )
+}
+
+export interface PaneScope {
+  doc: Doc | null
+  show: (doc: Doc) => void
+  typing: boolean
+}
+
+const PaneContext = createContext<PaneScope | null>(null)
+
+export const usePane = (): PaneScope | null => use(PaneContext)
+
+export type DetailView = Extract<Doc, { kind: "task" }> | { kind: "pr"; repo: string; number: number } | { kind: "issue"; repo: string; number: number }
+
+export type View = DetailView | { kind: "now" } | { kind: "specs" } | { kind: "spec"; ask: number } | { kind: "agents" } | { kind: "github" } | { kind: "needs" }
+
+export function viewOf(nav: Nav): View | null {
+  if (nav.tab === "chat") return null
+  if (nav.tab === "specs") return nav.spec == null ? { kind: "specs" } : { kind: "spec", ask: nav.spec }
+  return { kind: nav.tab }
+}
+
+export function docName(channel: Channel, doc: Exclude<Doc, { kind: "panel" }>): string {
+  if (doc.kind === "now") return t("panes.now")
+  if (doc.kind === "blank") return t("panes.blank.name")
+  if (doc.kind === "home") return t("panes.home")
+  if (doc.kind === "activity") return t("panes.activity")
+  const task = channel.tasks.find((x) => x.id === doc.task)
+  return task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)}` : `T${doc.task}`
+}
+
+export function dragOut(carry: Carry, label: string): { onPointerDown: (e: ReactPointerEvent) => void } {
+  return {
+    onPointerDown(e) {
+      if (e.button !== 0 || e.pointerType === "touch") return
+      const from = { x: e.clientX, y: e.clientY }
+      void import("~/panes/drag").then((m) => m.follow(carry, label, from))
+    },
+  }
 }
