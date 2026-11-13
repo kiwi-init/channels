@@ -1273,7 +1273,7 @@
   border-top-left-radius: var(--r-ctl);
 }
 
-.chan.is-bare .main {
+.chan.is-bare .main:not(.pane) {
   border-top-left-radius: 0;
 }
 
