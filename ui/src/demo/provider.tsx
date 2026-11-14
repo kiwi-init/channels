@@ -10,6 +10,7 @@ import { stepReplyText } from "~/chat/step"
 import { DEMO_ACCOUNT, DEMO_CHANNEL, DEMO_DEVICES, DEMO_EMPTY, DEMO_GUEST, DEMO_GUEST_MEMBER, DEMO_INTERLINKED, DEMO_LAUNCHED, DEMO_PREFS, DEMO_TILES, DEMO_WAITING } from "~/demo/data"
 import { longFeed } from "~/demo/long"
 import { withOwnBubbles } from "~/demo/own-bubbles"
+import { withMarkdownNodes } from "~/demo/markdown-nodes.ts"
 import { withSigns } from "~/demo/signs"
 import { withTheirs } from "~/demo/theirs"
 import { withDepartedDms } from "./departed-dms.ts"
@@ -293,6 +294,7 @@ export type Scenario =
   | "doc-busy"
   | "event-runs"
   | "own-bubbles"
+  | "markdown-nodes"
   | "tabs-3"
   | "tabs-8"
   | "signs"
@@ -504,6 +506,7 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
       scenario === "member" ? DEMO_GUEST_MEMBER : DEMO_GUEST,
     ].map((c) => [c.code, { ...c, docs: demoDocs(c.code) }])
   )
+  if (scenario === "markdown-nodes") channels.set("kiwi", { ...withMarkdownNodes(DEMO_CHANNEL), docs: demoDocs("kiwi") })
   if (scenario === "departed-dms") channels.set("kiwi", { ...withDepartedDms(DEMO_CHANNEL), docs: demoDocs("kiwi") })
   if (scenario === "departed-reviewer" || scenario === "departed-reviewer-readonly")
     channels.set("kiwi", { ...withDepartedReviewer(DEMO_CHANNEL, scenario === "departed-reviewer-readonly"), docs: demoDocs("kiwi") })

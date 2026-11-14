@@ -370,6 +370,31 @@ html .day.is-members {
   --enrm-selection-bg: var(--selection);
 }
 
+.md-spoiler-toggle {
+  display: inline-block;
+  min-height: var(--ctl-sm);
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--r-tag);
+  background: var(--wash-2);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--t-ui);
+  line-height: 1.5;
+  cursor: pointer;
+  user-select: none;
+}
+.md-spoiler-toggle::before {
+  content: attr(data-label);
+}
+.md-spoiler-toggle:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+.md-spoiler-toggle[aria-expanded="true"] {
+  margin-inline-end: 4px;
+}
+
 .md ul {
   list-style: disc;
 }

@@ -186,6 +186,8 @@ export default {
   "chat.markdown.column": "第 {n} 列",
   "chat.markdown.copy": "复制",
   "chat.markdown.copy.text": "复制 {text}",
+  "chat.markdown.spoiler.show": "显示剧透",
+  "chat.markdown.spoiler.hide": "隐藏剧透",
   "chat.markdown.code.block": "代码块",
   "chat.markdown.code.block.lang": "代码块：{lang}",
   "chat.markdown.utc.assuming": "按消息日期 {date}（UTC）计算",
