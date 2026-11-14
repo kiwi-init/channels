@@ -45,12 +45,16 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
       (frames) =>
         new Promise<string | null>((done) => {
           const read = () => [...document.querySelectorAll<HTMLElement>(".feed")].map((f) => `${Math.round(f.scrollTop)}/${f.scrollHeight}`).join(" ");
+          const rows = () => new Map([...document.querySelectorAll<HTMLElement>(".feed-list > *")].map((r, i) => [r.dataset.seq ?? `${r.className.split(" ")[0]}#${i}`, `${r.offsetHeight}:${r.className}:${r.innerHTML.length}`]));
+          const first = rows();
           const seen = [read()];
           const tick = () => {
             seen.push(read());
             if (seen.length <= frames) return void requestAnimationFrame(tick);
             const changed = new Set(seen);
-            done(changed.size === 1 ? null : `${changed.size} positions in ${frames} frames: ${[...changed].slice(0, 6).join(" → ")}`);
+            const last = rows();
+            const moved = [...last].filter(([k, v]) => first.get(k) !== v).map(([k, v]) => `${k}: ${first.get(k) ?? "new"} -> ${v}`).concat([...first.keys()].filter((k) => !last.has(k)).map((k) => `${k}: gone`));
+            done(changed.size === 1 ? null : `${changed.size} positions in ${frames} frames: ${[...changed].slice(0, 6).join(" → ")} | rows: ${moved.join(" ; ")} | plain=${document.querySelectorAll(".feed .md-plain").length}`);
           };
           requestAnimationFrame(tick);
         }),

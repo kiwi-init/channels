@@ -17,9 +17,5 @@ jobs:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - run: bun run ui:build
-      - name: ui-still x5
-        run: for i in 1 2 3 4 5; do bun scripts/ui-still.ts --dist ui/dist | grep -vE "^✓" || true; done
-      - name: ui-still x5 with the fonts wait
-        run: for i in 1 2 3 4 5; do STILL_FONTS=1 bun scripts/ui-still.ts --dist ui/dist | grep -vE "^✓" || true; done
-      - name: probe x4
-        run: for i in 1 2 3 4; do echo "=== run $i"; bun scripts/.nova-probe.ts thread-doc 1440x900 | sed -E 's/\| day=[^|]*//'; done
+      - name: ui-still x10, rows that change on a failure
+        run: for i in 1 2 3 4 5 6 7 8 9 10; do bun scripts/ui-still.ts --dist ui/dist | grep -vE "^✓" || true; done
