@@ -221,11 +221,7 @@ try {
     async () => {
       const id = ids[next++ % ids.length]!;
       await atlas("task", "start", `T${id}`);
-      await page.waitForFunction(
-        (task) => [...document.querySelectorAll("main .board-row")].find((r) => r.querySelector(".board-meta")?.textContent?.startsWith(`T${task} `))?.classList.contains("is-doing"),
-        id,
-        { polling: 50, timeout: 15000 },
-      );
+      await page.waitForFunction((task) => !!document.querySelector(`main a.pg-main[href="kiwi-task:${task}"] .dot.is-doing`), id, { polling: 50, timeout: 15000 });
     },
   );
   const now = page.getByRole("region", { name: "Now" }).getByRole("button", { name: /^Now/ });

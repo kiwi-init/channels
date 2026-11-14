@@ -30,10 +30,10 @@ export function NeedsYou({ channel }: { channel: Channel }) {
   const [tag] = useState(newTag)
   const now = useNow(TASK_TICK_MS)
   const built = useMemo(() => needsText(channel, go, tag, now), [channel, go, tag, now])
-  const stranger = useMemo(() => strangerOf(channel), [channel])
+  const look = useMemo(() => ({ stranger: strangerOf(channel) }), [channel])
   return (
     <PageFrame kind="needs">
-      <PageText channel={channel} md={built.md} seal={built.m.seal} fields={built.m.fields} stranger={stranger} />
+      <PageText channel={channel} md={built.md} seal={built.m.seal} fields={built.m.fields} look={look} />
     </PageFrame>
   )
 }

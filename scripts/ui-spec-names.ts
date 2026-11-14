@@ -18,7 +18,8 @@ const server = Bun.serve({
   },
 });
 
-const ROW = ".gh-row.spec-row";
+const ROW = '.pg-row:has(> a.pg-main[href^="kiwi-page:spec:"])';
+const KEY = `${ROW} > a.pg-main`;
 
 const nameState = (page: Page, sel: string) =>
   page.evaluate((pick: string) => {
@@ -38,12 +39,12 @@ const waitNamed = (page: Page, sel: string) =>
     { timeout: 10_000, polling: "raf" },
   );
 
-async function tabTo(page: Page, sel: string, has: string): Promise<boolean> {
+async function tabTo(page: Page, sel: string, scope: string, has: string): Promise<boolean> {
   await page.mouse.move(0, 0);
-  const want: [string, string] = [sel, has];
+  const want: [string, string, string] = [sel, scope, has];
   for (let i = 0; i < 80; i++) {
     await page.keyboard.press("Tab");
-    if (await page.evaluate(([s, h]: [string, string]) => (document.activeElement?.matches(s) && !!document.activeElement.querySelector(h)) ?? false, want)) return true;
+    if (await page.evaluate(([s, w, h]: [string, string, string]) => (document.activeElement?.matches(s) && !!document.activeElement.closest(w)?.querySelector(h)) ?? false, want)) return true;
   }
   return false;
 }
@@ -59,7 +60,10 @@ async function run(browser: Browser): Promise<string | null> {
     if (stray > 0) return `${stray} named avatars live outside the specs rows and cards`;
 
     const nested = await page.evaluate(
-      (row: string) => [...document.querySelectorAll(`${row}, .spec-card-main`)].flatMap((b) => [...b.querySelectorAll<HTMLElement>("button, a[href], input, select, textarea, [tabindex]")]).length,
+      (row: string) =>
+        [...document.querySelectorAll(`${row} > a.pg-main, ${row} .spec-card-faces, .spec-card-main`)].flatMap((b) => [
+          ...b.querySelectorAll<HTMLElement>("button, a[href], input, select, textarea, [tabindex]"),
+        ]).length,
       ROW,
     );
     if (nested > 0) return `${nested} focusable elements sit inside the row and card buttons`;
@@ -77,7 +81,7 @@ async function run(browser: Browser): Promise<string | null> {
       return `hovering a worker avatar leaves its name hidden (opacity ${hover?.opacity}, clip ${hover?.clip})`;
     }
 
-    if (!(await tabTo(page, ROW, ".spec-faces-all"))) return "the Tab key never reaches a specs row";
+    if (!(await tabTo(page, KEY, ROW, ".spec-faces-all"))) return "the Tab key never reaches a specs row";
     try {
       await waitNamed(page, `${ROW} .spec-faces-all`);
     } catch {
@@ -93,7 +97,7 @@ async function run(browser: Browser): Promise<string | null> {
     await page.waitForSelector(".spec-page", { timeout: 10_000 });
     await page.goto(`http://127.0.0.1:${server.port}/?shot=specs`);
     await page.waitForSelector(`${ROW} .spec-face`, { timeout: 60_000 });
-    if (!(await tabTo(page, ROW, ".spec-faces-all"))) return "the Tab key never reaches a specs row again";
+    if (!(await tabTo(page, KEY, ROW, ".spec-faces-all"))) return "the Tab key never reaches a specs row again";
     await page.keyboard.press(" ");
     await page.waitForSelector(".spec-page", { timeout: 10_000 });
 
@@ -110,7 +114,7 @@ async function run(browser: Browser): Promise<string | null> {
       const cardHover = await nameState(page, ".spec-card-main .spec-face-name");
       return `hovering a card avatar leaves its name hidden (opacity ${cardHover?.opacity}, clip ${cardHover?.clip})`;
     }
-    if (!(await tabTo(page, ".spec-card-main", ".spec-faces-all"))) return "the Tab key never reaches a spec card";
+    if (!(await tabTo(page, ".spec-card-main", ".spec-card-main", ".spec-faces-all"))) return "the Tab key never reaches a spec card";
     try {
       await waitNamed(page, ".spec-card-main .spec-faces-all");
     } catch {
