@@ -520,6 +520,9 @@ jobs:
       - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
+      - name: ui Channel settings and the task pane keep their controls while a markdown parse lands frames late, and a press in that window runs the current action (#2423)
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-sheet-parse.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui room membership agrees across summary, editor and saves, including live updates
         if: ${{ !cancelled() }}
         run: bun scripts/ui-room-members.ts ${{ matrix.engine == 'chromium' && '--chromium' || '' }}
