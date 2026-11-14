@@ -34,10 +34,10 @@ const SHOTS: Record<string, Screen> = {
   "task-review": { ready: ".task-page .pg-title" },
   "task-waiting": { ready: ".task-page .pg-title" },
   "task-done": { ready: ".task-page .pg-title" },
-  needs: { ready: ".needs-card" },
-  "needs-asked-of": { ready: ".needs-card" },
-  "needs-step": { ready: ".needs-card .ask" },
-  "needs-handoff": { ready: ".needs-card .ask" },
+  needs: { ready: ".page.is-needs .pg-card" },
+  "needs-asked-of": { ready: ".page.is-needs .pg-card" },
+  "needs-step": { ready: ".page.is-needs .pg-card .ask" },
+  "needs-handoff": { ready: ".page.is-needs .pg-card .ask" },
   specs: { ready: ".board" },
   "spec-draft": { ready: ".spec-rail" },
   "spec-inside": { ready: ".spec-top" },
@@ -144,9 +144,9 @@ const thrown: Sabotage = (page) =>
 async function selfTest(browser: Browser): Promise<string[]> {
   const healthy = await check(browser, "channel", { ready: FEED, mentions: true });
   const cases: [string, Seen][] = [
-    ["a crash boundary in place of a screen", await check(browser, "needs", { ready: ".needs-card" }, crash)],
-    ["a screen that throws", await check(browser, "needs", { ready: ".needs-card" }, thrown)],
-    ["a screen whose surface never mounts", await check(browser, "tasks", { ready: ".needs-card" })],
+    ["a crash boundary in place of a screen", await check(browser, "needs", { ready: ".page.is-needs .pg-card" }, crash)],
+    ["a screen that throws", await check(browser, "needs", { ready: ".page.is-needs .pg-card" }, thrown)],
+    ["a screen whose surface never mounts", await check(browser, "tasks", { ready: ".page.is-needs .pg-card" })],
   ];
   return [
     ...(healthy.problems.length || healthy.hits.length ? [`a healthy screen failed: ${[...healthy.problems, ...healthy.hits].join("; ")}`] : []),

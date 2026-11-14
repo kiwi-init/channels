@@ -14,7 +14,7 @@ import { Empty } from "~/kit/empty"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { ago, clock, lasting, useNow } from "~/kit/time"
-import { NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type PermissionAsk, type Powers, type QuietAsk, type ReviewAsk } from "~/model"
+import { NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type PermissionAsk, type Powers, type PullRequest, type ReviewAsk } from "~/model"
 import { useApp, useGo, type Go } from "~/nav"
 import { TASK_TICK_MS } from "~/tasks/tick"
 import { wakeLine } from "~/needs/wake-line"
@@ -22,21 +22,31 @@ import { nickname } from "~/names"
 import { SendBack } from "~/tasks/send-back"
 import { isIdle, isOpen, openAsks } from "~/needs/open"
 import { SpecNeedCard } from "~/specs/card"
-import { esc, inert } from "~/panes/engine"
-import { card, join, maker, PageFrame, PageText, prRow, steps, taskRow, type Maker } from "~/panes/page"
+import { authored, esc, face, type Stranger } from "~/panes/engine"
+import { card, join, link, main, maker, newTag, PageFrame, PageText, prTail, steps, taskRow, type Maker } from "~/panes/page"
 
 export function NeedsYou({ channel }: { channel: Channel }) {
   const go = useGo()
-  const built = useMemo(() => needsText(channel, go), [channel, go])
+  const [tag] = useState(newTag)
+  const now = useNow(TASK_TICK_MS)
+  const built = useMemo(() => needsText(channel, go, tag, now), [channel, go, tag, now])
+  const stranger = useMemo(() => strangerOf(channel), [channel])
   return (
     <PageFrame kind="needs">
-      <PageText channel={channel} md={built.md} seal={built.m.seal} fields={built.m.fields} />
+      <PageText channel={channel} md={built.md} seal={built.m.seal} fields={built.m.fields} stranger={stranger} />
     </PageFrame>
   )
 }
 
-export function needsText(channel: Channel, go: (to: Go) => void): { md: string; m: Maker } {
-  const m = maker()
+const strangerOf =
+  (channel: Channel) =>
+  (name: string): Stranger | undefined => {
+    const ask = channel.asks.find((a): a is JoinAsk => a.kind === "join" && a.name === name)
+    return ask ? { name: ask.name, kind: ask.who, harness: ask.harness, presence: "online" } : undefined
+  }
+
+export function needsText(channel: Channel, go: (to: Go) => void, tag?: string, now = Date.now()): { md: string; m: Maker } {
+  const m = maker(tag)
   const open = openAsks(channel).sort((a, b) => a.at - b.at)
   const unchecked = open.some((a) => a.kind === "join" && a.check === "unchecked")
   const idle = channel.asks.filter(isIdle).sort((a, b) => a.at - b.at)
@@ -47,12 +57,12 @@ export function needsText(channel: Channel, go: (to: Go) => void): { md: string;
     .filter(Boolean)
   const md = join([
     `# ${esc(t("shell.channel.needs.you"))}`,
-    unchecked ? m.field(() => <p className="needs-warn">{t("needs.list.unusual.joins")}</p>) : "",
-    ...open.map((a) => askText(channel, a, m, go)),
-    open.length ? "" : m.field(() => <Clear loading={!!channel.loading} />),
-    idle.length ? `## ${esc(t("needs.list.idle.label"))}` : "",
-    ...idle.map((a) => askText(channel, a, m, go)),
-    answered.length ? `## ${esc(t("needs.list.answered", { n: String(answered.length) }))}` : "",
+    unchecked ? tone(t("needs.list.unusual.joins"), "decide") : "",
+    ...open.map((a) => askText(channel, a, m, go, now)),
+    open.length ? "" : m.field("clear", () => <Clear loading={!!channel.loading} />),
+    idle.length ? `## ${esc(t("needs.list.idle.sum", { rest: t("needs.list.idle.rest") }))}` : "",
+    ...idle.map((a) => askText(channel, a, m, go, now)),
+    answered.length ? `## \`kiwi:fold\` ${esc(t("needs.list.answered", { n: String(answered.length) }))}` : "",
     answered.map((line) => `- ${esc(line)}`).join("\n"),
   ])
   return { md, m }
@@ -71,15 +81,40 @@ function Clear({ loading }: { loading: boolean }) {
   )
 }
 
-const fence = (text: string, lang = ""): string => {
+type Tone = "decide" | "alert" | "quiet"
+
+const toned = (md: string, kind: Tone): string => `[${md}](kiwi-do:?tone=${kind})`
+const tone = (text: string, kind: Tone): string => toned(esc(text), kind)
+
+const SPOT = "\u0000"
+
+const marked = (key: Key, vars: Record<string, string>, name: string, mark: (text: string) => string): string =>
+  esc(t(key, { ...vars, [name]: SPOT }))
+    .split(SPOT)
+    .join(mark(vars[name] ?? ""))
+
+const strong = (text: string): string => `**${esc(text)}**`
+const code = (text: string): string => `\`${text.replaceAll("`", "'")}\``
+
+const fence = (lines: readonly string[], lang = ""): string => {
+  const text = lines.join("\n")
   const ticks = "`".repeat(Math.max(3, ...Array.from(text.matchAll(/`+/g), (r) => r[0].length + 1)))
   return `${ticks}${lang}\n${text}\n${ticks}`
 }
 
-const head = (channel: Channel, from: string, parts: readonly string[], at: number): string => {
-  const more = [...parts, ago(at)].filter(Boolean).map(esc).join(" · ")
-  return channel.people.some((p) => p.name === from) ? `## [@${esc(from)}](kiwi-mention:${encodeURIComponent(from)}) · ${more}` : `### ${esc(nickname(channel, from))} · ${more}`
+const quote = (text: string): string => `> ${text}`
+
+interface Head {
+  from: string
+  name?: string
+  tag?: string
+  verb: string
+  show?: string
+  at: number
 }
+
+const headOf = (channel: Channel, h: Head, now: number): string =>
+  `### ${[link(h.name ?? nickname(channel, h.from), face(h.from)), h.tag ?? "", esc(h.verb), h.show ?? "", esc(ago(h.at, now))].filter(Boolean).join(" · ")}`
 
 const show = (channel: Channel, a: Ask): string => {
   const source = channel.messages.find((msg) => msg.ask === a.id)
@@ -92,97 +127,101 @@ const holds = (channel: Channel, ids: readonly number[]): string =>
     .flatMap((task) => (task ? [taskRow(channel, task, steps(task))] : []))
     .join("\n")
 
-function askText(channel: Channel, a: Ask, m: Maker, go: (to: Go) => void): string {
+const prLine = (pr: PullRequest): string =>
+  `- ${link(`#${pr.number} ${pr.title}`, `kiwi-pr:${pr.repo}/${pr.number}`)}${pr.additions === undefined ? "" : ` · +${pr.additions} −${pr.deletions ?? 0}`}${prTail(pr)}`
+
+const QUESTION_TONE = (a: { irreversible?: boolean | undefined; plain?: boolean | undefined }): "alert" | "quiet" | "decide" => (a.irreversible ? "alert" : a.plain ? "quiet" : "decide")
+
+function askText(channel: Channel, a: Ask, m: Maker, go: (to: Go) => void, now: number): string {
   switch (a.kind) {
     case "permission":
       return card([
-        head(channel, a.from, [a.title], a.at),
-        a.summary ? esc(t("needs.permission.summary", { text: a.summary })) : "",
-        fence(`${a.code}${a.cwd ? t("needs.permission.in", { cwd: a.cwd }) : ""}`),
-        a.replaced !== undefined || a.content !== undefined
-          ? fence(
-              [...(a.replaced?.split("\n").map((line) => `- ${line}`) ?? []), ...(a.content?.split("\n").map((line) => `${a.replaced !== undefined ? "+ " : ""}${line}`) ?? [])].join("\n"),
-              a.replaced !== undefined ? "diff" : ""
-            )
-          : "",
-        a.notes.map((note) => `**${esc(note)}**`).join("\n\n"),
+        headOf(channel, { from: a.from, verb: a.title, show: show(channel, a), at: a.at }, now),
+        a.summary ? `**${esc(t("needs.permission.summary", { text: a.summary }))}**` : "",
+        fence(
+          [
+            ...`${a.code}${a.cwd ? t("needs.permission.in", { cwd: a.cwd }) : ""}`.split("\n").map((line) => ` ${line}`),
+            ...(a.replaced?.split("\n").map((line) => `-${line}`) ?? []),
+            ...(a.content?.split("\n").map((line) => `${a.replaced !== undefined ? "+" : " "}${line}`) ?? []),
+          ],
+          "diff"
+        ),
+        ...a.notes.map((note) => tone(note, "alert")),
         a.task !== undefined ? holds(channel, [a.task]) : "",
-        show(channel, a),
-        m.field(() => <PermissionActs channel={channel} ask={a} />),
+        m.field(`permission-${a.id}`, () => <PermissionActs channel={channel} ask={a} />),
       ])
     case "question": {
       const askedOf = a.askedOf?.map((n) => nickname(channel, n)).join(t("needs.question.and"))
       const verb = a.step ? t("needs.question.step") : a.handoff ? t("needs.question.browser") : askedOf ? t("needs.question.asks", { names: askedOf }) : t("needs.question.asks.you")
       return card([
-        head(channel, a.from, [a.label, verb], a.at),
-        inert(wordsRaw(a.text)),
-        askedOf ? esc(t("needs.question.answer.too")) : "",
-        m.field(() => <QuestionCard channel={channel} ask={a} />),
+        headOf(channel, { from: a.from, tag: tone(a.label, QUESTION_TONE(a)), verb, show: show(channel, a), at: a.at }, now),
+        authored(wordsRaw(a.text)),
+        askedOf ? tone(t("needs.question.answer.too"), "quiet") : "",
+        m.field(`question-${a.id}`, () => <QuestionCard channel={channel} ask={a} />),
         holds(channel, [...new Set([...(a.task !== undefined ? [a.task] : []), ...a.holds])]),
-        show(channel, a),
       ])
     }
     case "join":
       return card([
-        `### ${esc(a.name)} · ${esc(t("needs.join.wants.in"))} · ${esc(ago(a.at))}`,
-        joinFacts(a)
-          .map((line) => `- ${line}`)
-          .join("\n"),
-        ...joinNotes(a),
-        m.field(() => <JoinGate channel={channel} ask={a} />),
-        show(channel, a),
+        headOf(channel, { from: a.name, name: a.name, verb: t("needs.join.wants.in"), show: show(channel, a), at: a.at }, now),
+        ...joinLines(a),
+        m.field(`join-${a.id}`, () => <JoinGate channel={channel} ask={a} />),
       ])
     case "review": {
       const task = channel.tasks.find((x) => x.id === a.task)
       const note = task?.notes.at(-1)
       return card([
-        head(channel, a.from, [t("needs.review.verb")], a.at),
+        headOf(channel, { from: a.from, verb: t("needs.review.verb"), show: show(channel, a), at: a.at }, now),
         task ? taskRow(channel, task, steps(task)) : esc(t("needs.review.gone")),
-        note ? `*${esc(wordsPlain(note.text, channel.nicknames))}* · ${esc(note.by === channel.you ? t("needs.review.you") : nickname(channel, note.by))} · ${esc(ago(note.at))}` : "",
-        task?.pr ? prRow(task.pr) : "",
-        show(channel, a),
-        m.field(() => <ReviewActs channel={channel} ask={a} />),
+        note ? quote(`${esc(wordsPlain(note.text, channel.nicknames))} · ${esc(note.by === channel.you ? t("needs.review.you") : nickname(channel, note.by))} · ${esc(ago(note.at, now))}`) : "",
+        task?.pr ? prLine(task.pr) : "",
+        m.field(`review-${a.id}`, () => <ReviewActs channel={channel} ask={a} />),
       ])
     }
     case "spec":
-      return m.field(() => <SpecNeedCard channel={channel} ask={a} />)
+      return m.field(`spec-${a.id}`, () => <SpecNeedCard channel={channel} ask={a} />)
     case "quiet": {
       const task = channel.tasks.find((x) => x.id === a.task)
       return card([
-        head(channel, a.from, [], a.at),
-        m.field(() => <QuietLine ask={a} />),
+        headOf(channel, { from: a.from, verb: t("needs.quiet.verb", { time: lasting(now - a.since) }), at: a.at }, now),
         task ? taskRow(channel, task, steps(task)) : `T${a.task}`,
-        `**${m.act(t("needs.quiet.open"), () => go({ to: "task", task: a.task }))}**`,
+        quote(esc(wakeLine(a.wake, now))),
+        main(m.act(t("needs.quiet.open"), () => go({ to: "task", task: a.task }))),
       ])
     }
   }
 }
 
-function joinFacts(a: JoinAsk): string[] {
+function joinLines(a: JoinAsk): string[] {
   const agent = a.who === "agent"
   const said = a.said
-  const machine = said && said !== "nothing" ? [said.machine, said.tools?.join(", ")].filter(Boolean).join(" · ") : ""
-  return [
-    esc(agent ? t("needs.join.agent") : t("needs.join.person")),
-    a.key ? esc(t("needs.join.key", { key: a.key })) : "",
-    a.runs ? esc(a.runs) : "",
-    a.machine ? esc(t("needs.join.on", { machine: a.machine })) : "",
-    a.sponsor ? esc(t("needs.brought.by", { name: a.sponsor })) : "",
-    said === "nothing" ? esc(t("needs.said.nothing")) : "",
-    said && said !== "nothing" && said.repo ? `${esc(said.repo)}${said.outside ? ` **${esc(t("needs.said.outside"))}**` : ""}` : "",
-    machine ? `${esc(machine)} ${esc(t("needs.said.word"))}` : "",
-  ].filter(Boolean)
-}
-
-function joinNotes(a: JoinAsk): string[] {
-  const agent = a.who === "agent"
   const named = a.pin && "name" in a.pin ? a.pin : undefined
+  const machine = said && said !== "nothing" ? [said.machine, said.tools?.join(", ")].filter(Boolean).join(" · ") : ""
+  const repo = said && said !== "nothing" ? said.repo : undefined
+  const outside = !!said && said !== "nothing" && !!said.outside
   return [
-    a.freeName ? esc(t(agent ? "needs.join.taken.agent" : "needs.join.taken.person", { name: a.name, free: a.freeName })) : "",
-    a.revoked ? `**${esc(t("needs.join.revoked", { who: a.sponsor ?? t("needs.join.its.person"), machine: a.machine ?? "", command: "kiwi login" }))}**` : "",
-    a.forgotten && !a.revoked ? `**${esc(t("needs.join.forgotten", { machine: a.machine ?? "" }))}**` : "",
-    named ? `${esc(t("needs.join.invited.as", { name: named.name }))}${named.persona === null ? ` **${esc(t("needs.join.invited.gone"))}**` : ""}` : "",
-    a.pin && "failed" in a.pin ? `**${esc(t("needs.join.invite.failed"))}**` : "",
+    tone(
+      [
+        agent ? t("needs.join.agent") : t("needs.join.person"),
+        a.key ? t("needs.join.key", { key: a.key }) : "",
+        a.runs ?? "",
+        a.machine ? t("needs.join.on", { machine: a.machine }) : "",
+        a.sponsor ? t("needs.brought.by", { name: a.sponsor }) : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      "quiet"
+    ),
+    a.freeName ? toned(marked(agent ? "needs.join.taken.agent" : "needs.join.taken.person", { name: a.name, free: a.freeName }, "free", strong), "quiet") : "",
+    a.revoked ? toned(marked("needs.join.revoked", { who: a.sponsor ?? t("needs.join.its.person"), machine: a.machine ?? "", command: "kiwi login" }, "command", code), "decide") : "",
+    a.forgotten && !a.revoked ? tone(t("needs.join.forgotten", { machine: a.machine ?? "" }), "decide") : "",
+    said === "nothing" ? tone(t("needs.said.nothing"), "quiet") : "",
+    repo ? toned(`${code(repo)}${outside ? esc(t("needs.said.outside")) : ""}`, outside ? "decide" : "quiet") : "",
+    machine ? tone(`${machine} ${t("needs.said.word")}`, "quiet") : "",
+    named
+      ? toned(`${marked("needs.join.invited.as", { name: named.name }, "name", strong)}${named.persona === null ? esc(t("needs.join.invited.gone")) : ""}`, named.persona === null ? "decide" : "quiet")
+      : "",
+    a.pin && "failed" in a.pin ? tone(t("needs.join.invite.failed"), "decide") : "",
   ]
 }
 
@@ -249,15 +288,6 @@ function PermissionActs({ channel, ask }: { channel: Channel; ask: PermissionAsk
         </span>
       )}
     </div>
-  )
-}
-
-function QuietLine({ ask }: { ask: QuietAsk }) {
-  const now = useNow(TASK_TICK_MS)
-  return (
-    <p className="needs-note">
-      {t("needs.quiet.verb", { time: lasting(now - ask.since) })}. {wakeLine(ask.wake, now)}
-    </p>
   )
 }
 

@@ -1,5 +1,5 @@
 import "~/i18n/en/chat-later"
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react"
+import { Fragment, isValidElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react"
 import type { MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
 import { normalizeMarkdownStyle } from "react-native-enriched-markdown/lib/module/normalizeMarkdownStyle.web.js"
 import { ENRM_TEXT_CLASS } from "react-native-enriched-markdown/lib/module/web/globalStyles.js"
@@ -140,7 +140,7 @@ const WRAP: CSSProperties = { display: "flex", flexDirection: "column" }
 
 const parsing = new Map<string, Promise<ASTNode>>()
 
-const OWN_LINK = /^kiwi-(?:mention|task|msg|page|do|pr|issue):/
+const OWN_LINK = /^kiwi-(?:mention|task|msg|page|do|pr|issue|face):/
 const OPENED = /^(?:https?:\/\/|mailto:)/i
 const LOCAL_PICTURE = /^(?:data|blob):/i
 
@@ -509,7 +509,7 @@ export default function Markdown({ markdown, at, onMention, onTask, onMessage, o
           {children.map((child, i) => {
             const last = i === children.length - 1
             const own = draw?.(child, i, children, tools)
-            if (own !== undefined) return <Fragment key={`own-${i}`}>{own}</Fragment>
+            if (own !== undefined) return <Fragment key={isValidElement(own) && own.key !== null ? `own-${own.key}` : `own-${i}`}>{own}</Fragment>
             const source = mermaidSource(child)
             if (source !== undefined)
               return (

@@ -12,7 +12,7 @@ import { openMessage } from "~/live/open-message"
 import type { Actions, Ask, Channel, PullRequest, Spec, Task, TaskStatus } from "~/model"
 import { useAct } from "~/nav"
 import { lanesOf, nowOf } from "~/now"
-import { inert, lookupOf, pieces, seal, type Seal } from "~/panes/engine"
+import { inert, lookupOf, pieces, seal, type Seal, type Stranger } from "~/panes/engine"
 import { usePane } from "~/panes/place"
 import type { DetailView, View } from "~/panes/place"
 import { statusOf } from "~/shell/sidebar"
@@ -34,23 +34,24 @@ const viewKey = (view: View): string =>
 export interface Maker {
   seal: Seal
   act: (label: string, run: () => void, mark?: typeof OUT) => string
-  field: (render: () => ReactNode) => string
+  field: (id: string, render: () => ReactNode) => string
   fields: ReadonlyMap<string, () => ReactNode>
 }
+
+export const newTag = (): string => Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("")
 
 export const OUT = "kiwi:out"
 
 const pageMark = (name: string): ReactNode | undefined => (name === OUT ? <GlyphIcon glyph={LinkSquare02Icon} size={12} /> : undefined)
 
-export function maker(): Maker {
+export function maker(tag = newTag()): Maker {
   const s = seal()
-  const tag = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("")
   const fields = new Map<string, () => ReactNode>()
   return {
     seal: s,
     act: (label, run, mark) => `[${mark ? `\`${mark}\` ` : ""}${inert(label).replace(/[[\]\\]/g, "\\$&")}](${s.key(run)})`,
-    field: (render) => {
-      const name = `${tag}-${fields.size}`
+    field: (id, render) => {
+      const name = `${tag}-${id}`
       fields.set(name, render)
       return ["```kiwi-field", name, "```"].join("\n")
     },
@@ -79,8 +80,8 @@ export const card = (parts: readonly string[]): string =>
     .join("\n")
 export const taskRow = (channel: Channel, task: Task, more = ""): string => `- ${link(wordsPlain(task.title, channel.nicknames), `kiwi-task:${task.id}`)}${more}`
 const specRow = (channel: Channel, spec: Spec, more: string): string => `- ${link(wordsPlain(spec.title, channel.nicknames), `kiwi-msg:${spec.ask}`)} · ${more}`
-export const prRow = (pr: PullRequest): string =>
-  `- ${link(`#${pr.number} ${pr.title}`, `kiwi-pr:${pr.repo}/${pr.number}`)}${pr.state === "draft" || pr.state === "closed" ? ` · ${pr.state}` : ""}${pr.checks === "none" || pr.state === "merged" ? "" : ` · ${pr.checks}`}`
+export const prTail = (pr: PullRequest): string => `${pr.state === "draft" || pr.state === "closed" ? ` · ${pr.state}` : ""}${pr.checks === "none" || pr.state === "merged" ? "" : ` · ${pr.checks}`}`
+export const prRow = (pr: PullRequest): string => `- ${link(`#${pr.number} ${pr.title}`, `kiwi-pr:${pr.repo}/${pr.number}`)}${prTail(pr)}`
 
 function nowPage(channel: Channel): string {
   const now = nowOf(channel)
@@ -168,13 +169,25 @@ function boardText(channel: Channel, view: BoardView): { md: string; seal: Seal 
   return { md, seal: m.seal }
 }
 
-export function PageText({ channel, md, seal, fields = NO_FIELDS }: { channel: Channel; md: string; seal: Seal; fields?: ReadonlyMap<string, () => ReactNode> }) {
+export function PageText({
+  channel,
+  md,
+  seal,
+  fields = NO_FIELDS,
+  stranger,
+}: {
+  channel: Channel
+  md: string
+  seal: Seal
+  fields?: ReadonlyMap<string, () => ReactNode>
+  stranger?: (name: string) => Stranger | undefined
+}) {
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
   const { go } = useAct()
   const pane = usePane()
   const text = useMemo(() => wrote(md), [md])
-  const draw = useMemo(() => pieces(lookupOf(channel), pageMark, seal.owns, (name) => fields.get(name)?.()), [channel, seal, fields])
+  const draw = useMemo(() => pieces({ ...lookupOf(channel), stranger }, pageMark, seal.owns, (name) => fields.get(name)?.()), [channel, seal, fields, stranger])
   const code = channel.code
   const onPage = (url: string) => {
     if (url.startsWith("kiwi-do:")) return seal.run(url)

@@ -83,6 +83,6 @@ describe("authored text can't mount a page's fields (T3566)", () => {
     const names = [...read(md).matchAll(/```kiwi-field\n([^\n]+)\n```/g)].map((r) => r[1])
     expect(names).toContain("0")
     expect(m.fields.has("0")).toBe(false)
-    expect([...m.fields.keys()].every((name) => /^[0-9a-f]{24}-\d+$/.test(name))).toBe(true)
+    expect([...m.fields.keys()].every((name) => /^[0-9a-f]{24}-question-/.test(name))).toBe(true)
   })
 })
