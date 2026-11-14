@@ -133,3 +133,12 @@ private fun site(): RoomView {
         places = listOf(PlaceView("main", "main", "kiwi-site", lastSeq = 2, last = messages.last())),
     )
 }
+
+fun githubBurst(model: AppModel) {
+    val room = model.rooms.getValue(DEV)
+    val start = System.currentTimeMillis() - 30 * MINUTE
+    val counts = listOf(15, 4, 6, 1, 12, 5, 2, 5, 5, 36, 1, 6, 7, 2, 14, 50, 19, 39, 43, 18, 11, 6, 10, 7)
+    val burst = counts.mapIndexed { i, n -> MessageView(100 + i, "jow", start + i * MINUTE, "event", "GitHub: $n update${if (n == 1) "" else "s"}", event = true) }
+    val messages = room.messages + burst.take(12) + MessageView(200, "lively-swan", start + 12.5 * MINUTE, "msg", "PR #12 is up for review.") + burst.drop(12)
+    model.rooms[DEV] = room.copy(messages = messages, head = 200, last = messages.last(), latest = messages.last())
+}

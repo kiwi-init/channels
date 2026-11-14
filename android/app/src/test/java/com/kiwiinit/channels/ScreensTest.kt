@@ -68,6 +68,9 @@ class ScreensTest {
     fun room() = shoot("room") { ConversationScreen(it, Spot(DEV, DESIGN_ROOM), back = {}) }
 
     @Test
+    fun githubUpdates() = shoot("github-updates", { githubBurst(it) }) { ConversationScreen(it, Spot(DEV), back = {}) }
+
+    @Test
     fun settings() = shoot("settings") { Home(it, open = {}, tasks = {}, first = Tab.Settings) }
 
     @Test
