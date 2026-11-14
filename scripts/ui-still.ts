@@ -40,6 +40,7 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
         // A row whose markdown never parses keeps its plain text for good; the frames below still say whether the view moves.
       });
     await page.waitForTimeout(SETTLE_MS);
+    await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
     return await page.evaluate(
       (frames) =>
         new Promise<string | null>((done) => {
