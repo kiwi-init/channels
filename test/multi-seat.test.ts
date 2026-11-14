@@ -1,9 +1,10 @@
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../src/config.ts";
+import { safe } from "../src/config/paths.ts";
 import { daemonListeners, daemonSock } from "../src/daemon.ts";
 import { hookOutput } from "../src/hooks.ts";
 import { HOOK_CONTEXT_MAX } from "../src/hooks/answer.ts";
@@ -71,6 +72,13 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
     if (Date.now() > end) throw new Error(`timed out waiting for ${label}`);
     await Bun.sleep(50);
   }
+}
+
+function readMark(home: string, channel: string, who: string, seq: number): boolean {
+  const path = join(home, "cursors", safe(channel), safe(who));
+  const at = existsSync(path) ? Number(readFileSync(path, "utf8").trim()) || 0 : 0;
+  const seen = existsSync(`${path}.seen`) ? readFileSync(`${path}.seen`, "utf8").split(/\s+/).filter(Boolean).map(Number) : [];
+  return at >= seq || seen.includes(seq);
 }
 
 const PERSON = { CLAUDECODE: "" };
@@ -335,8 +343,9 @@ describe("a seat whose own `kiwi listen` takes its messages", () => {
     })();
     try {
       await until(async () => (await slots(h)).includes("listen:reviewer"), "the listener's slot");
-      await ok(ownerB, ["send", "--to", "reviewer", "taken by the listener"], PERSON);
+      const sent = Number(/sent #(\d+)/.exec(await ok(ownerB, ["send", "--to", "reviewer", "taken by the listener"], PERSON))![1]);
       await until(() => printed.includes("taken by the listener"), "the listener printing the message");
+      await until(() => readMark(h, "beta", "reviewer", sent), "the listener marking the message read, not only printing it");
       const now = await run(h, ["-c", "beta", "--as", "reviewer", "listen", "--now"], S);
       expect(now.code).toBe(0);
       expect(now.out).toBe("");
