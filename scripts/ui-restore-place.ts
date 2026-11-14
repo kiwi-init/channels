@@ -174,7 +174,11 @@ async function plainFirst() {
   const row = Object.entries(full)
     .map(([seq, md]) => ({ seq: Number(seq), md: md.h, plain: plain[seq] }))
     .find((r) => r.seq >= 2000 && r.plain?.plain && r.plain.h + 12 < r.md);
-  expect(!!row, `a message in the long feed is shorter as plain text than as markdown (${JSON.stringify(row)})`);
+  const span = (rows: Record<string, { plain: boolean }>) => {
+    const seqs = Object.keys(rows).map(Number);
+    return { rows: seqs.length, from: Math.min(...seqs), to: Math.max(...seqs), plain: Object.values(rows).filter((r) => r.plain).length };
+  };
+  expect(!!row, `a message in the long feed is shorter as plain text than as markdown (${JSON.stringify(row ?? { before: span(full), after: span(plain) })})`);
   if (!row?.plain) return void (await page.context().close());
   await settle(page, MARKDOWN_LATE_MS + 700);
   const offset = -Math.round((row.plain.h + row.md) / 2);
