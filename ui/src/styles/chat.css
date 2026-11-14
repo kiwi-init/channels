@@ -1280,6 +1280,18 @@ button.msg-image-spot:hover {
   display: flex;
 }
 
+.feed[data-scrolling] .msg:not(.is-failed):hover {
+  background: none;
+}
+
+.feed[data-scrolling] .msg:not(:focus-within) .msg-tools {
+  display: none;
+}
+
+.feed[data-scrolling] .msg:not(:focus-within) .msg-time-hover {
+  opacity: 0;
+}
+
 .msg-tool {
   display: grid;
   place-items: center;
