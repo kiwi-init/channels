@@ -561,10 +561,39 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
     return { account: DEMO_ACCOUNT, tiles: DEMO_TILES.filter((t) => t.code !== "studio"), channels, prefs, seq: 1000, gone: { code: "studio", title: "studio", why: scenario } }
   const plain: State = { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "doc-busy" && DEMO_FROZEN) return Array.from({ length: BUSY_FROZEN_STEPS }, (_, i) => i + 1).reduce(busyStep, plain)
+  if (scenario === "ci-live" && DEMO_FROZEN) return Array.from({ length: CI_FROZEN_STEPS }, (_, i) => i).reduce(ciStep, plain)
   return plain
 }
 
 const BUSY_FROZEN_STEPS = 3
+const CI_FROZEN_STEPS = 4
+const CI_CHECKS = ["test / unit", "repo / static", "build / shots", "ci-ok"]
+
+function ciStep(s: State, n: number): State {
+  const c = s.channels.get("kiwi")
+  if (!c) return s
+  const at = Date.now()
+  const name = CI_CHECKS[n % CI_CHECKS.length] ?? "ci-ok"
+  const repo = "kiwi-init/channels"
+  const channels = new Map(s.channels)
+  const seq = s.seq + 1
+  channels.set("kiwi", {
+    ...c,
+    messages: [
+      ...c.messages,
+      {
+        seq,
+        from: "github",
+        at,
+        text: wrote(`GitHub: ${name} success on T10-icons`),
+        where: { kind: "room", room: "general" },
+        system: true,
+        github: [{ event: "check_run", at, repo, name, conclusion: "success" }],
+      },
+    ],
+  })
+  return { ...s, channels, seq }
+}
 
 function busyStep(s: State, n: number): State {
   const c = s.channels.get("kiwi")
@@ -592,35 +621,11 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   const shown = scenario !== "slow-open" || arrived === open ? open : null
 
   useEffect(() => {
-    if (scenario !== "ci-live") return
-    const repo = "kiwi-init/channels"
-    const names = ["test / unit", "repo / static", "build / shots", "ci-ok"]
+    if (scenario !== "ci-live" || DEMO_FROZEN) return
     let n = 0
     const timer = window.setInterval(() => {
-      const at = Date.now()
-      const name = names[n++ % names.length] ?? "ci-ok"
-      setState((s) => {
-        const c = s.channels.get("kiwi")
-        if (!c) return s
-        const channels = new Map(s.channels)
-        const seq = s.seq + 1
-        channels.set("kiwi", {
-          ...c,
-          messages: [
-            ...c.messages,
-            {
-              seq,
-              from: "github",
-              at,
-              text: wrote(`GitHub: ${name} success on T10-icons`),
-              where: { kind: "room", room: "general" },
-              system: true,
-              github: [{ event: "check_run", at, repo, name, conclusion: "success" }],
-            },
-          ],
-        })
-        return { ...s, channels, seq }
-      })
+      const step = n++
+      setState((s) => ciStep(s, step))
     }, 700)
     return () => window.clearInterval(timer)
   }, [scenario])

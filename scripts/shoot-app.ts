@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { chromium, webkit } from "playwright-core";
+import { chromium, webkit, type Page } from "playwright-core";
 
 import { reactionsOn, settleRequests, stopFetchOnLeave } from "./settle-requests.ts";
 import { pageErrors } from "./page-errors.ts";
@@ -51,48 +51,66 @@ const names = [...block.matchAll(/^(?:\t| {2})"?([\w-]+)"?:/gm)]
   .filter((n) => !only || only.includes(n))
   .filter((_, i) => i % shards === shard - 1);
 
+const QUIET_MS = 300;
+const QUIET_CAP_MS = 3000;
+
+const quiet = (page: Page) =>
+  page.evaluate(
+    ([still, cap]) =>
+      new Promise<number | null>((done) => {
+        const start = performance.now();
+        let last = start;
+        const moved = () => void (last = performance.now());
+        const seen = new MutationObserver(moved);
+        seen.observe(document, { subtree: true, childList: true, characterData: true, attributes: true });
+        document.addEventListener("scroll", moved, true);
+        const check = () => {
+          const now = performance.now();
+          if (now - last < still && now - start < cap) return void requestAnimationFrame(check);
+          seen.disconnect();
+          document.removeEventListener("scroll", moved, true);
+          done(now - last < still ? null : Math.round(now - start));
+        };
+        requestAnimationFrame(check);
+      }),
+    [QUIET_MS, QUIET_CAP_MS] as const,
+  );
+
 const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 try {
-  const page = await browser.newPage({ viewport: { width: size[0] ?? 1440, height: size[1] ?? 900 }, deviceScaleFactor: 2, timezoneId: "UTC", locale: "en-US" });
-  await page.clock.setFixedTime(new Date("2026-11-04T15:30:00Z"));
   const errors: string[] = [];
-  let at = "";
   const isReaction = reactionsOn(base);
-  await pageErrors(page, (e) => {
-    trace(`page error: ${e.split("\n")[0]}`);
-    errors.push(`${at}: ${e}\n  what led up to it:\n${trail.map((l) => `    ${l}`).join("\n")}`);
-  });
-  page.on("request", (r) => isReaction(new URL(r.url())) && trace(`page: asks ${new URL(r.url()).pathname}`));
-  page.on("response", (r) => isReaction(new URL(r.url())) && trace(`page: ${new URL(r.url()).pathname} answered ${r.status()}`));
-  page.on("requestfinished", (r) => isReaction(new URL(r.url())) && trace(`page: ${new URL(r.url()).pathname} finished`));
-  page.on("requestfailed", (r) => isReaction(new URL(r.url())) && trace(`page: ${new URL(r.url()).pathname} failed: ${r.failure()?.errorText ?? "no reason given"}`));
-  page.on("framenavigated", (f) => f === page.mainFrame() && trace(`page: navigated to ${f.url().replace(base, "/")}`));
-  const reactions = settleRequests(page, reactionsOn(base));
-  const leave = await stopFetchOnLeave(page);
   for (const theme of themes) {
     for (const name of names) {
       trail = trail.slice(-12);
-      at = `${name}-${theme}`;
+      const at = `${name}-${theme}`;
       trace(`shot ${at} starts`);
-      await page.evaluate(() => {
-        try {
-          localStorage.clear();
-          sessionStorage.clear();
-        } catch {
-          // about:blank before the first shot has no storage to clear
-        }
+      const page = await browser.newPage({ viewport: { width: size[0] ?? 1440, height: size[1] ?? 900 }, deviceScaleFactor: 2, timezoneId: "UTC", locale: "en-US" });
+      await page.clock.setFixedTime(new Date("2026-11-04T15:30:00Z"));
+      await pageErrors(page, (e) => {
+        trace(`page error: ${e.split("\n")[0]}`);
+        errors.push(`${at}: ${e}\n  what led up to it:\n${trail.map((l) => `    ${l}`).join("\n")}`);
       });
-      await leave();
-      await reactions.settled();
+      page.on("request", (r) => isReaction(new URL(r.url())) && trace(`page: asks ${new URL(r.url()).pathname}`));
+      page.on("response", (r) => isReaction(new URL(r.url())) && trace(`page: ${new URL(r.url()).pathname} answered ${r.status()}`));
+      page.on("requestfinished", (r) => isReaction(new URL(r.url())) && trace(`page: ${new URL(r.url()).pathname} finished`));
+      page.on("requestfailed", (r) => isReaction(new URL(r.url())) && trace(`page: ${new URL(r.url()).pathname} failed: ${r.failure()?.errorText ?? "no reason given"}`));
+      page.on("framenavigated", (f) => f === page.mainFrame() && trace(`page: navigated to ${f.url().replace(base, "/")}`));
+      const reactions = settleRequests(page, isReaction);
+      const leave = await stopFetchOnLeave(page);
       await page.goto(`${base}?shot=${name}&theme=${theme}&frozen`);
       await page.waitForLoadState("networkidle");
       if (textScale) await page.evaluate((scale) => document.documentElement.style.setProperty("--text-scale", scale), textScale);
       await page.evaluate(() => document.fonts.ready);
-      await page.waitForTimeout(350);
+      const still = await quiet(page);
+      if (still === null) console.log(`${at}: still moving after ${QUIET_CAP_MS} ms, shot as it was`);
       await reactions.settled();
       const file = join(out, `${name}-${theme}.png`);
       await page.screenshot({ path: file, animations: "disabled" });
       console.log(file);
+      await leave();
+      await reactions.settled();
+      await page.close();
     }
   }
   if (errors.length) {
