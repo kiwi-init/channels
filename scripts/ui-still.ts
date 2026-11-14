@@ -40,8 +40,10 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
         // A row whose markdown never parses keeps its plain text for good; the frames below still say whether the view moves.
       });
     if (process.env.STILL_FONTS) await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    const before = await page.evaluate(() => { const f = document.querySelector<HTMLElement>(".feed"); return `t=${Math.round(Number(document.timeline.currentTime ?? -1))} vis=${document.visibilityState} ${f ? `${Math.round(f.scrollTop)}/${f.scrollHeight}` : "-"}`; });
     await page.waitForTimeout(SETTLE_MS);
-    return await page.evaluate(
+    const after = await page.evaluate(() => { const f = document.querySelector<HTMLElement>(".feed"); return `t=${Math.round(Number(document.timeline.currentTime ?? -1))} vis=${document.visibilityState} ${f ? `${Math.round(f.scrollTop)}/${f.scrollHeight}` : "-"}`; });
+    const why: string | null = await page.evaluate(
       (frames) =>
         new Promise<string | null>((done) => {
           const read = () => [...document.querySelectorAll<HTMLElement>(".feed")].map((f) => `${Math.round(f.scrollTop)}/${f.scrollHeight}`).join(" ");
@@ -60,6 +62,7 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
         }),
       FRAMES,
     );
+    return why ? `${why} | settle: ${before} -> ${after}` : null;
   } finally {
     await page.close();
   }
