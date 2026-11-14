@@ -28,9 +28,43 @@ const server = Bun.serve({
   },
 });
 
-async function moves(browser: Browser, shot: string, width: number, height: number): Promise<string | null> {
+const watchRows = (): void => {
+  const grew: string[] = [];
+  (window as Window & { grew?: string[] }).grew = grew;
+  let last = new Map<string, number>();
+  const read = (): void => {
+    const now = new Map<string, number>();
+    for (const feed of document.querySelectorAll<HTMLElement>(".feed")) {
+      const list = feed.querySelector(".feed-list");
+      if (!list || list.hasAttribute("data-unfinished")) continue;
+      const view = feed.getBoundingClientRect();
+      for (const row of feed.querySelectorAll<HTMLElement>(".feed-list > [data-seq], section.blk")) {
+        const box = row.getBoundingClientRect();
+        if (box.bottom <= view.top || box.top >= view.bottom) continue;
+        now.set(row.dataset.seq ?? row.dataset.id ?? "", box.height);
+      }
+    }
+    for (const [row, size] of now) {
+      const was = last.get(row);
+      if (was !== undefined && Math.abs(size - was) > 1.5) grew.push(`row ${row} ${Math.round(was)} → ${Math.round(size)} px`);
+    }
+    last = now;
+    requestAnimationFrame(frame);
+  };
+  const frame = (): void => {
+    const fresh = new ResizeObserver(() => {
+      fresh.disconnect();
+      read();
+    });
+    fresh.observe(document.documentElement);
+  };
+  requestAnimationFrame(frame);
+};
+
+async function moves(browser: Browser, shot: string, width: number, height: number): Promise<{ moved: string | null; grew: string[] }> {
   const page = await browser.newPage({ viewport: { width, height } });
   try {
+    await page.addInitScript(watchRows);
     await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
     await page.waitForSelector(".feed", { timeout: 15_000 });
     await page.waitForLoadState("networkidle");
@@ -41,7 +75,7 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
       });
     await page.waitForTimeout(SETTLE_MS);
     await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
-    return await page.evaluate(
+    const moved = await page.evaluate(
       (frames) =>
         new Promise<string | null>((done) => {
           const read = () => [...document.querySelectorAll<HTMLElement>(".feed")].map((f) => `${Math.round(f.scrollTop)}/${f.scrollHeight}`).join(" ");
@@ -56,6 +90,7 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
         }),
       FRAMES,
     );
+    return { moved, grew: await page.evaluate(() => (window as Window & { grew?: string[] }).grew ?? []) };
   } finally {
     await page.close();
   }
@@ -66,15 +101,19 @@ let failed = 0;
 try {
   for (const shot of SHOTS)
     for (const [width, height] of SIZES) {
-      const why = await moves(browser, shot, width, height);
-      if (why) failed++;
-      console.log(`${why ? "✗" : "✓"} ${shot} at ${width}x${height} holds still after opening${why ? `: ${why}` : ""}`);
+      const { moved, grew } = await moves(browser, shot, width, height);
+      if (moved) failed++;
+      console.log(`${moved ? "✗" : "✓"} ${shot} at ${width}x${height} holds still after opening${moved ? `: ${moved}` : ""}`);
+      if (grew.length) failed++;
+      console.log(
+        `${grew.length ? "✗" : "✓"} ${shot} at ${width}x${height}: rows keep their height once the feed shows${grew.length ? `: ${grew.length} changes, ${grew.slice(0, 4).join(", ")}` : ""}`,
+      );
     }
 } finally {
   await browser.close();
   server.stop();
 }
 if (failed) {
-  console.error(`${failed} views kept scrolling after they opened, in ${engine}`);
+  console.error(`${failed} views kept scrolling or grew rows after they opened, in ${engine}`);
   process.exitCode = 1;
 }
