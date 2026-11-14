@@ -41,7 +41,7 @@ export async function newChannel(title: string): Promise<string> {
     throw err
   })
   void manage().then((x) => x.freshChannel(m.code))
-  await linkOf(m)
+  void linkOf(m)
     .setIcon({ kind: "robot", robot: ROBOT_FACES[Math.floor(Math.random() * ROBOT_FACES.length)] ?? "blue" })
     .catch(() => {
       // The channel exists either way; its owner can pick an icon later.
