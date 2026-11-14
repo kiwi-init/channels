@@ -868,6 +868,16 @@ button.msg-image-spot:hover {
   font: var(--t-meta) var(--ui);
 }
 
+.ask-earlier {
+  max-width: 560px;
+  margin-top: 8px;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .ask-state time,
 .ask-done time {
   margin-left: 4px;

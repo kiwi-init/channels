@@ -965,6 +965,17 @@ const asks: Ask[] = [
     holds: [11],
   },
   {
+    kind: "question",
+    id: "q-0",
+    from: "atlas",
+    at: m(60 * 26),
+    text: wrote("Keep the old sidebar for a week after the redesign ships?"),
+    label: "Taste call for you",
+    options: ["Keep it a week", "Drop it at once"].map(wrote),
+    holds: [11],
+    answer: { text: wrote("Keep it a week"), by: "jow", at: m(60 * 25), shownIn: "card" },
+  },
+  {
     kind: "join",
     id: "join-1",
     at: m(1),

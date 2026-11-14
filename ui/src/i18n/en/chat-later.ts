@@ -178,6 +178,8 @@ const words = {
   "chat.question.card.replied": "{who} replied {time}",
   "chat.question.card.show.reply": "Show the reply",
   "chat.question.card.chose": "{who} chose {choice} {time}",
+  "chat.question.card.earlier.chose": "You chose “{text}” on this before · {when}",
+  "chat.question.card.earlier.answered": "You answered “{text}” on this before · {when}",
   "chat.question.card.done": "Done",
   "chat.question.card.couldnt": "Couldn’t",
   "chat.question.card.something.else": "Something else…",

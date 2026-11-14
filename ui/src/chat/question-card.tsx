@@ -13,13 +13,14 @@ import { t } from "~/i18n/i18n"
 import { tr } from "~/i18n/rich"
 import { cx } from "~/kit/bits"
 import { GlyphIcon } from "~/kit/icons"
-import { clock } from "~/kit/time"
+import { clock, day } from "~/kit/time"
 import { announce } from "~/kit/toasts"
 import type { Channel, QuestionAsk } from "~/model"
 import { openMessage } from "~/live/open-message"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
 import { viewImage } from "~/chat/image-view"
+import { earlierAnswer } from "~/chat/earlier"
 
 type Handoff = NonNullable<QuestionAsk["handoff"]>
 
@@ -120,67 +121,71 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
   }
   if (ask.closed) return <ClosedAsk channel={channel} closed={ask.closed} />
   const choice = ask.options.length > 0 && !ask.step && !ask.handoff
+  const earlier = earlierAnswer(channel, ask)
   return (
-    <div className={cx("ask", choice && "is-choice", free && "is-free")}>
-      {ask.handoff && <HandoffLink handoff={ask.handoff} now={now} />}
-      {ask.handoff && other === null && ask.handoff.expiresAt > now && (
-        <div className="actions">
-          <button type="button" className="btn is-small" onClick={() => actions.answerQuestion(channel.code, ask.id, HANDOFF_DONE)}>
-            {t("chat.question.card.done")}
-          </button>
-          <button type="button" className="btn is-quiet is-small" onClick={() => actions.answerQuestion(channel.code, ask.id, HANDOFF_FAILED)}>
-            {t("chat.question.card.couldnt")}
-          </button>
-          <button type="button" className="btn is-quiet is-small" onClick={() => setOther("")}>
-            {t("chat.question.card.something.else")}
-          </button>
-        </div>
-      )}
-      {ask.step && <StepHow step={ask.step} you={[channel.you, nickname(channel, channel.you)]} text={(s) => <InlineText text={s} channel={channel} before={Number(ask.id)} />} />}
-      {ask.step && other === null && <StepAnswer onAnswer={(reply) => actions.answerStep(channel.code, ask.id, reply)} onElse={() => setOther("")} />}
-      {ask.options.length > 0 && (
-        <ol className="ask-options">
-          {ask.options.map((o, i) => (
-            <li key={wordsRaw(o)}>
-              <button type="button" className="ask-option" onClick={() => actions.answerQuestion(channel.code, ask.id, wordsRaw(o))}>
-                <span className="ask-letter">{String.fromCharCode(65 + i)}</span>
-                {wordsPlain(o, channel.nicknames)}
-              </button>
-              <InlineLinks text={wordsRaw(o)} channel={channel} before={Number(ask.id)} />
-            </li>
-          ))}
-        </ol>
-      )}
-      {(ask.step || (ask.handoff && ask.handoff.expiresAt > now)) && other === null ? null : other === null ? (
-        <button type="button" className={choice ? "ask-option is-else" : "btn is-quiet is-small"} onClick={() => setOther("")}>
-          {t("chat.question.card.something.else")}
-        </button>
-      ) : (
-        <form
-          className="ask-reply-form"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (other.trim()) actions.answerQuestion(channel.code, ask.id, other.trim())
-          }}
-        >
-          <div className="ask-other">
-            <input
-              id={`reply-${ask.id}`}
-              autoFocus={!free}
-              className="input"
-              value={other}
-              aria-label={t("chat.question.card.reply.to", { asker })}
-              title={t("chat.question.card.reply.title")}
-              onChange={(e) => setOther(e.target.value)}
-              placeholder={t("chat.question.card.reply.placeholder", { asker })}
-              onKeyDown={(e) => e.key === "Escape" && !free && setOther(null)}
-            />
-            <button type="submit" className="btn is-primary is-small" disabled={!other.trim()}>
-              {t("chat.question.card.reply")}
+    <>
+      {earlier && <p className="ask-earlier">{t(earlier.chose ? "chat.question.card.earlier.chose" : "chat.question.card.earlier.answered", { text: earlier.text, when: day(earlier.at) })}</p>}
+      <div className={cx("ask", choice && "is-choice", free && "is-free")}>
+        {ask.handoff && <HandoffLink handoff={ask.handoff} now={now} />}
+        {ask.handoff && other === null && ask.handoff.expiresAt > now && (
+          <div className="actions">
+            <button type="button" className="btn is-small" onClick={() => actions.answerQuestion(channel.code, ask.id, HANDOFF_DONE)}>
+              {t("chat.question.card.done")}
+            </button>
+            <button type="button" className="btn is-quiet is-small" onClick={() => actions.answerQuestion(channel.code, ask.id, HANDOFF_FAILED)}>
+              {t("chat.question.card.couldnt")}
+            </button>
+            <button type="button" className="btn is-quiet is-small" onClick={() => setOther("")}>
+              {t("chat.question.card.something.else")}
             </button>
           </div>
-        </form>
-      )}
-    </div>
+        )}
+        {ask.step && <StepHow step={ask.step} you={[channel.you, nickname(channel, channel.you)]} text={(s) => <InlineText text={s} channel={channel} before={Number(ask.id)} />} />}
+        {ask.step && other === null && <StepAnswer onAnswer={(reply) => actions.answerStep(channel.code, ask.id, reply)} onElse={() => setOther("")} />}
+        {ask.options.length > 0 && (
+          <ol className="ask-options">
+            {ask.options.map((o, i) => (
+              <li key={wordsRaw(o)}>
+                <button type="button" className="ask-option" onClick={() => actions.answerQuestion(channel.code, ask.id, wordsRaw(o))}>
+                  <span className="ask-letter">{String.fromCharCode(65 + i)}</span>
+                  {wordsPlain(o, channel.nicknames)}
+                </button>
+                <InlineLinks text={wordsRaw(o)} channel={channel} before={Number(ask.id)} />
+              </li>
+            ))}
+          </ol>
+        )}
+        {(ask.step || (ask.handoff && ask.handoff.expiresAt > now)) && other === null ? null : other === null ? (
+          <button type="button" className={choice ? "ask-option is-else" : "btn is-quiet is-small"} onClick={() => setOther("")}>
+            {t("chat.question.card.something.else")}
+          </button>
+        ) : (
+          <form
+            className="ask-reply-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (other.trim()) actions.answerQuestion(channel.code, ask.id, other.trim())
+            }}
+          >
+            <div className="ask-other">
+              <input
+                id={`reply-${ask.id}`}
+                autoFocus={!free}
+                className="input"
+                value={other}
+                aria-label={t("chat.question.card.reply.to", { asker })}
+                title={t("chat.question.card.reply.title")}
+                onChange={(e) => setOther(e.target.value)}
+                placeholder={t("chat.question.card.reply.placeholder", { asker })}
+                onKeyDown={(e) => e.key === "Escape" && !free && setOther(null)}
+              />
+              <button type="submit" className="btn is-primary is-small" disabled={!other.trim()}>
+                {t("chat.question.card.reply")}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </>
   )
 }
