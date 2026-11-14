@@ -182,6 +182,9 @@ function General({ channel, onEnd }: { channel: Channel; onEnd: () => void }) {
       flip(p, own, !!channel.specsOnly, t("modals.channel.settings.specs.only"), say(channel.specsOnly ? "modals.channel.settings.specs.only.on" : "modals.channel.settings.specs.only.off"), () =>
         app.actions.setSpecsOnly(channel.code, !channel.specsOnly)
       ),
+      flip(p, own, !!channel.tapToAnswer, t("modals.channel.settings.tap"), say(channel.tapToAnswer ? "modals.channel.settings.tap.on" : "modals.channel.settings.tap.off"), () =>
+        app.actions.setTapToAnswer(channel.code, !channel.tapToAnswer)
+      ),
     ].join("\n"),
     heading("modals.channel.settings.notifications"),
     toggle(

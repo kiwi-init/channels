@@ -180,6 +180,7 @@ const words = {
   "chat.question.card.chose": "{who} chose {choice} {time}",
   "chat.question.card.earlier.chose": "You chose “{text}” on this before · {when}",
   "chat.question.card.earlier.answered": "You answered “{text}” on this before · {when}",
+  "chat.question.card.typed": "You replied “{text}” in the chat. It stays open until you answer here or {who} restates it",
   "chat.question.card.done": "Done",
   "chat.question.card.couldnt": "Couldn’t",
   "chat.question.card.something.else": "Something else…",

@@ -196,6 +196,10 @@ export async function setQuiet(code: string, typed: string): Promise<void> {
   await event(setup(code), `quiet time: ${minutes} min`, { op: "quiet.set", minutes })
 }
 
+export async function setTapToAnswer(code: string, on: boolean): Promise<void> {
+  await event(owner(code), on ? "a person's decision closes only from its card" : "a reply in the chat answers a decision again", { op: "asks.tap.set", on })
+}
+
 export async function setReviewReset(code: string, on: boolean): Promise<void> {
   await event(owner(code), on ? "reviewers start a fresh session after each verdict" : "reviewers may keep one session", { op: "review.reset.set", on })
 }

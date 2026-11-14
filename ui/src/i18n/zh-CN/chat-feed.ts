@@ -86,6 +86,7 @@ export default {
   "chat.question.card.chose": "{who} 选择了 {choice} {time}",
   "chat.question.card.earlier.chose": "你之前在这件事上选了“{text}” · {when}",
   "chat.question.card.earlier.answered": "你之前在这件事上回答了“{text}” · {when}",
+  "chat.question.card.typed": "你在聊天里回复了“{text}”。在这里作答或 {who} 重新表述之前，它会一直开着",
   "chat.question.card.done": "完成",
   "chat.question.card.couldnt": "未能完成",
   "chat.question.card.something.else": "其他…",

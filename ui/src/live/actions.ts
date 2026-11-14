@@ -133,7 +133,7 @@ export function makeActions(): Actions {
         const run = need(code)
         const m = run.messages.find((x) => x.seq === Number(id))
         if (!m) throw new Error(t("live.actions.question.gone"))
-        await run.send(text, { to: [m.from], re: [m.seq], kind: "msg", side: true })
+        await run.send(text, { to: [m.from], re: [m.seq], kind: "msg", side: true, pick: true })
       }),
     answerStep: (code, id, reply) => attempt(t("live.actions.not.answered"), async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(t(yes ? "live.actions.let.in.failed" : "live.actions.turn.away.failed"), async () => (await manage()).answerJoin(code, id, yes, choice)),
@@ -189,6 +189,7 @@ export function makeActions(): Actions {
     setGithubWrite: (code, on) => attempt(t("live.actions.not.changed"), async () => (await manage()).setGithubWrite(code, on)),
     setBranchPrefix: (code, typed) => attempt(t("live.actions.branch.prefix.not.changed"), async () => (await manage()).setBranchPrefix(code, typed)),
     setQuiet: (code, typed) => attempt(t("live.actions.quiet.not.changed"), async () => (await manage()).setQuiet(code, typed)),
+    setTapToAnswer: (code, on) => attempt(t("live.actions.not.changed"), async () => (await manage()).setTapToAnswer(code, on)),
     setReviewReset: (code, on) => attempt(t("live.actions.not.changed"), async () => (await manage()).setReviewReset(code, on)),
     setResetWaived: (code, name, waived) => attempt(t("live.actions.not.changed"), async () => (await manage()).setResetWaived(code, name, waived)),
     setLanding: (code, then) => attempt(t("live.actions.landing.not.changed"), async () => (await manage()).setLanding(code, then)),

@@ -223,6 +223,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.branchPrefix ? { branchPrefix: state.branchPrefix } : {}),
       ...(state.quietMs !== QUIET_MINUTES * 60_000 ? { quietMinutes: state.quietMs / 60_000 } : {}),
       ...(state.reviewReset ? { reviewReset: true as const } : {}),
+      ...(state.tapToAnswer ? { tapToAnswer: true as const } : {}),
       ...(state.landing && state.landing !== "none" ? { landing: state.landing } : {}),
       ...(required.length ? { reviewStillRequired: { repos: required, check: reviewCheck } } : {}),
       rooms,
@@ -271,6 +272,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       state.branchPrefix,
       state.quietMs,
       state.reviewReset,
+      state.tapToAnswer,
       state.landing,
       required,
       reviewCheck,
@@ -433,7 +435,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   useEffect(() => {
     if (!isOwner || !ready || connection !== "live" || state.specsOnly !== null) return
     void import("~/live/manage")
-      .then((m) => (m.takeFresh(code) ? m.setSpecsOnly(code, true) : undefined))
+      .then((m) => (m.takeFresh(code) ? Promise.all([m.setSpecsOnly(code, true), m.setTapToAnswer(code, true)]) : undefined))
       .catch(() => {
         // The switch stays off; the owner turns it on in the channel's settings.
       })

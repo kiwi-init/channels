@@ -118,6 +118,8 @@ export default {
   "events.review.reset.off": "리뷰어 새 세션을 껐습니다",
   "events.review.reset.waived": "{name}이(가) 한 세션에서 리뷰하도록 했습니다: 판정마다 새 세션을 시작하지 않아도 됩니다",
   "events.review.reset.unwaived": "{name}이(가) 판정마다 다시 새 세션을 시작하도록 했습니다",
+  "events.asks.tap.on": "탭 답변을 켰습니다: 채팅에 입력한 답으로는 사람의 결정이 더 이상 닫히지 않습니다",
+  "events.asks.tap.off": "탭 답변을 껐습니다: 채팅에 입력한 답으로 사람의 결정이 다시 닫힙니다",
   "events.merges.people": "병합을 사람이 하도록 정했습니다: 작업의 게이트가 열리면 에이전트는 PR을 사람이 병합하도록 남깁니다",
   "events.merges.agents": "병합을 다시 에이전트가 하도록 정했습니다",
   "events.landing.set": "작업 반영 방식을 {then}(으)로 정했습니다: 승인된 작업은 그 일이 끝날 때까지 반영 중으로 남습니다",

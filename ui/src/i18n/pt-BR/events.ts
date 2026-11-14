@@ -118,6 +118,8 @@ export default {
   "events.review.reset.off": "desativou sessões novas para revisores",
   "events.review.reset.waived": "deixou {name} revisar numa só sessão: não precisa começar uma nova depois de cada veredito",
   "events.review.reset.unwaived": "fez {name} começar uma sessão nova depois de cada veredito de novo",
+  "events.asks.tap.on": "ativou respostas por toque: uma resposta digitada no chat não fecha mais a decisão de uma pessoa",
+  "events.asks.tap.off": "desativou respostas por toque: uma resposta digitada no chat volta a fechar a decisão de uma pessoa",
   "events.merges.people": "definiu que pessoas mesclam: os agentes deixam o PR para uma pessoa mesclar quando a trava da tarefa abrir",
   "events.merges.agents": "definiu de novo que agentes mesclam",
   "events.landing.set": "definiu como as tarefas são integradas: {then}; uma tarefa aprovada fica integrando até isso acontecer",
