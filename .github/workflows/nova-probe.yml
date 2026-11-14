@@ -1,0 +1,21 @@
+name: nova probe 2439
+on:
+  push:
+    branches: [Channels4122-probe]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.0-noble
+      options: --cpus 4
+    steps:
+      - run: apt-get update -qq && apt-get install -y -qq unzip git >/dev/null
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun run ui:build
+      - name: ui-still x5
+        run: for i in 1 2 3 4 5; do bun scripts/ui-still.ts --dist ui/dist | grep -vE "^✓" || true; done
