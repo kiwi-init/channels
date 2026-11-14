@@ -1,4 +1,5 @@
 import "~/i18n/en/modals"
+import "~/i18n/en/shell-later"
 import { QUIET_MINUTES } from "@kiwi/core/protocol.ts"
 import { NotificationOff01Icon } from "@hugeicons/core-free-icons"
 import "~/styles/channel-settings.css"
@@ -185,8 +186,8 @@ function General({ channel, onEnd }: { channel: Channel; onEnd: () => void }) {
     heading("modals.channel.settings.notifications"),
     toggle(
       muted,
-      a.act(t("modals.channel.settings.mute.here"), () => app.actions.setMute(channel.code, null, !muted)),
-      muted ? say("modals.channel.settings.mute.here.hint") : ""
+      a.act(t("shell.rail.menu.mute"), () => app.actions.setMute(channel.code, null, !muted)),
+      say("modals.channel.settings.mute.here.hint")
     ),
     heading("modals.channel.settings.history"),
     [
