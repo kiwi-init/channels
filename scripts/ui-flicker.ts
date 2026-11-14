@@ -9,11 +9,11 @@ const flag = (name: string): string | undefined => {
 
 if (process.argv.includes("--help")) {
   console.log(`Drives the app's main flows and lists every flicker: an element whose box, opacity, colours or text changes and comes
-back within a few frames (a return), or holds a state for a few frames between two steady ones that is not on the way from
-the first to the second (a detour). Each frame is read in requestAnimationFrame, so a state that never reached a frame is not
-counted.
+back within --short ms (a return), or holds a state for at most --short ms between two states held at least --steady ms, that
+is not on the way from the first to the second (a detour). Every element is read in each requestAnimationFrame, so a state
+that never reached a frame is not counted.
 
-  bun scripts/ui-flicker.ts --dist ui/dist --browser webkit|chromium [--flow NAME] [--live] [--out DIR] [--frames 6]`);
+  bun scripts/ui-flicker.ts --dist ui/dist --browser webkit|chromium [--flow NAME] [--live] [--out DIR] [--short 100] [--steady 150]`);
   process.exit(0);
 }
 
@@ -24,8 +24,9 @@ if (engine !== "webkit" && engine !== "chromium") throw new Error(`--browser is 
 const only = flag("--flow");
 const live = process.argv.includes("--live");
 const out = flag("--out");
-const SHORT = Number(flag("--frames") ?? 6);
-const STEADY = 3;
+const SHORT_MS = Number(flag("--short") ?? 100);
+const STEADY_MS = Number(flag("--steady") ?? 150);
+const STEP_MS = 3000;
 
 const server = Bun.serve({
   port: 0,
@@ -38,7 +39,7 @@ const server = Bun.serve({
 });
 const base = `http://127.0.0.1:${server.port}/`;
 
-type Log = { frames: number[]; labels: [number, string][]; changes: Record<string, [number, string][]> };
+type Log = { times: number[]; labels: [number, string][]; changes: Record<string, [number, string][]> };
 
 const recorder = () => {
   const cut = (s: string) => (s.length > 40 ? s.slice(0, 40) : s);
@@ -58,8 +59,7 @@ const recorder = () => {
   };
   const styles = new WeakMap<Element, CSSStyleDeclaration>();
   const last = new Map<string, string>();
-  const log: Log = { frames: [], labels: [[0, "load"]], changes: {} };
-  let frame = 0;
+  const log: Log = { times: [], labels: [[0, "load"]], changes: {} };
   const read = () => {
     const w = innerWidth;
     const h = innerHeight;
@@ -82,8 +82,8 @@ const recorder = () => {
   };
   const tick = () => {
     if (document.body) {
-      frame++;
-      log.frames.push(Math.round(performance.now()));
+      const frame = log.times.length;
+      log.times.push(Math.round(performance.now()));
       const now = read();
       for (const [key, state] of now) {
         if (last.get(key) !== state) (log.changes[key] ??= []).push([frame, state]);
@@ -101,13 +101,13 @@ const recorder = () => {
   requestAnimationFrame(tick);
   Object.assign(window, {
     __flicker: {
-      mark: (label: string) => void log.labels.push([frame + 1, label]),
-      take: () => log,
+      mark: (label: string) => void log.labels.push([log.times.length, label]),
+      take: () => ({ ...log, times: [...log.times, Math.round(performance.now())] }),
     },
   });
 };
 
-type Hit = { flow: string; step: string; key: string; kind: "return" | "detour"; frames: number; ms: number; from: string; via: string[]; to: string };
+type Hit = { flow: string; step: string; key: string; kind: "return" | "detour"; ms: number; from: string; via: string[]; to: string };
 
 const TEXT = 4;
 const nums = (s: string) => (s.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
@@ -124,62 +124,66 @@ const between = (a: string, b: string, c: string) => {
 };
 
 const hitsOf = (flow: string, log: Log): Hit[] => {
-  const end = log.frames.length + 1;
-  const stepAt = (f: number) => log.labels.filter(([at]) => at <= f).at(-1)?.[1] ?? "load";
-  const msAt = (a: number, b: number) => (log.frames[b - 1] ?? 0) - (log.frames[a - 1] ?? 0);
+  const end = log.times.length - 1;
+  const at = (frame: number) => log.times[frame] ?? log.times[end] ?? 0;
+  const stepAt = (frame: number) => log.labels.filter(([f]) => f <= frame).at(-1)?.[1] ?? "load";
   const hits: Hit[] = [];
   for (const [key, list] of Object.entries(log.changes)) {
-    const segs = list.map(([at, state], i) => ({ at, state, len: (list[i + 1]?.[0] ?? end) - at }));
-    if (list[0] && list[0][0] > 1) segs.unshift({ at: 1, state: "-", len: list[0][0] - 1 });
+    const segs = list.map(([frame, state], i) => ({ frame, state, ms: at(list[i + 1]?.[0] ?? end) - at(frame) }));
+    if (list[0] && list[0][0] > 0) segs.unshift({ frame: 0, state: "-", ms: at(list[0][0]) - at(0) });
     for (let i = 0; i + 2 < segs.length; i++) {
       const a = segs[i]!;
-      if (a.len < STEADY) continue;
+      if (a.ms < STEADY_MS) continue;
       let span = 0;
       for (let j = i + 1; j < segs.length; j++) {
         const b = segs[j]!;
         if (b.state === a.state) {
-          if (span <= SHORT && j > i + 1)
-            hits.push({
-              flow,
-              step: stepAt(segs[i + 1]!.at),
-              key,
-              kind: "return",
-              frames: span,
-              ms: msAt(segs[i + 1]!.at, b.at),
-              from: a.state,
-              via: segs.slice(i + 1, j).map((s) => s.state),
-              to: b.state,
-            });
+          if (j > i + 1) hits.push({ flow, step: stepAt(segs[i + 1]!.frame), key, kind: "return", ms: span, from: a.state, via: segs.slice(i + 1, j).map((s) => s.state), to: b.state });
           break;
         }
-        span += b.len;
-        if (span > SHORT) break;
+        span += b.ms;
+        if (span > SHORT_MS) break;
       }
       const b = segs[i + 1]!;
       const c = segs[i + 2]!;
-      if (b.len <= SHORT && c.len >= STEADY && c.state !== a.state && !between(a.state, b.state, c.state))
-        hits.push({ flow, step: stepAt(b.at), key, kind: "detour", frames: b.len, ms: msAt(b.at, c.at), from: a.state, via: [b.state], to: c.state });
+      if (b.ms <= SHORT_MS && c.ms >= STEADY_MS && c.state !== a.state && !between(a.state, b.state, c.state))
+        hits.push({ flow, step: stepAt(b.frame), key, kind: "detour", ms: b.ms, from: a.state, via: [b.state], to: c.state });
     }
   }
   return hits;
 };
 
+const skipped: string[] = [];
 const settle = (page: Page, ms = 1200) => page.waitForTimeout(ms);
 const mark = (page: Page, label: string) => page.evaluate((l) => (window as unknown as { __flicker: { mark: (l: string) => void } }).__flicker.mark(l), label);
 const step = async (page: Page, label: string, act: () => Promise<unknown>, ms?: number) => {
   await mark(page, label);
-  await act();
+  try {
+    await act();
+  } catch (e) {
+    // A step that can't run is listed and the flow goes on, so one missing control doesn't hide the rest.
+    skipped.push(`${label}: ${String(e instanceof Error ? e.message : e).split("\n")[0]}`);
+  }
   await settle(page, ms);
 };
 const clickAll = async (page: Page, selector: string, label: (text: string) => string, limit = 12) => {
   const rows = page.locator(selector);
   const n = Math.min(await rows.count(), limit);
+  if (n === 0) skipped.push(`${label("")}: nothing matches ${selector}`);
   for (let i = 0; i < n; i++) {
     const row = rows.nth(i);
     if (!(await row.isVisible())) continue;
-    const text = ((await row.innerText().catch(() => "")) || (await row.getAttribute("aria-label")) || `#${i}`).split("\n")[0]!.trim().slice(0, 30);
-    await step(page, label(text), () => row.click({ timeout: 3000 }).catch(() => undefined));
+    const text = ((await row.innerText({ timeout: STEP_MS }).catch(() => "")) || (await row.getAttribute("aria-label", { timeout: STEP_MS }).catch(() => "")) || `#${i}`)
+      .split("\n")[0]!
+      .trim()
+      .slice(0, 30);
+    await step(page, label(text), () => row.click({ timeout: STEP_MS }));
   }
+};
+const click = (page: Page, selector: string, options: { button?: "right"; last?: boolean; nth?: number } = {}) => {
+  const all = page.locator(selector);
+  const one = options.last ? all.last() : all.nth(options.nth ?? 0);
+  return one.click({ timeout: STEP_MS, ...(options.button ? { button: options.button } : {}) });
 };
 
 type Flow = { name: string; shot: string; run: (page: Page) => Promise<void> };
@@ -190,7 +194,7 @@ const FLOWS: Flow[] = [
     shot: "channel",
     run: async (page) => {
       await clickAll(page, ".rail .tile", (t) => `tab ${t}`);
-      await step(page, "back to the first tab", () => page.locator(".rail .tile").first().click());
+      await step(page, "back to the first tab", () => click(page, ".rail .tile"));
     },
   },
   { name: "sidebar views", shot: "channel", run: (page) => clickAll(page, ".side-views .side-row", (t) => `view ${t}`) },
@@ -207,7 +211,7 @@ const FLOWS: Flow[] = [
     name: "thread",
     shot: "channel",
     run: async (page) => {
-      await step(page, "open a thread", () => page.locator(".main .msg-thread").first().click());
+      await step(page, "open a thread", () => click(page, ".main .msg-thread"));
       await step(page, "close it", () => page.keyboard.press("Escape"));
     },
   },
@@ -215,9 +219,8 @@ const FLOWS: Flow[] = [
     name: "type and send",
     shot: "channel",
     run: async (page) => {
-      const box = page.locator(".main .composer textarea").first();
-      await step(page, "focus the composer", () => box.click());
-      await step(page, "type", () => box.pressSequentially("Checking how the feed takes a new message", { delay: 30 }));
+      await step(page, "focus the composer", () => click(page, ".main .composer textarea"));
+      await step(page, "type", () => page.keyboard.type("Checking how the feed takes a new message", { delay: 30 }));
       await step(page, "send", () => page.keyboard.press("Enter"), 2000);
     },
   },
@@ -238,18 +241,18 @@ const FLOWS: Flow[] = [
     name: "settings",
     shot: "channel",
     run: async (page) => {
-      await step(page, "open settings", () => page.locator(".rail-gear").first().click());
-      await clickAll(page, "dialog[open] nav button, dialog[open] [role=tab], .settings-nav button", (t) => `settings ${t}`, 10);
-      await step(page, "close settings", () => page.keyboard.press("Escape"));
+      await step(page, "open settings", () => click(page, ".rail-gear"));
+      await clickAll(page, ".side .side-row", (t) => `settings ${t}`, 10);
+      await step(page, "back to the channel", () => click(page, ".rail .tile"));
     },
   },
   {
     name: "menus",
     shot: "channel",
     run: async (page) => {
-      await step(page, "right-click a message", () => page.locator(".main article.msg").last().click({ button: "right" }));
+      await step(page, "right-click a message", () => click(page, ".main article.msg", { button: "right", last: true }));
       await step(page, "Escape", () => page.keyboard.press("Escape"));
-      await step(page, "right-click a room", () => page.locator('.side section[aria-label="Rooms"] .side-row').nth(1).click({ button: "right" }));
+      await step(page, "right-click a room", () => click(page, '.side section[aria-label="Rooms"] .side-row', { button: "right", nth: 1 }));
       await step(page, "Escape", () => page.keyboard.press("Escape"));
     },
   },
@@ -257,28 +260,38 @@ const FLOWS: Flow[] = [
   { name: "tasks", shot: "task-working", run: async () => {} },
   { name: "specs", shot: "specs-general", run: async () => {} },
   { name: "needs you", shot: "needs-panel", run: async () => {} },
-  { name: "channel settings", shot: "channel-settings", run: (page) => clickAll(page, "dialog[open] [role=tab], dialog[open] .tabs button", (t) => `tab ${t}`, 8) },
+  { name: "channel settings", shot: "channel-settings", run: async () => {} },
 ];
 
 const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 const all: Hit[] = [];
 const frames: Record<string, number> = {};
+if (out) mkdirSync(out, { recursive: true });
 try {
   for (const flow of FLOWS.filter((f) => !only || f.name === only)) {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, timezoneId: "UTC", locale: "en-US" });
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.addInitScript(recorder);
-    await page.goto(`${base}?shot=${flow.shot}&theme=dark${live ? "" : "&frozen"}`);
-    await page.waitForSelector(".side, .main, dialog[open]", { state: "attached", timeout: 15000 }).catch(() => undefined);
-    await settle(page, 1500);
-    await flow.run(page);
-    await settle(page, 800);
-    const log = await page.evaluate(() => (window as unknown as { __flicker: { take: () => Log } }).__flicker.take());
-    frames[flow.name] = log.frames.length;
-    const hits = hitsOf(flow.name, log);
-    all.push(...hits);
-    console.log(`${flow.name}: ${log.frames.length} frames, ${hits.length} hits${errors.length ? `, page errors: ${errors.join("; ")}` : ""}`);
+    try {
+      await page.goto(`${base}?shot=${flow.shot}&theme=dark${live ? "" : "&frozen"}`);
+      await page.waitForSelector(".side, .main, dialog[open]", { state: "attached", timeout: 15000 }).catch(() => skipped.push(`${flow.name}: no .side, .main or dialog after 15 s`));
+      await settle(page, 1500);
+      const before = skipped.length;
+      await flow.run(page);
+      await settle(page, 800);
+      if (out && skipped.length > before) await page.screenshot({ path: join(out, `${flow.name.replaceAll(" ", "-")}-${engine}.png`) });
+      const log = await page.evaluate(() => (window as unknown as { __flicker: { take: () => Log } }).__flicker.take());
+      frames[flow.name] = log.times.length;
+      const hits = hitsOf(flow.name, log);
+      all.push(...hits);
+      console.log(
+        `${flow.name}: ${log.times.length} frames over ${(log.times.at(-1) ?? 0) - (log.times[0] ?? 0)} ms, ${hits.length} hits${errors.length ? `, page errors: ${errors.join("; ")}` : ""}`,
+      );
+    } catch (e) {
+      // A flow that breaks is reported and the sweep goes on with the next one.
+      console.log(`${flow.name}: broke: ${String(e instanceof Error ? e.message : e).split("\n")[0]}`);
+    }
     await page.close();
   }
 } finally {
@@ -288,24 +301,21 @@ try {
 
 const short = (key: string) => key.split(">").slice(-3).join(">");
 const what = (h: Hit) => {
-  const a = h.from.split("|");
-  const b = (h.via[0] ?? "").split("|");
   if (h.from === "-") return "appears";
   if (h.via[0] === "-") return "disappears";
-  const names = ["box", "opacity", "background", "colour", "text"];
-  return names.filter((_, i) => a[i] !== b[i]).join("+");
+  const a = h.from.split("|");
+  const b = (h.via[0] ?? "").split("|");
+  return ["box", "opacity", "background", "colour", "text"].filter((_, i) => a[i] !== b[i]).join("+");
 };
 const groups = new Map<string, Hit[]>();
 for (const h of all) {
   const id = `${h.flow} · ${h.step} · ${short(h.key)} · ${h.kind} · ${what(h)}`;
   groups.set(id, [...(groups.get(id) ?? []), h]);
 }
+if (skipped.length) console.log(`\nskipped:\n${skipped.map((s) => `  ${s}`).join("\n")}`);
 console.log(`\n${all.length} hits in ${groups.size} groups (${engine}${live ? ", live demo" : ", frozen demo"})`);
 for (const [id, hs] of [...groups].sort((a, b) => b[1].length - a[1].length)) {
   const h = hs[0]!;
-  console.log(`${hs.length}x ${id} · ${h.frames} frames ${h.ms} ms\n     ${h.from}\n  -> ${h.via.join(" -> ")}\n  -> ${h.to}`);
+  console.log(`${hs.length}x ${id} · ${h.ms} ms\n     ${h.from}\n  -> ${h.via.join(" -> ")}\n  -> ${h.to}`);
 }
-if (out) {
-  mkdirSync(out, { recursive: true });
-  writeFileSync(join(out, `flicker-${engine}.json`), JSON.stringify({ engine, live, frames, hits: all }, null, 1));
-}
+if (out) writeFileSync(join(out, `flicker-${engine}.json`), JSON.stringify({ engine, live, frames, skipped, hits: all }, null, 1));
