@@ -53,7 +53,8 @@ const names = [...block.matchAll(/^(?:\t| {2})"?([\w-]+)"?:/gm)]
 
 const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 try {
-  const page = await browser.newPage({ viewport: { width: size[0] ?? 1440, height: size[1] ?? 900 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ viewport: { width: size[0] ?? 1440, height: size[1] ?? 900 }, deviceScaleFactor: 2, timezoneId: "UTC", locale: "en-US" });
+  await page.clock.setFixedTime(new Date("2026-11-04T15:30:00Z"));
   const errors: string[] = [];
   let at = "";
   const isReaction = reactionsOn(base);
@@ -90,7 +91,7 @@ try {
       await page.waitForTimeout(350);
       await reactions.settled();
       const file = join(out, `${name}-${theme}.png`);
-      await page.screenshot({ path: file });
+      await page.screenshot({ path: file, animations: "disabled" });
       console.log(file);
     }
   }
