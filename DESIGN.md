@@ -316,9 +316,7 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 
 - Things grow out of what was pressed: the search field out of the search
   button (`find-grow`, a clip, never a width), a menu out of its corner
-  (`menu-grow`), the right panel in from the window's edge (`panel-in`), a
-  view up into place when its row opens (`view-in`; the conversation is there
-  at once). Pointing at a channel's tile drops its name under it
+  (`menu-grow`). Pointing at a channel's tile drops its name under it
   (`hint-drop`), so a name never costs a click. The sidebar slides out and in
   and the work slides with it (`main-fill`, `main-yield`); the grid itself
   never animates.
@@ -328,6 +326,10 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   while a gap or the sidebar is being dragged. A new pane grows in from the
   side it split from (`pane-in-*`, a clip) and a closed one fades where it
   was (`pane-gone`).
+- A view that replaces another swaps in place in one frame, with no fade and
+  no rise: a conversation, a Settings page, a thread, a task, the board, Needs
+  you, their cards. Fades are for what lies over the work: dialogs, menus,
+  toasts, the palette.
 - Motion answers an action: something opens, arrives or moves because someone
   did something. It is felt, never watched: short, soft, and nothing plays
   twice for the same event. Two things loop: the working dots under the
@@ -351,12 +353,10 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   both through `useMoved`, so opening a view animates nothing that didn't change.
 - A message that arrives lands with `land()`: 8px up, 16px for your own, and only
   for what just came in, never history or a scroll.
-- A view's cards rise in a short stagger when it opens (30ms apart, 120ms at
-  most). Clearing Needs you draws a tick (`tick-draw`).
-- Keyframes: `rise` (6px up and in), `fade`, `panel-in` (the right panel, 12px
-  from the right), `dialog-in`, `toast-in`, `pop-in`, `palette-in` (6px down),
-  `jump-in` (Jump to latest),
-  `msg-flash` (a message you jumped to, 1.6s).
+- Clearing Needs you draws a tick (`tick-draw`).
+- Keyframes: `rise` (6px up and in), `fade`, `dialog-in`, `toast-in`,
+  `pop-in`, `palette-in` (6px down), `jump-in` (Jump to latest), `msg-flash`
+  (a message you jumped to, 1.6s).
 - Scrolling content fades under the top bar (16px, `bg` to transparent).
 - Reduced motion: the OS setting or Settings' own (`data-motion="reduced"` on
   `<html>`) cuts every animation and transition to 0.01ms, and `land()` does
@@ -517,7 +517,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   panel, an open spec), Activity is an icon beside Search that opens the same
   log in a popover under it.
 - **Right panel** (`--side-w` to start, wider by its grip): a thread,
-  a task, a PR or an issue slides in from the right (`panel-in`)
+  a task, a PR or an issue opens on the right
   beside the conversation, in the page's colour, with a title, a mono sub
   line and a close button.
   A thread keeps its own composer.

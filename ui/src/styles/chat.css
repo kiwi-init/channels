@@ -1990,10 +1990,6 @@ button.msg-image-spot:hover {
   margin-right: 8px;
 }
 
-.feed-wrap {
-  animation: fade var(--fast) var(--ease);
-}
-
 .chip-title + .chip-meta::before {
   content: "· ";
 }

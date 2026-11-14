@@ -40,7 +40,6 @@ html .set-body {
   max-width: calc(720px + 2 * var(--gutter));
   margin: 0 auto;
   padding: 16px var(--gutter-end) 64px var(--gutter);
-  animation: fade var(--fast) var(--ease);
 }
 
 .set-head {
