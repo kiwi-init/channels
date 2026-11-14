@@ -358,11 +358,12 @@ export interface MarkdownProps {
 export default function Markdown({ markdown, at, onMention, onTask, onMessage, onImage, onShown, onPage, draw }: MarkdownProps) {
   const box = useRef<HTMLDivElement>(null)
   const source = useMemo(() => parseKey(markdown, at), [markdown, at])
+  const ready = (): ASTNode | undefined => (draw ? parsedNow(markdown, at) : parsedFor(source))
   const [got, setGot] = useState<{ markdown: string; ast: ASTNode } | null>(() => {
-    const now = parsedNow(markdown, at)
+    const now = ready()
     return now ? { markdown: source, ast: now } : null
   })
-  const ast = got?.markdown === source ? got.ast : (parsedNow(markdown, at) ?? got?.ast ?? null)
+  const ast = got?.markdown === source ? got.ast : (ready() ?? got?.ast ?? null)
 
   useEffect(() => {
     let live = true

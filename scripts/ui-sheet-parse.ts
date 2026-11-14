@@ -9,13 +9,14 @@ const flag = (name: string): string | undefined => {
 };
 
 if (process.argv.includes("--help")) {
-  console.log(`Holds the markdown parser's async parse for some painted frames while the Channel settings sheet re-renders (#2423).
-The settings page makes new action links on every render, so a parse that lands late must never leave the old tree drawn
-with the new controls: no native checkboxes, no empty body, and a switch pressed in that window runs its current action.
+  console.log(`Holds the markdown parser's async parse for some painted frames while a page that draws its own controls re-renders (#2423):
+Channel settings and the task pane. They make new action links on every render, so a parse that lands late must never leave
+the old tree drawn with the new controls: no native checkboxes, no empty body, no missing controls, and a control pressed in
+that window runs its current action.
 
   bun scripts/ui-sheet-parse.ts --dist ui/dist [--browser webkit|chromium] [--hold 8] [--shots DIR]
 
---shots saves the sheet a few frames into a 60-frame hold, for a before and after picture.`);
+--shots saves each page a few frames into a 60-frame hold, for a before and after picture.`);
   process.exit(0);
 }
 
@@ -61,22 +62,39 @@ const HOLD = () => {
   };
 };
 
-type Sample = { boxes: number; switches: number; text: number };
+type Scene = { name: string; shot: string; root: string; control: string; first: string; again: string; least: number; frame: string };
+type Sample = { boxes: number; controls: number; text: number };
 type Run = { samples: Sample[]; before: string[]; after: string[]; held: number; hit: string };
 
-const PRESS = async ({ hold, label }: { hold: number; label: string }): Promise<Run> => {
+const SCENES: Scene[] = [
+  {
+    name: "Channel settings",
+    shot: "channel-settings",
+    root: ".cset .ctl-page",
+    control: '[role="switch"]',
+    first: "Mute on this computer",
+    again: "Mute on this computer",
+    least: 3,
+    frame: '[role="dialog"]',
+  },
+  { name: "the task pane", shot: "task-working", root: ".page-text", control: "button.btn", first: "Mark done", again: "Reopen", least: 4, frame: ".page-text" },
+];
+
+const PRESS = async ({ hold, scene }: { hold: number; scene: Scene }): Promise<Run> => {
   const w = window as unknown as { holdFrames: number; parsesHeld: number };
-  const sheet = () => document.querySelector(".cset .ctl-page");
-  const states = () => [...(sheet()?.querySelectorAll('[role="switch"]') ?? [])].map((s) => `${s.getAttribute("aria-label")}=${s.getAttribute("aria-checked")}`);
+  const roots = () => [...document.querySelectorAll(scene.root)];
+  const controls = () => roots().flatMap((r) => [...r.querySelectorAll<HTMLElement>(scene.control)]);
+  const nameOf = (c: Element) => c.getAttribute("aria-label") ?? c.textContent?.trim() ?? "";
+  const states = () => controls().map((c) => `${nameOf(c)}${c.hasAttribute("aria-checked") ? `=${c.getAttribute("aria-checked")}` : ""}`);
   const frame = () => new Promise((done) => requestAnimationFrame(done));
   const sample = (): Sample => ({
-    boxes: sheet()?.querySelectorAll('input[type="checkbox"]').length ?? -1,
-    switches: sheet()?.querySelectorAll('[role="switch"]').length ?? -1,
-    text: sheet()?.textContent?.trim().length ?? 0,
+    boxes: roots().reduce((n, r) => n + r.querySelectorAll('input[type="checkbox"]').length, 0),
+    controls: controls().length,
+    text: roots().reduce((n, r) => n + (r.textContent?.trim().length ?? 0), 0),
   });
-  const mute = sheet()?.querySelector<HTMLElement>(`[role="switch"][aria-label="${label}"]`);
-  if (!mute) throw new Error(`no ${label} switch in the sheet`);
-  const box = mute.getBoundingClientRect();
+  const first = controls().find((c) => nameOf(c) === scene.first);
+  if (!first) throw new Error(`no ${scene.first} control in ${scene.name}`);
+  const box = first.getBoundingClientRect();
   const x = box.left + box.width / 2;
   const y = box.top + box.height / 2;
   const before = states();
@@ -90,12 +108,12 @@ const PRESS = async ({ hold, label }: { hold: number; label: string }): Promise<
   };
   w.holdFrames = hold;
   requestAnimationFrame(watch);
-  mute.click();
+  first.click();
   await frame();
   await frame();
   const there = document.elementFromPoint(x, y);
-  const toggle = there?.closest('[role="switch"]');
-  const hit = toggle ? `the ${toggle.getAttribute("aria-label")} switch` : there ? `a ${there.tagName.toLowerCase()}${there instanceof HTMLInputElement ? ` ${there.type}` : ""}` : "nothing";
+  const control = there?.closest(scene.control);
+  const hit = control ? `the ${nameOf(control)} control` : there ? `<${there.tagName.toLowerCase()}${there instanceof HTMLInputElement ? ` type=${there.type}` : ""}>` : "nothing";
   (there instanceof HTMLElement ? there : null)?.click();
   for (let i = 0; i < hold + 20; i++) await frame();
   watching = false;
@@ -110,46 +128,61 @@ const expect = (ok: boolean, what: string) => {
   if (!ok) fails.push(what);
 };
 try {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
-  await page.addInitScript(HOLD);
-  await page.goto(`http://127.0.0.1:${server.port}/?shot=channel-settings`);
-  const dialog = page.getByRole("dialog", { name: "Channel settings" });
-  const label = "Mute on this computer";
-  await dialog.locator(`.ctl-page [role="switch"][aria-label="${label}"]`).waitFor({ timeout: 20_000 });
-  await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(1000);
-  expect(wrapped === 1, `the bundle has one async markdown parse to hold, found ${wrapped}`);
-  const loaded = await page.evaluate(() => (window as unknown as { parsesHeld: number }).parsesHeld);
-  expect(loaded > 0, `the hold runs in this bundle: ${loaded} parses held while the page loaded`);
+  for (const scene of SCENES) {
+    console.log(`${scene.name} (?shot=${scene.shot}):`);
+    wrapped = 0;
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
+    await page.addInitScript(HOLD);
+    await page.goto(`http://127.0.0.1:${server.port}/?shot=${scene.shot}`);
+    await page.waitForFunction(
+      ({ root, control, name }) => [...document.querySelectorAll(root)].some((r) => [...r.querySelectorAll(control)].some((e) => (e.getAttribute("aria-label") ?? e.textContent?.trim()) === name)),
+      { root: scene.root, control: scene.control, name: scene.first },
+      { timeout: 20_000 },
+    );
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(1000);
+    expect(wrapped === 1, `the bundle has one async markdown parse to hold, found ${wrapped}`);
+    const loaded = await page.evaluate(() => (window as unknown as { parsesHeld: number }).parsesHeld);
+    expect(loaded > 0, `the hold runs in this bundle: ${loaded} parses held while the page loaded`);
 
-  const run = await page.evaluate(PRESS, { hold, label });
-  const plain = run.samples.filter((s) => s.boxes !== 0).length;
-  const empty = run.samples.filter((s) => s.text === 0).length;
-  const fewer = run.samples.filter((s) => s.switches < run.before.length).length;
-  console.log(`     ${run.samples.length} frames sampled, ${run.held} async parses held ${hold} frames each, second press landed on ${run.hit}`);
-  expect(plain === 0, `no frame draws the sheet as plain markdown with native checkboxes (${plain} of ${run.samples.length} did)`);
-  expect(empty === 0, `no frame draws an empty sheet body (${empty} of ${run.samples.length} did)`);
-  expect(fewer === 0, `every frame keeps all ${run.before.length} switches (${fewer} of ${run.samples.length} had fewer)`);
-  expect(run.hit === `the ${label} switch`, `the second press, two frames after the rows changed, lands on the ${label} switch (it landed on ${run.hit})`);
-  expect(
-    JSON.stringify(run.after) === JSON.stringify(run.before),
-    `pressing ${label} twice runs only its own current action, and every other switch keeps its state: ${JSON.stringify(run.before)} -> ${JSON.stringify(run.after)}`,
-  );
+    const run = await page.evaluate(PRESS, { hold, scene });
+    const plain = run.samples.filter((s) => s.boxes !== 0).length;
+    const empty = run.samples.filter((s) => s.text === 0).length;
+    const fewer = run.samples.filter((s) => s.controls < scene.least).length;
+    console.log(`     ${run.samples.length} frames sampled, ${run.held} async parses held ${hold} frames each, second press landed on ${run.hit}`);
+    expect(plain === 0, `no frame draws ${scene.name} as plain markdown with native checkboxes (${plain} of ${run.samples.length} did)`);
+    expect(empty === 0, `no frame draws ${scene.name} with an empty body (${empty} of ${run.samples.length} did)`);
+    expect(fewer === 0, `every frame keeps at least ${scene.least} of its controls (${fewer} of ${run.samples.length} had fewer)`);
+    expect(run.hit === `the ${scene.again} control`, `the second press, two frames after the rows changed, lands on ${scene.again} (it landed on ${run.hit})`);
+    expect(
+      JSON.stringify(run.after) === JSON.stringify(run.before),
+      `pressing ${scene.first} then ${scene.again} runs only their current actions, and ${scene.name} ends where it started: ${JSON.stringify(run.before)} -> ${JSON.stringify(run.after)}`,
+    );
 
-  if (shots) {
-    mkdirSync(shots, { recursive: true });
-    await page.evaluate(() => {
-      (window as unknown as { holdFrames: number }).holdFrames = 60;
-    });
-    await dialog.locator(`.ctl-page [role="switch"][aria-label="${label}"]`).click();
-    await page.waitForTimeout(150);
-    await dialog.screenshot({ path: join(shots, `sheet-held-${engine}.png`) });
-    await page.waitForTimeout(1500);
-    await page.evaluate(() => {
-      (window as unknown as { holdFrames: number }).holdFrames = 2;
-    });
-    console.log(`     saved ${join(shots, `sheet-held-${engine}.png`)}`);
+    if (shots) {
+      mkdirSync(shots, { recursive: true });
+      const file = join(shots, `${scene.shot}-held-${engine}.png`);
+      await page.evaluate(() => {
+        (window as unknown as { holdFrames: number }).holdFrames = 60;
+      });
+      const pressed = await page.evaluate(
+        ({ root, control, names }) => {
+          const c = [...document.querySelectorAll(root)]
+            .flatMap((r) => [...r.querySelectorAll<HTMLElement>(control)])
+            .find((e) => names.includes(e.getAttribute("aria-label") ?? e.textContent?.trim() ?? ""));
+          c?.click();
+          return c?.getAttribute("aria-label") ?? c?.textContent?.trim() ?? null;
+        },
+        { root: scene.root, control: scene.control, names: [scene.first, scene.again] },
+      );
+      if (pressed === null) throw new Error(`no ${scene.first} or ${scene.again} control in ${scene.name} to press for the shot`);
+      await page.waitForTimeout(150);
+      await page.locator(scene.frame).first().screenshot({ path: file });
+      await page.waitForTimeout(1500);
+      console.log(`     saved ${file}`);
+    }
+    await page.close();
   }
 } finally {
   await browser.close();
