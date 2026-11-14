@@ -70,8 +70,11 @@ export class ChannelCore {
     return this.identity.pk === this.access.ownerPk;
   }
 
+  wrote = 0;
+
   request<T>(path: string, init: CallInit = {}, params: Record<string, string | number> = {}): Effect.Effect<T, MemberRefusal, Relay> {
     return Effect.gen({ self: this }, function* () {
+      if (init.method && init.method !== "GET") this.wrote++;
       return yield* callRelay<T>(this.relay, this.roomId, path, { ...init, identity: this.identity }, params);
     }).pipe(Effect.mapError(gone));
   }

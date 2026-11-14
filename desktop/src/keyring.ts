@@ -158,7 +158,7 @@ export class Keyring implements ChannelOps {
       return had;
     }
     const docStore = this.host.docStore?.({ roomId: access.roomId, pk: seat.pk, sk: seat.sk }) ?? null;
-    const ch = new Channel(access, relay, identityOf(seat), (a) => void this.host.access(code, seat.pk, a).catch(() => {}), { docStore });
+    const ch = new Channel(access, relay, identityOf(seat), (a) => void this.host.access(code, seat.pk, a).catch(() => {}), { docStore, keepInfo: true });
     this.open.set(key, ch);
     return ch;
   }

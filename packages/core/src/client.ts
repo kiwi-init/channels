@@ -541,7 +541,7 @@ export class Channel {
     const write = opts.write ?? true;
     const me = this.core.identity.pk;
     const sealed = [...this.core.roomNow].find(([, r]) => r.key && r.meta?.self && r.meta.members.some((m) => m.pk === me));
-    const seats = sealed ? [] : seatsOf(await this.members(), me);
+    const seats = sealed ? [] : seatsOf(await run(this.fx.members(undefined, !write)), me);
     const person = new Set([me, ...seats.map((r) => r.pk)]);
     const own = () => [...this.core.memberRooms].filter(([, r]) => r.self && r.members.length > 0 && r.members.every((m) => person.has(m.pk))).sort(([, a], [, b]) => (a.seq ?? 0) - (b.seq ?? 0))[0];
     if (!sealed && !own() && write && (opts.make ?? true)) await this.makeSelf();
