@@ -69,7 +69,18 @@ export async function newChannel(page: Page, title: string): Promise<string> {
   await docOpen(page);
   await page.getByRole("button", { name: "Invite people", exact: true }).first().click();
   const link = page.getByRole("dialog", { name: "Invite people" }).locator("code").filter({ hasText: "#mc2-" }).first();
-  await link.waitFor({ timeout: 15000 });
+  await link.waitFor({ timeout: 15000 }).catch(async (err: unknown) => {
+    const shows = await page
+      .evaluate(() => ({
+        dialogs: [...document.querySelectorAll("dialog, [role=dialog]")].map(
+          (d) => `${d.getAttribute("aria-label") ?? d.tagName} open=${d.hasAttribute("open")}: ${(d as HTMLElement).innerText.slice(0, 300)}`,
+        ),
+        inviteButtons: [...document.querySelectorAll("button")].filter((b) => (b.getAttribute("aria-label") ?? b.textContent ?? "").trim() === "Invite people").length,
+        url: location.href,
+      }))
+      .catch((e: unknown) => ({ evaluateFailed: String(e) }));
+    throw new Error(`the Invite dialog showed no code: ${JSON.stringify(shows)}`, { cause: err });
+  });
   const code = (await link.innerText()).trim().replace(/^.*#/, "");
   await page.keyboard.press("Escape");
   await link.waitFor({ state: "detached" });
