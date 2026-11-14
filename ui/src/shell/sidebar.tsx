@@ -105,6 +105,8 @@ function ViewRows({ channel }: { channel: Channel }) {
   )
 }
 
+type Tucked = "rooms" | "people" | "agents"
+
 export function Sidebar({ channel }: { channel: Channel }) {
   const nav = useNav()
   const go = useGo()
@@ -122,7 +124,9 @@ export function Sidebar({ channel }: { channel: Channel }) {
   const sideRef = useGlide<HTMLDivElement>(".side-row.is-on")
   const hidden = useSyncExternalStore(hiddenPlaces.subscribe, hiddenPlaces.get)
   const canLeave = useAppCan("leaveRoom")
-  const [showHidden, setShowHidden] = useState(false)
+  const [unfolded, setUnfolded] = useState<readonly Tucked[]>([])
+  const isOpen = (section: Tucked) => unfolded.includes(section)
+  const toggleHidden = (section: Tucked) => () => setUnfolded((was) => (was.includes(section) ? was.filter((s) => s !== section) : [...was, section]))
   const roomKey = (room: string) => hiddenKey(channel.code, room)
   const back = comingBack(
     channel.rooms.map((r) => ({ key: roomKey(r.id), mention: r.mentions > 0 })),
@@ -131,14 +135,13 @@ export function Sidebar({ channel }: { channel: Channel }) {
   useEffect(() => {
     for (const key of back ? back.split(" ") : []) setHidden(key, false)
   }, [back])
-  const shownRow = (key: string, on: boolean) => showHidden || on || !hidden.includes(key)
+  const shownRow = (key: string, on: boolean) => isOpen("rooms") || on || !hidden.includes(key)
   const openDm = (d: Direct) => onChat && sameWhere(nav.where, { kind: "dm", with: d.with })
-  const showLeft = (d: Direct) => showHidden || openDm(d)
+  const showLeft = (section: Tucked) => (d: Direct) => isOpen(section) || openDm(d)
   const hiddenCount = channel.rooms.filter((r) => hidden.includes(roomKey(r.id))).length
-  const tucked = (left: Direct[]) => (showHidden ? left : left.filter((d) => !openDm(d)))
-  const tuckedPeople = tucked(leftPeople)
-  const tuckedAgents = tucked(leftAgents)
-  const toggleHidden = () => setShowHidden(!showHidden)
+  const tucked = (left: Direct[], section: Tucked) => (isOpen(section) ? left : left.filter((d) => !openDm(d)))
+  const tuckedPeople = tucked(leftPeople, "people")
+  const tuckedAgents = tucked(leftAgents, "agents")
   const channelMenu = (at: DOMRect) => {
     const tile = now?.().channels.find((c) => c.code === channel.code)
     void import("~/shell/rail-menu").then((m) =>
@@ -205,7 +208,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
               </li>
             )
           })}
-          {hiddenCount > 0 && <HiddenRows count={hiddenCount} open={showHidden} toggle={toggleHidden} />}
+          {hiddenCount > 0 && <HiddenRows count={hiddenCount} open={isOpen("rooms")} toggle={toggleHidden("rooms")} />}
         </ul>
       </section>
 
@@ -219,10 +222,10 @@ export function Sidebar({ channel }: { channel: Channel }) {
             {humans.map((p) => (
               <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
             ))}
-            {leftPeople.filter(showLeft).map((d) => (
+            {leftPeople.filter(showLeft("people")).map((d) => (
               <Former key={d.with} channel={channel} direct={d} />
             ))}
-            {tuckedPeople.length > 0 && <HiddenRows count={tuckedPeople.length} news={unreadIn(tuckedPeople)} open={showHidden} toggle={toggleHidden} />}
+            {tuckedPeople.length > 0 && <HiddenRows count={tuckedPeople.length} news={unreadIn(tuckedPeople)} open={isOpen("people")} toggle={toggleHidden("people")} />}
             {channel.youOwn && humans.length === 0 && (
               <li>
                 <button type="button" className={cx("side-row is-add", nav.modal?.kind === "invite" && "is-on")} onClick={() => go({ to: "modal", modal: { kind: "invite" } })}>
@@ -243,10 +246,10 @@ export function Sidebar({ channel }: { channel: Channel }) {
           {agents.map((p) => (
             <Member key={p.name} person={p} channel={channel} direct={directOf.get(p.name)} />
           ))}
-          {leftAgents.filter(showLeft).map((d) => (
+          {leftAgents.filter(showLeft("agents")).map((d) => (
             <Former key={d.with} channel={channel} direct={d} />
           ))}
-          {tuckedAgents.length > 0 && <HiddenRows count={tuckedAgents.length} news={unreadIn(tuckedAgents)} open={showHidden} toggle={toggleHidden} />}
+          {tuckedAgents.length > 0 && <HiddenRows count={tuckedAgents.length} news={unreadIn(tuckedAgents)} open={isOpen("agents")} toggle={toggleHidden("agents")} />}
           {agents.length === 0 && (
             <li>
               <button type="button" className={cx("side-row is-add", nav.modal?.kind === "add-agent" && "is-on")} onClick={() => go({ to: "modal", modal: { kind: "add-agent" } })}>
