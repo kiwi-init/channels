@@ -435,6 +435,8 @@ export interface KiwiBridge {
   wallpaperTints(dark: boolean): Promise<string[]>;
   wallpaperBackdrop(dark: boolean): Promise<string | null>;
   windowControl(action: "minimize" | "maximize" | "close"): Promise<void>;
+  windowMaximized(): Promise<boolean>;
+  onMaximized(cb: (maximized: boolean) => void): () => void;
   getUpdate(): Promise<UpdateView | null>;
   onUpdate(cb: (u: UpdateView) => void): () => void;
   /** Restart into the downloaded update. */

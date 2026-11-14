@@ -10,7 +10,7 @@ import type { ServerWebSocket } from "bun";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, MAX_BLOB_BYTES, PING, PONG } from "@kiwi/core/protocol.ts";
-import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
+import { NotFound, UpdateRequired } from "./failures.ts";
 import { clockLayer, MAX_REQUEST_BYTES, MAX_SNAPSHOT_REQUEST_BYTES } from "./http.ts";
 import { devHostOk, devHumanAuth, devRequestOk, githubHumanAuth, Human, HUMAN_HEADER, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
@@ -66,6 +66,7 @@ import {
   type Sql,
   type SqlParam,
   leaseTake,
+  gone,
 } from "./room.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubRoutes } from "./github.ts";
@@ -567,7 +568,7 @@ export function startRelay(
           if (route.rest === "/ws") {
             if (db.isLegacy()) {
               apply(route.roomId, { wipe: true });
-              return withCors(errorResponse(new ChannelGone({ message: "no such channel" })));
+              return withCors(errorResponse(gone()));
             }
             const pk = await runRoom(relay, db, authenticateSocket(req));
             const since = Number(url.searchParams.get("since") ?? 0) || 0;

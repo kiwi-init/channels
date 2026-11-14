@@ -36,7 +36,7 @@ const tab = (page: Page, name: string) => page.getByRole("dialog", { name: "Chan
 async function readBack(page: Page): Promise<{ quiet: string; landing: string }> {
   await tab(page, "General");
   await tab(page, "Tasks");
-  const quiet = (await page.locator(".set-inline-value").first().textContent())?.trim() ?? "";
+  const quiet = (await page.locator(".ctl-row", { hasText: QUIET }).locator(".ctl-ctl .ctl-code").first().textContent())?.trim() ?? "";
   const landing = await page.getByRole("combobox", { name: LANDING }).inputValue();
   return { quiet, landing };
 }
@@ -59,7 +59,7 @@ async function channel(shot: string, connected: boolean): Promise<void> {
   await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
   await page.getByRole("dialog", { name: "Channel settings" }).waitFor();
   await tab(page, "GitHub");
-  const repos = await page.locator(".cset-repo-name").allTextContents();
+  const repos = (await page.getByRole("dialog", { name: "Channel settings" }).locator(".ctl-label").allTextContents()).filter((label) => /^[\w.-]+\/[\w.-]+$/.test(label.trim()));
   expect(repos.length > 0 === connected, `${where}: the channel has ${repos.length} connected repos`);
   expect((await page.getByText(QUIET, { exact: true }).count()) === 0, `${where}: the GitHub tab no longer shows quiet time`);
   expect((await page.getByRole("combobox", { name: LANDING }).count()) === 0, `${where}: the GitHub tab no longer shows tasks land on`);

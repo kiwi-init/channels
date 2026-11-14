@@ -1,4 +1,5 @@
 import "~/i18n/en/chat-later"
+import { Download01Icon } from "@hugeicons/core-free-icons"
 import { marks, terms } from "@kiwi/core/search-rank.ts"
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react"
 
@@ -6,7 +7,7 @@ import "~/styles/search.css"
 import { hitKey, hitText, messageIndex, searchHits, whereLabel, type Hit } from "~/chat/search-hits"
 import { t } from "~/i18n/i18n"
 import { cx, Dot, STATUS_WORDS } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { ago } from "~/kit/time"
 import type { Channel, Message, OlderSearch } from "~/model"
 import { useActions, useGo } from "~/nav"
@@ -334,7 +335,7 @@ function FetchRow({ pull, since, upTo }: { pull: Pull | null; since: number | nu
   return (
     <span className="search-msg search-fetch" aria-busy={asked !== null}>
       <span className="search-line">
-        <Icon name="download" size={14} />
+        <GlyphIcon glyph={Download01Icon} size={14} />
         <span className="search-who">{asked === null ? t("chat.search.box.search.older") : t("chat.search.box.fetching")}</span>
       </span>
       <span className="search-text">

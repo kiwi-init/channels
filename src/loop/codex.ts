@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { names, holds } from "./fs.ts";
+import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Permission } from "@kiwi/core/launch-options.ts";
@@ -46,24 +47,6 @@ function codexHome(env: Env): string {
 function dayDir(sessions: string, at: number): string {
   const d = new Date(at);
   return join(sessions, String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0"));
-}
-
-function names(dir: string): string[] {
-  try {
-    return readdirSync(dir);
-  } catch {
-    // No rollout written on that day yet.
-    return [];
-  }
-}
-
-function holds(file: string, nonce: string): boolean {
-  try {
-    return readFileSync(file, "utf8").includes(nonce);
-  } catch {
-    // Gone or unreadable between the listing and the read: not this launch's thread.
-    return false;
-  }
 }
 
 export function codexThread(nonce: string, since: number, now = Date.now(), env: Env = process.env): CodexThread | null {

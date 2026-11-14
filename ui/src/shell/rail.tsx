@@ -7,7 +7,8 @@ import { Icon } from "~/kit/icons"
 import type { ChannelTile } from "~/model"
 import { channelOf, onCommand } from "~/kit/commands"
 import { inText } from "~/kit/keys"
-import { useNav, useGo, useActions, useTiles, useAppPrefs } from "~/nav"
+import { useNav, useGo, useActions, useTiles, useAppPrefs, useOpenToType } from "~/nav"
+import { useWindowMaximized } from "~/live/window-state"
 import { openMenu } from "~/kit/menu-open"
 import { railItems, type DropTarget } from "~/shell/rail-items"
 import { useTabs } from "~/shell/top-layout"
@@ -45,6 +46,7 @@ function fitTabs(strip: HTMLElement) {
 export function Rail() {
   const nav = useNav()
   const go = useGo()
+  const enter = useOpenToType()
   const actions = useActions()
   const tiles = useTiles()
   const prefs = useAppPrefs()
@@ -57,7 +59,7 @@ export function Rail() {
     root.toggleAttribute("data-tabs", tabs)
     return () => root.removeAttribute("data-tabs")
   }, [tabs])
-  const cardsHere = onChannel && (home || sidebarHidden)
+  const cardsHere = sidebarHidden || (home && !tabs)
   const on = onChannel ? nav.channel : null
   const folders = prefs.folders
   const items = railItems(tiles, folders)
@@ -92,11 +94,11 @@ export function Rail() {
     const from = ordered.findIndex((c) => c.code === on)
     const news = ordered.map((c, i) => ({ open: i === from, fresh: c.unread > 0, needs: c.needsYou, count: c.unread }))
     const next = nextWithNews(ordered, news, from, dir)
-    if (next) go({ to: "channel", code: next.code })
+    if (next) enter(next.code)
   })
   const pick = useEffectEvent((n: number | null) => {
     const tile = n === null ? undefined : ordered[n - 1]
-    if (tile) go({ to: "channel", code: tile.code })
+    if (tile) enter(tile.code)
   })
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -119,32 +121,10 @@ export function Rail() {
     const target = spot(e)
     setOver(target.kind === "channel" && target.code === moving ? null : keyOf(target))
   }
-  const tile = (c: ChannelTile) => <Tile key={c.code} tile={c} on={on === c.code} drop={over === `c:${c.code}`} moving={moving === c.code} onClick={() => go({ to: "channel", code: c.code })} />
+  const tile = (c: ChannelTile) => <Tile key={c.code} tile={c} on={on === c.code} drop={over === `c:${c.code}`} moving={moving === c.code} onClick={() => enter(c.code)} />
   return (
     <nav ref={strip} className="rail" aria-label={t("shell.rail.channels")}>
-      {document.documentElement.dataset["wm"] === "floating" && (
-        <div className="wm-controls">
-          <button type="button" className="wm-btn is-close" aria-label={t("shell.rail.close.window")} title={t("shell.rail.close")} onClick={() => actions.windowControl("close")}>
-            <Icon name="close" size={10} />
-          </button>
-          <button type="button" className="wm-btn" aria-label={t("shell.rail.minimize.window")} title={t("shell.rail.minimize")} onClick={() => actions.windowControl("minimize")}>
-            <Icon name="minus" size={10} />
-          </button>
-          <button type="button" className="wm-btn" aria-label={t("shell.rail.maximize.window")} title={t("shell.rail.maximize")} onClick={() => actions.windowControl("maximize")}>
-            <Icon name="expand" size={10} />
-          </button>
-        </div>
-      )}
-      <button
-        type="button"
-        className={cx("tile is-home", home && "is-on")}
-        aria-label={t("shell.rail.home")}
-        aria-current={home ? "page" : undefined}
-        title={t("shell.rail.home")}
-        onClick={() => go({ to: "home" })}
-      >
-        <Icon name="home" size={18} />
-      </button>
+      {document.documentElement.dataset["wm"] === "floating" && <WindowControls control={actions.windowControl} />}
       <ul
         className={cx("rail-list", moving && "is-moving", over === "rail" && "is-drop")}
         onMouseOver={point}
@@ -269,6 +249,29 @@ export function Rail() {
         </button>
       </div>
     </nav>
+  )
+}
+
+function WindowControls({ control }: { control: (action: "minimize" | "maximize" | "close") => void }) {
+  const maximized = useWindowMaximized()
+  return (
+    <div className="wm-controls">
+      <button type="button" className="wm-btn" aria-label={t("shell.rail.minimize.window")} title={t("shell.rail.minimize")} onClick={() => control("minimize")}>
+        <Icon name="minus" size={14} />
+      </button>
+      <button
+        type="button"
+        className="wm-btn"
+        aria-label={maximized ? t("shell.rail.restore.window") : t("shell.rail.maximize.window")}
+        title={maximized ? t("shell.rail.restore") : t("shell.rail.maximize")}
+        onClick={() => control("maximize")}
+      >
+        <Icon name={maximized ? "restore" : "expand"} size={14} />
+      </button>
+      <button type="button" className="wm-btn is-close" aria-label={t("shell.rail.close.window")} title={t("shell.rail.close")} onClick={() => control("close")}>
+        <Icon name="close" size={14} />
+      </button>
+    </div>
   )
 }
 

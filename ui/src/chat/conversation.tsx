@@ -1,5 +1,6 @@
 import { Fragment, startTransition, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
+import { useHold } from "~/chat/whole"
 import { Composer } from "~/chat/composer"
 import { docOf } from "~/chat/doc-of"
 import { EditHere } from "~/chat/editing"
@@ -12,7 +13,7 @@ import { chatterLine, chatterRuns, type ChatterRun } from "~/chat/chatter"
 import { MessageRow } from "~/chat/message"
 import { useStick } from "~/chat/stick"
 import { linked } from "~/chat/linked"
-import { flash, jumpTo, ReplyContext, useReplying, type Replying } from "~/chat/reply"
+import { flash, jumpTo, ReplyContext, replyTo, useReplying, type Quoting, type Replying } from "~/chat/reply"
 import type { Jump } from "~/chat/search-box"
 import { paintHits } from "~/chat/search-paint"
 import { t } from "~/i18n/i18n"
@@ -39,12 +40,15 @@ const Start = later(() => import("~/chat/feed-notes").then((m) => m.Start))
 
 const GROUP_MS = 5 * 60_000
 const TAIL = 100
+const FIRST = 50
 const MORE = 40
 const CAP = 160
 const PREFETCH = 120
 const HOLD = 240
 const DRY_PAGES = 3
 const REACH_WAIT_MS = 600
+const QUIET_MS = 120
+const HAND_MS = 1000
 
 interface Span {
   top: number | null
@@ -169,10 +173,10 @@ export function Conversation({ channel, jump }: { channel: Channel; jump: Jump |
     }
   }, [target, visit, code, earlierTo])
   const waiting = target !== null && reached !== visit
-  const [reply, setReply] = useState<{ key: string; to: Message; excerpt: string | null } | null>(null)
+  const [reply, setReply] = useState<{ key: string; quoting: Quoting } | null>(null)
   const replying = useMemo((): Replying => {
     const here = reply?.key === key ? reply : null
-    return { to: here?.to ?? null, excerpt: here?.excerpt ?? null, set: (to, excerpt) => setReply(to ? { key, to, excerpt: excerpt ?? null } : null) }
+    return { quoting: here?.quoting ?? null, set: (quoting) => setReply(quoting ? { key, quoting } : null) }
   }, [reply, key])
   const doc = docOf(channel, where)
   const placeName =
@@ -302,10 +306,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const lastAt = span.bottom === null ? -1 : list.findIndex((m) => m.seq === span.bottom)
   const end = lastAt >= 0 ? lastAt + 1 : list.length
   const firstAt = span.top === null ? -1 : list.findIndex((m) => m.seq === span.top)
-  const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - TAIL)
+  const start = firstAt >= 0 && firstAt < end ? firstAt : Math.max(0, end - FIRST)
   const following = end === list.length
   const latest = useRef(false)
-  const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift } = useStick(following, !!doc)
+  const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift, prepended } = useStick(following, !!doc)
   const shownFrom = list[start]?.seq
   const shownTo = list[end - 1]?.seq
   const edges = useRef({ from: shownFrom, to: shownTo })
@@ -313,6 +317,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   useLayoutEffect(() => {
     const was = edges.current
     edges.current = { from: shownFrom, to: shownTo }
+    if (shownFrom !== undefined && was.from !== undefined && shownFrom < was.from) prepended()
     const kept = dropped.current
     if (kept) {
       dropped.current = null
@@ -329,13 +334,12 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     dropped.current = { row: cut.row, top: cut.row.getBoundingClientRect().top }
     lift(cut.tall)
     setSpan(spanOf(list, cut.from, end))
-  }, [shownFrom, shownTo, following, start, end, list, settle, lift, scroller, content])
+  }, [shownFrom, shownTo, following, start, end, list, settle, lift, prepended, scroller, content])
   const code = channel.code
   const holdEarlier = actions.holdEarlier
   const earlierPage = actions.earlier
   const holdFrom = list.length ? (list[Math.max(0, start - HOLD)]?.seq ?? null) : olderHere ? (since ?? null) : null
-  useEffect(() => holdEarlier(code, "feed", holdFrom), [code, holdFrom, holdEarlier])
-  useEffect(() => () => holdEarlier(code, "feed", null), [code, holdEarlier])
+  useHold(code, "feed", holdFrom)
   const paging = useRef({ busy: false, done: false, dry: 0, length: -1 })
   const [paged, setPaged] = useState(0)
   useEffect(() => {
@@ -356,19 +360,19 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     (seq: number, excerpt: string) => {
       const m = list.find((x) => x.seq === seq)
       if (!m) return
-      replying?.set(m, excerpt)
+      replying?.set(replyTo(m, excerpt))
     },
     [list, replying]
   )
 
   useEffect(() => {
     const near = [...list.slice(Math.max(0, start - MORE), start), ...list.slice(end, end + MORE)]
-    const texts = near.flatMap((m) => (wordsRaw(m.text) && !m.system ? [{ text: wordsRaw(m.text), seq: m.seq }] : []))
+    const texts = near.flatMap((m) => (wordsRaw(m.text) && !m.system ? [{ text: wordsRaw(m.text), seq: m.seq, at: m.at }] : []))
     let stop = () => {}
     let live = true
     const timer = window.setTimeout(() => {
       void import("~/chat/markdown").then(({ warm }) => {
-        if (live) stop = warm(texts, ({ text, seq }) => linked(text, names, tasks, seq))
+        if (live) stop = warm(texts, ({ text, seq, at }) => ({ markdown: linked(text, names, tasks, seq), at }))
       })
     }, 150)
     return () => {
@@ -438,6 +442,13 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   }, [last, list, channel.you, toBottom, settle, stuck, live, content, doc, scroller])
 
   const here = spotKey(channel.code, where)
+  const movedAt = useRef(Number.NEGATIVE_INFINITY)
+  const handAt = useRef(Number.NEGATIVE_INFINITY)
+  const byHand = () => {
+    handAt.current = performance.now()
+  }
+  const earlierDue = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(earlierDue.current), [])
   const onScroll = () => {
     remember()
     const box = scroller.current
@@ -459,6 +470,12 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     const cutBelow = (to: number) => to >= end || (at(to) ?? 0) - top > box.clientHeight * 2
     const cutAbove = (from: number) => from <= start || (at(from) ?? Infinity) - (content.current?.getBoundingClientRect().top ?? top) < below - box.clientHeight
     if (start > 0 && box.scrollTop < box.clientHeight * 3 && (!stuck.current || box.scrollHeight < box.clientHeight * 2)) {
+      const wait = movedAt.current + QUIET_MS - performance.now()
+      if (wait > 0) {
+        window.clearTimeout(earlierDue.current)
+        earlierDue.current = window.setTimeout(() => scrolled.current(), wait)
+        return
+      }
       const from = Math.max(0, start - MORE)
       const to = Math.min(end, from + CAP)
       const next = spanOf(list, from, cutBelow(to) ? to : end)
@@ -492,6 +509,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     const box = scroller.current
     if (box && top !== undefined && !stuck.current && box.scrollTop < box.clientHeight * 3) scrolled.current()
   }, [top, scroller, stuck])
+  useEffect(() => {
+    const box = scroller.current
+    if (box && start > 0 && stuck.current && box.scrollHeight < box.clientHeight * 2) scrolled.current()
+  }, [start, scroller, stuck])
 
   const toggleEarlier = () => {
     if (earlier) return setEarlier(false)
@@ -505,7 +526,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const toLatest = () => {
     setFresh(0)
     setFar(false)
-    if (following) return toBottom(true)
+    if (following) {
+      setSpan((s) => ({ ...s, bottom: null }))
+      return toBottom(true)
+    }
     latest.current = true
     setSpan({ top: null, bottom: null })
   }
@@ -587,7 +611,19 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
           <QuotePick root={content} onQuote={quote} />
         </Suspense>
       )}
-      <div className="feed" ref={scroller} onScroll={onScroll}>
+      <div
+        className="feed"
+        ref={scroller}
+        onScroll={() => {
+          const now = performance.now()
+          if (now - handAt.current < HAND_MS) movedAt.current = now
+          onScroll()
+        }}
+        onWheel={byHand}
+        onPointerDown={byHand}
+        onTouchStart={byHand}
+        onKeyDown={byHand}
+      >
         <div className="feed-list" ref={content}>
           {list.length === 0 && !compact
             ? channel.loading

@@ -8,7 +8,7 @@ import { channelTitle, loadRecent, saveRecent } from "@kiwi/channel/recent.ts"
 import { useChannel } from "@kiwi/channel/use-channel.ts"
 import { useKnownChannels } from "@kiwi/channel/list.ts"
 import { type StoredMember } from "@kiwi/channel/store.ts"
-import { useIcons, useLiveIcon } from "@kiwi/app/icons.ts"
+import { useIcons } from "@kiwi/app/icons.ts"
 import { markSeen, setOpenNews } from "@kiwi/channel/news.ts"
 import { lastPreview } from "@kiwi/app/preview.ts"
 import { sendsInTurn } from "@kiwi/app/send-order.ts"
@@ -135,7 +135,6 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   useMarksSync(ch, roomId, caughtUp)
   const known = useKnownChannels()
   const icon = iconUrl(useIcons().get(roomId) ?? null)
-  useLiveIcon(member)
   const [pending, setPendingNow] = useState<Pending[]>(() => unsentIn(roomId))
   const setPending = useCallback((change: (list: Pending[]) => Pending[]) => setPendingNow(changeUnsent(roomId, change)), [roomId])
   const [inTurn] = useState(sendsInTurn)

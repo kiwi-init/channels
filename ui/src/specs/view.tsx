@@ -13,12 +13,13 @@ import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import type { Channel, Spec, Task } from "~/model"
 import { useGo, useNav } from "~/nav"
-import { Shown } from "~/names"
+import { nickname, Shown } from "~/names"
 import { SpecMark } from "~/specs/card"
 import { faceOf, needsYou, tasksOf, workersOf } from "~/specs/read"
 import { NowCard } from "~/tasks/now"
 import { TaskRow } from "~/tasks/row"
 import { wordsPlain } from "~/words"
+import { dragOut } from "~/panes/place"
 
 const LOOSE_SHOWN = 3
 const DONE_PAGE = 20
@@ -176,16 +177,30 @@ function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
   const shown = unfolded && open.length > 0
   return (
     <li className={cx("gh-item", shown && "is-unfolded")}>
-      <button type="button" className="gh-row spec-row" onClick={() => go({ to: "spec", ask: spec.ask, part })}>
+      <button
+        type="button"
+        className="gh-row spec-row"
+        onClick={() => go({ to: "spec", ask: spec.ask, part })}
+        {...dragOut({ page: { at: "spec", ask: spec.ask } }, wordsPlain(spec.title, channel.nicknames))}
+      >
         <SpecMark spec={spec} />
         <span className="gh-title">
           <Shown value={spec.title} />
         </span>
         {who.length > 0 && (
-          <span className="spec-card-faces spec-row-faces" aria-hidden="true">
+          <span className="spec-card-faces spec-row-faces">
             {who.slice(0, 3).map((n) => (
-              <Avatar key={n} person={faceOf(channel, n)} size="sm" />
+              <span key={n} className="spec-face">
+                <Avatar person={faceOf(channel, n)} size="sm" />
+                <span className="spec-face-name">{nickname(channel, n)}</span>
+              </span>
             ))}
+            <span className="spec-faces-all" aria-hidden="true">
+              {who
+                .slice(0, 3)
+                .map((n) => nickname(channel, n))
+                .join(", ")}
+            </span>
           </span>
         )}
       </button>

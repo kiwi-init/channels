@@ -1,0 +1,51 @@
+.csheet .pg-label:first-child {
+  margin-top: 0;
+}
+
+.csheet .pg-acts:last-child {
+  margin-bottom: 0;
+}
+
+.csheet-hash {
+  color: var(--ink-3);
+  font: var(--t-ui) var(--mono);
+}
+
+.csheet-form {
+  display: grid;
+  gap: 8px;
+  padding: 4px 0 12px;
+}
+
+.ctl-below .csheet-form {
+  padding: 0;
+}
+
+.csheet-save {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.csheet-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 12px;
+}
+
+.csheet-add .input {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (hover: hover) {
+  .csheet.is-calm .ctl-row > .ctl-line > .ctl-ctl:not(:has(.is-primary)) > .btn.is-quiet {
+    opacity: 0;
+    transition: opacity var(--fast);
+  }
+
+  .csheet.is-calm .ctl-row:is(:hover, :focus-within) > .ctl-line > .ctl-ctl > .btn.is-quiet {
+    opacity: 1;
+  }
+}

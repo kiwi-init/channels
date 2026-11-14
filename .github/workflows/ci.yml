@@ -146,9 +146,15 @@ jobs:
       - name: ui css units
         if: ${{ !cancelled() }}
         run: bun scripts/css-units.ts
+      - name: ui theme colours in tokens.css come from channels.ts
+        if: ${{ !cancelled() }}
+        run: bun scripts/theme-tokens.ts
       - name: ui words in catalogs
         if: ${{ !cancelled() }}
         run: bun scripts/ui-english.ts
+      - name: feed promises, every line of FEED.md names a check that is in the repo, still says its words, and runs here
+        if: ${{ !cancelled() }}
+        run: bun scripts/feed-promises.ts
       - name: knip
         if: ${{ !cancelled() }}
         run: bun run knip
@@ -205,6 +211,9 @@ jobs:
       - name: ui bundle budget
         if: ${{ !cancelled() && matrix.part == 'app' }}
         run: bun scripts/ui-bundle.ts
+      - name: ui lazy imports preload only what the first load doesn't already have, and index.html preloads the entry's whole static graph
+        if: ${{ !cancelled() && matrix.part == 'app' }}
+        run: bun scripts/ui-preload-deps.ts --dist ui/dist
       - name: ui harness build, with the plain-browser key store
         if: ${{ !cancelled() }}
         run: bun scripts/ui-harness.ts
@@ -229,6 +238,18 @@ jobs:
       - name: ui removing a repo from channel settings keeps the settings dialog open, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
         run: bun scripts/ui-settings-remove.ts --dist ui/dist
+      # A specs row's and a spec card's worker avatars carry their names: hidden at rest, shown on hover and on the row's keyboard focus, with the buttons still one button (#2335).
+      - name: ui specs worker avatars name themselves on hover and keyboard focus, in WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
+        run: bun scripts/ui-spec-names.ts --dist ui/dist
+      # A UTC time written in chat prose names its local time on hover, keyboard focus and a press, and copying the message keeps the original text (#2367).
+      - name: ui a UTC time in chat prose names its local time, in WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
+        run: bun scripts/ui-utc-times.ts --dist ui/dist
+      # Selecting text in a task's description or its messages offers Quote; the excerpt lands in the task's composer next to the draft, a description quote cites the task and a message quote its message, mixed selections and read-only members get no Quote, and switching tasks clears it (#2374).
+      - name: ui a task panel quotes its description and its messages, in WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-a' }}
+        run: bun scripts/ui-task-quote.ts --dist ui/dist
       # A feed keeps its place when its width changes: the sidebar hidden and shown, its edge dragged, the panel opened and closed, the window resized. At the bottom it stays at the bottom with no blank room; scrolled up, the row being read comes back to its pixel (T231).
       - name: ui a feed keeps its place when its width changes, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-a' }}
@@ -239,6 +260,9 @@ jobs:
       - name: ui people see agents by nickname, never by handle, on the main screens (demo agents get real-looking handles)
         if: ${{ !cancelled() && matrix.part == 'ui-b' }}
         run: bun scripts/ui-handles.ts --dist ui/dist
+      - name: ui spoilers reveal without dropping text or hiding focus, in Chromium and WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-b' }}
+        run: bun scripts/ui-markdown-nodes.ts --browser chromium && bun scripts/ui-markdown-nodes.ts --browser webkit
       # DESIGN.md's rules of place, measured in the built page at two window sizes and in both layouts: the centre, the sidebar's edges and width, the tabs, hiding and peeking the sidebar, search, the panel (T339).
       - name: ui the layout rules hold, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-b' }}
@@ -326,6 +350,20 @@ jobs:
           status=0
           bun scripts/ui-msg-edit.ts || status=1
           bun scripts/ui-msg-edit.ts --webkit || status=1
+          exit "$status"
+      - name: feed late picture, a picture that arrives after its line leaves the conversation where it was, at the bottom and scrolled up, in Chromium and WebKit
+        if: ${{ !cancelled() && matrix.part == 'edit' }}
+        run: |
+          status=0
+          bun scripts/ui-feed-late-image.ts || status=1
+          bun scripts/ui-feed-late-image.ts --webkit || status=1
+          exit "$status"
+      - name: feed unread, lines posted while you sit in another room count on its row, open under the New line and clear when read, and scrolled up the button counts the new ones, in Chromium and WebKit
+        if: ${{ !cancelled() && matrix.part == 'edit' }}
+        run: |
+          status=0
+          bun scripts/ui-feed-unread.ts || status=1
+          bun scripts/ui-feed-unread.ts --webkit || status=1
           exit "$status"
       - name: ui a busy thread doc never scrolls on its own, under the composer or while you read, in WebKit
         if: ${{ !cancelled() && matrix.part == 'view' }}
@@ -467,12 +505,36 @@ jobs:
       - name: ui Esc in search keeps the panel, and Settings doesn't offer a name change, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-esc-and-name.ts --dist ui/dist
+      - name: ui the GIF pickers, updates panel, usage card and menus close on Escape, Tab, presses outside, blur and resize exactly as they did before sharing one dismissal hook
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-dismiss.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui the composer keeps each room's draft and images to itself, and an image sends without a file name as text, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-composer-rooms.ts --dist ui/dist
+      - name: ui opening a room, a DM or a channel focuses its composer, with the draft kept and the caret at its end, and never steals focus or opens a touch keyboard, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-composer-focus.ts --dist ui/dist
+      - name: ui the icons only later screens use come with those screens and still draw where they're first used, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-lazy-icons.ts --dist ui/dist
       - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
+      - name: ui Channel settings and the task pane keep their controls while a markdown parse lands frames late, and a press in that window runs the current action (#2423)
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-sheet-parse.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui room membership agrees across summary, editor and saves, including live updates
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-room-members.ts ${{ matrix.engine == 'chromium' && '--chromium' || '' }}
+      - name: ui departed human DMs keep their left label and human conversation wording
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-departed-dms.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui departed reviewers are identified in task details and picker context without rewriting history
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-departed-reviewer.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui Back and Forward in the top bar walk a room, a spec, Settings and Home and back, are off exactly when they can't move, and stay clear of the top bar at every size, in WebKit
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-history-arrows.ts --dist ui/dist
       - name: ui a refused copy selects the whole command and offers it by hand, and a landed one doesn't, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-copy-recovers.ts --dist ui/dist
@@ -512,6 +574,18 @@ jobs:
       - name: ui the sidebar stays where it is scrolled while its highlight glides to the row just opened, and a press on a row right after opens it
         if: ${{ !cancelled() }}
         run: bun scripts/ui-side-still.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui Others' direct messages keeps its heading in place while one of its conversations is open, collapsed or expanded (#2386)
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-theirs-heading.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui Jump to latest shows when you scroll up a long feed, takes a click and brings the feed to its end, from a little up, from far past the rows it holds and from near their top, at rest or the moment a wheel stops
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-feed-latest.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui a long wheel up a long feed, while older rows load above, and the same wheel back down bring the last line back, so no load skips rows
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-feed-wheel-up.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui a font that arrives late leaves the conversation where it was, at the bottom and scrolled up
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-feed-late-font.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Copy link to message copies only the message's address, and a pasted or opened link jumps to it with ⌘[ back, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-message-link.ts --dist ui/dist
@@ -618,6 +692,26 @@ jobs:
         if: ${{ !cancelled() }}
         timeout-minutes: 5
         run: bun desktop/scripts/eb-unreadable-check.ts desktop/release-eb/build/dev-macos-*/*.app
+      - name: the frame is the window's own glass over a bright and a dark wallpaper, solid with Reduce transparency, and scrolling next to an opaque window (T2107)
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: |
+          ax() { osascript -l JavaScript -e 'ObjC.import("AppKit"); const w = $.NSWorkspace.sharedWorkspace; `reduce transparency ${w.accessibilityDisplayShouldReduceTransparency}, increase contrast ${w.accessibilityDisplayShouldIncreaseContrast}`'; }
+          echo "what draws this screen: $(system_profiler SPDisplaysDataType 2> /dev/null | grep -E 'Chipset Model|Vendor|Metal|Resolution' | sed -E 's/^ +//' | paste -sd ';' -), $(sysctl -n hw.model), macOS $(sw_vers -productVersion)"
+          echo "this machine, as it comes: $(ax)"
+          for key in reduceTransparency increaseContrast; do echo "com.apple.universalaccess $key: $(defaults read com.apple.universalaccess "$key" 2>&1 | tail -n 1), for every user: $(defaults read /Library/Preferences/com.apple.universalaccess "$key" 2>&1 | tail -n 1)"; done
+          defaults write com.apple.universalaccess reduceTransparency -bool false || echo "the user's Reduce transparency can't be written"
+          echo "after the user's setting: $(ax)"
+          sudo defaults write /Library/Preferences/com.apple.universalaccess reduceTransparency -bool false || echo "the machine's Reduce transparency can't be written"
+          echo "after the machine's setting: $(ax)"
+          bun desktop/scripts/eb-glass-check.ts desktop/release-eb/build/dev-macos-*/*.app "$RUNNER_TEMP/glass"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: glass-mac
+          path: ${{ runner.temp }}/glass
+          if-no-files-found: ignore
+          overwrite: true
 
   desktop-linux:
     name: desktop / linux, ${{ matrix.os }}
@@ -653,7 +747,7 @@ jobs:
           find "$debs" -maxdepth 1 -name '*.deb' | wc -l > "$RUNNER_TEMP/debs-before"
           echo "Dir::Cache::Archives \"$debs/\";" | sudo tee /etc/apt/apt.conf.d/90linux-debs > /dev/null
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bison bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols libkf6iconthemes-dev qt6-base-dev qt6-svg-plugins breeze-icon-theme sway swaybg grim gsettings-desktop-schemas libglib2.0-bin libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0' || '' }}
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bison bubblewrap xdg-dbus-proxy xvfb xauth xdotool x11-utils squashfs-tools gnome-keyring libsecret-tools dbus ${{ matrix.drive && 'weston xwayland kwin-wayland plasma-wayland-protocols libkf6iconthemes-dev qt6-base-dev qt6-svg-plugins breeze-icon-theme sway swaybg grim gsettings-desktop-schemas libglib2.0-bin libwayland-dev python3-gi gir1.2-gtk-3.0 gir1.2-gdkpixbuf-2.0 openbox wmctrl' || '' }}
       - id: debs
         name: keep what apt downloaded, even when it ran out of time
         if: always()
@@ -741,13 +835,20 @@ jobs:
         env:
           CHANNELS_EB_TEST: "1"
           DASH_RELEASE_OFFLINE: "1"
-      - name: in the real app the Settings gear opens Settings, and a press on it never starts a window move, in both layouts
+      - name: with real X clicks under openbox, the Settings gear opens and closes Settings, a double-click or a drag on it leaves the window still, and a drag on the empty tabs rail moves it, in both layouts
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 5
         run: |
           test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
           [ -n "$test" ] || { echo "no dev-linux test build under desktop/release-eb/build"; exit 1; }
           xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-native-click.ts "$test"
+      - name: Linux window controls sit at the top-right, act on the window under openbox, and their label follows the window manager
+        if: ${{ !cancelled() && matrix.drive }}
+        timeout-minutes: 5
+        run: |
+          test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
+          [ -n "$test" ] || { echo "no dev-linux test build under desktop/release-eb/build"; exit 1; }
+          xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-window-controls.ts "$test"
       - if: ${{ !cancelled() && matrix.drive }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -883,11 +984,11 @@ jobs:
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 12
         run: bash desktop/scripts/wayland-check/kwin.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/wayland-check"
-      - name: tiling, scale and closing on wlroots as Hyprland and sway run it (headless sway with no XWayland), with screenshots
+      - name: tiling, scale, closing and the wallpaper under the glass frame on wlroots as Hyprland and sway run it (headless sway with no XWayland), with screenshots
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 12
         run: bash desktop/scripts/wlroots-check/sway.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/wlroots-check"
-      - name: on a floating desktop (headless weston) the shell draws GNOME's wallpaper, with no GTK title bar and close, minimize and maximize top left, with screenshots
+      - name: on a floating desktop (headless weston) the glass frame shows GNOME's wallpaper and then KDE's, with no GTK title bar and close, minimize and maximize top left, with screenshots
         if: ${{ !cancelled() && matrix.drive }}
         timeout-minutes: 8
         run: bash desktop/scripts/floating-check/weston.sh "$PWD/${{ steps.test-app.outputs.path }}" "$RUNNER_TEMP/floating-check"

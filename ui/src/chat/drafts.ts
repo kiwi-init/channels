@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react"
 
 import { MAX_BODY_LENGTH } from "@kiwi/core/protocol.ts"
 import { t } from "~/i18n/i18n"
-import type { Upload, Where } from "~/model"
+import { isUpload, type Upload, type Where } from "~/model"
 import { keysHint } from "~/kit/keys"
 
 export const composerKey = (code: string, where: Where, inThread?: number): string => `${code}:${JSON.stringify(where)}:${inThread ?? ""}`
@@ -126,9 +126,6 @@ export type FileShelf = {
   put(key: string, kept: KeptFiles): Promise<void>
   drop(key: string): Promise<void>
 }
-
-const isUpload = (v: unknown): v is Upload =>
-  typeof v === "object" && v !== null && "name" in v && "mime" in v && "data" in v && typeof v.name === "string" && typeof v.mime === "string" && typeof v.data === "string"
 
 const isKeptFiles = (v: unknown): v is KeptFiles =>
   typeof v === "object" && v !== null && "files" in v && "at" in v && typeof v.at === "number" && Array.isArray(v.files) && v.files.length > 0 && v.files.every(isUpload)

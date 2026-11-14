@@ -85,8 +85,9 @@ async function inThreadDoc<T>(ch: Channel, from: number, at: DocPlace, work: (td
     await sent(td, until);
     return out;
   } finally {
-    ch.closeDoc(at.key);
+    const saved = ch.closeDoc(at.key);
     stop.abort();
+    await saved;
   }
 }
 

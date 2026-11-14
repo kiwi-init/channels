@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test"
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts"
-import type { Event, Message } from "@kiwi/core/protocol.ts"
+import { cleanActivity, type Event, type Message } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
 import type { Online } from "@kiwi/channel/online.ts"
-import { liveOf, restOf, workingIn } from "~/doing"
+import { liveOf, restOf, unsureOf, workingIn } from "~/doing"
 import { peopleOf } from "~/live/map"
 
 const ids: Record<string, Identity> = {}
@@ -65,5 +65,22 @@ describe("the feed shows what agents are doing (T603)", () => {
     expect(names({ kind: "task", task: ship.seq + 1 })).toEqual([])
     expect(names({ kind: "dm", with: "calm-heron" })).toEqual([])
     expect(liveOf(people.find((p) => p.name === "busy-otter")!)?.text).toBe("waiting for a person")
+  })
+
+  test("an agent whose activity went from working to unknown shows activity unknown, not thinking or idle, and stays online and listening (#2382)", async () => {
+    const ship = await ev("jow", { op: "task.add", title: "Ship it", owner: "busy-otter" })
+    const state = fold([ship, await ev("busy-otter", { op: "task.claim", task: ship.seq })], roster)
+    const said = (activity: unknown) => new Map([here("busy-otter", { activity: cleanActivity(activity) ?? undefined, reach: "listening" })])
+    const working = peopleOf(state, roster, said({ state: "working", tool: "Bash" }), "jow", new Map()).find((p) => p.name === "busy-otter")!
+    expect(liveOf(working)).toEqual({ text: "running Bash", busy: true })
+    const unsure = peopleOf(state, roster, said({ state: "unknown", tool: "Bash" }), "jow", new Map()).find((p) => p.name === "busy-otter")!
+    expect(unsure.activity).toEqual({ state: "unknown" })
+    expect(liveOf(unsure)).toBeNull()
+    expect(restOf(unsure)).toBe("activity unknown")
+    expect([unsure.presence, unsure.reach]).toEqual(["online", "listening"])
+    expect(workingIn([unsure], { kind: "task", task: ship.seq })).toEqual([])
+    expect([unsureOf(unsure), unsureOf(working), unsureOf({ ...unsure, presence: "offline" })]).toEqual([true, false, false])
+    const idle = peopleOf(state, roster, said({ state: "idle" }), "jow", new Map()).find((p) => p.name === "busy-otter")!
+    expect(restOf(idle)).toBe("idle")
   })
 })

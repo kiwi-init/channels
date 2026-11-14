@@ -2,7 +2,8 @@ import type { Scenario } from "~/demo/provider"
 import type { Prefs, Usage } from "~/model"
 import type { Nav } from "~/nav"
 import type { TrackTab } from "~/tasks/track-tab"
-import type { Layout } from "@kiwi/app/layout.ts"
+
+export const DEMO_FROZEN = new URLSearchParams(location.search).has("frozen")
 
 export interface Shot {
   scenario: Scenario
@@ -13,9 +14,9 @@ export interface Shot {
   streams?: boolean
   onboarding?: true
   track?: TrackTab
-  layout?: Layout
   usage?: Partial<Usage>
   broken?: true
+  wm?: "floating"
   copyRefused?: true
 }
 
@@ -26,20 +27,25 @@ const kiwi = (nav: Partial<Nav> = {}): Shot => ({ scenario: "full", channel: "ki
 export const SHOTS: Record<string, Shot> = {
   channel: kiwi(),
   "channel-broken": { ...kiwi(), broken: true },
-  "channel-top": { ...kiwi(), layout: "top" },
-  home: { scenario: "full", channel: null },
-  "home-calm": { scenario: "home-calm", channel: null },
+  "linux-floating": { ...kiwi(), wm: "floating" },
   "long-feed": { scenario: "long", channel: "kiwi" },
   "own-bubbles": { scenario: "own-bubbles", channel: "kiwi" },
+  "markdown-nodes": { scenario: "markdown-nodes", channel: "kiwi" },
   "tabs-3": { scenario: "tabs-3", channel: "kiwi" },
   "tabs-8": { scenario: "tabs-8", channel: "kiwi" },
-  "tabs-8-top": { scenario: "tabs-8", channel: "kiwi", layout: "top" },
   signs: { scenario: "signs", channel: "kiwi" },
+  "theirs-many": { scenario: "theirs", channel: "kiwi" },
   opening: { scenario: "opening", channel: "kiwi" },
+  "slow-open": { scenario: "slow-open", channel: "kiwi" },
   "opening-tasks": { scenario: "opening", channel: "kiwi", nav: { tab: "specs" } },
   "opening-needs": { scenario: "opening", channel: "kiwi", nav: { tab: "needs" } },
   dm: kiwi({ where: { kind: "dm", with: "atlas" } }),
   "dm-private": kiwi({ where: { kind: "dm", with: "maya" } }),
+  "dm-departed-human": { scenario: "departed-dms", channel: "kiwi", nav: { where: { kind: "dm", with: "departed-human" } } },
+  "dm-departed-agent": { scenario: "departed-dms", channel: "kiwi", nav: { where: { kind: "dm", with: "scout" } } },
+  "dm-unknown": { scenario: "departed-dms", channel: "kiwi", nav: { where: { kind: "dm", with: "unknown-person" } } },
+  "dm-current-human": { scenario: "departed-dms", channel: "kiwi", nav: { where: { kind: "dm", with: "maya" } } },
+  "dm-current-agent": { scenario: "departed-dms", channel: "kiwi", nav: { where: { kind: "dm", with: "atlas" } } },
   "thread-doc": { ...kiwi({ where: { kind: "task", task: 10 } }), docs: 0 },
   "thread-doc-1000": { ...kiwi({ where: { kind: "task", task: 10 } }), docs: 1000 },
   "thread-doc-live": { ...kiwi({ where: { kind: "task", task: 10 } }), docs: 200, streams: true },
@@ -70,7 +76,14 @@ export const SHOTS: Record<string, Shot> = {
   task: kiwi({ tab: "specs", panel: { kind: "task", task: 12 } }),
   "task-working": kiwi({ panel: { kind: "task", task: 10 } }),
   "task-body": { scenario: "task-body", channel: "kiwi", nav: { tab: "specs", panel: { kind: "task", task: 12 } } },
+  "activity-unknown": { scenario: "activity-unknown", channel: "kiwi" },
+  "task-quote": { scenario: "task-quote", channel: "kiwi", nav: { tab: "specs", panel: { kind: "task", task: 12 } } },
+  "task-quote-read-only": { scenario: "task-quote-read-only", channel: "kiwi", nav: { tab: "specs", panel: { kind: "task", task: 12 } } },
   "task-review": kiwi({ tab: "specs", panel: { kind: "task", task: 14 } }),
+  "task-departed-reviewer": { scenario: "departed-reviewer", channel: "kiwi", nav: { panel: { kind: "task", task: 14 } } },
+  "task-offline-reviewer": { scenario: "departed-reviewer", channel: "kiwi", nav: { panel: { kind: "task", task: 12 } } },
+  "task-departed-reviewer-done": { scenario: "departed-reviewer", channel: "kiwi", nav: { panel: { kind: "task", task: 16 } } },
+  "task-departed-reviewer-readonly": { scenario: "departed-reviewer-readonly", channel: "kiwi", nav: { panel: { kind: "task", task: 14 } } },
   "task-waiting": kiwi({ tab: "specs", panel: { kind: "task", task: 13 } }),
   "task-done": kiwi({ tab: "specs", panel: { kind: "task", task: 9 } }),
   "tasks-empty": { scenario: "full", channel: "landing", nav: { tab: "specs" } },

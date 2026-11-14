@@ -119,6 +119,8 @@ const words = {
   "chat.markdown.column": "column {n}",
   "chat.markdown.copy": "Copy",
   "chat.markdown.copy.text": "Copy {text}",
+  "chat.markdown.spoiler.show": "Show spoiler",
+  "chat.markdown.spoiler.hide": "Hide spoiler",
   "chat.menus.view.profile": "View profile",
   "chat.menus.message": "Message",
   "chat.menus.open.link": "Open link",
@@ -229,6 +231,7 @@ const words = {
   "chat.updates.panel.and.more": " and {count} more",
   "chat.markdown.code.block": "Code block",
   "chat.markdown.code.block.lang": "Code block: {lang}",
+  "chat.markdown.utc.assuming": "assuming {date} UTC, the message date",
   "chat.markdown.task": "Task: {text}",
   "chat.doc.media.didnt.load": "{name} didn't load",
   "chat.fold.opened": "opened",
@@ -244,6 +247,7 @@ const words = {
   "chat.fold.check": "{name} {word}",
   "chat.doc.channel.removed": "the channel was removed",
   "chat.doc.channel.closed": "the channel was closed",
+  "chat.composer.edit.not.loaded": "The whole message couldn't be loaded, so it can't be edited right now",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

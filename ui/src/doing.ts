@@ -16,9 +16,12 @@ export function liveOf(p: Pick<Person, "activity" | "presence">): Live | null {
   return null
 }
 
+export const unsureOf = (p: Pick<Person, "activity" | "presence" | "kind">): boolean => p.kind === "agent" && p.presence !== "offline" && p.activity?.state === "unknown"
+
 const REACH: Record<NonNullable<Person["reach"]>, Key> = { listening: "doing.listening", running: "doing.reach.running", wakes: "doing.wakes" }
 
 export function restOf(p: Pick<Person, "activity" | "reach">): string {
+  if (p.activity?.state === "unknown") return t("doing.unknown")
   if (p.activity?.state === "idle" || !p.reach) return t("doing.idle")
   return t(REACH[p.reach])
 }

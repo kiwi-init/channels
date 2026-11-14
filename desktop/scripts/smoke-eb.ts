@@ -360,11 +360,11 @@ try {
     const finding = await until("⌘F opening search", 5_000, () => page(() => !!document.querySelector(".top-tools.is-searching")).then((on) => (on ? true : null))).catch(() => null);
     escape();
     if (!finding) once.push("⌘F didn't open search");
-    await page(() => document.querySelector<HTMLElement>(".rail .tile.is-home")?.click());
-    await until("Home", 5_000, () => inChannel().then((on) => (on ? null : true))).catch(() => null);
+    await page(() => document.querySelector<HTMLElement>(".rail-gear")?.click());
+    await until("Settings", 5_000, () => inChannel().then((on) => (on ? null : true))).catch(() => null);
     command("1");
     const first = await until("⌘1 opening the first channel", 5_000, () => inChannel().then((on) => (on ? true : null))).catch(() => null);
-    if (!first) once.push("⌘1 from Home didn't open the first channel");
+    if (!first) once.push("⌘1 from Settings didn't open the first channel");
     if (once.length) problems.push(...once);
     else console.log("through the menu bar: ⌘\\ toggles the sidebar once per press, ⌘[ and ⌘] move one place each, ⌘N opens New channel, ⌘F opens search, ⌘1 opens the first channel");
     if (inSettings && jumped && stayed && shut) console.log("⌘, opens Settings; ⌘K, a menu key and a page key at once, opens the palette once and closes it once");

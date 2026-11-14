@@ -27,9 +27,9 @@ function observersIn(text: string): Observers | null {
   try {
     const seen: unknown = JSON.parse(text);
     if (seen === null || typeof seen !== "object") return null;
-    const { late, untold, ran } = seen as { late?: unknown; untold?: unknown; ran?: unknown };
+    const { late, untold, ran, loading } = seen as { late?: unknown; untold?: unknown; ran?: unknown; loading?: unknown };
     const lines = (x: unknown): string[] => (Array.isArray(x) ? x.filter((l): l is string => typeof l === "string") : []);
-    return { late: lines(late), untold: lines(untold), ran: lines(ran) };
+    return { late: lines(late), untold: lines(untold), ran: lines(ran), loading: lines(loading) };
   } catch {
     // a page's own debug line that starts like ours is not a trace
     return null;
@@ -145,6 +145,10 @@ function traceObservers(tag: string): void {
             .filter((r) => now - r.at < 250)
             .map((r) => r.line)
             .slice(-20),
+          loading: [...document.head.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')]
+            .filter((l) => !l.sheet)
+            .map((l) => l.href.replace(/^https?:\/\/[^/]+\//, ""))
+            .slice(0, 30),
         }),
     );
   });

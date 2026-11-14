@@ -11,6 +11,7 @@ type Props = {
   whole?: boolean
   panel?: boolean
   quiet?: boolean
+  frame?: (crashed: ReactNode) => ReactNode
   onCrash?: () => void
   onMend?: () => void
 }
@@ -58,7 +59,7 @@ export class Boundary extends Component<Props, { failed: boolean; again: boolean
   }
   render() {
     if (!this.state.failed) return this.props.children
-    const { whole, panel, quiet } = this.props
+    const { whole, panel, quiet, frame = (crashed: ReactNode) => crashed } = this.props
     if (quiet) return null
     if (whole)
       return (
@@ -73,14 +74,14 @@ export class Boundary extends Component<Props, { failed: boolean; again: boolean
       )
     const title = t(panel ? "kit.boundary.panel.title" : "kit.boundary.view.title")
     if (this.state.again)
-      return (
+      return frame(
         <Crashed title={title} sub={t("kit.boundary.part.sub")}>
           <button type="button" className="btn is-primary" onClick={() => location.reload()}>
             {t("kit.boundary.reload")}
           </button>
         </Crashed>
       )
-    return (
+    return frame(
       <Crashed title={title} sub={t("kit.boundary.retry.sub")}>
         <button type="button" className="btn is-primary" onClick={this.retry}>
           {t("kit.boundary.retry")}

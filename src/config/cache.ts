@@ -102,6 +102,8 @@ export function fileBlobs(most = BLOB_CACHE_BYTES): BlobMemory {
 
 export const fileBlobMemory = fileBlobs();
 
+export const docsDir = (roomId: string, name?: string): string => join(home(), "cache", `${safe(roomId)}.docs`, ...(name === undefined ? [] : [safe(name)]));
+
 export function cachePath(roomId: string): string {
   return join(home(), "cache", `${roomId}.jsonl`);
 }

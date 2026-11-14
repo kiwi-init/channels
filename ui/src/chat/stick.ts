@@ -1,10 +1,14 @@
 import { useCallback, useLayoutEffect, useRef } from "react"
 
+import { motionOk } from "~/kit/glide"
+
 const NEAR_BOTTOM = 48
 
 const WHEEL_MS = 400
 
 const RESTORE_HOLD_MS = 4_000
+
+const TOUCHES = ["pointerdown", "keydown", "touchstart"] as const
 
 interface Anchor {
   el: Element
@@ -91,6 +95,11 @@ export function useStick(following = true, still = false) {
   const placed = useRef<Anchor | null>(null)
   const holdUntil = useRef(0)
   const parked = useRef<Anchor | null>(null)
+  const going = useRef(false)
+  const older = useRef(false)
+  const acted = useRef(Number.NEGATIVE_INFINITY)
+  const pressed = useRef(false)
+  const person = () => pressed.current || Date.now() - Math.max(acted.current, wheeled.current) < WHEEL_MS
   const pad = useCallback(() => {
     const h = room.current + reserve.current
     if (spacer.current) spacer.current.style.height = h > 0 ? `${h}px` : ""
@@ -137,7 +146,7 @@ export function useStick(following = true, still = false) {
         return
       }
       const top = box.getBoundingClientRect().top
-      if (still && Date.now() - wheeled.current < WHEEL_MS) {
+      if (still && !older.current && Date.now() - wheeled.current < WHEEL_MS) {
         anchor.current = spot(box, list, el, a.seq)
         return
       }
@@ -171,11 +180,12 @@ export function useStick(following = true, still = false) {
     if (!box || !list) return
     const reflow = width.current > 0 && box.clientWidth !== width.current
     width.current = box.clientWidth
-    if (!reflow && still && box.scrollTop < seen.current - 0.5 && gapIn(box) > 0.5) stuck.current = false
+    if (!reflow && still && box.scrollTop < seen.current - 0.5 && gapIn(box) > 0.5 && person()) stuck.current = false
     const from = box.scrollTop
     correct(reflow)
+    older.current = false
     if (!reflow && box.scrollTop !== from) parked.current = null
-    if (reflow || box.scrollTop !== from) seen.current = box.scrollTop
+    if (reflow || box.scrollTop !== from || (stuck.current && gapIn(box) <= 0.5)) seen.current = box.scrollTop
   }, [correct, still])
 
   const remember = useCallback(() => {
@@ -196,7 +206,8 @@ export function useStick(following = true, still = false) {
     const up = box.scrollTop < seen.current - 0.5
     const down = box.scrollTop > seen.current + 0.5
     if (up || down) parked.current = null
-    const near = !still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !up && (stuck.current || down)
+    going.current &&= !up && gap >= NEAR_BOTTOM
+    const near = going.current || (!still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !(up && person()) && (stuck.current || down))
     stuck.current = live.current && !held.current && near
     const kept = placed.current && placed.current === anchor.current && Date.now() < holdUntil.current && anchor.current?.el.isConnected ? anchor.current : null
     const was = anchor.current
@@ -238,11 +249,10 @@ export function useStick(following = true, still = false) {
       }
       touch()
     }
-    const kinds = ["pointerdown", "keydown", "touchstart"] as const
-    for (const kind of kinds) box.addEventListener(kind, touch, { passive: true })
+    for (const kind of TOUCHES) box.addEventListener(kind, touch, { passive: true })
     box.addEventListener("wheel", wheel, { passive: true })
     return () => {
-      for (const kind of kinds) box.removeEventListener(kind, touch)
+      for (const kind of TOUCHES) box.removeEventListener(kind, touch)
       box.removeEventListener("wheel", wheel)
     }
   }, [remember, still, pad])
@@ -250,10 +260,13 @@ export function useStick(following = true, still = false) {
   useLayoutEffect(() => {
     const page = scroller.current?.ownerDocument
     if (!page) return
-    const reader = () => {
+    const reader = ({ type }: Event) => {
       placed.current = null
+      going.current = false
+      acted.current = Date.now()
+      pressed.current = type === "pointerdown" || (pressed.current && !type.startsWith("pointer"))
     }
-    const kinds = ["pointerdown", "keydown", "touchstart", "wheel"] as const
+    const kinds = [...TOUCHES, "wheel", "pointerup", "pointercancel"] as const
     for (const kind of kinds) page.addEventListener(kind, reader, { passive: true })
     return () => {
       for (const kind of kinds) page.removeEventListener(kind, reader)
@@ -265,6 +278,8 @@ export function useStick(following = true, still = false) {
       const box = scroller.current
       if (!box) return
       stuck.current = true
+      going.current = smooth
+      seen.current = box.scrollTop
       placed.current = null
       parked.current = null
       anchor.current = null
@@ -273,7 +288,7 @@ export function useStick(following = true, still = false) {
         reserve.current = 0
         pad()
       }
-      box.scrollTo({ top: box.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" })
+      box.scrollTo({ top: box.scrollHeight, behavior: smooth && motionOk() ? "smooth" : "auto" })
     },
     [pad]
   )
@@ -302,6 +317,10 @@ export function useStick(following = true, still = false) {
     [remember]
   )
 
+  const prepended = useCallback(() => {
+    older.current = true
+  }, [])
+
   const unstick = useCallback(() => {
     placed.current = null
     parked.current = null
@@ -329,14 +348,12 @@ export function useStick(following = true, still = false) {
       if (on) {
         const box = scroller.current
         const list = content.current
-        stuck.current = false
-        placed.current = null
-        parked.current = null
+        unstick()
         anchor.current = box && list ? anchorIn(box, list) : null
       } else remember()
     },
-    [remember]
+    [remember, unstick]
   )
 
-  return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift }
+  return { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift, prepended }
 }

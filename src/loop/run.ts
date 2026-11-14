@@ -9,8 +9,8 @@ import { bindHeldSeat, holdSeat, releaseSeat, SEAT_TOKEN, type HoldChange } from
 import { loginShell } from "../login-shell.ts";
 import { loginArgv } from "./login-argv.ts";
 import type { Recipe, Started } from "./recipes.ts";
-import { clearPane, listenersUnder, paneText, pasteBracketed, stopStrays, strayKey, typeInto, type KimiScreen } from "./kimi.ts";
-import { tmuxSocket } from "./tmux.ts";
+import { listenersUnder, stopStrays, strayKey, type KimiScreen } from "./kimi.ts";
+import { clearPane, paneText, pasteBracketed, typeInto, tmuxSocket } from "./tmux.ts";
 import { firstPrompt, nextWork, step, waitingBehind, waitingText, waitsDue, waitTellsTo, workName, type Wait, type Work } from "./work.ts";
 import { clearFresh, freshAsked, LOOP_TASK_ENV } from "./fresh.ts";
 import { LOOP_ENV } from "../hooks/loop-wait.ts";

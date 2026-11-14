@@ -45,7 +45,10 @@ export function day(at: number, now = Date.now()): string {
   const start = new Date(now)
   start.setHours(0, 0, 0, 0)
   if (at >= start.getTime()) return t("kit.time.today")
-  if (at >= start.getTime() - DAY) return t("kit.time.yesterday")
+  const yesterday = new Date(start)
+  yesterday.setDate(start.getDate() - 1)
+  yesterday.setHours(0, 0, 0, 0)
+  if (at >= yesterday.getTime()) return t("kit.time.yesterday")
   return new Date(at).toLocaleDateString(locales(), { weekday: "long", month: "short", day: "numeric" })
 }
 

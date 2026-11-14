@@ -458,7 +458,7 @@ export class Keyring implements ChannelOps {
       const left = (this.docUsers.get(key) ?? 1) - 1;
       if (left > 0) return void this.docUsers.set(key, left);
       this.docUsers.delete(key);
-      ch.closeDoc(thread);
+      void ch.closeDoc(thread);
     };
     ch.threadDoc(thread, th ?? undefined).then(
       (td) => {

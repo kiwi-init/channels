@@ -1,6 +1,8 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": [
+    "hyprctl",
+    "swaybg",
     "gsettings",
     "xdg-user-dir",
     "weston-screenshooter",
@@ -18,11 +20,15 @@
     "gdbus",
     "pgrep",
     "xdotool",
+    "openbox",
+    "wmctrl",
     "swaymsg",
     "grim",
     "plutil",
     "secret-tool",
-    "readelf"
+    "readelf",
+    "sips",
+    "screencapture"
   ],
   "workspaces": {
     ".": {
@@ -51,7 +57,7 @@
       "project": ["src/**/*.ts", "scripts/**/*.ts"]
     },
     "ui": {
-      "entry": ["src/chat/react-native.ts", "src/chat/no-elk.ts", "src/chat/doc/screen-selection.page.ts", "src/meadow/meadow.page.ts", "src/meadow/scene.page.ts", "stubs/react-native/index.js", "src/**/*.test.{ts,tsx}"]
+      "entry": ["src/chat/react-native.ts", "src/chat/no-elk.ts", "src/chat/doc/screen-selection.page.ts", "src/meadow/meadow.page.ts", "src/meadow/scene.page.ts", "src/demo/room-members-page.tsx", "stubs/react-native/index.js", "src/**/*.test.{ts,tsx}"]
     }
   }
 }

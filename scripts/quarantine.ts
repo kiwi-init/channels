@@ -1,3 +1,4 @@
+import { githubClient, record, text, list } from "./github.ts";
 import { readFileSync } from "node:fs";
 
 export interface Rules {
@@ -153,18 +154,6 @@ export function plan(s: State, rules: Rules, bot: string): Plan {
   return { held: true, actions };
 }
 
-function record(x: unknown): Record<string, unknown> {
-  return x !== null && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x)) : {};
-}
-
-function text(x: unknown): string {
-  return typeof x === "string" ? x : "";
-}
-
-function list(x: unknown): unknown[] {
-  return Array.isArray(x) ? x : [];
-}
-
 export function readRules(raw: string): Rules {
   const r = record(JSON.parse(raw));
   const strings = (x: unknown): string[] => list(x).filter((v): v is string => typeof v === "string" && v.trim() !== "");
@@ -212,34 +201,12 @@ export async function apply(api: Api, pr: Pr, actions: Action[]): Promise<void> 
   }
 }
 
-function github(repo: string, token: string, dryRun: boolean): Api {
-  const root = process.env.GITHUB_API_URL ?? "https://api.github.com";
-  const headers: Record<string, string> = { accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28", "content-type": "application/json" };
-  if (token) headers.authorization = `Bearer ${token}`;
-  const call = async (method: string, url: string, body?: unknown): Promise<unknown> => {
-    const res = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-    if (res.status === 404 && (method === "GET" || method === "DELETE")) return null;
-    if (!res.ok) throw new Error(`${method} ${url}: ${res.status} ${await res.text()}`);
-    return res.status === 204 ? null : res.json();
-  };
-  return {
-    rest: async (method, path, body) => {
-      if (dryRun && method !== "GET") {
-        console.log(`would ${method} ${path}${body === undefined ? "" : ` ${JSON.stringify(body)}`}`);
-        return null;
-      }
-      return call(method, `${root}/repos/${repo}${path}`, body);
-    },
-    graphql: async (query, variables) => {
-      if (dryRun) {
-        console.log(`would ${/\{\s*(\w+)\(/.exec(query)?.[1] ?? query} ${JSON.stringify(variables)}`);
-        return null;
-      }
-      const out = record(await call("POST", `${root}/graphql`, { query, variables }));
-      if (list(out.errors).length > 0) throw new Error(`graphql: ${JSON.stringify(out.errors)}`);
-      return out.data;
-    },
-  };
+export function github(repo: string, token: string, dryRun: boolean): Api {
+  return githubClient(repo, {
+    credentials: { kind: "single", token },
+    dryRun,
+    policy: { contentType: "always", dryRunBody: true, notFound: "null", errorPath: "url", graphql: "skip", getBody: "send" },
+  });
 }
 
 if (import.meta.main) {

@@ -10,7 +10,7 @@ import { loadConfig } from "../src/config.ts";
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
-import { firstRun, letIn, newChannel, say } from "./perf-ui.ts";
+import { firstRun, letIn, newChannel, say, switchTo } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { pageErrors } from "./page-errors.ts";
 
@@ -80,15 +80,6 @@ const tileLabel = (page: Page, title: string): Promise<string | null> =>
       [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === t)?.getAttribute("aria-label") ?? null,
     title,
   );
-
-async function switchTo(page: Page, title: string): Promise<void> {
-  await page.evaluate((t) => {
-    const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === t);
-    if (!tile) throw new Error(`no ${t} tile in the rail`);
-    tile.click();
-  }, title);
-  await page.waitForFunction((t) => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] === t, title, { timeout: 15000 });
-}
 
 async function until(page: Page, title: string, want: (label: string) => boolean, timeoutMs: number): Promise<number | null> {
   const t0 = Date.now();

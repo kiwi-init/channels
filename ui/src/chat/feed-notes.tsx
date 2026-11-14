@@ -2,8 +2,7 @@ import "~/i18n/en/chat-later"
 import { lazy, Suspense } from "react"
 
 import { t } from "~/i18n/i18n"
-import { dmInRoom } from "~/live/dm"
-import type { Channel, Where } from "~/model"
+import { memberOf, type Channel, type Where } from "~/model"
 import { between, nickname, shown } from "~/names"
 import { useActions } from "~/nav"
 
@@ -44,7 +43,7 @@ export function Start({ channel, where }: { channel: Channel; where: Where }) {
         {where.kind === "room"
           ? t("chat.feed.notes.start.room", { room: channel.rooms.find((r) => r.id === where.room)?.name ?? where.room })
           : where.kind === "dm"
-            ? dmInRoom(channel, where.with)
+            ? memberOf(channel, where.with)?.kind === "human"
               ? t("chat.feed.notes.dm.alone", { name: nickname(channel, where.with) })
               : t("chat.feed.notes.dm.everyone", { name: nickname(channel, where.with) })
             : where.kind === "theirs"

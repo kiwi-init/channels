@@ -7,7 +7,6 @@ import { pageErrors } from "./page-errors.ts";
 
 const SHOTS = [
   "channel",
-  "channel-top",
   "dm",
   "thread-doc",
   "task",
@@ -25,7 +24,6 @@ const SHOTS = [
   "settings-devices",
   "settings-agents",
   "invite",
-  "home",
 ];
 const SIZES = ["1710x1074", "1280x800"];
 

@@ -6,13 +6,13 @@
   min-height: 0;
 }
 
-.top.set-top {
-  grid-template-columns: var(--side-w) minmax(0, 1fr);
+.set-lead {
+  margin: 0;
+  font: inherit;
 }
 
-.set-top-title {
-  padding: 0 12px;
-  font: inherit;
+.set-nav > .set-lead {
+  margin-bottom: 16px;
 }
 
 .set-nav {
@@ -40,7 +40,6 @@ html .set-body {
   max-width: calc(720px + 2 * var(--gutter));
   margin: 0 auto;
   padding: 16px var(--gutter-end) 64px var(--gutter);
-  animation: fade var(--fast) var(--ease);
 }
 
 .set-head {
@@ -594,14 +593,6 @@ html .set-body {
     grid-template-rows: var(--top-h) auto minmax(0, 1fr);
   }
 
-  .top.set-top {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .set-top > span {
-    display: none;
-  }
-
   .set-nav {
     padding: 8px 10px;
     border-right: 0;
@@ -616,15 +607,6 @@ html .set-body {
   .set-nav .side-row {
     width: auto;
     white-space: nowrap;
-  }
-
-  .app .set-nav[data-glide]::before {
-    width: var(--glide-w);
-    height: var(--glide-h);
-    margin-top: 0;
-    border-radius: var(--r-row);
-    background: var(--wash-2);
-    mask: none;
   }
 
   .set-nav[data-more-end] {

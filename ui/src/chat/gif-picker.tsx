@@ -1,10 +1,12 @@
 import "~/i18n/en/chat-later"
+import { Gif01Icon } from "@hugeicons/core-free-icons"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { gifFile, gifHost, useCatalog, useGifSrc, type Catalog, type Gif } from "~/chat/gifs"
 import { t } from "~/i18n/i18n"
 import { cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { useDismiss } from "~/kit/dismiss"
+import { GlyphIcon } from "~/kit/icons"
 import type { Channel, Message, Reaction } from "~/model"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
@@ -40,7 +42,7 @@ function GifTool({ channel, m, catalog }: { channel: Channel; m: Message; catalo
   return (
     <>
       <button type="button" className="msg-tool" aria-label={t("chat.gif.picker.react")} title={t("chat.gif.picker.react")} aria-expanded={open} data-gif-toggle onClick={() => setOpen((v) => !v)}>
-        <Icon name="gif" size={15} />
+        <GlyphIcon glyph={Gif01Icon} size={15} />
       </button>
       {open && <GifPicker catalog={catalog} className="gifs-on-msg" onClose={close} onPick={(g) => actions.react(channel.code, m.seq, g.key)} />}
     </>
@@ -50,23 +52,7 @@ function GifTool({ channel, m, catalog }: { channel: Channel; m: Message; catalo
 function GifPicker({ catalog, className, onClose, onPick }: { catalog: Catalog; className: string; onClose: () => void; onPick: (g: Gif) => void }) {
   const [tab, setTab] = useState(catalog.groups[0]?.reaction ?? "")
   const box = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return
-      e.stopPropagation()
-      onClose()
-    }
-    const outside = (e: PointerEvent) => {
-      if (!(e.target instanceof Element) || box.current?.contains(e.target) || e.target.closest("[data-gif-toggle]")) return
-      onClose()
-    }
-    document.addEventListener("keydown", esc, true)
-    document.addEventListener("pointerdown", outside, true)
-    return () => {
-      document.removeEventListener("keydown", esc, true)
-      document.removeEventListener("pointerdown", outside, true)
-    }
-  }, [onClose])
+  useDismiss(onClose, { on: "document", keys: "capture", escape: "stop", ignore: { box, toggle: "[data-gif-toggle]" } })
   const group = catalog.groups.find((g) => g.reaction === tab)
   return (
     <div ref={box} role="dialog" aria-label={t("chat.gif.picker.gifs")} className={cx("gifs", className)}>

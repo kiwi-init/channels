@@ -5,7 +5,7 @@ import type { Check, Issue, PullRequest } from "~/model"
 
 export type Shown = "open" | "closed"
 
-export type GroupKey = "fail" | "running" | "ready" | "none" | "merged" | "closed" | "free" | "held" | "done" | "dropped"
+type GroupKey = "fail" | "running" | "ready" | "none" | "merged" | "closed" | "free" | "held" | "done" | "dropped"
 
 export interface Group<T> {
   key: GroupKey
@@ -26,7 +26,7 @@ const HEADS: Record<GroupKey, Key> = {
   dropped: "github.groups.dropped",
 }
 
-export const isOpen = (x: { state: string }): boolean => x.state === "open" || x.state === "draft"
+const isOpen = (x: { state: string }): boolean => x.state === "open" || x.state === "draft"
 
 export function ciOf(pr: PullRequest): "fail" | "running" | "ready" | "none" {
   const ticks = pr.ticks

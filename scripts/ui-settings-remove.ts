@@ -19,7 +19,8 @@ const server = Bun.serve({
 });
 
 const openDialogs = (page: Page) => page.evaluate(() => [...document.querySelectorAll("dialog[open]")].map((d) => d.getAttribute("aria-label")));
-const repos = (page: Page) => page.evaluate(() => [...(document.querySelector("dialog[open]")?.querySelectorAll(".cset-repo-name") ?? [])].map((n) => n.textContent?.trim()));
+const repos = (page: Page) =>
+  page.evaluate(() => [...(document.querySelector("dialog[open]")?.querySelectorAll(".ctl-label") ?? [])].map((n) => n.textContent?.trim() ?? "").filter((label) => /^[\w.-]+\/[\w.-]+$/.test(label)));
 const settingsStays = async (page: Page, what: string, want: string[]): Promise<string | null> => {
   await page.waitForTimeout(400);
   const open = await openDialogs(page);
@@ -67,7 +68,7 @@ async function run(browser: Browser): Promise<string | null> {
     bad = await settingsStays(page, "cancelling the delete-channel confirm", []);
     if (bad) return bad;
 
-    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await page.getByRole("dialog", { name: "Channel settings" }).getByRole("button", { name: "Close", exact: true }).click();
     await page.waitForTimeout(400);
     const shut = await openDialogs(page);
     if (shut.length !== 0) return `after the settings dialog's own Close, open dialogs are [${shut.join(", ")}]`;

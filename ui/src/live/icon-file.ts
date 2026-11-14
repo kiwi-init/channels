@@ -1,3 +1,4 @@
+import "~/i18n/en/live-later"
 import { MAX_ICON_BYTES, type ChannelIcon } from "@kiwi/core/protocol.ts"
 import { t } from "~/i18n/i18n"
 

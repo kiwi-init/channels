@@ -22,6 +22,7 @@
     <string name="check_page_shows">페이지에 이 코드가 표시되는지 확인하세요</string>
     <string name="chose">%1$s의 선택</string>
     <string name="close">닫기</string>
+    <string name="updates">업데이트</string>
     <string name="connecting">연결 중…</string>
     <string name="connecting_lower">연결 중…</string>
     <string name="copy">복사</string>

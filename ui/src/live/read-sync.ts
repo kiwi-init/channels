@@ -3,6 +3,9 @@ import { markSeenIn, seenIn } from "@kiwi/app/threads.ts"
 import type { ChannelLink } from "@kiwi/channel/channel-ops.ts"
 
 const WRITE_EVERY_MS = 45_000
+const PULL_EVERY_MS = 60_000
+
+const pulledAt = new Map<string, number>()
 
 export function useMarksSync(ch: ChannelLink, roomId: string, caughtUp: boolean): void {
   const whole = useRef(caughtUp)
@@ -16,6 +19,7 @@ export function useMarksSync(ch: ChannelLink, roomId: string, caughtUp: boolean)
       if (live && marks) markSeenIn(roomId, { ...marks })
     }
     const pull = () => {
+      pulledAt.set(roomId, Date.now())
       ch.syncMarks(seenIn(roomId), { write: false })
         .then(take)
         .catch(() => {
@@ -40,7 +44,7 @@ export function useMarksSync(ch: ChannelLink, roomId: string, caughtUp: boolean)
     const hidden = () => {
       if (document.visibilityState === "hidden") push()
     }
-    pull()
+    if (Date.now() - (pulledAt.get(roomId) ?? -Infinity) >= PULL_EVERY_MS) pull()
     window.addEventListener("focus", pull)
     window.addEventListener("blur", push)
     document.addEventListener("visibilitychange", hidden)

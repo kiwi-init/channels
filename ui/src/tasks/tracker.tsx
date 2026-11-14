@@ -14,6 +14,7 @@ import { nickname, Shown } from "~/names"
 import { nowOf } from "~/now"
 import { keepTab, readTab, type TrackTab } from "~/tasks/track-tab"
 import { wordsPlain } from "~/words"
+import { dragOut } from "~/panes/place"
 
 const Log = later(() => import("~/chat/updates-panel").then((m) => m.Log))
 
@@ -100,6 +101,7 @@ function Now({ channel, open, count, counts, under, next }: { channel: Channel; 
                 className="side-row track-row"
                 title={[`T${task.id}`, STATUS_WORDS[task.status], task.owner ? nickname(channel, task.owner) : null, wordsPlain(task.title, channel.nicknames)].filter(Boolean).join(" · ")}
                 onClick={() => go({ to: "task", task: task.id })}
+                {...dragOut({ page: { at: "doc", doc: { kind: "task", task: task.id } } }, `T${task.id} ${wordsPlain(task.title, channel.nicknames)}`)}
               >
                 <span className="side-icon">
                   <Dot status={task.status} />

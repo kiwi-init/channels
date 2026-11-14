@@ -370,6 +370,31 @@ html .day.is-members {
   --enrm-selection-bg: var(--selection);
 }
 
+.md-spoiler-toggle {
+  display: inline-block;
+  min-height: var(--ctl-sm);
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--r-tag);
+  background: var(--wash-2);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--t-ui);
+  line-height: 1.5;
+  cursor: pointer;
+  user-select: none;
+}
+.md-spoiler-toggle::before {
+  content: attr(data-label);
+}
+.md-spoiler-toggle:hover {
+  background: var(--wash);
+  color: var(--ink);
+}
+.md-spoiler-toggle[aria-expanded="true"] {
+  margin-inline-end: 4px;
+}
+
 .md ul {
   list-style: disc;
 }
@@ -1537,6 +1562,12 @@ button.msg-image-spot:hover {
   transition: box-shadow var(--fast);
 }
 
+:root.reduce-transparency .composer {
+  background: var(--bg-3);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 .composer:focus-within {
   box-shadow:
     var(--shadow-float),
@@ -1984,10 +2015,6 @@ button.msg-image-spot:hover {
   margin-right: 8px;
 }
 
-.feed-wrap {
-  animation: fade var(--fast) var(--ease);
-}
-
 .chip-title + .chip-meta::before {
   content: "· ";
 }
@@ -2289,4 +2316,46 @@ button.msg-image-spot:hover {
 .md-mermaid-drawn svg {
   max-width: 100%;
   height: auto;
+}
+
+.md a[href^="kiwi-utc:"] {
+  position: relative;
+  border-bottom: 1px dotted var(--ink-3);
+  cursor: help;
+}
+
+.md a[href^="kiwi-utc:"]::after {
+  content: attr(data-local);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  z-index: 2;
+  padding: 2px 8px;
+  border-radius: var(--r-row);
+  background: var(--ink);
+  color: var(--on-ink);
+  font: 600 var(--t-ui) var(--ui);
+  white-space: nowrap;
+  box-shadow: var(--shadow-pop);
+  opacity: 0;
+  clip-path: inset(50%);
+  pointer-events: none;
+  transition: opacity var(--fast);
+}
+
+.md a[href^="kiwi-utc:"]:hover::after,
+.md a[href^="kiwi-utc:"]:focus-visible::after,
+.md a[href^="kiwi-utc:"]:active::after {
+  opacity: 1;
+  clip-path: none;
+}
+
+.md a[href^="kiwi-utc:"][data-flip]::after {
+  left: auto;
+  right: 0;
+}
+
+.md a[href^="kiwi-utc:"][data-open]::after {
+  opacity: 1;
+  clip-path: none;
 }

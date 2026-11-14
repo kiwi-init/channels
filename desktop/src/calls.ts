@@ -19,6 +19,7 @@ export interface Pushes {
   frost: boolean;
   accent: string | null;
   uiUpdate: UiUpdateView | null;
+  maximized: boolean;
 }
 
 export type Push = keyof Pushes;
@@ -84,6 +85,8 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     wallpaperTints: (dark) => t.call("wallpaperTints", dark),
     wallpaperBackdrop: (dark) => t.call("wallpaperBackdrop", dark),
     windowControl: (action) => t.call("windowControl", action),
+    windowMaximized: () => t.call("windowMaximized"),
+    onMaximized: (cb) => t.listen("maximized", cb),
     getUpdate: () => t.call("getUpdate"),
     onUpdate: (cb) => t.listen("update", cb),
     installUpdate: () => t.call("installUpdate"),

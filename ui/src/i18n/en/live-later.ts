@@ -99,6 +99,15 @@ const words = {
   "live.why.warm": "{why} (this session)",
   "live.why.context": "has its context",
   "doing.offline": "offline",
+  "live.update.not.in.place": "Channels {version} didn't go in place. Try again, or get it from the release page",
+  "live.update.current": "Channels is up to date",
+  "live.update.github.failed": "GitHub didn't answer, try again in a minute",
+  "live.update.downloading": "Downloading Channels {version}. It restarts when it's in",
+  "live.update.not.downloaded": "Channels {version} didn't download. Try again, or get it from the release page",
+  "live.icon.not.encoded": "the image couldn't be encoded",
+  "live.icon.not.image": "that isn't an image",
+  "live.icon.not.drawn": "the image couldn't be drawn",
+  "live.icon.too.detailed": "that image is too detailed for an icon",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

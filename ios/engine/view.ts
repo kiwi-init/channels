@@ -56,7 +56,7 @@ function memberView(m: FoldMember, state: ChannelState, online: ReadonlyMap<stri
     lead: state.lead === m.name,
     color: m.color ?? null,
     here: !!here,
-    activity: activity ? { state: activity.state, tool: activity.tool ?? null, since: activity.since ?? null } : null,
+    activity: activity && activity.state !== "unknown" ? { state: activity.state, tool: activity.tool ?? null, since: activity.since ?? null } : null,
     sponsor: m.sponsor?.name ?? null,
     model: m.runs?.model ?? null,
     harness,

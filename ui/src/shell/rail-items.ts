@@ -24,7 +24,7 @@ export function railItems(channels: readonly ChannelTile[], folders: readonly Fo
   return items
 }
 
-const MAX_NAME = 40
+export const MAX_NAME = 40
 
 export function cleanFolders(raw: unknown): Folder[] {
   if (!Array.isArray(raw)) return []

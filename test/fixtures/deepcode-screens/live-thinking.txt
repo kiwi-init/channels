@@ -1,0 +1,10 @@
+
+✦ Reading the new messages first.
+
+ ✧ Bash kiwi read 2>&1 | tail -60  # Read the new messages
+⠦ status: processing · 21.6K/1M [░░░░░░░░░░] 2% · deepseek-flash max
+────────────────────────────────────────────────────────────────────────────────────────────────────
+>   Type your message...
+────────────────────────────────────────────────────────────────────────────────────────────────────
+Thinking... (3s) · ↓ 0.4k tokens · ctrl+o view output
+

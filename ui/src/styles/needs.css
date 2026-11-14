@@ -51,7 +51,6 @@
   border-radius: var(--r-card);
   background: var(--plate);
   box-shadow: inset 0 0 0 1px var(--line);
-  animation: rise var(--glide) backwards;
 }
 
 .needs-card.is-open::before {
@@ -477,18 +476,6 @@ button.needs-name:hover {
   font: var(--t-ui) / 1.5 var(--ui);
 }
 
-.needs-cards > li:nth-child(2) .needs-card {
-  animation-delay: 30ms;
-}
-
-.needs-cards > li:nth-child(3) .needs-card {
-  animation-delay: 60ms;
-}
-
-.needs-cards > li:nth-child(n + 4) .needs-card {
-  animation-delay: 90ms;
-}
-
 .needs-clear {
   display: grid;
   justify-items: center;
@@ -534,4 +521,34 @@ button.needs-name:hover {
   from {
     stroke-dashoffset: 1;
   }
+}
+
+.page.is-needs .pg-card .ask,
+.page.is-needs .pg-card .ask.is-open,
+.page.is-needs .pg-card .ask.is-choice {
+  margin-block: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.page.is-needs .pg-card .ask :is(ol, ul) {
+  list-style: none;
+}
+
+.needs-gate {
+  display: grid;
+  gap: 8px;
+}
+
+.needs-gate > .needs-foot {
+  margin-top: 4px;
+}
+
+.page.is-needs .needs-clear .empty {
+  place-items: center;
+  min-height: 0;
+  padding: 0;
+  text-align: center;
 }

@@ -1,6 +1,7 @@
 import "~/i18n/en/needs"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
+import { useHold } from "~/chat/whole"
 import { Composer } from "~/chat/composer"
 import { compactAt, quoteOf, ReadOnly, useNames, useTaskIds } from "~/chat/conversation"
 import { useStick } from "~/chat/stick"
@@ -9,7 +10,7 @@ import { MessageRow } from "~/chat/message"
 import { threadReply } from "~/chat/quote"
 import { threadRoot } from "~/chat/thread-root"
 import { QuotePick } from "~/chat/quote-pick"
-import { jumpTo, ReplyContext, type Replying } from "~/chat/reply"
+import { jumpTo, ReplyContext, replyTo, type Replying } from "~/chat/reply"
 import { t } from "~/i18n/i18n"
 import { Empty } from "~/kit/empty"
 import { useLate } from "~/kit/late"
@@ -17,6 +18,8 @@ import type { Channel } from "~/model"
 import { nickname } from "~/names"
 import { useAct } from "~/nav"
 import { PanelHead } from "~/panels/frame"
+
+const KEPT = new Map<string, { seq: number; offset: number }>()
 
 export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: Channel; seq: number; focus?: number | undefined }) {
   const { seq, focus } = threadRoot(channel.messages, opened, asked)
@@ -28,14 +31,14 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
   const reply = useSyncExternalStore(threadReply.subscribe, threadReply.get)
   const replying = useMemo((): Replying => {
     const here = reply?.code === channel.code && reply.root === seq ? reply : null
+    const to = (here && (here.to === seq ? root : replies.find((m) => m.seq === here.to))) ?? null
     return {
-      to: (here && (here.to === seq ? root : replies.find((m) => m.seq === here.to))) ?? null,
-      excerpt: here?.excerpt ?? null,
-      set: (to, excerpt) => threadReply.set(to ? { code: channel.code, root: seq, to: to.seq, excerpt: excerpt ?? null } : null),
+      quoting: to ? replyTo(to, here?.excerpt ?? null) : null,
+      set: (quoting) => threadReply.set(quoting?.kind === "message" ? { code: channel.code, root: seq, to: quoting.to.seq, excerpt: quoting.excerpt } : null),
     }
   }, [reply, channel.code, seq, root, replies])
   const { actions } = useAct()
-  const { holdEarlier, earlierTo } = actions
+  const { earlierTo } = actions
   const code = channel.code
   const early = channel.since !== undefined && seq > 0 && seq < channel.since
   const [tried, setTried] = useState<string | null>(null)
@@ -43,10 +46,7 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
   const loadKey = `${code}:${seq}:${again}`
   const waiting = early && tried !== loadKey
   const late = useLate(waiting)
-  useEffect(() => {
-    holdEarlier(code, "thread", seq)
-    return () => holdEarlier(code, "thread", null)
-  }, [code, seq, holdEarlier])
+  useHold(code, "thread", seq)
   useEffect(() => {
     if (!early) return
     let live = true
@@ -57,17 +57,41 @@ export function ThreadPanel({ channel, seq: opened, focus: asked }: { channel: C
       live = false
     }
   }, [early, code, seq, loadKey, earlierTo])
-  const { scroller, content, remember, toBottom, unstick } = useStick()
+  const { scroller, content, remember, toBottom, unstick, toRow, stuck } = useStick()
+  const keepKey = `${code}\n${seq}`
   const last = replies.at(-1)?.seq
   const shown = useRef({ seq, last })
+  const restored = useRef<{ kept: { seq: number; offset: number }; at: number } | null>(null)
   useLayoutEffect(() => {
     if (waiting) return
     if (focus !== undefined) {
       unstick()
       if (jumpTo(content.current, focus, "instant")) return
     }
+    const kept = KEPT.get(keepKey)
+    const row = kept && content.current?.querySelector<HTMLElement>(`[data-seq="${kept.seq}"]`)
+    restored.current = null
+    if (kept && row) {
+      unstick()
+      toRow(row, kept.offset)
+      restored.current = { kept, at: scroller.current?.scrollTop ?? Number.NaN }
+      return
+    }
     toBottom(false)
-  }, [seq, focus, content, toBottom, unstick, waiting])
+  }, [seq, focus, content, scroller, toBottom, unstick, waiting, keepKey, toRow])
+  useLayoutEffect(() => {
+    const box = scroller.current
+    const list = content.current
+    if (waiting || !box || !list) return
+    return () => {
+      if (stuck.current) return void KEPT.delete(keepKey)
+      const was = restored.current
+      if (was && Math.abs(box.scrollTop - was.at) < 1) return void KEPT.set(keepKey, was.kept)
+      const top = box.getBoundingClientRect().top
+      const row = [...list.querySelectorAll<HTMLElement>("[data-seq]")].find((r) => r.getBoundingClientRect().bottom > top)
+      if (row) KEPT.set(keepKey, { seq: Number(row.dataset.seq), offset: row.getBoundingClientRect().top - top })
+    }
+  }, [waiting, keepKey, scroller, content, stuck])
   useLayoutEffect(() => {
     const was = shown.current
     shown.current = { seq, last }

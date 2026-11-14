@@ -2,6 +2,7 @@ import "~/i18n/en/github-later"
 import "~/styles/tasks.css"
 import "~/styles/github.css"
 
+import { LinkSquare02Icon } from "@hugeicons/core-free-icons"
 import type { ReactNode } from "react"
 
 import { checksSummary } from "~/github/groups"
@@ -9,7 +10,7 @@ import { t } from "~/i18n/i18n"
 import { Branch, Checks, checksLine, IssueMark, issueTone, issueWord, PR_TONES, PR_WORDS, PrMark, Size, TaskLink, Ticks } from "~/github/parts"
 import { cx, Heading } from "~/kit/bits"
 import { Empty } from "~/kit/empty"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon } from "~/kit/icons"
 import { ageOf, ago } from "~/kit/time"
 import type { Channel } from "~/model"
 import { useGo } from "~/nav"
@@ -27,7 +28,7 @@ function Out({ href, children, primary }: { href: string; children: ReactNode; p
   return (
     <OutsideLink className={cx("btn is-small", primary && "is-primary")} href={href}>
       {children}
-      {primary && <Icon name="external" size={12} />}
+      {primary && <GlyphIcon glyph={LinkSquare02Icon} size={12} />}
     </OutsideLink>
   )
 }

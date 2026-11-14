@@ -1,13 +1,15 @@
 import { lazy, memo, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react"
+import { flushSync } from "react-dom"
 
 import { isGifReaction } from "@kiwi/core/protocol.ts"
 
+import { BlockFilesSpots } from "~/chat/block-files-spots"
 import { ShownImage } from "~/chat/feed-image"
 import { withoutMediaNames } from "~/chat/doc/finished"
 import { PrChip, TaskChip } from "~/chat/cards"
 import { EditHere, useEditing } from "~/chat/editing"
 import { quotedExcerpt } from "~/chat/quote"
-import { preview, useReplying } from "~/chat/reply"
+import { preview, replyTo, useReplying } from "~/chat/reply"
 import { Body } from "~/chat/body"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
@@ -38,6 +40,20 @@ const BlockFilesView = later(() => import("~/chat/block-files").then((m) => m.Bl
 export const QUICK = ["👍", "🔥", "👀", "✅"]
 const CLAMP_PX = 12 * 22
 
+const clampDue = new Map<HTMLElement, (over: boolean) => void>()
+
+function clampSoon(el: HTMLElement, set: (over: boolean) => void): void {
+  const first = clampDue.size === 0
+  clampDue.set(el, set)
+  if (!first) return
+  queueMicrotask(() => {
+    const due = [...clampDue]
+    clampDue.clear()
+    const over = due.map(([box]) => box.isConnected && box.scrollHeight > CLAMP_PX + 44)
+    flushSync(() => due.forEach(([, apply], i) => apply(over[i] ?? false)))
+  })
+}
+
 function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null)
   const [over, setOver] = useState(false)
@@ -45,9 +61,8 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
   useLayoutEffect(() => {
     const el = box.current
     if (!on || !el) return
-    const check = () => setOver(el.scrollHeight > CLAMP_PX + 44)
-    check()
-    const watch = new ResizeObserver(check)
+    clampSoon(el, setOver)
+    const watch = new ResizeObserver(() => setOver(el.scrollHeight > CLAMP_PX + 44))
     for (const child of el.children) watch.observe(child)
     watch.observe(el)
     return () => watch.disconnect()
@@ -251,7 +266,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const onMenu = (e: MouseEvent<HTMLElement>) => {
     if (m.pending || m.failed !== undefined || m.leftOut || m.fromDoc || m.deleted || editing) return
     const target = e.target
-    const reply = replying && quoting ? () => replying.set(m) : null
+    const reply = replying && quoting ? () => replying.set(replyTo(m)) : null
     showMenu(e, t("chat.message.menu"), (x) => x.messageGroups({ channel, go }, m, target, { openImage, reply, thread: threaded ? openThread : null, at }))
   }
 
@@ -313,7 +328,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           </Suspense>
         ) : (
           <Clamp on={who?.kind === "agent" && !inThread}>
-            {body && <Body text={wrote(body)} seq={m.seq} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} hug={m.from === channel.you} />}
+            {body && <Body text={wrote(body)} seq={m.seq} at={m.at} names={names} tasks={tasks} onImage={openImage} onMessage={openMessage} hug={m.from === channel.you} />}
           </Clamp>
         )}
         {compact && m.edited !== undefined && !editing && (
@@ -323,7 +338,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
         )}
         {m.images && <MessageImages code={channel.code} images={m.images} open={openImage} />}
         {m.docMedia && (
-          <Suspense fallback={null}>
+          <Suspense fallback={<BlockFilesSpots media={m.docMedia} />}>
             <BlockFilesView code={channel.code} media={m.docMedia} open={openImage} />
           </Suspense>
         )}
@@ -390,7 +405,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
             </Suspense>
           )}
           {replying && quoting && (
-            <button type="button" className="msg-tool" aria-label={t("chat.message.reply")} title={t("chat.message.reply")} onClick={() => replying.set(m)}>
+            <button type="button" className="msg-tool" aria-label={t("chat.message.reply")} title={t("chat.message.reply")} onClick={() => replying.set(replyTo(m))}>
               <Icon name="reply" size={14} />
             </button>
           )}

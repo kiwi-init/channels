@@ -41,6 +41,7 @@ import {
   openRound,
   reviewClaimRefusal,
   reviewMoveRefusal,
+  reviewerTitle,
   reviewWaysOut,
   revisedOut,
   runRefusal,
@@ -721,9 +722,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const mayFinish = !review || isPerson(member) || (review === "*" ? m.from !== owner && !task.workedBy.includes(m.from) : m.from === review);
       if (ev.state === "done" && ev.close === undefined && task.state !== "done" && !mayFinish) {
         const open = openRound(task);
-        reject(
-          `${taskId(task.id)} needs review by ${review === "*" ? "someone who hasn't worked on it" : review} before it's done${open ? `: ${reviewWaysOut(task.id, review, open.n)}` : " (send it for review)"}`,
-        );
+        reject(`${taskId(task.id)} needs review by ${reviewerTitle(review)} before it's done${open ? `: ${reviewWaysOut(task.id, review, open.n)}` : " (send it for review)"}`);
         break;
       }
       const landingWrong = landingRefusal(task, ev, { person: isPerson(member), lead });
@@ -748,7 +747,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         break;
       }
       if (ev.state === "landing" && !mayFinish) {
-        reject(`${taskId(task.id)} needs review by ${review === "*" ? "someone who hasn't worked on it" : review} before it lands`);
+        reject(`${taskId(task.id)} needs review by ${reviewerTitle(review)} before it lands`);
         break;
       }
       const reopens = landingReopens(task, ev);

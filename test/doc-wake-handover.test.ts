@@ -1,59 +1,17 @@
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { daemonListeners, daemonListening, daemonSock, stopDaemon } from "../src/daemon.ts";
-import { startRelay } from "../src/relay/bun.ts";
-import { kiwiCmd } from "./owner.ts";
+import { daemonListeners, daemonListening, daemonSock } from "../src/daemon.ts";
+import { hooksFixture } from "./hooks-fixture.ts";
 import { addDocWake, docWakeTold, pendingDocWakes } from "../src/config/doc-wakes.ts";
 import { loadConfig } from "../src/config.ts";
 import { notePending, settlePending } from "../src/hooks/delivered.ts";
 
 setDefaultTimeout(90_000);
 
-type Env = Record<string, string>;
-
-const made: string[] = [];
-const scratch = (tag: string) => {
-  const d = mkdtempSync(join(tmpdir(), `kiwi-dochand-${tag}-`));
-  made.push(d);
-  return d;
-};
-const dataDir = scratch("relay");
-const claudeDir = scratch("claude");
-const owner = scratch("owner");
-const agent = scratch("agent");
-let server: ReturnType<typeof startRelay> | undefined;
+const fixture = hooksFixture({ prefix: "kiwi-dochand", sessionId: "dochand", channel: "dochand", transport: { kind: "direct" } });
+const { agent, ok, until, spawn, env: S, input: INPUT } = fixture;
 let me = "";
-
-const S: Env = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "dochand", CLAUDE_PID: String(process.pid), AI_AGENT: "claude-code_2-1-296_agent" };
-const INPUT = JSON.stringify({ session_id: "dochand", cwd: agent });
-
-function spawn(home: string, args: string[], env: Env = {}, stdin?: string) {
-  return Bun.spawn(kiwiCmd(args), {
-    cwd: home,
-    env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: server!.url.origin, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "", KIWI_MODEL: "test-model", ...env },
-    stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-}
-
-async function ok(home: string, args: string[], env: Env = {}, stdin?: string): Promise<string> {
-  const p = spawn(home, args, env, stdin);
-  const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
-  const code = await p.exited;
-  if (code !== 0) throw new Error(`kiwi ${args.join(" ")} exited ${code}: ${err}`);
-  return out;
-}
-
-async function until(pred: () => Promise<boolean>, label: string, ms = 20_000) {
-  const end = Date.now() + ms;
-  while (!(await pred())) {
-    if (Date.now() > end) throw new Error(`timed out waiting for ${label}`);
-    await Bun.sleep(50);
-  }
-}
 
 const listening = () =>
   daemonListeners(daemonSock(agent))
@@ -61,28 +19,12 @@ const listening = () =>
     .catch(() => false);
 
 beforeAll(async () => {
-  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
-  const code = /join code: (\S+)/.exec(await ok(owner, ["create", "dochand", "--as", "boss"]))![1]!;
-  let out = "";
-  const joining = spawn(agent, ["join", code, "--timeout", "60s"], S);
-  const reading = new Response(joining.stdout).text().then((t) => void (out = t));
-  let listed = "";
-  await until(async () => {
-    listed = await ok(owner, ["--as", "human", "requests"], { CLAUDECODE: "" });
-    return /\d{3}-\d{3}/.test(listed);
-  }, "join request");
-  await ok(owner, ["--as", "human", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes"], { CLAUDECODE: "" });
-  expect(await joining.exited).toBe(0);
-  await reading;
-  me = /You're "([^"]+)"/.exec(out)![1]!;
+  await fixture.start();
+  me = fixture.me;
   await until(async () => (await daemonListening(daemonSock(agent)).catch(() => [])).some((s) => s.agent === me), "the daemon holding the seat");
 });
 
-afterAll(async () => {
-  await stopDaemon(daemonSock(agent)).catch(() => {});
-  server?.stop(true);
-  for (const d of made) rmSync(d, { recursive: true, force: true });
-});
+afterAll(() => fixture.dispose());
 
 const inAgent = <T>(f: () => T): T => {
   const was = process.env.KIWI_HOME;
@@ -135,7 +77,7 @@ test("an acked hand-over tells its doc wakes when the host says it landed, and n
   });
 });
 
-const NOHARNESS: Env = { CLAUDECODE: "", CLAUDE_CODE_SESSION_ID: "", CLAUDE_PID: "", AI_AGENT: "", CODEX_THREAD_ID: "", CURSOR_AGENT: "" };
+const NOHARNESS: Record<string, string> = { CLAUDECODE: "", CLAUDE_CODE_SESSION_ID: "", CLAUDE_PID: "", AI_AGENT: "", CODEX_THREAD_ID: "", CURSOR_AGENT: "" };
 
 test("kiwi listen --once hands over a doc-only line and tells it (T1741)", async () => {
   const alias = inAgent(() => Object.keys(loadConfig().channels)[0]!);

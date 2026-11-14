@@ -38,9 +38,29 @@ const KIMI_PROCESSES: readonly string[] = ["kimi-code", "kimi"];
 
 const GEMINI_PROCESSES: readonly string[] = ["gemini", "node"];
 
+type ArgsLookup = (pid: number) => readonly string[] | null;
+
 export interface ProcessTree {
   lookup?: ProcLookup;
+  args?: ArgsLookup;
   from?: number;
+}
+
+function argsFromProc(pid: number): readonly string[] | null {
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
+function argsFromPs(pid: number): readonly string[] | null {
+  const r = spawnSync("ps", ["-o", "args=", "-p", String(pid)], { encoding: "utf8", timeout: 2_000 });
+  return r.status === 0 ? r.stdout.trim().split(/\s+/) : null;
+}
+
+function procArgs(pid: number): readonly string[] | null {
+  return process.platform === "linux" ? argsFromProc(pid) : argsFromPs(pid);
 }
 
 type Nearest = { kind: "harness"; pid: number; name: string } | { kind: "pid"; pid: number } | { kind: "unknown" };
@@ -71,6 +91,27 @@ export function kimiAncestor(tree: ProcessTree = {}): number | null {
 export function geminiAncestor(tree: ProcessTree = {}): number | null {
   const near = nearestHarness(tree, null, 12, GEMINI_PROCESSES);
   return near.kind === "harness" && GEMINI_PROCESSES.includes(near.name) ? near.pid : null;
+}
+
+let ownDeepcode: { pid: number | null } | undefined;
+
+export function deepcodeAncestor(tree: ProcessTree = {}, depth = 12): number | null {
+  if (tree.lookup || tree.args || tree.from !== undefined) return walkDeepcode(tree, depth);
+  ownDeepcode ??= { pid: walkDeepcode(tree, depth) };
+  return ownDeepcode.pid;
+}
+
+function walkDeepcode(tree: ProcessTree, depth: number): number | null {
+  const lookup = tree.lookup ?? procInfo;
+  const argv = tree.args ?? (tree.lookup ? () => null : procArgs);
+  let pid = tree.from ?? process.ppid;
+  for (let i = 0; i < depth && pid > 1; i++) {
+    const info = lookup(pid);
+    if (!info || HARNESS_PROCESSES.includes(info.name)) return null;
+    if ((argv(pid) ?? []).slice(0, 2).some((a) => basename(a) === "deepcode")) return pid;
+    pid = info.ppid;
+  }
+  return null;
 }
 
 export function zcodePid(env: Record<string, string | undefined>, tree: ProcessTree = {}): number | null {

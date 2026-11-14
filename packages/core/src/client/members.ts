@@ -1,3 +1,4 @@
+import { putMemberRecord } from "./member-record.ts";
 import { delegationLive } from "../delegation.ts";
 import { checkKeep, type DeviceClaim, type DeviceList } from "../devices.ts";
 import { cleanPersona, personaScopes, type Persona } from "../personality.ts";
@@ -64,8 +65,11 @@ export class ChannelMembers {
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
       const info = omit(m, "active", "readOnly", "unverified", "at");
-      const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, later: { scopes: [...scopes], since } })));
-      yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
+      yield* putMemberRecord(this.ch, e, key, {
+        pk: () => m.pk,
+        info: () => ({ ...info, later: { scopes: [...scopes], since } }),
+        post: () => canPost(scopes),
+      });
     }),
 
     updatePersona: Effect.fn("Channel.updatePersona")({ self: this }, function* (this: ChannelMembers, m: Member, persona: Persona | null, since: number) {
@@ -78,8 +82,11 @@ export class ChannelMembers {
       const key = this.ch.access.keys[String(e)]!;
       const info = omit(m, "active", "readOnly", "unverified", "at", "persona");
       const scopes = clean ? personaScopes(clean) : [...SCOPES];
-      const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, ...(clean ? { persona: clean } : {}), later: { scopes, since } })));
-      yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
+      yield* putMemberRecord(this.ch, e, key, {
+        pk: () => m.pk,
+        info: () => ({ ...info, ...(clean ? { persona: clean } : {}), later: { scopes, since } }),
+        post: () => canPost(scopes),
+      });
     }),
 
     updateRole: Effect.fn("Channel.updateRole")({ self: this }, function* (this: ChannelMembers, m: Member, role: string | null, about: string | null | undefined, since: number) {
@@ -90,9 +97,11 @@ export class ChannelMembers {
       const key = this.ch.access.keys[String(e)]!;
       const info = omit(m, "active", "readOnly", "unverified", "at");
       const laterRole = { role, ...(about !== undefined ? { about } : {}), since };
-      const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, laterRole })));
-      const scopes = m.later?.scopes ?? scopesOf(m);
-      yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
+      yield* putMemberRecord(this.ch, e, key, {
+        pk: () => m.pk,
+        info: () => ({ ...info, laterRole }),
+        post: () => canPost(m.later?.scopes ?? scopesOf(m)),
+      });
     }),
 
     updateNickname: Effect.fn("Channel.updateNickname")({ self: this }, function* (this: ChannelMembers, m: Member, nickname: string | null) {
@@ -103,9 +112,11 @@ export class ChannelMembers {
       const key = this.ch.access.keys[String(e)]!;
       const info = omit(m, "active", "readOnly", "unverified", "at", "display");
       const display = inlineText(nickname ?? "", MAX_NICKNAME);
-      const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, ...(display ? { display } : {}) })));
-      const scopes = m.later?.scopes ?? scopesOf(m);
-      yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
+      yield* putMemberRecord(this.ch, e, key, {
+        pk: () => m.pk,
+        info: () => ({ ...info, ...(display ? { display } : {}) }),
+        post: () => canPost(m.later?.scopes ?? scopesOf(m)),
+      });
     }),
 
     updatePowers: Effect.fn("Channel.updatePowers")({ self: this }, function* (this: ChannelMembers, m: Member, powers: PersonPowers) {
@@ -118,19 +129,11 @@ export class ChannelMembers {
       const addsAgents = powers.addsAgents ?? !!m.addsAgents;
       const answersDecisions = powers.answersDecisions ?? !!m.answersDecisions;
       const managesAgents = powers.managesAgents ?? !!m.managesAgents;
-      const rec = yield* Effect.promise(async () =>
-        sealRecord(
-          key,
-          await makeRecord(this.ch.identity, this.ch.roomId, {
-            ...info,
-            ...(addsAgents ? { addsAgents } : {}),
-            ...(answersDecisions ? { answersDecisions } : {}),
-            ...(managesAgents ? { managesAgents } : {}),
-          }),
-        ),
-      );
-      const scopes = m.later?.scopes ?? scopesOf(m);
-      yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
+      yield* putMemberRecord(this.ch, e, key, {
+        pk: () => m.pk,
+        info: () => ({ ...info, ...(addsAgents ? { addsAgents } : {}), ...(answersDecisions ? { answersDecisions } : {}), ...(managesAgents ? { managesAgents } : {}) }),
+        post: () => canPost(m.later?.scopes ?? scopesOf(m)),
+      });
     }),
 
     reconcilePosting: Effect.fn("Channel.reconcilePosting")({ self: this }, function* (this: ChannelMembers, state: Reconciled, members?: Member[]) {

@@ -12,6 +12,7 @@ const PAGE = `<!doctype html><meta charset="utf-8"><title>page errors</title>
 <div id="box" class="grows" style="width:120px;height:40px"></div>
 <div id="pad" style="width:120px;height:40px;padding-bottom:6px"></div>
 <div id="rows"><div id="first" style="height:20px"></div></div>
+<div id="feed"><div id="line" style="padding:4px"><p id="plain" style="margin:0;line-height:24px">plain</p></div></div>
 <script src="/loop.js"></script>`;
 
 const SCRIPT = `window.throwNow = function throwNow() {
@@ -47,19 +48,50 @@ window.watchLate = function watchLate() {
   });
   watch.observe(document.getElementById("first"));
 };
+window.swapWhileLoading = function swapWhileLoading() {
+  const feed = document.getElementById("feed");
+  const line = document.getElementById("line");
+  new ResizeObserver(function fed() {
+    void feed.offsetHeight;
+  }).observe(feed);
+  new ResizeObserver(function lined() {
+    void line.offsetHeight;
+  }).observe(line);
+  setTimeout(function load() {
+    const sheet = document.createElement("link");
+    sheet.rel = "stylesheet";
+    sheet.href = "/slow.css";
+    document.head.append(sheet);
+    setTimeout(function swap() {
+      document.getElementById("plain").remove();
+      const shown = document.createElement("p");
+      shown.style.cssText = "margin:0;line-height:24px";
+      shown.textContent = "shown";
+      line.append(shown);
+    }, 60);
+  }, 200);
+};
 `;
 
 interface Probes {
   throwNow?: () => void;
   loopNow?: () => void;
   watchLate?: () => void;
+  swapWhileLoading?: () => void;
 }
+
+const SLOW_SHEET_MS = 1200;
 
 const server = Bun.serve({
   port: 0,
   hostname: "127.0.0.1",
-  fetch(req) {
-    return new URL(req.url).pathname === "/loop.js" ? new Response(SCRIPT, { headers: { "content-type": "text/javascript" } }) : new Response(PAGE, { headers: { "content-type": "text/html" } });
+  async fetch(req) {
+    const path = new URL(req.url).pathname;
+    if (path === "/slow.css") {
+      await Bun.sleep(SLOW_SHEET_MS);
+      return new Response("#never { color: red }", { headers: { "content-type": "text/css" } });
+    }
+    return path === "/loop.js" ? new Response(SCRIPT, { headers: { "content-type": "text/javascript" } }) : new Response(PAGE, { headers: { "content-type": "text/html" } });
   },
 });
 const browser = await (engine === "webkit" ? webkit : chromium).launch({ executablePath: engine === "chromium" ? process.env.SMOKE_CHROMIUM || undefined : undefined });
@@ -119,6 +151,19 @@ try {
     expect(/div#second \d+x20, put under watch \d+ ms before by observer \d+/.test(lateAll), "it names that element, its size and how long before it was put under watch");
     expect(!/div#first \d+x\d+ -> /.test(lateAll), "and no element that kept its size");
   }
+
+  const toldLoading = told.length;
+  const printedLoading = printed.length;
+  await page.evaluate(() => (window as Window & Probes).swapWhileLoading?.());
+  await until(() => told.length > toldLoading || engine !== "webkit");
+  await new Promise((next) => setTimeout(next, SLOW_SHEET_MS + 500));
+  const held = told.slice(toldLoading).find((t) => t.includes("ResizeObserver")) ?? "";
+  const heldAll = `${told.slice(toldLoading).join("\n")}\n${printed.slice(printedLoading).join("\n")}`;
+  if (engine === "webkit" || held) {
+    expect(held !== "", `a line whose text is swapped while a stylesheet loads in <head> is laid out late, and told as a loop (${held.split("\n")[0]})`);
+    expect(/1 stylesheet was still loading in <head>[^\n]*\n\s+slow\.css/.test(heldAll), "it names the stylesheet that was still loading in <head>");
+    expect(/div#feed \d+x8 -> \d+x32, watched by observer \d+/.test(heldAll), "and the list that was told the line was empty");
+  } else console.log(`note ${engine} lays out new elements while a stylesheet loads in <head>, so there is no loop to tell here: WebKit runs these`);
   await page.close();
 } finally {
   await browser.close();

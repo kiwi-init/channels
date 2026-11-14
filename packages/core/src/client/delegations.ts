@@ -1,7 +1,7 @@
+import { putMemberRecord } from "./member-record.ts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { delegationDue, makeDelegation, readDelegation, type Delegation } from "../delegation.ts";
-import { makeRecord, sealRecord } from "../membership.ts";
 import { omit } from "../omit.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refused } from "./errors.ts";
@@ -73,8 +73,11 @@ export class ChannelDelegations {
         const e = this.ch.access.epoch;
         const key = this.ch.access.keys[String(e)]!;
         const info = omit(m, "active", "readOnly", "unverified", "at", "signedBy");
-        const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, info)));
-        yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: !m.readOnly }) });
+        yield* putMemberRecord(this.ch, e, key, {
+          pk: () => m.pk,
+          info: () => info,
+          post: () => !m.readOnly,
+        });
         adopted.push(m.pk);
       }
       return { issued, dropped, adopted } satisfies Tended;

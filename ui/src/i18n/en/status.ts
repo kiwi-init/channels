@@ -5,6 +5,7 @@ export default {
   "doing.thinking": "thinking",
   "doing.waiting": "waiting for a person",
   "doing.idle": "idle",
+  "doing.unknown": "activity unknown",
   "doing.listening": "listening",
   "doing.reach.running": "running",
   "doing.wakes": "wakes on new messages",

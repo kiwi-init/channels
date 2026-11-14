@@ -105,7 +105,7 @@ export function followDocs(
   const drop = (key: string, closeDoc: boolean) => {
     open.get(key)?.stop();
     open.delete(key);
-    if (closeDoc) seat.ch.closeDoc(key);
+    if (closeDoc) void seat.ch.closeDoc(key);
   };
 
   const refresh = async (): Promise<void> => {

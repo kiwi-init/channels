@@ -5,9 +5,8 @@ import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { lasting, useNow } from "~/kit/time"
 import type { Channel, MoveFor, RunTrouble, Task } from "~/model"
-import { useGo } from "~/nav"
 import { TASK_TICK_MS } from "~/tasks/tick"
-import { nickname, Shown } from "~/names"
+import { nickname } from "~/names"
 import { wordsPlain } from "~/words"
 
 const MOVES: Readonly<Record<MoveFor, Key>> = {
@@ -65,31 +64,4 @@ export const seesQuiet = (channel: Channel): boolean => channel.youOwn || channe
 
 export function quietTasks(channel: Channel, now: number): Task[] {
   return channel.tasks.filter((task) => !task.archived && quietFor(task, now) !== null).sort((a, b) => (a.quiet?.since ?? 0) - (b.quiet?.since ?? 0))
-}
-
-export function QuietList({ channel }: { channel: Channel }) {
-  const go = useGo()
-  const now = useTaskNow()
-  const tasks = seesQuiet(channel) ? quietTasks(channel, now) : []
-  if (!tasks.length) return null
-  return (
-    <section className="quiet" aria-label={t("tasks.quiet.label")}>
-      <p className="quiet-h">
-        {t("tasks.quiet.label")} <span className="dim">{t("tasks.quiet.hint")}</span>
-      </p>
-      <ul>
-        {tasks.map((task) => (
-          <li key={task.id}>
-            <button type="button" className="quiet-row" onClick={() => go({ to: "task", task: task.id })}>
-              <span className="lane-id num">T{task.id}</span>
-              <span className="lane-row-title">
-                <Shown value={task.title} />
-              </span>
-              <span className="quiet-for tone-alert">{quietWords(channel, task, now)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
 }

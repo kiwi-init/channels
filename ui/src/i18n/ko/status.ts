@@ -5,6 +5,7 @@ export default {
   "doing.thinking": "생각 중",
   "doing.waiting": "사람을 기다리는 중",
   "doing.idle": "대기 중",
+  "doing.unknown": "활동 상태 알 수 없음",
   "doing.listening": "수신 대기 중",
   "doing.reach.running": "실행 중",
   "doing.wakes": "새 메시지가 오면 깨어남",

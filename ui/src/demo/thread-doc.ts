@@ -10,6 +10,7 @@ import { madeHere, thisWindow } from "~/chat/doc/made"
 import { DEMO_ASK_BLOCK } from "~/demo/data"
 import { demoDoc } from "~/demo/doc-hub"
 import { DEMO_CHART, DEMO_REPORT } from "~/demo/doc-media"
+import { DEMO_FROZEN } from "~/demo/shots"
 import { FRAGMENT, fileNode, imageNode, newBlockId, schema, type BlockKind } from "~/chat/doc/schema"
 
 interface Seed {
@@ -119,15 +120,19 @@ export function seedThreadDoc(code: string, thread: string, extra: number, strea
   if (streams) stream(atlas.doc)
 }
 
+const FROZEN_WORDS = 24
+
 function stream(doc: Y.Doc): void {
   let words = 0
   let block: ReturnType<typeof agentBlock> | null = null
-  window.setInterval(() => {
+  const next = () => {
     block ??= agentBlock(doc, "atlas")
     block.write(`${words % 12 === 11 ? "\n" : words ? " " : ""}${WORDS[words % WORDS.length]}`)
     if (++words % 60 === 0) {
       block.end()
       block = null
     }
-  }, 60)
+  }
+  if (!DEMO_FROZEN) window.setInterval(next, 60)
+  else for (let i = 0; i < FROZEN_WORDS; i++) next()
 }

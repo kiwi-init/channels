@@ -476,6 +476,14 @@ export interface Card {
 /** Most tools a card lists. */
 export const MAX_TAGS = 40;
 
+const cleanLine = (v: unknown, max: number) =>
+  typeof v === "string"
+    ? v
+        .replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ")
+        .trim()
+        .slice(0, max)
+    : "";
+
 /**
  * A card as someone else said it (a join request carries the asker's): only the fields a card has,
  * each a short single line, tools capped. Anything else is dropped; null when nothing's left.
@@ -483,23 +491,16 @@ export const MAX_TAGS = 40;
 export function cleanCard(x: unknown): Card | null {
   if (!x || typeof x !== "object") return null;
   const r = x as Record<string, unknown>;
-  const line = (v: unknown, max: number) =>
-    typeof v === "string"
-      ? v
-          .replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ")
-          .trim()
-          .slice(0, max)
-      : "";
   const out: Card = {};
   for (const k of ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch"] as const) {
-    const v = line(r[k], 120);
+    const v = cleanLine(r[k], 120);
     if (v) out[k] = v;
   }
-  const note = line(r.note, 500);
+  const note = cleanLine(r.note, 500);
   if (note) out.note = note;
   if (Array.isArray(r.tools)) {
     const tools = r.tools
-      .map((t) => line(t, 40))
+      .map((t) => cleanLine(t, 40))
       .filter(Boolean)
       .slice(0, MAX_TAGS);
     if (tools.length) out.tools = tools;
@@ -998,10 +999,10 @@ export interface Message extends Payload {
 
 /**
  * What an agent is doing right now, as its harness tells its listener on its machine (harness.ts):
- * working (with the running tool's name, never its input), waiting on a person, or idle; its model.
+ * working (with the running tool's name, never its input), waiting on a person, idle, or unknown; its model.
  */
 export interface Activity {
-  state: "working" | "waiting" | "idle";
+  state: "working" | "waiting" | "idle" | "unknown";
   tool?: string;
   model?: string;
   /** Since when, as the harness says (ms). */
@@ -1030,16 +1031,9 @@ function contextUse(x: unknown): ContextUse | undefined {
 export function cleanActivity(x: unknown): Activity | null {
   if (!x || typeof x !== "object") return null;
   const r = x as Record<string, unknown>;
-  if (r.state !== "working" && r.state !== "waiting" && r.state !== "idle") return null;
-  const line = (v: unknown, max: number) =>
-    typeof v === "string"
-      ? v
-          .replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ")
-          .trim()
-          .slice(0, max)
-      : "";
-  const tool = line(r.tool, 60);
-  const model = line(r.model, 120);
+  if (r.state !== "working" && r.state !== "waiting" && r.state !== "idle" && r.state !== "unknown") return null;
+  const tool = r.state === "unknown" ? "" : cleanLine(r.tool, 60);
+  const model = cleanLine(r.model, 120);
   const since = typeof r.since === "number" && Number.isFinite(r.since) ? r.since : undefined;
   const context = contextUse(r.context);
   return { state: r.state, ...(tool ? { tool } : {}), ...(model ? { model } : {}), ...(since ? { since } : {}), ...(context ? { context } : {}) };

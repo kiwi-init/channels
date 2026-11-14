@@ -18,6 +18,22 @@ declare module "react-native-enriched-markdown/lib/module/web/renderers/index.js
   export * from "react-native-enriched-markdown/lib/typescript/src/web/renderers/index"
 }
 
+declare module "react-native-enriched-markdown/lib/module/web/renderers/BlockRenderers.js" {
+  export * from "react-native-enriched-markdown/lib/typescript/src/web/renderers/BlockRenderers"
+}
+
+declare module "react-native-enriched-markdown/lib/module/web/renderers/InlineRenderers.js" {
+  export * from "react-native-enriched-markdown/lib/typescript/src/web/renderers/InlineRenderers"
+}
+
+declare module "react-native-enriched-markdown/lib/module/web/renderers/ListRenderers.js" {
+  export * from "react-native-enriched-markdown/lib/typescript/src/web/renderers/ListRenderers"
+}
+
+declare module "react-native-enriched-markdown/lib/module/web/renderers/TableRenderers.js" {
+  export * from "react-native-enriched-markdown/lib/typescript/src/web/renderers/TableRenderers"
+}
+
 declare module "react-native-enriched-markdown/lib/module/web/styles.js" {
   export * from "react-native-enriched-markdown/lib/typescript/src/web/styles"
 }

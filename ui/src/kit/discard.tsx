@@ -1,3 +1,4 @@
+import "~/i18n/en/kit-later"
 import { useState } from "react"
 
 import { t } from "~/i18n/i18n"

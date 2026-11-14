@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { omit } from "@kiwi/core/omit.ts";
 import { loadConfig, updateConfig } from "../../config.ts";
 import { isRecord, readJson, writeJson } from "../files.ts";
-import { hookCommand, isOurHook, isOurHookCommand } from "../self.ts";
+import { hookCommand, isOurHook } from "../self.ts";
+import { ourHook, withoutOursKeepingForeign } from "./claude-shaped.ts";
 
 const ZCODE_STOP_MS = 30_000;
 
@@ -13,18 +14,6 @@ export function zcodeConfigPath(env: Record<string, string | undefined> = proces
 }
 
 const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
-
-const ours = (hook: unknown): boolean => isRecord(hook) && typeof hook.command === "string" && isOurHookCommand(hook.command);
-
-function withoutOurs(groups: unknown): unknown[] {
-  return list(groups).flatMap((group) => {
-    if (!isRecord(group)) return [group];
-    const hooks = list(group.hooks);
-    const kept = hooks.filter((h) => !ours(h));
-    if (kept.length === hooks.length) return [group];
-    return kept.length ? [{ ...group, hooks: kept }] : [];
-  });
-}
 
 function stopGroup(): Record<string, unknown> {
   return { hooks: [{ type: "command", command: hookCommand("stop"), timeoutMs: ZCODE_STOP_MS }] };
@@ -46,7 +35,7 @@ function noteTurnedOn(path: string, on: boolean): void {
 
 function hasOurs(config: Record<string, unknown>): boolean {
   const hooks = config.hooks;
-  return isRecord(hooks) && isRecord(hooks.events) && list(hooks.events.Stop).some((group) => isRecord(group) && list(group.hooks).some(ours));
+  return isRecord(hooks) && isRecord(hooks.events) && list(hooks.events.Stop).some((group) => isRecord(group) && list(group.hooks).some(ourHook));
 }
 
 export function installZcode(path: string): void {
@@ -54,7 +43,7 @@ export function installZcode(path: string): void {
   const hooks = isRecord(config.hooks) ? config.hooks : {};
   if (hooks.enabled === false) throw new Error(`ZCode's hooks are off in ${path} (hooks.enabled is false): turn them on, then run kiwi hooks install zcode`);
   const events = isRecord(hooks.events) ? hooks.events : {};
-  writeJson(path, { ...config, hooks: { ...hooks, enabled: true, events: { ...events, Stop: [...withoutOurs(events.Stop), stopGroup()] } } });
+  writeJson(path, { ...config, hooks: { ...hooks, enabled: true, events: { ...events, Stop: [...withoutOursKeepingForeign(events.Stop), stopGroup()] } } });
   if (!hasOurs(config)) noteTurnedOn(path, hooks.enabled === undefined);
 }
 
@@ -63,7 +52,7 @@ export function uninstallZcode(path: string): void {
   const config = readJson(path);
   if (!isRecord(config.hooks) || !hasOurs(config)) return noteTurnedOn(path, false);
   const events = isRecord(config.hooks.events) ? config.hooks.events : {};
-  const stop = withoutOurs(events.Stop);
+  const stop = withoutOursKeepingForeign(events.Stop);
   const keptEvents = stop.length ? { ...events, Stop: stop } : omit(events, "Stop");
   const withEvents = Object.keys(keptEvents).length ? { ...config.hooks, events: keptEvents } : omit(config.hooks, "events");
   const hooks = turnedOn(path) ? omit(withEvents, "enabled") : withEvents;

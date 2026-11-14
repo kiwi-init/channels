@@ -36,6 +36,7 @@ export function miscCalls(
   | "wallpaperTints"
   | "wallpaperBackdrop"
   | "windowControl"
+  | "windowMaximized"
   | "saveFile"
   | "getAccentColor"
   | "capabilities"
@@ -93,6 +94,7 @@ export function miscCalls(
       if (action !== "minimize" && action !== "maximize" && action !== "close") throw new Error("a window control is minimize, maximize or close");
       host.windowControl(action);
     },
+    windowMaximized: () => host.windowMaximized(),
     wallpaperBackdrop: async (dark: boolean) => {
       const pixels = await host.wallpaperImage(dark === true, BACKDROP_WIDTH, BACKDROP_HEIGHT);
       return pixels ? backdropOf(pixels, BACKDROP_WIDTH, BACKDROP_HEIGHT) : null;

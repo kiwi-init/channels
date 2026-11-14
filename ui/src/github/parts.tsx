@@ -10,6 +10,7 @@ import {
   GitPullRequestClosedIcon,
   GitPullRequestDraftIcon,
   GitPullRequestIcon,
+  LinkSquare02Icon,
   Loading03Icon,
   MinusSignCircleIcon,
   UnavailableIcon,
@@ -20,7 +21,7 @@ import { useState } from "react"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { Avatar, cx, Dot } from "~/kit/bits"
-import { GlyphIcon, Icon, ISSUE, type Glyph } from "~/kit/icons"
+import { type Glyph, GlyphIcon, Icon, ISSUE } from "~/kit/icons"
 import { copyText } from "~/kit/toasts"
 import { ago } from "~/kit/time"
 import { memberOf, type Channel, type Check, type Issue, type PullRequest } from "~/model"
@@ -240,7 +241,7 @@ export function PrCard({ pr }: { pr: PullRequest }) {
           <OutsideLink href={`${pr.url}/files`}>{t("github.parts.files.link")}</OutsideLink>
           <OutsideLink href={pr.url}>
             {t("github.parts.open.on.github")}
-            <Icon name="external" size={12} />
+            <GlyphIcon glyph={LinkSquare02Icon} size={12} />
           </OutsideLink>
         </span>
       </p>

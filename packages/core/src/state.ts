@@ -78,6 +78,7 @@ export {
   parseTaskId,
   reviewClaimRefusal,
   reviewMoveRefusal,
+  reviewerTitle,
   reviewWaysOut,
   revisedOut,
   similarOpenTasks,

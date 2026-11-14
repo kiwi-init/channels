@@ -32,6 +32,14 @@ const DOC_TESTS: [name: string, command: string][] = [
     "msg edit, an agent's edited message keeps its text on screen through every edit, in Chromium and WebKit",
     "bun scripts/ui-msg-edit.ts || status=1\nbun scripts/ui-msg-edit.ts --webkit || status=1",
   ],
+  [
+    "feed late picture, a picture that arrives after its line leaves the conversation where it was, at the bottom and scrolled up, in Chromium and WebKit",
+    "bun scripts/ui-feed-late-image.ts || status=1\nbun scripts/ui-feed-late-image.ts --webkit || status=1",
+  ],
+  [
+    "feed unread, lines posted while you sit in another room count on its row, open under the New line and clear when read, and scrolled up the button counts the new ones, in Chromium and WebKit",
+    "bun scripts/ui-feed-unread.ts || status=1\nbun scripts/ui-feed-unread.ts --webkit || status=1",
+  ],
   ["ui a busy thread doc never scrolls on its own, under the composer or while you read, in WebKit", "bun scripts/ui-doc-still.ts --dist ui/dist"],
   [
     "composer in a doc, late refusals keep the draft, PDFs, Edit in the composer, slow pasted images, the / menu and ⌘Enter, in Chromium and WebKit",

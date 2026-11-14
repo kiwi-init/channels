@@ -55,7 +55,6 @@ const QUIET_MS = 600
 const GROUP_CAP = 40
 const PARTS: readonly string[] = [
   ".rail",
-  ".tile.is-home",
   ".rail-gear",
   ".top",
   ".top-drawer",

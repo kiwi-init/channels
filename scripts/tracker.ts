@@ -1,3 +1,4 @@
+import { githubClient, record, text, list } from "./github.ts";
 import Anthropic from "@anthropic-ai/sdk";
 
 import { type Level, cut, higher, LEVELS, MODEL } from "./blast-radius.ts";
@@ -90,18 +91,6 @@ export const CI_RED = "Red CI";
 export const QUARANTINED = "Quarantined";
 export const DRAFTS = "Drafts";
 export const FIX = "Fix first";
-
-function record(x: unknown): Record<string, unknown> {
-  return x !== null && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x)) : {};
-}
-
-function text(x: unknown): string {
-  return typeof x === "string" ? x : "";
-}
-
-function list(x: unknown): unknown[] {
-  return Array.isArray(x) ? x : [];
-}
 
 function num(x: unknown): number {
   return typeof x === "number" && Number.isFinite(x) ? x : 0;
@@ -482,30 +471,12 @@ export async function publish(api: Api, body: string): Promise<boolean> {
   return true;
 }
 
-function github(repo: string, read: string, write: string, dryRun: boolean): Api {
-  const root = process.env.GITHUB_API_URL ?? "https://api.github.com";
-  const call = async (method: string, url: string, token: string, body?: unknown): Promise<unknown> => {
-    const headers: Record<string, string> = { accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28", "content-type": "application/json" };
-    if (token) headers.authorization = `Bearer ${token}`;
-    const res = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-    if (!res.ok) throw new Error(`${method} ${url}: ${res.status} ${await res.text()}`);
-    return res.status === 204 ? null : res.json();
-  };
-  return {
-    rest: async (method, path, body) => {
-      if (method === "GET") return call(method, `${root}/repos/${repo}${path}`, read);
-      if (dryRun) {
-        console.log(`would ${method} ${path}`);
-        return null;
-      }
-      return call(method, `${root}/repos/${repo}${path}`, write, body);
-    },
-    graphql: async (query, variables) => {
-      const out = record(await call("POST", `${root}/graphql`, read, { query, variables }));
-      if (list(out.errors).length > 0) throw new Error(`graphql: ${JSON.stringify(out.errors)}`);
-      return out.data;
-    },
-  };
+export function github(repo: string, read: string, write: string, dryRun: boolean): Api {
+  return githubClient(repo, {
+    credentials: { kind: "split", read, write },
+    dryRun,
+    policy: { contentType: "always", dryRunBody: false, notFound: "error", errorPath: "url", graphql: "read", getBody: "omit" },
+  });
 }
 
 if (import.meta.main) {

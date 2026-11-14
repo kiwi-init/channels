@@ -5,6 +5,7 @@ export default {
   "doing.thinking": "思考中",
   "doing.waiting": "等待人处理",
   "doing.idle": "空闲",
+  "doing.unknown": "活动状态未知",
   "doing.listening": "监听中",
   "doing.reach.running": "运行中",
   "doing.wakes": "有新消息时唤醒",

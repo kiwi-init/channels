@@ -14,8 +14,9 @@ Canonical sources: `ui/src/styles/tokens.css` (`:root`), `ui/src/theme/`
 
 Quiet and fast. A near-black canvas, Channels Dark (Channels Light in light), ink
 for what matters and greys for the rest, the system font for what people read and
-Paper Mono for the machine's words (times, ids, counts, code). No glass, no
-blur, no gradients for show. Colour means a state, never decoration.
+Paper Mono for the machine's words (times, ids, counts, code). The frame is
+glass where the desktop allows it; nothing else is. No gradients for show.
+Colour means a state, never decoration.
 
 ## 2. Theme architecture
 
@@ -34,7 +35,7 @@ blur, no gradients for show. Colour means a state, never decoration.
   a lighter frame around a dark page, a grey frame around a white one.
   `tokens.css` names them `--page` and `--frame` and rebinds `--bg`,
   `--bg-2`, `--bg-3`, `plate` and `float` on the frame's parts (`.top`,
-  `.rail`, `.side`, `.set-nav`, `.track`), so a rule that says `bg` means
+  `.rail`, `.side`, `.set-nav`), so a rule that says `bg` means
   the surface it sits on. The frame's own two steps, for its fields, cards
   and chips, are derived: `bg-3` with 6% and 12% of `ink` in dark, `bg-2`
   and `bg-3` with 6% of `ink` in light.
@@ -206,14 +207,27 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     hidden auto`): strips wrap, long code and diff lines wrap, a diagram
     shrinks to fit. The one exception is the image annotator's zoomed
     picture.
-  - One frame, one page. The top bar, the sidebar and the second sidebar
-    are one surface, the frame. The work is the page: the conversation or
-    a view, Settings, Home, and a thread or task opened in the right
-    column. The page rounds its top corners (`r-ctl`)
-    where it meets the frame and keeps them square against the window's
-    edge (a hidden sidebar, an open panel, a window under 1180px, Home).
-    What is open joins the page: the open tab from above and the open
-    sidebar row from the side, each in the page's colour with 8px flares.
+  - Two layers: one frame below, the page above. The tab row, the top bar
+    and the sidebar are one surface, the frame (glass, below). The work is
+    the page: panes laid on the frame as rounded cards (`r-card`) with
+    `--pane-gap` (6px) between them and around them, at the top, the
+    bottom and both sides. Only the open tab joins the page, from above, in
+    the page's colour with 8px flares. Nothing in the sidebar cuts across
+    the frame: its open row is a pill on it.
+  - The page is panes (`panes/`). A channel starts as the conversation
+    with Now docked on the right. ⌘D splits right, ⇧⌘D splits down, ⌘W
+    closes the focused pane (the window when one is left), and ⌥⌘ arrows
+    move the focus. A new pane is empty and says so ("Drag something
+    here", with a few picks). A sidebar row, a link, a channel tab or Home
+    dropped on a pane splits it or fills an empty one; a pane's grip moves
+    it. Dragging a gap resizes. Focus follows the pointer after 70ms, never
+    while a button is held; a composer with text keeps the typing. A pane too small to use
+    (under 216×160) folds to its name.
+  - Every view is a markdown page in one renderer (`panes/engine.tsx`):
+    Now, a task, a PR or an issue, Specs, Agents, GitHub, Needs you,
+    Activity, Home, Settings and channel settings. Its controls are
+    markdown conventions (`kiwi-do:` buttons, `check:` marks, a
+    `**Label** · value` list for properties). Only the chat feed is not.
   - Nothing you click moves. Hiding the sidebar or opening the right panel
     changes no control's position. Content may: a hidden sidebar gives its
     column to the work.
@@ -283,7 +297,10 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 - Surfaces are told apart by a step of fill (`bg` → `bg-2` → `bg-3`, counted
   from the surface they sit on, §2) and by hairlines (`line`), not by
   shadows. Cards on the page are `bg` with a `line` border.
-- No glass, no `backdrop-filter`, no blur anywhere, with one exception: the
+- Glass in two places only. The frame shows the window's frost: the Mac's
+  material, a compositor blur on Hyprland, and the wallpaper image on other
+  Linux desktops; the app sets `data-glass` to the kind, and without it
+  the frame stays solid `bg-3`. Labels on glass use `--ink-3-glass`. And the
   composer (§10) is frosted, so the thread scrolls under it. Nothing else
   takes a blur.
 - Sizes on `:root`: `--side-w 18rem` (the sidebar and the second sidebar),
@@ -299,14 +316,20 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 
 - Things grow out of what was pressed: the search field out of the search
   button (`find-grow`, a clip, never a width), a menu out of its corner
-  (`menu-grow`), the right panel in from the window's edge (`panel-in`), a
-  view up into place when its row opens (`view-in`; the conversation is there
-  at once). Pointing at a channel's tile drops its name under it
+  (`menu-grow`). Pointing at a channel's tile drops its name under it
   (`hint-drop`), so a name never costs a click. The sidebar slides out and in
   and the work slides with it (`main-fill`, `main-yield`); the grid itself
   never animates.
 - Motion moves `transform`, `translate`, `opacity` and `clip-path` only.
-  Nothing animates a width, a height, a position or a grid.
+  Nothing animates a width, a height, a position or a grid, except panes:
+  when the layout changes, a pane's box glides (`--pane-move` 0.34s), never
+  while a gap or the sidebar is being dragged. A new pane grows in from the
+  side it split from (`pane-in-*`, a clip) and a closed one fades where it
+  was (`pane-gone`).
+- A view that replaces another swaps in place in one frame, with no fade and
+  no rise: a conversation, a Settings page, a thread, a task, the board, Needs
+  you, their cards. Fades are for what lies over the work: dialogs, menus,
+  toasts, the palette.
 - Motion answers an action: something opens, arrives or moves because someone
   did something. It is felt, never watched: short, soft, and nothing plays
   twice for the same event. Two things loop: the working dots under the
@@ -330,12 +353,10 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   both through `useMoved`, so opening a view animates nothing that didn't change.
 - A message that arrives lands with `land()`: 8px up, 16px for your own, and only
   for what just came in, never history or a scroll.
-- A view's cards rise in a short stagger when it opens (30ms apart, 120ms at
-  most). Clearing Needs you draws a tick (`tick-draw`).
-- Keyframes: `rise` (6px up and in), `fade`, `panel-in` (the right panel, 12px
-  from the right), `dialog-in`, `toast-in`, `pop-in`, `palette-in` (6px down),
-  `jump-in` (Jump to latest),
-  `msg-flash` (a message you jumped to, 1.6s).
+- Clearing Needs you draws a tick (`tick-draw`).
+- Keyframes: `rise` (6px up and in), `fade`, `dialog-in`, `toast-in`,
+  `pop-in`, `palette-in` (6px down), `jump-in` (Jump to latest), `msg-flash`
+  (a message you jumped to, 1.6s).
 - Scrolling content fades under the top bar (16px, `bg` to transparent).
 - Reduced motion: the OS setting or Settings' own (`data-motion="reduced"` on
   `<html>`) cuts every animation and transition to 0.01ms, and `land()` does
@@ -465,14 +486,14 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   a count). A section's + (New
   room, Invite people, Add an agent) shows when the pointer is over the
   section; it becomes a row only while the section is empty. The open row
-  takes the page's colour and reaches the sidebar's edge, where it joins
-  the page like the open tab; a row with news is 600 with a count. Cards for what waits on
+  is a pill on `wash-2`; a row with news is 600 with a count. Cards for what waits on
   you (an update, a device) sit at the foot under a
   16px fade: the text, then the action on its line's end, or under it when
   the text needs the width.
 - **Second sidebar.** The right column (`--side-w`) is one place with two
-  states. At rest, on every view, it is part of the frame and holds Now
-  and Activity. Now is the task
+  states. At rest, on every view, it sits on the page, with no line and
+  no step of fill between it and the work, and holds Now and Activity.
+  Now is the task
   tracker: the counts (in progress, done today) in mono beside its name, or
   on their own line under the toggle, then a 4px bar with one
   segment per state in the state colours, the next step, and the open tasks
@@ -496,7 +517,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   panel, an open spec), Activity is an icon beside Search that opens the same
   log in a popover under it.
 - **Right panel** (`--side-w` to start, wider by its grip): a thread,
-  a task, a PR or an issue slides in from the right (`panel-in`)
+  a task, a PR or an issue opens on the right
   beside the conversation, in the page's colour, with a title, a mono sub
   line and a close button.
   A thread keeps its own composer.
@@ -598,7 +619,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   its tasks with PR and check ticks, Up next, Watching, and its last moves
   with mono times.
 - **Settings.** The sidebar trades the channels for Settings' sections (the
-  open one joined to the page, like a sidebar row) under a `‹ Settings` back
+  open one on `wash-2`) under a `‹ Settings` back
   button. The page sits beside them and reaches the window's right edge, its
   content centred on the window, up to 720px: a `t-display` title (a quiet line under it only when it
   says a scope or a limit), then groups of rows on the page under mono group

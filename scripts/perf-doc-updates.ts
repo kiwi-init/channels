@@ -2,10 +2,10 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { chromium, type CDPSession, type Page } from "playwright-core";
+import { chromium, type CDPSession } from "playwright-core";
 import { startLocalRelay } from "./local-relay.ts";
 import { harnessDist } from "./ui-harness.ts";
-import { composer, docOpen, firstRun, newChannel, say } from "./perf-ui.ts";
+import { composer, docOpen, firstRun, newChannel, say, switchTo } from "./perf-ui.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`What a thread doc's updates cost the page, by the length of the thread. Two windows of jow in one channel with
@@ -73,17 +73,6 @@ interface Sample {
   renders: number;
   long: number;
   frames: number;
-}
-
-async function switchTo(page: Page, name: string): Promise<void> {
-  await page.evaluate((title) => {
-    const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === title);
-    if (!tile) throw new Error(`no ${title} tile in the rail`);
-    tile.click();
-  }, name);
-  await page.waitForFunction((title) => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] === title, name, {
-    timeout: 15000,
-  });
 }
 
 interface ProfileNode {

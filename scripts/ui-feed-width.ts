@@ -25,12 +25,14 @@ const FEEDS = [
   { shot: "room-doc", name: "a short room with a written doc", feed: ".main .feed", height: 620 },
   { shot: "long-feed", name: "a long room", feed: ".main .feed", height: 900 },
   { shot: "dm", name: "a conversation with no doc", feed: ".main .feed", height: 420 },
-  { shot: "channel", name: "a thread in the panel", feed: "aside.panel .feed", height: 420, open: ".main .msg-thread" },
+  { shot: "channel", name: "a thread in the panel", feed: ".panel .feed", height: 420, open: ".main .msg-thread" },
 ] as const;
 const WIDTH = 1440;
 const UP = 300;
 const LEAST_UP = 60;
 const WAIT_MS = 350;
+const NOW_ROW = ".page.is-now a[href^='kiwi-task:']";
+const TASK_PANE = ".panes > .pane:has(.task-page)";
 
 interface Seen {
   top: number;
@@ -95,9 +97,9 @@ async function steps(page: Page, feed: string, height: number): Promise<[string,
     all.push(["the sidebar's edge dragged 90px out", false, drag(90)]);
     all.push(["the sidebar's edge dragged back", true, drag(-90)]);
   }
-  if (feed.startsWith(".main") && (await page.locator(".track .track-row").count()) > 0) {
-    all.push(["a task opened in the panel", false, () => page.locator(".track .track-row").first().click()]);
-    all.push(["the panel closed", true, () => page.locator("aside.panel").getByRole("button", { name: "Close", exact: true }).click()]);
+  if (feed.startsWith(".main") && (await page.locator(NOW_ROW).count()) > 0) {
+    all.push(["a task opened in the panel", false, () => page.locator(NOW_ROW).first().click()]);
+    all.push(["the panel closed", true, () => page.locator(TASK_PANE).getByRole("button", { name: "Close", exact: true }).click()]);
   }
   for (const width of [1100, 700]) {
     all.push([`the window narrowed to ${width}px`, false, () => page.setViewportSize({ width, height })]);

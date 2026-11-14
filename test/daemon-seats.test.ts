@@ -15,6 +15,7 @@ import { installMimo } from "../src/hooks/install/mimo.ts";
 import type { Presence } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { checked } from "./check.ts";
+import { processStart } from "../src/pid.ts";
 
 setDefaultTimeout(60_000);
 
@@ -76,6 +77,9 @@ async function seatOf(agent: string) {
 }
 
 const from = (pk: string) => heard.filter((p) => p.pk === pk && !p.query);
+
+const started = existsSync("/proc/self/stat") ? (processStart(process.pid) ?? "").split(":").at(-1) : processStart(process.pid);
+const claudeRegistry = (record: object): string => JSON.stringify({ pid: process.pid, sessionId: "s", procStart: started, ...record });
 
 describe("seats always on", () => {
   test("with no subscriber, a joined agent's seat is open and the relay sees it as the daemon", async () => {
@@ -274,15 +278,57 @@ describe("seats always on", () => {
   test("the daemon reports a Claude seat's activity from its record, even with no session id", async () => {
     const claudeDir = mkdtempSync(join(tmpdir(), "kiwi-daemon-seats-claude-"));
     mkdirSync(join(claudeDir, "sessions"), { recursive: true });
-    writeFileSync(join(claudeDir, "sessions", "4242.json"), JSON.stringify({ status: "idle", statusUpdatedAt: 123 }));
+    writeFileSync(join(claudeDir, "sessions", `${process.pid}.json`), claudeRegistry({ status: "idle", statusUpdatedAt: 123 }));
     const prev = process.env.CLAUDE_CONFIG_DIR;
     process.env.CLAUDE_CONFIG_DIR = claudeDir;
     try {
-      saveConfig({ ...loadConfig(), bindings: { "/work": { alias: "test", as: "claude", harness: "claude", pid: 4242 } } });
+      saveConfig({ ...loadConfig(), bindings: { "/work": { alias: "test", as: "claude", harness: "claude", pid: process.pid } } });
       await until("idle activity in claude's presence", () => from(claudePk).some((p) => p.activity?.state === "idle"));
     } finally {
       const bindings = omit(loadConfig().bindings ?? {}, "/work");
       saveConfig({ ...loadConfig(), bindings });
+      if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = prev;
+      rmSync(claudeDir, { recursive: true, force: true });
+    }
+  });
+
+  test("a listening Claude seat at work on a tool whose record stops matching its session goes to unknown end to end: no tool, still listening (#2382)", async () => {
+    const claudeDir = mkdtempSync(join(tmpdir(), "kiwi-daemon-seats-unsure-"));
+    mkdirSync(join(claudeDir, "sessions"), { recursive: true });
+    mkdirSync(join(claudeDir, "projects", "p"), { recursive: true });
+    const toolCall = { type: "assistant", message: { model: "claude-opus-5-5", stop_reason: "tool_use", content: [{ type: "tool_use", name: "Bash", input: { command: "true" } }] } };
+    writeFileSync(join(claudeDir, "projects", "p", "s-unsure.jsonl"), JSON.stringify(toolCall) + "\n");
+    const registry = join(claudeDir, "sessions", `${process.pid}.json`);
+    writeFileSync(registry, claudeRegistry({ sessionId: "s-unsure", status: "busy", statusUpdatedAt: 300 }));
+    const prev = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = claudeDir;
+    try {
+      saveConfig({ ...loadConfig(), bindings: { "/unsure": { alias: "test", as: "claude", harness: "claude", session: "s-unsure", pid: process.pid } } });
+      const last = () => from(claudePk).at(-1);
+      const seen = (p: Presence | undefined) => ({ state: p?.activity?.state, tool: p?.activity?.tool, reach: p?.reach });
+      const claude = await AgentSession.open("test", loadConfig().channels.test!, "claude");
+      const gemini = await AgentSession.open("test", loadConfig().channels.test!, "gemini");
+      const heard = async () => seen(await runAgent(gemini.heard()).then((m) => m?.get("claude")));
+      const same = (want: ReturnType<typeof seen>) => (got: ReturnType<typeof seen>) => JSON.stringify(got) === JSON.stringify(want);
+      const atWork = { state: "working" as const, tool: "Bash", reach: "listening" as const };
+      const unsure = { state: "unknown" as const, tool: undefined, reach: "listening" as const };
+      await runAgent(
+        Effect.raceFirst(
+          claude.listen(() => Effect.void, {}),
+          Effect.promise(async () => {
+            await until("claude at work on Bash, listening, in its presence", () => same(atWork)(seen(last())));
+            await until("gemini's daemon to hear claude at work on Bash, listening", async () => same(atWork)(await heard()));
+            writeFileSync(registry, claudeRegistry({ sessionId: "s-someone-else", status: "busy", statusUpdatedAt: 301 }));
+            await until("claude's presence to say unknown, still listening", () => same(unsure)(seen(last())));
+            await until("gemini's daemon to hear claude as unknown, still listening", async () => same(unsure)(await heard()));
+          }),
+        ),
+      );
+      expect(seen(last())).toEqual(unsure);
+      expect(await heard()).toEqual(unsure);
+    } finally {
+      saveConfig({ ...loadConfig(), bindings: omit(loadConfig().bindings ?? {}, "/unsure") });
       if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
       else process.env.CLAUDE_CONFIG_DIR = prev;
       rmSync(claudeDir, { recursive: true, force: true });
@@ -294,7 +340,7 @@ describe("seats always on", () => {
     mkdirSync(join(claudeDir, "sessions"), { recursive: true });
     mkdirSync(join(claudeDir, "projects"), { recursive: true });
     const registry = join(claudeDir, "sessions", `${process.pid}.json`);
-    writeFileSync(registry, JSON.stringify({ status: "idle", statusUpdatedAt: 123 }));
+    writeFileSync(registry, claudeRegistry({ status: "idle", statusUpdatedAt: 123 }));
     const prev = process.env.CLAUDE_CONFIG_DIR;
     process.env.CLAUDE_CONFIG_DIR = claudeDir;
     installHooks(true);
@@ -311,7 +357,7 @@ describe("seats always on", () => {
         kind: "none",
         why: "Claude Code's hook listener isn't running in this idle session (it starts when a turn ends; a prompt typed into the session starts it again)",
       });
-      writeFileSync(registry, JSON.stringify({ status: "busy", statusUpdatedAt: 124 }));
+      writeFileSync(registry, claudeRegistry({ status: "busy", statusUpdatedAt: 124 }));
       await until("a Claude seat at work to be reachable again", () => {
         const p = last();
         return p?.activity?.state !== "idle" && p?.reach === "running" && p.wake === "hooks";

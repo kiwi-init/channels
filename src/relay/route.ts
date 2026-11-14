@@ -17,7 +17,7 @@ import { verifyRequest } from "@kiwi/core/auth.ts";
 import { ownerFingerprint } from "@kiwi/core/crypto.ts";
 import { GITHUB_SYNC_LISTS, MAX_BLOB_BYTES, PAGE_LIMIT, reviewCheckOf, wellFormedFreed, wellFormedSendId, wellFormedSlot } from "@kiwi/core/protocol.ts";
 import { PUSH_PATH } from "@kiwi/core/push.ts";
-import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, Refused, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
+import { BadRequest, Forbidden, NotFound, NotOwner, Refused, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
 import { githubLinks, githubRepos, type GithubItem } from "./github.ts";
 import { GithubApp, GithubPush, type GithubReply } from "./github-app.ts";
@@ -263,7 +263,7 @@ const routes: RoomRoute[] = [
         const m = yield* readMeta;
         // The join code's second half is the owner key's fingerprint. A wrong one is answered like a
         // missing room. Calls with no fp never reach here (missingFingerprint).
-        if (url.searchParams.get("fp") !== (yield* Effect.promise(() => ownerFingerprint(m.ownerPk)))) return yield* new ChannelGone({ message: "no such channel" });
+        if (url.searchParams.get("fp") !== (yield* Effect.promise(() => ownerFingerprint(m.ownerPk)))) return yield* gone();
         return yield* tagged(db.etag("info"), () => ({
           ownerPk: m.ownerPk,
           ownerXpk: m.ownerXpk,
@@ -323,7 +323,7 @@ const routes: RoomRoute[] = [
         // Only the join code's holder may ask, as for GET /info: a wrong fingerprint is a missing room.
         const { url } = yield* Request_;
         const m = yield* readMeta;
-        if (url.searchParams.get("fp") !== (yield* Effect.promise(() => ownerFingerprint(m.ownerPk)))) return yield* new ChannelGone({ message: "no such channel" });
+        if (url.searchParams.get("fp") !== (yield* Effect.promise(() => ownerFingerprint(m.ownerPk)))) return yield* gone();
         if (!allow(`ask:${(yield* RoomStore).roomId}`, ASKS_PER_MINUTE)) return yield* new TooMany({ message: "too many join requests to this channel; try again in a minute" });
         const b = yield* json<RequestBody>();
         const { id, fresh } = yield* request(b);

@@ -1,3 +1,4 @@
+import { clean } from "./cert-text.ts";
 import { b64url } from "./crypto.ts";
 import { canonical, sign, signText, verify, verifyText, type Identity } from "./identity.ts";
 
@@ -68,14 +69,6 @@ const FIELDS: Record<DeviceLink["op"], string> = {
   renew: "at,device,kind,op,person,pk,prev,seq,sig,until,v",
   revoke: "at,device,kind,op,person,pk,prev,seq,sig,v",
 };
-
-function clean(s: string, max: number): string {
-  return s
-    .replace(/[\u0000-\u001f\u007f-\u009f\u2028-\u202e\u2060-\u2069]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, max);
-}
 
 async function digest(link: DeviceLink): Promise<string> {
   return b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical(link)))));

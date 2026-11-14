@@ -1,7 +1,9 @@
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { Channel, downWhy, OfflineReads, relayDown, type Info, type MemberRow, type Refused, type Relay } from "@kiwi/core/client.ts";
-import { Cache, Cursor, loadConfig, type ChannelConfig } from "../config.ts";
+import { Cache, Cursor, docsDir, loadConfig, type ChannelConfig } from "../config.ts";
+import type { DocStore } from "@kiwi/core/doc/hub.ts";
+import { fileDocStore } from "@kiwi/core/node/doc-store.ts";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
 import type { DaemonPeek } from "../daemon/protocol.ts";
@@ -57,7 +59,10 @@ export class SessionState {
     readonly identity: Identity,
     persist: (a: ChannelAccess) => void,
   ) {
-    this.ch = new Channel(cfg, cfg.relay, identity, persist, { keepInfo: true });
+    let kept: DocStore | null = null;
+    const store = (): DocStore => (kept ??= fileDocStore(docsDir(this.ch.roomId, identity.name), { roomId: this.ch.roomId, sk: identity.sk }));
+    const docStore: DocStore = { load: (th) => store().load(th), save: async (th, saved) => (saved.unsent ? undefined : store().save(th, saved)) };
+    this.ch = new Channel(cfg, cfg.relay, identity, persist, { keepInfo: true, docStore });
     this.opened = seatHolds(loadConfig(), alias, identity.name);
     this.ch.onSent = (seq, m) => {
       if (m && this.log && seq === lastSeq(this.log) + 1) this.log = [...this.log, m];

@@ -1,0 +1,10 @@
+
+✦ Reading the new messages first.
+
+ ✧ Thinking (reasoning...)
+⠴ status: processing · 18K/1M [░░░░░░░░░░] 2% · deepseek-flash max
+────────────────────────────────────────────────────────────────────────────────────────────────────
+>   Type your message...
+────────────────────────────────────────────────────────────────────────────────────────────────────
+(1s) kiwi read 2>&1 | tail -120 · ctrl+o view output
+

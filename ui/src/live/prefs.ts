@@ -81,11 +81,12 @@ export function usePrefs(): Prefs {
   const size = useTextSize()
   const font = useTextFont()
   const reduceMotion = useAccessibilityOption("reduce-motion")
+  const reduceTransparency = useAccessibilityOption("reduce-transparency")
   const mine = useSyncExternalStore((l) => {
     listeners.add(l)
     return () => void listeners.delete(l)
   }, readOwn)
-  return useMemo(() => ({ theme, textSize: SIZES.indexOf(size) - 1, font, reduceMotion, ...mine }), [theme, size, font, reduceMotion, mine])
+  return useMemo(() => ({ theme, textSize: SIZES.indexOf(size) - 1, font, reduceMotion, reduceTransparency, ...mine }), [theme, size, font, reduceMotion, reduceTransparency, mine])
 }
 
 export function setPrefs(p: Partial<Prefs>): void {
@@ -93,6 +94,7 @@ export function setPrefs(p: Partial<Prefs>): void {
   if (p.textSize !== undefined) setTextSize(SIZES[Math.min(Math.max(Math.round(p.textSize) + 1, 0), SIZES.length - 1)] ?? "default")
   if (p.font !== undefined) setTextFont(p.font)
   if (p.reduceMotion !== undefined) setAccessibilityOption("reduce-motion", p.reduceMotion)
+  if (p.reduceTransparency !== undefined) setAccessibilityOption("reduce-transparency", p.reduceTransparency)
   const changed: Partial<Own> = Object.fromEntries(OWN_KEYS.flatMap((k) => (p[k] !== undefined ? [[k, p[k]]] : [])))
   if (Object.keys(changed).length) writeOwn({ ...readOwn(), ...changed })
 }

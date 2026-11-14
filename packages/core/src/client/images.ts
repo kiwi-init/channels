@@ -1,10 +1,11 @@
 import * as Effect from "effect/Effect";
-import { fromBase64, openBlob, sealBlob, toBase64 } from "../crypto.ts";
+import { fromBase64, toBase64 } from "../crypto.ts";
 import { MAX_IMAGE_BYTES, type ImageAttachment, type InlineImage } from "../protocol.ts";
 import { Rejected } from "../refusals.ts";
+import { fetchBlob, openSized, storeSealed } from "./blob-io.ts";
 import type { ChannelCore } from "./core.ts";
-import { gone, RelayError, type MemberRefusal } from "./errors.ts";
-import { Relay } from "./relay.ts";
+import { gone, type MemberRefusal } from "./errors.ts";
+import type { Relay } from "./relay.ts";
 import type { ChannelSettings } from "./settings.ts";
 
 export interface ImagesFx {
@@ -27,23 +28,12 @@ export class ChannelImages {
       const ref = img.ref;
       if (!ref) return null;
       const cached = blobMemory.get(this.ch.roomId, ref.id);
-      const kept = cached ? yield* Effect.promise(() => openBlob(ref, cached)) : null;
-      if (kept && kept.length === ref.size) return toBase64(kept);
-      const relay = yield* Relay;
-      const blob = yield* relay.blob(this.ch.relay, this.ch.roomId, ref.id, this.ch.identity).pipe(
-        Effect.mapError(gone),
-        Effect.catchIf(
-          (err) => err instanceof RelayError && err.status === 404,
-          () =>
-            Effect.sync(() => {
-              blobMemory.drop(this.ch.roomId, ref.id);
-              return null;
-            }),
-        ),
-      );
+      const kept = cached ? yield* openSized(ref, cached) : null;
+      if (kept) return toBase64(kept);
+      const blob = yield* fetchBlob(this.ch, ref.id, () => blobMemory.drop(this.ch.roomId, ref.id));
       if (!blob) return null;
-      const raw = yield* Effect.promise(() => openBlob(ref, blob));
-      if (!raw || raw.length !== ref.size) return null;
+      const raw = yield* openSized(ref, blob);
+      if (!raw) return null;
       blobMemory.set(this.ch.roomId, ref.id, blob);
       return toBase64(raw);
     }),
@@ -54,9 +44,7 @@ export class ChannelImages {
       if (raw.length > MAX_IMAGE_BYTES) return yield* new Rejected(`${img.name} is ${Math.ceil(raw.length / 1024)} KB; an image is at most ${MAX_IMAGE_BYTES / 1024} KB`);
       const info = yield* this.ch.fx.info();
       if (info.blobs !== true) return yield* new Rejected(NO_BLOBS);
-      const { id, key, blob } = yield* Effect.promise(() => sealBlob(raw));
-      const relay = yield* Relay;
-      yield* relay.blob(this.ch.relay, this.ch.roomId, id, this.ch.identity, blob).pipe(Effect.mapError(gone));
+      const { id, key, blob } = yield* storeSealed(this.ch, raw).pipe(Effect.mapError(gone));
       blobMemory.set(this.ch.roomId, id, blob);
       const stored: ImageAttachment = { name: img.name, mime: img.mime, ref: { id, key, size: raw.length } };
       return stored;
@@ -78,15 +66,13 @@ export class ChannelImages {
       if (info._tag === "None" || info.value.blobs !== true) return imgs;
       const settings = yield* Effect.option(this.settings.settings(info.value));
       if (settings._tag === "None" || settings.value?.imageRefs !== true) return imgs;
-      const relay = yield* Relay;
       return yield* Effect.forEach(
         imgs,
         (img) =>
           Effect.gen({ self: this }, function* () {
             if (img.data === undefined) return img;
             const raw = fromBase64(img.data);
-            const { id, key, blob } = yield* Effect.promise(() => sealBlob(raw));
-            yield* relay.blob(this.ch.relay, this.ch.roomId, id, this.ch.identity, blob);
+            const { id, key, blob } = yield* storeSealed(this.ch, raw);
             blobMemory.set(this.ch.roomId, id, blob);
             const ref: ImageAttachment = { name: img.name, mime: img.mime, ref: { id, key, size: raw.length } };
             return ref;

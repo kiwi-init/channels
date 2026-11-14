@@ -1,6 +1,7 @@
 import "~/i18n/en/chat-later"
 import "~/styles/annotator.css"
 
+import { Download01Icon } from "@hugeicons/core-free-icons"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
 
 import { MAX_IMAGE_SIDE } from "@kiwi/core/fit-image.ts"
@@ -27,7 +28,7 @@ import { compressImage, readBase64 } from "@kiwi/app/compress-image.ts"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { Avatar, cx } from "~/kit/bits"
-import { Icon } from "~/kit/icons"
+import { GlyphIcon, Icon } from "~/kit/icons"
 import { clock } from "~/kit/time"
 import type { Person, Upload } from "~/model"
 import { useAct } from "~/nav"
@@ -434,7 +435,7 @@ export default function Annotator({ image, sender, face, at, onSend, onClose }: 
             <Icon name={copied ? "check" : "copy"} />
           </button>
           <button type="button" className="icon-btn" aria-label={t("chat.annotator.download")} title={t("chat.annotator.download")} onClick={() => void download()}>
-            <Icon name="download" />
+            <GlyphIcon glyph={Download01Icon} />
           </button>
           <button type="button" className="icon-btn annot-close" aria-label={t("chat.annotator.close")} title={t("chat.annotator.close")} autoFocus onClick={leave}>
             <Icon name="close" />

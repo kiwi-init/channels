@@ -4,7 +4,20 @@ import type { StoreSnapshot } from "../desktop/src/bridge.ts";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { CHANNEL_CALLS } from "../desktop/src/bridge.ts";
-import { CHANNEL_CALLS_BACKGROUND, CHANNEL_CALLS_SINCE, UI_CONTRACT, UI_REQUIRES, UI_SURFACES } from "../desktop/src/ui-contract.ts";
+import {
+  buildSurfaces,
+  CHANNEL_CALLS_BACKGROUND,
+  CHANNEL_CALLS_SINCE,
+  UI_CONTRACT,
+  UI_FIRST_CONTRACT,
+  UI_FIRST_SURFACES,
+  UI_REQUIRES,
+  UI_SURFACE_DELTAS,
+  UI_SURFACES,
+  type SurfaceDelta,
+} from "../desktop/src/ui-contract.ts";
+
+const baseline = JSON.parse(readFileSync(join(import.meta.dir, "fixtures/ui-contract-baseline.json"), "utf8")) as Record<string, string[]>;
 
 const snapshot: StoreSnapshot = { relayUrl: "https://relay.example", person: null, channels: [], computers: [], phones: [], pending: [], personalities: [] };
 
@@ -75,5 +88,52 @@ describe("the UI contract", () => {
 
   test("CHANNEL_CALLS holds every listed newer call, so a call can't be listed and then dropped", () => {
     for (const call of Object.values(CHANNEL_CALLS_SINCE).flat()) expect(CHANNEL_CALLS as readonly string[]).toContain(call);
+  });
+});
+
+describe("the UI contract history built from deltas (#2401)", () => {
+  const differing = (history: Record<string, readonly string[]>): string[] => Object.keys(baseline).filter((v) => JSON.stringify(history[v]) !== JSON.stringify(baseline[v]));
+
+  const changed = (version: string, change: (delta: SurfaceDelta) => SurfaceDelta): (readonly [string, SurfaceDelta])[] =>
+    UI_SURFACE_DELTAS.map(([v, delta]): readonly [string, SurfaceDelta] => [v, v === version ? change(delta) : delta]);
+
+  test("every version lists exactly the surfaces of the frozen baseline, in the same order", () => {
+    expect(Object.keys(UI_SURFACES)).toEqual(Object.keys(baseline));
+    for (const v of Object.keys(baseline)) expect({ v, surfaces: UI_SURFACES[v] }).toEqual({ v, surfaces: baseline[v] });
+  });
+
+  test("a changed past delta no longer matches the baseline from that version on", () => {
+    const dropped = buildSurfaces(
+      UI_FIRST_CONTRACT,
+      UI_FIRST_SURFACES,
+      changed("1.1.0", ({ add, remove }) => ({ add: add.slice(1), remove })),
+    );
+    expect(differing(dropped)[0]).toBe("1.1.0");
+    const extra = buildSurfaces(
+      UI_FIRST_CONTRACT,
+      UI_FIRST_SURFACES,
+      changed("3.3.0", ({ add, remove }) => ({ add: [...add, "kiwi.neverShipped"], remove })),
+    );
+    expect(differing(extra)).toEqual(Object.keys(baseline).filter((v) => newer(v, "3.3.0") >= 0));
+    const first = buildSurfaces(UI_FIRST_CONTRACT, UI_FIRST_SURFACES.slice(1), UI_SURFACE_DELTAS);
+    expect(differing(first)[0]).toBe(UI_FIRST_CONTRACT);
+  });
+
+  test("a delta that removes an unlisted surface, adds a listed one or repeats a version is refused", () => {
+    expect(() =>
+      buildSurfaces(
+        UI_FIRST_CONTRACT,
+        UI_FIRST_SURFACES,
+        changed("1.1.0", ({ add }) => ({ add, remove: ["kiwi.neverShipped"] })),
+      ),
+    ).toThrow(/removes kiwi\.neverShipped/);
+    expect(() =>
+      buildSurfaces(
+        UI_FIRST_CONTRACT,
+        UI_FIRST_SURFACES,
+        changed("1.1.0", ({ add, remove }) => ({ add: [...add, "kiwi.channels"], remove })),
+      ),
+    ).toThrow(/adds kiwi\.channels/);
+    expect(() => buildSurfaces(UI_FIRST_CONTRACT, UI_FIRST_SURFACES, [...UI_SURFACE_DELTAS, ["1.1.0", { add: [], remove: [] }]])).toThrow(/1\.1\.0 is listed twice/);
   });
 });

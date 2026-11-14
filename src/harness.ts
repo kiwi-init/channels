@@ -18,6 +18,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 
 import { agyHere, kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
+import { pidAlive, processStart } from "./pid.ts";
 import type { Activity, ContextUse } from "@kiwi/core/protocol.ts";
 
 type Env = Record<string, string | undefined>;
@@ -123,29 +124,51 @@ async function codexModel(env: Env): Promise<string | undefined> {
   }
 }
 
-async function opencodeModel(env: Env): Promise<string | undefined> {
+function opencodeDb(env: Env): { file: string; session: string } | undefined {
   const session = env.OPENCODE_SESSION_ID;
   if (!session) return undefined;
   const file = join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "opencode", "opencode.db");
-  if (!existsSync(file)) return undefined;
-  const row = (await sqliteOne(file, "SELECT model FROM session_v2 WHERE id = ?", session)) as { model?: unknown } | null;
+  return existsSync(file) ? { file, session } : undefined;
+}
+
+function grokSessionFile(env: Env, name: string): string | undefined {
+  const session = env.GROK_SESSION_ID;
+  if (!session || !/^[\w-]+$/.test(session)) return undefined;
+  const sessions = join(env.GROK_HOME || join(homedir(), ".grok"), "sessions");
+  for (const ws of readdirSync(sessions)) {
+    const file = join(sessions, ws, session, name);
+    if (existsSync(file)) return file;
+  }
+  return undefined;
+}
+
+async function firstDefined<T>(tries: readonly (() => T | undefined | Promise<T | undefined>)[]): Promise<T | undefined> {
+  for (const t of tries) {
+    try {
+      const found = await t();
+      if (found) return found;
+    } catch {
+      // Their files, their format: anything unexpected is "can't tell".
+    }
+  }
+  return undefined;
+}
+
+async function opencodeModel(env: Env): Promise<string | undefined> {
+  const db = opencodeDb(env);
+  if (!db) return undefined;
+  const row = (await sqliteOne(db.file, "SELECT model FROM session_v2 WHERE id = ?", db.session)) as { model?: unknown } | null;
   // Stored as JSON: {"id": "claude-sonnet-4-5", "providerID": "anthropic"}.
   const raw = typeof row?.model === "string" ? (JSON.parse(row.model) as { id?: unknown }) : (row?.model as { id?: unknown } | undefined);
   return slug(raw?.id);
 }
 
 function grokModel(env: Env): string | undefined {
-  const session = env.GROK_SESSION_ID;
-  if (!session || !/^[\w-]+$/.test(session)) return undefined;
-  const sessions = join(env.GROK_HOME || join(homedir(), ".grok"), "sessions");
-  for (const ws of readdirSync(sessions)) {
-    const file = join(sessions, ws, session, "summary.json");
-    if (!existsSync(file)) continue;
-    const summary = JSON.parse(readFileSync(file, "utf8")) as { current_model_id?: unknown; model?: unknown };
-    const m = summary.current_model_id ?? summary.model;
-    return slug(typeof m === "object" && m ? ((m as { id?: unknown; name?: unknown }).id ?? (m as { name?: unknown }).name) : m);
-  }
-  return undefined;
+  const file = grokSessionFile(env, "summary.json");
+  if (!file) return undefined;
+  const summary = JSON.parse(readFileSync(file, "utf8")) as { current_model_id?: unknown; model?: unknown };
+  const m = summary.current_model_id ?? summary.model;
+  return slug(typeof m === "object" && m ? ((m as { id?: unknown; name?: unknown }).id ?? (m as { name?: unknown }).name) : m);
 }
 
 function kimiModel(env: Env): string | undefined {
@@ -277,15 +300,7 @@ export async function harnessModel(env: Env = process.env, where: HarnessWhere =
     if (env.CODEX_THREAD_ID) tries.push(() => codexModel(env));
     if (env.OPENCODE_SESSION_ID) tries.push(() => opencodeModel(env));
   }
-  for (const t of tries) {
-    try {
-      const m = await t();
-      if (m) return m;
-    } catch {
-      // Their files, their format: anything unexpected is "can't tell".
-    }
-  }
-  return undefined;
+  return firstDefined(tries);
 }
 
 // ---------- what it's doing now ----------
@@ -321,6 +336,7 @@ function claudeTranscript(dir: string, session: string | undefined): string | un
   const known = transcripts.get(key);
   if (known && existsSync(known)) return known;
   const projects = join(dir, "projects");
+  if (!existsSync(projects)) return undefined;
   const found = readdirSync(projects)
     .map((p) => join(projects, p, `${session}.jsonl`))
     .find((f) => existsSync(f));
@@ -349,20 +365,57 @@ function runningTool(file: string): string | undefined {
   return undefined;
 }
 
+const CLAUDE_STATES = { busy: "working", idle: "idle", shell: "idle", waiting: "waiting" } as const;
+type ClaudeStatus = keyof typeof CLAUDE_STATES;
+type ClaudeRecord = { sessionId: string; procStart: string | undefined; status: ClaudeStatus | undefined; since: number | undefined };
+
+const isClaudeStatus = (s: unknown): s is ClaudeStatus => typeof s === "string" && Object.hasOwn(CLAUDE_STATES, s);
+
+function claudeRecord(file: string): ClaudeRecord | null {
+  let r: unknown;
+  try {
+    r = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    // A record that can't be read or parsed says nothing about what the session is doing.
+    return null;
+  }
+  if (!r || typeof r !== "object" || Array.isArray(r)) return null;
+  const sessionId = "sessionId" in r ? r.sessionId : undefined;
+  const procStart = "procStart" in r ? r.procStart : undefined;
+  if (typeof sessionId !== "string" || !sessionId) return null;
+  if (procStart !== undefined && (typeof procStart !== "string" || !procStart.trim())) return null;
+  const status = "status" in r && isClaudeStatus(r.status) ? r.status : undefined;
+  const since = "statusUpdatedAt" in r && typeof r.statusUpdatedAt === "number" && Number.isFinite(r.statusUpdatedAt) ? r.statusUpdatedAt : undefined;
+  return { sessionId, procStart, status, since };
+}
+
+const HAS_PROC = existsSync("/proc/self/stat");
+
+function sameProcess(pid: number, procStart: string | undefined): boolean {
+  if (!pidAlive(pid)) return false;
+  if (procStart === undefined) return process.platform === "win32";
+  const started = processStart(pid);
+  if (started === null) return false;
+  return (HAS_PROC ? started.slice(started.lastIndexOf(":") + 1) : started) === procStart;
+}
+
+const UNKNOWN: Activity = { state: "unknown" };
+
 /** Claude Code: its process's registry says busy or idle; the transcript's newest lines say which tool is running. */
 function claudeActivity(env: Env): Activity | undefined {
   const dir = env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
   const pid = Number(env.CLAUDE_PID);
   if (!Number.isInteger(pid) || pid <= 0) return undefined;
-  const reg = join(dir, "sessions", `${pid}.json`);
-  if (!existsSync(reg)) return undefined;
-  const r = JSON.parse(readFileSync(reg, "utf8")) as { sessionId?: string; status?: string; statusUpdatedAt?: number };
-  const since = typeof r.statusUpdatedAt === "number" ? r.statusUpdatedAt : undefined;
-  const file = claudeTranscript(dir, env.CLAUDE_CODE_SESSION_ID || r.sessionId);
+  const r = claudeRecord(join(dir, "sessions", `${pid}.json`));
+  if (!r || !sameProcess(pid, r.procStart)) return UNKNOWN;
+  const seat = env.CLAUDE_CODE_SESSION_ID;
+  if (seat && r.sessionId !== seat) return UNKNOWN;
+  const file = claudeTranscript(dir, seat || r.sessionId);
   const context = file ? whileUnchanged(claudeContexts, file, () => claudeContext(file)) : undefined;
-  const extra = { ...(since ? { since } : {}), ...(context ? { context } : {}) };
-  if (r.status === "idle") return { state: "idle", ...extra };
-  if (r.status && /wait|permission|input/i.test(r.status)) return { state: "waiting", ...extra };
+  const extra = { ...(r.since ? { since: r.since } : {}), ...(context ? { context } : {}) };
+  if (!r.status) return { ...UNKNOWN, ...extra };
+  const state = CLAUDE_STATES[r.status];
+  if (state !== "working") return { state, ...extra };
   const tool = file ? whileUnchanged(claudeTools, file, () => runningTool(file)) : undefined;
   return { state: "working", ...(tool ? { tool } : {}), ...extra };
 }
@@ -430,29 +483,22 @@ async function codexActivity(env: Env): Promise<Activity | undefined> {
 
 /** OpenCode: the session row says when it last went idle and when it last changed. */
 async function opencodeActivity(env: Env): Promise<Activity | undefined> {
-  const session = env.OPENCODE_SESSION_ID;
-  if (!session) return undefined;
-  const file = join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "opencode", "opencode.db");
-  if (!existsSync(file)) return undefined;
-  const row = (await sqliteOne(file, "SELECT time_idle, time_updated FROM session_v2 WHERE id = ?", session)) as { time_idle?: unknown; time_updated?: unknown } | null;
+  const db = opencodeDb(env);
+  if (!db) return undefined;
+  const row = (await sqliteOne(db.file, "SELECT time_idle, time_updated FROM session_v2 WHERE id = ?", db.session)) as { time_idle?: unknown; time_updated?: unknown } | null;
   if (!row) return undefined;
   const idle = Number(row.time_idle);
   const updated = Number(row.time_updated);
+  if (row.time_updated === null || row.time_updated === undefined || !Number.isFinite(updated)) return UNKNOWN;
   return Number.isFinite(idle) && idle > 0 && idle >= updated ? { state: "idle", since: idle } : { state: "working" };
 }
 
 /** Grok Build: its session's update stream; quiet for a minute reads as idle. */
 function grokActivity(env: Env): Activity | undefined {
-  const session = env.GROK_SESSION_ID;
-  if (!session || !/^[\w-]+$/.test(session)) return undefined;
-  const sessions = join(env.GROK_HOME || join(homedir(), ".grok"), "sessions");
-  for (const ws of readdirSync(sessions)) {
-    const file = join(sessions, ws, session, "updates.jsonl");
-    if (!existsSync(file)) continue;
-    const at = statSync(file).mtimeMs;
-    return Date.now() - at > 60_000 ? { state: "idle", since: at } : { state: "working" };
-  }
-  return undefined;
+  const file = grokSessionFile(env, "updates.jsonl");
+  if (!file) return undefined;
+  const at = statSync(file).mtimeMs;
+  return Date.now() - at > 60_000 ? { state: "idle", since: at } : { state: "working" };
 }
 
 /** What the harness running this process is doing right now, with its model; undefined when it can't be told. */
@@ -462,16 +508,12 @@ export async function harnessActivity(env: Env = process.env): Promise<Activity 
   if (env.CLAUDECODE) tries.push(() => claudeActivity(env));
   if (env.CODEX_THREAD_ID) tries.push(() => codexActivity(env));
   if (env.OPENCODE_SESSION_ID) tries.push(() => opencodeActivity(env));
-  for (const t of tries) {
-    try {
+  return firstDefined(
+    tries.map((t) => async () => {
       const a = await t();
-      if (a) {
-        const model = await harnessModel(env);
-        return { ...a, ...(model ? { model } : {}) };
-      }
-    } catch {
-      // Their files, their format: anything unexpected is "can't tell".
-    }
-  }
-  return undefined;
+      if (!a) return undefined;
+      const model = await harnessModel(env);
+      return { ...a, ...(model ? { model } : {}) };
+    }),
+  );
 }

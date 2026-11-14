@@ -1,11 +1,10 @@
 import type { ChannelTile, Folder } from "~/model"
-import type { DropTarget } from "~/shell/rail-items"
+import { MAX_NAME, type DropTarget } from "~/shell/rail-items"
 import { t } from "~/i18n/i18n"
 
 export const folderName = (): string => t("shell.folders.default")
 
 export const newFolderId = (): string => `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-const MAX_NAME = 40
 
 const without = (folders: readonly Folder[], code: string): Folder[] => folders.map((f) => ({ ...f, codes: f.codes.filter((c) => c !== code) })).filter((f) => f.codes.length > 0)
 

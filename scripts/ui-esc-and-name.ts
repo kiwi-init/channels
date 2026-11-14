@@ -30,7 +30,7 @@ const expect = (ok: boolean, what: string) => {
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
-  const panel = page.locator("aside.panel");
+  const panel = page.locator(".panel.is-pane");
   const search = page.locator('input[aria-label="Search this channel"]');
 
   await page.goto(`http://127.0.0.1:${server.port}/?shot=task-working`);
@@ -49,7 +49,7 @@ try {
   expect((await panel.count()) === 0, "Esc anywhere else still closes the panel");
 
   await page.goto(`http://127.0.0.1:${server.port}/?shot=settings`);
-  const name = page.locator(".set-row", { hasText: "Name" }).first();
+  const name = page.locator(".ctl-row", { hasText: "Name" }).first();
   await name.waitFor();
   expect((await name.getByRole("button", { name: "Change" }).count()) === 0, "Settings shows your name without a Change it can't keep");
 } finally {
