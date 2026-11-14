@@ -7,7 +7,7 @@ const ASKING =
   /do you want to|allow (?:once|always|this|for)|\(y\/n\)|\[y\/n\]|yes, allow|approve (?:this|once)|\b1\.\s*yes\b|trust this folder|waiting for (?:your )?(?:approval|confirmation)|↑\/↓ navigate|enter confirm/i;
 const AGY_INPUT = /^> ?(.*)$/;
 const AGY_HINT = /\(shift\+tab to cycle\)$/;
-const DEEPCODE_FOOTER = /^enter send · shift\+enter newline · @ files · .+ image \/ rich text · \/ commands · ctrl\+d exit$/;
+const DEEPCODE_FOOTER = /^enter send · .+ · ctrl\+d exit$/;
 const DEEPCODE_EMPTY = /^>\s+Type your message\.\.\.$/;
 const DEEPCODE_RULE = /^─{3,}$/;
 const DEEPCODE_STATUS = /^(?:\S )?status: ([a-z_]+)\b/;
