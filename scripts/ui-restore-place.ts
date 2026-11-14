@@ -170,7 +170,7 @@ async function plainFirst() {
   const full = await heights(page);
   await markdownLate(page);
   await page.reload();
-  await page.locator("article.msg").first().waitFor();
+  await page.locator("article.msg").first().waitFor({ state: "attached" });
   const plain = await heights(page);
   const row = Object.entries(full)
     .map(([seq, md]) => ({ seq: Number(seq), md: md.h, plain: plain[seq] }))

@@ -30,6 +30,7 @@ import { wordsRaw } from "~/words"
 import { openMessage } from "~/live/open-message"
 import { markOnce } from "@kiwi/channel/marks.ts"
 import { personGo } from "~/person-go"
+import { Wait } from "~/kit/wait"
 
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
 const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
@@ -50,6 +51,7 @@ const REACH_WAIT_MS = 600
 const QUIET_MS = 120
 const HAND_MS = 1000
 const STILL_MS = 150
+const WHOLE_MS = 1000
 
 interface Span {
   top: number | null
@@ -321,6 +323,37 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const following = end === list.length
   const latest = useRef(false)
   const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift, prepended } = useStick(following, !!doc)
+  useLayoutEffect(() => {
+    const box = scroller.current
+    const rows = content.current
+    if (!box || !rows) return
+    const unfinished = () => {
+      const view = box.getBoundingClientRect()
+      return [...rows.querySelectorAll(".md-plain, .lazy-wait")].some((el) => {
+        const row = el.closest("[data-seq], section.blk")
+        if (!row) return true
+        const at = row.getBoundingClientRect()
+        return at.bottom > view.top && at.top < view.bottom
+      })
+    }
+    if (!unfinished()) return
+    rows.setAttribute("data-unfinished", "")
+    const since = performance.now()
+    let frame = 0
+    const look = () => {
+      if (unfinished() && performance.now() - since < WHOLE_MS) frame = requestAnimationFrame(look)
+      else rows.removeAttribute("data-unfinished")
+    }
+    frame = requestAnimationFrame(look)
+    return () => {
+      cancelAnimationFrame(frame)
+      rows.removeAttribute("data-unfinished")
+    }
+  }, [scroller, content])
+  const questions = channel.asks.some((a) => a.kind === "question")
+  useEffect(() => {
+    if (questions) void import("~/chat/question-card")
+  }, [questions])
   const shownFrom = list[start]?.seq
   const shownTo = list[end - 1]?.seq
   const edges = useRef({ from: shownFrom, to: shownTo })
@@ -725,7 +758,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
             </Suspense>
           )}
           {doc && following && !channel.loading && (
-            <Suspense fallback={null}>
+            <Suspense fallback={<Wait />}>
               <LiveThreadDoc channel={channel} where={where} thread={doc} hold={hold} />
             </Suspense>
           )}

@@ -3,7 +3,7 @@ import { Fragment, isValidElement, useCallback, useEffect, useLayoutEffect, useM
 import type { MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
 import { normalizeMarkdownStyle } from "react-native-enriched-markdown/lib/module/normalizeMarkdownStyle.web.js"
 import { ENRM_TEXT_CLASS } from "react-native-enriched-markdown/lib/module/web/globalStyles.js"
-import { isParserReady, parseMarkdown, parseMarkdownSync } from "react-native-enriched-markdown/lib/module/web/parseMarkdown.js"
+import { isParserReady, parseMarkdown, parseMarkdownSync, preloadParser } from "react-native-enriched-markdown/lib/module/web/parseMarkdown.js"
 import { MarkdownNode as RenderNode, hasSpoiler } from "~/chat/markdown-node.tsx"
 import { buildStyles, tableBodyRowStyle, zeroTrailingMargins } from "react-native-enriched-markdown/lib/module/web/styles.js"
 import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown/lib/module/web/utils.js"
@@ -17,6 +17,8 @@ import { MermaidBlock } from "~/chat/mermaid"
 import { keepParsed, parseKey, parsedFor } from "~/chat/parsed"
 import { tooltipOf, zonedLinks } from "~/chat/zoned-times"
 import { copyText } from "~/kit/toasts"
+
+void preloadParser()
 
 const TEXT = { fontSize: 15, fontFamily: "var(--sans)", color: "var(--ink)", lineHeight: 22, marginTop: 0, marginBottom: 8 }
 const HEAD = { fontFamily: "var(--sans)", fontWeight: "600", color: "var(--ink)", marginTop: 6, marginBottom: 4 }
