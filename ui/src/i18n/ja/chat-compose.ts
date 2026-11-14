@@ -186,6 +186,8 @@ export default {
   "chat.markdown.column": "列 {n}",
   "chat.markdown.copy": "コピー",
   "chat.markdown.copy.text": "{text} をコピー",
+  "chat.markdown.spoiler.show": "ネタバレを表示",
+  "chat.markdown.spoiler.hide": "ネタバレを隠す",
   "chat.markdown.code.block": "コードブロック",
   "chat.markdown.code.block.lang": "コードブロック: {lang}",
   "chat.markdown.utc.assuming": "メッセージの日付 {date}（UTC）として解釈",

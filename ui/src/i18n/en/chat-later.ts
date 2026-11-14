@@ -119,6 +119,8 @@ const words = {
   "chat.markdown.column": "column {n}",
   "chat.markdown.copy": "Copy",
   "chat.markdown.copy.text": "Copy {text}",
+  "chat.markdown.spoiler.show": "Show spoiler",
+  "chat.markdown.spoiler.hide": "Hide spoiler",
   "chat.menus.view.profile": "View profile",
   "chat.menus.message": "Message",
   "chat.menus.open.link": "Open link",

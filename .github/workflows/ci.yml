@@ -260,6 +260,9 @@ jobs:
       - name: ui people see agents by nickname, never by handle, on the main screens (demo agents get real-looking handles)
         if: ${{ !cancelled() && matrix.part == 'ui-b' }}
         run: bun scripts/ui-handles.ts --dist ui/dist
+      - name: ui spoilers reveal without dropping text or hiding focus, in Chromium and WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-b' }}
+        run: bun scripts/ui-markdown-nodes.ts --browser chromium && bun scripts/ui-markdown-nodes.ts --browser webkit
       # DESIGN.md's rules of place, measured in the built page at two window sizes and in both layouts: the centre, the sidebar's edges and width, the tabs, hiding and peeking the sidebar, search, the panel (T339).
       - name: ui the layout rules hold, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-b' }}
