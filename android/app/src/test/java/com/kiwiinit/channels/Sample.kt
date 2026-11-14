@@ -134,11 +134,25 @@ private fun site(): RoomView {
     )
 }
 
+val GITHUB_COUNTS = listOf(15, 4, 6, 1, 12, 5, 2, 5, 5, 36, 1, 6, 7, 2, 14, 50, 19, 39, 43, 18, 11, 6, 10, 7)
+
+fun githubUpdates(): List<MessageView> {
+    val start = System.currentTimeMillis() - 30 * MINUTE
+    return GITHUB_COUNTS.mapIndexed { i, n -> MessageView(100 + i, "jow", start + i * MINUTE, "event", "GitHub: $n update${if (n == 1) "" else "s"}", event = true) }
+}
+
 fun githubBurst(model: AppModel) {
     val room = model.rooms.getValue(DEV)
-    val start = System.currentTimeMillis() - 30 * MINUTE
-    val counts = listOf(15, 4, 6, 1, 12, 5, 2, 5, 5, 36, 1, 6, 7, 2, 14, 50, 19, 39, 43, 18, 11, 6, 10, 7)
-    val burst = counts.mapIndexed { i, n -> MessageView(100 + i, "jow", start + i * MINUTE, "event", "GitHub: $n update${if (n == 1) "" else "s"}", event = true) }
-    val messages = room.messages + burst.take(12) + MessageView(200, "lively-swan", start + 12.5 * MINUTE, "msg", "PR #12 is up for review.") + burst.drop(12)
-    model.rooms[DEV] = room.copy(messages = messages, head = 200, last = messages.last(), latest = messages.last())
+    val burst = githubUpdates()
+    val asked = MessageView(0, "lively-swan", burst[7].at + MINUTE / 2, "msg", "PR #12 is up for review.")
+    val merged = MessageView(0, "hearty-badger", burst[15].at + MINUTE / 2, "msg", "Merged on green.")
+    val after = (burst.take(8) + asked + burst.subList(8, 16) + merged + burst.drop(16)).mapIndexed { i, m -> m.copy(seq = 100 + i) }
+    val messages = room.messages + after
+    model.rooms[DEV] = room.copy(messages = messages, head = messages.last().seq, last = messages.last(), latest = messages.last())
+}
+
+fun onlyGithub(model: AppModel) {
+    val room = model.rooms.getValue(DEV)
+    val messages = githubUpdates()
+    model.rooms[DEV] = room.copy(messages = messages, asks = emptyList(), reviews = emptyList(), head = messages.last().seq, last = messages.last(), latest = messages.last())
 }
