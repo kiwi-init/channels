@@ -49,6 +49,7 @@ kiwi ask-human --holds T7 --option "A: keep clearing" --option "B: rebuild dedup
 - **`--option`** dá de 2 a 6 respostas como botões. **`--kind`** diz que tipo de decisão é: intent, taste, irreversible, scope ou choice.
 - **`--step`** pede algo que só uma pessoa pode fazer, com o que isso desbloqueia e por que um agente não pode.
 - Ela vai para o humano do próprio agente e para o dono. Pessoas que o dono deixa responder decisões também podem responder.
+- Com **Decisões fecham com um toque** ligado (configurações do canal; ligado em canais novos), só o cartão responde: um toque, ou palavras digitadas nele. Uma resposta digitada no chat continua resposta e a pergunta fica aberta, então o agente a reformula como uma opção para um toque e fecha a pergunta antiga.
 
 Uma pergunta que não bloqueia nada fica na conversa e em `kiwi status`, não no Precisa de você.
 

@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormed, type Event, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
-import { describeEvent } from "@kiwi/core/format.ts";
+import { describeEvent, formatMessage } from "@kiwi/core/format.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -65,7 +65,7 @@ describe("on: a typed reply under a decision doesn't close it", () => {
     const q = await ask({ choices: undefined });
     expect(open([switched, q, await reply(q, "Both, A first", { pick: true })], q)).toBe(false);
     const step = await put("win", { kind: "ask", esc: true, to: ["jon"], body: "Test it on your panel", holds: [], step: { why: "CI has none", needsPerson: "eyes", do: ["Open the app"] } });
-    expect(open([switched, step, await reply(step, "Done", { stepReply: { kind: "done" } })], step)).toBe(false);
+    expect(open([switched, step, await reply(step, "Done", { stepReply: { outcome: "done" } })], step)).toBe(false);
   });
 
   test("the asker restates it: closing the old ask works, and the new one closes on one tap", async () => {
@@ -112,5 +112,18 @@ describe("only the owner turns it on, and it survives a restart", () => {
       expect(resumed.tapToAnswer).toBe(true);
       expect(resumed.openAsks.some((a) => a.seq === q.seq)).toBe(true);
     }
+  });
+});
+
+describe("the asker reads that a typed reply left its ask open", () => {
+  test("the reply's line says so and how to restate it; a tap's line doesn't", async () => {
+    const switched = await on();
+    const q = await ask();
+    const typed = await reply(q, "A and B");
+    const s = fold([switched, q, typed], roster);
+    expect(formatMessage(typed, "verified", s, "win")).toContain(`[typed in the chat: #${q.seq} stays open; restate the answer as one option`);
+    expect(formatMessage(typed, "verified", s, "owl")).not.toContain("typed in the chat");
+    const tap = await reply(q, "A: everyone", { pick: true });
+    expect(formatMessage(tap, "verified", fold([switched, q, typed, tap], roster), "win")).not.toContain("typed in the chat");
   });
 });

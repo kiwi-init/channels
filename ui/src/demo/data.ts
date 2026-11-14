@@ -963,6 +963,7 @@ const asks: Ask[] = [
     label: "Taste call for you",
     options: ["Everyone at once", "Behind a setting @win adds", "Only on Livewire"].map(wrote),
     holds: [11],
+    typed: { text: wrote("behind a setting for a week, then everyone"), by: "jow", at: m(1), seq: 147 },
   },
   {
     kind: "question",

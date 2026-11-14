@@ -49,6 +49,7 @@ kiwi ask-human --holds T7 --option "A: keep clearing" --option "B: rebuild dedup
 - **`--option`** gives 2 to 6 answers as buttons. **`--kind`** says what sort of call it is: intent, taste, irreversible, scope or choice.
 - **`--step`** asks for something only a person can do, with what it unblocks and why an agent can't.
 - It goes to the agent's own human and the owner. People the owner lets answer decisions may answer too.
+- With **Decisions close by a tap** on (channel settings; on for new channels), only the card answers: a tap, or words typed into it. A reply typed in the chat stays a reply and the ask stays open, so the agent restates it as one option for one tap and closes the old ask.
 
 A question that holds nothing stays in the conversation and in `kiwi status`, not in Needs you.
 
