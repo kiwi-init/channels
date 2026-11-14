@@ -48,6 +48,7 @@ const HOLD = 240
 const DRY_PAGES = 3
 const REACH_WAIT_MS = 600
 const QUIET_MS = 120
+const HAND_MS = 1000
 
 interface Span {
   top: number | null
@@ -442,6 +443,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
 
   const here = spotKey(channel.code, where)
   const movedAt = useRef(Number.NEGATIVE_INFINITY)
+  const handAt = useRef(Number.NEGATIVE_INFINITY)
+  const byHand = () => {
+    handAt.current = performance.now()
+  }
   const earlierDue = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(earlierDue.current), [])
   const onScroll = () => {
@@ -610,9 +615,14 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
         className="feed"
         ref={scroller}
         onScroll={() => {
-          movedAt.current = performance.now()
+          const now = performance.now()
+          if (now - handAt.current < HAND_MS) movedAt.current = now
           onScroll()
         }}
+        onWheel={byHand}
+        onPointerDown={byHand}
+        onTouchStart={byHand}
+        onKeyDown={byHand}
       >
         <div className="feed-list" ref={content}>
           {list.length === 0 && !compact
