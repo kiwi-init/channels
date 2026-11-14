@@ -92,6 +92,28 @@ describe("the installed parser's complete node inventory (#2444)", () => {
 })
 
 describe("spoilers remain accessible through a reveal control", () => {
+  for (const source of [
+    "- [ ] public ||SECRET_SPOILER||",
+    "- [x] public ||SECRET_SPOILER||",
+    "- [ ] parent ||SECRET_SPOILER||\n  - [x] child ||NESTED_SECRET||",
+    "![public ||SECRET_ALT||](https://example.com/image.png)",
+    "![public ||SECRET_ALT||](data:image/png;base64,AAAA)",
+    "![public ||SECRET_ALT||](javascript:alert(1))",
+  ]) {
+    test(`concealed text is absent from all rendered metadata: ${source}`, async () => {
+      const ast = await parseMarkdown(source, FLAGS)
+      expect(kinds(ast)).toContain("Spoiler")
+      const html = rendered(source, ast)
+      expect(html).not.toContain("SECRET_")
+      expect(html).not.toContain("NESTED_SECRET")
+      expect(html).toContain('aria-label="Show spoiler"')
+      if (source.startsWith("-")) {
+        expect(html).toContain(source.includes("parent") ? 'aria-label="Task: parent child "' : 'aria-label="Task: public "')
+        expect(html).toContain('aria-disabled="true"')
+        expect(html.match(/<input[^>]*>/)?.[0]?.includes('checked=""')).toBe(source.startsWith("- [x]"))
+      }
+    })
+  }
   for (const source of ["alpha ||beta|| gamma", "||one|| and ||two||", "||bold **inside** and [link](https://example.com)||", "[before ||inside|| after](https://example.com)", "- ||listed||"]) {
     test(source, async () => {
       const ast = await parseMarkdown(source, FLAGS)

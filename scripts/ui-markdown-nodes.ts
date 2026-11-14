@@ -104,7 +104,7 @@ try {
     (await code.locator("code").allTextContents()).every((text) => text.trim() === SPOILER_MESSAGES[0]),
     "inline/fenced code keeps its exact content",
   );
-  check((await message(807).locator(".msg-quote-text").innerText()) === SPOILER_MESSAGES[0], "reply preview preserves its existing literal-pipe string");
+  check((await message(813).locator(".msg-quote-text").innerText()) === SPOILER_MESSAGES[0], "reply preview preserves its existing literal-pipe string");
   for (const label of ["Hide spoiler", "Show spoiler"]) {
     const toggle = primary.getByRole("button", { name: label, exact: true });
     await message(801).hover();
@@ -112,6 +112,42 @@ try {
     check((await page.evaluate(() => navigator.clipboard.readText())) === SPOILER_MESSAGES[0], `whole-message copy keeps raw markdown while the control says ${label}`);
     await toggle.click();
   }
+  for (const seq of [807, 808, 809]) {
+    const task = message(seq).locator(".md");
+    const boxes = task.getByRole("checkbox");
+    const before = await boxes.evaluateAll((inputs) => inputs.map((input) => input instanceof HTMLInputElement && input.checked));
+    check(!(await task.ariaSnapshot()).includes("SECRET"), `task ${seq}: collapsed descendants and checkbox names conceal spoiler text`);
+    check(
+      await boxes.evaluateAll((inputs) => inputs.every((input) => input instanceof HTMLInputElement && input.readOnly && input.getAttribute("aria-disabled") === "true")),
+      `task ${seq}: checkbox behavior stays read-only`,
+    );
+    await task.getByRole("button", { name: "Show spoiler", exact: true }).first().click();
+    check((await task.ariaSnapshot()).includes("SECRET_SPOILER"), `task ${seq}: reveal keeps the spoiler content accessible`);
+    check(
+      JSON.stringify(await boxes.evaluateAll((inputs) => inputs.map((input) => input instanceof HTMLInputElement && input.checked))) === JSON.stringify(before),
+      `task ${seq}: revealing preserves checked state`,
+    );
+    await task.getByRole("button", { name: "Hide spoiler", exact: true }).first().click();
+    check(!(await task.ariaSnapshot()).includes("SECRET"), `task ${seq}: concealing removes it again`);
+  }
+  const nested = message(809).locator(".md");
+  await nested.getByRole("button", { name: "Show spoiler", exact: true }).nth(1).click();
+  check((await nested.ariaSnapshot()).includes("NESTED_SECRET") && !(await nested.ariaSnapshot()).includes("SECRET_SPOILER"), "nested task reveals only its own spoiler");
+  for (const seq of [811]) {
+    const image = message(seq).locator(".md");
+    check(!(await image.ariaSnapshot()).includes("SECRET_ALT"), `image ${seq}: concealed alt text never leaks through metadata`);
+    await image.getByRole("button", { name: "Show spoiler", exact: true }).click();
+    check((await image.ariaSnapshot()).includes("SECRET_ALT"), `image ${seq}: revealing preserves access to the alt text`);
+  }
+  for (const seq of [810, 812]) {
+    const image = message(seq).locator(".md");
+    check(
+      (await image.innerText()).includes("public ||SECRET_ALT||") && (await image.getByRole("button", { name: "Show spoiler", exact: true }).count()) === 0,
+      `image ${seq}: the existing remote-image preprocessor keeps escaped alt text literal`,
+    );
+  }
+  check((await message(812).locator(".md a[href]").count()) === 0, "unsafe image destination remains unlinked after reveal");
+  check(popups.length === 0, "task and image reveals never activate a link or image action");
   check(errors.length === 0, `no page errors: ${errors.join("; ")}`);
   console.log(`${engine}: ${checks} checks passed; browser accessibility assertions only, no assistive-technology run claimed`);
 } finally {

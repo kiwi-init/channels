@@ -152,6 +152,12 @@ function pictureLink(node: ASTNode, inLink: boolean): void {
   const url = node.attributes?.url ?? ""
   const safe = !inLink && /^https?:\/\//i.test(url.trim()) ? sanitizeMarkdownUrl(url) : undefined
   const alt = textOf(node) || "image"
+  if (hasSpoiler(node)) {
+    node.type = "Link"
+    node.attributes = safe ? { url: safe } : {}
+    delete node.content
+    return
+  }
   node.type = safe ? "Link" : "Text"
   node.attributes = safe ? { url: safe } : {}
   if (safe) node.children = [{ type: "Text", content: alt }]

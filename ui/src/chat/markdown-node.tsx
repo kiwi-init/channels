@@ -3,12 +3,22 @@ import { blockRenderers } from "react-native-enriched-markdown/lib/module/web/re
 import { inlineRenderers } from "react-native-enriched-markdown/lib/module/web/renderers/InlineRenderers.js"
 import { listRenderers } from "react-native-enriched-markdown/lib/module/web/renderers/ListRenderers.js"
 import { tableRenderers } from "react-native-enriched-markdown/lib/module/web/renderers/TableRenderers.js"
-import { hasStrongText } from "react-native-enriched-markdown/lib/module/web/utils.js"
+import { extractNodeText, hasStrongText } from "react-native-enriched-markdown/lib/module/web/utils.js"
 import type { ASTNode, RendererProps } from "react-native-enriched-markdown/lib/typescript/src/web/types"
 import { t } from "~/i18n/i18n.ts"
 
 const RENDERERS = new Map(Object.entries({ ...blockRenderers, ...inlineRenderers, ...listRenderers, ...tableRenderers }))
 const LinkRenderer = inlineRenderers.Link
+
+function taskMetadata(node: ASTNode) {
+  const originals = new WeakMap<ASTNode, ASTNode>()
+  const withoutSpoilers = (current: ASTNode): ASTNode => {
+    const next = current.type === "Spoiler" ? { ...current, content: "", children: [] } : { ...current, ...(current.children ? { children: current.children.map(withoutSpoilers) } : {}) }
+    originals.set(next, current)
+    return next
+  }
+  return { node: withoutSpoilers(node), original: (current: ASTNode) => originals.get(current) ?? current }
+}
 
 function tablePart(node: ASTNode): boolean {
   switch (node.type) {
@@ -61,14 +71,36 @@ export function MarkdownNode({ node, style, styles, callbacks, capabilities, par
   const childCapabilities = ownCapabilities.blockDir && !tablePart(node) ? { ...ownCapabilities, blockDir: undefined } : ownCapabilities
   const splitLink = node.type === "Link" && hasSpoiler(node)
   const childLink = node.type === "Link" ? (splitLink ? node : undefined) : link
+  const task = node.type === "ListItem" && node.attributes?.isTask === "true" && hasSpoiler(node) ? taskMetadata(node) : undefined
   const renderChildren = (parent: ASTNode) =>
-    parent.children?.map((child, i) => (
-      <MarkdownNode key={nodeKey(child, i)} node={child} style={style} styles={styles} callbacks={callbacks} capabilities={childCapabilities} parentType={parent.type} index={i} link={childLink} />
-    )) ?? null
-  const props = { node, style, styles, callbacks, capabilities: ownCapabilities, parentType, index, renderChildren }
+    parent.children?.map((child, i) => {
+      const original = task?.original(child) ?? child
+      return (
+        <MarkdownNode
+          key={nodeKey(original, i)}
+          node={original}
+          style={style}
+          styles={styles}
+          callbacks={callbacks}
+          capabilities={childCapabilities}
+          parentType={parent.type}
+          index={i}
+          link={childLink}
+        />
+      )
+    }) ?? null
+  const ownCallbacks: RendererProps["callbacks"] =
+    task && callbacks.onTaskListItemPress
+      ? {
+          ...callbacks,
+          onTaskListItemPress: (event) => callbacks.onTaskListItemPress?.({ ...event, text: extractNodeText(node) }),
+        }
+      : callbacks
+  const props = { node: task?.node ?? node, style, styles, callbacks: ownCallbacks, capabilities: ownCapabilities, parentType, index, renderChildren }
   if (node.type === "Spoiler") return <Spoiler {...props} />
   if (splitLink) return <>{renderChildren(node)}</>
   const Renderer = RENDERERS.get(node.type)
+  if (node.type === "Image" && hasSpoiler(node) && Renderer) return <Spoiler {...props} renderChildren={() => createElement(Renderer, props)} />
   const content = Renderer ? (
     createElement(Renderer, props)
   ) : (
