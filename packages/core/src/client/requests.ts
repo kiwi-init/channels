@@ -99,7 +99,7 @@ export class ChannelRequests {
       yield* this.ch.ownerOnly();
       const { requests } = yield* this.ch.request<{ requests: RequestRow[] }>("/requests", {}, { v: 2 });
       const out: JoinRequest[] = [];
-      const everyone = requests.length ? yield* this.ch.fx.members() : [];
+      const everyone = requests.length ? yield* this.ch.fx.members(undefined, true) : [];
       const seats = everyone.filter((m) => m.active && !m.unverified);
       const agentsOf = new Set(seats.flatMap((m) => (addsAgents(m) ? [m.person!] : [])));
       const offered: Pick<Member, "name">[] = [...everyone];
@@ -237,7 +237,9 @@ export class ChannelRequests {
       { self: this },
       function* (this: ChannelRequests, person: string, personalities: readonly Personality[] = [], mine: readonly string[] | null = null, lists?: ReadonlyMap<string, DeviceList>) {
         yield* this.ch.ownerOnly();
-        for (const req of yield* this.ch.fx.requests({ person, mine, lists })) {
+        const waiting = yield* this.ch.fx.requests({ person, mine, lists });
+        if (!waiting.length) return [];
+        for (const req of waiting) {
           if ((req.computer?.joinsOnItsOwn || req.device?.joinsOnItsOwn) && req.check === "unchecked") yield* Effect.ignoreCause(this.ch.fx.checkRequest(req));
         }
         const approved: Member[] = [];

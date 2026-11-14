@@ -528,6 +528,7 @@ export class ChannelLive {
           this.info.forgetInfo();
           return { _tag: "Info" } satisfies Live;
         case "roster":
+          this.info.forgetMembers();
           return { _tag: "Roster" } satisfies Live;
         case "request":
           return { _tag: "Request" } satisfies Live;
