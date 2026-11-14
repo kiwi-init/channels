@@ -90,8 +90,6 @@ export default {
   "settings.sections.update.keep.working": "作業を続けられます。再起動の前に確認します。",
   "settings.sections.up.to.date": "最新",
   "settings.sections.about.lede": "Channels by Kiwi Init.",
-  "settings.sections.interface": "インターフェース",
-  "settings.sections.interface.hint": "Channels が使っている見た目です。自動でアップデートされます。",
   "settings.sections.interface.copy": "インターフェースのバージョンをコピー",
   "settings.sections.interface.copied": "バージョンをコピーしました",
   "settings.sections.relay": "リレー",
@@ -280,7 +278,7 @@ export default {
   "settings.agents.harnesses": "ハーネス",
   "settings.agents.not.installed": "未インストール: {names}",
   "settings.agents.this.computer": "このコンピューター",
-  "settings.agents.checkpoint": "コンテキストが 250k を超えたらエージェントにチェックポイントを依頼",
+  "settings.agents.checkpoint": "長いセッションではエージェントにチェックポイントを依頼",
   "settings.agents.checkpoint.hint": "ここで 250k トークンを超えたエージェントは、ターンを終える前に作業の状況を書くよう求められます。",
 
   "settings.controls.save": "保存",

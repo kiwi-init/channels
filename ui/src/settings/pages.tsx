@@ -242,22 +242,23 @@ export function AppearancePage() {
   return <Sheet md={md} seal={a.seal} field={appearanceFields} />
 }
 
-function versionRow(account: Account, a: Acts, check: { busy: boolean; result: UpdateCheck | null; run: () => void; install: () => void }): string {
+function versionRow(account: Account, a: Acts, check: { busy: boolean; result: UpdateCheck | null; run: () => void; install: () => void }, ui: string): string {
   const update = account.update
+  const withUi = (line?: string): string => [line, ui].filter(Boolean).join(" ")
   const on = { version: account.version }
   if (update?.ready)
     return row({
       mark: "new",
       label: t("settings.sections.update.ready", { version: update.version }),
       hint: say("settings.sections.update.ready.hint", {}, on),
-      line: main(a.act(t("settings.sections.update.restart"), check.install)),
+      line: withUi(main(a.act(t("settings.sections.update.restart"), check.install))),
     })
   if (update?.state === "available")
     return row({
       mark: "new",
       label: t("settings.sections.update.out", { version: update.version }),
       hint: update.blocked ? say("settings.sections.update.blocked") : say("settings.sections.update.on", {}, on),
-      line: main(a.act(update.blocked ? t("settings.sections.update.get") : t("settings.sections.update.download"), check.install)),
+      line: withUi(main(a.act(update.blocked ? t("settings.sections.update.get") : t("settings.sections.update.download"), check.install))),
     })
   if (update)
     return row({
@@ -265,16 +266,19 @@ function versionRow(account: Account, a: Acts, check: { busy: boolean; result: U
       label: t("settings.sections.update.downloading", { version: update.version }),
       tag: update.progress ? `${Math.round(update.progress * 100)}%` : "…",
       hint: say("settings.sections.update.keep.working"),
+      line: withUi(),
     })
-  if (!account.desktop) return row({ mark: "fine", label: t("settings.sections.up.to.date"), hint: code(account.version) })
+  if (!account.desktop) return row({ mark: "fine", label: t("settings.sections.up.to.date"), hint: code(account.version), line: withUi() })
   const found = check.result ? esc(updateFound(check.result)) : ""
   return row({
     mark: "fine",
     label: t("settings.sections.up.to.date"),
     hint: check.busy ? say("settings.sections.checking") : check.result?.state === "failed" ? words(found, { tone: "alert" }) : found || code(account.version),
-    line: a.act(t("settings.sections.check.now"), () => {
-      if (!check.busy) check.run()
-    }),
+    line: withUi(
+      a.act(t("settings.sections.check.now"), () => {
+        if (!check.busy) check.run()
+      })
+    ),
   })
 }
 
@@ -291,12 +295,12 @@ function aboutPage(account: Account, a: Acts, debug: boolean, relayFailed: Failu
     `# ${esc(t("settings.settings.about"))}`,
     say("settings.sections.about.lede"),
     [
-      versionRow(account, a, check),
-      row({
-        label: t("settings.sections.interface"),
-        hint: say("settings.sections.interface.hint"),
-        line: a.chip(version, () => void copyText(version, t("settings.sections.interface.copied")), t("settings.sections.interface.copy")),
-      }),
+      versionRow(
+        account,
+        a,
+        check,
+        a.chip(version, () => void copyText(version, t("settings.sections.interface.copied")), t("settings.sections.interface.copy"))
+      ),
       relay,
     ].join("\n"),
     toggle(

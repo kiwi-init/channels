@@ -90,8 +90,6 @@ export default {
   "settings.sections.update.keep.working": "계속 작업해도 됩니다. 다시 시작하기 전에 묻습니다.",
   "settings.sections.up.to.date": "최신 버전",
   "settings.sections.about.lede": "Kiwi Init의 Channels.",
-  "settings.sections.interface": "인터페이스",
-  "settings.sections.interface.hint": "지금 Channels 화면의 버전입니다. 자동으로 업데이트됩니다.",
   "settings.sections.interface.copy": "인터페이스 버전 복사",
   "settings.sections.interface.copied": "버전 복사됨",
   "settings.sections.relay": "릴레이",
@@ -280,7 +278,7 @@ export default {
   "settings.agents.harnesses": "하네스",
   "settings.agents.not.installed": "설치 안 됨: {names}",
   "settings.agents.this.computer": "이 컴퓨터",
-  "settings.agents.checkpoint": "컨텍스트가 250k를 넘으면 에이전트에게 체크포인트 요청",
+  "settings.agents.checkpoint": "긴 세션에서는 에이전트에게 체크포인트 요청",
   "settings.agents.checkpoint.hint": "이 컴퓨터의 에이전트가 250k 토큰을 넘으면 턴을 끝내기 전에 작업 상황을 기록하도록 요청받습니다.",
 
   "settings.controls.save": "저장",

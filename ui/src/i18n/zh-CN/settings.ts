@@ -90,8 +90,6 @@ export default {
   "settings.sections.update.keep.working": "你可以继续工作。重启前会先询问你。",
   "settings.sections.up.to.date": "已是最新版本",
   "settings.sections.about.lede": "Channels，由 Kiwi Init 出品。",
-  "settings.sections.interface": "界面",
-  "settings.sections.interface.hint": "Channels 当前运行的界面版本，会自动更新。",
   "settings.sections.interface.copy": "复制界面版本",
   "settings.sections.interface.copied": "版本已复制",
   "settings.sections.relay": "中继",
@@ -278,7 +276,7 @@ export default {
   "settings.agents.harnesses": "智能体工具",
   "settings.agents.not.installed": "未安装：{names}",
   "settings.agents.this.computer": "这台电脑",
-  "settings.agents.checkpoint": "上下文超过 250k 时请智能体写检查点",
+  "settings.agents.checkpoint": "长会话时请智能体写检查点",
   "settings.agents.checkpoint.hint": "这里的智能体超过 250k token 后，会在结束本轮前被要求写下工作进展。",
 
   "settings.controls.save": "保存",
