@@ -10,9 +10,10 @@ const flag = (name: string): string | undefined => {
 if (process.argv.includes("--help")) {
   console.log(`Drives the app's main flows and lists every flicker: an element whose box, opacity, colours or text changes and comes
 back within --short ms (a return), or holds a state for at most --short ms between two states held at least --steady ms, that
-is not on the way from the first to the second (a detour). Every element is read right after each frame is drawn (a
-MessageChannel message posted from requestAnimationFrame runs after the paint), so a state that never reached the screen,
-such as a scroll a ResizeObserver corrects in the same frame, is not counted.
+is not on the way from the first to the second (a detour). Every element is read right before each paint, in a
+ResizeObserver made fresh each frame: observers run in the order they were made, so it runs after the app's own, and a
+state that never reached the screen, such as a scroll a ResizeObserver corrects in the same frame, is not counted. An
+element counts only where it shows: inside the window and inside every scroller that clips it.
 
   bun scripts/ui-flicker.ts --dist ui/dist --browser webkit|chromium [--flow NAME] [--live] [--out DIR] [--short 100] [--steady 150]`);
   process.exit(0);
@@ -59,11 +60,46 @@ const recorder = () => {
     return key;
   };
   const styles = new WeakMap<Element, CSSStyleDeclaration>();
+  const styleOf = (el: Element) => {
+    let cs = styles.get(el);
+    if (!cs) {
+      cs = getComputedStyle(el);
+      styles.set(el, cs);
+    }
+    return cs;
+  };
+  const clippers = new WeakMap<Element, Element | null>();
+  const clipper = (el: Element): Element | null => {
+    const known = clippers.get(el);
+    if (known !== undefined) return known;
+    let found: Element | null = null;
+    for (let e: Element | null = el; e && e !== document.body && styleOf(e).position !== "fixed"; e = e.parentElement) {
+      const up = e.parentElement;
+      if (!up || up === document.body) break;
+      const cs = styleOf(up);
+      if (cs.overflowX !== "visible" || cs.overflowY !== "visible") {
+        found = up;
+        break;
+      }
+    }
+    clippers.set(el, found);
+    return found;
+  };
   const last = new Map<string, string>();
   const log: Log = { times: [], labels: [[0, "load"]], changes: {} };
   const read = () => {
-    const w = innerWidth;
-    const h = innerHeight;
+    const whole = [0, 0, innerWidth, innerHeight] as const;
+    const shown = new Map<Element, readonly [number, number, number, number]>();
+    const shownIn = (el: Element | null): readonly [number, number, number, number] => {
+      if (!el) return whole;
+      const known = shown.get(el);
+      if (known) return known;
+      const r = el.getBoundingClientRect();
+      const [l, t, rr, b] = shownIn(clipper(el));
+      const box = [Math.max(r.left, l), Math.max(r.top, t), Math.min(r.right, rr), Math.min(r.bottom, b)] as const;
+      shown.set(el, box);
+      return box;
+    };
     const seen = new Map<string, string>();
     const moving = new Set<Element>();
     for (const a of document.getAnimations()) {
@@ -76,13 +112,11 @@ const recorder = () => {
     };
     for (const el of document.body.querySelectorAll("*")) {
       const r = el.getBoundingClientRect();
-      if (r.width < 1 || r.height < 1 || r.right <= 0 || r.bottom <= 0 || r.left >= w || r.top >= h) continue;
+      if (r.width < 1 || r.height < 1) continue;
+      const [l, t, rr, b] = shownIn(clipper(el));
+      if (r.right <= l || r.bottom <= t || r.left >= rr || r.top >= b) continue;
       if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
-      let cs = styles.get(el);
-      if (!cs) {
-        cs = getComputedStyle(el);
-        styles.set(el, cs);
-      }
+      const cs = styleOf(el);
       const text = el.childElementCount === 0 ? cut((el.textContent ?? "").trim()) : "";
       let key = keyOf(el);
       while (seen.has(key)) key += "+";
@@ -93,12 +127,10 @@ const recorder = () => {
     }
     return seen;
   };
-  const painted = new MessageChannel();
-  const tick = () => {
-    painted.port2.postMessage(0);
-    requestAnimationFrame(tick);
-  };
-  painted.port1.onmessage = () => {
+  const probe = document.createElement("i");
+  probe.style.cssText = "position: fixed; left: 0; top: 0; width: 1px; height: 1px; pointer-events: none; opacity: 0";
+  let watch: ResizeObserver | null = null;
+  const sample = () => {
     if (document.body) {
       const frame = log.times.length;
       log.times.push(Math.round(performance.now()));
@@ -114,6 +146,13 @@ const recorder = () => {
         }
       }
     }
+  };
+  const tick = () => {
+    if (document.body && !probe.isConnected) document.body.appendChild(probe);
+    watch?.disconnect();
+    watch = new ResizeObserver(sample);
+    watch.observe(probe);
+    requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
   Object.assign(window, {
