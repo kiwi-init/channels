@@ -12,7 +12,7 @@ import { openMessage } from "~/live/open-message"
 import type { Actions, Ask, Channel, PullRequest, Spec, Task, TaskStatus } from "~/model"
 import { useAct } from "~/nav"
 import { lanesOf, nowOf } from "~/now"
-import { inert, lookupOf, pieces, seal, type Seal, type Stranger } from "~/panes/engine"
+import { inert, lookupOf, pieces, seal, type Lookup, type Seal } from "~/panes/engine"
 import { usePane } from "~/panes/place"
 import type { DetailView, View } from "~/panes/place"
 import { statusOf } from "~/shell/sidebar"
@@ -169,31 +169,21 @@ function boardText(channel: Channel, view: BoardView): { md: string; seal: Seal 
   return { md, seal: m.seal }
 }
 
-export function PageText({
-  channel,
-  md,
-  seal,
-  fields = NO_FIELDS,
-  stranger,
-}: {
-  channel: Channel
-  md: string
-  seal: Seal
-  fields?: ReadonlyMap<string, () => ReactNode>
-  stranger?: (name: string) => Stranger | undefined
-}) {
+export function PageText({ channel, md, seal, fields = NO_FIELDS, look }: { channel: Channel; md: string; seal: Seal; fields?: ReadonlyMap<string, () => ReactNode>; look?: Partial<Lookup> }) {
   const names = useNames(channel)
   const tasks = useTaskIds(channel)
   const { go } = useAct()
   const pane = usePane()
   const text = useMemo(() => wrote(md), [md])
-  const draw = useMemo(() => pieces({ ...lookupOf(channel), stranger }, pageMark, seal.owns, (name) => fields.get(name)?.()), [channel, seal, fields, stranger])
+  const draw = useMemo(() => pieces({ ...lookupOf(channel), ...look }, pageMark, seal.owns, (name) => fields.get(name)?.()), [channel, seal, fields, look])
   const code = channel.code
   const onPage = (url: string) => {
     if (url.startsWith("kiwi-do:")) return seal.run(url)
     const gh = /^kiwi-(pr|issue):(.+)\/(\d+)$/.exec(url)
     if (gh) return go({ to: "panel", panel: { kind: gh[1] === "pr" ? "pr" : "issue", repo: gh[2]!, number: Number(gh[3]) } })
     const to = url.slice("kiwi-page:".length)
+    const spec = /^spec:(\d+)(?::(spec|inside|result))?$/.exec(to)
+    if (spec) return go({ to: "spec", ask: Number(spec[1]), part: spec[2] === "inside" || spec[2] === "result" ? spec[2] : "spec" })
     if (to === "now") return pane?.show({ kind: "now" })
     if (to === "specs") return go({ to: "spec", ask: null })
     if (to === "agents" || to === "github" || to === "needs") return go({ to: "tab", tab: to })

@@ -3,23 +3,26 @@ import "~/styles/tasks.css"
 import "~/styles/github.css"
 import "~/styles/specs.css"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 
 import { t } from "~/i18n/i18n"
-import { Avatar, cx, Loading } from "~/kit/bits"
+import { Avatar, Loading } from "~/kit/bits"
 import { Empty } from "~/kit/empty"
 import { Track } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
-import type { Channel, Spec, Task } from "~/model"
-import { useGo, useNav } from "~/nav"
-import { nickname, Shown } from "~/names"
+import type { Channel, Spec } from "~/model"
+import { useNav } from "~/nav"
+import { nickname } from "~/names"
+import { toned, type Lookup } from "~/panes/engine"
+import { join, link, maker, newTag, PageFrame, PageText, type Maker } from "~/panes/page"
+import { dragOut } from "~/panes/place"
 import { SpecMark } from "~/specs/card"
 import { faceOf, needsYou, tasksOf, workersOf } from "~/specs/read"
+import { useTaskNow } from "~/tasks/mover"
 import { NowCard } from "~/tasks/now"
-import { TaskRow } from "~/tasks/row"
+import { taskLine } from "~/tasks/row"
 import { wordsPlain } from "~/words"
-import { dragOut } from "~/panes/place"
 
 const LOOSE_SHOWN = 3
 const DONE_PAGE = 20
@@ -27,7 +30,7 @@ const DONE_PAGE = 20
 const SpecPage = later(() => import("~/specs/page").then((m) => m.SpecPage))
 const NewSpec = later(() => import("~/specs/new").then((m) => m.NewSpec))
 
-type Shown = "open" | "done"
+type Showing = "open" | "done"
 
 interface Group {
   key: string
@@ -36,7 +39,7 @@ interface Group {
   rows: Spec[]
 }
 
-function groupsOf(channel: Channel, shown: Shown): Group[] {
+function groupsOf(channel: Channel, shown: Showing): Group[] {
   const specs = channel.specs ?? []
   if (shown === "done")
     return [
@@ -66,173 +69,157 @@ export function SpecsView({ channel }: { channel: Channel }) {
   return <SpecList channel={channel} />
 }
 
-function SpecList({ channel }: { channel: Channel }) {
-  const [shown, setShown] = useState<Shown>("open")
-  const [making, setMaking] = useState(false)
+interface ListState {
+  shown: Showing
+  pages: number
+  on: number | null
+  now: number
+}
+
+interface ListActs {
+  show: (shown: Showing) => void
+  page: (pages: number) => void
+  make: () => void
+}
+
+const SPEC_URL = /^kiwi-page:spec:(\d+)/
+
+const specAt = (channel: Channel, url: string): Spec | undefined => {
+  const ask = SPEC_URL.exec(url)?.[1]
+  return ask === undefined ? undefined : channel.specs?.find((s) => s.ask === Number(ask))
+}
+
+const partOf = (spec: Spec): string => (spec.stage === "delivered" ? "result" : spec.stage === "working" ? "inside" : "spec")
+
+const nest = (md: string): string => md.replace(/^/gm, "  ")
+
+function specLine(channel: Channel, spec: Spec, state: ListState): string {
+  const row = `- ${link(wordsPlain(spec.title, channel.nicknames), `kiwi-page:spec:${spec.ask}:${partOf(spec)}`)}`
+  const tasks = spec.result ? [] : tasksOf(channel, spec).filter((task) => !task.archived && !task.cancelled)
+  if (!tasks.length) return row
+  const open = tasks.filter((task) => task.status !== "done")
+  const count = `${tasks.length - open.length}/${tasks.length} ${t("specs.view.task.word", { count: tasks.length })}`
+  if (!open.length) return `${row} · ${count}`
+  const first = open.some((task) => task.status === "waiting" || task.id === state.on)
+  return [`${row} · ${count} \`${first ? "kiwi:open" : "kiwi:fold"}\``, ...open.map((task) => nest(taskLine(channel, task, state.now)))].join("\n")
+}
+
+export function specsText(channel: Channel, state: ListState, acts: ListActs, m: Maker): string {
   const specs = channel.specs ?? []
   const open = specs.filter((s) => !s.result).length
-  const groups = groupsOf(channel, shown)
+  const groups = groupsOf(channel, state.shown)
   const inSpecs = new Set(specs.flatMap((s) => s.tasks))
   const loose = channel.tasks.filter((task) => !inSpecs.has(task.id) && !task.archived && task.status !== "done")
   const finished = channel.tasks.filter((task) => !inSpecs.has(task.id) && !task.cancelled && task.status === "done").sort((a, b) => b.updatedAt - a.updatedAt)
   const live = channel.tasks.some((task) => !task.archived)
-  const tasks = shown === "open" ? loose : finished
+  const tasks = state.shown === "open" ? loose : finished
+  const page = state.shown === "open" ? LOOSE_SHOWN : DONE_PAGE
+  const rows = tasks.slice(0, page * state.pages)
+  const left = tasks.length - rows.length
+  const more = state.shown === "done"
+  const counts = { open: open + loose.length, done: specs.length - open + finished.length }
+  const top = m.field("top", () => <ListTop shown={state.shown} counts={counts} seg={specs.length > 0 || finished.length > 0} acts={acts} />)
+  const empty = !specs.length ? t("specs.view.empty") : state.shown === "open" ? t("specs.view.empty.open") : t("specs.view.empty.done")
   const label = specs.length ? t("specs.view.not.in.spec") : t("specs.view.tasks")
+  const paging =
+    tasks.length > page
+      ? m.act(left > 0 ? t("specs.view.show.more", { count: more ? Math.min(page, left) : left }) : t("specs.view.show.fewer"), () =>
+          acts.page(left > 0 ? (more ? state.pages + 1 : Math.ceil(tasks.length / page)) : 1)
+        )
+      : ""
+  return join([
+    `# ${t("shell.channel.specs")}`,
+    live ? m.field("now", () => <NowCard channel={channel} />) : "",
+    top,
+    channel.behind ? toned(t("specs.view.reading"), "tone-quiet") : "",
+    ...groups.map((g) => join([`## ${toned(g.label, g.tone)} · ${g.rows.length}`, g.rows.map((s) => specLine(channel, s, state)).join("\n")])),
+    tasks.length ? join([`## ${toned(label)} · ${tasks.length}`, rows.map((task) => taskLine(channel, task, state.now)).join("\n"), paging]) : "",
+    groups.length || tasks.length ? "" : channel.loading ? m.field("loading", () => <Loading />) : channel.behind ? "" : m.field("empty", () => <Empty title={empty} icon="spec" />),
+  ])
+}
+
+function ListTop({ shown, counts, seg, acts }: { shown: Showing; counts: { open: number; done: number }; seg: boolean; acts: ListActs }) {
   return (
-    <div className="board">
-      <div className="board-list gh-list specs-list">
-        {live && <NowCard channel={channel} />}
-        <div className="gh-top">
-          {(specs.length > 0 || finished.length > 0) && (
-            <Track className="seg" role="group" aria-label={t("specs.view.open.or.done")}>
-              <button type="button" aria-pressed={shown === "open"} onClick={() => setShown("open")}>
-                {t("specs.view.open")} <span className="gh-n num">{open + loose.length}</span>
-              </button>
-              <button type="button" aria-pressed={shown === "done"} onClick={() => setShown("done")}>
-                {t("specs.view.done")} <span className="gh-n num">{specs.length - open + finished.length}</span>
-              </button>
-            </Track>
-          )}
-          <button type="button" className="btn is-primary" onClick={() => setMaking(true)}>
-            <Icon name="plus" size={14} />
-            {t("specs.view.new")}
+    <div className="gh-top">
+      {seg && (
+        <Track className="seg" role="group" aria-label={t("specs.view.open.or.done")}>
+          <button type="button" aria-pressed={shown === "open"} onClick={() => acts.show("open")}>
+            {t("specs.view.open")} <span className="gh-n num">{counts.open}</span>
           </button>
-        </div>
-        {channel.behind && <p className="specs-behind">{t("specs.view.reading")}</p>}
-        {groups.length || tasks.length ? (
-          <div className="board-stack">
-            {groups.map((g) => (
-              <GroupCard key={g.key} channel={channel} group={g} />
-            ))}
-            {tasks.length > 0 && <Loose key={shown} channel={channel} tasks={tasks} label={label} page={shown === "open" ? LOOSE_SHOWN : DONE_PAGE} more={shown === "done"} />}
-          </div>
-        ) : channel.loading ? (
-          <Loading />
-        ) : channel.behind ? null : (
-          <Empty title={!specs.length ? t("specs.view.empty") : shown === "open" ? t("specs.view.empty.open") : t("specs.view.empty.done")} icon="spec" />
-        )}
-      </div>
-      {making && <NewSpec channel={channel} onClose={() => setMaking(false)} />}
+          <button type="button" aria-pressed={shown === "done"} onClick={() => acts.show("done")}>
+            {t("specs.view.done")} <span className="gh-n num">{counts.done}</span>
+          </button>
+        </Track>
+      )}
+      <button type="button" className="btn is-primary" onClick={acts.make}>
+        <Icon name="plus" size={14} />
+        {t("specs.view.new")}
+      </button>
     </div>
   )
 }
 
-function GroupCard({ channel, group }: { channel: Channel; group: Group }) {
-  return (
-    <section className={cx("board-group gh-group", `is-${group.key}`)} aria-label={group.label}>
-      <div className="board-head">
-        <h2 className="board-h">
-          <span className={cx("board-label", group.tone)}>{group.label}</span>
-          <span className="board-n num">{group.rows.length}</span>
-        </h2>
-      </div>
-      <ul className="gh-rows">
-        {group.rows.map((s) => (
-          <SpecRow key={s.ask} channel={channel} spec={s} />
-        ))}
-      </ul>
-    </section>
-  )
-}
-
-function Loose({ channel, tasks, label, page, more }: { channel: Channel; tasks: Task[]; label: string; page: number; more: boolean }) {
-  const nav = useNav()
-  const [pages, setPages] = useState(1)
-  const on = nav.panel?.kind === "task" ? nav.panel.task : null
-  const rows = tasks.slice(0, page * pages)
-  const left = tasks.length - rows.length
-  return (
-    <section className="board-group gh-group is-loose" aria-label={label}>
-      <div className="board-head">
-        <h2 className="board-h">
-          <span className="board-label">{label}</span>
-          <span className="board-n num">{tasks.length}</span>
-        </h2>
-      </div>
-      <ul className="board-rows">
-        {rows.map((task) => (
-          <li key={task.id}>
-            <TaskRow channel={channel} t={task} on={task.id === on} />
-          </li>
-        ))}
-      </ul>
-      {tasks.length > page && (
-        <button type="button" className="board-more" onClick={() => setPages(left > 0 ? (more ? pages + 1 : Math.ceil(tasks.length / page)) : 1)}>
-          {left > 0 ? t("specs.view.show.more", { count: more ? Math.min(page, left) : left }) : t("specs.view.show.fewer")}
-        </button>
-      )}
-    </section>
-  )
-}
-
-function SpecRow({ channel, spec }: { channel: Channel; spec: Spec }) {
-  const nav = useNav()
-  const go = useGo()
+export function SpecFaces({ channel, spec }: { channel: Channel; spec: Spec }) {
   const who = workersOf(channel, spec)
-  const part = spec.stage === "delivered" ? "result" : spec.stage === "working" ? "inside" : "spec"
-  const on = nav.panel?.kind === "task" ? nav.panel.task : null
-  const tasks = spec.result ? [] : tasksOf(channel, spec).filter((task) => !task.archived && !task.cancelled)
-  const open = tasks.filter((task) => task.status !== "done")
-  const [unfolded, setUnfolded] = useState(() => open.some((task) => task.status === "waiting" || task.id === on))
-  const shown = unfolded && open.length > 0
+  if (!who.length) return null
   return (
-    <li className={cx("gh-item", shown && "is-unfolded")}>
-      <button
-        type="button"
-        className="gh-row spec-row"
-        onClick={() => go({ to: "spec", ask: spec.ask, part })}
-        {...dragOut({ page: { at: "spec", ask: spec.ask } }, wordsPlain(spec.title, channel.nicknames))}
-      >
-        <SpecMark spec={spec} />
-        <span className="gh-title">
-          <Shown value={spec.title} />
+    <span className="spec-card-faces spec-row-faces">
+      {who.slice(0, 3).map((n) => (
+        <span key={n} className="spec-face">
+          <Avatar person={faceOf(channel, n)} size="sm" />
+          <span className="spec-face-name">{nickname(channel, n)}</span>
         </span>
-        {who.length > 0 && (
-          <span className="spec-card-faces spec-row-faces">
-            {who.slice(0, 3).map((n) => (
-              <span key={n} className="spec-face">
-                <Avatar person={faceOf(channel, n)} size="sm" />
-                <span className="spec-face-name">{nickname(channel, n)}</span>
-              </span>
-            ))}
-            <span className="spec-faces-all" aria-hidden="true">
-              {who
-                .slice(0, 3)
-                .map((n) => nickname(channel, n))
-                .join(", ")}
-            </span>
-          </span>
-        )}
-      </button>
-      {open.length > 0 ? (
-        <button
-          type="button"
-          className="spec-fold num"
-          aria-expanded={shown}
-          aria-label={t(shown ? "specs.view.hide.tasks" : "specs.view.show.tasks", { count: open.length, title: wordsPlain(spec.title, channel.nicknames) })}
-          onClick={() => setUnfolded(!unfolded)}
-        >
-          {tasks.length - open.length}/{tasks.length}
-          <span>{t("specs.view.task.word", { count: tasks.length })}</span>
-          <Icon name="down" size={12} />
-        </button>
-      ) : tasks.length > 0 ? (
-        <span className="spec-fold is-done num">
-          {tasks.length}/{tasks.length}
-          <span>{t("specs.view.task.word", { count: tasks.length })}</span>
-        </span>
-      ) : (
-        <span className="spec-fold is-empty" aria-hidden="true" />
-      )}
-      {shown && (
-        <ul className="board-rows spec-steps">
-          {open.map((task) => (
-            <li key={task.id}>
-              <TaskRow channel={channel} t={task} on={task.id === on} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </li>
+      ))}
+      <span className="spec-faces-all" aria-hidden="true">
+        {who
+          .slice(0, 3)
+          .map((n) => nickname(channel, n))
+          .join(", ")}
+      </span>
+    </span>
+  )
+}
+
+export const specsLook = (channel: Channel, on: number | null): Partial<Lookup> => ({
+  on: (url) => on !== null && url === `kiwi-task:${on}`,
+  lead: (url) => {
+    const spec = specAt(channel, url)
+    return spec ? <SpecMark spec={spec} /> : undefined
+  },
+  trail: (url) => {
+    const spec = specAt(channel, url)
+    return spec ? <SpecFaces channel={channel} spec={spec} /> : undefined
+  },
+  drag: (url) => {
+    const spec = specAt(channel, url)
+    return spec ? dragOut({ page: { at: "spec", ask: spec.ask } }, wordsPlain(spec.title, channel.nicknames)) : undefined
+  },
+})
+
+function SpecList({ channel }: { channel: Channel }) {
+  const nav = useNav()
+  const now = useTaskNow()
+  const [tag] = useState(newTag)
+  const [shown, setShown] = useState<Showing>("open")
+  const [pages, setPages] = useState(1)
+  const [making, setMaking] = useState(false)
+  const on = nav.panel?.kind === "task" ? nav.panel.task : null
+  const built = useMemo(() => {
+    const m = maker(tag)
+    const acts: ListActs = {
+      show: (next) => {
+        setShown(next)
+        setPages(1)
+      },
+      page: setPages,
+      make: () => setMaking(true),
+    }
+    return { md: specsText(channel, { shown, pages, on, now }, acts, m), m }
+  }, [channel, shown, pages, on, now, tag])
+  const look = useMemo(() => specsLook(channel, on), [channel, on])
+  return (
+    <PageFrame kind="specs" more={making && <NewSpec channel={channel} onClose={() => setMaking(false)} />}>
+      <PageText channel={channel} md={built.md} seal={built.m.seal} fields={built.m.fields} look={look} />
+    </PageFrame>
   )
 }

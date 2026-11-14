@@ -292,6 +292,24 @@ const FLOWS: Flow[] = [
   { name: "thread doc", shot: "thread-doc", run: async () => {} },
   { name: "tasks", shot: "task-working", run: async () => {} },
   { name: "specs", shot: "specs-general", run: async () => {} },
+  {
+    name: "specs list",
+    shot: "specs",
+    run: async (page) => {
+      const list = page.locator(".page.is-specs, .specs-list").first();
+      const fold = list.locator(".pg-unfold[aria-expanded], .spec-fold[aria-expanded]").first();
+      const button = (name: string | RegExp) => list.getByRole("button", { name }).first();
+      await step(page, "fold a spec's tasks", () => fold.click({ timeout: STEP_MS }));
+      await step(page, "unfold them", () => fold.click({ timeout: STEP_MS }));
+      await step(page, "show more tasks", () => button(/^Show \d+ more$/).click({ timeout: STEP_MS }));
+      await step(page, "show fewer", () => button("Show fewer").click({ timeout: STEP_MS }));
+      await step(page, "done specs", () => button(/^Done/).click({ timeout: STEP_MS }));
+      await step(page, "open specs", () => button(/^Open/).click({ timeout: STEP_MS }));
+      await step(page, "open a task", () => list.locator('a.pg-main[href^="kiwi-task:"], .board-row').first().click({ timeout: STEP_MS }));
+      await step(page, "close it", () => page.keyboard.press("Escape"));
+      await step(page, "open a spec", () => list.locator('a.pg-main[href^="kiwi-page:spec:"], .spec-row').first().click({ timeout: STEP_MS }));
+    },
+  },
   { name: "needs you", shot: "needs-panel", run: async () => {} },
   { name: "channel settings", shot: "channel-settings", run: async () => {} },
 ];

@@ -38,7 +38,7 @@ const SHOTS: Record<string, Screen> = {
   "needs-asked-of": { ready: ".page.is-needs .pg-card" },
   "needs-step": { ready: ".page.is-needs .pg-card .ask" },
   "needs-handoff": { ready: ".page.is-needs .pg-card .ask" },
-  specs: { ready: ".board" },
+  specs: { ready: ".page.is-specs" },
   "spec-draft": { ready: ".spec-rail" },
   "spec-inside": { ready: ".spec-top" },
   "spec-result": { ready: ".spec-box" },

@@ -37,7 +37,7 @@ const place = (page: Page) =>
     if (document.querySelector(".spec-doc-wrap")) return "spec";
     const box = document.querySelector<HTMLTextAreaElement>(".main .composer textarea");
     if (box) return box.getAttribute("placeholder") ?? "a room";
-    if (document.querySelector(".main :is(.gh-rows, .spec-card-main, .board)")) return "specs";
+    if (document.querySelector(".main :is(.page.is-specs, .gh-rows, .spec-card-main, .board)")) return "specs";
     return "unknown";
   });
 
@@ -89,7 +89,7 @@ try {
 
   await page.locator(".side-row", { hasText: "Specs" }).first().click();
   await settle(page);
-  await page.locator(".gh-row.spec-row, .spec-card-main, .board-row").first().click();
+  await page.locator('a.pg-main[href^="kiwi-page:spec:"], .spec-card-main, .board-row').first().click();
   await settle(page);
   expect((await place(page)) === "spec", "a spec opens");
 
