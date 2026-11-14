@@ -3,6 +3,8 @@ import type { Prefs, Usage } from "~/model"
 import type { Nav } from "~/nav"
 import type { TrackTab } from "~/tasks/track-tab"
 
+export const DEMO_FROZEN = new URLSearchParams(location.search).has("frozen")
+
 export interface Shot {
   scenario: Scenario
   channel: string | null

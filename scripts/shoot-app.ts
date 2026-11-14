@@ -84,7 +84,7 @@ try {
       });
       await leave();
       await reactions.settled();
-      await page.goto(`${base}?shot=${name}&theme=${theme}`);
+      await page.goto(`${base}?shot=${name}&theme=${theme}&frozen`);
       await page.waitForLoadState("networkidle");
       if (textScale) await page.evaluate((scale) => document.documentElement.style.setProperty("--text-scale", scale), textScale);
       await page.evaluate(() => document.fonts.ready);
