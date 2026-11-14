@@ -878,6 +878,10 @@ button.msg-image-spot:hover {
   text-overflow: ellipsis;
 }
 
+.ask-earlier.is-typed {
+  white-space: normal;
+}
+
 .ask-state time,
 .ask-done time {
   margin-left: 4px;

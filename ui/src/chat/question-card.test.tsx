@@ -141,9 +141,9 @@ describe("an ask shows your last answer on the same work (T507)", () => {
 })
 
 describe("a reply you typed in the chat shows on the open card (T509)", () => {
-  test("one quiet line says it stays open until you answer here or the asker restates it", () => {
+  test("one quiet line says it stays open until you answer here", () => {
     const html = render({ ...choice(undefined), typed: { text: wrote("A and B, A first"), by: "jow", at: NOW, seq: 51 } })
-    expect(html).toContain("You replied “A and B, A first” in the chat. It stays open until you answer here or opus-coder restates it")
+    expect(html).toContain("You replied “A and B, A first” in the chat · answer here to close it")
     expect(html).toContain("ask-options")
   })
 

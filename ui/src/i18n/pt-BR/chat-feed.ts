@@ -86,7 +86,7 @@ export default {
   "chat.question.card.chose": "{who} escolheu {choice} {time}",
   "chat.question.card.earlier.chose": "Você já escolheu “{text}” nisto antes · {when}",
   "chat.question.card.earlier.answered": "Você já respondeu “{text}” nisto antes · {when}",
-  "chat.question.card.typed": "Você respondeu “{text}” no chat. Fica aberta até você responder aqui ou {who} reformular",
+  "chat.question.card.typed": "Você respondeu “{text}” no chat · responda aqui para fechar",
   "chat.question.card.done": "Feito",
   "chat.question.card.couldnt": "Não consegui",
   "chat.question.card.something.else": "Outra coisa…",
