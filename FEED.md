@@ -16,6 +16,7 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | The composer you type in stays put while lines arrive | `scripts/ui-doc-still.ts` | `the composer you type in stays put while lines arrive` |
 | Held, or reading an older stretch, the bottom does not pull you along | `ui/src/chat/stick.test.tsx` | `held, or reading an older window, the bottom does not pull you along` |
 | A sent line with an image stays above the lines sent after it | `scripts/ui-doc-image-order.ts` | `doc lines with images are drawn wrong` |
+| Your line's picture, once shown, stays where it is while the line lands | `scripts/ui-doc-image-order.ts` | `once shown, stays where it is while the line lands` |
 | A line of yours that changes is laid out once, also while markdown is still loading: its row keeps the size the feed read | `scripts/ui-msg-edit.ts` | `no resize observer resizes its row from inside its own callback` |
 
 ## A change of width, and the sidebar toggle

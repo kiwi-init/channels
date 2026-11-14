@@ -56,6 +56,15 @@ interface Span {
   bottom: number | null
 }
 
+function rowKeys(list: readonly Message[]): (string | number)[] {
+  const seen = new Set<string>()
+  return list.map((m) => {
+    if (!m.block || seen.has(m.block)) return m.seq
+    seen.add(m.block)
+    return `b:${m.block}`
+  })
+}
+
 function spanOf(list: Message[], from: number, to: number): Span {
   return { top: list[Math.max(0, from)]?.seq ?? null, bottom: to >= list.length ? null : (list[to - 1]?.seq ?? null) }
 }
@@ -270,6 +279,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const jumpSeq = jump?.m.seq
   const talkOpen = useCallback((r: ChatterRun | undefined) => !r || openTalk.has(r.first) || (jumpSeq !== undefined && r.run.some((x) => x.seq === jumpSeq)), [openTalk, jumpSeq])
   const list = useMemo(() => unfolded.filter((m) => talkOpen(chatter.get(m.seq)) || chatter.get(m.seq)?.first === m.seq), [unfolded, chatter, talkOpen])
+  const keys = useMemo(() => rowKeys(list), [list])
   const foldAt = through === undefined ? undefined : list.find((m) => m.seq > through)?.seq
   const proposalAt = proposal && list.some((m) => m.seq === proposal.seq) ? proposal.seq : undefined
   const [shownRuns, setShownRuns] = useState<ReadonlySet<number>>(() => new Set())
@@ -660,7 +670,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
                 const prev = list[i - 1]
                 const afterFold = !!prev && !talkOpen(chatter.get(prev.seq))
                 return (
-                  <Fragment key={m.seq}>
+                  <Fragment key={keys[i]}>
                     {(i === 0 || !sameDay(list[i - 1]?.at ?? 0, m.at)) && (
                       <p className="day">
                         <span>{day(m.at)}</span>
