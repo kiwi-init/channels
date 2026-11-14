@@ -19,6 +19,7 @@ import { withSpecs } from "~/demo/specs"
 import { homeOf } from "~/home"
 import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
 import { TABS_3, TABS_8 } from "~/demo/tabs"
+import { DEMO_FROZEN } from "~/demo/shots"
 import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, TaskStep, Usage } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
@@ -558,7 +559,50 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "tabs-3" || scenario === "tabs-8") return { ...initial("full", look), tiles: scenario === "tabs-3" ? TABS_3 : TABS_8 }
   if (scenario === "closed" || scenario === "removed")
     return { account: DEMO_ACCOUNT, tiles: DEMO_TILES.filter((t) => t.code !== "studio"), channels, prefs, seq: 1000, gone: { code: "studio", title: "studio", why: scenario } }
-  return { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  const plain: State = { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "doc-busy" && DEMO_FROZEN) return Array.from({ length: BUSY_FROZEN_STEPS }, (_, i) => i + 1).reduce(busyStep, plain)
+  if (scenario === "ci-live" && DEMO_FROZEN) return Array.from({ length: CI_FROZEN_STEPS }, (_, i) => i).reduce(ciStep, plain)
+  return plain
+}
+
+const BUSY_FROZEN_STEPS = 3
+const CI_FROZEN_STEPS = 4
+const CI_CHECKS = ["test / unit", "repo / static", "build / shots", "ci-ok"]
+
+function ciStep(s: State, n: number): State {
+  const c = s.channels.get("kiwi")
+  if (!c) return s
+  const at = Date.now()
+  const name = CI_CHECKS[n % CI_CHECKS.length] ?? "ci-ok"
+  const repo = "kiwi-init/channels"
+  const channels = new Map(s.channels)
+  const seq = s.seq + 1
+  channels.set("kiwi", {
+    ...c,
+    messages: [
+      ...c.messages,
+      {
+        seq,
+        from: "github",
+        at,
+        text: wrote(`GitHub: ${name} success on T10-icons`),
+        where: { kind: "room", room: "general" },
+        system: true,
+        github: [{ event: "check_run", at, repo, name, conclusion: "success" }],
+      },
+    ],
+  })
+  return { ...s, channels, seq }
+}
+
+function busyStep(s: State, n: number): State {
+  const c = s.channels.get("kiwi")
+  if (!c) return s
+  const channels = new Map(s.channels)
+  const seq = s.seq + 1
+  const text = n % 3 ? `Step ${n} is done.` : `Step ${n} is done.\nThe next one takes longer: it rebuilds the icons and measures the first load again.`
+  channels.set("kiwi", { ...c, messages: [...c.messages, { seq, from: n % 2 ? "atlas" : "win", at: Date.now(), text: wrote(text), where: { kind: "task", task: 10 } }] })
+  return { ...s, channels, seq }
 }
 
 const SLOW_OPEN_MS = 1500
@@ -577,53 +621,21 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   const shown = scenario !== "slow-open" || arrived === open ? open : null
 
   useEffect(() => {
-    if (scenario !== "ci-live") return
-    const repo = "kiwi-init/channels"
-    const names = ["test / unit", "repo / static", "build / shots", "ci-ok"]
+    if (scenario !== "ci-live" || DEMO_FROZEN) return
     let n = 0
     const timer = window.setInterval(() => {
-      const at = Date.now()
-      const name = names[n++ % names.length] ?? "ci-ok"
-      setState((s) => {
-        const c = s.channels.get("kiwi")
-        if (!c) return s
-        const channels = new Map(s.channels)
-        const seq = s.seq + 1
-        channels.set("kiwi", {
-          ...c,
-          messages: [
-            ...c.messages,
-            {
-              seq,
-              from: "github",
-              at,
-              text: wrote(`GitHub: ${name} success on T10-icons`),
-              where: { kind: "room", room: "general" },
-              system: true,
-              github: [{ event: "check_run", at, repo, name, conclusion: "success" }],
-            },
-          ],
-        })
-        return { ...s, channels, seq }
-      })
+      const step = n++
+      setState((s) => ciStep(s, step))
     }, 700)
     return () => window.clearInterval(timer)
   }, [scenario])
 
   useEffect(() => {
-    if (scenario !== "doc-busy") return
+    if (scenario !== "doc-busy" || DEMO_FROZEN) return
     let n = 0
     const timer = window.setInterval(() => {
-      n++
-      setState((s) => {
-        const c = s.channels.get("kiwi")
-        if (!c) return s
-        const channels = new Map(s.channels)
-        const seq = s.seq + 1
-        const text = n % 3 ? `Step ${n} is done.` : `Step ${n} is done.\nThe next one takes longer: it rebuilds the icons and measures the first load again.`
-        channels.set("kiwi", { ...c, messages: [...c.messages, { seq, from: n % 2 ? "atlas" : "win", at: Date.now(), text: wrote(text), where: { kind: "task", task: 10 } }] })
-        return { ...s, channels, seq }
-      })
+      const step = ++n
+      setState((s) => busyStep(s, step))
     }, 700)
     return () => window.clearInterval(timer)
   }, [scenario])
