@@ -84,6 +84,8 @@ export default {
   "chat.question.card.replied": "{who} 已回复 {time}",
   "chat.question.card.show.reply": "查看回复",
   "chat.question.card.chose": "{who} 选择了 {choice} {time}",
+  "chat.question.card.earlier.chose": "你之前在这件事上选了“{text}” · {when}",
+  "chat.question.card.earlier.answered": "你之前在这件事上回答了“{text}” · {when}",
   "chat.question.card.done": "完成",
   "chat.question.card.couldnt": "未能完成",
   "chat.question.card.something.else": "其他…",

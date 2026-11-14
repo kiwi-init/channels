@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 
+import { earlierAnswer } from "~/chat/earlier"
 import QuestionCard from "~/chat/question-card"
 import type { Channel, Person, QuestionAsk } from "~/model"
 import { ActContext, AppContext, type Act, type Ctx } from "~/nav"
@@ -53,11 +54,11 @@ const choice = (answer: QuestionAsk["answer"]): QuestionAsk => ({
   ...(answer ? { answer } : {}),
 })
 
-const render = (ask: QuestionAsk): string =>
+const render = (ask: QuestionAsk, ch: Channel = channel): string =>
   renderToStaticMarkup(
-    <AppContext.Provider value={{ app: { channel }, go: () => {} } as unknown as Ctx}>
+    <AppContext.Provider value={{ app: { channel: ch }, go: () => {} } as unknown as Ctx}>
       <ActContext.Provider value={{ actions: {}, go: () => {}, toast: () => {} } as unknown as Act}>
-        <QuestionCard channel={channel} ask={ask} />
+        <QuestionCard channel={ch} ask={ask} />
       </ActContext.Provider>
     </AppContext.Provider>
   )
@@ -91,5 +92,50 @@ describe("an answered step shows its answer once (#1794)", () => {
     expect(html).toContain("Works here, thanks @opus-coder")
     expect(html).not.toContain("gentle-otter")
     expect(html).not.toContain("Show the reply")
+  })
+})
+
+describe("an ask shows your last answer on the same work (T507)", () => {
+  const open = (over: Partial<QuestionAsk> = {}): QuestionAsk => ({ ...choice(undefined), id: "90", at: NOW + 120_000, holds: [7], ...over })
+  const done = (id: string, text: string, at: number, over: Partial<QuestionAsk> = {}): QuestionAsk => ({
+    ...choice(undefined),
+    id,
+    options: [wrote("A: full name with a count"), wrote("B: icon only")],
+    holds: [7],
+    answer: { text: wrote(text), by: "jow", at, shownIn: "card" },
+    ...over,
+  })
+  const withAsks = (...asks: QuestionAsk[]): Channel => ({ ...channel, asks }) as Channel
+
+  test("the latest answer you gave on a task this ask holds, as a choice or as words", () => {
+    const ch = withAsks(done("60", "A: full name with a count", NOW - 86_400_000), done("70", "B: icon only", NOW), done("80", "No, keep it", NOW - 1000, { holds: [9] }))
+    expect(earlierAnswer(ch, open())).toEqual({ chose: true, text: "B: icon only", at: NOW })
+    expect(earlierAnswer(withAsks(done("60", "Keep the name, drop the count", NOW)), open())).toEqual({ chose: false, text: "Keep the name, drop the count", at: NOW })
+    expect(earlierAnswer(withAsks(done("60", "A: full name with a count", NOW, { holds: [], task: 7 })), open({ holds: [], task: 7 }))?.chose).toBe(true)
+  })
+
+  test("nothing from someone else, another task, a browser hand-off, or the ask itself", () => {
+    const other = done("60", "A: full name with a count", NOW)
+    expect(earlierAnswer(withAsks({ ...other, answer: { ...other.answer!, by: "maya" } }), open())).toBeNull()
+    expect(earlierAnswer(withAsks(done("60", "A", NOW, { holds: [9] })), open())).toBeNull()
+    expect(earlierAnswer(withAsks(done("60", "done", NOW, { handoff: { url: "https://x", label: "x", expiresAt: NOW } })), open())).toBeNull()
+    expect(earlierAnswer(withAsks(done("90", "A", NOW)), open())).toBeNull()
+    expect(earlierAnswer(withAsks(done("60", "A", NOW)), open({ holds: [] }))).toBeNull()
+  })
+
+  test("a long answer is one line, cut with an ellipsis", () => {
+    const long = "Keep the channel's full name on the tab with its unread count, and move the icon to the left of the name so it lines up"
+    const got = earlierAnswer(withAsks(done("60", long, NOW)), open())!
+    expect(got.text.length).toBe(80)
+    expect(got.text.endsWith("…")).toBe(true)
+  })
+
+  test("the open card says it above its options; an answered card doesn't", () => {
+    const ch = withAsks(done("60", "A: full name with a count", NOW - 3 * 86_400_000))
+    const html = render(open(), ch)
+    expect(html).toContain('<p class="ask-earlier">You chose “A: full name with a count” on this before · ')
+    expect(html.indexOf("ask-earlier")).toBeLessThan(html.indexOf("ask-options"))
+    expect(render(open({ answer: { text: wrote("A: Deploy now"), by: "jow", at: NOW + 200_000, shownIn: "card" } }), ch)).not.toContain("ask-earlier")
+    expect(render(open())).not.toContain("ask-earlier")
   })
 })

@@ -84,6 +84,8 @@ export default {
   "chat.question.card.replied": "{who} が返信しました {time}",
   "chat.question.card.show.reply": "返信を表示",
   "chat.question.card.chose": "{who} が {choice} を選びました {time}",
+  "chat.question.card.earlier.chose": "以前これに「{text}」を選びました · {when}",
+  "chat.question.card.earlier.answered": "以前これに「{text}」と答えました · {when}",
   "chat.question.card.done": "完了",
   "chat.question.card.couldnt": "できなかった",
   "chat.question.card.something.else": "その他…",
