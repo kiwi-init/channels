@@ -194,6 +194,12 @@ export const specsLook = (channel: Channel, on: number | null): Partial<Lookup> 
     const spec = specAt(channel, url)
     return spec ? dragOut({ page: { at: "spec", ask: spec.ask } }, wordsPlain(spec.title, channel.nicknames)) : undefined
   },
+  fold: (url, open) => {
+    const spec = specAt(channel, url)
+    if (!spec) return undefined
+    const count = tasksOf(channel, spec).filter((task) => !task.archived && !task.cancelled && task.status !== "done").length
+    return t(open ? "specs.view.hide.tasks" : "specs.view.show.tasks", { count, title: wordsPlain(spec.title, channel.nicknames) })
+  },
 })
 
 function SpecList({ channel }: { channel: Channel }) {

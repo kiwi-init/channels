@@ -217,5 +217,8 @@ describe("the Specs list is a markdown page, nothing lost (T4532)", () => {
     expect(look.lead?.("kiwi-page:spec:10:inside")).toBeDefined()
     expect(look.lead?.("kiwi-task:7")).toBeUndefined()
     expect(look.drag?.("kiwi-page:spec:10:inside")).toBeDefined()
+    expect(look.fold?.("kiwi-page:spec:10:inside", false)).toMatch(/^Show the \d+ open tasks? of \S/)
+    expect(look.fold?.("kiwi-page:spec:10:inside", true)).toMatch(/^Hide the \d+ open tasks? of \S/)
+    expect(look.fold?.("kiwi-task:7", false)).toBeUndefined()
   })
 })

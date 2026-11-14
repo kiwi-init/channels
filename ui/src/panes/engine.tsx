@@ -22,6 +22,7 @@ export interface Lookup {
   lead?: (url: string) => ReactNode | undefined
   trail?: (url: string) => ReactNode | undefined
   drag?: (url: string) => { onPointerDown: (e: PointerEvent) => void } | undefined
+  fold?: (url: string, open: boolean) => string | undefined
 }
 
 export type Stranger = Pick<Person, "name" | "kind" | "harness" | "presence">
@@ -285,10 +286,10 @@ function Trail({ url, find }: { url: string; find: Lookup }) {
   return person ? <Avatar person={person} size="sm" /> : null
 }
 
-function Unfold({ first, label, meta, children }: { first: boolean; label: string; meta: ReactNode; children: (open: boolean, toggle: ReactNode) => ReactNode }) {
+function Unfold({ first, label, meta, children }: { first: boolean; label: (open: boolean) => string; meta: ReactNode; children: (open: boolean, toggle: ReactNode) => ReactNode }) {
   const [open, setOpen] = useState(first)
   const toggle = (
-    <button type="button" className="pg-meta pg-unfold num" aria-expanded={open} aria-label={label} onClick={() => setOpen(!open)}>
+    <button type="button" className="pg-meta pg-unfold num" aria-expanded={open} aria-label={label(open)} onClick={() => setOpen(!open)}>
       {meta}
       <Icon name="down" size={12} />
     </button>
@@ -468,7 +469,7 @@ export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) =
     )
     if (fold.first === undefined || below.length === 0) return draw(true, null)
     return (
-      <Unfold key={key} first={fold.first} label={`${textOf({ type: "Paragraph", children: more }).trim()} · ${label}`} meta={meta}>
+      <Unfold key={key} first={fold.first} label={(shown) => find.fold?.(url, shown) ?? `${textOf({ type: "Paragraph", children: more }).trim()} · ${label}`} meta={meta}>
         {draw}
       </Unfold>
     )
