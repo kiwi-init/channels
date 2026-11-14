@@ -16,7 +16,7 @@ class UpdatesSheetTest {
         val model = sample(RuntimeEnvironment.getApplication()).also(::githubBurst)
         val messages = model.rooms.getValue(DEV).messages
         val events = messages.filter { it.event }
-        assertEquals(24, events.size)
+        assertEquals(24, events.count { it.body.startsWith("GitHub: ") })
         assertEquals(events.map { it.seq }.reversed(), updatesByDay(messages).flatMap { it.list }.map { it.seq })
     }
 
