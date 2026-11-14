@@ -166,6 +166,42 @@ describe("Deep Code's own screens, as deepcode-cli 0.6.0 draws them: only a reco
   });
 });
 
+const FOOTER_060 = /^enter send · .* \/ rich text · \/ commands · ctrl\+d exit$/m;
+const FOOTER_070 = "enter send · shift+enter newline · @ files · ctrl+v image · / commands · ctrl+d exit";
+const on070 = (name: string): string => deepcode(name).replace(FOOTER_060, FOOTER_070);
+const state070 = (name: string) => promptState(on070(name), on070(name), "deepcode");
+
+describe("Deep Code's screens as deepcode-cli 0.7.0 draws them, whose footer drops '/ rich text': the prompt's structure is what's recognized", () => {
+  test("its empty prompt, captured from a 0.7.0 pane, is ready", () => {
+    expect(deepcodeState("0.7.0-idle")).toBe("ready");
+  });
+
+  test("the 0.6.0 empty prompts with the 0.7.0 footer are ready too", () => {
+    for (const name of ["idle", "interrupted", "custom-status", "draft", "draft-multiline", "waiting"]) expect(on070(name)).not.toBe(deepcode(name));
+    for (const name of ["idle", "interrupted", "custom-status"]) expect(state070(name)).toBe("ready");
+  });
+
+  test("busy, asking and draft screens with the 0.7.0 footer are refused as on 0.6.0", () => {
+    for (const name of ["thinking", "process", "processing-quiet", "live-command", "live-thinking", "status-message"]) expect(state070(name)).toBe("busy");
+    for (const name of ["permission", "question", "waiting"]) expect(state070(name)).toBe("asking");
+    for (const name of ["draft", "draft-multiline"]) expect(state070(name)).toBe("draft");
+  });
+
+  test("a still-changing screen, an unknown status and a screen that isn't Deep Code's are not ready", () => {
+    expect(promptState(on070("thinking"), on070("idle"), "deepcode")).toBe("moving");
+    const unknownStatus = on070("idle").replace("status: completed", "status: compacting");
+    expect(promptState(unknownStatus, unknownStatus, "deepcode")).toBe("unknown");
+    expect(state070("unrecognized")).toBe("unknown");
+  });
+
+  test("the footer must still start with 'enter send' and end with 'ctrl+d exit'", () => {
+    for (const footer of ["shift+enter newline · @ files · / commands · ctrl+d exit", "enter send · shift+enter newline · @ files · / commands", "enter send · ctrl+d exit"]) {
+      const screen = deepcode("idle").replace(FOOTER_060, footer);
+      expect(promptState(screen, screen, "deepcode")).toBe("unknown");
+    }
+  });
+});
+
 describe("typing a wake into a Deep Code pane", () => {
   test("an empty prompt gets the prompt pasted and Enter pressed", async () => {
     const pane = fakePane([deepcode("idle"), deepcode("idle")]);
