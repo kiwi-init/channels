@@ -285,7 +285,7 @@ async function details(page: Page, cdp: CDPSession, opening: boolean): Promise<{
 async function openTask(page: Page, id: number, marker: string): Promise<number> {
   return page.evaluate(
     async ([task, text]) => {
-      const row = [...document.querySelectorAll<HTMLElement>("main .board-row")].find((r) => r.querySelector(".board-meta")?.textContent?.startsWith(`T${task} `));
+      const row = document.querySelector<HTMLElement>(`main a.pg-main[href="kiwi-task:${task}"]`);
       if (!row) throw new Error(`no row for T${task} on the board`);
       const t0 = performance.now();
       row.click();

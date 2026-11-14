@@ -28,7 +28,7 @@ const SHOTS: Record<string, Screen> = {
   compact: { ready: FEED, mentions: true },
   "step-card": { ready: ".feed .ask", mentions: true },
   "handoff-card": { ready: ".feed .ask", mentions: true },
-  tasks: { ready: ".board" },
+  tasks: { ready: ".page.is-specs" },
   task: { ready: ".task-page .pg-title" },
   "task-working": { ready: ".task-page .pg-title", mentions: true },
   "task-review": { ready: ".task-page .pg-title" },
