@@ -30,6 +30,24 @@ const server = Bun.serve({
 
 async function moves(browser: Browser, shot: string, width: number, height: number): Promise<string | null> {
   const page = await browser.newPage({ viewport: { width, height } });
+  await page.addInitScript(() => {
+    const log: string[] = [];
+    Reflect.set(window, "__still", log);
+    const t0 = performance.now();
+    const at = () => Math.round(performance.now() - t0);
+    let watched: Element | null = null;
+    const sizes = () => [...document.querySelectorAll<HTMLElement>(".feed-list > [data-seq]")].slice(-5).map((r) => `${r.dataset.seq}=${r.offsetHeight}`).join(",");
+    const hook = () => {
+      const f = document.querySelector<HTMLElement>(".feed");
+      const l = f?.querySelector(".feed-list");
+      if (!f || !l || l === watched) return;
+      watched = l;
+      new ResizeObserver(() => log.push(`${at()} resize ${Math.round(f.scrollTop)}/${f.scrollHeight} plain=${f.querySelectorAll(".md-plain").length} ${sizes()}`)).observe(l);
+      f.addEventListener("scroll", () => log.push(`${at()} scroll ${Math.round(f.scrollTop)}/${f.scrollHeight}`), { passive: true });
+      for (const kind of ["wheel", "pointerdown", "keydown"]) f.addEventListener(kind, () => log.push(`${at()} ${kind}`), { passive: true });
+    };
+    new MutationObserver(hook).observe(document, { childList: true, subtree: true });
+  });
   try {
     await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
     await page.waitForSelector(".feed", { timeout: 15_000 });
@@ -62,7 +80,7 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
         }),
       FRAMES,
     );
-    return why ? `${why} | settle: ${before} -> ${after}` : null;
+    return why ? `${why} | settle: ${before} -> ${after}\n${(await page.evaluate(() => (Reflect.get(window, "__still") as string[]).join("\n"))).split("\n").slice(-30).join("\n")}` : null;
   } finally {
     await page.close();
   }
