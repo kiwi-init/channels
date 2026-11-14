@@ -166,6 +166,7 @@ async function plainFirst() {
     await settle(page, 300);
   }
   await settle(page, 700);
+  await page.waitForFunction(() => !document.querySelector(".feed-list .md-plain"), undefined, { timeout: 15_000 });
   const full = await heights(page);
   await markdownLate(page);
   await page.reload();
