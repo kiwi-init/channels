@@ -3,7 +3,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import type { MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
 import { normalizeMarkdownStyle } from "react-native-enriched-markdown/lib/module/normalizeMarkdownStyle.web.js"
 import { ENRM_TEXT_CLASS } from "react-native-enriched-markdown/lib/module/web/globalStyles.js"
-import { parseMarkdown } from "react-native-enriched-markdown/lib/module/web/parseMarkdown.js"
+import { isParserReady, parseMarkdown, parseMarkdownSync } from "react-native-enriched-markdown/lib/module/web/parseMarkdown.js"
 import { RenderNode } from "react-native-enriched-markdown/lib/module/web/renderers/index.js"
 import { buildStyles, tableBodyRowStyle, zeroTrailingMargins } from "react-native-enriched-markdown/lib/module/web/styles.js"
 import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown/lib/module/web/utils.js"
@@ -201,6 +201,15 @@ export function blockGaps(markdown: string): string {
   return out.join("\n")
 }
 
+function kept(key: string, ast: ASTNode, at?: number): ASTNode {
+  indexTaskItems(ast)
+  markInlineImages(ast)
+  zonedLinks(ast, at)
+  safeLinks(ast)
+  keepParsed(key, ast)
+  return ast
+}
+
 function parse(markdown: string, at?: number): Promise<ASTNode> {
   const key = parseKey(markdown, at)
   const done = parsedFor(key)
@@ -208,17 +217,22 @@ function parse(markdown: string, at?: number): Promise<ASTNode> {
   const pending = parsing.get(key)
   if (pending) return pending
   const next = parseMarkdown(blockGaps(markdown), FLAGS)
-    .then((ast) => {
-      indexTaskItems(ast)
-      markInlineImages(ast)
-      zonedLinks(ast, at)
-      safeLinks(ast)
-      keepParsed(key, ast)
-      return ast
-    })
+    .then((ast) => kept(key, ast, at))
     .finally(() => parsing.delete(key))
   parsing.set(key, next)
   return next
+}
+
+function parsedNow(markdown: string, at?: number): ASTNode | undefined {
+  const key = parseKey(markdown, at)
+  const done = parsedFor(key)
+  if (done || !isParserReady()) return done
+  try {
+    return kept(key, parseMarkdownSync(blockGaps(markdown), FLAGS), at)
+  } catch {
+    // The async parse in Markdown's effect runs the same text and keeps the last drawn tree if it fails too.
+    return undefined
+  }
 }
 
 export function warm<T>(texts: readonly T[], source: (text: T) => { markdown: string; at: number }): () => void {
@@ -345,10 +359,10 @@ export default function Markdown({ markdown, at, onMention, onTask, onMessage, o
   const box = useRef<HTMLDivElement>(null)
   const source = useMemo(() => parseKey(markdown, at), [markdown, at])
   const [got, setGot] = useState<{ markdown: string; ast: ASTNode } | null>(() => {
-    const cached = parsedFor(source)
-    return cached ? { markdown: source, ast: cached } : null
+    const now = parsedNow(markdown, at)
+    return now ? { markdown: source, ast: now } : null
   })
-  const ast = got?.markdown === source ? got.ast : (parsedFor(source) ?? got?.ast ?? null)
+  const ast = got?.markdown === source ? got.ast : (parsedNow(markdown, at) ?? got?.ast ?? null)
 
   useEffect(() => {
     let live = true

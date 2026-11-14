@@ -365,3 +365,16 @@ describe("a warmed message is parsed under the key its render looks up (T7429)",
     expect(await rendered(bare, Date.UTC(2026, 10, 13, 2, 0))).toContain('href="kiwi-utc:2026-11-13T09:30:00Z"')
   })
 })
+
+describe("text nobody parsed yet draws in the render that brings it (#2423)", () => {
+  test("once the parser is loaded, a new text is drawn on its first render, so a sheet never shows an older tree or an empty box", async () => {
+    await parseMarkdown("load the parser", FLAGS)
+    const url = `kiwi-do:${crypto.randomUUID()}-0`
+    const markdown = `Mute here [On](${url})`
+    expect(parsedFor(markdown)).toBeUndefined()
+    const html = renderToStaticMarkup(createElement(Markdown, { markdown, onMention: quiet, onTask: quiet, onMessage: quiet, onImage: quiet, onShown: quiet }))
+    expect(html).toContain("Mute here")
+    expect(html).toContain(`href="${url}"`)
+    expect(parsedFor(markdown)).toBeDefined()
+  })
+})
