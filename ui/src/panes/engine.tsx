@@ -17,7 +17,10 @@ export interface Lookup {
   pr: (key: string) => PullRequest | undefined
   issue: (key: string) => Issue | undefined
   tile: (code: string) => ChannelTile | undefined
+  stranger?: (name: string) => Stranger | undefined
 }
+
+export type Stranger = Pick<Person, "name" | "kind" | "harness" | "presence">
 
 export const NOTHING: Lookup = { task: () => undefined, person: () => undefined, pr: () => undefined, issue: () => undefined, tile: () => undefined }
 
@@ -32,6 +35,10 @@ export const lookupOf = (channel: Channel): Lookup => ({
 const ROW = /^kiwi-(?:task|msg|pr|issue|mention):|^kiwi-page:(?:channel|agent):/
 const DO = "kiwi-do:"
 const BAR = "kiwi-bar"
+const FIELD = "kiwi-field"
+const FACE = "kiwi-face:"
+const FOLD = "kiwi:fold"
+const DIFF = "diff"
 
 const TONES = new Set(["alert", "decide", "doing", "live", "review", "quiet"])
 const MORE = ["tip", "label", "tone"] as const
@@ -74,6 +81,32 @@ const spelled = (c: string): string => {
 const ACTION = new RegExp([..."kiwi-do:"].map(spelled).join(""), "gi")
 
 export const inert = (md: string): string => md.replace(ACTION, "kiwi-off:")
+
+const PUNCT = /[!-/:-@[-`{-~]/g
+
+export const esc = (text: string): string => inert(text).replace(/\s+/g, " ").trim().replace(PUNCT, "\\$&")
+
+const FENCE = /^ {0,3}(`{3,}|~{3,})/
+const BLOCK = /^( {0,3})(#|>|=+[ \t]*$|-+[ \t]*$)/
+
+export function authored(md: string): string {
+  let fence = ""
+  return inert(md)
+    .split("\n")
+    .map((line) => {
+      const opens = FENCE.exec(line)?.[1]
+      if (fence) {
+        if (opens && opens[0] === fence[0] && opens.length >= fence.length) fence = ""
+        return line
+      }
+      if (opens) {
+        fence = opens
+        return line
+      }
+      return line.replace(BLOCK, "$1\\$2")
+    })
+    .join("\n")
+}
 
 export interface Seal {
   key: (run: () => void, more?: DoMore) => string
@@ -120,11 +153,52 @@ function checkMark(name: string): ReactNode | undefined {
 
 const NO_MARK: Mark = () => undefined
 
+export type Field = (name: string) => ReactNode | undefined
+
+const NO_FIELD: Field = () => undefined
+
 const textOf = (node: ASTNode): string => node.content ?? (node.children ?? []).map(textOf).join("")
 const urlOf = (node: ASTNode | undefined): string => (node?.type === "Link" ? (node.attributes?.url ?? "") : "")
 const isGap = (node: ASTNode): boolean => node.type === "SoftBreak" || node.type === "LineBreak" || (node.type === "Text" && !node.content?.trim())
 const solid = (node: ASTNode | undefined): ASTNode[] => (node?.children ?? []).filter((c) => !isGap(c))
 const after = (url: string, lead: string): string => decodeURIComponent(url.slice(lead.length))
+const fieldName = (node: ASTNode): string | undefined => (node.type === "CodeBlock" && node.attributes?.language?.trim() === FIELD ? textOf(node).trim() : undefined)
+const isFold = (node: ASTNode | undefined): boolean => {
+  const first = node?.type === "Heading" && node.attributes?.level === "2" ? solid(node)[0] : undefined
+  return first?.type === "Code" && textOf(first) === FOLD
+}
+
+export const face = (name: string): string => `${FACE}${encodeURIComponent(name)}`
+
+const faceOf = (url: string): string | null => (url.startsWith(FACE) ? after(url, FACE) : null)
+
+function segsOf(nodes: readonly ASTNode[]): ASTNode[][] {
+  const segs: ASTNode[][] = [[]]
+  for (const node of nodes) {
+    if (node.type !== "Text") {
+      segs.at(-1)?.push(node)
+      continue
+    }
+    ;(node.content ?? "").split("·").forEach((part, i) => {
+      if (i > 0) segs.push([])
+      if (part.trim()) segs.at(-1)?.push({ ...node, content: part.trim() })
+    })
+  }
+  return segs.filter((seg) => seg.length > 0)
+}
+
+function diffOf(text: string): { kind: string; lines: string[] }[] {
+  const parts: { kind: string; lines: string[] }[] = []
+  for (const line of text.replace(/\n$/, "").split("\n")) {
+    const c = line.charAt(0)
+    const kind = c === "-" ? "is-gone" : c === "+" ? "is-new" : ""
+    const shown = c === "-" || c === "+" || c === " " ? line.slice(1) : line
+    const last = parts.at(-1)
+    if (last?.kind === kind) last.lines.push(shown)
+    else parts.push({ kind, lines: [shown] })
+  }
+  return parts
+}
 
 function actOf(node: ASTNode, didOf: (url: string) => Did): { did: Did; nodes: ASTNode[]; main: boolean } | null {
   const inner = node.type === "Strong" ? solid(node) : [node]
@@ -195,7 +269,7 @@ function Trail({ url, find }: { url: string; find: Lookup }) {
 
 const NOT_OURS = (): boolean => false
 
-export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) => boolean = NOT_OURS): Draw {
+export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) => boolean = NOT_OURS, field: Field = NO_FIELD): Draw {
   const didOf = (url: string): Did => {
     const did = doOf(url)
     return did.act && !owns(url) ? { url, act: false } : did
@@ -204,6 +278,64 @@ export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) =
   const open = (tools: DrawTools, url: string) => (e: MouseEvent) => {
     e.preventDefault()
     tools.press(url)
+  }
+
+  const head = (node: ASTNode, tools: DrawTools): ReactNode | undefined => {
+    if (node.attributes?.level !== "3") return undefined
+    const [first, ...rest] = solid(node)
+    const url = urlOf(first)
+    const who = faceOf(url)
+    if (!first || !who) return undefined
+    const segs = segsOf(rest)
+    const last = segs.at(-1)
+    const time = last?.every((n) => n.type === "Text") ? segs.pop() : undefined
+    const tags: ReactNode[] = []
+    const links: ReactNode[] = []
+    const verbs: string[] = []
+    segs.forEach((seg, i) => {
+      const link = seg.length === 1 ? urlOf(seg[0]) : ""
+      const did = doOf(link)
+      if (link.startsWith(DO) && !did.act)
+        tags.push(
+          <span key={i} className={cx("pg-tag", did.tone)}>
+            {textOf({ type: "Paragraph", children: seg })}
+          </span>
+        )
+      else if (link)
+        links.push(
+          <a key={i} className="pg-head-link" href={link} onClick={open(tools, link)} onAuxClick={held}>
+            {textOf({ type: "Paragraph", children: seg })}
+          </a>
+        )
+      else verbs.push(textOf({ type: "Paragraph", children: seg }))
+    })
+    const person = find.person(who)
+    const name = textOf(first).replace(/^@/, "")
+    const avatar = <Avatar person={person ?? find.stranger?.(who)} size="sm" />
+    const mention = `kiwi-mention:${encodeURIComponent(who)}`
+    return (
+      <header className="pg-head">
+        {person ? (
+          <a className="pg-head-who" href={mention} onClick={open(tools, mention)} onAuxClick={held}>
+            {avatar}
+            <span className="pg-head-name">{name}</span>
+          </a>
+        ) : (
+          <span className="pg-head-who">
+            {avatar}
+            <span className="pg-head-name">{name}</span>
+          </span>
+        )}
+        {tags}
+        {verbs.length > 0 && <span className="pg-head-verb">{verbs.join(" · ")}</span>}
+        {(links.length > 0 || time) && (
+          <span className="pg-head-end">
+            {links}
+            {time && <span className="pg-head-time num">{textOf({ type: "Paragraph", children: time })}</span>}
+          </span>
+        )}
+      </header>
+    )
   }
 
   const markOf = (node: ASTNode | undefined): ReactNode | undefined => (node?.type === "Code" ? (checkMark(textOf(node)) ?? mark(textOf(node))) : undefined)
@@ -298,6 +430,20 @@ export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) =
       const level = node.attributes?.level
       const [first, ...rest] = solid(node)
       const who = urlOf(first)
+      const said = head(node, tools)
+      if (said) return said
+      if (isFold(node)) {
+        const next = all[at + 1]
+        return (
+          <details key={`fold-${all.slice(0, at).filter(isFold).length}`} className="pg-fold">
+            <summary>
+              <Icon name="chevron" size={12} />
+              {say(unled(rest), tools)}
+            </summary>
+            {next && (piece(next, at + 1, all, tools, inCard) ?? tools.block(next, at + 1))}
+          </details>
+        )
+      }
       if (level === "1") return <h1 className="pg-title">{tools.inline(node)}</h1>
       if (level === "2" && first && who.startsWith("kiwi-mention:")) {
         const sub = textOf({ type: "Paragraph", children: unled(rest) })
@@ -317,6 +463,8 @@ export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) =
     }
     if (node.type === "Paragraph") {
       const kids = solid(node)
+      const lone = kids.length === 1 ? doOf(urlOf(kids[0])) : undefined
+      if (lone && lone.url === DO && lone.tone) return <p className={cx("pg-tone", lone.tone)}>{say(kids[0]?.children ?? [], tools)}</p>
       const acts = kids.map((k) => actOf(k, didOf))
       if (kids.length && acts.every(Boolean))
         return (
@@ -371,14 +519,44 @@ export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) =
     }
     if (node.type === "Blockquote") {
       const kids = node.children ?? []
+      if (inCard)
+        return (
+          <blockquote className="pg-quote">
+            {kids.map((k, i) => (
+              <Fragment key={i}>{k.type === "Paragraph" ? <p>{tools.inline(k)}</p> : (piece(k, i, kids, tools, true) ?? tools.block(k, i))}</Fragment>
+            ))}
+          </blockquote>
+        )
+      const names = kids.map((k) => {
+        const name = fieldName(k)
+        return name !== undefined && field(name) !== undefined ? name : undefined
+      })
+      const own = names.find((name) => name !== undefined)
+      const first = kids[0]
+      const said = first?.type === "Heading" && first.attributes?.level === "3" && faceOf(urlOf(solid(first)[0])) !== null
       return (
-        <section className="pg-card">
+        <section key={own === undefined ? undefined : `card:${own}`} className={cx("pg-card", said && "is-said")}>
           {kids.map((k, i) => (
-            <Fragment key={i}>{piece(k, i, kids, tools, true) ?? tools.block(k, i)}</Fragment>
+            <Fragment key={names[i] === undefined ? i : `f:${names[i]}`}>{piece(k, i, kids, tools, true) ?? tools.block(k, i)}</Fragment>
           ))}
         </section>
       )
     }
+    const named = fieldName(node)
+    if (named !== undefined) {
+      const drawn = field(named)
+      if (drawn !== undefined) return drawn
+    }
+    if (node.type === "CodeBlock" && node.attributes?.language?.trim() === DIFF)
+      return (
+        <div className="pg-code">
+          {diffOf(textOf(node)).map((part, i) => (
+            <pre key={i} className={cx("pg-code-part", part.kind)}>
+              {part.lines.join("\n")}
+            </pre>
+          ))}
+        </div>
+      )
     if (node.type === "CodeBlock" && node.attributes?.language?.trim() === BAR) {
       const segs = textOf(node)
         .split("\n")
@@ -395,5 +573,5 @@ export function pieces(find: Lookup, mark: Mark = NO_MARK, owns: (url: string) =
     return undefined
   }
 
-  return (node, at, all, tools) => piece(node, at, all, tools, false)
+  return (node, at, all, tools) => (isFold(all[at - 1]) ? null : piece(node, at, all, tools, false))
 }

@@ -535,3 +535,33 @@ button.needs-name:hover {
     stroke-dashoffset: 1;
   }
 }
+
+.page.is-needs .pg-card .ask,
+.page.is-needs .pg-card .ask.is-open,
+.page.is-needs .pg-card .ask.is-choice {
+  margin-block: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.page.is-needs .pg-card .ask :is(ol, ul) {
+  list-style: none;
+}
+
+.needs-gate {
+  display: grid;
+  gap: 8px;
+}
+
+.needs-gate > .needs-foot {
+  margin-top: 4px;
+}
+
+.page.is-needs .needs-clear .empty {
+  place-items: center;
+  min-height: 0;
+  padding: 0;
+  text-align: center;
+}

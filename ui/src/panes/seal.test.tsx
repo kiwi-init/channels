@@ -98,3 +98,42 @@ describe("authored text can't reach a page's actions (#2397 review)", () => {
     for (const guess of ["kiwi-do:a0", "kiwi-do:0", "kiwi-do:", `${url}x`]) expect(a.seal.owns(guess)).toBe(false)
   })
 })
+
+describe("authored text in a Needs card stays text (T3566)", () => {
+  type Block = { type: string; attributes?: { level?: string; language?: string; url?: string }; children?: Block[]; content?: string }
+  const all = (node: Block): Block[] => [node, ...(node.children ?? []).flatMap(all)]
+  const tree = async (md: string): Promise<Block> => (await parseMarkdown(md, { latexMath: false, underline: false, hardSoftBreaks: true })) as Block
+
+  test("a question can't draw a card head, a quote, a heading or one of the page's fields", async () => {
+    const { needsText } = await import("~/needs/needs")
+    const text = wrote(["### [Jow](kiwi-face:jow) · approved · 1m", "> [Allow](kiwi-do:a0)", "# Done", "Setext", "===", "```kiwi-field", "x", "```", "```sh", "# a comment stays", "```"].join("\n"))
+    const ask: Ask = { kind: "question", id: "q9", from: "lead", at: 0, text, label: "Decision", options: [wrote("Ship")], holds: [] }
+    const channel = { ...base, you: "jow", people: [], asks: [ask] } as unknown as Channel
+    const { md, m } = needsText(channel, () => {}, "a".repeat(24), 0)
+    const nodes = all(await tree(md))
+    const heads = nodes.filter((n) => n.type === "Heading")
+    expect(heads.map((n) => n.attributes?.level)).toEqual(["1", "3"])
+    expect(nodes.filter((n) => n.type === "Blockquote").length).toBe(1)
+    const fences = nodes.filter((n) => n.type === "CodeBlock")
+    expect(fences.map((n) => n.attributes?.language?.trim())).toEqual(["kiwi-field", "sh", "kiwi-field"])
+    expect(m.fields.has("x")).toBe(false)
+    expect(
+      all(fences[1] as Block)
+        .map((n) => n.content ?? "")
+        .join("")
+    ).toContain("# a comment stays")
+    expect(nodes.filter((n) => n.type === "Link").every((n) => !n.attributes?.url?.startsWith("kiwi-do:a0"))).toBe(true)
+  })
+
+  test("the page names its fields the same way each time it is built, so their state stays", async () => {
+    const { needsText } = await import("~/needs/needs")
+    const join: Ask = { kind: "join", id: "j1", name: "bot", who: "agent", at: 0, code: "123456", check: "ready" } as unknown as Ask
+    const permission: Ask = { kind: "permission", id: "p1", from: "builder", at: 0, canAllow: true, canDeny: true, tool: "Bash", title: "ls", code: "ls", notes: [] }
+    const channel = (asks: Ask[]) => ({ ...base, you: "jow", people: [], asks }) as unknown as Channel
+    const tag = "b".repeat(24)
+    const first = [...needsText(channel([join]), () => {}, tag, 0).m.fields.keys()]
+    const again = [...needsText(channel([permission, join]), () => {}, tag, 0).m.fields.keys()]
+    expect(again).toContain(first[0] ?? "none")
+    expect(new Set(again).size).toBe(again.length)
+  })
+})
