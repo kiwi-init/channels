@@ -47,6 +47,7 @@ const PREFETCH = 120
 const HOLD = 240
 const DRY_PAGES = 3
 const REACH_WAIT_MS = 600
+const QUIET_MS = 120
 
 interface Span {
   top: number | null
@@ -440,6 +441,9 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   }, [last, list, channel.you, toBottom, settle, stuck, live, content, doc, scroller])
 
   const here = spotKey(channel.code, where)
+  const movedAt = useRef(Number.NEGATIVE_INFINITY)
+  const earlierDue = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(earlierDue.current), [])
   const onScroll = () => {
     remember()
     const box = scroller.current
@@ -461,6 +465,12 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
     const cutBelow = (to: number) => to >= end || (at(to) ?? 0) - top > box.clientHeight * 2
     const cutAbove = (from: number) => from <= start || (at(from) ?? Infinity) - (content.current?.getBoundingClientRect().top ?? top) < below - box.clientHeight
     if (start > 0 && box.scrollTop < box.clientHeight * 3 && (!stuck.current || box.scrollHeight < box.clientHeight * 2)) {
+      const wait = movedAt.current + QUIET_MS - performance.now()
+      if (wait > 0) {
+        window.clearTimeout(earlierDue.current)
+        earlierDue.current = window.setTimeout(() => scrolled.current(), wait)
+        return
+      }
       const from = Math.max(0, start - MORE)
       const to = Math.min(end, from + CAP)
       const next = spanOf(list, from, cutBelow(to) ? to : end)
@@ -596,7 +606,14 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
           <QuotePick root={content} onQuote={quote} />
         </Suspense>
       )}
-      <div className="feed" ref={scroller} onScroll={onScroll}>
+      <div
+        className="feed"
+        ref={scroller}
+        onScroll={() => {
+          movedAt.current = performance.now()
+          onScroll()
+        }}
+      >
         <div className="feed-list" ref={content}>
           {list.length === 0 && !compact
             ? channel.loading
