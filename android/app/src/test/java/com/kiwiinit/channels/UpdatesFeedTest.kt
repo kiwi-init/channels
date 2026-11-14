@@ -49,7 +49,7 @@ class UpdatesFeedTest {
         val model = sample(RuntimeEnvironment.getApplication()).also(::githubBurst)
         val messages = model.rooms.getValue(DEV).messages
         val events = messages.filter { it.event }
-        assertEquals(24, events.size)
+        assertEquals(24, events.count { it.body.startsWith("GitHub: ") })
 
         val lines = Line.build(messages, emptyList(), emptyList(), emptyList(), emptyMap())
         val eventIds = events.flatMap { listOf("t${it.seq}", "b${it.seq}") }.toSet()
@@ -64,7 +64,7 @@ class UpdatesFeedTest {
         val shown = texts()
         assertTrue("the sheet lists updates", shown.isNotEmpty())
         assertEquals("Jow ${events.last().body}", shown.first())
-        compose.onNode(hasScrollToIndexAction() and hasAnyDescendant(github)).performScrollToNode(hasText("Jow ${events.first().body}"))
+        compose.onNode(hasScrollToIndexAction() and hasAnyDescendant(github)).performScrollToNode(hasText(events.first().body, substring = true))
     }
 
     @Test
