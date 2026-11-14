@@ -52,7 +52,7 @@ class UpdatesFeedTest {
         assertEquals(24, events.count { it.body.startsWith("GitHub: ") })
 
         val lines = Line.build(messages, emptyList(), emptyList(), emptyList(), emptyMap())
-        val eventIds = events.flatMap { listOf("t${it.seq}", "b${it.seq}") }.toSet()
+        val eventIds = events.flatMap { listOf("e${it.seq}", "t${it.seq}", "b${it.seq}") }.toSet()
         assertTrue("no feed line comes from an update", lines.none { it.id in eventIds })
         val bubbles = lines.filterIsInstance<Line.Bubble>().map { it.message.body }
         assertEquals(listOf("PR #12 is up for review.", "Merged on green."), bubbles.takeLast(2))
