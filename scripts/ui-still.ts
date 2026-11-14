@@ -15,6 +15,7 @@ const SIZES = [
   [420, 800],
 ] as const;
 const SETTLE_MS = 1500;
+const DRAWN_MS = 15_000;
 const FRAMES = 60;
 
 const server = Bun.serve({
@@ -32,6 +33,12 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
   try {
     await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
     await page.waitForSelector(".feed", { timeout: 15_000 });
+    await page.waitForLoadState("networkidle");
+    await page
+      .waitForFunction(() => !document.querySelector(".feed .md-plain"), undefined, { timeout: DRAWN_MS })
+      .catch(() => {
+        // A row whose markdown never parses keeps its plain text for good; the frames below still say whether the view moves.
+      });
     await page.waitForTimeout(SETTLE_MS);
     return await page.evaluate(
       (frames) =>
