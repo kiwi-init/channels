@@ -30,6 +30,9 @@ const server = Bun.serve({
 
 async function moves(browser: Browser, shot: string, width: number, height: number): Promise<string | null> {
   const page = await browser.newPage({ viewport: { width, height } });
+  const said: string[] = [];
+  page.on("console", (m) => { if (/resize|loop/i.test(m.text())) said.push(`console ${m.type()}: ${m.text()}`); });
+  page.on("pageerror", (e) => said.push(`pageerror: ${e.message}`));
   await page.addInitScript(() => {
     const log: string[] = [];
     Reflect.set(window, "__still", log);
@@ -47,6 +50,13 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
       for (const kind of ["wheel", "pointerdown", "keydown"]) f.addEventListener(kind, () => log.push(`${at()} ${kind}`), { passive: true });
     };
     new MutationObserver(hook).observe(document, { childList: true, subtree: true });
+    let lastH = -1;
+    setInterval(() => {
+      const f = document.querySelector<HTMLElement>(".feed");
+      const l = f?.querySelector<HTMLElement>(".feed-list");
+      if (f && l && l.offsetHeight !== lastH) { lastH = l.offsetHeight; log.push(`${at()} timer list=${lastH} ${Math.round(f.scrollTop)}/${f.scrollHeight} spacer=${f.querySelector<HTMLElement>(".feed-room")?.offsetHeight}`); }
+    }, 100);
+    window.addEventListener("error", (e) => log.push(`${at()} error ${e.message}`));
   });
   try {
     await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
@@ -80,7 +90,7 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
         }),
       FRAMES,
     );
-    return why ? `${why} | settle: ${before} -> ${after}\n${(await page.evaluate(() => (Reflect.get(window, "__still") as string[]).join("\n"))).split("\n").slice(-30).join("\n")}` : null;
+    return why ? `${why} | settle: ${before} -> ${after}\n${(await page.evaluate(() => (Reflect.get(window, "__still") as string[]).join("\n"))).split("\n").slice(-30).join("\n")}\n${said.join("\n")}` : null;
   } finally {
     await page.close();
   }
