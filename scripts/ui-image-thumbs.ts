@@ -236,14 +236,21 @@ try {
     );
 
     await page.evaluate(() => {
-      const seen = window as unknown as { dragged?: string[]; dropped?: string[] };
+      const seen = window as unknown as { dragged?: string[]; carried?: { types: string[]; uri: string; html: string } };
       seen.dragged = [];
-      seen.dropped = [];
       window.addEventListener("dragstart", (e) => seen.dragged?.push(e.target instanceof HTMLImageElement ? e.target.src : ""), { capture: true });
+      window.addEventListener(
+        "dragstart",
+        (e) => {
+          const dt = e.dataTransfer;
+          if (!dt) return;
+          seen.carried = { types: [...dt.types], uri: dt.getData("text/uri-list"), html: dt.getData("text/html") };
+        },
+        { capture: false },
+      );
       window.addEventListener(
         "drop",
         (e) => {
-          seen.dropped?.push(`${e.dataTransfer?.getData("text/uri-list") ?? ""}\n${e.dataTransfer?.getData("text/html") ?? ""}`);
           e.preventDefault();
           e.stopImmediatePropagation();
         },
@@ -253,16 +260,20 @@ try {
     });
     await button.dragTo(composer(page));
     const drag = await page.evaluate(() => {
-      const seen = window as unknown as { dragged?: string[]; dropped?: string[] };
-      return { dragged: seen.dragged ?? [], dropped: (seen.dropped ?? []).filter((d) => d.trim()) };
+      const seen = window as unknown as { dragged?: string[]; carried?: { types: string[]; uri: string; html: string } };
+      return { dragged: seen.dragged ?? [], carried: seen.carried ?? null };
     });
+    const carried = drag.carried;
+    const carries = `${carried?.uri ?? ""}\n${carried?.html ?? ""}`;
     check(
       "a drag starts on the original and carries it",
       drag.dragged[0] !== original
         ? `it started on ${drag.dragged[0]?.slice(0, 40) || "no image"}…`
-        : drag.dropped.length && !drag.dropped.some((d) => d.includes(original))
-          ? `it carried ${drag.dropped.map((d) => d.slice(0, 40)).join(", ")}…`
-          : null,
+        : !carried || (!carried.types.includes("text/uri-list") && !carried.types.includes("text/html"))
+          ? `the drag carried nothing (types: ${carried ? carried.types.join(", ") || "none" : "no dataTransfer"})`
+          : !carries.includes(original)
+            ? `it carried ${carried.types.join(", ")}, and the original isn't in it (${carries.trim().slice(0, 60)}…)`
+            : null,
     );
 
     let copies = 1;
