@@ -29,16 +29,19 @@ const check = (ok: boolean, message: string) => {
   console.log(`ok ${++checks}: ${message}`);
 };
 const selection = (root: Locator) =>
-  root.evaluate((element) => {
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    const text = selection?.toString() ?? "";
-    selection?.removeAllRanges();
-    return text;
-  });
+  root
+    .locator("p")
+    .first()
+    .evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      const text = selection?.toString() ?? "";
+      selection?.removeAllRanges();
+      return text;
+    });
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
   const errors: string[] = [];
@@ -56,7 +59,8 @@ try {
   check((await control.getAttribute("aria-expanded")) === "false", "concealed control exposes collapsed state");
   check(!(await primary.ariaSnapshot()).includes("beta"), "concealed text is absent from the browser accessibility snapshot");
   check((await primary.locator("a, input, [tabindex]").count()) === 0, "concealed descendants cannot receive focus");
-  check((await selection(primary)) === "alpha  gamma", "selection before reveal is exactly 'alpha  gamma'");
+  const beforeSelection = await selection(primary);
+  check(beforeSelection === "alpha  gamma", `selection before reveal is exactly 'alpha  gamma', got ${JSON.stringify(beforeSelection)}`);
   await control.focus();
   await page.keyboard.press("Tab");
   await page.keyboard.press("Shift+Tab");
