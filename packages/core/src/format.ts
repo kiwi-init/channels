@@ -272,6 +272,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return say("quiet.set", { time: spanText(ev.minutes * 60_000) });
     case "review.reset.set":
       return ev.on ? say("review.reset.on") : say("review.reset.off");
+    case "asks.tap.set":
+      return ev.on ? say("asks.tap.on") : say("asks.tap.off");
     case "review.reset.waive":
       return ev.waived ? say("review.reset.waived", { name: ev.member }) : say("review.reset.unwaived", { name: ev.member });
     case "merges.set":
@@ -748,6 +750,7 @@ export function formatStatus({ alias, check, me, state, online, unread, now = Da
   const charter = charterLines(state);
   if (charter) out.push(charter);
   if (state.repos.length) out.push(`repos: ${state.repos.join(", ")}`);
+  if (state.tapToAnswer) out.push("a person's decision closes only from its card: a reply typed in the chat doesn't answer it, so restate it with kiwi ask-human --re N for one tap");
   if (state.reviewReset) out.push("reviewers start a fresh session after each verdict: a reviewer that gave one reviews nothing more until it rejoins from a new session");
   const ruleWarning = reviewRuleWarning(state, check);
   if (ruleWarning) out.push(ruleWarning);

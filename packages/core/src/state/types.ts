@@ -300,6 +300,7 @@ export interface ChannelState {
   branchPrefix: string | null;
   quietMs: number;
   reviewReset: boolean;
+  tapToAnswer: boolean;
   landing: Landing | null;
   landingSteps: StepSpec[] | null;
   compact: Compact | null;
@@ -389,6 +390,7 @@ export interface FoldBase {
   branchPrefix?: string | null;
   quietMs?: number;
   reviewReset?: true;
+  tapToAnswer?: true;
   landing?: Landing | null;
   landingSteps?: StepSpec[] | null;
   passedAsks?: [number, string][];

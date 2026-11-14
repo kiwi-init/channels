@@ -114,6 +114,8 @@ export const EVENT_WORDS = {
   "quiet.set": "set how long a task may stay quiet to {time}: after that a wake is due, then the lead, then the owner",
   "review.reset.on": "turned on fresh sessions for reviewers: after each verdict, a reviewer joins from a new session before it reviews again",
   "review.reset.off": "turned off fresh sessions for reviewers",
+  "asks.tap.on": "turned on answers by tap: a reply typed in the chat no longer closes a person's decision",
+  "asks.tap.off": "turned off answers by tap: a reply typed in the chat closes a person's decision again",
   "review.reset.waived": "let {name} review from one session: it needn't start a fresh one after each verdict",
   "review.reset.unwaived": "made {name} start a fresh session after each verdict again",
   "merges.people": "set who merges to people (a setting Kiwi has since retired)",

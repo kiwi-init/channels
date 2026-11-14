@@ -353,6 +353,7 @@ function folding(
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
   const closedAsks = new Set<number>();
   const askers = new Map([...(from?.asks ?? []), ...messages].flatMap((a): [number, string][] => ((a.kind === "ask" || a.kind === "blocking") && !a.permission ? [[a.seq, a.from]] : [])));
+  const decisions = new Set([...(from?.asks ?? []), ...messages].flatMap((a): number[] => ((a.kind === "ask" || a.kind === "blocking") && a.esc && !a.permission ? [a.seq] : [])));
   const settledBy = new Map<number, Set<string>>();
   const holding: Message[] = (from?.asks ?? []).filter((a) => !!a.holds?.length && !a.permission);
   const holdsOf = new Map(holding.map((a): [number, number[]] => [a.seq, a.holds ?? []]));
@@ -429,6 +430,7 @@ function folding(
     branchPrefix: from?.branchPrefix ?? null,
     quietMs: from?.quietMs ?? QUIET_MS,
     reviewReset: from?.reviewReset ?? false,
+    tapToAnswer: from?.tapToAnswer ?? false,
     landing: from?.landing ?? null,
     landingSteps: from?.landingSteps ?? null,
     passedAsks,
@@ -438,6 +440,7 @@ function folding(
   const doubled = new Set<number>();
   for (const m of messages) if (m.seq > after) (seen.has(m.seq) ? doubled : seen).add(m.seq);
 
+  const typedOnly = (m: Pick<Message, "pick" | "stepReply">, ask: number): boolean => ctx.tapToAnswer && decisions.has(ask) && !m.pick && !m.stepReply;
   const stillOpen = (m: Message): boolean => {
     if (m.kind !== "ask" && m.kind !== "blocking") return false;
     if (ignored(trust.get(m.seq)) || closedAsks.has(m.seq)) return false;
@@ -615,7 +618,7 @@ function folding(
         const replaced = m.check?.replaces;
         const changed = replaced === undefined ? `pre-ship check #${m.seq} added after the approval` : `pre-ship check #${replaced} replaced by #${m.seq} after the approval`;
         for (const t of reopened) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, changed);
-        answerChecks(checks, m, [...members.values()].find((x) => x.owner)?.name);
+        answerChecks(checks, { ...m, re: (m.re ?? []).filter((r) => !typedOnly(m, r)) }, [...members.values()].find((x) => x.owner)?.name);
         if (m.choices?.length && !m.check && !m.permission)
           questions.set(m.seq, { seq: m.seq, from: m.from, ...(m.esc ? { esc: true as const } : {}), ...(m.to?.length ? { to: m.to } : {}), choices: m.choices });
         for (const r of m.re ?? []) {
@@ -623,7 +626,7 @@ function folding(
           if (answeredCheck?.answer?.seq === m.seq) checkAnswered(tasks, answeredCheck, { seq: m.seq, by: m.from, at });
           const question = questions.get(r);
           const first = question?.choices[0];
-          if (!question || first === undefined || !answersAsk(members, question, m.from)) continue;
+          if (!question || first === undefined || !answersAsk(members, question, m.from) || typedOnly(m, r)) continue;
           const choice = choiceIn(m.body, question.choices);
           if (choice === undefined) continue;
           if (choice !== first) {
@@ -659,7 +662,7 @@ function folding(
         if (!(r < m.seq)) continue;
         let set = answered.get(r);
         if (!set) answered.set(r, (set = new Set()));
-        set.add(m.from);
+        if (!typedOnly(m, r)) set.add(m.from);
         for (const id of holdsOf.get(r) ?? []) tickTask(tasks.get(id), m.seq, at);
         if (m.perm) {
           let replies = permReplies.get(r);
@@ -878,6 +881,7 @@ function folding(
       branchPrefix: ctx.branchPrefix,
       ...(ctx.quietMs !== QUIET_MS ? { quietMs: ctx.quietMs } : {}),
       ...(ctx.reviewReset ? { reviewReset: true as const } : {}),
+      ...(ctx.tapToAnswer ? { tapToAnswer: true as const } : {}),
       landing: ctx.landing,
       ...(ctx.landingSteps ? { landingSteps: ctx.landingSteps } : {}),
       ...(passedAsks.size ? { passedAsks: [...passedAsks] } : {}),
@@ -993,6 +997,7 @@ function folding(
     branchPrefix: ctx.branchPrefix,
     quietMs: ctx.quietMs,
     reviewReset: ctx.reviewReset,
+    tapToAnswer: ctx.tapToAnswer,
     landing: ctx.landing,
     landingSteps: ctx.landingSteps,
     reactions,

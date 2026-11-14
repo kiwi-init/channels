@@ -49,6 +49,7 @@ const board = (tasks: Task[]): ChannelState =>
     branchPrefix: null,
     quietMs: 20 * 60_000,
     reviewReset: false,
+    tapToAnswer: false,
     landing: null,
     landingSteps: null,
     merges: "agents",

@@ -361,6 +361,8 @@ export type Event =
   | { op: "landing.set"; then: Landing | null; steps?: StepSpec[] }
   | { op: "merges.set"; by: Merger }
   | { op: "review.reset.set"; on: boolean }
+  /** Whether a person's decision closes only from its card (a tap, or words typed into the card) while a reply typed in the chat stays a reply. */
+  | { op: "asks.tap.set"; on: boolean }
   | { op: "review.reset.waive"; member: string; waived: boolean }
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
@@ -902,6 +904,8 @@ export interface Payload {
   /** A chat message to exactly one member, in the direct thread between the two. Older clients see a message to that member. */
   dm?: true;
   side?: true;
+  /** A reply sent from the ask's own card: a tapped option or words typed into the card. Older clients don't know it and read a plain reply. */
+  pick?: true;
   block?: DocBlockRef;
   /**
    * An agent handing a decision or a step to people instead of acting (`kiwi ask-human`): a blocking
@@ -945,7 +949,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 27;
+export const EVENT_OPS_VERSION = 28;
 
 export const SESSION_PRINT_RE = /^[A-Za-z0-9_-]{16}$/;
 
@@ -1316,6 +1320,7 @@ function eventCheck(ev: unknown): boolean | null {
     case "landing.set":
       return (e.then === null || isLanding(e.then)) && (e.steps === undefined || (e.then === null && wellFormedStepSpecs(e.steps)));
     case "review.reset.set":
+    case "asks.tap.set":
       return typeof e.on === "boolean";
     case "review.reset.waive":
       return str(e.member, 64) && e.member.trim() !== "" && typeof e.waived === "boolean";
@@ -1394,6 +1399,7 @@ export function wellFormed(p: unknown): p is WirePayload {
     (m.task === undefined || (Number.isSafeInteger(m.task) && (m.task as number) > 0)) &&
     (m.dm === undefined || m.dm === true) &&
     (m.side === undefined || m.side === true) &&
+    (m.pick === undefined || (m.pick === true && m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0)) &&
     (m.block === undefined || ((m.kind === "msg" || m.kind === "ask" || m.kind === "blocking") && wellFormedBlockRef(m.block))) &&
     (m.esc === undefined || m.esc === true) &&
     (m.handoff === undefined || (m.esc === true && wellFormedHandoff(m.handoff))) &&
