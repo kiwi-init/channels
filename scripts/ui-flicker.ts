@@ -10,8 +10,9 @@ const flag = (name: string): string | undefined => {
 if (process.argv.includes("--help")) {
   console.log(`Drives the app's main flows and lists every flicker: an element whose box, opacity, colours or text changes and comes
 back within --short ms (a return), or holds a state for at most --short ms between two states held at least --steady ms, that
-is not on the way from the first to the second (a detour). Every element is read in each requestAnimationFrame, so a state
-that never reached a frame is not counted.
+is not on the way from the first to the second (a detour). Every element is read right after each frame is drawn (a
+MessageChannel message posted from requestAnimationFrame runs after the paint), so a state that never reached the screen,
+such as a scroll a ResizeObserver corrects in the same frame, is not counted.
 
   bun scripts/ui-flicker.ts --dist ui/dist --browser webkit|chromium [--flow NAME] [--live] [--out DIR] [--short 100] [--steady 150]`);
   process.exit(0);
@@ -92,7 +93,12 @@ const recorder = () => {
     }
     return seen;
   };
+  const painted = new MessageChannel();
   const tick = () => {
+    painted.port2.postMessage(0);
+    requestAnimationFrame(tick);
+  };
+  painted.port1.onmessage = () => {
     if (document.body) {
       const frame = log.times.length;
       log.times.push(Math.round(performance.now()));
@@ -108,7 +114,6 @@ const recorder = () => {
         }
       }
     }
-    requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
   Object.assign(window, {
