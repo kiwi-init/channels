@@ -64,6 +64,15 @@ const recorder = () => {
     const w = innerWidth;
     const h = innerHeight;
     const seen = new Map<string, string>();
+    const moving = new Set<Element>();
+    for (const a of document.getAnimations()) {
+      const target = (a.effect as KeyframeEffect | null)?.target;
+      if (a.playState === "running" && target instanceof Element) moving.add(target);
+    }
+    const animated = (el: Element) => {
+      for (let e: Element | null = el; e; e = e.parentElement) if (moving.has(e)) return true;
+      return false;
+    };
     for (const el of document.body.querySelectorAll("*")) {
       const r = el.getBoundingClientRect();
       if (r.width < 1 || r.height < 1 || r.right <= 0 || r.bottom <= 0 || r.left >= w || r.top >= h) continue;
@@ -76,7 +85,10 @@ const recorder = () => {
       const text = el.childElementCount === 0 ? cut((el.textContent ?? "").trim()) : "";
       let key = keyOf(el);
       while (seen.has(key)) key += "+";
-      seen.set(key, `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}|${cs.opacity}|${cs.backgroundColor}|${cs.color}|${text}`);
+      seen.set(
+        key,
+        `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}|${cs.opacity}|${cs.backgroundColor}|${cs.color}|${text}${moving.size && animated(el) ? "|~" : ""}`,
+      );
     }
     return seen;
   };
@@ -107,7 +119,9 @@ const recorder = () => {
   });
 };
 
-type Hit = { flow: string; step: string; key: string; kind: "return" | "detour"; ms: number; from: string; via: string[]; to: string };
+type Hit = { flow: string; step: string; frame: number; t: number; key: string; kind: "return" | "detour"; ms: number; from: string; via: string[]; to: string };
+
+const ANIMATED = "|~";
 
 const TEXT = 4;
 const nums = (s: string) => (s.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
@@ -138,7 +152,20 @@ const hitsOf = (flow: string, log: Log): Hit[] => {
       for (let j = i + 1; j < segs.length; j++) {
         const b = segs[j]!;
         if (b.state === a.state) {
-          if (j > i + 1) hits.push({ flow, step: stepAt(segs[i + 1]!.frame), key, kind: "return", ms: span, from: a.state, via: segs.slice(i + 1, j).map((s) => s.state), to: b.state });
+          const via = segs.slice(i + 1, j);
+          if (j > i + 1 && !via.some((s) => s.state.endsWith(ANIMATED)))
+            hits.push({
+              flow,
+              step: stepAt(via[0]!.frame),
+              frame: via[0]!.frame,
+              t: at(via[0]!.frame) - at(0),
+              key,
+              kind: "return",
+              ms: span,
+              from: a.state,
+              via: via.map((s) => s.state),
+              to: b.state,
+            });
           break;
         }
         span += b.ms;
@@ -146,8 +173,8 @@ const hitsOf = (flow: string, log: Log): Hit[] => {
       }
       const b = segs[i + 1]!;
       const c = segs[i + 2]!;
-      if (b.ms <= SHORT_MS && c.ms >= STEADY_MS && c.state !== a.state && !between(a.state, b.state, c.state))
-        hits.push({ flow, step: stepAt(b.frame), key, kind: "detour", ms: b.ms, from: a.state, via: [b.state], to: c.state });
+      if (b.ms <= SHORT_MS && c.ms >= STEADY_MS && c.state !== a.state && !b.state.endsWith(ANIMATED) && !between(a.state, b.state, c.state))
+        hits.push({ flow, step: stepAt(b.frame), frame: b.frame, t: at(b.frame) - at(0), key, kind: "detour", ms: b.ms, from: a.state, via: [b.state], to: c.state });
     }
   }
   return hits;
@@ -178,6 +205,7 @@ const clickAll = async (page: Page, selector: string, label: (text: string) => s
       .trim()
       .slice(0, 30);
     await step(page, label(text), () => row.click({ timeout: STEP_MS }));
+    if (await page.locator("dialog[open], [role=dialog]").count()) await step(page, "close the dialog", () => page.keyboard.press("Escape"), 800);
   }
 };
 const click = (page: Page, selector: string, options: { button?: "right"; last?: boolean; nth?: number } = {}) => {
@@ -299,7 +327,7 @@ try {
   await server.stop(true);
 }
 
-const short = (key: string) => key.split(">").slice(-3).join(">");
+const short = (key: string) => key.split(">").slice(-2).join(">");
 const what = (h: Hit) => {
   if (h.from === "-") return "appears";
   if (h.via[0] === "-") return "disappears";
@@ -307,15 +335,26 @@ const what = (h: Hit) => {
   const b = (h.via[0] ?? "").split("|");
   return ["box", "opacity", "background", "colour", "text"].filter((_, i) => a[i] !== b[i]).join("+");
 };
-const groups = new Map<string, Hit[]>();
+const shift = (h: Hit) => {
+  const [a, b] = [nums(h.from.split("|")[0] ?? ""), nums((h.via[0] ?? "").split("|")[0] ?? "")];
+  return a.length === 4 && b.length === 4 ? `${b[0]! - a[0]!},${b[1]! - a[1]!}` : "";
+};
+const events = new Map<string, Hit[]>();
 for (const h of all) {
-  const id = `${h.flow} · ${h.step} · ${short(h.key)} · ${h.kind} · ${what(h)}`;
-  groups.set(id, [...(groups.get(id) ?? []), h]);
+  const id = `${h.flow}|${h.frame}|${h.kind}|${what(h)}|${what(h) === "box" ? shift(h) : ""}`;
+  events.set(id, [...(events.get(id) ?? []), h]);
 }
-if (skipped.length) console.log(`\nskipped:\n${skipped.map((s) => `  ${s}`).join("\n")}`);
-console.log(`\n${all.length} hits in ${groups.size} groups (${engine}${live ? ", live demo" : ", frozen demo"})`);
-for (const [id, hs] of [...groups].sort((a, b) => b[1].length - a[1].length)) {
+const lines = [...events.values()].map((hs) => {
   const h = hs[0]!;
-  console.log(`${hs.length}x ${id} · ${h.ms} ms\n     ${h.from}\n  -> ${h.via.join(" -> ")}\n  -> ${h.to}`);
-}
+  const keys = [...new Set(hs.map((x) => x.key))].sort((x, y) => x.length - y.length);
+  const texts = [...new Set(hs.map((x) => (x.from === "-" ? x.via[0] : x.from)?.split("|")[TEXT] ?? "").filter(Boolean))].slice(0, 3);
+  const move = what(h) === "box" ? ` by ${shift(h)} px` : "";
+  return {
+    size: hs.length,
+    text: `${h.flow} · ${h.step} · at ${h.t} ms · ${hs.length} element${hs.length === 1 ? "" : "s"} ${h.kind === "return" ? "change and come back" : "pass through a state"}: ${what(h)}${move} for ${h.ms} ms\n     ${keys.slice(0, 2).map(short).join("  ")}${texts.length ? `  "${texts.join('", "')}"` : ""}\n     ${h.from.slice(0, 110)}\n  -> ${h.via.map((v) => v.slice(0, 110)).join(" -> ")}\n  -> ${h.to.slice(0, 110)}`,
+  };
+});
+if (skipped.length) console.log(`\nskipped:\n${skipped.map((s) => `  ${s}`).join("\n")}`);
+console.log(`\n${all.length} hits in ${events.size} events (${engine}${live ? ", live demo" : ", frozen demo"})`);
+for (const l of lines.sort((a, b) => b.size - a.size)) console.log(l.text);
 if (out) writeFileSync(join(out, `flicker-${engine}.json`), JSON.stringify({ engine, live, frames, skipped, hits: all }, null, 1));
