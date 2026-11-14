@@ -39,6 +39,7 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
       .catch(() => {
         // A row whose markdown never parses keeps its plain text for good; the frames below still say whether the view moves.
       });
+    if (process.env.STILL_FONTS) await page.evaluate(() => document.fonts.ready.then(() => undefined));
     await page.waitForTimeout(SETTLE_MS);
     return await page.evaluate(
       (frames) =>
