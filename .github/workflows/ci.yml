@@ -260,6 +260,9 @@ jobs:
       - name: ui people see agents by nickname, never by handle, on the main screens (demo agents get real-looking handles)
         if: ${{ !cancelled() && matrix.part == 'ui-b' }}
         run: bun scripts/ui-handles.ts --dist ui/dist
+      - name: ui spoilers reveal without dropping text or hiding focus, in Chromium and WebKit
+        if: ${{ !cancelled() && matrix.part == 'ui-b' }}
+        run: bun scripts/ui-markdown-nodes.ts --browser chromium && bun scripts/ui-markdown-nodes.ts --browser webkit
       # DESIGN.md's rules of place, measured in the built page at two window sizes and in both layouts: the centre, the sidebar's edges and width, the tabs, hiding and peeking the sidebar, search, the panel (T339).
       - name: ui the layout rules hold, in WebKit
         if: ${{ !cancelled() && matrix.part == 'ui-b' }}
@@ -517,6 +520,9 @@ jobs:
       - name: ui muting a room dims it in the sidebar, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'chromium' }}
         run: bun scripts/ui-mute-room.ts --dist ui/dist
+      - name: ui Channel settings and the task pane keep their controls while a markdown parse lands frames late, and a press in that window runs the current action (#2423)
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-sheet-parse.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui room membership agrees across summary, editor and saves, including live updates
         if: ${{ !cancelled() }}
         run: bun scripts/ui-room-members.ts ${{ matrix.engine == 'chromium' && '--chromium' || '' }}

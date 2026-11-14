@@ -103,6 +103,7 @@ fun ConversationScreen(
     var replyTo by remember { mutableStateOf<MessageView?>(null) }
     var answering by remember { mutableStateOf<AskView?>(null) }
     var sendingBack by remember { mutableStateOf<ReviewView?>(null) }
+    var updates by rememberSaveable { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val view = LocalView.current
@@ -137,7 +138,7 @@ fun ConversationScreen(
     val room = model.shown(spot)
     if (room == null) {
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-            Header(model, null, spot, previous, back = back, switchTo = ::switchTo)
+            Header(model, null, spot, previous, back = back, switchTo = ::switchTo, updates = null)
             Centered(stringResource(R.string.channel_gone), stringResource(R.string.channel_gone_lead))
         }
         return
@@ -148,7 +149,7 @@ fun ConversationScreen(
     }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).navigationBarsPadding().imePadding()) {
-        Header(model, room, spot, previous, back = back, switchTo = ::switchTo)
+        Header(model, room, spot, previous, back = back, switchTo = ::switchTo, updates = if (room.messages.any { it.event }) ({ updates = true }) else null)
         Box(Modifier.weight(1f)) {
             AnimatedContent(
                 targetState = spot,
@@ -212,6 +213,7 @@ fun ConversationScreen(
             clearSendBack = { sendingBack = null },
         )
     }
+    if (updates) UpdatesSheet(room) { updates = false }
 }
 
 @Composable
@@ -234,6 +236,7 @@ private fun Header(
     previous: Spot?,
     back: () -> Unit,
     switchTo: (Spot) -> Unit,
+    updates: (() -> Unit)?,
 ) {
     val tone = Tone.current
     val view = LocalView.current
@@ -291,6 +294,7 @@ private fun Header(
                     Status(room, place)
                 }
             }
+            if (updates != null) UpdatesButton(updates)
             if (other != null) Flip(model, room, other) { switchTo(other) }
         } else {
             Box(Modifier.weight(1f))

@@ -1,10 +1,10 @@
 import "~/i18n/en/chat-later"
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react"
+import { Fragment, isValidElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react"
 import type { MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
 import { normalizeMarkdownStyle } from "react-native-enriched-markdown/lib/module/normalizeMarkdownStyle.web.js"
 import { ENRM_TEXT_CLASS } from "react-native-enriched-markdown/lib/module/web/globalStyles.js"
-import { parseMarkdown } from "react-native-enriched-markdown/lib/module/web/parseMarkdown.js"
-import { RenderNode } from "react-native-enriched-markdown/lib/module/web/renderers/index.js"
+import { isParserReady, parseMarkdown, parseMarkdownSync } from "react-native-enriched-markdown/lib/module/web/parseMarkdown.js"
+import { MarkdownNode as RenderNode, hasSpoiler } from "~/chat/markdown-node.tsx"
 import { buildStyles, tableBodyRowStyle, zeroTrailingMargins } from "react-native-enriched-markdown/lib/module/web/styles.js"
 import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown/lib/module/web/utils.js"
 import type { ASTNode, RendererCallbacks } from "react-native-enriched-markdown/lib/typescript/src/web/types"
@@ -140,7 +140,7 @@ const WRAP: CSSProperties = { display: "flex", flexDirection: "column" }
 
 const parsing = new Map<string, Promise<ASTNode>>()
 
-const OWN_LINK = /^kiwi-(?:mention|task|msg|page|do|pr|issue):/
+const OWN_LINK = /^kiwi-(?:mention|task|msg|page|do|pr|issue|face):/
 const OPENED = /^(?:https?:\/\/|mailto:)/i
 const LOCAL_PICTURE = /^(?:data|blob):/i
 
@@ -152,6 +152,12 @@ function pictureLink(node: ASTNode, inLink: boolean): void {
   const url = node.attributes?.url ?? ""
   const safe = !inLink && /^https?:\/\//i.test(url.trim()) ? sanitizeMarkdownUrl(url) : undefined
   const alt = textOf(node) || "image"
+  if (hasSpoiler(node)) {
+    node.type = "Link"
+    node.attributes = safe ? { url: safe } : {}
+    delete node.content
+    return
+  }
   node.type = safe ? "Link" : "Text"
   node.attributes = safe ? { url: safe } : {}
   if (safe) node.children = [{ type: "Text", content: alt }]
@@ -201,6 +207,15 @@ export function blockGaps(markdown: string): string {
   return out.join("\n")
 }
 
+function kept(key: string, ast: ASTNode, at?: number): ASTNode {
+  indexTaskItems(ast)
+  markInlineImages(ast)
+  zonedLinks(ast, at)
+  safeLinks(ast)
+  keepParsed(key, ast)
+  return ast
+}
+
 function parse(markdown: string, at?: number): Promise<ASTNode> {
   const key = parseKey(markdown, at)
   const done = parsedFor(key)
@@ -208,17 +223,22 @@ function parse(markdown: string, at?: number): Promise<ASTNode> {
   const pending = parsing.get(key)
   if (pending) return pending
   const next = parseMarkdown(blockGaps(markdown), FLAGS)
-    .then((ast) => {
-      indexTaskItems(ast)
-      markInlineImages(ast)
-      zonedLinks(ast, at)
-      safeLinks(ast)
-      keepParsed(key, ast)
-      return ast
-    })
+    .then((ast) => kept(key, ast, at))
     .finally(() => parsing.delete(key))
   parsing.set(key, next)
   return next
+}
+
+function parsedNow(markdown: string, at?: number): ASTNode | undefined {
+  const key = parseKey(markdown, at)
+  const done = parsedFor(key)
+  if (done || !isParserReady()) return done
+  try {
+    return kept(key, parseMarkdownSync(blockGaps(markdown), FLAGS), at)
+  } catch {
+    // The async parse in Markdown's effect runs the same text and keeps the last drawn tree if it fails too.
+    return undefined
+  }
 }
 
 export function warm<T>(texts: readonly T[], source: (text: T) => { markdown: string; at: number }): () => void {
@@ -290,12 +310,13 @@ function Table({ node, style, styles, callbacks }: { node: ASTNode; style: Style
                   <button
                     type="button"
                     className="md-sort"
-                    aria-label={t("chat.markdown.sort.by", { name: textOf(cell) || t("chat.markdown.column", { n: i + 1 }) })}
+                    aria-label={t("chat.markdown.sort.by", { name: (!hasSpoiler(cell) && textOf(cell)) || t("chat.markdown.column", { n: i + 1 }) })}
                     onClick={() => setSort((was) => nextSort(was, i))}
                   >
-                    {inside(cell)}
+                    {!hasSpoiler(cell) && inside(cell)}
                     <span aria-hidden="true">{direction === "asc" ? "↑" : direction === "desc" ? "↓" : ""}</span>
                   </button>
+                  {hasSpoiler(cell) && inside(cell)}
                 </th>
               )
             })}
@@ -344,11 +365,12 @@ export interface MarkdownProps {
 export default function Markdown({ markdown, at, onMention, onTask, onMessage, onImage, onShown, onPage, draw }: MarkdownProps) {
   const box = useRef<HTMLDivElement>(null)
   const source = useMemo(() => parseKey(markdown, at), [markdown, at])
+  const ready = (): ASTNode | undefined => (draw ? parsedNow(markdown, at) : parsedFor(source))
   const [got, setGot] = useState<{ markdown: string; ast: ASTNode } | null>(() => {
-    const cached = parsedFor(source)
-    return cached ? { markdown: source, ast: cached } : null
+    const now = ready()
+    return now ? { markdown: source, ast: now } : null
   })
-  const ast = got?.markdown === source ? got.ast : (parsedFor(source) ?? got?.ast ?? null)
+  const ast = got?.markdown === source ? got.ast : (ready() ?? got?.ast ?? null)
 
   useEffect(() => {
     let live = true
@@ -494,7 +516,7 @@ export default function Markdown({ markdown, at, onMention, onTask, onMessage, o
           {children.map((child, i) => {
             const last = i === children.length - 1
             const own = draw?.(child, i, children, tools)
-            if (own !== undefined) return <Fragment key={`own-${i}`}>{own}</Fragment>
+            if (own !== undefined) return <Fragment key={isValidElement(own) && own.key !== null ? `own-${own.key}` : `own-${i}`}>{own}</Fragment>
             const source = mermaidSource(child)
             if (source !== undefined)
               return (

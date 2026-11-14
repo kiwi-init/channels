@@ -163,6 +163,7 @@
 
 .spec-face:hover .spec-face-name,
 .gh-row:focus-visible .spec-faces-all,
+.pg-row:has(> .pg-main:focus-visible) .spec-faces-all,
 .spec-card-main:focus-visible .spec-faces-all {
   opacity: 1;
   clip-path: none;
@@ -1334,4 +1335,12 @@
 
 .result-actions > .btn.is-quiet:first-child {
   margin-left: -12px;
+}
+
+.page.is-specs .gh-top {
+  margin: 0 0 8px;
+}
+
+.page.is-specs .now {
+  margin: 0 0 16px;
 }

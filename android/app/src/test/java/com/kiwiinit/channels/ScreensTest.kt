@@ -15,6 +15,7 @@ import com.kiwiinit.channels.ui.ConversationScreen
 import com.kiwiinit.channels.ui.Home
 import com.kiwiinit.channels.ui.Tab
 import com.kiwiinit.channels.ui.TasksScreen
+import com.kiwiinit.channels.ui.Updates
 import com.kiwiinit.channels.ui.LinkScreen
 import org.junit.Rule
 import org.junit.Test
@@ -66,6 +67,12 @@ class ScreensTest {
 
     @Test
     fun room() = shoot("room") { ConversationScreen(it, Spot(DEV, DESIGN_ROOM), back = {}) }
+
+    @Test
+    fun githubUpdates() = shoot("github-updates", { githubBurst(it) }) { ConversationScreen(it, Spot(DEV), back = {}) }
+
+    @Test
+    fun updatesSheet() = shoot("updates-sheet", { githubBurst(it) }) { Updates(it.rooms.getValue(DEV), close = {}) }
 
     @Test
     fun settings() = shoot("settings") { Home(it, open = {}, tasks = {}, first = Tab.Settings) }

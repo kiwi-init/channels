@@ -198,7 +198,6 @@
   background: var(--bg-2);
   color: var(--ink);
   font: var(--t-ui) var(--ui);
-  animation: rise var(--slow) var(--ease);
 }
 
 .side-card-text {
@@ -414,13 +413,6 @@
   opacity: 1;
 }
 
-@keyframes panel-in {
-  from {
-    opacity: 0;
-    transform: translateX(16px);
-  }
-}
-
 .panel-head {
   display: flex;
   align-items: center;
@@ -595,17 +587,6 @@
 .side-row.is-muted .side-label,
 .side-row.is-muted .icon {
   color: var(--ink-3);
-}
-
-.main > :is(.board, .needs, .lanes) {
-  animation: view-in var(--slow) var(--ease);
-}
-
-@keyframes view-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
 }
 
 @keyframes hint-grow {
@@ -1525,7 +1506,6 @@
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  animation: panel-in var(--slow) var(--ease);
 }
 
 @media (max-width: 1179px), (orientation: portrait) {

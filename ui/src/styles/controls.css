@@ -281,7 +281,6 @@
 .ctl-card {
   display: grid;
   gap: 12px;
-  animation: rise var(--slow) var(--ease);
 }
 
 .ctl-card > * {

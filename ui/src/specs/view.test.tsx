@@ -2,9 +2,10 @@ import { describe, expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import type { Channel, Person, Spec, Task } from "~/model"
-import { ActContext, AppContext, NavContext, type Act, type Ctx, type Nav } from "~/nav"
+import { ActContext, AppContext, type Act, type Ctx } from "~/nav"
+import { maker } from "~/panes/page"
 import { SpecCard } from "~/specs/card"
-import { SpecsView } from "~/specs/view"
+import { SpecFaces, specsLook, specsText } from "~/specs/view"
 import { wrote } from "~/words"
 
 const NOW = 1_800_000_000_000
@@ -71,17 +72,12 @@ const channelOf = (people: Person[], nicknames: [string, string][], tasks: Task[
     connection: "live",
   }) as unknown as Channel
 
-const providers = (channel: Channel) => (
-  <AppContext.Provider value={{ app: { channel }, go: () => {} } as unknown as Ctx}>
-    <NavContext.Provider value={{} as Nav}>
-      <ActContext.Provider value={{ actions: {}, go: () => {}, toast: () => {} } as unknown as Act}>
-        <SpecsView channel={channel} />
-      </ActContext.Provider>
-    </NavContext.Provider>
-  </AppContext.Provider>
-)
-
-const renderList = (channel: Channel): string => renderToStaticMarkup(providers(channel))
+const renderList = (channel: Channel): string =>
+  renderToStaticMarkup(
+    <AppContext.Provider value={{ app: { channel }, go: () => {} } as unknown as Ctx}>
+      <SpecFaces channel={channel} spec={spec} />
+    </AppContext.Provider>
+  )
 const renderCard = (channel: Channel): string =>
   renderToStaticMarkup(
     <AppContext.Provider value={{ app: { channel }, go: () => {} } as unknown as Ctx}>
@@ -114,8 +110,10 @@ const element = (html: string, tag: string, at: number): string => {
 
 const opened = (html: string, tag: string, mark: string): number => html.lastIndexOf(`<${tag}`, html.indexOf(mark))
 const faces = (html: string): string => element(html, "span", opened(html, "span", 'class="spec-card-faces'))
-const rowButton = (html: string): string => element(html, "button", opened(html, "button", 'class="gh-row spec-row'))
 const cardButton = (html: string): string => element(html, "button", opened(html, "button", 'class="spec-card-main'))
+
+const list = (channel: Channel, on: number | null = null): string =>
+  specsText(channel, { shown: "open", pages: 1, on, now: NOW }, { show: () => {}, page: () => {}, make: () => {} }, maker("t")).replace(/\\(.)/g, "$1")
 
 describe("worker names on Specs avatars (#2335)", () => {
   test("a row's single worker avatar carries their name", () => {
@@ -157,20 +155,14 @@ describe("worker names on Specs avatars (#2335)", () => {
     expect(box).toContain(">opus-coder</span>")
   })
 
-  test("the row stays one button with no focusables inside", () => {
-    const html = renderList(
-      channelOf(
-        [person("gentle-otter", "opus-coder"), person("quiet-heron", "ds-reviewer")],
-        [
-          ["gentle-otter", "opus-coder"],
-          ["quiet-heron", "ds-reviewer"],
-        ],
-        [owned(7, "gentle-otter"), owned(8, "quiet-heron")]
-      )
-    )
-    const row = rowButton(html)
-    expect(row.slice(row.indexOf(">") + 1)).not.toContain("<button")
-    expect(row).not.toContain("tabindex")
+  test("the row is one link, and its faces hold no focusables", () => {
+    const channel = channelOf([person("gentle-otter", "opus-coder")], [["gentle-otter", "opus-coder"]], [owned(7, "gentle-otter"), owned(8, "gentle-otter")])
+    const md = list(channel)
+    expect(md.match(/kiwi-page:spec:10:inside/g)?.length).toBe(1)
+    const faces = renderList(channel)
+    expect(faces).not.toContain("<button")
+    expect(faces).not.toContain("<a ")
+    expect(faces).not.toContain("tabindex")
   })
 
   test("the card stays one button with no focusables inside", () => {
@@ -178,5 +170,55 @@ describe("worker names on Specs avatars (#2335)", () => {
     const card = cardButton(html)
     expect(card.slice(card.indexOf(">") + 1)).not.toContain("<button")
     expect(card).not.toContain("tabindex")
+  })
+})
+
+describe("the Specs list is a markdown page, nothing lost (T4532)", () => {
+  const two = () => channelOf([person("gentle-otter", "opus-coder")], [["gentle-otter", "opus-coder"]], [owned(7, "gentle-otter"), { ...owned(8, "gentle-otter"), status: "waiting" }])
+
+  test("a spec's open tasks fold under it, unfolded while one of them waits on you", () => {
+    const md = list(two())
+    expect(md).toContain("## [Working](<kiwi-do:?tone=doing>) · 1")
+    expect(md).toMatch(/\[Export the board\]\(<kiwi-page:spec:10:inside>\) · 0\/2 tasks `kiwi:open`/)
+    expect(md).toMatch(/\n {2}- \[Build it\]\(<kiwi-task:7>\)\\\n {4}\[T7\]/)
+  })
+
+  test("with nothing waiting the tasks start folded", () => {
+    const channel = channelOf([person("gentle-otter", "opus-coder")], [["gentle-otter", "opus-coder"]], [owned(7, "gentle-otter"), owned(8, "gentle-otter")])
+    expect(list(channel)).toContain("0/2 tasks `kiwi:fold`")
+    expect(list(channel, 8)).toContain("0/2 tasks `kiwi:open`")
+  })
+
+  test("a task line keeps its number, its state, its PR and its mentions", () => {
+    const channel = channelOf(
+      [person("gentle-otter", "opus-coder")],
+      [["gentle-otter", "opus-coder"]],
+      [owned(7, "gentle-otter"), { ...owned(8, "gentle-otter"), pr: { repo: "o/r", number: 45, title: "x", state: "open", checks: "fail", url: "https://github.com/o/r/pull/45" }, mentions: 2 }]
+    )
+    const md = list(channel)
+    expect(md).toContain("[T8](<kiwi-do:>)")
+    expect(md).toContain("[PR #45](<kiwi-do:?tip=Checks+failed&tone=alert>)")
+    expect(md).toContain("`kiwi:n:2`")
+  })
+
+  test("a spec title can't draw an act or a heading", () => {
+    const sly = { ...spec, title: wrote("# Boom [go](kiwi-do:run)") }
+    const channel = { ...two(), specs: [sly] } as Channel
+    const md = specsText(channel, { shown: "open", pages: 1, on: null, now: NOW }, { show: () => {}, page: () => {}, make: () => {} }, maker("t"))
+    expect(md).not.toContain("kiwi-do:run")
+    expect(md).not.toMatch(/^# Boom/m)
+  })
+
+  test("the open task is marked on the page, and spec rows get their mark and faces", () => {
+    const channel = two()
+    const look = specsLook(channel, 7)
+    expect(look.on?.("kiwi-task:7")).toBe(true)
+    expect(look.on?.("kiwi-task:8")).toBe(false)
+    expect(look.lead?.("kiwi-page:spec:10:inside")).toBeDefined()
+    expect(look.lead?.("kiwi-task:7")).toBeUndefined()
+    expect(look.drag?.("kiwi-page:spec:10:inside")).toBeDefined()
+    expect(look.fold?.("kiwi-page:spec:10:inside", false)).toMatch(/^Show the \d+ open tasks? of \S/)
+    expect(look.fold?.("kiwi-page:spec:10:inside", true)).toMatch(/^Hide the \d+ open tasks? of \S/)
+    expect(look.fold?.("kiwi-task:7", false)).toBeUndefined()
   })
 })

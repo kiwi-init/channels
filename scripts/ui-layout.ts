@@ -371,8 +371,16 @@ try {
     const row = (name: string) => agents.locator(`.side-row:has-text("${name}")`);
     expect((await row("atlas").count()) === 1 && (await row("pip").count()) === 1, "an agent with nothing to do keeps its own row");
     expect((await row("scout").count()) === 0, "an agent that left has no row");
+    const rooms = page.locator('.side section[aria-label="Rooms"]');
+    await rooms.locator('.side-row:has-text("design")').click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Hide #design" }).click();
+    await page.waitForTimeout(300);
     await agents.getByRole("button", { name: "1 hidden" }).click();
     expect((await row("scout").innerText()).includes("left"), "the hidden row brings it back, marked as left");
+    expect(
+      (await rooms.locator('.side-row:has-text("design")').count()) === 0 && (await rooms.getByRole("button", { name: "1 hidden" }).count()) === 1,
+      "opening the agents' hidden rows leaves the rooms' folded",
+    );
     await row("scout").click();
     await agents.getByRole("button", { name: "Show less" }).click();
     expect((await row("scout").count()) === 1 && (await agents.getByRole("button", { name: "1 hidden" }).count()) === 0, "it stays listed while its conversation is open");

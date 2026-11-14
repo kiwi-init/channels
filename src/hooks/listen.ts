@@ -9,11 +9,12 @@ import { openSession } from "../agent.ts";
 import { Cursor, home, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeOn } from "../daemon/reach.ts";
 import { appendWakeRow } from "../daemon/wake.ts";
-import { formatMessage, messageHead } from "@kiwi/core/format.ts";
+import { formatMessage, handedNote, messageHead } from "@kiwi/core/format.ts";
+import type { ChannelState } from "@kiwi/core/state.ts";
 import { docWakeLine } from "../agent/docs.ts";
 import { pendingDocWakes, tellDocWakes } from "../config/doc-wakes.ts";
 import { claimTaken, type Binding, type Here } from "../seats.ts";
-import { handOver, seatBudget } from "./answer.ts";
+import { handOver, seatBudget, withHanded } from "./answer.ts";
 import { answeringNow, deliveredInProcess, noteDelivered, noteHeard, notePending, settlePending } from "./delivered.ts";
 import { hooksListen, installedListenSeconds } from "./install/claude.ts";
 import { loopDelivery } from "./loop-wait.ts";
@@ -56,11 +57,14 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
   const from = at;
   const peek = Cursor.of({ read: () => Effect.succeed(at), write: (_c, _a, seq) => Effect.sync(() => void (at = Math.max(at, seq))), seen: real.seen, markSeen: () => Effect.void });
   const got: Heard[] = [];
+  let seen: Pick<ChannelState, "openAsks"> | null = null;
   const hearing = s
     .listen(
       (m, state) =>
         Effect.andThen(
-          Effect.sync(() => void got.push({ seq: m.seq, text: formatMessage(m, state.trust.get(m.seq), state, s.me), head: messageHead(m, state.trust.get(m.seq), state, s.me).length + 2 })),
+          Effect.sync(
+            () => void ((seen = state), got.push({ seq: m.seq, text: formatMessage(m, state.trust.get(m.seq), state, s.me), head: messageHead(m, state.trust.get(m.seq), state, s.me).length + 2 })),
+          ),
           woke,
         ),
       {
@@ -96,7 +100,8 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
     got.splice(0, got.length, ...left);
     at = Math.max(at, shown);
   });
-  return { b, got, hearing: hearingAll, dropShown, from, reached: () => at, still: s.unheld };
+  const waits = (shown: readonly number[] = []) => (seen === null ? null : handedNote(seen, s.me, mc, shown));
+  return { b, got, hearing: hearingAll, dropShown, from, reached: () => at, still: s.unheld, waits };
 });
 
 type Tuned = Effect.Success<ReturnType<typeof tune>> & { release: () => void };
@@ -237,16 +242,17 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
       share,
       a.got.some((g) => g.seq !== null),
     );
+    const waits = a.waits();
     const hand = handOver(
       a.got.map((g) => ({ line: g.text, seq: g.seq ?? 0, head: g.head })),
-      Math.max(0, share - head.length - 2),
+      Math.max(0, share - head.length - 2 - (waits === null ? 0 : waits.length + 1)),
       mc,
     );
     const shown = a.got.slice(0, hand.count);
     const rest = a.got.slice(hand.count).filter((g) => g.seq !== null).length;
     const seqs = shown.flatMap((g) => (g.seq === null ? [] : [g.seq]));
     const docs = shown.flatMap((g) => (g.block === undefined ? [] : [g.block]));
-    return { b: a.b, seqs, docs, from: a.from, upTo: rest ? Math.max(0, ...seqs) : a.reached(), text: hand.text, head };
+    return { b: a.b, seqs, docs, from: a.from, upTo: rest ? Math.max(0, ...seqs) : a.reached(), text: withHanded(hand.text, a.waits(seqs)), head };
   });
   if (extension && !told.length) return 0;
   const blocks = told.map(({ head, text }) => `${head}\n${text}\n`);

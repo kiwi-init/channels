@@ -365,3 +365,26 @@ describe("a warmed message is parsed under the key its render looks up (T7429)",
     expect(await rendered(bare, Date.UTC(2026, 10, 13, 2, 0))).toContain('href="kiwi-utc:2026-11-13T09:30:00Z"')
   })
 })
+
+describe("a page's text draws in the render that brings it; a feed row keeps waiting behind its plain text (#2423)", () => {
+  const drawn = (markdown: string, draw?: () => undefined): string =>
+    renderToStaticMarkup(createElement(Markdown, { markdown, onMention: quiet, onTask: quiet, onMessage: quiet, onImage: quiet, onShown: quiet, draw }))
+
+  test("once the parser is loaded, text a page draws itself is drawn on its first render, so a sheet never shows an older tree or an empty box", async () => {
+    await parseMarkdown("load the parser", FLAGS)
+    const url = `kiwi-do:${crypto.randomUUID()}-0`
+    const markdown = `Mute here [On](${url})`
+    expect(parsedFor(markdown)).toBeUndefined()
+    const html = drawn(markdown, () => undefined)
+    expect(html).toContain("Mute here")
+    expect(html).toContain(`href="${url}"`)
+    expect(parsedFor(markdown)).toBeDefined()
+  })
+
+  test("a message row without a draw still leaves new text to the async parse, as Body shows its plain text meanwhile", async () => {
+    await parseMarkdown("load the parser", FLAGS)
+    const markdown = `A new line ${crypto.randomUUID()}`
+    expect(drawn(markdown)).toBe('<div class="md"></div>')
+    expect(parsedFor(markdown)).toBeUndefined()
+  })
+})

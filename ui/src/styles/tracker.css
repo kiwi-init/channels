@@ -5,7 +5,6 @@
   overflow: hidden auto;
   scrollbar-gutter: stable;
   font: var(--t-ui) var(--ui);
-  animation: fade var(--slow) var(--ease);
 }
 
 .track-head {

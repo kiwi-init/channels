@@ -3,6 +3,7 @@ import { flushSync } from "react-dom"
 
 import { isGifReaction } from "@kiwi/core/protocol.ts"
 
+import { BlockFilesSpots } from "~/chat/block-files-spots"
 import { ShownImage } from "~/chat/feed-image"
 import { withoutMediaNames } from "~/chat/doc/finished"
 import { PrChip, TaskChip } from "~/chat/cards"
@@ -337,7 +338,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
         )}
         {m.images && <MessageImages code={channel.code} images={m.images} open={openImage} />}
         {m.docMedia && (
-          <Suspense fallback={null}>
+          <Suspense fallback={<BlockFilesSpots media={m.docMedia} />}>
             <BlockFilesView code={channel.code} media={m.docMedia} open={openImage} />
           </Suspense>
         )}
