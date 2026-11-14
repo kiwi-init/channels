@@ -90,8 +90,6 @@ export default {
   "settings.sections.update.keep.working": "Você pode continuar trabalhando. Perguntamos antes de reiniciar.",
   "settings.sections.up.to.date": "Atualizado",
   "settings.sections.about.lede": "Channels, da Kiwi Init.",
-  "settings.sections.interface": "Interface",
-  "settings.sections.interface.hint": "O visual que o Channels está usando. Ele se atualiza sozinho.",
   "settings.sections.interface.copy": "Copiar a versão da interface",
   "settings.sections.interface.copied": "Versão copiada",
   "settings.sections.relay": "Relay",
@@ -280,7 +278,7 @@ export default {
   "settings.agents.harnesses": "Harnesses",
   "settings.agents.not.installed": "Não instalados: {names}",
   "settings.agents.this.computer": "Este computador",
-  "settings.agents.checkpoint": "Pedir um checkpoint aos agentes acima de 250k de contexto",
+  "settings.agents.checkpoint": "Pedir um checkpoint aos agentes em sessões longas",
   "settings.agents.checkpoint.hint": "Um agente daqui acima de 250k tokens é chamado a escrever em que pé está o trabalho antes de encerrar o turno.",
 
   "settings.controls.save": "Salvar",
