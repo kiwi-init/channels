@@ -11,7 +11,7 @@ import { detectWhere } from "../card.ts";
 import { contextLineOn, home, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeHooked, wakeOn } from "../daemon/reach.ts";
 import { appendRotated } from "../daemon/wake.ts";
-import { charterLines, formatMessage, holdLine, leadLine, messageHead } from "@kiwi/core/format.ts";
+import { charterLines, formatMessage, handedNote, holdLine, leadLine, messageHead } from "@kiwi/core/format.ts";
 import { kimiServer } from "../kimi-server.ts";
 import { here, type Binding, type Here } from "../seats.ts";
 import { REENTRY_MAX, reentryText } from "@kiwi/core/reentry.ts";
@@ -287,6 +287,10 @@ export interface Unread {
   head: number;
 }
 
+export function withHanded(text: string, note: string | null): string {
+  return note === null || !text ? text : `${text}\n${note}`;
+}
+
 export function handOver(unread: readonly Unread[], max: number, mc: string): { count: number; text: string } {
   const total = unread.length;
   const lines = unread.map((u) => u.line);
@@ -303,9 +307,10 @@ export function handOver(unread: readonly Unread[], max: number, mc: string): { 
   return { count: 0, text: waiting.length <= max ? waiting : "" };
 }
 
-const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession, mc: string, max = MAX_CONTEXT, d: Delivery = {}) {
+export const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession, mc: string, max = MAX_CONTEXT, d: Delivery = {}) {
   const { messages, state, commit } = yield* s.unread(d);
   const docs = pendingDocWakes(s.alias, s.me);
+  const waits = handedNote(state, s.me, mc);
   const hand = handOver(
     [
       ...messages.map((m) => ({
@@ -318,7 +323,7 @@ const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession, mc:
         return { line, seq: 0, head: (line.split("\n")[0] ?? "").length + 2 };
       }),
     ],
-    max,
+    Math.max(0, max - (waits === null ? 0 : waits.length + 1)),
     mc,
   );
   const shownMessages = messages.slice(0, hand.count);
@@ -341,7 +346,13 @@ const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession, mc:
       );
     }),
   );
-  return { text: hand.text, shown, messages: shownMessages.length };
+  const note = handedNote(
+    state,
+    s.me,
+    mc,
+    shownMessages.map((m) => m.seq),
+  );
+  return { text: withHanded(hand.text, note), shown, messages: shownMessages.length };
 });
 
 export type AnswerKind = "cursor-start" | "start" | "gemini-prompt" | "agy-inject" | "prompt" | "followup" | "block" | "deny" | "agy-continue";

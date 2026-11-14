@@ -7,7 +7,9 @@ import { AgentLive, AgentSession } from "../src/agent.ts";
 import { personaOf, type Persona } from "@kiwi/core/personality.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
-import { handedOver } from "@kiwi/core/state.ts";
+import { handedNote } from "@kiwi/core/format.ts";
+import { handedOver, handedTo, readHandedOver } from "@kiwi/core/state.ts";
+import { unreadText, withHanded } from "../src/hooks/answer.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, kiwiCmd, pairComputer, setupChannel, type OwnerSetup, type PairedComputer } from "./owner.ts";
 
@@ -58,6 +60,59 @@ describe("handedOver: what the Lead reads", () => {
 
   test("a bare question is the question and whose it is", () => {
     expect(handedOver("wren", "Ship it?", {})).toBe("Ship it?\n\nHanded to you, the Lead: wren doesn't ask people. Decide it yourself, or ask a person with kiwi ask-human.");
+  });
+});
+
+describe("readHandedOver: what the Lead's list reads back (T504)", () => {
+  test("a decision reads back as it was asked, with a question of several paragraphs", () => {
+    const ask = { choices: ["A: glass", "B: flat"], holds: ["T7", "#18"], decision: "taste" as const };
+    expect(readHandedOver(handedOver("wren", "Which look?\n\nThe top bar is flat already.", ask))).toEqual({ from: "wren", question: "Which look?\n\nThe top bar is flat already.", ...ask });
+  });
+
+  test("a step reads back with why, why an agent can't, and how", () => {
+    const step = { why: "the release waits on it", needsPerson: "the key is on your Mac", do: ["Open Keychain"], run: ["bun run sign"], expect: "signed", links: ["https://example.com/keys"] };
+    expect(readHandedOver(handedOver("wren", "Sign the build", { holds: ["T7"], step }))).toEqual({ from: "wren", question: "Sign the build", choices: [], holds: ["T7"], step });
+    const bare = { why: "the release waits on it", needsPerson: "the key is on your Mac", links: ["https://example.com/keys"] };
+    expect(readHandedOver(handedOver("wren", "Sign the build", { holds: ["T7"], step: bare }))?.step).toEqual(bare);
+  });
+
+  test("a bare question, and a message that isn't a hand-over", () => {
+    expect(readHandedOver(handedOver("wren", "Ship it?", {}))).toEqual({ from: "wren", question: "Ship it?", choices: [], holds: [] });
+    expect(readHandedOver("Ship it?")).toBeNull();
+    expect(readHandedOver("Ship it?\n\nOptions:\n- A: yes\n- B: no")).toBeNull();
+  });
+});
+
+describe("handedTo and handedNote: the Lead's list and its wake line (T504)", () => {
+  const ask = (seq: number, from: string, to: string[], body: string): Message => ({ seq, ts: 1_000 * seq, from, to, kind: "blocking", body }) as Message;
+  const look = handedOver("wren", "Which look?", { choices: ["A: glass", "B: flat"], holds: ["T7"], decision: "taste" });
+  const sign = handedOver("finch", "Sign the build", { holds: ["T8"], step: { why: "the release waits on it", needsPerson: "the key is on your Mac" } });
+  const state = {
+    openAsks: [ask(30, "finch", ["puma"], sign), ask(12, "wren", ["puma"], look), ask(20, "jon", ["puma"], "Ship it?"), ask(25, "otter", ["puma"], look), ask(40, "wren", ["jon"], look)],
+  };
+
+  test("only asks handed to me by their own asker count, oldest first", () => {
+    expect(handedTo(state, "puma").map((h) => [h.ask.seq, h.handed.from, h.handed.question])).toEqual([
+      [12, "wren", "Which look?"],
+      [30, "finch", "Sign the build"],
+    ]);
+    expect(handedTo(state, "jon").map((h) => h.ask.seq)).toEqual([40]);
+    expect(handedTo(state, "wren")).toEqual([]);
+  });
+
+  test("the wake line counts them and goes quiet once the wake shows them all", () => {
+    const now = 1_000 * 12 + 5 * 60_000;
+    expect(handedNote(state, "puma", "kiwi", [], now)).toBe("* 2 decisions handed to you wait, the oldest (#12) from 5m ago: `kiwi status` lists them, oldest first.");
+    expect(handedNote({ openAsks: state.openAsks.slice(1, 2) }, "puma", "kiwi", [], now)).toBe("* 1 decision handed to you waits (#12, from 5m ago): `kiwi status` shows it.");
+    expect(handedNote(state, "puma", "kiwi", [12], now)).not.toBeNull();
+    expect(handedNote(state, "puma", "kiwi", [12, 30], now)).toBeNull();
+    expect(handedNote(state, "wren", "kiwi", [], now)).toBeNull();
+  });
+
+  test("the line goes under a wake's messages, never alone", () => {
+    expect(withHanded("#9 jon: hi", "* 1 decision handed to you waits")).toBe("#9 jon: hi\n* 1 decision handed to you waits");
+    expect(withHanded("", "* 1 decision handed to you waits")).toBe("");
+    expect(withHanded("#9 jon: hi", null)).toBe("#9 jon: hi");
   });
 });
 
@@ -128,6 +183,33 @@ describe("ask-human from a personality without Ask people (T503)", () => {
     expect(lead.trust.get(sent.seq)).toBe("verified");
     await run(puma.reply(sent.seq, "B, flat: it matches the top bar"));
     expect((await run(wren.state())).state.openAsks.some((a) => a.seq === sent.seq)).toBe(false);
+  });
+
+  test("the Lead's wake says how many handed decisions wait, once the decision itself is out of the wake (T504)", async () => {
+    await run((await run(unreadText(puma, "kiwi"))).shown);
+    const sent = await run(finch.escalate("Which icon set?", undefined, undefined, { choices: ["A: line", "B: solid"] }));
+    expect(sent.lead).toBe("puma");
+    const woken = async (has: string) => {
+      const deadline = Date.now() + 5_000;
+      for (;;) {
+        const got = await run(unreadText(puma, "kiwi"));
+        if (got.text.includes(has) || Date.now() > deadline) return got;
+        await Bun.sleep(200);
+      }
+    };
+    const first = await woken("Which icon set?");
+    expect(first.text).toContain("Which icon set?");
+    expect(first.text).not.toContain("handed to you wait");
+    await run(first.shown);
+    await owner.ownerCh.send("puma, how is the tab bar going?", { to: ["puma"] });
+    const next = await woken("how is the tab bar going?");
+    expect(next.text).toContain("how is the tab bar going?");
+    expect(next.text).toMatch(/\n\* \d+ decisions? handed to you wa/);
+    expect(next.text).toContain(`#${sent.seq}`);
+    const tight = await run(unreadText(puma, "kiwi", 400));
+    expect(tight.text.length).toBeLessThanOrEqual(400);
+    await run(next.shown);
+    await run(puma.reply(sent.seq, "A, line icons"));
   });
 
   test("a Builder's step goes to the Lead with how to do it", async () => {
@@ -243,7 +325,22 @@ describe("kiwi ask-human says where the question went (T503)", () => {
     expect([out, seq === undefined]).toEqual([out, false]);
     const shown = await ok(puma, "show", seq!);
     for (const line of ["Which look?", "- A: glass", "- B: flat", `Holds: T${held}`, "Handed to you, the Lead: wren doesn't ask people."]) expect(shown).toContain(line);
+    const status = await ok(puma, "status");
+    expect(status).toContain('decisions handed to you (1), oldest first — decide one: kiwi reply <#> "…" · send it on to a person: kiwi ask-human --re <#> …');
+    expect(status).toContain(`  #${seq} wren, `);
+    expect(status).toContain(`· holds T${held}: Which look?\n      A: glass · B: flat\n`);
+    expect(status.split("\n").filter((l) => l.includes(`#${seq} wren`))).toHaveLength(1);
+    expect(status).not.toContain("waiting on you");
     expect(await ok(wren, "ask-human", "--close", seq!, "the spec already says flat")).toContain(`closed #${seq}`);
+    expect(await ok(puma, "status")).not.toContain("decisions handed to you");
+  });
+
+  test("the Lead sends a handed decision on to a person, and it leaves the Lead's list and the Builder's open questions (T504)", async () => {
+    const seq = /^sent #(\d+)/.exec(await ok(wren, "ask-human", "--holds", `T${held}`, "--option", "A: glass", "--option", "B: flat", "Which tint?"))![1]!;
+    expect(await ok(puma, "status")).toContain(`  #${seq} wren, `);
+    expect(await ok(puma, "ask-human", "--re", seq, "--holds", `T${held}`, "--option", "A: glass", "--option", "B: flat", "Which tint for the tab bar?")).toMatch(/^escalated #\d+ to human/);
+    expect(await ok(puma, "status")).not.toContain("decisions handed to you");
+    expect(await ok(wren, "status")).not.toContain("your unanswered questions");
   });
 
   test("a Builder's step says the Lead passes it on", async () => {

@@ -6,7 +6,22 @@
 // Conflicts resolve deterministically: the earlier sequence number wins.
 
 export { fold } from "./state/fold.ts";
-export { askedOfPeopleByOthers, askGroups, askRefusal, asksOnSameWork, directThreadStart, handedOver, heldBy, holdsWork, leadForAsk, mayNameGoal, type AskGroup } from "./state/asks.ts";
+export {
+  askedOfPeopleByOthers,
+  askGroups,
+  askRefusal,
+  asksOnSameWork,
+  directThreadStart,
+  handedOver,
+  handedTo,
+  heldBy,
+  holdsWork,
+  leadForAsk,
+  mayNameGoal,
+  readHandedOver,
+  type AskGroup,
+  type HandedAsk,
+} from "./state/asks.ts";
 export {
   allowedOnHold,
   answersAsk,

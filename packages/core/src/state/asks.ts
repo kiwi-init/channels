@@ -1,5 +1,5 @@
 import { asksPeople } from "../personality.ts";
-import type { DecisionKind, Message, Step } from "../protocol.ts";
+import { isDecisionKind, type DecisionKind, type Message, type Step } from "../protocol.ts";
 import { isPerson } from "./people.ts";
 import { placeKey } from "./places.ts";
 import { commentedSpec } from "./specs.ts";
@@ -134,6 +134,75 @@ export function handedOver(from: string, body: string, ask: HandedOver): string 
     ...(ask.holds?.length ? [`Holds: ${ask.holds.join(", ")}`] : []),
     `Handed to you, the Lead: ${from} doesn't ask people. ${step ? "Pass it to a person with kiwi ask-human --step, or say why it isn't needed." : "Decide it yourself, or ask a person with kiwi ask-human."}`,
   ].join("\n");
+}
+
+export interface Handed {
+  from: string;
+  question: string;
+  choices: string[];
+  holds: string[];
+  decision?: DecisionKind;
+  step?: Step;
+}
+
+const HANDED = /^Handed to you, the Lead: (.+) doesn't ask people\. /;
+
+export function readHandedOver(body: string): Handed | null {
+  const cut = body.lastIndexOf("\n\n");
+  if (cut < 0) return null;
+  const lines = body.slice(cut + 2).split("\n");
+  const from = HANDED.exec(lines.at(-1) ?? "")?.[1];
+  if (!from) return null;
+  const lists: Record<string, string[]> = { "Do:": [], "Run:": [], "Links:": [], "Options:": [] };
+  const said = new Map<string, string>();
+  let list: string[] | undefined;
+  for (const line of lines.slice(0, -1)) {
+    if (line in lists) list = lists[line];
+    else if (list && line.startsWith("- ")) list.push(line.slice(2));
+    else {
+      list = undefined;
+      const at = line.indexOf(": ");
+      if (at > 0) said.set(line.slice(0, at), line.slice(at + 2));
+    }
+  }
+  const why = said.get("A step for a person");
+  const needsPerson = said.get("Why an agent can't do it");
+  const kind = said.get("Kind");
+  const expect = said.get("Expect");
+  const some = (items: string[] | undefined): string[] | undefined => (items?.length ? items : undefined);
+  const step: Step | undefined =
+    why !== undefined && needsPerson !== undefined
+      ? {
+          why,
+          needsPerson,
+          ...(some(lists["Do:"]) ? { do: lists["Do:"] } : {}),
+          ...(some(lists["Run:"]) ? { run: lists["Run:"] } : {}),
+          ...(expect ? { expect } : {}),
+          ...(some(lists["Links:"]) ? { links: lists["Links:"] } : {}),
+        }
+      : undefined;
+  return {
+    from,
+    question: body.slice(0, cut),
+    choices: lists["Options:"] ?? [],
+    holds: said.get("Holds")?.split(", ") ?? [],
+    ...(isDecisionKind(kind) ? { decision: kind } : {}),
+    ...(step ? { step } : {}),
+  };
+}
+
+export interface HandedAsk {
+  ask: Message;
+  handed: Handed;
+}
+
+export function handedTo(state: Pick<ChannelState, "openAsks">, me: string): HandedAsk[] {
+  return state.openAsks
+    .flatMap((ask) => {
+      const handed = ask.from !== me && ask.to?.includes(me) ? readHandedOver(String(ask.body ?? "")) : null;
+      return handed?.from === ask.from ? [{ ask, handed }] : [];
+    })
+    .sort((a, b) => a.ask.seq - b.ask.seq);
 }
 
 function isPeopleTarget(state: Pick<ChannelState, "members">, name: string): boolean {
