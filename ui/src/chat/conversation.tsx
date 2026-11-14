@@ -49,6 +49,7 @@ const DRY_PAGES = 3
 const REACH_WAIT_MS = 600
 const QUIET_MS = 120
 const HAND_MS = 1000
+const STILL_MS = 150
 
 interface Span {
   top: number | null
@@ -447,6 +448,21 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const byHand = () => {
     handAt.current = performance.now()
   }
+  const pointerAt = useRef(Number.NEGATIVE_INFINITY)
+  const stillDue = useRef<number | undefined>(undefined)
+  const underStill = (now: number) => {
+    const box = scroller.current
+    if (!box || now - pointerAt.current < STILL_MS) return
+    if (!box.hasAttribute("data-scrolling")) box.setAttribute("data-scrolling", "")
+    window.clearTimeout(stillDue.current)
+    stillDue.current = window.setTimeout(() => box.removeAttribute("data-scrolling"), STILL_MS)
+  }
+  const pointerMoved = () => {
+    pointerAt.current = performance.now()
+    window.clearTimeout(stillDue.current)
+    scroller.current?.removeAttribute("data-scrolling")
+  }
+  useEffect(() => () => window.clearTimeout(stillDue.current), [])
   const earlierDue = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(earlierDue.current), [])
   const onScroll = () => {
@@ -617,8 +633,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
         onScroll={() => {
           const now = performance.now()
           if (now - handAt.current < HAND_MS) movedAt.current = now
+          underStill(now)
           onScroll()
         }}
+        onPointerMove={pointerMoved}
         onWheel={byHand}
         onPointerDown={byHand}
         onTouchStart={byHand}
