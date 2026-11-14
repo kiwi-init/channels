@@ -186,6 +186,8 @@ export default {
   "chat.markdown.column": "{n}열",
   "chat.markdown.copy": "복사",
   "chat.markdown.copy.text": "{text} 복사",
+  "chat.markdown.spoiler.show": "스포일러 보기",
+  "chat.markdown.spoiler.hide": "스포일러 숨기기",
   "chat.markdown.code.block": "코드 블록",
   "chat.markdown.code.block.lang": "코드 블록: {lang}",
   "chat.markdown.utc.assuming": "메시지 날짜 {date}(UTC) 기준",

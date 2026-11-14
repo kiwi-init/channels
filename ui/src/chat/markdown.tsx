@@ -4,7 +4,7 @@ import type { MarkdownStyle } from "react-native-enriched-markdown/lib/module/in
 import { normalizeMarkdownStyle } from "react-native-enriched-markdown/lib/module/normalizeMarkdownStyle.web.js"
 import { ENRM_TEXT_CLASS } from "react-native-enriched-markdown/lib/module/web/globalStyles.js"
 import { parseMarkdown } from "react-native-enriched-markdown/lib/module/web/parseMarkdown.js"
-import { RenderNode } from "react-native-enriched-markdown/lib/module/web/renderers/index.js"
+import { MarkdownNode as RenderNode, hasSpoiler } from "~/chat/markdown-node.tsx"
 import { buildStyles, tableBodyRowStyle, zeroTrailingMargins } from "react-native-enriched-markdown/lib/module/web/styles.js"
 import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown/lib/module/web/utils.js"
 import type { ASTNode, RendererCallbacks } from "react-native-enriched-markdown/lib/typescript/src/web/types"
@@ -290,12 +290,13 @@ function Table({ node, style, styles, callbacks }: { node: ASTNode; style: Style
                   <button
                     type="button"
                     className="md-sort"
-                    aria-label={t("chat.markdown.sort.by", { name: textOf(cell) || t("chat.markdown.column", { n: i + 1 }) })}
+                    aria-label={t("chat.markdown.sort.by", { name: (!hasSpoiler(cell) && textOf(cell)) || t("chat.markdown.column", { n: i + 1 }) })}
                     onClick={() => setSort((was) => nextSort(was, i))}
                   >
-                    {inside(cell)}
+                    {!hasSpoiler(cell) && inside(cell)}
                     <span aria-hidden="true">{direction === "asc" ? "↑" : direction === "desc" ? "↓" : ""}</span>
                   </button>
+                  {hasSpoiler(cell) && inside(cell)}
                 </th>
               )
             })}

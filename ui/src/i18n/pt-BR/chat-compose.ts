@@ -186,6 +186,8 @@ export default {
   "chat.markdown.column": "coluna {n}",
   "chat.markdown.copy": "Copiar",
   "chat.markdown.copy.text": "Copiar {text}",
+  "chat.markdown.spoiler.show": "Mostrar spoiler",
+  "chat.markdown.spoiler.hide": "Ocultar spoiler",
   "chat.markdown.code.block": "Bloco de código",
   "chat.markdown.code.block.lang": "Bloco de código: {lang}",
   "chat.markdown.utc.assuming": "assumindo {date} UTC, a data da mensagem",

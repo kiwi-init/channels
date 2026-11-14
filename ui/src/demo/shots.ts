@@ -28,6 +28,7 @@ export const SHOTS: Record<string, Shot> = {
   "linux-floating": { ...kiwi(), wm: "floating" },
   "long-feed": { scenario: "long", channel: "kiwi" },
   "own-bubbles": { scenario: "own-bubbles", channel: "kiwi" },
+  "markdown-nodes": { scenario: "markdown-nodes", channel: "kiwi" },
   "tabs-3": { scenario: "tabs-3", channel: "kiwi" },
   "tabs-8": { scenario: "tabs-8", channel: "kiwi" },
   signs: { scenario: "signs", channel: "kiwi" },
