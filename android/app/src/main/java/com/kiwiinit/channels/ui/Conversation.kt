@@ -136,8 +136,6 @@ sealed interface Line {
 
     data class Time(override val id: String, val at: Long) : Line
 
-    data class Event(override val id: String, val message: MessageView) : Line
-
     data class Bubble(override val id: String, val message: MessageView, val first: Boolean, val last: Boolean) : Line
 
     data class Ask(override val id: String, val ask: AskView) : Line
@@ -156,6 +154,7 @@ sealed interface Line {
             val answers = mutableMapOf<String, ArrayDeque<Int>>()
             for (m in messages) m.chosen?.let { answers.getOrPut("${it.by}|${it.choice}") { ArrayDeque() } += m.seq }
             for (m in messages) {
+                if (m.event) continue
                 val polls = answers["${m.from}|${m.body}"]
                 if (m.choices.isEmpty() && polls != null && polls.isNotEmpty() && polls.first() < m.seq) {
                     polls.removeFirst()
@@ -172,11 +171,6 @@ sealed interface Line {
                 if (newDay || gap > 15 * 60_000) {
                     out += Time("t${m.seq}", m.millis)
                     prev = null
-                }
-                if (m.event) {
-                    out += Event("e${m.seq}", m)
-                    prev = null
-                    continue
                 }
                 val first = prev == null || prev.from != m.from || m.quote != null
                 if (!first) {
@@ -274,7 +268,6 @@ fun Conversation(
             Box(Modifier.animateItem()) {
                 when (line) {
                     is Line.Time -> TimeLine(line.at)
-                    is Line.Event -> EventLine(room, line.message)
                     is Line.Ask -> AskLine(model, room, line.ask) { answer(line.ask) }
                     is Line.Review -> ReviewLine(model, room, line.review) { sendBack(line.review) }
                     is Line.Sending -> PendingBubble(model, line.item, spot)
@@ -297,8 +290,9 @@ fun Conversation(
         }
         item(key = "intro", contentType = "intro") {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                if (room.whole || (room.messages.isEmpty() && room.connection == Connection.Live)) Intro(room)
-                if (!room.whole && room.messages.isNotEmpty()) {
+                val talk = room.messages.any { !it.event }
+                if (room.whole || (!talk && room.connection == Connection.Live)) Intro(room)
+                if (!room.whole && talk) {
                     Text(
                         stringResource(R.string.earlier_not_here),
                         style = MaterialTheme.typography.labelMedium,
@@ -323,18 +317,6 @@ private fun TimeLine(at: Long) {
         color = Tone.current.ink3,
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 6.dp),
-    )
-}
-
-@Composable
-private fun EventLine(room: RoomView, m: MessageView) {
-    Text(
-        "${room.display(m.from)} ${m.body}",
-        style = MaterialTheme.typography.labelMedium,
-        color = Tone.current.ink3,
-        textAlign = TextAlign.Center,
-        maxLines = 2,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 4.dp),
     )
 }
 
