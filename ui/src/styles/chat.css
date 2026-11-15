@@ -83,6 +83,10 @@
   padding: 24px var(--gutter-end) max(var(--compose-space), calc(var(--compose-h, 0px) + 40px)) var(--gutter);
 }
 
+.feed-list[data-unfinished] {
+  visibility: hidden;
+}
+
 .feed-start {
   display: grid;
   align-content: end;

@@ -45,6 +45,7 @@ The conversation stays where you left it. Each line below is one promise, the ch
 | The feed promises | The check that fails | Words in that check |
 | --- | --- | --- |
 | A feed, a thread and a thread doc hold still once they open | `scripts/ui-still.ts` | `holds still after opening` |
+| A feed, a thread and a thread doc show their rows whole: markdown and cards are in place when the feed shows, so no row in view changes height | `scripts/ui-still.ts` | `rows keep their height once the feed shows` |
 | A reload brings the scroll back to the same message | `scripts/ui-restore-place.ts` | `a restart brings the scroll back to the same message` |
 | It lands on that message while markdown is still loading | `scripts/ui-restore-place.ts` | `a restart that paints plain text before markdown still lands on the same message` |
 | It lands on that message below a permission ask too | `scripts/ui-restore-place.ts` | `lands on that message once the cards settle` |

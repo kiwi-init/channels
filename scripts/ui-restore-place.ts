@@ -18,7 +18,7 @@ const server = Bun.serve({
   async fetch(req) {
     const path = decodeURIComponent(new URL(req.url).pathname);
     const file = Bun.file(join(dist, path === "/" || !path.includes(".") ? "index.html" : path));
-    return (await file.exists()) ? new Response(file) : new Response("not found", { status: 404 });
+    return (await file.exists()) ? new Response(file, { headers: { "cache-control": "no-store" } }) : new Response("not found", { status: 404 });
   },
 });
 const browser = await (engine === "webkit" ? webkit : chromium).launch();
@@ -170,7 +170,7 @@ async function plainFirst() {
   const full = await heights(page);
   await markdownLate(page);
   await page.reload();
-  await page.locator("article.msg").first().waitFor();
+  await page.locator("article.msg").first().waitFor({ state: "attached" });
   const plain = await heights(page);
   const row = Object.entries(full)
     .map(([seq, md]) => ({ seq: Number(seq), md: md.h, plain: plain[seq] }))

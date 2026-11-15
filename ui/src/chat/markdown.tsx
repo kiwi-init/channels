@@ -3,7 +3,7 @@ import { Fragment, isValidElement, useCallback, useEffect, useLayoutEffect, useM
 import type { MarkdownStyle } from "react-native-enriched-markdown/lib/module/index.web.js"
 import { normalizeMarkdownStyle } from "react-native-enriched-markdown/lib/module/normalizeMarkdownStyle.web.js"
 import { ENRM_TEXT_CLASS } from "react-native-enriched-markdown/lib/module/web/globalStyles.js"
-import { isParserReady, parseMarkdown, parseMarkdownSync } from "react-native-enriched-markdown/lib/module/web/parseMarkdown.js"
+import { isParserReady, parseMarkdown, parseMarkdownSync, preloadParser } from "react-native-enriched-markdown/lib/module/web/parseMarkdown.js"
 import { MarkdownNode as RenderNode, hasSpoiler } from "~/chat/markdown-node.tsx"
 import { buildStyles, tableBodyRowStyle, zeroTrailingMargins } from "react-native-enriched-markdown/lib/module/web/styles.js"
 import { indexTaskItems, markInlineImages } from "react-native-enriched-markdown/lib/module/web/utils.js"
@@ -239,6 +239,10 @@ function parsedNow(markdown: string, at?: number): ASTNode | undefined {
     // The async parse in Markdown's effect runs the same text and keeps the last drawn tree if it fails too.
     return undefined
   }
+}
+
+export function warmParser(): void {
+  void preloadParser()
 }
 
 export function warm<T>(texts: readonly T[], source: (text: T) => { markdown: string; at: number }): () => void {

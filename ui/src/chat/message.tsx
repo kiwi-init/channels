@@ -28,6 +28,7 @@ import { later } from "~/kit/later"
 import { copyText } from "~/kit/toasts"
 import { personGo } from "~/person-go"
 import { SENT } from "~/sent"
+import { Wait } from "~/kit/wait"
 
 const Annotator = lazy(() => import("~/chat/annotator"))
 const Gifs = lazy(() => import("~/chat/gif-picker"))
@@ -351,7 +352,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
         )}
         {m.task !== undefined && <TaskChip channel={channel} id={m.task} />}
         {spec && !inThread && (
-          <Suspense fallback={null}>
+          <Suspense fallback={<Wait />}>
             <SpecCard channel={channel} spec={spec} />
           </Suspense>
         )}
@@ -359,12 +360,12 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
           <PrChip key={pr.url} pr={pr} />
         ))}
         {ask?.kind === "permission" && (
-          <Suspense fallback={null}>
+          <Suspense fallback={<Wait />}>
             <PermissionCard channel={channel} ask={ask} />
           </Suspense>
         )}
         {ask?.kind === "question" && (
-          <Suspense fallback={null}>
+          <Suspense fallback={<Wait />}>
             <QuestionCard channel={channel} ask={ask} />
           </Suspense>
         )}

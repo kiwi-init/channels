@@ -50,6 +50,7 @@ import { useAct, useGo, useActions, useAppAccount } from "~/nav"
 import { keysHint } from "~/kit/keys"
 import { personGo } from "~/person-go"
 import { viewImage } from "~/chat/image-view"
+import { Wait } from "~/kit/wait"
 
 const QuestionCard = lazy(() => import("~/chat/question-card"))
 
@@ -853,7 +854,7 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
         return ask
           ? [
               createPortal(
-                <Suspense fallback={null}>
+                <Suspense fallback={<Wait />}>
                   <QuestionCard channel={channel} ask={ask} />
                 </Suspense>,
                 el,
