@@ -61,6 +61,7 @@ function parse() {
         replaces: { type: "string" },
         close: { type: "string" },
         step: { type: "boolean" },
+        also: { type: "boolean" },
         do: { type: "string", multiple: true },
         run: { type: "string", multiple: true },
         expect: { type: "string" },

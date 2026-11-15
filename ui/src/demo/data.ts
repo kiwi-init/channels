@@ -967,6 +967,16 @@ const asks: Ask[] = [
   },
   {
     kind: "question",
+    id: "q-3",
+    from: "win",
+    at: m(1.5),
+    text: wrote("If it goes behind a setting, is it on for new people by default?"),
+    label: "Taste call for you",
+    options: ["On for new people", "Off until they turn it on"].map(wrote),
+    holds: [11],
+  },
+  {
+    kind: "question",
     id: "q-0",
     from: "atlas",
     at: m(60 * 26),

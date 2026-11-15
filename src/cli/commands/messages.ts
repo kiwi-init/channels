@@ -31,7 +31,7 @@ import {
   type Step,
 } from "@kiwi/core/protocol.ts";
 import { recipients, waitsLines, waitsOf, type Busy, type Marks, type Reached } from "@kiwi/core/receipts.ts";
-import { asksOnSameWork, chooseThread, inGeneral, longForGeneral, parseTaskId, taskId, wentTo, type ChannelState } from "@kiwi/core/state.ts";
+import { asksOnSameWork, openAsksOnWork, chooseThread, inGeneral, longForGeneral, parseTaskId, taskId, wentTo, type ChannelState } from "@kiwi/core/state.ts";
 import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
@@ -394,6 +394,17 @@ export const messageCommands: Record<string, Command> = {
           const { state, messages } = yield* s.state();
           for (const n of yield* waitingOn(s, state, messages, { seq, body, to: [lead], task, re })) out(n);
         });
+      if (ids.length && !opt.also && !opt.step && decision !== "irreversible" && opt.handoff === undefined) {
+        const { state } = yield* s.state();
+        const open = openAsksOnWork(state, ids).find((a) => a.from !== s.me && a.seq !== re);
+        if (open) {
+          const shared = ids.filter((id) => open.task === id || open.holds?.includes(id)).map((id) => (state.tasks.has(id) ? taskId(id) : `#${id}`));
+          out(`already open on ${shared.join(", ")}: #${open.seq} ${open.from} → ${open.to?.join(", ")}: ${firstLine(open.body)}`);
+          return yield* die(
+            `one open decision per task: if it's the same question, wait for #${open.seq}'s answer; if it's another one on the same work, send it again with --also and it joins #${open.seq}'s card in Needs you`,
+          );
+        }
+      }
       const stepFlags = ["do", "run", "expect", "link", "why", "needs-person"] as const;
       if (!opt.step && stepFlags.some((f) => opt[f] !== undefined)) return yield* die(`--${stepFlags.find((f) => opt[f] !== undefined)} goes with --step`);
       if (opt.step) {

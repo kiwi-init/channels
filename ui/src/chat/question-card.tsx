@@ -84,7 +84,7 @@ function ClosedAsk({ channel, closed }: { channel: Channel; closed: Closed }) {
   )
 }
 
-export default function QuestionCard({ channel, ask }: { channel: Channel; ask: QuestionAsk }) {
+export default function QuestionCard({ channel, ask, joined = false }: { channel: Channel; ask: QuestionAsk; joined?: boolean }) {
   const { actions } = useAct()
   const free = !ask.step && !ask.handoff && ask.options.length === 0
   const [other, setOther] = useState<string | null>(free ? "" : null)
@@ -121,7 +121,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
   }
   if (ask.closed) return <ClosedAsk channel={channel} closed={ask.closed} />
   const choice = ask.options.length > 0 && !ask.step && !ask.handoff
-  const earlier = earlierAnswer(channel, ask)
+  const earlier = joined ? null : earlierAnswer(channel, ask)
   return (
     <>
       {earlier && <p className="ask-earlier">{t(earlier.chose ? "chat.question.card.earlier.chose" : "chat.question.card.earlier.answered", { text: earlier.text, when: day(earlier.at) })}</p>}

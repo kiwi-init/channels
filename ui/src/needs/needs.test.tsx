@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 
 import type { Channel, Person, QuestionAsk } from "~/model"
 import { ActContext, AppContext, type Act, type Ctx } from "~/nav"
-import { needsText } from "~/needs/needs"
+import { joinedQuestions, needsText } from "~/needs/needs"
 import { wrote } from "~/words"
 
 const NOW = 1_800_000_000_000
@@ -84,5 +84,34 @@ describe("authored text can't mount a page's fields (T3566)", () => {
     expect(names).toContain("0")
     expect(m.fields.has("0")).toBe(false)
     expect([...m.fields.keys()].every((name) => /^[0-9a-f]{24}-question-/.test(name))).toBe(true)
+  })
+})
+
+describe("a second decision on a task joins the open card (T508)", () => {
+  const first = ask({ id: "q1", holds: [7], text: wrote("Glass or frosted?") })
+  const second = ask({ id: "q2", from: "upbeat-heron", at: NOW - 30_000, holds: [7], text: wrote("Which blur radius?") })
+  const cardOf = (md: string, text: string): string => md.split(/\n(?!>)/).find((block) => block.includes(text)) ?? ""
+
+  test("the later one renders inside the first card, with its own question and answers", () => {
+    const { md, m } = built([second, first])
+    expect(cardOf(md, "Glass or frosted?")).toContain("Which blur radius?")
+    expect([...m.fields.keys()].filter((k) => k.includes("question-")).map((k) => k.slice(k.indexOf("question-")))).toEqual(["question-q1", "question-q2"])
+    expect(joinedQuestions([first, second])).toEqual({ more: new Map([["q1", [second]]]), joined: new Set(["q2"]) })
+  })
+
+  test("your earlier answer on the task shows once, on the first question", () => {
+    const done = ask({ id: "q0", holds: [7], options: [wrote("A: keep it")], answer: { text: wrote("A: keep it"), by: "jow", at: NOW - 86_400_000, shownIn: "card" } })
+    expect(fields([done, first, second]).split("ask-earlier").length - 1).toBe(1)
+  })
+
+  test("another task, an irreversible one, a step or one that holds nothing keeps its own card", () => {
+    const apart = [
+      ask({ id: "q3", holds: [8] }),
+      ask({ id: "q4", holds: [7], irreversible: true }),
+      ask({ id: "q5", holds: [7], step: { why: "w", needsPerson: "n", do: ["d"] } }),
+      ask({ id: "q6", holds: [] }),
+    ]
+    expect(joinedQuestions([first, ...apart]).joined.size).toBe(0)
+    expect(cardOf(built([first, ...apart]).md, "Glass or frosted?")).not.toContain("Should @")
   })
 })

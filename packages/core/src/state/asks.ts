@@ -85,6 +85,13 @@ export function askedOfPeopleByOthers(state: Pick<ChannelState, "openAsks" | "me
   return state.openAsks.filter((a) => a.from !== me && !!a.to?.length && !a.to.includes(me) && a.to.some((n) => isPeopleTarget(state, n)));
 }
 
+export function openAsksOnWork(state: Pick<ChannelState, "openAsks" | "members" | "tasks" | "askHeads">, holds: readonly number[]): Message[] {
+  if (!holds.length) return [];
+  return state.openAsks.filter(
+    (a) => a.esc && !a.permission && !a.handoff && !a.step && a.decision !== "irreversible" && !!a.to?.some((n) => isPeopleTarget(state, n)) && heldBy(state, a).some((id) => holds.includes(id)),
+  );
+}
+
 export function asksOnSameWork(state: Pick<ChannelState, "openAsks" | "members" | "tasks" | "askHeads">, me: string, to: readonly string[], holds: readonly number[]): Message[] {
   if (!holds.length) return [];
   return askedOfPeopleByOthers(state, me).filter((a) => a.to?.some((n) => to.includes(n)) && heldBy(state, a).some((id) => holds.includes(id)));

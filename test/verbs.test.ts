@@ -372,7 +372,11 @@ describe("review rounds through the CLI", () => {
   test("ask-human names another agent's open ask to the same person on the same work, and status lists it (#1580)", async () => {
     const t = taskNo(await ok(dev, "task", "add", "pick the avatar blur", "--ask", want));
     const first = seqOf(await ok(dev, "ask-human", "--holds", `T${t}`, "--option", "A: glass", "--option", "B: frosted", "Glass or frosted?"));
-    const second = await ok(other, "ask-human", "--holds", `T${t}`, "--option", "A: 8px", "--option", "B: 12px", "Which blur radius?");
+    const stopped = await run(other, "ask-human", "--holds", `T${t}`, "--option", "A: 8px", "--option", "B: 12px", "Which blur radius?");
+    expect(stopped.code).not.toBe(0);
+    expect(stopped.out).toContain(`already open on T${t}: #${first} dev`);
+    expect(stopped.err).toContain(`send it again with --also and it joins #${first}'s card`);
+    const second = await ok(other, "ask-human", "--also", "--holds", `T${t}`, "--option", "A: 8px", "--option", "B: 12px", "Which blur radius?");
     const mine = seqOf(second);
     expect(second).toContain(`also open on T${t}: #${first} dev`);
     expect(second).toContain(`kiwi ask-human --close ${mine} "same as #${first}"`);
