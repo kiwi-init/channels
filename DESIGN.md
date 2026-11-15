@@ -329,7 +329,7 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
 - A view that replaces another swaps in place in one frame, with no fade and
   no rise: a conversation, a Settings page, a thread, a task, the board, Needs
   you, their cards. Fades are for what lies over the work: dialogs, menus,
-  toasts, the palette.
+  toasts. The palette opens at once: it comes from a key, many times a day.
 - Motion answers an action: something opens, arrives or moves because someone
   did something. It is felt, never watched: short, soft, and nothing plays
   twice for the same event. Two things loop: the working dots under the
@@ -355,7 +355,7 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   for what just came in, never history or a scroll.
 - Clearing Needs you draws a tick (`tick-draw`).
 - Keyframes: `rise` (6px up and in), `fade`, `dialog-in`, `toast-in`,
-  `pop-in`, `palette-in` (6px down), `jump-in` (Jump to latest), `msg-flash`
+  `pop-in`, `jump-in` (Jump to latest), `msg-flash`
   (a message you jumped to, 1.6s).
 - Scrolling content fades under the top bar (16px, `bg` to transparent).
 - Reduced motion: the OS setting or Settings' own (`data-motion="reduced"` on

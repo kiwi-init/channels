@@ -110,7 +110,7 @@
   font-size: var(--t-ui);
   opacity: 0.85;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: opacity var(--fast);
   animation: onb-late 1s 2.6s var(--ease) both;
 }
 

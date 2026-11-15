@@ -12,20 +12,8 @@
   overflow: hidden;
 }
 
-.palette[open] {
-  animation: palette-in var(--fast) var(--ease);
-}
-
 .palette::backdrop {
   background: var(--scrim);
-  animation: fade var(--fast) var(--ease);
-}
-
-@keyframes palette-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
 }
 
 .palette-box {
