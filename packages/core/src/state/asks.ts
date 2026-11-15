@@ -206,7 +206,7 @@ export function readHandedOver(body: string): Handed | null {
 export function handedAskOf<M extends Pick<Message, "seq" | "from" | "to" | "body">>(ask: Pick<Message, "from" | "re">, find: (seq: number) => M | undefined): M | undefined {
   for (const seq of ask.re ?? []) {
     const handed = find(seq);
-    if (handed?.to?.includes(ask.from) && readHandedOver(String(handed.body ?? ""))?.from === handed.from) return handed;
+    if (handed?.to?.includes(ask.from) && HANDED.exec(String(handed.body ?? "").split("\n").at(-1) ?? "")?.[1] === handed.from) return handed;
   }
   return undefined;
 }
