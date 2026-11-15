@@ -99,6 +99,11 @@ describe("a second decision on a task joins the open card (T508)", () => {
     expect(joinedQuestions([first, second])).toEqual({ more: new Map([["q1", [second]]]), joined: new Set(["q2"]) })
   })
 
+  test("your earlier answer on the task shows once, on the first question", () => {
+    const done = ask({ id: "q0", holds: [7], options: [wrote("A: keep it")], answer: { text: wrote("A: keep it"), by: "jow", at: NOW - 86_400_000, shownIn: "card" } })
+    expect(fields([done, first, second]).split("ask-earlier").length - 1).toBe(1)
+  })
+
   test("another task, an irreversible one, a step or one that holds nothing keeps its own card", () => {
     const apart = [
       ask({ id: "q3", holds: [8] }),

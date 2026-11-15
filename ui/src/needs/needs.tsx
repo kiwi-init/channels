@@ -175,17 +175,17 @@ function askText(channel: Channel, a: Ask, m: Maker, go: (to: Go) => void, now: 
         m.field(`permission-${a.id}`, () => <PermissionActs channel={channel} ask={a} />),
       ])
     case "question": {
-      const one = (q: QuestionAsk): string[] => {
+      const one = (q: QuestionAsk, i: number): string[] => {
         const askedOf = q.askedOf?.map((n) => nickname(channel, n)).join(t("needs.question.and"))
         const verb = q.step ? t("needs.question.step") : q.handoff ? t("needs.question.browser") : askedOf ? t("needs.question.asks", { names: askedOf }) : t("needs.question.asks.you")
         return [
           headOf(channel, { from: q.from, tag: tone(q.label, QUESTION_TONE(q)), verb, show: show(channel, q), at: q.at }, now),
           authored(wordsRaw(q.text)),
           askedOf ? tone(t("needs.question.answer.too"), "quiet") : "",
-          m.field(`question-${q.id}`, () => <QuestionCard channel={channel} ask={q} />),
+          m.field(`question-${q.id}`, () => <QuestionCard channel={channel} ask={q} joined={i > 0} />),
         ]
       }
-      return card([...one(a), ...more.flatMap(one), holds(channel, [...new Set([a, ...more].flatMap(workOf))])])
+      return card([...one(a, 0), ...more.flatMap((q) => one(q, 1)), holds(channel, [...new Set([a, ...more].flatMap(workOf))])])
     }
     case "join":
       return card([
