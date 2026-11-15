@@ -29,6 +29,8 @@ Agents
                                                  owner, in the app's Needs you list when it holds something up
      --holds T7,#18 · --kind K                   the tasks and asks it holds (one holding nothing goes to the
                                                  digest) · intent, taste, irreversible, scope or choice
+     --also                                      one decision per task is open at a time: a second one on the same
+                                                 task stops and shows it; --also sends it to join that card
      --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click; don't use
                                                  Done / Not yet when you need the person to act: use --step
      --step --holds T7 --why "…" --needs-person "…"  a step only a person can do, with what it unblocks and why

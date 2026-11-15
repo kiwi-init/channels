@@ -14,7 +14,7 @@ import { Empty } from "~/kit/empty"
 import { Toggle } from "~/kit/form"
 import { Icon } from "~/kit/icons"
 import { ago, clock, lasting, useNow } from "~/kit/time"
-import { NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type PermissionAsk, type Powers, type PullRequest, type ReviewAsk } from "~/model"
+import { NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type PermissionAsk, type Powers, type PullRequest, type QuestionAsk, type ReviewAsk } from "~/model"
 import { useApp, useGo, type Go } from "~/nav"
 import { TASK_TICK_MS } from "~/tasks/tick"
 import { wakeLine } from "~/needs/wake-line"
@@ -48,6 +48,7 @@ const strangerOf =
 export function needsText(channel: Channel, go: (to: Go) => void, tag?: string, now = Date.now()): { md: string; m: Maker } {
   const m = maker(tag)
   const open = openAsks(channel).sort((a, b) => a.at - b.at)
+  const joins = joinedQuestions(open)
   const unchecked = open.some((a) => a.kind === "join" && a.check === "unchecked")
   const idle = channel.asks.filter(isIdle).sort((a, b) => a.at - b.at)
   const answered = channel.asks
@@ -58,7 +59,7 @@ export function needsText(channel: Channel, go: (to: Go) => void, tag?: string, 
   const md = join([
     `# ${esc(t("shell.channel.needs.you"))}`,
     unchecked ? tone(t("needs.list.unusual.joins"), "decide") : "",
-    ...open.map((a) => askText(channel, a, m, go, now)),
+    ...open.filter((a) => !joins.joined.has(a.id)).map((a) => askText(channel, a, m, go, now, joins.more.get(a.id))),
     open.length ? "" : m.field("clear", () => <Clear loading={!!channel.loading} />),
     idle.length ? `## ${esc(t("needs.list.idle.sum", { rest: t("needs.list.idle.rest") }))}` : "",
     ...idle.map((a) => askText(channel, a, m, go, now)),
@@ -132,7 +133,30 @@ const prLine = (pr: PullRequest): string =>
 
 const QUESTION_TONE = (a: { irreversible?: boolean | undefined; plain?: boolean | undefined }): "alert" | "quiet" | "decide" => (a.irreversible ? "alert" : a.plain ? "quiet" : "decide")
 
-function askText(channel: Channel, a: Ask, m: Maker, go: (to: Go) => void, now: number): string {
+const workOf = (a: QuestionAsk): number[] => [...new Set([...(a.task !== undefined ? [a.task] : []), ...a.holds])]
+
+const joinsCard = (a: Ask): a is QuestionAsk => a.kind === "question" && !a.irreversible && !a.handoff && !a.step
+
+export function joinedQuestions(open: readonly Ask[]): { more: Map<string, QuestionAsk[]>; joined: Set<string> } {
+  const more = new Map<string, QuestionAsk[]>()
+  const joined = new Set<string>()
+  const leads: QuestionAsk[] = []
+  for (const a of open) {
+    if (!joinsCard(a)) continue
+    const work = workOf(a)
+    if (!work.length) continue
+    const lead = leads.find((l) => workOf(l).some((id) => work.includes(id)))
+    if (!lead) {
+      leads.push(a)
+      continue
+    }
+    more.set(lead.id, [...(more.get(lead.id) ?? []), a])
+    joined.add(a.id)
+  }
+  return { more, joined }
+}
+
+function askText(channel: Channel, a: Ask, m: Maker, go: (to: Go) => void, now: number, more: readonly QuestionAsk[] = []): string {
   switch (a.kind) {
     case "permission":
       return card([
@@ -151,15 +175,17 @@ function askText(channel: Channel, a: Ask, m: Maker, go: (to: Go) => void, now: 
         m.field(`permission-${a.id}`, () => <PermissionActs channel={channel} ask={a} />),
       ])
     case "question": {
-      const askedOf = a.askedOf?.map((n) => nickname(channel, n)).join(t("needs.question.and"))
-      const verb = a.step ? t("needs.question.step") : a.handoff ? t("needs.question.browser") : askedOf ? t("needs.question.asks", { names: askedOf }) : t("needs.question.asks.you")
-      return card([
-        headOf(channel, { from: a.from, tag: tone(a.label, QUESTION_TONE(a)), verb, show: show(channel, a), at: a.at }, now),
-        authored(wordsRaw(a.text)),
-        askedOf ? tone(t("needs.question.answer.too"), "quiet") : "",
-        m.field(`question-${a.id}`, () => <QuestionCard channel={channel} ask={a} />),
-        holds(channel, [...new Set([...(a.task !== undefined ? [a.task] : []), ...a.holds])]),
-      ])
+      const one = (q: QuestionAsk): string[] => {
+        const askedOf = q.askedOf?.map((n) => nickname(channel, n)).join(t("needs.question.and"))
+        const verb = q.step ? t("needs.question.step") : q.handoff ? t("needs.question.browser") : askedOf ? t("needs.question.asks", { names: askedOf }) : t("needs.question.asks.you")
+        return [
+          headOf(channel, { from: q.from, tag: tone(q.label, QUESTION_TONE(q)), verb, show: show(channel, q), at: q.at }, now),
+          authored(wordsRaw(q.text)),
+          askedOf ? tone(t("needs.question.answer.too"), "quiet") : "",
+          m.field(`question-${q.id}`, () => <QuestionCard channel={channel} ask={q} />),
+        ]
+      }
+      return card([...one(a), ...more.flatMap(one), holds(channel, [...new Set([a, ...more].flatMap(workOf))])])
     }
     case "join":
       return card([
