@@ -1,7 +1,9 @@
 import { resolve } from "node:path"
 import react from "@vitejs/plugin-react"
-import { defineConfig, type Plugin } from "vite"
+import { defineConfig, type CSSOptions, type Plugin } from "vite"
 import { slimIcon } from "./src/kit/slim-icons.ts"
+
+type AcceptedPlugin = NonNullable<Exclude<CSSOptions["postcss"], string | undefined>["plugins"]>[number]
 
 function compactIcons(): Plugin {
   return {
@@ -11,6 +13,28 @@ function compactIcons(): Plugin {
       return { code: slimIcon(code), map: null }
     },
   }
+}
+
+type Up = { type: string; name?: string; params?: string; parent?: Up }
+
+const MOUSE = "(hover: hover) and (pointer: fine)"
+const REVEALS = /^(opacity: ?1|visibility: ?visible|display: ?(?!none))/
+const bareHover = (selector: string): boolean => selector.replace(/\([^()]*\)/g, "").includes(":hover")
+
+const hoverWithAMouse: AcceptedPlugin = {
+  postcssPlugin: "hover-with-a-mouse",
+  Rule(rule, { AtRule }) {
+    const hovers = rule.selectors.filter(bareHover)
+    if (!hovers.length) return
+    for (let up: Up | undefined = rule.parent; up; up = up.parent) if (up.type === "atrule" && up.name === "media" && up.params?.includes("hover")) return
+    if (rule.some((node) => node.type === "decl" && REVEALS.test(`${node.prop}: ${node.value}`))) return
+    const media = new AtRule({ name: "media", params: MOUSE })
+    media.append(rule.clone({ selectors: hovers }))
+    rule.after(media)
+    const rest = rule.selectors.filter((selector) => !bareHover(selector))
+    if (rest.length) rule.selectors = rest
+    else rule.remove()
+  },
 }
 
 const LINK_IN_HEAD = "document.head.appendChild(link)"
@@ -55,6 +79,7 @@ function firstLoadChunks(): Plugin {
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), compactIcons(), lazyLinksAfterThePage(), firstLoadChunks()],
+  css: { postcss: { plugins: [hoverWithAMouse] } },
   build: { modulePreload: { resolveDependencies: (_file, deps, { hostType }) => (hostType === "js" ? deps.filter((dep) => !firstLoad.has(dep)) : deps) } },
   define: { __DEV__: "false", ...(mode === "harness" ? { "import.meta.env.DEV": "true" } : {}) },
   resolve: {

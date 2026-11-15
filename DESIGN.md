@@ -347,7 +347,9 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   lighting up on its own.
 - Pressing a control dips it to 0.96 and it springs back on `--pop`. This is the
   only scale on a resting control. Rows take hover at once and let it go on
-  `--fast`; nothing grows on hover.
+  `--fast`; nothing grows on hover. Hover looks apply only with a mouse
+  (`hoverWithAMouse` in `ui/vite.config.ts`); a hover that reveals a control
+  still answers a tap.
 - A change is marked once: a `Dot` pops when its status moves and rings when it
   turns done (`done-ring`), a `Count` rolls to its new number (`count-roll`),
   both through `useMoved`, so opening a view animates nothing that didn't change.
