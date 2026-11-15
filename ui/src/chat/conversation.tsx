@@ -350,6 +350,9 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
       rows.removeAttribute("data-unfinished")
     }
   }, [scroller, content])
+  useEffect(() => {
+    void import("~/chat/markdown").then((m) => m.warmParser())
+  }, [])
   const questions = channel.asks.some((a) => a.kind === "question")
   useEffect(() => {
     if (questions) void import("~/chat/question-card")

@@ -18,8 +18,6 @@ import { keepParsed, parseKey, parsedFor } from "~/chat/parsed"
 import { tooltipOf, zonedLinks } from "~/chat/zoned-times"
 import { copyText } from "~/kit/toasts"
 
-void preloadParser()
-
 const TEXT = { fontSize: 15, fontFamily: "var(--sans)", color: "var(--ink)", lineHeight: 22, marginTop: 0, marginBottom: 8 }
 const HEAD = { fontFamily: "var(--sans)", fontWeight: "600", color: "var(--ink)", marginTop: 6, marginBottom: 4 }
 
@@ -241,6 +239,10 @@ function parsedNow(markdown: string, at?: number): ASTNode | undefined {
     // The async parse in Markdown's effect runs the same text and keeps the last drawn tree if it fails too.
     return undefined
   }
+}
+
+export function warmParser(): void {
+  void preloadParser()
 }
 
 export function warm<T>(texts: readonly T[], source: (text: T) => { markdown: string; at: number }): () => void {

@@ -18,7 +18,7 @@ const server = Bun.serve({
   async fetch(req) {
     const path = decodeURIComponent(new URL(req.url).pathname);
     const file = Bun.file(join(dist, path === "/" || !path.includes(".") ? "index.html" : path));
-    return (await file.exists()) ? new Response(file) : new Response("not found", { status: 404 });
+    return (await file.exists()) ? new Response(file, { headers: { "cache-control": "no-store" } }) : new Response("not found", { status: 404 });
   },
 });
 const browser = await (engine === "webkit" ? webkit : chromium).launch();
