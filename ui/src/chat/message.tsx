@@ -63,10 +63,16 @@ function Clamp({ on, children }: { on: boolean; children: ReactNode }) {
     const el = box.current
     if (!on || !el) return
     clampSoon(el, setOver)
-    const watch = new ResizeObserver(() => setOver(el.scrollHeight > CLAMP_PX + 44))
+    const measure = () => setOver(el.scrollHeight > CLAMP_PX + 44)
+    const watch = new ResizeObserver(measure)
     for (const child of el.children) watch.observe(child)
     watch.observe(el)
-    return () => watch.disconnect()
+    const changes = new MutationObserver(measure)
+    changes.observe(el, { childList: true, subtree: true, characterData: true })
+    return () => {
+      watch.disconnect()
+      changes.disconnect()
+    }
   }, [on])
   if (!on) return <>{children}</>
   return (
