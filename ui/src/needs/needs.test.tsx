@@ -87,6 +87,23 @@ describe("authored text can't mount a page's fields (T3566)", () => {
   })
 })
 
+describe("what the Lead settled is one line, never a card (T506)", () => {
+  test("a fold line with the count and the first questions, and the list behind it", () => {
+    const settled = [
+      { id: "s1", by: "gentle-otter", asker: "upbeat-heron", at: NOW - 60_000, question: wrote("Hide agents that left?"), answer: wrote("B: dim") },
+      { id: "s2", by: "gentle-otter", asker: "upbeat-heron", at: NOW - 120_000, question: wrote("Cap the bubble?"), answer: wrote("A: cap it") },
+    ]
+    const { md, m } = needsText({ ...channel([]), settled }, () => {})
+    expect(read(md)).toContain("The Lead settled 2")
+    expect([...m.fields.keys()].some((k) => k.endsWith("-settled"))).toBe(true)
+    expect(md.split("\n").filter((l) => l.startsWith("> ### "))).toHaveLength(0)
+  })
+
+  test("with nothing settled there's no line", () => {
+    expect(built([]).md).not.toContain("settled")
+  })
+})
+
 describe("a second decision on a task joins the open card (T508)", () => {
   const first = ask({ id: "q1", holds: [7], text: wrote("Glass or frosted?") })
   const second = ask({ id: "q2", from: "upbeat-heron", at: NOW - 30_000, holds: [7], text: wrote("Which blur radius?") })

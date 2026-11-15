@@ -482,6 +482,16 @@ export interface QuestionAsk {
   via?: string
 }
 
+export interface Settled {
+  id: string
+  by: string
+  asker: string
+  at: number
+  question: Words
+  answer: Words
+  overruled?: { text: Words; at: number }
+}
+
 export interface JoinAsk {
   kind: "join"
   id: string
@@ -662,6 +672,7 @@ export interface Channel {
   specsOnly?: true
   free?: string[]
   asks: Ask[]
+  settled?: Settled[]
   connection: "connecting" | "live" | "reconnecting"
   docs?: Readonly<Record<string, string>>
   loading?: boolean
@@ -810,6 +821,7 @@ export interface Actions {
   deleteMessage(code: string, seq: number): void
   answerPermission(code: string, id: string, allow: boolean): void
   answerQuestion(code: string, id: string, text: string): void
+  overrule(code: string, id: string, text: string): void
   answerStep(code: string, id: string, reply: StepReply): void
   answerJoin(code: string, id: string, letIn: boolean, choice?: JoinChoice): void
   approveTask(code: string, task: number, approve: boolean, why?: string): void

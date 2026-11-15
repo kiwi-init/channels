@@ -476,6 +476,39 @@ button.needs-name:hover {
   font: var(--t-ui) / 1.5 var(--ui);
 }
 
+.settled {
+  display: grid;
+  gap: 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settled-row {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+
+.settled-row .ask-other {
+  justify-self: stretch;
+  max-width: 560px;
+}
+
+.settled-question {
+  color: var(--ink);
+  font: var(--t-ui) / 1.5 var(--ui);
+}
+
+.settled-answer {
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+}
+
+.settled-answer.is-overruled {
+  color: var(--ink-2);
+}
+
 .needs-clear {
   display: grid;
   justify-items: center;

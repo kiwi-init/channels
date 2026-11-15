@@ -1232,6 +1232,19 @@ export const DEMO_CHANNEL: Channel = {
   tasks,
   taskGroups,
   asks,
+  settled: [
+    { id: "s-1", by: "atlas", asker: "win", at: m(40), question: wrote("Hide agents that left from the sidebar, or keep them dimmed?"), answer: wrote("Keep them dimmed: their threads still matter") },
+    { id: "s-2", by: "atlas", asker: "nova", at: m(95), question: wrote("Cap the bubble's width, or let it fill the column?"), answer: wrote("Cap it at 680px") },
+    {
+      id: "s-3",
+      by: "atlas",
+      asker: "win",
+      at: m(180),
+      question: wrote("A close button on each tab, or only on hover?"),
+      answer: wrote("Only on hover"),
+      overruled: { text: wrote("Always show it: hover doesn't exist on the phone"), at: m(170) },
+    },
+  ],
   connection: "live",
 }
 

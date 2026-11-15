@@ -85,6 +85,7 @@ import type {
   TaskQuiet,
   TaskStep,
   RunTrouble,
+  Settled,
   TaskStatus,
   TheirDirect,
   Upload,
@@ -865,6 +866,30 @@ interface AsksMap {
   asks: Ask[]
   askOf: Map<number, string>
   held: Set<number>
+  settled: Settled[]
+}
+
+const SETTLED_FOR = 86_400_000
+
+function settledOf(messages: readonly Wire[], bySeq: ReadonlyMap<number, Wire>, replies: ReadonlyMap<number, readonly Wire[]>, me: string, ignore: (m: Wire) => boolean, now: number): Settled[] {
+  const out: Settled[] = []
+  for (const m of messages) {
+    if (m.esc || m.kind === "event" || now - m.ts > SETTLED_FOR || ignore(m)) continue
+    const handed = handedAskOf(m, (seq) => bySeq.get(seq))
+    if (!handed) continue
+    const body = String(handed.body ?? "")
+    const overrule = (replies.get(m.seq) ?? []).find((r) => r.from === me && r.kind !== "event" && !ignore(r))
+    out.push({
+      id: String(m.seq),
+      by: m.from,
+      asker: handed.from,
+      at: m.ts,
+      question: wrote(body.slice(0, Math.max(0, body.lastIndexOf("\n\n")))),
+      answer: wrote(m.body),
+      ...(overrule ? { overruled: { text: wrote(overrule.body), at: overrule.ts } } : {}),
+    })
+  }
+  return out
 }
 
 const isQuestion = (m: Wire): boolean => (m.kind === "ask" || m.kind === "blocking") && !m.permission
@@ -1018,7 +1043,8 @@ export function asksOf(
   const me_ = state.members.get(me)
   for (const t of reviewsFor(state.tasks.values(), me, !!me_ && isPerson(me_))) asks.push({ kind: "review", id: `review-${t.id}`, at: t.updatedAt, from: t.owner ?? t.createdBy, task: t.id })
   if (owner) asks.push(...quietAsks(state, now))
-  return { asks, askOf, held }
+  const settled = decides || owner ? settledOf(messages, bySeq, replies, me, (m) => ignored(state.trust.get(m.seq)), now) : []
+  return { asks, askOf, held, settled }
 }
 
 const LADDER_TOP = 3
