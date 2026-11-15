@@ -1,5 +1,5 @@
 import { TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
-import { taskId, taskSpecRefusal } from "@kiwi/core/state.ts"
+import { handedAskOf, taskId, taskSpecRefusal } from "@kiwi/core/state.ts"
 import { assignTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { forgetChannel, forgetPending, loadMember, loadPending, renameChannel } from "@kiwi/channel/store.ts"
 import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
@@ -133,7 +133,8 @@ export function makeActions(): Actions {
         const run = need(code)
         const m = run.messages.find((x) => x.seq === Number(id))
         if (!m) throw new Error(t("live.actions.question.gone"))
-        await run.send(text, { to: [m.from], re: [m.seq], kind: "msg", side: true, pick: true })
+        const handed = handedAskOf(m, (seq) => run.messages.find((x) => x.seq === seq))
+        await run.send(text, { to: handed ? [m.from, handed.from] : [m.from], re: handed ? [m.seq, handed.seq] : [m.seq], kind: "msg", side: true, pick: true })
       }),
     answerStep: (code, id, reply) => attempt(t("live.actions.not.answered"), async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(t(yes ? "live.actions.let.in.failed" : "live.actions.turn.away.failed"), async () => (await manage()).answerJoin(code, id, yes, choice)),

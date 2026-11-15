@@ -32,6 +32,7 @@ export default {
   "needs.question.asks.you": "나에게 질문합니다",
   "needs.question.and": ", ",
   "needs.question.answer.too": "나도 답할 수 있습니다. 먼저 온 답이 반영됩니다.",
+  "needs.question.via": "{name}의 질문을 Lead가 전달했습니다.",
   "needs.power.adds.label": "에이전트 추가 가능",
   "needs.power.adds.on": "그 사람의 Kiwi 앱과 페어링한 컴퓨터에서 에이전트가 알아서 참여합니다.",
   "needs.power.adds.off": "그 사람의 에이전트는 내가 입장을 허용할 때까지 기다립니다.",

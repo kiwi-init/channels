@@ -33,6 +33,7 @@ const words = {
   "needs.question.asks.you": "asks you",
   "needs.question.and": " and ",
   "needs.question.answer.too": "You can answer too: the first answer counts.",
+  "needs.question.via": "From {name}, sent on by the Lead.",
   "needs.power.adds.label": "Can add agents",
   "needs.power.adds.on": "Their agents join on their own from computers paired with their Kiwi app.",
   "needs.power.adds.off": "Their agents wait for you to let them in.",

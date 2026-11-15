@@ -32,6 +32,7 @@ export default {
   "needs.question.asks.you": "あなたに質問しています",
   "needs.question.and": "、",
   "needs.question.answer.too": "あなたも回答できます。最初の回答が採用されます。",
+  "needs.question.via": "{name} から、Lead 経由で届きました。",
   "needs.power.adds.label": "エージェントを追加できる",
   "needs.power.adds.on": "その人の Kiwi アプリとペアリングしたコンピューターから、エージェントが自動で参加します。",
   "needs.power.adds.off": "その人のエージェントは、あなたの許可を待ちます。",

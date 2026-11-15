@@ -137,15 +137,20 @@ const workOf = (a: QuestionAsk): number[] => [...new Set([...(a.task !== undefin
 
 const joinsCard = (a: Ask): a is QuestionAsk => a.kind === "question" && !a.irreversible && !a.handoff && !a.step
 
+const tagOf = (q: QuestionAsk): string => (q.area !== undefined && !q.irreversible ? q.area : q.label)
+
+const areaKey = (a: QuestionAsk): string | undefined => a.area?.toLocaleLowerCase()
+
+const together = (lead: QuestionAsk, a: QuestionAsk): boolean => workOf(lead).some((id) => workOf(a).includes(id)) || (a.area !== undefined && lead.from === a.from && areaKey(lead) === areaKey(a))
+
 export function joinedQuestions(open: readonly Ask[]): { more: Map<string, QuestionAsk[]>; joined: Set<string> } {
   const more = new Map<string, QuestionAsk[]>()
   const joined = new Set<string>()
   const leads: QuestionAsk[] = []
   for (const a of open) {
     if (!joinsCard(a)) continue
-    const work = workOf(a)
-    if (!work.length) continue
-    const lead = leads.find((l) => workOf(l).some((id) => work.includes(id)))
+    if (!workOf(a).length && a.area === undefined) continue
+    const lead = leads.find((l) => together(l, a))
     if (!lead) {
       leads.push(a)
       continue
@@ -179,8 +184,11 @@ function askText(channel: Channel, a: Ask, m: Maker, go: (to: Go) => void, now: 
         const askedOf = q.askedOf?.map((n) => nickname(channel, n)).join(t("needs.question.and"))
         const verb = q.step ? t("needs.question.step") : q.handoff ? t("needs.question.browser") : askedOf ? t("needs.question.asks", { names: askedOf }) : t("needs.question.asks.you")
         return [
-          headOf(channel, { from: q.from, tag: tone(q.label, QUESTION_TONE(q)), verb, show: show(channel, q), at: q.at }, now),
+          i > 0 && q.from === a.from && tagOf(q).toLocaleLowerCase() === tagOf(a).toLocaleLowerCase()
+            ? ""
+            : headOf(channel, { from: q.from, tag: tone(tagOf(q), QUESTION_TONE(q)), verb, show: show(channel, q), at: q.at }, now),
           authored(wordsRaw(q.text)),
+          q.via ? tone(t("needs.question.via", { name: nickname(channel, q.via) }), "quiet") : "",
           askedOf ? tone(t("needs.question.answer.too"), "quiet") : "",
           m.field(`question-${q.id}`, () => <QuestionCard channel={channel} ask={q} joined={i > 0} />),
         ]

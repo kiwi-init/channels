@@ -23,6 +23,8 @@ import {
   isDecisionKind,
   isGifReaction,
   wellFormedChoices,
+  wellFormedArea,
+  AREA_MAX_LENGTH,
   isQuiet,
   PROTOCOL_VERSION,
   type InlineImage,
@@ -369,7 +371,10 @@ export const messageCommands: Record<string, Command> = {
       if (bad) return yield* die(`--holds takes tasks and asks, like T7,#18: "${bad[0]}" isn't one`);
       const holds = held?.flatMap(([, id]) => (id === null ? [] : [id]));
       const decision = opt.kind === undefined ? undefined : isDecisionKind(opt.kind) ? opt.kind : yield* die(`--kind is one of ${DECISION_KINDS.join(", ")}`);
-      const hold = { ...(holds?.length ? { holds } : {}), ...(decision ? { decision } : {}) };
+      const area = opt.area?.trim();
+      if (area !== undefined && !wellFormedArea(area)) return yield* die(`--area takes the area's name, one line of up to ${AREA_MAX_LENGTH} characters, like --area "Tab strip"`);
+      if (area !== undefined && (opt.step || opt.handoff !== undefined)) return yield* die("--area puts decisions on one area in one card; a step or a browser hand-off keeps its own card");
+      const hold = { ...(holds?.length ? { holds } : {}), ...(decision ? { decision } : {}), ...(area ? { area } : {}) };
       const named = [...new Set([...(task !== undefined ? [`T${task}`] : []), ...(held?.map(([raw]) => raw) ?? [])])];
       const heldText = named.length ? `, holding ${named.join(", ")}` : "";
       const ids = [...new Set([...(task !== undefined ? [task] : []), ...(holds ?? [])])];
@@ -394,7 +399,7 @@ export const messageCommands: Record<string, Command> = {
           const { state, messages } = yield* s.state();
           for (const n of yield* waitingOn(s, state, messages, { seq, body, to: [lead], task, re })) out(n);
         });
-      if (ids.length && !opt.also && !opt.step && decision !== "irreversible" && opt.handoff === undefined) {
+      if (ids.length && !opt.also && area === undefined && !opt.step && decision !== "irreversible" && opt.handoff === undefined) {
         const { state } = yield* s.state();
         const open = openAsksOnWork(state, ids).find((a) => a.from !== s.me && a.seq !== re);
         if (open) {

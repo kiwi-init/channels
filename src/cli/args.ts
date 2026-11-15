@@ -62,6 +62,7 @@ function parse() {
         close: { type: "string" },
         step: { type: "boolean" },
         also: { type: "boolean" },
+        area: { type: "string" },
         do: { type: "string", multiple: true },
         run: { type: "string", multiple: true },
         expect: { type: "string" },

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
-import { fold, type Roster } from "@kiwi/core/state.ts"
+import { fold, handedOver, type Roster } from "@kiwi/core/state.ts"
 import { asksOf } from "~/live/map"
 import { wordsRaw } from "~/words"
 
@@ -47,6 +47,23 @@ describe("a card knows where its answer shows (#1794)", () => {
     const { asks } = asksOf(fold(messages, roster, 0), messages, "jow", true, [], roster, new Map())
     expect(asks[0]).toMatchObject({ kind: "question", answer: { shownIn: "card" } })
     expect(asks[0]?.kind === "question" && asks[0].answer && "seq" in asks[0].answer).toBe(false)
+  })
+})
+
+describe("a decision the Lead sends on keeps its area and whose it was (T505)", () => {
+  test("the card has the area, and names the Builder whose hand-over it answers", () => {
+    const handed = signed({ id: "h", seq: 3, from: "win", pk: "pk-win", kind: "blocking", body: handedOver("win", "Count where?", { area: "Tab strip" }), to: ["atlas"] })
+    const sent = signed({ id: "s", seq: 4, from: "atlas", pk: "pk-atlas", kind: "blocking", body: "The count after the name?", to: ["jow"], esc: true, area: "Tab strip", re: [3] })
+    const messages = [handed, sent]
+    const card = asksOf(fold(messages, roster, 0), messages, "jow", true, [], roster, new Map()).asks.find((a) => a.id === "4")
+    expect(card).toMatchObject({ kind: "question", area: "Tab strip", via: "win" })
+  })
+
+  test("a decision of the Lead's own names nobody else", () => {
+    const own = signed({ id: "s", seq: 4, from: "atlas", pk: "pk-atlas", kind: "blocking", body: "Ship it?", to: ["jow"], esc: true, re: [5] })
+    const messages = [ask, own]
+    const card = asksOf(fold(messages, roster, 0), messages, "jow", true, [], roster, new Map()).asks.find((a) => a.id === "4")
+    expect(card?.kind === "question" && card.via).toBeUndefined()
   })
 })
 

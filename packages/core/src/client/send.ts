@@ -60,6 +60,7 @@ export interface SendOptions {
   choices?: string[];
   holds?: number[];
   decision?: DecisionKind;
+  area?: string;
   step?: Step;
   stepReply?: StepReply;
   check?: CheckAsk;
@@ -163,6 +164,7 @@ export class ChannelSending {
         ...(opts.esc && opts.choices && !opts.ev ? { choices: opts.choices } : {}),
         ...(opts.esc && opts.holds?.length && !opts.ev ? { holds: opts.holds } : {}),
         ...(opts.esc && opts.decision && !opts.ev ? { decision: opts.decision } : {}),
+        ...(opts.esc && opts.area && !opts.ev ? { area: opts.area } : {}),
         ...(opts.esc && opts.step && !opts.ev ? { step: opts.step } : {}),
         ...(opts.esc && opts.check && !opts.ev ? { check: opts.check } : {}),
         ...(opts.stepReply && opts.re?.length && !opts.ev ? { stepReply: opts.stepReply } : {}),

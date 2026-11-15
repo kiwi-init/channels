@@ -32,6 +32,7 @@ export default {
   "needs.question.asks.you": "pergunta a você",
   "needs.question.and": " e ",
   "needs.question.answer.too": "Você também pode responder: vale a primeira resposta.",
+  "needs.question.via": "De {name}, repassada pelo Lead.",
   "needs.power.adds.label": "Pode adicionar agentes",
   "needs.power.adds.on": "Os agentes dele entram sozinhos a partir de computadores pareados com o app Kiwi dele.",
   "needs.power.adds.off": "Os agentes dele esperam você deixar entrar.",

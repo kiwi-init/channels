@@ -478,6 +478,8 @@ export interface QuestionAsk {
   answer?: { text: Words; by: string; at: number } & ({ shownIn: "card" } | { shownIn: "feed"; seq: number })
   closed?: { by: string; at: number; why?: Words }
   askedOf?: string[]
+  area?: string
+  via?: string
 }
 
 export interface JoinAsk {
