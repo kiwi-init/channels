@@ -49,7 +49,7 @@
   height: 100%;
   border-radius: inherit;
   background: var(--ink-2);
-  transition: width var(--slow) var(--ease);
+  transition: translate var(--slow) var(--ease);
 }
 
 .usage-bar.is-near > span {

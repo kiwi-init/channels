@@ -30,7 +30,7 @@
 @keyframes folder-pop {
   from {
     opacity: 0;
-    transform: scale(0.6);
+    transform: scale(0.9);
   }
 }
 
@@ -257,7 +257,7 @@
   block-size: 100%;
   border-radius: inherit;
   background: var(--doing);
-  transition: inline-size var(--slow) var(--ease);
+  transition: translate var(--slow) var(--ease);
 }
 
 .side-row {
@@ -587,13 +587,6 @@
 .side-row.is-muted .side-label,
 .side-row.is-muted .icon {
   color: var(--ink-3);
-}
-
-@keyframes hint-grow {
-  from {
-    opacity: 0;
-    transform: translateX(-8px) scaleX(0.6);
-  }
 }
 
 .top-find .search-field {
@@ -1041,14 +1034,14 @@
   left: 0;
   translate: calc(var(--x) - 50%) var(--y);
   transform-origin: center top;
-  animation: hint-drop var(--pop);
+  animation: hint-drop var(--fast) var(--ease);
   transition: translate var(--fast) var(--ease);
 }
 
 @keyframes hint-drop {
   from {
     opacity: 0;
-    transform: translateY(-4px) scale(0.8);
+    transform: translateY(-4px) scale(0.96);
   }
 }
 

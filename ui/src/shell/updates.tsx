@@ -93,7 +93,7 @@ function SideCard({ card }: { card: Card }) {
       )}
       {pct !== null && (
         <span className="side-card-bar" role="progressbar" aria-label={card.text} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
-          <span className="side-card-fill" style={{ inlineSize: `${pct}%` }} />
+          <span className="side-card-fill" style={{ translate: `${pct - 100}% 0` }} />
         </span>
       )}
     </li>

@@ -18,7 +18,7 @@ const SHOWN_KEY = "kiwi.limit-shown"
 export function UsageBar({ usage }: { usage: Usage }) {
   return (
     <span className={cx("usage-bar", `is-${levelOf(usage)}`)} aria-hidden="true">
-      <span style={{ width: `${shareOf(usage) * 100}%` }} />
+      <span style={{ translate: `${shareOf(usage) * 100 - 100}% 0` }} />
     </span>
   )
 }
