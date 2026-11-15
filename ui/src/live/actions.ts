@@ -136,6 +136,14 @@ export function makeActions(): Actions {
         const handed = handedAskOf(m, (seq) => run.messages.find((x) => x.seq === seq))
         await run.send(text, { to: handed ? [m.from, handed.from] : [m.from], re: handed ? [m.seq, handed.seq] : [m.seq], kind: "msg", side: true, pick: true })
       }),
+    overrule: (code, id, text) =>
+      attempt(t("live.actions.not.sent"), async () => {
+        const run = need(code)
+        const m = run.messages.find((x) => x.seq === Number(id))
+        if (!m) throw new Error(t("live.actions.question.gone"))
+        const handed = handedAskOf(m, (seq) => run.messages.find((x) => x.seq === seq))
+        await run.send(text, { to: handed ? [m.from, handed.from] : [m.from], re: [m.seq], kind: "msg" })
+      }),
     answerStep: (code, id, reply) => attempt(t("live.actions.not.answered"), async () => (await rare()).answerStep(code, id, reply)),
     answerJoin: (code, id, yes, choice) => attempt(t(yes ? "live.actions.let.in.failed" : "live.actions.turn.away.failed"), async () => (await manage()).answerJoin(code, id, yes, choice)),
     endStep: (code, id, step) => attempt(t("live.actions.step.not.ended"), async () => (await rare()).endStep(code, id, step)),

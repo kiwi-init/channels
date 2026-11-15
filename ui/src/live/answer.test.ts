@@ -67,6 +67,35 @@ describe("a decision the Lead sends on keeps its area and whose it was (T505)", 
   })
 })
 
+describe("what the Lead settled itself shows to the person who decides (T506)", () => {
+  const handed = signed({ id: "h", seq: 3, from: "win", pk: "pk-win", kind: "blocking", body: handedOver("win", "Hide agents that left?", { choices: ["A: hide", "B: dim"] }), to: ["atlas"] })
+  const settle = signed({ id: "r", seq: 4, from: "atlas", pk: "pk-atlas", kind: "msg", body: "B: dim", re: [3], to: ["win"] })
+  const passed = signed({ id: "p", seq: 5, from: "atlas", pk: "pk-atlas", kind: "blocking", body: "Hide agents that left?", to: ["jow"], esc: true, re: [3] })
+  const settledOf = (messages: Wire[], me = "jow", now = 1_000) => asksOf(fold(messages, roster, 0), messages, me, me === "jow", [], roster, new Map(), now).settled
+
+  test("the Lead's answer to a hand-over is settled, with the question and whose it was", () => {
+    const [one, ...rest] = settledOf([handed, settle])
+    expect(rest).toHaveLength(0)
+    expect(one).toMatchObject({ id: "4", by: "atlas", asker: "win" })
+    expect(one && [wordsRaw(one.question), wordsRaw(one.answer)]).toEqual(["Hide agents that left?", "B: dim"])
+  })
+
+  test("one the Lead sent on to a person isn't settled, and a day later it's gone", () => {
+    expect(settledOf([handed, passed])).toEqual([])
+    expect(settledOf([handed, settle], "jow", 1 + 86_400_001)).toEqual([])
+  })
+
+  test("your reply to it is the overrule", () => {
+    const over = signed({ id: "o", seq: 6, from: "jow", pk: "pk-jow", kind: "msg", body: "Hide them", re: [4], to: ["atlas", "win"] })
+    const [one] = settledOf([handed, settle, over])
+    expect(one?.overruled && wordsRaw(one.overruled.text)).toBe("Hide them")
+  })
+
+  test("someone who doesn't decide doesn't see it", () => {
+    expect(settledOf([handed, settle], "win")).toEqual([])
+  })
+})
+
 describe("with answers by tap on, a typed reply doesn't answer the card (T509)", () => {
   const tapOn = signed({ id: "t", seq: 4, from: "jow", pk: "pk-jow", kind: "event", body: "", ev: { op: "asks.tap.set", on: true } })
   const map = (messages: Wire[]) => asksOf(fold(messages, roster, 0), messages, "jow", true, [], roster, new Map()).asks[0]

@@ -755,6 +755,11 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           ...c,
           asks: c.asks.map((a) => (a.kind === "question" && a.id === id ? { ...a, answer: { text: wrote(text), by: c.you, at: Date.now(), shownIn: "card" as const } } : a)),
         })),
+      overrule: (code, id, text) =>
+        edit(code, (c) => ({
+          ...c,
+          ...(c.settled ? { settled: c.settled.map((s) => (s.id === id ? { ...s, overruled: { text: wrote(text), at: Date.now() } } : s)) } : {}),
+        })),
       answerJoin: (code, id, letIn, choice) =>
         edit(code, (c) => {
           const ask = c.asks.find((a) => a.kind === "join" && a.id === id)

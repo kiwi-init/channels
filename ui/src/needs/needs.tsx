@@ -18,6 +18,7 @@ import { NO_POWERS, trusted, type Ask, type Channel, type JoinAsk, type Permissi
 import { useApp, useGo, type Go } from "~/nav"
 import { TASK_TICK_MS } from "~/tasks/tick"
 import { wakeLine } from "~/needs/wake-line"
+import SettledList from "~/needs/settled"
 import { nickname } from "~/names"
 import { SendBack } from "~/tasks/send-back"
 import { isIdle, isOpen, openAsks } from "~/needs/open"
@@ -51,6 +52,7 @@ export function needsText(channel: Channel, go: (to: Go) => void, tag?: string, 
   const joins = joinedQuestions(open)
   const unchecked = open.some((a) => a.kind === "join" && a.check === "unchecked")
   const idle = channel.asks.filter(isIdle).sort((a, b) => a.at - b.at)
+  const settled = [...(channel.settled ?? [])].sort((a, b) => b.at - a.at)
   const answered = channel.asks
     .filter((a) => !isOpen(a))
     .sort((a, b) => answeredAt(b) - answeredAt(a))
@@ -61,6 +63,8 @@ export function needsText(channel: Channel, go: (to: Go) => void, tag?: string, 
     unchecked ? tone(t("needs.list.unusual.joins"), "decide") : "",
     ...open.filter((a) => !joins.joined.has(a.id)).map((a) => askText(channel, a, m, go, now, joins.more.get(a.id))),
     open.length ? "" : m.field("clear", () => <Clear loading={!!channel.loading} />),
+    settled.length ? `## \`kiwi:fold\` ${esc(t("needs.settled", { n: String(settled.length) }))}` : "",
+    settled.length ? m.field("settled", () => <SettledList channel={channel} settled={settled} />) : "",
     idle.length ? `## ${esc(t("needs.list.idle.sum", { rest: t("needs.list.idle.rest") }))}` : "",
     ...idle.map((a) => askText(channel, a, m, go, now)),
     answered.length ? `## \`kiwi:fold\` ${esc(t("needs.list.answered", { n: String(answered.length) }))}` : "",
