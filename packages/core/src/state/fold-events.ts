@@ -89,6 +89,7 @@ export interface FoldCtx {
   branchPrefix: string | null;
   quietMs: number;
   reviewReset: boolean;
+  tapToAnswer: boolean;
   landing: Landing | null;
   landingSteps: StepSpec[] | null;
   passedAsks: Map<number, string>;
@@ -442,6 +443,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       c.reviewReset = ev.on;
       if (!ev.on) for (const x of members.values()) if (x.reset?.kind === "needs") x.reset = undefined;
+      break;
+    }
+
+    case "asks.tap.set": {
+      if (!member.owner) {
+        reject("only the owner says whether a decision closes only from its card");
+        break;
+      }
+      c.tapToAnswer = ev.on;
       break;
     }
 

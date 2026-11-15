@@ -272,6 +272,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return say("quiet.set", { time: spanText(ev.minutes * 60_000) });
     case "review.reset.set":
       return ev.on ? say("review.reset.on") : say("review.reset.off");
+    case "asks.tap.set":
+      return ev.on ? say("asks.tap.on") : say("asks.tap.off");
     case "review.reset.waive":
       return ev.waived ? say("review.reset.waived", { name: ev.member }) : say("review.reset.unwaived", { name: ev.member });
     case "merges.set":
@@ -453,7 +455,15 @@ export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, m
   const kept = !gone && media.length ? ` ${media.join(" ")}` : "";
   const link = m.handoff ? " [browser link]" : "";
   const options = m.choices?.length ? ` [options: ${m.choices.map((c) => inlineText(c, 200)).join(" | ")}]` : "";
-  return `${messageHead(m, trust, state, me)}: ${body}${takeSpec(m, state, me)}${kept}${link}${options}`;
+  return `${messageHead(m, trust, state, me)}: ${body}${takeSpec(m, state, me)}${kept}${link}${options}${typedNote(m, state, me)}`;
+}
+
+function typedNote(m: Message, state?: ChannelState, me?: string): string {
+  if (!state?.tapToAnswer || !me || m.kind === "event" || m.pick || m.stepReply || m.from === me) return "";
+  const asks = (m.re ?? []).filter((seq) => state.openAsks.some((a) => a.seq === seq && a.from === me && a.esc && !a.permission));
+  return asks
+    .map((seq) => ` [typed in the chat: #${seq} stays open; restate the answer as one option, kiwi ask-human --option "A: …" with the same --holds, then kiwi ask-human --close ${seq} "restated"]`)
+    .join("");
 }
 
 function takeSpec(m: Message, state?: ChannelState, me?: string): string {
@@ -748,6 +758,7 @@ export function formatStatus({ alias, check, me, state, online, unread, now = Da
   const charter = charterLines(state);
   if (charter) out.push(charter);
   if (state.repos.length) out.push(`repos: ${state.repos.join(", ")}`);
+  if (state.tapToAnswer) out.push("a person's decision closes only from its card: a reply typed in the chat doesn't answer it, so restate the answer as one option and close the old ask");
   if (state.reviewReset) out.push("reviewers start a fresh session after each verdict: a reviewer that gave one reviews nothing more until it rejoins from a new session");
   const ruleWarning = reviewRuleWarning(state, check);
   if (ruleWarning) out.push(ruleWarning);

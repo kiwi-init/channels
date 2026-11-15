@@ -42,6 +42,7 @@ function blank(): ChannelState {
     branchPrefix: null,
     quietMs: 20 * 60_000,
     reviewReset: false,
+    tapToAnswer: false,
     landing: null,
     landingSteps: null,
     reactions: new Map(),

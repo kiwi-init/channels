@@ -139,3 +139,15 @@ describe("an ask shows your last answer on the same work (T507)", () => {
     expect(render(open())).not.toContain("ask-earlier")
   })
 })
+
+describe("a reply you typed in the chat shows on the open card (T509)", () => {
+  test("one quiet line says it stays open until you answer here", () => {
+    const html = render({ ...choice(undefined), typed: { text: wrote("A and B, A first"), by: "jow", at: NOW, seq: 51 } })
+    expect(html).toContain("You replied “A and B, A first” in the chat · answer here to close it")
+    expect(html).toContain("ask-options")
+  })
+
+  test("someone else's typed reply doesn't speak for you", () => {
+    expect(render({ ...choice(undefined), typed: { text: wrote("B"), by: "maya", at: NOW, seq: 51 } })).not.toContain("You replied")
+  })
+})

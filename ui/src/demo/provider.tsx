@@ -1000,6 +1000,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setBranchPrefix: (code, prefix) => edit(code, (c) => ({ ...c, branchPrefix: prefix?.trim() || undefined })),
       setQuiet: (code, minutes) => edit(code, (c) => ({ ...c, quietMinutes: Number(minutes) })),
       setReviewReset: (code, on) => edit(code, (c) => ({ ...c, reviewReset: on || undefined })),
+      setTapToAnswer: (code, on) => edit(code, (c) => ({ ...c, tapToAnswer: on || undefined })),
       setResetWaived: (code, name, waived) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, reset: waived ? { kind: "waived" as const } : undefined } : p)) })),
       setLanding: (code, then) => edit(code, (c) => ({ ...c, landing: then?.trim() && then.trim() !== "none" ? then.trim() : undefined })),
       setRoomMembers: async (code, id, members) => {

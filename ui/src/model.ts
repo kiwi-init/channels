@@ -472,6 +472,7 @@ export interface QuestionAsk {
   holds: number[]
   task?: number
   idle?: true
+  typed?: { text: Words; by: string; at: number; seq: number }
   step?: Step
   handoff?: { url: string; label: string; expiresAt: number }
   answer?: { text: Words; by: string; at: number } & ({ shownIn: "card" } | { shownIn: "feed"; seq: number })
@@ -640,6 +641,7 @@ export interface Channel {
   branchPrefix?: string
   quietMinutes?: number
   reviewReset?: true
+  tapToAnswer?: true
   landing?: string
   rooms: Room[]
   directs: Direct[]
@@ -843,6 +845,7 @@ export interface Actions {
   setBranchPrefix(code: string, prefix: string | null): void
   setQuiet(code: string, minutes: string): void
   setReviewReset(code: string, on: boolean): void
+  setTapToAnswer(code: string, on: boolean): void
   setResetWaived(code: string, name: string, waived: boolean): void
   setLanding(code: string, then: string | null): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>

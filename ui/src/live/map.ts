@@ -943,7 +943,10 @@ export function asksOf(
     if (!isQuestion(m)) continue
     const toMe = !m.to?.length || m.to.includes(me) || m.to.includes("*") || (decides && !!m.esc && !m.handoff)
     if (!toMe) continue
-    const answer = (replies.get(m.seq) ?? []).find((r) => r.kind !== "event" && answersAsk(state.members, m, r.from))
+    const tapOnly = state.tapToAnswer && !!m.esc
+    const said = (replies.get(m.seq) ?? []).filter((r) => r.kind !== "event" && answersAsk(state.members, m, r.from))
+    const answer = said.find((r) => !tapOnly || r.pick || r.stepReply)
+    const typed = tapOnly && !answer ? said.at(-1) : undefined
     const isOpen = open.has(m.seq)
     const idle = !isOpen && !answer && pending.has(m.seq)
     const closed = !isOpen && !answer && !idle ? closes.get(m.seq) : undefined
@@ -967,6 +970,7 @@ export function asksOf(
       ...(task !== undefined ? { task } : {}),
       ...(idle ? { idle: true as const } : {}),
       ...(askedOf ? { askedOf } : {}),
+      ...((isOpen || idle) && typed ? { typed: { text: wrote(typed.body), by: typed.from, at: typed.ts, seq: typed.seq } } : {}),
       ...(!isOpen && answer
         ? { answer: { text: wrote(answer.body), by: answer.from, at: answer.ts, ...(answer.side ? { shownIn: "card" as const } : { shownIn: "feed" as const, seq: answer.seq }) } }
         : {}),

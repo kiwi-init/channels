@@ -1,5 +1,5 @@
 import type { Channel, QuestionAsk } from "~/model"
-import { wordsPlain, wordsSame } from "~/words"
+import { wordsPlain, wordsSame, type Words } from "~/words"
 
 const CUT = 80
 
@@ -7,6 +7,11 @@ export interface Earlier {
   chose: boolean
   text: string
   at: number
+}
+
+export const oneLine = (words: Words, names: Channel["nicknames"]): string => {
+  const plain = wordsPlain(words, names).replace(/\s+/g, " ").trim()
+  return plain.length > CUT ? `${plain.slice(0, CUT - 1).trimEnd()}…` : plain
 }
 
 const workOf = (a: Pick<QuestionAsk, "task" | "holds">): number[] => [...(a.task !== undefined ? [a.task] : []), ...a.holds]
@@ -19,8 +24,7 @@ export function earlierAnswer(channel: Pick<Channel, "asks" | "you" | "nicknames
     if (a.kind !== "question" || a.id === ask.id || a.handoff || a.answer?.by !== channel.you) continue
     const answer = a.answer
     if ((last && last.at >= answer.at) || !workOf(a).some((id) => work.has(id))) continue
-    const plain = wordsPlain(answer.text, channel.nicknames).replace(/\s+/g, " ").trim()
-    last = { chose: a.options.some((o) => wordsSame(o, answer.text)), text: plain.length > CUT ? `${plain.slice(0, CUT - 1).trimEnd()}…` : plain, at: answer.at }
+    last = { chose: a.options.some((o) => wordsSame(o, answer.text)), text: oneLine(answer.text, channel.nicknames), at: answer.at }
   }
   return last
 }

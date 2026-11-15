@@ -20,7 +20,7 @@ import { openMessage } from "~/live/open-message"
 import { useAct } from "~/nav"
 import { nickname } from "~/names"
 import { viewImage } from "~/chat/image-view"
-import { earlierAnswer } from "~/chat/earlier"
+import { earlierAnswer, oneLine } from "~/chat/earlier"
 
 type Handoff = NonNullable<QuestionAsk["handoff"]>
 
@@ -125,6 +125,7 @@ export default function QuestionCard({ channel, ask }: { channel: Channel; ask: 
   return (
     <>
       {earlier && <p className="ask-earlier">{t(earlier.chose ? "chat.question.card.earlier.chose" : "chat.question.card.earlier.answered", { text: earlier.text, when: day(earlier.at) })}</p>}
+      {ask.typed?.by === channel.you && <p className="ask-earlier is-typed">{t("chat.question.card.typed", { text: oneLine(ask.typed.text, channel.nicknames) })}</p>}
       <div className={cx("ask", choice && "is-choice", free && "is-free")}>
         {ask.handoff && <HandoffLink handoff={ask.handoff} now={now} />}
         {ask.handoff && other === null && ask.handoff.expiresAt > now && (

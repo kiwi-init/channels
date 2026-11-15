@@ -71,6 +71,7 @@ export interface SendOptions {
   task?: number;
   dm?: boolean;
   side?: boolean;
+  pick?: boolean;
   block?: DocBlockRef;
   slot?: { name: string; ttl: number };
   wake?: readonly string[];
@@ -171,6 +172,7 @@ export class ChannelSending {
         ...(opts.task && !opts.ev ? { task: opts.task } : {}),
         ...(opts.dm && !opts.ev && opts.to?.length === 1 ? { dm: true as const } : {}),
         ...(opts.side && opts.re?.length && !opts.ev ? { side: true as const } : {}),
+        ...(opts.pick && opts.re?.length && !opts.ev ? { pick: true as const } : {}),
         ...(opts.block && !opts.ev ? { block: opts.block } : {}),
         ts: Date.now(),
       };

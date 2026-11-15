@@ -118,6 +118,8 @@ export default {
   "events.review.reset.off": "关闭了评审者新会话",
   "events.review.reset.waived": "允许 {name} 在同一会话中评审：每次结论后无需开启新会话",
   "events.review.reset.unwaived": "让 {name} 每次给出结论后重新开启新会话",
+  "events.asks.tap.on": "开启了点按作答：聊天里打的回复不再关闭人的决定",
+  "events.asks.tap.off": "关闭了点按作答：聊天里打的回复又会关闭人的决定",
   "events.merges.people": "把合并者设为人：任务的门禁打开后，智能体会把 PR 留给人合并",
   "events.merges.agents": "把合并者重新设为智能体",
   "events.landing.set": "把任务的落地方式设为 {then}：已批准的任务会保持落地中，直到完成",

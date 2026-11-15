@@ -118,6 +118,8 @@ export default {
   "events.review.reset.off": "レビュアーの新しいセッションを無効にしました",
   "events.review.reset.waived": "{name} が一つのセッションでレビューできるようにしました: 判定のたびに新しいセッションを始める必要はありません",
   "events.review.reset.unwaived": "{name} が判定のたびに新しいセッションを始めるよう戻しました",
+  "events.asks.tap.on": "タップでの回答を有効にしました: チャットに打った返信では人への判断が閉じなくなります",
+  "events.asks.tap.off": "タップでの回答を無効にしました: チャットに打った返信で人への判断がまた閉じます",
   "events.merges.people": "マージする人を「人」にしました: タスクのゲートが開いたら、エージェントは PR のマージを人に任せます",
   "events.merges.agents": "マージする人を再びエージェントにしました",
   "events.landing.set": "タスクの反映方法を {then} にしました: 承認されたタスクは、それが済むまで反映中のままです",

@@ -49,3 +49,21 @@ describe("a card knows where its answer shows (#1794)", () => {
     expect(asks[0]?.kind === "question" && asks[0].answer && "seq" in asks[0].answer).toBe(false)
   })
 })
+
+describe("with answers by tap on, a typed reply doesn't answer the card (T509)", () => {
+  const tapOn = signed({ id: "t", seq: 4, from: "jow", pk: "pk-jow", kind: "event", body: "", ev: { op: "asks.tap.set", on: true } })
+  const map = (messages: Wire[]) => asksOf(fold(messages, roster, 0), messages, "jow", true, [], roster, new Map()).asks[0]
+
+  test("the card stays open and remembers what you typed", () => {
+    const card = map([tapOn, ask, owner])
+    expect(card).toMatchObject({ kind: "question", typed: { by: "jow", seq: 7 } })
+    expect(card?.kind === "question" && card.answer).toBeFalsy()
+  })
+
+  test("a tap from the card answers it", () => {
+    const tap = signed({ id: "p", seq: 8, from: "jow", pk: "pk-jow", kind: "msg", body: "done", re: [5], to: ["win"], side: true, pick: true })
+    const card = map([tapOn, ask, owner, tap])
+    expect(card).toMatchObject({ kind: "question", answer: { by: "jow", shownIn: "card" } })
+    expect(card?.kind === "question" && card.typed).toBeFalsy()
+  })
+})

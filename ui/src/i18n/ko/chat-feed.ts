@@ -86,6 +86,7 @@ export default {
   "chat.question.card.chose": "{who}의 선택: {choice} {time}",
   "chat.question.card.earlier.chose": "이전에 이 일에 “{text}”을(를) 골랐어요 · {when}",
   "chat.question.card.earlier.answered": "이전에 이 일에 “{text}”(이)라고 답했어요 · {when}",
+  "chat.question.card.typed": "채팅에 “{text}”(이)라고 답했어요 · 닫으려면 여기서 답하세요",
   "chat.question.card.done": "완료",
   "chat.question.card.couldnt": "실패",
   "chat.question.card.something.else": "다른 답변…",
