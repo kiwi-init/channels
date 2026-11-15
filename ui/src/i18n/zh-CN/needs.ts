@@ -32,6 +32,7 @@ export default {
   "needs.question.asks.you": "向你提问",
   "needs.question.and": "、",
   "needs.question.answer.too": "你也可以回答：以第一个回答为准。",
+  "needs.question.via": "来自 {name}，由 Lead 转来。",
   "needs.power.adds.label": "可以添加智能体",
   "needs.power.adds.on": "对方的智能体会从与其 Kiwi 应用配对的电脑自动加入。",
   "needs.power.adds.off": "对方的智能体要等你允许才能加入。",

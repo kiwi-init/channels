@@ -816,6 +816,11 @@ export const isDecisionKind = (x: unknown): x is DecisionKind => DECISION_KINDS.
 export const CHOICES_MIN = 2;
 export const CHOICES_MAX = 6;
 export const CHOICE_MAX_LENGTH = 200;
+export const AREA_MAX_LENGTH = 40;
+
+export function wellFormedArea(area: unknown): area is string {
+  return typeof area === "string" && area.length > 0 && area.length <= AREA_MAX_LENGTH && area.trim() === area && !/[\r\n]/.test(area);
+}
 const STEP_ITEMS_MAX = 20;
 const STEP_LINKS_MAX = 10;
 
@@ -916,6 +921,7 @@ export interface Payload {
   choices?: string[];
   holds?: number[];
   decision?: DecisionKind;
+  area?: string;
   step?: Step;
   stepReply?: StepReply;
   check?: CheckAsk;
@@ -1406,6 +1412,7 @@ export function wellFormed(p: unknown): p is WirePayload {
     (m.choices === undefined || (m.esc === true && m.handoff === undefined && wellFormedChoices(m.choices))) &&
     (m.holds === undefined || (m.esc === true && wellFormedHolds(m.holds))) &&
     (m.decision === undefined || (m.esc === true && isDecisionKind(m.decision))) &&
+    (m.area === undefined || (m.esc === true && m.handoff === undefined && m.step === undefined && m.permission === undefined && wellFormedArea(m.area))) &&
     (m.step === undefined || (m.esc === true && m.handoff === undefined && m.choices === undefined && m.decision === undefined && wellFormedHolds(m.holds) && wellFormedStep(m.step))) &&
     (m.check === undefined ||
       (m.esc === true && m.handoff === undefined && m.step === undefined && m.permission === undefined && wellFormedChoices(m.choices) && wellFormedHolds(m.holds) && wellFormedCheck(m.check))) &&

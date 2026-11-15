@@ -1,5 +1,5 @@
 import { asksPeople } from "../personality.ts";
-import { isDecisionKind, type DecisionKind, type Message, type Step } from "../protocol.ts";
+import { isDecisionKind, wellFormedArea, type DecisionKind, type Message, type Step } from "../protocol.ts";
 import { isPerson } from "./people.ts";
 import { placeKey } from "./places.ts";
 import { commentedSpec } from "./specs.ts";
@@ -117,6 +117,7 @@ interface HandedOver {
   choices?: readonly string[];
   holds?: readonly string[];
   decision?: DecisionKind;
+  area?: string;
   step?: Step;
 }
 
@@ -138,6 +139,7 @@ export function handedOver(from: string, body: string, ask: HandedOver): string 
       : []),
     ...list("Options:", ask.choices),
     ...(ask.decision ? [`Kind: ${ask.decision}`] : []),
+    ...(ask.area ? [`Area: ${ask.area}`] : []),
     ...(ask.holds?.length ? [`Holds: ${ask.holds.join(", ")}`] : []),
     `Handed to you, the Lead: ${from} doesn't ask people. ${step ? "Pass it to a person with kiwi ask-human --step, or say why it isn't needed." : "Decide it yourself, or ask a person with kiwi ask-human."}`,
   ].join("\n");
@@ -149,6 +151,7 @@ export interface Handed {
   choices: string[];
   holds: string[];
   decision?: DecisionKind;
+  area?: string;
   step?: Step;
 }
 
@@ -175,6 +178,7 @@ export function readHandedOver(body: string): Handed | null {
   const why = said.get("A step for a person");
   const needsPerson = said.get("Why an agent can't do it");
   const kind = said.get("Kind");
+  const area = said.get("Area");
   const expect = said.get("Expect");
   const some = (items: string[] | undefined): string[] | undefined => (items?.length ? items : undefined);
   const step: Step | undefined =
@@ -194,8 +198,25 @@ export function readHandedOver(body: string): Handed | null {
     choices: lists["Options:"] ?? [],
     holds: said.get("Holds")?.split(", ") ?? [],
     ...(isDecisionKind(kind) ? { decision: kind } : {}),
+    ...(wellFormedArea(area) ? { area } : {}),
     ...(step ? { step } : {}),
   };
+}
+
+export function handedAskOf<M extends Pick<Message, "seq" | "from" | "to" | "body">>(ask: Pick<Message, "from" | "re">, find: (seq: number) => M | undefined): M | undefined {
+  for (const seq of ask.re ?? []) {
+    const handed = find(seq);
+    if (
+      handed?.to?.includes(ask.from) &&
+      HANDED.exec(
+        String(handed.body ?? "")
+          .split("\n")
+          .at(-1) ?? "",
+      )?.[1] === handed.from
+    )
+      return handed;
+  }
+  return undefined;
 }
 
 export interface HandedAsk {

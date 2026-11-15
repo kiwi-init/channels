@@ -20,6 +20,7 @@ export {
   leadForAsk,
   mayNameGoal,
   readHandedOver,
+  handedAskOf,
   type AskGroup,
   type HandedAsk,
 } from "./state/asks.ts";

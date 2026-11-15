@@ -357,6 +357,7 @@ export class SessionMessaging extends SessionListen {
         task?: number;
         holds?: number[];
         decision?: DecisionKind;
+        area?: string;
         step?: Step;
       } & Pick<SendOptions, "id" | "permission"> = {},
     ) {
@@ -388,6 +389,7 @@ export class SessionMessaging extends SessionListen {
             ...(ask.choices ? { choices: ask.choices } : {}),
             ...(holds?.length ? { holds } : {}),
             ...(ask.decision ? { decision: ask.decision } : {}),
+            ...(ask.area ? { area: ask.area } : {}),
             ...(ask.step ? { step: ask.step } : {}),
           }),
           { to: [lead], kind: "blocking", ...(ask.task !== undefined ? { task: ask.task } : {}), ...(re !== undefined ? { re: [re] } : {}) },
@@ -403,6 +405,7 @@ export class SessionMessaging extends SessionListen {
         ...(ask.task !== undefined ? { task: ask.task } : {}),
         ...(ask.holds?.length ? { holds: ask.holds } : {}),
         ...(ask.decision ? { decision: ask.decision } : {}),
+        ...(ask.area ? { area: ask.area } : {}),
         ...(ask.step ? { step: ask.step } : {}),
         ...(ask.id ? { id: ask.id } : {}),
         ...(ask.permission ? { permission: ask.permission } : {}),

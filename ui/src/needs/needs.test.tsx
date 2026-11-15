@@ -104,6 +104,21 @@ describe("a second decision on a task joins the open card (T508)", () => {
     expect(fields([done, first, second]).split("ask-earlier").length - 1).toBe(1)
   })
 
+  test("decisions one asker sends on one area share a card, under one head, each saying whose it was (T505)", () => {
+    const count = ask({ id: "a1", from: "lead", holds: [], area: "Tab strip", via: "upbeat-heron", text: wrote("The count after the name, or at the far right?") })
+    const close = ask({ id: "a2", from: "lead", at: NOW - 30_000, holds: [], area: "tab strip", text: wrote("A close button on hover?") })
+    const other = ask({ id: "a3", from: "lead", holds: [], area: "My bubble", text: wrote("Grey, or the accent wash?") })
+    const elsewhere = ask({ id: "a4", from: "upbeat-heron", holds: [], area: "Tab strip", text: wrote("Pin the first tab?") })
+    expect(joinedQuestions([count, close, other, elsewhere])).toEqual({ more: new Map([["a1", [close]]]), joined: new Set(["a2"]) })
+    const md = built([count, close, other, elsewhere]).md
+    const card = cardOf(md, "The count after the name")
+    expect(card).toContain("A close button on hover?")
+    expect(card).toContain("Tab strip")
+    expect(card.split("### ").length - 1).toBe(1)
+    expect(read(card)).toContain("From opus2-coder, sent on by the Lead.")
+    expect(cardOf(md, "Grey, or the accent wash?")).not.toContain("The count")
+  })
+
   test("another task, an irreversible one, a step or one that holds nothing keeps its own card", () => {
     const apart = [
       ask({ id: "q3", holds: [8] }),

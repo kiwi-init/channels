@@ -26,6 +26,7 @@ import {
   answersDecisions,
   colorOf,
   heldBy,
+  handedAskOf,
   dmPlace,
   holdsWork,
   humanOf,
@@ -954,6 +955,7 @@ export function asksOf(
     const holds = heldBy(state, m)
     const askedOf = m.esc && !m.handoff && m.to?.length && !m.to.includes(me) && !m.to.includes("*") ? [...m.to] : undefined
     if (isOpen) for (const t of holds) held.add(t)
+    const via = m.esc ? handedAskOf(m, (seq) => bySeq.get(seq)) : undefined
     asks.push({
       kind: "question",
       id,
@@ -970,6 +972,8 @@ export function asksOf(
       ...(task !== undefined ? { task } : {}),
       ...(idle ? { idle: true as const } : {}),
       ...(askedOf ? { askedOf } : {}),
+      ...(m.area && !m.handoff && !m.step ? { area: m.area } : {}),
+      ...(via ? { via: via.from } : {}),
       ...((isOpen || idle) && typed ? { typed: { text: wrote(typed.body), by: typed.from, at: typed.ts, seq: typed.seq } } : {}),
       ...(!isOpen && answer
         ? { answer: { text: wrote(answer.body), by: answer.from, at: answer.ts, ...(answer.side ? { shownIn: "card" as const } : { shownIn: "feed" as const, seq: answer.seq }) } }
