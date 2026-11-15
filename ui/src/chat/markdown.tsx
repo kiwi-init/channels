@@ -434,7 +434,10 @@ export default function Markdown({ markdown, at, onMention, onTask, onMessage, o
     const watch = new ResizeObserver((seen) => {
       for (const { target } of seen) if (target instanceof HTMLElement) scrollsOn(target)
     })
-    for (const pre of pres) watch.observe(pre)
+    for (const pre of pres) {
+      scrollsOn(pre)
+      watch.observe(pre)
+    }
     return () => watch.disconnect()
   }, [ast])
 
