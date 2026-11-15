@@ -508,6 +508,9 @@ jobs:
       - name: ui the GIF pickers, updates panel, usage card and menus close on Escape, Tab, presses outside, blur and resize exactly as they did before sharing one dismissal hook
         if: ${{ !cancelled() }}
         run: bun scripts/ui-dismiss.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui polish count, how far each screen is from the standard (prints; never fails)
+        if: ${{ !cancelled() && matrix.engine == 'webkit' }}
+        run: bun scripts/ui-polish.ts --dist ui/dist --list --json ui-polish.json
       - name: ui the composer keeps each room's draft and images to itself, and an image sends without a file name as text, in WebKit
         if: ${{ !cancelled() && matrix.engine == 'webkit' }}
         run: bun scripts/ui-composer-rooms.ts --dist ui/dist
