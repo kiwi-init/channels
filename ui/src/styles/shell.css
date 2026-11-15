@@ -1266,7 +1266,6 @@
   margin: 0 calc(8px + var(--tail-n) * (var(--ctl) + 8px)) 0 max(var(--side-w), calc(var(--lead-pad) + var(--ctl) + 8px + var(--history-w)));
   padding: 0 8px;
   overflow: hidden;
-  transition: margin var(--slow) var(--ease);
   -webkit-app-region: drag;
 }
 
@@ -1280,10 +1279,6 @@
 
 :root[data-tabs]:has(.top-tools.is-searching, .top-hold) .app > .rail {
   margin-right: var(--side-w);
-}
-
-:root[data-tabs][data-resizing="side"] .app > .rail {
-  transition: none;
 }
 
 :root[data-tabs] .top-tools {
