@@ -2,6 +2,46 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 2026.11.22 — 2026-11-15
+
+- **Home is gone: the app lands on a channel instead (#3713)** ([#2429](https://github.com/kiwi-init/channels/pull/2429))
+- **Panes: all four corners round with the sidebar hidden (#3721)** ([#2430](https://github.com/kiwi-init/channels/pull/2430))
+- **refactor: share card and activity line sanitizer** ([#2435](https://github.com/kiwi-init/channels/pull/2435))
+- **Core: files and images share one blob seal, store and read (#2434, T9711)** ([#2436](https://github.com/kiwi-init/channels/pull/2436))
+- **UI build: lazy imports stop listing the first load as preload deps (796,912 to 780,648 bytes)** ([#2437](https://github.com/kiwi-init/channels/pull/2437))
+- **Channel switch: a channel you opened keeps its live connection, so going back makes no new one (#3909)** ([#2438](https://github.com/kiwi-init/channels/pull/2438))
+- **Channel switch: the feed opens on 50 rows and lays out once (#3909)** ([#2440](https://github.com/kiwi-init/channels/pull/2440))
+- **kiwi send: the CLI keeps a sealed copy of each thread's doc, so a send fetches only what's new (#3909)** ([#2441](https://github.com/kiwi-init/channels/pull/2441))
+- **Channel switch: opening a channel makes no relay calls (#3909)** ([#2442](https://github.com/kiwi-init/channels/pull/2442))
+- **Pages that draw their own controls parse new text in the render that brings it, so the old tree never shows with new controls (#2423)** ([#2445](https://github.com/kiwi-init/channels/pull/2445))
+- **Flows: multi-seat waits for the listener's read mark, not its print (#2159)** ([#2449](https://github.com/kiwi-init/channels/pull/2449))
+- **ui-image-thumbs: the drag check reads the data the drag carries, where it is set (#2167)** ([#2451](https://github.com/kiwi-init/channels/pull/2451))
+- **Shots: two runs of one commit match, Chromium 0 of 161, WebKit 2 of 159 (T2770)** ([#2452](https://github.com/kiwi-init/channels/pull/2452))
+- **Feed: file chips hold their place before their chunk lands; ui-still waits for a view to open (#2439)** ([#2450](https://github.com/kiwi-init/channels/pull/2450))
+- **Settings: the interface version sits on the version row, and the checkpoint switch reads plainly (#2108, T4132)** ([#2454](https://github.com/kiwi-init/channels/pull/2454))
+- **Rooms: each sidebar section's "N hidden" opens only its own rows, and channel mute reads "Mute channel" everywhere (#2085, T4133)** ([#2455](https://github.com/kiwi-init/channels/pull/2455))
+- **ui-flicker: a sweep that lists every element that flashes, jumps or blanks for a frame in 14 flows (T4462)** ([#2458](https://github.com/kiwi-init/channels/pull/2458))
+- **Needs you is a markdown page drawn by the engine, nothing lost (T3566)** ([#2457](https://github.com/kiwi-init/channels/pull/2457))
+- **Keep markdown content and add accessible spoiler reveal** ([#2447](https://github.com/kiwi-init/channels/pull/2447))
+- **Wake: Deep Code seats wake on any footer that keeps its prompt's structure (#2446)** ([#2448](https://github.com/kiwi-init/channels/pull/2448))
+- **Feed: scrolling up runs its whole length; earlier lines load once the scroll is still (T4458)** ([#2456](https://github.com/kiwi-init/channels/pull/2456))
+- **Views that replace each other swap in one frame, with no fade or rise (#4462)** ([#2459](https://github.com/kiwi-init/channels/pull/2459))
+- **Android: updates leave the feed for an Updates sheet (T10567, #2460)** ([#2461](https://github.com/kiwi-init/channels/pull/2461))
+- **A new channel opens at once, so a modal opened right after stays open (T4473)** ([#2463](https://github.com/kiwi-init/channels/pull/2463))
+- **Specs as a markdown page, nothing lost (T4532)** ([#2462](https://github.com/kiwi-init/channels/pull/2462))
+- **Checks: restore-place measures markdown heights once markdown is in (T4509)** ([#2464](https://github.com/kiwi-init/channels/pull/2464))
+- **ui-flicker reads each frame in a fresh ResizeObserver (T4462)** ([#2466](https://github.com/kiwi-init/channels/pull/2466))
+- **Lead's list: kiwi status lists the decisions handed to the Lead, and its wake counts them (T504)** ([#2465](https://github.com/kiwi-init/channels/pull/2465))
+- **Feed: rows passing under a still pointer don't flash their hover toolbar (T4462)** ([#2467](https://github.com/kiwi-init/channels/pull/2467))
+- **Reload: fewer member, request and info reads (#3909)** ([#2443](https://github.com/kiwi-init/channels/pull/2443))
+- **Feed: your own picture doesn't blink as its line lands (T1116)** ([#2469](https://github.com/kiwi-init/channels/pull/2469))
+- **Ask card: your last answer on the same task or message shows (T507)** ([#2468](https://github.com/kiwi-init/channels/pull/2468))
+- **Asks: a reply typed in the chat doesn't close a decision, a tap does (T509)** ([#2470](https://github.com/kiwi-init/channels/pull/2470))
+- **Asks: a second decision on a task joins the open card (T508)** ([#2471](https://github.com/kiwi-init/channels/pull/2471))
+- **Feed: a cold open shows its rows whole, with markdown and cards in place (T4221)** ([#2472](https://github.com/kiwi-init/channels/pull/2472))
+- **Asks: decisions on one area go to a person as one card (T505)** ([#2473](https://github.com/kiwi-init/channels/pull/2473))
+- **Needs you: what the Lead settled itself is one line to open and overrule (T506)** ([#2474](https://github.com/kiwi-init/channels/pull/2474))
+
 ## 2026.11.21 — 2026-11-13
 
 - **Chat: local time on hover for UTC times in messages (#2367)** ([#2375](https://github.com/kiwi-init/channels/pull/2375))
