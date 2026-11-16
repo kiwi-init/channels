@@ -106,4 +106,43 @@ describe("a task-level wait on a step-less task", () => {
     expect(t.clock?.key).toBe("?4");
     expect(moverOf(state, t, 5_000)).toMatchObject({ kind: "member", question: 4 });
   });
+
+  test("what the hook and the checkpoint request write on their own doesn't end it: the Stop snapshot and a checkpoint keep the wait", () => {
+    const snapshot = event(4, 3 * MIN, "win", { op: "task.snapshot", task: TASK, path: "/home/www/repo-T1", branch: "T1-resume", head: "a".repeat(40), subject: "pause the job", dirty: ["wip.ts"] });
+    const checkpoint = event(5, 4 * MIN, "win", { op: "task.update", task: TASK, note: "waiting on the load to drop", checkpoint: true });
+    const state = fold([...doing(), wait(3, 2_000), snapshot, checkpoint], roster, 10 * MIN);
+    expect(state.rejected.size).toBe(0);
+    expect(state.tasks.get(TASK)!.wait).toMatchObject({ seq: 3 });
+    expect(moverOf(state, state.tasks.get(TASK)!, 10 * MIN)).toMatchObject({ kind: "wait" });
+    const note = event(6, 5 * MIN, "win", { op: "task.update", task: TASK, note: "load is down, resuming" });
+    expect(fold([...doing(), wait(3, 2_000), snapshot, checkpoint, note], roster, 10 * MIN).tasks.get(TASK)!.wait).toBeUndefined();
+  });
+
+  test("on a task with no owner the lead has the move, so the lead's post ends it, and nobody else's does", () => {
+    const open = (): Message[] => [event(TASK, 0, "jow", { op: "task.add", title: "Resume the job once load drops" }), wait(2, 1_000, undefined, "jow")];
+    const kept = fold([...open(), post(3, 2 * MIN, "mac", TASK)], roster, 5 * MIN);
+    expect(moverOf(kept, kept.tasks.get(TASK)!, 5 * MIN)).toMatchObject({ kind: "wait" });
+    const ended = fold([...open(), post(3, 2 * MIN, "mac", TASK), post(4, 3 * MIN, "owl", TASK)], roster, 5 * MIN);
+    expect(ended.tasks.get(TASK)!.wait).toBeUndefined();
+    expect(moverOf(ended, ended.tasks.get(TASK)!, 5 * MIN)).toMatchObject({ kind: "member", name: "owl", move: "assign" });
+
+    const moved: Roster = roster.map((r) => (r.name === "owl" ? { ...r, role: undefined } : r.name === "mac" ? { ...r, role: "lead" } : r));
+    expect(fold([...open(), post(3, 2 * MIN, "owl", TASK)], moved, 5 * MIN).tasks.get(TASK)!.wait).toBeDefined();
+    expect(fold([...open(), post(3, 2 * MIN, "mac", TASK)], moved, 5 * MIN).tasks.get(TASK)!.wait).toBeUndefined();
+
+    const gone: Roster = roster.map((r) => (r.name === "owl" ? { ...r, active: false } : r));
+    expect(fold([...open(), post(3, 2 * MIN, "jow", TASK)], gone, 5 * MIN).tasks.get(TASK)!.wait).toBeUndefined();
+  });
+
+  test("a lead signed through its persona is the lead whose post ends it, the same one the board shows with the move (#11503)", () => {
+    const persona = { name: "Lead", role: "lead" as const, capabilities: [], areas: [], instructions: "" };
+    const signed: Roster = roster.map((r) => (r.name === "owl" ? { ...r, role: undefined } : r.name === "mac" ? { ...r, persona } : r));
+    const open = (): Message[] => [event(TASK, 0, "jow", { op: "task.add", title: "Resume the job once load drops" }), wait(2, 1_000, undefined, "jow")];
+    const kept = fold([...open(), post(3, 2 * MIN, "owl", TASK)], signed, 5 * MIN);
+    expect(kept.lead).toBe("mac");
+    expect(kept.tasks.get(TASK)!.wait).toBeDefined();
+    const ended = fold([...open(), post(3, 2 * MIN, "owl", TASK), post(4, 3 * MIN, "mac", TASK)], signed, 5 * MIN);
+    expect(ended.tasks.get(TASK)!.wait).toBeUndefined();
+    expect(moverOf(ended, ended.tasks.get(TASK)!, 5 * MIN)).toMatchObject({ kind: "member", name: "mac", move: "assign" });
+  });
 });

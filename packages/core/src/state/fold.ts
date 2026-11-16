@@ -12,6 +12,7 @@ import {
   POWERS,
   powerChange,
   ROOM_ID_RE,
+  type Event as WireEvent,
   type Message,
   type Power,
   type Trust,
@@ -457,11 +458,17 @@ function folding(
     return !!who && who.active && !isPerson(who);
   };
   const leadHere = (): string | undefined => (lead && members.get(lead)?.active ? lead : [...members.values()].find((x) => x.owner && x.active)?.name);
+  const leadNow = (): string | undefined => {
+    const signedLead = [...members.values()].filter((x) => x.active && signed.has(x.name) && x.persona?.role === "lead").sort((a, b) => a.joined - b.joined)[0]?.name;
+    const legacyLead = lead && members.get(lead)?.active && !signed.has(lead) ? lead : undefined;
+    return signedLead ?? legacyLead ?? [...members.values()].find((x) => x.owner && x.active)?.name;
+  };
   const standsFor = (name: string): string | undefined => (members.get(name)?.active ? name : [...members.values()].find((x) => x.owner && x.active)?.name);
   const timeTask = (t: Task): void => void (timedStep(t) ? timed.add(t.id) : timed.delete(t.id));
-  const tickTask = (t: Task | undefined, seq: number, at: number, by?: string): void => {
+  const keepsWait = (ev: WireEvent): boolean => ev.op === "task.snapshot" || ev.op === "task.wait" || (ev.op === "task.update" && ev.checkpoint === true);
+  const tickTask = (t: Task | undefined, seq: number, at: number, by?: string, endsWait = true): void => {
     if (!t) return;
-    if (t.wait && by !== undefined && t.wait.seq !== seq && waitEndedBy(clockView(), t, by, at)) delete t.wait;
+    if (t.wait && endsWait && by !== undefined && t.wait.seq !== seq && waitEndedBy(clockView(), t, by, at, leadNow())) delete t.wait;
     tick(clockView(), t, { seq, at, ...(by !== undefined ? { by } : {}) });
     timeTask(t);
   };
@@ -811,7 +818,7 @@ function folding(
       if (!rejected.has(m.seq) && ev.op !== "task.nudge" && ev.op !== "task.wake") {
         const subject = ev.op === "task.add" ? tasks.get(m.seq) : before && tasks.has(before.id) ? before : undefined;
         if (subject) {
-          tickTask(subject, m.seq, at, m.from);
+          tickTask(subject, m.seq, at, m.from, !keepsWait(ev));
           for (const other of tasks.values())
             if (other !== subject && other.state === "todo" && other.owner !== undefined && (other.owner === subject.owner || other.owner === ownedBy)) tickTask(other, m.seq, at);
         } else if (ev.op === "github") {
