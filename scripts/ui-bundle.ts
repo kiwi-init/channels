@@ -1,20 +1,20 @@
 import { readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { firstLoad } from "./first-load.ts";
 
 const BUDGET_BYTES = 820_000;
 const FILE_LIMIT_BYTES = 20 * 1024 * 1024;
 
 const dist = resolve(import.meta.dir, "../ui/dist");
-const html = await Bun.file(join(dist, "index.html")).text();
-const entry = [...html.matchAll(/<script type="module"[^>]*src="\/([^"]+)"/g)].map(([, path = ""]) => path);
-const preloaded = [...html.matchAll(/<link rel="modulepreload"[^>]*href="\/([^"]+)"/g)].map(([, path = ""]) => path);
-if (entry.length !== 1) {
-  console.error(`ui/dist/index.html should load one entry script, found ${entry.length}: run bun run ui:build first`);
-  process.exit(1);
-}
-const files = [...entry, ...preloaded];
-const sizes = await Promise.all(files.map(async (path) => ({ path, bytes: (await Bun.file(join(dist, path)).bytes()).length })));
-const total = sizes.reduce((sum, s) => sum + s.bytes, 0);
+const measured = (() => {
+  try {
+    return firstLoad(dist);
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exit(1);
+  }
+})();
+const { total, files: sizes } = measured;
 for (const s of sizes) console.log(`${String(s.bytes).padStart(9)}  ${s.path}`);
 console.log(`first-load JS: ${total} bytes in ${sizes.length} files (budget ${BUDGET_BYTES})`);
 if (total > BUDGET_BYTES) {

@@ -93,6 +93,46 @@ export function section(version: string, head: Head, commits: readonly (Commit &
   return `## ${bare(version)} — ${head.date}\n\n${headLine(head)}\n\n${groups.join("\n") || "- No changes.\n"}`;
 }
 
+const SIZE = /^First-load JS: ([\d,]+) bytes\b.*$/m;
+const grouped = (n: number) => n.toLocaleString("en-US");
+
+export type Earlier = { version: string; bytes: number | null } | null;
+
+/** What the release's first load weighs, and the change since the release before it (unavailable when that one didn't record it). */
+export function sizeLine(bytes: number, earlier: Earlier): string {
+  const since =
+    earlier === null
+      ? "no earlier release to compare"
+      : earlier.bytes === null
+        ? `change since ${bare(earlier.version)} unavailable: it has no first-load figure`
+        : bytes === earlier.bytes
+          ? `no change since ${bare(earlier.version)}`
+          : `${bytes > earlier.bytes ? "+" : "-"}${grouped(Math.abs(bytes - earlier.bytes))} since ${bare(earlier.version)}`;
+  return `First-load JS: ${grouped(bytes)} bytes (${since})`;
+}
+
+export function bytesIn(sec: string | null): number | null {
+  const m = sec ? SIZE.exec(sec) : null;
+  return m?.[1] ? Number(m[1].replaceAll(",", "")) : null;
+}
+
+/** The release just below `version` in the changelog's text, with its first-load figure if it has one. */
+export function earlierThan(text: string, version: string): Earlier {
+  const v = bare(version);
+  const sections = text.split(/(?=^## )/m).filter((s) => s.startsWith("## ") && !s.startsWith(`## ${v} `) && !s.startsWith(`## ${v}\n`));
+  const top = sections[0];
+  const name = top ? /^## (\S+)/.exec(top)?.[1] : undefined;
+  return top && name ? { version: name, bytes: bytesIn(top) } : null;
+}
+
+/** Puts a first-load line under the section's tag and commit line, in place of one it already has. */
+export function withSize(sec: string, size: string): string {
+  if (SIZE.test(sec)) return sec.replace(SIZE, size);
+  const lines = sec.split("\n");
+  const at = lines.findIndex((l) => l.startsWith("Tag ["));
+  return at < 0 ? `${sec.trimEnd()}\n\n${size}\n` : [...lines.slice(0, at + 1), "", size, ...lines.slice(at + 1)].join("\n");
+}
+
 export function handOf(sec: string | null): string {
   if (!sec) return "";
   const blocks = sec.split(/(?=^### )/m).filter((b) => HAND.some((h) => b.startsWith(`### ${h}\n`)));
@@ -103,6 +143,11 @@ export function handOf(sec: string | null): string {
 }
 
 export function carryHand(old: string | null, sec: string): string {
+  const size = old ? SIZE.exec(old)?.[0] : undefined;
+  return carryNotes(old, size && !SIZE.test(sec) ? withSize(sec, size) : sec);
+}
+
+function carryNotes(old: string | null, sec: string): string {
   const hand = handOf(old);
   if (!hand || handOf(sec)) return sec;
   const lines = sec.split("\n");
