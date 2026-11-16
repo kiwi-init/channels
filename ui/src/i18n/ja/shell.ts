@@ -42,7 +42,6 @@ export default {
   "shell.sidebar.add.agent": "エージェントを追加",
   "shell.sidebar.show.less": "閉じる",
   "shell.sidebar.others": "ほかの人同士のダイレクトメッセージ",
-  "shell.sidebar.others.count": { other: "{count} 件の会話" },
   "shell.sidebar.offline.ago": "オフライン · {ago}",
   "shell.sidebar.away": "離席中",
   "shell.sidebar.online": "オンライン",

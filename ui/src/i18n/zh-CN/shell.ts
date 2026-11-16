@@ -42,7 +42,6 @@ export default {
   "shell.sidebar.add.agent": "添加智能体",
   "shell.sidebar.show.less": "收起",
   "shell.sidebar.others": "他人之间的私信",
-  "shell.sidebar.others.count": { other: "{count} 个对话" },
   "shell.sidebar.offline.ago": "离线 · {ago}",
   "shell.sidebar.away": "离开",
   "shell.sidebar.online": "在线",
