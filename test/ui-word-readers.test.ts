@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { isProduction, keysIn, readersIn, unread, type Source } from "../scripts/ui-word-readers.ts";
 
-const KEYS = ["live.map.event", "tasks.lanes.empty", "tasks.lanes.label", "events.task.claim", "events.task.first", "chat.only.in.a.test"];
+const KEYS = ["live.map.event", "tasks.lanes.empty", "tasks.lanes.label", "tasks.label", "tasks.unused", "events.task.claim", "events.task.first", "chat.only.in.a.test"];
 
 const left = (sources: readonly Source[]): string[] => unread(KEYS, readersIn(sources.filter((s) => isProduction(s.file))));
 
@@ -37,6 +37,44 @@ describe("a UI word key is read only when production code looks it up (#2499)", 
       { file: "ui/src/i18n/ja/chat.ts", code: 'export default { "chat.only.in.a.test": "x" }' },
     ]);
     expect(got).toContain("chat.only.in.a.test");
+  });
+
+  test("a production diagnostic, comparison or bare mention of an otherwise unused key reads nothing", () => {
+    const got = left([
+      {
+        file: "ui/src/a.ts",
+        code: [
+          '"tasks.unused";',
+          'console.error("tasks.unused");',
+          'throw new Error("tasks.unused");',
+          'function f(k) { if (k === "tasks.unused") return 1; switch (k) { case "tasks.unused": return 2 } }',
+          'const o = { "tasks.unused": 1 };',
+        ].join("\n"),
+      },
+    ]);
+    expect(got).toContain("tasks.unused");
+  });
+
+  test("a leading interpolation resolves through a const, or keeps its family when it can't", () => {
+    expect(left([{ file: "ui/src/a.tsx", code: 'const area = "tasks"; const label = t(`${area}.label`)' }])).not.toContain("tasks.label");
+    const open = left([{ file: "ui/src/a.tsx", code: "function label(area) { return t(`${area}.label`) }" }]);
+    expect(open).not.toContain("tasks.label");
+    expect(open).not.toContain("tasks.lanes.label");
+    expect(open).toContain("tasks.unused");
+  });
+
+  test("a concatenated prefix keeps its family, through a const too", () => {
+    expect(left([{ file: "ui/src/a.tsx", code: 'const a = t("tasks.lanes." + part)' }])).not.toContain("tasks.lanes.empty");
+    expect(left([{ file: "ui/src/a.tsx", code: 'const P = "tasks.lanes."; const a = t(P + part)' }])).not.toContain("tasks.lanes.empty");
+  });
+
+  test("a key reaches t() through a Key-typed helper or a typed map of keys", () => {
+    expect(left([{ file: "ui/src/a.tsx", code: 'function heading(key: Key) { return t(key) }\nheading("live.map.event")' }])).not.toContain("live.map.event");
+    expect(left([{ file: "ui/src/a.ts", code: 'const WORDS: Readonly<Record<string, Key>> = { failure: "tasks.label" }; const w = t(WORDS[x])' }])).not.toContain("tasks.label");
+  });
+
+  test("a file name built like `${a}.${b}` keeps no family", () => {
+    expect(left([{ file: "ui/src/a.ts", code: "const f = `${name}.${ext}`" }])).toContain("tasks.unused");
   });
 
   test("a key in a type position isn't a lookup", () => {

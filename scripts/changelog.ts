@@ -98,7 +98,6 @@ const grouped = (n: number) => n.toLocaleString("en-US");
 
 export type Earlier = { version: string; bytes: number | null } | null;
 
-/** What the release's first load weighs, and the change since the release before it (unavailable when that one didn't record it). */
 export function sizeLine(bytes: number, earlier: Earlier): string {
   const since =
     earlier === null
@@ -116,7 +115,6 @@ export function bytesIn(sec: string | null): number | null {
   return m?.[1] ? Number(m[1].replaceAll(",", "")) : null;
 }
 
-/** The release just below `version` in the changelog's text, with its first-load figure if it has one. */
 export function earlierThan(text: string, version: string): Earlier {
   const v = bare(version);
   const sections = text.split(/(?=^## )/m).filter((s) => s.startsWith("## ") && !s.startsWith(`## ${v} `) && !s.startsWith(`## ${v}\n`));
@@ -125,7 +123,6 @@ export function earlierThan(text: string, version: string): Earlier {
   return top && name ? { version: name, bytes: bytesIn(top) } : null;
 }
 
-/** Puts a first-load line under the section's tag and commit line, in place of one it already has. */
 export function withSize(sec: string, size: string): string {
   if (SIZE.test(sec)) return sec.replace(SIZE, size);
   const lines = sec.split("\n");
