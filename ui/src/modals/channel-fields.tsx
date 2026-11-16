@@ -59,7 +59,7 @@ export function Edit({ value, label, onSave, onDone }: { value: string; label: s
 
 const zones = (): string[] => (typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [])
 
-export const hereZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+const hereZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
 
 export function DailyEdit({ value, onSave, onDone }: { value: CheckpointDaily | undefined; onSave: (daily: CheckpointDaily) => void; onDone: () => void }) {
   const [at, setAt] = useState(value?.at ?? "18:00")

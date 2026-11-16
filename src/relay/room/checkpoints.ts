@@ -9,7 +9,7 @@ import type { Effects } from "./directory.ts";
 const DAILY_KEY = "ckpt_daily";
 const NEXT_KEY = "ckpt_next";
 const LOG_KEY = "ckpt_log";
-export const CHECKPOINT_LOG_KEPT = 14;
+const CHECKPOINT_LOG_KEPT = 14;
 
 const parsed = (raw: string | undefined): unknown => {
   if (!raw) return null;
@@ -21,7 +21,7 @@ const parsed = (raw: string | undefined): unknown => {
   }
 };
 
-export const dailyOf = (db: RoomDb): CheckpointDaily | null => {
+const dailyOf = (db: RoomDb): CheckpointDaily | null => {
   const d = parsed(db.get(DAILY_KEY));
   return wellFormedDaily(d) ? d : null;
 };

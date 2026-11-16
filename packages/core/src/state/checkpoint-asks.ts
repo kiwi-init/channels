@@ -4,10 +4,10 @@ import { leadCheckpointKey } from "./lead.ts";
 import { isPerson } from "./people.ts";
 import type { CheckpointAsk, Fact, FoldMember, Member, Task } from "./types.ts";
 
-export const CHECKPOINT_ASKS_KEPT = 20;
+const CHECKPOINT_ASKS_KEPT = 20;
 export const CHECKPOINT_ASK_TTL_MS = 86_400_000;
 
-export const owesCheckpoints = (m: { kind?: string; owner?: boolean }): boolean => !isPerson(m) && m.kind !== "computer";
+const owesCheckpoints = (m: { kind?: string; owner?: boolean }): boolean => !isPerson(m) && m.kind !== "computer";
 
 export interface AskBody {
   asks: CheckpointOwed[];
@@ -74,7 +74,7 @@ export function checkpointAskRefusal(c: AskView, m: Pick<Message, "pk" | "rts">,
 
 export const keepAsk = (kept: readonly CheckpointAsk[], ask: CheckpointAsk): CheckpointAsk[] => [...kept, ask].slice(-CHECKPOINT_ASKS_KEPT);
 
-export type CheckpointItem = { kind: "task"; task: number; state: "saved" | "pending" | "closed" } | { kind: "lead"; state: "saved" | "pending" };
+type CheckpointItem = { kind: "task"; task: number; state: "saved" | "pending" | "closed" } | { kind: "lead"; state: "saved" | "pending" };
 
 export type AgentCheckpoints = { agent: string; reach: "asked"; items: CheckpointItem[]; saved: boolean } | { agent: string; reach: "unreachable" };
 

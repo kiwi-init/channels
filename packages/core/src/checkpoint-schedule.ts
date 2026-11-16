@@ -17,9 +17,9 @@ export interface Occurrence {
   due: number;
 }
 
-export const dailyAt = (x: unknown): x is string => typeof x === "string" && AT_RE.test(x);
+const dailyAt = (x: unknown): x is string => typeof x === "string" && AT_RE.test(x);
 
-export function timeZoneKnown(x: unknown): x is string {
+function timeZoneKnown(x: unknown): x is string {
   if (typeof x !== "string" || !x || x.length > MAX_TZ) return false;
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: x });
@@ -67,7 +67,7 @@ const wallMs = (w: Wall): number => Date.UTC(w.y, w.mo - 1, w.d, w.h, w.mi);
 
 const offsetAt = (tz: string, t: number): number => wallMs(wallAt(tz, t)) - Math.floor(t / MINUTE_MS) * MINUTE_MS;
 
-export function localDate(tz: string, t: number): string {
+function localDate(tz: string, t: number): string {
   const w = wallAt(tz, t);
   return `${String(w.y).padStart(4, "0")}-${String(w.mo).padStart(2, "0")}-${String(w.d).padStart(2, "0")}`;
 }
@@ -97,7 +97,7 @@ export function dueOn(date: string, at: string, tz: string): number | null {
   return firstAfterGap(tz, Math.min(...ends), Math.max(...ends));
 }
 
-export const occurrenceId = (date: string, at: string): string => `${date}T${at}`;
+const occurrenceId = (date: string, at: string): string => `${date}T${at}`;
 
 export function parseOccurrence(id: unknown): { date: string; at: string } | null {
   if (typeof id !== "string") return null;
@@ -114,7 +114,7 @@ export function nextOccurrence(daily: CheckpointDaily, after: number): Occurrenc
   }
 }
 
-export function occurrenceDue(daily: CheckpointDaily, id: string): number | null {
+function occurrenceDue(daily: CheckpointDaily, id: string): number | null {
   const o = parseOccurrence(id);
   if (!o || o.at !== daily.at) return null;
   return dueOn(o.date, o.at, daily.tz);
@@ -125,7 +125,7 @@ export function withinWindow(daily: CheckpointDaily, id: string, at: number): bo
   return due !== null && at >= due && at < due + CHECKPOINT_WINDOW_MS;
 }
 
-export type MissedWhy = "nobody online" | "nobody answered" | "relay asleep";
+type MissedWhy = "nobody online" | "nobody answered" | "relay asleep";
 
 export type OccurrenceRecord = { id: string; due: number; state: "open" } | { id: string; due: number; state: "answered"; seq: number } | { id: string; due: number; state: "missed"; why: MissedWhy };
 

@@ -399,7 +399,7 @@ export interface CheckpointOwed {
   lead?: true;
 }
 
-export const MAX_CHECKPOINT_AGENTS = 64;
+const MAX_CHECKPOINT_AGENTS = 64;
 const MAX_CHECKPOINT_TASKS = 64;
 
 function wellFormedOwed(x: unknown): x is CheckpointOwed {
@@ -412,7 +412,7 @@ function wellFormedOwed(x: unknown): x is CheckpointOwed {
   return o.tasks.length > 0 || o.lead === true;
 }
 
-export function wellFormedCheckpointAsk(e: Record<string, unknown>): boolean {
+function wellFormedCheckpointAsk(e: Record<string, unknown>): boolean {
   if (!Array.isArray(e.asks) || !Array.isArray(e.unreachable)) return false;
   if (e.asks.length + e.unreachable.length === 0 || e.asks.length + e.unreachable.length > MAX_CHECKPOINT_AGENTS) return false;
   if (!e.asks.every(wellFormedOwed)) return false;
