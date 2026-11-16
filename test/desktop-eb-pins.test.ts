@@ -45,7 +45,8 @@ describe("Electrobun's toolchain and what it ships are pinned in the repo (T804)
     expect(() => pinFor(PINS.app, "linux-riscv64", "app files")).toThrow("pins no app files for linux-riscv64");
     expect(hostKey("darwin", "arm64")).toBe("macos-arm64");
     expect(hostKey("linux", "x64")).toBe("linux-x64");
-    expect(() => hostKey("win32", "x64")).toThrow("doesn't build on win32-x64");
+    expect(hostKey("win32", "x64")).toBe("windows-x64");
+    expect(() => hostKey("freebsd", "x64")).toThrow("doesn't build on freebsd-x64");
   });
 
   test("the Linux core's files are pinned like the Mac ones, and the build checks them (T7239)", () => {

@@ -14,7 +14,7 @@ export interface Release {
   url: string;
 }
 
-export const coreUrl = (base: string, version: string, key: string): string => `${base}/v${version}/electrobun-core-${key.replace(/^macos-/, "darwin-")}.tar.gz`;
+export const coreUrl = (base: string, version: string, key: string): string => `${base}/v${version}/electrobun-core-${key.replace(/^macos-/, "darwin-").replace(/^windows-/, "win-")}.tar.gz`;
 
 export const pairedHutch = (config: string): string | null => /^\/\/ @hutch cli=(\S+)/m.exec(config)?.[1] ?? null;
 

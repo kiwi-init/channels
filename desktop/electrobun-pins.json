@@ -33,13 +33,24 @@
           "bin/hutch-engine": "b5aa0bc00329f2e14beef18fba541b3225d2d781c5c734cf738e8c516f70957a",
           "hutch-release.json": "f6c483f2e84756cfd04b8a1dbeac56c4936c019618da482813dea830bc8282ff"
         }
+      },
+      "windows-x64": {
+        "url": "https://hutch.blackboard.sh/hutch/builds/a2c9255ed54f93225814d7d7cf04ad5a613e44eb/windows-x64/hutch.tar.gz",
+        "size": 1370139,
+        "sha256": "5689e643748c6569f0d40e702300555ca08c93790fe69f4327797279b2a75213",
+        "files": {
+          "bin/hutch.exe": "a35e7620abfe0192109822493c02017d8bf3d2c1c270f699825104aeffa84415",
+          "bin/hutch-engine.exe": "a129599ce42162e3bc86e1db2cb75096e25fa4a9b65e54a5920b6ef2a58ef264",
+          "hutch-release.json": "50a4610b29ba108dec6c4371517a93fbe1adb58d0d71c7284d38925a4209defa"
+        }
       }
     }
   },
   "devkit": {
     "macos-arm64": "a383ef126c49105359912c73c7bf040d7967f9b881ee63f6b95dc6116be21446",
     "linux-x64": "a383ef126c49105359912c73c7bf040d7967f9b881ee63f6b95dc6116be21446",
-    "linux-arm64": "a383ef126c49105359912c73c7bf040d7967f9b881ee63f6b95dc6116be21446"
+    "linux-arm64": "a383ef126c49105359912c73c7bf040d7967f9b881ee63f6b95dc6116be21446",
+    "windows-x64": "a383ef126c49105359912c73c7bf040d7967f9b881ee63f6b95dc6116be21446"
   },
   "app": {
     "macos-arm64": {
@@ -79,6 +90,18 @@
       "Resources/preload-full.js": "0de49cdec806dfc7f7e55da5ad02ce69a7211be6e9d656b2b10c06af691d6a3c",
       "Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
       "Resources/uninstall": "ad5dbe76d900be28fe661c1b18527c2b95cf202f18cd2671ffabfec800aa7cb3"
+    },
+    "windows-x64": {
+      "bin/launcher.exe": "b1e2e5a5ec8b6b5749a5f6d871a8cce8bcb1fdbbe1dfd1cb94057cd522eb1f58",
+      "bin/ElectrobunCore.dll": "8841ac8fa83688bbe72e277326ab126f68c39fde1e94e3eb747abe3f73baabe7",
+      "bin/libNativeWrapper.dll": "1b4712a535ec111b2f9c222dde5740a0ca29b6c493a80d5767517588b7fba803",
+      "bin/libasar.dll": "5738e2307a90b8006bdae37b953355a5795a87141f9469ca0f683a75e90a097f",
+      "bin/WebView2Loader.dll": "d3fce90bdeecb08596e377dea6a316354dd8949e32ff09b89d51be00c14e21b6",
+      "bin/zig-zstd.exe": "22bbe1b7065227bc73b90db0c7989608262c79c79c36c409eeabb245dfa5e067",
+      "bin/bspatch.exe": "630b1f24f9a796b462927bd2c58f4c26aea4d3385fd8c0cfa6f3e9da53be40ff",
+      "Resources/main.js": "db3593eeb506247d154a0c868bf05fb6c0a1dad82b7c7885c891d8b8a45b9755",
+      "Resources/preload-full.js": "0de49cdec806dfc7f7e55da5ad02ce69a7211be6e9d656b2b10c06af691d6a3c",
+      "Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9"
     }
   }
 }

@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       jobs:
-        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, and the phone jobs ios, android); empty picks from what the branch changed (.github/coverage.yml), everything when in doubt"
+        description: "Only these jobs, comma-separated (static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, and the jobs only a dispatch or a release runs: ios, android, desktop-windows); empty picks from what the branch changed (.github/coverage.yml), everything when in doubt"
         required: false
         default: ""
       update_from:
@@ -72,7 +72,7 @@ jobs:
           RELEASE: ${{ inputs.release }}
         run: |
           all="static test-unit test-flows build doc fuzz shots desktop-mac desktop-linux desktop-distros cli-macos"
-          phones="ios android"
+          phones="ios android desktop-windows"
           case "$EVENT" in
             pull_request) pick="static test-unit"; if echo "$TITLE" | grep -qE '^kiwi [0-9]{4}\.[0-9]{1,2}\.[0-9]+(-rc\.[0-9]+)?$'; then pick="$pick cli-macos"; fi ;;
             workflow_dispatch)
@@ -1124,6 +1124,45 @@ jobs:
           done
           bun ../scripts/cli-downloads.ts .
 
+  # The Windows build: the kiwi CLI for Windows, then the desktop app on Electrobun with WebView2, packed as the release packs it.
+  desktop-windows:
+    name: desktop / windows
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['desktop-windows']
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: the kiwi CLI for Windows starts
+        run: |
+          bun scripts/build-cli.ts --target bun-windows-x64 --outfile dist/kiwi-windows-x64
+          ./dist/kiwi-windows-x64.exe --version
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/electrobun-pins.json') }}
+      - name: renderer
+        run: bun run ui:build
+      - name: electrobun toolchain
+        working-directory: desktop
+        timeout-minutes: 5
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
+      - name: the kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+      - name: build
+        working-directory: desktop
+        env:
+          CHANNELS_EB_RELEASE: "1"
+          DASH_RELEASE_OFFLINE: "1"
+        run: bun run build:eb
+      - name: what the build made
+        if: ${{ !cancelled() }}
+        run: find desktop/release-eb -maxdepth 5 -not -path '*/views/*' | head -200
+
   # The iPhone app: Swift lint, then an unsigned build for devices with the engine bundled in.
   ios:
     name: ios / build
@@ -1253,7 +1292,7 @@ jobs:
   # The one check to require: passes when every job the plan ran passed and the rest were skipped.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android]
+    needs: [plan, static, test-unit, test-flows, build, doc, fuzz, shots, desktop-mac, desktop-linux, desktop-distros, cli-macos, ios, android, desktop-windows]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2

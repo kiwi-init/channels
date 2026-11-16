@@ -22,7 +22,7 @@ export interface Pins {
 export const PINS: Pins = pinned;
 
 export function hostKey(platform: NodeJS.Platform = process.platform, arch: string = process.arch): string {
-  const os = platform === "darwin" ? "macos" : platform === "linux" ? "linux" : null;
+  const os = platform === "darwin" ? "macos" : platform === "linux" ? "linux" : platform === "win32" ? "windows" : null;
   if (!os || (arch !== "arm64" && arch !== "x64")) throw new Error(`Electrobun doesn't build on ${platform}-${arch}`);
   return `${os}-${arch}`;
 }
@@ -32,6 +32,8 @@ export function pinFor<T>(table: Record<string, T>, key: string, what: string): 
   if (v === undefined) throw new Error(`desktop/electrobun-pins.json pins no ${what} for ${key}`);
   return v;
 }
+
+export const hutchBinary = (platform: NodeJS.Platform = process.platform): string => (platform === "win32" ? "bin/hutch.exe" : "bin/hutch");
 
 export const sha256 = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 
