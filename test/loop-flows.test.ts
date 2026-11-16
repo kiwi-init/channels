@@ -104,14 +104,14 @@ say({ kind: "start", harness: "claude", pid: process.pid, argv, token: !!process
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
 if (task && !(argv.at(-1) ?? "").includes("“loop hold”")) {
-  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: sessionId, CLAUDE_PID: String(process.pid) }, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: sessionId, CLAUDE_PID: String(process.pid) }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
 }
 const judged = /This session is for reviewing round (\\d+) of (T\\d+)/.exec(argv.at(-1) ?? "");
 if (judged) {
-  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "approve", judged[2], "--round", judged[1], "looks right"]), { env: { ...process.env, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: sessionId, CLAUDE_PID: String(process.pid) }, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "approve", judged[2], "--round", judged[1], "looks right"]), { env: { ...process.env, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: sessionId, CLAUDE_PID: String(process.pid) }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
@@ -141,7 +141,7 @@ say({ kind: "start", harness: "codex", pid: process.pid, argv, token: !!process.
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
 if (task) {
-  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, CODEX_THREAD_ID: thread }, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, CODEX_THREAD_ID: thread }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
@@ -169,7 +169,7 @@ await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
 if (task) {
   update({ sessionUpdate: "tool_call" });
-  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, GROK_SESSION_ID: session }, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, GROK_SESSION_ID: session }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
@@ -200,7 +200,7 @@ say({ kind: "start", harness: "mimo", pid: process.pid, argv, token: !!process.e
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
 if (task) {
-  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, MIMOCODE: "1", MIMOCODE_PID: String(process.pid), MIMOCODE_SESSION_ID: session }, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, MIMOCODE: "1", MIMOCODE_PID: String(process.pid), MIMOCODE_SESSION_ID: session }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
@@ -250,12 +250,12 @@ db.run("insert into session values (?, ?, ?, ?, ?)", [session, realpathSync(proc
 db.run("insert into message values (?, ?, ?, ?)", ["msg_p_" + session, session, asked, JSON.stringify({ role: "user" })]);
 db.run("insert into part values (?, ?, ?, ?)", ["prt_p_" + session, "msg_p_" + session, session, JSON.stringify({ type: "text", text: prompt })]);
 db.run("insert into message values (?, ?, ?, ?)", ["msg_s_" + session, session, asked + 5, JSON.stringify({ role: "user" })]);
-const stray = spawnOwned(["bash", "-c", "exec -a 'kiwi listen --once' sleep 120"], { stdout: "ignore", stderr: "ignore" });
+const stray = Bun.spawn(["bash", "-c", "exec -a 'kiwi listen --once' sleep 120"], { stdout: "ignore", stderr: "ignore" });
 say({ kind: "typed", pid: process.pid, prompt, stray: stray.pid });
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(prompt)?.[1];
 if (task) {
-  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, ZCODE_RUNTIME_ENV: "1" }, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, ZCODE_RUNTIME_ENV: "1" }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
@@ -275,7 +275,7 @@ say({ kind: "start", harness: "kimi", pid: process.pid, argv, token: !!process.e
 process.stdout.write("Model: fake\\r\\nNo session yet — one will be created on your first message.\\r\\n> ");
 await Bun.sleep(1_000);
 process.stdout.write("\\x1b[?2004h");
-spawnOwnedSync(["stty", "raw", "-echo"], { stdin: "inherit" });
+Bun.spawnSync(["stty", "raw", "-echo"], { stdin: "inherit" });
 process.stdin.resume();
 process.stdin.on("data", (d) => { if (d.includes(3)) process.kill(process.pid, "SIGKILL"); });
 let got = "";
@@ -293,13 +293,13 @@ mkdirSync(join(dir, "agents", "main"), { recursive: true });
 writeFileSync(join(dir, "state.json"), JSON.stringify({ id: session, cwd: realpathSync(process.cwd()), createdAt: Date.now() }));
 const wire = (o) => appendFileSync(join(dir, "agents", "main", "wire.jsonl"), JSON.stringify(o) + "\\n");
 wire({ type: "turn.prompt", text: prompt });
-const stray = spawnOwned(["bash", "-c", "exec -a 'kiwi listen --once' sleep 120"], { stdout: "ignore", stderr: "ignore" });
+const stray = Bun.spawn(["bash", "-c", "exec -a 'kiwi listen --once' sleep 120"], { stdout: "ignore", stderr: "ignore" });
 say({ kind: "typed", pid: process.pid, prompt, stray: stray.pid });
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(prompt)?.[1];
 if (task) {
   wire({ type: "tool.call" });
-  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: process.env, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: process.env, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });

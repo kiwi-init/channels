@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnDaemon } from "../../src/daemon/rpc.ts";
-import { LEDGER_ENV, spawnOwned } from "../owned.ts";
+import { LEDGER_ENV } from "../../scripts/ci-owned.ts";
+import { spawnOwned } from "../owned.ts";
 
 const how = process.env.OWNED_CASE ?? "pass";
 const report = process.env.OWNED_REPORT ?? "";

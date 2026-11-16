@@ -8,7 +8,8 @@ import { afterAll, afterEach, beforeEach } from "bun:test";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LEDGER_ENV, ledgerSize, stopOwned } from "./owned.ts";
+import { LEDGER_ENV, stopOwned } from "../scripts/ci-owned.ts";
+import { ledgerSize } from "./owned.ts";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-test-harness-"));
 for (const name of ["codex", "gemini", "cursor", "grok", "kimi", "pi", "mimo", "zcode", "agy", "claude", "kiwi", "tmux"]) mkdirSync(join(root, name));

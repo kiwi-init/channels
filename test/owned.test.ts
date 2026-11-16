@@ -2,8 +2,9 @@ import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { running } from "../src/daemon/lock.ts";
-import { GRACE_MS, spawnOwned } from "./owned.ts";
+import { parseSync } from "oxc-parser";
+import { GRACE_MS, running } from "../scripts/ci-owned.ts";
+import { spawnOwned } from "./owned.ts";
 
 setDefaultTimeout(60_000);
 
@@ -94,9 +95,27 @@ test("a parallel run under scripts/ci-tests.ts stopped by SIGINT or SIGTERM leav
   }
 });
 
-test("test files start processes only through the owned helpers, so every child is in a ledger", () => {
-  const raw = [...new Bun.Glob("test/*.ts").scanSync({ cwd: ROOT })]
-    .filter((f) => f !== "test/owned.ts")
-    .filter((f) => /(^|[^.\w])Bun\.spawn(Sync)?\(/m.test(readFileSync(join(ROOT, f), "utf8").replace(/(["'`])(?:\\.|(?!\1)[^\\\n])*\1/g, '""')));
-  expect(raw).toEqual([]);
+const fields = (node: unknown): Record<string, unknown> => (node && typeof node === "object" && !Array.isArray(node) ? Object.fromEntries(Object.entries(node)) : {});
+
+const rawSpawns = (file: string): number => {
+  let found = 0;
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    const n = fields(node);
+    const callee = fields(n.callee);
+    const object = fields(callee.object);
+    const property = fields(callee.property);
+    if (n.type === "CallExpression" && callee.type === "MemberExpression" && object.type === "Identifier" && object.name === "Bun" && (property.name === "spawn" || property.name === "spawnSync"))
+      found++;
+    for (const v of Object.values(n)) if (v && typeof v === "object") walk(v);
+  };
+  walk(parseSync(file, readFileSync(join(ROOT, file), "utf8")).program);
+  return found;
+};
+
+test("test files start processes only through the owned helpers, so every child is in a ledger; script text they write is left alone", () => {
+  const files = [...new Bun.Glob("test/**/*.ts").scanSync({ cwd: ROOT })].filter((f) => f !== "test/owned.ts" && !f.startsWith("test/fixtures/"));
+  expect(files.length).toBeGreaterThan(50);
+  expect(files.filter((f) => rawSpawns(f) > 0)).toEqual([]);
+  expect(rawSpawns("test/fixtures/place-quit.ts")).toBe(1);
 });

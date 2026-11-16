@@ -17,6 +17,7 @@ function project(tests: Record<string, string>, flows: string[], mac: string[] =
   mkdirSync(join(dir, "test"));
   copyFileSync(join(SCRIPTS, "ci-tests.ts"), join(dir, "scripts", "ci-tests.ts"));
   copyFileSync(join(SCRIPTS, "ci-watchdog.ts"), join(dir, "scripts", "ci-watchdog.ts"));
+  copyFileSync(join(SCRIPTS, "ci-owned.ts"), join(dir, "scripts", "ci-owned.ts"));
   writeFileSync(join(dir, "scripts", "ci-flows.ts"), `export const FLOWS: string[] = ${JSON.stringify(flows)};\nexport const MAC: string[] = ${JSON.stringify(mac)};\n`);
   for (const [name, body] of Object.entries(tests)) writeFileSync(join(dir, "test", `${name}.test.ts`), `import { expect, test } from "bun:test";\n${body}\n`);
   return dir;
@@ -70,7 +71,7 @@ describe("scripts/ci-tests.ts", () => {
 
   test("a process a test leaves running with the run's stderr doesn't hold the group after bun test exits", async () => {
     const leaves = `test("leaves a sleeper", async () => {
-  const sleeper = spawnOwned(["sleep", "15"], { stdout: "ignore", stderr: "inherit", detached: true });
+  const sleeper = Bun.spawn(["sleep", "15"], { stdout: "ignore", stderr: "inherit", detached: true });
   sleeper.unref();
   await Bun.write("sleeper.pid", String(sleeper.pid));
 });`;

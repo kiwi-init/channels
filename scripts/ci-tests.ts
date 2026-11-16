@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { FLOWS, MAC } from "./ci-flows.ts";
 import { noteLine, shouldKill, SILENT_MS, verdict, watching } from "./ci-watchdog.ts";
-import { GRACE_MS, stopOwned } from "../test/owned.ts";
+import { GRACE_MS, stopOwned } from "./ci-owned.ts";
 
 const [group = "", ...extra] = process.argv.slice(2);
 const all = [...new Glob("test/*.test.ts").scanSync(), ...new Glob("ui/src/**/*.test.{ts,tsx}").scanSync(), ...new Glob("packages/*/src/**/*.test.{ts,tsx}").scanSync()].sort();
