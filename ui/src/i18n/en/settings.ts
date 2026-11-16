@@ -280,7 +280,7 @@ const words = {
   "settings.agents.back.hint": "Tries to bring back the supported agents that ran here before the restart, each in its own tmux window.",
   "settings.agents.back.run": "Bring back",
   "settings.agents.back.working": "Bringing back…",
-  "settings.agents.back.done": "{restored} back, {failed} failed",
+  "settings.agents.back.done": "{back} back, {left} not back",
   "settings.agents.back.none": "No agents on this computer",
   "settings.agents.back.no.answer": "kiwi up didn't answer. Run it in a terminal to see why: {command}",
   "settings.agents.back.restored": "Back",

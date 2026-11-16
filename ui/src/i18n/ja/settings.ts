@@ -279,7 +279,7 @@ export default {
   "settings.agents.back.hint": "再起動前にここで動いていた対応エージェントを、それぞれ自分の tmux ウィンドウで戻そうとします。",
   "settings.agents.back.run": "呼び戻す",
   "settings.agents.back.working": "呼び戻しています…",
-  "settings.agents.back.done": "{restored} 件復帰、{failed} 件失敗",
+  "settings.agents.back.done": "{back} 件復帰、{left} 件未復帰",
   "settings.agents.back.none": "このコンピューターにエージェントはいません",
   "settings.agents.back.no.answer": "kiwi up が応答しませんでした。ターミナルで実行して理由を確認してください: {command}",
   "settings.agents.back.restored": "復帰",

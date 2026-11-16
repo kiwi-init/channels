@@ -928,7 +928,7 @@ export interface Actions {
   savePersonalities(list: Personality[]): void
   setHooks(harness: HookHarness, on: boolean): Promise<void>
   checkComputer(): Promise<Finding[] | null>
-  bringAgentsBack(): Promise<UpOutcome[] | null>
+  bringAgentsBack(): Promise<BackRun>
   setContextLine(on: boolean): void
   computerSettings(id: string): Promise<[string, string[]][]>
   launchedFrom(ids: string[]): Promise<LaunchedAgent[]>
@@ -956,7 +956,10 @@ export interface ThisComputer {
   hooks: { harness: HookHarness; label: string; state: Exclude<HookState, "absent"> }[]
   contextLine: boolean | null
   back: { down: UpOutcome[]; apart: UpOutcome[] } | null
+  run: BackRun
 }
+
+export type BackRun = { at: "idle" } | { at: "working" } | { at: "done"; outcomes: UpOutcome[] } | { at: "no.answer" }
 
 export interface GoneChannel {
   code: string

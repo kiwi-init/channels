@@ -22,7 +22,7 @@ import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
 import { TABS_3, TABS_8 } from "~/demo/tabs"
 import { DEMO_FROZEN } from "~/demo/shots"
 import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
-import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, TaskStep, Usage } from "~/model"
+import type { Account, Actions, App, BackRun, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, TaskStep, Usage } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
@@ -66,6 +66,7 @@ const COMPUTER: ThisComputer = {
   ],
   contextLine: false,
   back: null,
+  run: { at: "idle" },
 }
 
 const FINDINGS: Finding[] = [
@@ -1171,13 +1172,16 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           )
         ),
       checkComputer: () => new Promise((done) => setTimeout(() => done(FINDINGS), 400)),
-      bringAgentsBack: () =>
-        new Promise((done) =>
+      bringAgentsBack: () => {
+        setComputer((c) => ({ ...c, run: { at: "working" } }))
+        return new Promise<BackRun>((done) =>
           setTimeout(() => {
-            setComputer((c) => ({ ...c, back: null }))
-            done(BROUGHT_BACK)
+            const run: BackRun = { at: "done", outcomes: BROUGHT_BACK }
+            setComputer((c) => ({ ...c, back: null, run }))
+            done(run)
           }, 400)
-        ),
+        )
+      },
       myUsage: async () => ({
         plan: "free",
         blocked: false,

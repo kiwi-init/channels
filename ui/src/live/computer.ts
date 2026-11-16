@@ -8,9 +8,10 @@ import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { store } from "~/live/value"
-import type { Finding, ThisComputer } from "~/model"
+import type { BackRun, Finding, ThisComputer } from "~/model"
 
 const computer = store<ThisComputer | null>(null)
+const lastRun = store<BackRun>({ at: "idle" })
 
 const shown = (rows: HookRow[]): ThisComputer["hooks"] =>
   rows.filter((r): r is HookRow & { state: Exclude<HookState, "absent"> } => r.state !== "absent").map((r) => ({ harness: r.harness, label: harnessName(r.harness), state: r.state }))
@@ -32,7 +33,14 @@ export async function loadComputer(): Promise<void> {
     hooks: shown(hooks),
     contextLine: line === null ? null : line === "on",
     back: backPrompt(plan.get()),
+    run: lastRun.get(),
   })
+}
+
+function setRun(run: BackRun): void {
+  lastRun.set(run)
+  const now = computer.get()
+  if (now) computer.set({ ...now, run })
 }
 
 export function useComputer(): ThisComputer | null {
@@ -66,10 +74,14 @@ export async function loadUpPlan(): Promise<void> {
   if (now) computer.set({ ...now, back: backPrompt(plan.get()) })
 }
 
-export async function bringAgentsBack(): Promise<UpOutcome[] | null> {
-  const outcomes = await need().bringBack()
-  await loadUpPlan()
-  return outcomes
+export async function bringAgentsBack(): Promise<BackRun> {
+  const b = need()
+  setRun({ at: "working" })
+  const outcomes = await b.bringBack().catch(() => null)
+  const run: BackRun = outcomes ? { at: "done", outcomes } : { at: "no.answer" }
+  setRun(run)
+  await loadUpPlan().catch(() => {})
+  return run
 }
 
 export type BackPrompt = NonNullable<ThisComputer["back"]>

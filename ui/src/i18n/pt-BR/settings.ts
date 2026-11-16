@@ -279,7 +279,7 @@ export default {
   "settings.agents.back.hint": "Tenta trazer de volta os agentes compatíveis que rodavam aqui antes de reiniciar, cada um na própria janela do tmux.",
   "settings.agents.back.run": "Trazer de volta",
   "settings.agents.back.working": "Trazendo de volta…",
-  "settings.agents.back.done": "{restored} de volta, {failed} com falha",
+  "settings.agents.back.done": "{back} de volta, {left} não voltaram",
   "settings.agents.back.none": "Nenhum agente neste computador",
   "settings.agents.back.no.answer": "O kiwi up não respondeu. Rode no terminal para ver por quê: {command}",
   "settings.agents.back.restored": "De volta",

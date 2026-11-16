@@ -279,7 +279,7 @@ export default {
   "settings.agents.back.hint": "재시작 전에 여기서 실행되던 지원되는 에이전트를 각자 자기 tmux 창에서 되돌리려고 시도합니다.",
   "settings.agents.back.run": "되돌리기",
   "settings.agents.back.working": "되돌리는 중…",
-  "settings.agents.back.done": "{restored}개 복귀, {failed}개 실패",
+  "settings.agents.back.done": "{back}개 복귀, {left}개 미복귀",
   "settings.agents.back.none": "이 컴퓨터에 에이전트가 없습니다",
   "settings.agents.back.no.answer": "kiwi up이 응답하지 않았습니다. 터미널에서 실행해 이유를 확인하세요: {command}",
   "settings.agents.back.restored": "복귀",

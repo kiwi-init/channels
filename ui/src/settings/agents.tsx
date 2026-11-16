@@ -7,9 +7,9 @@ import { t } from "~/i18n/i18n"
 import { failedToast } from "~/kit/failed"
 import { LOGOS } from "~/kit/logos"
 import { RoleFace } from "~/kit/role-face"
-import type { UpOutcome, UpResult } from "@kiwi/core/up-outcome.ts"
 import type { Finding, Harness, ThisComputer } from "~/model"
 import { useApp } from "~/nav"
+import { backRow } from "~/settings/back-row"
 import { Personalities } from "~/settings/personalities"
 import { acts, esc, field, fine, join, row, say, Sheet, toggle, words, type Acts } from "~/settings/sheet"
 
@@ -90,47 +90,9 @@ function checkRow(check: Check, a: Acts, run: () => void): string {
   })
 }
 
-type Back = "idle" | "running" | "failed" | UpOutcome[]
-
-const BACK_SAYS: Record<UpResult, { key: Key; mark: "fine" | "bad" | "offline" | "waiting" }> = {
-  restored: { key: "settings.agents.back.restored", mark: "fine" },
-  running: { key: "settings.agents.back.running", mark: "fine" },
-  skipped: { key: "settings.agents.back.skipped", mark: "offline" },
-  failed: { key: "settings.agents.back.failed", mark: "bad" },
-  printed: { key: "settings.agents.back.printed", mark: "waiting" },
-  planned: { key: "settings.agents.back.planned", mark: "waiting" },
-}
-
-function outcomeRow(o: UpOutcome): string {
-  const says = BACK_SAYS[o.result]
-  const why = o.result === "printed" ? `\`${o.why}\`` : esc(o.why)
-  return row({ mark: says.mark, label: `${o.handle} · ${o.channel}`, hint: `${esc(t(says.key))}: ${why}` })
-}
-
-function backRow(back: Back, a: Acts, run: () => void): string {
-  const done = Array.isArray(back) ? back : null
-  const restored = done ? done.filter((o) => o.result === "restored").length : 0
-  const failed = done ? done.filter((o) => o.result === "failed").length : 0
-  return row({
-    label: t("settings.agents.back"),
-    hint: done
-      ? done.length
-        ? say("settings.agents.back.done", { restored, failed })
-        : say("settings.agents.back.none")
-      : back === "failed"
-        ? say("settings.agents.back.no.answer", {}, { command: "kiwi up" })
-        : say("settings.agents.back.hint"),
-    line: a.act(back === "running" ? t("settings.agents.back.working") : t("settings.agents.back.run"), () => {
-      if (back !== "running") run()
-    }),
-    nested: done ? [done.map(outcomeRow).join("\n")] : [],
-  })
-}
-
 export function AgentsPage() {
   const { app } = useApp()
   const [check, setCheck] = useState<Check>("idle")
-  const [back, setBack] = useState<Back>("idle")
   const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set())
   const { computer, actions } = app
   const hooks = computer?.hooks ?? []
@@ -164,13 +126,10 @@ export function AgentsPage() {
       () => setCheck("failed")
     )
   }
-  const bring = () => {
-    setBack("running")
-    actions.bringAgentsBack().then(
-      (o) => setBack(o ?? "failed"),
-      () => setBack("failed")
-    )
-  }
+  const bring = () =>
+    void actions.bringAgentsBack().catch(() => {
+      // the shared run state already says kiwi up didn't answer
+    })
   const a = acts()
   const kiwi = kiwiState(computer)
   const md = join([
@@ -196,7 +155,7 @@ export function AgentsPage() {
     computer
       ? [
           checkRow(check, a, run),
-          backRow(back, a, bring),
+          backRow(computer.run, a, bring),
           computer.contextLine === null
             ? ""
             : toggle(

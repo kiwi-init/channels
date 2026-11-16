@@ -277,7 +277,7 @@ export default {
   "settings.agents.back.hint": "尝试让重启前在这里运行的受支持智能体，各自在自己的 tmux 窗口中回来。",
   "settings.agents.back.run": "让它们回来",
   "settings.agents.back.working": "正在恢复…",
-  "settings.agents.back.done": "{restored} 个已恢复，{failed} 个失败",
+  "settings.agents.back.done": "{back} 个已回来，{left} 个未回来",
   "settings.agents.back.none": "这台电脑上没有智能体",
   "settings.agents.back.no.answer": "kiwi up 没有响应。请在终端中运行以查看原因：{command}",
   "settings.agents.back.restored": "已恢复",
