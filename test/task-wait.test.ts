@@ -72,7 +72,7 @@ describe("a task-level wait on a step-less task", () => {
     const due = nudgesDue(after, now);
     expect(due).toEqual([expect.objectContaining({ task: TASK, step: 1, waited: "until load < 65% on 2 reads (#123)" })]);
     const mark = event(9, now, "win", { op: "task.nudge", task: TASK, mover: due[0]!.mover, since: due[0]!.since, step: 1, waited: due[0]!.waited! });
-    expect(describeEvent(mark)).toBe("marked T1 quiet with win: a wake is attempted; its wait ran out: until load < 65% on 2 reads (#123)");
+    expect(describeEvent(mark)).toBe("Kiwi clock: T1 quiet with win: a wake is attempted; its wait ran out: until load < 65% on 2 reads (#123) (posted by win's daemon)");
     const marked = fold([...doing(), wait(3, 2_000, until), mark], roster, now + QUIET_MS);
     expect(nudgesDue(marked, now + QUIET_MS).every((d) => d.waited === undefined)).toBe(true);
   });
