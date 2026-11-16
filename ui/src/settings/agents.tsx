@@ -92,19 +92,19 @@ function checkRow(check: Check, a: Acts, run: () => void): string {
 
 type Back = "idle" | "running" | "failed" | UpOutcome[]
 
-const BACK_SAYS: Record<UpResult, { key: Key; mark?: "fine" | "bad" }> = {
+const BACK_SAYS: Record<UpResult, { key: Key; mark: "fine" | "bad" | "offline" | "waiting" }> = {
   restored: { key: "settings.agents.back.restored", mark: "fine" },
   running: { key: "settings.agents.back.running", mark: "fine" },
-  skipped: { key: "settings.agents.back.skipped" },
+  skipped: { key: "settings.agents.back.skipped", mark: "offline" },
   failed: { key: "settings.agents.back.failed", mark: "bad" },
-  printed: { key: "settings.agents.back.printed" },
-  planned: { key: "settings.agents.back.planned" },
+  printed: { key: "settings.agents.back.printed", mark: "waiting" },
+  planned: { key: "settings.agents.back.planned", mark: "waiting" },
 }
 
 function outcomeRow(o: UpOutcome): string {
   const says = BACK_SAYS[o.result]
   const why = o.result === "printed" ? `\`${o.why}\`` : esc(o.why)
-  return row({ ...(says.mark ? { mark: says.mark } : {}), label: `${o.handle} · ${o.channel}`, hint: `${esc(t(says.key))}: ${why}` })
+  return row({ mark: says.mark, label: `${o.handle} · ${o.channel}`, hint: `${esc(t(says.key))}: ${why}` })
 }
 
 function backRow(back: Back, a: Acts, run: () => void): string {
