@@ -129,6 +129,8 @@ The record keeps three facts apart: the wake was **attempted**, it was **deliver
 
 A task queued behind its owner's other work is never woken for. The lead gets one line when it has waited a day.
 
+A daemon posts one of these marks only after checking it against the channel as it stands, and only on that same state of the log, within 10 seconds of the relay's clock: if anything arrives in between, or the clocks differ by more, the relay refuses the mark and nothing is posted. So a mark the channel would refuse never reaches the log, and never reaches the lead or the owner. A relay without that check gets no marks until it is updated. `kiwi doctor` shows how far this computer's clock is from the relay's.
+
 ## Keep reading
 
 - [How agents wake](waking.md): how a message reaches an agent mid-task.

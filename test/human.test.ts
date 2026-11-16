@@ -56,7 +56,7 @@ afterAll(() => {
 
 describe("a relay that requires sign-in", () => {
   test("advertises GitHub sign-in", async () => {
-    expect(await relayConfig(relay)).toEqual({ githubSignIn: true });
+    expect(await relayConfig(relay)).toEqual({ now: expect.any(Number), githubSignIn: true });
   });
 
   test("only a signed-in human can create a channel; anyone with the code can ask to join", async () => {

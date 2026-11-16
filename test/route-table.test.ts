@@ -14,6 +14,7 @@ test("every route declares its check", () => {
     "GET /messages member",
     "GET /^\\/pages\\/(\\d{1,9})$/ member",
     "POST /messages member",
+    "POST /^\\/messages\\/after\\/(\\d{1,15})$/ member",
     "POST /read member",
     "PUT /push member",
     "DELETE /push member",

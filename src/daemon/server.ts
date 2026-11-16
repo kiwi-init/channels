@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from "
 import { getRandomValues, timingSafeEqual } from "node:crypto";
 import type { Socket } from "bun";
 import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
-import { KEEP_MAX, type Message } from "@kiwi/core/protocol.ts";
+import { AFTER_SKEW_MS, KEEP_MAX, type Message } from "@kiwi/core/protocol.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, writePrivate, type Config } from "../config.ts";
 import { readCursor } from "../config/cursors.ts";
 import { keepProof, saveMachine, takeDeviceList } from "../machine.ts";
@@ -222,7 +222,22 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       },
       reachable: (name) => [...seat.heard.values()].some((h) => h.presence.from === name && h.presence.reach !== "unreachable" && Date.now() - h.at < 3 * beaconMs),
       stateOf: () => stateOf(seat),
-      nudge: (ev, to) => posting(async (session) => (await import("../agent.ts")).runAgent(session.taskNudge(ev, to))),
+      nudge: async (ev, to, after) => {
+        const session = await sessionOf(seat);
+        if (!session) return null;
+        try {
+          return await (await import("../agent.ts")).runAgent(session.taskNudge(ev, to, after));
+        } catch (err) {
+          // A head that moved is the watcher's to read again; any other refusal or an unreachable relay means nothing was appended.
+          const { RelayError } = await import("@kiwi/core/client.ts");
+          if (!(err instanceof RelayError)) return null;
+          return err.tag === "MovedOn" ? "moved" : err.tag === "OffClock" ? "off-clock" : null;
+        }
+      },
+      offClock: () =>
+        void process.stderr.write(
+          `kiwi daemon: ${seat.alias}/${seat.agent}: the relay's clock and this computer's differ by more than ${AFTER_SKEW_MS / 1000}s, so quiet-task marks are held; kiwi doctor shows the difference\n`,
+        ),
       got: async (ev) => void (await posting(async (session) => (await import("../agent.ts")).runAgent(session.taskWake(ev)))),
       pending: () => pendingDocWakes(seat.alias, seat.agent),
       told: (block) => docWakeTold(seat.alias, seat.agent, block),

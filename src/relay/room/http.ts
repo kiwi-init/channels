@@ -49,5 +49,6 @@ export function relayConfig(human: HumanAuth | null, githubClientId?: string | n
     githubSignIn: !!human && !human.dev,
     ...(human?.dev ? { dev: true } : {}),
     ...(githubClientId ? { githubClientId } : {}),
+    now: Date.now(),
   });
 }

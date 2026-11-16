@@ -453,12 +453,18 @@ function folding(
     return !by || ![...by].some((n) => answersAsk(members, m, n));
   };
   const clockView = (): ClockView => ({ tasks, members, github: ctx.github, branchPrefix: ctx.branchPrefix, quietMs: ctx.quietMs, openAsks: holding.filter(stillOpen) });
+  const present = (m: FoldMember | undefined): m is FoldMember => !!m && m.active && (m.owner || !gone.has(m.pk));
   const agentHere = (name: string): boolean => {
     const who = members.get(name);
-    return !!who && who.active && !isPerson(who);
+    return present(who) && !isPerson(who);
   };
-  const leadHere = (): string | undefined => (lead && members.get(lead)?.active ? lead : [...members.values()].find((x) => x.owner && x.active)?.name);
-  const standsFor = (name: string): string | undefined => (members.get(name)?.active ? name : [...members.values()].find((x) => x.owner && x.active)?.name);
+  const leadNow = (): string | null => {
+    const signedLead = [...members.values()].filter((m) => present(m) && signed.has(m.name) && m.persona?.role === "lead").sort((a, b) => a.joined - b.joined)[0]?.name;
+    return signedLead ?? (lead && present(members.get(lead)) && !signed.has(lead) ? lead : null);
+  };
+  const ownerHere = (): string | undefined => [...members.values()].find((x) => x.owner && x.active)?.name;
+  const leadHere = (): string | undefined => leadNow() ?? ownerHere();
+  const standsFor = (name: string): string | undefined => (present(members.get(name)) ? name : ownerHere());
   const timeTask = (t: Task): void => void (timedStep(t) ? timed.add(t.id) : timed.delete(t.id));
   const tickTask = (t: Task | undefined, seq: number, at: number, by?: string): void => {
     if (!t) return;
@@ -940,9 +946,7 @@ function folding(
     member.scopes = scopesByKey.get(member.pk) ?? [];
     if (!member.owner && gone.has(member.pk)) member.active = false;
   }
-  const signedLead = [...members.values()].filter((m) => m.active && signed.has(m.name) && m.persona?.role === "lead").sort((a, b) => a.joined - b.joined)[0]?.name;
-  const legacyLead = lead && members.get(lead)?.active && !signed.has(lead) ? lead : null;
-  const theLead = signedLead ?? legacyLead;
+  const theLead = leadNow();
   for (const m of members.values()) {
     if (!signed.has(m.name)) {
       const leads = m.name === theLead;

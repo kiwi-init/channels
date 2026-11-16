@@ -14,6 +14,7 @@ import {
   type Event,
   type IssueRef,
   type KeptEvidence,
+  type SendAfter,
   type TaskState,
   type Verdict,
 } from "@kiwi/core/protocol.ts";
@@ -392,8 +393,8 @@ export class SessionTasks extends SessionMessaging {
     oneLook,
   );
 
-  readonly taskNudge = Effect.fn("AgentSession.taskNudge")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.nudge" }>, to?: string) {
-    return yield* this.event(ev, `${taskId(ev.task)} quiet`, to ? [to] : undefined);
+  readonly taskNudge = Effect.fn("AgentSession.taskNudge")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.nudge" }>, to: string | undefined, after: SendAfter) {
+    return yield* this.event(ev, `${taskId(ev.task)} quiet`, to ? [to] : undefined, undefined, { after });
   });
 
   readonly taskSnapshot = Effect.fn("AgentSession.taskSnapshot")({ self: this }, function* (this: SessionTasks, id: number, facts: SnapshotFacts) {
