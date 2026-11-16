@@ -207,7 +207,7 @@ export function useStick(following = true, still = false) {
     const down = box.scrollTop > seen.current + 0.5
     if (up || down) parked.current = null
     going.current &&= !up && gap >= NEAR_BOTTOM
-    const near = going.current || (!still || gap <= 0.5 ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !(up && person()) && (stuck.current || down))
+    const near = going.current || (!still ? gap < NEAR_BOTTOM : gap < NEAR_BOTTOM && !(up && person()) && (stuck.current || down))
     stuck.current = live.current && !held.current && near
     const kept = placed.current && placed.current === anchor.current && Date.now() < holdUntil.current && anchor.current?.el.isConnected ? anchor.current : null
     const was = anchor.current

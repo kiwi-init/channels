@@ -734,6 +734,52 @@ describe("useStick in a thread doc", () => {
     await act(async () => root.unmount())
   })
 
+  for (const wheeling of [false, true])
+    test(`a reader the feed's own correction clamps to the bottom, as content under them shrinks, keeps reading instead of following${wheeling ? ", even inside the wheel's window" : ""} (#2498)`, async () => {
+      const f = new Feed(100)
+      f.lines = 60
+      const { stick, root } = await mount(f, true, true)
+      f.scrollTo(f.max)
+      stick.remember()
+      if (wheeling) {
+        f.fire("wheel", -200)
+        f.scrollTo(f.top - 200)
+        stick.remember()
+      } else userScroll(f, stick, -200)
+      expect(stick.stuck.current).toBe(false)
+      f.lines -= 50
+      expect(f.layout()).toBe(true)
+      stick.settle()
+      f.resized()
+      stick.remember()
+      expect(stick.stuck.current).toBe(false)
+      const before = f.docTop
+      for (let i = 0; i < 5; i++) {
+        docLine(f)
+        stick.remember()
+      }
+      expect(Math.abs(f.docTop - before)).toBeLessThan(4)
+      await act(async () => root.unmount())
+    })
+
+  test("a key that takes you down to the bottom, such as End, still follows the lines that arrive (#2498)", async () => {
+    const f = new Feed(100)
+    const { stick, root } = await mount(f, true, true)
+    f.scrollTo(f.max)
+    stick.remember()
+    userScroll(f, stick, -200)
+    expect(stick.stuck.current).toBe(false)
+    f.fireDoc("keydown")
+    f.scrollTo(f.max)
+    stick.remember()
+    expect(stick.stuck.current).toBe(true)
+    for (let i = 0; i < 3; i++) {
+      docLine(f)
+      expect(f.top).toBe(f.max)
+    }
+    await act(async () => root.unmount())
+  })
+
   test("unmounting stops watching the feed", async () => {
     const f = new Feed(100)
     const { root } = await mount(f, true, true)
