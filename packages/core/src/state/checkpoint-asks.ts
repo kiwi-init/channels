@@ -57,17 +57,19 @@ function namedRefusal(c: AskView, ev: AskEvent): string | null {
   return null;
 }
 
-function dailyRefusal(c: AskView, rts: number | undefined, occurrence: string): string | null {
+function dailyRefusal(c: AskView, m: Pick<Message, "rts" | "rocc">, occurrence: string): string | null {
+  const rts = m.rts;
   if (!c.checkpointDaily) return "this channel has no daily checkpoint time";
+  if (m.rocc !== occurrence) return `the relay didn't take this message as the daily checkpoint request for ${occurrence}`;
   if (rts === undefined || !withinWindow(c.checkpointDaily, occurrence, rts)) return `the daily checkpoint request for ${occurrence} came outside its time`;
   if (c.checkpointAsks.some((a) => a.occurrence === occurrence)) return `the daily checkpoint request for ${occurrence} was already made`;
   return null;
 }
 
-export function checkpointAskRefusal(c: AskView, m: Pick<Message, "pk" | "rts">, ev: AskEvent, member: FoldMember): string | null {
+export function checkpointAskRefusal(c: AskView, m: Pick<Message, "pk" | "rts" | "rocc">, ev: AskEvent, member: FoldMember): string | null {
   const named = namedRefusal(c, ev);
   if (named) return named;
-  if (ev.occurrence !== undefined) return dailyRefusal(c, m.rts, ev.occurrence);
+  if (ev.occurrence !== undefined) return dailyRefusal(c, m, ev.occurrence);
   if (member.owner || c.trusted(m.pk ?? "", member)) return null;
   return "only the owner or a person they trust asks every agent for its checkpoints";
 }

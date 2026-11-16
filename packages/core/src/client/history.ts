@@ -16,7 +16,7 @@ interface PageOffer {
   next: number;
 }
 
-export function received(p: WirePayload, seq: number, rts: number | undefined, sigOk: boolean): Message {
+export function received(p: WirePayload, seq: number, rts: number | undefined, sigOk: boolean, rocc?: string): Message {
   const { ev, ...rest } = p;
   const imgs = Array.isArray(p.imgs) ? p.imgs.filter(rasterAttachment) : undefined;
   const files = Array.isArray(p.files) ? p.files.filter(fileAttachment) : undefined;
@@ -27,6 +27,7 @@ export function received(p: WirePayload, seq: number, rts: number | undefined, s
     ...(files?.length ? { files } : { files: undefined }),
     seq,
     ...(rts !== undefined ? { rts } : {}),
+    ...(rocc !== undefined ? { rocc } : {}),
     sigOk,
   };
 }
@@ -87,7 +88,7 @@ export class ChannelHistory {
       if (!key) return null;
       const p = (yield* Effect.promise(() => open(key, this.ch.roomId, env.iv, env.ct).catch(() => null))) as unknown;
       if (!wellFormed(p)) return null;
-      return yield* this.ch.fx.unseal(received(p, env.seq, env.ts, yield* Effect.promise(() => verify(p))));
+      return yield* this.ch.fx.unseal(received(p, env.seq, env.ts, yield* Effect.promise(() => verify(p)), typeof env.occ === "string" ? env.occ : undefined));
     }),
 
     openRooms: Effect.fn("Channel.openRooms")({ self: this }, function* (this: ChannelHistory, base: FoldBase) {
@@ -112,7 +113,7 @@ export class ChannelHistory {
       }
       const inner = yield* Effect.promise(async () => (await rooms()).openLetter(this.ch.roomId, ev, key));
       if (!wellFormed(inner) || inner.from !== m.from) return null;
-      const opened = received(inner, m.seq, m.rts ?? m.ts, yield* Effect.promise(() => verify(inner)));
+      const opened = received(inner, m.seq, m.rts ?? m.ts, yield* Effect.promise(() => verify(inner)), m.rocc);
       if (opened.pk !== m.pk) return null;
       return { ...opened, room: ev.room, sealed: { room: ev.room, n: ev.n } };
     }),

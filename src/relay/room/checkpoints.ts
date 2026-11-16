@@ -86,13 +86,14 @@ export const openCheckpointFrames: Effect.Effect<string[], never, RoomStore> = E
     .map(dueFrame);
 });
 
-export const claimOccurrence = Effect.fn("Room.claimOccurrence")(function* (id: unknown) {
+export const claimOccurrence = Effect.fn("Room.claimOccurrence")(function* (id: unknown, sender: string, cid: unknown) {
   if (typeof id !== "string" || id.length > 32) return yield* new BadRequest({ message: "bad checkpoint occurrence" });
   const db = yield* RoomStore;
   const now = yield* Clock.currentTimeMillis;
-  const open = settled(logOf(db), now).find((r) => r.id === id);
-  if (open?.state !== "open") return yield* new Taken({ message: `the daily checkpoint request for ${id} was already made, or isn't due` });
-  return id;
+  const record = settled(logOf(db), now).find((r) => r.id === id);
+  if (record?.state === "open") return id;
+  if (record?.state === "answered" && typeof cid === "string" && db.sentAs(record.seq, sender, cid)) return id;
+  return yield* new Taken({ message: `the daily checkpoint request for ${id} was already made, or isn't due` });
 });
 
 export const answerOccurrence = (id: string, seq: number): Effect.Effect<void, never, RoomStore> =>

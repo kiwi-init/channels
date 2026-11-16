@@ -163,6 +163,7 @@ export type FollowEvent =
   | { _tag: "Roster" }
   | { _tag: "Request" }
   | { _tag: "Checkpoint"; occurrence: string; due: number }
+  | { _tag: "Synced" }
   | { _tag: "Status"; line: string }
   | { _tag: "Down" }
   | { _tag: "Failed"; error: WireError };

@@ -11,17 +11,17 @@ const ids: Record<string, Identity> = {};
 let seq = 0;
 const T0 = Date.parse("2026-11-16T20:00:00Z");
 
-async function put(from: string, p: Partial<Payload>, rts = T0 + seq * 1000): Promise<Message> {
+async function put(from: string, p: Partial<Payload>, rts = T0 + seq * 1000, rocc?: string): Promise<Message> {
   seq++;
   const signed = await sign(ids[from]!, { v: 1 as const, id: crypto.randomUUID(), from, kind: "msg" as const, body: "", ts: rts, ...p } as Payload);
-  return { ...signed, seq, rts, sigOk: await verify(signed) };
+  return { ...signed, seq, rts, ...(rocc ? { rocc } : {}), sigOk: await verify(signed) };
 }
-const ev = (from: string, e: Event, rts?: number) => put(from, { kind: "event", ev: e }, rts);
+const ev = (from: string, e: Event, rts?: number, rocc?: string) => put(from, { kind: "event", ev: e }, rts, rocc);
 const addTask = (title: string, owner: string) => ev("jon", { op: "task.add", title, owner });
 const checkpoint = (from: string, task: number) => ev(from, { op: "task.update", task, note: "branch x, next y", checkpoint: true });
 const leadCheckpoint = (from: string) => ev(from, { op: "fact.set", key: leadCheckpointKey(from), value: "where the channel stands" });
-const ask = (from: string, asks: CheckpointOwed[], unreachable: string[] = [], occurrence?: string, rts?: number) =>
-  ev(from, { op: "checkpoint.ask", asks, unreachable, ...(occurrence ? { occurrence } : {}) }, rts);
+const ask = (from: string, asks: CheckpointOwed[], unreachable: string[] = [], occurrence?: string, rts?: number, stamp: string | null = occurrence ?? null) =>
+  ev(from, { op: "checkpoint.ask", asks, unreachable, ...(occurrence ? { occurrence } : {}) }, rts, stamp ?? undefined);
 const daily = { at: "18:00", tz: "America/Sao_Paulo" };
 const DUE = Date.parse("2026-11-16T21:00:00Z");
 
@@ -226,6 +226,18 @@ describe("the daily request takes its authority from the schedule's occurrence",
     expect(state.rejected.get(late.seq)).toContain("outside its time");
     const unset = await ask("jon", owed, [], "2026-11-16T18:00", DUE + 1000);
     expect(fold([unset], roster).rejected.get(unset.seq)).toContain("no daily checkpoint time");
+  });
+
+  test("only the message the relay took for that occurrence counts: no stamp, or another time's, is refused", async () => {
+    const set = await ev("jon", { op: "checkpoint.daily.set", daily });
+    const owed = [{ agent: "win", tasks: [1] }];
+    const unstamped = await ask("jon", owed, [], "2026-11-16T18:00", DUE + 1000, null);
+    const elsewhere = await ask("jon", owed, [], "2026-11-16T18:00", DUE + 2000, "2026-11-15T18:00");
+    const taken = await ask("fox", owed, [], "2026-11-16T18:00", DUE + 3000);
+    const state = fold([set, unstamped, elsewhere, taken], roster);
+    expect(state.rejected.get(unstamped.seq)).toContain("the relay didn't take this message");
+    expect(state.rejected.get(elsewhere.seq)).toContain("the relay didn't take this message");
+    expect(state.checkpointAsks.map((a) => a.seq)).toEqual([taken.seq]);
   });
 });
 

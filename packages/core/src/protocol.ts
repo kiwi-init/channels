@@ -146,6 +146,7 @@ export interface Envelope {
   ct: string;
   /** Key epoch (membership channels): which channel key sealed this message. */
   e?: number;
+  occ?: string;
 }
 
 /** Frames the relay sends over the WebSocket. */
@@ -1036,6 +1037,7 @@ export interface Message extends Payload {
   seq: number;
   /** When the relay stored it (one clock for everyone, unlike `ts`). */
   rts?: number;
+  rocc?: string;
   /** Signature checks out for `pk` (binding pk to the name is the fold's job). */
   sigOk: boolean;
 }

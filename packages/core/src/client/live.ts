@@ -38,7 +38,7 @@ import { keepAlive, markOn, ownMessage, wireOf, wireOn, type Inbox, type Incomin
 
 export interface StreamOptions {
   signal?: AbortSignal;
-  onReady?: (head: number) => void;
+  onReady?: (head: number, more: boolean) => void;
   onStatus?: (s: string) => void;
   quietMs?: number;
   now?: () => number;
@@ -63,7 +63,7 @@ export type Live =
       readonly outage: number | null;
       readonly kind: OpenKind;
     }
-  | { readonly _tag: "Ready"; readonly head: number }
+  | { readonly _tag: "Ready"; readonly head: number; readonly more: boolean }
   | { readonly _tag: "Message"; readonly message: Message; readonly envelope?: Envelope }
   | { readonly _tag: "Unread"; readonly envelope: Envelope }
   | { readonly _tag: "Head"; readonly seq: number }
@@ -258,7 +258,7 @@ export class ChannelLive {
           case "Open":
             return Effect.sync(() => opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)), mark: ev.mark, probe: ev.probe }));
           case "Ready":
-            return Effect.sync(() => opts.onReady?.(ev.head));
+            return Effect.sync(() => opts.onReady?.(ev.head, ev.more));
           case "Message":
             return Effect.promise(async () => onMessage(ev.message));
           case "Presence":
@@ -541,7 +541,7 @@ export class ChannelLive {
         case "checkpoint":
           return parseOccurrence(f.occurrence) && Number.isSafeInteger(f.due) ? ({ _tag: "Checkpoint", occurrence: f.occurrence, due: f.due } satisfies Live) : null;
         case "ready":
-          return { _tag: "Ready", head: f.head } satisfies Live;
+          return { _tag: "Ready", head: f.head, more: f.more === true } satisfies Live;
         case "read": {
           if (!reads) return null;
           const mark = wellFormedRead(f);
@@ -567,7 +567,7 @@ export class ChannelLive {
         return { _tag: "Head", seq: f.seq };
       case "ready":
         at.seq = Math.max(at.seq, f.head);
-        return { _tag: "Ready", head: f.head };
+        return { _tag: "Ready", head: f.head, more: false };
       case "info":
         return { _tag: "Info" };
       case "roster":

@@ -37,6 +37,9 @@ export interface Seat {
   fetchingRows: boolean;
   heard: Map<string, { presence: Presence & { sigOk: boolean }; at: number }>;
   openedAt: number | null;
+  synced: "no" | "settling" | "yes";
+  owedCheckpoint: { occurrence: string; due: number } | null;
+  checkpointTimer: ReturnType<typeof setTimeout> | undefined;
   listenerAt: number;
   docs: DocFollower | null;
   clock: ClockWatcher | null;

@@ -402,17 +402,26 @@ const routes: RoomRoute[] = [
         if (b.slot !== undefined && !wellFormedSlot(b.slot)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slot" }));
         if (b.free !== undefined && !wellFormedFreed(b.free)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slots to free" }));
         if (b.cid !== undefined && !wellFormedSendId(b.cid)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad send id" }));
-        const occurrence = b.occurrence === undefined ? null : yield* claimOccurrence(b.occurrence).pipe(Effect.tapError(() => Effect.sync(counted.refund)));
+        const occurrence = b.occurrence === undefined ? null : yield* claimOccurrence(b.occurrence, me, b.cid).pipe(Effect.tapError(() => Effect.sync(counted.refund)));
         yield* leaseNow;
-        const e = yield* append(b.iv as string, b.ct as string, Number(b.e ?? 0), me, { ...(b.slot ? { take: b.slot } : {}), ...(b.free ? { free: b.free } : {}) }, b.cid).pipe(
-          Effect.tapError(() => Effect.sync(counted.refund)),
-        );
+        const e = yield* append(
+          b.iv as string,
+          b.ct as string,
+          Number(b.e ?? 0),
+          me,
+          { ...(b.slot ? { take: b.slot } : {}), ...(b.free ? { free: b.free } : {}) },
+          b.cid,
+          occurrence ?? undefined,
+        ).pipe(Effect.tapError(() => Effect.sync(counted.refund)));
         if ("repeat" in e) {
           counted.refund();
           return { data: { seq: e.seq, ts: e.ts }, fx: {} };
         }
         if (occurrence) yield* answerOccurrence(occurrence, e.seq);
-        return { data: { seq: e.seq, ts: e.ts }, fx: { broadcast: [msgFrame(e)], ...watchFrame(e), ...wakesFor(db, b.wake, me, e.seq), expireAt: (yield* touch) ?? undefined } };
+        return {
+          data: { seq: e.seq, ts: e.ts, ...(e.occ ? { occ: e.occ } : {}) },
+          fx: { broadcast: [msgFrame(e)], ...watchFrame(e), ...wakesFor(db, b.wake, me, e.seq), expireAt: (yield* touch) ?? undefined },
+        };
       }),
   },
   {
