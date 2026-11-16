@@ -19,6 +19,7 @@ type WholeLog = Effect.Success<ReturnType<Channel["fx"]["history"]>>;
 
 const CACHE_TRIM_AT = 800;
 const CACHE_KEEP = 300;
+const UNREAD_KEPT = 800;
 
 const NOT_A_MEMBER = " isn't a member";
 
@@ -212,7 +213,7 @@ export class SessionState {
     });
   }
 
-  protected foldState(messages: Message[], given: Roster, info?: Info): Effect.Effect<ChannelState, never, Relay | Cache> {
+  protected foldState(messages: Message[], given: Roster, info?: Info): Effect.Effect<ChannelState, never, Relay | Cache | Cursor> {
     return Effect.gen({ self: this }, function* () {
       this.roomsFloor ??= yield* orNone(this.ch.fx.rooms(info));
       this.guardFloor ??= yield* orNone(this.ch.fx.guard(info));
@@ -242,27 +243,34 @@ export class SessionState {
         }
       }
       if (kept.base && this.publish && (!strangers(kept.base.rejected, since) || fresh)) yield* this.publish(kept.base);
-      if (messages.length > CACHE_TRIM_AT && !this.partial) {
+      const above = messages.filter((m) => m.seq > since);
+      if (above.length > CACHE_TRIM_AT && !this.partial) {
         const trimmed = (): FoldBase | undefined => {
           const older: { base?: FoldBase } = {};
-          fold(messages.slice(0, messages.length - CACHE_KEEP), roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, (b) => void (older.base = b));
+          fold(above.slice(0, above.length - CACHE_KEEP), roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, (b) => void (older.base = b));
           return older.base;
         };
         let older = trimmed();
         if (older && strangers(older.rejected, since) && !fresh) older = (yield* refresh) ? trimmed() : undefined;
         if (older) {
           yield* (yield* Cache).trim(this.cfg.roomId, older);
-          this.keepTail(older);
+          yield* this.keepTail(older);
         }
       }
       return state;
     });
   }
 
-  private keepTail(older: FoldBase): void {
-    if (!this.log || this.partial || older.n <= (this.base?.n ?? 0)) return;
-    this.base = older;
-    this.log = this.log.filter((m) => m.seq > older.n);
+  private keepTail(older: FoldBase): Effect.Effect<void, never, Cursor> {
+    return Effect.gen({ self: this }, function* () {
+      const cursor = yield* Cursor;
+      const readTo = (yield* cursor.read(this.alias, this.me)) ?? older.n;
+      const seen = yield* cursor.seen(this.alias, this.me);
+      if (!this.log || this.partial || older.n <= (this.base?.n ?? 0)) return;
+      const unread = this.log.filter((m) => m.seq > readTo && m.seq <= older.n && !seen.has(m.seq)).slice(-UNREAD_KEPT);
+      this.base = older;
+      this.log = [...unread, ...this.log.filter((m) => m.seq > older.n)];
+    });
   }
 
   protected snapshotDue?(head: number): boolean;

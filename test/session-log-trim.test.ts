@@ -2,12 +2,13 @@ import { afterAll, beforeAll, expect, setDefaultTimeout, setSystemTime, test } f
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as Effect from "effect/Effect";
 import { AgentSession, runAgent } from "../src/agent.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState, FoldBase } from "@kiwi/core/state.ts";
-import { saveConfig, saveIdentity, type ChannelConfig } from "../src/config.ts";
+import { Cursor, saveConfig, saveIdentity, type ChannelConfig } from "../src/config.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(240_000);
@@ -49,10 +50,29 @@ function plain(x: unknown): unknown {
 }
 
 function contiguous(s: AgentSession): void {
-  const seqs = logOf(s).map((m) => m.seq);
+  const seqs = logOf(s)
+    .map((m) => m.seq)
+    .filter((seq) => seq > baseOf(s));
   expect(seqs[0]).toBe(baseOf(s) + 1);
   expect(seqs).toEqual(seqs.map((_, i) => baseOf(s) + 1 + i));
 }
+
+const below = (s: AgentSession): number[] =>
+  logOf(s)
+    .map((m) => m.seq)
+    .filter((seq) => seq <= baseOf(s));
+
+const setCursor = (seq: number): Promise<void> =>
+  runAgent(
+    Effect.gen(function* () {
+      yield* (yield* Cursor).write("test", "claude", seq);
+    }),
+  );
+
+const wakeSeqs = async (s: AgentSession): Promise<number[]> => {
+  const { messages, state } = await runAgent(s.state());
+  return (await runAgent(s.unreadAt(state, messages))).seqs;
+};
 
 beforeAll(async () => {
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, devNoRateLimits: true });
@@ -131,4 +151,35 @@ test("a message arriving while two looks trim at once leaves no hole and no repe
   contiguous(session);
   expect(messages.some((m) => m.seq === sent)).toBe(true);
   expect(state.head).toBe(sent);
+});
+
+test("an unread mention and a direct message below the new base still wake the seat and are delivered, until they are read", async () => {
+  const session = await AgentSession.open("test", cfg, "claude");
+  await runAgent(session.state());
+  const mention = await ownerCh.send("@claude are you there?");
+  const direct = await ownerCh.send("just for claude", { to: ["claude"] });
+  await setCursor(mention - 1);
+  await burst(90, "unread");
+  const head = await ownerCh.send("the last one");
+  for (let look = 0; look < 3; look++) {
+    const seqs = await wakeSeqs(session);
+    expect(seqs).toContain(mention);
+    expect(seqs).toContain(direct);
+  }
+  expect(baseOf(session)).toBeGreaterThan(direct);
+  expect(below(session)).toContain(mention);
+  expect(below(session)).toContain(direct);
+  contiguous(session);
+
+  const got = await runAgent(session.unread());
+  expect(got.messages.map((m) => m.seq)).toEqual(expect.arrayContaining([mention, direct]));
+  await runAgent(got.commit());
+  expect(await wakeSeqs(session)).not.toContain(mention);
+
+  await burst(90, "after reading");
+  await runAgent(session.state());
+  expect(below(session)).not.toContain(mention);
+  expect(below(session)).not.toContain(direct);
+  expect(below(session).every((seq) => seq > head)).toBe(true);
+  contiguous(session);
 });

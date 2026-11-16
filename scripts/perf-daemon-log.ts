@@ -1,20 +1,15 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { heapStats } from "bun:jsc";
+import { benchArgs, claimWork } from "./perf-daemon-log-args.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
-const flag = (name: string, fallback: number): number => {
-  const at = process.argv.indexOf(`--${name}`);
-  return at >= 0 ? Number(process.argv[at + 1]) : fallback;
-};
-
-const SEATS = flag("seats", 8);
-const PER_CYCLE = flag("per-cycle", 300);
-const CYCLES = flag("cycles", 4);
-const RATE = flag("rate", 20);
-const SETTLE_MS = flag("settle", 10_000);
-const BODY = flag("body", 1500);
-const WORK = resolve(process.argv[process.argv.indexOf("--work") + 1] ?? "");
+const args = benchArgs(process.argv);
+if ("why" in args) {
+  console.error(`perf-daemon-log: ${args.why}`);
+  process.exit(2);
+}
+const { work: WORK, seats: SEATS, perCycle: PER_CYCLE, cycles: CYCLES, rate: RATE, settleMs: SETTLE_MS, body: BODY } = args;
 
 if (process.argv.includes("--relay")) {
   const { startRelay } = await import("../src/relay/bun.ts");
@@ -28,7 +23,7 @@ if (process.argv.includes("--send")) {
   const given = JSON.parse(readFileSync(join(WORK, "sender.json"), "utf8"));
   const ch = new Channel(given.access, given.relay, given.owner);
   const text = "x".repeat(BODY);
-  const n = Number(process.argv[process.argv.indexOf("--n") + 1]);
+  const n = PER_CYCLE;
   const gap = 1000 / RATE;
   for (let i = 0; i < n; i++) {
     const at = Date.now();
@@ -39,11 +34,15 @@ if (process.argv.includes("--send")) {
   process.exit(0);
 }
 
+const taken = claimWork(WORK);
+if (taken) {
+  console.error(`perf-daemon-log: ${taken}`);
+  process.exit(2);
+}
 const home = join(WORK, "home");
 const data = join(WORK, "relay");
-rmSync(WORK, { recursive: true, force: true });
-mkdirSync(home, { recursive: true });
-mkdirSync(data, { recursive: true });
+mkdirSync(home);
+mkdirSync(data);
 process.env.KIWI_HOME = home;
 
 const { Channel } = await import("@kiwi/core/client.ts");
@@ -132,7 +131,7 @@ console.log(JSON.stringify({ sessionsPid: process.pid, relayPid: relayProc.pid, 
 await look();
 sample("start", 0);
 for (let c = 1; c <= CYCLES; c++) {
-  const sender = Bun.spawn(["bun", import.meta.path, "--send", "--work", WORK, "--n", String(PER_CYCLE), "--rate", String(RATE), "--body", String(BODY)], {
+  const sender = Bun.spawn(["bun", import.meta.path, "--send", "--work", WORK, "--per-cycle", String(PER_CYCLE), "--rate", String(RATE), "--body", String(BODY)], {
     cwd: ROOT,
     stdout: "inherit",
     stderr: "inherit",
