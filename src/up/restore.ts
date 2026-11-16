@@ -18,6 +18,8 @@ export interface RestoreDeps {
   transcript: (session: string) => boolean;
   stop: (pid: number) => Promise<void>;
   wake: (alias: string, as: string) => Promise<string | null>;
+  seen: (token: string, alias: string, as: string) => string | null;
+  forget: (token: string) => void;
   live: (b: SeatRecord) => Liveness;
   sleep: (ms: number) => Promise<void>;
   now: () => number;
@@ -27,6 +29,7 @@ export interface RestoreDeps {
 export type Restored = { kind: "restored"; session: string; resumed: boolean; dir: string; exited: Promise<number> } | { kind: "running"; why: string } | { kind: "failed"; why: string };
 
 const POLL_MS = 100;
+const READY_GRACE_MS = 15_000;
 
 export const RESUMED_PROMPT = "kiwi up restarted this session after the computer restarted. Check `kiwi status` and the repository before you carry on: things may have moved since.";
 export const FRESH_PROMPT = "kiwi up started this fresh session for your seat after the computer restarted. Carry on from the checkpoints above; check the repository before you act on them.";
@@ -88,38 +91,54 @@ export async function restoreSeat(alias: string, as: string, bindMs: number, dep
     { KIWI_CHANNEL: alias, KIWI_AS: as },
   );
   const childEnvOf = childEnv(env, token);
-  const child = deps.spawn(argv, last.dir, childEnvOf);
-  let exited = false;
-  void child.exited.then(() => void (exited = true));
-  const deadline = deps.now() + bindMs;
-  let session: string | null = null;
-  while (!session && !exited && !deps.aborted() && deps.now() < deadline) {
-    session = deps.started(child.pid);
-    if (!session) await deps.sleep(POLL_MS);
+  const dir = last.dir;
+  const child = deps.spawn(argv, dir, childEnvOf);
+  try {
+    return await settle();
+  } finally {
+    deps.forget(token);
   }
-  const giveUp = async (why: string): Promise<Restored> => {
-    await deps.stop(child.pid);
-    abandonReserved(alias, as, token);
-    return { kind: "failed", why };
-  };
-  if (!session)
-    return giveUp(
-      exited
-        ? "Claude Code exited before it started a session"
-        : deps.aborted()
-          ? "stopped before the session took the seat"
-          : `Claude Code didn't start a session within ${Math.round(bindMs / 1000)}s`,
-    );
-  const bound = bindReserved(alias, as, token, { harness: "claude", session, pid: child.pid });
-  if (bound.kind !== "changed") return giveUp("its reservation was gone before the session could take the seat");
-  const undo = async (why: string): Promise<Restored> => {
-    await deps.stop(child.pid);
-    unbindReserved(alias, as, token, prior);
-    return { kind: "failed", why };
-  };
-  const who = { harness: "claude" as const, session, pid: child.pid };
-  if (!seatsFor(last.dir, { who, env: childEnvOf, claim: false }).some((b) => b.alias === alias && b.as === as)) return undo("the new session doesn't find its seat from its folder");
-  const noWake = await deps.wake(alias, as);
-  if (noWake) return undo(`the new session can't be woken: ${noWake}`);
-  return { kind: "restored", session, resumed: !!resume, dir: last.dir, exited: child.exited };
+
+  async function settle(): Promise<Restored> {
+    let exited = false;
+    void child.exited.then(() => void (exited = true));
+    const deadline = deps.now() + bindMs;
+    let session: string | null = null;
+    while (!session && !exited && !deps.aborted() && deps.now() < deadline) {
+      session = deps.started(child.pid);
+      if (!session) await deps.sleep(POLL_MS);
+    }
+    const giveUp = async (why: string): Promise<Restored> => {
+      await deps.stop(child.pid);
+      abandonReserved(alias, as, token);
+      return { kind: "failed", why };
+    };
+    if (!session)
+      return giveUp(
+        exited
+          ? "Claude Code exited before it started a session"
+          : deps.aborted()
+            ? "stopped before the session took the seat"
+            : `Claude Code didn't start a session within ${Math.round(bindMs / 1000)}s`,
+      );
+    const bound = bindReserved(alias, as, token, { harness: "claude", session, pid: child.pid });
+    if (bound.kind !== "changed") return giveUp("its reservation was gone before the session could take the seat");
+    const undo = async (why: string): Promise<Restored> => {
+      await deps.stop(child.pid);
+      unbindReserved(alias, as, token, prior);
+      return { kind: "failed", why };
+    };
+    const who = { harness: "claude" as const, session, pid: child.pid };
+    if (!seatsFor(dir, { who, env: childEnvOf, claim: false }).some((b) => b.alias === alias && b.as === as)) return undo("the new session doesn't find its seat from its folder");
+    const readyBy = Math.max(deadline, deps.now() + READY_GRACE_MS);
+    let seen = deps.seen(token, alias, as);
+    while (seen !== session && !exited && !deps.aborted() && deps.now() < readyBy) {
+      await deps.sleep(POLL_MS);
+      seen = deps.seen(token, alias, as);
+    }
+    if (seen !== session) return undo(exited ? "Claude Code exited before its hooks took the seat" : "the new session's hooks never reported taking the seat (kiwi hooks status)");
+    const noWake = await deps.wake(alias, as);
+    if (noWake) return undo(`the new session can't be woken: ${noWake}`);
+    return { kind: "restored", session, resumed: !!resume, dir, exited: child.exited };
+  }
 }

@@ -16,13 +16,17 @@ import { printedLine, tmuxLauncher } from "../../up/launch.ts";
 import { sessionLiveness } from "../../up/liveness.ts";
 import { planUp, runningAtShutdown, usedSince, withMembers, type Chooser, type Membership, type SeatPlan } from "../../up/plan.ts";
 import { beforeThisBoot, readRunning } from "../../up/running.ts";
+import { forgetLaunch, forgetReport, isReportId, launchSeen, readReport, writeReport } from "../../up/ready.ts";
 import { restoreSeat, type RestoreDeps } from "../../up/restore.ts";
+import { abandonReserved, keyOf, newSeatToken, reserveSeat } from "../../hold.ts";
+import { randomBytes } from "node:crypto";
 import { args, opt } from "../args.ts";
 import { type Command, die, keepDaemon, out } from "../context.ts";
 
 const USAGE = "usage: kiwi up [--dry-run] [--since 7d] [--bind-timeout SECONDS] · kiwi up --seat HANDLE [-c CHANNEL] [--bind-timeout SECONDS]";
 const BIND_MS = 60_000;
 const SETTLE_MS = 15_000;
+const READY_MS = 15_000;
 const STOP_GRACE_MS = 5_000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -114,16 +118,22 @@ function chooser(since: string | undefined): Chooser | string {
   return runningAtShutdown(boot === null ? null : (beforeThisBoot(readRunning(), boot)?.seats ?? null));
 }
 
-const oneSeat = (handle: string, bindMs: number) =>
+const failed = (report: string | null, why: string) =>
+  Effect.suspend(() => {
+    if (report) writeReport(report, { result: "failed", why });
+    return die(why);
+  });
+
+const oneSeat = (handle: string, bindMs: number, report: string | null) =>
   Effect.gen(function* () {
     const alias = seatChannel(handle);
-    if (!alias) return yield* die(`${handle} has a seat in several channels, or none, on this computer: pass -c CHANNEL`);
+    if (!alias) return yield* failed(report, `${handle} has a seat in several channels, or none, on this computer: pass -c CHANNEL`);
     const member = (yield* membership(planUp(loadConfig(), (b) => sessionLiveness(b)).filter((p) => p.alias === alias)))(alias, handle);
-    if (member.kind === "left") return yield* die(`${handle} left ${alias} or was removed: kiwi up starts only current members`);
-    if (member.kind === "unverified") return yield* die(`${handle}'s membership in ${alias} couldn't be checked, so nothing started: ${member.why}`);
+    if (member.kind === "left") return yield* failed(report, `${handle} left ${alias} or was removed: kiwi up starts only current members`);
+    if (member.kind === "unverified") return yield* failed(report, `${handle}'s membership in ${alias} couldn't be checked, so nothing started: ${member.why}`);
     const recipe = recipeFor("claude");
     const bin = Bun.which(recipe.program, { PATH: process.env.PATH ?? "" }) ?? Bun.which(recipe.program, { PATH: yield* Effect.promise(() => loginPath()) });
-    if (!bin) return yield* die(`${recipe.program} isn't on your login shell's PATH`);
+    if (!bin) return yield* failed(report, `${recipe.program} isn't on your login shell's PATH`);
     const wrote = recipe.hooks();
     if (wrote) process.stderr.write(`kiwi up: installed ${recipe.label}'s Kiwi hooks: ${wrote}\n`);
     yield* keepDaemon;
@@ -140,6 +150,8 @@ const oneSeat = (handle: string, bindMs: number) =>
         return { pid: child.pid, exited: child.exited };
       },
       started: (pid) => claudeSession(pid)?.sessionId ?? null,
+      seen: (token, a, as) => launchSeen(keyOf(token), a, as),
+      forget: (token) => forgetLaunch(keyOf(token)),
       transcript: (session) => claudeTranscript(session),
       stop: stopTree,
       wake: async (a, as) => {
@@ -152,6 +164,11 @@ const oneSeat = (handle: string, bindMs: number) =>
       aborted: () => stop.asked,
     };
     const restored = yield* Effect.promise(() => restoreSeat(alias, handle, bindMs, deps));
+    if (report)
+      writeReport(
+        report,
+        restored.kind === "restored" ? { result: "restored", why: restored.resumed ? "it resumed its session" : "a fresh session took the seat" } : { result: restored.kind, why: restored.why },
+      );
     switch (restored.kind) {
       case "running":
         out(`${handle} in ${alias}: ${restored.why}; nothing started`);
@@ -186,7 +203,20 @@ const everySeat = (bindMs: number) =>
     const tmux = Bun.which(process.env.KIWI_TMUX || "tmux");
     const launcher = tmux ? tmuxLauncher(tmux) : null;
     if (!launcher && plans.some((p) => p.kind === "restore" || p.kind === "loop")) out("tmux isn't installed: run each line below in its own terminal");
-    const outcomes = yield* Effect.promise(() => upAll(plans, launcher, selfArgv(), bindMs + SETTLE_MS, { load: loadConfig, sleep, now: () => Date.now() }));
+    const outcomes = yield* Effect.promise(() =>
+      upAll(plans, launcher, selfArgv(), bindMs / 1000, bindMs + READY_MS + SETTLE_MS, {
+        load: loadConfig,
+        sleep,
+        now: () => Date.now(),
+        newId: () => randomBytes(12).toString("hex"),
+        report: readReport,
+        forget: forgetReport,
+        token: newSeatToken,
+        keyOf,
+        reserve: (p, token) => reserveSeat(p.alias, p.as, token, (b) => sessionLiveness(b)),
+        abandon: (p, token) => void abandonReserved(p.alias, p.as, token),
+      }),
+    );
     for (const o of outcomes) out(outcomeLine(o));
     return outcomes.some((o) => o.result === "failed") ? 1 : 0;
   });
@@ -198,7 +228,9 @@ export const upCommands: Record<string, Command> = {
       const bindMs = yield* bindTimeout;
       if (opt.seat !== undefined) {
         if (opt["dry-run"]) return yield* die(`--dry-run plans every seat; drop --seat. ${USAGE}`);
-        return yield* oneSeat(opt.seat, bindMs);
+        const report = opt.report ?? null;
+        if (report !== null && !isReportId(report)) return yield* die(USAGE);
+        return yield* oneSeat(opt.seat, bindMs, report);
       }
       return yield* everySeat(bindMs);
     }),

@@ -147,6 +147,7 @@ function parse() {
         seat: { type: "string" },
         "dry-run": { type: "boolean" },
         "bind-timeout": { type: "string" },
+        report: { type: "string" },
         since: { type: "string" },
         n: { type: "string", short: "n" },
         help: { type: "boolean", short: "h" },

@@ -4,7 +4,7 @@ import type { SeatAt, Startable } from "./plan.ts";
 
 export interface Launcher {
   name: string;
-  open: (at: SeatAt, argv: readonly string[]) => string | null;
+  open: (at: SeatAt, argv: readonly string[], env?: Readonly<Record<string, string>>) => string | null;
 }
 
 const TMUX_SESSION = "kiwi";
@@ -13,10 +13,22 @@ export function tmuxLauncher(tmux: string, env: Record<string, string | undefine
   const inside = !!env.TMUX;
   return {
     name: "tmux",
-    open: (at, argv) => {
+    open: (at, argv, env = {}) => {
       const fresh = !inside && run([tmux, "has-session", "-t", `=${TMUX_SESSION}`]).status !== 0;
       const where = inside ? [] : fresh ? ["new-session", "-d", "-s", TMUX_SESSION] : ["new-window", "-d", "-t", `=${TMUX_SESSION}:`];
-      const r = run([tmux, ...(inside ? ["new-window", "-d"] : where), "-P", "-F", "#{window_id}", "-c", at.dir, "-n", at.as, ...argv]);
+      const r = run([
+        tmux,
+        ...(inside ? ["new-window", "-d"] : where),
+        "-P",
+        "-F",
+        "#{window_id}",
+        "-c",
+        at.dir,
+        "-n",
+        at.as,
+        ...Object.entries(env).flatMap(([k, v]) => ["-e", `${k}=${v}`]),
+        ...argv,
+      ]);
       if (r.status !== 0) return r.stderr.trim() || `tmux exited with ${r.status ?? "a signal"}`;
       const window = r.stdout.trim();
       if (window) run([tmux, "set-option", "-w", "-t", window, "remain-on-exit", "failed"]);
@@ -25,8 +37,9 @@ export function tmuxLauncher(tmux: string, env: Record<string, string | undefine
   };
 }
 
-export function seatArgv(kiwi: readonly string[], p: Startable): string[] {
-  return p.kind === "restore" ? [...kiwi, "up", "--seat", p.as, "-c", p.alias] : [...kiwi, "loop", "--harness", p.harness, "-c", p.alias, "--as", p.as];
+export function seatArgv(kiwi: readonly string[], p: Startable, run: { bindSeconds?: number; report?: string } = {}): string[] {
+  if (p.kind === "loop") return [...kiwi, "loop", "--harness", p.harness, "-c", p.alias, "--as", p.as];
+  return [...kiwi, "up", "--seat", p.as, "-c", p.alias, ...(run.bindSeconds !== undefined ? ["--bind-timeout", String(run.bindSeconds)] : []), ...(run.report ? ["--report", run.report] : [])];
 }
 
 const PLAIN_WORD = /^[\w@%+=:,./-]+$/;

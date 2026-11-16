@@ -4,16 +4,17 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { wakePath } from "@kiwi/core/wake.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "../src/config.ts";
-import { reserveSeat, SEAT_TOKEN, UP_LAUNCH, type Liveness } from "../src/hold.ts";
+import { bindHeldSeat, holdSeat, reserveSeat, SEAT_TOKEN, UP_LAUNCH, type Liveness } from "../src/hold.ts";
 import { claudeArgv, claudeTranscript } from "../src/loop/claude.ts";
 import { processStart } from "../src/pid.ts";
 import { seatsFor } from "../src/seats.ts";
 import { outcomeLine, upAll } from "../src/up/all.ts";
-import { printedLine, tmuxLauncher, type Launcher } from "../src/up/launch.ts";
+import { printedLine, seatArgv, tmuxLauncher, type Launcher } from "../src/up/launch.ts";
 import { sessionLiveness, type Probe } from "../src/up/liveness.ts";
 import { NO_SAMPLE, planUp, runningAtShutdown, usedSince, withMembers } from "../src/up/plan.ts";
 import { beforeThisBoot, nextRunning, noteRunning, readRunning } from "../src/up/running.ts";
 import { FRESH_PROMPT, RESUMED_PROMPT, restoreSeat, type RestoreDeps } from "../src/up/restore.ts";
+import type { Report } from "../src/up/ready.ts";
 
 let home = "";
 let dir = "";
@@ -68,6 +69,7 @@ interface Fake {
   bindAfter: { polls: number };
   transcripts: Set<string>;
   wakeWhy: { value: string | null };
+  hooked: { value: boolean };
 }
 
 function fake(): Fake {
@@ -76,6 +78,9 @@ function fake(): Fake {
   const bindAfter = { polls: 2 };
   const transcripts = new Set<string>();
   const wakeWhy: { value: string | null } = { value: null };
+  const hooked = { value: true };
+  const bound = new Map<string, string>();
+  let clock = Date.now();
   const polls = new Map<number, number>();
   const sessions = new Map<number, string>();
   const deps: RestoreDeps = {
@@ -92,8 +97,13 @@ function fake(): Fake {
     started: (pid) => {
       const n = (polls.get(pid) ?? 0) + 1;
       polls.set(pid, n);
-      return n > bindAfter.polls ? (sessions.get(pid) ?? null) : null;
+      const session = n > bindAfter.polls ? (sessions.get(pid) ?? null) : null;
+      const env = spawned.find((r) => r.pid === pid)?.env;
+      if (session && env?.[SEAT_TOKEN]) bound.set(env[SEAT_TOKEN], session);
+      return session;
     },
+    seen: (token) => (hooked.value ? (bound.get(token) ?? null) : null),
+    forget: (token) => void bound.delete(token),
     transcript: (session) => transcripts.has(session),
     stop: async (pid) => {
       stopped.push(pid);
@@ -103,11 +113,14 @@ function fake(): Fake {
     },
     wake: async () => wakeWhy.value,
     live: testLive,
-    sleep: (ms) => new Promise((r) => setTimeout(r, Math.min(ms, 5))),
-    now: () => Date.now(),
+    sleep: async (ms) => {
+      clock += ms;
+      await new Promise((r) => setTimeout(r, 1));
+    },
+    now: () => clock,
     aborted: () => false,
   };
-  return { deps, spawned, stopped, bindAfter, transcripts, wakeWhy };
+  return { deps, spawned, stopped, bindAfter, transcripts, wakeWhy, hooked };
 }
 
 const hookView = (who: string, env: Record<string, string>, pid?: number) => seatsFor(dir, { who: { harness: "claude", session: who, ...(pid ? { pid } : {}) }, env, claim: false }).map((b) => b.as);
@@ -294,7 +307,18 @@ test("with no launcher, kiwi up prints one quoted line per seat and changes noth
   });
   const before = JSON.stringify(loadConfig());
   const plans = planUp(loadConfig(), testLive);
-  const outcomes = await upAll(plans, null, ["kiwi"], 1_000, { load: loadConfig, sleep: async () => {}, now: () => Date.now() });
+  const outcomes = await upAll(plans, null, ["kiwi"], 60, 1_000, {
+    load: loadConfig,
+    sleep: async () => {},
+    now: () => Date.now(),
+    newId: () => "0".repeat(16),
+    report: () => null,
+    forget: () => {},
+    token: () => "t",
+    keyOf: (t: string) => t,
+    reserve: () => ({ kind: "held" as const, prior: [] }),
+    abandon: () => {},
+  });
   expect(outcomes.map(outcomeLine)).toEqual(["kiwi up --seat dev -c ch", `cd '${odd.replace("'", "'\\''")}' && kiwi loop --harness codex -c ch --as lp`, "kiwi up --seat 'x;y' -c 'my ch'"]);
   expect(JSON.stringify(loadConfig())).toBe(before);
   expect(plans.flatMap((p) => (p.kind === "restore" || p.kind === "loop" ? [printedLine(p)] : []))).toEqual(outcomes.map(outcomeLine));
@@ -311,22 +335,26 @@ test("kiwi up opens one window per seat and reports each as restored once its se
     },
   };
   let ticks = 0;
+  let ids = 0;
+  const forgotten: string[] = [];
   const deps = {
     load: loadConfig,
     now: () => Date.now() + ticks * 1_000,
-    sleep: async () => {
-      ticks++;
-      if (ticks === 1)
-        updateConfig((c: Config) => {
-          c.bindings = { [dir]: [{ ...deadClaude("ok"), session: "new", upKey: "k", at: Date.now() + 5_000 }, deadClaude("stuck")] };
-        });
-    },
+    sleep: async () => void ticks++,
+    newId: () => String(++ids).padStart(16, "0"),
+    report: (id: string): Report | null => (id === "0000000000000001" && ticks >= 1 ? { result: "restored", why: "it resumed its session" } : null),
+    forget: (id: string) => void forgotten.push(id),
+    token: () => "t",
+    keyOf: (t: string) => t,
+    reserve: () => ({ kind: "held" as const, prior: [] }),
+    abandon: () => {},
   };
-  const outcomes = await upAll(planUp(loadConfig(), testLive), launcher, ["/bin/kiwi"], 10_000, deps);
+  const outcomes = await upAll(planUp(loadConfig(), testLive), launcher, ["/bin/kiwi"], 300, 10_000, deps);
   expect(opened).toEqual([
-    ["ok", dir, "/bin/kiwi", "up", "--seat", "ok", "-c", "ch"],
-    ["stuck", dir, "/bin/kiwi", "up", "--seat", "stuck", "-c", "ch"],
+    ["ok", dir, "/bin/kiwi", "up", "--seat", "ok", "-c", "ch", "--bind-timeout", "300", "--report", "0000000000000001"],
+    ["stuck", dir, "/bin/kiwi", "up", "--seat", "stuck", "-c", "ch", "--bind-timeout", "300", "--report", "0000000000000002"],
   ]);
+  expect(forgotten).toEqual(["0000000000000001", "0000000000000002"]);
   expect(outcomes.map((o) => [o.plan.as, o.result])).toEqual([
     ["ok", "restored"],
     ["stuck", "failed"],
@@ -440,4 +468,87 @@ test("--since picks seats by their last use, and only current members of a chann
     ["left", "skipped", "it left the channel or was removed"],
     ["unread", "skipped", "its membership couldn't be checked: relay down"],
   ]);
+});
+
+test("two kiwi up runs on a dead loop: the second, planned before the first loop bound, finds its live session and starts nothing", async () => {
+  place(dir, { alias: "ch", as: "lp", harness: "claude", session: "gone", pid: DEAD_PID, loop: true, at: 1 });
+  const plansA = planUp(loadConfig(), testLive);
+  const plansB = planUp(loadConfig(), testLive);
+  const child = Bun.spawn(["sleep", "30"], { stdout: "ignore", stderr: "ignore" });
+  children.push(child);
+  const opened: Record<string, string>[] = [];
+  const launcher: Launcher = {
+    name: "tmux",
+    open: (_at, _argv, env = {}) => {
+      opened.push({ ...env });
+      const token = env[SEAT_TOKEN];
+      if (!token) return "no token";
+      holdSeat("ch", "lp", token, Date.now(), process.pid);
+      bindHeldSeat("ch", "lp", token, { harness: "claude", session: "live", pid: child.pid }, "loop");
+      return null;
+    },
+  };
+  let n = 0;
+  const deps = {
+    load: loadConfig,
+    now: () => Date.now(),
+    sleep: async () => {},
+    newId: () => "b".repeat(16),
+    report: () => null,
+    forget: () => {},
+    token: () => `token-${++n}`,
+    keyOf: (t: string) => t,
+    reserve: (p: { alias: string; as: string }, token: string) => reserveSeat(p.alias, p.as, token, sessionLiveness),
+    abandon: () => {},
+  };
+  const a = await upAll(plansA, launcher, ["kiwi"], 60, 10_000, deps);
+  expect(a.map((o) => o.result)).toEqual(["restored"]);
+  const b = await upAll(plansB, launcher, ["kiwi"], 60, 10_000, deps);
+  expect(b.map((o) => o.result)).toEqual(["running"]);
+  expect(opened.length).toBe(1);
+  expect(seatOf("lp")).toMatchObject({ session: "live", pid: child.pid, loop: true });
+});
+
+test("the parent waits for each seat's own report: an intermediate bind that later fails wake checks is reported failed, not restored", async () => {
+  place(dir, deadClaude("dev"));
+  const launcher: Launcher = { name: "tmux", open: () => null };
+  let ticks = 0;
+  const deps = {
+    load: loadConfig,
+    now: () => Date.now() + ticks * 1_000,
+    sleep: async () => {
+      ticks++;
+      if (ticks === 1)
+        updateConfig((c: Config) => {
+          c.bindings = { [dir]: { ...deadClaude("dev"), session: "mid", upKey: "k", at: Date.now() + 5_000 } };
+        });
+    },
+    newId: () => "a".repeat(16),
+    report: (): Report | null => (ticks >= 3 ? { result: "failed", why: "the new session can't be woken: hooks missing" } : null),
+    forget: () => {},
+    token: () => "t",
+    keyOf: (t: string) => t,
+    reserve: () => ({ kind: "held" as const, prior: [] }),
+    abandon: () => {},
+  };
+  const outcomes = await upAll(planUp(loadConfig(), testLive), launcher, ["kiwi"], 60, 10_000, deps);
+  expect(outcomes.map((o) => (o.result === "printed" ? o.line : [o.result, o.why]))).toEqual([["failed", "the new session can't be woken: hooks missing"]]);
+  expect(ticks).toBe(3);
+});
+
+test("a session whose hooks never report taking the seat is stopped and the seat goes back to its record", async () => {
+  place(dir, deadClaude("dev"));
+  const before = seatOf("dev");
+  const f = fake();
+  f.hooked.value = false;
+  const r = await restoreSeat("ch", "dev", 5_000, f.deps, {});
+  expect(r).toEqual({ kind: "failed", why: "the new session's hooks never reported taking the seat (kiwi hooks status)" });
+  expect(f.stopped.length).toBe(1);
+  expect({ ...seatOf("dev"), holds: undefined }).toEqual({ ...before, holds: undefined });
+});
+
+test("--bind-timeout reaches every seat's own kiwi up, shorter or longer than the default", () => {
+  const p = { kind: "restore" as const, harness: "claude" as const, alias: "ch", as: "dev", dir };
+  expect(seatArgv(["kiwi"], p, { bindSeconds: 15, report: "f".repeat(16) })).toEqual(["kiwi", "up", "--seat", "dev", "-c", "ch", "--bind-timeout", "15", "--report", "f".repeat(16)]);
+  expect(seatArgv(["kiwi"], p, { bindSeconds: 600 })).toEqual(["kiwi", "up", "--seat", "dev", "-c", "ch", "--bind-timeout", "600"]);
 });

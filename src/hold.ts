@@ -25,7 +25,7 @@ export function newSeatToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
-function keyOf(token: string): string {
+export function keyOf(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
@@ -237,7 +237,7 @@ export function bindReserved(alias: string, as: string, token: string, to: { har
 }
 
 export function abandonReserved(alias: string, as: string, token: string): HoldChange {
-  return rewrite(alias, as, token, true, (b) => omit(b, "hold"));
+  return rewrite(alias, as, token, true, (b) => (b.hold?.up ? omit(b, "hold") : b));
 }
 
 export function unbindReserved(alias: string, as: string, token: string, prior: readonly PlacedSeat[]): number {
