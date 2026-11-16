@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { wakePath } from "@kiwi/core/wake.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "../src/config.ts";
-import { bindHeldSeat, holdSeat, reserveSeat, SEAT_TOKEN, UP_LAUNCH, type Liveness } from "../src/hold.ts";
+import { abandonReserved, adoptReserved, bindHeldSeat, holdSeat, reserveSeat, SEAT_TOKEN, UP_LAUNCH, type Liveness } from "../src/hold.ts";
 import { claudeArgv, claudeTranscript } from "../src/loop/claude.ts";
 import { processStart } from "../src/pid.ts";
 import { seatsFor } from "../src/seats.ts";
@@ -551,4 +551,33 @@ test("--bind-timeout reaches every seat's own kiwi up, shorter or longer than th
   const p = { kind: "restore" as const, harness: "claude" as const, alias: "ch", as: "dev", dir };
   expect(seatArgv(["kiwi"], p, { bindSeconds: 15, report: "f".repeat(16) })).toEqual(["kiwi", "up", "--seat", "dev", "-c", "ch", "--bind-timeout", "15", "--report", "f".repeat(16)]);
   expect(seatArgv(["kiwi"], p, { bindSeconds: 600 })).toEqual(["kiwi", "up", "--seat", "dev", "-c", "ch", "--bind-timeout", "600"]);
+});
+
+test("a loop kiwi up opened adopts its own live reservation, which turns into the loop's hold", () => {
+  place(dir, { alias: "ch", as: "lp", harness: "claude", session: "gone", pid: DEAD_PID, loop: true, at: 1 });
+  expect(reserveSeat("ch", "lp", "t1", testLive).kind).toBe("held");
+  expect(adoptReserved("ch", "lp", "t1")).toEqual({ kind: "changed", seats: 1 });
+  const hold = seatOf("lp")?.hold;
+  expect(hold?.up).toBeUndefined();
+  expect(hold?.holder?.pid).toBe(process.pid);
+  expect(seatOf("lp")?.session).toBeUndefined();
+  expect(adoptReserved("ch", "lp", "t1")).toEqual({ kind: "not-held" });
+});
+
+test("after kiwi up times out, its late loop adopts nothing: not the released seat, and not a replacement's live binding", () => {
+  place(dir, { alias: "ch", as: "lp", harness: "claude", session: "gone", pid: DEAD_PID, loop: true, at: 1 });
+  expect(reserveSeat("ch", "lp", "old", testLive).kind).toBe("held");
+  abandonReserved("ch", "lp", "old");
+  const released = JSON.stringify(loadConfig().bindings);
+  expect(adoptReserved("ch", "lp", "old")).toEqual({ kind: "not-held" });
+  expect(JSON.stringify(loadConfig().bindings)).toBe(released);
+  const child = Bun.spawn(["sleep", "30"], { stdout: "ignore", stderr: "ignore" });
+  children.push(child);
+  expect(reserveSeat("ch", "lp", "new", testLive).kind).toBe("held");
+  expect(adoptReserved("ch", "lp", "new").kind).toBe("changed");
+  bindHeldSeat("ch", "lp", "new", { harness: "claude", session: "live", pid: child.pid }, "loop");
+  const bound = JSON.stringify(loadConfig().bindings);
+  expect(adoptReserved("ch", "lp", "old")).toEqual({ kind: "not-held" });
+  expect(JSON.stringify(loadConfig().bindings)).toBe(bound);
+  expect(seatOf("lp")).toMatchObject({ session: "live", pid: child.pid, loop: true });
 });

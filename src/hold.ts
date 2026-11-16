@@ -236,6 +236,24 @@ export function bindReserved(alias: string, as: string, token: string, to: { har
   }));
 }
 
+export const UP_LOOP = "KIWI_UP_LOOP";
+
+export function adoptReserved(alias: string, as: string, token: string, now = Date.now(), pid = process.pid): HoldChange {
+  const key = keyOf(token);
+  const started = processStart(pid);
+  let outcome: HoldChange = { kind: "not-held" };
+  if (started === null) return outcome;
+  updateConfig((cfg) => {
+    const ours = (b: SeatRecord) => b.alias === alias && b.as === as && b.hold?.key === key && !!b.hold.up;
+    const count = placedOf(cfg, alias, as).filter(({ record }) => ours(record)).length;
+    if (!count) return;
+    const adopt = (b: SeatRecord): SeatRecord => (ours(b) ? { ...omit(b, "session", "pid", "harnessSession", "started", "upKey"), hold: { key, at: b.hold?.at ?? now, holder: { pid, started } } } : b);
+    cfg.bindings = Object.fromEntries(Object.entries(cfg.bindings ?? {}).map(([dir, v]) => [dir, Array.isArray(v) ? v.map(adopt) : adopt(v)]));
+    outcome = { kind: "changed", seats: count };
+  });
+  return outcome;
+}
+
 export function abandonReserved(alias: string, as: string, token: string): HoldChange {
   return rewrite(alias, as, token, true, (b) => (b.hold?.up ? omit(b, "hold") : b));
 }

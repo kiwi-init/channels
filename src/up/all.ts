@@ -2,7 +2,7 @@ import type { Config, SeatRecord } from "../config.ts";
 import { printedLine, seatArgv, type Launcher } from "./launch.ts";
 import type { SeatPlan, Startable } from "./plan.ts";
 import type { Report } from "./ready.ts";
-import { SEAT_TOKEN, type Reservation } from "../hold.ts";
+import { SEAT_TOKEN, UP_LOOP, type Reservation } from "../hold.ts";
 
 export type Outcome = { plan: SeatPlan; result: "restored" | "running" | "failed" | "skipped"; why: string } | { plan: Startable; result: "printed"; line: string };
 
@@ -74,7 +74,7 @@ export async function upAll(plans: readonly SeatPlan[], launcher: Launcher | nul
           );
           break;
         }
-        const failed = launcher.open(plan, seatArgv(kiwi, plan, { bindSeconds, report: id }), token === null ? {} : { [SEAT_TOKEN]: token });
+        const failed = launcher.open(plan, seatArgv(kiwi, plan, { bindSeconds, report: id }), token === null ? {} : { [SEAT_TOKEN]: token, [UP_LOOP]: "1" });
         if (failed) {
           if (token !== null) deps.abandon(plan, token);
           done.set(plan, { plan, result: "failed", why: `${launcher.name} didn't open its window: ${failed}` });
