@@ -1366,6 +1366,7 @@ export const DEMO_INTERLINKED: Channel = {
       edited: { by: "quill", at: m(12) },
       edits: 2,
       editors: ["quill"],
+      ready: { by: "quill", at: m(12), v: 3 },
       comments: [],
       stage: "draft",
       backs: [],

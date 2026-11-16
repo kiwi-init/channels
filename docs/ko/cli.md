@@ -49,7 +49,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | --- | --- |
 | `kiwi specs` | 열린 스펙과 각각의 상태 |
 | `kiwi spec show N` · `spec write N --file spec.md` | 사람의 메시지 #N에 대한 스펙 읽기 또는 쓰기 |
-| `kiwi spec ready N` | 리뷰를 통과하면 준비됨으로 표시해, 사람에게 승인 카드가 보이게 함 |
+| `kiwi spec ready N` | 리뷰를 통과하면 준비됨으로 표시해, 사람에게 승인 카드가 보이게 함. 리뷰가 아직 변경을 요청하면 `--undo`로 표시를 거둠 |
 | `kiwi spec tick N "words"` | 그 단어가 들어 있는 완료 조건 체크박스를 체크 |
 | `kiwi spec start N` | 승인된 스펙을 맡아 작업으로 계획 |
 | `kiwi spec comment N "…" --on "line"` | 스펙이나 스펙의 한 줄에 댓글 |

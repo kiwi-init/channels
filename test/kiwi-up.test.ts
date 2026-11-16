@@ -8,7 +8,8 @@ import { abandonReserved, adoptReserved, bindHeldSeat, holdSeat, reserveSeat, SE
 import { claudeArgv, claudeTranscript } from "../src/loop/claude.ts";
 import { processStart } from "../src/pid.ts";
 import { seatsFor } from "../src/seats.ts";
-import { outcomeLine, upAll } from "../src/up/all.ts";
+import { readUpOutcomes } from "@kiwi/core/up-outcome.ts";
+import { outcomeJson, outcomeLine, upAll } from "../src/up/all.ts";
 import { printedLine, seatArgv, tmuxLauncher, type Launcher } from "../src/up/launch.ts";
 import { sessionLiveness, type Probe } from "../src/up/liveness.ts";
 import { NO_SAMPLE, planUp, runningAtShutdown, usedSince, withMembers } from "../src/up/plan.ts";
@@ -580,4 +581,17 @@ test("after kiwi up times out, its late loop adopts nothing: not the released se
   expect(adoptReserved("ch", "lp", "old")).toEqual({ kind: "not-held" });
   expect(JSON.stringify(loadConfig().bindings)).toBe(bound);
   expect(seatOf("lp")).toMatchObject({ session: "live", pid: child.pid, loop: true });
+});
+
+test("kiwi up --json reads back on the desktop side, seat by seat, and anything else is no answer", () => {
+  const plan = { kind: "restore" as const, harness: "claude" as const, alias: "ch", as: "dev", dir: "/w" };
+  const json = JSON.stringify({
+    seats: [outcomeJson({ plan, result: "restored", why: "it resumed its session" }), outcomeJson({ plan, result: "printed", line: "kiwi up --seat dev -c ch" }), { handle: "broken" }],
+  });
+  expect(readUpOutcomes(json)).toEqual([
+    { channel: "ch", handle: "dev", folder: "/w", result: "restored", why: "it resumed its session" },
+    { channel: "ch", handle: "dev", folder: "/w", result: "printed", why: "kiwi up --seat dev -c ch" },
+  ]);
+  expect(readUpOutcomes("not json")).toBeNull();
+  expect(readUpOutcomes(JSON.stringify({ findings: [] }))).toBeNull();
 });

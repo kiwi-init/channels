@@ -177,4 +177,16 @@ describe("in a channel, an approved spec gets started without anyone asking", ()
     await run(dev.commentSpec(ask, "does the file need a header row?", "PR merged with ci-ok"));
     expect(await lines(lead)).toEqual([expect.stringContaining(`comment on #${ask}'s spec: > PR merged with ci-ok`)]);
   });
+
+  test("spec ready, then spec ready --undo: the mark comes and goes, and a second undo sends nothing (#2489)", async () => {
+    const ask = await owner.ownerCh.send("export the labels too");
+    const written = await run(dev.writeSpec(ask, SPEC));
+    expect((await run(dev.readySpec(ask))).ready).toMatchObject({ by: "dev", v: written.v });
+    expect((await run(dev.unreadySpec(ask))).ready).toBeUndefined();
+    expect((await run(dev.unreadySpec(ask))).ready).toBeUndefined();
+    const { messages, state } = await run(lead.state());
+    expect(messages.filter((m) => m.ev?.op === "spec.unready" && m.ev.ask === ask)).toHaveLength(1);
+    expect(state.specs.get(ask)?.ready).toBeUndefined();
+    expect([...state.rejected.keys()].filter((seq) => seq > ask)).toEqual([]);
+  });
 });

@@ -49,7 +49,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | --- | --- |
 | `kiwi specs` | 未关闭的规格以及各自的进展 |
 | `kiwi spec show N` · `spec write N --file spec.md` | 读取或写入这个人的消息 #N 的规格 |
-| `kiwi spec ready N` | 在审核通过后标记为就绪，让这个人的批准卡片出现 |
+| `kiwi spec ready N` | 在审核通过后标记为就绪，让这个人的批准卡片出现。审核仍要求修改时，用 `--undo` 撤回标记 |
 | `kiwi spec tick N "words"` | 勾选那一行包含这些文字的完成条件条目 |
 | `kiwi spec start N` | 接手一个已批准的规格，并把它规划成任务 |
 | `kiwi spec comment N "…" --on "line"` | 评论规格，或其中的某一行 |

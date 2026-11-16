@@ -2,14 +2,16 @@ import { useEffect, useSyncExternalStore } from "react"
 
 import type { ComputerSettings, SeatWake } from "@kiwi/core/computer-settings.ts"
 import type { HookHarness, HookRow, HookState } from "@kiwi/core/harnesses.ts"
+import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
 import { harnessName } from "@kiwi/app/harness.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { store } from "~/live/value"
-import type { Finding, ThisComputer } from "~/model"
+import type { BackRun, Finding, ThisComputer } from "~/model"
 
 const computer = store<ThisComputer | null>(null)
+const lastRun = store<BackRun>({ at: "idle" })
 
 const shown = (rows: HookRow[]): ThisComputer["hooks"] =>
   rows.filter((r): r is HookRow & { state: Exclude<HookState, "absent"> } => r.state !== "absent").map((r) => ({ harness: r.harness, label: harnessName(r.harness), state: r.state }))
@@ -26,10 +28,23 @@ export async function loadComputer(): Promise<void> {
   const b = bridge()
   if (!b) return
   const [daemon, hooks, line] = await Promise.all([b.daemonStatus(), b.hooks().catch((): HookRow[] => []), b.contextLine().catch(() => null)])
-  computer.set({ kiwi: { running: daemon.running, ...(daemon.version ? { version: daemon.version } : {}) }, hooks: shown(hooks), contextLine: line === null ? null : line === "on" })
+  computer.set({
+    kiwi: { running: daemon.running, ...(daemon.version ? { version: daemon.version } : {}) },
+    hooks: shown(hooks),
+    contextLine: line === null ? null : line === "on",
+    back: backPrompt(plan.get()),
+    run: lastRun.get(),
+  })
+}
+
+function setRun(run: BackRun): void {
+  lastRun.set(run)
+  const now = computer.get()
+  if (now) computer.set({ ...now, run })
 }
 
 export function useComputer(): ThisComputer | null {
+  useEffect(() => void loadUpPlan().catch(() => {}), [])
   useEffect(() => {
     const again = () => void loadComputer().catch(() => {})
     again()
@@ -46,6 +61,38 @@ export async function setHooks(harness: HookHarness, on: boolean): Promise<void>
 }
 
 export const checkComputer = (): Promise<Finding[] | null> => need().doctor()
+
+const plan = store<UpOutcome[] | null>(null)
+
+export const upPlanNow = plan.get
+
+export async function loadUpPlan(): Promise<void> {
+  const b = bridge()
+  if (!b) return
+  plan.set(await b.upPlan().catch(() => null))
+  const now = computer.get()
+  if (now) computer.set({ ...now, back: backPrompt(plan.get()) })
+}
+
+export async function bringAgentsBack(): Promise<BackRun> {
+  const b = need()
+  setRun({ at: "working" })
+  const outcomes = await b.bringBack().catch(() => null)
+  const run: BackRun = outcomes ? { at: "done", outcomes } : { at: "no.answer" }
+  setRun(run)
+  await loadUpPlan().catch(() => {})
+  return run
+}
+
+export type BackPrompt = NonNullable<ThisComputer["back"]>
+
+const APART = new Set(["unsupported", "unverified", "unknown"])
+
+export function backPrompt(seats: readonly UpOutcome[] | null): BackPrompt | null {
+  const before = (seats ?? []).filter((s) => s.before)
+  const down = before.filter((s) => s.result === "planned")
+  return down.length ? { down, apart: before.filter((s) => s.result === "skipped" && !!s.skip && APART.has(s.skip)) } : null
+}
 
 export async function setContextLine(on: boolean): Promise<void> {
   const got = await need().setContextLine(on ? "on" : "off")

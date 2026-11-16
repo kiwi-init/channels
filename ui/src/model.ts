@@ -3,6 +3,7 @@ import type { TextFont } from "@kiwi/app/theme.ts"
 import type { GithubHealth } from "@kiwi/core/github-health.ts"
 import type { Activity as CoreActivity, COLORS } from "@kiwi/core/protocol.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
+import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { SharedWith } from "@kiwi/core/shared-seats.ts"
 import type { Reason } from "@kiwi/core/routing.ts"
@@ -259,7 +260,7 @@ export interface Spec {
   edits: number
   editors: string[]
   stage: SpecStage
-  ready?: true
+  ready?: SpecMark & { v: number }
   approved?: SpecMark & { v: number; text: Words }
   changed?: true
   result?: SpecMark & { verdict: "accepted" | "dropped"; note?: Words; auto?: true }
@@ -928,6 +929,7 @@ export interface Actions {
   savePersonalities(list: Personality[]): void
   setHooks(harness: HookHarness, on: boolean): Promise<void>
   checkComputer(): Promise<Finding[] | null>
+  bringAgentsBack(): Promise<BackRun>
   setContextLine(on: boolean): void
   computerSettings(id: string): Promise<[string, string[]][]>
   launchedFrom(ids: string[]): Promise<LaunchedAgent[]>
@@ -954,7 +956,11 @@ export interface ThisComputer {
   kiwi: { running: boolean; version?: string }
   hooks: { harness: HookHarness; label: string; state: Exclude<HookState, "absent"> }[]
   contextLine: boolean | null
+  back: { down: UpOutcome[]; apart: UpOutcome[] } | null
+  run: BackRun
 }
+
+export type BackRun = { at: "idle" } | { at: "working" } | { at: "done"; outcomes: UpOutcome[] } | { at: "no.answer" }
 
 export interface GoneChannel {
   code: string

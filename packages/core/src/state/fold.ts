@@ -51,6 +51,7 @@ const CLOCK_BLIND_OPS: ReadonlySet<string> = new Set([
   "doc.open",
   "spec.set",
   "spec.ready",
+  "spec.unready",
   "spec.approve",
   "spec.result",
   "spec.delete",
@@ -782,7 +783,7 @@ function folding(
           continue;
         }
       }
-      if (ev.op === "spec.set" || ev.op === "spec.ready" || ev.op === "spec.approve" || ev.op === "spec.result" || ev.op === "spec.delete") {
+      if (ev.op === "spec.set" || ev.op === "spec.ready" || ev.op === "spec.unready" || ev.op === "spec.approve" || ev.op === "spec.result" || ev.op === "spec.delete") {
         placeOf.set(m.seq, MAIN);
         const why = foldSpec(specs, askHeads, members, m, ev, at, leads(member));
         if (why) reject(why);

@@ -49,7 +49,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | --- | --- |
 | `kiwi specs` | The open specs and where each stands |
 | `kiwi spec show N` · `spec write N --file spec.md` | Read or write the spec of the person's message #N |
-| `kiwi spec ready N` | Mark it ready once its reviews pass, so the person's approve card shows |
+| `kiwi spec ready N` | Mark it ready once its reviews pass, so the person's approve card shows. `--undo` takes the mark back while a review still asks for changes |
 | `kiwi spec tick N "words"` | Tick the Done when box whose line says those words |
 | `kiwi spec start N` | Take an approved spec and plan it into tasks |
 | `kiwi spec comment N "…" --on "line"` | Comment on the spec, or one line of it |

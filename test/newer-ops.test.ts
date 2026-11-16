@@ -5,7 +5,7 @@ import { received } from "@kiwi/core/client/history.ts";
 import { newChannelKey } from "@kiwi/core/crypto.ts";
 import { describeEvent } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { EVENT_OPS_VERSION, isQuiet, knownOp, outgrown, PROTOCOL_VERSION, wellFormed, type Event, type Message } from "@kiwi/core/protocol.ts";
+import { EVENT_OPS_VERSION, isQuiet, knownOp, outgrown, PROTOCOL_VERSION, wellFormed, type Event, type Message, type NewerEvent } from "@kiwi/core/protocol.ts";
 import { openSnapshot, sealSnapshot } from "@kiwi/core/snapshot.ts";
 import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { outgrownCache } from "../src/agent/state.ts";
@@ -104,6 +104,7 @@ const OPS: Record<Event["op"], true> = {
   "spec.set": true,
   "spec.approve": true,
   "spec.ready": true,
+  "spec.unready": true,
   "spec.result": true,
   "spec.delete": true,
   "specs.only.set": true,
@@ -485,7 +486,8 @@ OPS_AT[27] = [...(OPS_AT[26] ?? []), "review.reset.set", "review.reset.waive"];
 OPS_AT[28] = [...(OPS_AT[27] ?? []), "asks.tap.set"];
 OPS_AT[29] = [...(OPS_AT[28] ?? []), "checkpoint.daily.set", "checkpoint.ask"];
 OPS_AT[30] = [...(OPS_AT[29] ?? []), "task.snapshot"];
-OPS_AT[31] = [...(OPS_AT[30] ?? []), "task.wait", "task.wait.end"];
+OPS_AT[31] = [...(OPS_AT[30] ?? []), "spec.unready"];
+OPS_AT[32] = [...(OPS_AT[31] ?? []), "task.wait", "task.wait.end"];
 
 describe("events from a newer client", () => {
   test("every op the Event type has is known, and a new op needs EVENT_OPS_VERSION raised with it", () => {
@@ -615,5 +617,55 @@ describe("voice.set, from when Channels had voice", () => {
     const kept = await openSnapshot(access, await sealSnapshot(owner, access, { ...base, voice: true }));
     expect(kept?.voice).toBe(true);
     expect(Object.hasOwn(fold([], roster, T0 + 3_600_000, null, null, kept), "voice")).toBe(false);
+  });
+});
+
+describe("a task's wait, to a reader of event ops 31 (#2492)", () => {
+  test("spec.unready stays at 31 and both wait ops arrive at 32, so a 31 reader keeps them whole as newer events that fold to nothing", async () => {
+    expect(OPS_AT[31]).toContain("spec.unready");
+    expect(OPS_AT[31]).not.toContain("task.wait");
+    expect(OPS_AT[31]).not.toContain("task.wait.end");
+    expect(OPS_AT[32]).toEqual([...(OPS_AT[31] ?? []), "task.wait", "task.wait.end"]);
+
+    const jow = await generateIdentity("jow");
+    const ann = await generateIdentity("ann");
+    const people: Roster = [
+      { name: "jow", pk: jow.pk, owner: true, at: 0, active: true, kind: "human" },
+      { name: "ann", pk: ann.pk, owner: false, at: 0, active: true, kind: "agent" },
+    ];
+    const signed = async (id: Identity, seq: number, ev: Event): Promise<Message> => {
+      const p = await sign(id, { v: PROTOCOL_VERSION, id: crypto.randomUUID(), from: id.name, kind: "event" as const, body: "", ev, ts: T0 + seq });
+      if (!wellFormed(p)) throw new Error(`#${seq} is malformed`);
+      return received(p, seq, T0 + seq, await verify(p));
+    };
+    const log = [
+      await signed(jow, 1, { op: "task.add", title: "Resume the job once load drops", owner: "ann" }),
+      await signed(ann, 2, { op: "task.update", task: 1, state: "doing" }),
+      await signed(ann, 3, { op: "task.wait", task: 1, reason: "until load < 65%", until: T0 + 3_600_000 }),
+      await signed(ann, 4, { op: "task.wait.end", task: 1 }),
+    ];
+    expect(log.map((m) => [m.sigOk, m.ev?.op])).toEqual([
+      [true, "task.add"],
+      [true, "task.update"],
+      [true, "task.wait"],
+      [true, "task.wait.end"],
+    ]);
+
+    const asReader31 = log.map(({ ev, ...m }): Message => {
+      if (!ev || (OPS_AT[31] ?? []).includes(ev.op)) return { ...m, ...(ev ? { ev } : {}) };
+      const newer: NewerEvent = { ...ev };
+      return { ...m, newer };
+    });
+    expect(asReader31.filter((m) => m.newer !== undefined).map((m) => [m.seq, m.sigOk, m.newer?.op])).toEqual([
+      [3, true, "task.wait"],
+      [4, true, "task.wait.end"],
+    ]);
+    expect(asReader31.filter((m) => m.newer !== undefined).every((m) => isQuiet(m))).toBe(true);
+    const at = T0 + 600_000;
+    const read = fold(asReader31, people, at);
+    expect(read.rejected.size).toBe(0);
+    expect(read.tasks.get(1)?.wait).toBeUndefined();
+    expect(read.tasks.get(1)?.state).toBe("doing");
+    expect(fold(log.slice(0, 2), people, at).tasks.get(1)).toEqual(read.tasks.get(1));
   });
 });
