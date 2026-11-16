@@ -230,8 +230,6 @@ const words = {
   "chat.updates.panel.fewer": "fewer",
   "chat.updates.panel.more": { one: "{count} more", other: "{count} more" },
   "chat.updates.panel.updates": { one: "{count} update", other: "{count} updates" },
-  "chat.updates.panel.open": "Open",
-  "chat.updates.panel.and.more": " and {count} more",
   "chat.markdown.code.block": "Code block",
   "chat.markdown.code.block.lang": "Code block: {lang}",
   "chat.markdown.utc.assuming": "assuming {date} UTC, the message date",

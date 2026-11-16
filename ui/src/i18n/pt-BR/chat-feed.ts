@@ -142,8 +142,6 @@ export default {
   "chat.updates.panel.fewer": "menos",
   "chat.updates.panel.more": { one: "mais {count}", other: "mais {count}" },
   "chat.updates.panel.updates": { one: "{count} atualização", other: "{count} atualizações" },
-  "chat.updates.panel.open": "Abrir",
-  "chat.updates.panel.and.more": " e mais {count}",
   "chat.use.commands.compact": "Pedir ao líder um resumo para condensar o histórico anterior",
   "chat.use.commands.pause": "Pausar os agentes",
   "chat.use.commands.pause.note": "nota",

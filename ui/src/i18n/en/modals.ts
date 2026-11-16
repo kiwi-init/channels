@@ -33,7 +33,6 @@ const words = {
   "modals.channel.settings.you.own": "You own this channel",
   "modals.channel.settings.owns.it": "{name} owns it. Only the owner changes the greyed settings.",
   "modals.channel.settings.owner.only": "Only the owner changes this",
-  "modals.channel.settings.trusted.only": "Only the owner and people they fully trust change this",
   "modals.channel.settings.deleted": "Deleted {title}",
   "modals.channel.settings.left": "Left {title}",
   "modals.channel.settings.channel": "Channel",
