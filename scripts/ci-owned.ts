@@ -1,7 +1,9 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { type Proc, procOf, procTable } from "../src/daemon/procs.ts";
 
 export const LEDGER_ENV = "KIWI_TEST_SPAWNS";
+export const OWNER_ENV = "KIWI_TEST_OWNER";
 export const GRACE_MS = 2_000;
 const KILLED_MS = 1_000;
 const POLL_MS = 50;
@@ -46,13 +48,27 @@ function entries(path: string, from: number): Entry[] {
     });
 }
 
-function marked(pid: number, ledger: string): boolean {
+export const ownerFor = (ledger: string, scope: string): string => `${ledger}:${scope}:`;
+
+function environOf(pid: number): string {
   try {
-    return `\u0000${readFileSync(`/proc/${pid}/environ`, "utf8")}`.includes(`\u0000${LEDGER_ENV}=${ledger}\u0000`);
+    return `\u0000${readFileSync(`/proc/${pid}/environ`, "utf8")}`;
   } catch {
     // Gone, or not ours to read: not one this run started.
-    return false;
+    return "";
   }
+}
+
+function marked(table: Map<number, Proc>, owner: string): Set<number> {
+  if (process.platform === "linux") return new Set([...table.keys()].filter((pid) => environOf(pid).includes(`\u0000${OWNER_ENV}=${owner}`)));
+  const out = spawnSync("ps", ["-E", "-ww", "-A", "-o", "pid=,command="], { encoding: "utf8", timeout: 5_000 }).stdout ?? "";
+  return new Set(
+    out
+      .split("\n")
+      .filter((l) => l.includes(` ${OWNER_ENV}=${owner}`))
+      .map((l) => Number(/^\s*(\d+)/.exec(l)?.[1]))
+      .filter((pid) => table.has(pid)),
+  );
 }
 
 function owned(roots: Entry[], marker: string | null): Proc[] {
@@ -69,7 +85,11 @@ function owned(roots: Entry[], marker: string | null): Proc[] {
     if (leader && same) add(leader);
     if (e.group && (same || leader === undefined)) for (const p of table.values()) if (p.pgid === e.pid) add(p);
   }
-  if (marker) for (const p of table.values()) if (marked(p.pid, marker)) add(p);
+  if (marker)
+    for (const pid of marked(table, marker)) {
+      const p = table.get(pid);
+      if (p) add(p);
+    }
   let grew = found.size > 0;
   while (grew) {
     grew = false;
@@ -90,10 +110,10 @@ function signal(pid: number, sig: NodeJS.Signals): void {
   }
 }
 
-export async function stopOwned(path = process.env[LEDGER_ENV], from = 0, options: { grace?: number; sweep?: boolean } = {}): Promise<number[]> {
+export async function stopOwned(path = process.env[LEDGER_ENV], from = 0, options: { grace?: number; owner?: string; sweep?: boolean } = {}): Promise<number[]> {
   if (!path) return [];
   const roots = entries(path, from);
-  const marker = options.sweep && process.platform === "linux" ? path : null;
+  const marker = options.owner ?? (options.sweep ? `${path}:` : null);
   if (!roots.length && !marker) return [];
   const termed = new Set<number>();
   const until = Date.now() + (options.grace ?? GRACE_MS);

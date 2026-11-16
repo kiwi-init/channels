@@ -9,7 +9,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LEDGER_ENV, stopOwned } from "../scripts/ci-owned.ts";
+import { LEDGER_ENV, OWNER_ENV, ownerFor, stopOwned } from "../scripts/ci-owned.ts";
 import { ledgerSize } from "./owned.ts";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-test-harness-"));
@@ -74,14 +74,20 @@ isolate();
 beforeEach(isolate);
 
 const ledger = join(root, "spawns.jsonl");
+const fileOwner = ownerFor(ledger, "file");
 process.env[LEDGER_ENV] = ledger;
+process.env[OWNER_ENV] = fileOwner;
 let testFrom = 0;
+let tests = 0;
 beforeEach(() => {
   process.env[LEDGER_ENV] = ledger;
+  process.env[OWNER_ENV] = ownerFor(ledger, `test-${++tests}`);
   testFrom = ledgerSize(ledger);
 });
 afterEach(async () => {
-  await stopOwned(ledger, testFrom);
+  const owner = process.env[OWNER_ENV];
+  process.env[OWNER_ENV] = fileOwner;
+  await stopOwned(ledger, testFrom, { owner });
 });
 afterAll(async () => {
   await stopOwned(ledger, 0, { sweep: true });
@@ -89,5 +95,5 @@ afterAll(async () => {
 spawn("sh", ["-c", `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.5; done; exec "$0" "$1" stop "$2"`, process.execPath, join(import.meta.dir, "../scripts/ci-owned.ts"), ledger], {
   detached: true,
   stdio: "ignore",
-  env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== LEDGER_ENV)),
+  env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== LEDGER_ENV && k !== OWNER_ENV)),
 }).unref();

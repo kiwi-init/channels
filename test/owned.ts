@@ -1,11 +1,12 @@
 import { appendFileSync, statSync } from "node:fs";
-import { LEDGER_ENV, ledgerLine } from "../scripts/ci-owned.ts";
+import { LEDGER_ENV, ledgerLine, OWNER_ENV } from "../scripts/ci-owned.ts";
 
 const ledger = (): string | undefined => process.env[LEDGER_ENV];
 
 const withLedger = (env: Record<string, string | undefined> | undefined): Record<string, string | undefined> | undefined => {
   const path = ledger();
-  return env && path ? { ...env, [LEDGER_ENV]: path } : env;
+  const owner = process.env[OWNER_ENV];
+  return env && path ? { ...env, [LEDGER_ENV]: path, ...(owner ? { [OWNER_ENV]: owner } : {}) } : env;
 };
 
 export function record(pid: number, cmd: readonly string[], group = false, path = ledger()): void {
@@ -18,7 +19,7 @@ export function spawnOwned<const In extends Bun.SpawnOptions.Writable = "ignore"
   options?: Bun.SpawnOptions.SpawnOptions<In, Out, Err>,
 ): Bun.Subprocess<In, Out, Err> {
   const group = options?.detached ?? true;
-  const p = Bun.spawn<In, Out, Err>(cmd, { ...options, detached: group, env: withLedger(options?.env) });
+  const p = Bun.spawn<In, Out, Err>(cmd, { ...options, detached: group, env: withLedger(options?.env ?? process.env) });
   record(p.pid, cmd, group);
   return p;
 }
@@ -28,7 +29,7 @@ export function spawnOwnedSync<const In extends Bun.SpawnOptions.Writable = "ign
   options?: Bun.SpawnOptions.SpawnSyncOptions<In, Out, Err>,
 ): Bun.SyncSubprocess<Out, Err> {
   const group = options?.detached ?? true;
-  const p = Bun.spawnSync<In, Out, Err>(cmd, { ...options, detached: group, env: withLedger(options?.env) });
+  const p = Bun.spawnSync<In, Out, Err>(cmd, { ...options, detached: group, env: withLedger(options?.env ?? process.env) });
   record(p.pid, cmd, group);
   return p;
 }
