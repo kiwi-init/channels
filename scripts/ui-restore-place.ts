@@ -149,14 +149,25 @@ const heights = (page: Page) =>
     return out;
   });
 
-const markdownLate = (page: Page) =>
-  page.route(/\/markdown-[^/]*\.js$/, async (route) => {
-    await page.waitForTimeout(MARKDOWN_LATE_MS);
+async function restartMarkdownLate(page: Page, what: string): Promise<Page> {
+  const next = await page.context().newPage();
+  await pageErrors(next, (e) => fails.push(`page threw: ${e}`));
+  let held = 0;
+  await next.route(/\/markdown-[^/]*\.js$/, async (route) => {
+    held++;
+    await next.waitForTimeout(MARKDOWN_LATE_MS);
     await route.continue();
   });
+  const url = page.url();
+  await page.close();
+  await next.goto(url);
+  await next.locator("article.msg").first().waitFor({ state: "attached" });
+  expect(held > 0, `${what}: the restart holds markdown back ${MARKDOWN_LATE_MS} ms (${held} markdown requests held)`);
+  return next;
+}
 
 async function plainFirst() {
-  const page = await fresh("long-feed");
+  let page = await fresh("long-feed");
   await page.locator("article.msg").first().waitFor();
   await settle(page);
   for (let i = 0; i < 4; i++) {
@@ -168,9 +179,7 @@ async function plainFirst() {
   await settle(page, 700);
   await page.waitForFunction(() => !document.querySelector(".feed-list .md-plain"), undefined, { timeout: 15_000 });
   const full = await heights(page);
-  await markdownLate(page);
-  await page.reload();
-  await page.locator("article.msg").first().waitFor({ state: "attached" });
+  page = await restartMarkdownLate(page, "plain text first");
   const plain = await heights(page);
   const row = Object.entries(full)
     .map(([seq, md]) => ({ seq: Number(seq), md: md.h, plain: plain[seq] }))
@@ -193,7 +202,7 @@ async function plainFirst() {
   await settle(page, 700);
   const spot = await topRow(page);
   expect(spot?.seq === row.seq, `the feed rests on a message whose plain text ends above the top (${JSON.stringify(row)} → ${JSON.stringify(spot)})`);
-  await page.reload();
+  page = await restartMarkdownLate(page, "back to the same message");
   await page.locator("article.msg").first().waitFor();
   await settle(page, MARKDOWN_LATE_MS + 1200);
   const after = await topRow(page);
