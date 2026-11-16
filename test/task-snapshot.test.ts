@@ -9,7 +9,12 @@ import { isQuiet, wellFormedEvent, type Event, type Message } from "@kiwi/core/p
 import { reentryText } from "@kiwi/core/reentry.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import type { SnapshotFacts } from "@kiwi/core/task-snapshot.ts";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import { snapshotBudget, snapshotsAfter, STOP_SNAPSHOTS_BY_MS } from "../src/hooks/answer.ts";
 import { factsOf, snapshotsDue, worktreesOf } from "../src/hooks/snapshot.ts";
+
+const run = <A>(e: Effect.Effect<A>): Promise<A> => Effect.runPromise(e);
 
 const ids: Record<string, Identity> = {};
 let roster: Roster;
@@ -57,7 +62,7 @@ const board = async (extra: Message[] = []) => {
 
 describe("a snapshot on Stop", () => {
   test("describes the task's own worktree, names its path, and reads its files as that checkout's state", async () => {
-    const due = snapshotsDue(await board(), "bot", hook);
+    const due = await run(snapshotsDue(await board(), "bot", hook));
     expect(due).toHaveLength(1);
     expect(due[0]!.task).toBe(7);
     expect(due[0]!.facts).toEqual({
@@ -72,17 +77,17 @@ describe("a snapshot on Stop", () => {
   });
 
   test("a task with no worktree of its own gets none: the hook folder's state is never pinned on it", async () => {
-    const due = snapshotsDue(await board(), "bot", hook);
+    const due = await run(snapshotsDue(await board(), "bot", hook));
     expect(due.map((d) => d.task)).not.toContain(8);
-    expect(worktreesOf(hook).map((w) => w.path)).toEqual([hook, work]);
+    expect((await run(worktreesOf(hook))).map((w) => w.path)).toEqual([hook, work]);
   });
 
   test("isn't saved again while nothing changed, and is once something did", async () => {
-    const facts = factsOf(worktreesOf(hook).find((w) => w.path === work)!)!;
+    const facts = (await run(factsOf((await run(worktreesOf(hook))).find((w) => w.path === work)!)))!;
     const saved = await ev("bot", { op: "task.snapshot", task: 7, ...facts });
-    expect(snapshotsDue(await board([saved]), "bot", hook)).toEqual([]);
+    expect(await run(snapshotsDue(await board([saved]), "bot", hook))).toEqual([]);
     writeFileSync(join(work, "more.ts"), "next step");
-    const again = snapshotsDue(await board([saved]), "bot", hook);
+    const again = await run(snapshotsDue(await board([saved]), "bot", hook));
     rmSync(join(work, "more.ts"));
     expect(again.map((d) => d.facts.dirty)).toEqual([["more.ts", "wip.ts"]]);
   });
@@ -119,5 +124,61 @@ describe("a snapshot on the board", () => {
       "  │ branch T7-snapshots at aaaaaaaaa “Stop hook”, 2 ahead and 1 behind origin/main",
       "  │ uncommitted in that checkout, which may hold others' edits too: wip.ts",
     ]);
+  });
+});
+
+describe("a snapshot pass never holds up the Stop hook", () => {
+  const hung = join(root, "hung-bin");
+  const pidFile = join(root, "hung.pid");
+
+  test("it gets what's left of the hook's time, at most 600 ms, and nothing once too little is left", () => {
+    expect(snapshotBudget(0)).toBe(600);
+    expect(snapshotBudget(STOP_SNAPSHOTS_BY_MS - 400)).toBe(400);
+    expect(snapshotBudget(STOP_SNAPSHOTS_BY_MS - 100)).toBe(0);
+    expect(snapshotBudget(5_000)).toBe(0);
+  });
+
+  test("a git that hangs is cut off at the budget, and its process is killed", async () => {
+    execFileSync("mkdir", ["-p", hung]);
+    writeFileSync(join(hung, "git"), `#!/bin/sh\necho $$ > ${pidFile}\nexec sleep 30\n`, { mode: 0o755 });
+    const path = process.env.PATH;
+    process.env.PATH = `${hung}:${path}`;
+    try {
+      const started = performance.now();
+      const out = await run(snapshotsDue(await board(), "bot", hook).pipe(Effect.timeoutOption(300)));
+      expect(Option.isNone(out)).toBe(true);
+      expect(performance.now() - started).toBeLessThan(1_000);
+    } finally {
+      process.env.PATH = path;
+    }
+    const pid = Number(execFileSync("cat", [pidFile], { encoding: "utf8" }).trim());
+    await Bun.sleep(100);
+    expect(() => process.kill(pid, 0)).toThrow();
+  });
+
+  test("a board that loads slowly is cut off too: the pass ends within its budget, having sent nothing", async () => {
+    const state = await board();
+    const sent: number[] = [];
+    const session = {
+      me: "bot",
+      state: () => Effect.as(Effect.sleep(5_000), { messages: [], state }),
+      taskSnapshot: (task: number) => Effect.sync(() => void sent.push(task)),
+    };
+    const started = performance.now();
+    await run(snapshotsAfter(session, hook, 0));
+    expect(performance.now() - started).toBeLessThan(900);
+    expect(sent).toEqual([]);
+  });
+
+  test("with time to spare, every owned task with a worktree of its own is sent", async () => {
+    const state = await board();
+    const sent: number[] = [];
+    const session = {
+      me: "bot",
+      state: () => Effect.succeed({ messages: [], state }),
+      taskSnapshot: (task: number) => Effect.sync(() => void sent.push(task)),
+    };
+    await run(snapshotsAfter(session, hook, 0));
+    expect(sent).toEqual([7]);
   });
 });

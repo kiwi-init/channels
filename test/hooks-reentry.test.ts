@@ -267,3 +267,31 @@ test("on Stop, an open task's own worktree is snapshotted once, and the task sho
   expect(shape.exec(await shown())?.[1]).toBe(first);
   await ok(agent, ["task", "done", id], S);
 });
+
+test("with a slow git and two tasks to snapshot, the Stop hook still delivers its unread message in time", async () => {
+  const repo = scratch("slow");
+  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "ignore" });
+  git(repo, "init", "-q", "-b", "main");
+  writeFileSync(join(repo, "a.txt"), "a");
+  git(repo, "add", "a.txt");
+  git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "first");
+  const task = async (title: string) => {
+    const id = /added (T\d+)/.exec(await ok(agent, ["task", "add", title, "--owner", me, "--ask", want], S))![1]!;
+    git(repo, "worktree", "add", "-q", "-b", `${id}-slow`, `${repo}-${id}`);
+    made.push(`${repo}-${id}`);
+    writeFileSync(join(`${repo}-${id}`, "wip.ts"), "half done");
+    return id;
+  };
+  const ids = [await task("slow one"), await task("slow two")];
+  const shim = scratch("slow-git");
+  writeFileSync(join(shim, "git"), `#!/bin/sh\nsleep 0.45\nexec ${Bun.which("git")} "$@"\n`, { mode: 0o755 });
+  await ok(owner, ["--as", "human", "send", "--to", `@${me}`, "SLOW-GIT ping"], { CLAUDECODE: "" });
+  const out = await ok(
+    agent,
+    ["hook", "stop"],
+    { ...S, TMUX: "", TMUX_PANE: "", TERM_PROGRAM: "", PATH: `${shim}:${process.env.PATH}` },
+    JSON.stringify({ session_id: "reentry", cwd: repo, hook_event_name: "Stop" }),
+  );
+  expect(out).toContain("SLOW-GIT ping");
+  await Promise.all(ids.map((id) => ok(agent, ["task", "done", id], S)));
+});
