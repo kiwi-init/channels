@@ -207,6 +207,15 @@ export function cursorFollow(alias: string, mc: string, unread: boolean, reminde
   return [nudge, rearm].filter((t) => t !== null).join("\n\n");
 }
 
+const SNAPSHOT_MS = 600;
+
+const saveSnapshots = Effect.fn("Hooks.saveSnapshots")(function* (s: AgentSession, dir: string) {
+  const { state } = yield* s.state();
+  const { snapshotsDue } = yield* Effect.promise(() => import("./snapshot.ts"));
+  const sends = Effect.forEach(snapshotsDue(state, s.me, dir), ({ task, facts }) => Effect.ignore(s.taskSnapshot(task, facts)), { discard: true });
+  yield* sends.pipe(Effect.timeoutOption(SNAPSHOT_MS));
+});
+
 const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput, s: AgentSession, who: Here, mc: string, budget: number) {
   if (!contextLineOn(loadConfig())) return null;
   const session = who.session;
@@ -527,6 +536,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
   }
 
   if (event === "stop") {
+    yield* Effect.ignore(saveSnapshots(s, input.cwd ?? process.cwd()));
     const kind = stopKind(input, who);
     if (kind === null) return null;
     if (kind === "followup") {

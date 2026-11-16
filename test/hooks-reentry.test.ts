@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonListening, daemonSock, stopDaemon } from "../src/daemon.ts";
@@ -232,4 +233,37 @@ test("the lead past the line is asked for its lead checkpoint, which must name e
   const told = await context("clear");
   expect(told).toMatch(/Your lead checkpoint, \S+ ago \(#\d+\):\n {2}│ LEAD-NOTE waiting on review of /);
   expect(told).toContain("next: merge order");
+});
+
+test("on Stop, an open task's own worktree is snapshotted once, and the task shows it beside the authored checkpoint", async () => {
+  const id = /added (T\d+)/.exec(await ok(agent, ["task", "add", "snapshot on stop", "--owner", me, "--ask", want], S))![1]!;
+  const repo = scratch("repo");
+  const tree = `${repo}-${id}`;
+  made.push(tree);
+  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "ignore" });
+  git(repo, "init", "-q", "-b", "main");
+  writeFileSync(join(repo, "a.txt"), "a");
+  git(repo, "add", "a.txt");
+  git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "first");
+  git(repo, "worktree", "add", "-q", "-b", `${id}-snapshot`, tree);
+  writeFileSync(join(tree, "wip.ts"), "half done");
+  writeFileSync(join(repo, "elsewhere.txt"), "not this task's");
+  const note = join(agent, "snap.md");
+  writeFileSync(note, "SNAP-NOTE next: the tests\n");
+  await ok(agent, ["task", "checkpoint", id, "--file", note], S);
+  const stop = () => ok(agent, ["hook", "stop"], { ...S, TMUX: "", TMUX_PANE: "", TERM_PROGRAM: "" }, JSON.stringify({ session_id: "reentry", cwd: repo, hook_event_name: "Stop" }));
+  const shown = () => ok(agent, ["task", "show", id], S);
+  const escaped = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const shape = new RegExp(
+    `on disk at the end of a turn, .+ \\(#(\\d+)\\), ${escaped(realpathSync(tree))}:\\n {2}branch ${id}-snapshot at [0-9a-f]{9} “first”\\n {2}uncommitted in that checkout, which may hold others' edits too: wip.ts`,
+  );
+  await stop();
+  let told = "";
+  await until(async () => shape.test((told = await shown())), "the snapshot");
+  const first = shape.exec(told)?.[1];
+  expect(told).toContain("(checkpoint): SNAP-NOTE next: the tests");
+  expect(told).not.toContain("elsewhere.txt");
+  await stop();
+  expect(shape.exec(await shown())?.[1]).toBe(first);
+  await ok(agent, ["task", "done", id], S);
 });

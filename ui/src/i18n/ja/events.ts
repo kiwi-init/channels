@@ -54,6 +54,7 @@ export default {
   "events.task.nudge.lead.read": "{task} が、通知を見た {name} のもとで止まったままだと記録しました: リードに伝える時期です",
   "events.task.wake.delivered": "{task} の通知が {name} のセッションに届いたと記録しました",
   "events.task.wake.read": "{name} のセッションに {task} の通知が表示されたと記録しました",
+  "events.task.snapshot": "{task} のディスク上の状態を記録しました: {where}",
   "events.task.nudge.owner": "{task} が {name} のもとで止まったままだと記録しました: オーナーの要対応に入れる時期です",
   "events.task.landed": "{task} を反映しました: {at}",
   "events.task.step.done": "{task} のステップ {step} を終えました{note}",

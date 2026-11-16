@@ -54,6 +54,7 @@ export default {
   "events.task.nudge.lead.read": "marcou {task} como ainda parada com {name}, que viu o aviso: está na hora de avisar a liderança",
   "events.task.wake.delivered": "registrou que o aviso sobre {task} chegou à sessão de {name}",
   "events.task.wake.read": "registrou que a sessão de {name} viu o aviso sobre {task}",
+  "events.task.snapshot": "registrou onde {task} está no disco: {where}",
   "events.task.nudge.owner": "marcou {task} como ainda parada com {name}: está na hora de ir para o Precisa de você do dono",
   "events.task.landed": "integrou {task}: {at}",
   "events.task.step.done": "encerrou a etapa {step} de {task}{note}",

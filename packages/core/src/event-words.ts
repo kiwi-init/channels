@@ -52,6 +52,7 @@ export const EVENT_WORDS = {
   "task.nudge.lead.read": "marked {task} still quiet with {name}, who was shown the wake: due to the lead",
   "task.wake.delivered": "noted that the wake for {task} reached {name}'s session",
   "task.wake.read": "noted that {name}'s session was shown the wake for {task}",
+  "task.snapshot": "noted where {task} stands on disk: {where}",
   "task.nudge.owner": "marked {task} still quiet with {name}: due in the owner's Needs you",
   "task.landed": "landed {task}: {at}",
   "task.step.done": "ended step {step} of {task}{note}",

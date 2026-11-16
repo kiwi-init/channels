@@ -54,6 +54,7 @@ export default {
   "events.task.nudge.lead.read": "{task}이(가) 알림을 본 {name}에게서 계속 멈춰 있다고 기록했습니다: 리드에게 알릴 때입니다",
   "events.task.wake.delivered": "{task} 알림이 {name}의 세션에 전달되었다고 기록했습니다",
   "events.task.wake.read": "{name}의 세션에 {task} 알림이 표시되었다고 기록했습니다",
+  "events.task.snapshot": "{task}의 디스크 상태를 기록했습니다: {where}",
   "events.task.nudge.owner": "{task}이(가) {name}에게서 계속 멈춰 있다고 기록했습니다: 소유자의 확인 필요에 올릴 때입니다",
   "events.task.landed": "{task}을(를) 반영했습니다: {at}",
   "events.task.step.done": "{task}의 단계 {step}을(를) 마쳤습니다{note}",
