@@ -142,6 +142,7 @@ export async function endSession(ch: LineChannel): Promise<void> {
 }
 
 export function keySources(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): KeySources {
+  if (platform === "win32") return { key: keychainKey(), legacy: legacyPassword(platform), done: () => {} };
   if (platform !== "darwin") return { key: { ...keychainKey(), locked: storeKeyHeld, running: keyringRunning }, legacy: legacyPassword(platform), done: () => {} };
   const ch = launcherChannel(env);
   if (!ch) throw new Error("on a Mac, Channels gets its store key only from its signed launcher, and it wasn't started by it");

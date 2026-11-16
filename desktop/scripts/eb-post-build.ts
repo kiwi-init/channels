@@ -16,7 +16,7 @@ const buildDir = process.env.ELECTROBUN_BUILD_DIR;
 const os = process.env.ELECTROBUN_OS;
 const arch = process.env.ELECTROBUN_ARCH;
 if (!buildDir || !os || !arch) throw new Error("run by electrobun build: ELECTROBUN_BUILD_DIR, _OS and _ARCH are unset");
-if (os !== "macos" && os !== "linux") throw new Error(`the Electrobun shell builds only on macOS and Linux, not ${os}`);
+if (os !== "macos" && os !== "linux" && os !== "win") throw new Error(`the Electrobun shell builds only on macOS, Linux and Windows, not ${os}`);
 
 const desktop = path.resolve(import.meta.dirname, "..");
 const web = path.resolve(desktop, process.env.KIWI_UI_DIST ?? "../ui/dist");
@@ -61,6 +61,15 @@ if (!boxWorker.success || !boxOut) throw new Error(`the message box worker didn'
 fs.writeFileSync(path.join(app, "bun", "message-box.js"), await boxOut.text());
 const answered = await bundledKeysAnswer(path.join(app, "bun", "keys.js"));
 if (answered !== "ok") throw new Error(`the bundled keys worker didn't answer a page's request: ${answered}`);
+if (os === "win") {
+  const root = path.dirname(resources[0] as string);
+  const key = hostKey("win32", arch);
+  const pins = pinFor(PINS.app, key, "app files");
+  const swapped = [...mismatches(root, pins), ...unpinned(root, "bin", pins).map((f) => `${f}: nobody pinned it`)];
+  if (swapped.length) throw new Error(`eb-post-build: the ${key} app's Electrobun files aren't Livewire ${PINS.electrobun}'s pinned ones (desktop/electrobun-pins.json): ${swapped.join("; ")}`);
+  console.log(`eb-post-build: the ${key} app's ${Object.keys(pins).length} Electrobun files match Livewire ${PINS.electrobun}'s pins`);
+  process.exit(0);
+}
 if (os === "linux") {
   const host = process.arch === "x64" ? "x64" : process.arch === "arm64" ? "arm64" : process.arch;
   if (host !== arch) throw new Error(`eb-post-build: the Linux launcher is built with this machine's cc, for ${host}, not the ${arch} app`);

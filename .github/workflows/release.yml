@@ -141,7 +141,7 @@ jobs:
         run: |
           mapfile -t files < <(find artifacts -maxdepth 1 -type f | sort)
           bun repo/scripts/changelog.ts --notes "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
-          printf '\n---\n\n%s\n' "Channels desktop app (macOS dmg/zip, Linux AppImage) and the kiwi CLI. Download the app at https://channels.kiwiinit.com/; install the CLI with: curl -fsSL https://channels.kiwiinit.com/install | sh (macOS, Linux). Every file is checksummed in SHA256SUMS, signed in SHA256SUMS.minisig (minisign -Vm SHA256SUMS -P <the key in desktop/src/release-key.ts>), and has a build-provenance attestation: gh attestation verify <file> --repo $GITHUB_REPOSITORY" >> "$RUNNER_TEMP/notes.md"
+          printf '\n---\n\n%s\n' "Channels desktop app (macOS dmg/zip, Linux AppImage) and the kiwi CLI. Download the app at https://channels.kiwiinit.com/; install the CLI with: curl -fsSL https://channels.kiwiinit.com/install | sh (macOS, Linux), or on Windows unzip kiwi-windows-x64.zip (or kiwi-windows-arm64.zip) and run kiwi-windows-x64.exe setup. Every file is checksummed in SHA256SUMS, signed in SHA256SUMS.minisig (minisign -Vm SHA256SUMS -P <the key in desktop/src/release-key.ts>), and has a build-provenance attestation: gh attestation verify <file> --repo $GITHUB_REPOSITORY" >> "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" "${files[@]}" --latest \
             --repo "$GITHUB_REPOSITORY" \
             --title "Channels ${GITHUB_REF_NAME#v}" \
