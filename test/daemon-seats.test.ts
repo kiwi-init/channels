@@ -453,6 +453,7 @@ describe("the CLI and the daemon", () => {
   });
 
   test("status shows your own seat as the daemon sees it and reports its read, and when the rest were last seen", async () => {
+    await cli(["--as", "claude", "task", "--global"]);
     await until("claude's seat", async () => (await seatOf("claude")) !== null);
     const status = await cli(["-c", "test", "--as", "claude", "status"], "status-session");
     expect(status).toMatch(/claude \(you\).* · not listening · /);
