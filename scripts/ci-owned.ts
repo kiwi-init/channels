@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { type Proc, procOf, procTable } from "../src/daemon/procs.ts";
 
 export const LEDGER_ENV = "KIWI_TEST_SPAWNS";
 export const GRACE_MS = 2_000;
 const KILLED_MS = 1_000;
+const POLL_MS = 50;
 
-type Entry = { pid: number; cmd: string };
+type Entry = { pid: number; start: string | null; group: boolean };
 
 export function running(pid: number): boolean {
   try {
@@ -16,14 +17,8 @@ export function running(pid: number): boolean {
   }
 }
 
-function commandOf(pid: number): string {
-  try {
-    if (process.platform === "linux") return readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\u0000").join(" ").trim();
-    return spawnSync("ps", ["-o", "command=", "-p", String(pid)], { encoding: "utf8", timeout: 2_000 }).stdout.trim();
-  } catch {
-    // A process whose command can't be read is never one this run may stop.
-    return "";
-  }
+export function ledgerLine(pid: number, group: boolean, cmd: readonly string[]): string {
+  return `${JSON.stringify({ pid, start: procOf(pid)?.start ?? null, group, cmd: cmd.join(" ") })}\n`;
 }
 
 function entries(path: string, from: number): Entry[] {
@@ -40,7 +35,10 @@ function entries(path: string, from: number): Entry[] {
     .flatMap((l) => {
       try {
         const e: unknown = JSON.parse(l);
-        return typeof e === "object" && e !== null && "pid" in e && "cmd" in e && Number.isSafeInteger(e.pid) && typeof e.cmd === "string" ? [{ pid: Number(e.pid), cmd: e.cmd }] : [];
+        if (typeof e !== "object" || e === null || !("pid" in e) || !Number.isSafeInteger(e.pid)) return [];
+        const start = "start" in e && typeof e.start === "string" ? e.start : null;
+        const group = "group" in e && e.group === true;
+        return [{ pid: Number(e.pid), start, group }];
       } catch {
         // A line cut short by a kill mid-write names no process we can prove is ours.
         return [];
@@ -48,32 +46,73 @@ function entries(path: string, from: number): Entry[] {
     });
 }
 
-const shape = (cmd: string): string => {
-  const [program = "", ...rest] = cmd.trim().split(/\s+/);
-  return [program.split("/").pop() ?? program, ...rest].join(" ");
-};
+function marked(pid: number, ledger: string): boolean {
+  try {
+    return `\u0000${readFileSync(`/proc/${pid}/environ`, "utf8")}`.includes(`\u0000${LEDGER_ENV}=${ledger}\u0000`);
+  } catch {
+    // Gone, or not ours to read: not one this run started.
+    return false;
+  }
+}
 
-const ours = (e: Entry): boolean => e.pid !== process.pid && running(e.pid) && shape(commandOf(e.pid)) === shape(e.cmd);
+function owned(roots: Entry[], marker: string | null): Proc[] {
+  const table = procTable();
+  const keep = new Set<number>();
+  for (let p = table.get(process.pid); p && !keep.has(p.pid); p = table.get(p.ppid)) keep.add(p.pid);
+  const found = new Map<number, Proc>();
+  const add = (p: Proc): void => {
+    if (!keep.has(p.pid)) found.set(p.pid, p);
+  };
+  for (const e of roots) {
+    const leader = table.get(e.pid);
+    const same = leader !== undefined && e.start !== null && leader.start === e.start;
+    if (leader && same) add(leader);
+    if (e.group && (same || leader === undefined)) for (const p of table.values()) if (p.pgid === e.pid) add(p);
+  }
+  if (marker) for (const p of table.values()) if (marked(p.pid, marker)) add(p);
+  let grew = found.size > 0;
+  while (grew) {
+    grew = false;
+    for (const p of table.values())
+      if (!found.has(p.pid) && !keep.has(p.pid) && found.has(p.ppid)) {
+        found.set(p.pid, p);
+        grew = true;
+      }
+  }
+  return [...found.values()];
+}
 
 function signal(pid: number, sig: NodeJS.Signals): void {
   try {
     process.kill(pid, sig);
   } catch {
-    // It exited between the check and the signal: already stopped.
+    // It exited between the snapshot and the signal: already stopped.
   }
 }
 
-export async function stopOwned(path = process.env[LEDGER_ENV], from = 0, grace = GRACE_MS): Promise<number[]> {
+export async function stopOwned(path = process.env[LEDGER_ENV], from = 0, options: { grace?: number; sweep?: boolean } = {}): Promise<number[]> {
   if (!path) return [];
-  const live = entries(path, from).filter(ours);
-  for (const e of live) signal(e.pid, "SIGTERM");
-  const until = Date.now() + grace;
-  while (live.some(ours) && Date.now() < until) await Bun.sleep(50);
-  const stubborn = live.filter(ours);
-  for (const e of stubborn) signal(e.pid, "SIGKILL");
+  const roots = entries(path, from);
+  const marker = options.sweep && process.platform === "linux" ? path : null;
+  if (!roots.length && !marker) return [];
+  const termed = new Set<number>();
+  const until = Date.now() + (options.grace ?? GRACE_MS);
+  for (let live = owned(roots, marker); live.length && Date.now() < until; live = owned(roots, marker)) {
+    for (const p of live.filter((p) => !termed.has(p.pid))) {
+      signal(p.pid, "SIGTERM");
+      termed.add(p.pid);
+    }
+    await Bun.sleep(POLL_MS);
+  }
   const killedBy = Date.now() + KILLED_MS;
-  while (stubborn.some((e) => running(e.pid)) && Date.now() < killedBy) await Bun.sleep(50);
-  return live.map((e) => e.pid);
+  for (let live = owned(roots, marker); live.length && Date.now() < killedBy; live = owned(roots, marker)) {
+    for (const p of live) {
+      signal(p.pid, "SIGKILL");
+      termed.add(p.pid);
+    }
+    await Bun.sleep(POLL_MS);
+  }
+  return [...termed];
 }
 
 if (import.meta.main) {
@@ -82,5 +121,5 @@ if (import.meta.main) {
     console.error("usage: bun scripts/ci-owned.ts stop LEDGER");
     process.exit(2);
   }
-  await stopOwned(ledger, 0);
+  await stopOwned(ledger, 0, { sweep: true });
 }

@@ -1,3 +1,4 @@
+import { procOf } from "./procs.ts";
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -231,7 +232,7 @@ export function spawnDaemon(dir = home(), argv?: string[]): void {
   const ledger = process.env.KIWI_TEST_SPAWNS;
   if (ledger && child.pid)
     try {
-      appendFileSync(ledger, `${JSON.stringify({ pid: child.pid, cmd: cmd.join(" ") })}\n`);
+      appendFileSync(ledger, `${JSON.stringify({ pid: child.pid, start: procOf(child.pid)?.start ?? null, group: true, cmd: cmd.join(" ") })}\n`);
     } catch {
       // The test run's ledger is gone: that run is over, and nothing is left to clean up after it.
     }

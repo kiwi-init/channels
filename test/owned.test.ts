@@ -3,8 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:f
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseSync } from "oxc-parser";
-import { GRACE_MS, running } from "../scripts/ci-owned.ts";
-import { spawnOwned } from "./owned.ts";
+import { GRACE_MS, running, stopOwned } from "../scripts/ci-owned.ts";
+import { ledgerSize, spawnOwned } from "./owned.ts";
 
 setDefaultTimeout(60_000);
 
@@ -14,15 +14,21 @@ const BOUND_MS = GRACE_MS + 1_000 + 2_000;
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-function pidsIn(report: string): number[] {
+const STARTED = 8;
+const ALIVE = 7;
+
+function reported(report: string): { pid: number; alive: boolean }[] {
   return readFileSync(report, "utf8")
     .split("\n")
     .filter((l) => l.trim())
     .map((l) => {
       const e: unknown = JSON.parse(l);
-      return typeof e === "object" && e !== null && "pid" in e && Number.isSafeInteger(e.pid) ? Number(e.pid) : -1;
+      return typeof e === "object" && e !== null && "pid" in e && Number.isSafeInteger(e.pid) ? { pid: Number(e.pid), alive: "alive" in e && e.alive === true } : { pid: -1, alive: false };
     });
 }
+
+const pidsIn = (report: string): number[] => reported(report).map((e) => e.pid);
+const aliveIn = (report: string): number => reported(report).filter((e) => e.alive).length;
 
 async function ownedRun(how: "pass" | "fail" | "timeout" | "signal", signal?: "SIGINT" | "SIGTERM") {
   const report = join(dir, `${how}-${signal ?? "none"}.jsonl`);
@@ -38,15 +44,15 @@ async function ownedRun(how: "pass" | "fail" | "timeout" | "signal", signal?: "S
   const pids = pidsIn(report);
   while (pids.some(running) && Date.now() - sent < BOUND_MS) await Bun.sleep(50);
   const took = Date.now() - sent;
-  return { code, took, pids, left: pids.filter(running), sentinel };
+  return { code, took, pids, alive: aliveIn(report), left: pids.filter(running), sentinel };
 }
 
-test("an owned run cleans up its children, a child that ignores TERM and its detached daemon, whether the test passes, fails or times out", async () => {
+test("an owned run cleans up everything it started, whether the test passes, fails or times out: a child, one that ignores TERM, one that execs, a child's own child, an orphaned detached grandchild and a detached daemon", async () => {
   for (const how of ["pass", "fail", "timeout"] as const) {
     const r = await ownedRun(how);
     expect({ how, exited: r.code !== null }).toEqual({ how, exited: true });
     expect(r.code === 0).toBe(how === "pass");
-    expect(r.pids.length).toBe(3);
+    expect({ how, started: r.pids.length, alive: r.alive }).toEqual({ how, started: STARTED, alive: ALIVE });
     expect({ how, left: r.left }).toEqual({ how, left: [] });
     expect({ how, sentinel: running(r.sentinel.pid) }).toEqual({ how, sentinel: true });
     r.sentinel.kill();
@@ -58,7 +64,7 @@ test("an owned run stopped by SIGINT or SIGTERM cleans up the same, within the T
     const r = await ownedRun("signal", signal);
     expect({ signal, exited: r.code !== null }).toEqual({ signal, exited: true });
     expect(r.took).toBeLessThan(BOUND_MS);
-    expect(r.pids.length).toBe(3);
+    expect({ signal, started: r.pids.length, alive: r.alive }).toEqual({ signal, started: STARTED, alive: ALIVE });
     expect({ signal, left: r.left }).toEqual({ signal, left: [] });
     expect({ signal, sentinel: running(r.sentinel.pid) }).toEqual({ signal, sentinel: true });
     r.sentinel.kill();
@@ -89,7 +95,7 @@ test("a parallel run under scripts/ci-tests.ts stopped by SIGINT or SIGTERM leav
     while (pids.some(running) && Date.now() - sent < BOUND_MS + GRACE_MS) await Bun.sleep(50);
     expect({ signal, exited: code !== null }).toEqual({ signal, exited: true });
     expect(Date.now() - sent).toBeLessThan(BOUND_MS + GRACE_MS);
-    expect(pids.length).toBe(3);
+    expect({ signal, started: pids.length, alive: aliveIn(report) }).toEqual({ signal, started: STARTED, alive: ALIVE });
     expect({ signal, left: pids.filter(running) }).toEqual({ signal, left: [] });
     expect({ signal, roots: roots.filter((r) => existsSync(join(own, r))) }).toEqual({ signal, roots: [] });
     expect({ signal, sentinel: running(sentinel.pid) }).toEqual({ signal, sentinel: true });
@@ -114,6 +120,31 @@ const rawSpawns = (file: string): number => {
   walk(parseSync(file, readFileSync(join(ROOT, file), "utf8")).program);
   return found;
 };
+
+test("stopping one test's processes reaches a child that exec'd and a child's own child, by their start time and group, and leaves an identical process started before it alone", async () => {
+  const sentinel = spawnOwned(["sleep", "300"]);
+  const from = ledgerSize();
+  const kidFile = join(dir, "in-process-child");
+  const execd = spawnOwned(["sh", "-c", "exec sleep 300"]);
+  const parent = spawnOwned(
+    [
+      process.execPath,
+      "-e",
+      `const c = Bun.spawn(["sleep", "300"], { stdio: ["ignore", "ignore", "ignore"] }); require("node:fs").writeFileSync(process.env.KID_FILE, String(c.pid)); setInterval(() => {}, 60_000);`,
+    ],
+    { env: { ...process.env, KID_FILE: kidFile } },
+  );
+  const end = Date.now() + 10_000;
+  while (!existsSync(kidFile) && Date.now() < end) await Bun.sleep(20);
+  const child = Number(readFileSync(kidFile, "utf8"));
+  await Bun.sleep(200);
+  expect([execd.pid, parent.pid, child].map(running)).toEqual([true, true, true]);
+  const started = Date.now();
+  await stopOwned(undefined, from);
+  expect(Date.now() - started).toBeLessThan(BOUND_MS);
+  expect({ execd: running(execd.pid), parent: running(parent.pid), child: running(child) }).toEqual({ execd: false, parent: false, child: false });
+  expect(running(sentinel.pid)).toBe(true);
+});
 
 test("test files start processes only through the owned helpers, so every child is in a ledger; script text they write is left alone", () => {
   const files = [...new Bun.Glob("test/**/*.ts").scanSync({ cwd: ROOT })].filter((f) => f !== "test/owned.ts" && !f.startsWith("test/fixtures/"));

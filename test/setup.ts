@@ -84,9 +84,10 @@ afterEach(async () => {
   await stopOwned(ledger, testFrom);
 });
 afterAll(async () => {
-  await stopOwned(ledger, 0);
+  await stopOwned(ledger, 0, { sweep: true });
 });
 spawn("sh", ["-c", `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.5; done; exec "$0" "$1" stop "$2"`, process.execPath, join(import.meta.dir, "../scripts/ci-owned.ts"), ledger], {
   detached: true,
   stdio: "ignore",
+  env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== LEDGER_ENV)),
 }).unref();

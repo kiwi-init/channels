@@ -18,6 +18,8 @@ function project(tests: Record<string, string>, flows: string[], mac: string[] =
   copyFileSync(join(SCRIPTS, "ci-tests.ts"), join(dir, "scripts", "ci-tests.ts"));
   copyFileSync(join(SCRIPTS, "ci-watchdog.ts"), join(dir, "scripts", "ci-watchdog.ts"));
   copyFileSync(join(SCRIPTS, "ci-owned.ts"), join(dir, "scripts", "ci-owned.ts"));
+  mkdirSync(join(dir, "src", "daemon"), { recursive: true });
+  copyFileSync(join(SCRIPTS, "..", "src", "daemon", "procs.ts"), join(dir, "src", "daemon", "procs.ts"));
   writeFileSync(join(dir, "scripts", "ci-flows.ts"), `export const FLOWS: string[] = ${JSON.stringify(flows)};\nexport const MAC: string[] = ${JSON.stringify(mac)};\n`);
   for (const [name, body] of Object.entries(tests)) writeFileSync(join(dir, "test", `${name}.test.ts`), `import { expect, test } from "bun:test";\n${body}\n`);
   return dir;

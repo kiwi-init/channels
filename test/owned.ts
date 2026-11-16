@@ -1,5 +1,5 @@
 import { appendFileSync, statSync } from "node:fs";
-import { LEDGER_ENV } from "../scripts/ci-owned.ts";
+import { LEDGER_ENV, ledgerLine } from "../scripts/ci-owned.ts";
 
 const ledger = (): string | undefined => process.env[LEDGER_ENV];
 
@@ -8,17 +8,18 @@ const withLedger = (env: Record<string, string | undefined> | undefined): Record
   return env && path ? { ...env, [LEDGER_ENV]: path } : env;
 };
 
-export function record(pid: number, cmd: readonly string[], path = ledger()): void {
+export function record(pid: number, cmd: readonly string[], group = false, path = ledger()): void {
   if (!path) return;
-  appendFileSync(path, `${JSON.stringify({ pid, cmd: cmd.join(" ") })}\n`);
+  appendFileSync(path, ledgerLine(pid, group, cmd));
 }
 
 export function spawnOwned<const In extends Bun.SpawnOptions.Writable = "ignore", const Out extends Bun.SpawnOptions.Readable = "pipe", const Err extends Bun.SpawnOptions.Readable = "inherit">(
   cmd: string[],
   options?: Bun.SpawnOptions.SpawnOptions<In, Out, Err>,
 ): Bun.Subprocess<In, Out, Err> {
-  const p = Bun.spawn<In, Out, Err>(cmd, options ? { ...options, env: withLedger(options.env) } : options);
-  record(p.pid, cmd);
+  const group = options?.detached ?? true;
+  const p = Bun.spawn<In, Out, Err>(cmd, { ...options, detached: group, env: withLedger(options?.env) });
+  record(p.pid, cmd, group);
   return p;
 }
 
@@ -26,7 +27,10 @@ export function spawnOwnedSync<const In extends Bun.SpawnOptions.Writable = "ign
   cmd: string[],
   options?: Bun.SpawnOptions.SpawnSyncOptions<In, Out, Err>,
 ): Bun.SyncSubprocess<Out, Err> {
-  return Bun.spawnSync<In, Out, Err>(cmd, options ? { ...options, env: withLedger(options.env) } : options);
+  const group = options?.detached ?? true;
+  const p = Bun.spawnSync<In, Out, Err>(cmd, { ...options, detached: group, env: withLedger(options?.env) });
+  record(p.pid, cmd, group);
+  return p;
 }
 
 export function ledgerSize(path = ledger()): number {
