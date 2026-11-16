@@ -98,7 +98,9 @@ if (import.meta.main) {
   const keys = catalogKeys();
   const left = unread(keys, readersIn(productionSources()));
   if (left.length) {
-    console.error(`${left.length} UI word key${left.length === 1 ? " has" : "s have"} no reader in production code (a catalog or a test doesn't count). Remove each from all five catalogs, or look it up:`);
+    console.error(
+      `${left.length} UI word key${left.length === 1 ? " has" : "s have"} no reader in production code (a catalog or a test doesn't count). Remove each from all five catalogs, or look it up:`,
+    );
     for (const k of left) console.error(`  ${k}`);
     process.exit(1);
   }
