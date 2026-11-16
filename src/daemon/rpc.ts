@@ -311,8 +311,9 @@ export async function holdListener(entry: Omit<DaemonListener, "at">, sock = dae
   let ended = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const attempt = async (): Promise<boolean | null> => {
+    let c: DaemonConn | null = null;
     try {
-      const c = await openConn(sock, 2_000);
+      c = await openConn(sock, 2_000);
       const r = await c.call("hold", { ...entry, as: entry.agent });
       if (ended || r.held !== true) {
         c.close();
@@ -321,6 +322,9 @@ export async function holdListener(entry: Omit<DaemonListener, "at">, sock = dae
       conn = c;
       return true;
     } catch {
+      // A hold the daemon didn't answer stays queued on this connection: left open, a stalled daemon would later
+      // grant it to nobody and refuse this listener's own retry as "another session" (#2502).
+      c?.close();
       return null;
     }
   };
