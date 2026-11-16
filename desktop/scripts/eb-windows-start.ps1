@@ -32,8 +32,8 @@ if ($Shot) {
   Write-Output "screenshot: $Shot"
 }
 Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Write-Output "process: $($_.ProcessName) pid $($_.Id) window $($_.MainWindowHandle) titled '$($_.MainWindowTitle)'" }
-$logs = @($root, (Join-Path $env:APPDATA "com.kiwiinit.channels"), (Join-Path $env:LOCALAPPDATA "com.kiwiinit.channels")) | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object { Get-ChildItem -LiteralPath $_ -Recurse -Include *.log -ErrorAction SilentlyContinue } | Sort-Object FullName -Unique
-$logs + @(Get-ChildItem -LiteralPath $stage -Include app.out, app.err -Recurse -ErrorAction SilentlyContinue) | ForEach-Object { Write-Output "--- $($_.FullName)"; Get-Content $_.FullName -Tail 80 }
+$logs = @(@($root, (Join-Path $env:APPDATA "com.kiwiinit.channels"), (Join-Path $env:LOCALAPPDATA "com.kiwiinit.channels")) | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object { Get-ChildItem -LiteralPath $_ -Recurse -Include *.log -ErrorAction SilentlyContinue } | Sort-Object FullName -Unique)
+@($logs) + @(Get-ChildItem -LiteralPath $stage -Include app.out, app.err -Recurse -ErrorAction SilentlyContinue) | ForEach-Object { Write-Output "--- $($_.FullName)"; Get-Content $_.FullName -Tail 80 }
 Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force -ErrorAction SilentlyContinue
 if ($problems.Count) { $problems | ForEach-Object { Write-Output "problem: $_" }; exit 1 }
 Write-Output "Channels installed, started on Windows and kept its window"
