@@ -250,10 +250,19 @@ export class SessionState {
         };
         let older = trimmed();
         if (older && strangers(older.rejected, since) && !fresh) older = (yield* refresh) ? trimmed() : undefined;
-        if (older) yield* (yield* Cache).trim(this.cfg.roomId, older);
+        if (older) {
+          yield* (yield* Cache).trim(this.cfg.roomId, older);
+          this.keepTail(older);
+        }
       }
       return state;
     });
+  }
+
+  private keepTail(older: FoldBase): void {
+    if (!this.log || this.partial || older.n <= (this.base?.n ?? 0)) return;
+    this.base = older;
+    this.log = this.log.filter((m) => m.seq > older.n);
   }
 
   protected snapshotDue?(head: number): boolean;
