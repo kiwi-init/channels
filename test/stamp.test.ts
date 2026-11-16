@@ -32,7 +32,7 @@ test("every stamped file in the repo takes the tag's version, and only its versi
     expect(after.replaceAll("9.8.7", VERSION)).toBe(before);
   }
   const app = stampText("site/app.js", await Bun.file("site/app.js").text(), "9.8.7");
-  expect(app.match(/Channels-9\.8\.7-/g)?.length).toBe(3);
+  expect(app.match(/Channels-9\.8\.7-/g)?.length).toBe(2);
 });
 
 test("a file whose version moved out of reach fails the stamp instead of shipping stale", () => {

@@ -6,7 +6,6 @@ const IOS_BETA = "https://testflight.apple.com/join/qvKqgRNJ";
 const DOWNLOADS = [
   { id: "mac-arm64", os: "macOS", detail: "Apple silicon", file: "Channels-2026.11.22-mac-arm64.dmg" },
   { id: "linux-appimage", os: "Linux", detail: "AppImage", file: "Channels-2026.11.22-linux-x86_64.AppImage" },
-  { id: "windows-x64", os: "Windows", detail: "x64", file: "Channels-2026.11.22-windows-x64-Setup.zip" },
 ];
 
 const WORDS = {
@@ -24,7 +23,6 @@ function guessPlatform(nav) {
   if (/iPhone|iPad|iPod/i.test(ua)) return "ios";
   if (/Android/i.test(ua)) return "";
   if (/Macintosh|Mac OS X/i.test(ua)) return "mac-arm64";
-  if (/Windows/i.test(ua)) return "windows-x64";
   if (/aarch64|arm/i.test(ua)) return "";
   if (/Linux|X11/i.test(ua)) return "linux-appimage";
   return "";
