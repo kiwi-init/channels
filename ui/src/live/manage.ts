@@ -26,6 +26,8 @@ import { roomProblemWords } from "~/live/room-problem"
 import { SENT } from "~/sent"
 import { revokedComputer } from "@kiwi/app/forgotten-computers.ts"
 import { forgottenComputer } from "@kiwi/core/client/requests.ts"
+import { checkpointAskFor } from "@kiwi/core/state/checkpoint-asks.ts"
+import { wellFormedDaily, type CheckpointDaily } from "@kiwi/core/checkpoint-schedule.ts"
 
 function agentManager(code: string, name: string): { run: Run; m: RosterMember } {
   const run = need(code)
@@ -198,6 +200,21 @@ export async function setQuiet(code: string, typed: string): Promise<void> {
 
 export async function setTapToAnswer(code: string, on: boolean): Promise<void> {
   await event(owner(code), on ? "a person's decision closes only from its card" : "a reply in the chat answers a decision again", { op: "asks.tap.set", on })
+}
+
+export async function askCheckpoints(code: string, running: readonly string[]): Promise<void> {
+  const run = setup(code)
+  const body = checkpointAskFor(run.state, (name) => running.includes(name))
+  if (!body) throw new Error(t("live.manage.checkpoints.none"))
+  const asked = body.asks.map((a) => a.agent)
+  await event(run, asked.length ? `asked ${asked.join(", ")} for their checkpoints` : "asked for checkpoints: no agent with open work is running", { op: "checkpoint.ask", ...body }, asked)
+}
+
+export async function setCheckpointDaily(code: string, daily: CheckpointDaily | null): Promise<void> {
+  if (daily && !wellFormedDaily(daily)) throw new Error(t("live.manage.bad.daily"))
+  const run = owner(code)
+  await run.ch.setCheckpointSchedule(daily)
+  await event(run, daily ? `daily checkpoints at ${daily.at} (${daily.tz})` : "turned off daily checkpoints", { op: "checkpoint.daily.set", daily })
 }
 
 export async function setReviewReset(code: string, on: boolean): Promise<void> {

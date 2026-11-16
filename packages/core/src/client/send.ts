@@ -77,6 +77,7 @@ export interface SendOptions {
   slot?: { name: string; ttl: number };
   wake?: readonly string[];
   free?: string[];
+  occurrence?: string;
 }
 
 export interface SendFx {
@@ -211,9 +212,9 @@ export class ChannelSending {
         const roomId = this.ch.roomId;
         const slot = take ? { slot: { id: yield* Effect.promise(() => slotId(key, roomId, take.name)), ttl: take.ttl } } : {};
         const free = freeing.length ? { free: yield* Effect.promise(() => Promise.all(freeing.map((n) => slotId(key, roomId, n)))) } : {};
-        const stored = yield* this.ch.request<{ seq: number; ts?: number }>("/messages", {
+        const stored = yield* this.ch.request<{ seq: number; ts?: number; occ?: unknown }>("/messages", {
           method: "POST",
-          body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}) }),
+          body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}), ...(opts.occurrence ? { occurrence: opts.occurrence } : {}) }),
         });
         if (!Number.isSafeInteger(stored.seq) || stored.seq < 1) return yield* notTheRelay(this.ch.relay);
         return stored;
@@ -227,7 +228,10 @@ export class ChannelSending {
         );
         if (this.onSent) {
           const p: unknown = JSON.parse(JSON.stringify(signed));
-          const got = typeof stored.ts === "number" && Number.isFinite(stored.ts) && wellFormed(p) ? received(p, stored.seq, stored.ts, yield* Effect.promise(() => verify(p))) : null;
+          const got =
+            typeof stored.ts === "number" && Number.isFinite(stored.ts) && wellFormed(p)
+              ? received(p, stored.seq, stored.ts, yield* Effect.promise(() => verify(p)), typeof stored.occ === "string" ? stored.occ : undefined)
+              : null;
           const open = got && (yield* this.ch.fx.unseal(got));
           const kept = open && (yield* this.ch.fx.settle(open));
           this.onSent(stored.seq, kept);
@@ -235,7 +239,7 @@ export class ChannelSending {
         return stored.seq;
       });
       const once = Effect.gen({ self: this }, function* () {
-        const wire = slotted ? undefined : [...this.live.wires].at(-1);
+        const wire = slotted || opts.occurrence ? undefined : [...this.live.wires].at(-1);
         if (!wire) return yield* posted;
         const { e, sealed } = yield* sealNow;
         const acked = yield* wire.send(sealed, e, signed, cid, wake).pipe(

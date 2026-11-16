@@ -43,6 +43,8 @@ function blank(): ChannelState {
     quietMs: 20 * 60_000,
     reviewReset: false,
     tapToAnswer: false,
+    checkpointDaily: null,
+    checkpointAsks: [],
     landing: null,
     landingSteps: null,
     reactions: new Map(),

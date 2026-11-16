@@ -8,6 +8,7 @@ import type { Effects } from "./directory.ts";
 import { docAppend, docBacklog, docSnap } from "./docs.ts";
 import { allow, DOC_SUBS_PER_MINUTE, DOC_UPDATES_PER_MINUTE, EPHEMERAL_PER_MINUTE, MESSAGES_PER_MINUTE, MORE_PER_MINUTE, READS_PER_MINUTE, take } from "./limits.ts";
 import { append, leaseWant, markRead, touch } from "./messages.ts";
+import { openCheckpointFrames } from "./checkpoints.ts";
 import { wakesFor } from "./push.ts";
 
 export const frame = (f: ServerFrame) => JSON.stringify(f);
@@ -31,7 +32,7 @@ export const welcomeFrames = (since: number, reads = true, watch = false): Effec
     const head = db.head();
     const last = backlog.at(-1)?.seq ?? since;
     return [...backlog.map(msgFrame), ...(reads ? [frame({ t: "reads", reads: db.reads() })] : []), frame({ t: "ready", head, more: last < head })];
-  });
+  }).pipe(Effect.flatMap((frames) => (watch ? Effect.succeed(frames) : Effect.map(openCheckpointFrames, (due) => [...due, ...frames]))));
 
 export const wantsReads = (url: URL): boolean => url.searchParams.get("reads") !== "0";
 

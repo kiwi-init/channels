@@ -131,6 +131,7 @@ export class ChannelLink {
   info = () => this.c("info");
   title = () => this.c("title");
   setTitle = (...a: Args<"setTitle">) => this.c("setTitle", ...a);
+  setCheckpointSchedule = (...a: Args<"setCheckpointSchedule">) => this.c("setCheckpointSchedule", ...a);
   rooms = () => this.c("rooms");
   guard = () => this.c("guard");
   setCharter = (...a: Args<"setCharter">) => this.c("setCharter", ...a);

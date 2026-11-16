@@ -28,6 +28,7 @@ import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
 import { muteKey } from "~/live/mute"
 import { specLineTest } from "~/specs/quote"
 import { wordsRaw, wrote } from "~/words"
+import { demoRound, withCheckpoints } from "~/demo/checkpoints"
 
 const unticked = (text: string): string => text.replace(/^(\s*[-*+]\s+)\[[xX]\]/gm, "$1[ ]").trim()
 
@@ -339,6 +340,7 @@ export type Scenario =
   | "forgotten-computer"
   | "invite-failed"
   | "review-reset"
+  | "checkpoints"
   | "member"
   | "home-calm"
   | "departed-dms"
@@ -492,15 +494,17 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                                             }
                                           : scenario === "review-reset"
                                             ? withReviewReset(DEMO_CHANNEL)
-                                            : scenario === "event-runs"
-                                              ? withEventRuns(DEMO_CHANNEL)
-                                              : scenario === "own-bubbles"
-                                                ? withOwnBubbles(DEMO_CHANNEL)
-                                                : scenario === "signs"
-                                                  ? withSigns(DEMO_CHANNEL)
-                                                  : scenario === "theirs"
-                                                    ? withTheirs(DEMO_CHANNEL)
-                                                    : DEMO_CHANNEL,
+                                            : scenario === "checkpoints"
+                                              ? withCheckpoints(DEMO_CHANNEL)
+                                              : scenario === "event-runs"
+                                                ? withEventRuns(DEMO_CHANNEL)
+                                                : scenario === "own-bubbles"
+                                                  ? withOwnBubbles(DEMO_CHANNEL)
+                                                  : scenario === "signs"
+                                                    ? withSigns(DEMO_CHANNEL)
+                                                    : scenario === "theirs"
+                                                      ? withTheirs(DEMO_CHANNEL)
+                                                      : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,
@@ -1006,6 +1010,8 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setQuiet: (code, minutes) => edit(code, (c) => ({ ...c, quietMinutes: Number(minutes) })),
       setReviewReset: (code, on) => edit(code, (c) => ({ ...c, reviewReset: on || undefined })),
       setTapToAnswer: (code, on) => edit(code, (c) => ({ ...c, tapToAnswer: on || undefined })),
+      askCheckpoints: (code, running) => edit(code, (c, seq) => ({ ...c, checkpoints: demoRound(c, running, seq, Date.now()) })),
+      setCheckpointDaily: (code, daily) => edit(code, (c) => ({ ...c, checkpointDaily: daily ?? undefined })),
       setResetWaived: (code, name, waived) => edit(code, (c) => ({ ...c, people: c.people.map((p) => (p.name === name ? { ...p, reset: waived ? { kind: "waived" as const } : undefined } : p)) })),
       setLanding: (code, then) => edit(code, (c) => ({ ...c, landing: then?.trim() && then.trim() !== "none" ? then.trim() : undefined })),
       setRoomMembers: async (code, id, members) => {

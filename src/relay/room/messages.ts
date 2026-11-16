@@ -105,7 +105,7 @@ export interface Slots {
   free?: readonly string[];
 }
 
-export const append = Effect.fn("Room.append")(function* (iv: string, ct: string, e: number, sender: string, slots: Slots = {}, cid?: string) {
+export const append = Effect.fn("Room.append")(function* (iv: string, ct: string, e: number, sender: string, slots: Slots = {}, cid?: string, occ?: string) {
   const db = yield* RoomStore;
   const policy = yield* Policy;
   if (db.isReadOnly(sender)) return yield* new ReadOnly({ message: READ_ONLY });
@@ -137,13 +137,13 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
     if (bytes + ct.length > cap) bytes -= db.dropOldestBlobs(bytes + ct.length - cap);
     if (bytes + ct.length > cap) bytes -= db.dropSnapshot();
 
-    db.insert(seq, ts, iv, ct, e, cid ? { sender, cid, since: ts - SEND_MEMORY_MS } : undefined);
+    db.insert(seq, ts, iv, ct, e, cid ? { sender, cid, since: ts - SEND_MEMORY_MS } : undefined, occ);
     if (slots.free?.length) db.freeSlots(slots.free, sender);
     if (slots.take) db.takeSlot(slots.take.id, sender, seq, ts + slots.take.ttl, ts);
     bytes += ct.length;
     if (bytes === was + ct.length) db.countMessage({ bytes, day, n: today + 1 });
     else db.setCounters({ bytes, day, n: today + 1 });
-    return { seq, ts, iv, ct, e };
+    return { seq, ts, iv, ct, e, ...(occ ? { occ } : {}) };
   };
   return store();
 });

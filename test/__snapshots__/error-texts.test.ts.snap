@@ -3,6 +3,7 @@
 exports[`the relay's error texts are exactly these 1`] = `
 [
   "400 a change takes {plan: \${PLANS.join(" | ")}} and/or {blocked: true | false}",
+  "400 a daily checkpoint time is HH:MM in a known IANA time zone, or null",
   "400 a machine registers with a device list that lists it as a current computer",
   "400 a machine registers with its own cert",
   "400 a member's key can't be a delegate",
@@ -14,6 +15,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "400 an ask takes {ask}: device, dxpk, label, os, as, at and commit",
   "400 an inbox takes {box}, at most 4096 bytes",
   "400 approve a pending request",
+  "400 bad checkpoint occurrence",
   "400 bad envelope",
   "400 bad epoch",
   "400 bad icon (at most 32KB, sealed with a channel key)",
@@ -166,6 +168,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "413 this channel's docs hold all they may (\${formatBytes(cap)})",
   "413 this page is too large to send whole; page through /messages",
   "423 taken at #\${held.seq}",
+  "423 the daily checkpoint request for \${id} was already made, or isn't due",
   "426 <UPDATE_KIWI>",
   "426 expected websocket",
   "426 update kiwi to join or approve here: curl -fsSL https://channels.kiwiinit.com/install | sh",

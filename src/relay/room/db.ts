@@ -170,7 +170,7 @@ export class RoomDb {
   init(): void {
     warmRooms.set(this.sql, { ...coldRoom(), exists: true, head: 0, blobs: false, notes: false });
     this.sql.run("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
-    this.sql.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL, sent TEXT)");
+    this.sql.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL, sent TEXT, occ TEXT)");
     this.sql.run(
       "CREATE TABLE members (pk TEXT PRIMARY KEY, xpk TEXT NOT NULL, rec TEXT NOT NULL, rec_e INTEGER NOT NULL, since INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, read_only INTEGER NOT NULL DEFAULT 0, admits_until INTEGER, admitted_by TEXT, delegation TEXT)",
     );
@@ -201,7 +201,9 @@ export class RoomDb {
     this.sql.run(READS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run(SLOTS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     this.sql.run("DROP TABLE IF EXISTS review_tickets");
-    if (!this.sql.all<{ name: string }>("PRAGMA table_info(msgs)").some((c) => c.name === "sent")) this.sql.run("ALTER TABLE msgs ADD COLUMN sent TEXT");
+    const msgCols = new Set(this.sql.all<{ name: string }>("PRAGMA table_info(msgs)").map((c) => c.name));
+    if (!msgCols.has("sent")) this.sql.run("ALTER TABLE msgs ADD COLUMN sent TEXT");
+    if (!msgCols.has("occ")) this.sql.run("ALTER TABLE msgs ADD COLUMN occ TEXT");
     if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sends'").length) {
       this.sql.run("UPDATE msgs SET sent = (SELECT s.sender || ' ' || s.cid FROM sends s WHERE s.seq = msgs.seq) WHERE seq IN (SELECT seq FROM sends)");
       this.sql.run("DROP TABLE sends");
@@ -279,15 +281,24 @@ export class RoomDb {
     }
   }
 
-  insert(seq: number, ts: number, iv: string, ct: string, e: number, send?: { sender: string; cid: string; since: number }): void {
+  insert(seq: number, ts: number, iv: string, ct: string, e: number, send?: { sender: string; cid: string; since: number }, occ?: string): void {
     const sent = send ? sendKey(send.sender, send.cid) : null;
-    if (sent) this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e, sent) VALUES (?, ?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e, sent);
+    if (occ) this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e, sent, occ) VALUES (?, ?, ?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e, sent, occ);
+    else if (sent) this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e, sent) VALUES (?, ?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e, sent);
     else this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e) VALUES (?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e);
     this.warm.head = seq;
     if (!send || !sent) return;
     const sends = this.recentSends(send.since);
     sends.set(sent, { seq, ts });
     if (seq % 100 === 0) for (const [k, v] of sends) if (v.ts < send.since) sends.delete(k);
+  }
+
+  occOf(seq: number): string | null {
+    return this.sql.all<{ occ: string | null }>("SELECT occ FROM msgs WHERE seq = ?", seq)[0]?.occ ?? null;
+  }
+
+  sentAs(seq: number, sender: string, cid: string): boolean {
+    return this.sql.all<{ sent: string | null }>("SELECT sent FROM msgs WHERE seq = ?", seq)[0]?.sent === sendKey(sender, cid);
   }
 
   priorSend(sender: string, cid: string, since: number): Sent | null {
@@ -550,8 +561,8 @@ export class RoomDb {
 
   range(after: number, through: number): Envelope[] {
     return this.sql
-      .all<{ seq: number; ts: number; iv: Stored; ct: Stored; e: number }>("SELECT seq, ts, iv, ct, e FROM msgs WHERE seq > ? AND seq <= ? ORDER BY seq LIMIT ?", after, through, PAGE_LIMIT)
-      .map((r) => ({ seq: r.seq, ts: r.ts, iv: unpacked(r.iv), ct: unpacked(r.ct), e: r.e }));
+      .all<{ seq: number; ts: number; iv: Stored; ct: Stored; e: number; occ?: string | null }>("SELECT * FROM msgs WHERE seq > ? AND seq <= ? ORDER BY seq LIMIT ?", after, through, PAGE_LIMIT)
+      .map((r) => ({ seq: r.seq, ts: r.ts, iv: unpacked(r.iv), ct: unpacked(r.ct), e: r.e, ...(r.occ ? { occ: r.occ } : {}) }));
   }
 
   docLog(th: string): DocLog {

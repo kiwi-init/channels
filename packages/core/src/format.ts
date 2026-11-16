@@ -274,6 +274,13 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return ev.on ? say("review.reset.on") : say("review.reset.off");
     case "asks.tap.set":
       return ev.on ? say("asks.tap.on") : say("asks.tap.off");
+    case "checkpoint.daily.set":
+      return ev.daily ? say("checkpoint.daily.set", { at: ev.daily.at, tz: inlineText(ev.daily.tz, 64) }) : say("checkpoint.daily.off");
+    case "checkpoint.ask": {
+      const names = ev.asks.map((a) => inlineText(nameOf(a.agent), 40)).join(", ");
+      if (ev.occurrence !== undefined) return names ? say("checkpoint.ask.daily", { names }) : say("checkpoint.ask.daily.none");
+      return names ? say("checkpoint.ask", { names }) : say("checkpoint.ask.none");
+    }
     case "review.reset.waive":
       return ev.waived ? say("review.reset.waived", { name: ev.member }) : say("review.reset.unwaived", { name: ev.member });
     case "merges.set":

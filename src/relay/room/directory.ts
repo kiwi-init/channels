@@ -19,6 +19,7 @@ export interface Effects {
   github?: GithubLink[];
   push?: { room: string; wakes: Wake[] };
   expireAt?: number;
+  checkpointAt?: number | null;
   lease?: { user: string; ask: LeaseAsk };
 }
 

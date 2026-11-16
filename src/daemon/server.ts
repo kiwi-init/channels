@@ -28,6 +28,8 @@ import { throttled } from "./throttle.ts";
 import { readAdmitRoom, startAdmitter } from "./admit.ts";
 import { addDocWake, docWakeTold, pendingDocWakes, tellDocWakes } from "../config/doc-wakes.ts";
 import { watchClock, watchedPeers, type ClockWatcher } from "./clock-watch.ts";
+import { checkpointAskFor } from "@kiwi/core/state/checkpoint-asks.ts";
+import { CHECKPOINT_WINDOW_MS } from "@kiwi/core/checkpoint-schedule.ts";
 import { followDocs } from "./doc-follow.ts";
 import { pathOf, seatWakes } from "./wake.ts";
 import { sampleRunning } from "../up/sample.ts";
@@ -65,6 +67,7 @@ export interface DaemonOptions {
   wakeOutstandingMs?: number;
   listenerGraceMs?: number;
   retryFirstMs?: number;
+  presenceSettleMs?: number;
 }
 
 const WAKE_DELAY_MS = 2_000;
@@ -72,6 +75,7 @@ const FOLLOW_OPS: ReadonlySet<string> = new Set(["doc.open", "task.add", "task.c
 const WAKE_GAP_MS = 60_000;
 const WAKE_OUTSTANDING_MS = 10 * 60_000;
 const LISTENER_GRACE_MS = 60_000;
+const PRESENCE_SETTLE_MS = 3_000;
 
 export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promise<Daemon> {
   const sock = daemonSock(dir);
@@ -228,6 +232,42 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     });
   };
 
+  const answeredOccurrences = new Set<string>();
+  const answerCheckpoint = async (seat: Seat, occurrence: string): Promise<void> => {
+    const key = `${seat.alias}\u0000${occurrence}`;
+    if (answeredOccurrences.has(key)) return;
+    answeredOccurrences.add(key);
+    if (answeredOccurrences.size > 64) answeredOccurrences.delete(answeredOccurrences.values().next().value ?? key);
+    const state = await stateOf(seat);
+    if (!state) return;
+    const now = Date.now();
+    const running = (name: string): boolean => {
+      const local = [...seats.values()].find((s) => s.alias === seat.alias && s.agent === name);
+      if (local) return local.reach === "running";
+      return [...seat.heard.values()].some((h) => h.presence.from === name && h.presence.reach === "running" && now - h.at < 3 * beaconMs);
+    };
+    const body = checkpointAskFor(state, running);
+    if (!body) return;
+    const session = await sessionOf(seat);
+    if (!session) return;
+    try {
+      await (await import("../agent.ts")).runAgent(session.checkpointAsk(body, occurrence));
+    } catch {
+      // Another client answered this occurrence first, or the relay was out of reach: the relay keeps one request per occurrence.
+      return;
+    }
+    if (body.asks.some((a) => a.agent === seat.agent)) scheduleWake(seat);
+  };
+
+  const answerWhenSynced = (seat: Seat): void => {
+    const owed = seat.owedCheckpoint;
+    if (!owed || seat.ctl.signal.aborted) return;
+    if (Date.now() >= owed.due + CHECKPOINT_WINDOW_MS) return void (seat.owedCheckpoint = null);
+    if (seat.synced !== "yes") return;
+    seat.owedCheckpoint = null;
+    void answerCheckpoint(seat, owed.occurrence);
+  };
+
   const seatInfo = async (s: Seat): Promise<DaemonSeat> => {
     const cfg = loadConfig();
     return {
@@ -293,6 +333,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   };
 
   const endSeat = (seat: Seat): void => {
+    clearTimeout(seat.checkpointTimer);
     seat.docs?.stop();
     seat.docs = null;
     seat.clock?.stop();
@@ -407,6 +448,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     seat.probe = probe;
     seat.rows = null;
     seat.openedAt = Date.now();
+    seat.synced = "no";
     seat.announce = () => void presence(fieldsOf(seat)).catch(() => {});
     void refreshActivity(seat, true).catch(() => seat.announce?.());
     stopBeacon(seat);
@@ -484,6 +526,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         fetchingRows: false,
         heard: new Map(),
         openedAt: null,
+        synced: "no",
+        owedCheckpoint: null,
+        checkpointTimer: undefined,
         listenerAt: 0,
         docs: null,
         clock: null,
@@ -529,6 +574,19 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           },
           onRoster: () => tell(seat, { event: "roster" }),
           onInfo: () => tell(seat, { event: "info" }),
+          onCheckpoint: (due) => {
+            seat.owedCheckpoint = due;
+            answerWhenSynced(seat);
+          },
+          onReady: (_head, more) => {
+            if (more || seat.synced !== "no") return;
+            seat.synced = "settling";
+            clearTimeout(seat.checkpointTimer);
+            seat.checkpointTimer = setTimeout(() => {
+              if (seat.synced === "settling") seat.synced = "yes";
+              answerWhenSynced(seat);
+            }, opts.presenceSettleMs ?? PRESENCE_SETTLE_MS);
+          },
           onRequest: () => {
             tell(seat, { event: "request" });
             admitter.watch({ relay: c.relay, roomId: c.roomId, ownerPk: c.ownerPk }, 0);
