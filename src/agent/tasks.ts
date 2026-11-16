@@ -9,6 +9,7 @@ import {
   REVIEW_SUMMARY_MAX_LENGTH,
   TASK_STATES,
   TASK_BODY_MAX_LENGTH,
+  TASK_WAIT_REASON_MAX,
   TASK_TITLE_LIMIT,
   ignored,
   type Event,
@@ -405,6 +406,21 @@ export class SessionTasks extends SessionMessaging {
     const asked = body.asks.map((a) => a.agent);
     const words = asked.length ? `daily checkpoint request: ${asked.join(", ")}` : "daily checkpoint request: no agent with open work is running";
     return yield* this.event({ op: "checkpoint.ask", ...body, occurrence }, words, asked, undefined, { occurrence });
+  });
+
+  readonly taskWait = Effect.fn("AgentSession.taskWait")({ self: this }, function* (this: SessionTasks, id: number, wait: { reason: string; until?: number } | "end") {
+    const { state } = yield* this.state();
+    const t = state.tasks.get(id);
+    if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
+    if (wait === "end") {
+      if (!t.wait) return yield* new Rejected(`${taskId(id)} isn't waiting`);
+      return yield* this.confirm(yield* this.event({ op: "task.wait.end", task: id }, `${taskId(id)}: the wait ended`));
+    }
+    const reason = wait.reason.trim();
+    if (!reason || /[\r\n]/.test(reason) || reason.length > TASK_WAIT_REASON_MAX)
+      return yield* new Rejected(`a wait says what it waits for, on one line of at most ${TASK_WAIT_REASON_MAX} characters`);
+    const ev = { op: "task.wait" as const, task: id, reason, ...(wait.until !== undefined ? { until: wait.until } : {}) };
+    return yield* this.confirm(yield* this.event(ev, `${taskId(id)} waits: ${reason}`));
   });
 
   readonly taskWake = Effect.fn("AgentSession.taskWake")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.wake" }>) {

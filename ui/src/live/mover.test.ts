@@ -133,6 +133,35 @@ describe("landing steps on the task (#3930 §3)", () => {
     expect(after.steps?.[0]).toMatchObject({ state: "current", yours: true })
     expect(after.steps?.[0]?.wait).toBeUndefined()
   })
+
+  test("a step that waits still shows first when the task also waits, and the task's wait shows once the step's ends", () => {
+    const step = { ...event(5, "jow", { op: "task.steps", task: TASK, edit: { kind: "wait", id: "s1", reason: "the freeze ends Monday", ms: 60 * MIN } }), ts: 5000, rts: 5000 }
+    const task = { ...event(6, "win", { op: "task.wait", task: TASK, reason: "load under 65%" }), ts: 6000, rts: 6000 }
+    const during = shown([...approved(), step, task], 5000 + 10 * MIN, "win")
+    expect(during.mover).toMatchObject({ kind: "hold", until: 5000 + 60 * MIN })
+    const after = shown([...approved(), step, task], 5000 + 61 * MIN, "win")
+    expect(moverWords(channel([after], "win"), after, 5000 + 61 * MIN)).toBe("Waiting: load under 65%")
+  })
+})
+
+describe("a task-level wait (#2492)", () => {
+  const doing = (): Wire[] => [
+    event(1, "jow", { op: "landing.set", then: "none" }),
+    event(TASK, "jow", { op: "task.add", title: "resume the job", owner: "win" }),
+    event(3, "win", { op: "task.update", task: TASK, state: "doing" }),
+  ]
+
+  test("a step-less task that waits shows it, with its limit when it has one, instead of being quiet", () => {
+    const now = 10 * 60 * MIN
+    const open = shown([...doing(), event(4, "win", { op: "task.wait", task: TASK, reason: "load under 65% on 2 reads" })], now)
+    expect(open.steps).toBeUndefined()
+    expect(open.mover).toEqual({ kind: "wait", reason: expect.anything() })
+    expect(open.quiet).toBeUndefined()
+    expect(moverWords(channel([open]), open, now)).toBe("Waiting: load under 65% on 2 reads")
+    expect(moverTag(channel([open]), open, now)).toBe("Waiting: load under 65% on 2 reads")
+    const capped = shown([...doing(), event(4, "win", { op: "task.wait", task: TASK, reason: "load under 65%", until: 4000 + 12 * 60 * MIN })], 4000)
+    expect(moverWords(channel([capped]), capped, 4000)).toBe("Waiting, for 12h at most: load under 65%")
+  })
 })
 
 describe("a reviewer that needs a fresh session (#6005)", () => {

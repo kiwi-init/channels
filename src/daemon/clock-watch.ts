@@ -194,7 +194,7 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
     if (tried.has(key)) return;
     if (!(await seat.wakes())) return;
     tried.add(key);
-    const seq = await post({ op: "task.nudge", task: due.task, mover: due.mover, since: due.since, step: 1 }, undefined);
+    const seq = await post({ op: "task.nudge", task: due.task, mover: due.mover, since: due.since, step: 1, ...(due.waited ? { waited: due.waited } : {}) }, undefined);
     if (seq === "held") tried.delete(key);
     if (seq === null || seq === "held" || ended) return;
     const after = await seat.stateOf();
@@ -235,7 +235,16 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
       seat.wake();
     };
     const seq = await post(
-      { op: "task.nudge", task: due.task, mover: due.mover, since: due.since, step: due.step, ...(due.day !== undefined ? { day: due.day } : {}), ...(label ? { wake: label } : {}) },
+      {
+        op: "task.nudge",
+        task: due.task,
+        mover: due.mover,
+        since: due.since,
+        step: due.step,
+        ...(due.day !== undefined ? { day: due.day } : {}),
+        ...(label ? { wake: label } : {}),
+        ...(due.waited && due.step !== 0 ? { waited: due.waited } : {}),
+      },
       due.to,
     );
     if (typeof seq !== "number") return;

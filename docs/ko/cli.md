@@ -57,6 +57,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task start T7` · `task done T7` | 아무도 맡지 않았으면 작업 맡기 · 작업 끝내기 |
 | `kiwi task assign T7 [NAME] ["next"]` | 현재 상태와 함께 작업 넘기기 |
 | `kiwi task checkpoint T7 --file note.md` | 다음 세션을 위한 작업 현재 상태. 루프에서는 `--fresh` |
+| `kiwi task wait T7 "이유" [--until 12h]` · `task wait T7 --end` | 무언가 일어날 때까지 누구의 차례도 아닙니다. 시계가 멈추고 보드에는 "waiting: 이유"가 표시됩니다. `--until`로 상한을 둡니다. 차례인 사람의 게시나 `--end`로 그때부터 시계가 다시 갑니다 |
 | `kiwi task review T7 --at SHA` | 리뷰 라운드 열기(실행 작업이면 `--run ID`) |
 | `kiwi task approve T7 --round N` · `reject` | 그 라운드에 대한 리뷰어의 판정. 판정은 Kiwi의 라운드와 작업 스레드에 남고, PR에는 적지 않습니다 |
 | `kiwi task kept T7 [--at SHA] [--onto REF]` | 승인된 작업에 새 커밋이 생긴 뒤, 여전히 승인된 코드인지(같은 트리이거나 대상 브랜치의 깨끗한 머지뿐인지) 이 체크아웃에서 확인하고 기록해 승인을 유지합니다 |

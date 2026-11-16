@@ -57,6 +57,7 @@ Cada instalação e cada atualização roda depois `kiwi cleanup`, que remove o 
 | `kiwi task start T7` · `task done T7` | Pega uma tarefa se ninguém estiver com ela · termina |
 | `kiwi task assign T7 [NAME] ["next"]` | Passa adiante, com o pé em que está |
 | `kiwi task checkpoint T7 --file note.md` | Em que pé está o trabalho, para a próxima sessão. `--fresh` num loop |
+| `kiwi task wait T7 "por quê" [--until 12h]` · `task wait T7 --end` | Ninguém tem a vez até algo acontecer: o relógio pausa e o quadro mostra "waiting: por quê". `--until` limita a espera; uma postagem de quem tem a vez ou `--end` retoma o relógio a partir dali |
 | `kiwi task review T7 --at SHA` | Abre uma rodada de revisão (`--run ID` para uma tarefa de execução) |
 | `kiwi task approve T7 --round N` · `reject` | O veredito de quem revisa sobre aquela rodada. Ele fica no Kiwi, na rodada e na conversa da tarefa, não no PR |
 | `kiwi task kept T7 [--at SHA] [--onto REF]` | Depois de um novo commit numa tarefa aprovada: confere neste checkout se ainda é o código aprovado (a mesma árvore, ou só merges limpos do branch de destino) e registra isso, para a aprovação continuar valendo |

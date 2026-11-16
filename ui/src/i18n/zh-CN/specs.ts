@@ -288,6 +288,8 @@ export default {
   "tasks.move.waiting": "等待中，{who} 手上前面还有 {count} 个",
   "tasks.move.run": "{time} 内由运行负责，之后该 {who}",
   "tasks.move.hold": "{time} 内无人需要行动：{reason}",
+  "tasks.move.wait": "等待中：{reason}",
+  "tasks.move.wait.until": "等待中（最多 {time}）：{reason}",
   "tasks.move.nobody": "无人：此频道没有所有者",
   "tasks.quiet.with": "在 {who} 手上已停滞 {time}",
   "tasks.quiet.due": "{quiet}（{due}）",

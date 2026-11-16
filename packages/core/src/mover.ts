@@ -4,6 +4,7 @@ import { landerOf, openRound } from "./state/tasks.ts";
 import { needsReset } from "./state/reset.ts";
 import type { ChannelState, Task } from "./state/types.ts";
 import { pausingStep, runSight } from "./state/landing-steps.ts";
+import { waitActive } from "./state/clocks.ts";
 import { currentStep, spanText, stepMove, stepText, type LandingStep } from "./steps.ts";
 
 type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land" | "reset";
@@ -15,6 +16,7 @@ export type Mover =
   | { kind: "waiting"; owner: string; ahead: number }
   | { kind: "run"; step: string; behind: string; due: number; left: number }
   | { kind: "hold"; step: string; until: number; left: number; reason: string }
+  | { kind: "wait"; reason: string; until?: number; left?: number }
   | { kind: "nobody"; move: MoveFor };
 
 type Board = Pick<ChannelState, "tasks" | "members" | "lead" | "openAsks" | "github">;
@@ -70,6 +72,12 @@ export function moverOf(state: Board, t: Task, now: number = Date.now()): Mover 
   const paused = pausingStep(state.github, t, now);
   if (paused?.kind === "hold") return { kind: "hold", step: stepText(paused.step), until: paused.until, left: paused.until - now, reason: paused.reason };
   if (paused) return { kind: "run", step: stepText(paused.step), behind: paused.behind, due: paused.due, left: paused.due - now };
+  const wait = t.wait;
+  if (wait && waitActive(t, now)) {
+    const landing = t.state === "landing" ? landingMover(state, t, now) : undefined;
+    if (landing?.kind === "hold" || landing?.kind === "run") return landing;
+    return { kind: "wait", reason: wait.reason, ...(wait.until !== undefined ? { until: wait.until, left: wait.until - now } : {}) };
+  }
   if (t.state === "doing") return leadOr(state, t.owner, "work", "assign");
   if (t.state === "todo") return t.owner && here(state, t.owner) ? queued(state, t, t.owner) : leadOr(state, t.owner, "start", "assign");
   if (t.state === "landing") return landingMover(state, t, now);
@@ -103,6 +111,7 @@ export function moverText(m: Mover): string {
   if (m.kind === "nobody") return `nobody ${MOVE_WORDS[m.move]}: the channel has no owner here`;
   if (m.kind === "run") return `nobody while step ${inlineText(m.step, 80)} runs; ${inlineText(m.behind, 40)} takes it if the run isn't done in ${spanText(m.left)}`;
   if (m.kind === "hold") return `nobody for ${spanText(m.left)}: step ${inlineText(m.step, 80)} waits (${inlineText(m.reason, 120)})`;
+  if (m.kind === "wait") return `nobody: waiting: ${inlineText(m.reason, 120)}${m.left !== undefined ? ` (for at most ${spanText(m.left)})` : ""}`;
   return `${memberWords(m)}${m.step ? `: step ${inlineText(m.step, 80)}${m.why ? ` (its ${m.why})` : ""}` : ""}`;
 }
 
@@ -112,5 +121,6 @@ export function moverTag(t: Pick<Task, "owner">, m: Mover | undefined): string {
   if (m.kind === "nobody") return "";
   if (m.kind === "run") return ` · a run has the move for ${spanText(m.left)}, then ${inlineText(m.behind, 40)}`;
   if (m.kind === "hold") return ` · nobody's move for ${spanText(m.left)}`;
+  if (m.kind === "wait") return ` · waiting: ${inlineText(m.reason, 80)}`;
   return m.name === t.owner && m.move !== "revise" && !m.why ? "" : ` · move: ${memberWords(m)}${m.why ? ` (its ${m.why})` : ""}`;
 }
