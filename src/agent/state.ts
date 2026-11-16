@@ -52,6 +52,7 @@ export class SessionState {
   protected partial = false;
   private replayed: { page: WholeLog | null } | null = null;
   private folded: ChannelState | null = null;
+  private unreadDroppedTo = 0;
   readonly opened: number;
 
   constructor(
@@ -267,9 +268,26 @@ export class SessionState {
       const readTo = (yield* cursor.read(this.alias, this.me)) ?? older.n;
       const seen = yield* cursor.seen(this.alias, this.me);
       if (!this.log || this.partial || older.n <= (this.base?.n ?? 0)) return;
-      const unread = this.log.filter((m) => m.seq > readTo && m.seq <= older.n && !seen.has(m.seq)).slice(-UNREAD_KEPT);
+      const unread = this.log.filter((m) => m.seq > readTo && m.seq <= older.n && !seen.has(m.seq));
+      const kept = unread.slice(-UNREAD_KEPT);
+      const lastDropped = unread.at(-kept.length - 1)?.seq;
+      if (lastDropped !== undefined) this.unreadDroppedTo = Math.max(this.unreadDroppedTo, lastDropped);
       this.base = older;
-      this.log = [...unread, ...this.log.filter((m) => m.seq > older.n)];
+      this.log = [...kept, ...this.log.filter((m) => m.seq > older.n)];
+    });
+  }
+
+  private withDropped(messages: readonly Message[], since: number): Effect.Effect<readonly Message[], Refused, Relay> {
+    const to = this.unreadDroppedTo;
+    if (since >= to) return Effect.succeed(messages);
+    return Effect.gen({ self: this }, function* () {
+      const held = new Set(messages.map((m) => m.seq));
+      const paged: Message[] = [];
+      for (let from = since; from < to; from += PAGE_LIMIT) {
+        const upTo = Math.min(from + PAGE_LIMIT, to);
+        paged.push(...(yield* this.ch.fx.page(from, upTo - from)).filter((m) => m.seq > from && m.seq <= upTo && !held.has(m.seq)));
+      }
+      return [...paged, ...messages];
     });
   }
 
@@ -349,7 +367,8 @@ export class SessionState {
   readonly unread = Effect.fn("AgentSession.unread")({ self: this }, function* (this: SessionState, d: Delivery = {}) {
     yield* this.unheld;
     const since = yield* this.cursor();
-    const { messages, state } = yield* this.state();
+    const { messages: window, state } = yield* this.state();
+    const messages = yield* this.withDropped(window, since);
     const cursor = yield* Cursor;
     const seen = yield* cursor.seen(this.alias, this.me);
     const unread = messages.filter((m) => m.seq > since && !seen.has(m.seq) && this.wants(m, state, d));
@@ -389,7 +408,7 @@ export class SessionState {
     const cursor = yield* Cursor;
     const since = (yield* cursor.read(this.alias, this.me)) ?? state.head;
     const seen = yield* cursor.seen(this.alias, this.me);
-    const seqs = messages.filter((m) => m.seq > since && !seen.has(m.seq) && this.wants(m, state, d)).map((m) => m.seq);
+    const seqs = (yield* this.withDropped(messages, since)).filter((m) => m.seq > since && !seen.has(m.seq) && this.wants(m, state, d)).map((m) => m.seq);
     return { unread: seqs.length, cursor: since, seqs };
   });
 

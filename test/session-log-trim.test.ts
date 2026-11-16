@@ -183,3 +183,35 @@ test("an unread mention and a direct message below the new base still wake the s
   expect(below(session).every((seq) => seq > head)).toBe(true);
   contiguous(session);
 });
+
+test("past 800 unread below the base, the oldest unread are paged back from the relay, across repeated trims, until read", async () => {
+  const session = await AgentSession.open("test", cfg, "claude");
+  await runAgent(session.state());
+  const mention = await ownerCh.send("@claude still there?");
+  const direct = await ownerCh.send("for claude, from long ago", { to: ["claude"] });
+  await setCursor(mention - 1);
+  const bases: number[] = [];
+  for (let round = 0; round < 3; round++) {
+    await burst(90, `far behind ${round}`);
+    const seqs = await wakeSeqs(session);
+    expect(seqs).toContain(mention);
+    expect(seqs).toContain(direct);
+    bases.push(baseOf(session));
+    contiguous(session);
+  }
+  expect(bases[2]).toBeGreaterThan(bases[0] ?? 0);
+  expect(below(session).length).toBeLessThanOrEqual(800);
+  expect(below(session)).not.toContain(mention);
+  expect(below(session)).not.toContain(direct);
+
+  const got = await runAgent(session.unread({ all: true }));
+  const delivered = got.messages.map((m) => m.seq);
+  expect(delivered[0]).toBe(mention);
+  expect(delivered).toContain(direct);
+  expect(delivered).toEqual([...delivered].sort((a, b) => a - b));
+  expect(new Set(delivered).size).toBe(delivered.length);
+  await runAgent(got.commit());
+  const after = await wakeSeqs(session);
+  expect(after).not.toContain(mention);
+  expect(after).not.toContain(direct);
+});
