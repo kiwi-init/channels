@@ -57,10 +57,21 @@ const QUIET_CAP_MS = 3000;
 const quiet = (page: Page) =>
   page.evaluate(
     ([still, cap]) =>
-      new Promise<number | null>((done) => {
+      new Promise<{ at: number | null; movers: string[] }>((done) => {
         const start = performance.now();
         let last = start;
-        const moved = () => void (last = performance.now());
+        const counts = new Map<string, number>();
+        const name = (n: Node): string => {
+          const el = n instanceof Element ? n : n.parentElement;
+          if (!el) return n.nodeName.toLowerCase();
+          return `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ""}${el.classList[0] ? `.${el.classList[0]}` : ""}`;
+        };
+        const count = (what: string) => counts.set(what, (counts.get(what) ?? 0) + 1);
+        const moved = (records: MutationRecord[] | Event) => {
+          last = performance.now();
+          if (records instanceof Event) return void count(`scroll ${records.target instanceof Node ? name(records.target) : "document"}`);
+          for (const r of records) count(`${name(r.target)} ${r.type === "attributes" ? `[${r.attributeName}]` : r.type === "childList" ? "children" : "text"}`);
+        };
         const seen = new MutationObserver(moved);
         seen.observe(document, { subtree: true, childList: true, characterData: true, attributes: true });
         document.addEventListener("scroll", moved, true);
@@ -69,12 +80,18 @@ const quiet = (page: Page) =>
           if (now - last < still && now - start < cap) return void requestAnimationFrame(check);
           seen.disconnect();
           document.removeEventListener("scroll", moved, true);
-          done(now - last < still ? null : Math.round(now - start));
+          const movers = [...counts]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 6)
+            .map(([what, n]) => `${what} ×${n}`);
+          done({ at: now - last < still ? null : Math.round(now - start), movers });
         };
         requestAnimationFrame(check);
       }),
     [QUIET_MS, QUIET_CAP_MS] as const,
   );
+
+let movers: string[] = [];
 
 const SHOT_TIME = new Date("2026-11-04T15:30:00Z");
 const MOVING_MS = 4000;
@@ -119,7 +136,11 @@ try {
       await page.clock.runFor(MOVING_MS);
       await page.waitForLoadState("networkidle");
       await page.clock.runFor(500);
-    } else still = (await quiet(page)) !== null;
+    } else {
+      const seen = await quiet(page);
+      still = seen.at !== null;
+      movers = seen.movers;
+    }
     await reactions.settled();
     if (still) {
       const file = join(out, `${name}-${theme}.png`);
@@ -136,7 +157,7 @@ try {
       trail = trail.slice(-12);
       trace(`shot ${name}-${theme} starts`);
       if (await shoot(name, theme, false)) continue;
-      console.log(`${name}-${theme}: still moving after ${QUIET_CAP_MS} ms, shot ${MOVING_MS} ms into a paused clock`);
+      console.log(`${name}-${theme}: still moving after ${QUIET_CAP_MS} ms (${movers.join(", ") || "no DOM change seen"}), shot ${MOVING_MS} ms into a paused clock`);
       await shoot(name, theme, true);
     }
   }
