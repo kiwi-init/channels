@@ -8,7 +8,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import type { SharedWith } from "@kiwi/core/shared-seats.ts"
 import type { Reason } from "@kiwi/core/routing.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
-import type { DocBlockRef, GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
+import type { DocBlockRef, GithubNote, Step, StepReply, Unarmed } from "@kiwi/core/protocol.ts"
 import type { CheckpointDaily } from "@kiwi/core/checkpoint-schedule.ts"
 import type { DocEvent } from "../../desktop/src/bridge.ts"
 
@@ -62,8 +62,7 @@ export interface Person {
   presence: Presence
   activity?: Activity
   reach?: "listening" | "running" | "wakes"
-  /** Why this agent's listener hasn't armed for five minutes or more (#2502). */
-  unarmed?: string
+  unarmed?: Unarmed
   harness?: Harness
   runs?: string
   model?: string

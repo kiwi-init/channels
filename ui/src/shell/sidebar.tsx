@@ -7,7 +7,8 @@ import { useAppCan } from "~/live/app-can"
 import { useGlide } from "~/kit/glide"
 import { Icon } from "~/kit/icons"
 import { later } from "~/kit/later"
-import { ago } from "~/kit/time"
+import { unarmedAlert } from "@kiwi/core/protocol.ts"
+import { ago, useNow } from "~/kit/time"
 import { memberOf, type Channel, type Direct, type Person } from "~/model"
 import { sameWhere, useAct, useGo, useNav, useOpenToType } from "~/nav"
 import { between, nickname, onePerPerson, shown } from "~/names"
@@ -308,10 +309,13 @@ export function Sidebar({ channel }: { channel: Channel }) {
   )
 }
 
+const UNARMED_TICK_MS = 30_000
+
 const rank = (p: Person): number => (liveOf(p) ? 0 : 3) + (p.role === "lead" ? 0 : p.presence === "offline" ? 2 : 1)
 
-export function statusOf(p: Person, channel: Channel): string {
-  if (p.unarmed) return t("shell.sidebar.unarmed", { why: p.unarmed })
+export function statusOf(p: Person, channel: Channel, now = Date.now()): string {
+  const unarmed = p.kind === "agent" ? unarmedAlert(p.unarmed, now) : null
+  if (unarmed) return t("shell.sidebar.unarmed", { why: unarmed })
   const live = liveOf(p)
   if (live) return live.text
   const task = taskOf(p, channel)
@@ -389,7 +393,8 @@ function Member({ person, channel, direct }: { person: Person; channel: Channel;
   const unread = direct?.unread ?? 0
   const agent = person.kind === "agent"
   const live = agent ? liveOf(person) : null
-  const unarmed = agent && !!person.unarmed
+  const now = useNow(agent && person.unarmed ? UNARMED_TICK_MS : null)
+  const unarmed = agent && unarmedAlert(person.unarmed, now) !== null
   const task = live ? taskOf(person, channel) : undefined
   return (
     <li>
@@ -405,7 +410,7 @@ function Member({ person, channel, direct }: { person: Person; channel: Channel;
           person.presence === "offline" && "is-off"
         )}
         aria-current={on ? "page" : undefined}
-        title={task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)} · ${statusOf(person, channel)}` : statusOf(person, channel)}
+        title={task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)} · ${statusOf(person, channel, now)}` : statusOf(person, channel, now)}
         onClick={() => open(channel.code, where)}
         {...dragOut({ page: { at: "where", where } }, `@ ${shown(person)}`)}
         onContextMenu={(e) =>

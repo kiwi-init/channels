@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonListeners, holdListener, startDaemon, type Daemon } from "../src/daemon.ts";
-import type { ListenerProc } from "../src/daemon/protocol.ts";
+import { supersedes, type DaemonListener, type ListenerProc } from "../src/daemon/protocol.ts";
 import { holderWords } from "../src/hooks/listen.ts";
 import { processStart } from "../src/pid.ts";
 
@@ -117,5 +117,35 @@ describe("a seat's own session always arms its listener, and a healthy one is ke
     y.close();
     one.kill();
     two.kill();
+  });
+});
+
+describe("only a proven handoff replaces a holder (#2502 review)", () => {
+  const listener = (proc: ListenerProc | null): DaemonListener => ({ ...hook("s", proc), at: 0 });
+  const held = listener({ pid: 900, started: "boot:100" });
+  const asking = listener({ pid: 901, started: "boot:200" });
+
+  test("a live holder whose start can't be read is kept: unknown isn't dead", () => {
+    expect(supersedes(asking, held, { alive: () => true, startOf: () => null })).toBe(false);
+  });
+
+  test("a live holder with its recorded start is kept", () => {
+    expect(supersedes(asking, held, { alive: () => true, startOf: () => "boot:100" })).toBe(false);
+  });
+
+  test("a holder whose process is gone is replaced", () => {
+    expect(supersedes(asking, held, { alive: () => false, startOf: () => null })).toBe(true);
+  });
+
+  test("a holder whose pid now belongs to another process (a different start) is replaced", () => {
+    expect(supersedes(asking, held, { alive: () => true, startOf: () => "boot:555" })).toBe(true);
+  });
+
+  test("the same listener process holding again replaces its own hold", () => {
+    expect(supersedes(listener({ pid: 900, started: "boot:100" }), held, { alive: () => true, startOf: () => null })).toBe(true);
+  });
+
+  test("a holder that never said which process it is is kept", () => {
+    expect(supersedes(asking, listener(null), { alive: () => false, startOf: () => null })).toBe(false);
   });
 });

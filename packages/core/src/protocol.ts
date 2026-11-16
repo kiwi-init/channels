@@ -1138,7 +1138,6 @@ export interface Presence {
   reach?: Reach;
   readAt?: number;
   wake?: string;
-  /** Since when this seat's listener has failed to arm, and why (#2502). */
   unarmed?: Unarmed;
   ops?: number;
   ts: number;

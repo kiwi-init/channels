@@ -463,7 +463,9 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                         : scenario === "unarmed"
                           ? {
                               ...DEMO_CHANNEL,
-                              people: DEMO_CHANNEL.people.map((p) => (p.name === "win" ? { ...p, unarmed: "the listen slot for win in kiwi is held by session 4f2a, claude pid 81234" } : p)),
+                              people: DEMO_CHANNEL.people.map((p) =>
+                                p.name === "win" ? { ...p, unarmed: { since: Date.now() - 6 * 60_000, why: "the listen slot for win in kiwi is held by session 4f2a, claude pid 81234" } } : p
+                              ),
                             }
                           : scenario === "task-body"
                             ? withTaskBody(DEMO_CHANNEL)

@@ -13,7 +13,7 @@ import { moverOf, type Mover } from "@kiwi/core/mover.ts"
 import { currentStep, stepMove, type LandingStep } from "@kiwi/core/steps.ts"
 import { runSight } from "@kiwi/core/state/landing-steps.ts"
 import { sharedWith } from "@kiwi/core/state/reset.ts"
-import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, unarmedAlert, type Message as Wire } from "@kiwi/core/protocol.ts"
+import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf, sentTo } from "@kiwi/core/room-rules.ts"
 import { dmDocOf, dmRoomWith } from "~/live/dm"
 import type { Key } from "~/i18n/en"
@@ -173,7 +173,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
   const color: Color | null = human ? colorOf(state, m.name) : (m.color ?? null)
   const activity = human ? undefined : activityOf(here)
   const reach = human ? null : howHere(here)
-  const unarmed = human ? null : unarmedAlert(here?.unarmed, Date.now())
+  const unarmed = human ? undefined : here?.unarmed
   const specs = m.card ? specsOf(m.card) : ""
   const load = loadOf(state, m)
   const shares = human ? [] : sharedWith(state.members, m.name)

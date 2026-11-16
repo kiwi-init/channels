@@ -126,10 +126,17 @@ export function readHolder(v: unknown): ListenerHolder | null {
   return { session, pid, harness, proc: "proc" in v ? readProc(v.proc) : null };
 }
 
-export function supersedes(by: DaemonListener, holder: DaemonListener, startOf: (pid: number) => string | null): boolean {
+export interface ProcessLook {
+  alive: (pid: number) => boolean;
+  startOf: (pid: number) => string | null;
+}
+
+export function supersedes(by: DaemonListener, holder: DaemonListener, look: ProcessLook): boolean {
   if (!holder.proc) return false;
   if (by.proc && by.proc.pid === holder.proc.pid && by.proc.started === holder.proc.started) return true;
-  return startOf(holder.proc.pid) !== holder.proc.started;
+  if (!look.alive(holder.proc.pid)) return true;
+  const started = look.startOf(holder.proc.pid);
+  return started !== null && started !== holder.proc.started;
 }
 
 const optionalText = (v: unknown): string | null => (typeof v === "string" && v ? v : null);

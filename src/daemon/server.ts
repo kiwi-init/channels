@@ -870,7 +870,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           if (!l) throw new Error('hold needs {"channel", "as", "kind": "listen" or "hook", "cwd"?, "harness"?, "session"?, "pid"?}');
           const same = (h: DaemonListener) => h.kind === "hook" && h.channel === l.channel && h.agent === l.agent && h.session === l.session;
           const others = [...conns].filter((c) => c !== conn && !c.dead);
-          if (l.kind === "hook") for (const c of others) for (const h of [...c.held]) if (same(h) && supersedes(l, h, processStart)) c.held.delete(h);
+          if (l.kind === "hook") for (const c of others) for (const h of [...c.held]) if (same(h) && supersedes(l, h, { alive: pidAlive, startOf: processStart })) c.held.delete(h);
           const holder = l.kind === "hook" ? others.flatMap((c) => [...c.held]).find(same) : undefined;
           if (!holder) {
             conn.held.add(l);
