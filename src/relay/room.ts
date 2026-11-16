@@ -28,6 +28,7 @@ export { forgetRoom, RoomDb, RoomStore, type RoomServices, type Sql, type SqlPar
 export { Directory, HOLD_MS, holdEntry, releasable, reserveSlot, type DirectoryEntry, type DirectoryUpdate, type Effects } from "./room/directory.ts";
 export { allow, take, ASKS_PER_MINUTE, BLOBS_PER_MINUTE, GITHUB_READS_PER_MINUTE, MESSAGES_PER_MINUTE, MORE_PER_MINUTE, NOTES_PER_MINUTE, PAGES_PER_MINUTE, READS_PER_MINUTE } from "./room/limits.ts";
 export { getNote, putNote } from "./room/notes.ts";
+export { answerOccurrence, checkpointAlarm, checkpointDeadline, checkpointView, claimOccurrence, dailyOf, openCheckpointFrames, setCheckpointSchedule } from "./room/checkpoints.ts";
 export { registerPush, unregisterPush, wakesFor } from "./room/push.ts";
 export { authenticate, authenticateSocket, gone, missingFingerprint, readMeta, requestToken, UPDATE_KIWI, wsHeaders } from "./room/auth.ts";
 export { append, expire, idleExpired, leaseNow, leaseTake, markRead, storeBlob, touch } from "./room/messages.ts";
@@ -62,4 +63,6 @@ export { errorResponse, gateRoom, parseRoomPath, relayConfig } from "./room/http
  *   GET    /messages?since=N          member
  *   POST   /messages                  member: {iv, ct, e}
  *   POST   /read                      member: {seq}, how far it has read (a number, never content)
+ *   PUT    /checkpoints/schedule      owner: {daily: {at, tz} | null}, when to signal "checkpoint due" (plaintext, never task state)
+ *   GET    /checkpoints               member: the schedule, the next occurrence and the recent ones
  */

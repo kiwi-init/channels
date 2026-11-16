@@ -77,6 +77,7 @@ export interface SendOptions {
   slot?: { name: string; ttl: number };
   wake?: readonly string[];
   free?: string[];
+  occurrence?: string;
 }
 
 export interface SendFx {
@@ -213,7 +214,7 @@ export class ChannelSending {
         const free = freeing.length ? { free: yield* Effect.promise(() => Promise.all(freeing.map((n) => slotId(key, roomId, n)))) } : {};
         const stored = yield* this.ch.request<{ seq: number; ts?: number }>("/messages", {
           method: "POST",
-          body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}) }),
+          body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}), ...(opts.occurrence ? { occurrence: opts.occurrence } : {}) }),
         });
         if (!Number.isSafeInteger(stored.seq) || stored.seq < 1) return yield* notTheRelay(this.ch.relay);
         return stored;

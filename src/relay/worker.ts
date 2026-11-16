@@ -24,6 +24,8 @@ import {
   relayConfig,
   authenticateSocket,
   errorResponse,
+  checkpointAlarm,
+  checkpointDeadline,
   expire,
   forgetRoom,
   requestsGone,
@@ -311,8 +313,10 @@ export class Channel extends DurableObject<Env> {
       await this.ctx.storage.deleteAll();
       forgetRoom(this.sql);
       for (const ws of sockets) close(ws, CLOSE_CLOSED, "channel closed");
-    } else if (fx.expireAt) {
-      await this.ctx.storage.setAlarm(fx.expireAt);
+    } else if (fx.expireAt || fx.checkpointAt !== undefined) {
+      const room = this.metaRoom();
+      if (fx.expireAt && room) this.store(room).set("expire_at", fx.expireAt);
+      await this.arm();
     }
   }
 
@@ -328,17 +332,38 @@ export class Channel extends DurableObject<Env> {
     return true;
   }
 
-  /** An idle room's expiry check: expire it if nobody's connected and nothing was stored since. */
-  override async alarm(): Promise<void> {
-    const room = (this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = 'room'")[0] ?? null)?.v;
+  private metaRoom(): string | undefined {
+    return (this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = 'room'")[0] ?? null)?.v;
+  }
+
+  private expiryDeadline(db: RoomDb, now: number): number | null {
+    const days = this.policy.expireAfterDays;
+    if (!days) return null;
+    return Number(db.get("expire_at") ?? 0) || Number(db.get("active") ?? db.get("created") ?? now) + days * 86_400_000;
+  }
+
+  private async arm(): Promise<void> {
+    const room = this.metaRoom();
     if (!room) return;
     const db = this.store(room);
+    const deadlines = [this.expiryDeadline(db, Date.now()), checkpointDeadline(db)].filter((t): t is number => t !== null);
+    if (deadlines.length) await this.ctx.storage.setAlarm(Math.min(...deadlines));
+  }
+
+  override async alarm(): Promise<void> {
+    const room = this.metaRoom();
+    if (!room) return;
+    const db = this.store(room);
+    const now = Date.now();
+    if ((checkpointDeadline(db) ?? Number.POSITIVE_INFINITY) <= now) await this.apply(runRoomSync(this.relay, db, checkpointAlarm(this.ctx.getWebSockets().length)));
     const days = this.policy.expireAfterDays;
-    if (!days) return;
-    // Someone's still connected: look again later rather than cut them off.
-    if (this.ctx.getWebSockets().length) return void (await this.ctx.storage.setAlarm(Date.now() + days * 86_400_000));
-    if (runRoomSync(this.relay, db, idleExpired)) await this.apply(runRoomSync(this.relay, db, expire));
-    else await this.ctx.storage.setAlarm(Number(this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = 'active'")[0]?.v ?? Date.now()) + days * 86_400_000);
+    const deadline = this.expiryDeadline(db, now);
+    if (days && deadline !== null && deadline <= now) {
+      if (this.ctx.getWebSockets().length) db.set("expire_at", now + days * 86_400_000);
+      else if (runRoomSync(this.relay, db, idleExpired)) return void (await this.apply(runRoomSync(this.relay, db, expire)));
+      else db.set("expire_at", Number(db.get("active") ?? now) + days * 86_400_000);
+    }
+    await this.arm();
   }
 }
 

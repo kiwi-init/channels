@@ -170,7 +170,8 @@ export type ServerFrame =
   | { t: "page" }
   | { t: "head"; seq: number; ts: number }
   | ({ t: "doc" } & DocEnvelope)
-  | { t: "doc.ready"; th: string; head: number };
+  | { t: "doc.ready"; th: string; head: number }
+  | { t: "checkpoint"; occurrence: string; due: number };
 
 export interface DocEnvelope {
   th: string;

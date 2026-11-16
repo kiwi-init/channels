@@ -6,6 +6,7 @@ import { sign, verify } from "../identity.ts";
 import { delegatedMember, readDelegation } from "../delegation.ts";
 import { readRecord, type Member } from "../membership.ts";
 import { MAX_ICON_BYTES, wellFormedIcon, type ChannelIcon } from "../protocol.ts";
+import { readCheckpointView, type CheckpointDaily, type CheckpointView } from "../checkpoint-schedule.ts";
 import { MissingKey, Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
 import { gone, type MemberRefusal, type Refusal, type Refused } from "./errors.ts";
@@ -43,6 +44,8 @@ export interface InfoFx {
   resealIcon(): Effect.Effect<void, Refused, Relay>;
   members(rows?: readonly MemberRow[], reuse?: boolean): Effect.Effect<Member[], MemberRefusal, Relay>;
   memberRows(reuse?: boolean): Effect.Effect<MemberRow[], MemberRefusal, Relay>;
+  putCheckpointSchedule(daily: CheckpointDaily | null): Effect.Effect<void, Refused, Relay>;
+  checkpoints(): Effect.Effect<CheckpointView, MemberRefusal, Relay>;
 }
 
 export class ChannelInfo {
@@ -123,6 +126,16 @@ export class ChannelInfo {
       yield* this.ch.request("/title", { method: "PUT", body: JSON.stringify({ title: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.forgetInfo())));
       noteSeen(this.ch, "seenTitleAt", at);
       this.noteSignedTitle();
+    }),
+
+    putCheckpointSchedule: Effect.fn("Channel.putCheckpointSchedule")({ self: this }, function* (this: ChannelInfo, daily: CheckpointDaily | null) {
+      yield* this.ch.ownerOnly();
+      yield* this.ch.request("/checkpoints/schedule", { method: "PUT", body: JSON.stringify({ daily }) });
+    }),
+
+    checkpoints: Effect.fn("Channel.checkpoints")({ self: this }, function* (this: ChannelInfo) {
+      const view = readCheckpointView(yield* this.ch.request<unknown>("/checkpoints"));
+      return view ?? { daily: null, next: null, log: [] };
     }),
 
     icon: Effect.fn("Channel.icon")({ self: this }, function* (this: ChannelInfo) {

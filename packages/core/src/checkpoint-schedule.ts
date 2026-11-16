@@ -124,3 +124,38 @@ export function withinWindow(daily: CheckpointDaily, id: string, at: number): bo
   const due = occurrenceDue(daily, id);
   return due !== null && at >= due && at < due + CHECKPOINT_WINDOW_MS;
 }
+
+export type MissedWhy = "nobody online" | "nobody answered" | "relay asleep";
+
+export type OccurrenceRecord = { id: string; due: number; state: "open" } | { id: string; due: number; state: "answered"; seq: number } | { id: string; due: number; state: "missed"; why: MissedWhy };
+
+export interface CheckpointView {
+  daily: CheckpointDaily | null;
+  next: Occurrence | null;
+  log: OccurrenceRecord[];
+}
+
+const MISSED_WHYS: readonly unknown[] = ["nobody online", "nobody answered", "relay asleep"];
+
+function readRecord(x: unknown): OccurrenceRecord | null {
+  if (!x || typeof x !== "object") return null;
+  const r = x as Record<string, unknown>;
+  if (parseOccurrence(r.id) === null || !Number.isSafeInteger(r.due)) return null;
+  const base = { id: r.id as string, due: r.due as number };
+  if (r.state === "open") return { ...base, state: "open" };
+  if (r.state === "answered" && Number.isSafeInteger(r.seq)) return { ...base, state: "answered", seq: r.seq as number };
+  if (r.state === "missed" && MISSED_WHYS.includes(r.why)) return { ...base, state: "missed", why: r.why as MissedWhy };
+  return null;
+}
+
+export function readCheckpointView(x: unknown): CheckpointView | null {
+  if (!x || typeof x !== "object") return null;
+  const v = x as Record<string, unknown>;
+  const n = v.next as Record<string, unknown> | null;
+  const next = n && parseOccurrence(n.id) !== null && Number.isSafeInteger(n.due) ? { id: n.id as string, due: n.due as number } : null;
+  return {
+    daily: wellFormedDaily(v.daily) ? v.daily : null,
+    next,
+    log: Array.isArray(v.log) ? v.log.flatMap((r) => readRecord(r) ?? []) : [],
+  };
+}

@@ -17,6 +17,7 @@ import { isPerson, personOf, sentTo, withSeats, type RoomMember } from "./room-r
 import type { Marks } from "./note.ts";
 import { GENERAL_ROOM, type ChannelIcon, type DocEnvelope, type Envelope, type FileAttachment, type ImageAttachment, type InlineImage, type Message } from "./protocol.ts";
 import type { Scope } from "./scopes.ts";
+import type { CheckpointDaily, CheckpointView } from "./checkpoint-schedule.ts";
 import type { GithubStatus } from "./github-health.ts";
 import type { FoldBase, GithubRelease, GithubRules, GithubState, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
@@ -276,6 +277,15 @@ export class Channel {
   /** Owner only: rename the channel. The new name is signed and sealed, like the icon. */
   setTitle(name: string): Promise<void> {
     return run(this.fx.setTitle(name));
+  }
+
+  async setCheckpointDaily(daily: CheckpointDaily | null): Promise<number> {
+    await run(this.fx.putCheckpointSchedule(daily));
+    return this.send("", { ev: { op: "checkpoint.daily.set", daily } });
+  }
+
+  checkpoints(): Promise<CheckpointView> {
+    return run(this.fx.checkpoints());
   }
 
   /**

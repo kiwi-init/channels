@@ -27,6 +27,7 @@ import {
   type ReadMark,
   type ServerFrame,
 } from "../protocol.ts";
+import { parseOccurrence } from "../checkpoint-schedule.ts";
 import { DocHub, type DocStore, type ThreadKeys } from "../doc/hub.ts";
 import { docKeysFor, type RoomsHere } from "../doc/threads.ts";
 import type { ChannelCore } from "./core.ts";
@@ -46,6 +47,7 @@ export interface StreamOptions {
   onInfo?: () => void;
   onRoster?: () => void;
   onRequest?: () => void;
+  onCheckpoint?: (due: { occurrence: string; due: number }) => void;
 }
 
 export type OpenKind = "first" | "page" | "reconnect";
@@ -68,6 +70,7 @@ export type Live =
   | { readonly _tag: "Presence"; readonly presence: Presence & { sigOk: boolean } }
   | { readonly _tag: "Read"; readonly reads: readonly ReadMark[]; readonly snapshot: boolean }
   | { readonly _tag: "Info" | "Roster" | "Request" }
+  | { readonly _tag: "Checkpoint"; readonly occurrence: string; readonly due: number }
   | { readonly _tag: "Down"; readonly after: number; readonly code: number; readonly reason: string }
   | { readonly _tag: "Skipped"; readonly frame: string; readonly error: unknown };
 
@@ -141,6 +144,7 @@ const FRAME: Record<Live["_tag"], string> = {
   Info: "info",
   Roster: "roster",
   Request: "request",
+  Checkpoint: "checkpoint",
   Read: "read",
   Down: "status",
   Skipped: "status",
@@ -265,6 +269,8 @@ export class ChannelLive {
             return Effect.sync(() => opts.onRoster?.());
           case "Request":
             return Effect.sync(() => opts.onRequest?.());
+          case "Checkpoint":
+            return Effect.sync(() => opts.onCheckpoint?.({ occurrence: ev.occurrence, due: ev.due }));
           default:
             return Effect.void;
         }
@@ -532,6 +538,8 @@ export class ChannelLive {
           return { _tag: "Roster" } satisfies Live;
         case "request":
           return { _tag: "Request" } satisfies Live;
+        case "checkpoint":
+          return parseOccurrence(f.occurrence) && Number.isSafeInteger(f.due) ? ({ _tag: "Checkpoint", occurrence: f.occurrence, due: f.due } satisfies Live) : null;
         case "ready":
           return { _tag: "Ready", head: f.head } satisfies Live;
         case "read": {
