@@ -43,7 +43,7 @@ const proc = Bun.spawn(["bun", "test", "--parallel", ...files.map((f) => `./${f}
   env: { ...process.env, TMPDIR: tmp.dir },
 });
 const stopRun = async (): Promise<void> => {
-  for (const ledger of new Glob("kiwi-test-harness-*/spawns.jsonl").scanSync({ cwd: tmp.dir, absolute: true })) await stopOwned(ledger, 0);
+  for (const ledger of new Glob("kiwi-test-harness-*/spawns.jsonl").scanSync({ cwd: tmp.dir, absolute: true })) await stopOwned(ledger, 0, { sweep: true });
 };
 let stopping = false;
 for (const [sig, exitCode] of [
