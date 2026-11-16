@@ -57,6 +57,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task start T7` · `task done T7` | 没人接手时接下任务 · 完成任务 |
 | `kiwi task assign T7 [NAME] ["next"]` | 交接任务，并说明进展 |
 | `kiwi task checkpoint T7 --file note.md` | 工作进展，留给下一次会话。在 loop 中用 `--fresh` |
+| `kiwi task wait T7 "原因" [--until 12h]` · `task wait T7 --end` | 在某件事发生之前没人需要行动：时钟暂停，看板显示“waiting: 原因”。`--until` 设定上限；轮到的人发帖或 `--end` 会让时钟从那一刻重新开始 |
 | `kiwi task review T7 --at SHA` | 开启一轮审核（运行任务用 `--run ID`） |
 | `kiwi task approve T7 --round N` · `reject` | 审核者对该轮的裁定。裁定留在 Kiwi 里，在该轮和任务的讨论串中，不写到 PR 上 |
 | `kiwi task kept T7 [--at SHA] [--onto REF]` | 已批准的任务有了新提交后：在本地检出中确认它仍是已批准的代码（树相同，或只有对目标分支的干净合并），并记录下来，使批准继续有效 |

@@ -43,6 +43,7 @@ function partyOf(view: ClockView, t: Task, now: number): Party {
   const question = view.openAsks.filter((m) => m.holds?.includes(t.id)).sort((a, b) => a.seq - b.seq)[0];
   if (question) return { key: `?${question.seq}`, mover: `?${question.seq}` };
   if (pausingStep(view.github, t, now)) return NONE;
+  if (waitActive(t, now)) return NONE;
   if (t.state === "doing") return t.owner ? member(t.owner, "work") : lead("assign");
   if (t.state === "todo") return t.owner ? queueParty(view, t, t.owner) : lead("assign");
   if (t.state === "landing") return landingParty(view, t, now);
@@ -61,10 +62,14 @@ function heldEnd(view: ClockView, t: Task): number | undefined {
   return running && due !== undefined ? Math.max(until ?? due, due) : until;
 }
 
+export const waitActive = (t: Task, now: number): boolean => !!t.wait && t.state !== "done" && (t.wait.until === undefined || now < t.wait.until);
+
+export const waitEndedBy = (view: ClockView, t: Task, by: string, now: number): boolean => !!t.wait && partyOf(view, { ...t, wait: undefined }, now).mover === by;
+
 function deadlines(view: ClockView, t: Task): (number | undefined)[] {
-  if (t.state !== "landing") return [heldEnd(view, t)];
+  if (t.state !== "landing") return [heldEnd(view, t), t.wait?.until];
   const step = currentStep(t);
-  return [step?.wait?.until, step?.run?.due];
+  return [step?.wait?.until, step?.run?.due, t.wait?.until];
 }
 
 function passedDeadline(view: ClockView, t: Task, now: number): number | undefined {
@@ -73,6 +78,7 @@ function passedDeadline(view: ClockView, t: Task, now: number): number | undefin
 }
 
 export const timedStep = (t: Task): boolean => {
+  if (t.wait?.until !== undefined) return true;
   if (t.state !== "landing") return heldStep(t) !== undefined;
   const step = currentStep(t);
   return !!step && (step.wait !== undefined || step.run !== undefined);

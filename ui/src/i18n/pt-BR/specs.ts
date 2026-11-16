@@ -283,6 +283,8 @@ export default {
   "tasks.move.waiting": "Esperando, {count} na frente dela para {who}",
   "tasks.move.run": "Uma execução tem a vez por {time}, depois {who}",
   "tasks.move.hold": "A vez não é de ninguém por {time}: {reason}",
+  "tasks.move.wait": "Esperando: {reason}",
+  "tasks.move.wait.until": "Esperando, por {time} no máximo: {reason}",
   "tasks.move.nobody": "Ninguém: o canal não tem dono aqui",
   "tasks.quiet.with": "parada há {time} com {who}",
   "tasks.quiet.due": "{quiet} ({due})",

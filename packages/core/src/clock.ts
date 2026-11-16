@@ -38,6 +38,7 @@ export interface NudgeDue {
   step: NudgeStep;
   day?: number;
   wake?: WakeSeen;
+  waited?: string;
   to: string | undefined;
 }
 
@@ -57,7 +58,8 @@ function quietDue(state: Board, t: Task, now: number, every: number): NudgeDue[]
   const step = ladderStep(clock.quiet, every);
   if (step === 0 || clock.step >= step) return [];
   if (step === 1 && clock.woke) return [];
-  return [{ task: t.id, mover: clock.party, since: clock.epoch, step, to: target(state, clock.mover, step) }];
+  const waited = t.wait?.until !== undefined && clock.step === 0 && clock.since === t.wait.until ? t.wait.reason : undefined;
+  return [{ task: t.id, mover: clock.party, since: clock.epoch, step, ...(waited ? { waited } : {}), to: target(state, clock.mover, step) }];
 }
 
 function skipDue(state: Board, t: Task, now: number, every: number): NudgeDue[] {

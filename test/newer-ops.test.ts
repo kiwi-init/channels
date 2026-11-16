@@ -112,6 +112,8 @@ const OPS: Record<Event["op"], true> = {
   "task.nudge": true,
   "task.wake": true,
   "task.snapshot": true,
+  "task.wait": true,
+  "task.wait.end": true,
   "task.landed": true,
   "task.steps": true,
   "hold.set": true,
@@ -483,6 +485,7 @@ OPS_AT[27] = [...(OPS_AT[26] ?? []), "review.reset.set", "review.reset.waive"];
 OPS_AT[28] = [...(OPS_AT[27] ?? []), "asks.tap.set"];
 OPS_AT[29] = [...(OPS_AT[28] ?? []), "checkpoint.daily.set", "checkpoint.ask"];
 OPS_AT[30] = [...(OPS_AT[29] ?? []), "task.snapshot"];
+OPS_AT[31] = [...(OPS_AT[30] ?? []), "task.wait", "task.wait.end"];
 
 describe("events from a newer client", () => {
   test("every op the Event type has is known, and a new op needs EVENT_OPS_VERSION raised with it", () => {

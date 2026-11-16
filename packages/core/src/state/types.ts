@@ -197,6 +197,15 @@ export interface Task {
   handedOff?: { seq: number; from: string };
   first?: number;
   snapshot?: TaskSnapshot;
+  wait?: TaskWait;
+}
+
+interface TaskWait {
+  reason: string;
+  by: string;
+  seq: number;
+  at: number;
+  until?: number;
 }
 
 export interface AskHead {

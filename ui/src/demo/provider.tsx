@@ -29,6 +29,7 @@ import { muteKey } from "~/live/mute"
 import { specLineTest } from "~/specs/quote"
 import { wordsRaw, wrote } from "~/words"
 import { demoRound, withCheckpoints } from "~/demo/checkpoints"
+import { withTaskWait } from "~/demo/task-wait"
 
 const unticked = (text: string): string => text.replace(/^(\s*[-*+]\s+)\[[xX]\]/gm, "$1[ ]").trim()
 
@@ -341,6 +342,7 @@ export type Scenario =
   | "invite-failed"
   | "review-reset"
   | "checkpoints"
+  | "task-wait"
   | "member"
   | "home-calm"
   | "departed-dms"
@@ -496,15 +498,17 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                                             ? withReviewReset(DEMO_CHANNEL)
                                             : scenario === "checkpoints"
                                               ? withCheckpoints(DEMO_CHANNEL)
-                                              : scenario === "event-runs"
-                                                ? withEventRuns(DEMO_CHANNEL)
-                                                : scenario === "own-bubbles"
-                                                  ? withOwnBubbles(DEMO_CHANNEL)
-                                                  : scenario === "signs"
-                                                    ? withSigns(DEMO_CHANNEL)
-                                                    : scenario === "theirs"
-                                                      ? withTheirs(DEMO_CHANNEL)
-                                                      : DEMO_CHANNEL,
+                                              : scenario === "task-wait"
+                                                ? withTaskWait(DEMO_CHANNEL)
+                                                : scenario === "event-runs"
+                                                  ? withEventRuns(DEMO_CHANNEL)
+                                                  : scenario === "own-bubbles"
+                                                    ? withOwnBubbles(DEMO_CHANNEL)
+                                                    : scenario === "signs"
+                                                      ? withSigns(DEMO_CHANNEL)
+                                                      : scenario === "theirs"
+                                                        ? withTheirs(DEMO_CHANNEL)
+                                                        : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,

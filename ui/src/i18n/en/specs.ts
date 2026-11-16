@@ -284,6 +284,8 @@ const words = {
   "tasks.move.waiting": "Waiting, {count} ahead of it for {who}",
   "tasks.move.run": "A run has the move for {time}, then {who}",
   "tasks.move.hold": "Nobody's move for {time}: {reason}",
+  "tasks.move.wait": "Waiting: {reason}",
+  "tasks.move.wait.until": "Waiting, for {time} at most: {reason}",
   "tasks.move.nobody": "Nobody: the channel has no owner here",
   "tasks.quiet.with": "quiet {time} with {who}",
   "tasks.quiet.due": "{quiet} ({due})",

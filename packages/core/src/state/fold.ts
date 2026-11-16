@@ -34,7 +34,7 @@ import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
-import { nudge, QUIET_MS, roll, tick, timedStep, wakeGot, type ClockView } from "./clocks.ts";
+import { nudge, QUIET_MS, roll, tick, timedStep, waitEndedBy, wakeGot, type ClockView } from "./clocks.ts";
 
 const CLOCK_BLIND_OPS: ReadonlySet<string> = new Set([
   "hello",
@@ -461,6 +461,7 @@ function folding(
   const timeTask = (t: Task): void => void (timedStep(t) ? timed.add(t.id) : timed.delete(t.id));
   const tickTask = (t: Task | undefined, seq: number, at: number, by?: string): void => {
     if (!t) return;
+    if (t.wait && by !== undefined && t.wait.seq !== seq && waitEndedBy(clockView(), t, by, at)) delete t.wait;
     tick(clockView(), t, { seq, at, ...(by !== undefined ? { by } : {}) });
     timeTask(t);
   };

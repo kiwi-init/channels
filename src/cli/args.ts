@@ -104,6 +104,8 @@ function parse() {
         all: { type: "boolean" },
         global: { type: "boolean" },
         fresh: { type: "boolean" },
+        until: { type: "string" },
+        end: { type: "boolean" },
         stale: { type: "boolean" },
         first: { type: "boolean" },
         json: { type: "boolean" },

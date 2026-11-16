@@ -284,6 +284,8 @@ export default {
   "tasks.move.waiting": "대기 중, {who}에게 앞선 작업 {count}개",
   "tasks.move.run": "{time} 동안은 실행 차례, 그다음은 {who}",
   "tasks.move.hold": "{time} 동안은 누구의 차례도 아닙니다: {reason}",
+  "tasks.move.wait": "기다리는 중: {reason}",
+  "tasks.move.wait.until": "기다리는 중(최대 {time}): {reason}",
   "tasks.move.nobody": "차례인 사람 없음: 이 채널에 소유자가 없습니다",
   "tasks.quiet.with": "{who}에게서 {time} 동안 멈춤",
   "tasks.quiet.due": "{quiet} ({due})",

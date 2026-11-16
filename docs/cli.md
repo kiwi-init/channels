@@ -57,6 +57,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi task start T7` · `task done T7` | Take a task if nobody has it · finish it |
 | `kiwi task assign T7 [NAME] ["next"]` | Hand it over, with where it stands |
 | `kiwi task checkpoint T7 --file note.md` | Where the work stands, for the next session. `--fresh` in a loop |
+| `kiwi task wait T7 "why" [--until 12h]` · `task wait T7 --end` | Nobody has a move until something happens: the clock pauses and the board shows "waiting: why". `--until` caps it; a post by its mover or `--end` resumes the clock from then |
 | `kiwi task review T7 --at SHA` | Open a review round (`--run ID` for a run task) |
 | `kiwi task approve T7 --round N` · `reject` | The reviewer's verdict on that round. It stays in Kiwi, on the round and in the task's thread, not on the pull request |
 | `kiwi task kept T7 [--at SHA] [--onto REF]` | After a new commit on an approved task: check in this checkout that it is still the approved code (the same tree, or only clean merges of the target branch) and record it, so the approval holds |
