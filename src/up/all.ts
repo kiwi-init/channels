@@ -1,3 +1,4 @@
+import type { UpOutcome } from "@kiwi/core/up-outcome.ts";
 import type { Config, SeatRecord } from "../config.ts";
 import { printedLine, seatArgv, type Launcher } from "./launch.ts";
 import type { SeatPlan, Startable } from "./plan.ts";
@@ -106,6 +107,11 @@ export async function upAll(plans: readonly SeatPlan[], launcher: Launcher | nul
     const outcome = done.get(p);
     return outcome ? [outcome] : [];
   });
+}
+
+export function outcomeJson(o: Outcome): UpOutcome {
+  const at = { channel: o.plan.alias, handle: o.plan.as, folder: o.plan.dir };
+  return o.result === "printed" ? { ...at, result: "printed", why: o.line } : { ...at, result: o.result, why: o.why };
 }
 
 export function outcomeLine(o: Outcome): string {

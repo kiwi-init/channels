@@ -21,7 +21,8 @@ import { homeOf } from "~/home"
 import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
 import { TABS_3, TABS_8 } from "~/demo/tabs"
 import { DEMO_FROZEN } from "~/demo/shots"
-import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, TaskStep, Usage } from "~/model"
+import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
+import type { Account, Actions, App, BackRun, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, TaskStep, Usage } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
@@ -64,12 +65,28 @@ const COMPUTER: ThisComputer = {
     { harness: "codex", label: "Codex", state: "outdated" },
   ],
   contextLine: false,
+  back: null,
+  run: { at: "idle" },
 }
 
 const FINDINGS: Finding[] = [
   { ok: true, what: "kiwi     2026.10.8 at ~/.local/bin/kiwi" },
   { ok: true, what: "relay    wss://relay.kiwi.sh answers" },
   { ok: false, what: "Codex's hooks are from an older kiwi", how: "Update them in Settings > Agents > Harnesses." },
+]
+
+const RESTARTED: NonNullable<ThisComputer["back"]> = {
+  down: [
+    { channel: "kiwi", handle: "atlas", folder: "~/code/kiwi", result: "planned", why: "kiwi up --seat atlas -c kiwi", before: true },
+    { channel: "kiwi", handle: "win", folder: "~/code/kiwi", result: "planned", why: "kiwi up --seat win -c kiwi", before: true },
+  ],
+  apart: [{ channel: "kiwi", handle: "sage", folder: "~/code/kiwi", result: "skipped", why: "kiwi up doesn't restore codex seats yet", skip: "unsupported", before: true }],
+}
+
+const BROUGHT_BACK: UpOutcome[] = [
+  { channel: "kiwi", handle: "atlas", folder: "~/code/kiwi", result: "restored", why: "it resumed its session" },
+  { channel: "kiwi", handle: "win", folder: "~/code/kiwi", result: "running", why: "its session is still running" },
+  { channel: "kiwi", handle: "sage", folder: "~/code/kiwi", result: "skipped", why: "kiwi up doesn't restore codex seats yet: start it yourself in its folder" },
 ]
 
 function withLeftOut(c: Channel): Channel {
@@ -338,6 +355,7 @@ export type Scenario =
   | "specs"
   | "spec-changed"
   | "forgotten-computer"
+  | "restarted"
   | "invite-failed"
   | "review-reset"
   | "checkpoints"
@@ -618,7 +636,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   const [state, setState] = useState(() => initial(scenario, look))
   const [shownUsage] = useState(usage)
   const [ownPersonalities, setOwnPersonalities] = useState<Personality[]>([])
-  const [computer, setComputer] = useState(COMPUTER)
+  const [computer, setComputer] = useState<ThisComputer>(scenario === "restarted" ? { ...COMPUTER, back: RESTARTED } : COMPUTER)
   const [arrived, setArrived] = useState(open)
   useEffect(() => {
     if (scenario !== "slow-open") return
@@ -1154,6 +1172,16 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           )
         ),
       checkComputer: () => new Promise((done) => setTimeout(() => done(FINDINGS), 400)),
+      bringAgentsBack: () => {
+        setComputer((c) => ({ ...c, run: { at: "working" } }))
+        return new Promise<BackRun>((done) =>
+          setTimeout(() => {
+            const run: BackRun = { at: "done", outcomes: BROUGHT_BACK }
+            setComputer((c) => ({ ...c, back: null, run }))
+            done(run)
+          }, 400)
+        )
+      },
       myUsage: async () => ({
         plan: "free",
         blocked: false,

@@ -1,5 +1,7 @@
 import type { Config, SeatRecord } from "../config.ts";
+import type { UpOutcome } from "@kiwi/core/up-outcome.ts";
 import { holderGone, OLDER_LOOP, type Liveness } from "../hold.ts";
+import { printedLine } from "./launch.ts";
 import { isLoopHarness, type LoopHarness } from "../loop/recipes.ts";
 
 export interface SeatAt {
@@ -15,7 +17,7 @@ export type SeatPlan =
   | (SeatAt & { kind: "unsupported"; why: string })
   | (SeatAt & { kind: "unknown"; why: string })
   | (SeatAt & { kind: "idle"; why: string; start: Startable })
-  | (SeatAt & { kind: "skipped"; why: string });
+  | (SeatAt & { kind: "skipped"; why: string; reason: "left" | "unverified" });
 
 export type Startable = Extract<SeatPlan, { kind: "restore" | "loop" }>;
 
@@ -92,11 +94,32 @@ export function usedSince(after: number, used: (b: SeatRecord) => number): Choos
   };
 }
 
+export function planJson(p: SeatPlan, before: boolean): UpOutcome {
+  const at = { channel: p.alias, handle: p.as, folder: p.dir, before };
+  switch (p.kind) {
+    case "restore":
+    case "loop":
+      return { ...at, result: "planned", why: printedLine(p) };
+    case "running":
+      return { ...at, result: "running", why: p.why };
+    case "unsupported":
+      return { ...at, result: "skipped", why: p.why, skip: "unsupported" };
+    case "unknown":
+      return { ...at, result: "skipped", why: p.why, skip: "unknown" };
+    case "idle":
+      return { ...at, result: "skipped", why: `${p.why}; to bring it back: ${printedLine(p.start)}`, skip: "idle" };
+    case "skipped":
+      return { ...at, result: "skipped", why: p.why, skip: p.reason };
+  }
+}
+
 export function withMembers(plans: readonly SeatPlan[], member: (alias: string, as: string) => Membership): SeatPlan[] {
   return plans.map((p) => {
     if (p.kind !== "restore" && p.kind !== "loop" && p.kind !== "idle" && p.kind !== "unsupported") return p;
     const m = member(p.alias, p.as);
     if (m.kind === "member") return p;
-    return { alias: p.alias, as: p.as, dir: p.dir, kind: "skipped", why: m.kind === "left" ? "it left the channel or was removed" : `its membership couldn't be checked: ${m.why}` };
+    return m.kind === "left"
+      ? { alias: p.alias, as: p.as, dir: p.dir, kind: "skipped", why: "it left the channel or was removed", reason: "left" }
+      : { alias: p.alias, as: p.as, dir: p.dir, kind: "skipped", why: `its membership couldn't be checked: ${m.why}`, reason: "unverified" };
   });
 }

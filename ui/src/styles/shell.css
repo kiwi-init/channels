@@ -1162,6 +1162,7 @@
   bottom: calc(var(--compose-space) + 16px);
   left: 40px;
   pointer-events: auto;
+  visibility: visible;
 }
 
 .side-views,

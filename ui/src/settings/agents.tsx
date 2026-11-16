@@ -9,6 +9,7 @@ import { LOGOS } from "~/kit/logos"
 import { RoleFace } from "~/kit/role-face"
 import type { Finding, Harness, ThisComputer } from "~/model"
 import { useApp } from "~/nav"
+import { backRow } from "~/settings/back-row"
 import { Personalities } from "~/settings/personalities"
 import { acts, esc, field, fine, join, row, say, Sheet, toggle, words, type Acts } from "~/settings/sheet"
 
@@ -125,6 +126,10 @@ export function AgentsPage() {
       () => setCheck("failed")
     )
   }
+  const bring = () =>
+    void actions.bringAgentsBack().catch(() => {
+      // the shared run state already says kiwi up didn't answer
+    })
   const a = acts()
   const kiwi = kiwiState(computer)
   const md = join([
@@ -150,6 +155,7 @@ export function AgentsPage() {
     computer
       ? [
           checkRow(check, a, run),
+          backRow(computer.run, a, bring),
           computer.contextLine === null
             ? ""
             : toggle(
