@@ -12,9 +12,21 @@ import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { listenedPath, pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
-import { DAEMON_PROTOCOL, daemonSock, daemonToken, readKeepAsk, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
+import {
+  DAEMON_PROTOCOL,
+  daemonSock,
+  daemonToken,
+  readKeepAsk,
+  readListener,
+  supersedes,
+  type DaemonEvent,
+  type DaemonListener,
+  type DaemonRead,
+  type DaemonSeat,
+  type DaemonVerb,
+} from "./protocol.ts";
 import { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
-import { pidAlive } from "../pid.ts";
+import { pidAlive, processStart } from "../pid.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
 import { computerSettings } from "./settings.ts";
@@ -847,13 +859,16 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "hold": {
           const l = readListener({ ...params, at: Date.now() });
           if (!l) throw new Error('hold needs {"channel", "as", "kind": "listen" or "hook", "cwd"?, "harness"?, "session"?, "pid"?}');
-          const others = [...conns].filter((c) => c !== conn && !c.dead).flatMap((c) => [...c.held]);
-          const taken = l.kind === "hook" && others.some((h) => h.kind === "hook" && h.channel === l.channel && h.agent === l.agent && h.session === l.session);
-          if (!taken) {
+          const same = (h: DaemonListener) => h.kind === "hook" && h.channel === l.channel && h.agent === l.agent && h.session === l.session;
+          const others = [...conns].filter((c) => c !== conn && !c.dead);
+          if (l.kind === "hook") for (const c of others) for (const h of [...c.held]) if (same(h) && supersedes(l, h, processStart)) c.held.delete(h);
+          const holder = l.kind === "hook" ? others.flatMap((c) => [...c.held]).find(same) : undefined;
+          if (!holder) {
             conn.held.add(l);
             reachMoved(l.channel, l.agent);
           }
-          sendLine(conn, JSON.stringify({ id, ok: true, held: !taken }));
+          const named = holder ? { holder: { session: holder.session, pid: holder.pid, harness: holder.harness, proc: holder.proc } } : {};
+          sendLine(conn, JSON.stringify({ id, ok: true, held: !holder, ...named }));
           break;
         }
         case "listeners":

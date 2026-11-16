@@ -54,7 +54,7 @@ function stalledDaemon(sock: string, stallMs: number) {
   return { open, settled: () => chain, stop: () => server.stop(true) };
 }
 
-const hook = { channel: "ch", agent: "otter-gentle", kind: "hook" as const, cwd: "/work", harness: "claude", session: "s1", pid: process.pid, marks: true };
+const hook = { channel: "ch", agent: "otter-gentle", kind: "hook" as const, cwd: "/work", harness: "claude", session: "s1", pid: process.pid, proc: null, marks: true };
 
 describe("a hook's listen slot survives a stalled daemon (#2502)", () => {
   test("a hold that timed out leaves no connection behind once the daemon catches up", async () => {

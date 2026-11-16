@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { home } from "../config.ts";
-import type { DaemonListener } from "../daemon/protocol.ts";
+import type { DaemonListener, ListenerHolder } from "../daemon/protocol.ts";
+import { processStart } from "../pid.ts";
 import { daemonListeners, ensureDaemon, holdListener, type HeldListener } from "../daemon/rpc.ts";
 import { bindDirectory as bindSeat, bindingFor as seatFor, here, seatsFor as heldSeats, type Binding, type Listener, type SeatOptions } from "../seats.ts";
 
@@ -26,7 +27,9 @@ let signalsSet = false;
 
 function heldFor(alias: string, as: string, kind: DaemonListener["kind"], session: string | null, marks: boolean | null = null): Omit<DaemonListener, "at"> {
   const who = here();
-  return { channel: alias, agent: as, kind, cwd: process.cwd(), harness: who.harness ?? null, session, pid: who.pid ?? null, marks };
+  const started = processStart(process.pid);
+  const proc = started ? { pid: process.pid, started } : null;
+  return { channel: alias, agent: as, kind, cwd: process.cwd(), harness: who.harness ?? null, session, pid: who.pid ?? null, proc, marks };
 }
 
 export async function refreshListeners(): Promise<void> {
@@ -42,20 +45,26 @@ export async function holdListening(alias: string, as: string, marks: boolean): 
   return held;
 }
 
-function legacySlotHeld(alias: string, as: string, session: string): boolean {
+function legacySlotHolder(alias: string, as: string, session: string): ListenerHolder | null {
   const file = join(home(), "listen-hooks", `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.${encodeURIComponent(session)}`);
   try {
     const pid = Number(readFileSync(file, "utf8"));
-    if (pid > 0 && alive(pid)) return true;
+    if (pid > 0 && alive(pid)) {
+      const started = processStart(pid);
+      return { session, pid: null, harness: null, proc: started ? { pid, started } : null };
+    }
     rmSync(file, { force: true });
   } catch {
     // No legacy slot file (the usual case), or one that can't be read: not held.
   }
-  return false;
+  return null;
 }
 
-export async function takeListenSlot(alias: string, as: string, session: string): Promise<HeldListener | "taken" | "unreachable"> {
-  if (legacySlotHeld(alias, as, session)) return "taken";
+export type ListenSlot = { kind: "held"; slot: HeldListener } | { kind: "taken"; holder: ListenerHolder | null } | { kind: "unreachable" };
+
+export async function takeListenSlot(alias: string, as: string, session: string): Promise<ListenSlot> {
+  const legacy = legacySlotHolder(alias, as, session);
+  if (legacy) return { kind: "taken", holder: legacy };
   const entry = heldFor(alias, as, "hook", session);
   let slot = await holdListener(entry);
   if (slot.held === null) {
@@ -63,9 +72,9 @@ export async function takeListenSlot(alias: string, as: string, session: string)
     await ensureDaemon().catch(() => null);
     slot = await holdListener(entry);
   }
-  if (slot.held) return slot;
+  if (slot.held) return { kind: "held", slot };
   slot.close();
-  return slot.held === null ? "unreachable" : "taken";
+  return slot.held === null ? { kind: "unreachable" } : { kind: "taken", holder: slot.holder };
 }
 
 function liveRecords(): { name: string; rec: Record<string, unknown> }[] {

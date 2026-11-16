@@ -13,7 +13,20 @@ import { compareVersions } from "@kiwi/core/versions.ts";
 import type { PairedPerson } from "./pair.ts";
 import { lockPath } from "./lock.ts";
 import type { AdmitRoom } from "./admit.ts";
-import { DAEMON_PROTOCOL, daemonSock, isDaemonEvent, readListener, withDeadline, type DaemonEvent, type DaemonHello, type DaemonListener, type DaemonPeek, type DaemonSeat } from "./protocol.ts";
+import {
+  DAEMON_PROTOCOL,
+  daemonSock,
+  isDaemonEvent,
+  readHolder,
+  readListener,
+  withDeadline,
+  type ListenerHolder,
+  type DaemonEvent,
+  type DaemonHello,
+  type DaemonListener,
+  type DaemonPeek,
+  type DaemonSeat,
+} from "./protocol.ts";
 
 const PEEK_MS = 300;
 
@@ -303,6 +316,7 @@ export async function daemonUnpair(sock = daemonSock()): Promise<void> {
 
 export interface HeldListener {
   readonly held: boolean | null;
+  readonly holder: ListenerHolder | null;
   close(): void;
 }
 
@@ -310,6 +324,7 @@ export async function holdListener(entry: Omit<DaemonListener, "at">, sock = dae
   let conn: DaemonConn | null = null;
   let ended = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let holder: ListenerHolder | null = null;
   const attempt = async (): Promise<boolean | null> => {
     let c: DaemonConn | null = null;
     try {
@@ -317,6 +332,7 @@ export async function holdListener(entry: Omit<DaemonListener, "at">, sock = dae
       const r = await c.call("hold", { ...entry, as: entry.agent });
       if (ended || r.held !== true) {
         c.close();
+        if (!ended) holder = readHolder(r.holder);
         return ended ? null : false;
       }
       conn = c;
@@ -342,6 +358,7 @@ export async function holdListener(entry: Omit<DaemonListener, "at">, sock = dae
   if (held !== false) watch();
   return {
     held,
+    holder,
     close: () => {
       ended = true;
       if (timer) clearTimeout(timer);
