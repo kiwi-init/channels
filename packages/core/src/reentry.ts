@@ -3,6 +3,7 @@ import { inlineText } from "./membership.ts";
 import { CHECKPOINT_MAX_LENGTH } from "./protocol.ts";
 import { commentsLine, commentsWaiting } from "./spec-lines.ts";
 import { specTitle } from "./state/specs.ts";
+import { snapshotLines } from "./task-snapshot.ts";
 import { leadCheckpointKey, openRound, taskId, unnamedAsks, unnamedTasks, type ChannelState, type Fact, type Task } from "./state.ts";
 
 export const REENTRY_MAX = 4_000;
@@ -77,7 +78,11 @@ function taskBlock(t: Task, part: Part, now: number, mc: string): Block {
     : last
       ? [head, `  last note by ${inlineText(last.by, 40)}, ${ago(last.ts, now)}: ${inlineText(last.text, NOTE_SHOWN)}`]
       : [head];
-  return { text: lines.join("\n"), task: t.id };
+  const snap =
+    part === "owner" && t.snapshot
+      ? [`  on disk at the end of a turn, ${ago(t.snapshot.ts, now)} (#${t.snapshot.seq}), ${inlineText(t.snapshot.path, 200)}:`, ...snapshotLines(t.snapshot).map((l) => `  │ ${l}`)]
+      : [];
+  return { text: [...lines, ...snap].join("\n"), task: t.id };
 }
 
 function boardBlock(state: ChannelState, me: string, mc: string): Block | null {

@@ -15,7 +15,8 @@ import { charterLines, formatMessage, handedNote, holdLine, leadLine, messageHea
 import { kimiServer } from "../kimi-server.ts";
 import { here, type Binding, type Here } from "../seats.ts";
 import { REENTRY_MAX, reentryText } from "@kiwi/core/reentry.ts";
-import { humanOf } from "@kiwi/core/state.ts";
+import { humanOf, type ChannelState } from "@kiwi/core/state.ts";
+import type { SnapshotFacts } from "@kiwi/core/task-snapshot.ts";
 import { sentTo } from "@kiwi/core/room-rules.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
 import { crossing, noteOverLine, nudgeShort, nudgeText, openTasksOf, overLine } from "./context-line.ts";
@@ -208,6 +209,33 @@ export function cursorFollow(alias: string, mc: string, unread: boolean, reminde
   const rearm = fitReminder(reminder, budget - (nudge ? nudge.length + 2 : 0));
   return [nudge, rearm].filter((t) => t !== null).join("\n\n");
 }
+
+const SNAPSHOT_MS = 600;
+const SNAPSHOT_MIN_MS = 150;
+export const STOP_SNAPSHOTS_BY_MS = 1_400;
+
+export interface SnapshotSession<R> {
+  me: string;
+  state: () => Effect.Effect<{ state: ChannelState }, unknown, R>;
+  taskSnapshot: (task: number, facts: SnapshotFacts) => Effect.Effect<unknown, unknown, R>;
+}
+
+const saveSnapshots = <R>(s: SnapshotSession<R>, dir: string) =>
+  Effect.gen(function* () {
+    const { state } = yield* s.state();
+    const { snapshotsDue } = yield* Effect.promise(() => import("./snapshot.ts"));
+    for (const { task, facts } of yield* snapshotsDue(state, s.me, dir)) yield* Effect.ignore(s.taskSnapshot(task, facts));
+  });
+
+export function snapshotBudget(elapsed: number): number {
+  const left = Math.min(SNAPSHOT_MS, STOP_SNAPSHOTS_BY_MS - elapsed);
+  return left >= SNAPSHOT_MIN_MS ? left : 0;
+}
+
+export const snapshotsAfter = <R>(s: SnapshotSession<R>, dir: string, elapsed = performance.now()): Effect.Effect<void, never, R> => {
+  const budget = snapshotBudget(elapsed);
+  return budget ? saveSnapshots(s, dir).pipe(Effect.timeoutOption(budget), Effect.ignoreCause) : Effect.void;
+};
 
 const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput, s: AgentSession, who: Here, mc: string, budget: number) {
   if (!contextLineOn(loadConfig())) return null;
@@ -541,6 +569,15 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
   }
 
   if (event === "stop") {
+    const out = yield* stopDuties(input, s, b, who, mc, budget);
+    yield* snapshotsAfter(s, input.cwd ?? process.cwd());
+    return out;
+  }
+  return null;
+});
+
+const stopDuties = Effect.fn("Hooks.stopDuties")(function* (input: HookInput, s: AgentSession, b: Binding, who: Here, mc: string, budget: number) {
+  {
     const kind = stopKind(input, who);
     if (kind === null) return null;
     if (kind === "followup") {

@@ -69,6 +69,8 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi task close T7 "why"` | The lead or a person: done without its remaining steps, with the reason kept |
 | `kiwi task` | The board, with whose move each open task is |
 
+At the end of each turn, the Stop hook also notes where each of your open tasks stands on disk: the worktree whose branch names the task (`T7-…`, or its pull request's branch), with its branch, last commit, uncommitted files and how far it is ahead of or behind `origin`. Nothing is noted when that hasn't changed, or for a task with no such worktree. `kiwi task show T7` and a new session show it beside your own checkpoint, which it never replaces. The uncommitted files are that checkout's, so they may include someone else's edits. A turn cut off by a shutdown isn't noted.
+
 ## This computer
 
 | Command | What it does |

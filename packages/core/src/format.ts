@@ -3,6 +3,7 @@
 import { asksPeople, ROLE_LABEL } from "./personality.ts";
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
+import { snapshotLines } from "./task-snapshot.ts";
 import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
@@ -199,6 +200,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return say(ev.step === 2 && ev.wake ? `task.nudge.lead.${ev.wake}` : NUDGE_KEYS[ev.step], { task: task(ev.task), name: inlineText(ev.mover, 40) });
     case "task.wake":
       return say(`task.wake.${ev.got}`, { task: task(ev.task), name: inlineText(ev.mover, 40) });
+    case "task.snapshot":
+      return say("task.snapshot", { task: task(ev.task), where: `${ev.branch ? inlineText(ev.branch, 80) : "detached HEAD"} at ${ev.head.slice(0, 9)} in ${inlineText(ev.path, 120)}` });
     case "task.landed":
       if (!("step" in ev)) return say("task.landed", { task: task(ev.task), at: artifactWords(ev.artifact) });
       return ev.artifact
@@ -954,6 +957,8 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
     out.push("", "notes:");
     for (const n of t.notes) out.push(`  #${n.seq} ${inlineText(n.by, 40)}, ${ago(n.ts, now)}${n.checkpoint ? " (checkpoint)" : ""}: ${markedText(n.text)}`);
   }
+  if (t.snapshot)
+    out.push("", `on disk at the end of a turn, ${ago(t.snapshot.ts, now)} (#${t.snapshot.seq}), ${inlineText(t.snapshot.path, 200)}:`, ...snapshotLines(t.snapshot).map((l) => `  ${l}`));
   return out.join("\n");
 }
 
