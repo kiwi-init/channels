@@ -4,6 +4,7 @@ import type { LandingStep, StepSpec } from "../steps.ts";
 import type { Card, CheckpointOwed, Color, IssueRef, KeptHow, Landing, MemberPicture, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { CheckpointDaily } from "../checkpoint-schedule.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubRun, GithubState } from "./github.ts";
+import type { TaskSnapshot } from "../task-snapshot.ts";
 import type { Persona } from "../personality.ts";
 import type { Power } from "../protocol.ts";
 import type { RoomMember, RoomMeta, RoomSeal } from "../room-rules.ts";
@@ -195,6 +196,7 @@ export interface Task {
   leftBy?: string;
   handedOff?: { seq: number; from: string };
   first?: number;
+  snapshot?: TaskSnapshot;
 }
 
 export interface AskHead {

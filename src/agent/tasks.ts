@@ -18,6 +18,7 @@ import {
   type Verdict,
 } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
+import type { SnapshotFacts } from "@kiwi/core/task-snapshot.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { wellFormedRunId } from "@kiwi/core/checks.ts";
 import { currentStep, landedStepRefusal, stepById, stepText, type StepEdit, type StepSpec } from "@kiwi/core/steps.ts";
@@ -393,6 +394,10 @@ export class SessionTasks extends SessionMessaging {
 
   readonly taskNudge = Effect.fn("AgentSession.taskNudge")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.nudge" }>, to?: string) {
     return yield* this.event(ev, `${taskId(ev.task)} quiet`, to ? [to] : undefined);
+  });
+
+  readonly taskSnapshot = Effect.fn("AgentSession.taskSnapshot")({ self: this }, function* (this: SessionTasks, id: number, facts: SnapshotFacts) {
+    return yield* this.event({ op: "task.snapshot", task: id, ...facts }, `${taskId(id)} on disk: ${facts.branch ?? "detached HEAD"} at ${facts.head.slice(0, 9)}`);
   });
 
   readonly checkpointAsk = Effect.fn("AgentSession.checkpointAsk")({ self: this }, function* (this: SessionTasks, body: AskBody, occurrence: string) {

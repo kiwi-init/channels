@@ -7,6 +7,7 @@
 import { wellFormedArtifact, wellFormedCheck, wellFormedRunId, type CheckArtifact, type CheckAsk } from "./checks.ts";
 import { wellFormedStepEdit, wellFormedStepLanded, wellFormedStepSpecs, type StepEdit, type StepLanded, type StepSpec } from "./steps.ts";
 import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
+import { wellFormedSnapshot, type SnapshotFacts } from "./task-snapshot.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
 
@@ -299,6 +300,7 @@ export type Event =
   | { op: "task.first"; task: number }
   | { op: "task.nudge"; task: number; mover: string; since: number; step: NudgeStep; day?: number; wake?: WakeSeen }
   | { op: "task.wake"; task: number; mover: string; since: number; got: WakeGot }
+  | ({ op: "task.snapshot"; task: number } & SnapshotFacts)
   | { op: "task.landed"; task: number; artifact: CheckArtifact }
   | ({ op: "task.landed"; task: number } & StepLanded)
   | { op: "task.steps"; task: number; edit: StepEdit }
@@ -475,6 +477,7 @@ const QUIET_OPS: ReadonlySet<string> = new Set([
   "devices",
   "spec.set",
   "doc.open",
+  "task.snapshot",
 ]);
 
 export const isRunning = (i: GithubNote): boolean => (i.event === "check_run" || i.event === "workflow_run") && i.conclusion === undefined;
@@ -989,7 +992,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 29;
+export const EVENT_OPS_VERSION = 30;
 
 export const SESSION_PRINT_RE = /^[A-Za-z0-9_-]{16}$/;
 
@@ -1186,6 +1189,8 @@ function eventCheck(ev: unknown): boolean | null {
       );
     case "task.wake":
       return n(e.task) && str(e.mover, 64) && e.mover.length > 0 && n(e.since) && WAKE_GOTS.some((g) => g === e.got);
+    case "task.snapshot":
+      return n(e.task) && wellFormedSnapshot(e);
     case "task.landed":
       return n(e.task) && (e.step === undefined ? wellFormedArtifact(e.artifact) : wellFormedStepLanded(e));
     case "task.steps":

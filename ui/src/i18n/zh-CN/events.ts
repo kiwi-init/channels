@@ -54,6 +54,7 @@ export default {
   "events.task.nudge.lead.read": "记录了 {task} 在已看到唤醒的 {name} 手上仍然停滞：该告知负责人了",
   "events.task.wake.delivered": "记录了 {task} 的唤醒已送达 {name} 的会话",
   "events.task.wake.read": "记录了 {name} 的会话已显示 {task} 的唤醒",
+  "events.task.snapshot": "记录了 {task} 在磁盘上的状态：{where}",
   "events.task.nudge.owner": "记录了 {task} 在 {name} 手上仍然停滞：该放进所有者的待处理了",
   "events.task.landed": "落地了 {task}：{at}",
   "events.task.step.done": "结束了 {task} 的步骤 {step}{note}",

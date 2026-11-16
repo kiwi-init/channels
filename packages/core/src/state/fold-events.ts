@@ -659,6 +659,17 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     case "task.wake":
       break;
 
+    case "task.snapshot": {
+      const task = tasks.get(ev.task);
+      const { op, task: _id, ...facts } = ev;
+      void [op, _id];
+      if (!task) reject(`no task ${taskId(ev.task)}`);
+      else if (task.owner !== m.from) reject(`only ${taskId(task.id)}'s owner saves its snapshot`);
+      else if (task.state === "done") reject(`${taskId(task.id)} is already done`);
+      else task.snapshot = { ...facts, seq: m.seq, by: m.from, ts: at };
+      break;
+    }
+
     case "task.first": {
       const task = tasks.get(ev.task);
       if (!task) reject(`no task ${taskId(ev.task)}`);

@@ -79,6 +79,7 @@ function scopeFor(m: Pick<Message, "kind" | "ev">): Scope | "any" | null {
     case "task.first":
     case "task.nudge":
     case "task.wake":
+    case "task.snapshot":
     case "ask.name":
     case "spec.set":
     case "spec.ready":
