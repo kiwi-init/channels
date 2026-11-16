@@ -11,7 +11,7 @@ import { recipeFor } from "../../loop/recipes.ts";
 import { processes } from "../../loop/tmux.ts";
 import { loginPath, loginShell } from "../../login-shell.ts";
 import { bootId, pidAlive } from "../../pid.ts";
-import { outcomeLine, upAll } from "../../up/all.ts";
+import { outcomeJson, outcomeLine, upAll } from "../../up/all.ts";
 import { printedLine, tmuxLauncher } from "../../up/launch.ts";
 import { sessionLiveness } from "../../up/liveness.ts";
 import { planUp, runningAtShutdown, usedSince, withMembers, type Chooser, type Membership, type SeatPlan } from "../../up/plan.ts";
@@ -23,7 +23,7 @@ import { randomBytes } from "node:crypto";
 import { args, opt } from "../args.ts";
 import { type Command, die, keepDaemon, out } from "../context.ts";
 
-const USAGE = "usage: kiwi up [--dry-run] [--since 7d] [--bind-timeout SECONDS] · kiwi up --seat HANDLE [-c CHANNEL] [--bind-timeout SECONDS]";
+const USAGE = "usage: kiwi up [--dry-run] [--json] [--since 7d] [--bind-timeout SECONDS] · kiwi up --seat HANDLE [-c CHANNEL] [--bind-timeout SECONDS]";
 const BIND_MS = 60_000;
 const SETTLE_MS = 15_000;
 const READY_MS = 15_000;
@@ -189,7 +189,7 @@ const everySeat = (bindMs: number) =>
     const choose = chooser(opt.since);
     if (typeof choose === "string") return yield* die(choose);
     const planned = planUp(loadConfig(), (b) => sessionLiveness(b), choose);
-    if (!planned.length) return out("no seats on this computer");
+    if (!planned.length) return out(opt.json ? JSON.stringify({ seats: [] }) : "no seats on this computer");
     const plans = withMembers(planned, yield* membership(planned));
     if (opt["dry-run"]) {
       for (const p of plans)
@@ -202,7 +202,7 @@ const everySeat = (bindMs: number) =>
     }
     const tmux = Bun.which(process.env.KIWI_TMUX || "tmux");
     const launcher = tmux ? tmuxLauncher(tmux) : null;
-    if (!launcher && plans.some((p) => p.kind === "restore" || p.kind === "loop")) out("tmux isn't installed: run each line below in its own terminal");
+    if (!launcher && !opt.json && plans.some((p) => p.kind === "restore" || p.kind === "loop")) out("tmux isn't installed: run each line below in its own terminal");
     const outcomes = yield* Effect.promise(() =>
       upAll(plans, launcher, selfArgv(), bindMs / 1000, bindMs + READY_MS + SETTLE_MS, {
         load: loadConfig,
@@ -217,7 +217,8 @@ const everySeat = (bindMs: number) =>
         abandon: (p, token) => void abandonReserved(p.alias, p.as, token),
       }),
     );
-    for (const o of outcomes) out(outcomeLine(o));
+    if (opt.json) out(JSON.stringify({ seats: outcomes.map(outcomeJson) }));
+    else for (const o of outcomes) out(outcomeLine(o));
     return outcomes.some((o) => o.result === "failed") ? 1 : 0;
   });
 

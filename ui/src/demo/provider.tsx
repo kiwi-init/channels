@@ -21,6 +21,7 @@ import { homeOf } from "~/home"
 import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
 import { TABS_3, TABS_8 } from "~/demo/tabs"
 import { DEMO_FROZEN } from "~/demo/shots"
+import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
 import type { Account, Actions, App, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, TaskStep, Usage } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
@@ -69,6 +70,12 @@ const FINDINGS: Finding[] = [
   { ok: true, what: "kiwi     2026.10.8 at ~/.local/bin/kiwi" },
   { ok: true, what: "relay    wss://relay.kiwi.sh answers" },
   { ok: false, what: "Codex's hooks are from an older kiwi", how: "Update them in Settings > Agents > Harnesses." },
+]
+
+const BROUGHT_BACK: UpOutcome[] = [
+  { channel: "kiwi", handle: "atlas", folder: "~/code/kiwi", result: "restored", why: "it resumed its session" },
+  { channel: "kiwi", handle: "win", folder: "~/code/kiwi", result: "running", why: "its session is still running" },
+  { channel: "kiwi", handle: "sage", folder: "~/code/kiwi", result: "skipped", why: "kiwi up doesn't restore codex seats yet: start it yourself in its folder" },
 ]
 
 function withLeftOut(c: Channel): Channel {
@@ -1148,6 +1155,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           )
         ),
       checkComputer: () => new Promise((done) => setTimeout(() => done(FINDINGS), 400)),
+      bringAgentsBack: () => new Promise((done) => setTimeout(() => done(BROUGHT_BACK), 400)),
       myUsage: async () => ({
         plan: "free",
         blocked: false,

@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from "react"
 
 import type { ComputerSettings, SeatWake } from "@kiwi/core/computer-settings.ts"
 import type { HookHarness, HookRow, HookState } from "@kiwi/core/harnesses.ts"
+import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
 import { harnessName } from "@kiwi/app/harness.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { Key } from "~/i18n/en"
@@ -46,6 +47,8 @@ export async function setHooks(harness: HookHarness, on: boolean): Promise<void>
 }
 
 export const checkComputer = (): Promise<Finding[] | null> => need().doctor()
+
+export const bringAgentsBack = (): Promise<UpOutcome[] | null> => need().bringBack()
 
 export async function setContextLine(on: boolean): Promise<void> {
   const got = await need().setContextLine(on ? "on" : "off")

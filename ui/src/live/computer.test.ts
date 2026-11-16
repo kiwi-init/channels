@@ -3,6 +3,7 @@ import { describe, expect, mock, test } from "bun:test"
 import type { HookRow, KnownHarness } from "@kiwi/core/harnesses.ts"
 
 const calls: string[] = []
+let presses = 0
 let running = true
 let line: "on" | "off" = "off"
 let hooks: HookRow[] = [
@@ -32,11 +33,33 @@ const fake = {
         }
       : { ok: false as const, detail: "laptop didn't answer: it's offline" },
   doctor: async () => [{ ok: false as const, what: "Codex's hooks are from an older kiwi", how: "Update them" }],
+  bringBack: async () => {
+    presses++
+    return [
+      {
+        channel: "kiwi",
+        handle: "atlas",
+        folder: "/w",
+        result: presses === 1 ? ("restored" as const) : ("running" as const),
+        why: presses === 1 ? "it resumed its session" : "its session is still running",
+      },
+      { channel: "kiwi", handle: "sage", folder: "/w", result: "skipped" as const, why: "kiwi up doesn't restore codex seats yet: start it yourself in its folder" },
+      { channel: "kiwi", handle: "nova", folder: "/w", result: "failed" as const, why: "Claude Code didn't start a session within 60s" },
+    ]
+  },
 }
-mock.module("@kiwi/secrets/secrets.ts", () => ({ bridge: () => fake }))
-const { checkComputer, computerNow, computerSettings, loadComputer, setContextLine, setHooks } = await import("~/live/computer")
+let bridged = false
+mock.module("@kiwi/secrets/secrets.ts", () => ({ bridge: () => (bridged ? fake : null) }))
+const { bringAgentsBack, checkComputer, computerNow, computerSettings, loadComputer, setContextLine, setHooks } = await import("~/live/computer")
 
 describe("Settings > Agents shows this computer", () => {
+  test("without the desktop bridge (web) there's no computer, so no Bring my agents back, and the call refuses", async () => {
+    await loadComputer()
+    expect(computerNow()).toBeNull()
+    expect(() => bringAgentsBack()).toThrow("this needs the Channels desktop app")
+    bridged = true
+  })
+
   test("kiwi's version, and the hooks of every harness that takes them", async () => {
     await loadComputer()
     expect(computerNow()).toEqual({
@@ -60,6 +83,17 @@ describe("Settings > Agents shows this computer", () => {
     await setContextLine(true)
     expect(calls.at(-1)).toBe("context line on")
     expect(computerNow()?.contextLine).toBe(true)
+  })
+
+  test("Bring my agents back hands back each seat's outcome from kiwi up, and a second press finds the seat already running", async () => {
+    const first = await bringAgentsBack()
+    expect(first?.map((o) => [o.handle, o.result])).toEqual([
+      ["atlas", "restored"],
+      ["sage", "skipped"],
+      ["nova", "failed"],
+    ])
+    expect((await bringAgentsBack())?.[0]).toEqual({ channel: "kiwi", handle: "atlas", folder: "/w", result: "running", why: "its session is still running" })
+    expect(presses).toBe(2)
   })
 
   test("Check this computer hands back kiwi doctor's findings", async () => {
