@@ -23,7 +23,7 @@ import { roomSelection } from "./room-selection.ts"
 import { useApp, type ChannelTab, useGo } from "~/nav"
 import { repoOffers } from "~/modals/repo-offers"
 import { LandingPick, landingWord } from "~/modals/landing-pick"
-import { Edit, GoalEditor, HoldNote, RepoAdd } from "~/modals/channel-fields"
+import { DailyEdit, Edit, GoalEditor, HoldNote, RepoAdd } from "~/modals/channel-fields"
 import { Confirm } from "~/settings/controls"
 import { acts, card, code, esc, field, fine, join, link, main, note, row, say, Sheet, toggle, type Acts } from "~/settings/sheet"
 import { useAppCan } from "~/live/app-can"
@@ -462,9 +462,18 @@ function Tasks({ channel }: { channel: Channel }) {
   const sets = own || !!channel.youTrusted
   const quiet = String(channel.quietMinutes ?? QUIET_MINUTES)
   const landing = channel.landing
+  const daily = channel.checkpointDaily
+  const canSchedule = useAppCan("setCheckpointSchedule")
+  const schedules = own && canSchedule
   const [editing, setEditing] = useState(false)
+  const [timing, setTiming] = useState(false)
   const p = page()
   const { a } = p
+  const dailyActs = !schedules
+    ? []
+    : daily
+      ? [a.act(t("modals.channel.settings.change"), () => setTiming(true)), a.act(t("modals.channel.settings.daily.turn.off"), () => app.actions.setCheckpointDaily(channel.code, null))]
+      : [a.act(t("modals.channel.settings.daily.turn.on"), () => setTiming(true))]
   const md = [
     row({
       label: t("modals.channel.settings.quiet"),
@@ -472,6 +481,14 @@ function Tasks({ channel }: { channel: Channel }) {
       line: editing ? "" : [code(quiet), sets ? a.act(t("modals.channel.settings.change"), () => setEditing(true)) : ""].filter(Boolean).join(" "),
       nested: editing ? [field("quiet")] : [],
     }),
+    schedules || daily
+      ? row({
+          label: t("modals.channel.settings.daily"),
+          hint: say(daily ? "modals.channel.settings.daily.on" : "modals.channel.settings.daily.off"),
+          line: timing ? "" : [daily ? code(`${daily.at} ${daily.tz}`) : "", ...dailyActs].filter(Boolean).join(" "),
+          nested: timing ? [field("daily")] : [],
+        })
+      : "",
     flip(
       p,
       own,
@@ -492,6 +509,8 @@ function Tasks({ channel }: { channel: Channel }) {
       <Edit value={quiet} label={t("modals.channel.settings.quiet")} onSave={(v) => app.actions.setQuiet(channel.code, v)} onDone={() => setEditing(false)} />
     ) : name === "landing" ? (
       <LandingPick value={landing} onPick={(then) => app.actions.setLanding(channel.code, then)} />
+    ) : name === "daily" ? (
+      <DailyEdit value={daily} onSave={(next) => app.actions.setCheckpointDaily(channel.code, next)} onDone={() => setTiming(false)} />
     ) : undefined
   return <ChannelSheet md={md} p={p} field={fields} />
 }

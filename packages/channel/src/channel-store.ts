@@ -22,6 +22,7 @@ import { subscribeTick, tickOf } from "./clock.ts";
 import { noteAgentWorked } from "./recent.ts";
 import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./store.ts";
 import { asleepNames, hear, onlineByName, sharedOnline, type Online } from "./online.ts";
+import { checkpointAskFor } from "@kiwi/core/state/checkpoint-asks.ts";
 import { trimmed } from "./trim.ts";
 import { foldRoster } from "./fold-roster.ts";
 import { asKept, toKept } from "./kept.ts";
@@ -299,6 +300,23 @@ export class ChannelStore {
       if (this.onGone(err)) throw new Error("you no longer have access to this channel", { cause: err });
       throw err;
     });
+
+  private answerCheckpoint = async (occurrence: string): Promise<void> => {
+    const online = onlineByName(this.online.peek(), this.keyOf.peek(), Date.now());
+    const body = checkpointAskFor(this.state.peek(), (name) => online.get(name)?.reach === "running");
+    if (!body) return;
+    const asked = body.asks.map((a) => a.agent);
+    try {
+      await this.send(asked.length ? `daily checkpoint request: ${asked.join(", ")}` : "daily checkpoint request: no agent with open work is running", {
+        kind: "event",
+        ev: { op: "checkpoint.ask", ...body, occurrence },
+        ...(asked.length ? { to: asked } : {}),
+        occurrence,
+      });
+    } catch {
+      // Another client answered this occurrence first, or the relay was out of reach: the relay keeps one request per occurrence.
+    }
+  };
 
   refreshRoster = async (): Promise<void> => {
     try {
@@ -592,6 +610,8 @@ export class ChannelStore {
           this.infoAt.value = Date.now();
           window.dispatchEvent(new CustomEvent(ICON_LIVE, { detail: this.code }));
           return;
+        case "Checkpoint":
+          return void this.answerCheckpoint(ev.occurrence);
         case "Head":
         case "Status":
           return;

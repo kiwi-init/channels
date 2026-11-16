@@ -279,8 +279,12 @@ export class Channel {
     return run(this.fx.setTitle(name));
   }
 
+  setCheckpointSchedule(daily: CheckpointDaily | null): Promise<void> {
+    return run(this.fx.putCheckpointSchedule(daily));
+  }
+
   async setCheckpointDaily(daily: CheckpointDaily | null): Promise<number> {
-    await run(this.fx.putCheckpointSchedule(daily));
+    await this.setCheckpointSchedule(daily);
     return this.send("", { ev: { op: "checkpoint.daily.set", daily } });
   }
 

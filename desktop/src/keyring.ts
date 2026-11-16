@@ -430,6 +430,8 @@ export class Keyring implements ChannelOps {
         return { _tag: "Presence", presence: ev.presence };
       case "Read":
         return { _tag: "Read", reads: [...ev.reads], snapshot: ev.snapshot };
+      case "Checkpoint":
+        return { _tag: "Checkpoint", occurrence: ev.occurrence, due: ev.due };
       case "Info":
       case "Roster":
       case "Request":

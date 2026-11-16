@@ -5,6 +5,7 @@ import { useId, useState } from "react"
 import { t } from "~/i18n/i18n"
 import type { Channel } from "~/model"
 import { useApp } from "~/nav"
+import { wellFormedDaily, type CheckpointDaily } from "@kiwi/core/checkpoint-schedule.ts"
 
 const REPO = /^[\w.-]+\/[\w.-]+$/
 
@@ -50,6 +51,49 @@ export function Edit({ value, label, onSave, onDone }: { value: string; label: s
         {t("modals.channel.settings.cancel")}
       </button>
       <button type="submit" className="btn is-small" disabled={!draft.trim()}>
+        {t("modals.channel.settings.save")}
+      </button>
+    </form>
+  )
+}
+
+const zones = (): string[] => (typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [])
+
+export const hereZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+
+export function DailyEdit({ value, onSave, onDone }: { value: CheckpointDaily | undefined; onSave: (daily: CheckpointDaily) => void; onDone: () => void }) {
+  const [at, setAt] = useState(value?.at ?? "18:00")
+  const [tz, setTz] = useState(value?.tz ?? hereZone())
+  const list = useId()
+  const draft = { at, tz: tz.trim() }
+  const ok = wellFormedDaily(draft)
+  return (
+    <form
+      className="set-inline"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!ok) return
+        if (draft.at !== value?.at || draft.tz !== value.tz) onSave(draft)
+        onDone()
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== "Escape") return
+        e.preventDefault()
+        e.stopPropagation()
+        onDone()
+      }}
+    >
+      <input autoFocus type="time" className="input is-mono set-inline-input" aria-label={t("modals.channel.settings.daily.time")} value={at} onChange={(e) => setAt(e.target.value)} />
+      <input className="input is-mono set-inline-input" aria-label={t("modals.channel.settings.daily.zone")} list={list} value={tz} spellCheck={false} onChange={(e) => setTz(e.target.value)} />
+      <datalist id={list}>
+        {zones().map((z) => (
+          <option key={z} value={z} />
+        ))}
+      </datalist>
+      <button type="button" className="btn is-quiet is-small" onClick={onDone}>
+        {t("modals.channel.settings.cancel")}
+      </button>
+      <button type="submit" className="btn is-small" disabled={!ok}>
         {t("modals.channel.settings.save")}
       </button>
     </form>
