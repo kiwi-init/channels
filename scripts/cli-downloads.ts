@@ -6,6 +6,8 @@ const BUDGETS = {
   "kiwi-darwin-x64": 32_000_000,
   "kiwi-linux-x64": 39_000_000,
   "kiwi-linux-arm64": 34_000_000,
+  "kiwi-windows-x64.exe": 43_000_000,
+  "kiwi-windows-arm64.exe": 37_000_000,
 } as const;
 
 const dir = resolve(process.argv[2] ?? "dist");

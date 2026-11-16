@@ -1,17 +1,24 @@
-param([Parameter(Mandatory = $true)][string]$App, [string]$Shot = "")
+param([Parameter(Mandatory = $true)][string]$Setup, [string]$Shot = "")
 $ErrorActionPreference = "Stop"
-$home2 = Join-Path $env:RUNNER_TEMP ("channels-start-" + [guid]::NewGuid())
-New-Item -ItemType Directory -Path $home2 | Out-Null
-$env:LOCALAPPDATA = Join-Path $home2 "Local"
-$env:APPDATA = Join-Path $home2 "Roaming"
-$launcher = Join-Path $App "bin\launcher.exe"
-$p = Start-Process -FilePath $launcher -WorkingDirectory (Join-Path $App "bin") -PassThru
-$win = $null
-for ($i = 0; $i -lt 60 -and -not $win; $i++) {
-  Start-Sleep -Milliseconds 500
-  $win = Get-Process | Where-Object { $_.MainWindowTitle -eq "Channels" } | Select-Object -First 1
-}
+$stage = Join-Path $env:RUNNER_TEMP ("channels-setup-" + [guid]::NewGuid())
+Expand-Archive -LiteralPath $Setup -DestinationPath $stage
+$root = Join-Path $env:LOCALAPPDATA "com.kiwiinit.channels\stable"
+$launcher = Join-Path $root "app\bin\launcher.exe"
+$env:ELECTROBUN_INSTALLER_UI_AUTOCLOSE = "1"
+$setupExe = Join-Path $stage "Channels-Setup.exe"
+$installer = Start-Process -FilePath $setupExe -WorkingDirectory $stage -PassThru
 $problems = @()
+for ($i = 0; $i -lt 240 -and -not (Test-Path -LiteralPath $launcher); $i++) { Start-Sleep -Milliseconds 500 }
+if (-not (Test-Path -LiteralPath $launcher)) { $problems += "Channels-Setup.exe didn't install $launcher within 120 s" } else { Write-Output "installed: $launcher" }
+$installer | Wait-Process -Timeout 120 -ErrorAction SilentlyContinue
+Remove-Item Env:ELECTROBUN_INSTALLER_UI_AUTOCLOSE
+$find = { Get-Process | Where-Object { $_.MainWindowTitle -eq "Channels" } | Select-Object -First 1 }
+$win = & $find
+if (-not $win -and (Test-Path -LiteralPath $launcher)) {
+  Write-Output "the installer didn't open the app; starting it"
+  Start-Process -FilePath $launcher -WorkingDirectory (Split-Path $launcher) | Out-Null
+}
+for ($i = 0; $i -lt 60 -and -not $win; $i++) { Start-Sleep -Milliseconds 500; $win = & $find }
 if (-not $win) { $problems += "no window titled Channels within 30 s" } else { Write-Output "window: $($win.ProcessName) pid $($win.Id) titled $($win.MainWindowTitle)" }
 Start-Sleep -Seconds 8
 if ($win -and -not (Get-Process -Id $win.Id -ErrorAction SilentlyContinue)) { $problems += "the window's process quit within 8 s" }
@@ -24,7 +31,7 @@ if ($Shot) {
   $bmp.Save($Shot, [System.Drawing.Imaging.ImageFormat]::Png)
   Write-Output "screenshot: $Shot"
 }
-Get-ChildItem -Path $env:LOCALAPPDATA -Recurse -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object { Write-Output "--- $($_.FullName)"; Get-Content $_.FullName -Tail 40 }
-Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($App) } | Stop-Process -Force -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $root) { Get-ChildItem -LiteralPath $root -Recurse -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object { Write-Output "--- $($_.FullName)"; Get-Content $_.FullName -Tail 60 } }
+Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force -ErrorAction SilentlyContinue
 if ($problems.Count) { $problems | ForEach-Object { Write-Output "problem: $_" }; exit 1 }
-Write-Output "Channels started on Windows and kept its window"
+Write-Output "Channels installed, started on Windows and kept its window"
