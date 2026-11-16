@@ -415,7 +415,8 @@ const routes: RoomRoute[] = [
         ).pipe(Effect.tapError(() => Effect.sync(counted.refund)));
         if ("repeat" in e) {
           counted.refund();
-          return { data: { seq: e.seq, ts: e.ts }, fx: {} };
+          const occ = occurrence ? db.occOf(e.seq) : null;
+          return { data: { seq: e.seq, ts: e.ts, ...(occ ? { occ } : {}) }, fx: {} };
         }
         if (occurrence) yield* answerOccurrence(occurrence, e.seq);
         return {

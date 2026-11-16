@@ -293,6 +293,10 @@ export class RoomDb {
     if (seq % 100 === 0) for (const [k, v] of sends) if (v.ts < send.since) sends.delete(k);
   }
 
+  occOf(seq: number): string | null {
+    return this.sql.all<{ occ: string | null }>("SELECT occ FROM msgs WHERE seq = ?", seq)[0]?.occ ?? null;
+  }
+
   sentAs(seq: number, sender: string, cid: string): boolean {
     return this.sql.all<{ sent: string | null }>("SELECT sent FROM msgs WHERE seq = ?", seq)[0]?.sent === sendKey(sender, cid);
   }

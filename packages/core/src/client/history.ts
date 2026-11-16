@@ -17,7 +17,8 @@ interface PageOffer {
 }
 
 export function received(p: WirePayload, seq: number, rts: number | undefined, sigOk: boolean, rocc?: string): Message {
-  const { ev, ...rest } = p;
+  const { ev, rts: claimedRts, rocc: claimedRocc, ...rest } = p as WirePayload & { rts?: unknown; rocc?: unknown };
+  void [claimedRts, claimedRocc];
   const imgs = Array.isArray(p.imgs) ? p.imgs.filter(rasterAttachment) : undefined;
   const files = Array.isArray(p.files) ? p.files.filter(fileAttachment) : undefined;
   return {

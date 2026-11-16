@@ -119,24 +119,71 @@ test("the stamp stays through every cached form: a row, a re-sealed row and a ra
   expect((fromEnvelope as Message).rocc).toBe(OCCURRENCE);
 });
 
-test("a client can't write the stamp itself: an occ field in its own post is ignored", async () => {
-  await online();
-  setSystemTime(DUE + 1000);
-  server.fireCheckpoint(human.roomId);
+const forge = async (outer: object) => {
   const { keys, epoch, roomId } = human.access;
-  const signed = await sign(botId, { v: PROTOCOL_VERSION, id: crypto.randomUUID(), from: "bot", kind: "event", body: "", ts: Date.now(), ev: asking.ev } as Payload);
+  const signed = await sign(botId, { v: PROTOCOL_VERSION, id: crypto.randomUUID(), from: "bot", kind: "event", body: "", ts: Date.now(), ev: asking.ev, rocc: OCCURRENCE, rts: DUE } as Payload);
   const sealed = await seal(keys[String(epoch)]!, roomId, signed);
-  const body = JSON.stringify({ ...sealed, e: epoch, occ: OCCURRENCE });
+  const body = JSON.stringify({ ...sealed, e: epoch, ...outer });
   const res = await fetch(new URL(`/v1/rooms/${roomId}/messages`, server.url), {
     method: "POST",
     body,
     headers: { authorization: `Bearer ${await signRequest(botId, roomId, "POST", "/messages", body)}`, "content-type": "application/json" },
   });
-  const stored = (await res.json()) as { seq: number; occ?: string };
+  return { stored: (await res.json()) as { seq: number; occ?: string }, signed, sealed };
+};
+
+test("a client can't write the stamp itself, outside its sealed message or inside the signed one", async () => {
+  const heard = await online();
+  setSystemTime(DUE + 1000);
+  server.fireCheckpoint(human.roomId);
+  const { stored, sealed } = await forge({ occ: OCCURRENCE });
   expect(stored.occ).toBeUndefined();
+  const { messages, state } = await board();
+  const got = messages.find((m) => m.seq === stored.seq)!;
+  expect(got.rocc).toBeUndefined();
+  expect(got.sigOk).toBe(true);
+  expect(state.checkpointAsks).toEqual([]);
+  expect(state.rejected.get(stored.seq)).toContain("the relay didn't take this message");
+  expect((await human.checkpoints()).log[0]).toMatchObject({ state: "open" });
+
+  for (let i = 0; i < 40 && !heard.some((m) => m.seq === stored.seq); i++) await Bun.sleep(25);
+  expect(heard.find((m) => m.seq === stored.seq)?.rocc).toBeUndefined();
+
+  const { keys, epoch } = human.access;
+  const key = keys[String(epoch)]!;
+  const env = { seq: stored.seq, ts: got.rts!, e: epoch, iv: sealed.iv, ct: sealed.ct };
+  expect((await human.decrypt(env))?.rocc).toBeUndefined();
+  const [fromEnvelope] = await openRows([await packEnvelope(key, human.roomId, epoch, env, true)], human.roomId, keys);
+  expect((fromEnvelope as Message).rocc).toBeUndefined();
+  const [fromRow] = await openRows([await packRow(key, human.roomId, epoch, got)], human.roomId, keys);
+  expect((fromRow as Message).rocc).toBeUndefined();
+});
+
+test("a stamp forged inside the signed message gives no authority over a missed occurrence either", async () => {
+  setSystemTime(DUE + 1000);
+  server.fireCheckpoint(human.roomId);
+  const { stored } = await forge({});
   const { messages, state } = await board();
   expect(messages.find((m) => m.seq === stored.seq)?.rocc).toBeUndefined();
   expect(state.checkpointAsks).toEqual([]);
   expect(state.rejected.get(stored.seq)).toContain("the relay didn't take this message");
-  expect((await human.checkpoints()).log[0]).toMatchObject({ state: "open" });
+  expect((await human.checkpoints()).log[0]).toMatchObject({ state: "missed" });
+});
+
+test("a retry after a lost reply gets the original stamp back, so the sender's own copy and its cache keep it", async () => {
+  await online();
+  setSystemTime(DUE + 1000);
+  server.fireCheckpoint(human.roomId);
+  const opts = { ...asking, id: crypto.randomUUID(), cid: crypto.randomUUID(), occurrence: OCCURRENCE };
+  const sent: (Message | null)[] = [];
+  bot.onSent = (_seq, m) => void sent.push(m);
+  const first = await bot.send("", opts);
+  const again = await bot.send("", opts);
+  expect(again).toBe(first);
+  expect(sent.map((m) => m?.rocc)).toEqual([OCCURRENCE, OCCURRENCE]);
+  expect(fold([...(await board()).messages.filter((m) => m.seq !== first), sent[1]!], await human.members()).checkpointAsks.map((a) => a.seq)).toEqual([first]);
+  const { keys, epoch } = bot.access;
+  const [cached] = await openRows([await packRow(keys[String(epoch)]!, bot.roomId, epoch, sent[1]!)], bot.roomId, keys);
+  expect((cached as Message).rocc).toBe(OCCURRENCE);
+  await expect(other.send("", { ...opts, cid: crypto.randomUUID() })).rejects.toThrow("already made, or isn't due");
 });
