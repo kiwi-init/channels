@@ -1,4 +1,5 @@
 import { dlopen, FFIType } from "bun:ffi";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -82,7 +83,9 @@ export function readHandoff(line: string, scheme: string): Handoff | null {
   return null;
 }
 
-function serve(socket: string, scheme: string, onHandoff: (h: Handoff) => void): Promise<net.Server> {
+const instancePipe = (dir: string): string => `\\\\.\\pipe\\channels-${createHash("sha256").update(path.win32.resolve(dir).toLowerCase(), "utf8").digest("hex").slice(0, 32)}`;
+
+function serve(socket: string, scheme: string, onHandoff: (h: Handoff) => void, platform: NodeJS.Platform = process.platform): Promise<net.Server> {
   const server = net.createServer((conn) => {
     let buf = "";
     let answered = false;
@@ -103,7 +106,7 @@ function serve(socket: string, scheme: string, onHandoff: (h: Handoff) => void):
     server.once("error", reject);
     server.listen(socket, () => {
       server.off("error", reject);
-      fs.chmodSync(socket, 0o600);
+      if (platform !== "win32") fs.chmodSync(socket, 0o600);
       resolve(server);
     });
   });
@@ -123,6 +126,7 @@ function deliver(socket: string, h: Handoff): Promise<boolean> {
 
 export async function claimInstance({ dir, handoff, scheme, onHandoff, waitMs = 5000, platform = process.platform }: InstanceOptions): Promise<Instance> {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  if (platform === "win32") return claimPipe(instancePipe(dir), handoff, scheme, onHandoff, waitMs);
   fs.chmodSync(dir, 0o700);
   const socket = path.join(dir, SOCKET_FILE);
   const fd = fs.openSync(path.join(dir, LOCK_FILE), fs.constants.O_CREAT | fs.constants.O_RDWR | oCloexec(platform), 0o600);
@@ -144,10 +148,33 @@ export async function claimInstance({ dir, handoff, scheme, onHandoff, waitMs = 
     };
   }
   fs.closeSync(fd);
+  return handOver(socket, handoff, waitMs);
+}
+
+async function handOver(socket: string, handoff: Handoff, waitMs: number): Promise<Instance> {
   const until = Date.now() + waitMs;
   for (;;) {
     if (await deliver(socket, handoff)) return { kind: "second", delivered: true };
     if (Date.now() >= until) return { kind: "second", delivered: false };
     await later(100);
   }
+}
+
+async function claimPipe(pipe: string, handoff: Handoff, scheme: string, onHandoff: (h: Handoff) => void, waitMs: number): Promise<Instance> {
+  const server = await serve(pipe, scheme, onHandoff, "win32").catch((e: unknown) => {
+    if ((e as NodeJS.ErrnoException).code === "EADDRINUSE") return null;
+    throw e;
+  });
+  if (!server) return handOver(pipe, handoff, waitMs);
+  if (handoff.kind === "link") onHandoff(handoff);
+  let released = false;
+  return {
+    kind: "first",
+    listening: true,
+    release: () => {
+      if (released) return;
+      released = true;
+      server.close();
+    },
+  };
 }

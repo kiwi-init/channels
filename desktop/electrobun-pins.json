@@ -93,10 +93,10 @@
     },
     "windows-x64": {
       "bin/launcher.exe": "b1e2e5a5ec8b6b5749a5f6d871a8cce8bcb1fdbbe1dfd1cb94057cd522eb1f58",
+      "bin/bun.exe": "cb1d8e6564e655e49d30cead359750a1cbbd12f42651caa4b62244d7bd93c244",
       "bin/ElectrobunCore.dll": "8841ac8fa83688bbe72e277326ab126f68c39fde1e94e3eb747abe3f73baabe7",
       "bin/libNativeWrapper.dll": "1b4712a535ec111b2f9c222dde5740a0ca29b6c493a80d5767517588b7fba803",
       "bin/libasar.dll": "5738e2307a90b8006bdae37b953355a5795a87141f9469ca0f683a75e90a097f",
-      "bin/WebView2Loader.dll": "d3fce90bdeecb08596e377dea6a316354dd8949e32ff09b89d51be00c14e21b6",
       "bin/zig-zstd.exe": "22bbe1b7065227bc73b90db0c7989608262c79c79c36c409eeabb245dfa5e067",
       "bin/bspatch.exe": "630b1f24f9a796b462927bd2c58f4c26aea4d3385fd8c0cfa6f3e9da53be40ff",
       "Resources/main.js": "db3593eeb506247d154a0c868bf05fb6c0a1dad82b7c7885c891d8b8a45b9755",

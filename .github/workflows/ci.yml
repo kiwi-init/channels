@@ -1162,6 +1162,23 @@ jobs:
       - name: what the build made
         if: ${{ !cancelled() }}
         run: find desktop/release-eb -maxdepth 5 -not -path '*/views/*' | head -200
+      - name: the app makes a channel and sends
+        run: |
+          app=desktop/release-eb/build/stable-win-x64/Channels
+          bun desktop/scripts/package-probe.ts "$app/bin/bun.exe" "$app/Resources/kiwi.js" "$app/Resources/app/bun/keys.js"
+      - name: the app starts and keeps its window
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: ./desktop/scripts/eb-windows-start.ps1 -App "$PWD\desktop\release-eb\build\stable-win-x64\Channels" -Shot "$env:RUNNER_TEMP\windows-start.png"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: desktop-windows
+          retention-days: 7
+          path: |
+            desktop/release-eb/artifacts/*
+            ${{ runner.temp }}/windows-start.png
+          if-no-files-found: warn
 
   # The iPhone app: Swift lint, then an unsigned build for devices with the engine bundled in.
   ios:
