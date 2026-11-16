@@ -354,6 +354,7 @@ export type Scenario =
   | "thread-unloaded"
   | "specs"
   | "spec-changed"
+  | "spec-not-ready"
   | "forgotten-computer"
   | "restarted"
   | "invite-failed"
@@ -468,8 +469,8 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                                   ? withCompact(DEMO_CHANNEL, scenario === "compacted")
                                   : scenario === "specs-behind"
                                     ? behindOf(withSpecs(DEMO_CHANNEL, false))
-                                    : scenario === "specs" || scenario === "spec-changed"
-                                      ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed")
+                                    : scenario === "specs" || scenario === "spec-changed" || scenario === "spec-not-ready"
+                                      ? withSpecs(DEMO_CHANNEL, scenario === "spec-changed", scenario !== "spec-not-ready")
                                       : scenario === "forgotten-computer"
                                         ? {
                                             ...DEMO_CHANNEL,
@@ -944,6 +945,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       writeSpec: (code, ask, text) =>
         edit(code, (c, seq) => ({
           ...c,
+          asks: c.asks.filter((a) => !(a.kind === "spec" && a.ask === ask && a.why !== "result")),
           specs: c.specs?.map((sp) => {
             if (sp.ask !== ask) return sp
             const changed = !!sp.approved && (!!sp.changed || !sp.canJudge) && unticked(wordsRaw(sp.approved.text)) !== unticked(text)
@@ -960,6 +962,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
               edits: sp.edits + 1,
               edited: { by: c.you, at: Date.now() },
               editors: sp.editors.includes(c.you) ? sp.editors : [...sp.editors, c.you],
+              ready: undefined,
               ...(changed ? { changed: true as const } : { changed: undefined }),
             }
           }),

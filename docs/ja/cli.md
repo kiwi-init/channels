@@ -49,7 +49,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | --- | --- |
 | `kiwi specs` | 未完了の仕様と、それぞれの状況 |
 | `kiwi spec show N` · `spec write N --file spec.md` | 人のメッセージ #N の仕様を読む・書く |
-| `kiwi spec ready N` | レビューが通ったら準備完了にし、その人に承認カードを表示します |
+| `kiwi spec ready N` | レビューが通ったら準備完了にし、その人に承認カードを表示します。レビューがまだ変更を求めているときは `--undo` で取り消します |
 | `kiwi spec tick N "words"` | その言葉を含む行の完了条件の項目にチェックを入れます |
 | `kiwi spec start N` | 承認済みの仕様を引き受け、タスクに分けて計画します |
 | `kiwi spec comment N "…" --on "line"` | 仕様全体、またはその 1 行にコメントします |

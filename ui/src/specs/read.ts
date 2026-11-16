@@ -46,6 +46,7 @@ export function stageLine(channel: Channel, spec: Spec): StageLine {
   const done = tasks.filter((t) => t.status === "done" && !t.cancelled).length
   switch (spec.stage) {
     case "draft":
+      if (!spec.ready) return { word: t("specs.read.word.draft"), tone: "tone-quiet", line: t("specs.read.not.ready") }
       return { word: t("specs.read.word.draft"), tone: "tone-quiet", line: spec.canJudge ? t("specs.read.waits.your.approval") : t("specs.read.waits.approval", { who: asker }) }
     case "queued": {
       if (spec.changed) return { word: t("specs.read.word.changed"), tone: "tone-decide", line: t("specs.read.changed.since", { who: nickname(channel, spec.approved?.by ?? spec.by) }) }
@@ -84,7 +85,7 @@ export function stageLine(channel: Channel, spec: Spec): StageLine {
 }
 
 export function needsYou(spec: Spec): boolean {
-  return !!spec.canJudge && !spec.result && (spec.stage === "draft" || spec.stage === "delivered" || !!spec.changed)
+  return !!spec.canJudge && !spec.result && ((spec.stage === "draft" && !!spec.ready) || spec.stage === "delivered" || (!!spec.changed && !!spec.ready))
 }
 
 export interface Comment {

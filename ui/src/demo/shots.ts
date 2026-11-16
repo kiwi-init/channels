@@ -73,6 +73,7 @@ export const SHOTS: Record<string, Shot> = {
   "spec-result": { scenario: "specs", channel: "kiwi", nav: { tab: "specs", spec: 170, part: "result" } },
   "specs-needs": { scenario: "specs", channel: "kiwi", nav: { tab: "needs" } },
   "spec-changed": { scenario: "spec-changed", channel: "kiwi", nav: { tab: "specs", spec: 160, part: "spec" } },
+  "spec-not-ready": { scenario: "spec-not-ready", channel: "kiwi", nav: { tab: "specs", spec: 150, part: "spec" } },
   task: kiwi({ tab: "specs", panel: { kind: "task", task: 12 } }),
   "task-working": kiwi({ panel: { kind: "task", task: 10 } }),
   "task-body": { scenario: "task-body", channel: "kiwi", nav: { tab: "specs", panel: { kind: "task", task: 12 } } },

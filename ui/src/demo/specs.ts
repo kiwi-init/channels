@@ -1,4 +1,4 @@
-import type { Channel, Message, PullRequest, Spec, Task } from "~/model"
+import type { Channel, Message, PullRequest, Spec, SpecAsk, Task } from "~/model"
 import { wrote } from "~/words"
 
 const now = Date.now()
@@ -234,6 +234,7 @@ const SPECS: Spec[] = [
     edited: { by: "pixel", at: m(6) },
     edits: 4,
     editors: ["atlas", "maya", "pixel"],
+    ready: { by: "pixel", at: m(6), v: 1150 },
     canJudge: true,
   }),
   spec({
@@ -369,14 +370,18 @@ function drifted(list: readonly Spec[]): Spec[] {
   return list.map((sp) => (sp.ask === 160 ? { ...sp, text: wrote(DRIFTED), changed: true as const, edited: { by: "win", at: m(7) }, edits: 4 } : sp))
 }
 
-export function withSpecs(c: Channel, changed = false): Channel {
+const notReady = (list: readonly Spec[]): Spec[] => list.map((sp) => (sp.ask === 150 ? { ...sp, ready: undefined } : sp))
+
+export function withSpecs(c: Channel, changed = false, ready = true): Channel {
+  const specs = changed ? drifted(SPECS) : SPECS
+  const approve: SpecAsk[] = ready ? [{ kind: "spec", id: "spec:150:approve", at: m(6), ask: 150, why: "approve" }] : []
   return {
     ...c,
     messages: merged(c.messages, MESSAGES),
     tasks: [...c.tasks, ...TASKS],
-    specs: changed ? drifted(SPECS) : SPECS,
+    specs: ready ? specs : notReady(specs),
     specsOnly: true,
     free: [],
-    asks: [...c.asks, { kind: "spec", id: "spec:150:approve", at: m(6), ask: 150, why: "approve" }, { kind: "spec", id: "spec:170:result", at: m(38), ask: 170, why: "result" }],
+    asks: [...c.asks, ...approve, { kind: "spec", id: "spec:170:result", at: m(38), ask: 170, why: "result" }],
   }
 }

@@ -148,6 +148,7 @@ export default {
   "events.spec.changed": "在批准后修改了 #{ask} 的规格：{title}",
   "events.spec.set": "编写了 #{ask} 的规格：{title}",
   "events.spec.ready": "把 #{ask} 的规格标记为可以批准",
+  "events.spec.unready": "撤回了 #{ask} 的规格的就绪标记：它不再请人批准",
   "events.spec.approve": "批准了 #{ask} 的规格：有智能体空闲时就会开始",
   "events.specs.only.on": "开启了“仅从已批准的规格创建任务”：从现在起，任务都归在人批准过的规格下",
   "events.specs.only.off": "关闭了“仅从已批准的规格创建任务”",

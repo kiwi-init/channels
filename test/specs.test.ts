@@ -347,4 +347,35 @@ describe("a spec reaches the person for approval only once its author marks it r
     expect(s.rejected.has(6)).toBe(false);
     expect(at(s, 1).ready).toMatchObject({ by: "lead", v: 3 });
   });
+
+  test("spec ready --undo takes the mark back: the spec is a draft waiting for its reviews again (#2489)", async () => {
+    const unready = (from: string, ask: number, v: number) => ev(from, { op: "spec.unready", ask, v });
+    const log = await signedLog([say("ana", "labels as a spreadsheet?"), write("dev", 1, SPEC), ready("dev", 1, 2), unready("dev", 1, 2)]);
+    const s = fold(log, roster, T0);
+    expect(s.rejected.has(4)).toBe(false);
+    expect(at(s, 1).ready).toBeUndefined();
+    expect(describeEvent(log[3]!, s)).toBe("took back the ready mark on the spec of #1: it no longer asks a person to approve it");
+    expect(formatSpec(s, at(s, 1))).toContain("draft: once its reviews pass, mark it ready (kiwi spec ready 1)");
+  });
+
+  test("a stale version, someone who never wrote it and doesn't lead, or a spec not marked ready can't take a mark back", async () => {
+    const unready = (from: string, ask: number, v: number) => ev(from, { op: "spec.unready", ask, v });
+    const log = await signedLog([
+      say("ana", "labels as a spreadsheet?"),
+      write("dev", 1, SPEC),
+      unready("dev", 1, 2),
+      ready("dev", 1, 2),
+      unready("ops", 1, 2),
+      write("dev", 1, `${SPEC}\n- 3D`),
+      ready("dev", 1, 6),
+      unready("dev", 1, 2),
+      unready("ana", 1, 6),
+    ]);
+    const s = fold(log, roster, T0);
+    expect(s.rejected.get(3)).toContain("isn't marked ready at this version");
+    expect(s.rejected.get(5)).toContain("who wrote the spec, the lead or a person who approves it takes back its ready mark");
+    expect(s.rejected.get(8)).toContain("changed since that version");
+    expect(s.rejected.has(9)).toBe(false);
+    expect(at(s, 1).ready).toBeUndefined();
+  });
 });

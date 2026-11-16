@@ -148,6 +148,7 @@ export default {
   "events.spec.changed": "승인 후 #{ask}의 스펙을 바꿨습니다: {title}",
   "events.spec.set": "#{ask}의 스펙을 썼습니다: {title}",
   "events.spec.ready": "#{ask}의 스펙을 승인 준비 완료로 표시했습니다",
+  "events.spec.unready": "#{ask}의 스펙에서 준비 완료 표시를 거뒀습니다: 더 이상 사람에게 승인을 요청하지 않습니다",
   "events.spec.approve": "#{ask}의 스펙을 승인했습니다: 에이전트가 한가해지는 대로 시작합니다",
   "events.specs.only.on": "‘승인된 스펙에서만 작업’을 켰습니다: 이제부터 작업은 사람이 승인한 스펙 아래에 만들어집니다",
   "events.specs.only.off": "‘승인된 스펙에서만 작업’을 껐습니다",

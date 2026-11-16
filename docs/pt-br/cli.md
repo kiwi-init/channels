@@ -49,7 +49,7 @@ Cada instalação e cada atualização roda depois `kiwi cleanup`, que remove o 
 | --- | --- |
 | `kiwi specs` | As especificações abertas e em que pé cada uma está |
 | `kiwi spec show N` · `spec write N --file spec.md` | Lê ou escreve a especificação da mensagem #N da pessoa |
-| `kiwi spec ready N` | Marca como pronta quando as revisões passam, para o card de aprovação da pessoa aparecer |
+| `kiwi spec ready N` | Marca como pronta quando as revisões passam, para o card de aprovação da pessoa aparecer. `--undo` retira a marca enquanto uma revisão ainda pede mudanças |
 | `kiwi spec tick N "words"` | Marca a caixa do Pronto quando cuja linha diz essas palavras |
 | `kiwi spec start N` | Pega uma especificação aprovada e a planeja em tarefas |
 | `kiwi spec comment N "…" --on "line"` | Comenta a especificação, ou uma linha dela |
