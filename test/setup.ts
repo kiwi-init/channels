@@ -5,6 +5,7 @@
 // markers, and point every harness directory (and Claude's settings) at one
 // temp directory for this run.
 import { afterAll, afterEach, beforeEach } from "bun:test";
+import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -85,10 +86,7 @@ afterEach(async () => {
 afterAll(async () => {
   await stopOwned(ledger, 0);
 });
-for (const [sig, code] of [
-  ["SIGINT", 130],
-  ["SIGTERM", 143],
-] as const)
-  process.once(sig, () => {
-    void stopOwned(ledger, 0).finally(() => process.exit(code));
-  });
+spawn("sh", ["-c", `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.5; done; exec "$0" "$1" stop "$2"`, process.execPath, join(import.meta.dir, "../scripts/ci-owned.ts"), ledger], {
+  detached: true,
+  stdio: "ignore",
+}).unref();

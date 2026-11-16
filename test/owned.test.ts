@@ -35,8 +35,9 @@ async function ownedRun(how: "pass" | "fail" | "timeout" | "signal", signal?: "S
   }
   const sent = Date.now();
   const code = await Promise.race([run.exited, Bun.sleep(30_000).then(() => null)]);
-  const took = Date.now() - sent;
   const pids = pidsIn(report);
+  while (pids.some(running) && Date.now() - sent < BOUND_MS) await Bun.sleep(50);
+  const took = Date.now() - sent;
   return { code, took, pids, left: pids.filter(running), sentinel };
 }
 
@@ -85,6 +86,7 @@ test("a parallel run under scripts/ci-tests.ts stopped by SIGINT or SIGTERM leav
     const sent = Date.now();
     const code = await Promise.race([runner.exited, Bun.sleep(30_000).then(() => null)]);
     const pids = pidsIn(report);
+    while (pids.some(running) && Date.now() - sent < BOUND_MS + GRACE_MS) await Bun.sleep(50);
     expect({ signal, exited: code !== null }).toEqual({ signal, exited: true });
     expect(Date.now() - sent).toBeLessThan(BOUND_MS + GRACE_MS);
     expect(pids.length).toBe(3);

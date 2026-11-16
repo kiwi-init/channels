@@ -75,3 +75,12 @@ export async function stopOwned(path = process.env[LEDGER_ENV], from = 0, grace 
   while (stubborn.some((e) => running(e.pid)) && Date.now() < killedBy) await Bun.sleep(50);
   return live.map((e) => e.pid);
 }
+
+if (import.meta.main) {
+  const [cmd, ledger] = Bun.argv.slice(2);
+  if (cmd !== "stop" || !ledger) {
+    console.error("usage: bun scripts/ci-owned.ts stop LEDGER");
+    process.exit(2);
+  }
+  await stopOwned(ledger, 0);
+}
