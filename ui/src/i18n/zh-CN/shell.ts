@@ -45,6 +45,8 @@ export default {
   "shell.sidebar.offline.ago": "离线 · {ago}",
   "shell.sidebar.away": "离开",
   "shell.sidebar.online": "在线",
+  "shell.sidebar.unarmed.short": "监听器未就绪",
+  "shell.sidebar.unarmed": "监听器未就绪：{why}",
   "shell.sidebar.hidden": "{count} 个已隐藏",
   "shell.sidebar.left.channel": "已离开频道",
   "shell.sidebar.left": "已离开",

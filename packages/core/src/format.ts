@@ -4,8 +4,8 @@ import { asksPeople, ROLE_LABEL } from "./personality.ts";
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { snapshotLines } from "./task-snapshot.ts";
-import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange } from "./protocol.ts";
-import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
+import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange, unarmedAlert } from "./protocol.ts";
+import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust, Unarmed } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import { sentTo } from "./room-rules.ts";
 import {
@@ -622,10 +622,12 @@ export function presenceAnswers(on: { client: string; reach?: Reach; wake?: stri
   return on.client !== "daemon" || on.reach !== "unreachable" || (isWakeVia(on.wake) && !wakesInSession(on.wake));
 }
 
-export function presenceWords(on: { client: string; reach?: Reach; readAt?: number; wake?: string }, now = Date.now()): string {
+export function presenceWords(on: { client: string; reach?: Reach; readAt?: number; wake?: string; unarmed?: Unarmed }, now = Date.now()): string {
   if (on.client !== "daemon") return `online (${inlineText(on.client, 40)})`;
   const wake = isWakeVia(on.wake) ? `wakes via ${wakeWords(on.wake)}` : "can't be woken";
-  return `${presenceAnswers(on) ? "reachable" : "not listening"} · ${wake} · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}`;
+  const alert = unarmedAlert(on.unarmed, now);
+  const unarmed = alert ? ` · listener not armed for ${ago(on.unarmed?.since ?? now, now).replace(/ ago$/, "")}: ${inlineText(alert, 200)}` : "";
+  return `${presenceAnswers(on) ? "reachable" : "not listening"} · ${wake} · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}${unarmed}`;
 }
 
 export interface Snapshot {

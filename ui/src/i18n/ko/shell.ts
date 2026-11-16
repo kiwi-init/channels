@@ -45,6 +45,8 @@ export default {
   "shell.sidebar.offline.ago": "오프라인 · {ago}",
   "shell.sidebar.away": "자리 비움",
   "shell.sidebar.online": "온라인",
+  "shell.sidebar.unarmed.short": "리스너 준비 안 됨",
+  "shell.sidebar.unarmed": "리스너가 준비되지 않음: {why}",
   "shell.sidebar.hidden": "숨김 {count}개",
   "shell.sidebar.left.channel": "채널을 나갔습니다",
   "shell.sidebar.left": "나감",

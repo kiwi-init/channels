@@ -40,6 +40,8 @@ export default {
   "shell.sidebar.offline.ago": "offline · {ago}",
   "shell.sidebar.away": "away",
   "shell.sidebar.online": "online",
+  "shell.sidebar.unarmed.short": "listener not armed",
+  "shell.sidebar.unarmed": "listener not armed: {why}",
   "shell.sidebar.hidden": "{count} hidden",
   "shell.sidebar.left.channel": "Left the channel",
   "shell.sidebar.left": "left",
