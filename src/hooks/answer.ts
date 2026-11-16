@@ -19,6 +19,8 @@ import { humanOf } from "@kiwi/core/state.ts";
 import { sentTo } from "@kiwi/core/room-rules.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
 import { crossing, noteOverLine, nudgeShort, nudgeText, openTasksOf, overLine } from "./context-line.ts";
+import { noteOwedShown, owedMark, owedShown, owedText } from "./checkpoint-ask.ts";
+import { owedBy } from "@kiwi/core/state/checkpoint-asks.ts";
 import { commitDelivered, noteHeard } from "./delivered.ts";
 import { isRecord } from "./files.ts";
 import { loopDelivery } from "./loop-wait.ts";
@@ -232,6 +234,18 @@ const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput
   const text = [nudgeText(context, tasks, mc, lead), nudgeShort(tasks, mc, lead)].find((t) => t !== null && t.length <= budget);
   if (!text) return null;
   return { text, shown: Effect.sync(() => noteOverLine(s.alias, s.me, session, true, state.head)) };
+});
+
+const checkpointNudge = Effect.fn("Hooks.checkpointNudge")(function* (s: AgentSession, who: Here, mc: string, budget: number) {
+  const { state } = yield* s.state();
+  const owed = owedBy(state, s.me, Date.now());
+  if (!owed) return null;
+  const session = who.session ?? "none";
+  const mark = owedMark(owed);
+  if (owedShown(s.alias, s.me, session) === mark) return null;
+  const text = owedText(owed, mc);
+  if (!text || text.length > budget) return null;
+  return { text, shown: Effect.sync(() => noteOwedShown(s.alias, s.me, session, mark)) };
 });
 
 const personaNews = Effect.fn("Hooks.personaNews")(function* (s: AgentSession, who: Here, mc: string, max: number) {
@@ -537,15 +551,18 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     }
     const stopHead = `Before stopping: unread Kiwi Channels messages for you (${b.alias}). Handle them (answer with \`${mc} reply N "…"\`):`;
     const nudge = yield* contextNudge(input, s, who, mc, budget);
-    const persona = yield* personaNews(s, who, mc, budget - (nudge ? nudge.text.length + 2 : 0));
-    const rearm = fitReminder(yield* rearmText(input, b, who, mc), budget - (nudge ? nudge.text.length + 2 : 0) - (persona ? persona.text.length + 2 : 0));
-    const reminder = [nudge?.text ?? null, rearm].filter((t) => t !== null).join("\n\n") || null;
+    const owed = yield* checkpointNudge(s, who, mc, budget - (nudge ? nudge.text.length + 2 : 0));
+    const nudged = (nudge ? nudge.text.length + 2 : 0) + (owed ? owed.text.length + 2 : 0);
+    const persona = yield* personaNews(s, who, mc, budget - nudged);
+    const rearm = fitReminder(yield* rearmText(input, b, who, mc), budget - nudged - (persona ? persona.text.length + 2 : 0));
+    const reminder = [nudge?.text ?? null, owed?.text ?? null, rearm].filter((t) => t !== null).join("\n\n") || null;
     const unreadMax = stopUnreadMax(stopHead, [persona?.text ?? null, reminder].filter((t) => t !== null).join("\n\n") || null, budget);
     const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax, loopDelivery()) : { text: "", shown: Effect.void, messages: 0 };
     const head = unread.messages ? stopHead : `Before stopping: unread lines for you in Kiwi Channels (${b.alias}) that aren't messages. Each says what to do next:`;
     const reason = [persona?.text ?? null, stopReason(head, unread.text, reminder) || null].filter((t) => t !== null).join("\n\n");
     const told = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
-    const shown = nudge ? Effect.andThen(nudge.shown, told) : told;
+    const marked = owed ? Effect.andThen(owed.shown, told) : told;
+    const shown = nudge ? Effect.andThen(nudge.shown, marked) : marked;
     if (reason) return answered(kind, reason, shown);
     yield* unread.shown;
   }
