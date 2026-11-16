@@ -28,6 +28,7 @@ import { throttled } from "./throttle.ts";
 import { readAdmitRoom, startAdmitter } from "./admit.ts";
 import { addDocWake, docWakeTold, pendingDocWakes, tellDocWakes } from "../config/doc-wakes.ts";
 import { watchClock, watchedPeers, type ClockWatcher } from "./clock-watch.ts";
+import { checkpointAskFor } from "@kiwi/core/state/checkpoint-asks.ts";
 import { followDocs } from "./doc-follow.ts";
 import { pathOf, seatWakes } from "./wake.ts";
 
@@ -224,6 +225,33 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       drop: (blocks) => tellDocWakes(seat.alias, seat.agent, blocks),
       wake: () => scheduleWake(seat),
     });
+  };
+
+  const answeredOccurrences = new Set<string>();
+  const answerCheckpoint = async (seat: Seat, occurrence: string): Promise<void> => {
+    const key = `${seat.alias}\u0000${occurrence}`;
+    if (answeredOccurrences.has(key)) return;
+    answeredOccurrences.add(key);
+    if (answeredOccurrences.size > 64) answeredOccurrences.delete(answeredOccurrences.values().next().value ?? key);
+    const state = await stateOf(seat);
+    if (!state) return;
+    const now = Date.now();
+    const running = (name: string): boolean => {
+      const local = [...seats.values()].find((s) => s.alias === seat.alias && s.agent === name);
+      if (local) return local.reach === "running";
+      return [...seat.heard.values()].some((h) => h.presence.from === name && h.presence.reach === "running" && now - h.at < 3 * beaconMs);
+    };
+    const body = checkpointAskFor(state, running);
+    if (!body) return;
+    const session = await sessionOf(seat);
+    if (!session) return;
+    try {
+      await (await import("../agent.ts")).runAgent(session.checkpointAsk(body, occurrence));
+    } catch {
+      // Another client answered this occurrence first, or the relay was out of reach: the relay keeps one request per occurrence.
+      return;
+    }
+    if (body.asks.some((a) => a.agent === seat.agent)) scheduleWake(seat);
   };
 
   const seatInfo = async (s: Seat): Promise<DaemonSeat> => {
@@ -527,6 +555,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           },
           onRoster: () => tell(seat, { event: "roster" }),
           onInfo: () => tell(seat, { event: "info" }),
+          onCheckpoint: ({ occurrence }) => void answerCheckpoint(seat, occurrence),
           onRequest: () => {
             tell(seat, { event: "request" });
             admitter.watch({ relay: c.relay, roomId: c.roomId, ownerPk: c.ownerPk }, 0);

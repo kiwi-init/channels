@@ -47,7 +47,7 @@ afterEach(() => setSystemTime());
 
 async function scheduledRoom(): Promise<{ roomId: string; pk: string; created: number }> {
   setSystemTime(DUE - 60_000);
-  const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, policy: { ...OPEN_POLICY, noRateLimits: true } });
+  const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, policy: OPEN_POLICY });
   try {
     const owner = await generateIdentity("worker");
     const { access } = await Client.create(r.url.origin, owner, { name: "worker", kind: "human" }, []);

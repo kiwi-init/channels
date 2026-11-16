@@ -46,6 +46,7 @@ import { inlineText } from "@kiwi/core/membership.ts";
 import { parseIssueRef, taskDigest, taskOfIssue } from "@kiwi/core/work.ts";
 import { handBackText, heldBy, reviewedBy } from "@kiwi/core/handback.ts";
 import { branchAreas } from "../areas.ts";
+import type { AskBody } from "@kiwi/core/state/checkpoint-asks.ts";
 import { SessionMessaging } from "./messaging.ts";
 import { oneLook } from "./shared.ts";
 
@@ -392,6 +393,12 @@ export class SessionTasks extends SessionMessaging {
 
   readonly taskNudge = Effect.fn("AgentSession.taskNudge")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.nudge" }>, to?: string) {
     return yield* this.event(ev, `${taskId(ev.task)} quiet`, to ? [to] : undefined);
+  });
+
+  readonly checkpointAsk = Effect.fn("AgentSession.checkpointAsk")({ self: this }, function* (this: SessionTasks, body: AskBody, occurrence: string) {
+    const asked = body.asks.map((a) => a.agent);
+    const words = asked.length ? `daily checkpoint request: ${asked.join(", ")}` : "daily checkpoint request: no agent with open work is running";
+    return yield* this.event({ op: "checkpoint.ask", ...body, occurrence }, words, asked, undefined, { occurrence });
   });
 
   readonly taskWake = Effect.fn("AgentSession.taskWake")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.wake" }>) {

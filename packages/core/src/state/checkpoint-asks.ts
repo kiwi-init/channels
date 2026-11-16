@@ -2,10 +2,38 @@ import { withinWindow, type CheckpointDaily } from "../checkpoint-schedule.ts";
 import type { CheckpointOwed, Message } from "../protocol.ts";
 import { leadCheckpointKey } from "./lead.ts";
 import { isPerson } from "./people.ts";
-import type { CheckpointAsk, Fact, FoldMember, Task } from "./types.ts";
+import type { CheckpointAsk, Fact, FoldMember, Member, Task } from "./types.ts";
 
 export const CHECKPOINT_ASKS_KEPT = 20;
 export const CHECKPOINT_ASK_TTL_MS = 86_400_000;
+
+export const owesCheckpoints = (m: { kind?: string; owner?: boolean }): boolean => !isPerson(m) && m.kind !== "computer";
+
+export interface AskBody {
+  asks: CheckpointOwed[];
+  unreachable: string[];
+}
+
+interface BuildView {
+  members: ReadonlyMap<string, Member>;
+  tasks: ReadonlyMap<number, Task>;
+  lead: string | null;
+}
+
+export function checkpointAskFor(view: BuildView, running: (agent: string) => boolean): AskBody | null {
+  const owed = [...view.members.values()]
+    .filter((m) => m.active && owesCheckpoints(m))
+    .map((m): CheckpointOwed => {
+      const tasks = [...view.tasks.values()]
+        .filter((t) => t.owner === m.name && t.state !== "done" && !t.archived)
+        .map((t) => t.id)
+        .sort((a, b) => a - b);
+      return { agent: m.name, tasks, ...(view.lead === m.name ? { lead: true as const } : {}) };
+    })
+    .filter((o) => o.tasks.length > 0 || o.lead === true);
+  if (!owed.length) return null;
+  return { asks: owed.filter((o) => running(o.agent)), unreachable: owed.filter((o) => !running(o.agent)).map((o) => o.agent) };
+}
 
 interface AskView {
   members: Map<string, FoldMember>;
@@ -24,7 +52,7 @@ function namedRefusal(c: AskView, ev: AskEvent): string | null {
   for (const name of [...ev.asks.map((a) => a.agent), ...ev.unreachable]) {
     const named = c.members.get(name);
     if (!named?.active) return `no member named ${name}`;
-    if (isPerson(named)) return `${name} is a person: only agents are asked for checkpoints`;
+    if (!owesCheckpoints(named)) return `${name} isn't an agent: only agents are asked for checkpoints`;
   }
   return null;
 }

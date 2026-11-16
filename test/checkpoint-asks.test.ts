@@ -4,7 +4,7 @@ import { wellFormed, type CheckpointOwed, type Event, type Message, type Payload
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { describeEvent } from "@kiwi/core/format.ts";
 import { leadCheckpointKey } from "@kiwi/core/state/lead.ts";
-import { checkpointAskStatus, owedBy, CHECKPOINT_ASK_TTL_MS } from "@kiwi/core/state/checkpoint-asks.ts";
+import { checkpointAskFor, checkpointAskStatus, owedBy, CHECKPOINT_ASK_TTL_MS } from "@kiwi/core/state/checkpoint-asks.ts";
 import { CHECKPOINT_WINDOW_MS, dueOn, nextOccurrence, withinWindow } from "@kiwi/core/checkpoint-schedule.ts";
 
 const ids: Record<string, Identity> = {};
@@ -110,7 +110,7 @@ describe("a manual request", () => {
   test("a person or a departed name can't be asked", async () => {
     const t = await addTask("Ship it", "win");
     const asked = await ask("jon", [{ agent: "jon", tasks: [t.seq] }]);
-    expect(fold([t, asked], roster).rejected.get(asked.seq)).toContain("is a person");
+    expect(fold([t, asked], roster).rejected.get(asked.seq)).toContain("isn't an agent");
     const ghost = await ask("jon", [], ["nobody"]);
     expect(fold([ghost], roster).rejected.get(ghost.seq)).toContain("no member named nobody");
   });
@@ -226,5 +226,36 @@ describe("the daily request takes its authority from the schedule's occurrence",
     expect(state.rejected.get(late.seq)).toContain("outside its time");
     const unset = await ask("jon", owed, [], "2026-11-16T18:00", DUE + 1000);
     expect(fold([unset], roster).rejected.get(unset.seq)).toContain("no daily checkpoint time");
+  });
+});
+
+describe("building a request from the board and who is running", () => {
+  test("running agents with open work are asked for each open task, the lead for its channel checkpoint too; the rest are listed unreachable", async () => {
+    const a = await addTask("Win's", "win");
+    const b = await addTask("Win's other", "win");
+    const c = await addTask("Fox's", "fox");
+    const d = await addTask("Done one", "win");
+    const state = fold([a, b, c, d, await ev("jon", { op: "task.update", task: d.seq, state: "done", note: "landed" })], roster);
+    expect(checkpointAskFor(state, (name) => name !== "fox")).toEqual({
+      asks: [
+        { agent: "owl", tasks: [], lead: true },
+        { agent: "win", tasks: [a.seq, b.seq] },
+      ],
+      unreachable: ["fox"],
+    });
+  });
+
+  test("people are never asked, and with no agent owing anything there's nothing to send", async () => {
+    const mine = await addTask("The owner's own", "jon");
+    const noLead = roster.map((m) => (m.name === "owl" ? { ...m, role: undefined } : m));
+    expect(checkpointAskFor(fold([mine], noLead), () => true)).toBeNull();
+  });
+
+  test("what it builds is a request the fold accepts", async () => {
+    const a = await addTask("Win's", "win");
+    const state = fold([a], roster);
+    const body = checkpointAskFor(state, (name) => name === "win");
+    const req = await ask("jon", body!.asks, body!.unreachable);
+    expect(fold([a, req], roster).checkpointAsks.map((r) => r.seq)).toEqual([req.seq]);
   });
 });
