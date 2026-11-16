@@ -286,6 +286,7 @@ export default {
   "settings.agents.back.running": "Já está rodando",
   "settings.agents.back.skipped": "Não iniciado",
   "settings.agents.back.failed": "Falhou",
+  "settings.agents.back.planned": "Seria iniciado",
   "settings.agents.back.printed": "Rode no terminal",
   "settings.agents.harnesses": "Harnesses",
   "settings.agents.not.installed": "Não instalados: {names}",

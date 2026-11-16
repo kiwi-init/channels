@@ -941,6 +941,7 @@ export interface ThisComputer {
   kiwi: { running: boolean; version?: string }
   hooks: { harness: HookHarness; label: string; state: Exclude<HookState, "absent"> }[]
   contextLine: boolean | null
+  back: { down: UpOutcome[]; apart: UpOutcome[] } | null
 }
 
 export interface GoneChannel {

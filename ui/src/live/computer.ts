@@ -27,10 +27,16 @@ export async function loadComputer(): Promise<void> {
   const b = bridge()
   if (!b) return
   const [daemon, hooks, line] = await Promise.all([b.daemonStatus(), b.hooks().catch((): HookRow[] => []), b.contextLine().catch(() => null)])
-  computer.set({ kiwi: { running: daemon.running, ...(daemon.version ? { version: daemon.version } : {}) }, hooks: shown(hooks), contextLine: line === null ? null : line === "on" })
+  computer.set({
+    kiwi: { running: daemon.running, ...(daemon.version ? { version: daemon.version } : {}) },
+    hooks: shown(hooks),
+    contextLine: line === null ? null : line === "on",
+    back: backPrompt(plan.get()),
+  })
 }
 
 export function useComputer(): ThisComputer | null {
+  useEffect(() => void loadUpPlan().catch(() => {}), [])
   useEffect(() => {
     const again = () => void loadComputer().catch(() => {})
     again()
@@ -48,7 +54,33 @@ export async function setHooks(harness: HookHarness, on: boolean): Promise<void>
 
 export const checkComputer = (): Promise<Finding[] | null> => need().doctor()
 
-export const bringAgentsBack = (): Promise<UpOutcome[] | null> => need().bringBack()
+const plan = store<UpOutcome[] | null>(null)
+
+export const upPlanNow = plan.get
+
+export async function loadUpPlan(): Promise<void> {
+  const b = bridge()
+  if (!b) return
+  plan.set(await b.upPlan().catch(() => null))
+  const now = computer.get()
+  if (now) computer.set({ ...now, back: backPrompt(plan.get()) })
+}
+
+export async function bringAgentsBack(): Promise<UpOutcome[] | null> {
+  const outcomes = await need().bringBack()
+  await loadUpPlan()
+  return outcomes
+}
+
+export type BackPrompt = NonNullable<ThisComputer["back"]>
+
+const APART = new Set(["unsupported", "unverified", "unknown"])
+
+export function backPrompt(seats: readonly UpOutcome[] | null): BackPrompt | null {
+  const before = (seats ?? []).filter((s) => s.before)
+  const down = before.filter((s) => s.result === "planned")
+  return down.length ? { down, apart: before.filter((s) => s.result === "skipped" && !!s.skip && APART.has(s.skip)) } : null
+}
 
 export async function setContextLine(on: boolean): Promise<void> {
   const got = await need().setContextLine(on ? "on" : "off")

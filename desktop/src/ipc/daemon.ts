@@ -9,8 +9,9 @@ import { runKiwi } from "./kiwi.ts";
 import { readUpOutcomes } from "@kiwi/core/up-outcome.ts";
 
 const BRING_BACK_MS = 10 * 60_000;
+const PLAN_MS = 60_000;
 
-export function daemonCalls(devices: DeviceHost): Serves<"daemonStatus" | "daemonAdopt" | "installCli" | "doctor" | "bringBack"> {
+export function daemonCalls(devices: DeviceHost): Serves<"daemonStatus" | "daemonAdopt" | "installCli" | "doctor" | "bringBack" | "upPlan"> {
   return {
     daemonStatus: async (): Promise<DaemonStatus> => {
       const hello = await daemonHello();
@@ -21,5 +22,6 @@ export function daemonCalls(devices: DeviceHost): Serves<"daemonStatus" | "daemo
     installCli: () => installCli(),
     doctor: async () => readDoctorFindings((await runKiwi(["doctor", "--json"])).stdout),
     bringBack: async () => readUpOutcomes((await runKiwi(["up", "--json"], BRING_BACK_MS)).stdout),
+    upPlan: async () => readUpOutcomes((await runKiwi(["up", "--dry-run", "--json"], PLAN_MS)).stdout),
   };
 }

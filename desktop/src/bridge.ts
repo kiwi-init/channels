@@ -429,6 +429,8 @@ export interface KiwiBridge {
   doctor(): Promise<DoctorFinding[] | null>;
   /** Runs `kiwi up` on this computer: each seat comes back in its own tmux window, with its outcome. */
   bringBack(): Promise<UpOutcome[] | null>;
+  /** What `kiwi up` would do now, changing nothing: each seat planned, running or skipped, and whether it ran before this boot. */
+  upPlan(): Promise<UpOutcome[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */
   daemonAdopt(): Promise<ComputerView>;
   /** Put the bundled kiwi binary in ~/.kiwi/bin and on the PATH (the app also does this on every start). */

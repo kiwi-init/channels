@@ -1,4 +1,6 @@
-export type UpResult = "restored" | "running" | "skipped" | "failed" | "printed";
+export type UpResult = "restored" | "running" | "skipped" | "failed" | "printed" | "planned";
+
+type UpSkip = "unsupported" | "unverified" | "left" | "idle" | "unknown";
 
 export interface UpOutcome {
   channel: string;
@@ -6,9 +8,12 @@ export interface UpOutcome {
   folder: string;
   result: UpResult;
   why: string;
+  skip?: UpSkip;
+  before?: boolean;
 }
 
-const RESULTS: readonly UpResult[] = ["restored", "running", "skipped", "failed", "printed"];
+const RESULTS: readonly UpResult[] = ["restored", "running", "skipped", "failed", "printed", "planned"];
+const SKIPS: readonly UpSkip[] = ["unsupported", "unverified", "left", "idle", "unknown"];
 const TEXT_MAX = 2_000;
 const SEATS_MAX = 200;
 
@@ -21,7 +26,9 @@ function readOutcome(x: unknown): UpOutcome | null {
   const folder = "folder" in x ? text(x.folder) : null;
   const why = "why" in x ? text(x.why) : null;
   const result = "result" in x ? RESULTS.find((r) => r === x.result) : undefined;
-  return channel && handle && folder !== null && why !== null && result ? { channel, handle, folder, result, why } : null;
+  const skip = "skip" in x ? SKIPS.find((k) => k === x.skip) : undefined;
+  const before = "before" in x && typeof x.before === "boolean" ? x.before : undefined;
+  return channel && handle && folder !== null && why !== null && result ? { channel, handle, folder, result, why, ...(skip ? { skip } : {}), ...(before !== undefined ? { before } : {}) } : null;
 }
 
 export function readUpOutcomes(stdout: string): UpOutcome[] | null {

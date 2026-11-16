@@ -287,6 +287,7 @@ const words = {
   "settings.agents.back.running": "Already running",
   "settings.agents.back.skipped": "Not started",
   "settings.agents.back.failed": "Failed",
+  "settings.agents.back.planned": "Would start",
   "settings.agents.back.printed": "Run in a terminal",
   "settings.agents.harnesses": "Harnesses",
   "settings.agents.not.installed": "Not installed: {names}",

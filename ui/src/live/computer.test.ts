@@ -33,6 +33,16 @@ const fake = {
         }
       : { ok: false as const, detail: "laptop didn't answer: it's offline" },
   doctor: async () => [{ ok: false as const, what: "Codex's hooks are from an older kiwi", how: "Update them" }],
+  upPlan: async () =>
+    presses
+      ? [{ channel: "kiwi", handle: "atlas", folder: "/w", result: "running" as const, why: "its session is still running", before: true }]
+      : [
+          { channel: "kiwi", handle: "atlas", folder: "/w", result: "planned" as const, why: "kiwi up --seat atlas -c kiwi", before: true },
+          { channel: "kiwi", handle: "sage", folder: "/w", result: "skipped" as const, why: "kiwi up doesn't restore codex seats yet", skip: "unsupported" as const, before: true },
+          { channel: "kiwi", handle: "nova", folder: "/w", result: "skipped" as const, why: "its membership couldn't be checked: offline", skip: "unverified" as const, before: true },
+          { channel: "kiwi", handle: "old", folder: "/w", result: "skipped" as const, why: "it wasn't running when this computer went down", skip: "idle" as const, before: false },
+          { channel: "kiwi", handle: "win", folder: "/w", result: "running" as const, why: "its session is still running", before: true },
+        ],
   bringBack: async () => {
     presses++
     return [
@@ -50,13 +60,13 @@ const fake = {
 }
 let bridged = false
 mock.module("@kiwi/secrets/secrets.ts", () => ({ bridge: () => (bridged ? fake : null) }))
-const { bringAgentsBack, checkComputer, computerNow, computerSettings, loadComputer, setContextLine, setHooks } = await import("~/live/computer")
+const { backPrompt, bringAgentsBack, checkComputer, loadUpPlan, upPlanNow, computerNow, computerSettings, loadComputer, setContextLine, setHooks } = await import("~/live/computer")
 
 describe("Settings > Agents shows this computer", () => {
   test("without the desktop bridge (web) there's no computer, so no Bring my agents back, and the call refuses", async () => {
     await loadComputer()
     expect(computerNow()).toBeNull()
-    expect(() => bringAgentsBack()).toThrow("this needs the Channels desktop app")
+    await expect(bringAgentsBack()).rejects.toThrow("this needs the Channels desktop app")
     bridged = true
   })
 
@@ -69,6 +79,7 @@ describe("Settings > Agents shows this computer", () => {
         { harness: "codex", label: "Codex", state: "outdated" },
       ],
       contextLine: false,
+      back: null,
     })
   })
 
@@ -85,6 +96,16 @@ describe("Settings > Agents shows this computer", () => {
     expect(computerNow()?.contextLine).toBe(true)
   })
 
+  test("after a restart, Home's prompt counts the seats from before it that kiwi up would start, and lists unsupported and unverified ones apart", async () => {
+    await loadUpPlan()
+    const prompt = backPrompt(upPlanNow())
+    expect(prompt?.down.map((s) => s.handle)).toEqual(["atlas"])
+    expect(prompt?.apart.map((s) => [s.handle, s.skip])).toEqual([
+      ["sage", "unsupported"],
+      ["nova", "unverified"],
+    ])
+  })
+
   test("Bring my agents back hands back each seat's outcome from kiwi up, and a second press finds the seat already running", async () => {
     const first = await bringAgentsBack()
     expect(first?.map((o) => [o.handle, o.result])).toEqual([
@@ -94,6 +115,7 @@ describe("Settings > Agents shows this computer", () => {
     ])
     expect((await bringAgentsBack())?.[0]).toEqual({ channel: "kiwi", handle: "atlas", folder: "/w", result: "running", why: "its session is still running" })
     expect(presses).toBe(2)
+    expect(backPrompt(upPlanNow())).toBeNull()
   })
 
   test("Check this computer hands back kiwi doctor's findings", async () => {

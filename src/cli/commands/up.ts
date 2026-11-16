@@ -14,7 +14,7 @@ import { bootId, pidAlive } from "../../pid.ts";
 import { outcomeJson, outcomeLine, upAll } from "../../up/all.ts";
 import { printedLine, tmuxLauncher } from "../../up/launch.ts";
 import { sessionLiveness } from "../../up/liveness.ts";
-import { planUp, runningAtShutdown, usedSince, withMembers, type Chooser, type Membership, type SeatPlan } from "../../up/plan.ts";
+import { planJson, planUp, runningAtShutdown, usedSince, withMembers, type Chooser, type Membership, type SeatPlan } from "../../up/plan.ts";
 import { beforeThisBoot, readRunning } from "../../up/running.ts";
 import { forgetLaunch, forgetReport, isReportId, launchSeen, readReport, writeReport } from "../../up/ready.ts";
 import { restoreSeat, type RestoreDeps } from "../../up/restore.ts";
@@ -114,8 +114,12 @@ function chooser(since: string | undefined): Chooser | string {
       return `${err instanceof Error ? err.message : String(err)}; ${USAGE}`;
     }
   }
+  return runningAtShutdown(ranBefore());
+}
+
+function ranBefore(): readonly { alias: string; as: string }[] | null {
   const boot = bootId();
-  return runningAtShutdown(boot === null ? null : (beforeThisBoot(readRunning(), boot)?.seats ?? null));
+  return boot === null ? null : (beforeThisBoot(readRunning(), boot)?.seats ?? null);
 }
 
 const failed = (report: string | null, why: string) =>
@@ -191,6 +195,10 @@ const everySeat = (bindMs: number) =>
     const planned = planUp(loadConfig(), (b) => sessionLiveness(b), choose);
     if (!planned.length) return out(opt.json ? JSON.stringify({ seats: [] }) : "no seats on this computer");
     const plans = withMembers(planned, yield* membership(planned));
+    if (opt["dry-run"] && opt.json) {
+      const ran = new Set((ranBefore() ?? []).map((s) => `${s.alias}\u0000${s.as}`));
+      return out(JSON.stringify({ seats: plans.map((p) => planJson(p, ran.has(`${p.alias}\u0000${p.as}`))) }));
+    }
     if (opt["dry-run"]) {
       for (const p of plans)
         out(

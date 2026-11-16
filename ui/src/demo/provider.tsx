@@ -64,6 +64,7 @@ const COMPUTER: ThisComputer = {
     { harness: "codex", label: "Codex", state: "outdated" },
   ],
   contextLine: false,
+  back: null,
 }
 
 const FINDINGS: Finding[] = [
@@ -71,6 +72,14 @@ const FINDINGS: Finding[] = [
   { ok: true, what: "relay    wss://relay.kiwi.sh answers" },
   { ok: false, what: "Codex's hooks are from an older kiwi", how: "Update them in Settings > Agents > Harnesses." },
 ]
+
+const RESTARTED: NonNullable<ThisComputer["back"]> = {
+  down: [
+    { channel: "kiwi", handle: "atlas", folder: "~/code/kiwi", result: "planned", why: "kiwi up --seat atlas -c kiwi", before: true },
+    { channel: "kiwi", handle: "win", folder: "~/code/kiwi", result: "planned", why: "kiwi up --seat win -c kiwi", before: true },
+  ],
+  apart: [{ channel: "kiwi", handle: "sage", folder: "~/code/kiwi", result: "skipped", why: "kiwi up doesn't restore codex seats yet", skip: "unsupported", before: true }],
+}
 
 const BROUGHT_BACK: UpOutcome[] = [
   { channel: "kiwi", handle: "atlas", folder: "~/code/kiwi", result: "restored", why: "it resumed its session" },
@@ -344,6 +353,7 @@ export type Scenario =
   | "specs"
   | "spec-changed"
   | "forgotten-computer"
+  | "restarted"
   | "invite-failed"
   | "review-reset"
   | "member"
@@ -621,7 +631,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   const [state, setState] = useState(() => initial(scenario, look))
   const [shownUsage] = useState(usage)
   const [ownPersonalities, setOwnPersonalities] = useState<Personality[]>([])
-  const [computer, setComputer] = useState(COMPUTER)
+  const [computer, setComputer] = useState<ThisComputer>(scenario === "restarted" ? { ...COMPUTER, back: RESTARTED } : COMPUTER)
   const [arrived, setArrived] = useState(open)
   useEffect(() => {
     if (scenario !== "slow-open") return
@@ -1155,7 +1165,13 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
           )
         ),
       checkComputer: () => new Promise((done) => setTimeout(() => done(FINDINGS), 400)),
-      bringAgentsBack: () => new Promise((done) => setTimeout(() => done(BROUGHT_BACK), 400)),
+      bringAgentsBack: () =>
+        new Promise((done) =>
+          setTimeout(() => {
+            setComputer((c) => ({ ...c, back: null }))
+            done(BROUGHT_BACK)
+          }, 400)
+        ),
       myUsage: async () => ({
         plan: "free",
         blocked: false,

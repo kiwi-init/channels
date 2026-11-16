@@ -3,16 +3,44 @@ import { Fragment, useEffect, useState } from "react"
 
 import { Icon } from "~/kit/icons"
 import { copyText } from "~/kit/toasts"
-import { useActions, useAppAccount } from "~/nav"
+import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
+import type { Key } from "~/i18n/en"
+import { useActions, useApp, useAppAccount, useToast } from "~/nav"
 import { t } from "~/i18n/i18n"
 import { showAsk } from "~/shell/enroll-hidden"
 
 type Card = { key: string; text: string; detail?: string; path?: string; act?: string; busy?: string; onAct?: () => void; progress?: number }
 
+const APART_WHY: Record<NonNullable<UpOutcome["skip"]>, Key> = {
+  unsupported: "shell.updates.back.why.unsupported",
+  unverified: "shell.updates.back.why.unverified",
+  unknown: "shell.updates.back.why.unknown",
+  left: "shell.updates.back.why.unknown",
+  idle: "shell.updates.back.why.unknown",
+}
+
 function useCards(): Card[] {
   const actions = useActions()
   const account = useAppAccount()
+  const toast = useToast()
+  const back = useApp().app.computer?.back ?? null
   const cards: Card[] = []
+  if (back)
+    cards.push({
+      key: `back ${back.down.map((s) => `${s.channel}/${s.handle}`).join(" ")}`,
+      text: back.down.length === 1 ? t("shell.updates.back.one") : t("shell.updates.back", { count: back.down.length }),
+      ...(back.apart.length ? { detail: t("shell.updates.back.apart", { names: back.apart.map((s) => `${s.handle} (${t(APART_WHY[s.skip ?? "unknown"])})`).join(", ") }) } : {}),
+      act: t("shell.updates.back.act"),
+      busy: t("shell.updates.back.busy"),
+      onAct: () =>
+        void actions.bringAgentsBack().then(
+          (outcomes) => {
+            const failed = (outcomes ?? []).filter((o) => o.result === "failed").length
+            toast(failed ? t("shell.updates.back.failed", { count: failed }) : t("shell.updates.back.done"), failed ? "error" : "info")
+          },
+          () => toast(t("shell.updates.back.no.answer"), "error")
+        ),
+    })
   const ask = account?.enrollAsk
   if (ask && ask.stage !== "elsewhere") cards.push({ key: "ask", text: t("shell.updates.sign.in.ask", { name: ask.label }), act: t("shell.updates.review"), onAct: showAsk })
   const moved = account?.moved

@@ -286,6 +286,7 @@ export default {
   "settings.agents.back.running": "実行中",
   "settings.agents.back.skipped": "未起動",
   "settings.agents.back.failed": "失敗",
+  "settings.agents.back.planned": "起動予定",
   "settings.agents.back.printed": "ターミナルで実行",
   "settings.agents.harnesses": "ハーネス",
   "settings.agents.not.installed": "未インストール: {names}",

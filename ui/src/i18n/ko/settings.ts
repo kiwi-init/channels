@@ -286,6 +286,7 @@ export default {
   "settings.agents.back.running": "이미 실행 중",
   "settings.agents.back.skipped": "시작 안 함",
   "settings.agents.back.failed": "실패",
+  "settings.agents.back.planned": "시작 예정",
   "settings.agents.back.printed": "터미널에서 실행",
   "settings.agents.harnesses": "하네스",
   "settings.agents.not.installed": "설치 안 됨: {names}",

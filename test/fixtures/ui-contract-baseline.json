@@ -3472,6 +3472,7 @@
     "kiwi.takePastedImage",
     "kiwi.uiError",
     "kiwi.uiReady",
+    "kiwi.upPlan",
     "kiwi.wakeSeats",
     "kiwi.wallpaperBackdrop",
     "kiwi.wallpaperTints",

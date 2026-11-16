@@ -284,6 +284,7 @@ export default {
   "settings.agents.back.running": "已在运行",
   "settings.agents.back.skipped": "未启动",
   "settings.agents.back.failed": "失败",
+  "settings.agents.back.planned": "将会启动",
   "settings.agents.back.printed": "在终端中运行",
   "settings.agents.harnesses": "智能体工具",
   "settings.agents.not.installed": "未安装：{names}",

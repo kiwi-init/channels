@@ -98,6 +98,7 @@ const BACK_SAYS: Record<UpResult, { key: Key; mark?: "fine" | "bad" }> = {
   skipped: { key: "settings.agents.back.skipped" },
   failed: { key: "settings.agents.back.failed", mark: "bad" },
   printed: { key: "settings.agents.back.printed" },
+  planned: { key: "settings.agents.back.planned" },
 }
 
 function outcomeRow(o: UpOutcome): string {
