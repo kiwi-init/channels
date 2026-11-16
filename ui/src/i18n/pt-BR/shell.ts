@@ -122,7 +122,7 @@ export default {
   "panes.page.checkpoints.daily": "Checkpoints diários pedidos às {time}",
   "panes.page.checkpoints.saved.count": "{count} salvos",
   "panes.page.checkpoints.waiting.count": "{count} aguardando",
-  "panes.page.checkpoints.unreachable.count": "{count} fora de execução",
+  "panes.page.checkpoints.unreachable.count": "{count} fora de execução no pedido",
   "panes.page.checkpoints.saved": "checkpoint salvo",
   "panes.page.checkpoints.waiting": "checkpoint aguardando {items}",
   "panes.page.checkpoints.unreachable": "não estava em execução no pedido",

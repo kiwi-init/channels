@@ -122,7 +122,7 @@ export default {
   "panes.page.checkpoints.daily": "毎日のチェックポイントを依頼: {time}",
   "panes.page.checkpoints.saved.count": "保存済み {count}",
   "panes.page.checkpoints.waiting.count": "待機中 {count}",
-  "panes.page.checkpoints.unreachable.count": "未稼働 {count}",
+  "panes.page.checkpoints.unreachable.count": "依頼時に未稼働 {count}",
   "panes.page.checkpoints.saved": "チェックポイント保存済み",
   "panes.page.checkpoints.waiting": "チェックポイント待ち: {items}",
   "panes.page.checkpoints.unreachable": "依頼時に稼働していませんでした",

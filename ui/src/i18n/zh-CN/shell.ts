@@ -122,7 +122,7 @@ export default {
   "panes.page.checkpoints.daily": "已发出每日检查点请求：{time}",
   "panes.page.checkpoints.saved.count": "已保存 {count}",
   "panes.page.checkpoints.waiting.count": "等待中 {count}",
-  "panes.page.checkpoints.unreachable.count": "未运行 {count}",
+  "panes.page.checkpoints.unreachable.count": "请求时未运行 {count}",
   "panes.page.checkpoints.saved": "检查点已保存",
   "panes.page.checkpoints.waiting": "等待检查点：{items}",
   "panes.page.checkpoints.unreachable": "请求时未在运行",

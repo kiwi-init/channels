@@ -240,7 +240,7 @@ const words = {
   "panes.page.checkpoints.daily": "Daily checkpoints asked at {time}",
   "panes.page.checkpoints.saved.count": "{count} saved",
   "panes.page.checkpoints.waiting.count": "{count} waiting",
-  "panes.page.checkpoints.unreachable.count": "{count} not running",
+  "panes.page.checkpoints.unreachable.count": "{count} not running when asked",
   "panes.page.checkpoints.saved": "checkpoint saved",
   "panes.page.checkpoints.waiting": "checkpoint waiting on {items}",
   "panes.page.checkpoints.unreachable": "wasn't running when asked",
