@@ -16,9 +16,9 @@ const CHECKED = 1;
 const checked = (ok: boolean | undefined): { ok?: number } => (ok === true ? { ok: CHECKED } : {});
 
 export async function packRow(key: string, roomId: string, epoch: number, message: Message): Promise<CachedRow> {
-  const { seq, rts, sigOk, opened, proven, sealed: room, ...payload } = asSent(message);
+  const { seq, rts, rocc, sigOk, opened, proven, sealed: room, ...payload } = asSent(message);
   void [sigOk, opened, proven];
-  const sealed = await seal(key, roomId, { seq, msg: payload, ...(room ? { sealed: room } : {}) });
+  const sealed = await seal(key, roomId, { seq, msg: payload, ...(room ? { sealed: room } : {}), ...(rocc !== undefined ? { rocc } : {}) });
   return { seq, ...(rts !== undefined ? { rts } : {}), e: epoch, iv: sealed.iv, ct: sealed.ct };
 }
 
@@ -28,7 +28,7 @@ export interface Unread {
 }
 
 export async function packEnvelope(key: string, roomId: string, epoch: number, env: Envelope, sigOk?: boolean): Promise<CachedRow> {
-  const sealed = await seal(key, roomId, { seq: env.seq, raw: { ts: env.ts, e: env.e ?? 0, iv: env.iv, ct: env.ct }, ...checked(sigOk) });
+  const sealed = await seal(key, roomId, { seq: env.seq, raw: { ts: env.ts, e: env.e ?? 0, iv: env.iv, ct: env.ct, ...(env.occ ? { occ: env.occ } : {}) }, ...checked(sigOk) });
   return { seq: env.seq, rts: env.ts, e: epoch, iv: sealed.iv, ct: sealed.ct };
 }
 
@@ -43,13 +43,14 @@ interface Opened {
   again?: object;
 }
 
-async function reopen(seq: number, raw: { ts: number; e: number; iv: string; ct: string }, ok: unknown, roomId: string, keys: Record<string, string>): Promise<Opened> {
+async function reopen(seq: number, raw: { ts: number; e: number; iv: string; ct: string; occ?: unknown }, ok: unknown, roomId: string, keys: Record<string, string>): Promise<Opened> {
   const key = keys[String(raw.e)];
   const p = key ? ((await open(key, roomId, raw.iv, raw.ct).catch(() => null)) as unknown) : null;
   if (!wellFormed(p)) return { m: { seq, unread: true } };
-  if (ok === CHECKED) return { m: received(p, seq, raw.ts, true) };
+  const occ = typeof raw.occ === "string" ? raw.occ : undefined;
+  if (ok === CHECKED) return { m: received(p, seq, raw.ts, true, occ) };
   const sigOk = await verify(p);
-  return { m: received(p, seq, raw.ts, sigOk), ...(sigOk ? { again: { seq, raw, ok: CHECKED } } : {}) };
+  return { m: received(p, seq, raw.ts, sigOk, occ), ...(sigOk ? { again: { seq, raw, ok: CHECKED } } : {}) };
 }
 
 function sealedIn(x: unknown): x is { room: string; n: number } {
@@ -63,7 +64,7 @@ async function openChecked(row: CachedRow, roomId: string, keys: Record<string, 
   for (const e of epochs) {
     const key = keys[e];
     if (!key) continue;
-    const opened = (await open(key, roomId, row.iv, row.ct)) as { seq?: unknown; msg?: unknown; raw?: unknown; sealed?: unknown; ok?: unknown } | null;
+    const opened = (await open(key, roomId, row.iv, row.ct)) as { seq?: unknown; msg?: unknown; raw?: unknown; sealed?: unknown; ok?: unknown; rocc?: unknown } | null;
     if (!opened || opened.seq !== row.seq) continue;
     if (wellFormedRaw(opened.raw)) return reopen(row.seq, opened.raw, opened.ok, roomId, keys);
     if (!opened.msg || typeof opened.msg !== "object") continue;
@@ -75,10 +76,11 @@ async function openChecked(row: CachedRow, roomId: string, keys: Record<string, 
     if (!wellFormed(msg)) continue;
     const known = opened.ok === CHECKED;
     const sigOk = known || (await verify(msg));
-    const m = received(msg, row.seq, row.rts, sigOk);
+    const rocc = typeof opened.rocc === "string" ? opened.rocc : undefined;
+    const m = received(msg, row.seq, row.rts, sigOk, rocc);
     return {
       m: room ? { ...m, room: room.room, sealed: room } : m,
-      ...(sigOk && !known ? { again: { seq: row.seq, msg: opened.msg, ...(opened.sealed ? { sealed: opened.sealed } : {}), ok: CHECKED } } : {}),
+      ...(sigOk && !known ? { again: { seq: row.seq, msg: opened.msg, ...(opened.sealed ? { sealed: opened.sealed } : {}), ...(rocc !== undefined ? { rocc } : {}), ok: CHECKED } } : {}),
     };
   }
   return null;

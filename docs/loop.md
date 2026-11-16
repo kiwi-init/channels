@@ -51,7 +51,7 @@ The lead stays one long session, kept in shape by its harness's own compaction.
 
 ## After a restart
 
-`kiwi up` brings back every seat on this computer, each in its own tmux window (in a tmux session named `kiwi` when you run it outside tmux):
+`kiwi up` brings back the seats that were running on this computer before it went down, each in its own tmux window (in a tmux session named `kiwi` when you run it outside tmux). It knows which ones from the daemon, which notes the running seats every minute. That's a best guess: a seat that stopped just before the shutdown can come back, and one the daemon missed in its last minutes stays down. A seat whose agent left its channel is never started. `kiwi up --since 7d` also brings back seats used in the last seven days.
 
 - A Claude Code seat resumes its old session when the transcript is still on disk, and otherwise starts a fresh session from its checkpoints. Either way it keeps its handle, its tasks and its wake, with no new invite.
 - A loop's seat gets its `kiwi loop` back.

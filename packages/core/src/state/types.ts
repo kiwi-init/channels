@@ -1,7 +1,8 @@
 import type { Authors } from "./authors.ts";
 import type { Member as MemberRecord, Runs } from "../membership.ts";
 import type { LandingStep, StepSpec } from "../steps.ts";
-import type { Card, Color, IssueRef, KeptHow, Landing, MemberPicture, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
+import type { Card, CheckpointOwed, Color, IssueRef, KeptHow, Landing, MemberPicture, Message, SpecVerdict, TaskState, Trust, Verdict } from "../protocol.ts";
+import type { CheckpointDaily } from "../checkpoint-schedule.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubRelease, GithubRules, GithubRun, GithubState } from "./github.ts";
 import type { TaskSnapshot } from "../task-snapshot.ts";
 import type { Persona } from "../personality.ts";
@@ -251,6 +252,15 @@ export interface Lease {
   queue: { name: string; ttl: number; joined: number; note?: string }[];
 }
 
+export interface CheckpointAsk {
+  seq: number;
+  at: number;
+  by: string;
+  asks: CheckpointOwed[];
+  unreachable: string[];
+  occurrence: string | null;
+}
+
 export interface Fact {
   key: string;
   value: string;
@@ -303,6 +313,8 @@ export interface ChannelState {
   quietMs: number;
   reviewReset: boolean;
   tapToAnswer: boolean;
+  checkpointDaily: CheckpointDaily | null;
+  checkpointAsks: CheckpointAsk[];
   landing: Landing | null;
   landingSteps: StepSpec[] | null;
   compact: Compact | null;
@@ -393,6 +405,8 @@ export interface FoldBase {
   quietMs?: number;
   reviewReset?: true;
   tapToAnswer?: true;
+  checkpointDaily?: CheckpointDaily;
+  checkpointAsks?: CheckpointAsk[];
   landing?: Landing | null;
   landingSteps?: StepSpec[] | null;
   passedAsks?: [number, string][];

@@ -22,6 +22,8 @@ import { subscribeTick, tickOf } from "./clock.ts";
 import { noteAgentWorked } from "./recent.ts";
 import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./store.ts";
 import { asleepNames, hear, onlineByName, sharedOnline, type Online } from "./online.ts";
+import { checkpointAskFor } from "@kiwi/core/state/checkpoint-asks.ts";
+import { CHECKPOINT_WINDOW_MS } from "@kiwi/core/checkpoint-schedule.ts";
 import { trimmed } from "./trim.ts";
 import { foldRoster } from "./fold-roster.ts";
 import { asKept, toKept } from "./kept.ts";
@@ -58,6 +60,7 @@ export interface OlderHistory {
 export const APP_BEACON_MS = 60_000;
 const ANSWER_GAP_MS = 500;
 export const PRESENCE_SETTLE_MS = 3_000;
+const CHECKPOINT_RETRY_MS = 250;
 export interface ChannelHandle {
   ch: ChannelLink;
   connection: Connection;
@@ -300,6 +303,23 @@ export class ChannelStore {
       throw err;
     });
 
+  private answerCheckpoint = async (occurrence: string): Promise<void> => {
+    const online = onlineByName(this.online.peek(), this.keyOf.peek(), Date.now());
+    const body = checkpointAskFor(this.state.peek(), (name) => online.get(name)?.reach === "running");
+    if (!body) return;
+    const asked = body.asks.map((a) => a.agent);
+    try {
+      await this.send(asked.length ? `daily checkpoint request: ${asked.join(", ")}` : "daily checkpoint request: no agent with open work is running", {
+        kind: "event",
+        ev: { op: "checkpoint.ask", ...body, occurrence },
+        ...(asked.length ? { to: asked } : {}),
+        occurrence,
+      });
+    } catch {
+      // Another client answered this occurrence first, or the relay was out of reach: the relay keeps one request per occurrence.
+    }
+  };
+
   refreshRoster = async (): Promise<void> => {
     try {
       this.takeRoster(await this.ch.members());
@@ -454,6 +474,19 @@ export class ChannelStore {
     let beat: ReturnType<typeof setInterval> | undefined;
     let settling: ReturnType<typeof setTimeout> | undefined;
     let answeredAt = 0;
+    let synced = false;
+    let owed: { occurrence: string; due: number } | null = null;
+    let owedRetry: ReturnType<typeof setTimeout> | undefined;
+    const answerWhenSynced = () => {
+      clearTimeout(owedRetry);
+      if (closed || !owed) return;
+      if (Date.now() >= owed.due + CHECKPOINT_WINDOW_MS) return void (owed = null);
+      const ready = synced && pending.length === 0 && this.connection.peek() === "live" && this.answered.peek() && this.caughtUp.peek();
+      if (!ready) return void (owedRetry = setTimeout(answerWhenSynced, CHECKPOINT_RETRY_MS));
+      const { occurrence } = owed;
+      owed = null;
+      void this.answerCheckpoint(occurrence);
+    };
     let indexing: "idle" | "running" | "again" | "off" = "idle";
     let indexed: (() => void)[] = [];
     const settle = () => {
@@ -559,6 +592,7 @@ export class ChannelStore {
             void this.refreshRoster();
           }
           void ch.presence({ client: "probe", query: true }).catch(() => {});
+          synced = false;
           this.answered.value = false;
           clearTimeout(settling);
           settling = setTimeout(() => (this.answered.value = true), PRESENCE_SETTLE_MS);
@@ -592,10 +626,17 @@ export class ChannelStore {
           this.infoAt.value = Date.now();
           window.dispatchEvent(new CustomEvent(ICON_LIVE, { detail: this.code }));
           return;
+        case "Checkpoint":
+          owed = { occurrence: ev.occurrence, due: ev.due };
+          return answerWhenSynced();
+        case "Synced":
+          synced = true;
+          return answerWhenSynced();
         case "Head":
         case "Status":
           return;
         case "Down":
+          synced = false;
           this.connection.value = "reconnecting";
           return;
         case "Failed":
@@ -701,6 +742,7 @@ export class ChannelStore {
       stopLive?.();
       clearTimeout(flush);
       clearTimeout(settling);
+      clearTimeout(owedRetry);
       clearInterval(beat);
       lent.release();
     };

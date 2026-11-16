@@ -455,7 +455,7 @@ export class SessionMessaging extends SessionListen {
     oneLook,
   );
 
-  protected event(ev: Event, body: string, to?: string[], re?: number, slots: Pick<SendOptions, "slot" | "free"> = {}) {
+  protected event(ev: Event, body: string, to?: string[], re?: number, slots: Pick<SendOptions, "slot" | "free" | "occurrence"> = {}) {
     return Effect.gen({ self: this }, function* () {
       yield* this.mayI({ kind: "event", ev });
       return yield* this.ch.fx.send(body, { kind: "event", ev, to: to?.length ? [...new Set(to)].filter((n) => n !== this.me) : undefined, ...(re !== undefined ? { re: [re] } : {}), ...slots });

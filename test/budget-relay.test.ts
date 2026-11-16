@@ -22,6 +22,7 @@ const BUDGET = {
   markReads: 0,
   markWrites: 1,
   welcomeReads: 2,
+  welcomeFirstMeta: 1,
 } as const;
 
 interface Tally {
@@ -144,6 +145,10 @@ describe("relay storage budget, per operation on a warm room", () => {
     reset();
     const frames = runRoomSync(relayCtx, new RoomDb(sql, roomId), welcomeFrames(n));
     expect(frames.at(-1)).toContain('"t":"ready"');
+    const first = reset();
+    console.log(`first welcome: ${first.reads} reads (${first.rows} rows), ${first.writes} writes`);
+    expect(first.reads).toBeLessThanOrEqual(BUDGET.welcomeReads + BUDGET.welcomeFirstMeta);
+    runRoomSync(relayCtx, new RoomDb(sql, roomId), welcomeFrames(n));
     const t = reset();
     console.log(`welcome: ${t.reads} reads (${t.rows} rows), ${t.writes} writes`);
     expect(t.reads).toBeLessThanOrEqual(BUDGET.welcomeReads);

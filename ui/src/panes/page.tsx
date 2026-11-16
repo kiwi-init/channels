@@ -9,8 +9,9 @@ import { STATUS_WORDS } from "~/kit/bits"
 import { GlyphIcon } from "~/kit/icons"
 import { later } from "~/kit/later"
 import { openMessage } from "~/live/open-message"
-import type { Actions, Ask, Channel, PullRequest, Spec, Task, TaskStatus } from "~/model"
-import { useAct } from "~/nav"
+import type { Actions, Ask, Channel, CheckpointAgent, PullRequest, Spec, Task, TaskStatus } from "~/model"
+import { useAct, useApp } from "~/nav"
+import { clock } from "~/kit/time"
 import { lanesOf, nowOf } from "~/now"
 import { inert, lookupOf, pieces, seal, type Lookup, type Seal } from "~/panes/engine"
 import { usePane } from "~/panes/place"
@@ -102,14 +103,41 @@ function nowPage(channel: Channel): string {
   return join([`# ${t("panes.now")}`, counts, bar, now.next ?? "", ...groups, open.length ? "" : t("panes.page.empty")])
 }
 
-function agentsPage(channel: Channel): string {
+function owedWords(agent: Extract<CheckpointAgent, { state: "pending" }>): string {
+  return [...agent.tasks.map((id) => `T${id}`), ...(agent.lead ? [t("panes.page.checkpoints.channel")] : [])].join(", ")
+}
+
+function checkpointWord(agent: CheckpointAgent | undefined): string {
+  if (!agent) return ""
+  if (agent.state === "saved") return ` · ${t("panes.page.checkpoints.saved")}`
+  if (agent.state === "unreachable") return ` · ${t("panes.page.checkpoints.unreachable")}`
+  return ` · ${t("panes.page.checkpoints.waiting", { items: owedWords(agent) })}`
+}
+
+function checkpointLines(channel: Channel, actions: Actions, m: Maker): string {
+  const round = channel.checkpoints
+  const can = channel.youOwn || !!channel.youTrusted
+  const running = channel.people.filter((p) => p.kind === "agent" && p.reach === "running").map((p) => p.name)
+  const ask = can ? main(m.act(t("panes.page.checkpoints.ask"), () => actions.askCheckpoints(channel.code, running))) : ""
+  if (!round) return ask
+  const count = (state: CheckpointAgent["state"]): number => round.agents.filter((a) => a.state === state).length
+  const parts = [
+    count("saved") ? t("panes.page.checkpoints.saved.count", { count: count("saved") }) : "",
+    count("pending") ? t("panes.page.checkpoints.waiting.count", { count: count("pending") }) : "",
+    count("unreachable") ? t("panes.page.checkpoints.unreachable.count", { count: count("unreachable") }) : "",
+  ].filter(Boolean)
+  const head = t(round.daily ? "panes.page.checkpoints.daily" : "panes.page.checkpoints.asked", { time: clock(round.at) })
+  return join([ask, parts.length ? `${head}: ${parts.join(" · ")}` : head])
+}
+
+function agentsPage(channel: Channel, actions: Actions, m: Maker): string {
   const lanes = lanesOf(channel).map((lane) =>
     join([
-      `## @${lane.person.name} · ${statusOf(lane.person, channel)}`,
+      `## @${lane.person.name} · ${statusOf(lane.person, channel)}${checkpointWord(channel.checkpoints?.agents.find((a) => a.name === lane.person.name))}`,
       [...lane.current.map((x) => taskRow(channel, x, steps(x))), ...lane.next.map((x) => taskRow(channel, x, ` · ${t("panes.page.next").toLowerCase()}`)), ...lane.watching.map(prRow)].join("\n"),
     ])
   )
-  return join([`# ${t("shell.channel.agents")}`, ...lanes, lanes.length ? "" : t("panes.page.empty")])
+  return join([`# ${t("shell.channel.agents")}`, lanes.length ? checkpointLines(channel, actions, m) : "", ...lanes, lanes.length ? "" : t("panes.page.empty")])
 }
 
 function githubPage(channel: Channel): string {
@@ -163,9 +191,9 @@ export function askCard(channel: Channel, a: Ask, actions: Actions, m: Maker): s
   return card([`### ${t("panes.page.quiet", { name: `@${a.from}` })}`, held(channel, a.task)])
 }
 
-function boardText(channel: Channel, view: BoardView): { md: string; seal: Seal } {
+function boardText(channel: Channel, view: BoardView, actions: Actions): { md: string; seal: Seal } {
   const m = maker()
-  const md = view.kind === "now" ? nowPage(channel) : view.kind === "agents" ? agentsPage(channel) : githubPage(channel)
+  const md = view.kind === "now" ? nowPage(channel) : view.kind === "agents" ? agentsPage(channel, actions, m) : githubPage(channel)
   return { md, seal: m.seal }
 }
 
@@ -223,7 +251,8 @@ export function Page({ channel, view }: { channel: Channel; view: View }) {
 }
 
 function Board({ channel, view }: { channel: Channel; view: BoardView }) {
-  const built = useMemo(() => boardText(channel, view), [channel, view])
+  const { app } = useApp()
+  const built = useMemo(() => boardText(channel, view, app.actions), [channel, view, app.actions])
   return (
     <PageFrame kind={view.kind}>
       <PageText channel={channel} md={built.md} seal={built.seal} />

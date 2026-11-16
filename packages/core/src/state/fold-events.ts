@@ -50,7 +50,9 @@ import {
   worked,
 } from "./tasks.ts";
 import { addResetRefusal, clearOnCard, markReset, resetRefusal } from "./reset.ts";
-import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
+import type { Charter, CheckpointAsk, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
+import { checkpointAskRefusal, keepAsk } from "./checkpoint-asks.ts";
+import type { CheckpointDaily } from "../checkpoint-schedule.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
 
 const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
@@ -90,6 +92,8 @@ export interface FoldCtx {
   quietMs: number;
   reviewReset: boolean;
   tapToAnswer: boolean;
+  checkpointDaily: CheckpointDaily | null;
+  checkpointAsks: CheckpointAsk[];
   landing: Landing | null;
   landingSteps: StepSpec[] | null;
   passedAsks: Map<number, string>;
@@ -452,6 +456,25 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         break;
       }
       c.tapToAnswer = ev.on;
+      break;
+    }
+
+    case "checkpoint.daily.set": {
+      if (!member.owner) {
+        reject("only the owner sets when every agent is asked for its checkpoints");
+        break;
+      }
+      c.checkpointDaily = ev.daily;
+      break;
+    }
+
+    case "checkpoint.ask": {
+      const refused = checkpointAskRefusal(c, m, ev, member);
+      if (refused) {
+        reject(refused);
+        break;
+      }
+      c.checkpointAsks = keepAsk(c.checkpointAsks, { seq: m.seq, at: m.rts ?? at, by: member.name, asks: ev.asks, unreachable: ev.unreachable, occurrence: ev.occurrence ?? null });
       break;
     }
 

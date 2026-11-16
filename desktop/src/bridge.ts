@@ -116,6 +116,7 @@ export const CHANNEL_CALLS = [
   "info",
   "title",
   "setTitle",
+  "setCheckpointSchedule",
   "rooms",
   "guard",
   "setCharter",
@@ -161,6 +162,8 @@ export type FollowEvent =
   | { _tag: "Info" }
   | { _tag: "Roster" }
   | { _tag: "Request" }
+  | { _tag: "Checkpoint"; occurrence: string; due: number }
+  | { _tag: "Synced" }
   | { _tag: "Status"; line: string }
   | { _tag: "Down" }
   | { _tag: "Failed"; error: WireError };

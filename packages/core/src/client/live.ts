@@ -27,6 +27,7 @@ import {
   type ReadMark,
   type ServerFrame,
 } from "../protocol.ts";
+import { parseOccurrence } from "../checkpoint-schedule.ts";
 import { DocHub, type DocStore, type ThreadKeys } from "../doc/hub.ts";
 import { docKeysFor, type RoomsHere } from "../doc/threads.ts";
 import type { ChannelCore } from "./core.ts";
@@ -37,7 +38,7 @@ import { keepAlive, markOn, ownMessage, wireOf, wireOn, type Inbox, type Incomin
 
 export interface StreamOptions {
   signal?: AbortSignal;
-  onReady?: (head: number) => void;
+  onReady?: (head: number, more: boolean) => void;
   onStatus?: (s: string) => void;
   quietMs?: number;
   now?: () => number;
@@ -46,6 +47,7 @@ export interface StreamOptions {
   onInfo?: () => void;
   onRoster?: () => void;
   onRequest?: () => void;
+  onCheckpoint?: (due: { occurrence: string; due: number }) => void;
 }
 
 export type OpenKind = "first" | "page" | "reconnect";
@@ -61,13 +63,14 @@ export type Live =
       readonly outage: number | null;
       readonly kind: OpenKind;
     }
-  | { readonly _tag: "Ready"; readonly head: number }
+  | { readonly _tag: "Ready"; readonly head: number; readonly more: boolean }
   | { readonly _tag: "Message"; readonly message: Message; readonly envelope?: Envelope }
   | { readonly _tag: "Unread"; readonly envelope: Envelope }
   | { readonly _tag: "Head"; readonly seq: number }
   | { readonly _tag: "Presence"; readonly presence: Presence & { sigOk: boolean } }
   | { readonly _tag: "Read"; readonly reads: readonly ReadMark[]; readonly snapshot: boolean }
   | { readonly _tag: "Info" | "Roster" | "Request" }
+  | { readonly _tag: "Checkpoint"; readonly occurrence: string; readonly due: number }
   | { readonly _tag: "Down"; readonly after: number; readonly code: number; readonly reason: string }
   | { readonly _tag: "Skipped"; readonly frame: string; readonly error: unknown };
 
@@ -141,6 +144,7 @@ const FRAME: Record<Live["_tag"], string> = {
   Info: "info",
   Roster: "roster",
   Request: "request",
+  Checkpoint: "checkpoint",
   Read: "read",
   Down: "status",
   Skipped: "status",
@@ -254,7 +258,7 @@ export class ChannelLive {
           case "Open":
             return Effect.sync(() => opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)), mark: ev.mark, probe: ev.probe }));
           case "Ready":
-            return Effect.sync(() => opts.onReady?.(ev.head));
+            return Effect.sync(() => opts.onReady?.(ev.head, ev.more));
           case "Message":
             return Effect.promise(async () => onMessage(ev.message));
           case "Presence":
@@ -265,6 +269,8 @@ export class ChannelLive {
             return Effect.sync(() => opts.onRoster?.());
           case "Request":
             return Effect.sync(() => opts.onRequest?.());
+          case "Checkpoint":
+            return Effect.sync(() => opts.onCheckpoint?.({ occurrence: ev.occurrence, due: ev.due }));
           default:
             return Effect.void;
         }
@@ -532,8 +538,10 @@ export class ChannelLive {
           return { _tag: "Roster" } satisfies Live;
         case "request":
           return { _tag: "Request" } satisfies Live;
+        case "checkpoint":
+          return parseOccurrence(f.occurrence) && Number.isSafeInteger(f.due) ? ({ _tag: "Checkpoint", occurrence: f.occurrence, due: f.due } satisfies Live) : null;
         case "ready":
-          return { _tag: "Ready", head: f.head } satisfies Live;
+          return { _tag: "Ready", head: f.head, more: f.more === true } satisfies Live;
         case "read": {
           if (!reads) return null;
           const mark = wellFormedRead(f);
@@ -559,7 +567,7 @@ export class ChannelLive {
         return { _tag: "Head", seq: f.seq };
       case "ready":
         at.seq = Math.max(at.seq, f.head);
-        return { _tag: "Ready", head: f.head };
+        return { _tag: "Ready", head: f.head, more: false };
       case "info":
         return { _tag: "Info" };
       case "roster":
