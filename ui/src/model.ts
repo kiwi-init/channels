@@ -62,6 +62,8 @@ export interface Person {
   presence: Presence
   activity?: Activity
   reach?: "listening" | "running" | "wakes"
+  /** Why this agent's listener hasn't armed for five minutes or more (#2502). */
+  unarmed?: string
   harness?: Harness
   runs?: string
   model?: string

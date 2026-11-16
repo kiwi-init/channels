@@ -43,6 +43,7 @@ export {
   daemonSeat,
   ensureDaemon,
   holdListener,
+  reportUnarmed,
   listenDaemon,
   reportRead,
   spawnDaemon,

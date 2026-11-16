@@ -368,6 +368,15 @@ export async function holdListener(entry: Omit<DaemonListener, "at">, sock = dae
   };
 }
 
+export async function reportUnarmed(channel: string, agent: string, why: string, sock = daemonSock()): Promise<void> {
+  const c = await openConn(sock, 2_000);
+  try {
+    await c.call("unarmed", { channel, as: agent, why });
+  } finally {
+    c.close();
+  }
+}
+
 export async function daemonSeat(channel: string, agent: string, sock = daemonSock()): Promise<DaemonSeat | null> {
   try {
     return (await daemonListening(sock)).find((s) => s.channel === channel && s.agent === agent) ?? null;

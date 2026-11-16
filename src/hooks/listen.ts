@@ -8,6 +8,7 @@ import { writeSync } from "node:fs";
 import { openSession } from "../agent.ts";
 import { Cursor, home, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeOn } from "../daemon/reach.ts";
+import { reportUnarmed } from "../daemon/rpc.ts";
 import { appendWakeRow } from "../daemon/wake.ts";
 import { formatMessage, handedNote, messageHead } from "@kiwi/core/format.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
@@ -192,9 +193,10 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     return heard === 1 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void;
   });
   const arming = yield* Effect.forEach(served, (seat) => arm(seat, who, woke).pipe(Effect.catchCause(() => Effect.succeed<Arming>({ kind: "failed", b: seat.b, why: "it couldn't start" }))));
-  for (const a of arming)
-    if (a.kind === "failed")
-      appendWakeRow(home(), { at: Date.now(), alias: a.b.alias, agent: a.b.as, via: via ?? "hooks", unread: 0, result: "failed", why: `the hook listener didn't arm: ${a.why}`, cursor: 0 });
+  const failedArms = arming.flatMap((a) => (a.kind === "failed" ? [a] : []));
+  for (const a of failedArms)
+    appendWakeRow(home(), { at: Date.now(), alias: a.b.alias, agent: a.b.as, via: via ?? "hooks", unread: 0, result: "failed", why: `the hook listener didn't arm: ${a.why}`, cursor: 0 });
+  yield* Effect.forEach(failedArms, (a) => Effect.promise(() => reportUnarmed(a.b.alias, a.b.as, a.why).catch(() => {})), { discard: true });
   const armed = arming.flatMap((a) => (a.kind === "armed" ? [a.tuned] : []));
   let failed = 0;
   const hear = ({ hearing, release }: (typeof armed)[number]) =>

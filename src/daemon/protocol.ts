@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { Info, MemberRow } from "@kiwi/core/client.ts";
 import { home } from "../config.ts";
-import { KEEP_MAX, type Reach } from "@kiwi/core/protocol.ts";
+import { KEEP_MAX, type Reach, type Unarmed } from "@kiwi/core/protocol.ts";
 import type { WakeCommand, WakePath } from "@kiwi/core/wake.ts";
 import type { PairedPerson } from "./pair.ts";
 
@@ -29,6 +29,7 @@ export type DaemonVerb =
   | "listening"
   | "hold"
   | "listeners"
+  | "unarmed"
   | "read"
   | "mark"
   | "peek"
@@ -110,7 +111,7 @@ export interface ListenerProc {
 
 export type ListenerHolder = Pick<DaemonListener, "session" | "pid" | "harness" | "proc">;
 
-export function readProc(v: unknown): ListenerProc | null {
+function readProc(v: unknown): ListenerProc | null {
   if (!v || typeof v !== "object") return null;
   const pid = "pid" in v ? v.pid : null;
   const started = "started" in v ? v.started : null;
@@ -160,6 +161,7 @@ export interface DaemonSeat {
   read: DaemonRead | null;
   wake: { on: boolean; path: WakePath; last: DaemonWake | null };
   reach: Reach | null;
+  unarmed: Unarmed | null;
 }
 
 export interface DaemonPeek {

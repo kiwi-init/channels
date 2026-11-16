@@ -46,6 +46,7 @@ export default {
   "shell.sidebar.offline.ago": "オフライン · {ago}",
   "shell.sidebar.away": "離席中",
   "shell.sidebar.online": "オンライン",
+  "shell.sidebar.unarmed": "リスナーが起動していません: {why}",
   "shell.sidebar.hidden": "非表示 {count} 件",
   "shell.sidebar.left.channel": "チャンネルを退出しました",
   "shell.sidebar.left": "退出",

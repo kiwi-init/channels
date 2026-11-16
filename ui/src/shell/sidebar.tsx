@@ -311,6 +311,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
 const rank = (p: Person): number => (liveOf(p) ? 0 : 3) + (p.role === "lead" ? 0 : p.presence === "offline" ? 2 : 1)
 
 export function statusOf(p: Person, channel: Channel): string {
+  if (p.unarmed) return t("shell.sidebar.unarmed", { why: p.unarmed })
   const live = liveOf(p)
   if (live) return live.text
   const task = taskOf(p, channel)

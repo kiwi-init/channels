@@ -161,8 +161,15 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       ...(seat.reach ? { reach: seat.reach } : {}),
       ...(read ? { readAt: read.at } : {}),
       ...(seat.wakeVia ? { wake: seat.wakeVia } : {}),
+      ...(seat.unarmed && seat.wakeVia && !hookHeld(seat.alias, seat.agent) ? { unarmed: seat.unarmed } : {}),
     };
   };
+
+  function hookHeld(alias: string, agent: string): boolean {
+    return [...conns].some((c) => !c.dead && [...c.held].some((l) => l.kind === "hook" && l.channel === alias && l.agent === agent));
+  }
+
+  const seatsOf = (alias: string, agent: string): Seat[] => [...seats.values()].filter((s) => s.alias === alias && s.agent === agent);
 
   const attachedTo = (seat: Seat): Attached => {
     const held = [...conns].filter((c) => !c.dead).flatMap((c) => [...c.held].filter((l) => l.channel === seat.alias && l.agent === seat.agent));
@@ -304,6 +311,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       read: reads.get(readKey(s.alias, s.agent)) ?? null,
       wake: { on: wakeOn(cfg, s.alias, s.agent), path: await livePath(cfg, s, attachedTo(s)), last: s.lastWake },
       reach: s.reach,
+      unarmed: s.unarmed,
     };
   };
 
@@ -529,6 +537,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         ch,
         ctl: new AbortController(),
         subs: new Set(),
+        unarmed: null,
         head,
         activity: undefined,
         reach: null,
@@ -865,10 +874,28 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           const holder = l.kind === "hook" ? others.flatMap((c) => [...c.held]).find(same) : undefined;
           if (!holder) {
             conn.held.add(l);
+            if (l.kind === "hook")
+              for (const seat of seatsOf(l.channel, l.agent).filter((s) => s.unarmed)) {
+                seat.unarmed = null;
+                seat.announce?.();
+              }
             reachMoved(l.channel, l.agent);
           }
           const named = holder ? { holder: { session: holder.session, pid: holder.pid, harness: holder.harness, proc: holder.proc } } : {};
           sendLine(conn, JSON.stringify({ id, ok: true, held: !holder, ...named }));
+          break;
+        }
+        case "unarmed": {
+          const channel = typeof params.channel === "string" && params.channel ? params.channel : null;
+          const agent = typeof params.as === "string" && params.as ? params.as : null;
+          const why = typeof params.why === "string" && params.why ? params.why.slice(0, 300) : null;
+          if (!channel || !agent || !why) throw new Error('unarmed needs {"channel", "as", "why"}');
+          if (wakeOn(loadConfig(), channel, agent) && !hookHeld(channel, agent))
+            for (const seat of seatsOf(channel, agent)) {
+              seat.unarmed = { since: seat.unarmed?.since ?? Date.now(), why };
+              seat.announce?.();
+            }
+          sendLine(conn, JSON.stringify({ id, ok: true }));
           break;
         }
         case "listeners":

@@ -16,6 +16,7 @@ import {
   cleanActivity,
   goneHow,
   isReach,
+  readUnarmed,
   MORE_REFUSED,
   EVENT_OPS_VERSION,
   PROTOCOL_VERSION,
@@ -588,11 +589,12 @@ export class ChannelLive {
       const rest = omit(p, "e");
       const sigOk = yield* Effect.promise(() => verify(rest));
       if (!fresh(beacons, rest, sigOk, yield* Clock.currentTimeMillis)) return null;
-      const { activity: said, reach, ...fields } = omit(rest as Presence & { role?: unknown }, "role");
+      const { activity: said, reach, unarmed: claimed, ...fields } = omit(rest as Presence & { role?: unknown }, "role");
       const activity = cleanActivity(said);
+      const unarmed = readUnarmed(claimed);
       return {
         _tag: "Presence",
-        presence: { ...fields, ...(activity ? { activity } : {}), ...(isReach(reach) ? { reach } : {}), sigOk },
+        presence: { ...fields, ...(activity ? { activity } : {}), ...(isReach(reach) ? { reach } : {}), ...(unarmed ? { unarmed } : {}), sigOk },
       } satisfies Live;
     });
   }
