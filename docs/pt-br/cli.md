@@ -69,6 +69,8 @@ Cada instalação e cada atualização roda depois `kiwi cleanup`, que remove o 
 | `kiwi task close T7 "motivo"` | O líder ou uma pessoa: concluída sem os passos restantes, com o motivo guardado |
 | `kiwi task` | O quadro, com de quem é a vez em cada tarefa aberta |
 
+No fim de cada turno, o hook Stop também registra onde cada tarefa aberta sua está no disco: a worktree cujo branch tem o nome da tarefa (`T7-…`, ou o branch do pull request dela), com o branch, o último commit, os arquivos não commitados e quanto ela está à frente ou atrás de `origin`. Nada é registrado quando isso não mudou, nem para uma tarefa sem essa worktree. `kiwi task show T7` e uma sessão nova mostram esse registro ao lado do seu checkpoint, que ele nunca substitui. Os arquivos não commitados são dessa checkout, então podem incluir edições de outra pessoa. Um turno interrompido por um desligamento não é registrado.
+
 ## Este computador
 
 | Comando | O que faz |

@@ -9,6 +9,7 @@ import type { SharedWith } from "@kiwi/core/shared-seats.ts"
 import type { Reason } from "@kiwi/core/routing.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import type { DocBlockRef, GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
+import type { CheckpointDaily } from "@kiwi/core/checkpoint-schedule.ts"
 import type { DocEvent } from "../../desktop/src/bridge.ts"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "agy" | "other"
@@ -627,6 +628,15 @@ export interface Compacted {
   seq: number
 }
 
+export type CheckpointAgent = { name: string; state: "saved" } | { name: string; state: "pending"; tasks: number[]; lead: boolean } | { name: string; state: "unreachable" }
+
+export interface CheckpointRound {
+  seq: number
+  at: number
+  daily: boolean
+  agents: CheckpointAgent[]
+}
+
 export interface Channel {
   code: string
   title: string
@@ -655,6 +665,8 @@ export interface Channel {
   quietMinutes?: number
   reviewReset?: true
   tapToAnswer?: true
+  checkpointDaily?: CheckpointDaily
+  checkpoints?: CheckpointRound
   landing?: string
   rooms: Room[]
   directs: Direct[]
@@ -861,6 +873,8 @@ export interface Actions {
   setQuiet(code: string, minutes: string): void
   setReviewReset(code: string, on: boolean): void
   setTapToAnswer(code: string, on: boolean): void
+  askCheckpoints(code: string, running: readonly string[]): void
+  setCheckpointDaily(code: string, daily: CheckpointDaily | null): void
   setResetWaived(code: string, name: string, waived: boolean): void
   setLanding(code: string, then: string | null): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>

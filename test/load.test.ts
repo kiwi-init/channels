@@ -50,6 +50,8 @@ const board = (tasks: Task[]): ChannelState =>
     quietMs: 20 * 60_000,
     reviewReset: false,
     tapToAnswer: false,
+    checkpointDaily: null,
+    checkpointAsks: [],
     landing: null,
     landingSteps: null,
     merges: "agents",

@@ -934,3 +934,64 @@ describe("the channel is folded when something changed, not on a clock (T1787)",
     stop();
   });
 });
+
+describe("the daily checkpoint signal", () => {
+  const boss = { ...person("boss", "pk-owner"), owner: true, kind: "human" } as Member;
+  const agent = (name: string): Member => ({ ...person(name, `pk-${name}`), kind: "agent" }) as Member;
+  const by = (seq: number, ev: Message["ev"]): Message => ({ ...msg(seq), from: "boss", pk: "pk-owner", kind: "event", ev }) as Message;
+  const occurrence = "2026-11-16T18:00";
+  const asked = (r: ReturnType<typeof relay>) => r.called("send").map((c) => (c.args[1] as { ev?: unknown }).ev);
+  const askedSoon = async (r: ReturnType<typeof relay>) => {
+    for (let i = 0; i < 40 && !asked(r).length; i++) await sleep(50);
+    return asked(r);
+  };
+
+  test("after a reconnect it waits for the backlog through the announced head, then asks from the new board", async () => {
+    const r = relay(2);
+    r.setRoster([boss, agent("atlas"), agent("bolt")]);
+    const { store, close } = await opened(r);
+    r.say({ _tag: "Open" });
+    r.say({ _tag: "Message", message: by(1, { op: "task.add", title: "Cached work", owner: "atlas" }), row: null });
+    r.say({ _tag: "Message", message: msg(2), row: null });
+    r.say({ _tag: "Synced" });
+    await until(() => store.handle.value.caughtUp);
+    r.say({ _tag: "Down" });
+    r.say({ _tag: "Open" });
+    r.say({ _tag: "Checkpoint", occurrence, due: Date.now() });
+    await sleep(100);
+    r.say({ _tag: "Message", message: by(3, { op: "task.add", title: "New work", owner: "bolt" }), row: null });
+    r.say({ _tag: "Message", message: by(4, { op: "task.update", task: 1, owner: "bolt" }), row: null });
+    await sleep(PRESENCE_SETTLE_MS + 100);
+    expect(asked(r)).toEqual([]);
+    r.say({ _tag: "Synced" });
+    expect(await askedSoon(r)).toEqual([{ op: "checkpoint.ask", asks: [], unreachable: ["bolt"], occurrence }]);
+    close();
+  }, 10_000);
+
+  test("with nothing cached, a signal ahead of the first backlog is answered once the board is in, never from the empty one", async () => {
+    const r = relay(1);
+    r.setRoster([boss, agent("atlas")]);
+    const { close } = await opened(r);
+    r.say({ _tag: "Open" });
+    r.say({ _tag: "Checkpoint", occurrence, due: Date.now() });
+    await sleep(PRESENCE_SETTLE_MS + 100);
+    expect(asked(r)).toEqual([]);
+    r.say({ _tag: "Message", message: by(1, { op: "task.add", title: "Work", owner: "atlas" }), row: null });
+    r.say({ _tag: "Synced" });
+    expect(await askedSoon(r)).toEqual([{ op: "checkpoint.ask", asks: [], unreachable: ["atlas"], occurrence }]);
+    close();
+  }, 10_000);
+
+  test("a signal whose time has passed by the time the board is in is dropped", async () => {
+    const r = relay(1);
+    r.setRoster([boss, agent("atlas")]);
+    const { close } = await opened(r);
+    r.say({ _tag: "Open" });
+    r.say({ _tag: "Checkpoint", occurrence, due: Date.now() - 5 * 60_000 });
+    r.say({ _tag: "Message", message: by(1, { op: "task.add", title: "Work", owner: "atlas" }), row: null });
+    r.say({ _tag: "Synced" });
+    await sleep(PRESENCE_SETTLE_MS + 300);
+    expect(asked(r)).toEqual([]);
+    close();
+  }, 10_000);
+});

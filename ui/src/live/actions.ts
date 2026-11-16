@@ -199,6 +199,8 @@ export function makeActions(): Actions {
     setBranchPrefix: (code, typed) => attempt(t("live.actions.branch.prefix.not.changed"), async () => (await manage()).setBranchPrefix(code, typed)),
     setQuiet: (code, typed) => attempt(t("live.actions.quiet.not.changed"), async () => (await manage()).setQuiet(code, typed)),
     setTapToAnswer: (code, on) => attempt(t("live.actions.not.changed"), async () => (await manage()).setTapToAnswer(code, on)),
+    askCheckpoints: (code, running) => attempt(t("live.actions.checkpoints.not.asked"), async () => (await manage()).askCheckpoints(code, running)),
+    setCheckpointDaily: (code, daily) => attempt(t("live.actions.not.changed"), async () => (await manage()).setCheckpointDaily(code, daily)),
     setReviewReset: (code, on) => attempt(t("live.actions.not.changed"), async () => (await manage()).setReviewReset(code, on)),
     setResetWaived: (code, name, waived) => attempt(t("live.actions.not.changed"), async () => (await manage()).setResetWaived(code, name, waived)),
     setLanding: (code, then) => attempt(t("live.actions.landing.not.changed"), async () => (await manage()).setLanding(code, then)),

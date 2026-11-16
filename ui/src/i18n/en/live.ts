@@ -32,6 +32,7 @@ export default {
   "live.actions.not.sent.back": "Not sent back",
   "live.actions.task.not.added": "Task not added",
   "live.actions.not.changed": "Not changed",
+  "live.actions.checkpoints.not.asked": "Checkpoints not asked",
   "live.actions.status.not.changed": "Status not changed",
   "live.actions.not.cancelled": "Not cancelled",
   "live.actions.not.closed": "Not closed",

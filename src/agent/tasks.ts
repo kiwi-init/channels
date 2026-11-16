@@ -18,6 +18,7 @@ import {
   type Verdict,
 } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
+import type { SnapshotFacts } from "@kiwi/core/task-snapshot.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { wellFormedRunId } from "@kiwi/core/checks.ts";
 import { currentStep, landedStepRefusal, stepById, stepText, type StepEdit, type StepSpec } from "@kiwi/core/steps.ts";
@@ -46,6 +47,7 @@ import { inlineText } from "@kiwi/core/membership.ts";
 import { parseIssueRef, taskDigest, taskOfIssue } from "@kiwi/core/work.ts";
 import { handBackText, heldBy, reviewedBy } from "@kiwi/core/handback.ts";
 import { branchAreas } from "../areas.ts";
+import type { AskBody } from "@kiwi/core/state/checkpoint-asks.ts";
 import { SessionMessaging } from "./messaging.ts";
 import { oneLook } from "./shared.ts";
 
@@ -392,6 +394,16 @@ export class SessionTasks extends SessionMessaging {
 
   readonly taskNudge = Effect.fn("AgentSession.taskNudge")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.nudge" }>, to?: string) {
     return yield* this.event(ev, `${taskId(ev.task)} quiet`, to ? [to] : undefined);
+  });
+
+  readonly taskSnapshot = Effect.fn("AgentSession.taskSnapshot")({ self: this }, function* (this: SessionTasks, id: number, facts: SnapshotFacts) {
+    return yield* this.event({ op: "task.snapshot", task: id, ...facts }, `${taskId(id)} on disk: ${facts.branch ?? "detached HEAD"} at ${facts.head.slice(0, 9)}`);
+  });
+
+  readonly checkpointAsk = Effect.fn("AgentSession.checkpointAsk")({ self: this }, function* (this: SessionTasks, body: AskBody, occurrence: string) {
+    const asked = body.asks.map((a) => a.agent);
+    const words = asked.length ? `daily checkpoint request: ${asked.join(", ")}` : "daily checkpoint request: no agent with open work is running";
+    return yield* this.event({ op: "checkpoint.ask", ...body, occurrence }, words, asked, undefined, { occurrence });
   });
 
   readonly taskWake = Effect.fn("AgentSession.taskWake")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.wake" }>) {
