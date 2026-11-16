@@ -38,4 +38,13 @@ describe("the owner's approve card waits for a spec marked ready (#1625)", () =>
     expect(cards(changed, "changed")).toEqual([])
     expect(cards([...changed, ev(6, "dev", { op: "spec.ready", ask: 1, v: 5 })], "changed").map((a) => a.ask)).toEqual([1])
   })
+
+  test("the page learns who marked which version ready, and spec ready --undo takes the card and the mark away (#2489)", () => {
+    const ready = [msg(1, "jow", "export please"), ev(2, "dev", { op: "spec.set", ask: 1, text: SPEC }), ev(3, "dev", { op: "spec.ready", ask: 1, v: 2 })]
+    expect(specsOf(fold(ready, roster, 0), "jow")[0]?.ready).toEqual({ by: "dev", at: 3000, v: 2 })
+    const undone = [...ready, ev(4, "dev", { op: "spec.unready", ask: 1, v: 2 })]
+    expect(approveCards(undone)).toEqual([])
+    expect(specsOf(fold(undone, roster, 0), "jow")[0]?.ready).toBeUndefined()
+    expect(approveCards([...undone, ev(5, "dev", { op: "spec.ready", ask: 1, v: 2 })]).map((a) => a.ask)).toEqual([1])
+  })
 })

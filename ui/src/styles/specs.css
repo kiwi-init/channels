@@ -376,6 +376,11 @@
   background: var(--decide-wash);
 }
 
+.spec-gate.is-not-ready {
+  border-color: var(--line-2);
+  background: none;
+}
+
 .spec-gate-text {
   flex: 1;
   min-width: 240px;
