@@ -42,7 +42,6 @@ export default {
   "shell.sidebar.add.agent": "에이전트 추가",
   "shell.sidebar.show.less": "접기",
   "shell.sidebar.others": "다른 사람끼리의 다이렉트 메시지",
-  "shell.sidebar.others.count": { other: "대화 {count}개" },
   "shell.sidebar.offline.ago": "오프라인 · {ago}",
   "shell.sidebar.away": "자리 비움",
   "shell.sidebar.online": "온라인",

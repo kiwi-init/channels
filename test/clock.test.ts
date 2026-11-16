@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { clockOf, nudgeRefusal, nudgesDue, skipsDue } from "@kiwi/core/clock.ts";
-import { describeEvent, formatTask, formatTasks } from "@kiwi/core/format.ts";
+import { describeEvent, formatMessage, formatTask, formatTasks } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { MAX_QUIET_MINUTES, PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type NudgeStep, type Payload, type WakeGot, type WakeSeen } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
@@ -372,10 +372,10 @@ describe("the board and the task page say when a task is quiet, and the words on
     const words = (step: NudgeStep) =>
       describeEvent({ ...due1, ev: step === 0 ? { op: "task.nudge", task: id, mover: "mac", since: epoch, step, day: 1 } : { op: "task.nudge", task: id, mover: "mac", since: epoch, step } }, s);
     expect(([0, 1, 2, 3] as const).map(words)).toEqual([
-      `noted that T${id} “ship” has waited a day in mac's queue`,
-      `marked T${id} “ship” quiet with mac: a wake is attempted`,
-      `marked T${id} “ship” still quiet with mac: due to the lead`,
-      `marked T${id} “ship” still quiet with mac: due in the owner's Needs you`,
+      `Kiwi clock: T${id} “ship” has waited a day in mac's queue (posted by mac's daemon)`,
+      `Kiwi clock: T${id} “ship” quiet with mac: a wake is attempted (posted by mac's daemon)`,
+      `Kiwi clock: T${id} “ship” still quiet with mac: due to the lead (posted by mac's daemon)`,
+      `Kiwi clock: T${id} “ship” still quiet with mac: due in the owner's Needs you (posted by mac's daemon)`,
     ]);
   });
 });
@@ -574,7 +574,8 @@ describe("one waker: the attempt, what came of it, and when the lead is told ear
     expect(s.rejected.get(early.seq)).toBe(`T${id} hasn't been quiet long enough for step 2 of its clock`);
     expect(s.rejected.get(plain.seq)).toBe(`T${id} hasn't been quiet long enough for step 2 of its clock`);
     expect(s.rejected.has(told.seq)).toBe(false);
-    expect(describeEvent(told, s)).toBe(`marked T${id} “ship” quiet with mac, with no wake attempted: due to the lead`);
+    expect(describeEvent(told, s)).toBe(`Kiwi clock: T${id} “ship” quiet with mac, with no wake attempted: due to the lead (posted by owl's daemon)`);
+    expect(formatMessage(told, undefined, s)).toEndWith(`[event]: Kiwi clock: T${id} “ship” quiet with mac, with no wake attempted: due to the lead (posted by owl's daemon)`);
     expect(s.tasks.get(id)!.clock!.step).toBe(2);
     expect(due(c)).toEqual([]);
     expect(formatTask(s, s.tasks.get(id)!, c.now()).split("\n")).toContain("  quiet 20m with mac (told to the lead; no wake attempted)");
@@ -633,7 +634,7 @@ describe("one waker: the attempt, what came of it, and when the lead is told ear
     c.wait(N);
     const told = await c.told("owl", id, "mac", epoch, "read");
     expect(c.state().rejected.has(told.seq)).toBe(false);
-    expect(describeEvent(told, c.state())).toBe(`marked T${id} “ship” still quiet with mac, who was shown the wake: due to the lead`);
+    expect(describeEvent(told, c.state())).toBe(`Kiwi clock: T${id} “ship” still quiet with mac, who was shown the wake: due to the lead (posted by owl's daemon)`);
   });
 
   test("a delivered wake nobody read goes to the lead after 5 min, once", async () => {
@@ -648,7 +649,7 @@ describe("one waker: the attempt, what came of it, and when the lead is told ear
     expect(c.state().rejected.has(told.seq)).toBe(false);
     expect(skips(c)).toEqual([]);
     expect(due(c)).toEqual([]);
-    expect(describeEvent(told, c.state())).toBe(`marked T${id} “ship” quiet with mac, whose wake was delivered and not read: due to the lead`);
+    expect(describeEvent(told, c.state())).toBe(`Kiwi clock: T${id} “ship” quiet with mac, whose wake was delivered and not read: due to the lead (posted by owl's daemon)`);
   });
 
   test("progress or a new mover ends the attempt: its receipts are refused and the new clock has none", async () => {

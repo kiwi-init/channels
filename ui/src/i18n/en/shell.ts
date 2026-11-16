@@ -37,7 +37,6 @@ export default {
   "shell.sidebar.add.agent": "Add an agent",
   "shell.sidebar.show.less": "Show less",
   "shell.sidebar.others": "Others' direct messages",
-  "shell.sidebar.others.count": { one: "{count} conversation", other: "{count} conversations" },
   "shell.sidebar.offline.ago": "offline · {ago}",
   "shell.sidebar.away": "away",
   "shell.sidebar.online": "online",
