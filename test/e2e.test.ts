@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -56,7 +57,7 @@ const claudeDir = mkdtempSync(join(tmpdir(), "mc-claude-"));
 const asPerson = (args: string[]) => args.some((a, i) => a === "--as" && args[i + 1] === "human");
 
 function mc(home: string, ...args: string[]) {
-  return Bun.spawn(kiwiCmd(args), {
+  return spawnOwned(kiwiCmd(args), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDECODE: asPerson(args) ? "" : "1" },
     stdin: "ignore",
@@ -206,7 +207,7 @@ describe("agents coordinating through the CLI", () => {
     expect(await evil.exited).toBe(1);
 
     // Agents can't approve: requests are the owner's, in the Channels app, and the kiwi command says so.
-    const asked = Bun.spawn([...MC, "requests"], { cwd: mac, env: { ...process.env, KIWI_HOME: mac, KIWI_RELAY: relay }, stdout: "pipe", stderr: "pipe" });
+    const asked = spawnOwned([...MC, "requests"], { cwd: mac, env: { ...process.env, KIWI_HOME: mac, KIWI_RELAY: relay }, stdout: "pipe", stderr: "pipe" });
     expect(await new Response(asked.stderr).text()).toContain("in the Channels app");
 
     const status = await ok(lead, "status");
@@ -444,7 +445,7 @@ describe("several agents on one machine", () => {
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "m", "--as", "boss"))![1]!;
 
     const inDir = (dir: string, ...args: string[]) =>
-      Bun.spawn(kiwiCmd(args), { cwd: dir, env: { ...process.env, KIWI_HOME: shared, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+      spawnOwned(kiwiCmd(args), { cwd: dir, env: { ...process.env, KIWI_HOME: shared, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
     const runIn = async (dir: string, ...args: string[]) => {
       const p = inDir(dir, ...args);
       const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
@@ -482,7 +483,7 @@ describe("several agents on one machine", () => {
     const codeB = /join code: (\S+)/.exec(await ok(ownerB, "create", "b", "--as", "boss"))![1]!;
 
     const inDir = (dir: string, ...args: string[]) =>
-      Bun.spawn(kiwiCmd(args), { cwd: dir, env: { ...process.env, KIWI_HOME: shared, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+      spawnOwned(kiwiCmd(args), { cwd: dir, env: { ...process.env, KIWI_HOME: shared, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
     const runIn = async (dir: string, ...args: string[]) => {
       const p = inDir(dir, ...args);
       const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
@@ -534,7 +535,7 @@ describe("several agents on one machine", () => {
     const owner = home("hb-owner");
     const h = home("hb-home");
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "hb", "--as", "boss"))![1]!;
-    const p = Bun.spawn([...MC, "join", code, "--as", "solo"], {
+    const p = spawnOwned([...MC, "join", code, "--as", "solo"], {
       cwd: h,
       env: { ...process.env, HOME: h, KIWI_HOME: h, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir },
       stdin: "ignore",
@@ -551,7 +552,7 @@ describe("several agents on one machine", () => {
 
 describe("Claude Code hooks", () => {
   async function hook(dir: string, mcHome: string, event: string, input: object): Promise<string> {
-    const p = Bun.spawn([...MC, "hook", event], {
+    const p = spawnOwned([...MC, "hook", event], {
       cwd: dir,
       env: { ...process.env, KIWI_HOME: mcHome, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "" },
       stdin: new TextEncoder().encode(JSON.stringify(input)),

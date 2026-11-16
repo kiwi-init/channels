@@ -10,7 +10,7 @@ export function lockPath(dir: string): string {
   return join(dir, "daemon.lock");
 }
 
-function running(pid: number): boolean {
+export function running(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
@@ -19,7 +19,7 @@ function running(pid: number): boolean {
   }
 }
 
-function commandOf(pid: number): string {
+export function commandOf(pid: number): string {
   try {
     if (process.platform === "linux") return readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\u0000").join(" ").trim();
     return spawnSync("ps", ["-o", "command=", "-p", String(pid)], { encoding: "utf8", timeout: 2_000 }).stdout.trim();

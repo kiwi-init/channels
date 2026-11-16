@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -53,7 +54,7 @@ function readHooks(path: string): HooksFile {
 }
 
 function kiwiCli(args: string[], env: Record<string, string>): { code: number; out: string; err: string } {
-  const r = Bun.spawnSync([process.execPath, MAIN_TS, ...args], {
+  const r = spawnOwnedSync([process.execPath, MAIN_TS, ...args], {
     cwd: scratch("hk-agy-cwd-"),
     env: { ...process.env, ...env },
     stdin: new TextEncoder().encode("{}"),
@@ -128,7 +129,7 @@ function agyShell(): (env: Record<string, string>) => string {
   writeFileSync(script, `import { autoInstallExtraHooks } from ${JSON.stringify(join(import.meta.dir, "..", "src", "hooks.ts"))};\nconsole.log(JSON.stringify(autoInstallExtraHooks()));\n`);
   const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
   return (env) =>
-    Bun.spawnSync([bin, "-c", `${quote(process.execPath)} ${quote(script)}; true`], { env: { ...process.env, ...env }, stdout: "pipe", stderr: "pipe" })
+    spawnOwnedSync([bin, "-c", `${quote(process.execPath)} ${quote(script)}; true`], { env: { ...process.env, ...env }, stdout: "pipe", stderr: "pipe" })
       .stdout.toString()
       .trim();
 }

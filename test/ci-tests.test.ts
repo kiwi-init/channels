@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, describe, expect, test } from "bun:test";
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,7 +28,7 @@ async function run(dir: string, ...args: string[]): Promise<{ code: number; err:
 
 async function runWith(env: Record<string, string>, dir: string, ...args: string[]): Promise<{ code: number; err: string; ms: number }> {
   const started = Date.now();
-  const proc = Bun.spawn(["bun", "scripts/ci-tests.ts", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe", env: { ...process.env, ...env } });
+  const proc = spawnOwned(["bun", "scripts/ci-tests.ts", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe", env: { ...process.env, ...env } });
   const [code, err] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
   return { code, err, ms: Date.now() - started };
 }
@@ -69,7 +70,7 @@ describe("scripts/ci-tests.ts", () => {
 
   test("a process a test leaves running with the run's stderr doesn't hold the group after bun test exits", async () => {
     const leaves = `test("leaves a sleeper", async () => {
-  const sleeper = Bun.spawn(["sleep", "15"], { stdout: "ignore", stderr: "inherit", detached: true });
+  const sleeper = spawnOwned(["sleep", "15"], { stdout: "ignore", stderr: "inherit", detached: true });
   sleeper.unref();
   await Bun.write("sleeper.pid", String(sleeper.pid));
 });`;

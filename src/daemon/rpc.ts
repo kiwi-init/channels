@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { Socket } from "bun";
 import type { Info, MemberRow } from "@kiwi/core/client.ts";
@@ -228,6 +228,13 @@ export function spawnDaemon(dir = home(), argv?: string[]): void {
   const abs = resolve(dir);
   const child = spawn(cmd[0]!, cmd.slice(1), { cwd: abs, env: { ...process.env, KIWI_HOME: abs }, stdio: "ignore", detached: true });
   child.unref();
+  const ledger = process.env.KIWI_TEST_SPAWNS;
+  if (ledger && child.pid)
+    try {
+      appendFileSync(ledger, `${JSON.stringify({ pid: child.pid, cmd: cmd.join(" ") })}\n`);
+    } catch {
+      // The test run's ledger is gone: that run is over, and nothing is left to clean up after it.
+    }
 }
 
 function cliDaemonArgv(): string[] {

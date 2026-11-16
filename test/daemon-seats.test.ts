@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -431,7 +432,7 @@ describe("seats always on", () => {
 });
 
 async function cli(args: string[], session = "cli-session", opts: { cwd?: string; kiwiHome?: string } = {}): Promise<string> {
-  const p = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), ...args], {
+  const p = spawnOwned([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), ...args], {
     cwd: opts.cwd ?? home,
     env: { ...process.env, KIWI_HOME: opts.kiwiHome ?? home, KIWI_RELAY: relay, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: session, CLAUDE_PID: String(process.pid) },
     stdout: "pipe",

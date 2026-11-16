@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,8 +28,8 @@ let me = "";
 let alias = "";
 let token = "";
 let key = "";
-const stand = Bun.spawn(["sleep", "600"], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
-const third = Bun.spawn(["sleep", "600"], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+const stand = spawnOwned(["sleep", "600"], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+const third = spawnOwned(["sleep", "600"], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
 
 const PLAIN: Env = Object.fromEntries(
   [
@@ -59,7 +60,7 @@ const THIRD = claude("third-session", third.pid);
 const unhooked = (env: Env): Env => ({ ...env, AI_AGENT: "claude-code_2-1-200_agent" });
 
 function spawn(home: string, args: string[], env: Env = {}, stdin?: string) {
-  return Bun.spawn(kiwiCmd(args), {
+  return spawnOwned(kiwiCmd(args), {
     cwd: home,
     env: Object.fromEntries(
       Object.entries({ ...process.env, KIWI_HOME: home, KIWI_RELAY: server.url.origin, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: agent, KIWI_MODEL: "test-model", ...env }).filter(

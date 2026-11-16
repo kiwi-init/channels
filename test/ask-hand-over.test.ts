@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -300,7 +301,7 @@ describe("kiwi ask-human says where the question went (T503)", () => {
   let server: ReturnType<typeof startRelay>;
   let held = "";
   const ok = async (home: string, ...args: string[]): Promise<string> => {
-    const p = Bun.spawn(kiwiCmd(args), {
+    const p = spawnOwned(kiwiCmd(args), {
       cwd: home,
       env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: server.url.origin, KIWI_NO_HOOKS: "1", CLAUDECODE: "" },
       stdin: "ignore",

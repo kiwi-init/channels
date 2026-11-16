@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { joinAgent, joinPerson, kiwiCmd, pairComputer, setupChannel } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import * as Effect from "effect/Effect";
@@ -25,7 +26,7 @@ let human: Channel;
 let owner: Channel;
 
 function spawn(home: string, args: string[], env: Record<string, string> = {}, stdin?: string) {
-  return Bun.spawn(kiwiCmd(args), {
+  return spawnOwned(kiwiCmd(args), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1", ...env },
     stdin: stdin === undefined ? "ignore" : new Blob([stdin]),

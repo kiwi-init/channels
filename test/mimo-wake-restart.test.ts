@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -34,7 +35,7 @@ afterAll(() => {
 type Env = Record<string, string>;
 
 function spawn(home: string, args: string[], env: Env) {
-  return Bun.spawn(kiwiCmd(args), {
+  return spawnOwned(kiwiCmd(args), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_MODEL: "test-model", ...env },
     stdin: "ignore",

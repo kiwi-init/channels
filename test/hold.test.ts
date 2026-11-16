@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import * as Effect from "effect/Effect";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
@@ -161,7 +162,7 @@ test("a join that opened the seat before a hold binds nothing once the seat went
 });
 
 const killed = async (): Promise<number> => {
-  const child = Bun.spawn(["sleep", "30"]);
+  const child = spawnOwned(["sleep", "30"]);
   holdSeat("ch", "dev", "killed-loop", Date.now(), child.pid);
   expect(all()[0]?.hold?.holder?.pid).toBe(child.pid);
   expect(seatHeldAway(loadConfig(), "ch", "dev")).toBe(true);
@@ -227,7 +228,7 @@ test("a hold taken from a shell records no process, so it never lapses on its ow
 });
 
 test("a process's start is the same each time it's read, and unknown once the process is gone (#1272)", async () => {
-  const child = Bun.spawn(["sleep", "30"]);
+  const child = spawnOwned(["sleep", "30"]);
   try {
     const started = processStart(child.pid);
     expect(started).not.toBeNull();

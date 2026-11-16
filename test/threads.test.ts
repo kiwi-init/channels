@@ -1,6 +1,7 @@
 // Agents in threads (T1460): what an agent says while doing a task goes
 // to that task's thread, among the agents working it (and the lead); --main and --dm say where
 // else; listening delivers your task threads and your direct thread, not other tasks' talk.
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -31,7 +32,7 @@ const scratch = (tag: string) => {
 };
 
 function spawn(home: string, args: string[]) {
-  return Bun.spawn(kiwiCmd(args), { cwd: home, env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  return spawnOwned(kiwiCmd(args), { cwd: home, env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
 }
 
 async function ok(home: string, ...args: string[]): Promise<string> {

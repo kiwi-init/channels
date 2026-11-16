@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -166,7 +167,7 @@ test("Pi: the extension Kiwi writes is strictly typed TypeScript", () => {
   const file = join(dir, "kiwi.ts");
   writeFileSync(file, piExtensionSource({ "session-start": "a", prompt: "b", stop: "c", listen: "d" }));
   const root = join(import.meta.dir, "..");
-  const tsrs = Bun.spawnSync(
+  const tsrs = spawnOwnedSync(
     [
       join(root, "node_modules", ".bin", "tsrs"),
       "--ignoreConfig",

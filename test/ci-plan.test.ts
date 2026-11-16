@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,7 +17,7 @@ function plan(env: Record<string, string>): Record<string, boolean> {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-ci-plan-"));
   const out = join(dir, "out");
   try {
-    const run = Bun.spawnSync(["bash", "-c", script ?? ""], { env: { PATH: process.env.PATH ?? "", GITHUB_OUTPUT: out, ...env } });
+    const run = spawnOwnedSync(["bash", "-c", script ?? ""], { env: { PATH: process.env.PATH ?? "", GITHUB_OUTPUT: out, ...env } });
     if (run.exitCode !== 0) throw new Error(run.stdout.toString() + run.stderr.toString());
     return JSON.parse(readFileSync(out, "utf8").replace(/^run=/, "")) as Record<string, boolean>;
   } finally {

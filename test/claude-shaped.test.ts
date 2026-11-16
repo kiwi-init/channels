@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,7 +15,7 @@ describe("Claude-shaped hook installers share one module and keep each caller's 
   test("every phase of every scenario gives the same files, results and errors as base", () => {
     expect(base.base).toMatch(/^[0-9a-f]{40}$/);
     const home = mkdtempSync(join(tmpdir(), "kiwi-claude-shaped-home-"));
-    const run = Bun.spawnSync([process.execPath, join(import.meta.dir, "claude-shaped-scenarios.ts")], { env: { PATH: process.env.PATH ?? "", HOME: home }, stdout: "pipe", stderr: "pipe" });
+    const run = spawnOwnedSync([process.execPath, join(import.meta.dir, "claude-shaped-scenarios.ts")], { env: { PATH: process.env.PATH ?? "", HOME: home }, stdout: "pipe", stderr: "pipe" });
     rmSync(home, { recursive: true, force: true });
     expect(run.stderr.toString()).toBe("");
     const head = JSON.parse(run.stdout.toString()) as Outcome[];

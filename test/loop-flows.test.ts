@@ -1,3 +1,4 @@
+import { spawnOwned, spawnOwnedSync } from "./owned.ts";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -46,7 +47,7 @@ const base = (home: string): Env => ({
 });
 
 function spawn(home: string, args: string[], env: Env = {}) {
-  return Bun.spawn(kiwiCmd(args), { cwd: home, env: { ...process.env, ...base(home), ...env }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  return spawnOwned(kiwiCmd(args), { cwd: home, env: { ...process.env, ...base(home), ...env }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
 }
 
 async function ok(home: string, args: string[], env: Env = {}): Promise<string> {
@@ -103,14 +104,14 @@ say({ kind: "start", harness: "claude", pid: process.pid, argv, token: !!process
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
 if (task && !(argv.at(-1) ?? "").includes("“loop hold”")) {
-  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: sessionId, CLAUDE_PID: String(process.pid) }, stdout: "pipe", stderr: "pipe" });
+  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: sessionId, CLAUDE_PID: String(process.pid) }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
 }
 const judged = /This session is for reviewing round (\\d+) of (T\\d+)/.exec(argv.at(-1) ?? "");
 if (judged) {
-  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "approve", judged[2], "--round", judged[1], "looks right"]), { env: { ...process.env, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: sessionId, CLAUDE_PID: String(process.pid) }, stdout: "pipe", stderr: "pipe" });
+  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "approve", judged[2], "--round", judged[1], "looks right"]), { env: { ...process.env, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: sessionId, CLAUDE_PID: String(process.pid) }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
@@ -140,7 +141,7 @@ say({ kind: "start", harness: "codex", pid: process.pid, argv, token: !!process.
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
 if (task) {
-  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, CODEX_THREAD_ID: thread }, stdout: "pipe", stderr: "pipe" });
+  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, CODEX_THREAD_ID: thread }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
@@ -168,7 +169,7 @@ await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
 if (task) {
   update({ sessionUpdate: "tool_call" });
-  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, GROK_SESSION_ID: session }, stdout: "pipe", stderr: "pipe" });
+  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, GROK_SESSION_ID: session }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
@@ -199,7 +200,7 @@ say({ kind: "start", harness: "mimo", pid: process.pid, argv, token: !!process.e
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(argv.at(-1) ?? "")?.[1];
 if (task) {
-  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, MIMOCODE: "1", MIMOCODE_PID: String(process.pid), MIMOCODE_SESSION_ID: session }, stdout: "pipe", stderr: "pipe" });
+  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, MIMOCODE: "1", MIMOCODE_PID: String(process.pid), MIMOCODE_SESSION_ID: session }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
@@ -249,12 +250,12 @@ db.run("insert into session values (?, ?, ?, ?, ?)", [session, realpathSync(proc
 db.run("insert into message values (?, ?, ?, ?)", ["msg_p_" + session, session, asked, JSON.stringify({ role: "user" })]);
 db.run("insert into part values (?, ?, ?, ?)", ["prt_p_" + session, "msg_p_" + session, session, JSON.stringify({ type: "text", text: prompt })]);
 db.run("insert into message values (?, ?, ?, ?)", ["msg_s_" + session, session, asked + 5, JSON.stringify({ role: "user" })]);
-const stray = Bun.spawn(["bash", "-c", "exec -a 'kiwi listen --once' sleep 120"], { stdout: "ignore", stderr: "ignore" });
+const stray = spawnOwned(["bash", "-c", "exec -a 'kiwi listen --once' sleep 120"], { stdout: "ignore", stderr: "ignore" });
 say({ kind: "typed", pid: process.pid, prompt, stray: stray.pid });
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(prompt)?.[1];
 if (task) {
-  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, ZCODE_RUNTIME_ENV: "1" }, stdout: "pipe", stderr: "pipe" });
+  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: { ...process.env, ZCODE_RUNTIME_ENV: "1" }, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
@@ -274,7 +275,7 @@ say({ kind: "start", harness: "kimi", pid: process.pid, argv, token: !!process.e
 process.stdout.write("Model: fake\\r\\nNo session yet — one will be created on your first message.\\r\\n> ");
 await Bun.sleep(1_000);
 process.stdout.write("\\x1b[?2004h");
-Bun.spawnSync(["stty", "raw", "-echo"], { stdin: "inherit" });
+spawnOwnedSync(["stty", "raw", "-echo"], { stdin: "inherit" });
 process.stdin.resume();
 process.stdin.on("data", (d) => { if (d.includes(3)) process.kill(process.pid, "SIGKILL"); });
 let got = "";
@@ -292,13 +293,13 @@ mkdirSync(join(dir, "agents", "main"), { recursive: true });
 writeFileSync(join(dir, "state.json"), JSON.stringify({ id: session, cwd: realpathSync(process.cwd()), createdAt: Date.now() }));
 const wire = (o) => appendFileSync(join(dir, "agents", "main", "wire.jsonl"), JSON.stringify(o) + "\\n");
 wire({ type: "turn.prompt", text: prompt });
-const stray = Bun.spawn(["bash", "-c", "exec -a 'kiwi listen --once' sleep 120"], { stdout: "ignore", stderr: "ignore" });
+const stray = spawnOwned(["bash", "-c", "exec -a 'kiwi listen --once' sleep 120"], { stdout: "ignore", stderr: "ignore" });
 say({ kind: "typed", pid: process.pid, prompt, stray: stray.pid });
 await Bun.sleep(1_500);
 const task = /This session is for (T\\d+)/.exec(prompt)?.[1];
 if (task) {
   wire({ type: "tool.call" });
-  const p = Bun.spawn(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: process.env, stdout: "pipe", stderr: "pipe" });
+  const p = spawnOwned(${JSON.stringify(kiwiCmd([]))}.concat(["task", "done", task]), { env: process.env, stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(p.stdout).text()) + (await new Response(p.stderr).text());
   await p.exited;
   say({ kind: "done", pid: process.pid, out });
@@ -646,7 +647,7 @@ test("with --harness mimo, the loop passes MiMoCode's chosen model, finds the se
   expect(log).toContain(`${id} is over; its session ended`);
 });
 
-const tmuxPastes = !!Bun.which("tmux") && tmuxPastesFlag(new TextDecoder().decode(Bun.spawnSync(["tmux", "-V"]).stdout));
+const tmuxPastes = !!Bun.which("tmux") && tmuxPastesFlag(new TextDecoder().decode(spawnOwnedSync(["tmux", "-V"]).stdout));
 const shWord = (w: string) => `'${w.replace(/'/g, "'\\''")}'`;
 
 test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop types the first prompt once Kimi is ready, binds the seat to its process, and stops the listener it left", async () => {
@@ -666,7 +667,7 @@ test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop typ
   chmodSync(join(sttyShim, "stty"), 0o755);
   const env: Env = { ...base(agent), PATH: `${sttyShim}:${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_PID: "", CLAUDE_CODE_SESSION_ID: "" };
   const line = ["exec", "env", ...Object.entries(env).map(([k, v]) => shWord(`${k}=${v}`)), ...kiwiCmd(["loop", "--harness", "kimi"]).map(shWord), `2>>${shWord(logFile)}`].join(" ");
-  const tmux = (...args: string[]) => Bun.spawnSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
+  const tmux = (...args: string[]) => spawnOwnedSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
   expect(tmux("new-session", "-d", "-s", "loop", "-x", "200", "-y", "50", "-c", agent, line).exitCode).toBe(0);
   const log = () => (existsSync(logFile) ? readFileSync(logFile, "utf8") : "");
   const fail = (e: unknown) => {
@@ -751,7 +752,7 @@ test.skipIf(!tmuxPastes)(
     const logFile = join(where, "loop.log");
     const env: Env = { ...base(agent), KIWI_ZCODE_DIR: zcodeDir, PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_PID: "", CLAUDE_CODE_SESSION_ID: "" };
     const command = (args: string[]) => ["exec", "env", ...Object.entries(env).map(([k, v]) => shWord(`${k}=${v}`)), ...kiwiCmd(args).map(shWord), `2>>${shWord(logFile)}`].join(" ");
-    const tmux = (...args: string[]) => Bun.spawnSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
+    const tmux = (...args: string[]) => spawnOwnedSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
     const log = () => (existsSync(logFile) ? readFileSync(logFile, "utf8") : "");
     const fail = (e: unknown) => {
       tmux("kill-server");

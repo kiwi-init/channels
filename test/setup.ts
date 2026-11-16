@@ -4,10 +4,11 @@
 // real harness files. This preload runs for every test file: drop the session
 // markers, and point every harness directory (and Claude's settings) at one
 // temp directory for this run.
-import { beforeEach } from "bun:test";
+import { afterAll, afterEach, beforeEach } from "bun:test";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { LEDGER_ENV, ledgerSize, stopOwned } from "./owned.ts";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-test-harness-"));
 for (const name of ["codex", "gemini", "cursor", "grok", "kimi", "pi", "mimo", "zcode", "agy", "claude", "kiwi", "tmux"]) mkdirSync(join(root, name));
@@ -69,3 +70,24 @@ function isolate(): void {
 for (const [key, dir] of Object.entries(DIRS)) process.env[key] = dir;
 isolate();
 beforeEach(isolate);
+
+const ledger = join(root, "spawns.jsonl");
+process.env[LEDGER_ENV] = ledger;
+let testFrom = 0;
+beforeEach(() => {
+  process.env[LEDGER_ENV] = ledger;
+  testFrom = ledgerSize(ledger);
+});
+afterEach(async () => {
+  await stopOwned(ledger, testFrom);
+});
+afterAll(async () => {
+  await stopOwned(ledger, 0);
+});
+for (const [sig, code] of [
+  ["SIGINT", 130],
+  ["SIGTERM", 143],
+] as const)
+  process.once(sig, () => {
+    void stopOwned(ledger, 0).finally(() => process.exit(code));
+  });

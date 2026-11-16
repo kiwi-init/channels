@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,7 +28,7 @@ afterAll(() => {
 async function relayLog(trust: string[]): Promise<string> {
   const data = mkdtempSync(join(tmpdir(), "kiwi-proxy-hint-"));
   made.push(data);
-  const relay = Bun.spawn(["bun", "src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", "0", "--data", data, "--no-web", ...trust], {
+  const relay = spawnOwned(["bun", "src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", "0", "--data", data, "--no-web", ...trust], {
     cwd: join(import.meta.dir, ".."),
     stdout: "pipe",
     stderr: "pipe",

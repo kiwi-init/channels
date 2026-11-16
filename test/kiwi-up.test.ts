@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -88,7 +89,7 @@ function fake(): Fake {
     shell: "/bin/sh",
     bin: "claude",
     spawn: (argv, cwd, env) => {
-      const child = Bun.spawn(["sleep", "30"], { stdout: "ignore", stderr: "ignore" });
+      const child = spawnOwned(["sleep", "30"], { stdout: "ignore", stderr: "ignore" });
       children.push(child);
       spawned.push({ argv, cwd, env, pid: child.pid });
       const resumed = argv[argv.indexOf("--resume") + 1];
@@ -212,7 +213,7 @@ test("two processes reserving one seat at once: exactly one holds it", async () 
     script,
     `import { reserveSeat } from ${JSON.stringify(hold)};\nconst r = reserveSeat("ch", "dev", "t-" + process.pid, () => ({ kind: "dead" }));\nawait Bun.sleep(300);\nconsole.log(r.kind);\n`,
   );
-  const run = () => Bun.spawn([process.execPath, script], { env: { ...process.env, KIWI_HOME: home }, stdout: "pipe", stderr: "pipe" });
+  const run = () => spawnOwned([process.execPath, script], { env: { ...process.env, KIWI_HOME: home }, stdout: "pipe", stderr: "pipe" });
   const [a, b] = [run(), run()];
   const outs = await Promise.all([a, b].map(async (p) => (await new Response(p.stdout).text()).trim()));
   expect(outs.sort()).toEqual(["held", "starting"]);
@@ -475,7 +476,7 @@ test("two kiwi up runs on a dead loop: the second, planned before the first loop
   place(dir, { alias: "ch", as: "lp", harness: "claude", session: "gone", pid: DEAD_PID, loop: true, at: 1 });
   const plansA = planUp(loadConfig(), testLive);
   const plansB = planUp(loadConfig(), testLive);
-  const child = Bun.spawn(["sleep", "30"], { stdout: "ignore", stderr: "ignore" });
+  const child = spawnOwned(["sleep", "30"], { stdout: "ignore", stderr: "ignore" });
   children.push(child);
   const opened: Record<string, string>[] = [];
   const launcher: Launcher = {
@@ -572,7 +573,7 @@ test("after kiwi up times out, its late loop adopts nothing: not the released se
   const released = JSON.stringify(loadConfig().bindings);
   expect(adoptReserved("ch", "lp", "old")).toEqual({ kind: "not-held" });
   expect(JSON.stringify(loadConfig().bindings)).toBe(released);
-  const child = Bun.spawn(["sleep", "30"], { stdout: "ignore", stderr: "ignore" });
+  const child = spawnOwned(["sleep", "30"], { stdout: "ignore", stderr: "ignore" });
   children.push(child);
   expect(reserveSeat("ch", "lp", "new", testLive).kind).toBe("held");
   expect(adoptReserved("ch", "lp", "new").kind).toBe("changed");
