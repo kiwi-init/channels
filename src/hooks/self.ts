@@ -27,7 +27,7 @@ export function stableBin(exe: string): string {
   return exe;
 }
 
-function selfArgv(): string[] {
+export function selfArgv(): string[] {
   const compiled = !/\.(ts|js)$/.test(Bun.main);
   return compiled ? [stableBin(process.execPath)] : [Bun.which("bun") ?? process.execPath, Bun.main];
 }
@@ -36,7 +36,7 @@ function selfCommand(): string {
   return selfArgv().map(shellQuote).join(" ");
 }
 
-function shellQuote(s: string): string {
+export function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 

@@ -36,7 +36,7 @@ export function holdsSeat(b: SeatRecord, env: Env = process.env): boolean {
 
 type Hold = NonNullable<SeatRecord["hold"]>;
 
-function holderGone(hold: Hold): boolean {
+export function holderGone(hold: Hold): boolean {
   if (!hold.holder) return false;
   if (!pidAlive(hold.holder.pid)) return true;
   const started = processStart(hold.holder.pid);
@@ -105,7 +105,7 @@ export function holdSeat(alias: string, as: string, token: string, now = Date.no
   const holder = pid !== undefined && started !== null ? { holder: { pid, started } } : {};
   return rewrite(alias, as, token, false, (b) => {
     const kept = b.hold?.key === key ? b.hold : undefined;
-    return { ...omit(b, "session", "pid", "harnessSession"), hold: { key, at: kept?.at ?? now, ...holder }, holds: (b.holds ?? 0) + (kept ? 0 : 1) };
+    return { ...omit(b, "session", "pid", "harnessSession", "started", "upKey"), hold: { key, at: kept?.at ?? now, ...holder }, holds: (b.holds ?? 0) + (kept ? 0 : 1) };
   });
 }
 
@@ -114,7 +114,13 @@ export function bindHeldSeat(alias: string, as: string, token: string, to: HeldS
     to.harness === "kimi"
       ? { harness: to.harness, session: `kimi-pid-${to.pid}`, pid: to.pid, ...(to.served ? { harnessSession: to.served } : {}) }
       : { harness: to.harness, session: to.session, ...(to.pid ? { pid: to.pid } : {}) };
-  return rewrite(alias, as, token, true, (b) => ({ ...omit(b, "hold", "session", "pid", "harnessSession", "loop"), ...bound, ...(by === "loop" ? { loop: true } : {}), at: now, seen: now }));
+  return rewrite(alias, as, token, true, (b) => ({
+    ...omit(b, "hold", "session", "pid", "harnessSession", "loop", "started", "upKey"),
+    ...bound,
+    ...(by === "loop" ? { loop: true } : {}),
+    at: now,
+    seen: now,
+  }));
 }
 
 export function releaseSeat(alias: string, as: string, token: string): HoldChange {
@@ -147,4 +153,105 @@ export function releaseStale(alias: string, as: string, force = false): StaleRel
     outcome = { kind: "changed", seats: held.length };
   });
   return outcome;
+}
+
+export const UP_LAUNCH = "KIWI_UP";
+
+export function upLaunch(env: Env = process.env): string | null {
+  const token = env[SEAT_TOKEN];
+  return env[UP_LAUNCH] === "1" && token ? keyOf(token) : null;
+}
+
+export type Liveness = { kind: "alive" } | { kind: "dead" } | { kind: "unknown"; why: string };
+
+export interface PlacedSeat {
+  dir: string;
+  record: SeatRecord;
+}
+
+export type Reservation =
+  | { kind: "held"; prior: PlacedSeat[] }
+  | { kind: "no-seat" }
+  | { kind: "running"; session: string | null }
+  | { kind: "starting"; up: boolean }
+  | { kind: "unknown"; why: string };
+
+const listOf = (v: SeatRecord | SeatRecord[] | undefined): SeatRecord[] => (Array.isArray(v) ? v : v ? [v] : []);
+
+function placedOf(cfg: Config, alias: string, as: string): PlacedSeat[] {
+  return Object.entries(cfg.bindings ?? {}).flatMap(([dir, v]) => listOf(v).flatMap((record) => (record.alias === alias && record.as === as ? [{ dir, record }] : [])));
+}
+
+export const OLDER_LOOP = "it's held by a loop from an older Kiwi, which records no process: check no kiwi loop runs for it, then kiwi seat release --stale --force";
+
+export function reserveSeat(alias: string, as: string, token: string, live: (b: SeatRecord) => Liveness, now = Date.now(), pid = process.pid): Reservation {
+  const key = keyOf(token);
+  const started = processStart(pid);
+  if (started === null) return { kind: "unknown", why: "kiwi up couldn't read its own process's start time, so no later run could tell whether it still runs" };
+  let outcome: Reservation = { kind: "no-seat" };
+  updateConfig((cfg) => {
+    const prior = placedOf(cfg, alias, as);
+    if (!prior.length) return;
+    const held = prior.find(({ record }) => record.hold && !holderGone(record.hold))?.record.hold;
+    if (held) {
+      outcome = held.holder ? { kind: "starting", up: !!held.up } : { kind: "unknown", why: OLDER_LOOP };
+      return;
+    }
+    for (const { record } of prior) {
+      const state = live(record);
+      if (state.kind === "alive") {
+        outcome = { kind: "running", session: record.session ?? null };
+        return;
+      }
+      if (state.kind === "unknown") {
+        outcome = state;
+        return;
+      }
+    }
+    const hold = { key, at: now, holder: { pid, started }, up: true as const };
+    const ours = (b: SeatRecord) => b.alias === alias && b.as === as;
+    cfg.bindings = Object.fromEntries(
+      Object.entries(cfg.bindings ?? {}).map(([dir, v]) => [
+        dir,
+        Array.isArray(v) ? v.map((b) => (ours(b) ? { ...b, hold, holds: (b.holds ?? 0) + 1 } : b)) : ours(v) ? { ...v, hold, holds: (v.holds ?? 0) + 1 } : v,
+      ]),
+    );
+    outcome = { kind: "held", prior };
+  });
+  return outcome;
+}
+
+export function bindReserved(alias: string, as: string, token: string, to: { harness: SeatHarness; session: string; pid: number }, now = Date.now()): HoldChange {
+  const started = processStart(to.pid);
+  const key = keyOf(token);
+  return rewrite(alias, as, token, true, (b) => ({
+    ...omit(b, "hold", "session", "pid", "harnessSession", "loop", "started", "upKey"),
+    harness: to.harness,
+    session: to.session,
+    pid: to.pid,
+    ...(started !== null ? { started } : {}),
+    upKey: key,
+    at: now,
+    seen: now,
+  }));
+}
+
+export function abandonReserved(alias: string, as: string, token: string): HoldChange {
+  return rewrite(alias, as, token, true, (b) => omit(b, "hold"));
+}
+
+export function unbindReserved(alias: string, as: string, token: string, prior: readonly PlacedSeat[]): number {
+  const key = keyOf(token);
+  let restored = 0;
+  updateConfig((cfg) => {
+    for (const { dir, record } of prior) {
+      const at = listOf(cfg.bindings?.[dir]);
+      const i = at.findIndex((b) => b.alias === alias && b.as === as && b.upKey === key);
+      if (i < 0) continue;
+      const kept = at.map((b, j) => (j === i ? omit(record, "hold") : b));
+      cfg.bindings = { ...cfg.bindings, [dir]: kept.length === 1 ? omit(record, "hold") : kept };
+      restored++;
+    }
+  });
+  return restored;
 }

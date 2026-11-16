@@ -192,6 +192,11 @@ This computer
      seat shared [--json]                        seats this computer runs in one session across channels, with their open work
   kiwi loop [--harness claude|codex|grok|mimo|kimi|zcode] [--model ID] [--effort LEVEL]   run in a tmux window from a seat's folder: a
                                                  fresh session for each task, review round or message, ended when that work is done
+  kiwi up [--dry-run]                            after a restart, bring this computer's seats back, one tmux window each (no
+                                                 tmux: prints a line per seat to run); Claude seats resume their session, loops restart
+     up --seat HANDLE [-c CHANNEL]               bring one seat back in this terminal: its old session if the transcript is
+                                                 still there, else a fresh one that starts from its checkpoints
+     --bind-timeout SECONDS                      how long a start may take to claim its seat before it's stopped (default 60)
   kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path
                                                  and version, and whether Kiwi can wake it
   kiwi doctor [--json]                           check this computer: the install, the relay, your devices and hooks, with a fix for each problem

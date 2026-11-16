@@ -19,6 +19,7 @@ interface SeatHold {
   key: string;
   at: number;
   holder?: { pid: number; started: string };
+  up?: true;
 }
 
 export interface SeatRecord {
@@ -29,6 +30,8 @@ export interface SeatRecord {
   harnessSession?: string;
   bin?: string;
   pid?: number;
+  started?: string;
+  upKey?: string;
   at?: number;
   seen?: number;
   plain?: true;
