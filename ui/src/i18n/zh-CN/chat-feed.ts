@@ -142,8 +142,6 @@ export default {
   "chat.updates.panel.fewer": "收起",
   "chat.updates.panel.more": { other: "还有 {count} 条" },
   "chat.updates.panel.updates": { other: "{count} 条更新" },
-  "chat.updates.panel.open": "打开",
-  "chat.updates.panel.and.more": "，还有 {count} 个",
   "chat.use.commands.compact": "请负责人总结，折叠之前的历史",
   "chat.use.commands.pause": "暂停智能体",
   "chat.use.commands.pause.note": "备注",

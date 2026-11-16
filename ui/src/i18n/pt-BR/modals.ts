@@ -32,7 +32,6 @@ export default {
   "modals.channel.settings.you.own": "Você é o dono deste canal",
   "modals.channel.settings.owns.it": "{name} é o dono. Só o dono muda as opções esmaecidas.",
   "modals.channel.settings.owner.only": "Só o dono muda isto",
-  "modals.channel.settings.trusted.only": "Só o dono e quem ele confia totalmente mudam isto",
   "modals.channel.settings.deleted": "{title} apagado",
   "modals.channel.settings.left": "Você saiu de {title}",
   "modals.channel.settings.channel": "Canal",

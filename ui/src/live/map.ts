@@ -378,8 +378,12 @@ function eventText(m: Wire, state: ChannelState): string {
     case "role.set":
       return ev.role ? t("live.map.role", { name: nameIn(state, ev.member), role: ev.role }) : t("live.map.no.role", { name: nameIn(state, ev.member) })
     default:
-      return t("live.map.event", { who, what: eventWhat(m, state) })
+      return actText(m, state)
   }
+}
+
+function actText(m: Wire, state: ChannelState): string {
+  return m.ev?.op === "task.nudge" ? eventWhat(m, state) : t("live.map.event", { who: nameIn(state, m.from), what: eventWhat(m, state) })
 }
 
 function eventForYou(m: Wire, me: string): boolean {
@@ -632,7 +636,7 @@ export function leftOutOf(state: ChannelState, messages: readonly Wire[], me: st
         seq: m.seq,
         from: m.from,
         at: m.ts,
-        text: wrote(t("live.map.event", { who: nameIn(state, m.from), what: eventWhat(m, state) })),
+        text: wrote(actText(m, state)),
         where: { kind: "room", room: GENERAL_ROOM },
         system: true,
         leftOut,

@@ -198,7 +198,10 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return say("task.first", { task: task(ev.task) });
     case "task.nudge": {
       const mark = say(ev.step === 2 && ev.wake ? `task.nudge.lead.${ev.wake}` : NUDGE_KEYS[ev.step], { task: task(ev.task), name: inlineText(ev.mover, 40) });
-      return ev.waited ? say("task.nudge.waited", { mark, reason: inlineText(ev.waited, 120) }) : mark;
+      return say("task.nudge.clock", {
+        what: ev.waited ? say("task.nudge.waited", { mark, reason: inlineText(ev.waited, 120) }) : mark,
+        poster: inlineText(nameOf(m.from), 40),
+      });
     }
     case "task.wait":
       return say("task.wait", { task: task(ev.task), reason: inlineText(ev.reason, 120) });
