@@ -172,14 +172,13 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
     }
   };
 
-  const post = async (ev: Nudge, to: string | undefined, safe: () => void = () => {}): Promise<number | "held" | null> => {
+  const post = async (ev: Nudge, to: string | undefined): Promise<number | "held" | null> => {
     for (let race = 0; race <= RACES; race++) {
       const fresh = await seat.stateOf();
       if (!fresh || ended) return "held";
       const at = now();
       const refused = (when: number): boolean => nudgeRefusal(fresh, ev, { seq: fresh.head + 1, at: when, by: seat.agent }) !== null;
       if (refused(at - skew) || refused(at + skew)) return "held";
-      if (race === 0) safe();
       const got = await seat.nudge(ev, to, { head: fresh.head, at });
       if (got === "off-clock" && !warned) {
         warned = true;
@@ -238,9 +237,10 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
     const seq = await post(
       { op: "task.nudge", task: due.task, mover: due.mover, since: due.since, step: due.step, ...(due.day !== undefined ? { day: due.day } : {}), ...(label ? { wake: label } : {}) },
       due.to,
-      told,
     );
-    if (typeof seq === "number") posted.add(key);
+    if (typeof seq !== "number") return;
+    posted.add(key);
+    told();
   };
 
   const look = async (): Promise<void> => {

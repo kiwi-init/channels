@@ -596,4 +596,29 @@ describe("a mark the host would refuse never reaches the log (#2491)", () => {
     expect(c.events("task.nudge").map((m) => [m.from, m.ev])).toEqual([["mac", { op: "task.nudge", task: id, mover: "mac", since: epoch, step: 1 }]]);
     expect(host.did.wakes).toBe(1);
   });
+
+  test("a step-2 mark addressed to the hosting lead tells it nothing until the relay keeps the mark, then once", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(2 * N + 60_000);
+    const failing: Rig[] = [{ racers: 4 }, { oldRelay: true }, { skew: 10_000, ahead: 30_000 }];
+    for (const rig of failing) {
+      const lead = seat(c, "owl", rig);
+      await lead.w.look();
+      expect(lead.did.sends).toBeGreaterThan(0);
+      expect(c.log.filter((m) => m.ev?.op === "task.nudge")).toEqual([]);
+      expect(lead.pending()).toEqual([]);
+      expect(lead.did.wakes).toBe(0);
+      lead.w.stop();
+    }
+    const lead = seat(c, "owl", { racers: 1 });
+    await lead.w.look();
+    expect(c.events("task.nudge").map((m) => [m.ev, m.to])).toEqual([[{ op: "task.nudge", task: id, mover: "mac", since: epoch, step: 2, wake: "none" }, undefined]]);
+    expect(lead.pending().map((p) => p.block)).toEqual([`clock:T${id}:${epoch}:2`]);
+    expect(lead.did.wakes).toBe(1);
+    c.wait(61_000);
+    await lead.w.look();
+    expect(lead.pending()).toHaveLength(1);
+    expect(lead.did.wakes).toBe(1);
+  });
 });
