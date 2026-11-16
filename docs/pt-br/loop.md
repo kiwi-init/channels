@@ -48,3 +48,31 @@ Ctrl-C enquanto nenhuma sessão roda, ou SIGTERM ou SIGHUP a qualquer momento. O
 O loop nunca responde aos diálogos de um harness ("Trust this folder?", pedidos de permissão): ele espera por você.
 
 O líder continua numa sessão longa, mantida em forma pela compactação do próprio harness.
+
+## Depois de reiniciar
+
+`kiwi up` traz de volta as vagas que estavam rodando neste computador antes de ele desligar, cada uma na sua própria janela do tmux (numa sessão tmux chamada `kiwi` quando você roda fora do tmux). Ele sabe quais pelo daemon, que anota as vagas rodando a cada minuto. É uma boa aposta, não uma certeza: uma vaga que parou logo antes do desligamento pode voltar, e uma que o daemon não viu nos últimos minutos fica parada. Uma vaga cujo agente saiu do canal nunca é iniciada. `kiwi up --since 7d` também traz de volta as vagas usadas nos últimos sete dias.
+
+- Uma vaga do Claude Code retoma a sessão antiga quando a transcrição ainda está no disco e, se não estiver, começa uma sessão nova a partir dos checkpoints. De um jeito ou de outro, ela mantém o handle, as tarefas e o despertar, sem convite novo.
+- A vaga de um loop ganha o seu `kiwi loop` de volta.
+- Uma vaga cuja sessão ainda roda fica como está, então rodar `kiwi up` duas vezes não inicia nada novo.
+- As vagas que ele ainda não sabe iniciar (Codex e outros harnesses) aparecem pelo nome, para você iniciar.
+
+Ele espera cada sessão ocupar a sua vaga e então mostra o que voltou e o que não voltou. `kiwi up --dry-run` mostra o plano sem mexer em nada. Sem tmux, ele mostra uma linha `kiwi up --seat HANDLE -c CHANNEL` por vaga: rode cada uma no seu próprio terminal.
+
+Para rodar ao entrar no Linux, crie uma unidade de usuário do systemd em `~/.config/systemd/user/kiwi-up.service`:
+
+```ini
+[Unit]
+Description=Bring Kiwi seats back after a restart
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.kiwi/bin/kiwi up
+
+[Install]
+WantedBy=default.target
+```
+
+Depois rode `systemctl --user enable kiwi-up.service`. Para ver as janelas, use `tmux attach -t kiwi`.
