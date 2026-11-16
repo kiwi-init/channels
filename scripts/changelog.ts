@@ -72,7 +72,7 @@ export function kindOf(entry: Entry, look: Lookup): { kind: Kind; failed: number
     if (got === null) failed.push(n);
     else labels.push(...got);
   }
-  return { kind: kindIn(labels) ?? "other", failed };
+  return { kind: failed.length ? "other" : (kindIn(labels) ?? "other"), failed };
 }
 
 export function line(c: Commit): string {
@@ -109,6 +109,12 @@ export function carryHand(old: string | null, sec: string): string {
   const at = lines.findIndex((l, i) => i > 0 && (l.startsWith("### ") || l.startsWith("- ")));
   if (at < 0) return `${sec.trimEnd()}\n\n${hand}`;
   return `${[...lines.slice(0, at), ...hand.trimEnd().split("\n"), "", ...lines.slice(at)].join("\n")}`;
+}
+
+export function rebuilt(current: string, versions: readonly string[], sectionOf: (version: string) => string): string {
+  let text = HEADER;
+  for (const v of versions) text = upsert(text, v, carryHand(sectionIn(current, v), sectionOf(v)));
+  return text;
 }
 
 /** Puts a section into the changelog's text: in place of the same version's, else above the newest. */
@@ -278,8 +284,7 @@ if (import.meta.main) {
       .sort(compareVersions);
     const look = ghLookup();
     look.warm(commits("HEAD").flatMap((c) => (c.pr ? [c.pr] : [])));
-    let text = HEADER;
-    for (const t of tags) text = upsert(text, t, carryHand(sectionIn(current, t), sectionFor(t, t, tagDate(t), look)));
+    const text = rebuilt(current, tags, (t) => sectionFor(t, t, tagDate(t), look));
     if (values.write) writeFileSync(FILE, text);
     else process.stdout.write(text);
   } else {

@@ -1,5 +1,23 @@
 import { describe, expect, test } from "bun:test";
-import { carryHand, entryOf, ghLookup, handOf, isBump, kindOf, line, namedIssues, release, section, sectionIn, upsert, type Commit, type Gh, type Head, type Lookup } from "../scripts/changelog.ts";
+import {
+  carryHand,
+  entryOf,
+  ghLookup,
+  handOf,
+  isBump,
+  kindOf,
+  line,
+  namedIssues,
+  rebuilt,
+  release,
+  section,
+  sectionIn,
+  upsert,
+  type Commit,
+  type Gh,
+  type Head,
+  type Lookup,
+} from "../scripts/changelog.ts";
 
 const REPO = "https://github.com/kiwi-init/channels";
 const SHA = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b";
@@ -55,6 +73,36 @@ describe("the kind of a change", () => {
   test("no kind anywhere is Other changes, never a guess from the wording", () => {
     const got = kindOf({ title: "Fix the crash and add a docs page", pr: 10 }, look({ 10: ["size:XS"] }));
     expect(got).toEqual({ kind: "other", failed: [] });
+  });
+
+  test("one failed lookup puts the change under Other changes even when another lookup found a kind, and the warning says so", () => {
+    const run = (labels: Record<number, readonly string[] | null>, closes: (pr: number) => readonly number[] | null) => {
+      const told: [string, number[]][] = [];
+      const lookup: Lookup = { labels: (n) => (n in labels ? (labels[n] ?? null) : []), closes };
+      const sec = release("2026.11.22", HEAD, [commit("Feed: repairs (#7, #8) (#10)")], lookup, (c, failed) => told.push([c.title, failed]));
+      return { sec, told };
+    };
+    const issueFails = run({ 10: [], 7: null, 8: ["bug"] }, () => []);
+    expect(issueFails.told).toEqual([["Feed: repairs (#7, #8)", [7]]]);
+    expect(issueFails.sec).toContain("### Other changes\n\n- **Feed:** repairs");
+    expect(issueFails.sec).not.toContain("### Fixes");
+    const closesFails = run({ 10: [], 8: ["bug"] }, () => null);
+    expect(closesFails.told).toEqual([["Feed: repairs (#7, #8)", [10]]]);
+    expect(closesFails.sec).toContain("### Other changes\n\n- **Feed:** repairs");
+    expect(closesFails.sec).not.toContain("### Fixes");
+  });
+
+  test("a PR with its own kind needs no other lookup, so another number's failure can't touch it", () => {
+    const asked: number[] = [];
+    const lookup: Lookup = {
+      labels: (n) => {
+        asked.push(n);
+        return n === 10 ? ["bug"] : null;
+      },
+      closes: () => null,
+    };
+    expect(kindOf({ title: "Feed: repairs (#7)", pr: 10 }, lookup)).toEqual({ kind: "fixes", failed: [] });
+    expect(asked).toEqual([10]);
   });
 
   test("a lookup that fails is reported and lands under Other changes", () => {
@@ -123,6 +171,29 @@ describe("Highlights and Upgrade", () => {
     expect(kept!.indexOf("### Upgrade")).toBeLessThan(kept!.indexOf("### Features"));
     expect(kept!.indexOf("Tag [v2026.11.22]")).toBeLessThan(kept!.indexOf("### Highlights"));
     expect(carryHand(edited, section("2026.11.22", HEAD, []))).toContain(`${hand}\n- No changes.`);
+  });
+
+  test("a full rebuild keeps each release's own blocks, two releases at once, and drops versions without a tag", () => {
+    const at = (tag: string, date: string): Head => ({ tag, sha: SHA, date });
+    const old21 = section("2026.11.21", at("v2026.11.21", "2026-11-10"), [{ title: "Old: a", pr: 1, sha: SHA, kind: "fixes" }]).replace(
+      "\n### Fixes",
+      "\n### Highlights\n\n- Twenty-one.\n\n### Fixes",
+    );
+    const old22 = section("2026.11.22", at("v2026.11.22", "2026-11-14"), [{ title: "Old: b", pr: 2, sha: SHA, kind: "fixes" }]).replace(
+      "\n### Fixes",
+      "\n### Upgrade\n\n- Run `kiwi up`.\n\n### Fixes",
+    );
+    const current = upsert(upsert(upsert("", "2026.11.21", old21), "2026.11.22", old22), "2026.11.99", section("2026.11.99", at("v2026.11.99", "2026-11-20"), []));
+    const fresh = (tag: string) => section(tag, at(tag, "2026-11-15"), [{ title: `New: ${tag.slice(1)}`, pr: 3, sha: SHA, kind: "features" }]);
+    const text = rebuilt(current, ["v2026.11.21", "v2026.11.22"], fresh);
+    const s21 = sectionIn(text, "2026.11.21") ?? "";
+    const s22 = sectionIn(text, "2026.11.22") ?? "";
+    expect(s21).toContain("### Highlights\n\n- Twenty-one.\n\n### Features\n\n- **New:** 2026.11.21");
+    expect(s21).not.toContain("### Upgrade");
+    expect(s22).toContain("### Upgrade\n\n- Run `kiwi up`.\n\n### Features\n\n- **New:** 2026.11.22");
+    expect(s22).not.toContain("### Highlights");
+    expect(sectionIn(text, "2026.11.99")).toBeNull();
+    expect(text.indexOf("## 2026.11.22")).toBeLessThan(text.indexOf("## 2026.11.21"));
   });
 
   test("--notes shows them: the section without its heading", () => {
