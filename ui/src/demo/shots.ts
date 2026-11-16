@@ -135,6 +135,7 @@ export const SHOTS: Record<string, Shot> = {
   "enroll-desktop-check": { scenario: "enroll-desktop-check", channel: null },
   "settings-devices": { scenario: "devices", channel: "kiwi", nav: { page: "settings", section: "computers" } },
   "restarted-prompt": { scenario: "restarted", channel: "kiwi" },
+  "agent-unarmed": { scenario: "unarmed", channel: "kiwi" },
   "side-update-moved": { scenario: "update-moved", channel: "kiwi" },
   "side-update-moved-mac": { scenario: "update-moved-mac", channel: "kiwi" },
   "settings-forget-agents": { scenario: "devices", channel: "kiwi", nav: { page: "settings", section: "computers" } },

@@ -389,12 +389,21 @@ function Member({ person, channel, direct }: { person: Person; channel: Channel;
   const unread = direct?.unread ?? 0
   const agent = person.kind === "agent"
   const live = agent ? liveOf(person) : null
+  const unarmed = agent && !!person.unarmed
   const task = live ? taskOf(person, channel) : undefined
   return (
     <li>
       <button
         type="button"
-        className={cx("side-row side-member", live && "is-live", live && !live.busy && "is-waiting", on && "is-on", unread > 0 && "is-news", person.presence === "offline" && "is-off")}
+        className={cx(
+          "side-row side-member",
+          live && "is-live",
+          live && !live.busy && "is-waiting",
+          unarmed && "is-unarmed",
+          on && "is-on",
+          unread > 0 && "is-news",
+          person.presence === "offline" && "is-off"
+        )}
         aria-current={on ? "page" : undefined}
         title={task ? `T${task.id} ${wordsPlain(task.title, channel.nicknames)} · ${statusOf(person, channel)}` : statusOf(person, channel)}
         onClick={() => open(channel.code, where)}
@@ -405,12 +414,16 @@ function Member({ person, channel, direct }: { person: Person; channel: Channel;
       >
         <Avatar person={person} size="sm" pip />
         <span className="side-name">{shown(person)}</span>
-        {live && (
-          <span key={live.text} className="side-state">
-            {live.busy ? live.text : t("shell.sidebar.needs.person")}
-          </span>
+        {unarmed ? (
+          <span className="side-state">{t("shell.sidebar.unarmed.short")}</span>
+        ) : (
+          live && (
+            <span key={live.text} className="side-state">
+              {live.busy ? live.text : t("shell.sidebar.needs.person")}
+            </span>
+          )
         )}
-        {!live && unsureOf(person) && <span className="side-state">{t("doing.unknown")}</span>}
+        {!live && !unarmed && unsureOf(person) && <span className="side-state">{t("doing.unknown")}</span>}
         <Count n={unread} loud />
       </button>
     </li>

@@ -397,7 +397,8 @@
   animation: rise var(--fast) var(--ease);
 }
 
-.side-member.is-waiting .side-state {
+.side-member.is-waiting .side-state,
+.side-member.is-unarmed .side-state {
   color: var(--decide);
 }
 

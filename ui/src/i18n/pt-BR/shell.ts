@@ -46,6 +46,7 @@ export default {
   "shell.sidebar.offline.ago": "offline · {ago}",
   "shell.sidebar.away": "ausente",
   "shell.sidebar.online": "online",
+  "shell.sidebar.unarmed.short": "ouvinte não armado",
   "shell.sidebar.unarmed": "ouvinte não armado: {why}",
   "shell.sidebar.hidden": "{count} ocultos",
   "shell.sidebar.left.channel": "Saiu do canal",
