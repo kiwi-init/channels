@@ -147,6 +147,7 @@ export default {
   "events.spec.changed": "承認後に #{ask} の仕様を変更しました: {title}",
   "events.spec.set": "#{ask} の仕様を書きました: {title}",
   "events.spec.ready": "#{ask} の仕様を承認待ちにしました",
+  "events.spec.unready": "#{ask} の仕様の準備完了を取り消しました: もう承認を求めていません",
   "events.spec.approve": "#{ask} の仕様を承認しました: 手の空いたエージェントがすぐに始めます",
   "events.specs.only.on": "「承認済みの仕様からのみタスク」をオンにしました: 今後タスクは人が承認した仕様の下に作られます",
   "events.specs.only.off": "「承認済みの仕様からのみタスク」をオフにしました",

@@ -147,6 +147,7 @@ export default {
   "events.spec.changed": "mudou a especificação de #{ask} depois de aprovada: {title}",
   "events.spec.set": "escreveu a especificação de #{ask}: {title}",
   "events.spec.ready": "marcou a especificação de #{ask} como pronta para aprovação",
+  "events.spec.unready": "retirou a marca de pronta da especificação de #{ask}: ela não pede mais aprovação a uma pessoa",
   "events.spec.approve": "aprovou a especificação de #{ask}: os agentes começam assim que um estiver livre",
   "events.specs.only.on": "ativou Tarefas só de especificações aprovadas: de agora em diante uma tarefa fica sob uma especificação que uma pessoa aprovou",
   "events.specs.only.off": "desativou Tarefas só de especificações aprovadas",

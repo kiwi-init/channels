@@ -313,6 +313,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     }
     case "spec.ready":
       return say("spec.ready", { ask: String(ev.ask) });
+    case "spec.unready":
+      return say("spec.unready", { ask: String(ev.ask) });
     case "spec.approve":
       return say("spec.approve", { ask: String(ev.ask) });
     case "specs.only.set":

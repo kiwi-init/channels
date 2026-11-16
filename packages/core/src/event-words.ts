@@ -145,6 +145,7 @@ export const EVENT_WORDS = {
   "spec.changed": "changed #{ask}'s spec after it was approved: {title}",
   "spec.set": "wrote the spec of #{ask}: {title}",
   "spec.ready": "marked the spec of #{ask} ready for approval",
+  "spec.unready": "took back the ready mark on the spec of #{ask}: it no longer asks a person to approve it",
   "spec.approve": "approved the spec of #{ask}: agents start it as soon as one is free",
   "specs.only.on": "turned on Tasks only from approved specs: from now on a task is filed under a spec a person approved",
   "specs.only.off": "turned off Tasks only from approved specs",

@@ -104,6 +104,7 @@ const OPS: Record<Event["op"], true> = {
   "spec.set": true,
   "spec.approve": true,
   "spec.ready": true,
+  "spec.unready": true,
   "spec.result": true,
   "spec.delete": true,
   "specs.only.set": true,
@@ -481,6 +482,7 @@ OPS_AT[26] = [...(OPS_AT[25] ?? []), "task.wake"];
 OPS_AT[27] = [...(OPS_AT[26] ?? []), "review.reset.set", "review.reset.waive"];
 OPS_AT[28] = [...(OPS_AT[27] ?? []), "asks.tap.set"];
 OPS_AT[29] = [...(OPS_AT[28] ?? []), "checkpoint.daily.set", "checkpoint.ask"];
+OPS_AT[30] = [...(OPS_AT[29] ?? []), "spec.unready"];
 
 describe("events from a newer client", () => {
   test("every op the Event type has is known, and a new op needs EVENT_OPS_VERSION raised with it", () => {

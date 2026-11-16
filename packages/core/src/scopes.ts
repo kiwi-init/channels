@@ -82,6 +82,7 @@ function scopeFor(m: Pick<Message, "kind" | "ev">): Scope | "any" | null {
     case "ask.name":
     case "spec.set":
     case "spec.ready":
+    case "spec.unready":
     case "claim":
       return "tasks";
     case "release":
