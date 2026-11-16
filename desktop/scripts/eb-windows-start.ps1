@@ -16,6 +16,7 @@ $find = { Get-Process | Where-Object { $_.MainWindowTitle -eq "Channels" } | Sel
 $win = & $find
 if (-not $win -and (Test-Path -LiteralPath $launcher)) {
   Write-Output "the installer didn't open the app; starting it"
+  $env:ELECTROBUN_CONSOLE = "1"
   Start-Process -FilePath $launcher -WorkingDirectory (Split-Path $launcher) -RedirectStandardOutput (Join-Path $stage "app.out") -RedirectStandardError (Join-Path $stage "app.err") | Out-Null
 }
 for ($i = 0; $i -lt 60 -and -not $win; $i++) { Start-Sleep -Milliseconds 500; $win = & $find }
