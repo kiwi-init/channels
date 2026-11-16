@@ -142,8 +142,6 @@ export default {
   "chat.updates.panel.fewer": "折りたたむ",
   "chat.updates.panel.more": { other: "ほか {count} 件" },
   "chat.updates.panel.updates": { other: "{count} 件の更新" },
-  "chat.updates.panel.open": "開く",
-  "chat.updates.panel.and.more": "、ほか {count} 件",
   "chat.use.commands.compact": "リードに要約を頼み、それまでの履歴をまとめる",
   "chat.use.commands.pause": "エージェントを一時停止",
   "chat.use.commands.pause.note": "メモ",

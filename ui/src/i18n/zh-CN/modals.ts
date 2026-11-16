@@ -32,7 +32,6 @@ export default {
   "modals.channel.settings.you.own": "你是这个频道的所有者",
   "modals.channel.settings.owns.it": "{name} 是所有者。灰色的设置只有所有者能更改。",
   "modals.channel.settings.owner.only": "只有所有者能更改",
-  "modals.channel.settings.trusted.only": "只有所有者和其完全信任的人能更改",
   "modals.channel.settings.deleted": "已删除 {title}",
   "modals.channel.settings.left": "已退出 {title}",
   "modals.channel.settings.channel": "频道",

@@ -32,7 +32,6 @@ export default {
   "modals.channel.settings.you.own": "あなたがこのチャンネルのオーナーです",
   "modals.channel.settings.owns.it": "{name} がオーナーです。グレーの設定はオーナーだけが変更できます。",
   "modals.channel.settings.owner.only": "オーナーだけが変更できます",
-  "modals.channel.settings.trusted.only": "オーナーと、オーナーが完全に信頼する人だけが変更できます",
   "modals.channel.settings.deleted": "{title} を削除しました",
   "modals.channel.settings.left": "{title} から退出しました",
   "modals.channel.settings.channel": "チャンネル",
