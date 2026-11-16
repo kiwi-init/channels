@@ -1,8 +1,8 @@
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { blobId } from "@kiwi/core/crypto.ts";
-import { MAX_BLOB_BYTES, MAX_CT_LENGTH, type Envelope, type ReadMark, type SlotTake } from "@kiwi/core/protocol.ts";
-import { BadRequest, Conflict, Forbidden, ReadOnly, Taken, TooLarge, TooMany } from "../failures.ts";
+import { AFTER_SKEW_MS, MAX_BLOB_BYTES, MAX_CT_LENGTH, type Envelope, type ReadMark, type SendAfter, type SlotTake } from "@kiwi/core/protocol.ts";
+import { BadRequest, Conflict, Forbidden, MovedOn, OffClock, ReadOnly, Taken, TooLarge, TooMany } from "../failures.ts";
 import { Policy, upgradeFor, type RoomPolicy } from "../policy.ts";
 import { fits, StoredEnvelope } from "../schema.ts";
 import { readMeta } from "./auth.ts";
@@ -103,6 +103,7 @@ interface Repeat {
 export interface Slots {
   take?: SlotTake;
   free?: readonly string[];
+  after?: SendAfter;
 }
 
 export const append = Effect.fn("Room.append")(function* (iv: string, ct: string, e: number, sender: string, slots: Slots = {}, cid?: string, occ?: string) {
@@ -127,9 +128,13 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
 
   const cap = policy.bytesPerChannel;
   if (ct.length > cap) return yield* new TooLarge({ message: `that message is bigger than this channel may hold (${formatBytes(cap)})` });
-  const seq = db.head() + 1;
+  const head = db.head();
+  const prior = cid ? db.priorSend(sender, cid, ts - SEND_MEMORY_MS) : null;
+  const after = prior ? undefined : slots.after;
+  if (after && head !== after.head) return yield* new MovedOn({ message: `the channel moved on: its last message is #${head}, not #${after.head}` });
+  if (after && Math.abs(ts - after.at) > AFTER_SKEW_MS) return yield* new OffClock({ message: `the relay's clock is more than ${AFTER_SKEW_MS / 1000}s from the time this send was judged at` });
+  const seq = head + 1;
   const store = (): Envelope | Repeat => {
-    const prior = cid ? db.priorSend(sender, cid, ts - SEND_MEMORY_MS) : null;
     if (prior) return { repeat: true, seq: prior.seq, ts: prior.ts } satisfies Repeat;
     const was = db.storedBytes();
     let bytes = was;

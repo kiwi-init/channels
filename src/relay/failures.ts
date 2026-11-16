@@ -38,6 +38,8 @@ class MethodNotAllowed extends Schema.TaggedError<MethodNotAllowed>()("MethodNot
 export class Conflict extends Schema.TaggedError<Conflict>()("Conflict", text) {}
 /** Someone else holds the slot this append takes: their message is the seq the text names. */
 export class Taken extends Schema.TaggedError<Taken>()("Taken", text) {}
+export class MovedOn extends Schema.TaggedError<MovedOn>()("MovedOn", text) {}
+export class OffClock extends Schema.TaggedError<OffClock>()("OffClock", text) {}
 /** More than the relay stores at once. */
 export class TooLarge extends Schema.TaggedError<TooLarge>()("TooLarge", text) {}
 /** The client speaks an old path; it has to update kiwi. */
@@ -60,6 +62,8 @@ export type Failure =
   | MethodNotAllowed
   | Conflict
   | Taken
+  | MovedOn
+  | OffClock
   | TooLarge
   | UpdateRequired
   | TooMany;
@@ -80,6 +84,8 @@ export const STATUS = {
   MethodNotAllowed: 405,
   Conflict: 409,
   Taken: 423,
+  MovedOn: 412,
+  OffClock: 412,
   TooLarge: 413,
   UpdateRequired: 426,
   TooMany: 429,

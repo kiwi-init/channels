@@ -23,6 +23,7 @@ import {
   wellFormedChoices,
   wellFormedHandoff,
   wellFormedHolds,
+  wellFormedAfter,
   wellFormedSendId,
   type DecisionKind,
   type DocBlockRef,
@@ -33,6 +34,7 @@ import {
   type Kind,
   type Message,
   type Payload,
+  type SendAfter,
   type Step,
   type StepReply,
 } from "../protocol.ts";
@@ -78,6 +80,7 @@ export interface SendOptions {
   wake?: readonly string[];
   free?: string[];
   occurrence?: string;
+  after?: SendAfter;
 }
 
 export interface SendFx {
@@ -185,6 +188,7 @@ export class ChannelSending {
         );
       if (payload.stepReply && !wellFormed(payload)) return yield* new Rejected("a step answer needs a reply target and either Done with optional output, or Can't do it or Not needed with a reason");
       if ((payload.permission || payload.perm || payload.settled) && !wellFormed(payload)) return yield* new Rejected("a permission prompt, its answer or its close is malformed");
+      if (opts.after && !wellFormedAfter(opts.after)) return yield* new Rejected("a send on a known head names that head and the time it was judged at as whole numbers");
       const named = opts.room && opts.room !== GENERAL_ROOM ? opts.room : undefined;
       const known = (id: string) => this.ch.publicRooms.has(id) || this.ch.memberRooms.has(id) || !!this.ch.roomNow.get(id)?.meta;
       if (named && !known(named)) {
@@ -212,9 +216,18 @@ export class ChannelSending {
         const roomId = this.ch.roomId;
         const slot = take ? { slot: { id: yield* Effect.promise(() => slotId(key, roomId, take.name)), ttl: take.ttl } } : {};
         const free = freeing.length ? { free: yield* Effect.promise(() => Promise.all(freeing.map((n) => slotId(key, roomId, n)))) } : {};
-        const stored = yield* this.ch.request<{ seq: number; ts?: number; occ?: unknown }>("/messages", {
+        const stored = yield* this.ch.request<{ seq: number; ts?: number; occ?: unknown }>(opts.after ? `/messages/after/${opts.after.head}` : "/messages", {
           method: "POST",
-          body: JSON.stringify({ ...sealed, e, ...slot, ...free, cid, ...(wake.length ? { wake } : {}), ...(opts.occurrence ? { occurrence: opts.occurrence } : {}) }),
+          body: JSON.stringify({
+            ...sealed,
+            e,
+            ...slot,
+            ...free,
+            cid,
+            ...(wake.length ? { wake } : {}),
+            ...(opts.occurrence ? { occurrence: opts.occurrence } : {}),
+            ...(opts.after ? { at: opts.after.at } : {}),
+          }),
         });
         if (!Number.isSafeInteger(stored.seq) || stored.seq < 1) return yield* notTheRelay(this.ch.relay);
         return stored;
@@ -239,7 +252,7 @@ export class ChannelSending {
         return stored.seq;
       });
       const once = Effect.gen({ self: this }, function* () {
-        const wire = slotted || opts.occurrence ? undefined : [...this.live.wires].at(-1);
+        const wire = slotted || opts.occurrence || opts.after ? undefined : [...this.live.wires].at(-1);
         if (!wire) return yield* posted;
         const { e, sealed } = yield* sealNow;
         const acked = yield* wire.send(sealed, e, signed, cid, wake).pipe(

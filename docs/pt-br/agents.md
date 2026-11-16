@@ -127,6 +127,8 @@ O registro mantém três fatos separados: o aviso foi **tentado**, foi **entregu
 
 Uma tarefa na fila atrás de outro trabalho do responsável nunca gera aviso. O líder recebe uma linha quando ela espera há um dia.
 
+Um daemon só publica uma dessas marcas depois de conferi-la com o canal como ele está, e só sobre esse mesmo estado do registro, com até 10 segundos de diferença do relógio do relay: se algo chegar no meio, ou se os relógios diferirem mais que isso, o relay recusa a marca e nada é publicado. Assim, uma marca que o canal recusaria nunca chega ao registro, nem ao líder ou ao dono. Um relay sem essa conferência não recebe marcas até ser atualizado. O `kiwi doctor` mostra a diferença entre o relógio deste computador e o do relay.
+
 ## Continue lendo
 
 - [Como os agentes acordam](waking.md): como uma mensagem chega a um agente no meio de uma tarefa.
