@@ -8,6 +8,7 @@ import { writeSync } from "node:fs";
 import { openSession } from "../agent.ts";
 import { Cursor, home, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeOn } from "../daemon/reach.ts";
+import { reportUnarmed } from "../daemon/rpc.ts";
 import { appendWakeRow } from "../daemon/wake.ts";
 import { formatMessage, handedNote, messageHead } from "@kiwi/core/format.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
@@ -20,6 +21,7 @@ import { hooksListen, installedListenSeconds } from "./install/claude.ts";
 import { loopDelivery } from "./loop-wait.ts";
 import { mimoInstalled } from "./install/mimo.ts";
 import { piInstalled } from "./install/pi.ts";
+import type { ListenerHolder } from "../daemon/protocol.ts";
 import { alive, isListening, takeListenSlot } from "./listeners.ts";
 import { LISTEN_SECONDS, mcFor } from "./self.ts";
 import { takenText } from "./taken.ts";
@@ -104,6 +106,12 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
   return { b, got, hearing: hearingAll, dropShown, from, reached: () => at, still: s.unheld, waits };
 });
 
+export function holderWords(h: ListenerHolder | null): string {
+  if (!h) return "a listener the daemon didn't name";
+  const parts = [h.session ? `session ${h.session}` : "no session", h.pid ? `${h.harness ?? "harness"} pid ${h.pid}` : null, h.proc ? `listener pid ${h.proc.pid}` : null];
+  return parts.filter((p) => p !== null).join(", ");
+}
+
 type Tuned = Effect.Success<ReturnType<typeof tune>> & { release: () => void };
 type Arming = { kind: "armed"; tuned: Tuned } | { kind: "not-needed" } | { kind: "failed"; b: Binding; why: string };
 
@@ -112,13 +120,13 @@ const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Eff
   if (!wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as)) return { kind: "not-needed" } satisfies Arming;
   const slot = yield* Effect.promise(() => takeListenSlot(b.alias, b.as, who.session ?? "")).pipe(
     Effect.repeat({
-      while: (got) => got === "unreachable" && (!who.pid || alive(who.pid)),
+      while: (got) => got.kind === "unreachable" && (!who.pid || alive(who.pid)),
       schedule: Schedule.min([Schedule.exponential(SLOT_RETRY_FIRST_MS), Schedule.spaced(SLOT_RETRY_MAX_MS)]),
     }),
   );
-  if (slot === "unreachable") return { kind: "not-needed" } satisfies Arming;
-  if (slot === "taken") return { kind: "failed", b, why: `another session holds the listen slot for ${b.as} in ${b.alias}` } satisfies Arming;
-  const release = () => slot.close();
+  if (slot.kind === "unreachable") return { kind: "not-needed" } satisfies Arming;
+  if (slot.kind === "taken") return { kind: "failed", b, why: `the listen slot for ${b.as} in ${b.alias} is held by ${holderWords(slot.holder)}` } satisfies Arming;
+  const release = () => slot.slot.close();
   yield* Effect.addFinalizer(() => Effect.sync(release));
   return yield* tune(seat, who, woke).pipe(
     Effect.map((tuned): Arming => ({ kind: "armed", tuned: { ...tuned, release } })),
@@ -185,9 +193,10 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     return heard === 1 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void;
   });
   const arming = yield* Effect.forEach(served, (seat) => arm(seat, who, woke).pipe(Effect.catchCause(() => Effect.succeed<Arming>({ kind: "failed", b: seat.b, why: "it couldn't start" }))));
-  for (const a of arming)
-    if (a.kind === "failed")
-      appendWakeRow(home(), { at: Date.now(), alias: a.b.alias, agent: a.b.as, via: via ?? "hooks", unread: 0, result: "failed", why: `the hook listener didn't arm: ${a.why}`, cursor: 0 });
+  const failedArms = arming.flatMap((a) => (a.kind === "failed" ? [a] : []));
+  for (const a of failedArms)
+    appendWakeRow(home(), { at: Date.now(), alias: a.b.alias, agent: a.b.as, via: via ?? "hooks", unread: 0, result: "failed", why: `the hook listener didn't arm: ${a.why}`, cursor: 0 });
+  yield* Effect.forEach(failedArms, (a) => Effect.promise(() => reportUnarmed(a.b.alias, a.b.as, a.why).catch(() => {})), { discard: true });
   const armed = arming.flatMap((a) => (a.kind === "armed" ? [a.tuned] : []));
   let failed = 0;
   const hear = ({ hearing, release }: (typeof armed)[number]) =>

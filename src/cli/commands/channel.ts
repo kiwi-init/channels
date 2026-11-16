@@ -111,7 +111,7 @@ export const channelCommands: Record<string, Command> = {
       }
       if (turn !== undefined) return yield* die("usage: kiwi wake [on|off|webhook URL|webhook off|seats|seat ROOM_ID AGENT on|off]");
       const seat = yield* Effect.promise(() => daemonSeat(s.alias, s.me));
-      out(seat ? wakeLine(seat.wake) : `the daemon holds no seat for ${s.me} in "${s.alias}" yet`);
+      out(seat ? `${wakeLine(seat.wake)}${unarmedLine(seat.unarmed)}` : `the daemon holds no seat for ${s.me} in "${s.alias}" yet`);
     }),
 
   status: () =>
@@ -158,6 +158,10 @@ export const channelCommands: Record<string, Command> = {
       }
     }),
 };
+
+function unarmedLine(u: DaemonSeat["unarmed"]): string {
+  return u ? ` · listener not armed for ${ago(u.since).replace(/ ago$/, "")}: ${u.why}` : "";
+}
 
 function wakeLine(w: DaemonSeat["wake"]): string {
   const how =

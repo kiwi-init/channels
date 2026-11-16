@@ -1,7 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { sectionFor, sectionIn, upsert } from "./changelog.ts";
+import { spawnSync } from "node:child_process";
+import { earlierThan, sectionFor, sectionIn, sizeLine, upsert, withSize } from "./changelog.ts";
+import { firstLoad } from "./first-load.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const VERSION_RE = String.raw`\d+\.\d+\.\d+(?:-[a-z]+\.\d+)?`;
@@ -50,9 +52,16 @@ export function stampText(file: Stamped, text: string, version: string): string 
   return out;
 }
 
-export function stampChangelog(text: string, version: string, section: () => string): string {
+export function stampChangelog(text: string, version: string, section: () => string, bytes?: () => number): string {
   if (version.includes("-") || sectionIn(text, version)) return text;
-  return upsert(text, version, section());
+  const sec = section();
+  return upsert(text, version, bytes ? withSize(sec, sizeLine(bytes(), earlierThan(text, version))) : sec);
+}
+
+function measured(): number {
+  const built = spawnSync("bun", ["run", "ui:build"], { cwd: ROOT, encoding: "utf8" });
+  if (built.status !== 0) throw new Error(`stamp: the UI didn't build, so the release's first-load bytes can't be measured:\n${built.stderr || built.stdout}`);
+  return firstLoad(resolve(ROOT, "ui/dist")).total;
 }
 
 if (import.meta.main) {
@@ -76,7 +85,7 @@ if (import.meta.main) {
   const text = existsSync(log) ? readFileSync(log, "utf8") : "";
   writeFileSync(
     log,
-    stampChangelog(text, version, () => sectionFor(version, "HEAD", new Date().toISOString().slice(0, 10))),
+    stampChangelog(text, version, () => sectionFor(version, "HEAD", new Date().toISOString().slice(0, 10)), measured),
   );
   console.log(`stamped ${version} into ${FILES.join(", ")} and CHANGELOG.md`);
 }

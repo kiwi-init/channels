@@ -152,6 +152,9 @@ jobs:
       - name: ui words in catalogs
         if: ${{ !cancelled() }}
         run: bun scripts/ui-english.ts
+      - name: every ui word key has a production reader
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-word-readers.ts
       - name: feed promises, every line of FEED.md names a check that is in the repo, still says its words, and runs here
         if: ${{ !cancelled() }}
         run: bun scripts/feed-promises.ts

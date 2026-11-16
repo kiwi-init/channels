@@ -173,6 +173,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
   const color: Color | null = human ? colorOf(state, m.name) : (m.color ?? null)
   const activity = human ? undefined : activityOf(here)
   const reach = human ? null : howHere(here)
+  const unarmed = human ? undefined : here?.unarmed
   const specs = m.card ? specsOf(m.card) : ""
   const load = loadOf(state, m)
   const shares = human ? [] : sharedWith(state.members, m.name)
@@ -206,6 +207,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(human ? {} : workOf(state, m)),
     ...(!m.owner && !canPost(m.scopes) ? { readOnly: true } : {}),
     ...(!human && wakes.has(m.name) ? { wakes: wakes.get(m.name) === true } : {}),
+    ...(unarmed ? { unarmed } : {}),
     ...(human && m.addsAgents ? { addsAgents: true } : {}),
     ...(human && m.answersDecisions ? { answersDecisions: true } : {}),
     ...(human && m.managesAgents ? { managesAgents: true } : {}),

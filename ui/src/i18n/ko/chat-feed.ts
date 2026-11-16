@@ -142,8 +142,6 @@ export default {
   "chat.updates.panel.fewer": "접기",
   "chat.updates.panel.more": { other: "{count}개 더" },
   "chat.updates.panel.updates": { other: "업데이트 {count}개" },
-  "chat.updates.panel.open": "열기",
-  "chat.updates.panel.and.more": " 외 {count}개",
   "chat.use.commands.compact": "리드에게 요약을 요청해 이전 기록 접기",
   "chat.use.commands.pause": "에이전트 일시 중지",
   "chat.use.commands.pause.note": "메모",

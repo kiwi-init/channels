@@ -1103,6 +1103,23 @@ export function cleanActivity(x: unknown): Activity | null {
 
 export type Reach = "listening" | "running" | "unreachable";
 
+export interface Unarmed {
+  since: number;
+  why: string;
+}
+
+export const UNARMED_ALERT_MS = 5 * 60_000;
+const UNARMED_WHY_MAX = 300;
+
+export function readUnarmed(x: unknown): Unarmed | null {
+  if (!x || typeof x !== "object") return null;
+  const since = "since" in x ? x.since : null;
+  const why = "why" in x ? x.why : null;
+  return typeof since === "number" && Number.isFinite(since) && since > 0 && typeof why === "string" && why && why.length <= UNARMED_WHY_MAX ? { since, why } : null;
+}
+
+export const unarmedAlert = (u: Unarmed | undefined, now: number): string | null => (u && now - u.since >= UNARMED_ALERT_MS ? u.why : null);
+
 export function isReach(x: unknown): x is Reach {
   return x === "listening" || x === "running" || x === "unreachable";
 }
@@ -1121,6 +1138,7 @@ export interface Presence {
   reach?: Reach;
   readAt?: number;
   wake?: string;
+  unarmed?: Unarmed;
   ops?: number;
   ts: number;
   pk?: string;

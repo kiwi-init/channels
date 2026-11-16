@@ -496,7 +496,9 @@ describe("a Claude Code session whose seat another session took (#1676)", () => 
     mkdirSync(join(h, "listen-hooks"), { recursive: true });
     writeFileSync(join(h, "listen-hooks", "alpha.lead.L"), String(process.pid));
     expect((await run(h, ["hook", "listen"], lead, h, JSON.stringify({ session_id: "L", cwd: h }))).code).toBe(0);
-    expect(readFileSync(join(h, "wake.log"), "utf8")).toContain("\talpha\tlead\thooks\t0\tfailed\tthe hook listener didn't arm: another session holds the listen slot for lead in alpha\t");
+    expect(readFileSync(join(h, "wake.log"), "utf8")).toContain(
+      `\talpha\tlead\thooks\t0\tfailed\tthe hook listener didn't arm: the listen slot for lead in alpha is held by session L, listener pid ${process.pid}\t`,
+    );
   });
 
   test("a prompt in its pane says so, and the session that took the seat hears nothing about it", async () => {
