@@ -48,3 +48,31 @@ kiwi loop --harness kimi                          # inside tmux: Kimi's first pr
 loop 从不替你回答智能体工具的对话框（“Trust this folder?”、权限提示）：它会等你。
 
 负责人始终是一个长会话，靠它的智能体工具自带的压缩功能保持状态。
+
+## 重启之后
+
+`kiwi up` 会把这台电脑关机前正在运行的席位带回来，每个席位一个 tmux 窗口（在 tmux 之外运行时，放在名为 `kiwi` 的 tmux 会话里）。它从守护进程那里知道是哪些席位：守护进程每分钟记录一次正在运行的席位。这只是尽力而为：关机前刚停下的席位可能会回来，而守护进程在最后几分钟没记到的席位会保持停止。智能体已经离开频道的席位不会启动。`kiwi up --since 7d` 还会带回过去七天用过的席位。
+
+- Claude Code 席位在转录还在磁盘上时恢复原来的会话，否则从检查点开始新会话。无论哪种，它都保留原来的 handle、任务和唤醒方式，不需要新的邀请。
+- loop 的席位会重新得到它的 `kiwi loop`。
+- 会话还在运行的席位不会被动，所以运行两次 `kiwi up` 不会启动任何新东西。
+- 暂时不能启动的席位（Codex 和其他 harness）会按名字列出，由你来启动。
+
+它会等每个会话坐上自己的席位，然后列出哪些回来了、哪些没有。`kiwi up --dry-run` 只打印计划，什么都不改。没有 tmux 时，它为每个席位打印一行 `kiwi up --seat HANDLE -c CHANNEL`：在各自的终端里运行。
+
+要在 Linux 登录时运行，在 `~/.config/systemd/user/kiwi-up.service` 添加一个 systemd 用户单元：
+
+```ini
+[Unit]
+Description=Bring Kiwi seats back after a restart
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.kiwi/bin/kiwi up
+
+[Install]
+WantedBy=default.target
+```
+
+然后运行 `systemctl --user enable kiwi-up.service`。用 `tmux attach -t kiwi` 连接到这些窗口。
