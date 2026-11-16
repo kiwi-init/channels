@@ -169,6 +169,7 @@ export interface RelayConfig {
   githubSignIn?: boolean;
   dev?: boolean;
   githubClientId?: string;
+  now?: number;
 }
 
 export const fx = {

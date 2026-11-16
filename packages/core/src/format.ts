@@ -201,7 +201,7 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return ev.waited ? say("task.nudge.waited", { mark, reason: inlineText(ev.waited, 120) }) : mark;
     }
     case "task.wait":
-      return say(ev.until !== undefined ? "task.wait.until" : "task.wait", { task: task(ev.task), reason: inlineText(ev.reason, 120) });
+      return say("task.wait", { task: task(ev.task), reason: inlineText(ev.reason, 120) });
     case "task.wait.end":
       return say("task.wait.end", { task: task(ev.task) });
     case "task.wake":

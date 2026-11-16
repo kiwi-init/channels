@@ -675,7 +675,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const task = tasks.get(ev.task);
       if (!task) reject(`no task ${taskId(ev.task)}`);
       else if (task.state === "done") reject(`${taskId(task.id)} is already done`);
-      else if (task.owner !== m.from && !isPerson(member) && !c.leads(member)) reject(`only ${taskId(task.id)}'s owner, the lead or a person ${ev.op === "task.wait" ? "sets" : "ends"} its wait`);
+      else if (task.owner !== m.from && !isPerson(member) && !c.leads(member)) reject(`only ${taskId(task.id)}'s owner, the lead or a person sets or ends its wait`);
       else if (ev.op === "task.wait.end") {
         if (!task.wait) reject(`${taskId(task.id)} isn't waiting`);
         else delete task.wait;

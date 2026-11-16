@@ -65,7 +65,6 @@ function heldEnd(view: ClockView, t: Task): number | undefined {
 export const waitActive = (t: Task, now: number): boolean => !!t.wait && t.state !== "done" && (t.wait.until === undefined || now < t.wait.until);
 
 export function waitEndedBy(view: ClockView, t: Task, by: string, now: number, lead: string | undefined): boolean {
-  if (!t.wait) return false;
   const mover = partyOf(view, { ...t, wait: undefined }, now).mover;
   return mover === LEAD ? by === lead : mover === by;
 }

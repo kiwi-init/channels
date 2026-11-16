@@ -91,7 +91,7 @@ describe("a task-level wait on a step-less task", () => {
 
   test("its owner, the lead or a person sets it; another agent can't, and ending one that isn't there is refused", () => {
     const state = fold([...doing(), wait(3, 2_000, undefined, "mac"), event(4, 3_000, "win", { op: "task.wait.end", task: TASK })], roster, 4_000);
-    expect(state.rejected.get(3)).toBe("only T1's owner, the lead or a person sets its wait");
+    expect(state.rejected.get(3)).toBe("only T1's owner, the lead or a person sets or ends its wait");
     expect(state.rejected.get(4)).toBe("T1 isn't waiting");
     const byLead = fold([...doing(), wait(3, 2_000, undefined, "owl")], roster, 4_000);
     expect(byLead.tasks.get(TASK)!.wait?.by).toBe("owl");
@@ -144,5 +144,22 @@ describe("a task-level wait on a step-less task", () => {
     const ended = fold([...open(), post(3, 2 * MIN, "owl", TASK), post(4, 3 * MIN, "mac", TASK)], signed, 5 * MIN);
     expect(ended.tasks.get(TASK)!.wait).toBeUndefined();
     expect(moverOf(ended, ended.tasks.get(TASK)!, 5 * MIN)).toMatchObject({ kind: "member", name: "mac", move: "assign" });
+  });
+
+  test("a signed lead whose key is gone no longer ends it; the channel owner, who has the move then, does", () => {
+    const persona = { name: "Lead", role: "lead" as const, capabilities: [], areas: [], instructions: "" };
+    const signed: Roster = roster.map((r) => (r.name === "owl" ? { ...r, role: undefined } : r.name === "mac" ? { ...r, persona } : r));
+    const open = (): Message[] => [
+      event(TASK, 0, "jow", { op: "task.add", title: "Resume the job once load drops" }),
+      wait(2, 1_000, undefined, "jow"),
+      event(3, 2_000, "jow", { op: "member.gone", member: "mac", pk: "pk-mac" }),
+    ];
+    const kept = fold([...open(), post(4, 2 * MIN, "mac", TASK)], signed, 5 * MIN);
+    expect([...kept.rejected]).toEqual([[4, "sent after its key was removed"]]);
+    expect(kept.lead).toBeNull();
+    expect(kept.tasks.get(TASK)!.wait).toBeDefined();
+    const ended = fold([...open(), post(4, 2 * MIN, "mac", TASK), post(5, 3 * MIN, "jow", TASK)], signed, 5 * MIN);
+    expect(ended.tasks.get(TASK)!.wait).toBeUndefined();
+    expect(moverOf(ended, ended.tasks.get(TASK)!, 5 * MIN)).toMatchObject({ kind: "member", name: "jow", move: "assign" });
   });
 });

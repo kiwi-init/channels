@@ -63,12 +63,17 @@ interface Rig {
   reachable?: boolean;
   lose?: "response" | "post";
   staleAfter?: number;
+  racers?: number;
+  meanwhile?: () => Promise<unknown>;
+  oldRelay?: boolean;
+  skew?: number;
+  ahead?: number;
 }
 
 function seat(c: Channel, agent: Name, rig: Rig = {}) {
   const pending: DocWakeItem[] = [];
   const told = new Set<string>();
-  const did = { wakes: 0 };
+  const did = { wakes: 0, sends: 0, reads: 0, offClock: 0 };
   const set = { ...rig };
   const w = watchClock(
     {
@@ -78,16 +83,27 @@ function seat(c: Channel, agent: Name, rig: Rig = {}) {
       wanted: async () => set.wanted ?? true,
       wakes: async () => set.wakes ?? true,
       reachable: () => set.reachable ?? true,
-      stateOf: async () =>
-        set.staleAfter
+      stateOf: async () => {
+        did.reads++;
+        const meanwhile = did.reads === 2 ? set.meanwhile : undefined;
+        if (meanwhile) await meanwhile();
+        return set.staleAfter
           ? fold(
               c.log.filter((m) => m.seq <= set.staleAfter!),
               roster,
               c.now(),
             )
-          : c.state(),
-      nudge: async (ev, to) => {
-        if (set.lose === "post") return null;
+          : c.state();
+      },
+      nudge: async (ev, to, after) => {
+        did.sends++;
+        if (set.lose === "post" || set.oldRelay) return null;
+        if (set.racers) {
+          set.racers--;
+          await c.say("zed", "msg", "meanwhile");
+        }
+        if (after.head !== c.log.length) return "moved";
+        if (Math.abs(c.now() - after.at) > (set.skew ?? 0)) return "off-clock";
         const m = await c.ev(agent, ev, to);
         return set.lose === "response" ? null : m.seq;
       },
@@ -97,8 +113,11 @@ function seat(c: Channel, agent: Name, rig: Rig = {}) {
       add: (item) => void pending.push(item),
       drop: (blocks) => void blocks.forEach((b) => told.add(b)),
       wake: () => void did.wakes++,
+      offClock: () => void did.offClock++,
     },
-    c.now,
+    () => c.now() + (set.ahead ?? 0),
+    undefined,
+    rig.skew ?? 0,
   );
   open.push(w);
   return { w, did, set, pending: () => pending.filter((p) => !told.has(p.block)), shown: (block: string) => void told.add(block) };
@@ -447,27 +466,24 @@ describe("one waker (#3930 §2, cases 2 and 22)", () => {
 });
 
 describe("a refused quiet mark (#2319)", () => {
-  test("a mark the host refuses is not retried while the clock stays ahead of the daemon's view", async () => {
+  test("a daemon whose view runs behind the log posts nothing, and posts once it catches up (#2491)", async () => {
     const c = channel();
     const id = (await c.ev("owl", { op: "task.add", title: "ship" })).seq;
     const lead = seat(c, "owl", { staleAfter: id });
     await c.ev("owl", { op: "task.update", task: id, owner: "win" });
     c.wait(2 * N + UNREAD_MS);
     await lead.w.look();
-    const refused = c.log.filter((m) => m.ev?.op === "task.nudge");
-    expect(refused).toHaveLength(1);
-    expect(c.state().rejected.has(refused[0]!.seq)).toBe(true);
+    expect(lead.did.sends).toBe(4);
+    expect(c.log.filter((m) => m.ev?.op === "task.nudge")).toEqual([]);
     c.wait(61_000);
     await lead.w.look();
-    c.wait(61_000);
-    await lead.w.look();
-    expect(c.log.filter((m) => m.ev?.op === "task.nudge")).toHaveLength(1);
+    expect(c.log.filter((m) => m.ev?.op === "task.nudge")).toEqual([]);
     lead.set.staleAfter = undefined;
     c.wait(2 * N);
     await lead.w.look();
     const after = c.log.filter((m) => m.ev?.op === "task.nudge");
-    expect(after).toHaveLength(2);
-    expect(c.state().rejected.has(after[1]!.seq)).toBe(false);
+    expect(after).toHaveLength(1);
+    expect(c.state().rejected.size).toBe(0);
   });
 
   test("a due escalation on another member's clock still posts once", async () => {
@@ -481,5 +497,128 @@ describe("a refused quiet mark (#2319)", () => {
     await lead.w.look();
     expect(c.events("task.nudge")).toHaveLength(1);
     expect(c.state().rejected.size).toBe(0);
+  });
+});
+
+describe("a mark the host would refuse never reaches the log (#2491)", () => {
+  const toOwner = (c: Channel) => c.log.filter((m) => m.from !== "jon" && m.to?.includes("jon"));
+
+  test("progress between the look and the post: the dry-run on fresh state refuses it, and nothing is posted", async () => {
+    const c = channel();
+    const { id } = await inReview(c);
+    c.wait(3 * N);
+    const lead = seat(c, "owl", { meanwhile: () => c.say("mac", "msg", "reviewing now", { task: id }) });
+    await lead.w.look();
+    expect(lead.did.sends).toBe(0);
+    expect(c.log.filter((m) => m.ev?.op === "task.nudge")).toEqual([]);
+    expect(toOwner(c)).toEqual([]);
+  });
+
+  test("a send that loses the race twice reads again each time and then lands, once", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(3 * N);
+    const lead = seat(c, "owl", { racers: 2 });
+    await lead.w.look();
+    expect(lead.did.sends).toBe(3);
+    expect(c.events("task.nudge").map((m) => [m.ev, m.to])).toEqual([[{ op: "task.nudge", task: id, mover: "mac", since: epoch, step: 3 }, ["jon"]]]);
+    expect(c.state().rejected.size).toBe(0);
+  });
+
+  test("when every retry loses, nothing is appended and nobody is told until a later look lands", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(3 * N);
+    const lead = seat(c, "owl", { racers: 4 });
+    await lead.w.look();
+    expect(lead.did.sends).toBe(4);
+    expect(lead.did.offClock).toBe(0);
+    expect(c.log.filter((m) => m.ev?.op === "task.nudge")).toEqual([]);
+    expect(toOwner(c)).toEqual([]);
+    c.wait(61_000);
+    await lead.w.look();
+    expect(c.events("task.nudge").map((m) => m.ev)).toEqual([{ op: "task.nudge", task: id, mover: "mac", since: epoch, step: 3 }]);
+    expect(c.state().rejected.size).toBe(0);
+  });
+
+  test("a relay that can't take a send on a known head gets no clock mark at all", async () => {
+    const c = channel();
+    await inReview(c);
+    c.wait(3 * N);
+    const lead = seat(c, "owl", { oldRelay: true });
+    await lead.w.look();
+    expect(lead.did.sends).toBe(1);
+    expect(c.log.filter((m) => m.ev?.op === "task.nudge")).toEqual([]);
+    expect(toOwner(c)).toEqual([]);
+  });
+
+  test("a mark due only inside the skew window is held until both ends of it accept, then lands", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(3 * N);
+    const lead = seat(c, "owl", { skew: 10_000 });
+    await lead.w.look();
+    expect(lead.did.sends).toBe(0);
+    c.wait(61_000);
+    await lead.w.look();
+    expect(c.events("task.nudge").map((m) => m.ev)).toEqual([{ op: "task.nudge", task: id, mover: "mac", since: epoch, step: 3 }]);
+    expect(c.state().rejected.size).toBe(0);
+  });
+
+  test("a daemon whose clock is off by more than the window posts nothing, says so once, and lands once the clocks agree", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(3 * N + 60_000);
+    const lead = seat(c, "owl", { skew: 10_000, ahead: 30_000 });
+    await lead.w.look();
+    expect(lead.did.sends).toBe(4);
+    expect(lead.did.offClock).toBe(1);
+    c.wait(61_000);
+    await lead.w.look();
+    expect(lead.did.offClock).toBe(1);
+    expect(c.log.filter((m) => m.ev?.op === "task.nudge")).toEqual([]);
+    expect(toOwner(c)).toEqual([]);
+    lead.set.ahead = 5_000;
+    c.wait(90_000);
+    await lead.w.look();
+    expect(c.events("task.nudge").map((m) => m.ev)).toEqual([{ op: "task.nudge", task: id, mover: "mac", since: epoch, step: 3 }]);
+  });
+
+  test("a wake attempt held by the window is tried again on a later look", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(N);
+    const host = seat(c, "mac", { skew: 10_000 });
+    await host.w.look();
+    expect(c.events("task.nudge")).toEqual([]);
+    c.wait(30_000);
+    await host.w.look();
+    expect(c.events("task.nudge").map((m) => [m.from, m.ev])).toEqual([["mac", { op: "task.nudge", task: id, mover: "mac", since: epoch, step: 1 }]]);
+    expect(host.did.wakes).toBe(1);
+  });
+
+  test("a step-2 mark addressed to the hosting lead tells it nothing until the relay keeps the mark, then once", async () => {
+    const c = channel();
+    const { id, epoch } = await inReview(c);
+    c.wait(2 * N + 60_000);
+    const failing: Rig[] = [{ racers: 4 }, { oldRelay: true }, { skew: 10_000, ahead: 30_000 }];
+    for (const rig of failing) {
+      const lead = seat(c, "owl", rig);
+      await lead.w.look();
+      expect(lead.did.sends).toBeGreaterThan(0);
+      expect(c.log.filter((m) => m.ev?.op === "task.nudge")).toEqual([]);
+      expect(lead.pending()).toEqual([]);
+      expect(lead.did.wakes).toBe(0);
+      lead.w.stop();
+    }
+    const lead = seat(c, "owl", { racers: 1 });
+    await lead.w.look();
+    expect(c.events("task.nudge").map((m) => [m.ev, m.to])).toEqual([[{ op: "task.nudge", task: id, mover: "mac", since: epoch, step: 2, wake: "none" }, undefined]]);
+    expect(lead.pending().map((p) => p.block)).toEqual([`clock:T${id}:${epoch}:2`]);
+    expect(lead.did.wakes).toBe(1);
+    c.wait(61_000);
+    await lead.w.look();
+    expect(lead.pending()).toHaveLength(1);
+    expect(lead.did.wakes).toBe(1);
   });
 });

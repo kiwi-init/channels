@@ -80,7 +80,7 @@ function firstLoadChunks(): Plugin {
 export default defineConfig(({ mode }) => ({
   plugins: [react(), compactIcons(), lazyLinksAfterThePage(), firstLoadChunks()],
   css: { postcss: { plugins: [hoverWithAMouse] } },
-  build: { modulePreload: { resolveDependencies: (_file, deps, { hostType }) => (hostType === "js" ? deps.filter((dep) => !firstLoad.has(dep)) : deps) } },
+  build: { modulePreload: { polyfill: false, resolveDependencies: (_file, deps, { hostType }) => (hostType === "js" ? deps.filter((dep) => !firstLoad.has(dep)) : deps) } },
   define: { __DEV__: "false", ...(mode === "harness" ? { "import.meta.env.DEV": "true" } : {}) },
   resolve: {
     alias: {

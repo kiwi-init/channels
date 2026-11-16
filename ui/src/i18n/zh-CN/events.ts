@@ -57,7 +57,6 @@ export default {
   "events.task.snapshot": "记录了 {task} 在磁盘上的状态：{where}",
   "events.task.nudge.waited": "{mark}；等待已到期：{reason}",
   "events.task.wait": "将 {task} 标为等待中：{reason}",
-  "events.task.wait.until": "将 {task} 标为限时等待中：{reason}",
   "events.task.wait.end": "结束了 {task} 的等待",
   "events.task.nudge.owner": "记录了 {task} 在 {name} 手上仍然停滞：该放进所有者的待处理了",
   "events.task.landed": "落地了 {task}：{at}",

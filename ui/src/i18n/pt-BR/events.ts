@@ -57,7 +57,6 @@ export default {
   "events.task.snapshot": "registrou onde {task} está no disco: {where}",
   "events.task.nudge.waited": "{mark}; a espera acabou: {reason}",
   "events.task.wait": "marcou {task} como esperando: {reason}",
-  "events.task.wait.until": "marcou {task} como esperando, por um tempo no máximo: {reason}",
   "events.task.wait.end": "encerrou a espera em {task}",
   "events.task.nudge.owner": "marcou {task} como ainda parada com {name}: está na hora de ir para o Precisa de você do dono",
   "events.task.landed": "integrou {task}: {at}",

@@ -55,7 +55,6 @@ export const EVENT_WORDS = {
   "task.snapshot": "noted where {task} stands on disk: {where}",
   "task.nudge.waited": "{mark}; its wait ran out: {reason}",
   "task.wait": "marked {task} waiting: {reason}",
-  "task.wait.until": "marked {task} waiting, for a while at most: {reason}",
   "task.wait.end": "ended the wait on {task}",
   "task.nudge.owner": "marked {task} still quiet with {name}: due in the owner's Needs you",
   "task.landed": "landed {task}: {at}",

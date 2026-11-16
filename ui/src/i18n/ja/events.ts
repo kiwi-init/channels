@@ -57,7 +57,6 @@ export default {
   "events.task.snapshot": "{task} のディスク上の状態を記録しました: {where}",
   "events.task.nudge.waited": "{mark}。待機が期限切れになりました: {reason}",
   "events.task.wait": "{task} を待機中にしました: {reason}",
-  "events.task.wait.until": "{task} を期限付きで待機中にしました: {reason}",
   "events.task.wait.end": "{task} の待機を終えました",
   "events.task.nudge.owner": "{task} が {name} のもとで止まったままだと記録しました: オーナーの要対応に入れる時期です",
   "events.task.landed": "{task} を反映しました: {at}",

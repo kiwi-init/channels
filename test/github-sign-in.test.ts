@@ -83,7 +83,7 @@ describe("creating a channel with a GitHub sign-in", () => {
   });
 
   test("/v1/config says GitHub sign-in is taken", async () => {
-    expect(await relayConfig(relay)).toEqual({ githubSignIn: true });
+    expect(await relayConfig(relay)).toEqual({ now: expect.any(Number), githubSignIn: true });
   });
 
   test("a phone asking to join a GitHub sign-in that has no devices yet hears to sign in on its first app", async () => {

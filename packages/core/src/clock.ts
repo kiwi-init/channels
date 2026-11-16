@@ -1,7 +1,8 @@
 import { inlineText } from "./membership.ts";
 import { channelOwner, moverOf } from "./mover.ts";
-import type { NudgeStep, WakeSeen } from "./protocol.ts";
-import { actOf, memberKey, partyOfKey, queuedKey, QUEUE_MS, rolled, UNREAD_MS, wakeSeen, wokeFor } from "./state/clocks.ts";
+import type { Event, NudgeStep, WakeSeen } from "./protocol.ts";
+import { actOf, memberKey, nudge, partyOfKey, queuedKey, QUEUE_MS, rolled, UNREAD_MS, wakeSeen, wokeFor } from "./state/clocks.ts";
+import { taskId } from "./state/tasks.ts";
 import { isPerson } from "./state/people.ts";
 import type { ChannelState, Task, Woke } from "./state/types.ts";
 import { spanText } from "./steps.ts";
@@ -29,6 +30,23 @@ export function clockOf(state: Board, t: Task, now: number): Clock | undefined {
   const start = own ?? { seq: c.seq, at: c.at };
   const woke = wokeFor(c, start.seq);
   return { mover: mover.name, party: partyOfKey(c.key), epoch: start.seq, since: start.at, quiet: Math.max(0, now - start.at), paged, step: own ? own.step : (c.step ?? 0), ...(woke ? { woke } : {}) };
+}
+
+type NudgeEvent = Extract<Event, { op: "task.nudge" }>;
+
+export function nudgeRefusal(state: Board, ev: NudgeEvent, mark: { seq: number; at: number; by: string }): string | null {
+  const t = state.tasks.get(ev.task);
+  if (!t) return `no task ${taskId(ev.task)}`;
+  const owner = (): string | undefined => channelOwner(state);
+  const here = (name: string): boolean => state.members.get(name)?.active === true;
+  return nudge(state, structuredClone(t), ev, mark, {
+    agentQueue: (name) => {
+      const m = state.members.get(name);
+      return !!m && m.active && !isPerson(m);
+    },
+    lead: () => state.lead ?? owner(),
+    stands: (name) => (here(name) ? name : owner()),
+  });
 }
 
 export interface NudgeDue {

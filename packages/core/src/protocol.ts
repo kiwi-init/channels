@@ -107,6 +107,15 @@ export const PAGE_LIMIT = 1_000;
 
 export const MORE_REFUSED = "too many page requests; slow down";
 
+export const AFTER_SKEW_MS = 10_000;
+
+export interface SendAfter {
+  head: number;
+  at: number;
+}
+
+export const wellFormedAfter = (x: SendAfter): boolean => Number.isSafeInteger(x.head) && x.head >= 0 && Number.isSafeInteger(x.at) && x.at >= 0;
+
 export interface SlotTake {
   id: string;
   ttl: number;
