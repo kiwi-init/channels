@@ -73,6 +73,33 @@ describe("a UI word key is read only when production code looks it up (#2499)", 
     expect(left([{ file: "ui/src/a.ts", code: 'const WORDS: Readonly<Record<string, Key>> = { failure: "tasks.label" }; const w = t(WORDS[x])' }])).not.toContain("tasks.label");
   });
 
+  test("a const resolves only where it's the one binding of its name: a sibling's or a parameter's keeps the family", () => {
+    const siblings = 'function a() { const area = "tasks"; return t(`${area}.label`) }\nfunction b() { const area = "other"; return area }';
+    expect(left([{ file: "ui/src/a.tsx", code: siblings }])).not.toContain("tasks.label");
+    const shadowed = 'const area = "other"; function label(area) { return t(`${area}.label`) }';
+    expect(left([{ file: "ui/src/a.tsx", code: shadowed }])).not.toContain("tasks.label");
+  });
+
+  test("a key stored in a variable that only a diagnostic uses has no reader", () => {
+    expect(left([{ file: "ui/src/a.ts", code: 'const diagnostic = "tasks.unused"; console.log(diagnostic)' }])).toContain("tasks.unused");
+    expect(left([{ file: "ui/src/a.ts", code: 'const words = { gone: "tasks.unused" }; console.error(words.gone)' }])).toContain("tasks.unused");
+  });
+
+  test("a key reaches a lookup through an untyped map: indexed, mapped over, or imported", () => {
+    expect(left([{ file: "packages/core/src/f.ts", code: 'const KEYS = ["tasks.label"] as const; const s = say(KEYS[step])' }])).not.toContain("tasks.label");
+    expect(left([{ file: "ui/src/a.tsx", code: 'const CAN = [{ id: "read", label: "tasks.label" }] as const; const r = CAN.map((c) => t(c.label))' }])).not.toContain("tasks.label");
+    const imported = left([
+      { file: "ui/src/words.ts", code: 'export const WORDS = { a: "tasks.label" }' },
+      { file: "ui/src/a.tsx", code: 'import { WORDS as W } from "~/words"; const x = t(W[k])' },
+    ]);
+    expect(imported).not.toContain("tasks.label");
+  });
+
+  test("a field typed through an interface that holds a Key reads its key", () => {
+    const code = 'interface Character { name: Key }\nconst CHARACTERS: Record<string, Character> = { lead: { name: "tasks.label" } }';
+    expect(left([{ file: "ui/src/a.ts", code }])).not.toContain("tasks.label");
+  });
+
   test("a file name built like `${a}.${b}` keeps no family", () => {
     expect(left([{ file: "ui/src/a.ts", code: "const f = `${name}.${ext}`" }])).toContain("tasks.unused");
   });
