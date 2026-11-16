@@ -9,6 +9,10 @@ permissions:
 jobs:
   release-rehearsal:
     name: release / rehearsal
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
     uses: ./.github/workflows/release-build.yml
     with:
       rehearsal: true

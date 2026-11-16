@@ -41,8 +41,9 @@ test("a file whose version moved out of reach fails the stamp instead of shippin
 });
 
 test("the changelog: a release gets its section once, a hand-written one is kept, a pre-release gets none", () => {
-  const made = section("0.21.0", "2026-10-20", [{ title: "Tag-only releases", pr: 550 }]);
-  const once = stampChangelog(upsert("", "0.20.5", section("0.20.5", "2026-10-19", [])), "0.21.0", () => made);
+  const head = (tag: string, date: string) => ({ tag, sha: "a".repeat(40), date });
+  const made = section("0.21.0", head("v0.21.0", "2026-10-20"), [{ title: "Tag-only releases", pr: 550, sha: "b".repeat(40), kind: "features" }]);
+  const once = stampChangelog(upsert("", "0.20.5", section("0.20.5", head("v0.20.5", "2026-10-19"), [])), "0.21.0", () => made);
   expect(sectionIn(once, "0.21.0")).toBe(made);
   const edited = once.replace("Tag-only releases", "Tag-only releases, by hand");
   expect(stampChangelog(edited, "0.21.0", () => made)).toBe(edited);
