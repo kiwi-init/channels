@@ -16,6 +16,7 @@ import { args, opt } from "../args.ts";
 import { type Command, die, keepDaemon, offlineOk, out, session } from "../context.ts";
 import { firstLine, readText, taskArg, text } from "../input.ts";
 import { landingFromOptions, taskLanded, taskSteps } from "./task-steps.ts";
+import { parseSpan, spanText } from "@kiwi/core/steps.ts";
 import { LOOP_ENV } from "../../hooks/loop-wait.ts";
 import { askFresh, LOOP_TASK_ENV } from "../../loop/fresh.ts";
 
@@ -296,6 +297,17 @@ export const taskCommands: Record<string, Command> = {
             ...(runId !== undefined ? { run: { id: runId } } : {}),
             ...(opt.note ? { note: opt.note } : {}),
           });
+        } else if (sub === "wait") {
+          const reason = args.slice(3).join(" ").trim();
+          if (opt.end) {
+            if (reason || opt.until !== undefined) return yield* die("usage: kiwi task wait T7 --end (it takes nothing else)");
+            state = yield* s.taskWait(id, "end");
+          } else {
+            if (!reason) return yield* die('usage: kiwi task wait T7 "what it waits for" [--until 12h], or kiwi task wait T7 --end');
+            const span = opt.until === undefined ? undefined : parseSpan(opt.until);
+            if (span === null) return yield* die("--until takes how long at most, like 90m, 12h or 2d");
+            state = yield* s.taskWait(id, { reason, ...(span !== undefined ? { until: Date.now() + span } : {}) });
+          }
         } else return yield* die(`unknown task command "${sub}"`);
         const t = state.tasks.get(id)!;
         if (kept) return out(`${taskId(id)}'s review moved to ${t.review === "*" ? "anyone who hasn't worked on it" : t.review}: ${keptAt}`);
@@ -303,6 +315,11 @@ export const taskCommands: Record<string, Command> = {
         if ((sub === "done" || sub === "review") && t.areas?.length) out(`folders it changed (for kiwi task who): ${t.areas.join(", ")}`);
         if (sub === "checkpoint" && opt.fresh) out(`checkpoint saved: end your turn, and the loop starts a fresh session on ${taskId(id)} from it`);
         else if (sub === "checkpoint") out(contextLineOn(loadConfig()) ? `checkpoint saved: a new session of yours starts ${taskId(id)} from it` : `checkpoint saved on ${taskId(id)}`);
+        else if (sub === "wait" && opt.end) out(`${taskId(id)} is back on its clock, from now`);
+        else if (sub === "wait")
+          out(
+            `${taskId(id)} waits: its clock is paused until the wait ends (kiwi task wait ${taskId(id)} --end, or a post of yours on it)${t.wait?.until !== undefined ? `, or in ${spanText(t.wait.until - Date.now())} at most` : ""}`,
+          );
       }),
     ),
 

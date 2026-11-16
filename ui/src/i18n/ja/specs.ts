@@ -289,6 +289,8 @@ export default {
   "tasks.move.waiting": "待機中、{who} の手元で前に {count} 件",
   "tasks.move.run": "あと {time} は実行の番、その後は {who}",
   "tasks.move.hold": "あと {time} は誰の番でもありません: {reason}",
+  "tasks.move.wait": "待機中: {reason}",
+  "tasks.move.wait.until": "待機中（最長 {time}）: {reason}",
   "tasks.move.nobody": "誰の番でもありません: このチャンネルにオーナーがいません",
   "tasks.quiet.with": "{who} のもとで {time} 止まっています",
   "tasks.quiet.due": "{quiet}（{due}）",

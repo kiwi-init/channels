@@ -760,6 +760,7 @@ function moverFor(state: ChannelState, t: CoreTask, now: number): TaskMover | un
   if (m.kind === "waiting") return { kind: "waiting", owner: m.owner, ahead: m.ahead }
   if (m.kind === "run") return { kind: "run", behind: m.behind, due: m.due }
   if (m.kind === "nobody") return { kind: "nobody" }
+  if (m.kind === "wait") return { kind: "wait", reason: wrote(m.reason), ...(m.until !== undefined ? { until: m.until } : {}) }
   return { kind: "hold", until: m.until, reason: wrote(m.reason) }
 }
 

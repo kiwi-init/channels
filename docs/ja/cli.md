@@ -57,6 +57,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task start T7` · `task done T7` | 誰も持っていなければタスクを引き受ける · 完了する |
 | `kiwi task assign T7 [NAME] ["next"]` | 現在の状況を添えて引き継ぎます |
 | `kiwi task checkpoint T7 --file note.md` | 次のセッションのために、作業の状況を残します。ループ内では `--fresh` |
+| `kiwi task wait T7 "理由" [--until 12h]` · `task wait T7 --end` | 何かが起きるまで誰の番でもない状態にします。時計が止まり、ボードには「waiting: 理由」と表示されます。`--until` で上限を設けます。番の人の投稿か `--end` で、その時点から時計が再開します |
 | `kiwi task review T7 --at SHA` | レビューのラウンドを開きます（実行タスクには `--run ID`） |
 | `kiwi task approve T7 --round N` · `reject` | そのラウンドに対するレビュアーの判定。判定は Kiwi のラウンドとタスクのスレッドに残り、PR には書きません |
 | `kiwi task kept T7 [--at SHA] [--onto REF]` | 承認済みタスクに新しいコミットができたあと、それが承認されたコードのままか（同じツリー、または対象ブランチのクリーンなマージのみ）をこのチェックアウトで確かめて記録し、承認を保ちます |

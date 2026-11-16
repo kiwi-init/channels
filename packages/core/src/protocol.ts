@@ -307,7 +307,9 @@ export type Event =
       kept?: KeptEvidence;
     }
   | { op: "task.first"; task: number }
-  | { op: "task.nudge"; task: number; mover: string; since: number; step: NudgeStep; day?: number; wake?: WakeSeen }
+  | { op: "task.nudge"; task: number; mover: string; since: number; step: NudgeStep; day?: number; wake?: WakeSeen; waited?: string }
+  | { op: "task.wait"; task: number; reason: string; until?: number }
+  | { op: "task.wait.end"; task: number }
   | { op: "task.wake"; task: number; mover: string; since: number; got: WakeGot }
   | ({ op: "task.snapshot"; task: number } & SnapshotFacts)
   | { op: "task.landed"; task: number; artifact: CheckArtifact }
@@ -1002,7 +1004,9 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 31;
+export const EVENT_OPS_VERSION = 32;
+
+export const TASK_WAIT_REASON_MAX = 200;
 
 export const SESSION_PRINT_RE = /^[A-Za-z0-9_-]{16}$/;
 
@@ -1195,8 +1199,13 @@ function eventCheck(ev: unknown): boolean | null {
         e.mover.length > 0 &&
         n(e.since) &&
         (e.step === 0 ? n(e.day) : (e.step === 1 || e.step === 2 || e.step === 3) && e.day === undefined) &&
-        (e.wake === undefined || (e.step === 2 && WAKES_SEEN.some((w) => w === e.wake)))
+        (e.wake === undefined || (e.step === 2 && WAKES_SEEN.some((w) => w === e.wake))) &&
+        (e.waited === undefined || (e.step !== 0 && str(e.waited, TASK_WAIT_REASON_MAX) && e.waited.trim().length > 0))
       );
+    case "task.wait":
+      return n(e.task) && str(e.reason, TASK_WAIT_REASON_MAX) && e.reason.trim().length > 0 && !/[\r\n]/.test(e.reason) && (e.until === undefined || n(e.until));
+    case "task.wait.end":
+      return n(e.task);
     case "task.wake":
       return n(e.task) && str(e.mover, 64) && e.mover.length > 0 && n(e.since) && WAKE_GOTS.some((g) => g === e.got);
     case "task.snapshot":

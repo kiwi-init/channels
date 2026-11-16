@@ -196,8 +196,14 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return say("task.claim", { task: task(ev.task) });
     case "task.first":
       return say("task.first", { task: task(ev.task) });
-    case "task.nudge":
-      return say(ev.step === 2 && ev.wake ? `task.nudge.lead.${ev.wake}` : NUDGE_KEYS[ev.step], { task: task(ev.task), name: inlineText(ev.mover, 40) });
+    case "task.nudge": {
+      const mark = say(ev.step === 2 && ev.wake ? `task.nudge.lead.${ev.wake}` : NUDGE_KEYS[ev.step], { task: task(ev.task), name: inlineText(ev.mover, 40) });
+      return ev.waited ? say("task.nudge.waited", { mark, reason: inlineText(ev.waited, 120) }) : mark;
+    }
+    case "task.wait":
+      return say("task.wait", { task: task(ev.task), reason: inlineText(ev.reason, 120) });
+    case "task.wait.end":
+      return say("task.wait.end", { task: task(ev.task) });
     case "task.wake":
       return say(`task.wake.${ev.got}`, { task: task(ev.task), name: inlineText(ev.mover, 40) });
     case "task.snapshot":

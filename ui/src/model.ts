@@ -190,6 +190,7 @@ export type TaskMover =
   | { kind: "waiting"; owner: string; ahead: number }
   | { kind: "run"; behind: string; due: number }
   | { kind: "hold"; until: number; reason: Words }
+  | { kind: "wait"; reason: Words; until?: number }
   | { kind: "nobody" }
 
 export interface TaskQuiet {
