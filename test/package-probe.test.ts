@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,7 +11,7 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 const root = join(import.meta.dir, "..");
 const probe = (keysJs: string) =>
-  Bun.spawn([process.execPath, join(root, "desktop/scripts/package-probe.ts"), process.execPath, join(root, "src/cli/main.ts"), keysJs], { stdout: "pipe", stderr: "pipe" });
+  spawnOwned([process.execPath, join(root, "desktop/scripts/package-probe.ts"), process.execPath, join(root, "src/cli/main.ts"), keysJs], { stdout: "pipe", stderr: "pipe" });
 
 test("with a package's bun, its kiwi CLI as the relay and its keys worker: a channel is made, a message sent and read back, and its seat handed to the app", async () => {
   const built = await Bun.build({ entrypoints: [join(root, "desktop/src/keys-worker.ts")], target: "bun" });

@@ -1,3 +1,4 @@
+import { spawnOwned, spawnOwnedSync } from "./owned.ts";
 import { afterEach, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
@@ -185,7 +186,7 @@ test("names the install folder and a remedy when it is not writable", async () =
 });
 
 test("rejects unsupported options instead of silently ignoring them", async () => {
-  const child = Bun.spawn([process.execPath, "src/cli/main.ts", "upgrade", "--quiet"], { stdout: "pipe", stderr: "pipe" });
+  const child = spawnOwned([process.execPath, "src/cli/main.ts", "upgrade", "--quiet"], { stdout: "pipe", stderr: "pipe" });
   expect(await child.exited).toBe(1);
   expect(await new Response(child.stderr).text()).toContain("does not accept --quiet");
 });
@@ -203,7 +204,7 @@ test("keeps a binary replaced by another updater during download", async () => {
 
 test.each(["upgrade", "update"])("%s routes without needing a configured identity", async (command) => {
   const f = fixture();
-  const child = Bun.spawn([process.execPath, "src/cli/main.ts", command], { env: { ...process.env, KIWI_HOME: f.dir }, stdout: "pipe", stderr: "pipe" });
+  const child = spawnOwned([process.execPath, "src/cli/main.ts", command], { env: { ...process.env, KIWI_HOME: f.dir }, stdout: "pipe", stderr: "pipe" });
   expect(await child.exited).toBe(1);
   expect(await new Response(child.stderr).text()).toContain("runs from source");
 });
@@ -253,7 +254,7 @@ test("keeps the old binary when the .xz won't unpack and the release has no .gz"
 });
 
 test.skipIf(!Bun.which("xz"))("unpacks a real .xz with the xz found on PATH", async () => {
-  const packed = Bun.spawnSync(["xz", "-c", "--x86", "--lzma2"], { stdin: Buffer.from(XZ_BODY) });
+  const packed = spawnOwnedSync(["xz", "-c", "--x86", "--lzma2"], { stdin: Buffer.from(XZ_BODY) });
   expect(packed.exitCode).toBe(0);
   const f = fixture({ xz: packed.stdout });
   await upgrade(f.options);

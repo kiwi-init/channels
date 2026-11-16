@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -23,7 +24,7 @@ const verifier = (): string => {
   return file;
 };
 
-const run = (data: string, sig: string, key: string = keyLine) => Bun.spawnSync(["python3", verifier(), data, sig, key]);
+const run = (data: string, sig: string, key: string = keyLine) => spawnOwnedSync(["python3", verifier(), data, sig, key]);
 
 const raised = (data: string, sig: string, key: string = keyLine): string | undefined => {
   const r = run(data, sig, key);

@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -52,7 +53,7 @@ export function joinSeats(): JoinSeats {
   };
 
   const spawn = (home: string, args: string[], env: Env = {}, cwd = home, stdin?: string, via: string[] = []) =>
-    Bun.spawn([...via, ...kiwiCmd(args)], {
+    spawnOwned([...via, ...kiwiCmd(args)], {
       cwd,
       // The owner's person seat (--as human) runs from a person's terminal, never an agent's harness.
       // KIWI_MODEL: an agent in a harness says what runs it or can't join; these sessions have no transcript to read it from.

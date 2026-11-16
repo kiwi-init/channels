@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,7 +8,7 @@ import { wakeHarness } from "./wake-harness.ts";
 
 setDefaultTimeout(60_000);
 
-const tmuxPastes = !!Bun.which("tmux") && tmuxPastesFlag(new TextDecoder().decode(Bun.spawnSync(["tmux", "-V"]).stdout));
+const tmuxPastes = !!Bun.which("tmux") && tmuxPastesFlag(new TextDecoder().decode(spawnOwnedSync(["tmux", "-V"]).stdout));
 
 const IDLE = ["  Antigravity CLI 1.4.12", "─".repeat(60), ">", "─".repeat(60), "? for shortcuts                       auto · Gemini 3.8 Flash · low"].join("\r\n");
 const BUSY = ["  ⣻  Running command...", "─".repeat(60), ">", "─".repeat(60), "esc to cancel                         auto · Gemini 3.8 Flash · low"].join("\r\n");
@@ -48,7 +49,7 @@ describe.skipIf(!tmuxPastes)("waking an idle agy agent by typing into its own tm
   const sock = join("/tmp", `kiwi-wt-${process.pid}.sock`);
   const state = join(dir, "state");
   const got = join(dir, "got.jsonl");
-  const tmux = (...args: string[]) => Bun.spawnSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
+  const tmux = (...args: string[]) => spawnOwnedSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
   let pane = "";
 
   const typed = (): { at: number; screen: string; prompt: string }[] =>

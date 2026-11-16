@@ -1,3 +1,4 @@
+import { record } from "./owned.ts";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import type { Duplex } from "node:stream";
@@ -9,6 +10,7 @@ const PROMPT_MS = 600;
 function waitingOnPrompt(): Promise<{ inTime: boolean; ticks: number; key: string | null }> {
   return new Promise((done, failed) => {
     const child = spawn(process.execPath, [CHILD], { stdio: ["ignore", "pipe", "inherit", "pipe"], env: { ...process.env, KIWI_KEY_FD: "3" } });
+    if (child.pid) record(child.pid, [process.execPath, CHILD]);
     const launcher = child.stdio[3] as Duplex;
     let asked = "";
     launcher.on("data", (d: Buffer) => {

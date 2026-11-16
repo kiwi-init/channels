@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -63,7 +64,7 @@ console.log(JSON.stringify({ stops, spawned: existsSync(${JSON.stringify(marker)
 process.exit(0);
 `,
   );
-  const r = Bun.spawnSync(["bun", script], {
+  const r = spawnOwnedSync(["bun", script], {
     cwd: dir,
     env: {
       PATH: process.env["PATH"] ?? "",

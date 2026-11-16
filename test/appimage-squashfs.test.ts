@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,7 +26,7 @@ function appImage(name: string, compressor: number, block: number): string {
 }
 
 const check = (dir: string) => {
-  const r = Bun.spawnSync(["bun", "desktop/scripts/appimage-squashfs.ts", dir]);
+  const r = spawnOwnedSync(["bun", "desktop/scripts/appimage-squashfs.ts", dir]);
   return { code: r.exitCode, out: r.stdout.toString() + r.stderr.toString() };
 };
 

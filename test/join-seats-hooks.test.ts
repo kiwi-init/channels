@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -40,7 +41,7 @@ describe("Claude Code's hooks do the listening", () => {
     expect(await new Response(listening.stderr).text()).toContain(`boss → ${me}: wake up`);
 
     // A listener whose session ends goes too, and leaves the next message unread for whoever comes next.
-    const session = Bun.spawn(["sleep", "120"]);
+    const session = spawnOwned(["sleep", "120"]);
     const orphan = spawn(h, ["hook", "listen"], { ...S, CLAUDE_CODE_SESSION_ID: "L2", CLAUDE_PID: String(session.pid) }, h, JSON.stringify({ session_id: "L2", cwd: h }));
     await Bun.sleep(1500);
     session.kill();

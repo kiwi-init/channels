@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -163,7 +164,7 @@ test("kiwi cleanup --quiet, as the installer runs it, takes --quiet even when it
   const s = sandbox();
   mkdirSync(join(s.home, "listeners"), { recursive: true });
   writeFileSync(join(s.home, "listeners", `seat.${DEAD}`), "");
-  const r = Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "src", "cli", "main.ts"), "cleanup", "--quiet"], {
+  const r = spawnOwnedSync([process.execPath, join(import.meta.dir, "..", "src", "cli", "main.ts"), "cleanup", "--quiet"], {
     cwd: s.root,
     env: { ...process.env, KIWI_HOME: s.home },
     stdout: "pipe",

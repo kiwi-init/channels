@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,7 +21,7 @@ const err = ${make};
 await Effect.runPromise(Effect.provide(fail(Cause.fail(err)), LocalFiles));
 `,
     );
-    const r = Bun.spawnSync([process.execPath, "--no-install", script], { cwd: ROOT, env: { ...process.env, KIWI_HOME: dir }, stdout: "pipe", stderr: "pipe" });
+    const r = spawnOwnedSync([process.execPath, "--no-install", script], { cwd: ROOT, env: { ...process.env, KIWI_HOME: dir }, stdout: "pipe", stderr: "pipe" });
     return r.stderr.toString().trim();
   } finally {
     rmSync(dir, { recursive: true, force: true });

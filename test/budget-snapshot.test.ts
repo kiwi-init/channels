@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, setSystemTime, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -34,7 +35,7 @@ let alias = "";
 let roomId = "";
 
 function spawn(home: string, args: string[]) {
-  return Bun.spawn(kiwiCmd(args), {
+  return spawnOwned(kiwiCmd(args), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: proxy!.url, KIWI_NO_HOOKS: "1" },
     stdin: "ignore",

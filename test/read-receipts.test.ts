@@ -1,6 +1,7 @@
 // Read receipts (T1554): a member tells the relay how far it has read, the relay keeps one mark per
 // key (a seq and a time, never content) and passes each to every client, and an agent marks as kiwi
 // hands it messages.
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
@@ -145,7 +146,7 @@ describe("agents mark as kiwi hands them messages", () => {
   const owner = scratch("owner");
   const agent = scratch("agent");
   function spawn(home: string, args: string[], env: Record<string, string> = {}, input?: string) {
-    return Bun.spawn(kiwiCmd(args), {
+    return spawnOwned(kiwiCmd(args), {
       cwd: home,
       env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1", KIWI_MODEL: "test-model", ...env },
       stdin: input === undefined ? "ignore" : new Blob([input]),

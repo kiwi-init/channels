@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -583,7 +584,7 @@ describe("the Kimi Code recipe", () => {
   });
 
   test("the kiwi listeners a session left running are found under it, by pid and start time", async () => {
-    const parent = Bun.spawn(["bash", "-c", `(exec -a "kiwi listen --once" bash -c 'echo $$; sleep 30; :') & sleep 30 & wait`], { stdout: "pipe", stderr: "ignore" });
+    const parent = spawnOwned(["bash", "-c", `(exec -a "kiwi listen --once" bash -c 'echo $$; sleep 30; :') & sleep 30 & wait`], { stdout: "pipe", stderr: "ignore" });
     let listener = 0;
     try {
       const reader = parent.stdout.getReader();

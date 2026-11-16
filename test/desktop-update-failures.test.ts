@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterAll, expect, mock, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -57,7 +58,7 @@ function release(): void {
   mkdirSync(join(src, "Channels.app", "Contents", "Resources"), { recursive: true });
   writeFileSync(join(src, "Channels.app", "Contents", "Resources", "version.json"), JSON.stringify({ version: "0.20.0" }));
   const out = join(root, name);
-  Bun.spawnSync(["/usr/bin/ditto", "-c", "-k", "--keepParent", join(src, "Channels.app"), out]);
+  spawnOwnedSync(["/usr/bin/ditto", "-c", "-k", "--keepParent", join(src, "Channels.app"), out]);
   zip = new Uint8Array(readFileSync(out));
   sums = `${createHash("sha256").update(zip).digest("hex")}  ${name}\n`;
 }

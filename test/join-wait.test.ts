@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -181,7 +182,7 @@ describe("join waits on the relay instead of polling it", () => {
 
 describe("kiwi join", () => {
   function joining(home: string, proxy: string, code: string, timeout: string) {
-    return Bun.spawn(kiwiCmd(["join", code, "--as", "dev", "--model", "test-model", "--timeout", timeout]), {
+    return spawnOwned(kiwiCmd(["join", code, "--as", "dev", "--model", "test-model", "--timeout", timeout]), {
       cwd: home,
       env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: proxy, KIWI_NO_HOOKS: "1" },
       stdin: "ignore",

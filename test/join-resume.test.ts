@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -34,7 +35,7 @@ afterAll(() => {
 });
 
 function run(home: string, args: string[]) {
-  const p = Bun.spawn(kiwiCmd(["join", ...args]), {
+  const p = spawnOwned(kiwiCmd(["join", ...args]), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1" },
     stdin: "ignore",

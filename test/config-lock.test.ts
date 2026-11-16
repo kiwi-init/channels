@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,7 +28,7 @@ test("a lock left by a process that's gone is taken at once, not after waiting",
 
 test("a lock a live process holds is waited for, not stolen", () => {
   const { dir, lock } = scratch();
-  const holder = Bun.spawn(["sleep", "30"]);
+  const holder = spawnOwned(["sleep", "30"]);
   try {
     mkdirSync(lock);
     writeFileSync(join(lock, "owner"), `${holder.pid}:holding`);

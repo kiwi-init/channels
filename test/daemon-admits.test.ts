@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -69,7 +70,7 @@ afterAll(async () => {
 });
 
 test("with the owner's app closed, kiwi join on a delegated computer is let in by that computer's daemon", async () => {
-  const p = Bun.spawn(kiwiCmd(["join", s.code, "--as", "bot", "--model", "test-model", "--timeout", "60s"]), {
+  const p = spawnOwned(kiwiCmd(["join", s.code, "--as", "bot", "--model", "test-model", "--timeout", "60s"]), {
     cwd: work,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDECODE: "", CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "" },
     stdin: "ignore",

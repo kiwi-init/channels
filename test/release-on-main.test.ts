@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -45,7 +46,7 @@ function repo(name: string): (...args: string[]) => string {
   const dir = join(root, name);
   mkdirSync(dir, { recursive: true });
   const git = (...args: string[]): string => {
-    const r = Bun.spawnSync(["git", ...args], { cwd: dir, env: gitEnv });
+    const r = spawnOwnedSync(["git", ...args], { cwd: dir, env: gitEnv });
     if (r.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr.toString()}`);
     return r.stdout.toString().trim();
   };
@@ -54,7 +55,7 @@ function repo(name: string): (...args: string[]) => string {
 }
 
 function bash(script: string, cwd: string, env: Record<string, string>): { code: number; out: string } {
-  const r = Bun.spawnSync(["bash", "-e", "-c", script], { cwd, env: { ...gitEnv, ...env } });
+  const r = spawnOwnedSync(["bash", "-e", "-c", script], { cwd, env: { ...gitEnv, ...env } });
   return { code: r.exitCode, out: r.stdout.toString() + r.stderr.toString() };
 }
 

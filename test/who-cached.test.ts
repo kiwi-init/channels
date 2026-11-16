@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -65,7 +66,7 @@ afterAll(async () => {
 
 async function who(): Promise<{ out: string; ms: number }> {
   const t0 = performance.now();
-  const p = Bun.spawn(kiwiCmd(["-c", "test", "--as", "claude", "status"]), {
+  const p = spawnOwned(kiwiCmd(["-c", "test", "--as", "claude", "status"]), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDECODE: "" },
     stdout: "pipe",

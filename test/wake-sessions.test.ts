@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -70,7 +71,7 @@ describe("waking an agent in its own session, across sessions, relay outages and
   test("kiwi wake off keeps it asleep, presence stops saying it wakes, and kiwi wake on brings it back", async () => {
     await readAll();
     const cli = async (...args: string[]): Promise<string> => {
-      const p = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "-c", "test", "--as", "claude", ...args], {
+      const p = spawnOwned([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "-c", "test", "--as", "claude", ...args], {
         env: { ...process.env, KIWI_RELAY: w.relay },
         stdout: "pipe",
         stderr: "pipe",
