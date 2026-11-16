@@ -30,6 +30,7 @@ import { addDocWake, docWakeTold, pendingDocWakes, tellDocWakes } from "../confi
 import { watchClock, watchedPeers, type ClockWatcher } from "./clock-watch.ts";
 import { followDocs } from "./doc-follow.ts";
 import { pathOf, seatWakes } from "./wake.ts";
+import { sampleRunning } from "../up/sample.ts";
 
 export const ACTIVITY_EVERY_MS = 3_000;
 const PROBE_ANSWER_GAP_MS = 500;
@@ -38,6 +39,7 @@ const MAX_QUEUED_BYTES = 64 * 1024 * 1024;
 const lineEncoder = new TextEncoder();
 const TICK_MS = 5_000;
 const PRUNE_EVERY_MS = 24 * 3600_000;
+const RUNNING_EVERY_MS = 60_000;
 const HOOK_FILES_KEEP_MS = 7 * 24 * 3600_000;
 const ORPHAN_MS = 10 * 60_000;
 const RETRY_FIRST_MS = 5_000;
@@ -902,8 +904,16 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     pruneHookFiles(dir, HOOK_FILES_KEEP_MS);
   };
   pruneNow();
+  let sampledAt = 0;
+  const sampleNow = (): void => {
+    if (Date.now() - sampledAt < RUNNING_EVERY_MS) return;
+    sampledAt = Date.now();
+    sampleRunning(dir);
+  };
+  sampleNow();
   const tick = setInterval(() => {
     pruneNow();
+    sampleNow();
     if (!existsSync(dir) || !beatLock(lock)) return void stop();
     void seatSync.now();
     void orphaned().then((dead) => {

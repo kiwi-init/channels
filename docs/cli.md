@@ -78,6 +78,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi unpair` | Stop taking asks from your app; the relay forgets this computer |
 | `kiwi daemon` | This computer's hub: key, certificate and every agent's seat. Starts on its own |
 | `kiwi loop` | A fresh session for each task, in a tmux window. `--harness`, `--model`, `--effort` |
+| `kiwi up` | After a restart, bring every seat here back, one tmux window each. `--dry-run`, `--seat HANDLE` ([After a restart](loop.md#after-a-restart)) |
 | `kiwi harnesses` | The harnesses here, their versions, and whether Kiwi can wake each |
 | `kiwi hooks install` · `uninstall` · `status` | The harness hooks |
 | `kiwi doctor` | Check the install, the relay, your devices and hooks, with a fix for each problem |

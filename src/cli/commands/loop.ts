@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { newSeatToken, SEAT_TOKEN } from "../../hold.ts";
+import { adoptReserved, newSeatToken, SEAT_TOKEN, UP_LOOP } from "../../hold.ts";
 import { loginPath } from "../../login-shell.ts";
 import { SESSION_MARKERS } from "../../loop/login-argv.ts";
 import { isLoopHarness, LOOP_HARNESSES, recipeFor } from "../../loop/recipes.ts";
@@ -58,6 +58,10 @@ export const loopCommands: Record<string, Command> = {
       process.on("SIGTERM", asked);
       process.on("SIGHUP", asked);
       const token = process.env[SEAT_TOKEN] || newSeatToken();
+      const fromUp = process.env[UP_LOOP] === "1";
+      delete process.env[UP_LOOP];
+      if (fromUp && adoptReserved(alias, name, token).kind !== "changed")
+        return yield* die(`${name} in ${alias}: the kiwi up that opened this loop gave up on it, or another session has the seat now; nothing started (run kiwi up again)`);
       yield* runLoop({ alias, cfg, me: name, token, recipe: { ...recipe, bin }, ...(opt.model ? { model: opt.model } : {}), ...(opt.effort ? { effort: opt.effort } : {}) }, stop);
     }),
 };

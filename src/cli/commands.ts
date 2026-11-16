@@ -21,6 +21,7 @@ const TABLE: [Load, string[]][] = [
   [() => import("./commands/seat.ts").then((m) => m.seatCommands), ["seat"]],
   [() => import("./commands/harnesses.ts").then((m) => m.harnessCommands), ["harnesses"]],
   [() => import("./commands/loop.ts").then((m) => m.loopCommands), ["loop"]],
+  [() => import("./commands/up.ts").then((m) => m.upCommands), ["up"]],
 ];
 
 export const RENAMED: Readonly<Record<string, string>> = {

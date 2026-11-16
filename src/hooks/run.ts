@@ -13,7 +13,8 @@ import { migrateMimo } from "./install/mimo.ts";
 import { handoffFrom, listen, refusedFrom, type Served } from "./listen.ts";
 import { refreshListeners, seatsFor } from "./listeners.ts";
 import { decisionJson, runPermission, type PermissionInput } from "./permission.ts";
-import { KIMI_STOP, LISTEN, PERMISSION } from "./self.ts";
+import { EVENTS, KIMI_STOP, LISTEN, PERMISSION } from "./self.ts";
+import { noteLaunchSeen } from "../up/ready.ts";
 import { takenText } from "./taken.ts";
 
 const HOOK_MS = 1_800;
@@ -54,6 +55,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
     const near = project.length ? project : seatsFor(input.cwd ?? process.cwd(), { who });
     const seats = [...near, ...seatsHeldAnywhere(who)].filter((b, i, all) => all.findIndex((o) => sameSeat(o, b)) === i);
     yield* Effect.sync(() => notePlace(seats));
+    if (event === EVENTS.SessionStart) yield* Effect.sync(() => noteLaunchSeen(seats, who.session));
     const channels = (yield* keys.config).channels;
     return seats.flatMap((b): Served[] => {
       const cfg = channels[b.alias];

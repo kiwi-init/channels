@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -13,6 +13,7 @@ export interface ClaudeStart {
   permission?: Permission;
   context?: number;
   tools?: string;
+  resume?: string;
   prompt: string;
 }
 
@@ -22,10 +23,19 @@ const CLAUDE_MODES: Record<Permission, string | null> = { default: null, "accept
 
 export type ClaudeSession = { sessionId: string; idle: boolean; since: number | null };
 
-export function claudeArgv({ bin, model, effort, permission, context, tools, prompt }: ClaudeStart): string[] {
+export function claudeArgv({ bin, model, effort, permission, context, tools, resume, prompt }: ClaudeStart): string[] {
   const id = model && context === CLAUDE_1M ? `${model}[1m]` : model;
   const mode = permission ? CLAUDE_MODES[permission] : null;
-  return [bin, ...(id ? ["--model", id] : []), ...(effort ? ["--effort", effort] : []), ...(mode ? ["--permission-mode", mode] : []), ...(tools ? ["--allowedTools", tools] : []), "--", prompt];
+  return [
+    bin,
+    ...(resume ? ["--resume", resume] : []),
+    ...(id ? ["--model", id] : []),
+    ...(effort ? ["--effort", effort] : []),
+    ...(mode ? ["--permission-mode", mode] : []),
+    ...(tools ? ["--allowedTools", tools] : []),
+    "--",
+    prompt,
+  ];
 }
 
 function claudeDir(env: Env): string {
@@ -45,4 +55,25 @@ export function claudeSession(pid: number, env: Env = process.env): ClaudeSessio
     // Claude Code rewrites the file in place; a half-written one reads as not there yet.
     return null;
   }
+}
+
+const SESSION_ID = /^[\w-]{1,128}$/;
+
+export function claudeTranscriptAt(sessionId: string, env: Env = process.env): number | null {
+  if (!SESSION_ID.test(sessionId)) return null;
+  const projects = join(claudeDir(env), "projects");
+  try {
+    const times = readdirSync(projects).flatMap((project) => {
+      const file = join(projects, project, `${sessionId}.jsonl`);
+      return existsSync(file) ? [statSync(file).mtimeMs] : [];
+    });
+    return times.length ? Math.max(...times) : null;
+  } catch {
+    // No projects folder, or a transcript gone between listing and reading: Claude Code has kept none here.
+    return null;
+  }
+}
+
+export function claudeTranscript(sessionId: string, env: Env = process.env): boolean {
+  return claudeTranscriptAt(sessionId, env) !== null;
 }
