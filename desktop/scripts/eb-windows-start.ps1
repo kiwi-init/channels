@@ -16,7 +16,7 @@ $find = { Get-Process | Where-Object { $_.MainWindowTitle -eq "Channels" } | Sel
 $win = & $find
 if (-not $win -and (Test-Path -LiteralPath $launcher)) {
   Write-Output "the installer didn't open the app; starting it"
-  Start-Process -FilePath $launcher -WorkingDirectory (Split-Path $launcher) | Out-Null
+  Start-Process -FilePath $launcher -WorkingDirectory (Split-Path $launcher) -RedirectStandardOutput (Join-Path $stage "app.out") -RedirectStandardError (Join-Path $stage "app.err") | Out-Null
 }
 for ($i = 0; $i -lt 60 -and -not $win; $i++) { Start-Sleep -Milliseconds 500; $win = & $find }
 if (-not $win) { $problems += "no window titled Channels within 30 s" } else { Write-Output "window: $($win.ProcessName) pid $($win.Id) titled $($win.MainWindowTitle)" }
@@ -31,7 +31,9 @@ if ($Shot) {
   $bmp.Save($Shot, [System.Drawing.Imaging.ImageFormat]::Png)
   Write-Output "screenshot: $Shot"
 }
-if (Test-Path -LiteralPath $root) { Get-ChildItem -LiteralPath $root -Recurse -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object { Write-Output "--- $($_.FullName)"; Get-Content $_.FullName -Tail 60 } }
+Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Write-Output "process: $($_.ProcessName) pid $($_.Id) window $($_.MainWindowHandle) titled '$($_.MainWindowTitle)'" }
+$logs = @($root, (Join-Path $env:APPDATA "com.kiwiinit.channels"), (Join-Path $env:LOCALAPPDATA "com.kiwiinit.channels")) | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object { Get-ChildItem -LiteralPath $_ -Recurse -Include *.log -ErrorAction SilentlyContinue } | Sort-Object FullName -Unique
+$logs + @(Get-ChildItem -LiteralPath $stage -Include app.out, app.err -Recurse -ErrorAction SilentlyContinue) | ForEach-Object { Write-Output "--- $($_.FullName)"; Get-Content $_.FullName -Tail 80 }
 Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force -ErrorAction SilentlyContinue
 if ($problems.Count) { $problems | ForEach-Object { Write-Output "problem: $_" }; exit 1 }
 Write-Output "Channels installed, started on Windows and kept its window"
