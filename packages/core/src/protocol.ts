@@ -11,6 +11,7 @@ import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
 
 import { MAX_ROOM_MEMBERS, type RoomMember, type RoomMeta } from "./room-rules.ts";
+import { parseOccurrence, wellFormedDaily, type CheckpointDaily } from "./checkpoint-schedule.ts";
 
 const sealedBox = (x: unknown): boolean =>
   !!x && typeof x === "object" && typeof (x as { iv?: unknown }).iv === "string" && typeof (x as { ct?: unknown }).ct === "string" && (x as { ct: string }).ct.length <= 64_000;
@@ -363,6 +364,8 @@ export type Event =
   | { op: "review.reset.set"; on: boolean }
   /** Whether a person's decision closes only from its card (a tap, or words typed into the card) while a reply typed in the chat stays a reply. */
   | { op: "asks.tap.set"; on: boolean }
+  | { op: "checkpoint.daily.set"; daily: CheckpointDaily | null }
+  | { op: "checkpoint.ask"; asks: CheckpointOwed[]; unreachable: string[]; occurrence?: string }
   | { op: "review.reset.waive"; member: string; waived: boolean }
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
@@ -388,6 +391,35 @@ export type Event =
   | { op: "specs.only.set"; on: boolean };
 
 export type SpecVerdict = "accepted" | "back" | "dropped";
+
+export interface CheckpointOwed {
+  agent: string;
+  tasks: number[];
+  lead?: true;
+}
+
+export const MAX_CHECKPOINT_AGENTS = 64;
+const MAX_CHECKPOINT_TASKS = 64;
+
+function wellFormedOwed(x: unknown): x is CheckpointOwed {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  if (typeof o.agent !== "string" || !o.agent.trim() || o.agent.length > 64) return false;
+  if (!Array.isArray(o.tasks) || o.tasks.length > MAX_CHECKPOINT_TASKS) return false;
+  if (!o.tasks.every((t) => Number.isSafeInteger(t) && (t as number) > 0) || new Set(o.tasks).size !== o.tasks.length) return false;
+  if (o.lead !== undefined && o.lead !== true) return false;
+  return o.tasks.length > 0 || o.lead === true;
+}
+
+export function wellFormedCheckpointAsk(e: Record<string, unknown>): boolean {
+  if (!Array.isArray(e.asks) || !Array.isArray(e.unreachable)) return false;
+  if (e.asks.length + e.unreachable.length === 0 || e.asks.length + e.unreachable.length > MAX_CHECKPOINT_AGENTS) return false;
+  if (!e.asks.every(wellFormedOwed)) return false;
+  if (!e.unreachable.every((u) => typeof u === "string" && !!u.trim() && u.length <= 64)) return false;
+  const names = [...(e.asks as CheckpointOwed[]).map((a) => a.agent), ...(e.unreachable as string[])];
+  if (new Set(names).size !== names.length) return false;
+  return e.occurrence === undefined || parseOccurrence(e.occurrence) !== null;
+}
 
 export const MAX_SPEC = 20_000;
 
@@ -955,7 +987,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 28;
+export const EVENT_OPS_VERSION = 29;
 
 export const SESSION_PRINT_RE = /^[A-Za-z0-9_-]{16}$/;
 
@@ -1328,6 +1360,10 @@ function eventCheck(ev: unknown): boolean | null {
     case "review.reset.set":
     case "asks.tap.set":
       return typeof e.on === "boolean";
+    case "checkpoint.daily.set":
+      return e.daily === null || wellFormedDaily(e.daily);
+    case "checkpoint.ask":
+      return wellFormedCheckpointAsk(e);
     case "review.reset.waive":
       return str(e.member, 64) && e.member.trim() !== "" && typeof e.waived === "boolean";
     case "merges.set":
