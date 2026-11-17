@@ -4,12 +4,13 @@ import { useHug } from "~/chat/hug"
 import { linked, useMentionParser } from "~/chat/linked"
 import type { Draw } from "~/chat/markdown"
 import { parseKey, parsedFor } from "~/chat/parsed"
+import { loadMarkdown, markdownNow } from "~/chat/markdown-load"
 import type { ASTNode } from "react-native-enriched-markdown/lib/typescript/src/web/types"
 import { useAct } from "~/nav"
 import { type Words, wordsPlain, wordsRaw } from "~/words"
 import { personGo } from "~/person-go"
 
-const Markdown = lazy(() => import("~/chat/markdown"))
+const Markdown = lazy(loadMarkdown)
 
 export function Body({
   text,
@@ -38,6 +39,7 @@ export function Body({
   const parser = useMentionParser()
   const { markdown } = useMemo(() => ({ parser, markdown: linked(wordsRaw(text), names, tasks, seq) }), [parser, text, names, tasks, seq])
   const [shown, setShown] = useState<ASTNode | undefined>(() => parsedFor(parseKey(markdown, at)))
+  const [View] = useState(() => markdownNow() ?? Markdown)
   const onShown = useCallback((ast: ASTNode) => setShown(ast), [])
   const box = useRef<HTMLDivElement>(null)
   useHug(box, hug, shown ?? markdown)
@@ -53,7 +55,7 @@ export function Body({
     <div className="msg-text" ref={box}>
       {!draw && !shown && !parsedFor(parseKey(markdown, at)) && <p className="md-plain">{wordsPlain(text, names)}</p>}
       <Suspense fallback={null}>
-        <Markdown markdown={markdown} at={at} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} onPage={onPage} draw={draw} />
+        <View markdown={markdown} at={at} onMention={onMention} onTask={onTask} onMessage={onMessage} onImage={onImage} onShown={onShown} onPage={onPage} draw={draw} />
       </Suspense>
     </div>
   )
