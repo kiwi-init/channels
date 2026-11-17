@@ -2,6 +2,56 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.23 — 2026-11-17
+
+Tag [v2026.11.23](https://github.com/kiwi-init/channels/releases/tag/v2026.11.23) · commit [2dea493](https://github.com/kiwi-init/channels/commit/2dea49399eeaf0ad29280f9eb245eb54aca4e770) · 2026-11-17
+
+First-load JS: 801,658 bytes (change since 2026.11.22 unavailable: it has no first-load figure)
+
+### Features
+
+- **kiwi task wait:** a task waits on purpose, its clock paused and the board saying why (T11426) ([#2494](https://github.com/kiwi-init/channels/pull/2494)) ([712b16c](https://github.com/kiwi-init/channels/commit/712b16cbf49044afa9778b162156eafd39e90c56))
+- Release notes by kind: sections from PR and issue labels, area in bold, PR and commit links, kept highlights (T11736) ([#2500](https://github.com/kiwi-init/channels/pull/2500)) ([97523ca](https://github.com/kiwi-init/channels/commit/97523ca4242fd5901396d7de6f8566de088d5f0c))
+- **Clock:** marks read as Kiwi's clock, naming the seat only as poster (T11425) ([#2496](https://github.com/kiwi-init/channels/pull/2496)) ([004d4f3](https://github.com/kiwi-init/channels/commit/004d4f3387bf5124626c71e3722390654c1eafc3))
+
+### Fixes
+
+- **Specs:** the page and list ask for approval only once a draft is marked ready; spec ready --undo (T11423) ([#2493](https://github.com/kiwi-init/channels/pull/2493)) ([5b31064](https://github.com/kiwi-init/channels/commit/5b310643ccc1885387b59965fc90643422bf289d))
+- **Clock:** a mark the channel would refuse never reaches the log (T11424, #2491) ([#2495](https://github.com/kiwi-init/channels/pull/2495)) ([6c1a493](https://github.com/kiwi-init/channels/commit/6c1a49372804cfb1d52f094a7e6d5cee14c60fef))
+- Phones answer every question asked of them (T12507, #2514) ([#2517](https://github.com/kiwi-init/channels/pull/2517)) ([c448e3c](https://github.com/kiwi-init/channels/commit/c448e3c6f7ef691dc55bd0eb3f30dc9870815c6d))
+- Linux window controls stay clickable at every width; their check clicks for real (T12606) ([#2519](https://github.com/kiwi-init/channels/pull/2519)) ([e224b15](https://github.com/kiwi-init/channels/commit/e224b15c81b1dfc7304432f8c8940c252adadd81))
+- **Wake:** a Codex wake is checked until its session reads it; a paused queue is named in status, or resumed after a proven restart (T13087) ([#2525](https://github.com/kiwi-init/channels/pull/2525)) ([1d8a2e1](https://github.com/kiwi-init/channels/commit/1d8a2e13ac017a99779e8a68fbf88efe838ba936))
+
+### Performance
+
+- **Daemon:** a long-lived session drops the messages its fold base covers (T12212, #2501) ([#2512](https://github.com/kiwi-init/channels/pull/2512)) ([9f23d81](https://github.com/kiwi-init/channels/commit/9f23d81fdb83f88ca62ff6909badb37d2cc62d47))
+- **Specs tab:** the list stays mounted once opened, so going back mounts nothing (T12922, #2513) ([#2522](https://github.com/kiwi-init/channels/pull/2522)) ([e90b06b](https://github.com/kiwi-init/channels/commit/e90b06befd10c7e9864ad497905f133e7c2a0844))
+
+### Tests and CI
+
+- Flows clean up what they start; a join's timeout bounds its whole wait for admission (T12110) ([#2508](https://github.com/kiwi-init/channels/pull/2508)) ([a98349a](https://github.com/kiwi-init/channels/commit/a98349a1c7df12a101a1c88b654df369a259daa2))
+- **Android:** the updates-by-day test pins its clock and timezone (T12919, #2516) ([#2521](https://github.com/kiwi-init/channels/pull/2521)) ([83e0079](https://github.com/kiwi-init/channels/commit/83e0079987d357eb8e86e1eef18f108a9a52d8bb))
+- **Glass checks:** the sidebar is a pane now, so it stays solid; the top bar shows the wallpaper ([#2529](https://github.com/kiwi-init/channels/pull/2529)) ([b520949](https://github.com/kiwi-init/channels/commit/b52094978c29b5b9b03453718af8b4a2e6d48604))
+- **Perf:** Reload is timed to the first frame the seeded row is visible, rechecked a frame later (T13515, #2518) ([#2527](https://github.com/kiwi-init/channels/pull/2527)) ([2dea493](https://github.com/kiwi-init/channels/commit/2dea49399eeaf0ad29280f9eb245eb54aca4e770))
+
+### Other changes
+
+- **Motion:** the palette opens at once, hints and new tiles start near full size, bars move with translate (T5324) ([#2476](https://github.com/kiwi-init/channels/pull/2476)) ([25a86ab](https://github.com/kiwi-init/channels/commit/25a86ab9aba95ba13948627710adb8174334becd))
+- Hover looks apply only with a mouse; hover reveals still answer a tap (T5325) ([#2477](https://github.com/kiwi-init/channels/pull/2477)) ([414d1ac](https://github.com/kiwi-init/channels/commit/414d1acf54ae75edf63cbf3ccaea1701bd383684))
+- Tab bar takes its new width in one frame instead of animating margin (T5326) ([#2478](https://github.com/kiwi-init/channels/pull/2478)) ([6f93d0d](https://github.com/kiwi-init/channels/commit/6f93d0d37d6d07b7beacd8182cd904faad1db68f))
+- **kiwi up:** seats come back after a reboot (T10955) ([#2484](https://github.com/kiwi-init/channels/pull/2484)) ([b36ac50](https://github.com/kiwi-init/channels/commit/b36ac502c4ae2573e86ae7dfba306fc347e85448))
+- **Docs:** "After a restart" in every language, and which seats kiwi up brings back (T10955) ([#2488](https://github.com/kiwi-init/channels/pull/2488)) ([bd9f131](https://github.com/kiwi-init/channels/commit/bd9f1319bed788db2c3797055c9cbd2d0ca47648))
+- **Checkpoint requests:** Save your checkpoints and a daily time, with the relay keeping the clock (T10994) ([#2485](https://github.com/kiwi-init/channels/pull/2485)) ([7f559a0](https://github.com/kiwi-init/channels/commit/7f559a02bb381b5d3bc94451d5e877f48cac2f0a))
+- **Stop hook:** a snapshot of each open task's own worktree, beside its checkpoint (T10996) ([#2486](https://github.com/kiwi-init/channels/pull/2486)) ([725084a](https://github.com/kiwi-init/channels/commit/725084a7850fe4c8689a99eda6645d0a05be5461))
+- Bring my agents back: a Settings row and a restart card run kiwi up from the app (T10995) ([#2487](https://github.com/kiwi-init/channels/pull/2487)) ([a778d6a](https://github.com/kiwi-init/channels/commit/a778d6a5ae3eb05298187cf8e4ff414b90bef9cc))
+- **Checks:** restore-place's markdown delay applies in WebKit; late-font prints its failures (T11691) ([#2503](https://github.com/kiwi-init/channels/pull/2503)) ([baa2034](https://github.com/kiwi-init/channels/commit/baa20340935db96a8d39053d497ee173491930a5))
+- **Shots:** a shot that won't hold still names what kept moving (T11691) ([#2506](https://github.com/kiwi-init/channels/pull/2506)) ([3a6b48c](https://github.com/kiwi-init/channels/commit/3a6b48c8032746b7ae3107e8aee716ac53134ee8))
+- **First-load JS:** 132 unread UI words out, a reader guard, a 820,000 budget, first-load bytes in each release's notes (T11860) ([#2505](https://github.com/kiwi-init/channels/pull/2505)) ([ca62f2d](https://github.com/kiwi-init/channels/commit/ca62f2d1dce7d0b97ad037a34e0039dba8b7d077))
+- **Feed:** the feed's own correction clamped to the bottom no longer makes you follow (T11691) ([#2509](https://github.com/kiwi-init/channels/pull/2509)) ([bf78c09](https://github.com/kiwi-init/channels/commit/bf78c0976c0fc50b19c7cae00b5db135bd1974c4))
+- **Hooks:** a seat's own session always arms its listener, and one that can't is flagged (T11921, #2502) ([#2507](https://github.com/kiwi-init/channels/pull/2507)) ([887b1d8](https://github.com/kiwi-init/channels/commit/887b1d8339605ffb1603515f55c6a8e722f39c05))
+- Sidebar, Settings and the open tab are panes; the sidebar has its own width ([#2526](https://github.com/kiwi-init/channels/pull/2526)) ([6ba62ba](https://github.com/kiwi-init/channels/commit/6ba62ba5e9064399d4dfea093ff187194e03e73f))
+- kiwi runs on the app's own Bun: one Bun per computer, not three ([#2528](https://github.com/kiwi-init/channels/pull/2528)) ([2129e57](https://github.com/kiwi-init/channels/commit/2129e57b538c95e2428eb9b1e9527cea0518ad7e))
+
 ## 2026.11.22 — 2026-11-14
 
 Tag [v2026.11.22](https://github.com/kiwi-init/channels/releases/tag/v2026.11.22) · commit [b8786b1](https://github.com/kiwi-init/channels/commit/b8786b125b4e70994240264820cc730bb870c165) · 2026-11-14
