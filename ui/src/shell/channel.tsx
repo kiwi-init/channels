@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useLayoutEffect, useState } from "react"
+import { Activity, memo, Suspense, useEffect, useLayoutEffect, useState } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
@@ -26,6 +26,7 @@ import { t } from "~/i18n/i18n"
 
 const Panes = later(() => import("~/panes/panes").then((m) => m.Panes))
 const Page = later(() => import("~/panes/page").then((m) => m.Page))
+const SpecList = memo(later(() => import("~/specs/view").then((m) => m.SpecList)))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const OlderView = later(() => import("~/chat/older-view").then((m) => m.OlderView))
 const NarrowPanel = later(() => import("~/shell/narrow-panel").then((m) => m.NarrowPanel))
@@ -34,6 +35,16 @@ const ChannelSettings = later(() => import("~/modals/channel-settings").then((m)
 const Invite = later(() => import("~/modals/invite").then((m) => m.Invite))
 const AddAgent = later(() => import("~/modals/add-agent").then((m) => m.AddAgent))
 const DocVersions = later(() => import("~/modals/doc-versions").then((m) => m.DocVersions))
+
+type KeptTab = "specs"
+
+const keptTab = (nav: { tab: string; spec?: number }): KeptTab | null => (nav.tab === "specs" && nav.spec === undefined ? "specs" : null)
+
+function KeptSpecs({ channel, shown }: { channel: Channel; shown: boolean }) {
+  const [held, setHeld] = useState(channel)
+  if (shown && held !== channel) setHeld(channel)
+  return <SpecList channel={shown ? channel : held} />
+}
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const nav = useNav()
@@ -51,6 +62,10 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
   const setOlder = (o: Older | null) => setOlderAt(o ? { older: o, place } : null)
   const [focusAsk, setFocusAsk] = useState(0)
   if (jump && (nav.tab !== "chat" || !sameWhere(jump.m.where, nav.where))) setJump(null)
+  const board = older ? null : keptTab(nav)
+  const [keptAt, setKeptAt] = useState<{ code: string; tabs: readonly KeptTab[] }>({ code: channel.code, tabs: [] })
+  const kept = keptAt.code === channel.code ? keptAt.tabs : []
+  if (keptAt.code !== channel.code || (board && !kept.includes(board))) setKeptAt({ code: channel.code, tabs: board && !kept.includes(board) ? [...kept, board] : kept })
   const wanted = useWantedMessage()
   const found = findWanted(wanted, channel.code, channel.messages, channel.since)
   const target = found.kind === "found" ? found.m : null
@@ -156,11 +171,30 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
           now={now}
           place={<PlaceView channel={channel} />}
           main={
-            <Boundary resetKey={nav.tab}>
-              <Suspense fallback={null}>
-                {older ? <OlderView channel={channel} older={older} onBack={() => setOlder(null)} /> : view ? <Page channel={channel} view={view} /> : <Conversation channel={channel} jump={jump} />}
-              </Suspense>
-            </Boundary>
+            <>
+              {!board && (
+                <Boundary resetKey={nav.tab}>
+                  <Suspense fallback={null}>
+                    {older ? (
+                      <OlderView channel={channel} older={older} onBack={() => setOlder(null)} />
+                    ) : view ? (
+                      <Page channel={channel} view={view} />
+                    ) : (
+                      <Conversation channel={channel} jump={jump} />
+                    )}
+                  </Suspense>
+                </Boundary>
+              )}
+              {kept.map((tab) => (
+                <Activity key={tab} mode={board === tab ? "visible" : "hidden"}>
+                  <Boundary resetKey={`${tab}\n${board === tab}`}>
+                    <Suspense fallback={null}>
+                      <KeptSpecs channel={channel} shown={board === tab} />
+                    </Suspense>
+                  </Boundary>
+                </Activity>
+              ))}
+            </>
           }
         />
         {offline && (

@@ -581,6 +581,9 @@ jobs:
       - name: ui the sidebar stays where it is scrolled while its highlight glides to the row just opened, and a press on a row right after opens it
         if: ${{ !cancelled() }}
         run: bun scripts/ui-side-still.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui the Specs list stays mounted once opened, so going back mounts nothing, shows what changed while it was away and opens on Open as before (#2513)
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-kept-specs.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Others' direct messages keeps its heading in place while one of its conversations is open, collapsed or expanded (#2386)
         if: ${{ !cancelled() }}
         run: bun scripts/ui-theirs-heading.ts --dist ui/dist --browser ${{ matrix.engine }}
