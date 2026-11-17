@@ -1,13 +1,15 @@
-import type Markdown from "~/chat/markdown"
+import type { ASTNode } from "react-native-enriched-markdown/lib/typescript/src/web/types"
 
-type MarkdownView = typeof Markdown
+type MarkdownModule = typeof import("~/chat/markdown")
 
-let loaded: MarkdownView | null = null
+let loaded: MarkdownModule | null = null
 
-export const markdownNow = (): MarkdownView | null => loaded
+export const markdownNow = (): MarkdownModule["default"] | null => loaded?.default ?? null
 
-export const loadMarkdown = (): Promise<typeof import("~/chat/markdown")> =>
+export const parsedOnceLoaded = (markdown: string, at?: number): ASTNode | undefined => loaded?.parsedNow(markdown, at)
+
+export const loadMarkdown = (): Promise<MarkdownModule> =>
   import("~/chat/markdown").then((m) => {
-    loaded = m.default
+    loaded = m
     return m
   })
