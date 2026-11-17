@@ -138,8 +138,8 @@ private fun site(): RoomView {
 
 val GITHUB_COUNTS = listOf(15, 4, 6, 1, 12, 5, 2, 5, 5, 36, 1, 6, 7, 2, 14, 50, 19, 39, 43, 18, 11, 6, 10, 7)
 
-fun githubUpdates(): List<MessageView> {
-    val start = System.currentTimeMillis() - 30 * MINUTE
+fun githubUpdates(now: Double = System.currentTimeMillis().toDouble()): List<MessageView> {
+    val start = now - 30 * MINUTE
     return GITHUB_COUNTS.mapIndexed { i, n -> MessageView(100 + i, "jow", start + i * MINUTE, "event", "GitHub: $n update${if (n == 1) "" else "s"}", event = true) }
 }
 
