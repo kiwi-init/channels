@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent } from "react"
+import { createPortal } from "react-dom"
 
 import { nextWithNews } from "@kiwi/channel/news.ts"
 import { cx } from "~/kit/bits"
@@ -124,7 +125,7 @@ export function Rail() {
   const tile = (c: ChannelTile) => <Tile key={c.code} tile={c} on={on === c.code} drop={over === `c:${c.code}`} moving={moving === c.code} onClick={() => enter(c.code)} />
   return (
     <nav ref={strip} className="rail" aria-label={t("shell.rail.channels")}>
-      {document.documentElement.dataset["wm"] === "floating" && <WindowControls control={actions.windowControl} />}
+      {document.documentElement.dataset["wm"] === "floating" && createPortal(<WindowControls control={actions.windowControl} />, document.body)}
       <ul
         className={cx("rail-list", moving && "is-moving", over === "rail" && "is-drop")}
         onMouseOver={point}
