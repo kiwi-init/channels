@@ -436,3 +436,30 @@ describe("who a step waits for, and when it's answered, on the phone (#2515)", (
     expect(card(closed, "jow", 1)?.waiting).toBe(false);
   });
 });
+
+describe("only replies core accepts answer a step on the phone (#2515 round 1)", () => {
+  const card = (log: Message[], me: string, seq: number) => roomView(inputOf(log, me)).messages.find((m) => m.seq === seq);
+  const sign: Step = { why: "the release waits on it", needsPerson: "the key is on your Mac" };
+  const done: StepReply = { outcome: "done" };
+
+  test("a forged Done leaves the step open and actionable; the person's real reply then answers it", async () => {
+    const log = await signedLog([
+      say("lead", "Sign the build", { kind: "ask", to: ["jow"], esc: true, step: sign }),
+      say("jow", "Done", { re: [1], stepReply: done }),
+      say("jow", "Done", { re: [1], stepReply: done }),
+    ]);
+    const forgedOnly = [log[0]!, { ...log[1]!, sigOk: false }];
+    expect(card(forgedOnly, "jow", 1)?.waiting).toBe(true);
+    expect(card(forgedOnly, "jow", 1)?.stepAnswer).toBeNull();
+    const thenReal = [...forgedOnly, log[2]!];
+    expect(card(thenReal, "jow", 1)?.waiting).toBe(false);
+    expect(card(thenReal, "jow", 1)?.stepAnswer).toEqual({ by: "jow", outcome: "done" });
+  });
+
+  test("a forged pick doesn't decide a question either", async () => {
+    const log = await signedLog([say("lead", "Which one?", { kind: "ask", to: ["jow"], choices: ["A", "B"], esc: true }), say("jow", "A", { re: [1], pick: true })]);
+    const forged = [log[0]!, { ...log[1]!, sigOk: false }];
+    expect(card(forged, "jow", 1)?.waiting).toBe(true);
+    expect(card(forged, "jow", 1)?.chosen).toBeNull();
+  });
+});
