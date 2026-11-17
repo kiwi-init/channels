@@ -136,3 +136,56 @@ describe("a phone's answer to a question (#2514)", () => {
     expect(sent[0]?.opts).toMatchObject({ to: ["lead"], re: [1], kind: "msg", pick: true });
   });
 });
+
+describe("a phone's reply to a step (#2515)", () => {
+  test("goes out as the desktop's step reply: its words, to the asker, on the step, aside, with the structured reply", async () => {
+    const joined = (name: string, over: Partial<Joined> = {}): Joined => ({ name, pk: pks(name)[0]!, xpk: "x", owner: false, at: 0, active: true, kind: "human", ...over });
+    const roster = [joined("jow", { owner: true, sponsor: jowUser }), joined("jow-phone", { sponsor: jowUser }), joined("lead", { kind: "agent" })];
+    const sent: { body?: string; opts: SendOptions }[] = [];
+    let deliver: (ev: unknown) => void = () => {};
+    const keyring = {
+      call: async (_code: string, op: string, body?: string, opts?: SendOptions): Promise<unknown> => {
+        if (op === "head") return 0;
+        if (op === "members") return roster;
+        if (op === "send" && opts) {
+          sent.push({ body, opts });
+          return 3;
+        }
+        return null;
+      },
+      follow: (_code: string, _from: number, on: (ev: unknown) => void): (() => void) => {
+        deliver = on;
+        return () => {};
+      },
+    } as unknown as Keyring;
+    const seat = { code: "code", label: "jow-phone", idName: "jow-phone", name: "general", pk: pks("jow-phone")[0], access: {} } as unknown as ChannelIdentityView;
+    const room = new Room(keyring, seat, { emit: () => {}, lost: () => {}, person: () => null, log: () => {}, devices: () => {} });
+    await room.start();
+    await new Promise((done) => setTimeout(done, 200));
+    const step = {
+      seq: 1,
+      from: "lead",
+      ts: 1,
+      kind: "ask",
+      body: "Sign the build",
+      to: ["jow-phone"],
+      esc: true,
+      step: { why: "the release waits on it", needsPerson: "the key is on your Mac" },
+      sigOk: true,
+    } as unknown as Message;
+    const question = { seq: 2, from: "lead", ts: 2, kind: "ask", body: "Which?", to: ["jow-phone"], choices: ["A", "B"], esc: true, sigOk: true } as unknown as Message;
+    deliver({ _tag: "Message", message: step, row: null });
+    deliver({ _tag: "Message", message: question, row: null });
+    await room.answerStep(1, { outcome: "cant", reason: "the Mac is away" });
+    await room.answerStep(1, { outcome: "done", output: "signed 1.2.3" });
+    const notAStep = await room.answerStep(2, { outcome: "done" }).then(
+      () => null,
+      (e: Error) => e.message,
+    );
+    room.stop();
+    expect(sent.map((s) => s.body)).toEqual(["Can't do it: the Mac is away", "Done\n\nsigned 1.2.3"]);
+    expect(sent[0]?.opts).toMatchObject({ to: ["lead"], re: [1], kind: "msg", side: true, stepReply: { outcome: "cant", reason: "the Mac is away" } });
+    expect(sent[1]?.opts).toMatchObject({ to: ["lead"], re: [1], kind: "msg", side: true, stepReply: { outcome: "done", output: "signed 1.2.3" } });
+    expect(notAStep).toBe("that step isn't here any more");
+  });
+});

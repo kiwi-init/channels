@@ -148,6 +148,7 @@ export function roomView(r: RoomInput): RoomView {
       choices: m.choices ?? [],
       chosen: chosen ? { choice: chosen.choice, by: chosen.by } : null,
       waiting: waiting.has(m.seq),
+      step: m.step ?? null,
       images: m.imgs?.length ?? 0,
       task: place?.kind === "task" ? place.task : (m.task ?? null),
       reactions: chipsFor(state, m.seq, me, (name) => state.members.get(name)?.display ?? name),
