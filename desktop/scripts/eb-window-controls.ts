@@ -91,14 +91,21 @@ const timeline = async (d: Driver, from: number, until: number, seen: string[]):
   let last = seen.at(-1)?.replace(/^\+\d+ms /, "") ?? "";
   while (Date.now() < until) {
     const now = await d.evaluate(() => {
+      const name = (el: Element | null) =>
+        el
+          ? `${el.tagName.toLowerCase()}.${String(el.getAttribute("class") ?? "")
+              .trim()
+              .replace(/\s+/g, ".")}`
+          : "nothing";
       const regions = [...document.querySelectorAll(".wm-controls button")].map((b) => {
         const r = b.getBoundingClientRect();
         const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        const covered = top && b.contains(top) ? "" : `(under ${name(top)}${top?.parentElement ? ` in ${name(top.parentElement)}` : ""})`;
         for (let el = top; el; el = el.parentElement) {
           const v = getComputedStyle(el).getPropertyValue("--electrobun-app-region").trim();
-          if (v === "drag" || v === "no-drag") return `${v}${top && b.contains(top) ? "" : "(covered)"}`;
+          if (v === "drag" || v === "no-drag") return `${v}${covered}`;
         }
-        return top && b.contains(top) ? "-" : "-(covered)";
+        return `-${covered}`;
       });
       return `${document.documentElement.hasAttribute("data-tabs") ? "tabs" : "sidebar"} ${innerWidth}px ${regions.join(",")}`;
     }, null);
@@ -192,7 +199,8 @@ try {
       const right = await d.evaluate(() => innerWidth - (document.querySelector(".wm-controls")?.getBoundingClientRect().right ?? 0), null);
       if (right > 16) problems.push(`${size.name}: the controls aren't at the top-right (${right}px from the right edge)`);
 
-      if (await realClick(d, win, size.name, 1, "Maximize maximizes the window", () => maximized(win))) {
+      if (size.width >= 1280) console.log(`${size.name}: the window already fills the screen, so Maximize and Restore are clicked at the smaller sizes`);
+      else if (await realClick(d, win, size.name, 1, "Maximize maximizes the window", () => maximized(win))) {
         await until("the button reads Restore after Maximize", 10_000, async () => ((await label(d)) === "Restore window" ? true : null));
         await realClick(d, win, `${size.name}, maximized`, 1, "Restore restores the window", () => !maximized(win));
         await until("the button reads Maximize after Restore", 10_000, async () => ((await label(d)) === "Maximize window" ? true : null));
