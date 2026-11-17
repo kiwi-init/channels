@@ -1,4 +1,4 @@
-import { useId, useState } from "react"
+import { useEffect, useId, useState } from "react"
 import { CHARACTERS, type Face } from "~/kit/characters"
 import { LOGOS } from "~/kit/logos"
 import type { Mood } from "~/kit/mood"
@@ -26,17 +26,27 @@ const SHOWN: Readonly<Record<Mood, EyeShape | null>> = {
   error: null,
 }
 
-function useSeen(mood: Mood): { seen: ReadonlySet<Mood>; first: Mood } {
-  const [first] = useState(mood)
+function useSeen(mood: Mood): { seen: ReadonlySet<Mood>; entering: Mood | null } {
   const [seen, setSeen] = useState<ReadonlySet<Mood>>(() => new Set([mood]))
-  if (!seen.has(mood)) setSeen(new Set([...seen, mood]))
-  return { seen, first }
+  const [entering, setEntering] = useState<Mood | null>(null)
+  if (!seen.has(mood)) {
+    setSeen(new Set([...seen, mood]))
+    setEntering(mood)
+  }
+  useEffect(() => {
+    if (!entering) return
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => setEntering(null))
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [entering])
+  return { seen, entering }
 }
 
 const shapesOf = (seen: ReadonlySet<Mood>): ReadonlySet<EyeShape> => new Set([...seen].flatMap((m) => SHOWN[m] ?? []))
 
-function Eye({ x, side, shapes, first }: { x: number; side: -1 | 1; shapes: ReadonlySet<EyeShape>; first: EyeShape | null }) {
-  const named = (shape: EyeShape, kind: string) => `eye ${kind}eye-${shape}${shape === first ? "" : " eye-late"}`
+function Eye({ x, side, shapes, entering }: { x: number; side: -1 | 1; shapes: ReadonlySet<EyeShape>; entering: EyeShape | null }) {
+  const named = (shape: EyeShape, kind: string) => `eye ${kind}eye-${shape}${shape === entering ? " eye-enter" : ""}`
   return (
     <g transform={`translate(${x} 0)`}>
       {shapes.has("dot") && <ellipse className={named("dot", "")} rx={4.3} ry={5.3} />}
@@ -50,10 +60,10 @@ function Eye({ x, side, shapes, first }: { x: number; side: -1 | 1; shapes: Read
 
 export function RoleFace({ role, harness, mood = "free" }: { role?: string | undefined; harness?: Harness | undefined; mood?: Mood }) {
   const id = useId()
-  const { seen, first } = useSeen(mood)
+  const { seen, entering } = useSeen(mood)
   const shapes = shapesOf(seen)
-  const firstShape = SHOWN[first]
-  const mark = (on: Mood, name: string) => `${name}${on === first ? "" : " face-late"}`
+  const enteringShape = entering && SHOWN[entering]
+  const mark = (on: Mood, name: string) => `${name}${on === entering ? " face-enter" : ""}`
   const c = CHARACTERS[faceOf(role)]
   const logo = harness ? LOGOS[harness] : undefined
   const scale = BADGE / 24
@@ -66,8 +76,8 @@ export function RoleFace({ role, harness, mood = "free" }: { role?: string | und
           <rect x="-10" y="-10" width="120" height="120" fill="#fff" />
           <g transform={eyes}>
             <g className="face-look">
-              <Eye x={-half} side={-1} shapes={shapes} first={firstShape} />
-              <Eye x={half} side={1} shapes={shapes} first={firstShape} />
+              <Eye x={-half} side={-1} shapes={shapes} entering={enteringShape} />
+              <Eye x={half} side={1} shapes={shapes} entering={enteringShape} />
             </g>
           </g>
           {logo && (
