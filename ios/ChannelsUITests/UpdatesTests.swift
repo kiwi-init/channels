@@ -24,7 +24,7 @@ final class UpdatesTests: XCTestCase {
         XCTAssertTrue(rows.firstMatch.label.contains("5 updates"), "newest first")
         add(shot(app, "updates sheet"))
 
-        app.buttons["Done"].tap()
+        sheet.buttons["Done"].tap()
         XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Done closes the sheet")
     }
 
