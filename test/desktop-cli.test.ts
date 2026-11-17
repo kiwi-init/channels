@@ -171,7 +171,7 @@ test.skipIf(process.platform === "win32")("the launcher starts Bun from /, so a 
   const self = join(dir, "kiwi");
   writeFileSync(
     bundle,
-    `const { launcher } = await import(${JSON.stringify("/Users/jow/www/channels/src/launcher.ts")});\nconsole.log(JSON.stringify({ cwd: process.cwd(), pwd: process.env.PWD, dotenv: process.env.KIWI_DOTENV_PROBE ?? null, launcher, left: [process.env.KIWI_LAUNCHER ?? null, process.env.KIWI_LAUNCHER_CWD ?? null], args: process.argv.slice(2) }));\n`,
+    `const { launcher } = await import(${JSON.stringify(join(import.meta.dir, "..", "src", "launcher.ts"))});\nconsole.log(JSON.stringify({ cwd: process.cwd(), pwd: process.env.PWD, dotenv: process.env.KIWI_DOTENV_PROBE ?? null, launcher, left: [process.env.KIWI_LAUNCHER ?? null, process.env.KIWI_LAUNCHER_CWD ?? null], args: process.argv.slice(2) }));\n`,
   );
   writeFileSync(self, launcherScript(process.execPath, bundle, self), { mode: 0o755 });
   const repo = join(dir, "repo with 'quotes'");
