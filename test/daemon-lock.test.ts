@@ -117,6 +117,7 @@ test("a stale lock whose pid now belongs to something else frees the lock withou
   expect(isKiwiDaemon("/Users/jow/.kiwi/bin/kiwi daemon")).toBe(true);
   expect(isKiwiDaemon("/opt/homebrew/bin/bun /repo/src/cli/main.ts daemon")).toBe(true);
   expect(isKiwiDaemon("C:\\kiwi\\kiwi.exe daemon")).toBe(true);
+  expect(isKiwiDaemon("/Applications/Channels.app/Contents/MacOS/bun --no-env-file --no-install /Applications/Channels.app/Contents/Resources/kiwi.js daemon")).toBe(true);
   expect(isKiwiDaemon("sleep 30")).toBe(false);
   expect(isKiwiDaemon("/usr/bin/kiwi-daemon-helper")).toBe(false);
   expect(isKiwiDaemon("vim kiwi daemon.md")).toBe(false);

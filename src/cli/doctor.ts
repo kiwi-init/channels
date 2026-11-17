@@ -14,6 +14,7 @@ import { DEFAULT_RELAY, loadConfig } from "../config.ts";
 import { EXTRA_HARNESSES, extraInstalled, hooksInstalled } from "../hooks.ts";
 import { loadMachine, type MachineFile } from "../machine.ts";
 import { VERSION } from "../version.ts";
+import { launcher } from "../launcher.ts";
 
 /** One check. `how` is the plain fix, and only a problem has one. */
 export type Finding = { ok: true; what: string } | { ok: false; what: string; how: string };
@@ -45,7 +46,7 @@ function binVersion(bin: string): Promise<string | null> {
 /** The same file as this process: a dev checkout running itself must not spawn. */
 function sameBinary(bin: string): boolean {
   try {
-    return realpathSync(bin) === realpathSync(process.execPath);
+    return realpathSync(bin) === realpathSync(launcher ?? process.execPath);
   } catch {
     return false;
   }

@@ -1,5 +1,5 @@
 // The kiwi CLI on the app's own computer is the app's to keep: the agents here run it, and nobody
-// should have to install or update it by hand. On every start the app puts the binary it ships with
+// should have to install or update it by hand. On every start the app puts the kiwi it ships with
 // where the install script does (~/.kiwi/bin/kiwi), whenever that one is missing or older (never a
 // downgrade: a newer one someone installed stays), and makes sure a shell finds it as plain `kiwi`.
 
@@ -60,7 +60,7 @@ export interface KeptCli {
  * broken or older. Returns where it is and what version it is now. One too slow to say its version
  * (a loaded computer at login) may be newer, so it stays, marked unsure: the caller runs its own copy.
  */
-export async function keepCli(bundled: string, bundledVersion: string, prefixes: readonly string[] = brewPrefixes(), probeMs: number = PROBE_MS): Promise<KeptCli> {
+export async function keepCli(bundled: string, bundledVersion: string, prefixes: readonly string[] = brewPrefixes(), probeMs: number = PROBE_MS, bun: string | null = null): Promise<KeptCli> {
   const brew = homebrewKiwi(prefixes);
   const brewVersion = brew ? await versionOf(brew, probeMs) : null;
   if (brew && typeof brewVersion === "string") return { path: brew, version: brewVersion, updated: false, homebrew: true };
@@ -68,17 +68,17 @@ export async function keepCli(bundled: string, bundledVersion: string, prefixes:
   const was = fs.existsSync(dest) ? await versionOf(dest, probeMs) : null;
   if (was === SLOW) return { path: dest, version: bundledVersion, updated: false, homebrew: false, unsure: true };
   if (was && compareVersions(was, bundledVersion) >= 0) return { path: dest, version: was, updated: false, homebrew: false };
-  await place(bundled, dest);
+  await place(bundled, dest, bun);
   void tidy(dest);
   return { path: dest, version: bundledVersion, updated: true, homebrew: false };
 }
 
 const placing = new Map<string, Promise<void>>();
 
-export function place(bundled: string, dest: string): Promise<void> {
+export function place(bundled: string, dest: string, bun: string | null = null): Promise<void> {
   const busy = placing.get(dest);
   if (busy) return busy;
-  const done = unpack(bundled, dest).finally(() => placing.delete(dest));
+  const done = unpack(bundled, dest, bun).finally(() => placing.delete(dest));
   placing.set(dest, done);
   return done;
 }
@@ -119,13 +119,45 @@ async function compile(bundle: string, out: string): Promise<void> {
   await run(out, ["--version"], "the kiwi CLI built from the app doesn't run");
 }
 
-async function unpack(bundled: string, dest: string): Promise<void> {
+export function appBun(execPath: string = process.execPath, platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): string | null {
+  if (platform === "win32" || env["APPIMAGE"]) return null;
+  const at = path.resolve(execPath);
+  if (platform === "darwin" && (at.includes("/AppTranslocation/") || at.startsWith("/Volumes/"))) return null;
+  return at;
+}
+
+export function launcherScript(bun: string, cli: string, self: string): string {
+  const q = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
+  return [
+    "#!/bin/sh",
+    `bun=${q(bun)}`,
+    `cli=${q(cli)}`,
+    'if [ ! -x "$bun" ] || [ ! -f "$cli" ]; then',
+    `  echo ${q("kiwi: the Channels app this kiwi runs on was moved or removed. Open Channels again, or install kiwi on its own: curl -fsSL https://channels.kiwiinit.com/install | sh")} >&2`,
+    "  exit 127",
+    "fi",
+    "here=$(pwd) || here=/",
+    "cd / || exit 1",
+    `KIWI_LAUNCHER=${q(self)}`,
+    'KIWI_LAUNCHER_CWD="$here"',
+    "export KIWI_LAUNCHER KIWI_LAUNCHER_CWD",
+    'exec "$bun" --no-env-file --no-install "$cli" "$@"',
+    "",
+  ].join("\n");
+}
+
+async function launch(bun: string, bundled: string, out: string, dest: string): Promise<void> {
+  await fs.promises.writeFile(out, launcherScript(bun, path.resolve(bundled), dest), { mode: 0o755 });
+  await run(out, ["--version"], "the kiwi CLI on the app's Bun doesn't run");
+}
+
+async function unpack(bundled: string, dest: string, bun: string | null): Promise<void> {
   if (quitting) throw new Error("Channels is quitting");
   await fs.promises.mkdir(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.new-${process.pid}-${randomUUID()}`;
   unfinished.add(tmp);
   try {
-    if (bundled.endsWith(".js")) await compile(bundled, tmp);
+    if (bundled.endsWith(".js")) await (bun ? launch(bun, bundled, tmp, dest) : compile(bundled, tmp));
     else if (bundled.endsWith(".zst")) await pipeline(fs.createReadStream(bundled), zlib.createZstdDecompress(), fs.createWriteStream(tmp));
     else await fs.promises.copyFile(bundled, tmp);
     if (process.platform !== "win32") await fs.promises.chmod(tmp, 0o755);

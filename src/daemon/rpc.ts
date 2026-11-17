@@ -13,6 +13,7 @@ import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import type { PairedPerson } from "./pair.ts";
 import { lockPath } from "./lock.ts";
+import { launcher } from "../launcher.ts";
 import type { AdmitRoom } from "./admit.ts";
 import {
   DAEMON_PROTOCOL,
@@ -252,6 +253,7 @@ export function spawnDaemon(dir = home(), argv?: string[]): void {
 }
 
 function cliDaemonArgv(): string[] {
+  if (launcher) return [launcher, "daemon"];
   const argv = [process.execPath];
   const main = process.argv[1];
   if (main && main !== "daemon" && (main.endsWith(".ts") || main.endsWith(".js"))) argv.push(main);
