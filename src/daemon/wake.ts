@@ -219,14 +219,14 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, wake
     seat.announce?.();
   };
 
-  const watchTake = (seat: Seat, thread: string, seqs: number[], resumed: boolean): void => {
+  const watchTake = (seat: Seat, thread: string, seqs: number[], at: number, resumed: boolean): void => {
     if (seat.taking) clearTimeout(seat.taking.timer);
     seat.taking = null;
     if (stopped()) return;
     const timer = setTimeout(() => {
       void checkTake(seat).catch((err: unknown) => setUntaken(seat, `Kiwi's check of this Codex wake ended on an error: ${oneLine(err instanceof Error ? err.message : String(err))}`));
     }, wakeTakeMs);
-    seat.taking = { thread, seqs, resumed, timer };
+    seat.taking = { thread, seqs, at, resumed, timer };
   };
 
   const checkTake = async (seat: Seat): Promise<void> => {
@@ -242,7 +242,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, wake
       if (counted === null) return null;
       return "cursor" in counted && t.seqs.some((seq) => counted.seqs.includes(seq)) ? { cursor: counted.cursor } : "read";
     };
-    const again = (): void => watchTake(seat, t.thread, t.seqs, t.resumed);
+    const again = (): void => watchTake(seat, t.thread, t.seqs, t.at, t.resumed);
     const bound = record();
     if (!bound) return setUntaken(seat, null);
     const left = await unread();
@@ -256,19 +256,19 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, wake
     }
     const last = codexLastTurn(rollout);
     if (last.kind === "running") {
-      setUntaken(
-        seat,
-        last.quietFor >= CODEX_QUIET_MS
-          ? `thread ${t.thread}'s turn started at ${utc(last.at)} and has written nothing for ${Math.round(last.quietFor / 60_000)} min: if the session moved to another thread, run a kiwi command there`
-          : null,
-      );
+      const turn =
+        last.at < t.at
+          ? `the wake is queued behind thread ${t.thread}'s turn that started at ${utc(last.at)}, before the wake, and is still running`
+          : `a turn on thread ${t.thread} started at ${utc(last.at)}, after the wake, but hasn't read it yet`;
+      const quiet = last.quietFor >= CODEX_QUIET_MS ? `; nothing written to it since ${utc(Date.now() - last.quietFor)}: if the session moved to another thread, run a kiwi command there` : "";
+      setUntaken(seat, `${turn}${quiet}`);
       return again();
     }
     if (last.kind !== "aborted") {
       setUntaken(seat, `Codex queued the wake for thread ${t.thread} but no turn read it in ${Math.round(wakeTakeMs / 1000)} s: if the session moved to another thread, run a kiwi command there`);
       return again();
     }
-    const restart = codexWindowRestart(bound, last.at);
+    const restart = codexWindowRestart(bound, t.thread, last.at);
     if (restart.kind === "live") {
       setUntaken(seat, `paused by you: the turn was interrupted at ${utc(last.at)} in the running session, so Codex holds its queue until you type in its window`);
       return again();
@@ -288,7 +288,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, wake
     const recheck = now ? await unread() : "read";
     if (!now || recheck === "read") return setUntaken(seat, null);
     const lastNow = codexLastTurn(rollout);
-    const restartNow = codexWindowRestart(now, last.at);
+    const restartNow = codexWindowRestart(now, t.thread, last.at);
     if (recheck === null || lastNow.kind !== "aborted" || lastNow.turn !== last.turn || restartNow.kind !== "restarted") return again();
     const why = await startCodexQueue(codexControlSocket(home), t.thread);
     appendWakeRow(dir, {
@@ -306,7 +306,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, wake
       return again();
     }
     setUntaken(seat, null);
-    watchTake(seat, t.thread, t.seqs, true);
+    watchTake(seat, t.thread, t.seqs, t.at, true);
   };
 
   const scheduleWake = (seat: Seat, delay = wakeDelayMs): void => {
@@ -386,7 +386,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, wake
       if (why === null) {
         seat.outstanding = { seqs, to, at: seat.lastWake.at };
         seat.clock?.delivered(attempts);
-        if (path.via === "codex-queue") watchTake(seat, path.session, seqs, false);
+        if (path.via === "codex-queue") watchTake(seat, path.session, seqs, seat.lastWake.at, false);
       }
       logWake(seat, seat.lastWake, why, cursor);
     } finally {

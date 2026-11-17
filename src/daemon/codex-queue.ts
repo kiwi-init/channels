@@ -72,13 +72,15 @@ export type CodexRestart = { kind: "restarted"; at: number } | { kind: "live"; a
 
 const startOf = (p: Proc): number => Date.parse(`${p.start} GMT`);
 
-const runsCodex = (p: Proc, bin: string | undefined): boolean =>
-  p.args
-    .split(/\s+/)
-    .slice(0, 2)
-    .some((word) => basename(word) === "codex" || (!!bin && word === bin));
+const codexArgs = (p: Proc, bin: string | undefined): string[] | null => {
+  const words = p.args.split(/\s+/);
+  const at = words.slice(0, 2).findIndex((word) => basename(word) === "codex" || (!!bin && word === bin));
+  return at < 0 ? null : words.slice(at + 1);
+};
 
-export function codexWindowRestart(record: SeatRecord, abortedAt: number, procs: () => readonly Proc[] = processes): CodexRestart {
+const resumes = (args: readonly string[], thread: string): boolean => args.includes("resume") && args.includes(thread);
+
+export function codexWindowRestart(record: SeatRecord, thread: string, abortedAt: number, procs: () => readonly Proc[] = processes): CodexRestart {
   if (!record.tmux) return { kind: "unknown", why: "Kiwi doesn't know which window runs this Codex session" };
   const panePid = Number(tmuxNow(record.tmux.socket, ["display-message", "-p", "-t", record.tmux.pane, "#{pane_pid}"])?.trim());
   if (!Number.isInteger(panePid) || panePid <= 1) return { kind: "unknown", why: "its tmux window is gone" };
@@ -92,8 +94,13 @@ export function codexWindowRestart(record: SeatRecord, abortedAt: number, procs:
         grew = true;
       }
   }
-  const starts = all.filter((p) => inPane.has(p.pid) && runsCodex(p, record.bin)).map(startOf);
-  if (!starts.length) return { kind: "unknown", why: "no Codex runs in its tmux window" };
+  const codexes = all.flatMap((p) => {
+    const args = inPane.has(p.pid) ? codexArgs(p, record.bin) : null;
+    return args ? [{ p, args }] : [];
+  });
+  if (!codexes.length) return { kind: "unknown", why: "no Codex runs in its tmux window" };
+  const starts = codexes.filter((c) => resumes(c.args, thread)).map((c) => startOf(c.p));
+  if (!starts.length) return { kind: "unknown", why: "no Codex in its tmux window was started as codex resume of this thread" };
   if (starts.some((s) => !Number.isFinite(s))) return { kind: "unknown", why: "its Codex process's start time can't be read" };
   const started = Math.min(...starts);
   return Math.floor(started / 1000) > Math.floor(abortedAt / 1000) ? { kind: "restarted", at: started } : { kind: "live", at: started };

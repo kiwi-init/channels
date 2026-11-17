@@ -18,7 +18,7 @@ export interface Seat {
   reach: Reach | null;
   unarmed: Unarmed | null;
   untaken: Unarmed | null;
-  taking: { thread: string; seqs: number[]; resumed: boolean; timer: ReturnType<typeof setTimeout> } | null;
+  taking: { thread: string; seqs: number[]; at: number; resumed: boolean; timer: ReturnType<typeof setTimeout> } | null;
   activityTimer: ReturnType<typeof setInterval> | null;
   announce: (() => void) | null;
   beacon: ReturnType<typeof setInterval> | null;
