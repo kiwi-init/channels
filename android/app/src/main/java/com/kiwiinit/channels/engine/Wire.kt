@@ -49,6 +49,26 @@ data class QuoteView(val seq: Int, val from: String, val words: String)
 data class Chosen(val choice: String, val by: String)
 
 @Serializable
+data class StepView(
+    val why: String,
+    val needsPerson: String,
+    @SerialName("do") val todo: List<String> = emptyList(),
+    val run: List<String> = emptyList(),
+    val expect: String? = null,
+    val links: List<String> = emptyList(),
+)
+
+@Serializable
+enum class StepOutcome {
+    @SerialName("done") Done,
+    @SerialName("cant") Cant,
+    @SerialName("not-needed") NotNeeded,
+}
+
+@Serializable
+data class StepAnswer(val by: String, val outcome: StepOutcome? = null)
+
+@Serializable
 data class ReactionView(val emoji: String, val who: List<String> = emptyList(), val mine: Boolean = false)
 
 @Serializable
@@ -69,6 +89,8 @@ data class MessageView(
     val reactions: List<ReactionView> = emptyList(),
     val shown: String = body,
     val plain: String = body,
+    val step: StepView? = null,
+    val stepAnswer: StepAnswer? = null,
 ) {
     val myReaction: String? get() = reactions.firstOrNull { it.mine }?.emoji
     val millis: Long get() = at.toLong()

@@ -51,6 +51,27 @@ for (const [i, [from, body, kind]] of said.entries()) {
   log.push({ ...signed, seq: i + 1, rts: ts, sigOk: await verify(signed) });
 }
 
+const stepAt = start + said.length * 60_000;
+const step = await sign(ids.lead!, {
+  v: 1 as const,
+  id: crypto.randomUUID(),
+  from: "lead",
+  kind: "ask" as const,
+  body: "Sign the 1.4 build on your Mac",
+  ts: stepAt,
+  to: ["jow"],
+  esc: true as const,
+  step: {
+    why: "The release waits on a signed build, and CI has no signing key.",
+    needsPerson: "the signing key is on your Mac",
+    do: ["Unlock Keychain", "Run the signing command"],
+    run: ["bun run sign"],
+    expect: "A signed build in dist/",
+    links: ["https://example.com/sign"],
+  },
+});
+log.push({ ...step, seq: log.length + 1, rts: stepAt, sigOk: await verify(step) });
+
 const room = roomView({
   code: "fixture",
   title: "channels-dev",

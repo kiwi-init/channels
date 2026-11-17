@@ -12,6 +12,8 @@ import com.kiwiinit.channels.engine.QuoteView
 import com.kiwiinit.channels.engine.ReactionView
 import com.kiwiinit.channels.engine.ReviewView
 import com.kiwiinit.channels.engine.RoomView
+import com.kiwiinit.channels.engine.StepAnswer
+import com.kiwiinit.channels.engine.StepView
 import com.kiwiinit.channels.engine.TaskView
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Feed
@@ -165,6 +167,23 @@ const val UNHELD_QUESTION = "Take the Linux window-controls issue now, while the
 fun unheldQuestion(model: AppModel, waiting: Boolean) {
     val room = model.rooms.getValue(DEV)
     val asked = MessageView(UNHELD_SEQ, "lively-swan", System.currentTimeMillis() - 2 * MINUTE, "ask", UNHELD_QUESTION, choices = listOf("Take it now", "Wait for a second strike"), waiting = waiting)
+    val messages = room.messages + asked
+    model.rooms[DEV] = room.copy(messages = messages, asks = emptyList(), reviews = emptyList(), head = asked.seq, last = asked, latest = asked)
+}
+
+const val STEP_SEQ = 70
+val SIGN_STEP = StepView(
+    why = "The release waits on a signed build.",
+    needsPerson = "the signing key is on your Mac",
+    todo = listOf("Unlock Keychain", "Run the signing command"),
+    run = listOf("bun run sign"),
+    expect = "A signed build in dist/",
+    links = listOf("https://example.com/sign"),
+)
+
+fun stepAsked(model: AppModel, waiting: Boolean, step: StepView = SIGN_STEP, answer: StepAnswer? = null) {
+    val room = model.rooms.getValue(DEV)
+    val asked = MessageView(STEP_SEQ, "lively-swan", System.currentTimeMillis() - 2 * MINUTE, "ask", "Sign the 1.4 build", waiting = waiting, step = step, stepAnswer = answer)
     val messages = room.messages + asked
     model.rooms[DEV] = room.copy(messages = messages, asks = emptyList(), reviews = emptyList(), head = asked.seq, last = asked, latest = asked)
 }

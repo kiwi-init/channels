@@ -184,4 +184,18 @@
     <plurals name="n_working">
         <item quantity="other">作業中 %d</item>
     </plurals>
+    <string name="step_for_you">あなたの作業</string>
+    <string name="step_label">作業</string>
+    <string name="step_needs_person">人の対応が必要: %1$s</string>
+    <string name="step_expected">期待される結果</string>
+    <string name="step_output_hint">出力（任意）</string>
+    <string name="step_why_cant">できない理由は？</string>
+    <string name="step_why_not_needed">不要な理由は？</string>
+    <string name="step_done">完了</string>
+    <string name="step_cant">できない</string>
+    <string name="step_not_needed">不要</string>
+    <string name="step_send">送信</string>
+    <string name="step_needs_reason">先に理由を書いてください</string>
+    <string name="step_answered">%1$s · %2$s</string>
+    <string name="step_replied">%1$sが返信しました</string>
 </resources>
