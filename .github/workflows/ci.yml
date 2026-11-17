@@ -587,6 +587,9 @@ jobs:
       - name: ui a cold open never paints a partial row, on a quiet channel and a busy thread doc (#2513)
         if: ${{ !cancelled() }}
         run: bun scripts/ui-cold-whole.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui a face's first eye shows at once, and a shape or mark a later mood brings fades in as before (#2453)
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-face-moods.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Others' direct messages keeps its heading in place while one of its conversations is open, collapsed or expanded (#2386)
         if: ${{ !cancelled() }}
         run: bun scripts/ui-theirs-heading.ts --dist ui/dist --browser ${{ matrix.engine }}
