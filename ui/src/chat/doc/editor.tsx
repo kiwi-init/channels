@@ -941,5 +941,5 @@ export function LiveThreadDoc({ channel, where, thread, hold }: { channel: Chann
     [live, live?.isReady, code, thread, media]
   )
 
-  return live?.isReady ? <ThreadDoc channel={channel} where={where} thread={thread} shared={live} hold={hold} media={media} /> : null
+  return live?.isReady ? <ThreadDoc channel={channel} where={where} thread={thread} shared={live} hold={hold} media={media} /> : <Wait />
 }
