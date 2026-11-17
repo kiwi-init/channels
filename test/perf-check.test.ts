@@ -207,7 +207,8 @@ test("paired: missing or failed runs can't earn the exemption", () => {
   const short = pairedCheck(twoHeads);
   expect(short.code).toBe(1);
   expect(short.text).toContain("head: 1 reports, 4 expected");
-  expect(short.text).toContain("head has 1 usable runs, 3 needed");
+  expect(short.text).toContain("| Agents tab @4x | 250 | not measured |");
+  expect(short.text).not.toContain("exempt: the base is over it too");
   const failed = pairedCheck(files, ["run 3 head"]);
   expect(failed.code).toBe(1);
   expect(failed.text).toContain("run 3 head: the run failed");
@@ -225,4 +226,54 @@ test("paired: uncalibrated runs, mislabelled reports and one app on both sides f
   expect(pairedCheck(mislabelled).text).toContain("its control is base, its name says head");
   const sameApp = [...files.slice(0, 4), ...[2, 3, 6, 7].map((i) => pairRun("head", 900 + i, {}, { app: "b".repeat(40) }))];
   expect(pairedCheck(sameApp).text).toContain("base and head ran the same app commit");
+});
+
+const without = (metric: "Agents" | "Tasks", ms: { tasks?: number; agents?: number }) => {
+  const views: Record<string, number> = { Tasks: ms.tasks ?? 150, Agents: ms.agents ?? 90, Conversation: 95 };
+  delete views[metric];
+  return { "@4x": { switchMedianMs: views, calibrationMs: reference["@4x"] } };
+};
+
+test("paired: one missing value on either side fails that metric and names the file, never exempting it", () => {
+  const red = { agents: 250 };
+  const headGap = [
+    ...[1, 4, 5, 8].map((i) => pairRun("base", 1000 + i, red)),
+    ...[2, 3, 6].map((i) => pairRun("head", 1000 + i, { agents: 260 })),
+    pairRun("head", 1007, {}, without("Agents", { agents: 260 })),
+  ];
+  const h = pairedCheck(headGap);
+  expect(h.code).toBe(1);
+  expect(h.text).toContain("Agents tab @4x: perf-pair-1007-head.json has no usable value (the metric is missing)");
+  expect(h.text).toContain("| Agents tab @4x | 250 | not measured |");
+  expect(h.text).not.toContain("Agents tab @4x: 260, over its gate 115; the base is over it too");
+  const baseGap = [pairRun("base", 1101, {}, without("Agents", red)), ...[4, 5, 8].map((i) => pairRun("base", 1100 + i, red)), ...[2, 3, 6, 7].map((i) => pairRun("head", 1100 + i, { agents: 260 }))];
+  const b = pairedCheck(baseGap);
+  expect(b.code).toBe(1);
+  expect(b.text).toContain("Agents tab @4x: perf-pair-1101-base.json has no usable value (the metric is missing)");
+});
+
+test("paired: one unusable calibration on either side fails every scaled metric of that run, never exempting it", () => {
+  const red = { agents: 250 };
+  const offBounds = { "@4x": { switchMedianMs: { Tasks: 150, Agents: 260, Conversation: 95 }, calibrationMs: 5000 } };
+  const head = [...[1, 4, 5, 8].map((i) => pairRun("base", 1200 + i, red)), ...[2, 3, 6].map((i) => pairRun("head", 1200 + i, { agents: 260 })), pairRun("head", 1207, {}, offBounds)];
+  const h = pairedCheck(head);
+  expect(h.code).toBe(1);
+  expect(h.text).toContain("Agents tab @4x: perf-pair-1207-head.json has no usable value (its @4x calibration 5000 ms is outside");
+  expect(h.text).not.toContain("exempt: the base is over it too");
+  const base = [
+    pairRun("base", 1301, {}, { "@4x": { switchMedianMs: { Tasks: 150, Agents: 250, Conversation: 95 }, calibrationMs: 5000 } }),
+    ...[4, 5, 8].map((i) => pairRun("base", 1300 + i, red)),
+    ...[2, 3, 6, 7].map((i) => pairRun("head", 1300 + i, { agents: 260 })),
+  ];
+  expect(pairedCheck(base).text).toContain("perf-pair-1301-base.json has no usable value (its @4x calibration 5000 ms is outside");
+});
+
+test("paired: the thresholds are compared unrounded, and exactly 15% or exactly 10 ms is not a regression", () => {
+  expect(pairedCheck(pair({ tasks: 50 }, { tasks: 60 }, 1400)).code).toBe(0);
+  const justOverMs = pairedCheck(pair({ tasks: 50 }, { tasks: 60.04 }, 1500));
+  expect(justOverMs.code).toBe(1);
+  expect(justOverMs.text).toContain("| Tasks tab @4x | 50 | 60 | +10 ms (+20%) | 220 | regression |");
+  expect(pairedCheck(pair({ tasks: 100 }, { tasks: 115 }, 1600)).code).toBe(0);
+  expect(pairedCheck(pair({ tasks: 100 }, { tasks: 115.01 }, 1700)).code).toBe(1);
+  expect(pairedCheck(pair({ tasks: 140 }, { tasks: 161 }, 1800)).code).toBe(0);
 });

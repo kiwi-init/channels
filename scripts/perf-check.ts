@@ -133,7 +133,7 @@ export function perfCheck(runs: readonly string[], nightly = false): { code: 0 |
 
 export const REGRESSION = { ratio: 1.15, ms: 10 } as const;
 const PAIRED_RUNS = 4;
-const PAIRED_USABLE = 3;
+const TOLERANCE = 1e-9;
 type Side = "base" | "head";
 const SIDES: readonly Side[] = ["base", "head"];
 
@@ -165,31 +165,33 @@ export function pairedCheck(runs: readonly string[], failedRuns: readonly string
     if (l.nightly || l.source) continue;
     const median_: Partial<Record<Side, number>> = {};
     for (const side of SIDES) {
-      const seen = sides[side].map((r) => scaled(r.report, l, r.calibration)).filter((v): v is number => v !== null);
-      if (seen.length >= PAIRED_USABLE) median_[side] = round(median(seen));
-      else failures.push(`${l.what}: ${side} has ${seen.length} usable runs, ${PAIRED_USABLE} needed (${name})`);
+      const each = sides[side].map((r) => ({ file: r.file, why: typeof r.calibration === "string" ? r.calibration : "the metric is missing", v: scaled(r.report, l, r.calibration) }));
+      const missing = each.filter((x) => x.v === null);
+      for (const x of missing) failures.push(`${l.what}: ${basename(x.file)} has no usable value (${x.why}), so the pair can't be judged on it (${name})`);
+      const seen = each.flatMap((x) => (x.v === null ? [] : [x.v]));
+      if (!missing.length && seen.length === PAIRED_RUNS) median_[side] = median(seen);
     }
     const { base, head } = median_;
     if (base === undefined || head === undefined) {
-      rows.push(`| ${l.what} | ${base ?? "not measured"} | ${head ?? "not measured"} | | ${l.gate ?? "none yet"} | not measured |`);
+      rows.push(`| ${l.what} | ${base === undefined ? "not measured" : round(base)} | ${head === undefined ? "not measured" : round(head)} | | ${l.gate ?? "none yet"} | not measured |`);
       continue;
     }
-    const regressed = head > base * REGRESSION.ratio && head - base > REGRESSION.ms;
+    const regressed = head - base * REGRESSION.ratio > TOLERANCE * Math.max(1, Math.abs(base)) && head - base - REGRESSION.ms > TOLERANCE;
     const headOver = l.gate !== null && head > l.gate;
     const baseOver = l.gate !== null && base > l.gate;
     const change = `${head - base >= 0 ? "+" : ""}${round(head - base)} ms (${base > 0 ? `${head >= base ? "+" : ""}${Math.round(((head - base) / base) * 100)}%` : "n/a"})`;
     let verdict: string;
     if (regressed) {
       verdict = "regression";
-      failures.push(`${l.what}: ${head} against the base's ${base}, more than ${Math.round((REGRESSION.ratio - 1) * 100)}% and ${REGRESSION.ms} ms slower (${name})`);
+      failures.push(`${l.what}: ${round(head)} against the base's ${round(base)}, more than ${Math.round((REGRESSION.ratio - 1) * 100)}% and ${REGRESSION.ms} ms slower (${name})`);
     } else if (headOver && baseOver) {
       verdict = "over its gate, exempt: the base is over it too";
-      exempt.push(`${l.what}: ${head}, over its gate ${l.gate}; the base is over it too (${base}) and this change isn't a regression (${name})`);
+      exempt.push(`${l.what}: ${round(head)}, over its gate ${l.gate}; the base is over it too (${round(base)}) and this change isn't a regression (${name})`);
     } else if (headOver) {
       verdict = "over its gate";
-      failures.push(`${l.what}: ${head}, over its gate ${l.gate}, which the base meets (${base}) (${name})`);
+      failures.push(`${l.what}: ${round(head)}, over its gate ${l.gate}, which the base meets (${round(base)}) (${name})`);
     } else verdict = "ok";
-    rows.push(`| ${l.what} | ${base} | ${head} | ${change} | ${l.gate ?? "none yet"} | ${verdict} |`);
+    rows.push(`| ${l.what} | ${round(base)} | ${round(head)} | ${change} | ${l.gate ?? "none yet"} | ${verdict} |`);
   }
   const calibrations = SIDES.map(
     (side) => `${side} ${sides[side].map((r) => (typeof r.calibration === "string" ? "left out" : `${r.calibration["@1x"]}/${r.calibration["@4x"]}`)).join(", ") || "none"}`,
