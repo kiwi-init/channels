@@ -106,7 +106,7 @@ interface RpcCall {
 
 type RpcAnswer = { ok: true; result: unknown } | { ok: false; error: string };
 
-export async function codexRpc(socket: string, calls: readonly RpcCall[], ms = 10_000): Promise<RpcAnswer[] | { failed: string }> {
+async function codexRpc(socket: string, calls: readonly RpcCall[], ms = 10_000): Promise<RpcAnswer[] | { failed: string }> {
   if (!existsSync(socket)) return { failed: "Codex's app-server isn't running (no control socket)" };
   const ws = new WebSocket(`ws+unix://${socket}`);
   const answers: RpcAnswer[] = [];

@@ -55,7 +55,7 @@ beforeAll(() => {
   db.close();
   server = Bun.serve({
     unix: join(codex, "app-server-control", "app-server-control.sock"),
-    fetch: (req, srv) => (srv.upgrade(req) ? undefined : new Response("websocket only", { status: 400 })),
+    fetch: (req, srv) => (srv.upgrade(req, { data: undefined }) ? undefined : new Response("websocket only", { status: 400 })),
     websocket: {
       message(ws, raw) {
         const m = JSON.parse(String(raw)) as { id?: number; method: string };
