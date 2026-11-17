@@ -162,9 +162,9 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     when it is dragged, makes room for the open search field, and starts
     at the same place in Settings and on Home. Nothing in the row sits
     on anything else (`scripts/ui-layout.ts` checks every screen). The row
-    has no title. The strip is part of the frame. The open tab takes the
-    page's colour, rounds its top corners and stands on the strip's bottom
-    edge, so it reads as joined to the page; Home is a small icon tab and
+    has no title. The strip is part of the frame. The open tab is shaped
+    like a pane: the page's colour, `--r-ctl` on all four corners, `--ctl`
+    tall and centred in the row; Home is a small icon tab and
     can be the open one, and Settings, which is no channel, has none. Tabs share the
     strip equally, up to 15rem each, and + ends it, beside Search. A name
     that needs more than its share takes the room its neighbours don't use

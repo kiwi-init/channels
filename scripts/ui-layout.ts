@@ -167,7 +167,7 @@ try {
       !!shell && shell.rows === 1 && shell.sizes.length === 1 && near(shell.left, 8),
       `Home and the channel tabs are one height, in one line, 8px after the page's left edge (${shell?.sizes.join(", ")} high, ${shell?.left} after)`,
     );
-    expect(!!shell && near(shell.foot, 0) && shell.add, `standing on the strip's bottom edge, with + inside the strip (${shell?.foot} above it)`);
+    expect(!!shell && near(shell.foot, 8) && shell.add, `centred in the strip, 8px above its bottom edge, with + inside it (${shell?.foot} above it)`);
     await nothingClashes(page, "on the Mac");
     expect(!!shell && near(shell.under, 0), `the channel's name starts right under the tab strip (${shell?.under})`);
     expect(!!shell && shell.listEnd <= shell.gearTop && near(shell.gearFoot, 8), "Settings sits in the bottom-left corner, under the list");
@@ -605,8 +605,8 @@ try {
     expect(strip?.fit === fit, `the strip is ${fit} here (${strip?.fit})`);
     expect(!!strip && strip.over <= 1 && strip.page <= 0, `nothing scrolls sideways (${strip?.over}px over in the strip, ${strip?.page}px in the page)`);
     expect(
-      !!strip && strip.open.length === 1 && near(strip.open[0]!.bottom, strip.foot) && strip.open[0]!.shade === strip.ground && strip.frame !== strip.ground,
-      `one tab is open, in the page's colour and joined to it, on the frame's (${strip?.open.length} open, ${strip?.open[0]?.bottom} of ${strip?.foot}, ${strip?.ground} on ${strip?.frame})`,
+      !!strip && strip.open.length === 1 && near(strip.open[0]!.bottom, strip.foot - 8) && strip.open[0]!.shade === strip.ground && strip.frame !== strip.ground,
+      `one tab is open, a pane in the page's colour centred on the frame's (${strip?.open.length} open, ${strip?.open[0]?.bottom} of ${strip?.foot}, ${strip?.ground} on ${strip?.frame})`,
     );
     expect(!!strip && near(strip.addRight + 8, strip.search, 9) && tabs.every((tab) => tab.right <= strip.addLeft + 1), `+ ends the strip, beside Search (${strip?.addRight} before ${strip?.search})`);
     expect(tabs.length > 0 && tabs.every((tab) => tab.icon === 16), `every tab's icon is 16px (${[...new Set(tabs.map((tab) => tab.icon))].join(", ")})`);

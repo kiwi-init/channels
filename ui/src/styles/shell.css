@@ -1257,13 +1257,13 @@
   --tile: var(--ctl);
   --lead-pad: 8px;
   --tail-n: 1;
-  --tab-h: calc(var(--top-h) - 8px);
+  --tab-h: var(--ctl);
 
   grid-row: 1;
   grid-column: 1 / -1;
   z-index: 10;
   flex-wrap: nowrap;
-  align-items: flex-end;
+  align-items: center;
   gap: 0;
   margin: 0 calc(8px + var(--tail-n) * (var(--ctl) + 8px)) 0 max(var(--side-w), calc(var(--lead-pad) + var(--ctl) + 8px + var(--history-w)));
   padding: 0 8px;
@@ -1328,7 +1328,7 @@
 
 :root[data-tabs] .app > .rail .tile[data-code] {
   height: var(--tab-h);
-  border-radius: var(--r-ctl) var(--r-ctl) 0 0;
+  border-radius: var(--r-ctl);
   background: none;
   box-shadow: none;
 }
@@ -1374,26 +1374,6 @@
 :root[data-tabs] .app > .rail .tile[data-code].is-on {
   min-width: max-content;
   font-weight: 500;
-}
-
-:root[data-tabs] .app > .rail .tile.is-on::before,
-:root[data-tabs] .app > .rail .tile.is-on::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  width: 8px;
-  height: 8px;
-  pointer-events: none;
-}
-
-:root[data-tabs] .app > .rail .tile.is-on::before {
-  right: 100%;
-  background: radial-gradient(circle at 0 0, transparent 7.5px, var(--page) 8px);
-}
-
-:root[data-tabs] .app > .rail .tile.is-on::after {
-  left: 100%;
-  background: radial-gradient(circle at 100% 0, transparent 7.5px, var(--page) 8px);
 }
 
 :root[data-tabs] .tile[data-code] > :first-child {
