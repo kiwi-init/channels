@@ -118,7 +118,12 @@ export function roomView(r: RoomInput): RoomView {
   const askedOfMe = (m: Message): boolean =>
     !m.permission && m.from !== me && answersAsk(state.members, m, me) && (!m.to?.length || m.to.includes(me) || m.to.includes("*") || (decides && !!m.esc && !m.handoff));
   const waiting = new Set(state.openAsks.filter(askedOfMe).map((m) => m.seq));
-  const counted = (m: Message, replies: readonly Message[]): readonly Message[] => (state.tapToAnswer && m.esc ? replies.filter((r) => r.pick || r.stepReply) : replies);
+  const counted = (m: Message, replies: readonly Message[]): readonly Message[] =>
+    replies.filter((r) => !ignored(state.trust.get(r.seq)) && (!state.tapToAnswer || !m.esc || !!r.pick || !!r.stepReply));
+  const stepAnswerOf = (m: Message): MessageView["stepAnswer"] => {
+    const r = counted(m, repliesTo.get(m.seq) ?? []).find((x) => x.kind !== "event" && x.from !== m.from && answersAsk(state.members, m, x.from));
+    return r ? { by: r.from, outcome: r.stepReply?.outcome ?? null } : null;
+  };
   const root = rootOf(me, state.members);
   const myself = (name: string) => name === me || rootOf(name, state.members) === root;
   const here = placeFromKey(r.place) || roomOfKey(state, me, r.place) ? r.place : "main";
@@ -148,6 +153,8 @@ export function roomView(r: RoomInput): RoomView {
       choices: m.choices ?? [],
       chosen: chosen ? { choice: chosen.choice, by: chosen.by } : null,
       waiting: waiting.has(m.seq),
+      step: m.step ?? null,
+      stepAnswer: m.step ? stepAnswerOf(m) : null,
       images: m.imgs?.length ?? 0,
       task: place?.kind === "task" ? place.task : (m.task ?? null),
       reactions: chipsFor(state, m.seq, me, (name) => state.members.get(name)?.display ?? name),

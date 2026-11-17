@@ -44,6 +44,31 @@ struct Chosen: Codable, Sendable, Hashable {
     let by: String
 }
 
+struct StepView: Codable, Sendable, Hashable {
+    let why: String
+    let needsPerson: String
+    let todo: [String]?
+    let run: [String]?
+    let expect: String?
+    let links: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case why, needsPerson, run, expect, links
+        case todo = "do"
+    }
+}
+
+enum StepOutcome: String, Codable, Sendable, Hashable {
+    case done
+    case cant
+    case notNeeded = "not-needed"
+}
+
+struct StepAnswer: Codable, Sendable, Hashable {
+    let by: String
+    let outcome: StepOutcome?
+}
+
 struct MessageView: Codable, Sendable, Hashable, Identifiable {
     let seq: Int
     let from: String
@@ -61,6 +86,8 @@ struct MessageView: Codable, Sendable, Hashable, Identifiable {
     let reactions: [ReactionView]
     let shown: String
     let plain: String
+    var step: StepView? = nil
+    var stepAnswer: StepAnswer? = nil
 
     var id: Int { seq }
     var myReaction: String? { reactions.first { $0.mine }?.emoji }

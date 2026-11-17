@@ -27,6 +27,7 @@ import com.kiwiinit.channels.engine.EnrollStart
 import com.kiwiinit.channels.engine.MessageView
 import com.kiwiinit.channels.engine.Push
 import com.kiwiinit.channels.engine.RoomView
+import com.kiwiinit.channels.engine.StepOutcome
 import com.kiwiinit.channels.engine.wire
 import java.io.File
 import java.util.UUID
@@ -53,6 +54,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import com.kiwiinit.channels.R
 
 sealed interface Phase {
@@ -428,6 +430,22 @@ class AppModel(private val app: Application, private val calls: (suspend (JsonOb
                 put("code", code)
                 put("seq", seq)
                 put("text", text)
+            },
+        )
+    }
+
+    suspend fun answerStep(code: String, seq: Int, outcome: StepOutcome, note: String) {
+        val said = note.trim()
+        if (outcome != StepOutcome.Done && said.isEmpty()) throw EngineException(words(R.string.step_needs_reason))
+        ask(
+            buildJsonObject {
+                put("op", "answerStep")
+                put("code", code)
+                put("seq", seq)
+                putJsonObject("reply") {
+                    put("outcome", wire.encodeToJsonElement(StepOutcome.serializer(), outcome))
+                    if (said.isNotEmpty()) put(if (outcome == StepOutcome.Done) "output" else "reason", said)
+                }
             },
         )
     }

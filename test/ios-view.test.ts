@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import type { Event, Message } from "@kiwi/core/protocol.ts";
+import type { Event, Message, Step, StepReply } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 
 import { roomsFor, roomView, type RoomInput } from "../ios/engine/view.ts";
@@ -349,5 +349,117 @@ describe("a phone answers every question asked of its seat, as the desktop does 
     const tapped = await signedLog([ev("jow", { op: "asks.tap.set", on: true }), decision(), say("jow", "A", { re: [2], pick: true })]);
     expect(waiting(tapped, "jow", 2)).toBe(false);
     expect(chosen(tapped, "jow", 2)).toEqual({ choice: "A", by: "jow" });
+  });
+});
+
+describe("a phone acts on a step asked of its seat, as the desktop does (#2515)", () => {
+  const card = (log: Message[], me: string, seq: number) => roomView(inputOf(log, me)).messages.find((m) => m.seq === seq);
+  const full: Step = {
+    why: "the release waits on it",
+    needsPerson: "the key is on your Mac",
+    do: ["Open Keychain"],
+    run: ["bun run sign"],
+    expect: "a signed build",
+    links: ["https://example.com/sign"],
+  };
+  const stepAsk = (step: Step = full, more: Partial<Draft> = {}) => say("lead", "Sign the build", { kind: "ask", to: ["jow"], esc: true, step, ...more });
+
+  test("a step reaches the phone with its whole payload, waiting for whom it's addressed to", async () => {
+    const view = card(await signedLog([stepAsk()]), "jow", 1);
+    expect(view?.step).toEqual(full);
+    expect(view?.waiting).toBe(true);
+  });
+});
+
+describe("who a step waits for, and when it's answered, on the phone (#2515)", () => {
+  const card = (log: Message[], me: string, seq: number) => roomView(inputOf(log, me)).messages.find((m) => m.seq === seq);
+  const sign: Step = { why: "the release waits on it", needsPerson: "the key is on your Mac" };
+  const stepTo = (to: string[], step: Step = sign, from = "lead") => say(from, "Sign the build", { kind: "ask", to, esc: true, step });
+  const done: StepReply = { outcome: "done" };
+  let was: Roster;
+
+  beforeAll(async () => {
+    ids.ana = await generateIdentity("ana");
+    ids.bea = await generateIdentity("bea");
+    ids.helper = await generateIdentity("helper");
+    const beaPerson = { user: "p-bea", name: "Bea", handle: "bea" };
+    was = roster;
+    roster = [
+      ...was,
+      { name: "ana", pk: ids.ana.pk, owner: false, at: 0, active: true, kind: "human", answersDecisions: true },
+      { name: "bea", pk: ids.bea.pk, owner: false, at: 0, active: true, kind: "human", sponsor: beaPerson },
+      { name: "helper", pk: ids.helper.pk, owner: false, at: 0, active: true, kind: "agent", sponsor: beaPerson },
+    ];
+  });
+  afterAll(() => {
+    roster = was;
+  });
+
+  test("only whom a step is addressed to may act on it: not an unaddressed decider, not the owner, not anyone else", async () => {
+    const toBea = await signedLog([stepTo(["bea"], sign, "helper")]);
+    expect(card(toBea, "bea", 1)?.waiting).toBe(true);
+    expect(card(toBea, "ana", 1)?.waiting).toBe(false);
+    expect(card(toBea, "jow", 1)?.waiting).toBe(false);
+    expect(card(toBea, "dev", 1)?.waiting).toBe(false);
+  });
+
+  test("a step that only lists commands, or only links, still carries them", async () => {
+    const commands = { ...sign, run: ["bun run sign", "bun run notarize"] };
+    const links = { ...sign, links: ["https://example.com/sign"] };
+    expect(card(await signedLog([stepTo(["jow"], commands)]), "jow", 1)?.step).toEqual(commands);
+    expect(card(await signedLog([stepTo(["jow"], links)]), "jow", 1)?.step).toEqual(links);
+  });
+
+  test("a step reply answers it; so does a can't-do-it with its reason", async () => {
+    const answered = await signedLog([stepTo(["jow"]), say("jow", "Done", { re: [1], stepReply: done })]);
+    expect(card(answered, "jow", 1)?.waiting).toBe(false);
+    expect(card(answered, "jow", 1)?.stepAnswer).toEqual({ by: "jow", outcome: "done" });
+    const cant = await signedLog([stepTo(["jow"]), say("jow", "Can't do it: the Mac is away", { re: [1], stepReply: { outcome: "cant", reason: "the Mac is away" } })]);
+    expect(card(cant, "jow", 1)?.waiting).toBe(false);
+    expect(card(cant, "jow", 1)?.stepAnswer).toEqual({ by: "jow", outcome: "cant" });
+  });
+
+  test("a plain reply answers a step, except where answers are by tap; a step reply answers it there too", async () => {
+    const plain = await signedLog([stepTo(["jow"]), say("jow", "on it after lunch", { re: [1] })]);
+    expect(card(plain, "jow", 1)?.waiting).toBe(false);
+    expect(card(plain, "jow", 1)?.stepAnswer).toEqual({ by: "jow", outcome: null });
+    const tapOnly = await signedLog([ev("jow", { op: "asks.tap.set", on: true }), stepTo(["jow"]), say("jow", "on it after lunch", { re: [2] })]);
+    expect(card(tapOnly, "jow", 2)?.waiting).toBe(true);
+    expect(card(tapOnly, "jow", 2)?.stepAnswer).toBeNull();
+    const tapped = await signedLog([ev("jow", { op: "asks.tap.set", on: true }), stepTo(["jow"]), say("jow", "Done", { re: [2], stepReply: done })]);
+    expect(card(tapped, "jow", 2)?.waiting).toBe(false);
+    expect(card(tapped, "jow", 2)?.stepAnswer).toEqual({ by: "jow", outcome: "done" });
+  });
+
+  test("a closed step waits for nobody", async () => {
+    const closed = await signedLog([stepTo(["jow"]), ev("lead", { op: "ask.close", ask: 1, why: "done another way" })]);
+    expect(card(closed, "jow", 1)?.waiting).toBe(false);
+  });
+});
+
+describe("only replies core accepts answer a step on the phone (#2515 round 1)", () => {
+  const card = (log: Message[], me: string, seq: number) => roomView(inputOf(log, me)).messages.find((m) => m.seq === seq);
+  const sign: Step = { why: "the release waits on it", needsPerson: "the key is on your Mac" };
+  const done: StepReply = { outcome: "done" };
+
+  test("a forged Done leaves the step open and actionable; the person's real reply then answers it", async () => {
+    const log = await signedLog([
+      say("lead", "Sign the build", { kind: "ask", to: ["jow"], esc: true, step: sign }),
+      say("jow", "Done", { re: [1], stepReply: done }),
+      say("jow", "Done", { re: [1], stepReply: done }),
+    ]);
+    const forgedOnly = [log[0]!, { ...log[1]!, sigOk: false }];
+    expect(card(forgedOnly, "jow", 1)?.waiting).toBe(true);
+    expect(card(forgedOnly, "jow", 1)?.stepAnswer).toBeNull();
+    const thenReal = [...forgedOnly, log[2]!];
+    expect(card(thenReal, "jow", 1)?.waiting).toBe(false);
+    expect(card(thenReal, "jow", 1)?.stepAnswer).toEqual({ by: "jow", outcome: "done" });
+  });
+
+  test("a forged pick doesn't decide a question either", async () => {
+    const log = await signedLog([say("lead", "Which one?", { kind: "ask", to: ["jow"], choices: ["A", "B"], esc: true }), say("jow", "A", { re: [1], pick: true })]);
+    const forged = [log[0]!, { ...log[1]!, sigOk: false }];
+    expect(card(forged, "jow", 1)?.waiting).toBe(true);
+    expect(card(forged, "jow", 1)?.chosen).toBeNull();
   });
 });

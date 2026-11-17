@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 
 import type { Message as Wire, Step } from "@kiwi/core/protocol.ts"
 import { fold, type Roster } from "@kiwi/core/state.ts"
-import { stepReplyText } from "~/chat/step"
+import { stepReplyText } from "@kiwi/app/step-reply.ts"
 import { asksOf } from "~/live/map"
 import { wordsRaw } from "~/words"
 

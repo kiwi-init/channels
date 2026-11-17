@@ -184,4 +184,18 @@
     <plurals name="n_working">
         <item quantity="other">%d 个进行中</item>
     </plurals>
+    <string name="step_for_you">待你完成一步</string>
+    <string name="step_label">步骤</string>
+    <string name="step_needs_person">需要人来处理：%1$s</string>
+    <string name="step_expected">预期结果</string>
+    <string name="step_output_hint">输出（可选）</string>
+    <string name="step_why_cant">为什么做不到？</string>
+    <string name="step_why_not_needed">为什么不需要？</string>
+    <string name="step_done">完成</string>
+    <string name="step_cant">做不到</string>
+    <string name="step_not_needed">不需要</string>
+    <string name="step_send">发送</string>
+    <string name="step_needs_reason">请先写明原因</string>
+    <string name="step_answered">%1$s · %2$s</string>
+    <string name="step_replied">%1$s 已回复</string>
 </resources>

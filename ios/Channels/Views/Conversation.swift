@@ -378,7 +378,9 @@ struct BubbleRow: View {
                 if let quote = message.quote {
                     QuoteBubble(quote: quote, room: room) { jump(quote.seq) }
                 }
-                if message.choices.isEmpty {
+                if let step = message.step {
+                    StepCard(message: message, step: step, room: room, tail: last) { reply(message) }
+                } else if message.choices.isEmpty {
                     Bubble(message: message, room: room, tail: last, reply: { reply(message) })
                         .padding(.top, message.reactions.isEmpty ? 0 : 20)
                 } else {

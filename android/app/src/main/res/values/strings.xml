@@ -191,4 +191,18 @@
         <item quantity="one">%d working</item>
         <item quantity="other">%d working</item>
     </plurals>
+    <string name="step_for_you">A step for you</string>
+    <string name="step_label">Step</string>
+    <string name="step_needs_person">Needs a person: %1$s</string>
+    <string name="step_expected">Expected</string>
+    <string name="step_output_hint">Output (optional)</string>
+    <string name="step_why_cant">Why can\'t you do it?</string>
+    <string name="step_why_not_needed">Why isn\'t it needed?</string>
+    <string name="step_done">Done</string>
+    <string name="step_cant">Can\'t do it</string>
+    <string name="step_not_needed">Not needed</string>
+    <string name="step_send">Send</string>
+    <string name="step_needs_reason">Say why first</string>
+    <string name="step_answered">%1$s · %2$s</string>
+    <string name="step_replied">%1$s replied</string>
 </resources>

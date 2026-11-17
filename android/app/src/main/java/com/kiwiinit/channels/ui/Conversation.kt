@@ -453,7 +453,9 @@ private fun BubbleRow(
                     )
                 }
                 message.quote?.let { QuoteBubble(it, room) { jump(it.seq) } }
-                if (message.choices.isEmpty()) {
+                if (message.step != null) {
+                    StepCard(model, room, message, message.step) { reply(message) }
+                } else if (message.choices.isEmpty()) {
                     BubbleBody(model, room, message, first, last) { reply(message) }
                 } else {
                     PollCard(model, room, Poll.of(message)) {
