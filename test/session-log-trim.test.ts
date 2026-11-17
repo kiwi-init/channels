@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, setDefaultTimeout, setSystemTime, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
@@ -210,6 +211,29 @@ test("past 800 unread below the base, the oldest unread are paged back from the 
   expect(delivered).toContain(direct);
   expect(delivered).toEqual([...delivered].sort((a, b) => a - b));
   expect(new Set(delivered).size).toBe(delivered.length);
+  await runAgent(got.commit());
+  const after = await wakeSeqs(session);
+  expect(after).not.toContain(mention);
+  expect(after).not.toContain(direct);
+});
+
+test("unread paged back across relay pages cut short by their byte limit are all counted and delivered, in order", async () => {
+  const session = await AgentSession.open("test", cfg, "claude");
+  const start = (await runAgent(session.state())).state.head;
+  await setCursor(start);
+  for (let i = 0; i < 70; i++) await ownerCh.send(randomBytes(66_000).toString("base64"));
+  const mention = await ownerCh.send("@claude after the large bodies");
+  const direct = await ownerCh.send("for claude, after the large bodies", { to: ["claude"] });
+  await burst(180, "after large");
+  const head = await ownerCh.send("the newest");
+  const seqs = await wakeSeqs(session);
+  expect(below(session)).not.toContain(mention);
+  expect((await session.ch.page(start, 1000)).length).toBeLessThan(70);
+  expect(seqs).toContain(mention);
+  expect(seqs).toContain(direct);
+
+  const got = await runAgent(session.unread({ all: true }));
+  expect(got.messages.map((m) => m.seq)).toEqual(Array.from({ length: head - start }, (_, i) => start + 1 + i));
   await runAgent(got.commit());
   const after = await wakeSeqs(session);
   expect(after).not.toContain(mention);

@@ -283,9 +283,14 @@ export class SessionState {
     return Effect.gen({ self: this }, function* () {
       const held = new Set(messages.map((m) => m.seq));
       const paged: Message[] = [];
-      for (let from = since; from < to; from += PAGE_LIMIT) {
-        const upTo = Math.min(from + PAGE_LIMIT, to);
-        paged.push(...(yield* this.ch.fx.page(from, upTo - from)).filter((m) => m.seq > from && m.seq <= upTo && !held.has(m.seq)));
+      let from = since;
+      while (from < to) {
+        const page = yield* this.ch.fx.envelopes(from, Math.min(PAGE_LIMIT, to - from));
+        const fresh = page.messages.filter((e) => Number.isSafeInteger(e.seq) && e.seq > from && e.seq <= to).sort((a, b) => a.seq - b.seq);
+        const last = fresh.at(-1)?.seq;
+        if (last === undefined) return yield* new Rejected(`the relay sent nothing after #${from} while unread messages up to #${to} were still owed; nothing was marked read`);
+        for (const m of yield* Effect.forEach(fresh, (e) => this.ch.fx.decrypt(e))) if (m && !held.has(m.seq)) paged.push(m);
+        from = last;
       }
       return [...paged, ...messages];
     });
