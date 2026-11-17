@@ -119,12 +119,29 @@ const click = (win: string, at: { x: number; y: number }): void => {
   xdo("mousemove", "--window", win, String(at.x), String(at.y));
   xdo("click", "1");
 };
+const ROOT_SHOT = [
+  "import sys, gi",
+  'gi.require_version("Gdk", "3.0")',
+  "from gi.repository import Gdk",
+  "root = Gdk.get_default_root_window()",
+  'Gdk.pixbuf_get_from_window(root, 0, 0, root.get_width(), root.get_height()).savev(sys.argv[1], "png", [], [])',
+].join("\n");
 const shot = (name: string): void => {
   const dir = process.env.EB_WC_SHOTS;
   if (!dir) return;
   mkdirSync(dir, { recursive: true });
-  const r = spawnSync("import", ["-window", "root", join(dir, `${name}.png`)], { encoding: "utf8" });
-  console.log(r.status === 0 ? `screenshot: ${name}.png` : `no screenshot (${name}): import exited ${r.status ?? r.error?.message}`);
+  const r = spawnSync("python3", ["-c", ROOT_SHOT, join(dir, `${name}.png`)], { encoding: "utf8" });
+  console.log(r.status === 0 ? `screenshot: ${name}.png` : `no screenshot (${name}): ${(r.stderr || r.error?.message || "").trim().split("\n").pop() ?? ""}`);
+};
+const pageHearsClick = async (d: Driver, win: string): Promise<boolean> => {
+  const middle = await d.evaluate(() => {
+    const root = document.documentElement;
+    root.dataset["heard"] = "";
+    addEventListener("click", () => (root.dataset["heard"] = "click"), { capture: true, once: true });
+    return { x: Math.round(innerWidth / 2), y: Math.round(innerHeight / 2) };
+  }, null);
+  click(win, middle);
+  return until("a real click mid-page reaching the page", 5_000, async () => ((await d.evaluate(() => document.documentElement.dataset["heard"] === "click", null)) ? true : null)).catch(() => false);
 };
 const NAMES = ["Minimize", "Maximize", "Close"];
 const clickActs = async (d: Driver, win: string, where: string, index: number, what: string, done: () => boolean): Promise<{ acted: boolean; hit: Hit } | null> => {
@@ -259,6 +276,10 @@ try {
         spawnSync("wmctrl", ["-i", "-a", win], { stdio: "ignore" });
         await until("the window comes back", 10_000, async () => (!iconic(win) ? true : null));
       }
+      let settled = false;
+      for (let tries = 0; tries < 3 && !settled; tries++) settled = await pageHearsClick(d, win);
+      console.log(`after the negative control: ${settled ? "a real click mid-page reaches the page again" : "real clicks still don't reach the page"}`);
+      if (!settled) throw new Error("harness: after the negative control's press on a drag region, real clicks never reached the page again, so Close can't be judged");
     }
     await realClick(d, win, "narrow, last", 2, "Close takes the window off the screen", () => sh(["xdotool", "search", "--onlyvisible", "--class", "^Channels"]) === "");
     console.log("clicked for real at every width: Maximize, Restore and Minimize; then a window-manager maximize and restore; then Close last");
