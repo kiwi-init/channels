@@ -158,7 +158,7 @@
   }
 }
 
-.panes {
+:root {
   --pane-gap: 6px;
 }
 
