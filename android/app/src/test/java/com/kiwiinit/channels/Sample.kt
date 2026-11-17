@@ -15,6 +15,8 @@ import com.kiwiinit.channels.engine.RoomView
 import com.kiwiinit.channels.engine.TaskView
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Feed
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 const val DEV = "dev"
 const val LEAD_CHAT = "dm:jow~lively-swan"
@@ -22,8 +24,8 @@ const val DESIGN_ROOM = "room:design01"
 
 private const val MINUTE = 60_000.0
 
-fun sample(app: Application): AppModel {
-    val model = AppModel(app)
+fun sample(app: Application, calls: (suspend (JsonObject) -> JsonElement)? = null): AppModel {
+    val model = AppModel(app, calls)
     model.rooms[DEV] = dev()
     model.rooms["site"] = site()
     model.feeds["$DEV|$DESIGN_ROOM"] = Feed(design(), whole = true)
@@ -155,4 +157,14 @@ fun onlyGithub(model: AppModel) {
     val room = model.rooms.getValue(DEV)
     val messages = githubUpdates()
     model.rooms[DEV] = room.copy(messages = messages, asks = emptyList(), reviews = emptyList(), head = messages.last().seq, last = messages.last(), latest = messages.last())
+}
+
+const val UNHELD_SEQ = 60
+const val UNHELD_QUESTION = "Take the Linux window-controls issue now, while the shots streak runs?"
+
+fun unheldQuestion(model: AppModel, waiting: Boolean) {
+    val room = model.rooms.getValue(DEV)
+    val asked = MessageView(UNHELD_SEQ, "lively-swan", System.currentTimeMillis() - 2 * MINUTE, "ask", UNHELD_QUESTION, choices = listOf("Take it now", "Wait for a second strike"), waiting = waiting)
+    val messages = room.messages + asked
+    model.rooms[DEV] = room.copy(messages = messages, asks = emptyList(), reviews = emptyList(), head = asked.seq, last = asked, latest = asked)
 }

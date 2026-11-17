@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Message } from "@kiwi/core/protocol.ts";
@@ -296,5 +296,58 @@ describe("named rooms on the phone (#437)", () => {
       ["dm000001", { id: "dm000001", name: "", createdBy: "jow", at: 0, dm: true as const, members: [{ name: "jow", pk: "a" }] }],
     ]);
     expect(roomsFor({ rooms, members }, "jow").map((r) => r.name)).toEqual(["mine"]);
+  });
+});
+
+describe("a phone answers every question asked of its seat, as the desktop does (#2514)", () => {
+  const waiting = (log: Message[], me: string, seq: number) => roomView(inputOf(log, me)).messages.find((m) => m.seq === seq)?.waiting;
+  const chosen = (log: Message[], me: string, seq: number) => roomView(inputOf(log, me)).messages.find((m) => m.seq === seq)?.chosen ?? null;
+  const decision = (more: Partial<Draft> = {}) => say("lead", "Take it now?", { kind: "ask", to: ["jow"], choices: ["A", "B"], esc: true, ...more });
+  let was: Roster;
+
+  beforeAll(async () => {
+    ids.ana = await generateIdentity("ana");
+    ids.bea = await generateIdentity("bea");
+    was = roster;
+    roster = [
+      ...was,
+      { name: "ana", pk: ids.ana.pk, owner: false, at: 0, active: true, kind: "human", answersDecisions: true },
+      { name: "bea", pk: ids.bea.pk, owner: false, at: 0, active: true, kind: "human" },
+    ];
+  });
+  afterAll(() => {
+    roster = was;
+  });
+
+  test("an agent's question addressed to you waits for you whether or not it holds work", async () => {
+    expect(waiting(await signedLog([decision()]), "jow", 1)).toBe(true);
+    const held = await signedLog([ev("jow", { op: "task.add", title: "ship it", owner: "lead" }), decision({ holds: [1] })]);
+    expect(waiting(held, "jow", 2)).toBe(true);
+    expect(waiting(await signedLog([say("lead", "Which one?", { kind: "ask", to: ["jow"], choices: ["A", "B"] })]), "jow", 1)).toBe(true);
+  });
+
+  test("a person who answers decisions may answer an escalation not addressed to them; anyone else may not", async () => {
+    const log = await signedLog([decision()]);
+    expect(waiting(log, "ana", 1)).toBe(true);
+    expect(waiting(log, "bea", 1)).toBe(false);
+    expect(waiting(log, "dev", 1)).toBe(false);
+    expect(waiting(log, "lead", 1)).toBe(false);
+  });
+
+  test("a question answered or closed waits for nobody", async () => {
+    const answered = await signedLog([decision(), say("jow", "A", { re: [1] })]);
+    expect(waiting(answered, "jow", 1)).toBe(false);
+    expect(chosen(answered, "jow", 1)).toEqual({ choice: "A", by: "jow" });
+    const closed = await signedLog([decision(), ev("lead", { op: "ask.close", ask: 1, why: "settled elsewhere" })]);
+    expect(waiting(closed, "jow", 1)).toBe(false);
+  });
+
+  test("with answers by tap, a typed reply leaves the card open and unpicked; a tap answers it", async () => {
+    const typed = await signedLog([ev("jow", { op: "asks.tap.set", on: true }), decision(), say("jow", "A", { re: [2] })]);
+    expect(waiting(typed, "jow", 2)).toBe(true);
+    expect(chosen(typed, "jow", 2)).toBeNull();
+    const tapped = await signedLog([ev("jow", { op: "asks.tap.set", on: true }), decision(), say("jow", "A", { re: [2], pick: true })]);
+    expect(waiting(tapped, "jow", 2)).toBe(false);
+    expect(chosen(tapped, "jow", 2)).toEqual({ choice: "A", by: "jow" });
   });
 });

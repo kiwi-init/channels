@@ -95,7 +95,7 @@ data class Pending(val id: String, val body: String, val re: Int?, val at: Long,
 
 data class Feed(val messages: List<MessageView>, val whole: Boolean)
 
-class AppModel(private val app: Application) {
+class AppModel(private val app: Application, private val calls: (suspend (JsonObject) -> JsonElement)? = null) {
     private val scope = MainScope()
     private val prefs = app.getSharedPreferences("channels", Context.MODE_PRIVATE)
     private val pictures = object : LruCache<String, ImageBitmap>((Runtime.getRuntime().maxMemory() / 8).toInt()) {
@@ -229,7 +229,7 @@ class AppModel(private val app: Application) {
         }
     }
 
-    private suspend fun ask(request: JsonObject) = (engine ?: throw EngineException(words(R.string.still_starting))).ask(request)
+    private suspend fun ask(request: JsonObject): JsonElement = calls?.invoke(request) ?: (engine ?: throw EngineException(words(R.string.still_starting))).ask(request)
 
     private fun take(push: Push) {
         when (push) {
