@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { SendOptions } from "@kiwi/core/client.ts";
 import type { Member as Joined } from "@kiwi/core/membership.ts";
 import { wakeList } from "@kiwi/core/phone-wake.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
 import { MAX_WAKE } from "@kiwi/core/push.ts";
 import type { ChannelState, Member } from "@kiwi/core/state.ts";
 import type { ChannelIdentityView } from "../desktop/src/bridge.ts";
@@ -98,5 +99,40 @@ describe("a phone's own sends", () => {
     room.stop();
     expect(sent).toHaveLength(1);
     expect(sent[0]?.wake ?? []).toEqual([]);
+  });
+});
+
+describe("a phone's answer to a question (#2514)", () => {
+  test("a tapped option goes out as a pick, so it answers even when the channel takes answers by tap", async () => {
+    const joined = (name: string, over: Partial<Joined> = {}): Joined => ({ name, pk: pks(name)[0]!, xpk: "x", owner: false, at: 0, active: true, kind: "human", ...over });
+    const roster = [joined("jow", { owner: true, sponsor: jowUser }), joined("jow-phone", { sponsor: jowUser }), joined("lead", { kind: "agent" })];
+    const sent: { body?: string; opts: SendOptions }[] = [];
+    let deliver: (ev: unknown) => void = () => {};
+    const keyring = {
+      call: async (_code: string, op: string, body?: string, opts?: SendOptions): Promise<unknown> => {
+        if (op === "head") return 0;
+        if (op === "members") return roster;
+        if (op === "send" && opts) {
+          sent.push({ body, opts });
+          return 2;
+        }
+        return null;
+      },
+      follow: (_code: string, _from: number, on: (ev: unknown) => void): (() => void) => {
+        deliver = on;
+        return () => {};
+      },
+    } as unknown as Keyring;
+    const seat = { code: "code", label: "jow-phone", idName: "jow-phone", name: "general", pk: pks("jow-phone")[0], access: {} } as unknown as ChannelIdentityView;
+    const room = new Room(keyring, seat, { emit: () => {}, lost: () => {}, person: () => null, log: () => {}, devices: () => {} });
+    await room.start();
+    await new Promise((done) => setTimeout(done, 200));
+    const ask = { seq: 1, from: "lead", ts: 1, kind: "ask", body: "Take it now?", to: ["jow-phone"], choices: ["A", "B"], esc: true, sigOk: true } as unknown as Message;
+    deliver({ _tag: "Message", message: ask, row: null });
+    await room.answer(1, "A");
+    room.stop();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.body).toBe("A");
+    expect(sent[0]?.opts).toMatchObject({ to: ["lead"], re: [1], kind: "msg", pick: true });
   });
 });

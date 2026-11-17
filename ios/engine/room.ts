@@ -293,7 +293,7 @@ export class Room {
   async answer(seq: number, text: string): Promise<number> {
     const ask = this.messages.find((m) => m.seq === seq);
     if (!ask) throw new Error("that question isn't here any more");
-    return this.sendWoken(text, { to: [ask.from], re: [ask.seq], kind: "msg" });
+    return this.sendWoken(text, { to: [ask.from], re: [ask.seq], kind: "msg", pick: true });
   }
 
   private sendWoken(body: string, opts: SendOptions): Promise<number> {

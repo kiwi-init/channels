@@ -156,3 +156,12 @@ fun onlyGithub(model: AppModel) {
     val messages = githubUpdates()
     model.rooms[DEV] = room.copy(messages = messages, asks = emptyList(), reviews = emptyList(), head = messages.last().seq, last = messages.last(), latest = messages.last())
 }
+
+const val UNHELD_QUESTION = "Take the Linux window-controls issue now, while the shots streak runs?"
+
+fun unheldQuestion(model: AppModel, waiting: Boolean) {
+    val room = model.rooms.getValue(DEV)
+    val asked = MessageView(60, "lively-swan", System.currentTimeMillis() - 2 * MINUTE, "ask", UNHELD_QUESTION, choices = listOf("Take it now", "Wait for a second strike"), waiting = waiting)
+    val messages = room.messages + asked
+    model.rooms[DEV] = room.copy(messages = messages, asks = emptyList(), reviews = emptyList(), head = asked.seq, last = asked, latest = asked)
+}
