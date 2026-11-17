@@ -288,13 +288,13 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, wake
     let restartedAt = restart.at;
     let settled: "moved" | "read" | null = null;
     const stillOwed = async (): Promise<string | null> => {
+      const owed = await unread();
       if (!current(seat) || stopped()) return "the daemon let this seat go";
       const now = record();
       if (!now) {
         settled = "moved";
         return "the seat's binding moved off this thread";
       }
-      const owed = await unread();
       if (owed === null) return "the wake's unread state can't be read";
       if (owed === "read") {
         settled = "read";

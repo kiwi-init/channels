@@ -5,6 +5,8 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFile
 import { join } from "node:path";
 import { presenceWords } from "@kiwi/core/format.ts";
 import { resumedSession } from "../src/daemon/codex-queue.ts";
+import { AgentSession } from "../src/agent.ts";
+import * as Effect from "effect/Effect";
 import { wakeHarness } from "./wake-harness.ts";
 
 setDefaultTimeout(60_000);
@@ -26,6 +28,24 @@ const exactArgv = existsSync("/proc/self/cmdline");
 const NO_ARGV = "(the exact command line of the Codex in its tmux window can't be read here)";
 const REUSED = "01a1e000-0000-7000-8000-000000000011";
 const OTHER = "01a1e000-0000-7000-8000-000000000012";
+
+let afterUnread: (() => void) | null = null;
+const opened = AgentSession.open.bind(AgentSession);
+AgentSession.open = async (...args: Parameters<typeof AgentSession.open>) => {
+  const session = await opened(...args);
+  const unreadAt = session.unreadAt.bind(session);
+  Object.defineProperty(session, "unreadAt", {
+    value: (...params: Parameters<typeof session.unreadAt>) =>
+      Effect.tap(unreadAt(...params), () =>
+        Effect.sync(() => {
+          const then = afterUnread;
+          afterUnread = null;
+          then?.();
+        }),
+      ),
+  });
+  return session;
+};
 
 const tmux = (...args: string[]) => spawnOwnedSync(["tmux", "-S", tmuxSock, ...args], { stdout: "pipe", stderr: "pipe" });
 
@@ -87,6 +107,7 @@ afterAll(() => {
 beforeEach(async () => {
   rpc.length = 0;
   hooks = {};
+  afterUnread = null;
   await quiet();
   await until("no wake-not-taken alert left from before", async () => (await untaken()) === null, 10_000);
 });
@@ -262,6 +283,34 @@ describe.skipIf(!hasTmux)("a Codex queue paused by an interrupted turn", () => {
       expect(rpc).toEqual([...sent]);
       expect(wakeRows().filter((r) => r.includes("resumed Codex")).length).toBe(resumes);
       if (what !== "the thread's turn is interrupted again") expect(await untaken()).toBeNull();
+      await readAll();
+    });
+
+  for (const [i, [stage, sent]] of (
+    [
+      ["initialize", ["initialize", "initialized"]],
+      ["thread/resume", ["initialize", "initialized", "thread/resume"]],
+    ] as const
+  ).entries())
+    test.if(exactArgv)(`never starts the queue when the binding moves while the check after ${stage} looks up the unread wake`, async () => {
+      const id = `01a1e000-0000-7000-8000-0000000000${40 + i * 2}`;
+      const other = `01a1e000-0000-7000-8000-0000000000${41 + i * 2}`;
+      thread(id, [
+        { type: "task_started", at: Date.now() - 3_600_000 },
+        { type: "turn_aborted", at: Date.now() - 3_590_000 },
+      ]);
+      thread(other, [{ type: "task_complete", at: Date.now() - 60_000 }]);
+      const pane = window("guard", tui(`resume ${id}`));
+      bindAs({ harness: "codex", session: id, tmux: { socket: tmuxSock, pane } });
+      hooks[stage] = () => {
+        afterUnread = () => bindAs({ harness: "codex", session: other, tmux: { socket: tmuxSock, pane } });
+      };
+      await wakeOf(`for a restarted session whose binding moves during the check after ${stage}`);
+      await until(`Kiwi reaching ${stage}`, () => rpc.includes(stage), TAKE_MS * 4);
+      await until("the binding move", () => afterUnread === null, TAKE_MS * 4);
+      await Bun.sleep(TAKE_MS * 2 + 500);
+      expect(rpc).toEqual([...sent]);
+      expect(await untaken()).toBeNull();
       await readAll();
     });
 
