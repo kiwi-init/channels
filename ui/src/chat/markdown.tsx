@@ -229,7 +229,7 @@ function parse(markdown: string, at?: number): Promise<ASTNode> {
   return next
 }
 
-function parsedNow(markdown: string, at?: number): ASTNode | undefined {
+export function parsedNow(markdown: string, at?: number): ASTNode | undefined {
   const key = parseKey(markdown, at)
   const done = parsedFor(key)
   if (done || !isParserReady()) return done

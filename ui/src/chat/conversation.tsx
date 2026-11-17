@@ -31,10 +31,12 @@ import { openMessage } from "~/live/open-message"
 import { markOnce } from "@kiwi/channel/marks.ts"
 import { personGo } from "~/person-go"
 import { Wait } from "~/kit/wait"
+import { FeedRevealed } from "~/chat/revealed"
+import { docViewNow, loadDocView } from "~/chat/doc/load"
 
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
 const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
-const LiveThreadDoc = later(() => import("~/chat/doc/editor").then((m) => m.LiveThreadDoc))
+const LiveThreadDoc = later(loadDocView)
 const QuotePick = later(() => import("~/chat/quote-pick").then((m) => m.QuotePick))
 const HoldBanner = later(() => import("~/chat/feed-notes").then((m) => m.HoldBanner))
 const Start = later(() => import("~/chat/feed-notes").then((m) => m.Start))
@@ -323,6 +325,8 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const following = end === list.length
   const latest = useRef(false)
   const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift, prepended } = useStick(following, !!doc)
+  const [DocNow] = useState(() => docViewNow() ?? LiveThreadDoc)
+  const revealed = useRef(false)
   useLayoutEffect(() => {
     const box = scroller.current
     const rows = content.current
@@ -336,13 +340,19 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
         return at.bottom > view.top && at.top < view.bottom
       })
     }
-    if (!unfinished()) return
+    if (!unfinished()) {
+      revealed.current = true
+      return
+    }
     rows.setAttribute("data-unfinished", "")
     const since = performance.now()
     let frame = 0
     const look = () => {
       if (unfinished() && performance.now() - since < WHOLE_MS) frame = requestAnimationFrame(look)
-      else rows.removeAttribute("data-unfinished")
+      else {
+        revealed.current = true
+        rows.removeAttribute("data-unfinished")
+      }
     }
     frame = requestAnimationFrame(look)
     return () => {
@@ -667,115 +677,117 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   }, [jump, onQuote, content, unstick, remember])
 
   return (
-    <div className={doc ? "feed-wrap is-doc" : "feed-wrap"}>
-      {where.kind !== "theirs" && (
-        <Suspense fallback={null}>
-          <QuotePick root={content} onQuote={quote} />
-        </Suspense>
-      )}
-      <div
-        className="feed"
-        ref={scroller}
-        onScroll={() => {
-          const now = performance.now()
-          if (now - handAt.current < HAND_MS) movedAt.current = now
-          underStill(now)
-          onScroll()
-        }}
-        onPointerMove={pointerMoved}
-        onWheel={byHand}
-        onPointerDown={byHand}
-        onTouchStart={byHand}
-        onKeyDown={byHand}
-      >
-        <div className="feed-list" ref={content}>
-          {list.length === 0 && !compact
-            ? channel.loading
-              ? channel.connection === "live" && <Loading />
-              : !olderHere && (
-                  <Suspense fallback={null}>
-                    <Start channel={channel} where={where} />
-                  </Suspense>
-                )
-            : list.slice(start, end).map((m, k) => {
-                const i = start + k
-                const run = leftOutRun(list, i)
-                const open = !m.leftOut || shownRuns.has(runFirst(list, i))
-                const talk = chatter.get(m.seq)
-                const talkShown = talkOpen(talk)
-                const prev = list[i - 1]
-                const afterFold = !!prev && !talkOpen(chatter.get(prev.seq))
-                return (
-                  <Fragment key={keys[i]}>
-                    {(i === 0 || !sameDay(list[i - 1]?.at ?? 0, m.at)) && (
-                      <p className="day">
-                        <span>{day(m.at)}</span>
-                      </p>
-                    )}
-                    {m.membersOnly && !list[i - 1]?.membersOnly && where.kind === "dm" && (
-                      <p className="day is-members" role="separator">
-                        <span>{t("chat.conversation.members.only", { name: nickname(channel, where.with) })}</span>
-                      </p>
-                    )}
-                    {m.seq === mark && (
-                      <p className="feed-new" role="separator">
-                        <span>{t("chat.conversation.new")}</span>
-                      </p>
-                    )}
-                    {compact && m.seq === foldAt && (
-                      <Suspense fallback={null}>
-                        <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />
-                      </Suspense>
-                    )}
-                    {run && <Fold run={run} open={open} onToggle={() => toggleRun(m.seq)} />}
-                    {talk && talk.first === m.seq && <ChatterFold channel={channel} run={talk.run} open={talkShown} onToggle={() => toggleChatter(talk)} />}
-                    {m.seq === proposalAt && proposal ? (
-                      <Suspense fallback={null}>
-                        <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
-                      </Suspense>
-                    ) : (
-                      open &&
-                      talkShown && (
-                        <MessageRow
-                          channel={channel}
-                          m={m}
-                          compact={m.seq !== mark && m.seq !== foldAt && !afterFold && compactAt(list, i)}
-                          names={names}
-                          tasks={tasks}
-                          quote={quoteOf(list, i, bySeq)}
-                          onQuote={onQuote}
-                        />
-                      )
-                    )}
-                  </Fragment>
-                )
-              })}
-          {compact && foldAt === undefined && (
-            <Suspense fallback={null}>
-              <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />
-            </Suspense>
-          )}
-          {proposal && proposalAt === undefined && end === list.length && (
-            <Suspense fallback={null}>
-              <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
-            </Suspense>
-          )}
-          {doc && following && !channel.loading && (
-            <Suspense fallback={<Wait />}>
-              <LiveThreadDoc channel={channel} where={where} thread={doc} hold={hold} />
-            </Suspense>
-          )}
-          {working.length > 0 && !channel.loading && <Working people={working} />}
+    <FeedRevealed.Provider value={revealed}>
+      <div className={doc ? "feed-wrap is-doc" : "feed-wrap"}>
+        {where.kind !== "theirs" && (
+          <Suspense fallback={null}>
+            <QuotePick root={content} onQuote={quote} />
+          </Suspense>
+        )}
+        <div
+          className="feed"
+          ref={scroller}
+          onScroll={() => {
+            const now = performance.now()
+            if (now - handAt.current < HAND_MS) movedAt.current = now
+            underStill(now)
+            onScroll()
+          }}
+          onPointerMove={pointerMoved}
+          onWheel={byHand}
+          onPointerDown={byHand}
+          onTouchStart={byHand}
+          onKeyDown={byHand}
+        >
+          <div className="feed-list" ref={content}>
+            {list.length === 0 && !compact
+              ? channel.loading
+                ? channel.connection === "live" && <Loading />
+                : !olderHere && (
+                    <Suspense fallback={null}>
+                      <Start channel={channel} where={where} />
+                    </Suspense>
+                  )
+              : list.slice(start, end).map((m, k) => {
+                  const i = start + k
+                  const run = leftOutRun(list, i)
+                  const open = !m.leftOut || shownRuns.has(runFirst(list, i))
+                  const talk = chatter.get(m.seq)
+                  const talkShown = talkOpen(talk)
+                  const prev = list[i - 1]
+                  const afterFold = !!prev && !talkOpen(chatter.get(prev.seq))
+                  return (
+                    <Fragment key={keys[i]}>
+                      {(i === 0 || !sameDay(list[i - 1]?.at ?? 0, m.at)) && (
+                        <p className="day">
+                          <span>{day(m.at)}</span>
+                        </p>
+                      )}
+                      {m.membersOnly && !list[i - 1]?.membersOnly && where.kind === "dm" && (
+                        <p className="day is-members" role="separator">
+                          <span>{t("chat.conversation.members.only", { name: nickname(channel, where.with) })}</span>
+                        </p>
+                      )}
+                      {m.seq === mark && (
+                        <p className="feed-new" role="separator">
+                          <span>{t("chat.conversation.new")}</span>
+                        </p>
+                      )}
+                      {compact && m.seq === foldAt && (
+                        <Suspense fallback={null}>
+                          <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />
+                        </Suspense>
+                      )}
+                      {run && <Fold run={run} open={open} onToggle={() => toggleRun(m.seq)} />}
+                      {talk && talk.first === m.seq && <ChatterFold channel={channel} run={talk.run} open={talkShown} onToggle={() => toggleChatter(talk)} />}
+                      {m.seq === proposalAt && proposal ? (
+                        <Suspense fallback={null}>
+                          <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
+                        </Suspense>
+                      ) : (
+                        open &&
+                        talkShown && (
+                          <MessageRow
+                            channel={channel}
+                            m={m}
+                            compact={m.seq !== mark && m.seq !== foldAt && !afterFold && compactAt(list, i)}
+                            names={names}
+                            tasks={tasks}
+                            quote={quoteOf(list, i, bySeq)}
+                            onQuote={onQuote}
+                          />
+                        )
+                      )}
+                    </Fragment>
+                  )
+                })}
+            {compact && foldAt === undefined && (
+              <Suspense fallback={null}>
+                <HistoryFold channel={channel} compact={compact} earlier={earlier} onToggle={toggleEarlier} names={names} tasks={tasks} onQuote={onQuote} />
+              </Suspense>
+            )}
+            {proposal && proposalAt === undefined && end === list.length && (
+              <Suspense fallback={null}>
+                <ProposalCard channel={channel} proposal={proposal} names={names} tasks={tasks} onQuote={onQuote} />
+              </Suspense>
+            )}
+            {doc && following && !channel.loading && (
+              <Suspense fallback={<Wait />}>
+                <DocNow channel={channel} where={where} thread={doc} hold={hold} />
+              </Suspense>
+            )}
+            {working.length > 0 && !channel.loading && <Working people={working} />}
+          </div>
+          <div className="feed-room" ref={spacer} aria-hidden="true" />
         </div>
-        <div className="feed-room" ref={spacer} aria-hidden="true" />
+        {(fresh > 0 || far) && (
+          <button type="button" className="feed-jump" onClick={toLatest}>
+            {fresh > 0 ? t("chat.conversation.new.messages", { count: fresh }) : t("chat.conversation.jump.latest")}
+            <span aria-hidden="true"> ↓</span>
+          </button>
+        )}
       </div>
-      {(fresh > 0 || far) && (
-        <button type="button" className="feed-jump" onClick={toLatest}>
-          {fresh > 0 ? t("chat.conversation.new.messages", { count: fresh }) : t("chat.conversation.jump.latest")}
-          <span aria-hidden="true"> ↓</span>
-        </button>
-      )}
-    </div>
+    </FeedRevealed.Provider>
   )
 }
 
