@@ -19,7 +19,7 @@ import { demoAround, demoFetchOlder, demoOlder } from "~/demo/older"
 import { withSpecs } from "~/demo/specs"
 import { homeOf } from "~/home"
 import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
-import { TABS_3, TABS_8 } from "~/demo/tabs"
+import { openedTab, TABS_3, TABS_8 } from "~/demo/tabs"
 import { DEMO_FROZEN } from "~/demo/shots"
 import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
 import type { Account, Actions, App, BackRun, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, TaskStep, Usage } from "~/model"
@@ -666,6 +666,12 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     return () => window.clearTimeout(late)
   }, [scenario, open])
   const shown = scenario !== "slow-open" || arrived === open ? open : null
+
+  const [left, setLeft] = useState(open)
+  if (left !== open) {
+    setLeft(open)
+    if ((scenario === "tabs-3" || scenario === "tabs-8") && open) setState((s) => ({ ...s, tiles: openedTab(s.tiles, open, left) }))
+  }
 
   useEffect(() => {
     if (scenario !== "ci-live" || DEMO_FROZEN) return

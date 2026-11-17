@@ -995,6 +995,10 @@
   display: none;
 }
 
+.tile-mark {
+  display: contents;
+}
+
 .tile-badge {
   position: absolute;
   top: -4px;
@@ -1384,7 +1388,7 @@
   max-width: 15rem;
 }
 
-:root[data-tabs] .app > .rail[data-fit="icons"] .tile[data-code]:not(.is-on) {
+:root[data-tabs] .app > .rail[data-fit="icons"] .tile[data-code] {
   max-width: 15rem;
 }
 
@@ -1399,7 +1403,6 @@
 }
 
 :root[data-tabs] .app > .rail .tile[data-code].is-on {
-  min-width: max-content;
   font-weight: 500;
 }
 
@@ -1430,10 +1433,27 @@
   mask-image: linear-gradient(to right, #000 calc(100% - 8px), transparent);
 }
 
+:root[data-tabs] .tile[data-code] .tile-name::after {
+  content: attr(data-name) / "";
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 500;
+}
+
+:root[data-tabs] .tile[data-code] .tile-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 1rem;
+  margin: 0 8px 0 0;
+}
+
 :root[data-tabs] .tile[data-code] :is(.tile-badge, .tile-dot) {
   position: static;
   flex: none;
-  margin: 0 10px 0 0;
+  margin: 0;
   box-shadow: none;
 }
 
@@ -1448,15 +1468,19 @@
   background: var(--ink-3);
 }
 
-:root[data-tabs] .rail[data-fit="icons"] .tile[data-code]:not(.is-on) > :first-child {
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code] .tile-mark {
+  display: contents;
+}
+
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code] > :first-child {
   margin: 0 auto;
 }
 
-:root[data-tabs] .rail[data-fit="icons"] .tile[data-code]:not(.is-on) .tile-name {
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code] .tile-name {
   display: none;
 }
 
-:root[data-tabs] .rail[data-fit="icons"] .tile[data-code]:not(.is-on) :is(.tile-badge, .tile-dot) {
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code] :is(.tile-badge, .tile-dot) {
   position: absolute;
   top: calc(50% - 0.5rem - 3px);
   left: calc(50% + 0.5rem - 3px);
@@ -1470,7 +1494,7 @@
   font-size: 0;
 }
 
-:root[data-tabs] .rail[data-fit="icons"] .tile[data-code]:not(.is-on) .tile-dot {
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code] .tile-dot {
   background: var(--ink-3);
 }
 
