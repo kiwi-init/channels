@@ -11,7 +11,7 @@ import { inText } from "~/kit/keys"
 import { useNav, useGo, useActions, useTiles, useAppPrefs, useOpenToType } from "~/nav"
 import { useWindowMaximized } from "~/live/window-state"
 import { openMenu } from "~/kit/menu-open"
-import { railItems, type DropTarget } from "~/shell/rail-items"
+import { keepOrder, railItems, type DropTarget } from "~/shell/rail-items"
 import { useTabs } from "~/shell/top-layout"
 import { t } from "~/i18n/i18n"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
@@ -36,7 +36,7 @@ function fitTabs(strip: HTMLElement) {
   strip.setAttribute("data-fit", "roomy")
   if (strip.scrollWidth <= strip.clientWidth + 1) return
   strip.setAttribute("data-fit", "tight")
-  for (const name of strip.querySelectorAll<HTMLElement>(".tile[data-code]:not(.is-on) > .tile-name")) {
+  for (const name of strip.querySelectorAll<HTMLElement>(".tile[data-code] > .tile-name")) {
     if (name.scrollWidth <= name.clientWidth) continue
     if (name.clientWidth >= CUT_NAME_EMS * Number.parseFloat(getComputedStyle(name).fontSize)) continue
     strip.setAttribute("data-fit", "icons")
@@ -44,12 +44,20 @@ function fitTabs(strip: HTMLElement) {
   }
 }
 
+function useSteadyTiles(tiles: readonly ChannelTile[]): ChannelTile[] {
+  const [order, setOrder] = useState<readonly string[]>(() => tiles.map((c) => c.code))
+  const next = keepOrder(order, tiles)
+  if (next.length !== order.length || next.some((code, i) => code !== order[i])) setOrder(next)
+  const byCode = new Map(tiles.map((c) => [c.code, c]))
+  return next.flatMap((code) => byCode.get(code) ?? [])
+}
+
 export function Rail() {
   const nav = useNav()
   const go = useGo()
   const enter = useOpenToType()
   const actions = useActions()
-  const tiles = useTiles()
+  const tiles = useSteadyTiles(useTiles())
   const prefs = useAppPrefs()
   const onChannel = nav.page === "channel"
   const home = onChannel && nav.channel === null
@@ -66,7 +74,7 @@ export function Rail() {
   const items = railItems(tiles, folders)
   const ordered = items.flatMap((i) => (i.kind === "channel" ? [i.tile] : i.tiles))
   const strip = useRef<HTMLElement>(null)
-  const shown = `${on}|${items.map((i) => (i.kind === "channel" ? `${i.tile.title}:${i.tile.needsYou}:${i.tile.unread > 0}` : `${i.folder.id}:${i.folder.open}:${i.tiles.map((c) => c.title).join()}`)).join("|")}`
+  const shown = items.map((i) => (i.kind === "channel" ? i.tile.title : `${i.folder.id}:${i.folder.open}:${i.tiles.map((c) => c.title).join()}`)).join("|")
   useLayoutEffect(() => {
     const el = strip.current
     if (!el || !tabs) return
@@ -297,8 +305,10 @@ function Tile({ tile, on, drop, moving, onClick }: { tile: ChannelTile; on: bool
       onClick={onClick}
     >
       <Face tile={tile} />
-      <span className="tile-name">{tile.title}</span>
-      {tile.needsYou > 0 ? <span className="tile-badge">{tile.needsYou}</span> : tile.unread > 0 && !on ? <span className="tile-dot" /> : null}
+      <span className="tile-name" data-name={tile.title}>
+        {tile.title}
+      </span>
+      <span className="tile-mark">{tile.needsYou > 0 ? <span className="tile-badge">{tile.needsYou}</span> : tile.unread > 0 && !on ? <span className="tile-dot" /> : null}</span>
     </button>
   )
 }

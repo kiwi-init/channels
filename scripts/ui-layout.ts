@@ -645,10 +645,49 @@ try {
       expect(!!strip && near(tabs.at(-1)!.right, strip.addLeft, 1), "and the tabs still fill the strip");
     }
     if (fit === "icons") {
-      const rest = tabs.filter((tab) => !tab.on);
-      expect(rest.length > 0 && rest.every((tab) => !tab.shown) && tabs.filter((tab) => tab.on).every((tab) => tab.whole), "too many to name: tabs are their icons, and the open one keeps its name");
-      expect(Math.max(...rest.map((tab) => tab.width)) - Math.min(...rest.map((tab) => tab.width)) <= 1, `in equal shares (${rest.map((tab) => Math.round(tab.width)).join(", ")})`);
+      expect(tabs.length > 0 && tabs.every((tab) => !tab.shown), "too many to name: every tab is its icon, the open one marked by its background");
+      expect(Math.max(...widths) - Math.min(...widths) <= 1, `in equal shares (${widths.map((w) => Math.round(w)).join(", ")})`);
     }
+    await page.close();
+  }
+  for (const [width, fit] of [
+    [1710, "roomy"],
+    [1280, "tight"],
+    [900, "icons"],
+  ] as const) {
+    console.log(`\nthe tabs stay put, tabs-8 at ${width} wide`);
+    const page = await browser.newPage({ viewport: { width, height: 800 } });
+    await page.goto(`${base}?shot=tabs-8&theme=dark`);
+    await page.waitForSelector(".rail .tile[data-code]");
+    await page.waitForTimeout(900);
+    const places = () =>
+      page.evaluate(() => ({
+        fit: document.querySelector<HTMLElement>(".rail")?.dataset["fit"],
+        tabs: [...document.querySelectorAll<HTMLElement>(".rail .tile[data-code]")].map((tab) => ({
+          code: tab.dataset["code"] ?? "",
+          x: tab.getBoundingClientRect().left,
+          mark: !!tab.querySelector(".tile-badge, .tile-dot"),
+        })),
+      }));
+    const before = await places();
+    const moved: string[] = [];
+    let marksChanged = 0;
+    let last = before;
+    for (const code of ["landing", "livewire", "notes", "kiwi"]) {
+      await page.click(`.rail .tile[data-code="${code}"]`);
+      await page.waitForTimeout(400);
+      const now = await places();
+      marksChanged += now.tabs.filter((tab) => last.tabs.find((was) => was.code === tab.code)?.mark !== tab.mark).length;
+      last = now;
+      const off = now.tabs.flatMap((tab, i) => {
+        const was = before.tabs[i];
+        return was && was.code === tab.code && near(was.x, tab.x, 0.5) ? [] : [`${tab.code} at ${i} x ${Math.round(tab.x)} (was ${was?.code} x ${Math.round(was?.x ?? 0)})`];
+      });
+      if (off.length || now.tabs.length !== before.tabs.length) moved.push(`after ${code}: ${off.join(", ")}`);
+    }
+    expect(before.fit === fit, `the strip is ${fit} here (${before.fit})`);
+    expect(marksChanged > 0, `unread marks come and go as tabs open and close (${marksChanged} changes)`);
+    expect(moved.length === 0, `opening 4 tabs in turn moves no tab, in order or on screen${moved.length ? `: ${moved.join("; ")}` : ""}`);
     await page.close();
   }
   for (const [width, height] of [

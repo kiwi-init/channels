@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { dropOn, folderNews, renamed, ungrouped } from "~/shell/folders"
-import { cleanFolders, railItems } from "~/shell/rail-items"
+import { cleanFolders, keepOrder, railItems } from "~/shell/rail-items"
 import type { ChannelTile, Folder } from "~/model"
 
 const tile = (code: string, extra: Partial<ChannelTile> = {}): ChannelTile => ({ code, title: code, state: "member", unread: 0, needsYou: 0, last: 0, ...extra })
@@ -73,5 +73,19 @@ describe("rail folders", () => {
     const tiles = [tile("a", { needsYou: 2, unread: 1 }), tile("b", { needsYou: 1 })]
     expect(folderNews(tiles, "a")).toEqual({ needsYou: 3, unread: false, holdsOn: true })
     expect(folderNews(tiles, null)).toEqual({ needsYou: 3, unread: true, holdsOn: false })
+  })
+})
+
+describe("the rail keeps its order", () => {
+  test("a channel that sorts first by activity stays where it was", () => {
+    expect(keepOrder(["a", "b", "c"], [tile("c"), tile("a"), tile("b")])).toEqual(["a", "b", "c"])
+  })
+
+  test("a new channel goes to the end and a removed one drops out", () => {
+    expect(keepOrder(["a", "b", "c"], [tile("d"), tile("c"), tile("a")])).toEqual(["a", "c", "d"])
+  })
+
+  test("with nothing kept yet, the incoming order stands", () => {
+    expect(keepOrder([], channels)).toEqual(["a", "b", "c", "d"])
   })
 })

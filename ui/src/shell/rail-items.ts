@@ -5,6 +5,13 @@ export type RailItem = { kind: "channel"; tile: ChannelTile } | { kind: "folder"
 
 export type DropTarget = { kind: "channel"; code: string } | { kind: "folder"; id: string } | { kind: "rail" }
 
+export function keepOrder(before: readonly string[], now: readonly ChannelTile[]): string[] {
+  const here = new Set(now.map((c) => c.code))
+  const kept = before.filter((code) => here.has(code))
+  const placed = new Set(kept)
+  return [...kept, ...now.flatMap((c) => (placed.has(c.code) ? [] : [c.code]))]
+}
+
 export function railItems(channels: readonly ChannelTile[], folders: readonly Folder[]): RailItem[] {
   const byCode = new Map(channels.map((c) => [c.code, c]))
   const folderOf = new Map<string, Folder>()

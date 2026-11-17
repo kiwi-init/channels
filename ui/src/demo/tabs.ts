@@ -19,3 +19,10 @@ export const TABS_8: ChannelTile[] = [
   tile("notes", "kiwinotes", { needsYou: 12 }),
   tile("ops", "ops", { state: "waiting" }),
 ]
+
+export function openedTab(tiles: readonly ChannelTile[], open: string, left: string | null): ChannelTile[] {
+  const opened = tiles.find((c) => c.code === open)
+  if (!opened) return [...tiles]
+  const rest = tiles.filter((c) => c.code !== open).map((c) => (c.code === left ? { ...c, unread: c.unread + 1 } : c))
+  return [{ ...opened, unread: 0, last: Date.now() }, ...rest]
+}
