@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { perfCheck } from "../scripts/perf-check.ts";
+import { pairedCheck, perfCheck } from "../scripts/perf-check.ts";
 
 const { reference, limits: budgets } = (await Bun.file("scripts/perf-budgets.json").json()) as {
   reference: Record<"@1x" | "@4x", number>;
@@ -150,4 +150,79 @@ test("every workflow step that pipes perf-check runs under pipefail, so an over-
   });
   expect(steps.length).toBeGreaterThanOrEqual(1);
   for (const { path, run, shell } of steps) if (run!.includes("|")) expect({ path, shell }).toEqual({ path, shell: "bash" });
+});
+
+function pairRun(side: string, i: number, ms: { tasks?: number; agents?: number } = {}, extra: Record<string, unknown> = {}): string {
+  const file = join(dir, `perf-pair-${i}-${side}.json`);
+  writeFileSync(
+    file,
+    JSON.stringify({
+      control: side,
+      app: side === "base" ? "b".repeat(40) : "h".repeat(40),
+      "@1x": { reloadToFirstScreenMs: 500, calibrationMs: reference["@1x"] },
+      "reload, in page": { seededFrameMs: 425 },
+      "@4x": { switchMedianMs: { Tasks: ms.tasks ?? 150, Agents: ms.agents ?? 90, Conversation: 95 }, calibrationMs: reference["@4x"] },
+      "typing while 10 agents post": { p95Ms: 30 },
+      ...extra,
+    }),
+  );
+  return file;
+}
+
+const pair = (base: { tasks?: number; agents?: number }, head: { tasks?: number; agents?: number }, offset = 0) => [
+  ...[1, 4, 5, 8].map((i) => pairRun("base", offset + i, base)),
+  ...[2, 3, 6, 7].map((i) => pairRun("head", offset + i, head)),
+];
+
+test("paired: a head more than 15% and more than 10 ms slower than its base is a regression, even under the gate", () => {
+  const r = pairedCheck(pair({ tasks: 150 }, { tasks: 175 }, 100));
+  expect(r.code).toBe(1);
+  expect(r.text).toContain("| Tasks tab @4x | 150 | 175 | +25 ms (+17%) | 220 | regression |");
+});
+
+test("paired: slower by more than 15% but not by more than 10 ms, or by more than 10 ms but not 15%, is no regression", () => {
+  expect(pairedCheck(pair({ tasks: 50 }, { tasks: 59 }, 200)).code).toBe(0);
+  expect(pairedCheck(pair({ tasks: 150 }, { tasks: 170 }, 300)).code).toBe(0);
+});
+
+test("paired: a gate the base also misses doesn't fail a head that isn't a regression, and says so", () => {
+  const r = pairedCheck(pair({ agents: 250 }, { agents: 260 }, 400));
+  expect(r.code).toBe(0);
+  expect(r.text).toContain("over its gate, exempt: the base is over it too");
+  expect(r.text).toContain("Over a gate the base also misses (not a failure):");
+});
+
+test("paired: a head newly over a gate the base meets fails, and a regression on a red base still fails", () => {
+  const newlyRed = pairedCheck(pair({ agents: 110 }, { agents: 120 }, 500));
+  expect(newlyRed.code).toBe(1);
+  expect(newlyRed.text).toContain("over its gate 115, which the base meets (110)");
+  const worse = pairedCheck(pair({ agents: 250 }, { agents: 300 }, 600));
+  expect(worse.code).toBe(1);
+  expect(worse.text).toContain("| regression |");
+});
+
+test("paired: missing or failed runs can't earn the exemption", () => {
+  const files = pair({ agents: 250 }, { agents: 260 }, 700);
+  const twoHeads = files.filter((f) => !/-70[367]-head\.json$/.test(f));
+  const short = pairedCheck(twoHeads);
+  expect(short.code).toBe(1);
+  expect(short.text).toContain("head: 1 reports, 4 expected");
+  expect(short.text).toContain("head has 1 usable runs, 3 needed");
+  const failed = pairedCheck(files, ["run 3 head"]);
+  expect(failed.code).toBe(1);
+  expect(failed.text).toContain("run 3 head: the run failed");
+});
+
+test("paired: uncalibrated runs, mislabelled reports and one app on both sides fail closed", () => {
+  const files = pair({}, {}, 800);
+  const uncalibrated = [
+    ...files.slice(0, 6),
+    pairRun("head", 806, {}, { "@4x": { switchMedianMs: { Tasks: 150, Agents: 90, Conversation: 95 } } }),
+    pairRun("head", 807, {}, { "@4x": { switchMedianMs: { Tasks: 150, Agents: 90, Conversation: 95 } } }),
+  ];
+  expect(pairedCheck(uncalibrated).code).toBe(1);
+  const mislabelled = [...files.slice(0, 7), pairRun("head", 808, {}, { control: "base" })];
+  expect(pairedCheck(mislabelled).text).toContain("its control is base, its name says head");
+  const sameApp = [...files.slice(0, 4), ...[2, 3, 6, 7].map((i) => pairRun("head", 900 + i, {}, { app: "b".repeat(40) }))];
+  expect(pairedCheck(sameApp).text).toContain("base and head ran the same app commit");
 });

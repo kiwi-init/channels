@@ -258,6 +258,7 @@ const report: Record<string, unknown> = {
   messages: MESSAGES,
   soakMinutes: SOAK_MIN,
   control: process.env.PERF_CONTROL?.trim() || null,
+  app: process.env.PERF_APP_SHA?.trim() || null,
   loads: LOAD,
   switchRounds: ROUNDS,
   calibrationReps: CAL_REPS,
