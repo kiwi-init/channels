@@ -7,8 +7,8 @@ export interface FrameProbeArgs {
 }
 
 export interface SeededFrame {
-  firstFrameMs: number;
-  confirmedMs: number;
+  seenMs: number;
+  paintedByMs: number;
   frames: number;
   resets: number;
   timeOrigin: number;
@@ -27,24 +27,25 @@ export function seededFrameProbe({ seq, text, budgetMs }: FrameProbeArgs): void 
     const r = row.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
   };
-  let first: number | null = null;
+  let seen: number | null = null;
   let frames = 0;
   let resets = 0;
   const tick = (at: number): void => {
+    const began = performance.now();
     frames++;
     if (at > budgetMs) {
       Reflect.set(window, key, { failed: `the seeded row #${seq} wasn't visible two frames running within ${budgetMs} ms of the navigation` });
       return;
     }
     if (shown()) {
-      if (first !== null) {
-        Reflect.set(window, key, { firstFrameMs: first, confirmedMs: at, frames, resets, timeOrigin: performance.timeOrigin, clockSkewMs: Date.now() - (performance.timeOrigin + performance.now()) });
+      if (seen !== null) {
+        Reflect.set(window, key, { seenMs: seen, paintedByMs: began, frames, resets, timeOrigin: performance.timeOrigin, clockSkewMs: Date.now() - (performance.timeOrigin + performance.now()) });
         return;
       }
-      first = at;
-    } else if (first !== null) {
+      seen = performance.now();
+    } else if (seen !== null) {
       resets++;
-      first = null;
+      seen = null;
     }
     requestAnimationFrame(tick);
   };
@@ -70,19 +71,20 @@ export async function readSeededFrame(page: Page, timeoutMs: number): Promise<Se
   if (!raw || typeof raw !== "object") throw new Error("the reload probe's mark isn't an object");
   const failed: unknown = Reflect.get(raw, "failed");
   if (typeof failed === "string") throw new Error(`the reload probe failed: ${failed}`);
-  const firstFrameMs = num(raw, "firstFrameMs");
-  const confirmedMs = num(raw, "confirmedMs");
+  const seenMs = num(raw, "seenMs");
+  const paintedByMs = num(raw, "paintedByMs");
   const frames = num(raw, "frames");
   const resets = num(raw, "resets");
   const timeOrigin = num(raw, "timeOrigin");
   const clockSkewMs = num(raw, "clockSkewMs");
-  if (firstFrameMs === null || confirmedMs === null || frames === null || resets === null || timeOrigin === null || clockSkewMs === null)
+  if (seenMs === null || paintedByMs === null || frames === null || resets === null || timeOrigin === null || clockSkewMs === null)
     throw new Error(`the reload probe's mark is incomplete: ${JSON.stringify(raw)}`);
-  return { firstFrameMs, confirmedMs, frames, resets, timeOrigin, clockSkewMs };
+  if (paintedByMs < seenMs) throw new Error(`the reload probe's next frame (${paintedByMs} ms) began before it saw the row (${seenMs} ms)`);
+  return { seenMs, paintedByMs, frames, resets, timeOrigin, clockSkewMs };
 }
 
 export function reloadFromHost(epochBefore: number, frame: SeededFrame): { reloadMs: number; navigationOffsetMs: number } {
   const navigationOffsetMs = frame.timeOrigin - epochBefore;
   if (navigationOffsetMs < -2) throw new Error(`the page's navigation started ${-navigationOffsetMs} ms before the host's reload call: the clocks don't line up`);
-  return { reloadMs: Math.round(navigationOffsetMs + frame.firstFrameMs), navigationOffsetMs: Math.round(navigationOffsetMs * 10) / 10 };
+  return { reloadMs: Math.round(navigationOffsetMs + frame.paintedByMs), navigationOffsetMs: Math.round(navigationOffsetMs * 10) / 10 };
 }

@@ -411,8 +411,9 @@ try {
         };
       });
       const probe = {
-        seededFrameMs: Math.round(frame.firstFrameMs),
-        confirmedFrameMs: Math.round(frame.confirmedMs),
+        seededFrameMs: Math.round(frame.paintedByMs),
+        seenMs: Math.round(frame.seenMs),
+        paintWindowMs: Math.round(frame.paintedByMs - frame.seenMs),
         frames: frame.frames,
         resets: frame.resets,
         navigationOffsetMs: fromHost.navigationOffsetMs,

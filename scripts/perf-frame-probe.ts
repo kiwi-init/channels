@@ -4,20 +4,25 @@ import { readSeededFrame, watchSeededFrame } from "./seeded-frame.ts";
 const SEQ = 7;
 const TEXT = "Seeded: a reload opens the channel here";
 const SHOW_AT = 400;
+const BUSY = 300;
 
 interface Case {
   name: string;
   body: string;
-  script: string;
+  script?: string;
+  ahead?: string;
   expect: { atLeast: number } | { below: number } | "fails";
   resetsAtLeast?: number;
+  windowAtLeast?: number;
 }
 
 const row = (attrs = "", style = "") => `<div data-seq="${SEQ}" ${attrs} style="height:40px;${style}">${TEXT}</div>`;
 const later = (code: string) => `setTimeout(() => { ${code} }, ${SHOW_AT});`;
+const busy = `{ const t = performance.now(); while (performance.now() - t < ${BUSY}) {} }`;
+const reveal = `document.getElementById("r").style.visibility = "visible"; window.__revealedAt = performance.now();`;
 
 const CASES: Case[] = [
-  { name: "visible at once (positive control)", body: row(), script: "", expect: { below: SHOW_AT } },
+  { name: "visible at once (positive control)", body: row(), expect: { below: SHOW_AT } },
   { name: "inserted after a delay", body: `<div id="feed"></div>`, script: later(`document.getElementById("feed").innerHTML = ${JSON.stringify(row())};`), expect: { atLeast: SHOW_AT } },
   {
     name: "held by the cold-open hold",
@@ -36,8 +41,22 @@ const CASES: Case[] = [
     expect: { atLeast: SHOW_AT },
     resetsAtLeast: 1,
   },
-  { name: "the right text on another row", body: `<div data-seq="${SEQ + 1}" style="height:40px">${TEXT}</div>`, script: "", expect: "fails" },
-  { name: "never shown", body: row("", "visibility:hidden"), script: "", expect: "fails" },
+  { name: "a long task, then the reveal", body: row('id="r"', "visibility:hidden"), script: later(`${busy} ${reveal}`), expect: { atLeast: SHOW_AT + BUSY } },
+  {
+    name: "a frame callback ahead of the probe works, then reveals, in the probe's frame",
+    body: row('id="r"', "visibility:hidden"),
+    ahead: `(() => { const start = performance.now(); const loop = () => { if (performance.now() - start >= ${SHOW_AT} && document.getElementById("r")) { ${busy} ${reveal} } else requestAnimationFrame(loop); }; requestAnimationFrame(loop); })();`,
+    expect: { atLeast: SHOW_AT + BUSY },
+  },
+  {
+    name: "work after the probe sees the row delays its paint",
+    body: row('id="r"', "visibility:hidden"),
+    script: later(`${reveal} requestAnimationFrame(() => ${busy});`),
+    expect: { atLeast: SHOW_AT + BUSY },
+    windowAtLeast: BUSY - 50,
+  },
+  { name: "the right text on another row", body: `<div data-seq="${SEQ + 1}" style="height:40px">${TEXT}</div>`, expect: "fails" },
+  { name: "never shown", body: row("", "visibility:hidden"), expect: "fails" },
 ];
 
 const server = Bun.serve({
@@ -46,7 +65,7 @@ const server = Bun.serve({
   fetch(req) {
     const c = CASES[Number(new URL(req.url).searchParams.get("case"))];
     if (!c) return new Response("no such case", { status: 404 });
-    return new Response(`<!doctype html><html><body style="margin:0">${c.body}<script>${c.script}</script></body></html>`, { headers: { "content-type": "text/html" } });
+    return new Response(`<!doctype html><html><body style="margin:0">${c.body}<script>${c.script ?? ""}</script></body></html>`, { headers: { "content-type": "text/html" } });
   },
 });
 
@@ -55,18 +74,37 @@ const failures: string[] = [];
 try {
   for (const [i, c] of CASES.entries()) {
     const context = await browser.newContext({ viewport: { width: 800, height: 600 } });
-    await watchSeededFrame(context, { seq: SEQ, text: TEXT, budgetMs: 1_500 });
+    if (c.ahead) await context.addInitScript({ content: c.ahead });
+    await watchSeededFrame(context, { seq: SEQ, text: TEXT, budgetMs: 2_000 });
     const page = await context.newPage();
     await page.goto(`${server.url.origin}/?case=${i}`);
     const got = await readSeededFrame(page, 5_000).then(
-      (f) => ({ ok: true as const, ms: Math.round(f.firstFrameMs), confirmedAfter: Math.round(f.confirmedMs - f.firstFrameMs), resets: f.resets }),
+      (f) => ({ ok: true as const, seen: Math.round(f.seenMs), end: Math.round(f.paintedByMs), window: Math.round(f.paintedByMs - f.seenMs), resets: f.resets }),
       (e: unknown) => ({ ok: false as const, why: e instanceof Error ? e.message : String(e) }),
     );
+    const revealed: unknown = await page.evaluate(() => Reflect.get(window, "__revealedAt"));
     await context.close();
+    const revealedAt = typeof revealed === "number" ? Math.round(revealed) : null;
     const want = c.expect;
-    const pass = want === "fails" ? !got.ok : got.ok && ("atLeast" in want ? got.ms >= want.atLeast : got.ms < want.below) && got.resets >= (c.resetsAtLeast ?? 0);
-    const saw = got.ok ? `ended at ${got.ms} ms, confirmed ${got.confirmedAfter} ms later, ${got.resets} early frame(s) dropped on recheck` : `failed: ${got.why}`;
-    const expected = `${want === "fails" ? "fails" : "atLeast" in want ? `ends at or after ${want.atLeast} ms` : `ends before ${want.below} ms`}${c.resetsAtLeast ? `, with at least ${c.resetsAtLeast} early frame dropped` : ""}`;
+    const pass =
+      want === "fails"
+        ? !got.ok
+        : got.ok &&
+          ("atLeast" in want ? got.end >= want.atLeast : got.end < want.below) &&
+          got.resets >= (c.resetsAtLeast ?? 0) &&
+          got.window >= (c.windowAtLeast ?? 0) &&
+          (revealedAt === null || (got.seen >= revealedAt && got.end >= revealedAt));
+    const saw = got.ok
+      ? `seen at ${got.seen} ms, ends at ${got.end} ms (paint window ${got.window} ms), ${got.resets} early frame(s) dropped${revealedAt === null ? "" : `; the page revealed it at ${revealedAt} ms`}`
+      : `failed: ${got.why}`;
+    const expected = [
+      want === "fails" ? "fails" : "atLeast" in want ? `ends at or after ${want.atLeast} ms` : `ends before ${want.below} ms`,
+      c.resetsAtLeast ? `at least ${c.resetsAtLeast} early frame dropped` : "",
+      c.windowAtLeast ? `a paint window of at least ${c.windowAtLeast} ms` : "",
+      revealedAt === null ? "" : "seen and ended no earlier than the reveal",
+    ]
+      .filter(Boolean)
+      .join(", ");
     console.log(`${pass ? "ok  " : "FAIL"} ${c.name}: ${saw} (expected: ${expected})`);
     if (!pass) failures.push(c.name);
   }
