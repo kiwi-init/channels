@@ -46,6 +46,8 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/browser
       - run: bun scripts/ui-harness.ts
+      - name: perf-scale's reload probe ends only when the seeded row is shown two frames running, never on a delayed, held, hidden, off-screen or one-frame row
+        run: bun scripts/perf-frame-probe.ts
       - name: perf-scale, one soak for a diagnosis
         if: ${{ inputs.soak_only != '' }}
         env:
