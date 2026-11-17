@@ -386,7 +386,7 @@ try {
     const uncovered = gap("glass", "wallpaper");
     if (uncovered === null) problems.push("the window leaves no wallpaper uncovered below it, so the captures can't show the wallpaper changed");
     else if (uncovered < 25) problems.push(`the wallpaper left uncovered reads the same bright and dark (${round(uncovered)} apart), so the captures prove nothing`);
-    for (const part of ["top", "side"] as const) {
+    for (const part of ["top"] as const) {
       const glass = gap("glass", part);
       if (glass === null) problems.push(`the ${part} of the frame wasn't found in the glass captures`);
       else if (glass < 6) problems.push(`the glass frame's ${part} reads the same over a bright and a dark wallpaper (${round(glass)} apart): nothing shows through`);
@@ -395,11 +395,15 @@ try {
         if (solid !== null && solid > 2) problems.push(`the frame's ${part} changes with the wallpaper in the ${mode} window (${round(solid)} apart): it must be solid there`);
       }
     }
-    for (const mode of SHOWN) {
-      const page = gap(mode, "page");
-      if (page === null) problems.push(`the page wasn't found in the ${mode} captures`);
-      else if (page > 2) problems.push(`the page changes with the wallpaper in the ${mode} window (${round(page)} apart): it must stay solid`);
-    }
+    for (const mode of SHOWN)
+      for (const [part, name] of [
+        ["page", "page"],
+        ["side", "sidebar"],
+      ] as const) {
+        const solid = gap(mode, part);
+        if (solid === null) problems.push(`the ${name} wasn't found in the ${mode} captures`);
+        else if (solid > 2) problems.push(`the ${name} changes with the wallpaper in the ${mode} window (${round(solid)} apart): it must stay solid`);
+      }
   });
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
