@@ -126,10 +126,10 @@ try {
     return { ok: after !== null && taken, detail: { before, after, screenshot: taken } };
   });
 
-  await step("the frame shows GNOME's wallpaper under it, warm on the left and cool on the right, and the page stays solid (glass-gnome.png)", async () => {
+  await step("the frame shows GNOME's wallpaper under it, warm on the left and cool on the right, and the sidebar and the page stay solid (glass-gnome.png)", async () => {
     const got = await glassShot(driver, "glass-gnome");
     const t = got.tints;
-    return { ok: !!t && (t.left ?? 0) > 15 && (t.right ?? 0) < -15 && (t.side === null || t.side > 15) && (t.page ?? 0) < 12, detail: got };
+    return { ok: !!t && (t.left ?? 0) > 15 && (t.right ?? 0) < -15 && Math.abs(t.side ?? 0) < 12 && (t.page ?? 0) < 12, detail: got };
   });
 
   await step("on KDE the frame shows the wallpaper from Plasma's own settings, the other way round: cool on the left, warm on the right (glass-kde.png)", async () => {

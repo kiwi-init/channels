@@ -121,7 +121,7 @@ try {
     return { ok: follows(n, p) && drawn(px), detail: { tile: n.window_rect, page: p, pixels: px } };
   });
 
-  await step("the frame shows sway's wallpaper under it, warm on the left and cool on the right, and the page stays solid (glass-sway.png)", async () => {
+  await step("the frame shows sway's wallpaper under it, warm on the left and cool on the right, and the sidebar and the page stay solid (glass-sway.png)", async () => {
     const parts = await until("the wallpaper under the frame", 20_000, async () => {
       const p = await driver.evaluate(glassParts, null, 5_000);
       return p.glass === "image" && p.wallpaper && p.top ? p : null;
@@ -133,7 +133,7 @@ try {
     execFileSync("grim", [join(out, "glass-sway.png")]);
     const t = tints(ppm(execFileSync("grim", ["-t", "ppm", "-"], { maxBuffer: 256 * 1024 * 1024 })), { x: n.rect.x + n.window_rect.x, y: n.rect.y + n.window_rect.y }, parts);
     return {
-      ok: (t.left ?? 0) > 15 && (t.right ?? 0) < -15 && (t.side === null || t.side > 15) && (t.page ?? 0) < 12,
+      ok: (t.left ?? 0) > 15 && (t.right ?? 0) < -15 && Math.abs(t.side ?? 0) < 12 && (t.page ?? 0) < 12,
       detail: { tints: t, parts, window: { rect: n.rect, window_rect: n.window_rect } },
     };
   });
