@@ -18,7 +18,7 @@ function run(tasksMs: number, i: number, speed = 1, calibrated = true, at: Parti
     file,
     JSON.stringify({
       "@1x": { reloadToFirstScreenMs: reload.total, ...calibration("@1x") },
-      "reload, in page": { firstScreenMs: reload.inPage },
+      "reload, in page": { seededFrameMs: reload.inPage },
       "@4x": { switchMedianMs: { Tasks: tasksMs, Agents: 90, Conversation: 95 }, ...calibration("@4x") },
       "typing while 10 agents post": { p95Ms: 30 },
       soak: { heapSlopeMBPerHour: 60, nodesSlopePerHour: 152000, listenersSlopePerHour: 22000 },
