@@ -68,8 +68,7 @@ const NOW_ROW = ".page.is-now a[href^='kiwi-task:']";
 const TASK_PANE = ".panes > .pane:has(.task-page)";
 const gapOf = (page: Page): Promise<number> =>
   page.evaluate(() => {
-    const panes = document.querySelector(".panes");
-    return panes ? parseFloat(getComputedStyle(panes).getPropertyValue("--pane-gap")) || 0 : 0;
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--pane-gap")) || 0;
   });
 const boxOf = (page: Page, selector: string): Promise<Box | null> =>
   page.evaluate((s) => {
@@ -148,7 +147,7 @@ try {
             foot: strip.bottom - Math.max(...tiles.map((tile) => tile.bottom)),
             add: add.top >= strip.top && add.bottom <= strip.bottom,
             under: first.top - strip.bottom,
-            listEnd: side.bottom,
+            listEnd: side.bottom - Number.parseFloat(getComputedStyle(document.querySelector(".side")!).borderBottomWidth),
             gearTop: gear.top,
             gearFoot: innerHeight - gear.bottom,
           }
@@ -169,8 +168,8 @@ try {
     );
     expect(!!shell && near(shell.foot, 0) && shell.add, `standing on the strip's bottom edge, with + inside the strip (${shell?.foot} above it)`);
     await nothingClashes(page, "on the Mac");
-    expect(!!shell && near(shell.under, 0), `the channel's name starts right under the tab strip (${shell?.under})`);
-    expect(!!shell && shell.listEnd <= shell.gearTop && near(shell.gearFoot, 8), "Settings sits in the bottom-left corner, under the list");
+    expect(!!shell && near(shell.under, (await gapOf(page)) + 8), `the channel's name starts 8px inside the sidebar pane, under the tab strip (${shell?.under})`);
+    expect(!!shell && shell.listEnd <= shell.gearTop && near(shell.gearFoot, (await gapOf(page)) + 8), "Settings sits in the sidebar pane's bottom-left corner, under the list");
 
     const side = await page.evaluate(() => {
       const el = document.querySelector<HTMLElement>(".side");
@@ -265,7 +264,7 @@ try {
       return box && main && side ? { on: !!document.querySelector(".chan.is-peek"), left: box.left, right: box.right, shown: getComputedStyle(side).visibility === "visible", main: main.left } : null;
     });
     expect(
-      !!peek && peek.on && peek.shown && near(peek.left, 0) && near(peek.main, await gapOf(page)),
+      !!peek && peek.on && peek.shown && near(peek.left, await gapOf(page)) && near(peek.main, await gapOf(page)),
       `touching the left edge slides the hidden sidebar in over the conversation (${JSON.stringify(peek)})`,
     );
     const sheet = await peekSheet(page);
@@ -394,7 +393,7 @@ try {
     await open(page, "channel");
     const sideWidth = async (): Promise<number> => {
       const side = await boxOf(page, ".side");
-      return side ? side.right - side.left : 0;
+      return side ? side.right : 0;
     };
     const covered = async (): Promise<number> => {
       const side = await boxOf(page, ".side");
@@ -404,6 +403,7 @@ try {
     const grip = page.getByRole("separator", { name: "Resize the sidebar" });
     const gripBox = await grip.boundingBox();
     const sideBefore = await sideWidth();
+    const trackBefore = await boxOf(page, NOW_PANE);
     if (gripBox) {
       const [gx, gy] = [gripBox.x + gripBox.width / 2, gripBox.y + gripBox.height / 2];
       await page.mouse.move(gx, gy);
@@ -415,8 +415,14 @@ try {
     const composerWide = await boxOf(page, ".main .composer");
     const trackWide = await boxOf(page, NOW_PANE);
     expect(!!gripBox && sideWide === sideBefore + 64, `dragging the sidebar's edge 61px widens it by 64, on the grid (${sideBefore} → ${sideWide})`);
-    expect(!!composerWide && near(composerWide.x, width / 2), `the composer stays on the window's centre with a wider sidebar (${composerWide?.x.toFixed(1)} of ${width / 2})`);
-    expect(!!trackWide && near(width - trackWide.left, sideWide), `and Now takes the same width on the right (${trackWide ? width - trackWide.left : "?"} of ${sideWide})`);
+    expect(
+      !!composerWide && !!trackWide && near(composerWide.x, (sideWide + trackWide.left) / 2, 2),
+      `the composer stays on the conversation's centre with a wider sidebar (${composerWide?.x.toFixed(1)} of ${trackWide ? (sideWide + trackWide.left) / 2 : "?"})`,
+    );
+    expect(
+      !!trackWide && !!trackBefore && near(trackWide.left, trackBefore.left),
+      `and Now keeps its width on the right (${trackWide ? width - trackWide.left : "?"} of ${trackBefore ? width - trackBefore.left : "?"})`,
+    );
     await grip.focus();
     const under = [await covered()];
     await page.keyboard.press("Home");
@@ -606,7 +612,7 @@ try {
     expect(!!strip && strip.over <= 1 && strip.page <= 0, `nothing scrolls sideways (${strip?.over}px over in the strip, ${strip?.page}px in the page)`);
     expect(
       !!strip && strip.open.length === 1 && near(strip.open[0]!.bottom, strip.foot) && strip.open[0]!.shade === strip.ground && strip.frame !== strip.ground,
-      `one tab is open, in the page's colour and joined to it, on the frame's (${strip?.open.length} open, ${strip?.open[0]?.bottom} of ${strip?.foot}, ${strip?.ground} on ${strip?.frame})`,
+      `one tab is open, a pane in the page's colour standing on the strip's bottom edge, on the frame's (${strip?.open.length} open, ${strip?.open[0]?.bottom} of ${strip?.foot}, ${strip?.ground} on ${strip?.frame})`,
     );
     expect(!!strip && near(strip.addRight + 8, strip.search, 9) && tabs.every((tab) => tab.right <= strip.addLeft + 1), `+ ends the strip, beside Search (${strip?.addRight} before ${strip?.search})`);
     expect(tabs.length > 0 && tabs.every((tab) => tab.icon === 16), `every tab's icon is 16px (${[...new Set(tabs.map((tab) => tab.icon))].join(", ")})`);
