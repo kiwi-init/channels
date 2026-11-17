@@ -93,7 +93,12 @@ const render = (app: ReactNode) => {
 
 const warmColdOpen = () => {
   void import("~/chat/markdown-load").then((m) => m.loadMarkdown()).then((m) => m.warmParser())
-  requestAnimationFrame(() => setTimeout(() => void import("~/chat/doc/load").then((m) => m.loadDocView()), 0))
+  requestAnimationFrame(() =>
+    setTimeout(() => {
+      void import("~/chat/doc/load").then((m) => m.loadDocView())
+      void import("~/specs/card-load").then((m) => m.loadSpecCard())
+    }, 0)
+  )
 }
 
 const start = (prefs: ThemePrefs, app: ReactNode) => {
