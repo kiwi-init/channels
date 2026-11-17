@@ -3,7 +3,7 @@ import "~/styles/tasks.css"
 import "~/styles/github.css"
 import "~/styles/specs.css"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { t } from "~/i18n/i18n"
 import { Avatar, Loading } from "~/kit/bits"
@@ -202,7 +202,7 @@ export const specsLook = (channel: Channel, on: number | null): Partial<Lookup> 
   },
 })
 
-function SpecList({ channel }: { channel: Channel }) {
+export function SpecList({ channel }: { channel: Channel }) {
   const nav = useNav()
   const now = useTaskNow()
   const [tag] = useState(newTag)
@@ -210,6 +210,14 @@ function SpecList({ channel }: { channel: Channel }) {
   const [pages, setPages] = useState(1)
   const [making, setMaking] = useState(false)
   const on = nav.panel?.kind === "task" ? nav.panel.task : null
+  useEffect(
+    () => () => {
+      setShown("open")
+      setPages(1)
+      setMaking(false)
+    },
+    []
+  )
   const built = useMemo(() => {
     const m = maker(tag)
     const acts: ListActs = {

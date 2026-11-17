@@ -136,6 +136,7 @@ export const SHOTS: Record<string, Shot> = {
   "settings-devices": { scenario: "devices", channel: "kiwi", nav: { page: "settings", section: "computers" } },
   "restarted-prompt": { scenario: "restarted", channel: "kiwi" },
   "agent-unarmed": { scenario: "unarmed", channel: "kiwi" },
+  "specs-live": { scenario: "specs-live", channel: "kiwi" },
   "side-update-moved": { scenario: "update-moved", channel: "kiwi" },
   "side-update-moved-mac": { scenario: "update-moved-mac", channel: "kiwi" },
   "settings-forget-agents": { scenario: "devices", channel: "kiwi", nav: { page: "settings", section: "computers" } },

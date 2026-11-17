@@ -311,6 +311,7 @@ export type Scenario =
   | "events"
   | "task-events"
   | "ci-live"
+  | "specs-live"
   | "doc-busy"
   | "event-runs"
   | "own-bubbles"
@@ -643,6 +644,14 @@ function busyStep(s: State, n: number): State {
   return { ...s, channels, seq }
 }
 
+function specsStep(s: State, n: number): State {
+  const c = s.channels.get("kiwi")
+  if (!c) return s
+  const channels = new Map(s.channels)
+  channels.set("kiwi", { ...c, tasks: c.tasks.map((t) => (t.id === 10 ? { ...t, title: wrote(`Shrink the first-load bundle, pass ${n}`) } : t)) })
+  return { ...s, channels }
+}
+
 const SLOW_OPEN_MS = 1500
 
 export function useDemo(scenario: Scenario, open: string | null, look: Partial<Prefs> = {}, usage: Partial<Usage> = {}): App {
@@ -664,6 +673,16 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
     const timer = window.setInterval(() => {
       const step = n++
       setState((s) => ciStep(s, step))
+    }, 700)
+    return () => window.clearInterval(timer)
+  }, [scenario])
+
+  useEffect(() => {
+    if (scenario !== "specs-live" || DEMO_FROZEN) return
+    let n = 0
+    const timer = window.setInterval(() => {
+      const step = ++n
+      setState((s) => specsStep(s, step))
     }, 700)
     return () => window.clearInterval(timer)
   }, [scenario])
