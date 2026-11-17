@@ -93,7 +93,7 @@ const render = (app: ReactNode) => {
 
 const warmColdOpen = () => {
   void import("~/chat/markdown").then((m) => m.warmParser())
-  void import("~/chat/doc/editor")
+  void import("~/chat/doc/load").then((m) => m.loadDocView())
 }
 
 const start = (prefs: ThemePrefs, app: ReactNode) => {

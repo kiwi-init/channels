@@ -31,10 +31,11 @@ import { openMessage } from "~/live/open-message"
 import { markOnce } from "@kiwi/channel/marks.ts"
 import { personGo } from "~/person-go"
 import { Wait } from "~/kit/wait"
+import { docViewNow, loadDocView } from "~/chat/doc/load"
 
 const HistoryFold = later(() => import("~/chat/compact").then((m) => m.HistoryFold))
 const ProposalCard = later(() => import("~/chat/compact").then((m) => m.ProposalCard))
-const LiveThreadDoc = later(() => import("~/chat/doc/editor").then((m) => m.LiveThreadDoc))
+const LiveThreadDoc = later(loadDocView)
 const QuotePick = later(() => import("~/chat/quote-pick").then((m) => m.QuotePick))
 const HoldBanner = later(() => import("~/chat/feed-notes").then((m) => m.HoldBanner))
 const Start = later(() => import("~/chat/feed-notes").then((m) => m.Start))
@@ -323,6 +324,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const following = end === list.length
   const latest = useRef(false)
   const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift, prepended } = useStick(following, !!doc)
+  const [DocNow] = useState(() => docViewNow() ?? LiveThreadDoc)
   useLayoutEffect(() => {
     const box = scroller.current
     const rows = content.current
@@ -762,7 +764,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
           )}
           {doc && following && !channel.loading && (
             <Suspense fallback={<Wait />}>
-              <LiveThreadDoc channel={channel} where={where} thread={doc} hold={hold} />
+              <DocNow channel={channel} where={where} thread={doc} hold={hold} />
             </Suspense>
           )}
           {working.length > 0 && !channel.loading && <Working people={working} />}

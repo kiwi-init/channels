@@ -9,7 +9,7 @@ const flag = (name: string): string | undefined => {
 };
 if (process.argv.includes("--help")) {
   console.log(
-    "usage: bun scripts/ui-cold-whole.ts [--dist ui/dist] [--browser webkit|chromium]\n\nA cold open never paints a partial row (#2513): from the first frame until the feed settles, whenever the feed is visible, no row on screen still shows plain text waiting for markdown or a card waiting for its code, and no thread doc is still loading under the rows. Runs a quiet channel and a busy thread doc, at full speed and at 4x CPU (chromium only).",
+    "usage: bun scripts/ui-cold-whole.ts [--dist ui/dist] [--browser webkit|chromium]\n\nA cold open never paints a partial row (#2513): from the first frame, whenever the feed is visible, no row it opened with still shows plain text waiting for markdown or a card waiting for its code, and no thread doc is still loading under the rows. Rows that arrive later are out of scope. At full speed no such frame may show at all. At 4x CPU (chromium only) and with the parser, markdown and doc code arriving 600 ms late, one may show only through the 1 s backstop, never before it. Runs a quiet channel and a busy thread doc.",
   );
   process.exit(0);
 }
@@ -20,6 +20,9 @@ if (engine !== "webkit" && engine !== "chromium") throw new Error(`--browser is 
 
 const WATCH_MS = 3_000;
 const SCENES = ["channel", "thread-doc-busy"];
+const SLOW_MS = 600;
+const SLOW_CHUNK = /\/assets\/(markdown|editor|md4c|mention-tree)-[^/]+\.js$/;
+const BACKSTOP_MS = 950;
 
 const server = Bun.serve({
   port: 0,
@@ -42,18 +45,25 @@ interface Watched {
   firstShown: number;
   heldFrames: number;
   shown: number;
-  partial: { t: number; what: string }[];
+  partial: { t: number; since: number; what: string }[];
 }
 
-async function cold(scene: string, throttle: number): Promise<Watched> {
+async function cold(scene: string, throttle: number, slow: boolean): Promise<Watched> {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  if (slow)
+    await page.route(SLOW_CHUNK, async (route) => {
+      await new Promise((r) => setTimeout(r, SLOW_MS));
+      await route.continue();
+    });
   await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
   if (throttle > 1) {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
   }
   await page.addInitScript((watchMs: number) => {
-    const out = { frames: 0, shown: 0, firstShown: -1, heldFrames: 0, partial: [] as { t: number; what: string }[] };
+    const out = { frames: 0, shown: 0, firstShown: -1, heldFrames: 0, partial: [] as { t: number; since: number; what: string }[] };
+    let opened: Set<string> | null = null;
+    let listAt = -1;
     (window as unknown as { __whole: typeof out }).__whole = out;
     const onScreen = (el: Element, view: DOMRect) => {
       const r = el.getBoundingClientRect();
@@ -63,10 +73,13 @@ async function cold(scene: string, throttle: number): Promise<Watched> {
       out.frames++;
       const list = document.querySelector<HTMLElement>(".feed-list");
       const feed = list?.parentElement;
-      if (list && (list.hasAttribute("data-unfinished") || getComputedStyle(list).visibility === "hidden")) out.heldFrames++;
-      if (list && feed && !list.hasAttribute("data-unfinished") && getComputedStyle(list).visibility !== "hidden") {
+      if (list && listAt < 0) listAt = performance.now();
+      const painted = !!list && getComputedStyle(list).visibility !== "hidden";
+      if (list && !painted) out.heldFrames++;
+      if (list && feed && painted) {
         out.shown++;
         if (out.firstShown < 0) out.firstShown = out.frames;
+        opened ??= new Set([...list.querySelectorAll("[data-seq]")].map((r) => r.getAttribute("data-seq") ?? ""));
         const view = feed.getBoundingClientRect();
         for (const el of list.querySelectorAll(".md-plain, .lazy-wait")) {
           const row = el.closest("[data-seq], section.blk");
@@ -75,8 +88,9 @@ async function cold(scene: string, throttle: number): Promise<Watched> {
               ? `plain text in row ${row.getAttribute("data-seq") ?? "doc block"}`
               : `a loading card in row ${row.getAttribute("data-seq") ?? "doc block"}`
             : "a thread doc still loading under the rows";
-          if (!row || onScreen(row, view)) {
-            if (out.partial.length < 10) out.partial.push({ t: Math.round(performance.now()), what });
+          const atOpen = !row || !row.hasAttribute("data-seq") || opened?.has(row.getAttribute("data-seq") ?? "");
+          if (atOpen && (!row || onScreen(row, view))) {
+            if (out.partial.length < 10) out.partial.push({ t: Math.round(performance.now()), since: Math.round(performance.now() - listAt), what });
           }
         }
       }
@@ -93,13 +107,24 @@ async function cold(scene: string, throttle: number): Promise<Watched> {
 }
 
 try {
-  for (const throttle of engine === "chromium" ? [1, 4] : [1])
-    for (const scene of SCENES) {
-      const w = await cold(scene, throttle);
-      expect(w.shown > 0, `${scene} @${throttle}x: the feed showed (${w.shown} of ${w.frames} frames watched)`);
-      expect(w.firstShown > 1, `${scene} @${throttle}x: watching began before the feed first showed (it showed on frame ${w.firstShown}, after ${w.heldFrames} frames with the feed present but held)`);
-      expect(w.partial.length === 0, `${scene} @${throttle}x: no frame painted a partial row${w.partial.length ? `: ${w.partial.map((p) => `${p.what} at ${p.t} ms`).join("; ")}` : ""}`);
-    }
+  const runs = [
+    ...(engine === "chromium" ? [1, 4] : [1]).flatMap((throttle) => SCENES.map((scene) => ({ scene, throttle, slow: false }))),
+    ...SCENES.map((scene) => ({ scene, throttle: 1, slow: true })),
+  ];
+  for (const { scene, throttle, slow } of runs) {
+    const w = await cold(scene, throttle, slow);
+    const name = `${scene} @${throttle}x${slow ? `, markdown and doc code ${SLOW_MS} ms late` : ""}`;
+    expect(w.shown > 0, `${name}: the feed showed (${w.shown} of ${w.frames} frames watched)`);
+    expect(w.firstShown > 1, `${name}: watching began before the feed first showed (it showed on frame ${w.firstShown}, after ${w.heldFrames} frames with the feed present but held)`);
+    const early = w.partial.filter((p) => p.since < BACKSTOP_MS);
+    const list = (xs: Watched["partial"]) => xs.map((p) => `${p.what}, ${p.since} ms after the feed mounted`).join("; ");
+    if (throttle === 1 && !slow) expect(w.partial.length === 0, `${name}: no frame painted a partial row it opened with${w.partial.length ? `: ${list(w.partial)}` : ""}`);
+    else
+      expect(
+        early.length === 0,
+        `${name}: no partial row it opened with showed before the 1 s backstop${early.length ? `: ${list(early)}` : w.partial.length ? ` (the backstop showed ${w.partial.length}, ${w.partial[0]?.since} ms after the feed mounted)` : ""}`,
+      );
+  }
 } finally {
   await browser.close();
   await server.stop(true);
