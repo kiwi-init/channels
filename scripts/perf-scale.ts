@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import * as Effect from "effect/Effect";
 import { chromium, type CDPSession, type Page } from "playwright-core";
+import { readSeededFrame, reloadFromHost, watchSeededFrame } from "./seeded-frame.ts";
 import { RelayError } from "@kiwi/core/client.ts";
 import { chooseThread } from "@kiwi/core/state.ts";
 import { AgentSession, oneLook, runAgent } from "../src/agent.ts";
@@ -339,7 +340,7 @@ try {
 
   await post(early, perSender);
   const seeder = seats[0]!;
-  await patiently(() =>
+  const seededSeq = await patiently(() =>
     runAgent(
       oneLook(
         Effect.gen(function* () {
@@ -357,9 +358,12 @@ try {
   await mark(`${MESSAGES} messages, live`);
 
   let reloadMs = 0;
+  let reloadPolledMs = 0;
+  await watchSeededFrame(context, { seq: seededSeq, text: SEEDED, budgetMs: 60_000 });
   for (const throttle of [1, 4]) {
     if (!GATED || throttle === 1) {
       await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      const epochBefore = Date.now();
       const reloadAt = performance.now();
       await page.reload();
       await page
@@ -372,7 +376,10 @@ try {
           writeFileSync(join(tmpdir(), "kiwi-perf-scale-reload.txt"), await page.evaluate(() => document.body.innerText));
           throw e;
         });
-      reloadMs = Math.round(performance.now() - reloadAt);
+      reloadPolledMs = Math.round(performance.now() - reloadAt);
+      const frame = await readSeededFrame(page, 10_000);
+      const fromHost = reloadFromHost(epochBefore, frame);
+      reloadMs = fromHost.reloadMs;
       const inPage = await page.evaluate(() => {
         const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
         return {
@@ -403,7 +410,18 @@ try {
           longTasks: ((window as unknown as { __long?: number[] }).__long ?? []).map((d) => Math.round(d)),
         };
       });
-      if (throttle === 1) report["reload, in page"] = inPage;
+      const probe = {
+        seededFrameMs: Math.round(frame.firstFrameMs),
+        confirmedFrameMs: Math.round(frame.confirmedMs),
+        frames: frame.frames,
+        resets: frame.resets,
+        navigationOffsetMs: fromHost.navigationOffsetMs,
+        clockSkewMs: Math.round(frame.clockSkewMs * 10) / 10,
+        polledMs: reloadPolledMs,
+        frameMs: reloadMs,
+      };
+      log("reload probe", JSON.stringify(probe));
+      if (throttle === 1) report["reload, in page"] = { ...inPage, ...probe };
       log("reload in page", JSON.stringify(inPage));
       await page.waitForTimeout(2000);
       await drain(page);
@@ -446,6 +464,7 @@ try {
       calibrationMs: calibration.ms,
       calibrationRepsMs: calibration.reps,
       reloadToFirstScreenMs: throttle === 1 ? reloadMs : undefined,
+      reloadPolledMs: throttle === 1 ? reloadPolledMs : undefined,
       ...(switching
         ? {
             switchMedianMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, median(v)])),
