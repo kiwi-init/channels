@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.kiwiinit.channels.engine.Chosen
+import com.kiwiinit.channels.engine.EngineException
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.theme.ChannelsTheme
@@ -39,10 +40,11 @@ class QuestionTest {
 
     @Test
     fun tappingAnOptionOnAnUnheldQuestionRecordsTheAnswer() {
-        val asked = mutableListOf<JsonObject>()
+        val answers = mutableListOf<JsonObject>()
         lateinit var model: AppModel
         model = sample(RuntimeEnvironment.getApplication()) { request ->
-            asked += request
+            if (request.getValue("op").jsonPrimitive.content != "answer") throw EngineException("only answers here")
+            answers += request
             val room = model.rooms.getValue(DEV)
             val answer = request.getValue("text").jsonPrimitive.content
             model.rooms[DEV] = room.copy(messages = room.messages.map { if (it.seq == UNHELD_SEQ) it.copy(waiting = false, chosen = Chosen(answer, room.me)) else it })
@@ -51,8 +53,8 @@ class QuestionTest {
         open(model, waiting = true)
         compose.onNodeWithText("Take it now").assertIsEnabled().performClick()
         compose.waitForIdle()
-        assertEquals(1, asked.size)
-        val request = asked.single()
+        assertEquals(1, answers.size)
+        val request = answers.single()
         assertEquals("answer", request.getValue("op").jsonPrimitive.content)
         assertEquals(DEV, request.getValue("code").jsonPrimitive.content)
         assertEquals(UNHELD_SEQ.toString(), request.getValue("seq").jsonPrimitive.content)
@@ -64,16 +66,17 @@ class QuestionTest {
 
     @Test
     fun aQuestionNotWaitingForYouStaysShut() {
-        val asked = mutableListOf<JsonObject>()
+        val answers = mutableListOf<JsonObject>()
         val model = sample(RuntimeEnvironment.getApplication()) { request ->
-            asked += request
+            if (request.getValue("op").jsonPrimitive.content != "answer") throw EngineException("only answers here")
+            answers += request
             JsonPrimitive(0)
         }
         open(model, waiting = false)
         compose.onNodeWithText("Question").assertExists()
         compose.onNodeWithText("Take it now").assertIsNotEnabled().performClick()
         compose.waitForIdle()
-        assertEquals(0, asked.size)
+        assertEquals(0, answers.size)
     }
 
     private fun open(model: AppModel, waiting: Boolean) {
