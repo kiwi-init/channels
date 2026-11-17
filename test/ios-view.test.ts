@@ -413,17 +413,22 @@ describe("who a step waits for, and when it's answered, on the phone (#2515)", (
   test("a step reply answers it; so does a can't-do-it with its reason", async () => {
     const answered = await signedLog([stepTo(["jow"]), say("jow", "Done", { re: [1], stepReply: done })]);
     expect(card(answered, "jow", 1)?.waiting).toBe(false);
+    expect(card(answered, "jow", 1)?.stepAnswer).toEqual({ by: "jow", outcome: "done" });
     const cant = await signedLog([stepTo(["jow"]), say("jow", "Can't do it: the Mac is away", { re: [1], stepReply: { outcome: "cant", reason: "the Mac is away" } })]);
     expect(card(cant, "jow", 1)?.waiting).toBe(false);
+    expect(card(cant, "jow", 1)?.stepAnswer).toEqual({ by: "jow", outcome: "cant" });
   });
 
   test("a plain reply answers a step, except where answers are by tap; a step reply answers it there too", async () => {
     const plain = await signedLog([stepTo(["jow"]), say("jow", "on it after lunch", { re: [1] })]);
     expect(card(plain, "jow", 1)?.waiting).toBe(false);
+    expect(card(plain, "jow", 1)?.stepAnswer).toEqual({ by: "jow", outcome: null });
     const tapOnly = await signedLog([ev("jow", { op: "asks.tap.set", on: true }), stepTo(["jow"]), say("jow", "on it after lunch", { re: [2] })]);
     expect(card(tapOnly, "jow", 2)?.waiting).toBe(true);
+    expect(card(tapOnly, "jow", 2)?.stepAnswer).toBeNull();
     const tapped = await signedLog([ev("jow", { op: "asks.tap.set", on: true }), stepTo(["jow"]), say("jow", "Done", { re: [2], stepReply: done })]);
     expect(card(tapped, "jow", 2)?.waiting).toBe(false);
+    expect(card(tapped, "jow", 2)?.stepAnswer).toEqual({ by: "jow", outcome: "done" });
   });
 
   test("a closed step waits for nobody", async () => {

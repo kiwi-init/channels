@@ -104,6 +104,7 @@ export interface MessageView {
   chosen: { choice: string; by: string } | null;
   waiting: boolean;
   step: Step | null;
+  stepAnswer: { by: string; outcome: StepReply["outcome"] | null } | null;
   images: number;
   task: number | null;
   reactions: ReactionView[];
