@@ -39,6 +39,8 @@ const expect = (ok: boolean, what: string) => {
 
 interface Watched {
   frames: number;
+  firstShown: number;
+  heldFrames: number;
   shown: number;
   partial: { t: number; what: string }[];
 }
@@ -51,7 +53,7 @@ async function cold(scene: string, throttle: number): Promise<Watched> {
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
   }
   await page.addInitScript((watchMs: number) => {
-    const out = { frames: 0, shown: 0, partial: [] as { t: number; what: string }[] };
+    const out = { frames: 0, shown: 0, firstShown: -1, heldFrames: 0, partial: [] as { t: number; what: string }[] };
     (window as unknown as { __whole: typeof out }).__whole = out;
     const onScreen = (el: Element, view: DOMRect) => {
       const r = el.getBoundingClientRect();
@@ -61,8 +63,10 @@ async function cold(scene: string, throttle: number): Promise<Watched> {
       out.frames++;
       const list = document.querySelector<HTMLElement>(".feed-list");
       const feed = list?.parentElement;
+      if (list && (list.hasAttribute("data-unfinished") || getComputedStyle(list).visibility === "hidden")) out.heldFrames++;
       if (list && feed && !list.hasAttribute("data-unfinished") && getComputedStyle(list).visibility !== "hidden") {
         out.shown++;
+        if (out.firstShown < 0) out.firstShown = out.frames;
         const view = feed.getBoundingClientRect();
         for (const el of list.querySelectorAll(".md-plain, .lazy-wait")) {
           const row = el.closest("[data-seq], section.blk");
@@ -93,6 +97,7 @@ try {
     for (const scene of SCENES) {
       const w = await cold(scene, throttle);
       expect(w.shown > 0, `${scene} @${throttle}x: the feed showed (${w.shown} of ${w.frames} frames watched)`);
+      expect(w.firstShown > 1, `${scene} @${throttle}x: watching began before the feed first showed (it showed on frame ${w.firstShown}, after ${w.heldFrames} frames with the feed present but held)`);
       expect(w.partial.length === 0, `${scene} @${throttle}x: no frame painted a partial row${w.partial.length ? `: ${w.partial.map((p) => `${p.what} at ${p.t} ms`).join("; ")}` : ""}`);
     }
 } finally {
