@@ -26,13 +26,14 @@ const SHOWN: Readonly<Record<Mood, EyeShape | null>> = {
   error: null,
 }
 
-function useShapes(mood: Mood): { shapes: ReadonlySet<EyeShape>; first: EyeShape | null } {
-  const shown = SHOWN[mood]
-  const [first] = useState(shown)
-  const [shapes, setShapes] = useState<ReadonlySet<EyeShape>>(() => new Set(shown ? [shown] : []))
-  if (shown && !shapes.has(shown)) setShapes(new Set([...shapes, shown]))
-  return { shapes, first }
+function useSeen(mood: Mood): { seen: ReadonlySet<Mood>; first: Mood } {
+  const [first] = useState(mood)
+  const [seen, setSeen] = useState<ReadonlySet<Mood>>(() => new Set([mood]))
+  if (!seen.has(mood)) setSeen(new Set([...seen, mood]))
+  return { seen, first }
 }
+
+const shapesOf = (seen: ReadonlySet<Mood>): ReadonlySet<EyeShape> => new Set([...seen].flatMap((m) => SHOWN[m] ?? []))
 
 function Eye({ x, side, shapes, first }: { x: number; side: -1 | 1; shapes: ReadonlySet<EyeShape>; first: EyeShape | null }) {
   const named = (shape: EyeShape, kind: string) => `eye ${kind}eye-${shape}${shape === first ? "" : " eye-late"}`
@@ -49,7 +50,10 @@ function Eye({ x, side, shapes, first }: { x: number; side: -1 | 1; shapes: Read
 
 export function RoleFace({ role, harness, mood = "free" }: { role?: string | undefined; harness?: Harness | undefined; mood?: Mood }) {
   const id = useId()
-  const { shapes, first } = useShapes(mood)
+  const { seen, first } = useSeen(mood)
+  const shapes = shapesOf(seen)
+  const firstShape = SHOWN[first]
+  const mark = (on: Mood, name: string) => `${name}${on === first ? "" : " face-late"}`
   const c = CHARACTERS[faceOf(role)]
   const logo = harness ? LOGOS[harness] : undefined
   const scale = BADGE / 24
@@ -62,8 +66,8 @@ export function RoleFace({ role, harness, mood = "free" }: { role?: string | und
           <rect x="-10" y="-10" width="120" height="120" fill="#fff" />
           <g transform={eyes}>
             <g className="face-look">
-              <Eye x={-half} side={-1} shapes={shapes} first={first} />
-              <Eye x={half} side={1} shapes={shapes} first={first} />
+              <Eye x={-half} side={-1} shapes={shapes} first={firstShape} />
+              <Eye x={half} side={1} shapes={shapes} first={firstShape} />
             </g>
           </g>
           {logo && (
@@ -77,9 +81,9 @@ export function RoleFace({ role, harness, mood = "free" }: { role?: string | und
       </defs>
       <g className="face-rig">
         <path className="face-body" d={c.body} mask={`url(#${CSS.escape(id)})`} />
-        <path className="face-cross" transform={eyes} d={`M${-half - 3.6} -3.6l7.2 7.2m0 -7.2l-7.2 7.2M${half - 3.6} -3.6l7.2 7.2m0 -7.2l-7.2 7.2`} />
-        <path className="face-ask" d="M89.8 5h4.4l-1 11h-2.4zM92 18a2.6 2.6 0 1 1 0 5.2a2.6 2.6 0 1 1 0-5.2z" />
-        <path className="face-spark" d="M90 3l2.3 6.7L99 12l-6.7 2.3L90 21l-2.3-6.7L81 12l6.7-2.3z" />
+        {seen.has("error") && <path className={mark("error", "face-cross")} transform={eyes} d={`M${-half - 3.6} -3.6l7.2 7.2m0 -7.2l-7.2 7.2M${half - 3.6} -3.6l7.2 7.2m0 -7.2l-7.2 7.2`} />}
+        {seen.has("waiting") && <path className={mark("waiting", "face-ask")} d="M89.8 5h4.4l-1 11h-2.4zM92 18a2.6 2.6 0 1 1 0 5.2a2.6 2.6 0 1 1 0-5.2z" />}
+        {seen.has("done") && <path className={mark("done", "face-spark")} d="M90 3l2.3 6.7L99 12l-6.7 2.3L90 21l-2.3-6.7L81 12l6.7-2.3z" />}
       </g>
       {logo && (
         <g className="face-badge" data-harness={harness} transform={`scale(${scale})`}>

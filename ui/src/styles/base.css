@@ -406,6 +406,11 @@ kbd {
     opacity: 0;
     transform: scale(0.2);
   }
+
+  .face .face-late {
+    opacity: 0;
+    scale: 0.3;
+  }
 }
 
 .face .eye:not(.eye-line) {
