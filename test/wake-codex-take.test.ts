@@ -18,7 +18,7 @@ const sessions = join(codex, "sessions");
 const tmuxSock = join(codex, "tmux.sock");
 const tuiBin = join(codex, "tui");
 const rpc: string[] = [];
-let onStart: () => void = () => {};
+let hooks: Partial<Record<string, () => void | Promise<void>>> = {};
 let server: ReturnType<typeof Bun.serve> | undefined;
 const prevHome = process.env.CODEX_HOME;
 const hasTmux = !!Bun.which("tmux");
@@ -64,10 +64,12 @@ beforeAll(() => {
     unix: join(codex, "app-server-control", "app-server-control.sock"),
     fetch: (req, srv) => (srv.upgrade(req, { data: undefined }) ? undefined : new Response("websocket only", { status: 400 })),
     websocket: {
-      message(ws, raw) {
+      async message(ws, raw) {
         const m = JSON.parse(String(raw)) as { id?: number; method: string };
         rpc.push(m.method);
-        if (m.method === "thread/queue/start") onStart();
+        const hook = hooks[m.method];
+        delete hooks[m.method];
+        await hook?.();
         if (m.id !== undefined) ws.send(JSON.stringify({ id: m.id, result: {} }));
       },
     },
@@ -84,7 +86,7 @@ afterAll(() => {
 
 beforeEach(async () => {
   rpc.length = 0;
-  onStart = () => {};
+  hooks = {};
   await quiet();
   await until("no wake-not-taken alert left from before", async () => (await untaken()) === null, 10_000);
 });
@@ -214,7 +216,7 @@ describe.skipIf(!hasTmux)("a Codex queue paused by an interrupted turn", () => {
     ]);
     const pane = window("restarted", tui("resume 01a1e000-0000-7000-8000-00000000000d -a never"));
     bindAs({ harness: "codex", session: "01a1e000-0000-7000-8000-00000000000d", tmux: { socket: tmuxSock, pane } });
-    onStart = () => void readAll();
+    hooks["thread/queue/start"] = () => void readAll();
     await wakeOf("for a session restarted after a shutdown");
     await until("Kiwi resuming the paused queue", () => rpc.includes("thread/queue/start"), TAKE_MS * 4);
     expect(rpc).toEqual(["initialize", "initialized", "thread/resume", "thread/queue/start"]);
@@ -224,6 +226,44 @@ describe.skipIf(!hasTmux)("a Codex queue paused by an interrupted turn", () => {
     expect(await untaken()).toBeNull();
     expect(rpc.filter((m) => m === "thread/queue/start")).toHaveLength(1);
   });
+
+  const races = [
+    ["initialize", "the binding moves to another thread", ["initialize", "initialized"]],
+    ["thread/resume", "the binding moves to another thread", ["initialize", "initialized", "thread/resume"]],
+    ["initialize", "the thread's turn is interrupted again", ["initialize", "initialized"]],
+    ["thread/resume", "the thread's turn is interrupted again", ["initialize", "initialized", "thread/resume"]],
+    ["initialize", "the seat reads the wake", ["initialize", "initialized"]],
+    ["thread/resume", "the seat reads the wake", ["initialize", "initialized", "thread/resume"]],
+  ] as const;
+  for (const [i, [stage, what, sent]] of races.entries())
+    test.if(exactArgv)(`never starts the queue when ${what} while Kiwi waits on ${stage}`, async () => {
+      const id = `01a1e000-0000-7000-8000-0000000000${20 + i * 2}`;
+      const other = `01a1e000-0000-7000-8000-0000000000${21 + i * 2}`;
+      thread(id, [
+        { type: "task_started", at: Date.now() - 3_600_000 },
+        { type: "turn_aborted", at: Date.now() - 3_590_000 },
+      ]);
+      thread(other, [{ type: "task_complete", at: Date.now() - 60_000 }]);
+      const pane = window("race", tui(`resume ${id}`));
+      bindAs({ harness: "codex", session: id, tmux: { socket: tmuxSock, pane } });
+      const resumes = wakeRows().filter((r) => r.includes("resumed Codex")).length;
+      hooks[stage] = async () => {
+        if (what === "the binding moves to another thread") bindAs({ harness: "codex", session: other, tmux: { socket: tmuxSock, pane } });
+        else if (what === "the seat reads the wake") await readAll();
+        else
+          thread(id, [
+            { type: "task_started", at: Date.now() - 2_000 },
+            { type: "turn_aborted", at: Date.now() },
+          ]);
+      };
+      await wakeOf(`for a restarted session, while ${what} during ${stage}`);
+      await until(`Kiwi reaching ${stage}`, () => rpc.includes(stage), TAKE_MS * 4);
+      await Bun.sleep(TAKE_MS * 2 + 500);
+      expect(rpc).toEqual([...sent]);
+      expect(wakeRows().filter((r) => r.includes("resumed Codex")).length).toBe(resumes);
+      if (what !== "the thread's turn is interrupted again") expect(await untaken()).toBeNull();
+      await readAll();
+    });
 
   test.if(exactArgv)("stays paused when the turn was interrupted in the running session, and says it was paused by you", async () => {
     const pane = window("live", `${tui("resume 01a1e000-0000-7000-8000-00000000000e")} & sleep 2.5; ${tui("exec an-unrelated-task")} & wait`);

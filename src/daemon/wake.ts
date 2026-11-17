@@ -284,25 +284,47 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, wake
       setUntaken(seat, `Kiwi resumed thread ${t.thread}'s paused queue, but no turn has read the wake yet; type in its window to continue`);
       return again();
     }
-    const now = record();
-    const recheck = now ? await unread() : "read";
-    if (!now || recheck === "read") return setUntaken(seat, null);
-    const lastNow = codexLastTurn(rollout);
-    const restartNow = codexWindowRestart(now, t.thread, last.at);
-    if (recheck === null || lastNow.kind !== "aborted" || lastNow.turn !== last.turn || restartNow.kind !== "restarted") return again();
-    const why = await startCodexQueue(codexControlSocket(home), t.thread);
+    let cursor = left.cursor;
+    let restartedAt = restart.at;
+    let settled: "moved" | "read" | null = null;
+    const stillOwed = async (): Promise<string | null> => {
+      if (!current(seat) || stopped()) return "the daemon let this seat go";
+      const now = record();
+      if (!now) {
+        settled = "moved";
+        return "the seat's binding moved off this thread";
+      }
+      const owed = await unread();
+      if (owed === null) return "the wake's unread state can't be read";
+      if (owed === "read") {
+        settled = "read";
+        return "the wake was read";
+      }
+      cursor = owed.cursor;
+      const lastNow = codexLastTurn(rollout);
+      if (lastNow.kind !== "aborted" || lastNow.turn !== last.turn) return "the thread's last turn changed";
+      const restartNow = codexWindowRestart(now, t.thread, last.at);
+      if (restartNow.kind !== "restarted") return "the restart can no longer be proven";
+      restartedAt = restartNow.at;
+      return null;
+    };
+    const started = await startCodexQueue(codexControlSocket(home), t.thread, stillOwed);
+    if (started.kind === "abandoned") {
+      if (settled) return setUntaken(seat, null);
+      return again();
+    }
     appendWakeRow(dir, {
       at: Date.now(),
       alias: seat.alias,
       agent: seat.agent,
       via: "codex-queue",
       unread: t.seqs.length,
-      result: why === null ? "ok" : "failed",
-      why: why ?? `resumed Codex's paused queue: the session restarted at ${utc(restartNow.at)}, after its turn was interrupted at ${utc(last.at)}`,
-      cursor: recheck.cursor,
+      result: started.kind === "started" ? "ok" : "failed",
+      why: started.kind === "started" ? `resumed Codex's paused queue: the session restarted at ${utc(restartedAt)}, after its turn was interrupted at ${utc(last.at)}` : started.why,
+      cursor,
     });
-    if (why !== null) {
-      setUntaken(seat, `Codex paused thread ${t.thread}'s queue when its turn was interrupted at ${utc(last.at)}, and resuming it failed: ${why}`);
+    if (started.kind === "failed") {
+      setUntaken(seat, `Codex paused thread ${t.thread}'s queue when its turn was interrupted at ${utc(last.at)}, and resuming it failed: ${started.why}`);
       return again();
     }
     setUntaken(seat, null);

@@ -179,23 +179,31 @@ export function codexWindowRestart(record: SeatRecord, thread: string, abortedAt
   return Math.floor(started / 1000) > Math.floor(abortedAt / 1000) ? { kind: "restarted", at: started } : { kind: "live", at: started };
 }
 
-interface RpcCall {
-  method: string;
-  params: Record<string, unknown>;
-}
-
 type RpcAnswer = { ok: true; result: unknown } | { ok: false; error: string };
 
-async function codexRpc(socket: string, calls: readonly RpcCall[], ms = 10_000): Promise<RpcAnswer[] | { failed: string }> {
-  if (!existsSync(socket)) return { failed: "Codex's app-server isn't running (no control socket)" };
+type RpcCall = (method: string, params: Record<string, unknown>) => Promise<RpcAnswer>;
+
+async function codexSession<T>(socket: string, work: (call: RpcCall) => Promise<T>, ms = 10_000): Promise<{ ok: true; value: T } | { ok: false; why: string }> {
+  if (!existsSync(socket)) return { ok: false, why: "Codex's app-server isn't running (no control socket)" };
   const ws = new WebSocket(`ws+unix://${socket}`);
-  const answers: RpcAnswer[] = [];
   const waiting = new Map<number, (a: RpcAnswer) => void>();
-  const call = (id: number, method: string, params: Record<string, unknown>): Promise<RpcAnswer> =>
-    new Promise((resolve) => {
+  let next = 1;
+  let closed = false;
+  const answered = <A>(work: Promise<A>, late: A): Promise<A> => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    return Promise.race([work, new Promise<A>((resolve) => (timer = setTimeout(() => resolve(late), ms)))]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
+  };
+  const call: RpcCall = (method, params) => {
+    if (closed) return Promise.resolve({ ok: false, error: "Kiwi closed its connection to Codex's app-server" });
+    const id = next++;
+    const reply = new Promise<RpcAnswer>((resolve) => {
       waiting.set(id, resolve);
       ws.send(JSON.stringify({ id, method, params }));
     });
+    return answered(reply, { ok: false, error: `no answer to ${method} in ${ms / 1000} s` });
+  };
   ws.onmessage = (e) => {
     let m: unknown;
     try {
@@ -211,37 +219,35 @@ async function codexRpc(socket: string, calls: readonly RpcCall[], ms = 10_000):
     const err = "error" in m && m.error && typeof m.error === "object" && "message" in m.error ? String(m.error.message) : null;
     done(err === null ? { ok: true, result: "result" in m ? m.result : null } : { ok: false, error: err });
   };
-  const talk = async (): Promise<RpcAnswer[] | { failed: string }> => {
-    await new Promise<void>((resolve, reject) => {
-      ws.onopen = () => resolve();
-      ws.onerror = () => reject(new Error("Codex's app-server refused the connection"));
-    });
-    const hello = await call(1, "initialize", { clientInfo: { name: "kiwi", version: "1" }, capabilities: { experimentalApi: true } });
-    if (!hello.ok) return { failed: `Codex's app-server refused Kiwi: ${hello.error}` };
-    ws.send(JSON.stringify({ method: "initialized" }));
-    for (const [i, c] of calls.entries()) answers.push(await call(i + 2, c.method, c.params));
-    return answers;
-  };
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  const late = new Promise<{ failed: string }>((resolve) => {
-    timer = setTimeout(() => resolve({ failed: `Codex's app-server didn't answer in ${ms / 1000} s` }), ms);
-  });
   try {
-    return await Promise.race([talk().catch((err: unknown) => ({ failed: err instanceof Error ? err.message : String(err) })), late]);
+    const opened = new Promise<boolean>((resolve) => {
+      ws.onopen = () => resolve(true);
+      ws.onerror = () => resolve(false);
+    });
+    if (!(await answered(opened, false))) return { ok: false, why: "Codex's app-server refused the connection or didn't answer" };
+    const hello = await call("initialize", { clientInfo: { name: "kiwi", version: "1" }, capabilities: { experimentalApi: true } });
+    if (!hello.ok) return { ok: false, why: `Codex's app-server refused Kiwi: ${hello.error}` };
+    ws.send(JSON.stringify({ method: "initialized" }));
+    return { ok: true, value: await work(call) };
   } finally {
-    if (timer) clearTimeout(timer);
+    closed = true;
     ws.close();
   }
 }
 
-export async function startCodexQueue(socket: string, thread: string): Promise<string | null> {
-  const answers = await codexRpc(socket, [
-    { method: "thread/resume", params: { threadId: thread } },
-    { method: "thread/queue/start", params: { threadId: thread } },
-  ]);
-  if ("failed" in answers) return answers.failed;
-  const [resumed, started] = answers;
-  if (!resumed?.ok) return `Codex couldn't resume thread ${thread}: ${resumed?.error ?? "no answer"}`;
-  if (started?.ok || /active or pending turn|queue is empty/i.test(started?.error ?? "")) return null;
-  return `Codex couldn't start thread ${thread}'s queue: ${started?.error ?? "no answer"}`;
+export type QueueStart = { kind: "started" } | { kind: "abandoned"; why: string } | { kind: "failed"; why: string };
+
+export async function startCodexQueue(socket: string, thread: string, stillOwed: () => Promise<string | null>): Promise<QueueStart> {
+  const ran = await codexSession(socket, async (call): Promise<QueueStart> => {
+    const beforeResume = await stillOwed();
+    if (beforeResume !== null) return { kind: "abandoned", why: beforeResume };
+    const resumed = await call("thread/resume", { threadId: thread });
+    if (!resumed.ok) return { kind: "failed", why: `Codex couldn't resume thread ${thread}: ${resumed.error}` };
+    const beforeStart = await stillOwed();
+    if (beforeStart !== null) return { kind: "abandoned", why: beforeStart };
+    const started = await call("thread/queue/start", { threadId: thread });
+    if (started.ok || /active or pending turn|queue is empty/i.test(started.error)) return { kind: "started" };
+    return { kind: "failed", why: `Codex couldn't start thread ${thread}'s queue: ${started.error}` };
+  });
+  return ran.ok ? ran.value : { kind: "failed", why: ran.why };
 }
