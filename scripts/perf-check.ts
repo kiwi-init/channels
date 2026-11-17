@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 
 type Speed = "@1x" | "@4x";
@@ -131,12 +131,102 @@ export function perfCheck(runs: readonly string[], nightly = false): { code: 0 |
   return { code: over.length ? 1 : 0, text: lines.join("\n") };
 }
 
+export const REGRESSION = { ratio: 1.15, ms: 10 } as const;
+const PAIRED_RUNS = 4;
+const TOLERANCE = 1e-9;
+type Side = "base" | "head";
+const SIDES: readonly Side[] = ["base", "head"];
+
+export function pairedCheck(runs: readonly string[], failedRuns: readonly string[] = []): { code: 0 | 1; text: string } {
+  const problems: string[] = failedRuns.map((r) => `${r}: the run failed, so no verdict can rest on it`);
+  const sides: Record<Side, { file: string; report: Record<string, unknown>; calibration: Record<Speed, number> | string }[]> = { base: [], head: [] };
+  for (const file of runs) {
+    const report = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+    const control = report.control;
+    const named = /-(base|head)\.json$/.exec(basename(file))?.[1];
+    if ((control !== "base" && control !== "head") || control !== named) {
+      problems.push(`${basename(file)}: its control is ${String(control)}, its name says ${named ?? "nothing"}`);
+      continue;
+    }
+    sides[control].push({ file, report, calibration: calibrationOf(report) });
+  }
+  const apps: Record<Side, string[]> = { base: [], head: [] };
+  for (const side of SIDES) {
+    if (sides[side].length !== PAIRED_RUNS) problems.push(`${side}: ${sides[side].length} reports, ${PAIRED_RUNS} expected`);
+    apps[side] = [...new Set(sides[side].map((r) => String(r.report.app ?? "unknown")))];
+    if (apps[side].length !== 1 || apps[side][0] === "unknown") problems.push(`${side}: the app commit is ${apps[side].join(", ") || "missing"}, one expected`);
+  }
+  if (apps.base.length === 1 && apps.base[0] === apps.head[0]) problems.push(`base and head ran the same app commit ${apps.base[0]}`);
+
+  const rows: string[] = [];
+  const failures: string[] = [];
+  const exempt: string[] = [];
+  for (const [name, l] of Object.entries(limits)) {
+    if (l.nightly || l.source) continue;
+    const median_: Partial<Record<Side, number>> = {};
+    for (const side of SIDES) {
+      const each = sides[side].map((r) => ({ file: r.file, why: typeof r.calibration === "string" ? r.calibration : "the metric is missing", v: scaled(r.report, l, r.calibration) }));
+      const missing = each.filter((x) => x.v === null);
+      for (const x of missing) failures.push(`${l.what}: ${basename(x.file)} has no usable value (${x.why}), so the pair can't be judged on it (${name})`);
+      const seen = each.flatMap((x) => (x.v === null ? [] : [x.v]));
+      if (!missing.length && seen.length === PAIRED_RUNS) median_[side] = median(seen);
+    }
+    const { base, head } = median_;
+    if (base === undefined || head === undefined) {
+      rows.push(`| ${l.what} | ${base === undefined ? "not measured" : round(base)} | ${head === undefined ? "not measured" : round(head)} | | ${l.gate ?? "none yet"} | not measured |`);
+      continue;
+    }
+    const regressed = head - base * REGRESSION.ratio > TOLERANCE * Math.max(1, Math.abs(base)) && head - base - REGRESSION.ms > TOLERANCE;
+    const headOver = l.gate !== null && head > l.gate;
+    const baseOver = l.gate !== null && base > l.gate;
+    const change = `${head - base >= 0 ? "+" : ""}${round(head - base)} ms (${base > 0 ? `${head >= base ? "+" : ""}${Math.round(((head - base) / base) * 100)}%` : "n/a"})`;
+    let verdict: string;
+    if (regressed) {
+      verdict = "regression";
+      failures.push(`${l.what}: ${round(head)} against the base's ${round(base)}, more than ${Math.round((REGRESSION.ratio - 1) * 100)}% and ${REGRESSION.ms} ms slower (${name})`);
+    } else if (headOver && baseOver) {
+      verdict = "over its gate, exempt: the base is over it too";
+      exempt.push(`${l.what}: ${round(head)}, over its gate ${l.gate}; the base is over it too (${round(base)}) and this change isn't a regression (${name})`);
+    } else if (headOver) {
+      verdict = "over its gate";
+      failures.push(`${l.what}: ${round(head)}, over its gate ${l.gate}, which the base meets (${round(base)}) (${name})`);
+    } else verdict = "ok";
+    rows.push(`| ${l.what} | ${round(base)} | ${round(head)} | ${change} | ${l.gate ?? "none yet"} | ${verdict} |`);
+  }
+  const calibrations = SIDES.map(
+    (side) => `${side} ${sides[side].map((r) => (typeof r.calibration === "string" ? "left out" : `${r.calibration["@1x"]}/${r.calibration["@4x"]}`)).join(", ") || "none"}`,
+  );
+  const leftOut = SIDES.flatMap((side) => sides[side].flatMap((r) => (typeof r.calibration === "string" ? [`${basename(r.file)}: ${r.calibration}`] : [])));
+  const failed = problems.length + failures.length > 0;
+  const lines = [
+    `**perf-scale, paired on one runner: head ${apps.head.join(", ") || "?"} against its merge base ${apps.base.join(", ") || "?"}, ${PAIRED_RUNS} alternating runs each**`,
+    "",
+    `Each side is the median of its runs, scaled as the gates are. A regression is more than ${Math.round((REGRESSION.ratio - 1) * 100)}% and more than ${REGRESSION.ms} ms slower than the base. A gate the base also misses doesn't fail a head that isn't a regression. Calibrations @1x/@4x ms: ${calibrations.join("; ")}.`,
+    "",
+    "| What | Base | Head | Change | Gate | Verdict |",
+    "|---|---|---|---|---|---|",
+    ...rows,
+    ...(leftOut.length ? ["", "Left out of the scaled timings:", ...leftOut.map((s) => `- ${s}`)] : []),
+    ...(exempt.length ? ["", "Over a gate the base also misses (not a failure):", ...exempt.map((s) => `- ${s}`)] : []),
+    ...(problems.length ? ["", "The pair can't be judged:", ...problems.map((s) => `- ${s}`)] : []),
+    ...(failures.length ? ["", "Failed:", ...failures.map((s) => `- ${s}`)] : []),
+  ];
+  return { code: failed ? 1 : 0, text: lines.join("\n") };
+}
+
 if (import.meta.main) {
   const args = process.argv.slice(2);
   const runs = args.filter((a) => !a.startsWith("--"));
   if (!runs.length) {
-    console.error("usage: bun scripts/perf-check.ts [--nightly] run1.json [run2.json ...] [feel1.json ...]");
+    console.error("usage: bun scripts/perf-check.ts [--nightly] run1.json [run2.json ...] [feel1.json ...] | --paired [--failed=list.txt] perf-pair-*.json");
     process.exit(2);
+  }
+  if (args.includes("--paired")) {
+    const list = args.find((a) => a.startsWith("--failed="))?.slice("--failed=".length);
+    const failedRuns = list && existsSync(list) ? readFileSync(list, "utf8").split("\n").filter(Boolean) : [];
+    const { code, text } = pairedCheck(runs, failedRuns);
+    console.log(text);
+    process.exit(code);
   }
   const { code, text } = perfCheck(runs, args.includes("--nightly"));
   console.log(text);

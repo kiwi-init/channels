@@ -31,6 +31,14 @@ on:
         description: "Seconds the desktop app idles before its memory is read (empty is 60, 0 skips it)"
         type: string
         default: ""
+      paired:
+        description: "yes runs a UI PR's head against its merge base on one runner, four alternating runs each, and fails on a regression or a gate the base meets (empty runs the usual four runs, the soak and the gates)"
+        type: string
+        default: ""
+      paired_head_load:
+        description: "A control for the paired check: loop iterations added to every head run's switches, keys and reload (empty adds none)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -54,20 +62,61 @@ jobs:
           PERF_SOAK_MIN: ${{ inputs.soak_only }}
           PERF_SOAK_TABS: ${{ inputs.soak_tabs }}
         run: bun scripts/perf-scale.ts --gated --json "$RUNNER_TEMP/perf-soak.json"
+      - name: the merge base the paired check compares against
+        id: base
+        if: ${{ inputs.soak_only == '' && inputs.paired == 'yes' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "sha=$(gh api "repos/${{ github.repository }}/compare/main...${{ github.sha }}" --jq .merge_base_commit.sha)" >> "$GITHUB_OUTPUT"
+      - if: ${{ inputs.soak_only == '' && inputs.paired == 'yes' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.base.outputs.sha }}
+          path: perf-base
+      - name: the merge base's build, driven by this head's perf-scale harness so both sides run the same workload
+        if: ${{ inputs.soak_only == '' && inputs.paired == 'yes' }}
+        run: |
+          test "$(git -C perf-base rev-parse HEAD)" = "${{ steps.base.outputs.sha }}"
+          bun scripts/perf-paired.ts copy perf-base
+          cd perf-base && bun install --frozen-lockfile && bun scripts/ui-harness.ts
+      - name: perf-scale, paired, base and head alternating four runs each on this runner
+        if: ${{ inputs.soak_only == '' && inputs.paired == 'yes' }}
+        shell: bash
+        env:
+          PERF_SOAK_MIN: "0"
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          HEAD_SHA: ${{ github.sha }}
+          HEAD_LOAD: ${{ inputs.paired_head_load }}
+        run: |
+          i=0
+          for side in base head head base base head head base; do
+            i=$((i + 1))
+            if [ "$side" = base ]; then
+              (cd perf-base && PERF_CONTROL=base PERF_APP_SHA="$BASE_SHA" bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-pair-$i-base.json") || echo "run $i base" >> "$RUNNER_TEMP/perf-pair-failed.txt"
+            else
+              PERF_CONTROL=head PERF_APP_SHA="$HEAD_SHA" PERF_LOAD_UNITS="$HEAD_LOAD" bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-pair-$i-head.json" || echo "run $i head" >> "$RUNNER_TEMP/perf-pair-failed.txt"
+            fi
+          done
+      - name: head against its base, and against the gates
+        if: ${{ !cancelled() && inputs.soak_only == '' && inputs.paired == 'yes' }}
+        shell: bash
+        run: bun scripts/perf-check.ts --paired --failed="$RUNNER_TEMP/perf-pair-failed.txt" "$RUNNER_TEMP"/perf-pair-*.json | tee -a "$GITHUB_STEP_SUMMARY"
       - name: perf-scale, four runs and one with the 20-minute soak
-        if: ${{ inputs.soak_only == '' }}
+        if: ${{ inputs.soak_only == '' && inputs.paired == '' }}
         run: |
           for i in 1 2 3 4; do PERF_SOAK_MIN=0 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-$i.json"; done
           PERF_SOAK_MIN=20 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-5.json"
       - name: medians against the gates
-        if: ${{ inputs.soak_only == '' }}
+        if: ${{ inputs.soak_only == '' && inputs.paired == '' }}
         shell: bash
         run: bun scripts/perf-check.ts --nightly "$RUNNER_TEMP"/perf-*.json | tee -a "$GITHUB_STEP_SUMMARY"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: perf
-          path: ${{ runner.temp }}/perf-*.json
+          path: |
+            ${{ runner.temp }}/perf-*.json
+            ${{ runner.temp }}/perf-pair-failed.txt
           if-no-files-found: ignore
           overwrite: true
 
