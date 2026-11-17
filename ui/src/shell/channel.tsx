@@ -1,4 +1,4 @@
-import { Activity, Suspense, useEffect, useLayoutEffect, useState } from "react"
+import { Activity, memo, Suspense, useEffect, useLayoutEffect, useState } from "react"
 
 import { Conversation } from "~/chat/conversation"
 import type { Jump, Older } from "~/chat/search-box"
@@ -26,7 +26,7 @@ import { t } from "~/i18n/i18n"
 
 const Panes = later(() => import("~/panes/panes").then((m) => m.Panes))
 const Page = later(() => import("~/panes/page").then((m) => m.Page))
-const SpecList = later(() => import("~/specs/view").then((m) => m.SpecList))
+const SpecList = memo(later(() => import("~/specs/view").then((m) => m.SpecList)))
 const SearchBox = later(() => import("~/chat/search-box").then((m) => m.SearchBox))
 const OlderView = later(() => import("~/chat/older-view").then((m) => m.OlderView))
 const NarrowPanel = later(() => import("~/shell/narrow-panel").then((m) => m.NarrowPanel))
@@ -39,6 +39,12 @@ const DocVersions = later(() => import("~/modals/doc-versions").then((m) => m.Do
 type KeptTab = "specs"
 
 const keptTab = (nav: { tab: string; spec?: number }): KeptTab | null => (nav.tab === "specs" && nav.spec === undefined ? "specs" : null)
+
+function KeptSpecs({ channel, shown }: { channel: Channel; shown: boolean }) {
+  const [held, setHeld] = useState(channel)
+  if (shown && held !== channel) setHeld(channel)
+  return <SpecList channel={shown ? channel : held} />
+}
 
 export function ChannelScreen({ channel }: { channel: Channel }) {
   const nav = useNav()
@@ -183,7 +189,7 @@ export function ChannelScreen({ channel }: { channel: Channel }) {
                 <Activity key={tab} mode={board === tab ? "visible" : "hidden"}>
                   <Boundary resetKey={`${tab}\n${board === tab}`}>
                     <Suspense fallback={null}>
-                      <SpecList channel={channel} />
+                      <KeptSpecs channel={channel} shown={board === tab} />
                     </Suspense>
                   </Boundary>
                 </Activity>
