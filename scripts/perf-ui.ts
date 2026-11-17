@@ -133,6 +133,10 @@ export async function letIn(page: Page, waiting: () => boolean, timeoutMs = 1200
 }
 
 export async function view(page: Page, label: string, marker: string): Promise<number> {
+  return (await viewTimed(page, label, marker)).ms;
+}
+
+export async function viewTimed(page: Page, label: string, marker: string): Promise<{ ms: number; startMs: number; endMs: number }> {
   return page.evaluate(
     async ([name, text]) => {
       const flat = (s: string) => s.replace(/\s+/g, "");
@@ -153,7 +157,8 @@ export async function view(page: Page, label: string, marker: string): Promise<n
         throw new Error(`the ${name} view opened without ${text}; views: ${views}; main shows: ${shown}`);
       }
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      return Math.round(performance.now() - t0);
+      const t1 = performance.now();
+      return { ms: Math.round(t1 - t0), startMs: t0, endMs: t1 };
     },
     [label, marker] as const,
   );

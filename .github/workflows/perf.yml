@@ -31,6 +31,10 @@ on:
         description: "Seconds the desktop app idles before its memory is read (empty is 60, 0 skips it)"
         type: string
         default: ""
+      selection_load:
+        description: "T13697 selection job: loop iterations of the L control's added load (empty runs the usual perf-scale runs and gates)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -54,20 +58,37 @@ jobs:
           PERF_SOAK_MIN: ${{ inputs.soak_only }}
           PERF_SOAK_TABS: ${{ inputs.soak_tabs }}
         run: bun scripts/perf-scale.ts --gated --json "$RUNNER_TEMP/perf-soak.json"
+      - name: perf-scale, a selection job (T13697), P and L alternating four times, every run kept, 9 switch rounds and 9 calibration reps
+        if: ${{ inputs.soak_only == '' && inputs.selection_load != '' }}
+        shell: bash
+        env:
+          PERF_SOAK_MIN: "0"
+          PERF_SWITCH_ROUNDS: "9"
+          PERF_CALIBRATION_REPS: "9"
+          LOAD_UNITS: ${{ inputs.selection_load }}
+        run: |
+          failed=0
+          for i in 1 2 3 4; do
+            PERF_CONTROL=P bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-sel-$i-P.json" || { echo "run $i P failed" | tee -a "$RUNNER_TEMP/perf-sel-failed.txt"; failed=1; }
+            PERF_CONTROL=L PERF_LOAD_UNITS="$LOAD_UNITS" bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-sel-$i-L.json" || { echo "run $i L failed" | tee -a "$RUNNER_TEMP/perf-sel-failed.txt"; failed=1; }
+          done
+          exit "$failed"
       - name: perf-scale, four runs and one with the 20-minute soak
-        if: ${{ inputs.soak_only == '' }}
+        if: ${{ inputs.soak_only == '' && inputs.selection_load == '' }}
         run: |
           for i in 1 2 3 4; do PERF_SOAK_MIN=0 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-$i.json"; done
           PERF_SOAK_MIN=20 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-5.json"
       - name: medians against the gates
-        if: ${{ inputs.soak_only == '' }}
+        if: ${{ inputs.soak_only == '' && inputs.selection_load == '' }}
         shell: bash
         run: bun scripts/perf-check.ts --nightly "$RUNNER_TEMP"/perf-*.json | tee -a "$GITHUB_STEP_SUMMARY"
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: perf
-          path: ${{ runner.temp }}/perf-*.json
+          path: |
+            ${{ runner.temp }}/perf-*.json
+            ${{ runner.temp }}/perf-sel-failed.txt
           if-no-files-found: ignore
           overwrite: true
 

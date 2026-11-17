@@ -3,12 +3,14 @@ import type { Page } from "playwright-core";
 export interface Calibration {
   ms: number;
   reps: number[];
+  allRepsMedianMs: number;
 }
 
-export async function calibrateInPage(): Promise<Calibration> {
+export async function calibrateInPage(count: number | null): Promise<Calibration> {
   const OWN_ROWS = 2700;
   const times: number[] = [];
-  for (let r = 0; r < 5; r++) {
+  const repeat = count && count > 5 ? count : 5;
+  for (let r = 0; r < repeat; r++) {
     await new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 0)));
     const t0 = performance.now();
     const host = document.createElement("div");
@@ -35,7 +37,8 @@ export async function calibrateInPage(): Promise<Calibration> {
     times.push(performance.now() - t0);
   }
   const reps = times.map((t) => Math.round(t * 10) / 10);
-  return { ms: [...reps].sort((a, b) => a - b)[2]!, reps };
+  const all = [...reps].sort((a, b) => a - b);
+  return { ms: reps.slice(0, 5).sort((a, b) => a - b)[2]!, reps, allRepsMedianMs: all[Math.floor(all.length / 2)] ?? 0 };
 }
 
 export async function loopInPage(): Promise<number> {
@@ -50,6 +53,6 @@ export async function loopInPage(): Promise<number> {
   return x < 0 ? -1 : Math.round([...times].sort((a, b) => a - b)[2]! * 10) / 10;
 }
 
-export async function calibrate(page: Page): Promise<Calibration> {
-  return page.evaluate(calibrateInPage);
+export async function calibrate(page: Page, count: number | null = null): Promise<Calibration> {
+  return page.evaluate(calibrateInPage, count);
 }
