@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { benchArgs, claimWork } from "../scripts/perf-daemon-log-args.ts";
+import { spawnOwned } from "./owned.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "kiwi-perf-args-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
@@ -32,7 +33,7 @@ test("the script itself stops before touching the disk on bad arguments, and an 
   mkdirSync(theirs);
   writeFileSync(join(theirs, "sentinel"), "keep me");
   const run = async (args: string[]) => {
-    const p = Bun.spawn(["bun", SCRIPT, ...args], { cwd: scratch, stdout: "pipe", stderr: "pipe" });
+    const p = spawnOwned(["bun", SCRIPT, ...args], { cwd: scratch, stdout: "pipe", stderr: "pipe" });
     return { code: await p.exited, err: await new Response(p.stderr).text() };
   };
   expect(await run([])).toMatchObject({ code: 2, err: expect.stringContaining("--work DIR is required") });
