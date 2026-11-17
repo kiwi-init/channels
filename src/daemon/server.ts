@@ -77,6 +77,7 @@ export interface DaemonOptions {
   tickMs?: number;
   orphanMs?: number;
   wakeOutstandingMs?: number;
+  wakeTakeMs?: number;
   listenerGraceMs?: number;
   retryFirstMs?: number;
   presenceSettleMs?: number;
@@ -86,6 +87,7 @@ const WAKE_DELAY_MS = 2_000;
 const FOLLOW_OPS: ReadonlySet<string> = new Set(["doc.open", "task.add", "task.claim", "task.update", "task.delete", "task.first"]);
 const WAKE_GAP_MS = 60_000;
 const WAKE_OUTSTANDING_MS = 10 * 60_000;
+const WAKE_TAKE_MS = 60_000;
 const LISTENER_GRACE_MS = 60_000;
 const PRESENCE_SETTLE_MS = 3_000;
 
@@ -162,6 +164,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       ...(read ? { readAt: read.at } : {}),
       ...(seat.wakeVia ? { wake: seat.wakeVia } : {}),
       ...(seat.unarmed && seat.wakeVia && !hookHeld(seat.alias, seat.agent) ? { unarmed: seat.unarmed } : {}),
+      ...(seat.untaken ? { untaken: seat.untaken } : {}),
     };
   };
 
@@ -212,6 +215,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     wakeDelayMs: opts.wakeDelayMs ?? WAKE_DELAY_MS,
     wakeGapMs: opts.wakeGapMs ?? WAKE_GAP_MS,
     wakeOutstandingMs: opts.wakeOutstandingMs ?? WAKE_OUTSTANDING_MS,
+    wakeTakeMs: opts.wakeTakeMs ?? WAKE_TAKE_MS,
     stopped: () => stopped,
     current,
   });
@@ -312,6 +316,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       wake: { on: wakeOn(cfg, s.alias, s.agent), path: await livePath(cfg, s, attachedTo(s)), last: s.lastWake },
       reach: s.reach,
       unarmed: s.unarmed,
+      untaken: s.untaken,
     };
   };
 
@@ -378,6 +383,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (seat.markTimer) clearTimeout(seat.markTimer);
     if (seat.activityTimer) clearInterval(seat.activityTimer);
     if (seat.wakeTimer) clearTimeout(seat.wakeTimer);
+    if (seat.taking) clearTimeout(seat.taking.timer);
+    seat.taking = null;
     seat.wakeChild?.kill();
     seat.activityTimer = null;
     seat.wakeTimer = null;
@@ -538,6 +545,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         ctl: new AbortController(),
         subs: new Set(),
         unarmed: null,
+        untaken: null,
+        taking: null,
         head,
         activity: undefined,
         reach: null,
@@ -833,7 +842,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           const { channel, as, session } = params;
           if (typeof channel !== "string" || !channel || typeof as !== "string" || !as) throw new Error('read needs {"channel", "as", "session"?}');
           reads.set(readKey(channel, as), { at: Date.now(), session: typeof session === "string" && session ? session : null });
-          [...seats.values()].find((s) => s.alias === channel && s.agent === as)?.announce?.();
+          const read = [...seats.values()].find((s) => s.alias === channel && s.agent === as);
+          if (read) read.untaken = null;
+          read?.announce?.();
           sendLine(conn, JSON.stringify({ id, ok: true }));
           break;
         }

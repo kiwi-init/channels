@@ -6,7 +6,7 @@ import { AgentSession, runAgent } from "../src/agent.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { loadConfig, saveConfig, saveIdentity, updateConfig, type SeatRecord } from "../src/config.ts";
 import { readCursor, readSeen } from "../src/config/cursors.ts";
-import { daemonListening, daemonPeek, startDaemon, type Daemon } from "../src/daemon.ts";
+import { daemonListening, daemonPeek, startDaemon, type Daemon, type DaemonOptions } from "../src/daemon.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { Presence } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -32,7 +32,7 @@ export interface WakeHarness {
   stopDaemon(): Promise<void>;
 }
 
-export function wakeHarness(): WakeHarness {
+export function wakeHarness(opts: DaemonOptions = {}): WakeHarness {
   const home = mkdtempSync(join(tmpdir(), "kiwi-wake-"));
   const dataDir = mkdtempSync(join(tmpdir(), "kiwi-wake-relay-"));
   const bin = mkdtempSync(join(tmpdir(), "kiwi-wake-bin-"));
@@ -141,7 +141,7 @@ export function wakeHarness(): WakeHarness {
     bindAs({ harness: "codex", session: "thread-1" });
     await readAll();
     void ownerCh.stream(await ownerCh.head(), () => {}, { signal: watching.signal, onPresence: (p) => heard.push(p) });
-    daemon = await startDaemon(undefined, { beaconMs: 2_000, wakeDelayMs: 800, wakeGapMs: 1_500, wakeOutstandingMs: 5_000 });
+    daemon = await startDaemon(undefined, { beaconMs: 2_000, wakeDelayMs: 800, wakeGapMs: 1_500, wakeOutstandingMs: 5_000, ...opts });
     await until("claude's seat", async () => (await seat()) !== undefined);
   });
 

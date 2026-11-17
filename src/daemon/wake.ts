@@ -17,6 +17,7 @@ import { seatRecordFor, wakeOn } from "./reach.ts";
 import { tmuxPane } from "../tmux-pane.ts";
 import { typeWake } from "./wake-pane.ts";
 import type { Seat } from "./seat.ts";
+import { codexControlSocket, codexHome, codexLastTurn, codexRollout, codexWindowRestart, startCodexQueue } from "./codex-queue.ts";
 
 const WAKE_LOG_KEEP_BYTES = 1_000_000;
 
@@ -70,6 +71,10 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim().slice(0, 200);
 }
 const UNREAD_CHECK_MS = 30_000;
+const CODEX_QUIET_MS = 10 * 60_000;
+const UNTAKEN_WHY_MAX = 300;
+
+const utc = (at: number): string => `${new Date(at).toISOString().slice(11, 16)} UTC`;
 const TYPE_RETRY_MS = 10_000;
 
 export const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
@@ -104,11 +109,12 @@ interface WakeContext {
   wakeDelayMs: number;
   wakeGapMs: number;
   wakeOutstandingMs: number;
+  wakeTakeMs: number;
   stopped: () => boolean;
   current: (seat: Seat) => boolean;
 }
 
-export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stopped, current }: WakeContext): {
+export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, wakeTakeMs, stopped, current }: WakeContext): {
   scheduleWake: (seat: Seat, delay?: number) => void;
   stateOf: (seat: Seat) => Promise<ChannelState | null>;
   sessionOf: (seat: Seat) => Promise<Session | null>;
@@ -200,6 +206,109 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
       cursor: 0,
     });
 
+  const setUntaken = (seat: Seat, why: string | null): void => {
+    const was = seat.untaken;
+    if (why === null) {
+      seat.untaken = null;
+      if (was) seat.announce?.();
+      return;
+    }
+    const text = why.slice(0, UNTAKEN_WHY_MAX);
+    if (was?.why === text) return;
+    seat.untaken = { since: was?.since ?? Date.now(), why: text };
+    seat.announce?.();
+  };
+
+  const watchTake = (seat: Seat, thread: string, seqs: number[], resumed: boolean): void => {
+    if (seat.taking) clearTimeout(seat.taking.timer);
+    seat.taking = null;
+    if (stopped()) return;
+    const timer = setTimeout(() => {
+      void checkTake(seat).catch((err: unknown) => setUntaken(seat, `Kiwi's check of this Codex wake ended on an error: ${oneLine(err instanceof Error ? err.message : String(err))}`));
+    }, wakeTakeMs);
+    seat.taking = { thread, seqs, resumed, timer };
+  };
+
+  const checkTake = async (seat: Seat): Promise<void> => {
+    const t = seat.taking;
+    seat.taking = null;
+    if (!t || !current(seat) || stopped()) return;
+    const record = () => {
+      const r = seatRecordFor(loadConfig(), seat.alias, seat.agent);
+      return r?.harness === "codex" && r.session === t.thread ? r : null;
+    };
+    const unread = async (): Promise<{ cursor: number } | "read" | null> => {
+      const counted = await withDeadline(unreadFor(seat), UNREAD_CHECK_MS).catch(() => null);
+      if (counted === null) return null;
+      return "cursor" in counted && t.seqs.some((seq) => counted.seqs.includes(seq)) ? { cursor: counted.cursor } : "read";
+    };
+    const again = (): void => watchTake(seat, t.thread, t.seqs, t.resumed);
+    const bound = record();
+    if (!bound) return setUntaken(seat, null);
+    const left = await unread();
+    if (left === null) return again();
+    if (left === "read") return setUntaken(seat, null);
+    const home = codexHome();
+    const rollout = await codexRollout(home, t.thread);
+    if (!rollout) {
+      setUntaken(seat, `Codex took the wake but has no record of thread ${t.thread}: run a kiwi command in the Codex session you use, so Kiwi wakes that one`);
+      return again();
+    }
+    const last = codexLastTurn(rollout);
+    if (last.kind === "running") {
+      setUntaken(
+        seat,
+        last.quietFor >= CODEX_QUIET_MS
+          ? `thread ${t.thread}'s turn started at ${utc(last.at)} and has written nothing for ${Math.round(last.quietFor / 60_000)} min: if the session moved to another thread, run a kiwi command there`
+          : null,
+      );
+      return again();
+    }
+    if (last.kind !== "aborted") {
+      setUntaken(seat, `Codex queued the wake for thread ${t.thread} but no turn read it in ${Math.round(wakeTakeMs / 1000)} s: if the session moved to another thread, run a kiwi command there`);
+      return again();
+    }
+    const restart = codexWindowRestart(bound, last.at);
+    if (restart.kind === "live") {
+      setUntaken(seat, `paused by you: the turn was interrupted at ${utc(last.at)} in the running session, so Codex holds its queue until you type in its window`);
+      return again();
+    }
+    if (restart.kind === "unknown") {
+      setUntaken(
+        seat,
+        `paused: Codex holds thread ${t.thread}'s queue since its turn was interrupted at ${utc(last.at)}, and Kiwi can't tell if the session restarted since (${restart.why}); type in its window to continue`,
+      );
+      return again();
+    }
+    if (t.resumed) {
+      setUntaken(seat, `Kiwi resumed thread ${t.thread}'s paused queue, but no turn has read the wake yet; type in its window to continue`);
+      return again();
+    }
+    const now = record();
+    const recheck = now ? await unread() : "read";
+    if (!now || recheck === "read") return setUntaken(seat, null);
+    const lastNow = codexLastTurn(rollout);
+    const restartNow = codexWindowRestart(now, last.at);
+    if (recheck === null || lastNow.kind !== "aborted" || lastNow.turn !== last.turn || restartNow.kind !== "restarted") return again();
+    const why = await startCodexQueue(codexControlSocket(home), t.thread);
+    appendWakeRow(dir, {
+      at: Date.now(),
+      alias: seat.alias,
+      agent: seat.agent,
+      via: "codex-queue",
+      unread: t.seqs.length,
+      result: why === null ? "ok" : "failed",
+      why: why ?? `resumed Codex's paused queue: the session restarted at ${utc(restartNow.at)}, after its turn was interrupted at ${utc(last.at)}`,
+      cursor: recheck.cursor,
+    });
+    if (why !== null) {
+      setUntaken(seat, `Codex paused thread ${t.thread}'s queue when its turn was interrupted at ${utc(last.at)}, and resuming it failed: ${why}`);
+      return again();
+    }
+    setUntaken(seat, null);
+    watchTake(seat, t.thread, t.seqs, true);
+  };
+
   const scheduleWake = (seat: Seat, delay = wakeDelayMs): void => {
     if (seat.wakeTimer || stopped()) return;
     seat.wakeTimer = setTimeout(() => {
@@ -277,6 +386,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
       if (why === null) {
         seat.outstanding = { seqs, to, at: seat.lastWake.at };
         seat.clock?.delivered(attempts);
+        if (path.via === "codex-queue") watchTake(seat, path.session, seqs, false);
       }
       logWake(seat, seat.lastWake, why, cursor);
     } finally {

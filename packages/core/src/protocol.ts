@@ -1139,6 +1139,7 @@ export interface Presence {
   readAt?: number;
   wake?: string;
   unarmed?: Unarmed;
+  untaken?: Unarmed;
   ops?: number;
   ts: number;
   pk?: string;

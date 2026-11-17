@@ -22,7 +22,7 @@ describe("a wake attempt that ends on an error", () => {
   test("leaves one line in wake.log saying why, so an agent left asleep leaves a trace", async () => {
     writeFileSync(join(home, "config.json"), "{ not json");
     const seat = { key: "test\u0000claude", alias: "test", agent: "claude", wakeVia: "codex-queue", wakeTimer: null, waking: false, wakeAgain: false, lastWake: null } as unknown as Seat;
-    const { scheduleWake } = seatWakes({ dir: home, wakeDelayMs: 0, wakeGapMs: 0, wakeOutstandingMs: 0, stopped: () => false, current: () => true });
+    const { scheduleWake } = seatWakes({ dir: home, wakeDelayMs: 0, wakeGapMs: 0, wakeOutstandingMs: 0, wakeTakeMs: 0, stopped: () => false, current: () => true });
     scheduleWake(seat);
     const log = join(home, "wake.log");
     for (const end = Date.now() + 5_000; !existsSync(log) && Date.now() < end;) await Bun.sleep(10);
