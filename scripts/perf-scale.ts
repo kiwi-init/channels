@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import * as Effect from "effect/Effect";
 import { chromium, type CDPSession, type Page } from "playwright-core";
 import { readSeededFrame, reloadFromHost, watchSeededFrame } from "./seeded-frame.ts";
-import { installLoad, loadRuns, loadUnitsFrom, requireInside } from "./perf-load.ts";
+import { installLoad, loadRuns, loadsFrom, requireInside } from "./perf-load.ts";
 import { cpus, totalmem } from "node:os";
 import { RelayError } from "@kiwi/core/client.ts";
 import { chooseThread } from "@kiwi/core/state.ts";
@@ -250,7 +250,7 @@ const wholeEnv = (name: string, fallback: number, least: number): number => {
 };
 const ROUNDS = wholeEnv("PERF_SWITCH_ROUNDS", 3, 3);
 const CAL_REPS = wholeEnv("PERF_CALIBRATION_REPS", 5, 5);
-const LOAD = loadUnitsFrom(process.env);
+const LOAD = loadsFrom(process.env, VIEWS);
 const SPEC = "# Ship it at scale\n\n## Done when\n- [ ] the board holds every task";
 const report: Record<string, unknown> = {
   agents: AGENTS,
@@ -258,7 +258,7 @@ const report: Record<string, unknown> = {
   messages: MESSAGES,
   soakMinutes: SOAK_MIN,
   control: process.env.PERF_CONTROL?.trim() || null,
-  loadUnits: LOAD,
+  loads: LOAD,
   switchRounds: ROUNDS,
   calibrationReps: CAL_REPS,
   runner: {
@@ -276,7 +276,7 @@ const agents = Array.from({ length: AGENTS }, (_, i) => `agent${i}`);
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript(WATCH);
-  await installLoad(context, LOAD);
+  await installLoad(context, LOAD, VIEWS);
   await context.addInitScript((marker: string) => {
     const w = window as unknown as { __firstScreen?: number };
     const seen = () => {
@@ -410,7 +410,7 @@ try {
       reloadPolledMs = Math.round(performance.now() - reloadAt);
       const frame = await readSeededFrame(page, 10_000);
       const fromHost = reloadFromHost(epochBefore, frame);
-      if (LOAD > 0) requireInside(await loadRuns(page), "reload", 0, frame.paintedByMs, `the reload at ${throttle}x`);
+      if (LOAD.reload > 0) requireInside(await loadRuns(page), "reload", "", 0, frame.paintedByMs, `the reload at ${throttle}x`);
       reloadMs = fromHost.reloadMs;
       const inPage = await page.evaluate(() => {
         const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
@@ -472,7 +472,7 @@ try {
         const timed = await viewTimed(page, VIEWS[v] ?? v, markers[v]!);
         const mid = await work(cdp);
         views[v]!.push(timed.ms);
-        if (LOAD > 0) requireInside(await loadRuns(page), "switch", timed.startMs, timed.endMs, `the ${v} switch, round ${i + 1}`);
+        if ((LOAD.switch[v] ?? 0) > 0) requireInside(await loadRuns(page), "switch", v, timed.startMs, timed.endMs, `the ${v} switch, round ${i + 1}`);
         windowWork[v]!.push(Object.fromEntries(Object.keys(mid).map((k) => [`${k}Ms`, Math.round(((mid[k] ?? 0) - (before[k] ?? 0)) * 1000)])));
         await page.waitForTimeout(500);
         const after = await work(cdp);
@@ -541,7 +541,7 @@ try {
   })();
   const burst = Promise.all(seats.map((s, a) => say(s, `burst ${a}: ${TEXTS[a % TEXTS.length]}`)));
   await Promise.all([typing, burst]);
-  if (LOAD > 0) requireInside(await loadRuns(page), "key", typingFrom, await page.evaluate(() => performance.now()), "the typing scene's keys", 100);
+  if (LOAD.key > 0) requireInside(await loadRuns(page), "key", "", typingFrom, await page.evaluate(() => performance.now()), "the typing scene's keys", 100);
   const typed = await drain(page);
   const keys = typed.events
     .filter((e) => e.name.startsWith("key"))

@@ -35,6 +35,10 @@ on:
         description: "T13697 selection job: loop iterations of the L control's added load (empty runs the usual perf-scale runs and gates)"
         type: string
         default: ""
+      holdout:
+        description: "T13697 holdout job: yes runs P, S- and S+ with the frozen loads (empty runs the usual perf-scale runs and gates)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -73,13 +77,34 @@ jobs:
             PERF_CONTROL=L PERF_LOAD_UNITS="$LOAD_UNITS" bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-sel-$i-L.json" || { echo "run $i L failed" | tee -a "$RUNNER_TEMP/perf-sel-failed.txt"; failed=1; }
           done
           exit "$failed"
+      - name: perf-scale, a holdout job (T13697), P, S- and S+ alternating with the loads frozen after selection, every run kept
+        if: ${{ inputs.soak_only == '' && inputs.selection_load == '' && inputs.holdout == 'yes' }}
+        shell: bash
+        env:
+          PERF_SOAK_MIN: "0"
+          PERF_SWITCH_ROUNDS: "9"
+          PERF_CALIBRATION_REPS: "9"
+        run: |
+          failed=0
+          i=0
+          for c in P S- S+ P S+ S- P S- S+ P; do
+            i=$((i + 1))
+            case "$c" in
+              P) conv=0 key=0 ;;
+              S-) conv=4309524 key=1404762 ;;
+              S+) conv=13404762 key=7714286 ;;
+            esac
+            PERF_CONTROL="$c" PERF_LOAD_SWITCH_TASKS=0 PERF_LOAD_SWITCH_AGENTS=0 PERF_LOAD_SWITCH_CONVERSATION="$conv" PERF_LOAD_KEY="$key" PERF_LOAD_RELOAD=0 \
+              bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-hold-$i-$c.json" || { echo "run $i $c failed" | tee -a "$RUNNER_TEMP/perf-sel-failed.txt"; failed=1; }
+          done
+          exit "$failed"
       - name: perf-scale, four runs and one with the 20-minute soak
-        if: ${{ inputs.soak_only == '' && inputs.selection_load == '' }}
+        if: ${{ inputs.soak_only == '' && inputs.selection_load == '' && inputs.holdout == '' }}
         run: |
           for i in 1 2 3 4; do PERF_SOAK_MIN=0 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-$i.json"; done
           PERF_SOAK_MIN=20 bun scripts/perf-scale.ts --json "$RUNNER_TEMP/perf-5.json"
       - name: medians against the gates
-        if: ${{ inputs.soak_only == '' && inputs.selection_load == '' }}
+        if: ${{ inputs.soak_only == '' && inputs.selection_load == '' && inputs.holdout == '' }}
         shell: bash
         run: bun scripts/perf-check.ts --nightly "$RUNNER_TEMP"/perf-*.json | tee -a "$GITHUB_STEP_SUMMARY"
       - if: ${{ !cancelled() }}
