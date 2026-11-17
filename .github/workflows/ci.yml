@@ -20,6 +20,10 @@ on:
         description: "build / doc's busy-doc stillness check in WebKit runs this many loops with --trace, and keeps its log as the doc-still-trace artifact; empty runs it once"
         required: false
         default: ""
+      window_controls_loops:
+        description: "desktop / linux runs its window-controls check this many times, a fresh app each, and keeps every loop's log as the window-controls-loops artifact; empty runs it once"
+        required: false
+        default: ""
       release:
         description: "desktop / distros checks this published version's AppImage (checked against its SHA256SUMS) instead of this run's build, and doesn't wait for desktop / linux"
         required: false
@@ -721,7 +725,7 @@ jobs:
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['desktop-linux']
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.window_controls_loops != '' && 150 || 30 }}
     strategy:
       fail-fast: false
       matrix:
@@ -845,13 +849,34 @@ jobs:
           test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
           [ -n "$test" ] || { echo "no dev-linux test build under desktop/release-eb/build"; exit 1; }
           xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-native-click.ts "$test"
-      - name: Linux window controls sit at the top-right, act on the window under openbox, and their label follows the window manager
+      - name: Linux window controls sit at the top-right, act on real X clicks under openbox at every width, and their label follows the window manager
         if: ${{ !cancelled() && matrix.drive }}
-        timeout-minutes: 5
+        timeout-minutes: ${{ inputs.window_controls_loops != '' && 120 || 5 }}
+        env:
+          LOOPS: ${{ inputs.window_controls_loops }}
         run: |
           test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
           [ -n "$test" ] || { echo "no dev-linux test build under desktop/release-eb/build"; exit 1; }
-          xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-window-controls.ts "$test"
+          if [ -z "$LOOPS" ]; then exec xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-window-controls.ts "$test"; fi
+          case "$LOOPS" in *[!0-9]*) echo "window_controls_loops: a number of loops"; exit 1 ;; esac
+          out="$RUNNER_TEMP/window-controls"
+          mkdir -p "$out"
+          failed=0
+          for i in $(seq 1 "$LOOPS"); do
+            echo "::group::window controls, loop $i of $LOOPS"
+            if timeout 240 xvfb-run -a -s "-screen 0 1280x800x24" bun desktop/scripts/eb-window-controls.ts "$test" > "$out/loop-$i.log" 2>&1; then echo "loop $i passed"; else failed=$((failed + 1)); echo "loop $i FAILED"; fi
+            cat "$out/loop-$i.log"
+            echo "::endgroup::"
+          done
+          echo "window controls: $failed of $LOOPS loops failed"
+          [ "$failed" -eq 0 ]
+      - if: ${{ !cancelled() && matrix.drive && inputs.window_controls_loops != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: window-controls-loops
+          path: ${{ runner.temp }}/window-controls
+          if-no-files-found: ignore
+          overwrite: true
       - if: ${{ !cancelled() && matrix.drive }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
