@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, setDefaultTimeout, t
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { presenceWords } from "@kiwi/core/format.ts";
+import { resumedSession } from "../src/daemon/codex-queue.ts";
 import { wakeHarness } from "./wake-harness.ts";
 
 setDefaultTimeout(60_000);
@@ -21,6 +22,10 @@ let onStart: () => void = () => {};
 let server: ReturnType<typeof Bun.serve> | undefined;
 const prevHome = process.env.CODEX_HOME;
 const hasTmux = !!Bun.which("tmux");
+const exactArgv = existsSync("/proc/self/cmdline");
+const NO_ARGV = "(the exact command line of the Codex in its tmux window can't be read here)";
+const REUSED = "01a1e000-0000-7000-8000-000000000011";
+const OTHER = "01a1e000-0000-7000-8000-000000000012";
 
 const tmux = (...args: string[]) => spawnOwnedSync(["tmux", "-S", tmuxSock, ...args], { stdout: "pipe", stderr: "pipe" });
 
@@ -101,6 +106,29 @@ const status = async (): Promise<string> => {
 
 const wakeRows = (): string[] => (existsSync(join(home, "wake.log")) ? readFileSync(join(home, "wake.log"), "utf8").trim().split("\n") : []);
 
+describe("the session a codex command line resumes", () => {
+  test("is the first positional after resume, past options and their values, and nothing else", () => {
+    const cases: [string[], string | null][] = [
+      [["resume", REUSED], REUSED],
+      [["resume", "-a", "never", "--search", REUSED, "a", "prompt"], REUSED],
+      [["-c", "model=x", "resume", REUSED], REUSED],
+      [["resume", "--model=gpt", "-mgpt", "-C", "/w", REUSED], REUSED],
+      [["resume", "--", REUSED], REUSED],
+      [["resume", OTHER, REUSED], OTHER],
+      [["exec", "resume", REUSED], null],
+      [[`resume ${REUSED}`], null],
+      [["resume ", REUSED], null],
+      [["resume", "--last", REUSED], null],
+      [["resume", "-i", "shot.png", REUSED], null],
+      [["resume", "--unknown-flag", REUSED], null],
+      [["--", "resume", REUSED], null],
+      [["resume"], null],
+      [[], null],
+    ];
+    for (const [args, want] of cases) expect([args, resumedSession(args)]).toEqual([args, want]);
+  });
+});
+
 describe("a Codex wake is checked until the bound session reads it", () => {
   test("an idle seat takes a queued wake, and nothing is flagged or resumed", async () => {
     thread("01a1e000-0000-7000-8000-000000000001", [{ type: "task_complete", at: Date.now() - 60_000 }]);
@@ -164,7 +192,22 @@ describe("a Codex wake is checked until the bound session reads it", () => {
 });
 
 describe.skipIf(!hasTmux)("a Codex queue paused by an interrupted turn", () => {
-  test("is resumed when the seat's own window started after the abort, and the woken turn's read clears it", async () => {
+  test.if(!exactArgv)("stays paused where a Codex's exact command line can't be read, even in a window started after the abort", async () => {
+    thread("01a1e000-0000-7000-8000-00000000000d", [
+      { type: "task_started", at: Date.now() - 3_600_000 },
+      { type: "turn_aborted", at: Date.now() - 3_590_000 },
+    ]);
+    const pane = window("restarted", tui("resume 01a1e000-0000-7000-8000-00000000000d -a never"));
+    bindAs({ harness: "codex", session: "01a1e000-0000-7000-8000-00000000000d", tmux: { socket: tmuxSock, pane } });
+    await wakeOf("for a session restarted where argv can't be read");
+    await until("the paused alert", async () => (await untaken()) !== null, TAKE_MS * 4);
+    expect((await untaken())?.why).toContain(NO_ARGV);
+    await Bun.sleep(TAKE_MS * 2);
+    expect(rpc).toEqual([]);
+    await readAll();
+  });
+
+  test.if(exactArgv)("is resumed when the seat's own window started after the abort, and the woken turn's read clears it", async () => {
     thread("01a1e000-0000-7000-8000-00000000000d", [
       { type: "task_started", at: Date.now() - 3_600_000 },
       { type: "turn_aborted", at: Date.now() - 3_590_000 },
@@ -182,7 +225,7 @@ describe.skipIf(!hasTmux)("a Codex queue paused by an interrupted turn", () => {
     expect(rpc.filter((m) => m === "thread/queue/start")).toHaveLength(1);
   });
 
-  test("stays paused when the turn was interrupted in the running session, and says it was paused by you", async () => {
+  test.if(exactArgv)("stays paused when the turn was interrupted in the running session, and says it was paused by you", async () => {
     const pane = window("live", `${tui("resume 01a1e000-0000-7000-8000-00000000000e")} & sleep 2.5; ${tui("exec an-unrelated-task")} & wait`);
     await Bun.sleep(1_100);
     thread("01a1e000-0000-7000-8000-00000000000e", [
@@ -200,12 +243,16 @@ describe.skipIf(!hasTmux)("a Codex queue paused by an interrupted turn", () => {
   });
 
   for (const [what, command] of [
-    ["another thread's session reused its window", tui("resume 01a1e000-0000-7000-8000-000000000012")],
+    ["another thread's session reused its window", tui(`resume ${OTHER}`)],
+    ["another thread was resumed with this thread's id as its prompt", tui(`resume ${OTHER} ${REUSED}`)],
+    ["a codex exec whose prompt holds resume and this thread's id started", tui(`exec resume ${REUSED}`)],
+    ["a codex whose quoted prompt is resume and this thread's id started", `${join(tuiBin, "codex")} 'resume ${REUSED}'`],
+    ["a codex resume with images listed before this thread's id started", tui(`resume -i shot.png ${REUSED}`)],
     ["a plain codex session, which names no thread, started in its window", tui("-a never")],
     ["an unrelated Codex child process started", `sh -c "${tui("exec an-unrelated-task")}"`],
   ] as const)
     test(`stays paused when ${what} after the abort, since that isn't this thread's session`, async () => {
-      const id = "01a1e000-0000-7000-8000-000000000011";
+      const id = REUSED;
       thread(id, [
         { type: "task_started", at: Date.now() - 3_600_000 },
         { type: "turn_aborted", at: Date.now() - 3_590_000 },
@@ -214,7 +261,7 @@ describe.skipIf(!hasTmux)("a Codex queue paused by an interrupted turn", () => {
       bindAs({ harness: "codex", session: id, tmux: { socket: tmuxSock, pane } });
       await wakeOf(`for a paused thread whose window now runs something else: ${what}`);
       await until("the paused alert", async () => (await untaken()) !== null, TAKE_MS * 4);
-      expect((await untaken())?.why).toContain("(no Codex in its tmux window was started as codex resume of this thread)");
+      expect((await untaken())?.why).toContain(exactArgv ? "(no Codex in its tmux window was started as codex resume of this thread)" : NO_ARGV);
       await Bun.sleep(TAKE_MS * 2);
       expect(rpc).toEqual([]);
       await readAll();

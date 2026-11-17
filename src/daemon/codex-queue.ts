@@ -1,4 +1,4 @@
-import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import type { SeatRecord } from "../config.ts";
@@ -72,13 +72,79 @@ export type CodexRestart = { kind: "restarted"; at: number } | { kind: "live"; a
 
 const startOf = (p: Proc): number => Date.parse(`${p.start} GMT`);
 
-const codexArgs = (p: Proc, bin: string | undefined): string[] | null => {
-  const words = p.args.split(/\s+/);
-  const at = words.slice(0, 2).findIndex((word) => basename(word) === "codex" || (!!bin && word === bin));
-  return at < 0 ? null : words.slice(at + 1);
-};
+const isCodex = (word: string, bin: string | undefined): boolean => basename(word) === "codex" || (!!bin && word === bin);
 
-const resumes = (args: readonly string[], thread: string): boolean => args.includes("resume") && args.includes(thread);
+const runsCodex = (p: Proc, bin: string | undefined): boolean =>
+  p.args
+    .split(/\s+/)
+    .slice(0, 2)
+    .some((word) => isCodex(word, bin));
+
+function exactArgv(pid: number): string[] | null {
+  try {
+    const argv = readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0");
+    return argv.at(-1) === "" ? argv.slice(0, -1) : argv;
+  } catch {
+    // No /proc (macOS) or the process is gone: its exact arguments can't be read, and ps loses their quoting.
+    return null;
+  }
+}
+
+const TAKES_VALUE = new Set([
+  "-c",
+  "--config",
+  "--enable",
+  "--disable",
+  "--remote",
+  "--remote-auth-token-env",
+  "-m",
+  "--model",
+  "--local-provider",
+  "-p",
+  "--profile",
+  "-s",
+  "--sandbox",
+  "-C",
+  "--cd",
+  "--add-dir",
+  "-a",
+  "--ask-for-approval",
+]);
+const FLAGS = new Set([
+  "--all",
+  "--include-non-interactive",
+  "--strict-config",
+  "--oss",
+  "--approve-for-me",
+  "--dangerously-bypass-approvals-and-sandbox",
+  "--dangerously-bypass-hook-trust",
+  "--worktree",
+  "--search",
+  "--no-alt-screen",
+  "--no-daemon",
+]);
+
+export function resumedSession(args: readonly string[]): string | null {
+  let resuming = false;
+  for (let i = 0; i < args.length; i++) {
+    const word = args[i];
+    if (word === undefined) return null;
+    if (word === "--") return resuming ? (args[i + 1] ?? null) : null;
+    if (word.startsWith("-") && word !== "-") {
+      const eq = word.indexOf("=");
+      if (word.startsWith("--") && eq > 0) {
+        if (!TAKES_VALUE.has(word.slice(0, eq))) return null;
+      } else if (TAKES_VALUE.has(word)) i++;
+      else if (/^-[cmpsCa]./.test(word)) continue;
+      else if (!FLAGS.has(word)) return null;
+      continue;
+    }
+    if (resuming) return word;
+    if (word !== "resume") return null;
+    resuming = true;
+  }
+  return null;
+}
 
 export function codexWindowRestart(record: SeatRecord, thread: string, abortedAt: number, procs: () => readonly Proc[] = processes): CodexRestart {
   if (!record.tmux) return { kind: "unknown", why: "Kiwi doesn't know which window runs this Codex session" };
@@ -94,12 +160,19 @@ export function codexWindowRestart(record: SeatRecord, thread: string, abortedAt
         grew = true;
       }
   }
-  const codexes = all.flatMap((p) => {
-    const args = inPane.has(p.pid) ? codexArgs(p, record.bin) : null;
-    return args ? [{ p, args }] : [];
-  });
+  const codexes = all.filter((p) => inPane.has(p.pid) && runsCodex(p, record.bin));
   if (!codexes.length) return { kind: "unknown", why: "no Codex runs in its tmux window" };
-  const starts = codexes.filter((c) => resumes(c.args, thread)).map((c) => startOf(c.p));
+  const argvs = codexes.flatMap((p) => {
+    const argv = exactArgv(p.pid);
+    return argv ? [{ p, argv }] : [];
+  });
+  if (argvs.length < codexes.length) return { kind: "unknown", why: "the exact command line of the Codex in its tmux window can't be read here" };
+  const starts = argvs
+    .filter(({ argv }) => {
+      const at = argv.slice(0, 2).findIndex((word) => isCodex(word, record.bin));
+      return at >= 0 && resumedSession(argv.slice(at + 1)) === thread;
+    })
+    .map(({ p }) => startOf(p));
   if (!starts.length) return { kind: "unknown", why: "no Codex in its tmux window was started as codex resume of this thread" };
   if (starts.some((s) => !Number.isFinite(s))) return { kind: "unknown", why: "its Codex process's start time can't be read" };
   const started = Math.min(...starts);
