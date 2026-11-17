@@ -584,6 +584,9 @@ jobs:
       - name: ui the Specs list stays mounted once opened, so going back mounts nothing, shows what changed while it was away and opens on Open as before (#2513)
         if: ${{ !cancelled() }}
         run: bun scripts/ui-kept-specs.ts --dist ui/dist --browser ${{ matrix.engine }}
+      - name: ui a cold open never paints a partial row, on a quiet channel and a busy thread doc (#2513)
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-cold-whole.ts --dist ui/dist --browser ${{ matrix.engine }}
       - name: ui Others' direct messages keeps its heading in place while one of its conversations is open, collapsed or expanded (#2386)
         if: ${{ !cancelled() }}
         run: bun scripts/ui-theirs-heading.ts --dist ui/dist --browser ${{ matrix.engine }}

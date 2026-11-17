@@ -91,10 +91,16 @@ const render = (app: ReactNode) => {
     )
 }
 
+const warmColdOpen = () => {
+  void import("~/chat/markdown").then((m) => m.warmParser())
+  void import("~/chat/doc/editor")
+}
+
 const start = (prefs: ThemePrefs, app: ReactNode) => {
   const go = () => {
     bootTheme(prefs)
     render(app)
+    warmColdOpen()
     warmLater()
   }
   const ready = Promise.all([startLanguage(), wantsRex(prefs) ? loadRex() : undefined])
