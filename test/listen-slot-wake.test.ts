@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { daemonListeners, daemonSock, holdListener } from "../src/daemon.ts";
 import { processStart } from "../src/pid.ts";
@@ -17,7 +18,7 @@ describe("a seat whose slot was stranded is woken once by its own listener (#250
     const input = JSON.stringify({ session_id: "L", cwd: h });
     await run(h, ["hook", "session-start"], S, h, input);
 
-    const gone = Bun.spawn(["sleep", "30"]);
+    const gone = spawnOwned(["sleep", "30"]);
     const started = processStart(gone.pid);
     if (!started) throw new Error("no start time for the stand-in listener");
     const stranded = await holdListener(

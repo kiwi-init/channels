@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterAll, expect, mock, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -42,7 +43,7 @@ function zipFor(version: string): Uint8Array {
   mkdirSync(join(src, "Channels.app", "Contents", "MacOS"), { recursive: true });
   writeFileSync(join(src, "Channels.app", "Contents", "MacOS", "Channels"), version);
   const out = join(root, `${version}.zip`);
-  Bun.spawnSync(["/usr/bin/ditto", "-c", "-k", "--keepParent", join(src, "Channels.app"), out]);
+  spawnOwnedSync(["/usr/bin/ditto", "-c", "-k", "--keepParent", join(src, "Channels.app"), out]);
   const z = new Uint8Array(readFileSync(out));
   zips.set(version, z);
   return z;

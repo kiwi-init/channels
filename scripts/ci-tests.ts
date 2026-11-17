@@ -1,20 +1,22 @@
 import { Glob } from "bun";
-import { mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { FLOWS, MAC } from "./ci-flows.ts";
 import { noteLine, shouldKill, SILENT_MS, verdict, watching } from "./ci-watchdog.ts";
+import { GRACE_MS, stopOwned } from "./ci-owned.ts";
 
 const [group = "", ...extra] = process.argv.slice(2);
 const all = [...new Glob("test/*.test.ts").scanSync(), ...new Glob("ui/src/**/*.test.{ts,tsx}").scanSync(), ...new Glob("packages/*/src/**/*.test.{ts,tsx}").scanSync()].sort();
 const flows = FLOWS.map((name) => `test/${name}.test.ts`);
 const mac = MAC.map((name) => `test/${name}.test.ts`);
-const files = group === "all" ? all : group === "unit" ? all.filter((f) => !flows.includes(f)) : group === "flows" ? flows : group === "mac" ? mac : undefined;
+const only = (process.env.KIWI_CI_ONLY ?? "").split(",").filter(Boolean);
+const files = only.length ? only : group === "all" ? all : group === "unit" ? all.filter((f) => !flows.includes(f)) : group === "flows" ? flows : group === "mac" ? mac : undefined;
 if (!files || extra.length) {
   console.error("usage: bun scripts/ci-tests.ts all | unit | flows | mac");
   process.exit(2);
 }
-const missing = files.filter((f) => !all.includes(f));
+const missing = only.length ? only.filter((f) => !existsSync(f)) : files.filter((f) => !all.includes(f));
 if (missing.length) {
   console.error(`missing test files: ${missing.join(", ")}`);
   process.exit(1);
@@ -22,8 +24,8 @@ if (missing.length) {
 
 function tmpBehindSymlink(): { dir: string; cleanup: () => void } {
   const tmp = resolve(tmpdir());
-  if (realpathSync(tmp) !== tmp) return { dir: tmp, cleanup: () => {} };
   const real = mkdtempSync(join(tmp, "kiwi-tmp-"));
+  if (realpathSync(tmp) !== tmp) return { dir: real, cleanup: () => rmSync(real, { recursive: true, force: true }) };
   const link = `${real}.link`;
   symlinkSync(real, link);
   return {
@@ -40,6 +42,25 @@ const proc = Bun.spawn(["bun", "test", "--parallel", ...files.map((f) => `./${f}
   stdio: ["inherit", "pipe", "pipe"],
   env: { ...process.env, TMPDIR: tmp.dir },
 });
+const stopRun = async (): Promise<void> => {
+  for (const ledger of new Glob("kiwi-test-harness-*/spawns.jsonl").scanSync({ cwd: tmp.dir, absolute: true })) await stopOwned(ledger, 0, { sweep: true });
+};
+let stopping = false;
+for (const [sig, exitCode] of [
+  ["SIGINT", 130],
+  ["SIGTERM", 143],
+] as const)
+  process.on(sig, () => {
+    if (stopping) return;
+    stopping = true;
+    proc.kill(sig);
+    void Promise.race([proc.exited, Bun.sleep(GRACE_MS)])
+      .then(stopRun)
+      .finally(() => {
+        tmp.cleanup();
+        process.exit(exitCode);
+      });
+  });
 const watch = watching(Date.now());
 let tail = "";
 async function pump(stream: ReadableStream<Uint8Array>, out: NodeJS.WriteStream, keepTail: boolean): Promise<void> {
@@ -91,6 +112,7 @@ const timer = setInterval(
 const code = await proc.exited;
 clearInterval(timer);
 await Promise.race([reading, Bun.sleep(2000)]);
+await stopRun();
 tmp.cleanup();
 if (outcome.killed) {
   console.error(`watchdog: ${outcome.killed.why}`);

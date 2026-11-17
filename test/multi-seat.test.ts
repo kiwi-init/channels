@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -45,7 +46,7 @@ const scratch = (tag: string) => {
 type Env = Record<string, string>;
 
 function spawn(home: string, args: string[], env: Env = {}, cwd = home, stdin?: string) {
-  return Bun.spawn(kiwiCmd(args), {
+  return spawnOwned(kiwiCmd(args), {
     cwd,
     env: { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ""}`, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "", KIWI_MODEL: "test-model", ...env },
     stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),

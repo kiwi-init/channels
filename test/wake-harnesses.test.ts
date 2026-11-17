@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -79,7 +80,7 @@ describe("waking an agent in its own session, by harness, and when the daemon st
     });
     bindAs({ harness: "grok-bot" });
     const url = `https://example.test/routine`;
-    const p = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "-c", "test", "--as", "claude", "wake", "webhook", url], {
+    const p = spawnOwned([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "-c", "test", "--as", "claude", "wake", "webhook", url], {
       env: { ...process.env, KIWI_RELAY: w.relay },
       stdin: new Blob(["Bearer routine-secret\n"]),
       stdout: "pipe",

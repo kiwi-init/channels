@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -97,7 +98,7 @@ describe("review fixes (#1352)", () => {
     const d3 = join(h, "three");
     mkdirSync(d2);
     mkdirSync(d3);
-    const procs = [Bun.spawn(["sleep", "120"]), Bun.spawn(["sleep", "120"])];
+    const procs = [spawnOwned(["sleep", "120"]), spawnOwned(["sleep", "120"])];
     const S2 = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s2", CLAUDE_PID: String(procs[0]!.pid) };
     const S3 = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s3", CLAUDE_PID: String(procs[1]!.pid) };
     try {

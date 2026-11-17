@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -30,7 +31,7 @@ const S: Env = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "reentry", CLAUDE_PID:
 const start = (source: string) => JSON.stringify({ session_id: "reentry", cwd: agent, source, hook_event_name: "SessionStart" });
 
 function spawn(home: string, args: string[], env: Env = {}, stdin?: string) {
-  return Bun.spawn(kiwiCmd(args), {
+  return spawnOwned(kiwiCmd(args), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: server!.url.origin, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "", KIWI_MODEL: "test-model", ...env },
     stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),

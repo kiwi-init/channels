@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import net from "node:net";
@@ -103,7 +104,7 @@ describe("one Channels per data folder, taken before the store opens (T438)", ()
     const script = `import { claimInstance } from ${JSON.stringify(path.resolve(import.meta.dir, "../desktop/src/single-instance.ts"))};
       const i = await claimInstance({ dir: ${JSON.stringify(dir)}, handoff: { kind: "show" }, scheme: "kiwi", onHandoff: () => {} });
       console.log(i.kind); process.exit(0);`;
-    const run = Bun.spawnSync(["bun", "-e", script]);
+    const run = spawnOwnedSync(["bun", "-e", script]);
     expect(run.stdout.toString().trim()).toBe("first");
     expect(await claim(dir, { kind: "show" })).toMatchObject({ kind: "first" });
   });
@@ -117,12 +118,12 @@ describe("one Channels per data folder, taken before the store opens (T438)", ()
       const sh = dlopen(${JSON.stringify(libc)}, { system: { args: [FFIType.ptr], returns: FFIType.i32 } }).symbols;
       const cmd = new TextEncoder().encode("sleep 4.321 >/dev/null 2>&1 &\\0");
       sh.system(ptr(cmd)); process.exit(0);`;
-    Bun.spawnSync(["bun", "-e", script]);
+    spawnOwnedSync(["bun", "-e", script]);
     try {
-      expect(Bun.spawnSync(["pgrep", "-f", "^sleep 4.321$"]).exitCode).toBe(0);
+      expect(spawnOwnedSync(["pgrep", "-f", "^sleep 4.321$"]).exitCode).toBe(0);
       expect(await claim(dir, { kind: "show" })).toMatchObject({ kind: "first" });
     } finally {
-      Bun.spawnSync(["pkill", "-f", "^sleep 4.321$"]);
+      spawnOwnedSync(["pkill", "-f", "^sleep 4.321$"]);
     }
   });
 

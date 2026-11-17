@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -50,7 +51,7 @@ const withBentKey = (token: string) => {
 };
 
 function run(code: string, persona: string, timeout: string) {
-  const p = Bun.spawn(kiwiCmd(["join", code, "--as", "dev", "--model", "test-model", "--persona", persona, "--timeout", timeout]), {
+  const p = spawnOwned(kiwiCmd(["join", code, "--as", "dev", "--model", "test-model", "--persona", persona, "--timeout", timeout]), {
     cwd: scratch("work"),
     env: { ...process.env, KIWI_HOME: scratch("home"), KIWI_RELAY: relay, CLAUDECODE: "", CLAUDE_CONFIG_DIR: scratch("claude"), CLAUDE_PROJECT_DIR: "" },
     stdin: "ignore",

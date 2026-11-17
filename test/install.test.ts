@@ -2,6 +2,7 @@
 // installs kiwi, then runs `kiwi join CODE --relay URL` with every argument as given, and nothing else.
 // Downloads are stubbed: a fake `curl` hands back a script standing in for kiwi, and its checksum.
 
+import { spawnOwnedSync } from "./owned.ts";
 import { describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,7 +22,7 @@ function sandbox(packed: readonly ("gz" | "xz")[] = []) {
   const sums = TARGETS.map((a) => `${sha(fake)}  ${a}`);
   for (const ext of packed) {
     const tool = ext === "gz" ? "gzip" : "xz";
-    Bun.spawnSync(["sh", "-c", `${tool} -c "${dir}/fake-kiwi" > "${dir}/fake-kiwi.${ext}"`]);
+    spawnOwnedSync(["sh", "-c", `${tool} -c "${dir}/fake-kiwi" > "${dir}/fake-kiwi.${ext}"`]);
     const packedSum = sha(readFileSync(join(dir, `fake-kiwi.${ext}`)));
     sums.push(...TARGETS.map((a) => `${packedSum}  ${a}.${ext}`));
   }
@@ -42,7 +43,7 @@ function sandbox(packed: readonly ("gz" | "xz")[] = []) {
 }
 
 function install(dir: string, args: string[], env: Record<string, string> = {}, script = SCRIPT) {
-  return Bun.spawnSync(["sh", script, ...args], {
+  return spawnOwnedSync(["sh", script, ...args], {
     env: { PATH: `${dir}:${process.env.PATH}`, HOME: dir, KIWI_INSTALL: join(dir, "bin"), ...env },
     stdout: "pipe",
     stderr: "pipe",
@@ -59,7 +60,7 @@ function bare(dir: string, args: string[], env: Record<string, string> = {}) {
     if (!at) return null;
     symlinkSync(at, join(toolbin, tool));
   }
-  return Bun.spawnSync(["/bin/sh", SCRIPT, ...args], {
+  return spawnOwnedSync(["/bin/sh", SCRIPT, ...args], {
     env: { PATH: `${dir}:${toolbin}`, HOME: dir, KIWI_INSTALL: join(dir, "bin"), ...env },
     stdout: "pipe",
     stderr: "pipe",
@@ -273,7 +274,7 @@ describe("the installer's download", () => {
     try {
       const packed = "/Td6WFoAAATm1rRGBMEVwAIKACEBHAAAAAAAAJ4XMQ3gAT8ADV0ANZpLVTCUYrSDAdIAAAAAAACVrZkR/gLWXAABMcACAAAAhSBvT7HEZ/sCAAAAAARZWg==";
       writeFileSync(join(dir, "kiwi.xz"), Buffer.from(packed, "base64"));
-      const r = Bun.spawnSync(["/usr/bin/compression_tool", "-decode", "-a", "lzma", "-i", join(dir, "kiwi.xz")], { stdout: "pipe", stderr: "pipe" });
+      const r = spawnOwnedSync(["/usr/bin/compression_tool", "-decode", "-a", "lzma", "-i", join(dir, "kiwi.xz")], { stdout: "pipe", stderr: "pipe" });
       expect(r.stderr.toString()).toBe("");
       expect(r.stdout.toString()).toBe("kiwi ".repeat(64));
     } finally {

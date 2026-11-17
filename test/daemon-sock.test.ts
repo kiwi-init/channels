@@ -1,6 +1,7 @@
 // The daemon's socket verbs (src/daemon/server.ts): hello names the version, the computer key and its
 // pairing; adopt stores the cert; listening names the subscribers; stop quiets the socket.
 
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -178,7 +179,7 @@ describe("the daemon socket", () => {
     const sock = join(fg, "daemon.sock");
     let proc: { kill(signal?: string): void; exited: Promise<number>; stdout: ReadableStream<Uint8Array> } | undefined;
     try {
-      proc = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "daemon"], {
+      proc = spawnOwned([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "daemon"], {
         env: { ...process.env, KIWI_HOME: fg },
         stdout: "pipe",
         stderr: "pipe",

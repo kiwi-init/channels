@@ -36,6 +36,7 @@ export const FLOWS: string[] = [
 ];
 
 export const MAC: string[] = [
+  "owned-scope",
   "desktop-app-life",
   "desktop-eb-bundle",
   "desktop-update-blocked",

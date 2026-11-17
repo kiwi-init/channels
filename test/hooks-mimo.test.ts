@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -95,7 +96,7 @@ test("the plugin is strict TypeScript", async () => {
   const dir = scratch("hk-mimo-tsrs-");
   const file = join(dir, "kiwi.ts");
   writeFileSync(file, mimoPluginSource("'kiwi' hook listen # kiwi"));
-  const tsrs = Bun.spawn(
+  const tsrs = spawnOwned(
     [process.execPath, "x", "tsrs", "--ignoreConfig", "--strict", "--noEmit", "--skipLibCheck", "--target", "es2022", "--module", "esnext", "--moduleResolution", "bundler", "--types", "bun", file],
     {
       cwd: join(import.meta.dir, ".."),
@@ -446,7 +447,7 @@ test("kiwi hook listen run from MiMoCode rewrites a plugin of Kiwi's from an old
   const dir = scratch("hk-mimo-hook-");
   const env = { ...process.env, KIWI_MIMO_DIR: dir, KIWI_HOME: scratch("hk-mimo-hook-home-"), MIMOCODE: "1", MIMOCODE_SESSION_ID: "ses_hook" };
   const kiwi = async (args: string[], stdin?: string) => {
-    const p = Bun.spawn(kiwiCmd(args), { cwd: dir, env, stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin), stdout: "pipe", stderr: "pipe" });
+    const p = spawnOwned(kiwiCmd(args), { cwd: dir, env, stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin), stdout: "pipe", stderr: "pipe" });
     const err = await new Response(p.stderr).text();
     expect(await p.exited, err).toBe(0);
   };

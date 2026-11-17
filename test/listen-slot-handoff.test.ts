@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -46,7 +47,7 @@ const hooksFor = async (agent: string) => (await daemonListeners()).filter((l) =
 
 describe("a seat's own session always arms its listener, and a healthy one is kept (#2502)", () => {
   test("a healthy listener in another live process keeps the slot, and the refusal names it", async () => {
-    const other = Bun.spawn(["sleep", "30"]);
+    const other = spawnOwned(["sleep", "30"]);
     const held = await holdListener(hook("s-healthy", procOf(other.pid)));
     expect(held.held).toBe(true);
     const second = await holdListener(hook("s-healthy", me));
@@ -72,7 +73,7 @@ describe("a seat's own session always arms its listener, and a healthy one is ke
   });
 
   test("a holder whose process is gone is superseded", async () => {
-    const gone = Bun.spawn(["sleep", "30"]);
+    const gone = spawnOwned(["sleep", "30"]);
     const proc = procOf(gone.pid);
     const stale = await holdListener(hook("s-dead", proc));
     expect(stale.held).toBe(true);
@@ -105,8 +106,8 @@ describe("a seat's own session always arms its listener, and a healthy one is ke
   });
 
   test("two live processes arming at once leave exactly one listener, and the displaced one closing removes nothing", async () => {
-    const one = Bun.spawn(["sleep", "30"]);
-    const two = Bun.spawn(["sleep", "30"]);
+    const one = spawnOwned(["sleep", "30"]);
+    const two = spawnOwned(["sleep", "30"]);
     const [x, y] = await Promise.all([holdListener(hook("s-race", procOf(one.pid))), holdListener(hook("s-race", procOf(two.pid)))]);
     expect([x.held, y.held].filter(Boolean)).toHaveLength(1);
     const loser = x.held ? y : x;

@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,7 +9,7 @@ const home = mkdtempSync(join(tmpdir(), "kiwi-bad-flags-"));
 afterAll(() => rmSync(home, { recursive: true, force: true }));
 
 async function run(args: string[]) {
-  const p = Bun.spawn(kiwiCmd(args), { cwd: home, env: { ...process.env, KIWI_HOME: home }, stdout: "pipe", stderr: "pipe" });
+  const p = spawnOwned(kiwiCmd(args), { cwd: home, env: { ...process.env, KIWI_HOME: home }, stdout: "pipe", stderr: "pipe" });
   const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
   return { code: await p.exited, out, err };
 }

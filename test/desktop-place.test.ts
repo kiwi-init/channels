@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterAll, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,7 +15,7 @@ chmodSync(bundled, 0o755);
 test("places of one binary started at once share one write, and what lands runs", async () => {
   const dest = join(dir, "bin", "kiwi");
   await Promise.all([place(bundled, dest), place(bundled, dest), place(bundled, dest)]);
-  const run = Bun.spawnSync([dest], { stdout: "pipe" });
+  const run = spawnOwnedSync([dest], { stdout: "pipe" });
   expect(run.exitCode).toBe(0);
   expect(run.stdout.toString().trim()).toBe("1.2.3");
   expect(readdirSync(join(dir, "bin"))).toEqual(["kiwi"]);
@@ -32,7 +33,7 @@ interface Quit {
 function quitDuring(name: string, bundle: string, until: "started" | "written"): Quit {
   const dest = join(dir, name, "kiwi");
   mkdirSync(join(dir, name));
-  const ran = Bun.spawnSync([process.execPath, join(import.meta.dir, "fixtures", "place-quit.ts"), bundle, dest, until], { stdout: "pipe", stderr: "pipe" });
+  const ran = spawnOwnedSync([process.execPath, join(import.meta.dir, "fixtures", "place-quit.ts"), bundle, dest, until], { stdout: "pipe", stderr: "pipe" });
   expect(ran.exitCode, ran.stderr.toString()).toBe(0);
   return JSON.parse(ran.stdout.toString()) as Quit;
 }

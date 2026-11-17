@@ -1,5 +1,6 @@
 // Rooms through the CLI: the owner makes one, posts there, and log, rooms and the line tags show it.
 
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -19,7 +20,7 @@ afterAll(() => {
 });
 
 async function ok(...args: string[]): Promise<string> {
-  const p = Bun.spawn(kiwiCmd(args), {
+  const p = spawnOwned(kiwiCmd(args), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: server.url.origin, CLAUDE_CONFIG_DIR: claudeDir, CLAUDECODE: args[0] === "--as" && args[1] === "human" ? "" : "1" },
     stdin: "ignore",

@@ -5,6 +5,7 @@
 //   create [ALIAS] --as AGENT [--role R] [--about A] [--open]   a channel, owned by "human", AGENT in it
 //   requests | approve CODE [--name N] [--role R] | deny CODE|KEY | kick NAME | close
 //   role NAME ROLE|none [--about A] | room create NAME | room rename NAME|ID NEWNAME
+import { spawnOwnedSync } from "./owned.ts";
 import * as Effect from "effect/Effect";
 import { runAgent, type Agent } from "../src/agent.ts";
 import { Channel } from "@kiwi/core/client.ts";
@@ -92,7 +93,7 @@ const verbs: Record<string, () => Effect.Effect<void, unknown, Agent>> = {
       bindDirectory(process.cwd(), { alias, as: name, ...(who.harness ? { harness: who.harness } : { plain: true as const }) });
       out(`join code: ${code}`);
       // The agent's brief, as kiwi gives it (the agent's own command, not this one).
-      const brief = Bun.spawnSync([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "prompt", "-c", alias, "--as", name], { stdout: "pipe", stderr: "inherit" });
+      const brief = spawnOwnedSync([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "prompt", "-c", alias, "--as", name], { stdout: "pipe", stderr: "inherit" });
       out("");
       process.stdout.write(brief.stdout.toString());
     }),

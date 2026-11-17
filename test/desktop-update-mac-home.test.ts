@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterAll, expect, mock, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -28,7 +29,7 @@ afterAll(() => {
     else process.env[k] = v;
   }
   globalThis.fetch = realFetch;
-  Bun.spawnSync(["chmod", "-R", "u+w", root]);
+  spawnOwnedSync(["chmod", "-R", "u+w", root]);
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -42,7 +43,7 @@ function zip(): Uint8Array {
   mkdirSync(join(src, "Channels.app", "Contents", "MacOS"), { recursive: true });
   writeFileSync(join(src, "Channels.app", "Contents", "MacOS", "Channels"), "0.20.0");
   const out = join(root, "new.zip");
-  Bun.spawnSync(["/usr/bin/ditto", "-c", "-k", "--keepParent", join(src, "Channels.app"), out]);
+  spawnOwnedSync(["/usr/bin/ditto", "-c", "-k", "--keepParent", join(src, "Channels.app"), out]);
   return new Uint8Array(readFileSync(out));
 }
 

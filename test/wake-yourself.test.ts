@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -44,7 +45,7 @@ function baseEnv(home: string, env: Env): Env {
 }
 
 function spawn(home: string, args: string[], env: Env = {}, cwd = home, stdin?: string) {
-  return Bun.spawn(kiwiCmd(args), {
+  return spawnOwned(kiwiCmd(args), {
     cwd,
     env: baseEnv(home, env),
     stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
@@ -109,7 +110,7 @@ function fakeKimi(home: string, cwd: string, env: Env, name = "kimi") {
   copyFileSync(Bun.which("bash") ?? "/bin/sh", bin);
   chmodSync(bin, 0o755);
   const io = scratch("kimi-io");
-  const proc = Bun.spawn([bin], { cwd, env: baseEnv(home, { TERM: "xterm-256color", NO_COLOR: "", ...env }), stdin: "pipe", stdout: "ignore", stderr: "ignore" });
+  const proc = spawnOwned([bin], { cwd, env: baseEnv(home, { TERM: "xterm-256color", NO_COLOR: "", ...env }), stdin: "pipe", stdout: "ignore", stderr: "ignore" });
   shells.push(proc);
   let n = 0;
   const line = (args: string[], tool: boolean, stdin: string | undefined, background: boolean) => {

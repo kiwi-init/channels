@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -106,13 +107,13 @@ describe("the doc wakes an agent hasn't been told yet (T606)", () => {
 
   test("the answer command it suggests survives a shell: #general stays an argument, not a comment (T1353)", async () => {
     const said = /answer in the doc: kiwi (send .*) \(kiwi show/.exec(docWakeLine(item("b5", { key: "main" }), "kiwi"))?.[1] ?? "";
-    const p = Bun.spawn(["sh", "-c", `printf '%s\\n' ${said}`], { stdout: "pipe" });
+    const p = spawnOwned(["sh", "-c", `printf '%s\\n' ${said}`], { stdout: "pipe" });
     expect((await new Response(p.stdout).text()).trim().split("\n")).toEqual(["send", "--to", "#general", "…"]);
   });
 
   test("a wake queued while another process tells the earlier ones is never lost (T3358)", async () => {
     const stop = join(dir, "race.stop");
-    const teller = Bun.spawn(
+    const teller = spawnOwned(
       [
         process.execPath,
         "-e",

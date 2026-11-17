@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,9 +21,9 @@ test("on Linux the driver starts an app folder's bin/electrobun-launcher, past b
 });
 
 test("killing what's left skips a process that exited after it was listed, and kills the rest (T761)", async () => {
-  const gone = Bun.spawn(["true"]);
+  const gone = spawnOwned(["true"]);
   await gone.exited;
-  const held = Bun.spawn(["sleep", "60"]);
+  const held = spawnOwned(["sleep", "60"]);
   expect(() => killAll([gone.pid, held.pid])).not.toThrow();
   expect(await held.exited).toBe(137);
   expect(held.signalCode).toBe("SIGKILL");

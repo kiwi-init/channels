@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterAll, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,7 +18,7 @@ const line = inviteLine("https://relay.example", "mc2-abc", { nick: "Ada Bot" })
 const SHELLS = ["sh", "bash", "zsh"].filter((s) => Bun.which(s));
 
 function paste(shell: string, home: string, path: string): { out: string; code: number } {
-  const r = Bun.spawnSync([shell, "-c", line], { env: { HOME: home, PATH: path }, stdout: "pipe", stderr: "pipe" });
+  const r = spawnOwnedSync([shell, "-c", line], { env: { HOME: home, PATH: path }, stdout: "pipe", stderr: "pipe" });
   return { out: r.stdout.toString() + r.stderr.toString(), code: r.exitCode };
 }
 

@@ -1,3 +1,4 @@
+import { spawnOwned, spawnOwnedSync } from "./owned.ts";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -46,7 +47,7 @@ const base = (home: string): Env => ({
 });
 
 function spawn(home: string, args: string[], env: Env = {}) {
-  return Bun.spawn(kiwiCmd(args), { cwd: home, env: { ...process.env, ...base(home), ...env }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  return spawnOwned(kiwiCmd(args), { cwd: home, env: { ...process.env, ...base(home), ...env }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
 }
 
 async function ok(home: string, args: string[], env: Env = {}): Promise<string> {
@@ -646,7 +647,7 @@ test("with --harness mimo, the loop passes MiMoCode's chosen model, finds the se
   expect(log).toContain(`${id} is over; its session ended`);
 });
 
-const tmuxPastes = !!Bun.which("tmux") && tmuxPastesFlag(new TextDecoder().decode(Bun.spawnSync(["tmux", "-V"]).stdout));
+const tmuxPastes = !!Bun.which("tmux") && tmuxPastesFlag(new TextDecoder().decode(spawnOwnedSync(["tmux", "-V"]).stdout));
 const shWord = (w: string) => `'${w.replace(/'/g, "'\\''")}'`;
 
 test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop types the first prompt once Kimi is ready, binds the seat to its process, and stops the listener it left", async () => {
@@ -666,7 +667,7 @@ test.skipIf(!tmuxPastes)("with --harness kimi in tmux 3.7 or newer, the loop typ
   chmodSync(join(sttyShim, "stty"), 0o755);
   const env: Env = { ...base(agent), PATH: `${sttyShim}:${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_PID: "", CLAUDE_CODE_SESSION_ID: "" };
   const line = ["exec", "env", ...Object.entries(env).map(([k, v]) => shWord(`${k}=${v}`)), ...kiwiCmd(["loop", "--harness", "kimi"]).map(shWord), `2>>${shWord(logFile)}`].join(" ");
-  const tmux = (...args: string[]) => Bun.spawnSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
+  const tmux = (...args: string[]) => spawnOwnedSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
   expect(tmux("new-session", "-d", "-s", "loop", "-x", "200", "-y", "50", "-c", agent, line).exitCode).toBe(0);
   const log = () => (existsSync(logFile) ? readFileSync(logFile, "utf8") : "");
   const fail = (e: unknown) => {
@@ -751,7 +752,7 @@ test.skipIf(!tmuxPastes)(
     const logFile = join(where, "loop.log");
     const env: Env = { ...base(agent), KIWI_ZCODE_DIR: zcodeDir, PATH: `${bin}:${process.env.PATH}`, SHELL: "/bin/sh", CLAUDECODE: "", CLAUDE_PID: "", CLAUDE_CODE_SESSION_ID: "" };
     const command = (args: string[]) => ["exec", "env", ...Object.entries(env).map(([k, v]) => shWord(`${k}=${v}`)), ...kiwiCmd(args).map(shWord), `2>>${shWord(logFile)}`].join(" ");
-    const tmux = (...args: string[]) => Bun.spawnSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
+    const tmux = (...args: string[]) => spawnOwnedSync(["tmux", "-S", sock, ...args], { stdout: "pipe", stderr: "pipe" });
     const log = () => (existsSync(logFile) ? readFileSync(logFile, "utf8") : "");
     const fail = (e: unknown) => {
       tmux("kill-server");

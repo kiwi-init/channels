@@ -2,6 +2,7 @@
 // means the owner removes the old seat and the agent joins again; until then, a name someone holds
 // is offered the next free one.
 
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -73,7 +74,7 @@ describe("a taken name", () => {
       return d;
     };
     const run = async (dir: string, ...args: string[]) => {
-      const p = Bun.spawn(kiwiCmd(args), {
+      const p = spawnOwned(kiwiCmd(args), {
         cwd: dir,
         env: { ...process.env, KIWI_HOME: dir, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1", CLAUDECODE: "" },
         stdin: "ignore",

@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,7 +8,7 @@ const real = mkdtempSync(join(tmpdir(), "kiwi-real-home-"));
 afterAll(() => rmSync(real, { recursive: true, force: true }));
 
 test("a test run gets its own KIWI_HOME and Claude settings even when the shell exports the real ones", () => {
-  const p = Bun.spawnSync([process.execPath, "test", "./test/fixtures/home-probe.ts"], {
+  const p = spawnOwnedSync([process.execPath, "test", "./test/fixtures/home-probe.ts"], {
     cwd: join(import.meta.dir, ".."),
     env: { ...process.env, KIWI_HOME: join(real, "kiwi"), CLAUDE_CONFIG_DIR: join(real, "claude") },
   });

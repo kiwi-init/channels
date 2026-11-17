@@ -1,6 +1,7 @@
 import { MAX_PIN, pinFits } from "@kiwi/core/pin.ts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Option from "effect/Option";
 import { openSession } from "../../agent.ts";
 import { Channel, keepHeld, RelayError, type JoinStatus, type JoinWatch } from "@kiwi/core/client.ts";
 import { Cursor, Keystore, loadConfig } from "../../config.ts";
@@ -98,6 +99,7 @@ export const joinCommands: Record<string, Command> = {
         return yield* listenAs(held, modeFor(held));
       }
       const code = args[1].trim();
+      const startedAt = Date.now();
       try {
         decodeJoinCode(code);
       } catch {
@@ -249,79 +251,82 @@ export const joinCommands: Record<string, Command> = {
           return yield* listenAs(s, mode);
         });
 
-      if (hadKey) {
-        const access = yield* Channel.fx.resume(relay, code, id).pipe(
-          Effect.catchIf(
-            (err) => err instanceof RelayError && [401, 403, 404].includes(err.status),
-            () => Effect.succeed(null),
+      const wait = opt.timeout ?? "30m";
+      const deadline = startedAt + parseDuration(wait) * 1000;
+      let shown: string | null = null;
+      const admission = Effect.gen(function* () {
+        if (hadKey) {
+          const access = yield* Channel.fx.resume(relay, code, id).pipe(
+            Effect.catchIf(
+              (err) => err instanceof RelayError && [401, 403, 404].includes(err.status),
+              () => Effect.succeed(null),
+            ),
+          );
+          const local = Object.values((yield* keys.config).channels).find((c) => c.roomId === roomId);
+          if (access && (access.keys[String(access.epoch)] ?? local?.keys[String(access.epoch)])) return { access, how: "resumed" as const };
+        }
+        const claims = () => Effect.promise(async () => ({ ...(await computerClaimFor(roomId, id.pk)), card, ...(opt.persona ? { pin: opt.persona } : {}) }));
+        const req = yield* Channel.fx.requestJoin(relay, code, id, info, yield* claims()).pipe(
+          Effect.catchIf(outForGood, () =>
+            Effect.gen(function* () {
+              yield* keys.forgetIdentity(name, roomId);
+              id = yield* keys.identity(name, roomId);
+              return yield* Channel.fx.requestJoin(relay, code, id, info, yield* claims());
+            }),
           ),
         );
-        const local = Object.values((yield* keys.config).channels).find((c) => c.roomId === roomId);
-        if (access && (access.keys[String(access.epoch)] ?? local?.keys[String(access.epoch)])) return yield* settle(access, "resumed");
-      }
-      const claims = () => Effect.promise(async () => ({ ...(await computerClaimFor(roomId, id.pk)), card, ...(opt.persona ? { pin: opt.persona } : {}) }));
-      const req = yield* Channel.fx.requestJoin(relay, code, id, info, yield* claims()).pipe(
-        Effect.catchIf(outForGood, () =>
-          Effect.gen(function* () {
-            yield* keys.forgetIdentity(name, roomId);
-            id = yield* keys.identity(name, roomId);
-            return yield* Channel.fx.requestJoin(relay, code, id, info, yield* claims());
-          }),
-        ),
+        const background = listenMode(true, who) === "read" ? null : runInBackground(who.harness);
+        out(
+          [
+            `asked to join as ${name}.`,
+            `your request says you run on: ${cardLine(card)}`,
+            `waiting for the owner to open your request… Leave this running until it prints "joined" (up to ${wait}). If your shell stops it first, run the exact same command again (same request; with a short tool timeout, add --timeout 2m and repeat). Never type or guess the code it shows.`,
+            background
+              ? `If this command isn't running in the background, stop it and run it again ${background}: it waits for the owner, then keeps listening for you, and that is what wakes you in this session.`
+              : null,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        );
+        const poke = Effect.promise(() =>
+          ensureDaemon()
+            .then(() => daemonAdmit({ relay, roomId: req.roomId, ownerPk: req.ownerPk }))
+            .catch(() => {
+              // Without this computer's daemon the owner's app lets the agent in, as before.
+            }),
+        );
+        let poked = 0;
+        let seen: string | null = null;
+        for (;;) {
+          if (req.computer && Date.now() - poked >= POKE_EVERY_MS) {
+            poked = Date.now();
+            yield* poke;
+          }
+          const until = req.computer ? Math.min(deadline, poked + POKE_EVERY_MS) : deadline;
+          const watched: JoinWatch = yield* Channel.fx.watchJoin(relay, code, id, req.requestId, seen, Math.max(0, Math.min(JOIN_WAIT_S, Math.ceil((until - Date.now()) / 1000))));
+          seen = watched.tag;
+          const st: JoinStatus = watched.status ?? { status: "pending", code: shown };
+          if (st.status === "pending" && st.code && st.code !== shown) {
+            shown = st.code;
+            out(`verification code ${st.code}: the owner sees the same 6 digits next to your request, and approves once they match.`);
+          }
+          if (st.status === "denied") {
+            yield* doneAsking;
+            yield* keys.forgetIdentity(name, decodeJoinCode(code).roomId);
+            return yield* die("the owner denied this request. Don't ask again unless your person tells you to.");
+          }
+          if (st.status === "approved") return { access: st.access, how: "approved" as const };
+          if (Date.now() > deadline) return null;
+          if (!seen) yield* Effect.sleep(JOIN_POLL_MS);
+        }
+      });
+      const admitted = Option.flatten(Option.map(yield* admission.pipe(Effect.timeoutOption(Math.max(0, deadline - Date.now()))), Option.fromNullOr));
+      if (Option.isSome(admitted)) return yield* settle(admitted.value.access, admitted.value.how);
+      return yield* die(
+        shown
+          ? `still waiting for approval (code ${shown}). This isn't an error: run exactly the same command again to keep waiting (same request, same code).`
+          : "the owner hasn't opened your request yet. This isn't an error: run exactly the same command again to keep waiting (same request).",
+        3,
       );
-      const wait = opt.timeout ?? "30m";
-      const background = listenMode(true, who) === "read" ? null : runInBackground(who.harness);
-      out(
-        [
-          `asked to join as ${name}.`,
-          `your request says you run on: ${cardLine(card)}`,
-          `waiting for the owner to open your request… Leave this running until it prints "joined" (up to ${wait}). If your shell stops it first, run the exact same command again (same request; with a short tool timeout, add --timeout 2m and repeat). Never type or guess the code it shows.`,
-          background
-            ? `If this command isn't running in the background, stop it and run it again ${background}: it waits for the owner, then keeps listening for you, and that is what wakes you in this session.`
-            : null,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      );
-      const deadline = Date.now() + parseDuration(wait) * 1000;
-      const poke = Effect.promise(() =>
-        ensureDaemon()
-          .then(() => daemonAdmit({ relay, roomId: req.roomId, ownerPk: req.ownerPk }))
-          .catch(() => {
-            // Without this computer's daemon the owner's app lets the agent in, as before.
-          }),
-      );
-      let poked = 0;
-      let shown: string | null = null;
-      let seen: string | null = null;
-      for (;;) {
-        if (req.computer && Date.now() - poked >= POKE_EVERY_MS) {
-          poked = Date.now();
-          yield* poke;
-        }
-        const until = req.computer ? Math.min(deadline, poked + POKE_EVERY_MS) : deadline;
-        const watched: JoinWatch = yield* Channel.fx.watchJoin(relay, code, id, req.requestId, seen, Math.max(0, Math.min(JOIN_WAIT_S, Math.ceil((until - Date.now()) / 1000))));
-        seen = watched.tag;
-        const st: JoinStatus = watched.status ?? { status: "pending", code: shown };
-        if (st.status === "pending" && st.code && st.code !== shown) {
-          shown = st.code;
-          out(`verification code ${st.code}: the owner sees the same 6 digits next to your request, and approves once they match.`);
-        }
-        if (st.status === "denied") {
-          yield* doneAsking;
-          yield* keys.forgetIdentity(name, decodeJoinCode(code).roomId);
-          return yield* die("the owner denied this request. Don't ask again unless your person tells you to.");
-        }
-        if (st.status === "approved") return yield* settle(st.access, "approved");
-        if (Date.now() > deadline) {
-          return yield* die(
-            shown
-              ? `still waiting for approval (code ${shown}). This isn't an error: run exactly the same command again to keep waiting (same request, same code).`
-              : "the owner hasn't opened your request yet. This isn't an error: run exactly the same command again to keep waiting (same request).",
-            3,
-          );
-        }
-        if (!seen) yield* Effect.sleep(JOIN_POLL_MS);
-      }
     }),
 };

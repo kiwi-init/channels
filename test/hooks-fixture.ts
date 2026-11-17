@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { expect } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -36,7 +37,7 @@ export function hooksFixture(options: { prefix: string; sessionId: string; chann
 
   function spawn(home: string, args: string[], extra: Env = {}, stdin?: string) {
     if (!relay) throw new Error("hooks fixture has not started");
-    const child = Bun.spawn(kiwiCmd(args), {
+    const child = spawnOwned(kiwiCmd(args), {
       cwd: home,
       env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "", KIWI_MODEL: "test-model", ...extra },
       stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),

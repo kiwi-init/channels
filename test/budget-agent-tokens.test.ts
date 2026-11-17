@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { join } from "node:path";
 
@@ -28,7 +29,7 @@ const step = (intent: string): Step => {
 };
 
 beforeAll(async () => {
-  const p = Bun.spawn(["bun", join(import.meta.dir, "../scripts/agent-cost.ts"), "--json"], { stdout: "pipe", stderr: "pipe" });
+  const p = spawnOwned(["bun", join(import.meta.dir, "../scripts/agent-cost.ts"), "--json"], { stdout: "pipe", stderr: "pipe" });
   const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
   if ((await p.exited) !== 0) throw new Error(`scripts/agent-cost.ts failed:\n${err}`);
   steps = JSON.parse(out.trim().split("\n").at(-1)!) as Step[];
