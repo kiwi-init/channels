@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
@@ -119,20 +119,41 @@ const click = (win: string, at: { x: number; y: number }): void => {
   xdo("mousemove", "--window", win, String(at.x), String(at.y));
   xdo("click", "1");
 };
+const shot = (name: string): void => {
+  const dir = process.env.EB_WC_SHOTS;
+  if (!dir) return;
+  mkdirSync(dir, { recursive: true });
+  const r = spawnSync("import", ["-window", "root", join(dir, `${name}.png`)], { encoding: "utf8" });
+  console.log(r.status === 0 ? `screenshot: ${name}.png` : `no screenshot (${name}): import exited ${r.status ?? r.error?.message}`);
+};
 const NAMES = ["Minimize", "Maximize", "Close"];
-const realClick = async (d: Driver, win: string, where: string, index: number, what: string, done: () => boolean): Promise<boolean> => {
+const clickActs = async (d: Driver, win: string, where: string, index: number, what: string, done: () => boolean): Promise<{ acted: boolean; hit: Hit } | null> => {
   const hit = await hitAt(d, index);
-  if (!hit) {
-    problems.push(`${where}: no ${NAMES[index]} button on screen to click`);
-    return false;
-  }
+  if (!hit) return null;
   const sent = Date.now();
   click(win, hit.at);
   const acted = await until(what, 5_000, async () => (done() ? true : null)).catch(() => false);
   console.log(`${where}: a real click on ${NAMES[index]} at ${hit.at.x},${hit.at.y} (${hit.layout}): ${acted ? `acted in ${Date.now() - sent}ms` : "nothing happened in 5s"}; under it: ${hit.chain}`);
-  if (!acted) problems.push(`${where}: a real click on ${NAMES[index]} didn't act on the window; under it: ${hit.chain}; the control ${hit.inside ? "was" : "wasn't"} the element hit`);
-  return acted;
+  return { acted, hit };
 };
+const realClick = async (d: Driver, win: string, where: string, index: number, what: string, done: () => boolean): Promise<boolean> => {
+  const r = await clickActs(d, win, where, index, what, done);
+  if (!r) problems.push(`${where}: no ${NAMES[index]} button on screen to click`);
+  else if (!r.acted) problems.push(`${where}: a real click on ${NAMES[index]} didn't act on the window; under it: ${r.hit.chain}; the control ${r.hit.inside ? "was" : "wasn't"} the element hit`);
+  return !!r?.acted;
+};
+const plantDrag = (d: Driver, on: boolean): Promise<boolean> =>
+  d.evaluate((planting: boolean) => {
+    document.getElementById("eb-planted-drag")?.remove();
+    if (!planting) return true;
+    const box = document.querySelector(".wm-controls")?.getBoundingClientRect();
+    if (!box) return false;
+    const cover = document.createElement("div");
+    cover.id = "eb-planted-drag";
+    cover.style.cssText = `position: fixed; left: ${box.left - 4}px; top: ${box.top - 4}px; width: ${box.width + 8}px; height: ${box.height + 8}px; z-index: 2147483647; -webkit-app-region: drag; --electrobun-app-region: drag`;
+    document.body.append(cover);
+    return true;
+  }, on);
 const sizeBack = async (d: Driver, win: string, width: number, height: number): Promise<void> => {
   if ((await d.evaluate(() => innerWidth, null)) === width) return;
   spawnSync("wmctrl", ["-i", "-r", win, "-e", `0,0,0,${width},${height}`], { stdio: "ignore" });
@@ -152,6 +173,7 @@ try {
     await firstChannel(d, 0);
     const wmMark = await d.evaluate(() => document.documentElement.dataset["wm"] ?? "", null);
     if (wmMark !== "floating") throw new Error(`the window isn't marked floating under openbox (data-wm=${wmMark || "none"})`);
+    await until("the first-run dialog closed", 10_000, async () => (await d.evaluate(() => !document.querySelector("dialog[open]"), null)) || null);
 
     for (const size of [
       { name: "wide (tabs)", width: 1280, height: 800 },
@@ -167,6 +189,9 @@ try {
       const read = Date.now() - resized;
       await timeline(d, resized, resized + 2_500, seen);
       console.log(`${size.name}: after the resize (regions read at +${read}ms): ${seen.join("; ")}`);
+      shot(size.name.replace(/\W+/g, "-").replace(/-+$/, ""));
+      const bad = seen.filter((frame) => /\bdrag\b|\(under /.test(frame.replace(/no-drag/g, "")));
+      if (bad.length) problems.push(`${size.name}: after the resize a control was in a drag region or covered: ${bad.join("; ")}`);
       console.log(`${size.name}: ${c.names.join(" | ")} at x ${c.xs.map(Math.round).join(", ")}; regions ${c.regions.join(", ")}`);
       if (c.names.join("|") !== "Minimize window|Maximize window|Close window") problems.push(`${size.name}: controls read ${JSON.stringify(c.names)}`);
       if (!(c.xs[0]! < c.xs[1]! && c.xs[1]! < c.xs[2]!)) problems.push(`${size.name}: controls aren't ordered left to right (${c.xs.join(", ")})`);
@@ -222,6 +247,19 @@ try {
     await until("the button reads Maximize after the window manager restored it", 10_000, async () => ((await label(d)) === "Maximize window" ? true : null));
 
     await sizeBack(d, win, 700, 760);
+    if (!(await plantDrag(d, true))) problems.push("negative control: no controls to plant a drag cover over");
+    else {
+      const planted = await until("the window controls under the planted cover", 10_000, () => controls(d));
+      const through = await clickActs(d, win, "negative control (a planted drag cover over the controls)", 0, "Minimize iconifies the window through the cover", () => iconic(win));
+      console.log(`negative control: regions ${planted.regions.join(", ")}; a real click on Minimize ${through?.acted ? "still acted" : "didn't act"}`);
+      if (!planted.regions.every((r) => r === "drag")) problems.push(`negative control: a planted drag cover over the controls read ${planted.regions.join(", ")}, not drag`);
+      if (!through || through.acted) problems.push("negative control: a real click through a planted drag cover still reached Minimize, so this check can't see a covered control");
+      await plantDrag(d, false);
+      if (iconic(win)) {
+        spawnSync("wmctrl", ["-i", "-a", win], { stdio: "ignore" });
+        await until("the window comes back", 10_000, async () => (!iconic(win) ? true : null));
+      }
+    }
     await realClick(d, win, "narrow, last", 2, "Close takes the window off the screen", () => sh(["xdotool", "search", "--onlyvisible", "--class", "^Channels"]) === "");
     console.log("clicked for real at every width: Maximize, Restore and Minimize; then a window-manager maximize and restore; then Close last");
   } finally {

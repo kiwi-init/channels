@@ -21,7 +21,7 @@ on:
         required: false
         default: ""
       window_controls_loops:
-        description: "desktop / linux runs its window-controls check this many times, a fresh app each, and keeps every loop's log as the window-controls-loops artifact; empty runs it once"
+        description: "desktop / linux runs its window-controls check this many times, a fresh app each, and keeps every loop's log in the window-controls artifact, beside the screenshots each width takes; empty runs it once"
         required: false
         default: ""
       release:
@@ -854,6 +854,7 @@ jobs:
         timeout-minutes: ${{ inputs.window_controls_loops != '' && 120 || 5 }}
         env:
           LOOPS: ${{ inputs.window_controls_loops }}
+          EB_WC_SHOTS: ${{ runner.temp }}/window-controls/shots
         run: |
           test=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* 2>/dev/null | head -n 1)
           [ -n "$test" ] || { echo "no dev-linux test build under desktop/release-eb/build"; exit 1; }
@@ -870,10 +871,10 @@ jobs:
           done
           echo "window controls: $failed of $LOOPS loops failed"
           [ "$failed" -eq 0 ]
-      - if: ${{ !cancelled() && matrix.drive && inputs.window_controls_loops != '' }}
+      - if: ${{ !cancelled() && matrix.drive }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: window-controls-loops
+          name: window-controls
           path: ${{ runner.temp }}/window-controls
           if-no-files-found: ignore
           overwrite: true
