@@ -511,7 +511,7 @@ try {
             switchRoundsMs: views,
             switchFirstEntryMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, v[0] ?? null])),
             switchWarmMedianMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, median(v.slice(1))])),
-            switchWindowWorkMs: Object.fromEntries(Object.entries(windowWork).map(([k, v]) => [k, Object.fromEntries(Object.keys(v[0] ?? {}).map((m) => [m, median(v.map((x) => x[m] ?? 0))]))])),
+            switchRoundWorkMs: windowWork,
             switchWorkMs: Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Object.fromEntries(Object.keys(v[0] ?? {}).map((m) => [m, median(v.map((x) => x[m] ?? 0))]))])),
           }
         : {}),
