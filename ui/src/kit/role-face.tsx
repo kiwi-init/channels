@@ -1,4 +1,4 @@
-import { useId } from "react"
+import { useId, useState } from "react"
 import { CHARACTERS, type Face } from "~/kit/characters"
 import { LOGOS } from "~/kit/logos"
 import type { Mood } from "~/kit/mood"
@@ -13,20 +13,43 @@ export const faceOf = (role: string | undefined): Face => (role && Object.hasOwn
 
 const inner = (transform: string | undefined): number => Number(/scale\(([\d.]+)\)/.exec(transform ?? "")?.[1] ?? 1)
 
-function Eye({ x, side }: { x: number; side: -1 | 1 }) {
+type EyeShape = "dot" | "bar" | "shut" | "joy" | "chev"
+
+const SHOWN: Readonly<Record<Mood, EyeShape | null>> = {
+  free: "dot",
+  thinking: "dot",
+  waiting: "dot",
+  tool: "bar",
+  overloaded: "chev",
+  offline: "shut",
+  done: "joy",
+  error: null,
+}
+
+function useShapes(mood: Mood): { shapes: ReadonlySet<EyeShape>; first: EyeShape | null } {
+  const shown = SHOWN[mood]
+  const [first] = useState(shown)
+  const [shapes, setShapes] = useState<ReadonlySet<EyeShape>>(() => new Set(shown ? [shown] : []))
+  if (shown && !shapes.has(shown)) setShapes(new Set([...shapes, shown]))
+  return { shapes, first }
+}
+
+function Eye({ x, side, shapes, first }: { x: number; side: -1 | 1; shapes: ReadonlySet<EyeShape>; first: EyeShape | null }) {
+  const named = (shape: EyeShape, kind: string) => `eye ${kind}eye-${shape}${shape === first ? "" : " eye-late"}`
   return (
     <g transform={`translate(${x} 0)`}>
-      <ellipse className="eye eye-dot" rx={4.3} ry={5.3} />
-      <rect className="eye eye-bar" x={-5} y={-1.8} width={10} height={3.6} rx={1.8} />
-      <path className="eye eye-line eye-shut" d="M-4.8 -1Q0 3.8 4.8 -1" />
-      <path className="eye eye-line eye-joy" d="M-4.8 2.2Q0 -4.4 4.8 2.2" />
-      <path className="eye eye-line eye-chev" d={side < 0 ? "M-3 -3.8L3.4 0L-3 3.8" : "M3 -3.8L-3.4 0L3 3.8"} />
+      {shapes.has("dot") && <ellipse className={named("dot", "")} rx={4.3} ry={5.3} />}
+      {shapes.has("bar") && <rect className={named("bar", "")} x={-5} y={-1.8} width={10} height={3.6} rx={1.8} />}
+      {shapes.has("shut") && <path className={named("shut", "eye-line ")} d="M-4.8 -1Q0 3.8 4.8 -1" />}
+      {shapes.has("joy") && <path className={named("joy", "eye-line ")} d="M-4.8 2.2Q0 -4.4 4.8 2.2" />}
+      {shapes.has("chev") && <path className={named("chev", "eye-line ")} d={side < 0 ? "M-3 -3.8L3.4 0L-3 3.8" : "M3 -3.8L-3.4 0L3 3.8"} />}
     </g>
   )
 }
 
 export function RoleFace({ role, harness, mood = "free" }: { role?: string | undefined; harness?: Harness | undefined; mood?: Mood }) {
   const id = useId()
+  const { shapes, first } = useShapes(mood)
   const c = CHARACTERS[faceOf(role)]
   const logo = harness ? LOGOS[harness] : undefined
   const scale = BADGE / 24
@@ -39,8 +62,8 @@ export function RoleFace({ role, harness, mood = "free" }: { role?: string | und
           <rect x="-10" y="-10" width="120" height="120" fill="#fff" />
           <g transform={eyes}>
             <g className="face-look">
-              <Eye x={-half} side={-1} />
-              <Eye x={half} side={1} />
+              <Eye x={-half} side={-1} shapes={shapes} first={first} />
+              <Eye x={half} side={1} shapes={shapes} first={first} />
             </g>
           </g>
           {logo && (

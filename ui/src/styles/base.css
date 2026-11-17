@@ -401,6 +401,13 @@ kbd {
     transform var(--pop);
 }
 
+@starting-style {
+  .face .eye-late {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+}
+
 .face .eye:not(.eye-line) {
   fill: #000;
 }
