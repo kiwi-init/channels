@@ -1333,7 +1333,7 @@
   box-shadow: none;
 }
 
-:root[data-tabs] .app > .rail :is(.tile.is-add, .tile.is-folder, .wm-controls) {
+:root[data-tabs] .app > .rail :is(.tile.is-add, .tile.is-folder) {
   align-self: center;
 }
 
