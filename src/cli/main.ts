@@ -7,6 +7,7 @@
 // bottom turns that into the line on stderr and the exit code, in one place.
 // A command's value, when it has one, is its exit code.
 
+import { launcher } from "../launcher.ts";
 import * as Exit from "effect/Exit";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import { AgentLive } from "../agent.ts";
@@ -55,6 +56,10 @@ if (import.meta.main) {
       if (args.length !== 1) throw new Error("usage: kiwi upgrade (or kiwi update)");
       const extra = unexpectedOptions([]);
       if (extra.length) throw new Error(`kiwi ${cmd} does not accept ${extra.map((name) => `--${name}`).join(", ")}`);
+      if (launcher) {
+        out(`kiwi here runs on the Channels app (${launcher}) and updates with it.\n`);
+        process.exit(0);
+      }
       const { upgrade } = await import("./upgrade.ts");
       await upgrade({ executable: process.execPath, source: /\.(ts|js)$/.test(Bun.main), version: VERSION, platform: process.platform, arch: process.arch, report: out });
       process.exit(0);

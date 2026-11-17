@@ -1,11 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { kiwiCli } from "../desktop/src/bundled-daemon.ts";
-import { keepCli } from "../desktop/src/cli.ts";
+import { appBun, keepCli, launcherScript } from "../desktop/src/cli.ts";
 import { useHost } from "../desktop/src/host.ts";
 import { fakeHost } from "./fake-host.ts";
 
@@ -142,7 +142,7 @@ test.skipIf(process.platform === "win32")(
   90_000,
 );
 
-test("the daemon's own copy: with only kiwi.js in the app, kiwiCli compiles a runnable kiwi into the app's data, never hands back the .js", async () => {
+test("the daemon's own copy: with only kiwi.js in the app, kiwiCli puts a runnable kiwi into the app's data, never hands back the .js", async () => {
   const resources = folder();
   const data = folder();
   writeFileSync(join(resources, "kiwi.js"), 'if (process.argv.includes("--version")) console.log("kiwi 9.9.9");\n');
@@ -152,3 +152,63 @@ test("the daemon's own copy: with only kiwi.js in the app, kiwiCli compiles a ru
   expect(bin).toBe(join(data, "bin", "kiwi-9.9.9"));
   expect(execFileSync(bin, ["--version"], { encoding: "utf8" }).trim()).toBe("kiwi 9.9.9");
 }, 30_000);
+
+test("on the app's Bun, kiwi is a few lines that run the app's kiwi.js, and a current one is kept", async () => {
+  const dir = folder();
+  const bundle = join(dir, "kiwi.js");
+  writeFileSync(bundle, 'if (process.argv.includes("--version")) console.log("kiwi 9.9.9");\n');
+  process.env["KIWI_INSTALL"] = join(dir, "bin");
+  const kept = await keepCli(bundle, "9.9.9", [], undefined, process.execPath);
+  expect(kept).toEqual({ path: join(dir, "bin", "kiwi"), version: "9.9.9", updated: true, homebrew: false });
+  expect(statSync(kept.path).size).toBeLessThan(2048);
+  expect(execFileSync(kept.path, ["--version"], { encoding: "utf8" }).trim()).toBe("kiwi 9.9.9");
+  expect(await keepCli(bundle, "9.9.9", [], undefined, process.execPath)).toEqual({ path: kept.path, version: "9.9.9", updated: false, homebrew: false });
+}, 30_000);
+
+test.skipIf(process.platform === "win32")("the launcher starts Bun from /, so a folder's bunfig.toml and .env never reach kiwi, and kiwi works in the folder it was started in", () => {
+  const dir = folder();
+  const bundle = join(dir, "kiwi.js");
+  const self = join(dir, "kiwi");
+  writeFileSync(
+    bundle,
+    `const { launcher } = await import(${JSON.stringify("/Users/jow/www/channels/src/launcher.ts")});\nconsole.log(JSON.stringify({ cwd: process.cwd(), pwd: process.env.PWD, dotenv: process.env.KIWI_DOTENV_PROBE ?? null, launcher, left: [process.env.KIWI_LAUNCHER ?? null, process.env.KIWI_LAUNCHER_CWD ?? null], args: process.argv.slice(2) }));\n`,
+  );
+  writeFileSync(self, launcherScript(process.execPath, bundle, self), { mode: 0o755 });
+  const repo = join(dir, "repo with 'quotes'");
+  mkdirSync(repo);
+  writeFileSync(join(repo, "evil.js"), 'console.log("PRELOADED");\n');
+  writeFileSync(join(repo, "bunfig.toml"), 'preload = ["./evil.js"]\n');
+  writeFileSync(join(repo, ".env"), "KIWI_DOTENV_PROBE=leaked\n");
+  const out = execFileSync(self, ["send", "a b"], { cwd: repo, encoding: "utf8" });
+  expect(out).not.toContain("PRELOADED");
+  expect(JSON.parse(out)).toEqual({ cwd: realpathSync(repo), pwd: realpathSync(repo), dotenv: null, launcher: self, left: [null, null], args: ["send", "a b"] });
+});
+
+test.skipIf(process.platform === "win32")(
+  "a launcher whose app was moved says so and how to get kiwi back, and the app replaces it on its next start",
+  async () => {
+    const dir = folder();
+    const bundle = join(dir, "kiwi.js");
+    writeFileSync(bundle, 'if (process.argv.includes("--version")) console.log("kiwi 9.9.9");\n');
+    process.env["KIWI_INSTALL"] = join(dir, "bin");
+    mkdirSync(join(dir, "bin"));
+    const dest = join(dir, "bin", "kiwi");
+    writeFileSync(dest, launcherScript(join(dir, "gone", "bun"), bundle, dest), { mode: 0o755 });
+    const run = spawnSync(dest, ["--version"], { encoding: "utf8" });
+    expect(run.status).toBe(127);
+    expect(run.stderr).toContain("curl -fsSL https://channels.kiwiinit.com/install | sh");
+    expect(await keepCli(bundle, "9.9.9", [], undefined, process.execPath)).toEqual({ path: dest, version: "9.9.9", updated: true, homebrew: false });
+    expect(execFileSync(dest, ["--version"], { encoding: "utf8" }).trim()).toBe("kiwi 9.9.9");
+  },
+  30_000,
+);
+
+test("only an app at a lasting place lends its Bun: never Windows, an AppImage, a translocated app or one run from its disk image", () => {
+  const mac = "/Applications/Channels.app/Contents/MacOS/bun";
+  expect(appBun(mac, "darwin", {})).toBe(mac);
+  expect(appBun("/opt/Channels/bin/bun", "linux", {})).toBe("/opt/Channels/bin/bun");
+  expect(appBun("C:\\Channels\\bun.exe", "win32", {})).toBeNull();
+  expect(appBun("/tmp/.mount_abc/Channels/bin/bun", "linux", { APPIMAGE: "/home/a/Channels.AppImage" })).toBeNull();
+  expect(appBun("/private/var/folders/x/T/AppTranslocation/1234/d/Channels.app/Contents/MacOS/bun", "darwin", {})).toBeNull();
+  expect(appBun("/Volumes/Channels/Channels.app/Contents/MacOS/bun", "darwin", {})).toBeNull();
+});

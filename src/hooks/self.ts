@@ -6,6 +6,7 @@ import { binDir } from "@kiwi/core/node/shell-path.ts";
 import { VERSION } from "../version.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
 import { bindingFor } from "./listeners.ts";
+import { launcher } from "../launcher.ts";
 
 const MARK = "# kiwi";
 export const EVENTS = { SessionStart: "session-start", UserPromptSubmit: "prompt", Stop: "stop" } as const;
@@ -28,6 +29,7 @@ export function stableBin(exe: string): string {
 }
 
 export function selfArgv(): string[] {
+  if (launcher) return [launcher];
   const compiled = !/\.(ts|js)$/.test(Bun.main);
   return compiled ? [stableBin(process.execPath)] : [Bun.which("bun") ?? process.execPath, Bun.main];
 }
@@ -63,6 +65,7 @@ export function selfIdentity(): string | null {
 }
 
 function selfRunnable(): boolean {
+  if (launcher) return runnable(launcher);
   if (!/\.(ts|js)$/.test(Bun.main)) return runnable(process.execPath);
   try {
     return statSync(Bun.main).isFile() && runnable(Bun.which("bun") ?? process.execPath);

@@ -5,7 +5,7 @@ import type { DeviceLink } from "@kiwi/core/devices.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
 import type { ComputerView } from "./bridge.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
-import { ensureOnPath, keepCli, place, type KeptCli } from "./cli.ts";
+import { appBun, ensureOnPath, keepCli, place, type KeptCli } from "./cli.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, daemonUnpair, kiwiHome, noteDaemon, spawnDaemon, trimDaemonLog, type HelloResult } from "./daemon-client.ts";
 import { keepAlive } from "./daemon-keeper.ts";
 import { host } from "./host.ts";
@@ -30,7 +30,7 @@ async function runnableKiwi(): Promise<string> {
   const name = `kiwi-${host().app.version()}`;
   const unpacked = path.join(dir, name);
   if (fs.existsSync(unpacked)) return unpacked;
-  await place(bundled, unpacked);
+  await place(bundled, unpacked, appBun());
   for (const old of await fs.promises.readdir(dir)) if (old.startsWith("kiwi-") && old !== name) await fs.promises.rm(path.join(dir, old), { force: true });
   return unpacked;
 }
@@ -96,7 +96,7 @@ export async function adoptDaemon(listComputer: ListComputer): Promise<ComputerV
 }
 
 async function keepOwnCli(): Promise<KeptCli> {
-  const kept = await keepCli(bundledKiwi(), host().app.version());
+  const kept = await keepCli(bundledKiwi(), host().app.version(), undefined, undefined, host().app.packaged() ? appBun() : null);
   if (!kept.homebrew) ensureOnPath();
   kiwiBin = !kept.unsure && (!kept.homebrew || compareVersions(kept.version, host().app.version()) >= 0) ? kept : { path: await runnableKiwi(), version: host().app.version() };
   return kept;
