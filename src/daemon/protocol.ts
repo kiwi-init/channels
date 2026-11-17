@@ -169,6 +169,7 @@ export interface DaemonSeat {
   wake: { on: boolean; path: WakePath; last: DaemonWake | null };
   reach: Reach | null;
   unarmed: Unarmed | null;
+  untaken: Unarmed | null;
 }
 
 export interface DaemonPeek {

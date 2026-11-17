@@ -622,12 +622,13 @@ export function presenceAnswers(on: { client: string; reach?: Reach; wake?: stri
   return on.client !== "daemon" || on.reach !== "unreachable" || (isWakeVia(on.wake) && !wakesInSession(on.wake));
 }
 
-export function presenceWords(on: { client: string; reach?: Reach; readAt?: number; wake?: string; unarmed?: Unarmed }, now = Date.now()): string {
+export function presenceWords(on: { client: string; reach?: Reach; readAt?: number; wake?: string; unarmed?: Unarmed; untaken?: Unarmed }, now = Date.now()): string {
   if (on.client !== "daemon") return `online (${inlineText(on.client, 40)})`;
   const wake = isWakeVia(on.wake) ? `wakes via ${wakeWords(on.wake)}` : "can't be woken";
   const alert = unarmedAlert(on.unarmed, now);
   const unarmed = alert ? ` · listener not armed for ${ago(on.unarmed?.since ?? now, now).replace(/ ago$/, "")}: ${inlineText(alert, 200)}` : "";
-  return `${presenceAnswers(on) ? "reachable" : "not listening"} · ${wake} · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}${unarmed}`;
+  const untaken = on.untaken ? ` · wake not taken for ${ago(on.untaken.since, now).replace(/ ago$/, "")}: ${inlineText(on.untaken.why, 300)}` : "";
+  return `${presenceAnswers(on) ? "reachable" : "not listening"} · ${wake} · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}${unarmed}${untaken}`;
 }
 
 export interface Snapshot {

@@ -19,6 +19,7 @@ export const FLOWS: string[] = [
   "wake-yourself",
   "clock-wake-real",
   "wake-tmux",
+  "wake-codex-take",
   "seats",
   "multi-seat",
   "handoff",
@@ -45,5 +46,6 @@ export const MAC: string[] = [
   "desktop-update-stall",
   "install",
   "wake-tmux",
+  "wake-codex-take",
   "loop-flows",
 ];
