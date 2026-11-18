@@ -68,6 +68,25 @@ function rulesHold(view: BrowserView): Promise<boolean> {
   );
 }
 
+// Livewire T1290 (test branch only): page marks for when the load event fires,
+// when a setTimeout(0) queued then runs (Electrobun's preload sends dom-ready
+// that way), when a MessageChannel message (never timer-throttled) arrives,
+// and the page's visibility.
+const LOAD_PROBE = `;(() => {
+  const m = (n) => performance.mark("kiwi:t-" + n);
+  m("start-" + document.visibilityState);
+  document.addEventListener("visibilitychange", () => m("visible-" + document.visibilityState));
+  addEventListener("load", () => {
+    if (window !== window.top) return;
+    m("load");
+    setTimeout(() => m("timeout"));
+    const c = new MessageChannel();
+    c.port1.onmessage = () => m("message");
+    c.port2.postMessage(0);
+  });
+})();
+`;
+
 export async function createWindow(keyring: KeyringState | null = null, unreadable: Unreadable | null = null): Promise<BrowserWindow | null> {
   const index = fs.readFileSync(path.join(PATHS.VIEWS_FOLDER, "..", PAGE_TEMPLATE), "utf8");
   let current = index;
@@ -94,7 +113,7 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
   );
   keysToPage((frame) => bridge.pushKeys(frame));
   mark("window");
-  const preload = preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, lookMarks() + bundled);
+  const preload = preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, lookMarks() + LOAD_PROBE + bundled);
   Bun.gc(true);
   const win = new BrowserWindow({
     title: "Channels",
@@ -138,7 +157,7 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
     bridge.retire();
     webview.loadURL(PAGE_URL);
   };
-  const refreshPreload = (): void => setPreload(webview.id, preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, lookMarks() + bundled));
+  const refreshPreload = (): void => setPreload(webview.id, preloadSource({ snapshot: snapshot(), session: bridge.nextSession() }, lookMarks() + LOAD_PROBE + bundled));
   let shown = false;
   let quiet = false;
   const ui = uiFromChannel
