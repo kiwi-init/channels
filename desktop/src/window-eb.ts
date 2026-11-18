@@ -79,6 +79,13 @@ const LOAD_PROBE = `;(() => {
   addEventListener("load", () => {
     if (window !== window.top) return;
     m("load");
+    // The fix to try: dom-ready posted in a microtask, not behind a timer
+    // (Electrobun's preload still sends its own; the main process keeps the first).
+    queueMicrotask(() => {
+      const bridge = window.__electrobunEventBridge || window.__electrobunInternalBridge;
+      bridge?.postMessage(JSON.stringify({ id: "webviewEvent", type: "message", payload: { id: window.__electrobunWebviewId, eventName: "dom-ready", detail: document.location.href } }));
+      m("posted");
+    });
     setTimeout(() => m("timeout"));
     const c = new MessageChannel();
     c.port1.onmessage = () => m("message");
