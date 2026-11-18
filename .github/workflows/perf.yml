@@ -367,6 +367,7 @@ jobs:
           PERF_RUNS: "9"
           PERF_MESSAGES: ${{ inputs.desktop_messages || '20' }}
           PERF_IDLE_SEC: ${{ inputs.desktop_idle || '60' }}
+          LIVEWIRE_FFI_TRACE: ${{ runner.temp }}/ffi-trace-linux.txt
         run: |
           app=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* | head -n 1)
           test ! -e "$app/bin/bun"
@@ -402,5 +403,6 @@ jobs:
           path: |
             ${{ runner.temp }}/perf-desktop.json
             ${{ runner.temp }}/perf-desktop-jsc.json
+            ${{ runner.temp }}/ffi-trace-linux.txt
           if-no-files-found: ignore
           overwrite: true

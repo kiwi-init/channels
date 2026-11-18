@@ -118,7 +118,15 @@ const runs: {
   page?: Record<string, number>;
 }[] = [];
 let running: Running | null = null;
-let memory: { idleSec: number; appMb: number; webkitMb: number; totalMb: number; processes: string[] } | null = null;
+let memory: {
+  idleSec: number;
+  appMb: number;
+  webkitMb: number;
+  totalMb: number;
+  processes: string[];
+  appCpuPct?: number;
+  webkitCpuPct?: number;
+} | null = null;
 
 function footprintMb(pid: string): number {
   const m = /phys_footprint:\s*([\d.]+)\s*(KB|MB|GB)/.exec(spawnSync("footprint", [pid]).stdout.toString());
@@ -139,9 +147,9 @@ function pssMb(pid: string): number {
 
 const LINUX_HELPERS = ["WebKitWebProces", "WebKitNetworkPr", "WebKitGPUProces"];
 
-function idleMemory(): NonNullable<typeof memory> {
+// The app's own processes and the WebKit helpers.
+function appProcesses(): { own: string[]; helpers: { pid: string; name: string }[] } {
   const linux = process.platform === "linux";
-  const memoryMb = linux ? pssMb : footprintMb;
   const appDir = `${resolve(process.argv[2]!)}/`;
   const table = (columns: string) =>
     spawnSync("ps", ["-Ao", columns])
@@ -153,6 +161,46 @@ function idleMemory(): NonNullable<typeof memory> {
   const helpers = table("pid=,comm=")
     .filter((l) => (linux ? LINUX_HELPERS.some((name) => l.split(/\s+/)[1] === name) : l.includes("/com.apple.WebKit.")))
     .map((l) => ({ pid: l.split(/\s+/)[0]!, name: l.split("/").at(-1)?.split(/\s+/).at(-1) ?? "" }));
+  return { own, helpers };
+}
+
+// CPU time each process has used so far, in ms: /proc's utime + stime on
+// Linux (in clock ticks), ps's TIME on macOS ([[dd-]hh:]mm:ss.cc).
+function cpuMs(pids: string[]): Map<string, number> {
+  const out = new Map<string, number>();
+  if (process.platform === "linux") {
+    const tick = 1000 / (Number(spawnSync("getconf", ["CLK_TCK"]).stdout.toString().trim()) || 100);
+    for (const pid of pids) {
+      try {
+        const fields = readFileSync(`/proc/${pid}/stat`, "utf8").replace(/^.*\) /s, "").split(" ");
+        out.set(pid, (Number(fields[11]) + Number(fields[12])) * tick);
+      } catch {
+        // ended since ps listed it
+      }
+    }
+    return out;
+  }
+  if (!pids.length) return out;
+  for (const line of spawnSync("ps", ["-o", "pid=,time=", "-p", pids.join(",")]).stdout.toString().split("\n")) {
+    const [pid, time] = line.trim().split(/\s+/);
+    if (!pid || !time) continue;
+    const [days, clock] = time.includes("-") ? time.split("-") : ["0", time];
+    const ms = clock!.split(":").reduce((sum, part) => sum * 60 + Number(part), 0) * 1000;
+    out.set(pid, Number(days) * 86_400_000 + ms);
+  }
+  return out;
+}
+
+// Average CPU over the idle window, in percent of one core.
+function idleCpu(before: Map<string, number>, after: Map<string, number>, pids: string[], ms: number): number {
+  const used = pids.reduce((sum, pid) => sum + Math.max(0, (after.get(pid) ?? 0) - (before.get(pid) ?? 0)), 0);
+  return Math.round((used / ms) * 1000) / 10;
+}
+
+function idleMemory(): NonNullable<typeof memory> {
+  const linux = process.platform === "linux";
+  const memoryMb = linux ? pssMb : footprintMb;
+  const { own, helpers } = appProcesses();
   const appMb = own.reduce((sum, pid) => sum + memoryMb(pid), 0);
   const each = helpers.map((h) => ({ ...h, mb: memoryMb(h.pid) }));
   const webkitMb = each.reduce((sum, h) => sum + h.mb, 0);
@@ -236,9 +284,19 @@ try {
     await until("the reopened channel live, before the idle minute", 60_000, () =>
       app.evaluate(() => (performance.getEntriesByName("kiwi:live", "mark").length ? true : null), null, 2_000).catch(() => null),
     );
-    log(`idle for ${IDLE_SEC} s before reading memory`);
+    log(`idle for ${IDLE_SEC} s before reading memory and CPU`);
+    const listed = appProcesses();
+    const all = [...listed.own, ...listed.helpers.map((h) => h.pid)];
+    const before = cpuMs(all);
+    const idleFrom = Date.now();
     await later(IDLE_SEC * 1000);
-    memory = idleMemory();
+    const after = cpuMs(all);
+    const idleMs = Date.now() - idleFrom;
+    memory = {
+      ...idleMemory(),
+      appCpuPct: idleCpu(before, after, listed.own, idleMs),
+      webkitCpuPct: idleCpu(before, after, listed.helpers.map((h) => h.pid), idleMs),
+    };
     log("memory", JSON.stringify(memory));
     await app.quit();
     running = null;
