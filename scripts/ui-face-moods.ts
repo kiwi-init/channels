@@ -46,6 +46,7 @@ interface Seen {
 interface Kept {
   moods: string[];
   least: number;
+  entered: number;
 }
 
 try {
@@ -54,7 +55,7 @@ try {
   await page.addInitScript(
     ({ parts, watchMs }: { parts: string[]; watchMs: number }) => {
       const seen: Record<string, { firstAt: number; first: number; most: number }> = {};
-      const kept = { moods: [] as string[], least: 1 };
+      const kept = { moods: [] as string[], least: 1, entered: 0 };
       (window as unknown as { __moods: typeof seen; __kept: typeof kept }).__moods = seen;
       (window as unknown as { __kept: typeof kept }).__kept = kept;
       const tick = () => {
@@ -63,7 +64,10 @@ try {
         const mood = face?.dataset.mood ?? "";
         if (mood && !kept.moods.includes(mood)) kept.moods.push(mood);
         const dot = face?.querySelector(".eye-dot");
-        if (dot && (mood === "free" || mood === "thinking")) kept.least = Math.min(kept.least, Number(getComputedStyle(dot).opacity));
+        if (dot && (mood === "free" || mood === "thinking")) {
+          kept.least = Math.min(kept.least, Number(getComputedStyle(dot).opacity));
+          kept.entered += dot.classList.contains("eye-enter") ? 1 : 0;
+        }
         for (const part of parts) {
           const el = face?.querySelector(part);
           if (!el) continue;
@@ -87,8 +91,8 @@ try {
   const ask = seen[".face-ask"];
   expect(!!dot && dot.first > 0.99, `the eye shape a face starts with shows at once, with no fade (first frame opacity ${dot?.first ?? "never seen"})`);
   expect(
-    kept.moods.includes("thinking") && kept.least > 0.99,
-    `a mood change that keeps the same eye shape doesn't touch it (free to thinking: the dot's lowest opacity ${kept.least}, moods seen ${kept.moods.join(", ")})`,
+    kept.moods.includes("thinking") && kept.least > 0.99 && kept.entered === 0,
+    `a mood change that keeps the same eye shape doesn't touch it (free to thinking: the dot's lowest opacity ${kept.least}, frames it was held to enter ${kept.entered}, moods seen ${kept.moods.join(", ")})`,
   );
   expect(!!bar && bar.first < 0.5 && bar.most > 0.99, `an eye shape a later mood brings fades in from hidden (tool's bar: first frame ${bar?.first ?? "never seen"}, then ${bar?.most ?? "-"})`);
   expect(!!ask && ask.first < 0.5 && ask.most > 0.99, `a mark a later mood brings fades in from hidden (waiting's question mark: first frame ${ask?.first ?? "never seen"}, then ${ask?.most ?? "-"})`);
