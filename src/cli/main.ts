@@ -15,7 +15,7 @@ import { VERSION } from "../version.ts";
 import { refreshListeners } from "../hooks.ts";
 import { forgetSecretCopies } from "../config/wipe.ts";
 import { helpFor } from "./help.ts";
-import { args, ignoredOptions, opt, unexpectedOptions } from "./args.ts";
+import { args, ignoredOptions, opt, queryWorker, unexpectedOptions } from "./args.ts";
 import { die, out } from "./context.ts";
 import { commandFor, COMMANDS, RENAMED } from "./commands.ts";
 import { fail } from "./fail.ts";
@@ -41,7 +41,12 @@ if (args[0] === "daemon") {
   };
 }
 
-if (import.meta.main) {
+async function main(): Promise<void> {
+  if (queryWorker) {
+    const { runQueryWorker } = await import("../query.ts");
+    await runQueryWorker();
+    process.exit(0);
+  }
   const cmd = opt.version ? "version" : args[0];
   if (cmd === "version") {
     out(VERSION);
@@ -81,4 +86,11 @@ if (import.meta.main) {
     if (ignored.length) process.stderr.write(`kiwi: ${cmd} doesn't use ${ignored.map((o) => `--${o}`).join(", ")}, so ${ignored.length > 1 ? "they were" : "it was"} ignored\n`);
     process.exit(exit.value ?? 0);
   }
+}
+
+if (import.meta.main) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exit(1);
+  });
 }
