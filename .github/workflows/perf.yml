@@ -373,17 +373,15 @@ jobs:
           du -sk "$app" | cut -f1 > "$RUNNER_TEMP/size-jsc.txt"
           "$app/bin/main" --no-env-file --no-install "$app/Resources/kiwi.js" --version
           xvfb-run -a -s "-screen 0 1280x800x24" bun scripts/perf-desktop.ts "$app" --no-gate --json "$RUNNER_TEMP/perf-desktop-jsc.json"
-      - name: when the JavaScriptCore app didn't come up, what it says when it starts, through its launcher and as bin/main alone
+      - name: when the JavaScriptCore app didn't come up, what it says when it starts, through its launcher
         if: ${{ failure() && inputs.desktop_jsc != '' }}
         timeout-minutes: 3
         run: |
           app=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* | head -n 1)
           home=$(mktemp -d)
-          export HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" XDG_CACHE_HOME="$home/.cache" XDG_STATE_HOME="$home/.local/state" KIWI_HOME="$home/.kiwi" KIWI_EB_DRIVER="$home/driver.sock"
+          export HOME="$home" CFFIXED_USER_HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" XDG_CACHE_HOME="$home/.cache" XDG_STATE_HOME="$home/.local/state" KIWI_HOME="$home/.kiwi" KIWI_EB_DRIVER="$home/driver.sock"
           echo "== bin/launcher"
           timeout 30 xvfb-run -a "$app/bin/launcher" 2>&1 | tail -n 80 || true
-          echo "== bin/main"
-          timeout 20 xvfb-run -a "$app/bin/main" 2>&1 | tail -n 80 || true
           find "$home" -type f -size -2M \( -name '*.log' -o -name '*.txt' \) -exec sh -c 'echo "== $1"; tail -n 80 "$1"' _ {} \;
       - name: the report
         if: ${{ !cancelled() }}
