@@ -327,11 +327,13 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const { scroller, content, spacer, stuck, live, remember, settle, toBottom, toOffset, toRow, unstick, hold, lift, prepended } = useStick(following, !!doc)
   const [DocNow] = useState(() => docViewNow() ?? LiveThreadDoc)
   const revealed = useRef(false)
+  const [docAt] = useState(() => (doc && following && !channel.loading ? `${channel.code}\n${doc}` : null))
   useLayoutEffect(() => {
     const box = scroller.current
     const rows = content.current
     if (!box || !rows) return
     const unfinished = () => {
+      if (docAt !== null && !docFeeds.get().has(docAt)) return true
       const view = box.getBoundingClientRect()
       return [...rows.querySelectorAll(".md-plain, .lazy-wait")].some((el) => {
         const row = el.closest("[data-seq], section.blk")
@@ -359,7 +361,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
       cancelAnimationFrame(frame)
       rows.removeAttribute("data-unfinished")
     }
-  }, [scroller, content])
+  }, [scroller, content, docAt])
   useEffect(() => {
     void import("~/chat/markdown").then((m) => m.warmParser())
   }, [])
