@@ -690,6 +690,92 @@ try {
     expect(moved.length === 0, `opening 4 tabs in turn moves no tab, in order or on screen${moved.length ? `: ${moved.join("; ")}` : ""}`);
     await page.close();
   }
+  for (const [width, fit] of [
+    [1710, "roomy"],
+    [900, "icons"],
+  ] as const) {
+    console.log(`\ndragging tabs into order, tabs-8 at ${width} wide`);
+    const page = await browser.newPage({ viewport: { width, height: 800 } });
+    await page.goto(`${base}?shot=tabs-8&theme=dark`);
+    await page.waitForSelector(".rail .tile[data-code]");
+    await page.waitForTimeout(900);
+    const order = () => page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".rail [data-code], .rail [data-folder]")].map((el) => el.dataset["code"] ?? "[folder]").join(" "));
+    const active = () => page.evaluate(() => document.querySelector(".rail .tile.is-on")?.getAttribute("data-code") ?? null);
+    const saved = () => page.evaluate(() => localStorage.getItem("ui.prefs"));
+    const drag = async (from: string, to: string | null, at: number) => {
+      const fire = (step: { kind: string; on: "source" | "point"; from: string; to: string | null; at: number }) =>
+        page.evaluate((s) => {
+          const w = window as unknown as { __dt?: DataTransfer; __point?: { x: number; y: number } };
+          const source = document.querySelector<HTMLElement>(`.rail ${s.from}`);
+          if (!source) throw new Error(`no ${s.from}`);
+          if (s.kind === "dragstart") {
+            w.__dt = new DataTransfer();
+            const box = s.to ? document.querySelector<HTMLElement>(`.rail ${s.to}`)?.getBoundingClientRect() : null;
+            w.__point = box ? { x: box.left + box.width * s.at, y: box.top + box.height / 2 } : { x: innerWidth / 2, y: innerHeight / 2 };
+          }
+          const point = w.__point ?? { x: 0, y: 0 };
+          const box = source.getBoundingClientRect();
+          const el = s.on === "source" ? source : document.elementFromPoint(point.x, point.y);
+          const x = s.on === "source" ? box.left + box.width / 2 : point.x;
+          const y = s.on === "source" ? box.top + box.height / 2 : point.y;
+          el?.dispatchEvent(new DragEvent(s.kind, { bubbles: true, cancelable: true, dataTransfer: w.__dt ?? null, clientX: x, clientY: y }));
+        }, step);
+      const step = { from, to, at };
+      await fire({ kind: "dragstart", on: "source", ...step });
+      await page.waitForTimeout(150);
+      await fire({ kind: "dragover", on: "point", ...step });
+      await page.waitForTimeout(250);
+      await fire({ kind: "dragover", on: "point", ...step });
+      await page.waitForTimeout(150);
+      await fire({ kind: "drop", on: "point", ...step });
+      await fire({ kind: "dragend", on: "source", ...step });
+      await page.waitForTimeout(500);
+    };
+    const start = await order();
+    expect(start === "kiwi um reedy landing livewire interlinked notes ops", `with no saved order the tabs keep today's order (${start})`);
+    expect((await page.evaluate(() => document.querySelector<HTMLElement>(".rail")?.dataset["fit"])) === fit, `the strip is ${fit} here`);
+    await page.click('.rail .tile[data-code="reedy"]');
+    await page.waitForTimeout(400);
+    expect((await order()) === start && (await active()) === "reedy" && (await saved()) === null, "a click switches channel and moves nothing");
+    await drag('[data-code="ops"]', '[data-code="um"]', 0.1);
+    const placed = await order();
+    expect(placed === "kiwi ops um reedy landing livewire interlinked notes", `dragging ops onto um's left edge puts it before um, the others make room (${placed})`);
+    expect((await active()) === "reedy", "and the open channel stays open");
+    const kept = await saved();
+    await drag('[data-code="landing"]', '[data-code="landing"]', 0.5);
+    await drag('[data-code="notes"]', null, 0);
+    expect((await order()) === placed && (await saved()) === kept && (await active()) === "reedy", "dropping back where it started, or outside the strip, saves nothing and switches nothing");
+    if (fit === "roomy") {
+      await page.click('.rail [data-code="interlinked"]', { button: "right" });
+      await page.getByRole("menuitem", { name: "Delete channel…" }).click();
+      await page.getByRole("textbox", { name: "Type interlinked to confirm" }).fill("interlinked");
+      await page.getByRole("button", { name: "Delete channel", exact: true }).click();
+      await page.waitForTimeout(600);
+      const left = await order();
+      expect(left === "kiwi ops um reedy landing livewire notes", `a channel that's gone drops out and the rest keep their places (${left})`);
+      await drag('[data-code="livewire"]', '[data-code="notes"]', 0.5);
+      const grouped = await order();
+      expect(grouped === "kiwi ops um reedy landing [folder]", `dropping livewire on the middle of notes makes a folder where notes sat (${grouped})`);
+      await drag("[data-folder]", '[data-code="kiwi"]', 0.1);
+      const moved = await order();
+      expect(moved === "[folder] kiwi ops um reedy landing", `a folder drags as one unit (${moved})`);
+      await page.reload();
+      await page.waitForSelector(".rail .tile[data-code]");
+      await page.waitForTimeout(900);
+      const reloaded = await order();
+      expect(
+        reloaded === `${moved} interlinked`,
+        `the order and the folder survive a reload; the demo forgets the delete, so interlinked comes back at the end as a channel the order hasn't seen (${reloaded})`,
+      );
+      await page.click(".rail .tile.is-add");
+      await page.getByRole("dialog", { name: "New channel" }).getByRole("textbox").fill("fresh");
+      await page.getByRole("dialog", { name: "New channel" }).getByRole("button", { name: "Create channel" }).click();
+      await page.waitForTimeout(700);
+      const grown = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".rail .tile[data-code]")].map((el) => el.querySelector(".tile-name")?.textContent ?? ""));
+      expect(grown.at(-1) === "fresh" && (await order()).startsWith(moved), `a new channel joins at the end (${grown.join(", ")})`);
+    }
+    await page.close();
+  }
   for (const [width, height] of [
     [1000, 760],
     [700, 760],

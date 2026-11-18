@@ -18,11 +18,19 @@ export async function say(page: Page, text: string): Promise<void> {
 }
 
 export async function switchTo(page: Page, name: string): Promise<void> {
-  await page.evaluate((title) => {
-    const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === title);
-    if (!tile) throw new Error(`no ${title} tile in the rail`);
-    tile.click();
-  }, name);
+  const clicked = await page
+    .waitForFunction(
+      (title) => {
+        const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === title);
+        tile?.click();
+        return !!tile;
+      },
+      name,
+      { timeout: 15000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  if (!clicked) throw new Error(`no ${name} tile in the rail`);
   await page.waitForFunction((title) => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] === title, name, {
     timeout: 15000,
   });

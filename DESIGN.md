@@ -172,9 +172,18 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     that needs more than its share takes the room its neighbours don't use
     (`data-fit="roomy"`). When the names can't all fit, only the longest
     are cut, to one width, with a short fade and no ellipsis (`tight`).
-    When a cut name would show less than 3em, every tab but the open one
-    is its icon (`icons`). `shell/rail.tsx` picks the mode from the
-    strip's own overflow; nothing wraps or scrolls. A window 760px wide or
+    When a cut name would show less than 3em, every tab is its icon, the
+    open one too, marked by its background (`icons`). `shell/rail.tsx`
+    picks the mode from the strip's own overflow; nothing wraps or
+    scrolls. Tabs stay where they are: opening one moves nothing. You put
+    them in order by dragging. A tab dropped on another's outer quarter
+    or in a gap goes there and the others make room; dropped on its
+    middle half, the two become a folder where the target sat. A folder
+    drags as one unit and never joins. The order and the folders are
+    saved together by channel (`Prefs.tabOrder`, `folders`): with none
+    saved the strip keeps today's order, a new channel joins at the end,
+    and one that is gone drops out. A drop back where it started, or
+    outside the strip, saves nothing. A window 760px wide or
     less, or a portrait one, keeps the title and a row of 40px tiles under
     it.
   - The sidebar's width is yours. Its right edge drags (`shell/side-width.ts`,

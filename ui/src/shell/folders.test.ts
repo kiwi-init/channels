@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { dropOn, folderNews, renamed, ungrouped } from "~/shell/folders"
-import { cleanFolders, keepOrder, railItems } from "~/shell/rail-items"
+import { dropOn, dropResult, folderNews, renamed, ungrouped } from "~/shell/folders"
+import { cleanCodes, cleanFolders, inOrder, keepOrder, railItems } from "~/shell/rail-items"
 import type { ChannelTile, Folder } from "~/model"
 
 const tile = (code: string, extra: Partial<ChannelTile> = {}): ChannelTile => ({ code, title: code, state: "member", unread: 0, needsYou: 0, last: 0, ...extra })
@@ -78,14 +78,66 @@ describe("rail folders", () => {
 
 describe("the rail keeps its order", () => {
   test("a channel that sorts first by activity stays where it was", () => {
-    expect(keepOrder(["a", "b", "c"], [tile("c"), tile("a"), tile("b")])).toEqual(["a", "b", "c"])
+    expect(keepOrder(["a", "b", "c"], ["c", "a", "b"])).toEqual(["a", "b", "c"])
   })
 
   test("a new channel goes to the end and a removed one drops out", () => {
-    expect(keepOrder(["a", "b", "c"], [tile("d"), tile("c"), tile("a")])).toEqual(["a", "c", "d"])
+    expect(keepOrder(["a", "b", "c"], ["d", "c", "a"])).toEqual(["a", "c", "d"])
   })
 
   test("with nothing kept yet, the incoming order stands", () => {
-    expect(keepOrder([], channels)).toEqual(["a", "b", "c", "d"])
+    expect(
+      keepOrder(
+        [],
+        channels.map((c) => c.code)
+      )
+    ).toEqual(["a", "b", "c", "d"])
+  })
+})
+
+describe("dragging tabs into order", () => {
+  const order = ["a", "b", "c", "d"]
+  const shown = (o: readonly string[], f: readonly Folder[]) => railItems(inOrder(channels, o), f).map((i) => (i.kind === "channel" ? i.tile.code : `[${i.tiles.map((t) => t.code).join(",")}]`))
+
+  test("a channel dropped in a slot moves there and nothing else changes", () => {
+    expect(dropResult({ order, folders: [] }, { kind: "channel", code: "d" }, { kind: "slot", before: { kind: "channel", code: "b" } }, newId)).toEqual({ order: ["a", "d", "b", "c"], folders: [] })
+    expect(dropResult({ order, folders: [] }, { kind: "channel", code: "a" }, { kind: "slot", before: { kind: "end" } }, newId)?.order).toEqual(["b", "c", "d", "a"])
+  })
+
+  test("dropping back where it started, or on itself, saves nothing", () => {
+    expect(dropResult({ order, folders: [] }, { kind: "channel", code: "b" }, { kind: "slot", before: { kind: "channel", code: "c" } }, newId)).toBeNull()
+    expect(dropResult({ order, folders: [] }, { kind: "channel", code: "b" }, { kind: "slot", before: { kind: "channel", code: "b" } }, newId)).toBeNull()
+    expect(dropResult({ order, folders: [] }, { kind: "channel", code: "b" }, { kind: "join", target: { kind: "channel", code: "b" } }, newId)).toBeNull()
+  })
+
+  test("joining a tab makes a folder where the target sits, even when the dragged one was before it", () => {
+    const next = dropResult({ order, folders: [] }, { kind: "channel", code: "a" }, { kind: "join", target: { kind: "channel", code: "c" } }, () => "f")
+    expect(next && shown(next.order, next.folders)).toEqual(["b", "[c,a]", "d"])
+  })
+
+  test("a slot outside a folder takes the channel out of it, saved in one result", () => {
+    const folders: Folder[] = [{ id: "f", name: "work", codes: ["b", "c"], open: true }]
+    const next = dropResult({ order, folders }, { kind: "channel", code: "c" }, { kind: "slot", before: { kind: "end" } }, newId)
+    expect(next).toEqual({ order: ["a", "b", "d", "c"], folders: [{ id: "f", name: "work", codes: ["b"], open: true }] })
+  })
+
+  test.each([true, false])("a folder moves as one unit, in its own order (open: %p)", (open) => {
+    const folders: Folder[] = [{ id: "f", name: "work", codes: ["c", "b"], open }]
+    const next = dropResult({ order, folders }, { kind: "folder", id: "f" }, { kind: "slot", before: { kind: "channel", code: "a" } }, newId)
+    expect(next?.order).toEqual(["c", "b", "a", "d"])
+    expect(next && shown(next.order, next.folders)).toEqual(["[c,b]", "a", "d"])
+  })
+
+  test("a folder dropped on itself, on one of its own channels or onto a tab doesn't nest or move", () => {
+    const folders: Folder[] = [{ id: "f", name: "work", codes: ["b", "c"], open: true }]
+    expect(dropResult({ order, folders }, { kind: "folder", id: "f" }, { kind: "slot", before: { kind: "folder", id: "f" } }, newId)).toBeNull()
+    expect(dropResult({ order, folders }, { kind: "folder", id: "f" }, { kind: "slot", before: { kind: "channel", code: "c" } }, newId)).toBeNull()
+    expect(dropResult({ order, folders }, { kind: "folder", id: "f" }, { kind: "join", target: { kind: "channel", code: "d" } }, newId)).toBeNull()
+  })
+
+  test("a saved order keeps its places, a new channel goes to the end and a removed one drops out", () => {
+    expect(keepOrder(["d", "a", "c"], ["a", "b", "c"])).toEqual(["a", "c", "b"])
+    expect(cleanCodes(["a", "a", 3, "", "b"])).toEqual(["a", "b"])
+    expect(cleanCodes("nope")).toEqual([])
   })
 })

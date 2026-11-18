@@ -11,7 +11,7 @@ import { inText } from "~/kit/keys"
 import { useNav, useGo, useActions, useTiles, useAppPrefs, useOpenToType } from "~/nav"
 import { useWindowMaximized } from "~/live/window-state"
 import { openMenu } from "~/kit/menu-open"
-import { keepOrder, railItems, type DropTarget } from "~/shell/rail-items"
+import { inOrder, keepOrder, railItems, type Aim, type DropTarget, type Moving, type RailItem, type Slot } from "~/shell/rail-items"
 import { useTabs } from "~/shell/top-layout"
 import { t } from "~/i18n/i18n"
 import { useSidebarHidden } from "@kiwi/app/sidebar-hidden.ts"
@@ -21,6 +21,7 @@ const UsageMeter = later(() => import("~/usage/meter").then((m) => m.UsageMeter)
 const RailCards = later(() => import("~/shell/updates").then((m) => m.RailCards))
 
 const DRAG = "application/x-kiwi-channel"
+const DRAG_FOLDER = "application/x-kiwi-folder"
 
 const spot = (e: { target: EventTarget }): DropTarget => {
   const el = e.target instanceof Element ? e.target.closest<HTMLElement>("[data-code],[data-folder]") : null
@@ -46,10 +47,68 @@ function fitTabs(strip: HTMLElement) {
 
 function useSteadyTiles(tiles: readonly ChannelTile[]): ChannelTile[] {
   const [order, setOrder] = useState<readonly string[]>(() => tiles.map((c) => c.code))
-  const next = keepOrder(order, tiles)
+  const next = keepOrder(
+    order,
+    tiles.map((c) => c.code)
+  )
   if (next.length !== order.length || next.some((code, i) => code !== order[i])) setOrder(next)
-  const byCode = new Map(tiles.map((c) => [c.code, c]))
-  return next.flatMap((code) => byCode.get(code) ?? [])
+  return inOrder(tiles, next)
+}
+
+const EDGE = 0.25
+
+const isItem = (item: RailItem, moving: Moving): boolean =>
+  moving.kind === "channel" ? item.kind === "channel" && item.tile.code === moving.code : item.kind === "folder" && item.folder.id === moving.id
+
+const slotAt = (items: readonly RailItem[], at: number): Slot => {
+  const item = items[at]
+  return !item ? { kind: "end" } : item.kind === "channel" ? { kind: "channel", code: item.tile.code } : { kind: "folder", id: item.folder.id }
+}
+
+type Aimed = { aim: Aim | null; at: number | null }
+
+function itemBox(list: HTMLElement, item: RailItem): { left: number; width: number } | null {
+  const find = (attr: string, value: string) => list.querySelector<HTMLElement>(`[${attr}="${CSS.escape(value)}"]`)
+  const els = item.kind === "channel" ? [find("data-code", item.tile.code)] : [find("data-folder", item.folder.id), ...(item.folder.open ? item.tiles.map((c) => find("data-code", c.code)) : [])]
+  const boxes = els.flatMap((el) => (el ? [el.getBoundingClientRect()] : []))
+  if (!boxes.length) return null
+  const left = Math.min(...boxes.map((b) => b.left))
+  return { left, width: Math.max(...boxes.map((b) => b.right)) - left }
+}
+
+function aimAt(e: { target: EventTarget; clientX: number }, moving: Moving, items: readonly RailItem[], list: HTMLElement): Aimed {
+  const own = items.findIndex((item) => isItem(item, moving))
+  const slot = (at: number): Aimed => (own >= 0 && (at === own || at === own + 1) ? { aim: null, at: null } : { aim: { kind: "slot", before: slotAt(items, at) }, at })
+  const el = e.target instanceof Element ? e.target.closest<HTMLElement>("[data-code],[data-folder]") : null
+  const folderId = el?.dataset["folder"] ?? el?.closest<HTMLElement>("li.rail-folder")?.querySelector<HTMLElement>("[data-folder]")?.dataset["folder"]
+  const code = el?.dataset["code"]
+  const at = el ? items.findIndex((item) => (folderId ? item.kind === "folder" && item.folder.id === folderId : item.kind === "channel" && item.tile.code === code)) : -1
+  const item = items[at]
+  if (!el || !item) {
+    const next = items.findIndex((it) => {
+      const box = itemBox(list, it)
+      return !!box && box.left + box.width / 2 > e.clientX
+    })
+    return slot(next < 0 ? items.length : next)
+  }
+  const box = (item.kind === "folder" && item.folder.open && moving.kind === "folder" ? itemBox(list, item) : null) ?? el.getBoundingClientRect()
+  const f = (e.clientX - box.left) / Math.max(box.width, 1)
+  if (moving.kind === "folder") return item.kind === "folder" && item.folder.id === moving.id ? { aim: null, at: null } : slot(f < 0.5 ? at : at + 1)
+  if (item.kind === "channel")
+    return f < EDGE
+      ? slot(at)
+      : f > 1 - EDGE
+        ? slot(at + 1)
+        : item.tile.code === moving.code
+          ? { aim: null, at: null }
+          : { aim: { kind: "join", target: { kind: "channel", code: item.tile.code } }, at: null }
+  const child = !!code
+  const last = child && item.tiles.at(-1)?.code === code
+  if (!child && f < EDGE) return slot(at)
+  if (!child && !item.folder.open && f > 1 - EDGE) return slot(at + 1)
+  if (last && f > 1 - EDGE) return slot(at + 1)
+  if (child && code === moving.code) return { aim: null, at: null }
+  return { aim: { kind: "join", target: child && code ? { kind: "channel", code } : { kind: "folder", id: item.folder.id } }, at: null }
 }
 
 export function Rail() {
@@ -57,8 +116,15 @@ export function Rail() {
   const go = useGo()
   const enter = useOpenToType()
   const actions = useActions()
-  const tiles = useSteadyTiles(useTiles())
   const prefs = useAppPrefs()
+  const steady = useSteadyTiles(useTiles())
+  const tiles = inOrder(
+    steady,
+    keepOrder(
+      prefs.tabOrder,
+      steady.map((c) => c.code)
+    )
+  )
   const onChannel = nav.page === "channel"
   const home = onChannel && nav.channel === null
   const sidebarHidden = useSidebarHidden()
@@ -88,7 +154,10 @@ export function Rail() {
     }
   }, [tabs, shown])
   const [over, setOver] = useState<string | null>(null)
-  const [moving, setMoving] = useState<string | null>(null)
+  const [moving, setMoving] = useState<Moving | null>(null)
+  const [aimed, setAimed] = useState<Aimed>({ aim: null, at: null })
+  const [gap, setGap] = useState(0)
+  const list = useRef<HTMLUListElement>(null)
   const [fresh, setFresh] = useState<string | null>(null)
   const [hint, setHint] = useState<{ name: string; x: number; y: number } | null>(null)
   const point = (e: { target: EventTarget }) => {
@@ -127,14 +196,40 @@ export function Rail() {
   const dragOver = (e: DragEvent) => {
     if (!moving) return
     e.preventDefault()
-    const target = spot(e)
-    setOver(target.kind === "channel" && target.code === moving ? null : keyOf(target))
+    if (!tabs) {
+      const target = spot(e)
+      return setOver(moving.kind === "channel" && target.kind === "channel" && target.code === moving.code ? null : keyOf(target))
+    }
+    if (!list.current || (e.target instanceof Element && e.target.closest(".rail-gap"))) return
+    const next = aimAt(e, moving, items, list.current)
+    const join = next.aim?.kind === "join" ? next.aim.target : null
+    setOver(join ? (join.kind === "channel" ? `c:${join.code}` : `f:${join.id}`) : null)
+    if (JSON.stringify(next) !== JSON.stringify(aimed)) setAimed(next)
   }
-  const tile = (c: ChannelTile) => <Tile key={c.code} tile={c} on={on === c.code} drop={over === `c:${c.code}`} moving={moving === c.code} onClick={() => enter(c.code)} />
+  const endDrag = () => {
+    setMoving(null)
+    setOver(null)
+    setAimed({ aim: null, at: null })
+  }
+  const dropTabs = (aim: Aim | null, from: Moving) => {
+    if (!aim) return
+    const order = tiles.map((c) => c.code)
+    void import("~/shell/folders").then((f) => {
+      const next = f.dropResult({ order, folders }, from, aim, f.newFolderId)
+      if (!next) return
+      setFresh(next.folders.find((x) => !folders.some((y) => y.id === x.id))?.id ?? null)
+      actions.setPrefs({ folders: next.folders, tabOrder: next.order })
+    })
+  }
+  const gapAt = (at: number) => (moving && aimed.at === at ? <li key="gap" className="rail-gap" aria-hidden="true" style={{ "--gap": `${gap}px` } as CSSProperties} /> : null)
+  const tile = (c: ChannelTile) => (
+    <Tile key={c.code} tile={c} on={on === c.code} drop={over === `c:${c.code}`} moving={moving?.kind === "channel" && moving.code === c.code} onClick={() => enter(c.code)} />
+  )
   return (
     <nav ref={strip} className="rail" aria-label={t("shell.rail.channels")}>
       {document.documentElement.dataset["wm"] === "floating" && createPortal(<WindowControls control={actions.windowControl} />, document.body)}
       <ul
+        ref={list}
         className={cx("rail-list", moving && "is-moving", over === "rail" && "is-drop")}
         onMouseOver={point}
         onMouseLeave={() => setHint(null)}
@@ -142,20 +237,27 @@ export function Rail() {
         onScroll={() => setHint(null)}
         onDragStart={(e) => {
           const target = spot(e)
-          if (target.kind !== "channel") return
-          e.dataTransfer.setData(DRAG, target.code)
+          if (target.kind === "rail" || (target.kind === "folder" && !tabs)) return
+          const el = e.target instanceof Element ? e.target.closest<HTMLElement>("[data-code],[data-folder]") : null
+          const folder = target.kind === "folder" ? items.find((item) => item.kind === "folder" && item.folder.id === target.id) : undefined
+          const width = folder && list.current ? itemBox(list.current, folder)?.width : el?.getBoundingClientRect().width
+          e.dataTransfer.setData(target.kind === "channel" ? DRAG : DRAG_FOLDER, target.kind === "channel" ? target.code : target.id)
           e.dataTransfer.effectAllowed = "move"
-          setMoving(target.code)
+          setGap(Math.round(width ?? 0))
+          setMoving(target.kind === "channel" ? { kind: "channel", code: target.code } : { kind: "folder", id: target.id })
         }}
-        onDragEnd={() => (setMoving(null), setOver(null))}
+        onDragEnd={endDrag}
         onDragOver={dragOver}
         onDrop={(e) => {
+          const from = moving
+          const aim = aimed.aim
           const code = e.dataTransfer.getData(DRAG)
           const target = spot(e)
-          setMoving(null)
-          setOver(null)
-          if (!code) return
+          endDrag()
+          if (!from) return
           e.preventDefault()
+          if (tabs) return dropTabs(aim, from)
+          if (!code) return
           void import("~/shell/folders").then((f) => {
             const next = f.dropOn(folders, code, target, f.newFolderId)
             setFresh(next.find((x) => !folders.some((y) => y.id === x.id))?.id ?? null)
@@ -200,11 +302,12 @@ export function Rail() {
           )
         }}
       >
-        {items.map((item) =>
+        {items.flatMap((item, at) => [
+          gapAt(at),
           item.kind === "channel" ? (
             <li key={item.tile.code}>{tile(item.tile)}</li>
           ) : (
-            <li key={item.folder.id} className={cx("rail-folder", item.folder.open && "is-open")}>
+            <li key={item.folder.id} className={cx("rail-folder", item.folder.open && "is-open", moving?.kind === "folder" && moving.id === item.folder.id && "is-moving")}>
               <Suspense fallback={<span className="tile is-folder" />}>
                 <FolderTile
                   folder={item.folder}
@@ -212,6 +315,7 @@ export function Rail() {
                   on={on}
                   drop={over === `f:${item.folder.id}`}
                   fresh={fresh === item.folder.id}
+                  draggable={tabs}
                   onClick={() => save(folders.map((f) => (f.id === item.folder.id ? { ...f, open: !f.open } : f)))}
                 />
               </Suspense>
@@ -225,8 +329,9 @@ export function Rail() {
                 </ul>
               )}
             </li>
-          )
-        )}
+          ),
+        ])}
+        {gapAt(items.length)}
         <li>
           <button type="button" className="tile is-add" aria-label={t("shell.rail.new.channel")} title={t("shell.rail.new.channel")} onClick={() => go({ to: "dialog", dialog: "new-channel" })}>
             <Icon name="plus" />

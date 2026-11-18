@@ -975,6 +975,24 @@
     0 0 0 4px var(--ink-3);
 }
 
+.rail-folder.is-moving .tile {
+  opacity: 0.35;
+}
+
+@keyframes gap-open {
+  from {
+    width: 0;
+  }
+}
+
+.rail-list > li.rail-gap {
+  display: block;
+  flex: none;
+  align-self: stretch;
+  width: var(--gap);
+  animation: gap-open var(--slow) var(--ease);
+}
+
 .tile.is-new {
   animation: folder-pop var(--pop);
 }
@@ -1404,6 +1422,15 @@
 
 :root[data-tabs] .app > .rail .tile[data-code].is-on {
   font-weight: 500;
+}
+
+:root[data-tabs] .app > .rail :is(.tile.is-moving, .rail-folder.is-moving .tile) {
+  opacity: 0.35;
+}
+
+:root[data-tabs] .app > .rail .tile[data-code].is-drop {
+  background: var(--wash);
+  box-shadow: inset 0 0 0 2px var(--ink-3);
 }
 
 :root[data-tabs] .tile[data-code] > :first-child {
