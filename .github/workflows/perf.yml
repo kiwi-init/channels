@@ -272,8 +272,8 @@ jobs:
           app=$(ls -d desktop/release-eb/build/dev-macos-*/*.app | head -n 1)
           home=$(mktemp -d)
           export HOME="$home" CFFIXED_USER_HOME="$home" KIWI_HOME="$home/.kiwi" KIWI_EB_DRIVER="$home/driver.sock"
-          echo "== Contents/MacOS/launcher"
-          perl -e 'alarm shift; exec @ARGV' 30 "$app/Contents/MacOS/launcher" 2>&1 | tail -n 80 || true
+          echo "== Contents/MacOS/kiwi-launcher, as the test driver starts it"
+          perl -e 'alarm shift; exec @ARGV' 30 "$app/Contents/MacOS/kiwi-launcher" 2>&1 | tail -n 80 || true
           find "$home" -type f -size -2M \( -name '*.log' -o -name '*.txt' \) -exec sh -c 'echo "== $1"; tail -n 80 "$1"' _ {} \;
       - name: the report
         if: ${{ !cancelled() }}
@@ -380,8 +380,8 @@ jobs:
           app=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* | head -n 1)
           home=$(mktemp -d)
           export HOME="$home" CFFIXED_USER_HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" XDG_CACHE_HOME="$home/.cache" XDG_STATE_HOME="$home/.local/state" KIWI_HOME="$home/.kiwi" KIWI_EB_DRIVER="$home/driver.sock"
-          echo "== bin/launcher"
-          timeout 30 xvfb-run -a "$app/bin/launcher" 2>&1 | tail -n 80 || true
+          echo "== bin/electrobun-launcher, as the test driver starts it"
+          timeout 30 xvfb-run -a "$app/bin/electrobun-launcher" 2>&1 | tail -n 80 || true
           find "$home" -type f -size -2M \( -name '*.log' -o -name '*.txt' \) -exec sh -c 'echo "== $1"; tail -n 80 "$1"' _ {} \;
       - name: the report
         if: ${{ !cancelled() }}
