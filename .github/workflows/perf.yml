@@ -374,6 +374,16 @@ jobs:
           du -sk "$app" | cut -f1 > "$RUNNER_TEMP/size-jsc.txt"
           "$app/bin/main" --no-env-file --no-install "$app/Resources/kiwi.js" --version
           xvfb-run -a -s "-screen 0 1280x800x24" bun scripts/perf-desktop.ts "$app" --no-gate --json "$RUNNER_TEMP/perf-desktop-jsc.json"
+      - name: the JavaScriptCore app again, its Workers at nice 10 (T1290 experiment)
+        if: ${{ inputs.desktop_jsc != '' }}
+        env:
+          PERF_RUNS: "9"
+          PERF_MESSAGES: ${{ inputs.desktop_messages || '20' }}
+          PERF_IDLE_SEC: "0"
+          LIVEWIRE_WORKER_NICE: "10"
+        run: |
+          app=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* | head -n 1)
+          xvfb-run -a -s "-screen 0 1280x800x24" bun scripts/perf-desktop.ts "$app" --no-gate --json "$RUNNER_TEMP/perf-desktop-jsc-nice.json"
       - name: when the JavaScriptCore app didn't come up, what it says when it starts, through its launcher
         if: ${{ failure() && inputs.desktop_jsc != '' }}
         timeout-minutes: 3
@@ -404,5 +414,6 @@ jobs:
             ${{ runner.temp }}/perf-desktop.json
             ${{ runner.temp }}/perf-desktop-jsc.json
             ${{ runner.temp }}/ffi-trace-linux.txt
+            ${{ runner.temp }}/perf-desktop-jsc-nice.json
           if-no-files-found: ignore
           overwrite: true
