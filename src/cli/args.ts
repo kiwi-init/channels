@@ -10,11 +10,7 @@ if (process.argv[2] === IDENTITY_ARG && process.argv.length === 3) {
   process.exit(0);
 }
 
-if (process.argv[2] === QUERY_ARG && process.argv.length === 3) {
-  const { runQueryWorker } = await import("../query.ts");
-  await runQueryWorker();
-  process.exit(0);
-}
+export const queryWorker = process.argv[2] === QUERY_ARG && process.argv.length === 3;
 
 const isRelay = process.argv[2] === "relay";
 const raw = process.argv.slice(2);
