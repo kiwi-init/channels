@@ -49,6 +49,7 @@ export const DEMO_PREFS: Prefs = {
   lightTheme: "channels-light",
   customThemes: [],
   folders: [],
+  tabOrder: [],
 }
 
 export const DEMO_TILES: ChannelTile[] = [

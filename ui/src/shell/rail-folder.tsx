@@ -15,12 +15,14 @@ export default function FolderTile({
   onClick,
   drop,
   fresh,
+  draggable,
 }: {
   folder: Folder
   tiles: readonly ChannelTile[]
   on: string | null
   drop: boolean
   fresh: boolean
+  draggable: boolean
   onClick: () => void
 }) {
   const news = folderNews(tiles, on)
@@ -41,6 +43,7 @@ export default function FolderTile({
       aria-expanded={folder.open}
       aria-label={label}
       data-folder={folder.id}
+      draggable={draggable}
       onClick={onClick}
     >
       {shut ? (

@@ -30,6 +30,7 @@ import { muteKey } from "~/live/mute"
 import { specLineTest } from "~/specs/quote"
 import { wordsRaw, wrote } from "~/words"
 import { demoRound, withCheckpoints } from "~/demo/checkpoints"
+import { ownPrefs, setPrefs as setOwnPrefs } from "~/live/prefs"
 import { withTaskWait } from "~/demo/task-wait"
 
 const unticked = (text: string): string => text.replace(/^(\s*[-*+]\s+)\[[xX]\]/gm, "$1[ ]").trim()
@@ -595,7 +596,11 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "github-signed-in") return { account: null, tiles: [], channels: new Map(), prefs, seq: 1000, signIn: { stage: "signed-in", login: "ojowwalker77" } }
   if (scenario === "github-gate") return { ...initial("full", look), signIn: { stage: "sign-in", code: null, problem: null } }
   if (scenario === "no-channels") return { account: DEMO_ACCOUNT, tiles: [], channels: new Map(), prefs, seq: 1000 }
-  if (scenario === "tabs-3" || scenario === "tabs-8") return { ...initial("full", look), tiles: scenario === "tabs-3" ? TABS_3 : TABS_8 }
+  if (scenario === "tabs-3" || scenario === "tabs-8") {
+    const base = initial("full", look)
+    const { folders, tabOrder } = ownPrefs()
+    return { ...base, prefs: { ...base.prefs, folders, tabOrder }, tiles: scenario === "tabs-3" ? TABS_3 : TABS_8 }
+  }
   if (scenario === "closed" || scenario === "removed")
     return { account: DEMO_ACCOUNT, tiles: DEMO_TILES.filter((t) => t.code !== "studio"), channels, prefs, seq: 1000, gone: { code: "studio", title: "studio", why: scenario } }
   const plain: State = { account: DEMO_ACCOUNT, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
@@ -654,6 +659,8 @@ function specsStep(s: State, n: number): State {
 
 const SLOW_OPEN_MS = 1500
 
+const tabsDemo = (scenario: Scenario): boolean => scenario === "tabs-3" || scenario === "tabs-8"
+
 export function useDemo(scenario: Scenario, open: string | null, look: Partial<Prefs> = {}, usage: Partial<Usage> = {}): App {
   const [state, setState] = useState(() => initial(scenario, look))
   const [shownUsage] = useState(usage)
@@ -670,7 +677,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   const [left, setLeft] = useState(open)
   if (left !== open) {
     setLeft(open)
-    if ((scenario === "tabs-3" || scenario === "tabs-8") && open) setState((s) => ({ ...s, tiles: openedTab(s.tiles, open, left) }))
+    if (tabsDemo(scenario) && open) setState((s) => ({ ...s, tiles: openedTab(s.tiles, open, left) }))
   }
 
   useEffect(() => {
@@ -1133,6 +1140,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       setName: (name) => setState((s) => (s.account ? { ...s, account: { ...s.account, name } } : { ...s, account: { ...DEMO_ACCOUNT, name } })),
       setPrefs: (p) => {
         if (p.reduceTransparency !== undefined) setAccessibilityOption("reduce-transparency", p.reduceTransparency)
+        if (tabsDemo(scenario) && (p.folders || p.tabOrder)) setOwnPrefs({ ...(p.folders ? { folders: p.folders } : {}), ...(p.tabOrder ? { tabOrder: p.tabOrder } : {}) })
         setState((s) => ({ ...s, prefs: { ...s.prefs, ...p } }))
       },
       searchOlder: async (...[, query, before]: Parameters<Actions["searchOlder"]>) => demoOlder(query, before),

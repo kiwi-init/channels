@@ -789,6 +789,7 @@ export interface Prefs {
   lightTheme: string
   customThemes: CustomTheme[]
   folders: Folder[]
+  tabOrder: string[]
 }
 
 export interface Sign {
