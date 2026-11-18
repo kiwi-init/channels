@@ -265,6 +265,16 @@ jobs:
           PERF_MESSAGES: ${{ inputs.desktop_messages || '20' }}
           PERF_IDLE_SEC: ${{ inputs.desktop_idle || '60' }}
         run: bun scripts/perf-desktop.ts desktop/release-eb/build/dev-macos-*/*.app --no-gate --json "$RUNNER_TEMP/perf-desktop-jsc.json"
+      - name: when the JavaScriptCore app didn't come up, what it says when it starts, through its launcher
+        if: ${{ failure() && inputs.desktop_jsc != '' }}
+        timeout-minutes: 3
+        run: |
+          app=$(ls -d desktop/release-eb/build/dev-macos-*/*.app | head -n 1)
+          home=$(mktemp -d)
+          export HOME="$home" KIWI_HOME="$home/.kiwi" KIWI_EB_DRIVER="$home/driver.sock"
+          echo "== Contents/MacOS/launcher"
+          perl -e 'alarm shift; exec @ARGV' 30 "$app/Contents/MacOS/launcher" 2>&1 | tail -n 80 || true
+          find "$home" -type f -size -2M \( -name '*.log' -o -name '*.txt' \) -exec sh -c 'echo "== $1"; tail -n 80 "$1"' _ {} \;
       - name: the report
         if: ${{ !cancelled() }}
         shell: bash
