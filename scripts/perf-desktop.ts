@@ -117,6 +117,7 @@ const runs: {
   startup?: Record<string, number>;
   page?: Record<string, number>;
   cpu?: Record<string, number>;
+  nav?: Record<string, unknown>;
 }[] = [];
 let running: Running | null = null;
 let memory: {
@@ -281,6 +282,26 @@ try {
         .catch(() => null),
     );
     const cpu = threadCpu();
+    const nav = await app
+      .evaluate(
+        () => {
+          const n = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+          const at = (v: number) => Math.round(performance.timeOrigin + v);
+          return {
+            ...(n ? { requestStart: at(n.requestStart), responseEnd: at(n.responseEnd), domInteractive: at(n.domInteractive), domContentLoaded: at(n.domContentLoadedEventStart), loaded: at(n.loadEventStart) } : {}),
+            resources: (performance.getEntriesByType("resource") as PerformanceResourceTiming[])
+              .slice(0, 30)
+              .map((e) => `${e.name.split("/").pop()?.slice(0, 40)} ${at(e.startTime)}..${at(e.responseEnd)}`),
+          };
+        },
+        null,
+        2_000,
+      )
+      .catch(() => null);
+    const navAt = nav && {
+      ...Object.fromEntries(Object.entries(nav).flatMap(([k, v]) => (typeof v === "number" ? [[k, v - app.started]] : []))),
+      resources: nav.resources.map((r) => r.replace(/(\d{6,})\.\.(\d{6,})$/, (_, a: string, b: string) => `${Number(a) - app.started}..${Number(b) - app.started}`)),
+    };
     const run = {
       windowMs: Math.round(screen.origin - app.started),
       firstScreenMs: Math.round(screen.origin + screen.paint - app.started),
@@ -304,6 +325,7 @@ try {
       ),
       ...(await app.startup().then((marks) => (marks ? { startup: Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, Math.round(v - app.started)])) } : {}))),
       ...(Object.keys(cpu).length ? { cpu } : {}),
+      ...(navAt ? { nav: navAt } : {}),
     };
     runs.push(run);
     log(`run ${i + 1}`, JSON.stringify(run));
