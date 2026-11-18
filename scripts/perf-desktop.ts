@@ -12,8 +12,8 @@ import { calibrateInPage, loopInPage } from "./perf-calibrate.ts";
 if (process.argv.includes("--help") || !process.argv[2]) {
   console.log(`The packaged desktop app's cold start, measured: from launching the executable to its window, its first screen, the first cached message
 of the channel it reopens on screen, and live, PERF_RUNS times (5) after one run that makes a channel with PERF_MESSAGES messages (20) on a local relay,
-and leaves it open. On a Mac it then starts the app once more, leaves it alone for PERF_IDLE_SEC seconds (60; 0 skips it) and reports the memory
-(footprint) of the app's own processes and of every WebKit helper on the machine, so run it where no other WebKit app is open. A launch that doesn't reopen that channel fails. Each launch also times perf-scale's CPU calibration in the app's page; the medians are scaled by it to the reference runner in
+and leaves it open. It then starts the app once more, leaves it alone for PERF_IDLE_SEC seconds (60; 0 skips it) and reports the memory
+(footprint on a Mac, PSS on Linux) of the app's own processes and of every WebKit helper on the machine, so run it where no other WebKit app is open. A launch that doesn't reopen that channel fails. Each launch also times perf-scale's CPU calibration in the app's page; the medians are scaled by it to the reference runner in
 scripts/perf-budgets.json, and it fails when one is over its gate there (the limits whose source is desktop). The report also has loopMs, a
 pure-JS loop timed in the same page that doesn't depend on the engine's DOM speed, for comparing runners; nothing is gated on it.
 
@@ -127,16 +127,34 @@ function footprintMb(pid: string): number {
   return m[2] === "GB" ? v * 1024 : m[2] === "KB" ? v / 1024 : v;
 }
 
+function pssMb(pid: string): number {
+  try {
+    const m = /^Pss:\s+(\d+) kB/m.exec(readFileSync(`/proc/${pid}/smaps_rollup`, "utf8"));
+    return m ? Number(m[1]) / 1024 : 0;
+  } catch {
+    // the process ended between ps and this read: it holds no memory now
+    return 0;
+  }
+}
+
+const LINUX_HELPERS = ["WebKitWebProces", "WebKitNetworkPr", "WebKitGPUProces"];
+
 function idleMemory(): NonNullable<typeof memory> {
-  const own = processesOf(exe).map((l) => l.split(/\s+/)[0]!);
-  const helpers = spawnSync("ps", ["-Ao", "pid=,comm="])
-    .stdout.toString()
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.includes("/com.apple.WebKit."))
-    .map((l) => ({ pid: l.split(/\s+/)[0]!, name: l.split("/").at(-1) ?? "" }));
-  const appMb = own.reduce((sum, pid) => sum + footprintMb(pid), 0);
-  const each = helpers.map((h) => ({ ...h, mb: footprintMb(h.pid) }));
+  const linux = process.platform === "linux";
+  const memoryMb = linux ? pssMb : footprintMb;
+  const appDir = `${resolve(process.argv[2]!)}/`;
+  const table = (columns: string) =>
+    spawnSync("ps", ["-Ao", columns])
+      .stdout.toString()
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+  const own = (linux ? table("pid=,command=").filter((l) => l.includes(appDir)) : processesOf(exe)).map((l) => l.split(/\s+/)[0]!);
+  const helpers = table("pid=,comm=")
+    .filter((l) => (linux ? LINUX_HELPERS.some((name) => l.split(/\s+/)[1] === name) : l.includes("/com.apple.WebKit.")))
+    .map((l) => ({ pid: l.split(/\s+/)[0]!, name: l.split("/").at(-1)?.split(/\s+/).at(-1) ?? "" }));
+  const appMb = own.reduce((sum, pid) => sum + memoryMb(pid), 0);
+  const each = helpers.map((h) => ({ ...h, mb: memoryMb(h.pid) }));
   const webkitMb = each.reduce((sum, h) => sum + h.mb, 0);
   return {
     idleSec: IDLE_SEC,
@@ -212,7 +230,7 @@ try {
     await app.quit();
     running = null;
   }
-  if (process.platform === "darwin" && IDLE_SEC > 0) {
+  if (IDLE_SEC > 0) {
     running = await launch();
     const app = running;
     await until("the reopened channel live, before the idle minute", 60_000, () =>

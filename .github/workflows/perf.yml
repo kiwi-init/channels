@@ -12,7 +12,7 @@ on:
         type: string
         default: ""
       jobs:
-        description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a thread doc's updates cost, at a short and a long thread, no gate), upgrade (an older release's data opened by this build), replies (three agents answer one message, in the app), or all"
+        description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), desktop-linux (the same for the Linux app under Xvfb), doc (what a thread doc's updates cost, at a short and a long thread, no gate), upgrade (an older release's data opened by this build), replies (three agents answer one message, in the app), or all"
         type: string
         default: "scale"
       doc_lines:
@@ -54,7 +54,7 @@ permissions:
 jobs:
   perf:
     name: perf / scale and soak
-    if: ${{ inputs.jobs != 'desktop' && inputs.jobs != 'doc' && inputs.jobs != 'upgrade' && inputs.jobs != 'replies' }}
+    if: ${{ inputs.jobs != 'desktop' && inputs.jobs != 'desktop-linux' && inputs.jobs != 'doc' && inputs.jobs != 'upgrade' && inputs.jobs != 'replies' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -234,12 +234,12 @@ jobs:
           repository: kiwi-init/electrobun-livewire
           ref: ${{ inputs.desktop_jsc }}
           path: livewire
-      - name: Livewire's JavaScriptCore host, built beside the pinned devkit against its SDK
+      - name: Livewire's JavaScriptCore host and its launcher (2026.11.4's would start Bun), built beside the pinned devkit against its SDK
         if: ${{ inputs.desktop_jsc != '' }}
         run: |
           core=$(find "$HOME/.hutch/releases/electrobun" -path "*/macos-$(uname -m | sed 's/x86_64/x64/')/libElectrobunCore.dylib" | head -n 1)
           [ -n "$core" ] || { echo "no libElectrobunCore.dylib under ~/.hutch/releases/electrobun"; exit 1; }
-          sh livewire/package/src/jsc-host/overlay-devkit.sh desktop/.hutch/devkit "$RUNNER_TEMP/jsc-devkit" --check-lib "$core" --check-lib "$(dirname "$core")/libNativeWrapper.dylib"
+          sh livewire/package/src/jsc-host/overlay-devkit.sh desktop/.hutch/devkit "$RUNNER_TEMP/jsc-devkit" --launcher --check-lib "$core" --check-lib "$(dirname "$core")/libNativeWrapper.dylib"
       - name: test build with the main process on the JavaScriptCore host
         if: ${{ inputs.desktop_jsc != '' }}
         working-directory: desktop
@@ -279,6 +279,102 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: perf-desktop
+          path: |
+            ${{ runner.temp }}/perf-desktop.json
+            ${{ runner.temp }}/perf-desktop-jsc.json
+          if-no-files-found: ignore
+          overwrite: true
+
+  desktop-linux:
+    name: perf / desktop cold start and idle memory, Linux
+    if: ${{ inputs.jobs == 'desktop-linux' || inputs.jobs == 'all' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: WebKitGTK, Xvfb, and what Livewire's JavaScriptCore host builds against
+        timeout-minutes: 15
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bison xvfb xauth dbus libgcrypt20-dev libsqlite3-dev libsoup-3.0-dev xxd pkg-config
+      - run: bun run ui:build
+      - id: electrobun
+        run: echo "version=$(bun -e 'console.log(require("./desktop/electrobun-pins.json").electrobun)')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.hutch
+          key: hutch-${{ runner.os }}-${{ runner.arch }}-electrobun-${{ steps.electrobun.outputs.version }}
+      - name: electrobun toolchain
+        working-directory: desktop
+        timeout-minutes: 5
+        run: for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1
+      - name: the kiwi CLI the app bundles
+        run: mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
+      - name: test build (the test driver in, its own bundle id)
+        working-directory: desktop
+        run: bun scripts/eb.ts build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          DASH_RELEASE_OFFLINE: "1"
+      - name: cold start, nine launches, and memory after an idle minute under Xvfb; numbers only, no gate
+        env:
+          PERF_RUNS: "9"
+          PERF_MESSAGES: ${{ inputs.desktop_messages || '20' }}
+          PERF_IDLE_SEC: ${{ inputs.desktop_idle || '60' }}
+        run: |
+          app=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* | head -n 1)
+          du -sk "$app" | cut -f1 > "$RUNNER_TEMP/size-bun.txt"
+          xvfb-run -a -s "-screen 0 1280x800x24" bun scripts/perf-desktop.ts "$app" --no-gate --json "$RUNNER_TEMP/perf-desktop.json"
+      - if: ${{ inputs.desktop_jsc != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: kiwi-init/electrobun-livewire
+          ref: ${{ inputs.desktop_jsc }}
+          path: livewire
+      - name: Livewire's JavaScriptCore host and its launcher (2026.11.4's would start Bun), built beside the pinned devkit against its SDK
+        if: ${{ inputs.desktop_jsc != '' }}
+        run: |
+          core=$(find "$HOME/.hutch/releases/electrobun" -path "*/linux-x64/libElectrobunCore.so" | head -n 1)
+          [ -n "$core" ] || { echo "no libElectrobunCore.so under ~/.hutch/releases/electrobun"; exit 1; }
+          sh livewire/package/src/jsc-host/overlay-devkit.sh desktop/.hutch/devkit "$RUNNER_TEMP/jsc-devkit" --launcher --check-lib "$core" --check-lib "$(dirname "$core")/libNativeWrapper.so"
+      - name: test build with the main process on the JavaScriptCore host
+        if: ${{ inputs.desktop_jsc != '' }}
+        working-directory: desktop
+        run: bun scripts/eb.ts build --env=dev
+        env:
+          CHANNELS_EB_TEST: "1"
+          DASH_RELEASE_OFFLINE: "1"
+          CHANNELS_JSC: "1"
+          CHANNELS_JSC_HOST: ${{ runner.temp }}/jsc-devkit/api/jsc-host
+      - name: the same on the JavaScriptCore app, after its size and its kiwi CLI on the host
+        if: ${{ inputs.desktop_jsc != '' }}
+        env:
+          PERF_RUNS: "9"
+          PERF_MESSAGES: ${{ inputs.desktop_messages || '20' }}
+          PERF_IDLE_SEC: ${{ inputs.desktop_idle || '60' }}
+        run: |
+          app=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* | head -n 1)
+          test ! -e "$app/bin/bun"
+          du -sk "$app" | cut -f1 > "$RUNNER_TEMP/size-jsc.txt"
+          "$app/bin/main" --no-env-file --no-install "$app/Resources/kiwi.js" --version
+          xvfb-run -a -s "-screen 0 1280x800x24" bun scripts/perf-desktop.ts "$app" --no-gate --json "$RUNNER_TEMP/perf-desktop-jsc.json"
+      - name: the report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          [ -f "$RUNNER_TEMP/perf-desktop.json" ] || { echo "no report was written"; exit 1; }
+          echo "### Linux, Bun app: $(cat "$RUNNER_TEMP/size-bun.txt" 2>/dev/null) KB" | tee -a "$GITHUB_STEP_SUMMARY"
+          { echo '```json'; jq '{runs, calibrationMs, measured, scaled, memory, startup}' "$RUNNER_TEMP/perf-desktop.json"; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ inputs.desktop_jsc }}" ]; then
+            echo "### Linux, on Livewire's JavaScriptCore host (${{ inputs.desktop_jsc }}): $(cat "$RUNNER_TEMP/size-jsc.txt" 2>/dev/null) KB" | tee -a "$GITHUB_STEP_SUMMARY"
+            [ -f "$RUNNER_TEMP/perf-desktop-jsc.json" ] || { echo "no JavaScriptCore report was written"; exit 1; }
+            { echo '```json'; jq '{runs, calibrationMs, measured, scaled, memory, startup}' "$RUNNER_TEMP/perf-desktop-jsc.json"; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf-desktop-linux
           path: |
             ${{ runner.temp }}/perf-desktop.json
             ${{ runner.temp }}/perf-desktop-jsc.json

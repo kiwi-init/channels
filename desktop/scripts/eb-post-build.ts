@@ -18,7 +18,6 @@ const arch = process.env.ELECTROBUN_ARCH;
 if (!buildDir || !os || !arch) throw new Error("run by electrobun build: ELECTROBUN_BUILD_DIR, _OS and _ARCH are unset");
 if (os !== "macos" && os !== "linux") throw new Error(`the Electrobun shell builds only on macOS and Linux, not ${os}`);
 const jsc = process.env.CHANNELS_JSC === "1";
-if (jsc && os !== "macos") throw new Error(`eb-post-build: CHANNELS_JSC=1 builds the main process for the JSC host on macOS only, not ${os}`);
 
 const desktop = path.resolve(import.meta.dirname, "..");
 const web = path.resolve(desktop, process.env.KIWI_UI_DIST ?? "../ui/dist");
@@ -72,6 +71,7 @@ if (os === "linux") {
   const swapped = [...mismatches(root, pins), ...unpinned(root, "bin", pins).map((f) => `${f}: nobody pinned it`)];
   if (swapped.length) throw new Error(`eb-post-build: the ${key} app's Electrobun files aren't Livewire ${PINS.electrobun}'s pinned ones (desktop/electrobun-pins.json): ${swapped.join("; ")}`);
   console.log(`eb-post-build: the ${key} app's ${Object.keys(pins).length} Electrobun files match Livewire ${PINS.electrobun}'s pins`);
+  if (jsc) onJscHost();
   const bin = path.join(root, "bin");
   const theirs = path.join(bin, "launcher");
   if (!fs.existsSync(theirs)) throw new Error(`eb-post-build: no Electrobun launcher at ${theirs}`);
