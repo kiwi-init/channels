@@ -234,12 +234,14 @@ jobs:
           repository: kiwi-init/electrobun-livewire
           ref: ${{ inputs.desktop_jsc }}
           path: livewire
-      - name: Livewire's JavaScriptCore host and its launcher (2026.11.4's would start Bun), built beside the pinned devkit against its SDK
+      - name: Livewire's JavaScriptCore host, with glue for the app's own bun:ffi libraries (read from the Bun app's bundles) and its launcher (2026.11.4's would start Bun), built beside the pinned devkit against its SDK
         if: ${{ inputs.desktop_jsc != '' }}
         run: |
           core=$(find "$HOME/.hutch/releases/electrobun" -path "*/macos-$(uname -m | sed 's/x86_64/x64/')/libElectrobunCore.dylib" | head -n 1)
           [ -n "$core" ] || { echo "no libElectrobunCore.dylib under ~/.hutch/releases/electrobun"; exit 1; }
-          sh livewire/package/src/jsc-host/overlay-devkit.sh desktop/.hutch/devkit "$RUNNER_TEMP/jsc-devkit" --launcher --check-lib "$core" --check-lib "$(dirname "$core")/libNativeWrapper.dylib"
+          app=$(ls -d desktop/release-eb/build/dev-macos-*/*.app)
+          bun livewire/package/src/jsc-host/ffi/extract-app.ts --libs "$app/Contents/MacOS" --sdk desktop/.hutch/devkit/api/sdks/main "$app"/Contents/Resources/app/bun/*.js "$app/Contents/Resources/kiwi.js" | tee "$RUNNER_TEMP/app-ffi.json"
+          sh livewire/package/src/jsc-host/overlay-devkit.sh desktop/.hutch/devkit "$RUNNER_TEMP/jsc-devkit" --launcher --check-lib "$core" --check-lib "$(dirname "$core")/libNativeWrapper.dylib" --extra "$RUNNER_TEMP/app-ffi.json"
       - name: test build with the main process on the JavaScriptCore host
         if: ${{ inputs.desktop_jsc != '' }}
         working-directory: desktop
@@ -332,12 +334,14 @@ jobs:
           repository: kiwi-init/electrobun-livewire
           ref: ${{ inputs.desktop_jsc }}
           path: livewire
-      - name: Livewire's JavaScriptCore host and its launcher (2026.11.4's would start Bun), built beside the pinned devkit against its SDK
+      - name: Livewire's JavaScriptCore host, with glue for the app's own bun:ffi libraries (read from the Bun app's bundles) and its launcher (2026.11.4's would start Bun), built beside the pinned devkit against its SDK
         if: ${{ inputs.desktop_jsc != '' }}
         run: |
           core=$(find "$HOME/.hutch/releases/electrobun" -path "*/linux-x64/libElectrobunCore.so" | head -n 1)
           [ -n "$core" ] || { echo "no libElectrobunCore.so under ~/.hutch/releases/electrobun"; exit 1; }
-          sh livewire/package/src/jsc-host/overlay-devkit.sh desktop/.hutch/devkit "$RUNNER_TEMP/jsc-devkit" --launcher --check-lib "$core" --check-lib "$(dirname "$core")/libNativeWrapper.so"
+          app=$(ls -d "$PWD"/desktop/release-eb/build/dev-linux-*/* | head -n 1)
+          bun livewire/package/src/jsc-host/ffi/extract-app.ts --libs "$app/bin" --sdk desktop/.hutch/devkit/api/sdks/main "$app"/Resources/app/bun/*.js "$app/Resources/kiwi.js" | tee "$RUNNER_TEMP/app-ffi.json"
+          sh livewire/package/src/jsc-host/overlay-devkit.sh desktop/.hutch/devkit "$RUNNER_TEMP/jsc-devkit" --launcher --check-lib "$core" --check-lib "$(dirname "$core")/libNativeWrapper.so" --extra "$RUNNER_TEMP/app-ffi.json"
       - name: test build with the main process on the JavaScriptCore host
         if: ${{ inputs.desktop_jsc != '' }}
         working-directory: desktop
