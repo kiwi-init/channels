@@ -401,6 +401,16 @@ kbd {
     transform var(--pop);
 }
 
+.face[data-mood] .eye.eye-enter {
+  opacity: 0;
+  transform: scale(0.2);
+}
+
+.face[data-mood] :is(.face-cross, .face-ask, .face-spark).face-enter {
+  opacity: 0;
+  scale: 0.3;
+}
+
 .face .eye:not(.eye-line) {
   fill: #000;
 }

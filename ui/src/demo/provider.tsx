@@ -22,7 +22,7 @@ import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
 import { openedTab, TABS_3, TABS_8 } from "~/demo/tabs"
 import { DEMO_FROZEN } from "~/demo/shots"
 import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
-import type { Account, Actions, App, BackRun, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Prefs, Spec, Task, TaskStep, Usage } from "~/model"
+import type { Account, Actions, App, BackRun, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Person, Prefs, Spec, Task, TaskStep, Usage } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
@@ -313,6 +313,7 @@ export type Scenario =
   | "task-events"
   | "ci-live"
   | "specs-live"
+  | "moods-live"
   | "doc-busy"
   | "event-runs"
   | "own-bubbles"
@@ -649,6 +650,22 @@ function busyStep(s: State, n: number): State {
   return { ...s, channels, seq }
 }
 
+const MOOD_STEPS: readonly Person["activity"][] = [
+  { state: "working", since: Date.now() },
+  { state: "working", tool: "Bash", since: Date.now() },
+  { state: "waiting", since: Date.now() },
+  { state: "idle" },
+]
+
+function moodStep(s: State, n: number): State {
+  const c = s.channels.get("kiwi")
+  const activity = MOOD_STEPS[(n - 1) % MOOD_STEPS.length]
+  if (!c || !activity) return s
+  const channels = new Map(s.channels)
+  channels.set("kiwi", { ...c, people: c.people.map((p) => (p.name === "atlas" ? { ...p, activity } : p)) })
+  return { ...s, channels }
+}
+
 function specsStep(s: State, n: number): State {
   const c = s.channels.get("kiwi")
   if (!c) return s
@@ -687,6 +704,16 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       const step = n++
       setState((s) => ciStep(s, step))
     }, 700)
+    return () => window.clearInterval(timer)
+  }, [scenario])
+
+  useEffect(() => {
+    if (scenario !== "moods-live" || DEMO_FROZEN) return
+    let n = 0
+    const timer = window.setInterval(() => {
+      const step = ++n
+      setState((s) => moodStep(s, step))
+    }, 1200)
     return () => window.clearInterval(timer)
   }, [scenario])
 
