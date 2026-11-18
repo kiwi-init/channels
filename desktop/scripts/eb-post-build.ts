@@ -17,6 +17,8 @@ const os = process.env.ELECTROBUN_OS;
 const arch = process.env.ELECTROBUN_ARCH;
 if (!buildDir || !os || !arch) throw new Error("run by electrobun build: ELECTROBUN_BUILD_DIR, _OS and _ARCH are unset");
 if (os !== "macos" && os !== "linux") throw new Error(`the Electrobun shell builds only on macOS and Linux, not ${os}`);
+const jsc = process.env.CHANNELS_JSC === "1";
+if (jsc && os !== "macos") throw new Error(`eb-post-build: CHANNELS_JSC=1 builds the main process for the JSC host on macOS only, not ${os}`);
 
 const desktop = path.resolve(import.meta.dirname, "..");
 const web = path.resolve(desktop, process.env.KIWI_UI_DIST ?? "../ui/dist");
@@ -163,9 +165,17 @@ const problems = [
   ...keyChannelProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8")),
 ];
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
+if (jsc) onJscHost();
 if (fs.readdirSync(views).some((n) => n.toLowerCase() === "index.html"))
   throw new Error("eb-post-build: index.html is under views/ again by the seal, where Electrobun would serve it without the CSP");
 console.log(`eb-post-build: ${sealApp(path.dirname(contents))} files sealed in Info.plist`);
+
+function onJscHost(): void {
+  const host = process.env.CHANNELS_JSC_HOST ?? path.join(desktop, ".hutch", "devkit", "api", "jsc-host");
+  const hook = path.join(host, "post-build.ts");
+  if (!fs.existsSync(hook)) throw new Error(`eb-post-build: CHANNELS_JSC=1, but there is no JSC host at ${host} (CHANNELS_JSC_HOST names one this devkit lacks)`);
+  execFileSync(process.execPath, [hook, "--script", "kiwi.js"], { stdio: "inherit", cwd: desktop });
+}
 
 async function bundledKeysAnswer(file: string): Promise<string> {
   const dir = fs.mkdtempSync(path.join(tmpdir(), "kiwi-keys-bundle-"));
