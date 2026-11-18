@@ -31,6 +31,10 @@ on:
         description: "Seconds the desktop app idles before its memory is read (empty is 60, 0 skips it)"
         type: string
         default: ""
+      desktop_runner:
+        description: "The macOS runner the desktop job runs on (empty is macos-latest; macos-26-intel when arm64 runners aren't acquired)"
+        type: string
+        default: ""
       desktop_jsc:
         description: "A Livewire ref (a branch, tag or SHA): the desktop job then also builds the app with its main process on that ref's JavaScriptCore host, no Bun in it, and measures it the same way after the Bun app (empty measures the Bun app only)"
         type: string
@@ -193,7 +197,7 @@ jobs:
   desktop:
     name: perf / desktop cold start and idle memory
     if: ${{ inputs.jobs == 'desktop' || inputs.jobs == 'all' }}
-    runs-on: macos-latest
+    runs-on: ${{ inputs.desktop_runner || 'macos-latest' }}
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -233,7 +237,7 @@ jobs:
       - name: Livewire's JavaScriptCore host, built beside the pinned devkit against its SDK
         if: ${{ inputs.desktop_jsc != '' }}
         run: |
-          core=$(find "$HOME/.hutch/releases/electrobun" -path '*/macos-arm64/libElectrobunCore.dylib' | head -n 1)
+          core=$(find "$HOME/.hutch/releases/electrobun" -path "*/macos-$(uname -m | sed 's/x86_64/x64/')/libElectrobunCore.dylib" | head -n 1)
           [ -n "$core" ] || { echo "no libElectrobunCore.dylib under ~/.hutch/releases/electrobun"; exit 1; }
           sh livewire/package/src/jsc-host/overlay-devkit.sh desktop/.hutch/devkit "$RUNNER_TEMP/jsc-devkit" --check-lib "$core" --check-lib "$(dirname "$core")/libNativeWrapper.dylib"
       - name: test build with the main process on the JavaScriptCore host
