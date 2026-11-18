@@ -394,7 +394,7 @@ jobs:
           if [ -n "${{ inputs.desktop_jsc }}" ]; then
             echo "### Linux, on Livewire's JavaScriptCore host (${{ inputs.desktop_jsc }}): $(cat "$RUNNER_TEMP/size-jsc.txt" 2>/dev/null) KB" | tee -a "$GITHUB_STEP_SUMMARY"
             [ -f "$RUNNER_TEMP/perf-desktop-jsc.json" ] || { echo "no JavaScriptCore report was written"; exit 1; }
-            { echo '```json'; jq '{runs, calibrationMs, measured, scaled, memory, startup}' "$RUNNER_TEMP/perf-desktop-jsc.json"; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+            { echo '```json'; jq '{runs, calibrationMs, measured, scaled, memory, startup, cpuAtLive}' "$RUNNER_TEMP/perf-desktop-jsc.json"; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
           fi
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -1,5 +1,5 @@
 import { spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { appExecutable, attach, launch as launchApp, processesOf, stop, testEnv, webkitHelpers } from "../desktop/scripts/eb-drive.ts";
@@ -116,6 +116,7 @@ const runs: {
   loopMs: number;
   startup?: Record<string, number>;
   page?: Record<string, number>;
+  cpu?: Record<string, number>;
 }[] = [];
 let running: Running | null = null;
 let memory: {
@@ -191,6 +192,35 @@ function cpuMs(pids: string[]): Map<string, number> {
   return out;
 }
 
+// CPU each thread of the app's and WebKit's processes has used since it
+// started, in ms, keyed "process/thread" by their names (digits as #) and
+// summed per key: on Linux only, from /proc/<pid>/task/<tid>/stat.
+function threadCpu(): Record<string, number> {
+  if (process.platform !== "linux") return {};
+  const tick = 1000 / (Number(spawnSync("getconf", ["CLK_TCK"]).stdout.toString().trim()) || 100);
+  const { own, helpers } = appProcesses();
+  const out: Record<string, number> = {};
+  for (const pid of [...own, ...helpers.map((h) => h.pid)]) {
+    try {
+      const proc = readFileSync(`/proc/${pid}/comm`, "utf8").trim();
+      for (const tid of readdirSync(`/proc/${pid}/task`)) {
+        try {
+          const stat = readFileSync(`/proc/${pid}/task/${tid}/stat`, "utf8");
+          const name = stat.slice(stat.indexOf("(") + 1, stat.lastIndexOf(")")).replace(/\d+/g, "#");
+          const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+          const key = `${proc}/${tid === pid ? "(main)" : name}`;
+          out[key] = Math.round((out[key] ?? 0) + (Number(fields[11]) + Number(fields[12])) * tick);
+        } catch {
+          // the thread ended
+        }
+      }
+    } catch {
+      // the process ended
+    }
+  }
+  return out;
+}
+
 // Average CPU over the idle window, in percent of one core.
 function idleCpu(before: Map<string, number>, after: Map<string, number>, pids: string[], ms: number): number {
   const used = pids.reduce((sum, pid) => sum + Math.max(0, (after.get(pid) ?? 0) - (before.get(pid) ?? 0)), 0);
@@ -250,6 +280,7 @@ try {
         )
         .catch(() => null),
     );
+    const cpu = threadCpu();
     const run = {
       windowMs: Math.round(screen.origin - app.started),
       firstScreenMs: Math.round(screen.origin + screen.paint - app.started),
@@ -272,6 +303,7 @@ try {
         ).map(([k, v]) => [k, Math.round(v - app.started)]),
       ),
       ...(await app.startup().then((marks) => (marks ? { startup: Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, Math.round(v - app.started)])) } : {}))),
+      ...(Object.keys(cpu).length ? { cpu } : {}),
     };
     runs.push(run);
     log(`run ${i + 1}`, JSON.stringify(run));
@@ -329,6 +361,13 @@ const scaled = Object.fromEntries(Object.entries(measured).map(([k, v]) => [k, M
 const loopScaled = Object.fromEntries(Object.entries(measured).map(([k, v]) => [k, Math.round(v * loopFactor)]));
 const marks = [...new Set(runs.flatMap((r) => Object.keys(r.startup ?? {})))];
 const startup = Object.fromEntries(marks.map((k) => [k, median(runs.flatMap((r) => (r.startup?.[k] === undefined ? [] : [r.startup[k]])))]));
+const cpuKeys = [...new Set(runs.flatMap((r) => Object.keys(r.cpu ?? {})))];
+const cpuAtLive = Object.fromEntries(
+  cpuKeys
+    .map((k) => [k, median(runs.map((r) => r.cpu?.[k] ?? 0))] as const)
+    .filter(([, v]) => v >= 5)
+    .sort((a, b) => b[1] - a[1]),
+);
 const report = {
   app: "electrobun",
   runs: runs.length,
@@ -341,6 +380,7 @@ const report = {
   loopScaled,
   ...(marks.length ? { startup } : {}),
   ...(memory ? { memory } : {}),
+  ...(cpuKeys.length ? { cpuAtLive } : {}),
   each: runs,
 };
 console.log(JSON.stringify(report, null, 2));
