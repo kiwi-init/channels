@@ -306,7 +306,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
       - name: WebKitGTK, Xvfb, and what Livewire's JavaScriptCore host builds against
-        timeout-minutes: 15
+        timeout-minutes: 45
         run: |
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev bison xvfb xauth dbus libgcrypt20-dev libsqlite3-dev libsoup-3.0-dev xxd pkg-config
