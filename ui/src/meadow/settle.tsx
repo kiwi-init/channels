@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react"
+import { createContext, use, useEffect, useState } from "react"
 
 import { useAppPrefs } from "~/nav"
 
 const STILL = "(prefers-reduced-motion: reduce)"
 
+export const SceneFrozen = createContext(false)
+
 export function useStill(): boolean {
   const prefs = useAppPrefs()
+  const frozen = use(SceneFrozen)
   const [still, setStill] = useState(() => window.matchMedia(STILL).matches)
   useEffect(() => {
     const query = window.matchMedia(STILL)
@@ -13,7 +16,7 @@ export function useStill(): boolean {
     query.addEventListener("change", changed)
     return () => query.removeEventListener("change", changed)
   }, [])
-  return still || prefs.reduceMotion
+  return still || prefs.reduceMotion || frozen
 }
 
 export function Settle({ text, still, rate = 70, delay = 0 }: { text: string; still: boolean; rate?: number; delay?: number }) {
