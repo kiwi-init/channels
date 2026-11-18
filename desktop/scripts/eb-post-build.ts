@@ -17,6 +17,7 @@ const os = process.env.ELECTROBUN_OS;
 const arch = process.env.ELECTROBUN_ARCH;
 if (!buildDir || !os || !arch) throw new Error("run by electrobun build: ELECTROBUN_BUILD_DIR, _OS and _ARCH are unset");
 if (os !== "macos" && os !== "linux") throw new Error(`the Electrobun shell builds only on macOS and Linux, not ${os}`);
+const jsc = os === "macos" ? process.env.CHANNELS_BUN !== "1" : process.env.CHANNELS_JSC === "1";
 
 const desktop = path.resolve(import.meta.dirname, "..");
 const web = path.resolve(desktop, process.env.KIWI_UI_DIST ?? "../ui/dist");
@@ -70,6 +71,7 @@ if (os === "linux") {
   const swapped = [...mismatches(root, pins), ...unpinned(root, "bin", pins).map((f) => `${f}: nobody pinned it`)];
   if (swapped.length) throw new Error(`eb-post-build: the ${key} app's Electrobun files aren't Livewire ${PINS.electrobun}'s pinned ones (desktop/electrobun-pins.json): ${swapped.join("; ")}`);
   console.log(`eb-post-build: the ${key} app's ${Object.keys(pins).length} Electrobun files match Livewire ${PINS.electrobun}'s pins`);
+  if (jsc) onJscHost();
   const bin = path.join(root, "bin");
   const theirs = path.join(bin, "launcher");
   if (!fs.existsSync(theirs)) throw new Error(`eb-post-build: no Electrobun launcher at ${theirs}`);
@@ -163,9 +165,18 @@ const problems = [
   ...keyChannelProblems(fs.readFileSync(path.join(app, "bun", "index.js"), "utf8")),
 ];
 if (problems.length) throw new Error(`eb-post-build: ${problems.join("; ")}`);
+if (jsc) onJscHost();
 if (fs.readdirSync(views).some((n) => n.toLowerCase() === "index.html"))
   throw new Error("eb-post-build: index.html is under views/ again by the seal, where Electrobun would serve it without the CSP");
 console.log(`eb-post-build: ${sealApp(path.dirname(contents))} files sealed in Info.plist`);
+
+function onJscHost(): void {
+  const host = process.env.CHANNELS_JSC_HOST ?? path.join(desktop, ".hutch", "devkit", "api", "jsc-host");
+  const hook = path.join(host, "post-build.ts");
+  if (!fs.existsSync(hook))
+    throw new Error(`eb-post-build: the main process goes on Livewire's JavaScriptCore host, and there is none at ${host}: pin a Livewire whose devkit has api/jsc-host, or build with CHANNELS_BUN=1`);
+  execFileSync(process.execPath, [hook, "--script", "kiwi.js"], { stdio: "inherit", cwd: desktop });
+}
 
 async function bundledKeysAnswer(file: string): Promise<string> {
   const dir = fs.mkdtempSync(path.join(tmpdir(), "kiwi-keys-bundle-"));
