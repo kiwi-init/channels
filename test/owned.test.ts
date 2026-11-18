@@ -134,9 +134,11 @@ test("stopping one test's processes reaches a child that exec'd and a child's ow
     ],
     { env: { ...process.env, KID_FILE: kidFile } },
   );
+  const kid = (): number => (existsSync(kidFile) ? Number(readFileSync(kidFile, "utf8")) : 0);
   const end = Date.now() + 10_000;
-  while (!existsSync(kidFile) && Date.now() < end) await Bun.sleep(20);
-  const child = Number(readFileSync(kidFile, "utf8"));
+  while (!(kid() > 0) && Date.now() < end) await Bun.sleep(20);
+  const child = kid();
+  expect(child).toBeGreaterThan(0);
   await Bun.sleep(200);
   expect([execd.pid, parent.pid, child].map(running)).toEqual([true, true, true]);
   const started = Date.now();
