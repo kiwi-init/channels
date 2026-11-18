@@ -26,12 +26,22 @@ const SHOWN: Readonly<Record<Mood, EyeShape | null>> = {
   error: null,
 }
 
-function useSeen(mood: Mood): { seen: ReadonlySet<Mood>; entering: Mood | null } {
+interface Entering {
+  shape: EyeShape | null
+  mark: Mood | null
+}
+
+const MARKED: ReadonlySet<Mood> = new Set(["error", "waiting", "done"])
+
+const shapesOf = (seen: ReadonlySet<Mood>): ReadonlySet<EyeShape> => new Set([...seen].flatMap((m) => SHOWN[m] ?? []))
+
+function useSeen(mood: Mood): { seen: ReadonlySet<Mood>; entering: Entering | null } {
   const [seen, setSeen] = useState<ReadonlySet<Mood>>(() => new Set([mood]))
-  const [entering, setEntering] = useState<Mood | null>(null)
+  const [entering, setEntering] = useState<Entering | null>(null)
   if (!seen.has(mood)) {
+    const shape = SHOWN[mood]
     setSeen(new Set([...seen, mood]))
-    setEntering(mood)
+    setEntering({ shape: shape && !shapesOf(seen).has(shape) ? shape : null, mark: MARKED.has(mood) ? mood : null })
   }
   useEffect(() => {
     if (!entering) return
@@ -42,8 +52,6 @@ function useSeen(mood: Mood): { seen: ReadonlySet<Mood>; entering: Mood | null }
   }, [entering])
   return { seen, entering }
 }
-
-const shapesOf = (seen: ReadonlySet<Mood>): ReadonlySet<EyeShape> => new Set([...seen].flatMap((m) => SHOWN[m] ?? []))
 
 function Eye({ x, side, shapes, entering }: { x: number; side: -1 | 1; shapes: ReadonlySet<EyeShape>; entering: EyeShape | null }) {
   const named = (shape: EyeShape, kind: string) => `eye ${kind}eye-${shape}${shape === entering ? " eye-enter" : ""}`
@@ -62,8 +70,8 @@ export function RoleFace({ role, harness, mood = "free" }: { role?: string | und
   const id = useId()
   const { seen, entering } = useSeen(mood)
   const shapes = shapesOf(seen)
-  const enteringShape = entering && SHOWN[entering]
-  const mark = (on: Mood, name: string) => `${name}${on === entering ? " face-enter" : ""}`
+  const enteringShape = entering?.shape ?? null
+  const mark = (on: Mood, name: string) => `${name}${on === entering?.mark ? " face-enter" : ""}`
   const c = CHARACTERS[faceOf(role)]
   const logo = harness ? LOGOS[harness] : undefined
   const scale = BADGE / 24

@@ -9,7 +9,7 @@ const flag = (name: string): string | undefined => {
 };
 if (process.argv.includes("--help")) {
   console.log(
-    "usage: bun scripts/ui-face-moods.ts [--dist ui/dist] [--browser webkit|chromium]\n\nA face looks and moves as it did while mounting less (#2453): its first eye shape shows at once, and an eye shape or mark a later mood brings fades in from hidden instead of popping in. Watches atlas's face in the sidebar while the moods-live scene moves it from free to tool to waiting.",
+    "usage: bun scripts/ui-face-moods.ts [--dist ui/dist] [--browser webkit|chromium]\n\nA face looks and moves as it did while mounting less (#2453): its first eye shape shows at once, a mood change that keeps the same eye shape leaves it alone, and an eye shape or mark a later mood brings fades in from hidden instead of popping in. Watches atlas's face in the sidebar while the moods-live scene moves it from free to thinking to tool to waiting.",
   );
   process.exit(0);
 }
@@ -18,7 +18,7 @@ if (!existsSync(join(dist, "index.html"))) throw new Error(`no index.html in ${d
 const engine = flag("--browser") ?? "webkit";
 if (engine !== "webkit" && engine !== "chromium") throw new Error(`--browser is webkit or chromium, not ${engine}`);
 
-const WATCH_MS = 5_000;
+const WATCH_MS = 6_500;
 const PARTS = [".eye-dot", ".eye-bar", ".face-ask"];
 
 const server = Bun.serve({
@@ -43,16 +43,27 @@ interface Seen {
   most: number;
 }
 
+interface Kept {
+  moods: string[];
+  least: number;
+}
+
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await pageErrors(page, (e) => fails.push(`page threw: ${e}`));
   await page.addInitScript(
     ({ parts, watchMs }: { parts: string[]; watchMs: number }) => {
       const seen: Record<string, { firstAt: number; first: number; most: number }> = {};
-      (window as unknown as { __moods: typeof seen }).__moods = seen;
+      const kept = { moods: [] as string[], least: 1 };
+      (window as unknown as { __moods: typeof seen; __kept: typeof kept }).__moods = seen;
+      (window as unknown as { __kept: typeof kept }).__kept = kept;
       const tick = () => {
         const row = [...document.querySelectorAll(".side-row")].find((r) => r.textContent?.includes("atlas"));
-        const face = row?.querySelector("svg.face");
+        const face = row?.querySelector<SVGElement>("svg.face");
+        const mood = face?.dataset.mood ?? "";
+        if (mood && !kept.moods.includes(mood)) kept.moods.push(mood);
+        const dot = face?.querySelector(".eye-dot");
+        if (dot && (mood === "free" || mood === "thinking")) kept.least = Math.min(kept.least, Number(getComputedStyle(dot).opacity));
         for (const part of parts) {
           const el = face?.querySelector(part);
           if (!el) continue;
@@ -70,10 +81,15 @@ try {
   await page.goto(`http://127.0.0.1:${server.port}/?shot=moods-live`);
   await page.waitForFunction((ms: number) => performance.now() > ms, WATCH_MS + 200, { timeout: 30_000 });
   const seen = await page.evaluate(() => (window as unknown as { __moods: Record<string, Seen> }).__moods);
+  const kept = await page.evaluate(() => (window as unknown as { __kept: Kept }).__kept);
   const dot = seen[".eye-dot"];
   const bar = seen[".eye-bar"];
   const ask = seen[".face-ask"];
   expect(!!dot && dot.first > 0.99, `the eye shape a face starts with shows at once, with no fade (first frame opacity ${dot?.first ?? "never seen"})`);
+  expect(
+    kept.moods.includes("thinking") && kept.least > 0.99,
+    `a mood change that keeps the same eye shape doesn't touch it (free to thinking: the dot's lowest opacity ${kept.least}, moods seen ${kept.moods.join(", ")})`,
+  );
   expect(!!bar && bar.first < 0.5 && bar.most > 0.99, `an eye shape a later mood brings fades in from hidden (tool's bar: first frame ${bar?.first ?? "never seen"}, then ${bar?.most ?? "-"})`);
   expect(!!ask && ask.first < 0.5 && ask.most > 0.99, `a mark a later mood brings fades in from hidden (waiting's question mark: first frame ${ask?.first ?? "never seen"}, then ${ask?.most ?? "-"})`);
   await page.close();

@@ -645,7 +645,12 @@ function busyStep(s: State, n: number): State {
   return { ...s, channels, seq }
 }
 
-const MOOD_STEPS: readonly Person["activity"][] = [{ state: "working", tool: "Bash", since: Date.now() }, { state: "waiting", since: Date.now() }, { state: "idle" }]
+const MOOD_STEPS: readonly Person["activity"][] = [
+  { state: "working", since: Date.now() },
+  { state: "working", tool: "Bash", since: Date.now() },
+  { state: "waiting", since: Date.now() },
+  { state: "idle" },
+]
 
 function moodStep(s: State, n: number): State {
   const c = s.channels.get("kiwi")
