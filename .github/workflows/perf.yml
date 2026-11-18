@@ -271,7 +271,7 @@ jobs:
         run: |
           app=$(ls -d desktop/release-eb/build/dev-macos-*/*.app | head -n 1)
           home=$(mktemp -d)
-          export HOME="$home" KIWI_HOME="$home/.kiwi" KIWI_EB_DRIVER="$home/driver.sock"
+          export HOME="$home" CFFIXED_USER_HOME="$home" KIWI_HOME="$home/.kiwi" KIWI_EB_DRIVER="$home/driver.sock"
           echo "== Contents/MacOS/launcher"
           perl -e 'alarm shift; exec @ARGV' 30 "$app/Contents/MacOS/launcher" 2>&1 | tail -n 80 || true
           find "$home" -type f -size -2M \( -name '*.log' -o -name '*.txt' \) -exec sh -c 'echo "== $1"; tail -n 80 "$1"' _ {} \;
