@@ -24,7 +24,7 @@ export default {
         KIWI_EB_TEST: process.env.CHANNELS_EB_TEST === "1" ? "true" : "false",
         KIWI_EB_OFFICIAL_UI: officialUi ? "true" : "false",
         KIWI_EB_DEV: devBuild ? "true" : "false",
-        KIWI_UI_SEQ: String(Date.now()),
+        KIWI_UI_SEQ: process.env.KIWI_UI_SEQ ?? String(Date.now()),
       },
     },
     views: { preload: { entrypoint: "src/preload-eb.ts" } },
