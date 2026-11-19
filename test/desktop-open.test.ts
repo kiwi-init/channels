@@ -35,21 +35,23 @@ type Acts = "missing" | "running" | { exit: number; stderr?: string };
 
 function fakeLaunch(fail = false, missing: readonly string[] = fail ? ["xdg-open", "gio"] : [], acts: Record<string, Acts> = {}) {
   const calls: { cmd: string; args: string[]; env: Record<string, string>; detached: boolean }[] = [];
+  const destroyed: string[] = [];
   const launch: Launch = (cmd, args, opts) => {
     calls.push({ cmd, args, env: opts.env, detached: opts.detached });
-    const stderr = Object.assign(new EventEmitter(), { destroy: () => {} });
+    const stderr = Object.assign(new EventEmitter(), { destroy: () => void destroyed.push(cmd) });
     const child = Object.assign(new EventEmitter(), { unref: () => {}, stderr });
     const act: Acts = missing.includes(cmd) ? "missing" : (acts[cmd] ?? { exit: 0 });
     queueMicrotask(() => {
       if (act === "missing") return void child.emit("error", new Error("ENOENT"));
       child.emit("spawn");
       if (act === "running") return;
-      if (act.stderr) stderr.emit("data", Buffer.from(act.stderr));
       child.emit("exit", act.exit, null);
+      if (act.stderr) stderr.emit("data", Buffer.from(act.stderr));
+      stderr.emit("close");
     });
     return child;
   };
-  return { launch, calls };
+  return { launch, calls, destroyed };
 }
 
 const NOV_17 = [
@@ -114,10 +116,11 @@ describe("links leave the app for the person's own browser", () => {
   });
 
   test("on Linux an opener that keeps running counts as opened within the bound, and a clean exit shows nothing (#2534)", async () => {
-    const { launch } = fakeLaunch(false, [], { "xdg-open": "running" });
+    const { launch, destroyed } = fakeLaunch(false, [], { "xdg-open": "running" });
     const started = performance.now();
     await openInBrowser(web("https://example.com/f"), async () => {}, "linux", KIWI_ENV, launch, 50);
     expect(performance.now() - started).toBeLessThan(1_000);
+    expect(destroyed).toEqual(["xdg-open"]);
     await expect(openInBrowser(web("https://example.com/g"), async () => {}, "linux", KIWI_ENV, fakeLaunch().launch)).resolves.toBeUndefined();
   });
 
