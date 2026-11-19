@@ -5,7 +5,7 @@ import { type Config } from "../src/config.ts";
 import { seatRecordFor } from "../src/daemon.ts";
 import { howMessagesReachYou } from "../src/hooks.ts";
 import { listenMode, wokenBy } from "../src/hooks/reach.ts";
-import { listenedPath, pullsWake, wakeArgv, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
+import { listenedPath, pulledPath, pullsWake, viaOf, wakeArgv, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
 import { wakeHarness } from "./wake-harness.ts";
 
 setDefaultTimeout(60_000);
@@ -186,6 +186,18 @@ describe("wake paths, commands and words", () => {
     const off = howMessagesReachYou("kiwi", false, { harness: "codex", session: "t" });
     expect(off).toContain("Kiwi won't wake you");
     expect(off).toContain("Run `kiwi join` at the start of every turn");
+  });
+
+  test("a seat that pulls its wakes is woken via its listener only while one is attached (T15716)", () => {
+    const cursor = wakePath({ harness: "cursor", session: "chat-1" }, true);
+    expect(pulledPath(cursor, "cursor", true)).toEqual({ kind: "listener" });
+    expect(viaOf(pulledPath(cursor, "cursor", true))).toBe("listener");
+    const unarmed = pulledPath(cursor, "cursor", false);
+    expect(unarmed.kind === "none" && unarmed.why.startsWith("its background listener isn't running")).toBe(true);
+    const gemini = wakePath({ harness: "gemini", session: "g" }, true);
+    expect(pulledPath(gemini, "gemini", true)).toBe(gemini);
+    const codex = wakePath({ harness: "codex", session: "t" }, true);
+    expect(pulledPath(codex, "codex", true)).toBe(codex);
   });
 
   test("Kimi Code and Grok are told the exact tool call that keeps them wakeable", () => {

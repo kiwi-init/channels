@@ -542,7 +542,7 @@ describe("Grok Bot on a VM whose shell has Cursor's variables", () => {
         .flat()
         .map((b) => b.harness),
     ).toEqual(["grok-bot"]);
-    expect((await ok(h, ["wake"], B)).includes("Cursor gives Kiwi no way")).toBe(false);
+    expect((await ok(h, ["wake"], B)).includes("Cursor starts a turn only when")).toBe(false);
 
     await ok(owner, ["send", "--to", me, "for the grok bot"]);
     const r = await run(

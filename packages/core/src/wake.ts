@@ -2,7 +2,7 @@ export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "o
 
 export type WakeCommand = "codex-queue" | "opencode-api" | "webhook" | "kimi-server" | "tmux-typing";
 
-export type WakePath = { kind: "hooks" } | { kind: "extension"; via: WakeExtension } | { kind: "command"; via: WakeCommand; session: string } | { kind: "none"; why: string };
+export type WakePath = { kind: "hooks" } | { kind: "extension"; via: WakeExtension } | { kind: "command"; via: WakeCommand; session: string } | { kind: "listener" } | { kind: "none"; why: string };
 
 type WakeExtension = "pi-extension" | "mimo-plugin";
 
@@ -57,10 +57,16 @@ export function listenedPath(path: WakePath, listening: boolean, idle = false): 
     : { kind: "none", why: "Kiwi's Pi extension has no listener running for this session (/reload in Pi starts it again)" };
 }
 
+export function pulledPath(path: WakePath, harness: WakeHarness | undefined, attached: boolean): WakePath {
+  return attached && path.kind === "none" && pullsWake(harness) ? { kind: "listener" } : path;
+}
+
 export function viaOf(path: WakePath): WakeVia | null {
   switch (path.kind) {
     case "hooks":
       return "hooks";
+    case "listener":
+      return "listener";
     case "extension":
       return path.via;
     case "command":
@@ -91,7 +97,7 @@ export function wakePath(
     case "gemini":
       return { kind: "none", why: "Gemini CLI gives Kiwi no way to start a turn in a running session outside tmux (in tmux, Kiwi types into its pane)" };
     case "cursor":
-      return { kind: "none", why: "Cursor gives Kiwi no way to start a turn in a running session" };
+      return { kind: "none", why: "its background listener isn't running: Cursor starts a turn only when the agent's own background kiwi join ends, and the agent starts it again after each message" };
     case "zcode":
       return { kind: "none", why: "ZCode gives Kiwi no way to start a turn in a running session" };
     case "agy":
