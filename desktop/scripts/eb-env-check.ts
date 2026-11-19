@@ -137,9 +137,7 @@ if (id === "com.kiwiinit.channels" && !process.env.CI) {
       s.close(() => ok(p));
     });
   });
-  const onBun = existsSync(join(macos, "bun"));
-  const home = onBun ? forgedCacheHome(join(app, "Contents", "Resources", "app", "bun", "index.js"), join(macos, "bun")) : join(tmp, "home");
-  mkdirSync(home, { recursive: true });
+  const home = forgedCacheHome(join(app, "Contents", "Resources", "app", "bun", "index.js"), join(macos, "bun"));
   const dropKeychain = homeKeychain(home);
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -150,12 +148,12 @@ if (id === "com.kiwiinit.channels" && !process.env.CI) {
     DYLD_INSERT_LIBRARIES: marker,
   };
   const child = spawn(join(macos, read("CFBundleExecutable")), [], { env, stdio: "ignore", detached: true });
-  const bun = join(macos, onBun ? "bun" : "main");
+  const bun = join(macos, "bun");
   const up = async () => {
     for (const end = Date.now() + 60_000; Date.now() < end; await later(250)) if (spawnSync("pgrep", ["-f", bun], { encoding: "utf8" }).stdout.trim()) return true;
     return false;
   };
-  if (!(await up())) problems.push(`the app's ${onBun ? "bun" : "main"} process didn't start within 60s`);
+  if (!(await up())) problems.push("the app's bun process didn't start within 60s");
   else {
     await later(6_000);
     if (injected().includes("preload")) problems.push("BUN_OPTIONS or NODE_OPTIONS ran a file of the caller's choosing in the app's main process");
@@ -166,7 +164,7 @@ if (id === "com.kiwiinit.channels" && !process.env.CI) {
     if (reached.length) problems.push(`DYLD_INSERT_LIBRARIES reached ${reached.join(", ")}`);
     if (!problems.length)
       console.log(
-        `the running app: BUN_OPTIONS, BUN_INSPECT, NODE_OPTIONS, DYLD_INSERT_LIBRARIES${onBun ? " and a forged transpiler cache entry under HOME" : ""} reach none of its processes${injected().includes("kiwi-launcher") ? " (the unsigned launcher itself loads an inserted library: only a signed build's hardened runtime stops that)" : ""}`,
+        `the running app: BUN_OPTIONS, BUN_INSPECT, NODE_OPTIONS, DYLD_INSERT_LIBRARIES and a forged transpiler cache entry under HOME reach none of its processes${injected().includes("kiwi-launcher") ? " (the unsigned launcher itself loads an inserted library: only a signed build's hardened runtime stops that)" : ""}`,
       );
   }
   const groupAt = (label: string, pids: number[]) => {

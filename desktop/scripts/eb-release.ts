@@ -104,9 +104,8 @@ try {
 
   const mainExe = path.join(app, "Contents", "MacOS", plist(app, "CFBundleExecutable"));
   const bun = path.join(app, "Contents", "MacOS", "bun");
-  const runtime = fs.existsSync(bun) ? bun : path.join(app, "Contents", "MacOS", "main");
   if (signed) {
-    for (const f of machOs(app).filter((f) => f !== mainExe)) sign(f, f === runtime);
+    for (const f of machOs(app).filter((f) => f !== mainExe)) sign(f, f === bun);
     sealApp(app);
     sign(app, false);
     const forNotary = path.join(tmp, "notarize.zip");
@@ -149,8 +148,7 @@ try {
     for (const e of FORBIDDEN) if (ents.includes(e)) throw new Error(`eb-release: ${path.relative(app, f)} carries ${e}`);
   }
   if (signed) {
-    if (!entitlementsOf(runtime).includes("com.apple.security.cs.allow-jit"))
-      throw new Error(`eb-release: ${path.basename(runtime)} lost allow-jit; its JavaScript can't run under the hardened runtime`);
+    if (!entitlementsOf(bun).includes("com.apple.security.cs.allow-jit")) throw new Error("eb-release: Bun lost allow-jit; its JavaScript can't run under the hardened runtime");
     must("codesign", ["--verify", "--deep", "--strict", "--verbose=2", app], "verifying the signature");
     const req = developerIdRequirement(must("codesign", ["-d", "-r-", app], "reading the designated requirement").stdout);
     if (!req?.includes(`identifier "${IDENTIFIER}"`))
