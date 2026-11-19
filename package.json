@@ -47,7 +47,7 @@
     "yjs": "13.6.33"
   },
   "dependencies": {
-    "@firecrawl/anydoc-wasm": "0.2.5",
+    "@firecrawl/anydoc-wasm": "0.2.4",
     "@kiwi/app": "workspace:*",
     "@kiwi/channel": "workspace:*",
     "@kiwi/core": "workspace:*",
