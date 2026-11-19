@@ -146,4 +146,6 @@ export default {
   "kit.failed.update": "더 새로운 Channels가 필요합니다. 업데이트한 뒤 다시 시도하십시오.",
   "kit.failed.other": "잠시 뒤에 다시 시도하십시오.",
   "kit.toasts.dismiss": "닫기",
+  "kit.outside.not.opened": "링크를 열 수 없습니다. 복사해서 브라우저에서 여세요.",
+  "kit.outside.copy.link": "링크 복사",
 } satisfies Catalog

@@ -5,7 +5,9 @@ import { isValidElement, type ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import { StepHow } from "~/chat/step"
+import { t } from "~/i18n/i18n"
 import { OutsideLink, openOutside } from "~/kit/outside"
+import { onAnnounce, Toasts, type Tone, type ToastAction } from "~/kit/toasts"
 
 const LINK = "https://example.com/doc"
 const had = Object.getOwnPropertyDescriptor(globalThis, "window")
@@ -68,6 +70,30 @@ describe("links outside the app open through the desktop bridge (#1818)", () => 
     openOutside("https://example.com", () => (failed = true), via)
     await new Promise((done) => setTimeout(done, 0))
     expect(failed).toBe(true)
+  })
+
+  test("a link that can't open says so by default, with a Copy link action that copies its URL (#2534)", async () => {
+    const said: { text: string; tone: Tone; action?: ToastAction }[] = []
+    const stop = onAnnounce((text, tone, action) => void said.push({ text, tone, action }))
+    const copied: string[] = []
+    ;(navigator as { clipboard?: unknown }).clipboard = { writeText: async (text: string) => void copied.push(text) }
+    try {
+      openOutside(LINK, undefined, opener(true).via)
+      await new Promise((done) => setTimeout(done, 0))
+      expect(said.map(({ text, tone }) => ({ text, tone }))).toEqual([{ text: t("kit.outside.not.opened"), tone: "error" }])
+      expect(said[0]?.action?.label).toBe(t("kit.outside.copy.link"))
+      said[0]?.action?.run()
+      await new Promise((done) => setTimeout(done, 0))
+      expect(copied).toEqual([LINK])
+    } finally {
+      stop()
+      delete (navigator as { clipboard?: unknown }).clipboard
+    }
+  })
+
+  test("an error toast shows its action before Dismiss", () => {
+    const html = renderToStaticMarkup(<Toasts toasts={[{ id: 1, text: "Not opened", tone: "error", action: { label: "Copy link", run: () => {} } }]} onDismiss={() => {}} />)
+    expect(html).toMatch(/Not opened.*class="toast-action"[^>]*>Copy link<.*class="toast-close"/)
   })
 
   test("clicking a step link on desktop opens it through the bridge and stops the webview's own navigation", () => {

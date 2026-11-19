@@ -146,4 +146,6 @@ export default {
   "kit.failed.update": "这需要更新的 Channels。请更新后重试。",
   "kit.failed.other": "请稍后重试。",
   "kit.toasts.dismiss": "关闭",
+  "kit.outside.not.opened": "无法打开链接。请复制后在浏览器中打开。",
+  "kit.outside.copy.link": "复制链接",
 } satisfies Catalog

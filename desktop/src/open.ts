@@ -11,7 +11,7 @@ export function browserEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return out;
 }
 
-export interface Opener {
+interface Opener {
   once(event: "spawn", cb: () => void): unknown;
   once(event: "error", cb: (err: Error) => void): unknown;
   once(event: "exit", cb: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
@@ -21,7 +21,7 @@ export interface Opener {
 
 export type Launch = (cmd: string, args: string[], opts: { env: Record<string, string>; detached: boolean; stdio: ["ignore", "ignore", "pipe"] }) => Opener;
 
-export const STILL_OPENING_MS = 2_000;
+const STILL_OPENING_MS = 2_000;
 
 const KFMCLIENT_MISSING = /\bkfmclient: command not found/;
 const KDE_BRANCH = /^Selected DE kde$/m;

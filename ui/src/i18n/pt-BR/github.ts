@@ -146,4 +146,6 @@ export default {
   "kit.failed.update": "Isso precisa de um Channels mais novo. Atualize e tente de novo.",
   "kit.failed.other": "Tente de novo em instantes.",
   "kit.toasts.dismiss": "Dispensar",
+  "kit.outside.not.opened": "Não foi possível abrir o link. Copie e abra no seu navegador.",
+  "kit.outside.copy.link": "Copiar link",
 } satisfies Catalog
