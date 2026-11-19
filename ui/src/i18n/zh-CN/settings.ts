@@ -83,6 +83,7 @@ export default {
   "settings.sections.update.restart": "重启以更新",
   "settings.sections.update.out": "{version} 已发布",
   "settings.sections.update.blocked": "此副本无法在当前位置自行替换。",
+  "settings.sections.update.stuck": "此版本无法自行安装更新。手动获取这一次后，更新会恢复自动进行。",
   "settings.sections.update.on": "当前版本为 {version}。",
   "settings.sections.update.get": "获取",
   "settings.sections.update.download": "下载并重启",

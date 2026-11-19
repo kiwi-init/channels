@@ -83,6 +83,7 @@ export default {
   "settings.sections.update.restart": "Reiniciar para atualizar",
   "settings.sections.update.out": "Saiu a {version}",
   "settings.sections.update.blocked": "Esta cópia não consegue se substituir onde está.",
+  "settings.sections.update.stuck": "Esta versão não consegue instalar atualizações sozinha. Baixe esta uma vez e as atualizações voltam a funcionar sozinhas.",
   "settings.sections.update.on": "Você está na {version}.",
   "settings.sections.update.get": "Baixar",
   "settings.sections.update.download": "Baixar e reiniciar",

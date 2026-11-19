@@ -83,6 +83,7 @@ export default {
   "settings.sections.update.restart": "다시 시작하여 업데이트",
   "settings.sections.update.out": "{version} 출시",
   "settings.sections.update.blocked": "이 사본은 현재 위치에서 스스로 교체할 수 없습니다.",
+  "settings.sections.update.stuck": "이 버전은 스스로 업데이트를 설치할 수 없습니다. 이번 한 번만 직접 받으면 다음부터는 다시 자동으로 업데이트됩니다.",
   "settings.sections.update.on": "현재 {version}입니다.",
   "settings.sections.update.get": "받기",
   "settings.sections.update.download": "다운로드 후 다시 시작",
