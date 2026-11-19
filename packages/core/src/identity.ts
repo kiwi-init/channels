@@ -73,31 +73,60 @@ export async function sign<T extends object>(id: Identity, obj: T): Promise<T & 
   return { ...obj, pk: id.pk, sig: b64url(new Uint8Array(sig)) };
 }
 
-const verifyKeys = new Map<string, Promise<CryptoKey | null>>();
+const verifyKeys = new Map<string, Promise<CryptoKey>>();
 const MAX_VERIFY_KEYS = 4_096;
+const PK_BYTES = 32;
+const SIG_BYTES = 64;
+
+export class VerifyCouldNotRun extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause), { cause });
+    this.name = "VerifyCouldNotRun";
+  }
+}
+
+function verifyKey(pk: string, raw: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
+  const known = verifyKeys.get(pk);
+  if (known) return known;
+  const key = crypto.subtle.importKey("raw", raw, ALG, false, ["verify"]).catch((e: unknown) => {
+    verifyKeys.delete(pk);
+    throw new VerifyCouldNotRun(e);
+  });
+  if (verifyKeys.size >= MAX_VERIFY_KEYS) verifyKeys.delete(verifyKeys.keys().next().value!);
+  verifyKeys.set(pk, key);
+  return key;
+}
+
+function decoded(s: string, bytes: number): Uint8Array<ArrayBuffer> | null {
+  try {
+    const out = fromB64url(s);
+    return out.length === bytes ? out : null;
+  } catch {
+    // A pk or sig that isn't base64url names no key or signature, so it can't verify.
+    return null;
+  }
+}
+
+export async function signedBy(signed: object): Promise<boolean> {
+  const obj = signed as { pk?: unknown; sig?: unknown };
+  if (typeof obj.pk !== "string" || typeof obj.sig !== "string") return false;
+  const raw = decoded(obj.pk, PK_BYTES);
+  const sig = decoded(obj.sig, SIG_BYTES);
+  if (!raw || !sig) return false;
+  const k = await verifyKey(obj.pk, raw);
+  try {
+    return await crypto.subtle.verify(ALG, k, sig, new TextEncoder().encode(canonical({ ...obj, sig: undefined })));
+  } catch (e) {
+    throw new VerifyCouldNotRun(e);
+  }
+}
 
 /** Whether `obj.sig` is a valid signature by `obj.pk` over the rest of `obj`. */
 export async function verify(signed: object): Promise<boolean> {
-  const obj = signed as { pk?: unknown; sig?: unknown };
-  if (typeof obj.pk !== "string" || typeof obj.sig !== "string") return false;
-  let key = verifyKeys.get(obj.pk);
-  if (!key) {
-    let raw: ReturnType<typeof fromB64url>;
-    try {
-      raw = fromB64url(obj.pk);
-    } catch {
-      // A pk that isn't base64url names no key, so nothing it signed can verify.
-      return false;
-    }
-    key = crypto.subtle.importKey("raw", raw, ALG, false, ["verify"]).catch(() => null);
-    if (verifyKeys.size >= MAX_VERIFY_KEYS) verifyKeys.delete(verifyKeys.keys().next().value!);
-    verifyKeys.set(obj.pk, key);
-  }
-  const k = await key;
-  if (!k) return false;
   try {
-    return await crypto.subtle.verify(ALG, k, fromB64url(obj.sig), new TextEncoder().encode(canonical({ ...obj, sig: undefined })));
+    return await signedBy(signed);
   } catch {
+    // Callers that only need a yes read a check that couldn't run as unverified.
     return false;
   }
 }

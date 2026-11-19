@@ -166,7 +166,12 @@ export const joinCommands: Record<string, Command> = {
         return yield* die("--persona takes the token from the owner's invite, as it was copied");
       }
       const token = opt.persona;
-      if (token !== undefined && !(yield* Effect.promise(() => pinFits(token, decodeJoinCode(code))))) {
+      const check = token === undefined ? null : yield* Effect.promise(() => pinFits(token, decodeJoinCode(code)));
+      if (check?.kind === "couldNotRun") {
+        yield* doneAsking;
+        return yield* die(`verification could not run: ${check.why}, run the command again; nothing was sent`);
+      }
+      if (check?.kind === "invalid") {
         yield* doneAsking;
         return yield* die("this invite token failed verification: it isn't signed by this channel's owner for this channel. Ask the owner for the invite again and copy it whole; nothing was sent", 2);
       }
