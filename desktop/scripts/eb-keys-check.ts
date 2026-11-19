@@ -128,6 +128,20 @@ function ciKeychain(): CiKeychains {
   };
 }
 
+async function probeFor(app: string, file: string): Promise<{ entry: string; text: string }> {
+  const source = path.join(import.meta.dirname, file);
+  const macos = path.join(contents(app), "MacOS");
+  if (fs.existsSync(path.join(macos, "bun")) || !fs.existsSync(path.join(macos, "main"))) {
+    const built = await Bun.build({ entrypoints: [source], target: "bun" });
+    const out = built.outputs[0];
+    if (!built.success || !out) throw new Error(`${file} didn't bundle: ${built.logs.join("\n")}`);
+    return { entry: path.join("Resources", "main.js"), text: await out.text() };
+  }
+  const bundled = path.join(tmp, file.replace(/\.ts$/, ".jsc.js"));
+  execFileSync(process.execPath, [path.join(import.meta.dirname, "..", ".hutch", "devkit", "api", "jsc-host", "bundle.ts"), source, bundled], { stdio: "inherit" });
+  return { entry: path.join("Resources", "app", "bun", "index.js"), text: fs.readFileSync(bundled, "utf8") };
+}
+
 const ci = ciKeychain();
 for (const signal of ["SIGINT", "SIGTERM"] as const)
   process.on(signal, () => {
@@ -136,11 +150,9 @@ for (const signal of ["SIGINT", "SIGTERM"] as const)
   });
 try {
   const base = shippedApp(payloadOf(path.join(release, "artifacts")), tmp);
-  const probe = await Bun.build({ entrypoints: [path.join(import.meta.dirname, "eb-keys-probe.ts")], target: "bun" });
-  const out = probe.outputs[0];
-  if (!probe.success || !out) throw new Error(`the probe didn't bundle: ${probe.logs.join("\n")}`);
+  const keysProbe = await probeFor(base, "eb-keys-probe.ts");
   const good = copy(base, "good");
-  fs.writeFileSync(path.join(contents(good), "Resources", "main.js"), await out.text());
+  fs.writeFileSync(path.join(contents(good), keysProbe.entry), keysProbe.text);
   const version = path.join(contents(good), "Resources", "version.json");
   fs.writeFileSync(version, JSON.stringify({ ...(JSON.parse(fs.readFileSync(version, "utf8")) as Record<string, unknown>), identifier: id }));
   execFileSync("plutil", ["-replace", "CFBundleIdentifier", "-string", id, plist(good)]);
@@ -160,14 +172,18 @@ try {
     okOf(first, "markedBefore") === "unmarked" && okOf(first, "finish") === "ok" && okOf(first, "markedAfter") === "marked",
     JSON.stringify([first.report?.["markedBefore"], first.report?.["finish"], first.report?.["markedAfter"]]),
   );
-  expect("bun gets only stdio and the key channel: a descriptor the launcher inherited stays behind", okOf(first, "inherited") === null, JSON.stringify(first.report?.["inherited"]));
-  expect("bun moves the channel off fd 3 at once and drops KIWI_KEY_FD", okOf(first, "fd3") === null && okOf(first, "env") === null, JSON.stringify([first.report?.["fd3"], first.report?.["env"]]));
+  expect("the JS runtime gets only stdio and the key channel: a descriptor the launcher inherited stays behind", okOf(first, "inherited") === null, JSON.stringify(first.report?.["inherited"]));
+  expect(
+    "the JS runtime moves the channel off fd 3 at once and drops KIWI_KEY_FD",
+    okOf(first, "fd3") === null && okOf(first, "env") === null,
+    JSON.stringify([first.report?.["fd3"], first.report?.["env"]]),
+  );
   expect(
     "done ends the session: another copy of the socket gets nothing after it",
     okOf(first, "done") === "ended" && okOf(first, "after") === "nothing",
     JSON.stringify([first.report?.["done"], first.report?.["after"]]),
   );
-  expect("bun's copy of the key channel is close-on-exec", okOf(first, "cloexec") === "set", JSON.stringify(first.report?.["cloexec"]));
+  expect("the JS runtime's copy of the key channel is close-on-exec", okOf(first, "cloexec") === "set", JSON.stringify(first.report?.["cloexec"]));
   expect(
     "a child started through libc system() while the channel is open gets no socket and no KIWI_KEY_FD",
     okOf(first, "native") === JSON.stringify({ sockets: [], env: null }),
@@ -190,12 +206,10 @@ try {
     JSON.stringify([second.report?.["drop"], second.report?.["markedKept"], second.report?.["get"]]),
   );
 
-  const storeBundle = await Bun.build({ entrypoints: [path.join(import.meta.dirname, "eb-store-probe.ts")], target: "bun" });
-  const storeOut = storeBundle.outputs[0];
-  if (!storeBundle.success || !storeOut) throw new Error(`the store probe didn't bundle: ${storeBundle.logs.join("\n")}`);
+  const storeProbe = await probeFor(base, "eb-store-probe.ts");
   const storeApp = async (name: string, appId: string, legacyNames: string[]): Promise<string> => {
     const app = copy(base, name);
-    fs.writeFileSync(path.join(contents(app), "Resources", "main.js"), await storeOut.text());
+    fs.writeFileSync(path.join(contents(app), storeProbe.entry), storeProbe.text);
     const v = path.join(contents(app), "Resources", "version.json");
     fs.writeFileSync(v, JSON.stringify({ ...(JSON.parse(fs.readFileSync(v, "utf8")) as Record<string, unknown>), identifier: appId }));
     execFileSync("plutil", ["-replace", "CFBundleIdentifier", "-string", appId, plist(app)]);
