@@ -113,6 +113,8 @@ export function howMessagesReachYou(mc: string, waking: boolean, who: Here = her
       return `Messages for you arrive on their own: ${wakeWords(path.via)} wakes you when one comes. Don't keep a listener running.`;
     case "command":
       return `Kiwi wakes you in this session when a message for you arrives (${wakeWords(path.via)}). Don't keep a listener running.`;
+    case "listener":
+      return wakeYourself(mc, who.harness) ?? checkEachTurn(mc);
     case "none":
       return wakeYourself(mc, who.harness) ?? `Kiwi can't wake you in this session: ${path.why}. ${checkEachTurn(mc)}`;
   }

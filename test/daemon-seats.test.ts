@@ -235,6 +235,76 @@ describe("seats always on", () => {
     await wakesViaListenerWhileItRuns("/grok", { alias: "test", as: "claude", harness: "grok", session: "grok-1" });
   });
 
+  test("a Cursor seat's own status says it wakes via its background listener while one runs, and that the listener isn't running once it ends (T15716)", async () => {
+    saveConfig({ ...loadConfig(), bindings: { "/cursor": { alias: "test", as: "claude", harness: "cursor", session: "chat-1" } } });
+    try {
+      const unarmed = async () => {
+        const path = (await seatOf("claude"))?.wake.path;
+        return path?.kind === "none" && path.why.startsWith("its background listener isn't running");
+      };
+      await until("kiwi wake to say the listener isn't running", unarmed);
+      const channel = loadConfig().channels.test;
+      if (!channel) throw new Error("the test channel is missing");
+      const s = await AgentSession.open("test", channel, "claude");
+      const seen = from(claudePk).length;
+      let sawArmed = false;
+      const armed = async () => {
+        sawArmed =
+          (await seatOf("claude"))?.wake.path.kind === "listener" &&
+          from(claudePk)
+            .slice(seen)
+            .some((p) => p.wake === "listener");
+        return sawArmed;
+      };
+      await runAgent(
+        Effect.raceFirst(
+          s.listen(() => Effect.void, {}),
+          Effect.promise(() => until("the seat's own path and its presence to name the listener", armed)),
+        ),
+      );
+      expect(sawArmed).toBe(true);
+      await until("kiwi wake to say the listener isn't running again", unarmed);
+    } finally {
+      saveConfig({ ...loadConfig(), bindings: omit(loadConfig().bindings ?? {}, "/cursor") });
+    }
+  });
+
+  test("a held Cursor seat isn't announced as woken by a listener that's still attached (T15716)", async () => {
+    const record: SeatRecord = { alias: "test", as: "claude", harness: "cursor", session: "chat-1" };
+    saveConfig({ ...loadConfig(), bindings: { "/cursor": record } });
+    try {
+      const channel = loadConfig().channels.test;
+      if (!channel) throw new Error("the test channel is missing");
+      const s = await AgentSession.open("test", channel, "claude");
+      let heldWhileAttached = false;
+      let heldFrom: number | null = null;
+      const holdIt = async () => {
+        const seat = await seatOf("claude");
+        if (heldFrom === null && seat?.wake.path.kind === "listener") {
+          heldFrom = from(claudePk).length;
+          saveConfig({ ...loadConfig(), bindings: { "/cursor": { ...record, hold: { key: "loop-key", at: Date.now() } } } });
+        }
+        const path = seat?.wake.path;
+        const attachedUnwoken =
+          heldFrom !== null &&
+          from(claudePk)
+            .slice(heldFrom)
+            .some((p) => p.reach === "listening" && p.wake === undefined);
+        heldWhileAttached = attachedUnwoken && path?.kind === "none" && path.why.startsWith("its loop holds it between sessions");
+        return heldWhileAttached;
+      };
+      await runAgent(
+        Effect.raceFirst(
+          s.listen(() => Effect.void, {}),
+          Effect.promise(() => until("the hold to win over the attached listener", holdIt)),
+        ),
+      );
+      expect(heldWhileAttached).toBe(true);
+    } finally {
+      saveConfig({ ...loadConfig(), bindings: omit(loadConfig().bindings ?? {}, "/cursor") });
+    }
+  });
+
   test("a MiMoCode seat is announced as woken by Kiwi's plugin only while the plugin's listener runs, and kiwi wake says why not", async () => {
     const mimoDir = mkdtempSync(join(tmpdir(), "kiwi-daemon-seats-mimo-"));
     const prevMimo = process.env.KIWI_MIMO_DIR;

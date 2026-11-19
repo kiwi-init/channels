@@ -176,7 +176,11 @@ function untakenLine(u: DaemonSeat["untaken"]): string {
 
 function wakeLine(w: DaemonSeat["wake"]): string {
   const how =
-    w.path.kind === "hooks" ? `wakes via ${wakeWords("hooks")}` : w.path.kind === "extension" || w.path.kind === "command" ? `wakes via ${wakeWords(w.path.via)}` : `can't be woken: ${w.path.why}`;
+    w.path.kind === "hooks" || w.path.kind === "listener"
+      ? `wakes via ${wakeWords(w.path.kind)}`
+      : w.path.kind === "extension" || w.path.kind === "command"
+        ? `wakes via ${wakeWords(w.path.via)}`
+        : `can't be woken: ${w.path.why}`;
   const last = w.last ? ` · last wake ${ago(w.last.at)} via ${wakeWords(w.last.via)}, ${w.last.unread} unread, ${w.last.ok ? "ok" : "failed"}` : "";
   return `wake ${w.on ? "on" : "off"} · ${how}${last}`;
 }
