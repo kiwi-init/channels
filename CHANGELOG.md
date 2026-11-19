@@ -2,6 +2,37 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.24 — 2026-11-19
+
+Tag [v2026.11.24](https://github.com/kiwi-init/channels/releases/tag/v2026.11.24) · commit [33225db](https://github.com/kiwi-init/channels/commit/33225dbc2273d3b2f01eede72577de5ba49a0cf3) · 2026-11-19
+
+First-load JS: 806,156 bytes (+4,498 since 2026.11.23)
+
+### Features
+
+- Phones act on step cards: Done, Can't do it, Not needed (T12920, #2515) ([#2530](https://github.com/kiwi-init/channels/pull/2530)) ([0be8e46](https://github.com/kiwi-init/channels/commit/0be8e4634aee896ed257298e6ad4033f882f7914))
+- **Desktop:** drag channel tabs into order, saved (T14475) ([#2540](https://github.com/kiwi-init/channels/pull/2540)) ([022f935](https://github.com/kiwi-init/channels/commit/022f935f61cfcd3963ee1ed106ac4d826a39534c))
+
+### Fixes
+
+- **Desktop:** channel tabs keep their place when clicked (T14397) ([#2537](https://github.com/kiwi-init/channels/pull/2537)) ([3ac83fc](https://github.com/kiwi-init/channels/commit/3ac83fcab0944e77202b7322174aaafccbf178c0))
+
+### Performance
+
+- **Reload:** lazy rows no longer suspend on a cold open, so the feed shows 24-35% sooner (T12923) ([#2532](https://github.com/kiwi-init/channels/pull/2532)) ([58f9289](https://github.com/kiwi-init/channels/commit/58f92898e59bec8ae820711ec065a239593346a0))
+- **CLI:** run the command in main(), with no top-level await (Livewire T440) ([#2539](https://github.com/kiwi-init/channels/pull/2539)) ([5fe669f](https://github.com/kiwi-init/channels/commit/5fe669f25d1484abd9b8cdc256e919b4b5db7648))
+- Faces mount only what their mood shows: the Agents tab switches 16% faster, faces look and move as before (T11605) ([#2538](https://github.com/kiwi-init/channels/pull/2538)) ([8014192](https://github.com/kiwi-init/channels/commit/80141920a4ead7e2dc6c739d630ac7c623288153))
+
+### Tests and CI
+
+- **Perf:** a paired mode for UI PRs, head against its merge base on one runner (T13697, #2518) ([#2533](https://github.com/kiwi-init/channels/pull/2533)) ([fa35e53](https://github.com/kiwi-init/channels/commit/fa35e53a2091a3097dc413933d3cfa057d1102dd))
+- **Tests:** the owned stop test waits for the child's pid, not just its file, so it can't check pid 0 (T14760, #2535) ([#2542](https://github.com/kiwi-init/channels/pull/2542)) ([894b5eb](https://github.com/kiwi-init/channels/commit/894b5ebb7364220f74dcd2ecab51d36acbe5b5a1))
+- **Shots:** a frozen shot renders the onboarding still, so its capture no longer hangs behind a fake-clock WebGL backlog (T14760, #2535) ([#2544](https://github.com/kiwi-init/channels/pull/2544)) ([77a8fff](https://github.com/kiwi-init/channels/commit/77a8fffa018c15444809a55e52d54bd940abd576))
+
+### Other changes
+
+- **Desktop:** build on Livewire 2026.11.5 ([#2547](https://github.com/kiwi-init/channels/pull/2547)) ([acc7a4b](https://github.com/kiwi-init/channels/commit/acc7a4b7484e8da5d34c200bf3a903e53e5db25e))
+
 ## 2026.11.23 — 2026-11-17
 
 Tag [v2026.11.23](https://github.com/kiwi-init/channels/releases/tag/v2026.11.23) · commit [2dea493](https://github.com/kiwi-init/channels/commit/2dea49399eeaf0ad29280f9eb245eb54aca4e770) · 2026-11-17
