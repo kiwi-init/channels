@@ -54,6 +54,7 @@ function tree(root: number): number[] {
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eb-update-rehearsal-"));
 let app: ReturnType<typeof spawn> | null = null;
+let daemon: ReturnType<typeof spawn> | null = null;
 let dropKeychain: () => void = () => {};
 try {
   const apps = path.join(tmp, "Applications");
@@ -85,6 +86,20 @@ try {
     console.log("signed like the installed app: its designated requirement and Gatekeeper accept the update");
   } else console.log("rehearsal without the Developer ID: the signature check is skipped");
 
+  const oldBun = path.join(target, "Contents", "MacOS", "bun");
+  const oldCli = path.join(target, "Contents", "Resources", "kiwi.js");
+  if (fs.existsSync(oldBun) && fs.existsSync(oldCli)) {
+    const daemonHome = path.join(tmp, "daemon-home");
+    fs.mkdirSync(daemonHome);
+    daemon = spawn(oldBun, ["--no-env-file", "--no-install", oldCli, "daemon"], {
+      stdio: "ignore",
+      env: { PATH: "/usr/bin:/bin", HOME: daemonHome, KIWI_HOME: path.join(daemonHome, ".kiwi"), KIWI_RELAY: "http://127.0.0.1:9", TMPDIR: tmp },
+    });
+    await later(3000);
+    if (daemon.exitCode !== null || daemon.signalCode !== null) throw new Error("update rehearsal: the installed app's kiwi daemon didn't stay up, so the swap isn't rehearsed beside it");
+    console.log("the installed app's kiwi daemon runs from its bundle during the swap, as on a person's Mac");
+  } else console.log("the installed app ships no bun and kiwi.js: no daemon runs from it during the swap");
+
   const waiting = spawn("sleep", ["60"], { stdio: "ignore" });
   const marker = path.join(tmp, "update-failed");
   const script = path.join(stage, "swap.sh");
@@ -96,6 +111,8 @@ try {
   if (fs.existsSync(marker)) throw new Error(`update rehearsal: the swap left its failure marker: ${fs.readFileSync(marker, "utf8")}`);
   if (fs.existsSync(stage)) throw new Error("update rehearsal: the swap left the download behind");
   if (fs.readdirSync(apps).some((n) => n.startsWith("Channels.app.old-"))) throw new Error("update rehearsal: the old app is still beside the new one");
+  if (daemon && daemon.exitCode === null && daemon.signalCode === null) console.log("swapped with the old kiwi daemon still running");
+  daemon?.kill();
   if (plist(target, "CFBundleIdentifier") !== "com.kiwiinit.channels") throw new Error("update rehearsal: the swapped app isn't com.kiwiinit.channels");
   const now = (JSON.parse(fs.readFileSync(path.join(target, "Contents", "Resources", "version.json"), "utf8")) as { version?: unknown }).version;
   if (now !== to) throw new Error(`update rehearsal: ${target} is ${String(now)} after the swap, not ${to}`);
@@ -114,6 +131,7 @@ try {
   console.log(`the updated app opened its window (${win}) ${Date.now() - started} ms after launch`);
 } finally {
   if (app?.pid) for (const pid of tree(app.pid).reverse()) spawnSync("kill", ["-9", String(pid)]);
+  if (daemon?.pid) spawnSync("kill", ["-9", String(daemon.pid)]);
   dropKeychain();
   fs.rmSync(tmp, { recursive: true, force: true });
 }
