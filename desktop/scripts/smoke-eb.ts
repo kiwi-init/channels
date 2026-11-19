@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonHello, daemonStop } from "../src/daemon-client.ts";
 import { bridgeChecks } from "./eb-bridge-checks.ts";
-import { appExecutable, appRoot, attach, killAll, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
+import { appExecutable, appRoot, attach, killAll, launch, stop, tail, testEnv, until, type Driver } from "./eb-drive.ts";
 import { firstChannel, sendMessage } from "./eb-first-run.ts";
 
 if (!process.argv[2]) {
@@ -96,7 +96,7 @@ for (const name of ["xdg-open", "gio"]) {
   writeFileSync(opener, `#!/bin/sh\nprintf '%s\\n' "$@" >> '${opened}'\n`);
   chmodSync(opener, 0o755);
 }
-const app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY, { PATH: `${openers}:${process.env.PATH}` }));
+const app = launch(exe, testEnv(root, join(root, "driver.sock"), RELAY, { PATH: `${openers}:${process.env.PATH}` }), join(root, "app.log"));
 try {
   const d = await attach(join(root, "driver.sock"));
   const page = await until("the dashboard's first screen", 60_000, () =>
@@ -396,6 +396,10 @@ try {
   const left = alive();
   if (left.length) problems.push(`still running after the smoke test: ${left.join(", ")}`);
   killAll(left);
+  if (problems.length) {
+    console.error(`the app's output, last lines:\n${tail(join(root, "app.log"))}`);
+    for (const f of found(join(root, "home", logDir), "main.log")) console.error(`${f.slice(root.length)}, last lines:\n${tail(f, 40)}`);
+  }
   rmSync(root, { recursive: true, force: true });
 }
 

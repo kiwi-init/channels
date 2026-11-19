@@ -5,7 +5,7 @@ import { dirname, join, relative, sep } from "node:path";
 import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { buildUipack, generateSigningKey, signManifest, uipackFileName, type UiManifest } from "../.hutch/devkit/api/sdks/main/appengine/format.ts";
 import { UI_CONTRACT } from "../src/ui-contract.ts";
-import { appExecutable, appRoot, attach, launch, stop, testEnv, until, type Driver } from "./eb-drive.ts";
+import { appExecutable, appRoot, attach, launch, stop, tail, testEnv, until, type Driver } from "./eb-drive.ts";
 
 if (!process.argv[2] || process.platform !== "darwin") {
   console.error("usage (on a Mac): bun desktop/scripts/eb-ui-check.ts <Channels.app built with CHANNELS_EB_TEST=1>");
@@ -99,7 +99,7 @@ function engineState(): { current: UiManifest | null; good: UiManifest[]; bad: R
 }
 
 async function run(what: (d: Driver) => Promise<void>): Promise<void> {
-  const started = launch(exe, env);
+  const started = launch(exe, env, join(root, "app.log"));
   try {
     const d = await attach(join(root, "driver.sock"));
     try {
@@ -188,6 +188,7 @@ try {
 } finally {
   relay.kill();
   void channel.stop(true);
+  if (problems.length) console.error(`the app's output, last lines:\n${tail(join(root, "app.log"))}`);
   rmSync(root, { recursive: true, force: true });
 }
 if (problems.length) {
