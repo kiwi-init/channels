@@ -210,13 +210,7 @@ jobs:
         run: |
           ditto -x -k "$(ls out/Channels-*-mac-arm64.zip)" "$RUNNER_TEMP/probe"
           app="$RUNNER_TEMP/probe/Channels.app/Contents"
-          runtime="$app/MacOS/bun"
-          if [ ! -e "$runtime" ]; then
-            runtime="$app/MacOS/main"
-            bun desktop/.hutch/devkit/api/jsc-host/bundle.ts desktop/scripts/package-probe.ts "$RUNNER_TEMP/package-probe.js"
-            export PACKAGE_PROBE_SELF="$RUNNER_TEMP/package-probe.js"
-          fi
-          bun desktop/scripts/package-probe.ts "$runtime" "$app/Resources/kiwi.js" "$app/Resources/app/bun/keys.js"
+          bun desktop/scripts/package-probe.ts "$app/MacOS/bun" "$app/Resources/kiwi.js" "$app/Resources/app/bun/keys.js"
           rm -rf "$RUNNER_TEMP/probe"
 
       - name: Upload
