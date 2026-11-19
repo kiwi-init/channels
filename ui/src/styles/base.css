@@ -1006,7 +1006,7 @@ kbd {
 }
 
 .toast-action {
-  padding: 3px 10px;
+  padding: 4px 10px;
   border: 0;
   border-radius: var(--r-ctl);
   background: color-mix(in srgb, var(--on-ink) 16%, transparent);

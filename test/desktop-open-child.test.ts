@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 
 import { externalUrl, type ExternalUrl } from "../desktop/src/guard.ts";
 import { openInBrowser } from "../desktop/src/open.ts";
+import { spawnOwned } from "./owned.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "kiwi-open-child-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -56,7 +57,7 @@ describe.skipIf(process.platform !== "linux")("a real xdg-open's stderr and pipe
     expect(performance.now() - started).toBeLessThan(1_000);
     const script = `import { openInBrowser } from ${JSON.stringify(resolve(import.meta.dir, "../desktop/src/open.ts"))};
 await openInBrowser("https://example.com/r", async () => {}, "linux", ${JSON.stringify(env)});`;
-    const app = Bun.spawn([process.execPath, "-e", script], { stdout: "ignore", stderr: "pipe" });
+    const app = spawnOwned([process.execPath, "-e", script], { stdout: "ignore", stderr: "pipe" });
     const appStarted = performance.now();
     const code = await app.exited;
     expect({ code, stderr: await new Response(app.stderr).text() }).toEqual({ code: 0, stderr: "" });
