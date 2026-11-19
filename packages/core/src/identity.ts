@@ -73,8 +73,10 @@ export async function sign<T extends object>(id: Identity, obj: T): Promise<T & 
   return { ...obj, pk: id.pk, sig: b64url(new Uint8Array(sig)) };
 }
 
-const verifyKeys = new Map<string, Promise<CryptoKey | null>>();
+const verifyKeys = new Map<string, Promise<CryptoKey>>();
 const MAX_VERIFY_KEYS = 4_096;
+const PK_BYTES = 32;
+const SIG_BYTES = 64;
 
 export class VerifyCouldNotRun extends Error {
   constructor(cause: unknown) {
@@ -83,13 +85,10 @@ export class VerifyCouldNotRun extends Error {
   }
 }
 
-const badInput = (e: unknown): boolean => e instanceof DOMException && e.name === "DataError";
-
-function verifyKey(pk: string, raw: Uint8Array<ArrayBuffer>): Promise<CryptoKey | null> {
+function verifyKey(pk: string, raw: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
   const known = verifyKeys.get(pk);
   if (known) return known;
   const key = crypto.subtle.importKey("raw", raw, ALG, false, ["verify"]).catch((e: unknown) => {
-    if (badInput(e)) return null;
     verifyKeys.delete(pk);
     throw new VerifyCouldNotRun(e);
   });
@@ -98,25 +97,26 @@ function verifyKey(pk: string, raw: Uint8Array<ArrayBuffer>): Promise<CryptoKey 
   return key;
 }
 
-/** Whether `obj.sig` is a valid signature by `obj.pk` over the rest of `obj`; throws VerifyCouldNotRun when WebCrypto fails on input it should take. */
+function decoded(s: string, bytes: number): Uint8Array<ArrayBuffer> | null {
+  try {
+    const out = fromB64url(s);
+    return out.length === bytes ? out : null;
+  } catch {
+    // A pk or sig that isn't base64url names no key or signature, so it can't verify.
+    return null;
+  }
+}
+
 export async function signedBy(signed: object): Promise<boolean> {
   const obj = signed as { pk?: unknown; sig?: unknown };
   if (typeof obj.pk !== "string" || typeof obj.sig !== "string") return false;
-  let raw: Uint8Array<ArrayBuffer>;
-  let sig: Uint8Array<ArrayBuffer>;
-  try {
-    raw = fromB64url(obj.pk);
-    sig = fromB64url(obj.sig);
-  } catch {
-    // A pk or sig that isn't base64url names no key or signature, so it can't verify.
-    return false;
-  }
+  const raw = decoded(obj.pk, PK_BYTES);
+  const sig = decoded(obj.sig, SIG_BYTES);
+  if (!raw || !sig) return false;
   const k = await verifyKey(obj.pk, raw);
-  if (!k) return false;
   try {
     return await crypto.subtle.verify(ALG, k, sig, new TextEncoder().encode(canonical({ ...obj, sig: undefined })));
   } catch (e) {
-    if (badInput(e)) return false;
     throw new VerifyCouldNotRun(e);
   }
 }

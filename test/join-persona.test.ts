@@ -87,7 +87,7 @@ test("a verifying token still reaches the owner as a pinned request", async () =
 const notSigned = async (persona: (token: string) => string) => {
   const { code, ownerCh, token } = await ownedWithInvite();
   const { exit, out, err } = await run(code, persona(token), "8s");
-  expect([exit, err]).toEqual([2, expect.stringContaining("this invite token failed verification")]);
+  expect([exit, err]).toEqual([2, expect.stringContaining("this invite token failed verification: it isn't signed by this channel's owner for this channel")]);
   expect(err).not.toMatch(/^\s+at /m);
   expect(out).not.toContain("asked to join");
   expect(await ownerCh.requests({})).toEqual([]);
