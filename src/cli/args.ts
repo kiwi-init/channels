@@ -50,7 +50,7 @@ function parse() {
         image: { type: "string", multiple: true },
         attach: { type: "string", multiple: true },
         option: { type: "string", multiple: true },
-        holds: { type: "string" },
+        holds: { type: "string", multiple: true },
         check: { type: "string" },
         decider: { type: "string" },
         artifact: { type: "string" },
