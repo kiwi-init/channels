@@ -4,7 +4,7 @@ import type { Member as Joined } from "@kiwi/core/membership.ts";
 import { wakeList } from "@kiwi/core/phone-wake.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { MAX_WAKE } from "@kiwi/core/push.ts";
-import type { ChannelState, Member } from "@kiwi/core/state.ts";
+import { handedOver, type ChannelState, type Member } from "@kiwi/core/state.ts";
 import type { ChannelIdentityView } from "../desktop/src/bridge.ts";
 import type { Keyring } from "../desktop/src/keyring.ts";
 import { Room } from "../ios/engine/room.ts";
@@ -103,9 +103,9 @@ describe("a phone's own sends", () => {
 });
 
 describe("a phone's answer to a question (#2514)", () => {
-  test("a tapped option goes out as a pick, so it answers even when the channel takes answers by tap", async () => {
+  async function phoneAnswering(...messages: Message[]): Promise<{ room: Room; sent: { body?: string; opts: SendOptions }[] }> {
     const joined = (name: string, over: Partial<Joined> = {}): Joined => ({ name, pk: pks(name)[0]!, xpk: "x", owner: false, at: 0, active: true, kind: "human", ...over });
-    const roster = [joined("jow", { owner: true, sponsor: jowUser }), joined("jow-phone", { sponsor: jowUser }), joined("lead", { kind: "agent" })];
+    const roster = [joined("jow", { owner: true, sponsor: jowUser }), joined("jow-phone", { sponsor: jowUser }), joined("lead", { kind: "agent" }), joined("wren", { kind: "agent" })];
     const sent: { body?: string; opts: SendOptions }[] = [];
     let deliver: (ev: unknown) => void = () => {};
     const keyring = {
@@ -114,7 +114,7 @@ describe("a phone's answer to a question (#2514)", () => {
         if (op === "members") return roster;
         if (op === "send" && opts) {
           sent.push({ body, opts });
-          return 2;
+          return 9;
         }
         return null;
       },
@@ -127,13 +127,28 @@ describe("a phone's answer to a question (#2514)", () => {
     const room = new Room(keyring, seat, { emit: () => {}, lost: () => {}, person: () => null, log: () => {}, devices: () => {} });
     await room.start();
     await new Promise((done) => setTimeout(done, 200));
+    for (const message of messages) deliver({ _tag: "Message", message, row: null });
+    return { room, sent };
+  }
+
+  test("a tapped option goes out as a pick, so it answers even when the channel takes answers by tap", async () => {
     const ask = { seq: 1, from: "lead", ts: 1, kind: "ask", body: "Take it now?", to: ["jow-phone"], choices: ["A", "B"], esc: true, sigOk: true } as unknown as Message;
-    deliver({ _tag: "Message", message: ask, row: null });
+    const { room, sent } = await phoneAnswering(ask);
     await room.answer(1, "A");
     room.stop();
     expect(sent).toHaveLength(1);
     expect(sent[0]?.body).toBe("A");
     expect(sent[0]?.opts).toMatchObject({ to: ["lead"], re: [1], kind: "msg", pick: true });
+  });
+
+  test("an answer to a question the lead relayed reaches the agent who asked it, as the desktop's does (#2520)", async () => {
+    const handed = { seq: 1, from: "wren", ts: 1, kind: "msg", body: handedOver("wren", "Count where?", { choices: ["A: after", "B: right"] }), to: ["lead"], sigOk: true } as unknown as Message;
+    const relayed = { seq: 2, from: "lead", ts: 2, kind: "ask", body: "Count where?", to: ["jow-phone"], re: [1], choices: ["A: after", "B: right"], esc: true, sigOk: true } as unknown as Message;
+    const { room, sent } = await phoneAnswering(handed, relayed);
+    await room.answer(2, "A");
+    room.stop();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.opts).toMatchObject({ to: ["lead", "wren"], re: [2, 1], kind: "msg", pick: true });
   });
 });
 

@@ -219,6 +219,14 @@ export function handedAskOf<M extends Pick<Message, "seq" | "from" | "to" | "bod
   return undefined;
 }
 
+export function answerAddress<M extends Pick<Message, "seq" | "from" | "to" | "body">>(
+  ask: Pick<Message, "seq" | "from" | "re">,
+  find: (seq: number) => M | undefined,
+): { to: string[]; re: number[] } {
+  const handed = handedAskOf(ask, find);
+  return handed ? { to: [ask.from, handed.from], re: [ask.seq, handed.seq] } : { to: [ask.from], re: [ask.seq] };
+}
+
 export interface HandedAsk {
   ask: Message;
   handed: Handed;

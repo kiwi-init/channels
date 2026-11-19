@@ -9,7 +9,7 @@ import { personaOf, type Persona } from "@kiwi/core/personality.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { handedNote } from "@kiwi/core/format.ts";
-import { handedAskOf, handedOver, handedTo, readHandedOver } from "@kiwi/core/state.ts";
+import { answerAddress, handedAskOf, handedOver, handedTo, readHandedOver } from "@kiwi/core/state.ts";
 import { unreadText, withHanded } from "../src/hooks/answer.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, kiwiCmd, pairComputer, setupChannel, type OwnerSetup, type PairedComputer } from "./owner.ts";
@@ -89,6 +89,14 @@ describe("readHandedOver: what the Lead's list reads back (T504)", () => {
     expect(handedAskOf({ from: "puma", re: [5] }, byNumber)).toBeUndefined();
     expect(handedAskOf({ from: "scout", re: [4] }, byNumber)).toBeUndefined();
     expect(handedAskOf({ from: "puma" }, byNumber)).toBeUndefined();
+  });
+
+  test("an answer to a handed ask goes to the lead and the asker, on both asks; any other answer keeps one of each (#2520)", () => {
+    const handed = { seq: 4, from: "wren", to: ["puma"], body: handedOver("wren", "Count where?", {}) };
+    const byNumber = (seq: number) => [handed].find((m) => m.seq === seq);
+    expect(answerAddress({ seq: 7, from: "puma", re: [4] }, byNumber)).toEqual({ to: ["puma", "wren"], re: [7, 4] });
+    expect(answerAddress({ seq: 8, from: "puma", re: [5] }, byNumber)).toEqual({ to: ["puma"], re: [8] });
+    expect(answerAddress({ seq: 9, from: "puma" }, byNumber)).toEqual({ to: ["puma"], re: [9] });
   });
 
   test("a bare question, and a message that isn't a hand-over", () => {

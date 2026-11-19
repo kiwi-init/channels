@@ -21,6 +21,7 @@ export {
   mayNameGoal,
   readHandedOver,
   handedAskOf,
+  answerAddress,
   type AskGroup,
   type HandedAsk,
 } from "./state/asks.ts";
