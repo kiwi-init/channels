@@ -184,6 +184,28 @@ test("a swap never pulls the app from under a Channels that was opened again fro
   }
 }, 20_000);
 
+test("the kiwi daemon and hook listeners running on the app's bun don't stop the swap: they outlive the app, so the update goes in", async () => {
+  const f = swapFixture();
+  const bun = join(f.target, "Contents", "MacOS", "bun");
+  const cli = join(f.target, "Contents", "Resources", "kiwi.js");
+  mkdirSync(join(f.target, "Contents", "MacOS"), { recursive: true });
+  mkdirSync(join(f.target, "Contents", "Resources"), { recursive: true });
+  copyFileSync(process.execPath, bun, constants.COPYFILE_FICLONE);
+  writeFileSync(cli, "setTimeout(() => {}, 60000);");
+  const daemon = spawnOwned([bun, "--no-env-file", "--no-install", cli, "daemon"], { stdio: ["ignore", "ignore", "ignore"] });
+  try {
+    await Bun.sleep(500);
+    const script = swapScript({ ...f, version: "0.20.0", relaunch: false });
+    expect(spawnOwnedSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
+    expect(readFileSync(join(f.target, "v"), "utf8")).toBe("new");
+    expect(existsSync(f.dir)).toBe(false);
+  } finally {
+    daemon.kill();
+    await daemon.exited;
+    rmSync(f.root, { recursive: true, force: true });
+  }
+}, 20_000);
+
 test("a Channels still closing when the swap starts doesn't stop it: the swap waits for it to go", async () => {
   const f = swapFixture();
   const exe = join(f.target, "Contents", "MacOS", "Channels");

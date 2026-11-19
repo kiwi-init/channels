@@ -87,7 +87,7 @@ export function swapScript(o: SwapPlan): string {
     "#!/bin/sh",
     `while kill -0 ${o.pid} 2>/dev/null; do sleep 0.2; done`,
     `t=${q(o.target)}`,
-    `running() { /bin/ps -axo command= | T="$t/Contents/MacOS/" /usr/bin/awk 'index($0, ENVIRON["T"]) == 1 { found = 1 } END { exit !found }'; }`,
+    `running() { /bin/ps -axo command= | T="$t/Contents/MacOS/" K="$t/Contents/Resources/kiwi.js" /usr/bin/awk 'index($0, ENVIRON["T"]) == 1 && !index($0, ENVIRON["K"]) { found = 1 } END { exit !found }'; }`,
     `n=0; while running && [ "$n" -lt ${RELAUNCHED_TRIES} ]; do n=$((n + 1)); sleep 0.2; done`,
     `if running; then exit 0; fi`,
     `mkdir -p ${q(path.dirname(o.target))} 2>/dev/null`,
