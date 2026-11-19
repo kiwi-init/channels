@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -25,7 +25,13 @@ function web(url: string): ExternalUrl {
   return checked;
 }
 
-const open = (env: Record<string, string>) => openInBrowser(web("https://example.com/r"), async () => {}, "linux", env);
+const open = (env: Record<string, string>, stillOpeningMs?: number) => openInBrowser(web("https://example.com/r"), async () => {}, "linux", env, undefined, stillOpeningMs);
+
+async function statusOf(file: string, withinMs: number): Promise<string> {
+  const until = performance.now() + withinMs;
+  while (!existsSync(file) && performance.now() < until) await Bun.sleep(50);
+  return existsSync(file) ? readFileSync(file, "utf8").trim() : "never wrote: killed by SIGPIPE";
+}
 
 describe.skipIf(process.platform !== "linux")("a real xdg-open's stderr and pipes (#2534)", () => {
   test("after 6.8 KB of noise, the reason is still the final stderr line", async () => {
@@ -55,5 +61,19 @@ await openInBrowser("https://example.com/r", async () => {}, "linux", ${JSON.str
     const code = await app.exited;
     expect({ code, stderr: await new Response(app.stderr).text() }).toEqual({ code: 0, stderr: "" });
     expect(performance.now() - appStarted).toBeLessThan(2_000);
+  });
+
+  test("a browser xdg-open still waits on past the bound can write to stderr afterwards and lives on", async () => {
+    const status = join(dir, "foreground.status");
+    const env = opener("foreground", `sleep 0.6\necho "browser says something" >&2\necho "wrote $?" > ${status}`);
+    await expect(open(env, 200)).resolves.toBeUndefined();
+    expect(await statusOf(status, 3_000)).toBe("wrote 0");
+  });
+
+  test("a browser left running after xdg-open exits can write to stderr afterwards and lives on", async () => {
+    const status = join(dir, "left.status");
+    const env = opener("left", `(sleep 0.6; echo "browser says something" >&2; echo "wrote $?" > ${status}) &\nexit 0`);
+    await expect(open(env)).resolves.toBeUndefined();
+    expect(await statusOf(status, 3_000)).toBe("wrote 0");
   });
 });

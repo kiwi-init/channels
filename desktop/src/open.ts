@@ -15,7 +15,7 @@ interface Opener {
   once(event: "spawn", cb: () => void): unknown;
   once(event: "error", cb: (err: Error) => void): unknown;
   once(event: "exit", cb: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
-  stderr: { on(event: "data", cb: (chunk: Buffer | string) => void): unknown; once(event: "close", cb: () => void): unknown; destroy(): void } | null;
+  stderr: { on(event: "data", cb: (chunk: Buffer | string) => void): unknown; once(event: "close", cb: () => void): unknown } | null;
   unref(): void;
 }
 
@@ -40,6 +40,10 @@ function hear(heard: Heard, text: string): void {
   heard.kdeBranch ||= KDE_BRANCH.test(seen);
   heard.kfmclientMissing ||= KFMCLIENT_MISSING.exec(seen)?.[0] ?? "";
   heard.tail = seen.slice(-STDERR_TAIL);
+}
+
+function letGo(stderr: object | null): void {
+  if (stderr && "unref" in stderr && typeof stderr.unref === "function") stderr.unref();
 }
 
 type Ran = { kind: "opened" } | { kind: "failed"; reason: string } | { kind: "missing" };
@@ -85,7 +89,7 @@ function run(launch: Launch, cmd: string, args: string[], env: Record<string, st
       if (done) return;
       done = true;
       clearTimeout(timer);
-      child.stderr?.destroy();
+      letGo(child.stderr);
       resolve(ran);
     };
     child.stderr?.on("data", (chunk) => hear(heard, chunk.toString()));

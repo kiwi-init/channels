@@ -35,10 +35,10 @@ type Acts = "missing" | "running" | { exit: number; stderr?: string };
 
 function fakeLaunch(fail = false, missing: readonly string[] = fail ? ["xdg-open", "gio"] : [], acts: Record<string, Acts> = {}) {
   const calls: { cmd: string; args: string[]; env: Record<string, string>; detached: boolean }[] = [];
-  const destroyed: string[] = [];
+  const unrefed: string[] = [];
   const launch: Launch = (cmd, args, opts) => {
     calls.push({ cmd, args, env: opts.env, detached: opts.detached });
-    const stderr = Object.assign(new EventEmitter(), { destroy: () => void destroyed.push(cmd) });
+    const stderr = Object.assign(new EventEmitter(), { unref: () => void unrefed.push(cmd) });
     const child = Object.assign(new EventEmitter(), { unref: () => {}, stderr });
     const act: Acts = missing.includes(cmd) ? "missing" : (acts[cmd] ?? { exit: 0 });
     queueMicrotask(() => {
@@ -51,7 +51,7 @@ function fakeLaunch(fail = false, missing: readonly string[] = fail ? ["xdg-open
     });
     return child;
   };
-  return { launch, calls, destroyed };
+  return { launch, calls, unrefed };
 }
 
 const NOV_17 = [
@@ -122,11 +122,11 @@ describe("links leave the app for the person's own browser", () => {
   });
 
   test("on Linux an opener that keeps running counts as opened within the bound, and a clean exit shows nothing (#2534)", async () => {
-    const { launch, destroyed } = fakeLaunch(false, [], { "xdg-open": "running" });
+    const { launch, unrefed } = fakeLaunch(false, [], { "xdg-open": "running" });
     const started = performance.now();
     await openInBrowser(web("https://example.com/f"), async () => {}, "linux", KIWI_ENV, launch, 50);
     expect(performance.now() - started).toBeLessThan(1_000);
-    expect(destroyed).toEqual(["xdg-open"]);
+    expect(unrefed).toEqual(["xdg-open"]);
     await expect(openInBrowser(web("https://example.com/g"), async () => {}, "linux", KIWI_ENV, fakeLaunch().launch)).resolves.toBeUndefined();
   });
 
