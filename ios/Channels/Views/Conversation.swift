@@ -135,7 +135,7 @@ struct Conversation: View {
                 if near { follow.unseen = 0 }
             }
             .onScrollGeometryChange(for: Bool.self) { geo in
-                geo.contentSize.height > 0 && geo.visibleRect.minY > geo.contentSize.height - 24
+                geo.contentSize.height > 0 && geo.visibleRect.minY + geo.contentInsets.top > geo.contentSize.height - 24
             } action: { _, past in
                 if past { position.scrollTo(edge: .bottom) }
             }
