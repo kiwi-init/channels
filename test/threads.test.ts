@@ -101,6 +101,16 @@ describe("agents in threads", () => {
     expect(await ok(dev2, "send", "--to", "@lead", "one more")).toContain("to lead (direct)");
     expect(await fails(dev2, "send", "--to", `@lead,${task}`, "both")).toContain("--to names one place");
 
+    // A room named with --to wins over the task dev is doing (#2546); with no --to, the task's thread still does.
+    await ok(owner, "--as", "human", "room", "create", "design");
+    const roomSent = await ok(dev, "send", "--to", "#design", "mockups are up");
+    expect(roomSent).toContain("in #design");
+    expect(roomSent).not.toContain("thread");
+    const roomLine = (await ok(dev, "log", "-n", "50")).split("\n").find((l) => l.includes("mockups are up"));
+    expect(roomLine).toContain("[#design]");
+    expect(roomLine).not.toContain(`[${task}]`);
+    expect(await ok(dev, "send", "still on the lockfile")).toContain(`in ${task}'s thread`);
+
     // dev2, not on the task, asks in its thread: the answer in that conversation reaches dev2.
     const q = /#(\d+)/.exec(await ok(dev2, "send", "--task", task, "which lockfile?"))![1]!;
     await ok(dev, "send", "--re", q, "bun.lock");

@@ -48,12 +48,14 @@ export function summarize(placeOf: Map<number, Place>, tasks: Map<number, Task>,
 export interface ThreadAsk {
   task?: number;
   main?: boolean;
+  room?: string;
   dm?: string;
   reply?: boolean;
 }
 
 export interface ThreadChoice {
   task?: number;
+  room?: string;
   dm?: true;
   to?: string[];
   doing?: number;
@@ -61,9 +63,11 @@ export interface ThreadChoice {
 }
 
 export function chooseThread(state: Pick<ChannelState, "tasks" | "lead">, me: string, a: ThreadAsk): ThreadChoice | string {
-  if ([a.task !== undefined, !!a.main, !!a.dm].filter(Boolean).length > 1) return "say one place: a task (--to T7), #general (--to '#general') or a direct thread (--to @name)";
+  if ([a.task !== undefined, !!a.main, !!a.room, !!a.dm].filter(Boolean).length > 1)
+    return "say one place: a task (--to T7), #general (--to '#general'), a room (--to '#room') or a direct thread (--to @name)";
   if (a.dm) return { to: [a.dm], dm: true };
   if (a.task !== undefined) return { task: a.task };
+  if (a.room) return { room: a.room };
   if (a.main || a.reply || state.lead === me) return {};
   const doing = [...state.tasks.values()].filter((t) => t.owner === me && t.state === "doing").map((t) => t.id);
   if (doing.length === 1) return { task: doing[0]!, doing: doing[0]! };
@@ -73,6 +77,7 @@ export function chooseThread(state: Pick<ChannelState, "tasks" | "lead">, me: st
 export function wentTo(c: ThreadChoice): string {
   if (c.dm && c.to) return ` to ${c.to[0]} (direct)`;
   if (c.task !== undefined) return ` in ${taskId(c.task)}'s thread${c.doing !== undefined ? " (the task you're doing; --to '#general' for the main conversation)" : ""}`;
+  if (c.room) return ` in #${c.room}`;
   if (c.several) return ` in the main conversation: you're doing ${c.several.map(taskId).join(" and ")}, so say which with --to T7`;
   return "";
 }

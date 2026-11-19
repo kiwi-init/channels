@@ -115,7 +115,14 @@ export const messageCommands: Record<string, Command> = {
         const named = opt.task === undefined ? where.task : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
         const dm = opt.dm ?? where.dm;
         const reArgs = [...(list(opt.re) ?? []), ...(where.re ?? []).map(String)];
-        const chosen = chooseThread(state, s.me, { ...(named !== undefined ? { task: named } : {}), main: opt.main || where.main, ...(dm ? { dm } : {}), reply: reArgs.length > 0 });
+        const room = opt.room ?? where.room;
+        const chosen = chooseThread(state, s.me, {
+          ...(named !== undefined ? { task: named } : {}),
+          main: opt.main || where.main,
+          ...(room ? { room } : {}),
+          ...(dm ? { dm } : {}),
+          reply: reArgs.length > 0,
+        });
         if (typeof chosen === "string") return yield* die(chosen);
         const to = chosen.to ?? where.to;
         const kind = (opt.kind ?? "msg") as Kind;
@@ -124,7 +131,6 @@ export const messageCommands: Record<string, Command> = {
         const imgs = yield* images;
         const files = yield* attachments(s);
         const asking = opt.ask || !!opt.wait;
-        const room = opt.room ?? where.room;
         const doc =
           !asking && kind === "msg" ? docPlaceOf(state, { ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}), ...(room ? { room } : {}), re }) : null;
         const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
