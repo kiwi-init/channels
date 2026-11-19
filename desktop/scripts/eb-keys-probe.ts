@@ -55,7 +55,7 @@ function afterDone(other: number): string {
   }
 }
 
-const CHILD = `const fs = require("node:fs"); const open = []; for (let f = 3; f < 256; f++) { try { if (fs.fstatSync(f).isSocket()) open.push(f); } catch { /* not open, so not passed on */ } } console.log(JSON.stringify({ sockets: open, env: process.env.${KEY_FD_ENV} ?? null }));`;
+const CHILD = `my @s; for my $f (3 .. 255) { open(my $h, "+<&=", $f) or next; push @s, $f if -S $h; } my $e = $ENV{${KEY_FD_ENV}}; print "{\\"sockets\\":[" . join(",", @s) . "],\\"env\\":" . (defined $e ? "\\"$e\\"" : "null") . "}\\n";`;
 
 const O_CLOEXEC = 0x01000000;
 const F_GETFD = 1;
@@ -93,12 +93,10 @@ function channelCloexec(other: number): string {
 
 function nativeChild(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-probe-"));
-  const script = path.join(dir, "child.js");
   const out = path.join(dir, "out");
-  fs.writeFileSync(script, CHILD);
   const c = libc();
   try {
-    c.symbols.system(ptr(Buffer.from(`'${process.execPath}' '${script}' > '${out}' 2>&1\0`, "utf8")));
+    c.symbols.system(ptr(Buffer.from(`/usr/bin/perl -e '${CHILD}' > '${out}' 2>&1\0`, "utf8")));
     return fs.readFileSync(out, "utf8").trim();
   } finally {
     c.close();
@@ -143,7 +141,7 @@ async function probe(): Promise<ProbeReport> {
   });
   report["after"] = { ok: afterDone(other) };
   fs.closeSync(other);
-  const child = spawnSync(process.execPath, ["-e", CHILD], { encoding: "utf8" });
+  const child = spawnSync("/usr/bin/perl", ["-e", CHILD], { encoding: "utf8" });
   report["child"] = { ok: child.stdout.trim() || child.stderr.trim() };
   return report;
 }
