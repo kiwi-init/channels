@@ -36,9 +36,10 @@ interface Heard {
 }
 
 function hear(heard: Heard, text: string): void {
-  heard.tail = (heard.tail + text).slice(-STDERR_TAIL);
-  heard.kdeBranch ||= KDE_BRANCH.test(heard.tail);
-  heard.kfmclientMissing ||= KFMCLIENT_MISSING.exec(heard.tail)?.[0] ?? "";
+  const seen = heard.tail + text;
+  heard.kdeBranch ||= KDE_BRANCH.test(seen);
+  heard.kfmclientMissing ||= KFMCLIENT_MISSING.exec(seen)?.[0] ?? "";
+  heard.tail = seen.slice(-STDERR_TAIL);
 }
 
 type Ran = { kind: "opened" } | { kind: "failed"; reason: string } | { kind: "missing" };

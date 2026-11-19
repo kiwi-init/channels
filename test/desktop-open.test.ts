@@ -115,6 +115,12 @@ describe("links leave the app for the person's own browser", () => {
     expect(generic.calls.map((c) => c.cmd)).toEqual(["xdg-open"]);
   });
 
+  test("on Linux the Nov 17 verdict doesn't depend on how the pipe batches: KDE's branch, 6.8 KB of noise and the missing kfmclient in one write still fail (#2534)", async () => {
+    const oneWrite = ["Selected DE kde", "x".repeat(6_800), "/usr/bin/xdg-open: line 757: kfmclient: command not found", ""].join("\n");
+    const { launch } = fakeLaunch(false, [], { "xdg-open": { exit: 0, stderr: oneWrite } });
+    await expect(openInBrowser(web("https://example.com/h"), async () => {}, "linux", KIWI_ENV, launch)).rejects.toThrow("isn't installed: /usr/bin/xdg-open: line 757: kfmclient: command not found");
+  });
+
   test("on Linux an opener that keeps running counts as opened within the bound, and a clean exit shows nothing (#2534)", async () => {
     const { launch, destroyed } = fakeLaunch(false, [], { "xdg-open": "running" });
     const started = performance.now();
