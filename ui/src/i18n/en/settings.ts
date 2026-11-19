@@ -84,6 +84,7 @@ const words = {
   "settings.sections.update.restart": "Restart to update",
   "settings.sections.update.out": "{version} is out",
   "settings.sections.update.blocked": "This copy can't replace itself where it is.",
+  "settings.sections.update.stuck": "This version can't install updates by itself. Get this one once, and updates work on their own again.",
   "settings.sections.update.on": "You're on {version}.",
   "settings.sections.update.get": "Get it",
   "settings.sections.update.download": "Download and restart",

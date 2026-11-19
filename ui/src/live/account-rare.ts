@@ -6,7 +6,7 @@ import { Plain } from "~/kit/failed"
 import { announce } from "~/kit/toasts"
 import { devices, enrollAsk, github, githubBusy, githubCode, githubGate, listenForCodes, moved, selfEnroll } from "~/live/account"
 import { postDevicesNow } from "~/live/devices"
-import { downloadAndRestart } from "~/live/update"
+import { downloadAndRestart, stuckHere } from "~/live/update"
 import type { KeptAgent, LaunchedAgent } from "~/model"
 
 const ENROLLING_MS = 2_000
@@ -198,7 +198,7 @@ export async function setRelay(url: string): Promise<void> {
 export async function installUpdate(): Promise<void> {
   const b = bridge()
   if (!b) throw new Error(t("live.account.updates.desktop"))
-  await downloadAndRestart(b, announce)
+  await downloadAndRestart(b, announce, () => stuckHere(b))
 }
 
 export async function applyUi(): Promise<void> {

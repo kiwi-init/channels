@@ -10,6 +10,7 @@ import { announce } from "~/kit/toasts"
 import { deviceNews } from "~/live/devices"
 import { paced } from "~/live/paced"
 import { store, type Listener } from "~/live/value"
+import { stuckHere } from "~/live/update"
 import { useOwnAgents } from "~/live/wakes"
 import type { Account, Computer, Device, EnrollAsk, Enrolling, GithubSignIn } from "~/model"
 import { version } from "../../../package.json"
@@ -249,6 +250,25 @@ export const moved = (() => {
   }
 })()
 
+const stuckSwap = (() => {
+  const value = store<boolean>(false)
+  let started = false
+  return {
+    get: value.get,
+    subscribe: (l: Listener) => {
+      if (!started) {
+        started = true
+        const b = bridge()
+        if (b && typeof b.daemonStatus === "function")
+          void stuckHere(b)
+            .then(value.set)
+            .catch(() => {})
+      }
+      return value.subscribe(l)
+    },
+  }
+})()
+
 export function useAccount(): Account | null {
   const { person, computers, phones } = useSecrets()
   const update = useUpdate()
@@ -259,6 +279,7 @@ export function useAccount(): Account | null {
   const gate = useSyncExternalStore(githubGate.subscribe, githubGate.get)
   const look = useSyncExternalStore(uiUpdate.subscribe, uiUpdate.get)
   const home = useSyncExternalStore(moved.subscribe, moved.get)
+  const stuck = useSyncExternalStore(stuckSwap.subscribe, stuckSwap.get)
   const enroll = useSyncExternalStore(enrollAsk.subscribe, enrollAsk.get)
   const trouble = useSyncExternalStore(enrollTrouble.subscribe, enrollTrouble.get)
   const signed = useSyncExternalStore(devices.subscribe, devices.get)
@@ -276,17 +297,19 @@ export function useAccount(): Account | null {
       ...(gate === "signed-in" ? { githubSignIn: true } : {}),
       computers: [...computers.map((c) => computerOf(c, online, agents)), ...phones.map(phoneOf)],
       version,
-      ...(update
-        ? {
-            update: {
-              version: update.version,
-              ready: update.state === "ready",
-              state: update.state,
-              ...(update.state === "downloading" && update.progress !== undefined ? { progress: update.progress } : {}),
-              ...(update.blocked ? { blocked: true as const } : {}),
-            },
-          }
-        : {}),
+      ...(update && stuck
+        ? { update: { version: update.version, ready: false, state: "available" as const, blocked: true as const, stuck: true as const } }
+        : update
+          ? {
+              update: {
+                version: update.version,
+                ready: update.state === "ready",
+                state: update.state,
+                ...(update.state === "downloading" && update.progress !== undefined ? { progress: update.progress } : {}),
+                ...(update.blocked ? { blocked: true as const } : {}),
+              },
+            }
+          : {}),
       ...(look ? { uiUpdate: look } : {}),
       ...(home ? { moved: home } : {}),
       key: person.pk.slice(0, 8),

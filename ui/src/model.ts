@@ -714,7 +714,7 @@ export interface Account {
   githubSignIn?: boolean
   computers: Computer[]
   version: string
-  update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available"; progress?: number; blocked?: true }
+  update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available"; progress?: number; blocked?: true; stuck?: true }
   uiUpdate?: { version: string }
   moved?: { from?: string; to: string }
   key?: string

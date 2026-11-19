@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import type { UpdateCheckView, UpdateView } from "@kiwi/secrets/secrets.ts"
-import { downloadAndRestart, type Updater } from "~/live/update"
+import { downloadAndRestart, macDownload, swapStuck, type Updater } from "~/live/update"
 
 const URL = "https://github.com/kiwi-init/channels/releases/tag/v2026.10.8"
 const at = (state: UpdateView["state"], extra: Partial<UpdateView> = {}): UpdateView => ({ version: "2026.10.8", state, url: URL, ...extra })
@@ -102,9 +102,40 @@ describe("Download and restart", () => {
     expect(f.said).toEqual(["Channels is up to date"])
   })
 
+  test("a Mac whose app can't swap itself (2026.11.16 to 2026.11.24) opens the new version's dmg instead of restarting into nothing", async () => {
+    const dmg = "https://github.com/kiwi-init/channels/releases/download/v2026.10.8/Channels-2026.10.8-mac-arm64.dmg"
+    const ready = fake(at("ready"), at("ready"))
+    await downloadAndRestart(ready.b, ready.say, async () => true)
+    expect(ready.calls).toEqual([`open ${dmg}`])
+    const unknown = fake(null, at("ready"))
+    await downloadAndRestart(unknown.b, unknown.say, async () => true)
+    expect(unknown.calls).toEqual(["check", `open ${dmg}`])
+    const current = fake(null, { state: "current", version: "2026.10.8" })
+    await downloadAndRestart(current.b, current.say, async () => true)
+    expect(current.said).toEqual(["Channels is up to date"])
+  })
+
   test("GitHub not answering is an error the toast shows", async () => {
     const f = fake(at("available"), { state: "failed" })
     await expect(downloadAndRestart(f.b, f.say)).rejects.toThrow("GitHub didn't answer, try again in a minute")
     expect(f.calls).toEqual(["check"])
+  })
+})
+
+describe("Macs that can't swap themselves", () => {
+  test("only a Mac whose daemon is 2026.11.16 to 2026.11.24", () => {
+    expect(swapStuck("MacIntel", "2026.11.16")).toBe(true)
+    expect(swapStuck("MacIntel", "2026.11.24")).toBe(true)
+    expect(swapStuck("MacIntel", "2026.11.15")).toBe(false)
+    expect(swapStuck("MacIntel", "2026.11.25")).toBe(false)
+    expect(swapStuck("Linux x86_64", "2026.11.20")).toBe(false)
+    expect(swapStuck("MacIntel", undefined)).toBe(false)
+  })
+
+  test("the dmg sits beside the release page, and a page that isn't a release stays as it is", () => {
+    expect(macDownload({ version: "2026.11.25", url: "https://github.com/kiwi-init/channels/releases/tag/v2026.11.25" })).toBe(
+      "https://github.com/kiwi-init/channels/releases/download/v2026.11.25/Channels-2026.11.25-mac-arm64.dmg"
+    )
+    expect(macDownload({ version: "2026.11.25", url: "https://example.com/x" })).toBe("https://example.com/x")
   })
 })

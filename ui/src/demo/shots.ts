@@ -180,6 +180,8 @@ export const SHOTS: Record<string, Shot> = {
   "settings-update-available": { scenario: "update-available", channel: "kiwi", nav: { page: "settings", section: "about" } },
   "settings-update-downloading": { scenario: "update-downloading", channel: "kiwi", nav: { page: "settings", section: "about" } },
   "settings-update-blocked": { scenario: "update-blocked", channel: "kiwi", nav: { page: "settings", section: "about" } },
+  "settings-update-stuck": { scenario: "update-stuck", channel: "kiwi", nav: { page: "settings", section: "about" } },
+  "updates-stuck": { scenario: "update-stuck", channel: "kiwi" },
   "settings-about": kiwi({ page: "settings", section: "about" }),
   "channel-settings-guest": { scenario: "full", channel: "studio", nav: { modal: { kind: "channel" } } },
   "agent-manager": { scenario: "full", channel: "studio", nav: { modal: { kind: "person", name: "quill" } } },

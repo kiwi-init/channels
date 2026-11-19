@@ -334,6 +334,7 @@ export type Scenario =
   | "update-available"
   | "update-downloading"
   | "update-blocked"
+  | "update-stuck"
   | "update-moved"
   | "update-moved-mac"
   | "enroll"
@@ -555,6 +556,8 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
   if (scenario === "link-stuck") return { account: { ...DEMO_ACCOUNT, enrollError: "this app isn't in your device list any more" }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-downloading")
     return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "downloading", progress: 0.42 } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
+  if (scenario === "update-stuck")
+    return { account: { ...DEMO_ACCOUNT, update: { version: "2026.11.25", ready: false, state: "available", blocked: true, stuck: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-blocked")
     return { account: { ...DEMO_ACCOUNT, update: { version: "2026.10.8", ready: false, state: "available", blocked: true } }, tiles: DEMO_TILES, channels, prefs, seq: 1000 }
   if (scenario === "update-moved")

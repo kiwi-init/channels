@@ -83,6 +83,7 @@ export default {
   "settings.sections.update.restart": "再起動してアップデート",
   "settings.sections.update.out": "{version} が公開されました",
   "settings.sections.update.blocked": "このコピーは、今の場所では自分自身を置き換えられません。",
+  "settings.sections.update.stuck": "このバージョンは自分でアップデートを入れられません。今回だけ手動で入れると、次からは自動に戻ります。",
   "settings.sections.update.on": "現在は {version} です。",
   "settings.sections.update.get": "入手",
   "settings.sections.update.download": "ダウンロードして再起動",
