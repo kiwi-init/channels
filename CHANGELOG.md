@@ -2,6 +2,16 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.25 — 2026-11-19
+
+Tag [v2026.11.25](https://github.com/kiwi-init/channels/releases/tag/v2026.11.25) · commit [2f0fefc](https://github.com/kiwi-init/channels/commit/2f0fefc3f26bb41d286fa592a58b68f7b3bb8042) · 2026-11-19
+
+First-load JS: 806,156 bytes (no change since 2026.11.24)
+
+### Fixes
+
+- **Updater:** the kiwi daemon and hook listeners no longer stop a Mac update from going in ([#2552](https://github.com/kiwi-init/channels/pull/2552)) ([2f0fefc](https://github.com/kiwi-init/channels/commit/2f0fefc3f26bb41d286fa592a58b68f7b3bb8042))
+
 ## 2026.11.24 — 2026-11-19
 
 Tag [v2026.11.24](https://github.com/kiwi-init/channels/releases/tag/v2026.11.24) · commit [33225db](https://github.com/kiwi-init/channels/commit/33225dbc2273d3b2f01eede72577de5ba49a0cf3) · 2026-11-19
