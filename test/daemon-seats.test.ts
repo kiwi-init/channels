@@ -269,6 +269,42 @@ describe("seats always on", () => {
     }
   });
 
+  test("a held Cursor seat isn't announced as woken by a listener that's still attached (T15716)", async () => {
+    const record: SeatRecord = { alias: "test", as: "claude", harness: "cursor", session: "chat-1" };
+    saveConfig({ ...loadConfig(), bindings: { "/cursor": record } });
+    try {
+      const channel = loadConfig().channels.test;
+      if (!channel) throw new Error("the test channel is missing");
+      const s = await AgentSession.open("test", channel, "claude");
+      let heldWhileAttached = false;
+      let heldFrom: number | null = null;
+      const holdIt = async () => {
+        const seat = await seatOf("claude");
+        if (heldFrom === null && seat?.wake.path.kind === "listener") {
+          heldFrom = from(claudePk).length;
+          saveConfig({ ...loadConfig(), bindings: { "/cursor": { ...record, hold: { key: "loop-key", at: Date.now() } } } });
+        }
+        const path = seat?.wake.path;
+        const attachedUnwoken =
+          heldFrom !== null &&
+          from(claudePk)
+            .slice(heldFrom)
+            .some((p) => p.reach === "listening" && p.wake === undefined);
+        heldWhileAttached = attachedUnwoken && path?.kind === "none" && path.why.startsWith("its loop holds it between sessions");
+        return heldWhileAttached;
+      };
+      await runAgent(
+        Effect.raceFirst(
+          s.listen(() => Effect.void, {}),
+          Effect.promise(() => until("the hold to win over the attached listener", holdIt)),
+        ),
+      );
+      expect(heldWhileAttached).toBe(true);
+    } finally {
+      saveConfig({ ...loadConfig(), bindings: omit(loadConfig().bindings ?? {}, "/cursor") });
+    }
+  });
+
   test("a MiMoCode seat is announced as woken by Kiwi's plugin only while the plugin's listener runs, and kiwi wake says why not", async () => {
     const mimoDir = mkdtempSync(join(tmpdir(), "kiwi-daemon-seats-mimo-"));
     const prevMimo = process.env.KIWI_MIMO_DIR;

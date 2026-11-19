@@ -57,8 +57,8 @@ export function listenedPath(path: WakePath, listening: boolean, idle = false): 
     : { kind: "none", why: "Kiwi's Pi extension has no listener running for this session (/reload in Pi starts it again)" };
 }
 
-export function pulledPath(path: WakePath, harness: WakeHarness | undefined, attached: boolean): WakePath {
-  return attached && path.kind === "none" && pullsWake(harness) ? { kind: "listener" } : path;
+export function pulledPath(path: WakePath, seat: { harness?: WakeHarness; held?: boolean } | null, attached: boolean): WakePath {
+  return attached && path.kind === "none" && !seat?.held && pullsWake(seat?.harness) ? { kind: "listener" } : path;
 }
 
 export function viaOf(path: WakePath): WakeVia | null {

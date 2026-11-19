@@ -189,15 +189,24 @@ describe("wake paths, commands and words", () => {
   });
 
   test("a seat that pulls its wakes is woken via its listener only while one is attached (T15716)", () => {
-    const cursor = wakePath({ harness: "cursor", session: "chat-1" }, true);
-    expect(pulledPath(cursor, "cursor", true)).toEqual({ kind: "listener" });
-    expect(viaOf(pulledPath(cursor, "cursor", true))).toBe("listener");
-    const unarmed = pulledPath(cursor, "cursor", false);
+    const seat = { harness: "cursor" as const, session: "chat-1" };
+    const cursor = wakePath(seat, true);
+    expect(pulledPath(cursor, seat, true)).toEqual({ kind: "listener" });
+    expect(viaOf(pulledPath(cursor, seat, true))).toBe("listener");
+    const unarmed = pulledPath(cursor, seat, false);
     expect(unarmed.kind === "none" && unarmed.why.startsWith("its background listener isn't running")).toBe(true);
     const gemini = wakePath({ harness: "gemini", session: "g" }, true);
-    expect(pulledPath(gemini, "gemini", true)).toBe(gemini);
+    expect(pulledPath(gemini, { harness: "gemini" }, true)).toBe(gemini);
     const codex = wakePath({ harness: "codex", session: "t" }, true);
-    expect(pulledPath(codex, "codex", true)).toBe(codex);
+    expect(pulledPath(codex, { harness: "codex" }, true)).toBe(codex);
+  });
+
+  test("a held seat stays unwakeable even with a listener still attached (T15716)", () => {
+    const held = { harness: "cursor" as const, session: "chat-1", held: true };
+    const path = wakePath(held, true);
+    expect(path.kind === "none" && path.why.startsWith("its loop holds it between sessions")).toBe(true);
+    expect(pulledPath(path, held, true)).toBe(path);
+    expect(viaOf(pulledPath(path, held, true))).toBeNull();
   });
 
   test("Kimi Code and Grok are told the exact tool call that keeps them wakeable", () => {

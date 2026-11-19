@@ -11,6 +11,7 @@ import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { listenedPath, pulledPath, viaOf } from "@kiwi/core/wake.ts";
+import { seatHeldAway } from "../hold.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import {
   DAEMON_PROTOCOL,
@@ -190,7 +191,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const livePath = async (cfg: Config, seat: Seat, attached: Attached, activity = seat.activity) =>
     pulledPath(
       listenedPath(await pathOf(cfg, seat.alias, seat.agent), listenedLately(seat, attached), activity?.state === "idle"),
-      seatRecordFor(cfg, seat.alias, seat.agent)?.harness,
+      { harness: seatRecordFor(cfg, seat.alias, seat.agent)?.harness, held: seatHeldAway(cfg, seat.alias, seat.agent, {}) },
       attached === "listener",
     );
 
