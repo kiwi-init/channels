@@ -1,4 +1,4 @@
-import { appendFileSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, statSync } from "node:fs";
 import { LEDGER_ENV, ledgerLine, OWNER_ENV } from "../scripts/ci-owned.ts";
 
 const ledger = (): string | undefined => process.env[LEDGER_ENV];
@@ -37,4 +37,14 @@ export function spawnOwnedSync<const In extends Bun.SpawnOptions.Writable = "ign
 export function ledgerSize(path = ledger()): number {
   if (!path) return 0;
   return statSync(path, { throwIfNoEntry: false })?.size ?? 0;
+}
+
+export async function pidIn(file: string, ms = 10_000): Promise<number> {
+  const end = Date.now() + ms;
+  for (;;) {
+    const pid = existsSync(file) ? Number(readFileSync(file, "utf8")) : 0;
+    if (Number.isSafeInteger(pid) && pid > 0) return pid;
+    if (Date.now() >= end) throw new Error(`no pid in ${file} after ${ms} ms`);
+    await Bun.sleep(20);
+  }
 }
