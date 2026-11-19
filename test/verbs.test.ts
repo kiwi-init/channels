@@ -386,6 +386,25 @@ describe("review rounds through the CLI", () => {
     expect(elsewhere).not.toContain("also open on");
   });
 
+  test("ask-human holds every task given, whether --holds repeats or lists them with commas (#2545)", async () => {
+    const pair = async (what: string) => [taskNo(await ok(dev, "task", "add", `${what} one`, "--ask", want)), taskNo(await ok(dev, "task", "add", `${what} two`, "--ask", want))] as const;
+    const [a, b] = await pair("repeat");
+    const [c, d] = await pair("commas");
+    const asks: [string[], number[], string][] = [
+      [["--holds", `T${a}`, "--holds", `T${b}`], [Number(a), Number(b)], "Repeated holds?"],
+      [["--holds", `T${c},T${d}`], [Number(c), Number(d)], "Comma holds?"],
+    ];
+    for (const [flags, ids, question] of asks) {
+      expect(await ok(dev, "ask-human", ...flags, "--option", "A: yes", "--option", "B: no", question)).toContain(`holding T${ids[0]}, T${ids[1]}`);
+      const sent = (await ok(dev, "log", "--json", "-n", "40"))
+        .trim()
+        .split("\n")
+        .map((l) => JSON.parse(l) as { body?: string; holds?: number[] })
+        .find((m) => m.body?.includes(question));
+      expect(sent?.holds).toEqual(ids);
+    }
+  });
+
   test("task proof puts a link on the task, and refuses one that isn't https", async () => {
     const t = /T(\d+)/.exec(await ok(dev, "task", "add", "show the preview", "--ask", want))![1]!;
     await ok(dev, "task", "proof", `T${t}`, "https://preview.example.com/pr-1", "--label", "preview");

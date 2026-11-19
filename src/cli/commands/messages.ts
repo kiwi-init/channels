@@ -378,7 +378,7 @@ export const messageCommands: Record<string, Command> = {
         );
       const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
       const task = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
-      const held = list(opt.holds)?.map((h) => [h, parseTaskId(h)] as const);
+      const held = list(opt.holds?.join(","))?.map((h) => [h, parseTaskId(h)] as const);
       const bad = held?.find(([, id]) => id === null);
       if (bad) return yield* die(`--holds takes tasks and asks, like T7,#18: "${bad[0]}" isn't one`);
       const holds = held?.flatMap(([, id]) => (id === null ? [] : [id]));
