@@ -256,7 +256,18 @@ try {
     const tabsHidden = moved(tabsBefore, await placesOf(page, TABS));
     expect(tabsHidden.length === 0, `the tabs stay where they are with the sidebar hidden${tabsHidden.length ? `: ${tabsHidden.join("; ")}` : ""}`);
     await page.mouse.move(2, height / 2);
-    await page.waitForTimeout(900);
+    await page
+      .waitForFunction(
+        () => {
+          const side = document.querySelector(".chan.is-peek .side");
+          return !!side && side.getAnimations().every((a) => a.playState !== "running");
+        },
+        undefined,
+        { timeout: 5_000 },
+      )
+      .catch(() => {
+        // The sidebar never peeked or kept sliding: the reading below says which.
+      });
     const peek = await page.evaluate(() => {
       const side = document.querySelector(".side");
       const box = side?.getBoundingClientRect();
