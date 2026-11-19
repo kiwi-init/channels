@@ -1005,8 +1005,24 @@ kbd {
   font: var(--t-ui) var(--ui);
 }
 
+.toast-action {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: color-mix(in srgb, var(--on-ink) 16%, transparent);
+  color: inherit;
+  font: 600 var(--t-ui) var(--ui);
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
 .toast-close:hover {
   background: color-mix(in srgb, var(--on-ink) 16%, transparent);
+}
+
+.toast-action:hover {
+  background: color-mix(in srgb, var(--on-ink) 26%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

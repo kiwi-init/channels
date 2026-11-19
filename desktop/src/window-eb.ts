@@ -37,7 +37,9 @@ function openOutside(url: string): void {
     logMainError(new Error(`refused to open a non-http(s) message link: ${url}`));
     return;
   }
-  void openInBrowser(ext, (u) => ebHost.openExternal(u)).catch((err: unknown) => logMainError(new Error(`could not open ${ext} in the system browser`, { cause: err })));
+  void openInBrowser(ext, (u) => ebHost.openExternal(u)).catch((err: unknown) =>
+    logMainError(new Error(`could not open ${ext} in the system browser: ${err instanceof Error ? err.message : String(err)}`, { cause: err })),
+  );
 }
 
 let showNote: (state: KeyringState) => void = () => {};

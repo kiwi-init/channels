@@ -430,7 +430,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   hover. Section heads are never uppercase.
 - `Empty`, `Loading`, `Toasts` (`ink` pill with `on-ink` text, bottom
   centre; one goes after 2.6 s, an error stays with a Dismiss button until
-  dismissed; copying goes through `copyText`, which says Copied or why not), `.codebox` (a `bg-3` box of mono text with Copy), `Boundary`
+  dismissed, and may carry one action button before it, such as Copy link
+  when a link couldn't open; copying goes through `copyText`, which says Copied or why not), `.codebox` (a `bg-3` box of mono text with Copy), `Boundary`
   (every channel view renders inside one).
 - Icons: `Icon` in `ui/src/kit/icons.tsx`, 16px line icons drawn in
   `currentColor` at a 1.4 stroke on a 16 grid, plus Hugeicons (24 grid, 1.5

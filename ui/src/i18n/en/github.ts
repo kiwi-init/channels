@@ -27,4 +27,6 @@ export default {
   "kit.toasts.not.copied": "Couldn't copy. Select it and copy by hand.",
   "kit.toasts.copied": "Copied",
   "kit.toasts.dismiss": "Dismiss",
+  "kit.outside.not.opened": "Couldn't open the link. Copy it and open it in your browser.",
+  "kit.outside.copy.link": "Copy link",
 } as const satisfies Record<string, Msg>

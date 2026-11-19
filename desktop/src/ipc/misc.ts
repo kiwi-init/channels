@@ -57,7 +57,7 @@ export function miscCalls(
       try {
         await openInBrowser(ext, (u) => host.openExternal(u));
       } catch (err) {
-        logMainError(new Error(`could not open ${ext} in the system browser`, { cause: err }));
+        logMainError(new Error(`could not open ${ext} in the system browser: ${err instanceof Error ? err.message : String(err)}`, { cause: err }));
         throw err;
       }
     },

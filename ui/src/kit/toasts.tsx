@@ -7,22 +7,27 @@ import { Icon } from "~/kit/icons"
 
 export type Tone = "info" | "error"
 
-export interface Toast {
-  id: number
-  text: string
-  tone: Tone
+export interface ToastAction {
+  label: string
+  run: () => void
 }
+
+export type Toast = { id: number; text: string; tone: "info" } | { id: number; text: string; tone: "error"; action?: ToastAction }
 
 const SHOWN_MS = 2600
 const MOST = 3
 
-const heard = new Set<(text: string, tone: Tone) => void>()
+type Listener = (text: string, tone: Tone, action?: ToastAction) => void
 
-export function announce(text: string, tone: Tone = "info"): void {
-  for (const l of heard) l(text, tone)
+const heard = new Set<Listener>()
+
+export function announce(text: string, tone?: "info"): void
+export function announce(text: string, tone: "error", action?: ToastAction): void
+export function announce(text: string, tone: Tone = "info", action?: ToastAction): void {
+  for (const l of heard) l(text, tone, action)
 }
 
-export function onAnnounce(l: (text: string, tone: Tone) => void): () => void {
+export function onAnnounce(l: Listener): () => void {
   heard.add(l)
   return () => void heard.delete(l)
 }
@@ -82,14 +87,14 @@ export function kept(list: Toast[], next: Toast): Toast[] {
   return all
 }
 
-export function useToasts(): [Toast[], (text: string, tone?: Tone) => void, (id: number) => void] {
+export function useToasts(): [Toast[], (text: string, tone?: Tone, action?: ToastAction) => void, (id: number) => void] {
   const [toasts, setToasts] = useState<Toast[]>([])
   const next = useRef(0)
   const dismiss = useCallback((id: number) => setToasts((list) => list.filter((toast) => toast.id !== id)), [])
   const push = useCallback(
-    (text: string, tone: Tone = "info") => {
+    (text: string, tone: Tone = "info", action?: ToastAction) => {
       const id = ++next.current
-      setToasts((list) => kept(list, { id, text, tone }))
+      setToasts((list) => kept(list, tone === "error" ? { id, text, tone, action } : { id, text, tone }))
       if (tone === "info") setTimeout(() => dismiss(id), SHOWN_MS)
     },
     [dismiss]
@@ -105,6 +110,18 @@ export function Toasts({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id:
         toast.tone === "error" ? (
           <div key={toast.id} className="toast is-error" role="alert">
             <span>{toast.text}</span>
+            {toast.action && (
+              <button
+                type="button"
+                className="toast-action"
+                onClick={() => {
+                  toast.action?.run()
+                  onDismiss(toast.id)
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
             <button type="button" className="toast-close" aria-label={t("kit.toasts.dismiss")} onClick={() => onDismiss(toast.id)}>
               <Icon name="close" size={14} />
             </button>
