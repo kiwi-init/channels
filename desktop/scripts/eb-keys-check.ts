@@ -266,8 +266,7 @@ try {
     );
   } else console.log("skip  the Electron import: it reads the keychain's kiwi-desktop item, so it runs only on CI's temporary keychain");
 
-  const main = (app: string): string => path.join(contents(app), "Resources", "main.js");
-  refused("main.js changed", good, (app) => fs.appendFileSync(main(app), "\n"), "Resources/main.js was changed");
+  refused(`${path.basename(keysProbe.entry)} changed`, good, (app) => fs.appendFileSync(path.join(contents(app), keysProbe.entry), "\n"), `${keysProbe.entry} was changed`);
   refused("a bunfig.toml beside bun", good, (app) => fs.writeFileSync(path.join(contents(app), "MacOS", "bunfig.toml"), 'preload = ["/tmp/x.js"]\n'), "MacOS/bunfig.toml isn't part of the app");
   refused("an app.asar dropped in", good, (app) => fs.writeFileSync(path.join(contents(app), "Resources", "app.asar"), ""), "Resources/app.asar isn't part of the app");
   refused("a link", good, (app) => fs.symlinkSync("/tmp", path.join(contents(app), "Resources", "link")), "Resources/link isn't a plain file or folder");
