@@ -33,7 +33,7 @@ import {
   type Step,
 } from "@kiwi/core/protocol.ts";
 import { recipients, waitsLines, waitsOf, type Busy, type Marks, type Reached } from "@kiwi/core/receipts.ts";
-import { asksOnSameWork, openAsksOnWork, chooseThread, inGeneral, longForGeneral, parseTaskId, taskId, wentTo, type ChannelState } from "@kiwi/core/state.ts";
+import { asksOnSameWork, openAsksOnWork, chooseThread, findRoom, inGeneral, longForGeneral, parseTaskId, taskId, wentTo, type ChannelState } from "@kiwi/core/state.ts";
 import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
@@ -128,6 +128,12 @@ export const messageCommands: Record<string, Command> = {
         const kind = (opt.kind ?? "msg") as Kind;
         if (!CHAT_KINDS.includes(kind)) return yield* die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
         const re = reArgs.map((x) => Number(x.replace(/^#/, ""))).filter((n) => n > 0);
+        const asked = chosen.room ? findRoom(state, chosen.room) : null;
+        const parentRoom = re.length ? state.roomOf.get(re[0]!) : undefined;
+        if (asked && parentRoom !== undefined && parentRoom !== asked.id)
+          return yield* die(
+            `#${re[0]} is in #${findRoom(state, parentRoom)?.name ?? parentRoom}, and a reply stays in its message's room: leave out --to '#${asked.name}' to answer there; nothing was sent`,
+          );
         const imgs = yield* images;
         const files = yield* attachments(s);
         const asking = opt.ask || !!opt.wait;
