@@ -11,8 +11,8 @@ import { DOC_COMPACT, DOC_COMPACT_UPDATES, DOC_PRUNE_IDLE_MS, MAX_DOC_THREADS, W
 import { startRelay } from "../src/relay/bun.ts";
 import { GithubApp, GithubPush, githubPushFrom } from "../src/relay/github-app.ts";
 import { Human } from "../src/relay/human.ts";
-import { DOC_UPDATES_PER_MINUTE } from "../src/relay/room/limits.ts";
-import { OPEN_POLICY, Policy } from "../src/relay/policy.ts";
+import { DOC_SUBS_PER_MINUTE, DOC_UPDATES_PER_MINUTE } from "../src/relay/room/limits.ts";
+import { OPEN_POLICY, Policy, type RoomPolicy } from "../src/relay/policy.ts";
 import { Directory, onClientFrame, RoomDb, type Effects, type SocketView, type Sql } from "../src/relay/room.ts";
 import { makeRelay, runRoomSync } from "../src/relay/route.ts";
 
@@ -33,22 +33,25 @@ const sqlOf = (db: Database): Sql => ({
   all: <T>(q: string, ...p: (string | number | null)[]) => db.query(q).all(...p) as T[],
 });
 
-const relayCtx = makeRelay(
-  Layer.mergeAll(
-    Layer.succeed(Human, null),
-    Layer.succeed(GithubApp, null),
-    Layer.succeed(GithubPush, githubPushFrom()),
-    Layer.succeed(Policy, { ...OPEN_POLICY, noRateLimits: true }),
-    Layer.succeed(Directory, {
-      list: async () => [],
-      reserve: async () => true,
-      release: async () => {},
-      person: async () => ({ plan: "free" as const, blocked: false }),
-      seen: async () => {},
-      lease: async () => ({ grant: 0, plan: "free" as const, limit: null, remaining: null, blocked: false }),
-    }),
-  ),
-);
+const relayWith = (policy: RoomPolicy) =>
+  makeRelay(
+    Layer.mergeAll(
+      Layer.succeed(Human, null),
+      Layer.succeed(GithubApp, null),
+      Layer.succeed(GithubPush, githubPushFrom()),
+      Layer.succeed(Policy, policy),
+      Layer.succeed(Directory, {
+        list: async () => [],
+        reserve: async () => true,
+        release: async () => {},
+        person: async () => ({ plan: "free" as const, blocked: false }),
+        seen: async () => {},
+        lease: async () => ({ grant: 0, plan: "free" as const, limit: null, remaining: null, blocked: false }),
+      }),
+    ),
+  );
+
+const relayCtx = relayWith({ ...OPEN_POLICY, noRateLimits: true });
 
 const TH = "thread-aaaaaaaaaaaaaaa";
 const TH2 = "thread-bbbbbbbbbbbbbbb";
@@ -140,28 +143,30 @@ describe("the relay stores and relays sealed doc updates (T491)", () => {
 
   test("a refused update or snapshot still counts against the minute's updates, so a client looping on refusals is slowed down (T1426)", () =>
     withRoom((_, mem) => {
-      const limited = makeRelay(
-        Layer.mergeAll(
-          Layer.succeed(Human, null),
-          Layer.succeed(GithubApp, null),
-          Layer.succeed(GithubPush, githubPushFrom()),
-          Layer.succeed(Policy, OPEN_POLICY),
-          Layer.succeed(Directory, {
-            list: async () => [],
-            reserve: async () => true,
-            release: async () => {},
-            person: async () => ({ plan: "free" as const, blocked: false }),
-            seen: async () => {},
-            lease: async () => ({ grant: 0, plan: "free" as const, limit: null, remaining: null, blocked: false }),
-          }),
-        ),
-      );
+      const limited = relayWith(OPEN_POLICY);
       const looper = "l".repeat(43);
       mem.query("INSERT INTO members (pk, xpk, rec, rec_e, since, read_only) VALUES (?, 'x', 'r', 0, 0, 0)").run(looper);
       const sent = (f: object) => only(runRoomSync(limited, new RoomDb(sqlOf(mem), access.roomId), onClientFrame(JSON.stringify(f), looper, true)));
       for (let i = 0; i < DOC_UPDATES_PER_MINUTE / 2; i++) expect(sent({ t: "doc", id: `r${i}`, th: TH, iv: IV, ct: "eA", e: 7 })).toMatchObject({ t: "err", tag: "Conflict" });
       for (let i = 0; i < DOC_UPDATES_PER_MINUTE / 2; i++) expect(sent({ t: "doc.snap", id: `q${i}`, th: TH, upto: 0, iv: IV, ct: "eA", e: 0 })).toMatchObject({ t: "err", tag: "Conflict" });
       expect(sent({ t: "doc", id: "late", th: TH, iv: IV, ct: "eA", e: 0 })).toMatchObject({ t: "err", tag: "TooMany" });
+    }));
+
+  test("past the minute's doc subscriptions a member is told when to come back; a relay without rate limits never refuses one (#2575)", () =>
+    withRoom((_, mem) => {
+      const subscriber = (policy: RoomPolicy, pk: string) => {
+        const relay = relayWith(policy);
+        mem.query("INSERT INTO members (pk, xpk, rec, rec_e, since, read_only) VALUES (?, 'x', 'r', 0, 0, 0)").run(pk);
+        return () => replies(runRoomSync(relay, new RoomDb(sqlOf(mem), access.roomId), onClientFrame(JSON.stringify({ t: "doc.sub", th: TH, since: 0 }), pk, true))).at(-1);
+      };
+      const limited = subscriber(OPEN_POLICY, "s".repeat(43));
+      for (let i = 0; i < DOC_SUBS_PER_MINUTE; i++) expect(limited()).toMatchObject({ t: "doc.ready", th: TH });
+      const refused = limited();
+      expect(refused).toMatchObject({ t: "err", th: TH, tag: "TooMany", error: "too many doc subscriptions; wait a minute" });
+      expect(refused).toHaveProperty("retryAfter", expect.any(Number));
+
+      const unlimited = subscriber({ ...OPEN_POLICY, noRateLimits: true }, "u".repeat(43));
+      for (let i = 0; i <= DOC_SUBS_PER_MINUTE * 2; i++) expect(unlimited()).toMatchObject({ t: "doc.ready", th: TH });
     }));
 
   test("past the soft limit the ack asks for a snapshot; past the hard limit the update is refused until one comes", () =>
