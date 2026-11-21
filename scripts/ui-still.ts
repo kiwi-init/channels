@@ -93,7 +93,7 @@ async function moves(browser: Browser, shot: string, width: number, height: numb
   }
 }
 
-async function reopens(browser: Browser, shot: string, width: number, height: number): Promise<{ moved: string | null; grew: string[]; reveal: Reveal }> {
+async function reopens(browser: Browser, shot: string, width: number, height: number): Promise<{ moved: string | null; grew: string[]; reveal: Reveal; after: string[] }> {
   const page = await browser.newPage({ viewport: { width, height } });
   try {
     await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
@@ -104,7 +104,18 @@ async function reopens(browser: Browser, shot: string, width: number, height: nu
     await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}&docLate=${DOC_LATE_MS}`);
     await page.waitForFunction((after) => performance.now() > after, DOC_LATE_MS + SETTLE_MS, { timeout: DOC_LATE_MS + DRAWN_MS });
     const seen = await measure(page);
-    return { ...seen, reveal: await page.evaluate(() => (window as Window & { reveal?: { at: number; seqs: string[] } }).reveal ?? null) };
+    const after = await page.evaluate(() => {
+      const feed = document.querySelector<HTMLElement>(".feed");
+      if (!feed) return [];
+      const view = feed.getBoundingClientRect();
+      return [...feed.querySelectorAll<HTMLElement>(".feed-list > [data-seq]")]
+        .filter((row) => (row.dataset.seq ?? "").includes("."))
+        .map((row) => {
+          const box = row.getBoundingClientRect();
+          return `${row.dataset.seq ?? ""}@${Math.round(box.top - view.top)}..${Math.round(box.bottom - view.top)}/${Math.round(view.height)}`;
+        });
+    });
+    return { ...seen, after, reveal: await page.evaluate(() => (window as Window & { reveal?: { at: number; seqs: string[] } }).reveal ?? null) };
   } finally {
     await page.close();
   }
@@ -153,7 +164,7 @@ try {
     }
   for (const shot of REOPEN)
     for (const [width, height] of SIZES) {
-      const { moved, grew, reveal } = await reopens(browser, shot, width, height);
+      const { moved, grew, reveal, after } = await reopens(browser, shot, width, height);
       const late = `reopened with its doc ${DOC_LATE_MS} ms late`;
       if (moved) failed++;
       console.log(`${moved ? "✗" : "✓"} ${shot} at ${width}x${height} ${late} holds still${moved ? `: ${moved}` : ""}`);
@@ -161,8 +172,9 @@ try {
       console.log(`${grew.length ? "✗" : "✓"} ${shot} at ${width}x${height} ${late}: rows keep their height${grew.length ? `: ${grew.length} changes, ${grew.slice(0, 4).join(", ")}` : ""}`);
       const kept = !!reveal && reveal.at < DOC_LATE_MS && reveal.seqs.some(docLine);
       if (!kept) failed++;
+      const why = kept || !reveal ? "" : `; first frame rows ${reveal.seqs.slice(0, 3).join(",")}…${reveal.seqs.slice(-3).join(",")}, doc lines once the doc is in: ${after.join(" ") || "none"}`;
       console.log(
-        `${kept ? "✓" : "✗"} ${shot} at ${width}x${height} ${late}: its first frame shows the kept doc lines${reveal ? ` (shown at ${reveal.at} ms, ${reveal.seqs.filter(docLine).length} doc lines of ${reveal.seqs.length} rows)` : ": never shown"}`,
+        `${kept ? "✓" : "✗"} ${shot} at ${width}x${height} ${late}: its first frame shows the kept doc lines${reveal ? ` (shown at ${reveal.at} ms, ${reveal.seqs.filter(docLine).length} doc lines of ${reveal.seqs.length} rows)` : ": never shown"}${why}`,
       );
     }
 } finally {
