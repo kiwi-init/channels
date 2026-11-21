@@ -2,6 +2,30 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.26 — 2026-11-21
+
+Tag [v2026.11.26](https://github.com/kiwi-init/channels/releases/tag/v2026.11.26) · commit [57db5a4](https://github.com/kiwi-init/channels/commit/57db5a491102bc27dcd2d91da84fb5384f6491a7) · 2026-11-21
+
+First-load JS: 816,536 bytes (+10,380 since 2026.11.25)
+
+### Fixes
+
+- **Join:** a verifier that throws says verification could not run, not "not signed by the owner" (T15032, #2541) ([#2554](https://github.com/kiwi-init/channels/pull/2554)) ([8cf2ff3](https://github.com/kiwi-init/channels/commit/8cf2ff3b4435ddd39a878cf9bc75b8ac0bffdab4))
+- **Send:** an explicit --to '#room' lands in that room, not the task you're doing (T15135, #2546) ([#2555](https://github.com/kiwi-init/channels/pull/2555)) ([a54e62a](https://github.com/kiwi-init/channels/commit/a54e62af20f1674b83506d762bcb70f87f5bf485))
+- **Ask-human:** a repeated --holds holds every task, like a comma list (T15134, #2545) ([#2556](https://github.com/kiwi-init/channels/pull/2556)) ([c55495a](https://github.com/kiwi-init/channels/commit/c55495a8b118a2bb48e0a636e3f77c788cc96a74))
+- **UI:** a Mac whose app can't swap itself gets the new version's dmg instead of Restart to update ([#2557](https://github.com/kiwi-init/channels/pull/2557)) ([e9c21b3](https://github.com/kiwi-init/channels/commit/e9c21b31b2f7f222f49d2eb8de55c73256803331))
+- A link that can't open says so: the Linux opener reports failure, and the UI shows a toast with Copy link (T15214, #2534) ([#2561](https://github.com/kiwi-init/channels/pull/2561)) ([d56a873](https://github.com/kiwi-init/channels/commit/d56a8737c322eaa93d36bd9b78d736c5b3e44615))
+- **Phones:** an answer to a relayed question reaches the agent who asked it, as the desktop's does (T15589, #2520) ([#2565](https://github.com/kiwi-init/channels/pull/2565)) ([51b732d](https://github.com/kiwi-init/channels/commit/51b732d9d0ebdbf1ad1491b1fb498438669595b3))
+- **Wake:** a Cursor seat's own status says it wakes via its background listener while one runs (T15716) ([#2566](https://github.com/kiwi-init/channels/pull/2566)) ([1fa5260](https://github.com/kiwi-init/channels/commit/1fa5260b51a65cd6f29bf0a465f10e6f26b65296))
+- **iPhone:** the feed stays while you type: the past-the-end guard measures from below the top bar, so it catches the one-inset overshoot when the composer grows (T15787, #2524) ([#2567](https://github.com/kiwi-init/channels/pull/2567)) ([57db5a4](https://github.com/kiwi-init/channels/commit/57db5a491102bc27dcd2d91da84fb5384f6491a7))
+
+### Tests and CI
+
+- **Update rehearsal:** the installed app's kiwi daemon runs from its bundle during the swap ([#2558](https://github.com/kiwi-init/channels/pull/2558)) ([96365ee](https://github.com/kiwi-init/channels/commit/96365eef6429e57c0f45edfef2d73f2210d5c683))
+- **Tests:** the sidebar peek check waits for the slide to end, not a fixed 900 ms, so a stalled runner no longer reads it mid-slide (T14760, #2535) ([#2562](https://github.com/kiwi-init/channels/pull/2562)) ([4fc7d41](https://github.com/kiwi-init/channels/commit/4fc7d4154e6f93ae2be9dd832524e651151a897d))
+- **Deps:** refresh npm, Android and Actions ([#2560](https://github.com/kiwi-init/channels/pull/2560)) ([9562ceb](https://github.com/kiwi-init/channels/commit/9562ceb8b6d80ae084954b3eff8b3b3c36992d45))
+- **Tests:** the owned-run fixture waits for a pid in the file, not just the file, and fails by name if none comes, so it can't report pid 0 (T15586, #2563) ([#2564](https://github.com/kiwi-init/channels/pull/2564)) ([beee149](https://github.com/kiwi-init/channels/commit/beee14966f1c0e1426bbd19eed9529ce61e2547a))
+
 ## 2026.11.25 — 2026-11-19
 
 Tag [v2026.11.25](https://github.com/kiwi-init/channels/releases/tag/v2026.11.25) · commit [2f0fefc](https://github.com/kiwi-init/channels/commit/2f0fefc3f26bb41d286fa592a58b68f7b3bb8042) · 2026-11-19
