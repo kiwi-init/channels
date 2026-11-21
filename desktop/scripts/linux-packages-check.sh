@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-usage="usage: linux-packages-check.sh DIR"
+usage="usage: linux-packages-check.sh DIR [x86_64|aarch64]"
 dir=${1:?$usage}
+arch=${2:-x86_64}
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$dir"
 
 bun "$here/appimage-squashfs.ts" .
-img=$(ls Channels-*-linux-x86_64.AppImage)
+img=$(ls Channels-*-linux-"$arch".AppImage)
 "./$img" --appimage-extract > /dev/null
 for p in AppRun channels-desktop.desktop channels-desktop.png Channels/bin/launcher Channels/bin/electrobun-launcher Channels/bin/bun Channels/Resources/kiwi.js Channels/Resources/app/bun/index.js Channels/Resources/app/bun/keys.js Channels/Resources/app/bun/message-box.js Channels/Resources/app/page/index.html Channels/Resources/app/views/internal/assets usr/share/icons/breeze-dark/apps/16/channels-desktop.svg usr/share/icons/breeze-dark/apps/22/channels-desktop.svg usr/share/icons/breeze-dark/apps/32/channels-desktop.svg usr/share/icons/breeze-dark/apps/48/channels-desktop.svg; do
   [ -e "squashfs-root/$p" ] || { echo "$img lacks $p"; exit 1; }
