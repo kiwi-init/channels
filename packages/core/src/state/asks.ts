@@ -1,6 +1,6 @@
 import { asksPeople } from "../personality.ts";
-import { isDecisionKind, wellFormedArea, type DecisionKind, type Message, type Step } from "../protocol.ts";
-import { isPerson } from "./people.ts";
+import { ignored, isDecisionKind, wellFormedArea, type DecisionKind, type Message, type Step } from "../protocol.ts";
+import { answersAsk, isPerson } from "./people.ts";
 import { placeKey } from "./places.ts";
 import { commentedSpec } from "./specs.ts";
 import type { AskHead, ChannelState, Task } from "./types.ts";
@@ -90,6 +90,31 @@ export function openAsksOnWork(state: Pick<ChannelState, "openAsks" | "members" 
   return state.openAsks.filter(
     (a) => a.esc && !a.permission && !a.handoff && !a.step && a.decision !== "irreversible" && !!a.to?.some((n) => isPeopleTarget(state, n)) && heldBy(state, a).some((id) => holds.includes(id)),
   );
+}
+
+interface Decided {
+  ask: Message;
+  answer: Message;
+}
+
+export function decidedOnWork(state: Pick<ChannelState, "openAsks" | "members" | "rejected" | "trust" | "tapToAnswer">, messages: readonly Message[], holds: readonly number[], limit = 3): Decided[] {
+  if (!holds.length) return [];
+  const open = new Set(state.openAsks.map((a) => a.seq));
+  const kept = (m: Message) => !state.rejected.has(m.seq) && !ignored(state.trust.get(m.seq));
+  const asks = new Map<number, Message>();
+  for (const m of messages)
+    if (m.esc && !m.permission && !m.handoff && !open.has(m.seq) && kept(m) && [...(m.task !== undefined ? [m.task] : []), ...(m.holds ?? [])].some((id) => holds.includes(id))) asks.set(m.seq, m);
+  const decided: Decided[] = [];
+  for (const r of messages) {
+    if (r.kind === "event" || !kept(r) || (state.tapToAnswer && !r.pick && !r.stepReply)) continue;
+    for (const seq of r.re ?? []) {
+      const ask = asks.get(seq);
+      if (!ask || !answersAsk(state.members, ask, r.from)) continue;
+      asks.delete(seq);
+      decided.push({ ask, answer: r });
+    }
+  }
+  return decided.slice(-limit);
 }
 
 export function asksOnSameWork(state: Pick<ChannelState, "openAsks" | "members" | "tasks" | "askHeads">, me: string, to: readonly string[], holds: readonly number[]): Message[] {

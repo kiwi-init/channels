@@ -354,7 +354,7 @@ describe("kiwi ask-human", () => {
     const unsafe = await run(agent, "ask-human", "--step", "--holds", task, ...required, "--link", "http://example.com", "Purge the cache");
     expect(unsafe.code).toBe(1);
     expect(unsafe.err).toContain("https URL");
-    const disguised = await run(agent, "ask-human", "--holds", task, "--option", "A: Done", "--option", "B: Not yet", "Purge the cache");
+    const disguised = await run(agent, "ask-human", "--option", "A: Done", "--option", "B: Not yet", "Purge the cache");
     expect(disguised.code).toBe(1);
     expect(disguised.err).toContain("give no command or link");
     expect(disguised.err).toContain("use --step");

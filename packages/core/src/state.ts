@@ -12,6 +12,7 @@ export {
   askRefusal,
   asksOnSameWork,
   openAsksOnWork,
+  decidedOnWork,
   directThreadStart,
   handedOver,
   handedTo,

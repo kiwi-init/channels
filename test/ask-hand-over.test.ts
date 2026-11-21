@@ -422,6 +422,7 @@ describe("kiwi ask-human says where the question went (T503)", () => {
   });
 
   test("the Lead's own decision is escalated to the person as before", async () => {
-    expect(await ok(puma, "ask-human", "--holds", `T${held}`, "--option", "A: glass", "--option", "B: flat", "Which look?")).toMatch(/^escalated #\d+ to human with 2 options, holding T\d+/);
+    const own = /\bT(\d+)\b/.exec(await ok(puma, "task", "add", "Tab bar icons", "--from", `T${held}`))![1]!;
+    expect(await ok(puma, "ask-human", "--holds", `T${own}`, "--option", "A: glass", "--option", "B: flat", "Which look?")).toMatch(/^escalated #\d+ to human with 2 options, holding T\d+/);
   });
 });
