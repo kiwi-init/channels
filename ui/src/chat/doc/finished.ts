@@ -19,6 +19,8 @@ export interface DocFeed {
 
 export const EMPTY_FEED: DocFeed = { lines: [], hidden: new Set(), media: new Map(), typed: new Set() }
 
+export const keptFeed = (lines: readonly Line[]): DocFeed => ({ lines, hidden: new Set(lines.map((l) => l.id)), media: new Map(), typed: new Set() })
+
 function mirrors(own: NonNullable<Message["images"]>, imgs: BlockFiles["imgs"]): boolean {
   const left = imgs.map((i) => i.name)
   return own.every((i) => {

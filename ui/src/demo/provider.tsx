@@ -26,6 +26,7 @@ import type { Account, Actions, App, BackRun, Enrolling, Finding, GithubSignIn, 
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
 import { demoDocs, openDemoDoc } from "~/demo/doc-hub"
+import { keepDemoDocLines, withDemoDocLines } from "~/demo/doc-lines"
 import { muteKey } from "~/live/mute"
 import { specLineTest } from "~/specs/quote"
 import { wordsRaw, wrote } from "~/words"
@@ -682,7 +683,10 @@ const SLOW_OPEN_MS = 1500
 const tabsDemo = (scenario: Scenario): boolean => scenario === "tabs-3" || scenario === "tabs-8"
 
 export function useDemo(scenario: Scenario, open: string | null, look: Partial<Prefs> = {}, usage: Partial<Usage> = {}): App {
-  const [state, setState] = useState(() => initial(scenario, look))
+  const [state, setState] = useState(() => {
+    const s = initial(scenario, look)
+    return { ...s, channels: withDemoDocLines(s.channels) }
+  })
   const [shownUsage] = useState(usage)
   const [ownPersonalities, setOwnPersonalities] = useState<Personality[]>([])
   const [computer, setComputer] = useState<ThisComputer>(scenario === "restarted" ? { ...COMPUTER, back: RESTARTED } : COMPUTER)
@@ -790,6 +794,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
       retry: (code, seq) => edit(code, (c) => ({ ...c, messages: c.messages.map((m) => (m.seq === seq ? { ...m, failed: undefined } : m)) })),
       loadImage: () => {},
       openDoc: (code, thread, th, on) => openDemoDoc(code, thread, th, on),
+      keepDocLines: (code, thread, lines) => keepDemoDocLines(code, thread, lines),
       findDoc: async () => null,
       docVersions: async () => {
         const now = Date.now()

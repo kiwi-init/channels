@@ -7,7 +7,7 @@ import { EditHere } from "~/chat/editing"
 import { showActivity } from "~/chat/activity"
 import { splitUpdates } from "~/chat/split-updates"
 import { foldText, leftOutRun, runFirst, withLeftOut } from "~/chat/left-out"
-import { docFeeds, EMPTY_FEED, withDocMedia, withLines } from "~/chat/doc/finished"
+import { docFeeds, EMPTY_FEED, keptFeed, withDocMedia, withLines } from "~/chat/doc/finished"
 import { arrivals, docLines, inFeed, postedBlocks } from "~/chat/doc/posted"
 import { chatterLine, chatterRuns, type ChatterRun } from "~/chat/chatter"
 import { MessageRow } from "~/chat/message"
@@ -232,8 +232,10 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
   const since = channel.since
   const specAsks = useMemo(() => new Set((channel.specs ?? []).map((s) => s.ask)), [channel.specs])
   const feeds = useSyncExternalStore(docFeeds.subscribe, docFeeds.get)
+  const keptLines = doc ? channel.docLines?.[doc] : undefined
+  const kept = useMemo(() => (keptLines ? keptFeed(keptLines) : EMPTY_FEED), [keptLines])
   const raw = useMemo(() => {
-    const fromDoc = doc ? (feeds.get(`${channel.code}\n${doc}`) ?? EMPTY_FEED) : EMPTY_FEED
+    const fromDoc = doc ? (feeds.get(`${channel.code}\n${doc}`) ?? kept) : EMPTY_FEED
     const feed = withLeftOut(
       channel.messages
         .filter((m) => (since === undefined || m.seq < 0 || m.seq >= since) && sameWhere(m.where, where) && inFeed(m, !!doc) && (where.kind !== "room" || !m.specLine))
@@ -247,7 +249,7 @@ function Feed({ channel, where, spot, jump, doc }: { channel: Channel; where: Wh
       fromDoc.lines.filter((l) => !posted.has(l.id)),
       where
     )
-  }, [channel.messages, channel.leftOut, channel.code, where, doc, feeds, since])
+  }, [channel.messages, channel.leftOut, channel.code, where, doc, feeds, kept, since])
   const olderHere = useMemo(
     () => since !== undefined && channel.messages.some((m) => m.seq > 0 && m.seq < since && sameWhere(m.where, where) && inFeed(m, !!doc)),
     [channel.messages, since, where, doc]

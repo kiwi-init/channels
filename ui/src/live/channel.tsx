@@ -121,6 +121,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     pkOf,
     github,
     older,
+    docLines,
+    keepDocLines,
   } = live
   const messages = useMemo(() => withReach(reach, shownWire, state.openAsks), [reach, shownWire, state.openAsks])
   const since = shownWire[0]?.seq
@@ -202,6 +204,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     (): Channel => ({
       code,
       title,
+      ...(Object.keys(docLines).length ? { docLines } : {}),
       ...(icon ? { icon } : {}),
       youOwn: isOwner,
       ...(!isOwner && people.some((p) => p.you && p.managesAgents) ? { youManageAgents: true } : {}),
@@ -425,8 +428,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   }, [owed])
 
   const run = useMemo(
-    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard: toDraft, refreshRequests, refreshRoster, foldFrom, older }),
-    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, toDraft, refreshRequests, refreshRoster, foldFrom, older]
+    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard: toDraft, refreshRequests, refreshRoster, foldFrom, older, keepDocLines }),
+    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, toDraft, refreshRequests, refreshRoster, foldFrom, older, keepDocLines]
   )
 
   useLayoutEffect(() => {
