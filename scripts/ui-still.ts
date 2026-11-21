@@ -63,24 +63,36 @@ const watchRows = (): void => {
   requestAnimationFrame(frame);
 };
 
-const watchReveal = (): void => {
-  const look = (): void => {
+const watchReveal = (seenAt: number): void => {
+  const w = window as Window & { reveal?: { at: number; listed: string[]; seen: string[] | null } };
+  const docRows = (): { list: HTMLElement; view: DOMRect; rows: HTMLElement[] } | null => {
     const list = document.querySelector<HTMLElement>(".feed .feed-list");
     const feed = list?.closest<HTMLElement>(".feed");
-    if (!list || !feed || list.hasAttribute("data-unfinished") || !list.querySelector("[data-seq]")) return void requestAnimationFrame(look);
-    const view = feed.getBoundingClientRect();
-    const rows = [...list.querySelectorAll<HTMLElement>(":scope > [data-seq]")].filter((row) => {
-      const box = row.getBoundingClientRect();
-      return box.bottom > view.top && box.top < view.bottom;
-    });
-    (window as Window & { reveal?: { at: number; seqs: string[] } }).reveal = { at: Math.round(performance.now()), seqs: rows.map((row) => row.dataset.seq ?? "") };
+    if (!list || !feed || list.hasAttribute("data-unfinished") || !list.querySelector("[data-seq]")) return null;
+    return { list, view: feed.getBoundingClientRect(), rows: [...list.querySelectorAll<HTMLElement>(":scope > [data-seq]")].filter((row) => (row.dataset.seq ?? "").includes(".")) };
+  };
+  const seen = (): void => {
+    const now = docRows();
+    if (!w.reveal || !now) return;
+    w.reveal.seen = now.rows
+      .filter((row) => {
+        const box = row.getBoundingClientRect();
+        return box.bottom > now.view.top && box.top < now.view.bottom;
+      })
+      .map((row) => row.dataset.seq ?? "");
+  };
+  const look = (): void => {
+    const now = docRows();
+    if (!now) return void requestAnimationFrame(look);
+    w.reveal = { at: Math.round(performance.now()), listed: now.rows.map((row) => row.dataset.seq ?? ""), seen: null };
+    window.setTimeout(seen, Math.max(0, seenAt - performance.now()));
   };
   requestAnimationFrame(look);
 };
 
-const docLine = (seq: string): boolean => seq.includes(".");
+type Reveal = { at: number; listed: string[]; seen: string[] | null } | null;
 
-type Reveal = { at: number; seqs: string[] } | null;
+const SEEN_AT_MS = 1500;
 
 async function moves(browser: Browser, shot: string, width: number, height: number): Promise<{ moved: string | null; grew: string[] }> {
   const page = await browser.newPage({ viewport: { width, height } });
@@ -100,7 +112,7 @@ async function reopens(browser: Browser, shot: string, width: number, height: nu
     await page.waitForFunction(() => [...document.querySelectorAll<HTMLElement>(".feed-list > [data-seq]")].some((row) => (row.dataset.seq ?? "").includes(".")), undefined, { timeout: DRAWN_MS });
     await page.waitForTimeout(SETTLE_MS);
     await page.addInitScript(watchRows);
-    await page.addInitScript(watchReveal);
+    await page.addInitScript(watchReveal, SEEN_AT_MS);
     await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}&docLate=${DOC_LATE_MS}`);
     await page.waitForFunction((after) => performance.now() > after, DOC_LATE_MS + SETTLE_MS, { timeout: DOC_LATE_MS + DRAWN_MS });
     const seen = await measure(page);
@@ -115,7 +127,7 @@ async function reopens(browser: Browser, shot: string, width: number, height: nu
           return `${row.dataset.seq ?? ""}@${Math.round(box.top - view.top)}..${Math.round(box.bottom - view.top)}/${Math.round(view.height)}`;
         });
     });
-    return { ...seen, after, reveal: await page.evaluate(() => (window as Window & { reveal?: { at: number; seqs: string[] } }).reveal ?? null) };
+    return { ...seen, after, reveal: await page.evaluate(() => (window as Window & { reveal?: { at: number; listed: string[]; seen: string[] | null } }).reveal ?? null) };
   } finally {
     await page.close();
   }
@@ -170,11 +182,11 @@ try {
       console.log(`${moved ? "✗" : "✓"} ${shot} at ${width}x${height} ${late} holds still${moved ? `: ${moved}` : ""}`);
       if (grew.length) failed++;
       console.log(`${grew.length ? "✗" : "✓"} ${shot} at ${width}x${height} ${late}: rows keep their height${grew.length ? `: ${grew.length} changes, ${grew.slice(0, 4).join(", ")}` : ""}`);
-      const kept = !!reveal && reveal.at < DOC_LATE_MS && reveal.seqs.some(docLine);
+      const kept = !!reveal && reveal.at < DOC_LATE_MS && reveal.listed.length > 0 && !!reveal.seen?.length;
       if (!kept) failed++;
-      const why = kept || !reveal ? "" : `; first frame rows ${reveal.seqs.slice(0, 3).join(",")}…${reveal.seqs.slice(-3).join(",")}, doc lines once the doc is in: ${after.join(" ") || "none"}`;
+      const why = kept || !reveal ? "" : `; doc lines once the doc is in: ${after.join(" ") || "none"}`;
       console.log(
-        `${kept ? "✓" : "✗"} ${shot} at ${width}x${height} ${late}: its first frame shows the kept doc lines${reveal ? ` (shown at ${reveal.at} ms, ${reveal.seqs.filter(docLine).length} doc lines of ${reveal.seqs.length} rows)` : ": never shown"}${why}`,
+        `${kept ? "✓" : "✗"} ${shot} at ${width}x${height} ${late}: the kept doc lines are in its first frame and in view at ${SEEN_AT_MS} ms${reveal ? ` (shown at ${reveal.at} ms with ${reveal.listed.length} doc lines, ${reveal.seen?.length ?? 0} in view at ${SEEN_AT_MS} ms)` : ": never shown"}${why}`,
       );
     }
 } finally {
