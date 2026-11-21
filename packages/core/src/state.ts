@@ -19,6 +19,8 @@ export {
   heldBy,
   holdsWork,
   leadForAsk,
+  leadHoldsFor,
+  handedToLead,
   mayNameGoal,
   readHandedOver,
   handedAskOf,

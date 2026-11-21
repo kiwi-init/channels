@@ -129,6 +129,17 @@ export function leadForAsk(state: Pick<ChannelState, "members" | "lead">, me: st
   return lead.name;
 }
 
+export function leadHoldsFor(state: Pick<ChannelState, "members" | "lead">, me: string): string | null {
+  const role = state.members.get(me)?.persona?.role;
+  if (role !== "builder" && role !== "reviewer") return null;
+  const lead = state.lead === null || state.lead === me ? undefined : state.members.get(state.lead);
+  return lead?.active && !isPerson(lead) ? lead.name : null;
+}
+
+export function handedToLead(state: Pick<ChannelState, "openAsks" | "lead">, seq: number): Message | undefined {
+  return state.openAsks.find((a) => a.seq === seq && state.lead !== null && a.to?.includes(state.lead) && readHandedOver(String(a.body ?? ""))?.from === a.from);
+}
+
 export function directThreadStart(state: Pick<ChannelState, "placeOf">, seq: number): number | null {
   const place = state.placeOf.get(seq);
   if (place?.kind !== "dm") return null;

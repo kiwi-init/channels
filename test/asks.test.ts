@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Message } from "@kiwi/core/protocol.ts";
-import { askGroups, askRefusal, asksOnSameWork, fold, heldBy, holdsWork, tasksAwaitingPeople, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
+import { askGroups, askRefusal, asksOnSameWork, fold, heldBy, holdsWork, leadHoldsFor, tasksAwaitingPeople, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { formatStatus, formatTasks } from "@kiwi/core/format.ts";
 
 const T0 = 1_700_000_000_000;
@@ -214,5 +214,25 @@ describe("agents see each other's open asks to a person, so a decision is asked 
     expect(asksOnSameWork(s, "lead", ["someone"], [2])).toEqual([]);
     expect(asksOnSameWork(s, "lead", ["jow"], [])).toEqual([]);
     expect(asksOnSameWork(s, "dev", ["jow"], [2])).toEqual([]);
+  });
+});
+
+describe("a Builder or Reviewer defers to an active Lead (#2253 items 2 and 3)", () => {
+  const seat = (name: string, role: string | null, more: { active?: boolean; kind?: "human" | "agent" } = {}) =>
+    [name, { name, active: more.active ?? true, kind: more.kind ?? "agent", ...(role ? { persona: { role } } : {}) }] as const;
+  const state = (lead: string | null, ...seats: ReturnType<typeof seat>[]) => ({ lead, members: new Map(seats) }) as unknown as Pick<ChannelState, "members" | "lead">;
+
+  test("names the Lead to a Builder or Reviewer while an agent Lead is active", () => {
+    const s = state("otter", seat("otter", "lead"), seat("dev", "builder"), seat("rev", "reviewer"), seat("scout", "explorer"));
+    expect(leadHoldsFor(s, "dev")).toBe("otter");
+    expect(leadHoldsFor(s, "rev")).toBe("otter");
+    expect(leadHoldsFor(s, "scout")).toBeNull();
+    expect(leadHoldsFor(s, "otter")).toBeNull();
+  });
+
+  test("lifts with no Lead, a Lead who left, or a person as Lead", () => {
+    expect(leadHoldsFor(state(null, seat("dev", "builder")), "dev")).toBeNull();
+    expect(leadHoldsFor(state("otter", seat("otter", "lead", { active: false }), seat("dev", "builder")), "dev")).toBeNull();
+    expect(leadHoldsFor(state("jow", seat("jow", null, { kind: "human" }), seat("dev", "builder")), "dev")).toBeNull();
   });
 });
