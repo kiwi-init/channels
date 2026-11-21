@@ -187,12 +187,11 @@ function agyModel(env: Env): string | undefined {
   const dir = env.ANTIGRAVITY_APP_DATA_DIR || join(homedir(), ".gemini", "antigravity-cli");
   const settings = JSON.parse(readFileSync(join(dir, "settings.json"), "utf8")) as { model?: unknown };
   if (typeof settings.model !== "string") return undefined;
-  return slug(
-    settings.model
-      .toLowerCase()
-      .replace(/[^a-z0-9.]+/g, "-")
-      .replace(/^-+|-+$/g, ""),
-  );
+  const normalized = settings.model
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized === "auto" || normalized === "none" ? undefined : slug(normalized);
 }
 
 function tomlString(v: string | undefined): string | undefined {
