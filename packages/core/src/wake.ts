@@ -44,7 +44,7 @@ export function wakesInSession(via: string | undefined): boolean {
 const TYPED_IN_TMUX = new Set<WakeHarness | undefined>(["agy", "gemini", "deepcode"]);
 
 export function pullsWake(harness: WakeHarness | undefined): boolean {
-  return harness === "kimi" || harness === "cursor" || harness === "grok" || harness === "zcode";
+  return harness === "kimi" || harness === "cursor" || harness === "grok" || harness === "zcode" || harness === "agy";
 }
 
 export function listenedPath(path: WakePath, listening: boolean, idle = false): WakePath {
@@ -101,7 +101,10 @@ export function wakePath(
     case "zcode":
       return { kind: "none", why: "ZCode gives Kiwi no way to start a turn in a running session" };
     case "agy":
-      return { kind: "none", why: "Antigravity CLI takes no turn from outside a running session, so Kiwi wakes it only in tmux, by typing into its pane" };
+      return {
+        kind: "none",
+        why: "its background listener isn't running: outside tmux, Antigravity CLI starts a turn only when the agent's own background kiwi join ends, and the agent starts it again after each message (in tmux, Kiwi types into its pane)",
+      };
     case "deepcode":
       return { kind: "none", why: "Deep Code takes no turn from outside a running session, so Kiwi wakes it only in tmux, by typing into its pane" };
     case "kimi":
