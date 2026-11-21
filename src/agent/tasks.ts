@@ -44,6 +44,7 @@ import {
   type ReviewRound,
   type Spec,
   type Task,
+  leadHoldsFor,
 } from "@kiwi/core/state.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { parseIssueRef, taskDigest, taskOfIssue } from "@kiwi/core/work.ts";
@@ -98,6 +99,8 @@ export class SessionTasks extends SessionMessaging {
       if (opts.re !== undefined && (!state.placeOf.has(opts.re) || ignored(state.trust.get(opts.re)))) return yield* new Rejected(`no message #${opts.re}`);
       if (opts.from !== undefined && !state.tasks.has(opts.from)) return yield* new Rejected(`no task ${taskId(opts.from)} to come from`);
       const owner = opts.owner && (yield* this.resolveTo([opts.owner], state))?.[0];
+      const lead = owner && owner !== this.me ? leadHoldsFor(state, this.me) : null;
+      if (lead !== null) return yield* new Rejected(`the Lead gives out work while ${lead} leads: file it without --owner and ask @${lead} to assign it to ${owner}`);
       const review = opts.review === undefined ? undefined : yield* this.reviewer(state, opts.review);
       const lander = opts.lander && (yield* this.resolveTo([opts.lander], state))?.[0];
       const steps = opts.steps ? yield* this.stepSpecs(state, opts.steps) : undefined;
@@ -331,6 +334,8 @@ export class SessionTasks extends SessionMessaging {
       if (!target || !state.members.get(target)?.active) return yield* new Rejected(`no member named ${to}`);
       const task = state.tasks.get(id);
       if (target === this.me && !(task && !task.owner && task.leftBy)) return yield* new Rejected("hand it to someone else");
+      const lead = target === this.me ? null : leadHoldsFor(state, this.me);
+      if (lead !== null) return yield* new Rejected(`the Lead gives out work while ${lead} leads: ask @${lead} to give ${taskId(id)} to ${target}`);
       const after = yield* this.taskUpdate(id, {
         owner: target,
         ...(next ? { note: next } : {}),

@@ -306,6 +306,7 @@ describe("kiwi ask-human says where the question went (T503)", () => {
   const owner = scratch("owner");
   const puma = scratch("puma");
   const wren = scratch("wren");
+  const kite = scratch("kite");
   let server: ReturnType<typeof startRelay>;
   let held = "";
   const ok = async (home: string, ...args: string[]): Promise<string> => {
@@ -341,6 +342,7 @@ describe("kiwi ask-human says where the question went (T503)", () => {
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "handover", "--as", "boss"))![1]!;
     await seatAs(puma, code, "puma", "lead");
     await seatAs(wren, code, "wren", "builder");
+    await seatAs(kite, code, "kite", "builder");
     const want = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "a calmer tab bar"))![1]!;
     held = /\bT(\d+)\b/.exec(await ok(wren, "task", "add", "Tab bar look", "--ask", want))![1]!;
   });
@@ -419,6 +421,20 @@ describe("kiwi ask-human says where the question went (T503)", () => {
   test("a Builder's step says the Lead passes it on", async () => {
     const out = await ok(wren, "ask-human", "--step", "--holds", `T${held}`, "--why", "the release waits on it", "--needs-person", "the key is on your Mac", "--run", "bun run sign", "Sign the build");
     expect(out).toMatch(/^sent #\d+ to puma, the Lead, with a step, holding T\d+: your personality doesn't ask people, so the Lead passes it to a person; wait/);
+  });
+
+  test("a Builder gives out no work and answers no ask handed to the Lead while one leads (#2253 items 2 and 3)", async () => {
+    const refused = (...args: string[]) =>
+      ok(kite, ...args).then(
+        () => "",
+        (e: Error) => e.message,
+      );
+    expect(await refused("task", "add", "Tab icons", "--from", `T${held}`, "--owner", "wren")).toContain("the Lead gives out work while puma leads");
+    const mine = /\bT(\d+)\b/.exec(await ok(kite, "task", "add", "Tab icons", "--from", `T${held}`, "--owner", "kite"))![1]!;
+    expect(await refused("task", "assign", `T${mine}`, "wren")).toContain(`ask @puma to give T${mine} to wren`);
+    const seq = /^sent #(\d+)/.exec(await ok(wren, "ask-human", "--holds", `T${mine}`, "--option", "A: line", "--option", "B: fill", "Line or filled icons?"))![1]!;
+    expect(await refused("reply", seq, "A: line")).toContain(`#${seq} is handed to puma, the Lead`);
+    expect(await ok(puma, "reply", seq, "A: line")).toMatch(/^sent #\d+/);
   });
 
   test("the Lead's own decision is escalated to the person as before", async () => {
