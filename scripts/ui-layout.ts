@@ -244,7 +244,10 @@ try {
       const add = document.querySelector(".tile.is-add")?.getBoundingClientRect();
       return search && add ? { search: innerWidth - search.right, after: search.left - add.right } : null;
     });
-    expect(!!ends && near(ends.search, 8) && ends.after >= 8, `Search sits at the far end of the top row, 8px in, after the tabs (${ends?.search} in, ${ends?.after} after)`);
+    expect(
+      !!ends && near(ends.search, 8) && near(ends.after, 4),
+      `Search sits at the far end of the top row, 8px in, 4px after +, as the sidebar button sits 4px before Back (${ends?.search} in, ${ends?.after} after)`,
+    );
     const before = await placesOf(page, HEAD);
     const sideBefore = await placesOf(page, SIDE);
     const tabsBefore = await placesOf(page, TABS);

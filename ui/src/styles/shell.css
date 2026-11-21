@@ -1314,8 +1314,8 @@
   flex-wrap: nowrap;
   align-items: flex-end;
   gap: 0;
-  margin: 0 calc(8px + var(--tail-n) * (var(--ctl) + 8px)) 0 max(var(--nav-w), calc(var(--lead-pad) + var(--ctl) + 8px + var(--history-w)));
-  padding: 0 8px;
+  margin: 0 calc(8px + var(--tail-n) * (var(--ctl) + 4px)) 0 max(var(--nav-w), calc(var(--lead-pad) + var(--ctl) + 8px + var(--history-w)));
+  padding: 0 0 0 8px;
   overflow: hidden;
   -webkit-app-region: drag;
 }
@@ -1334,6 +1334,7 @@
 
 :root[data-tabs] .top-tools {
   justify-self: end;
+  gap: 4px;
   width: auto;
   padding: 0 8px;
 }
@@ -1343,7 +1344,7 @@
 }
 
 :root[data-tabs][data-wm="floating"] .app > .rail {
-  margin-right: calc(8px + var(--tail-n) * (var(--ctl) + 8px) + var(--wm-w));
+  margin-right: calc(8px + var(--tail-n) * (var(--ctl) + 4px) + var(--wm-w));
 }
 
 :root[data-tabs][data-wm="floating"]:has(.top-tools.is-searching, .top-hold) .app > .rail {
