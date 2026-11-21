@@ -7,11 +7,12 @@ import { prosemirrorToYXmlFragment } from "y-prosemirror"
 import { agentBlock } from "@kiwi/core/doc/agent.ts"
 
 import { madeHere, thisWindow } from "~/chat/doc/made"
+import { DEMO_NOW } from "~/demo/clock"
 import { DEMO_ASK_BLOCK } from "~/demo/data"
 import { demoDoc } from "~/demo/doc-hub"
 import { DEMO_CHART, DEMO_REPORT } from "~/demo/doc-media"
 import { DEMO_FROZEN } from "~/demo/shots"
-import { FRAGMENT, fileNode, imageNode, newBlockId, schema, type BlockKind } from "~/chat/doc/schema"
+import { FRAGMENT, fileNode, imageNode, schema, type BlockKind } from "~/chat/doc/schema"
 
 interface Seed {
   id?: string
@@ -69,10 +70,10 @@ function filler(n: number): Seed[] {
   }))
 }
 
-function block(seed: Seed): Node {
-  const id = seed.id ?? newBlockId()
+function block(seed: Seed, index: number): Node {
+  const id = seed.id ?? `demo-${index}`
   if (seed.by === thisWindow) madeHere.add(id)
-  return schema.nodes.block.create({ id, kind: seed.kind, author: seed.author, at: Date.now() - seed.ago * 60_000, by: seed.by ?? "" }, seed.body)
+  return schema.nodes.block.create({ id, kind: seed.kind, author: seed.author, at: DEMO_NOW - seed.ago * 60_000, by: seed.by ?? "" }, seed.body)
 }
 
 function peer(main: Y.Doc, aware: Awareness, name: string, color: string): { doc: Y.Doc; awareness: Awareness } {
@@ -108,7 +109,13 @@ export function seedThreadDoc(code: string, thread: string, extra: number, strea
   const { doc, awareness } = demoDoc(code, thread)
   const frag = doc.getXmlFragment(FRAGMENT)
   if (frag.length > 0) return
-  prosemirrorToYXmlFragment(schema.nodes.doc.create(null, [...filler(extra), ...SEEDS].map(block)), frag)
+  prosemirrorToYXmlFragment(
+    schema.nodes.doc.create(
+      null,
+      [...filler(extra), ...SEEDS].map((seed, index) => block(seed, index))
+    ),
+    frag
+  )
   const atlas = peer(doc, awareness, "atlas", "orange")
   const maya = peer(doc, awareness, "maya", "pink")
   const base = frag.length - SEEDS.length

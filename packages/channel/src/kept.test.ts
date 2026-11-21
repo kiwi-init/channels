@@ -55,7 +55,8 @@ const line = (id: string, text = `line ${id}`): DocLine => ({ id, author: "atlas
 test("doc lines go through the sealed record and come back the same; a record from before them reads as none", () => {
   const docLines = { "task:10": [line("a"), line("b")] };
   expect(asKept(sealedAndBack({ ...state(null), docLines }))?.docLines).toEqual(docLines);
-  const { docLines: _, ...older } = sealedAndBack(state(null)) as Record<string, unknown>;
+  const older = sealedAndBack(state(null)) as Record<string, unknown>;
+  delete older.docLines;
   expect(asKept(older)?.docLines).toEqual({});
 });
 
