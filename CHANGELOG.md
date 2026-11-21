@@ -2,6 +2,30 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.27 — 2026-11-21
+
+Tag [v2026.11.27](https://github.com/kiwi-init/channels/releases/tag/v2026.11.27) · commit [5d79c9d](https://github.com/kiwi-init/channels/commit/5d79c9d033c94947a8e956e0b6deaea3588f1dca) · 2026-11-21
+
+First-load JS: 817,912 bytes (+1,376 since 2026.11.26)
+
+### Features
+
+- **Asks:** one open decision per task counts the asker's own, and an ask on a task shows what was decided there before (T15970, #2253) ([#2569](https://github.com/kiwi-init/channels/pull/2569)) ([de39252](https://github.com/kiwi-init/channels/commit/de39252225d65ae75d52fd685a50cb6541771b8e))
+- **Lead role:** a Builder or Reviewer gives out no work and answers no ask handed to the Lead while one leads (T15970, #2253 items 2 and 3) ([#2570](https://github.com/kiwi-init/channels/pull/2570)) ([f568c6f](https://github.com/kiwi-init/channels/commit/f568c6fb44d3e3245758b55b2cad2194ff1d459f))
+- **Tasks:** a task filed from an issue lands on its PR's merge while the channel sets no landing (T15970, #2253 item 9) ([#2571](https://github.com/kiwi-init/channels/pull/2571)) ([5a7fb42](https://github.com/kiwi-init/channels/commit/5a7fb42dfab3125fbb42a3355c2829ac7662f2b1))
+- **Desktop:** the release ships a Linux aarch64 AppImage, built and checked on an ARM64 runner, so arm64 installs get the app and its updates (T16090, #2306) ([#2574](https://github.com/kiwi-init/channels/pull/2574)) ([ba22b6a](https://github.com/kiwi-init/channels/commit/ba22b6a959570cd0dc0aad4731b987a40657990f))
+
+### Fixes
+
+- **Feed:** a cold open shows a thread doc's last lines from the first frame (#2543) ([#2572](https://github.com/kiwi-init/channels/pull/2572)) ([7cb7a54](https://github.com/kiwi-init/channels/commit/7cb7a540ad1c04db4148c8d4039cc1ae72c61508))
+- **Relay:** the doc-subscription limit is off when rate limits are, and its refusal says when to come back, so the client's error names it (T16305, #2575) ([#2577](https://github.com/kiwi-init/channels/pull/2577)) ([e20f3b0](https://github.com/kiwi-init/channels/commit/e20f3b06a9b4393d5eb5726527152ecafbe6e872))
+
+### Tests and CI
+
+- **perf-feel:** a reload's first screen is the conversation's first message, not the seeded text anywhere on the page (T16091, #2183) ([#2573](https://github.com/kiwi-init/channels/pull/2573)) ([d34f5c9](https://github.com/kiwi-init/channels/commit/d34f5c93a85003d9f92703cf4cb75920c10ad5a3))
+- **perf-feel:** opening a task and switching views read the pane a wide window shows them in (#2576) ([#2579](https://github.com/kiwi-init/channels/pull/2579)) ([9abb3c4](https://github.com/kiwi-init/channels/commit/9abb3c426c20ee3720417eba8d90b5d51b171628))
+- **Perf:** feelReloadMs budget is 300 ms now that it times the conversation ([#2580](https://github.com/kiwi-init/channels/pull/2580)) ([5d79c9d](https://github.com/kiwi-init/channels/commit/5d79c9d033c94947a8e956e0b6deaea3588f1dca))
+
 ## 2026.11.26 — 2026-11-21
 
 Tag [v2026.11.26](https://github.com/kiwi-init/channels/releases/tag/v2026.11.26) · commit [57db5a4](https://github.com/kiwi-init/channels/commit/57db5a491102bc27dcd2d91da84fb5384f6491a7) · 2026-11-21
