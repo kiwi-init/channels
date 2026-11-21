@@ -158,11 +158,17 @@ test("an iPhone's button opens the iOS beta on TestFlight", async () => {
   expect(page["ios-beta"].removed).toBe(true);
 });
 
-test("Windows, Android and ARM Linux keep the button on the release page", async () => {
+test("ARM64 Linux gets the aarch64 AppImage", async () => {
+  const page = load("/", "", { userAgent: "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" });
+  await settle();
+  expect(page.download.href).toMatch(/\/Channels-[\d.]+-linux-aarch64\.AppImage$/);
+});
+
+test("Windows, Android and 32-bit ARM Linux keep the button on the release page", async () => {
   for (const userAgent of [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
     "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36",
-    "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
   ]) {
     const page = load("/", "", { userAgent });
     await settle();

@@ -70,6 +70,7 @@
     },
     "linux-arm64": {
       "bin/launcher": "570ff2debd7320bad42472e2c3997a5a0c0b951b45c0a77186936cc349227511",
+      "bin/bun": "354c2b049c716aca07b2e5cddb887928ac58950675d1258bb6312083917793b6",
       "bin/libElectrobunCore.so": "da618ab3923941c3c14efc3ae8a863daa52f6b4f46efbebcf1a19f8e14b16227",
       "bin/libNativeWrapper.so": "4ab7bce22d4e59d8de8581c869a6c83639158e77550f30bd9d325f1d74ee0651",
       "bin/libasar.so": "b2290cc159d7c85768de1fdc48bc90782042ed6b5cf59c11c462db61557f989c",
