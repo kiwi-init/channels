@@ -386,6 +386,22 @@ describe("review rounds through the CLI", () => {
     expect(elsewhere).not.toContain("also open on");
   });
 
+  test("ask-human holds the asker's own open decision on a task too, and the next ask there shows what was decided (#2253)", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "pick the badge shape", "--ask", want));
+    const first = seqOf(await ok(dev, "ask-human", "--holds", `T${t}`, "--option", "A: round", "--option", "B: square", "Round or square?"));
+    const head = async () => /head #(\d+)/.exec(await ok(dev, "status"))![1];
+    const before = await head();
+    const stopped = await run(dev, "ask-human", "--holds", `T${t}`, "--option", "A: 4px", "--option", "B: 8px", "Which corner radius?");
+    expect(stopped.code).not.toBe(0);
+    expect(stopped.out).toContain(`already open on T${t}: #${first} dev`);
+    expect(stopped.err).toContain("one open decision per task");
+    expect(await head()).toBe(before);
+    await ok(owner, "--as", "human", "reply", first, "A: round");
+    const next = await ok(dev, "ask-human", "--holds", `T${t}`, "--option", "A: 4px", "--option", "B: 8px", "Which corner radius?");
+    expect(next).toMatch(/^escalated #\d+ to /);
+    expect(next).toContain(`decided before on this work: #${first} dev: Round or square? → human: A: round`);
+  });
+
   test("ask-human holds every task given, whether --holds repeats or lists them with commas (#2545)", async () => {
     const pair = async (what: string) => [taskNo(await ok(dev, "task", "add", `${what} one`, "--ask", want)), taskNo(await ok(dev, "task", "add", `${what} two`, "--ask", want))] as const;
     const [a, b] = await pair("repeat");

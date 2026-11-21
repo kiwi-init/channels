@@ -33,7 +33,7 @@ import {
   type Step,
 } from "@kiwi/core/protocol.ts";
 import { recipients, waitsLines, waitsOf, type Busy, type Marks, type Reached } from "@kiwi/core/receipts.ts";
-import { asksOnSameWork, openAsksOnWork, chooseThread, findRoom, inGeneral, longForGeneral, parseTaskId, taskId, wentTo, type ChannelState } from "@kiwi/core/state.ts";
+import { asksOnSameWork, decidedOnWork, openAsksOnWork, chooseThread, findRoom, inGeneral, longForGeneral, parseTaskId, taskId, wentTo, type ChannelState } from "@kiwi/core/state.ts";
 import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
@@ -390,10 +390,15 @@ export const messageCommands: Record<string, Command> = {
       const named = [...new Set([...(task !== undefined ? [`T${task}`] : []), ...(held?.map(([raw]) => raw) ?? [])])];
       const heldText = named.length ? `, holding ${named.join(", ")}` : "";
       const ids = [...new Set([...(task !== undefined ? [task] : []), ...(holds ?? [])])];
+      const decidedBefore = (state: ChannelState, messages: readonly Message[]) => {
+        for (const { ask, answer } of decidedOnWork(state, messages, ids))
+          out(`decided before on this work: #${ask.seq} ${ask.from}: ${firstLine(ask.body)} → ${answer.from}: ${firstLine(answer.body)}`);
+      };
       const sameWork = (seq: number, to: readonly string[]) =>
         Effect.gen(function* () {
           if (!ids.length) return;
-          const { state } = yield* s.state();
+          const { state, messages } = yield* s.state();
+          decidedBefore(state, messages);
           for (const a of asksOnSameWork(state, s.me, to, ids).filter((x) => x.seq !== seq)) {
             const shared = ids.filter((id) => a.task === id || a.holds?.includes(id)).map((id) => (state.tasks.has(id) ? taskId(id) : `#${id}`));
             out(`also open on ${shared.join(", ")}: #${a.seq} ${a.from} → ${a.to?.join(", ")}: ${firstLine(a.body)}`);
@@ -410,10 +415,11 @@ export const messageCommands: Record<string, Command> = {
           );
           const { state, messages } = yield* s.state();
           for (const n of yield* waitingOn(s, state, messages, { seq, body, to: [lead], task, re })) out(n);
+          decidedBefore(state, messages);
         });
       if (ids.length && !opt.also && area === undefined && !opt.step && decision !== "irreversible" && opt.handoff === undefined) {
         const { state } = yield* s.state();
-        const open = openAsksOnWork(state, ids).find((a) => a.from !== s.me && a.seq !== re);
+        const open = openAsksOnWork(state, ids).find((a) => a.seq !== re);
         if (open) {
           const shared = ids.filter((id) => open.task === id || open.holds?.includes(id)).map((id) => (state.tasks.has(id) ? taskId(id) : `#${id}`));
           out(`already open on ${shared.join(", ")}: #${open.seq} ${open.from} → ${open.to?.join(", ")}: ${firstLine(open.body)}`);
