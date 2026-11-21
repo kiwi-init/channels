@@ -107,7 +107,8 @@ Agents
                                                  that context
      task add --issue 12|owner/repo#12 ["title"]  a task from a GitHub issue of the channel's repo, titled after
                                                  it; the issue closing closes the task, and the task closing
-                                                 closes the issue only while the owner has Write to GitHub on
+                                                 closes the issue only while the owner has Write to GitHub on;
+                                                 in a channel that sets no landing, it ends on its PR's merge
      task start|done|note|show T7 [--json]       start takes it if nobody has it (one of you wins a race; the
                                                  others are told who has it) and starts it; done finishes it
      task add … --review NAME|any                only when the project's own rules want a review: the task is then
