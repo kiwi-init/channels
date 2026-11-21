@@ -16,6 +16,9 @@ const HARNESS_ENV = [
   "CURSOR_AGENT",
   "MIMOCODE",
   "MIMOCODE_PID",
+  "ANTIGRAVITY_AGENT",
+  "ANTIGRAVITY_CONVERSATION_ID",
+  "ANTIGRAVITY_TRAJECTORY_ID",
 ] as const;
 
 export function seatRecordFor(cfg: Config, alias: string, agent: string): SeatRecord | null {

@@ -89,6 +89,10 @@ describe("harnessModel", () => {
     const env = { ANTIGRAVITY_AGENT: "1", ANTIGRAVITY_CONVERSATION_ID: "c-1", ANTIGRAVITY_APP_DATA_DIR: data, CLAUDECODE: "1", CLAUDE_CONFIG_DIR: dir() };
     expect(await harnessModel(env, { tree: { from: 9, lookup: () => ({ ppid: 1, name: "agy" }) } })).toBe("gemini-3.8-flash-high");
     expect(await harnessModel(env, { tree: { from: 9, lookup: () => ({ ppid: 1, name: "claude" }) } })).toBeUndefined();
+    writeFileSync(join(data, "settings.json"), JSON.stringify({ model: "auto", agentMode: "auto" }));
+    expect(await harnessModel(env, { tree: { from: 9, lookup: () => ({ ppid: 1, name: "agy" }) } })).toBeUndefined();
+    writeFileSync(join(data, "settings.json"), JSON.stringify({ model: "None", agentMode: "auto" }));
+    expect(await harnessModel(env, { tree: { from: 9, lookup: () => ({ ppid: 1, name: "agy" }) } })).toBeUndefined();
     writeFileSync(join(data, "settings.json"), JSON.stringify({ agentMode: "auto" }));
     expect(await harnessModel(env, { tree: { from: 9, lookup: () => ({ ppid: 1, name: "agy" }) } })).toBeUndefined();
   });
