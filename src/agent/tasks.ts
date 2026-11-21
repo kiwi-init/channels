@@ -110,7 +110,7 @@ export class SessionTasks extends SessionMessaging {
           ...(review ? { review } : {}),
           ...(opts.issue ? { issue: opts.issue } : {}),
           ...(opts.from !== undefined ? { from: opts.from } : {}),
-          ...(steps ? { steps } : opts.noSteps ? { then: "none" as const } : {}),
+          ...(steps ? { steps } : opts.noSteps ? { then: "none" as const } : opts.issue && state.landing === null && state.landingSteps === null ? { then: "merge" as const } : {}),
           ...(lander ? { lander } : {}),
         },
         `task: ${title}`,
