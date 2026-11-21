@@ -4,9 +4,9 @@ const INSTALL = `${location.origin}/install`;
 const IOS_BETA = "https://testflight.apple.com/join/qvKqgRNJ";
 
 const DOWNLOADS = [
-  { id: "mac-arm64", os: "macOS", detail: "Apple silicon", file: "Channels-2026.11.26-mac-arm64.dmg" },
-  { id: "linux-appimage", os: "Linux", detail: "AppImage", file: "Channels-2026.11.26-linux-x86_64.AppImage" },
-  { id: "linux-aarch64", os: "Linux", detail: "AppImage, ARM64", file: "Channels-2026.11.26-linux-aarch64.AppImage" },
+  { id: "mac-arm64", os: "macOS", detail: "Apple silicon", file: "Channels-2026.11.27-mac-arm64.dmg" },
+  { id: "linux-appimage", os: "Linux", detail: "AppImage", file: "Channels-2026.11.27-linux-x86_64.AppImage" },
+  { id: "linux-aarch64", os: "Linux", detail: "AppImage, ARM64", file: "Channels-2026.11.27-linux-aarch64.AppImage" },
 ];
 
 const WORDS = {
