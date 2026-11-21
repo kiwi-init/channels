@@ -15,7 +15,7 @@
       "source": "desktop-eb"
     },
     "typingP95Ms": { "what": "Typing while agents post, p95 key event", "at": ["typing", "p95Ms"], "per": "@1x", "budget": 32, "gate": 32 },
-    "feelReloadMs": { "what": "Reload to the first screen, 150 ms RTT, in page", "at": ["reload", "firstScreenInPageMs"], "source": "feel", "budget": 150, "gate": 440 },
+    "feelReloadMs": { "what": "Reload to the conversation's first message, 150 ms RTT, in page", "at": ["reload", "firstScreenInPageMs"], "source": "feel", "budget": 150, "gate": 440 },
     "feelNextBlockMs": { "what": "Enter to your next block in the thread doc, 150 ms RTT", "at": ["send", "nextBlockMs"], "source": "feel", "budget": 16, "gate": 16 },
     "feelFalseScreens": { "what": "False screens in 5 reloads (Add an agent, No tasks or messages yet)", "at": ["reload", "falseScreens"], "source": "feel", "budget": 0.5, "gate": 0.5 },
     "feelViewShift": { "what": "Layout shift, 10 switches Tasks / #general", "at": ["views", "layoutShift"], "source": "feel", "budget": 0.01, "gate": 0.01 },
