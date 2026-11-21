@@ -11,6 +11,7 @@ import { approveSpec, composer, firstRun, letIn, newChannel, channelSettings, er
 import { harnessDist } from "./ui-harness.ts";
 import { pageErrors } from "./page-errors.ts";
 import { readSeededFrame, reloadFromHost, watchSeededFrame } from "./seeded-frame.ts";
+import { TASK_VIEW } from "./task-view.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`What a person feels, measured: one channel with PERF_MESSAGES messages (400) and PERF_TASKS tasks (12), behind a relay PERF_RTT_MS away (0).
@@ -287,7 +288,7 @@ async function details(page: Page, cdp: CDPSession, opening: boolean): Promise<{
 
 async function openTask(page: Page, id: number, marker: string): Promise<number> {
   return page.evaluate(
-    async ([task, text]) => {
+    async ([task, text, view]) => {
       const row = document.querySelector<HTMLElement>(`main a.pg-main[href="kiwi-task:${task}"]`);
       if (!row) throw new Error(`no row for T${task} on the board`);
       const t0 = performance.now();
@@ -295,12 +296,12 @@ async function openTask(page: Page, id: number, marker: string): Promise<number>
       const deadline = t0 + 15000;
       while (performance.now() < deadline) {
         await new Promise((r) => requestAnimationFrame(r));
-        if (document.querySelector('aside[aria-label="Details"]')?.textContent?.includes(text)) break;
+        if ([...document.querySelectorAll<HTMLElement>(view)].some((el) => el.checkVisibility() && (el.textContent ?? "").includes(text))) break;
       }
       if (performance.now() >= deadline) throw new Error(`T${task} opened without “${text}”`);
       return Math.round(performance.now() - t0);
     },
-    [id, marker] as const,
+    [id, marker, TASK_VIEW] as const,
   );
 }
 
