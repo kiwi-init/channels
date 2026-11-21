@@ -1382,7 +1382,7 @@
   box-shadow: none;
 }
 
-:root[data-tabs] .app > .rail :is(.tile.is-add, .tile.is-folder) {
+:root[data-tabs] .app > .rail .tile.is-add {
   align-self: center;
 }
 
@@ -1525,13 +1525,89 @@
   background: var(--ink-3);
 }
 
-:root[data-tabs] .tile.is-folder .tile-dot {
-  bottom: -6px;
+:root[data-tabs] .app > .rail .tile.is-folder {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 6px;
+  align-self: auto;
+  width: auto;
+  min-width: calc(var(--ctl) + 8px);
+  max-width: 12rem;
+  height: var(--tab-h);
+  padding: 0 4px 0 12px;
+  background: var(--wash);
+  color: var(--ink-2);
+  font: 500 var(--t-ui) var(--ui);
 }
 
-:root[data-tabs] .folder-grid {
-  grid-template-columns: repeat(2, 0.75rem);
-  grid-auto-rows: 0.75rem;
+:root[data-tabs] .app > .rail .tile.is-folder:hover {
+  background: var(--wash-2);
+  color: var(--ink);
+}
+
+:root[data-tabs] .app > .rail .tile.is-folder.is-on {
+  background: var(--page);
+  color: var(--ink);
+}
+
+:root[data-tabs] .app > .rail .tile.is-folder > svg {
+  flex: none;
+}
+
+:root[data-tabs] .folder-name {
+  min-width: 0;
+  padding-right: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  mask-image: linear-gradient(to right, #000 calc(100% - 8px), transparent);
+}
+
+:root[data-tabs] .app > .rail .tile.is-folder :is(.tile-badge, .tile-dot) {
+  position: static;
+  flex: none;
+  margin: 0;
+  box-shadow: none;
+}
+
+:root[data-tabs] .app > .rail .tile.is-folder .tile-badge {
+  background: var(--decide-wash);
+  color: var(--decide);
+}
+
+:root[data-tabs] .app > .rail .tile.is-folder .tile-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  background: var(--ink-3);
+}
+
+:root[data-tabs] .app > .rail .rail-folder.is-open > .tile.is-folder {
+  border-radius: var(--r-ctl) 0 0 var(--r-ctl);
+}
+
+:root[data-tabs] .app > .rail .rail-folder-list .tile[data-code] {
+  border-radius: 0;
+  background: var(--wash);
+}
+
+:root[data-tabs] .app > .rail .rail-folder-list > li:last-child > .tile[data-code] {
+  border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
+}
+
+:root[data-tabs] .app > .rail .rail-folder-list .tile[data-code]:hover {
+  background: var(--wash-2);
+}
+
+:root[data-tabs] .app > .rail .rail-folder-list .tile[data-code].is-on {
+  border-radius: var(--r-ctl);
+  background: var(--page);
+}
+
+:root[data-tabs] .rail[data-fit="icons"] .tile.is-folder {
+  padding: 0 8px;
+}
+
+:root[data-tabs] .rail[data-fit="icons"] .folder-name {
+  display: none;
 }
 
 @media (min-width: 1180px) and (orientation: landscape) {
