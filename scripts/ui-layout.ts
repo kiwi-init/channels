@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
 import { pageErrors } from "./page-errors.ts";
+import { TASK_VIEW } from "./task-view.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -334,6 +335,8 @@ try {
     await page.locator(NOW_ROW).first().click();
     await page.waitForSelector(TASK_PANE);
     await page.waitForTimeout(900);
+    const found = await page.evaluate((view) => [...document.querySelectorAll<HTMLElement>(view)].some((el) => el.checkVisibility() && !!el.querySelector(".task-page, .task-body")), TASK_VIEW);
+    expect(found, "the opened task shows where perf-feel looks for it (scripts/task-view.ts)");
     const panel = await boxOf(page, TASK_PANE);
     expect(
       !!slot && !!panel && near(slot.left, panel.left) && near(slot.top, panel.top) && near(slot.right, panel.right) && near(slot.bottom, panel.bottom),
@@ -366,6 +369,8 @@ try {
     await page.locator(NOW_ROW).first().click();
     await page.waitForSelector(TASK_PANE);
     await page.waitForTimeout(900);
+    const found = await page.evaluate((view) => [...document.querySelectorAll<HTMLElement>(view)].some((el) => el.checkVisibility() && !!el.querySelector(".task-page, .task-body")), TASK_VIEW);
+    expect(found, "the opened task shows where perf-feel looks for it (scripts/task-view.ts)");
     const panel = await boxOf(page, TASK_PANE);
     const chat = await boxOf(page, ".main");
     const composer = await boxOf(page, ".main .composer");

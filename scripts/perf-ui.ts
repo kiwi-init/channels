@@ -148,6 +148,7 @@ export async function viewTimed(page: Page, label: string, marker: string): Prom
   return page.evaluate(
     async ([name, text]) => {
       const flat = (s: string) => s.replace(/\s+/g, "");
+      const shownPane = () => document.querySelector<HTMLElement>(".panes > .pane.is-focus") ?? document.querySelector<HTMLElement>("main");
       const b = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Views"] button, section[aria-label="Rooms"] button')].find((x) => flat(x.textContent ?? "").startsWith(flat(name)));
       if (!b) throw new Error(`no ${name} view`);
       const t0 = performance.now();
@@ -155,14 +156,14 @@ export async function viewTimed(page: Page, label: string, marker: string): Prom
       const deadline = t0 + 15000;
       while (performance.now() < deadline) {
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
-        if ((b.getAttribute("aria-pressed") === "true" || b.getAttribute("aria-current") === "page") && new RegExp(text).test(document.querySelector("main")?.textContent ?? "")) break;
+        if ((b.getAttribute("aria-pressed") === "true" || b.getAttribute("aria-current") === "page") && new RegExp(text).test(shownPane()?.textContent ?? "")) break;
       }
       if (performance.now() >= deadline) {
         const views = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Views"] button, section[aria-label="Rooms"] button')]
           .map((x) => `${flat(x.textContent ?? "")}[${x.getAttribute("aria-pressed") ?? x.getAttribute("aria-current")}]`)
           .join(" | ");
-        const shown = (document.querySelector<HTMLElement>("main")?.innerText ?? "").replace(/\n+/g, " / ").slice(0, 1200);
-        throw new Error(`the ${name} view opened without ${text}; views: ${views}; main shows: ${shown}`);
+        const shown = (shownPane()?.innerText ?? "").replace(/\n+/g, " / ").slice(0, 1200);
+        throw new Error(`the ${name} view opened without ${text}; views: ${views}; the focused pane shows: ${shown}`);
       }
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const t1 = performance.now();
