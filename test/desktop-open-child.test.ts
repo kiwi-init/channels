@@ -30,8 +30,9 @@ const open = (env: Record<string, string>, stillOpeningMs?: number) => openInBro
 
 async function statusOf(file: string, withinMs: number): Promise<string> {
   const until = performance.now() + withinMs;
-  while (!existsSync(file) && performance.now() < until) await Bun.sleep(50);
-  return existsSync(file) ? readFileSync(file, "utf8").trim() : "never wrote: killed by SIGPIPE";
+  const written = () => (existsSync(file) ? readFileSync(file, "utf8").trim() : "");
+  while (written() === "" && performance.now() < until) await Bun.sleep(50);
+  return written() || "never wrote: killed by SIGPIPE";
 }
 
 describe.skipIf(process.platform !== "linux")("a real xdg-open's stderr and pipes (#2534)", () => {
