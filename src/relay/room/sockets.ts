@@ -129,13 +129,14 @@ const onDocFrame = Effect.fn("Room.onDocFrame")(function* (f: DocFrame, sender: 
   if (view.watch) return refuse("a watch socket only follows the head");
   if (!wellFormedThread(th)) return refuse("bad thread id", "BadRequest");
   if (f.t === "doc.unsub") return { follow: { th, on: false } } satisfies Effects;
+  const { noRateLimits } = yield* Policy;
   if (f.t === "doc.sub") {
-    if (!allow(`docsub:${db.roomId}:${sender}`, DOC_SUBS_PER_MINUTE)) return refuse("too many doc subscriptions; slow down", "TooMany");
+    const subs = take(`docsub:${db.roomId}:${sender}`, noRateLimits ? Infinity : DOC_SUBS_PER_MINUTE);
+    if ("retryAfter" in subs) return refuse("too many doc subscriptions; wait a minute", "TooMany", subs.retryAfter);
     if (!view.docs.has(th) && view.docs.size >= MAX_DOC_THREADS) return refuse(`a socket follows at most ${MAX_DOC_THREADS} threads; unsubscribe one first`, "TooMany");
     const { updates, head } = yield* docBacklog(th, f.since);
     return { reply: [...updates.map((u) => frame({ t: "doc", ...u })), frame({ t: "doc.ready", th, head })], follow: { th, on: true } } satisfies Effects;
   }
-  const { noRateLimits } = yield* Policy;
   const counted = take(`doc:${db.roomId}:${sender}`, noRateLimits ? Infinity : DOC_UPDATES_PER_MINUTE);
   if ("retryAfter" in counted) return refuse("too many doc updates; wait a minute", "TooMany", counted.retryAfter);
   if (id === undefined) {

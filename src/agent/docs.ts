@@ -80,7 +80,9 @@ async function inThreadDoc<T>(ch: Channel, from: number, at: DocPlace, work: (td
   try {
     await within(streaming, ms, "opening the channel's socket");
     const td = await ch.threadDoc(at.key, at.th);
-    await within(td.whenSynced(), Math.max(1, until - Date.now()), "reading the thread's doc");
+    await within(td.whenSynced(), Math.max(1, until - Date.now()), "reading the thread's doc").catch((e: unknown) => {
+      throw td.refused ? new Error(`the relay refused the thread's doc: ${td.refused}`) : e;
+    });
     const out = work(td);
     await sent(td, until);
     return out;
