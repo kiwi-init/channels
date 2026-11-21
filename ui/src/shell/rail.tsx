@@ -315,7 +315,7 @@ export function Rail() {
                   on={on}
                   drop={over === `f:${item.folder.id}`}
                   fresh={fresh === item.folder.id}
-                  draggable={tabs}
+                  tabs={tabs}
                   onClick={() => save(folders.map((f) => (f.id === item.folder.id ? { ...f, open: !f.open } : f)))}
                 />
               </Suspense>
