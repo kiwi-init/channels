@@ -1,5 +1,5 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { created, joinSeats, youAre } from "./join-seats-setup.ts";
 
@@ -32,7 +32,10 @@ async function joinFromAgy(owner: string, home: string, code: string): Promise<s
   const bin = scratch("agy-bin");
   symlinkSync(process.execPath, join(bin, "agy"));
   const cli = join(bin, "agy-cli.ts");
-  writeFileSync(cli, "const child = Bun.spawn(process.argv.slice(2), { stdout: 'inherit', stderr: 'inherit' });\nconsole.log(`joined: ${await child.exited}`);\n");
+  writeFileSync(
+    cli,
+    "const child = Bun.spawn(process.argv.slice(2), { stdout: 'inherit', stderr: 'inherit' });\nfor (const s of ['SIGTERM', 'SIGINT']) process.on(s, () => child.kill());\nconsole.log(`joined: ${await child.exited}`);\n",
+  );
   const env = { ANTIGRAVITY_AGENT: "1", ANTIGRAVITY_CONVERSATION_ID: CONVERSATION, CLAUDECODE: "", KIWI_MODEL: "gemini-3.8-flash-low" };
   const p = spawn(home, ["join", code, "--timeout", "40s"], env, home, undefined, [join(bin, "agy"), cli]);
   let out = "";
@@ -43,27 +46,32 @@ async function joinFromAgy(owner: string, home: string, code: string): Promise<s
   let listed = "";
   await until(async () => /\d{3}-\d{3}/.test((listed = await ok(owner, ["--as", "human", "requests"]))), "the request listed with its code");
   await ok(owner, ["--as", "human", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes"]);
-  await until(() => out.includes("joined: "), "the join ending");
-  expect(out).toContain("joined: 0");
+  await until(() => out.includes("Listening now: this command ends when a message for you arrives."), "the join listening");
+  p.kill();
+  await p.exited;
   return youAre(out);
 }
 
 describe("Antigravity CLI's hooks answer in agy's format", () => {
-  test("session start and each model call inject a system message, and the stop continues the turn while messages are unread", async () => {
+  test("session start and each model call inject a system message, and the stop continues the turn for unread messages or a missing listener outside tmux", async () => {
     const owner = scratch("agy-own");
     const code = created(await ok(owner, ["create", "agyroom", "--as", "boss"]));
     const home = scratch("agy-seat");
     const me = await joinFromAgy(owner, home, code);
 
     const hooksDir = scratch("agy-config");
-    const hook = (event: string, stdin: string) => run(home, ["--harness", "agy", "hook", event], { ANTIGRAVITY_CONVERSATION_ID: CONVERSATION, CLAUDECODE: "" }, hooksDir, stdin);
+    const hook = (event: string, stdin: string, extraEnv: Record<string, string> = {}) =>
+      run(home, ["--harness", "agy", "hook", event], { ANTIGRAVITY_CONVERSATION_ID: CONVERSATION, CLAUDECODE: "", ...extraEnv }, hooksDir, stdin);
 
     const start = await hook("session-start", agyInput(home));
     expect(start.code).toBe(0);
     expect(injected(start.out)).toContain(`You're "${me}"`);
+    expect(injected(start.out)).toContain("run_command");
 
+    const sub = join(home, "sub");
+    mkdirSync(sub);
     await ok(owner, ["send", "--to", me, "first message for agy"]);
-    const prompt = await hook("prompt", agyInput(home, { invocationNum: 0, initialNumSteps: 1 }));
+    const prompt = await hook("prompt", agyInput(scratch("agy-other-ws"), { cwd: sub, invocationNum: 0, initialNumSteps: 1 }));
     expect(prompt.code).toBe(0);
     expect(injected(prompt.out)).toContain("first message for agy");
     expect((await hook("prompt", agyInput(home, { invocationNum: 1, initialNumSteps: 1 }))).out).toBe("");
@@ -78,7 +86,31 @@ describe("Antigravity CLI's hooks answer in agy's format", () => {
     const answer = JSON.parse(stop.out) as Continue;
     expect(answer.decision).toBe("continue");
     expect(answer.reason).toContain("second message for agy");
+    expect(answer.reason).toContain("no Kiwi listener of yours is running for agyroom");
 
-    expect((await hook("stop", agyInput(home, { executionNum: 1, terminationReason: "NO_TOOL_CALL", fullyIdle: true, error: "" }))).out).toBe("");
+    const rearm = await hook("stop", agyInput(home, { executionNum: 1, terminationReason: "NO_TOOL_CALL", fullyIdle: true, error: "" }));
+    expect(rearm.code).toBe(0);
+    const rearmAnswer = JSON.parse(rearm.out) as Continue;
+    expect(rearmAnswer.decision).toBe("continue");
+    expect(rearmAnswer.reason).toContain("no Kiwi listener of yours is running for agyroom");
+    expect(rearmAnswer.reason).toContain("run_command");
+
+    const inTmux = await hook("stop", agyInput(home, { executionNum: 1, terminationReason: "NO_TOOL_CALL", fullyIdle: true, error: "" }), {
+      TMUX: "/tmp/tmux-501/default,1,0",
+      TMUX_PANE: "%4",
+    });
+    expect(inTmux.code).toBe(0);
+    expect(inTmux.out).toBe("");
+
+    const listener = spawn(home, ["join"], { ANTIGRAVITY_AGENT: "1", ANTIGRAVITY_CONVERSATION_ID: CONVERSATION, CLAUDECODE: "" });
+    try {
+      await until(
+        async () => (await hook("stop", agyInput(home, { executionNum: 1, terminationReason: "NO_TOOL_CALL", fullyIdle: true, error: "" }))).out === "",
+        "stop hook quiet while agy listener is running",
+      );
+    } finally {
+      listener.kill();
+      await listener.exited;
+    }
   });
 });
