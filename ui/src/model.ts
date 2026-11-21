@@ -8,6 +8,7 @@ import type { Personality } from "@kiwi/core/personality.ts"
 import type { SharedWith } from "@kiwi/core/shared-seats.ts"
 import type { Reason } from "@kiwi/core/routing.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
+import type { DocLine, DocLines } from "@kiwi/channel/kept.ts"
 import type { DocBlockRef, GithubNote, Step, StepReply, Unarmed } from "@kiwi/core/protocol.ts"
 import type { CheckpointDaily } from "@kiwi/core/checkpoint-schedule.ts"
 import type { DocEvent } from "../../desktop/src/bridge.ts"
@@ -642,6 +643,7 @@ export interface CheckpointRound {
 export interface Channel {
   code: string
   title: string
+  docLines?: DocLines
   icon?: string
   youOwn: boolean
   youManageAgents?: boolean
@@ -816,6 +818,7 @@ export interface Folder {
 }
 
 export interface Actions {
+  keepDocLines(code: string, thread: string, lines: readonly DocLine[]): void
   send(code: string, where: Where, text: string, opts?: SendExtras): Promise<boolean>
   retry(code: string, seq: number): void
   loadImage(code: string, spot: string): void

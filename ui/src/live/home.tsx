@@ -31,7 +31,7 @@ export function HomeMembers({ except = null }: { except?: string | null }) {
 }
 
 const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }) {
-  const { ch, state, messages: shown, reach, roster, online, requests, isOwner, gone, ready, send, refreshRequests, refreshRoster, foldFrom, older } = useChannel(member, undefined, true)
+  const { ch, state, messages: shown, reach, roster, online, requests, isOwner, gone, ready, send, refreshRequests, refreshRoster, foldFrom, older, keepDocLines } = useChannel(member, undefined, true)
   const messages = useMemo(() => withReach(reach, shown, state.openAsks), [reach, shown, state.openAsks])
   const me = member.identity.name
   const roomId = member.access.roomId
@@ -91,8 +91,8 @@ const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }
   const discard = useCallback((key: number) => void changeUnsent(roomId, (list) => list.filter((p) => p.key !== key)), [roomId])
 
   const run = useMemo(
-    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom, older }),
-    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom, older]
+    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom, older, keepDocLines }),
+    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard, refreshRequests, refreshRoster, foldFrom, older, keepDocLines]
   )
 
   useLayoutEffect(() => publishHome(code, gone ? null : { channel: summary, run }), [code, summary, run, gone])

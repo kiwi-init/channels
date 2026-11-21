@@ -99,6 +99,7 @@ export function makeActions(): Actions {
       markSeenTo(room, upTo)
     },
     openDoc: (code, thread, th, on) => link(code).doc(thread, th, on),
+    keepDocLines: (code, thread, lines) => openedRun(code)?.keepDocLines(thread, lines),
     findDoc: (code, thread) => findDoc(link(code), code, thread),
     docVersions: async (code, th) => (await rare()).versionsOf(link(code), th),
     restoreDocVersion: async (code, ...a) => (await rare()).restoreOf(link(code), ...a),

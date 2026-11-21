@@ -26,7 +26,7 @@ import { checkpointAskFor } from "@kiwi/core/state/checkpoint-asks.ts";
 import { CHECKPOINT_WINDOW_MS } from "@kiwi/core/checkpoint-schedule.ts";
 import { trimmed } from "./trim.ts";
 import { foldRoster } from "./fold-roster.ts";
-import { asKept, toKept } from "./kept.ts";
+import { asKept, toKept, withDocLines, type DocLine, type DocLines } from "./kept.ts";
 import { handOver, onceEach, openChannel, warmUp } from "./open.ts";
 import type { Scrollback } from "./back.ts";
 import { dropWarm, foldedFor, keepWarm, LEAN, leanLoaded, leanNow, LIGHT, warmOf, type Warm } from "./warm.ts";
@@ -86,6 +86,8 @@ export interface ChannelHandle {
   ready: boolean;
   caughtUp: boolean;
   older: OlderHistory;
+  docLines: DocLines;
+  keepDocLines: (thread: string, lines: readonly DocLine[]) => void;
 }
 
 export interface ChannelStoreDeps {
@@ -165,6 +167,7 @@ export class ChannelStore {
   private scroll: Promise<Scrollback> | null = null;
   private readonly githubSynced = new Map<string, number>();
   private readonly githubHealth = signal<GithubHealth>({ status: null, errors: [], syncing: null });
+  private readonly docLines = signal<DocLines>({});
 
   constructor(member: StoredMember, human?: HumanSession | null, deps?: ChannelStoreDeps, light = false) {
     this.ch = deps?.link ?? linkOf(member);
@@ -262,6 +265,8 @@ export class ChannelStore {
       ready: this.ready.value,
       caughtUp: this.caughtUp.value,
       older: this.older,
+      docLines: this.docLines.value,
+      keepDocLines: this.keepDocLines,
     }));
   }
 
@@ -274,6 +279,12 @@ export class ChannelStore {
   };
 
   snapshot = (): ChannelHandle => this.handle.value;
+
+  keepDocLines = (thread: string, lines: readonly DocLine[]): void => {
+    const now = this.docLines.peek();
+    const next = withDocLines(now, thread, lines);
+    if (next !== now) this.docLines.value = next;
+  };
 
   serve(as: "full" | "light"): void {
     this.warmAs = as;
@@ -429,7 +440,13 @@ export class ChannelStore {
 
   private keepSealed(): (() => void) | undefined {
     if (!this.start.value || this.gone.value) return;
-    const kept = toKept({ roster: this.roster.value, base: this.partial.value ? null : this.base.value, guardFloor: this.guardFloor.value, roomsFloor: this.roomsFloor.value });
+    const kept = toKept({
+      roster: this.roster.value,
+      base: this.partial.value ? null : this.base.value,
+      guardFloor: this.guardFloor.value,
+      roomsFloor: this.roomsFloor.value,
+      docLines: this.docLines.value,
+    });
     const t = setTimeout(() => {
       void this.ch
         .keep(kept)
@@ -676,6 +693,7 @@ export class ChannelStore {
           }
           if (!this.guardIn) this.guardFloor.value = kept.guardFloor;
           if (!this.roomsIn) this.roomsFloor.value = kept.roomsFloor;
+          this.docLines.value = Object.entries(this.docLines.peek()).reduceRight((all, [thread, lines]) => withDocLines(all, thread, lines), kept.docLines);
           if (cached?.unread.length) {
             const seen = cached.unread;
             for (const seq of seen) earlyUnread.add(seq);

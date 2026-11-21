@@ -15,7 +15,7 @@ const empty = (): FoldBase => {
   return kept.base;
 };
 const base = (n: number): FoldBase => ({ ...empty(), n, rules: FOLD_RULES });
-const kept = (n: number | null): Kept => ({ roster: [], base: n === null ? null : base(n), guardFloor: null, roomsFloor: null });
+const kept = (n: number | null): Kept => ({ roster: [], base: n === null ? null : base(n), guardFloor: null, roomsFloor: null, docLines: {} });
 
 function relay(rotateTrips = 1, rotated = false) {
   const log: string[] = [];

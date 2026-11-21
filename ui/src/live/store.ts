@@ -6,6 +6,7 @@ import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import type { ChannelState, FoldBase } from "@kiwi/core/state.ts"
 import type { ChannelLink } from "@kiwi/channel/channel-ops.ts"
 import type { OlderHistory } from "@kiwi/channel/channel-store.ts"
+import type { DocLine } from "@kiwi/channel/kept.ts"
 import type { Channel, GoneChannel, HomeChannel, SendExtras, Where } from "~/model"
 
 export interface Run {
@@ -26,6 +27,7 @@ export interface Run {
   refreshRoster: () => Promise<void>
   foldFrom: (messages: Wire[], base: FoldBase | null) => ChannelState
   older: OlderHistory
+  keepDocLines: (thread: string, lines: readonly DocLine[]) => void
 }
 
 interface Opened {

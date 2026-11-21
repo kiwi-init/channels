@@ -2,8 +2,9 @@ import type { Account, Ask, Channel, ChannelTile, Device, Issue, LaunchedAgent, 
 import { nicknamesOf } from "~/names"
 import { omit } from "@kiwi/core/omit.ts"
 import { wrote } from "~/words"
+import { DEMO_NOW } from "~/demo/clock"
 
-const now = Date.now()
+const now = DEMO_NOW
 const m = (min: number): number => now - min * 60_000
 
 const DEMO_DAY = 86_400_000
