@@ -12,6 +12,7 @@ import { contextLineOn, home, loadConfig, type ChannelConfig } from "../config.t
 import { wakeHooked, wakeOn } from "../daemon/reach.ts";
 import { appendRotated } from "../daemon/wake.ts";
 import { charterLines, formatMessage, handedNote, holdLine, leadLine, messageHead } from "@kiwi/core/format.ts";
+import { agyModelName } from "../harness.ts";
 import { kimiServer } from "../kimi-server.ts";
 import { here, type Binding, type Here } from "../seats.ts";
 import { tmuxPlaceFrom } from "../tmux-pane.ts";
@@ -73,14 +74,22 @@ export interface HookInput {
   workspacePaths?: unknown;
   modelName?: unknown;
   terminationReason?: unknown;
+  continuationActive?: unknown;
 }
 
 export function fromAgy(input: HookInput): HookInput {
   const session = typeof input.conversationId === "string" && input.conversationId ? input.conversationId : undefined;
   const workspace = Array.isArray(input.workspacePaths) ? input.workspacePaths.find((p): p is string => typeof p === "string" && p !== "") : undefined;
   const cwd = typeof input.cwd === "string" && input.cwd ? input.cwd : workspace;
-  const model = typeof input.modelName === "string" && input.modelName.trim() && input.modelName.trim() !== "auto" ? input.modelName.trim() : undefined;
-  return { ...input, ...(session ? { session_id: session } : {}), ...(cwd ? { cwd } : {}), ...(model ? { model } : {}) };
+  const model = agyModelName(input.modelName);
+  const active = input.continuationActive === true || input.stop_hook_active === true;
+  return {
+    ...input,
+    ...(session ? { session_id: session } : {}),
+    ...(cwd ? { cwd } : {}),
+    ...(model ? { model } : {}),
+    ...(active ? { stop_hook_active: true } : {}),
+  };
 }
 
 export function freshAt(input: Pick<HookInput, "source">, now: number): number | null {
@@ -143,7 +152,7 @@ type ListenCheck = { kind: "skip" } | { kind: "check"; listens: () => boolean; s
 function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): ListenCheck {
   if (who.harness === "kimi" || who.harness === "cursor" || who.harness === "zcode" || who.harness === "agy") {
     if (who.harness === "kimi" && kimiServer(who.pid)) return { kind: "skip" };
-    if (who.harness === "agy" && tmuxPlaceFrom(process.env).tmux) return { kind: "skip" };
+    if (who.harness === "agy" && (input.stop_hook_active || tmuxPlaceFrom(process.env).tmux)) return { kind: "skip" };
     const heard = () => liveListeners().some((l) => l.alias === b.alias && l.as === b.as && ((!!who.session && l.session === who.session) || (!!who.pid && l.pid === who.pid)));
     return { kind: "check", listens: heard, settles: true };
   }
