@@ -2,6 +2,12 @@ import type { Harness } from "~/model"
 
 type LogoPath = { d: string; rule: "evenodd" | "nonzero"; transform?: string; opacity?: number }
 
+type LogoArt = { href: string; x: number; y: number; width: number; height: number }
+
+export const ART: Partial<Record<Harness, LogoArt>> = {
+  agy: { href: "/harness/antigravity.svg", x: 1.29, y: 2.1, width: 22, height: 20.625 },
+}
+
 export const LOGOS: Partial<Record<Harness, readonly LogoPath[]>> = {
   claude: [
     {

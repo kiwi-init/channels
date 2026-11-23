@@ -20,6 +20,6 @@ test("every harness kiwi detects has a logo, and nothing else does", () => {
   expect(knownHarness(undefined)).toBeNull();
   expect(monoHarness("grok")).toBe(true);
   expect(monoHarness("pi")).toBe(true);
-  expect(monoHarness("antigravity")).toBe(true);
+  expect(monoHarness("antigravity")).toBe(false);
   expect(monoHarness("claude-code")).toBe(false);
 });

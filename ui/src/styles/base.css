@@ -509,6 +509,10 @@ kbd {
   fill: var(--ink-3);
 }
 
+.av.is-off .face-badge image {
+  filter: grayscale(1);
+}
+
 @keyframes face-ponder {
   0%,
   100% {

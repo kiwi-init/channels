@@ -4,7 +4,7 @@ import { dirname, join } from "node:path"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { GlyphIcon, type Glyph } from "~/kit/icons"
-import { LOGOS } from "~/kit/logos"
+import { ART, LOGOS } from "~/kit/logos"
 import { harnessOf } from "~/live/map"
 import { slimIcon } from "~/kit/slim-icons"
 
@@ -34,9 +34,18 @@ describe("each harness an agent runs shows its own mark", () => {
   })
 
   test("the marks are the shapes in assets/harness, drawn in one color", () => {
-    for (const file of files.filter((f) => f !== "codex.svg")) {
+    for (const file of files.filter((f) => f !== "codex.svg" && !ART[harnessOf(f.replace(/\.svg$/, "")) ?? "other"])) {
       const harness = harnessOf(file.replace(/\.svg$/, ""))
       expect([file, harness ? LOGOS[harness] : undefined]).toEqual([file, assetPaths(file)])
+    }
+  })
+
+  test("a logo drawn in its own colours is the asset file, cut out by its outline", () => {
+    for (const [harness, art] of Object.entries(ART)) {
+      const file = files.find((f) => harnessOf(f.replace(/\.svg$/, "")) === harness)
+      expect([harness, !!file]).toEqual([harness, true])
+      expect(readFileSync(join(import.meta.dir, "../../public", art.href), "utf8")).toBe(readFileSync(join(ASSETS, file!), "utf8"))
+      expect(LOGOS[harness as keyof typeof ART]?.[0]?.d).toBe(assetPaths(file!)[0]?.d)
     }
   })
 
