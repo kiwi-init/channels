@@ -15,7 +15,7 @@ const NAMES: Record<string, string> = {
   antigravity: "Antigravity CLI",
 };
 
-const MONO = new Set(["opencode", "grok", "cursor", "mimocode", "grok-bot", "pi", "zcode"]);
+const MONO = new Set(["opencode", "grok", "cursor", "mimocode", "grok-bot", "pi", "zcode", "antigravity"]);
 
 export function canonicalHarness(harness: string | undefined): string | undefined {
   const h = harness?.trim().toLowerCase();

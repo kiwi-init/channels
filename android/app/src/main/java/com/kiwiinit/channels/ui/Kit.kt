@@ -88,6 +88,7 @@ val robots: Map<String, Int> = mapOf(
 )
 
 val harnesses: Map<String, Int> = mapOf(
+    "antigravity" to R.drawable.harness_antigravity,
     "claude-code" to R.drawable.harness_claude_code,
     "codex" to R.drawable.harness_codex,
     "cursor" to R.drawable.harness_cursor,

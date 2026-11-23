@@ -34,7 +34,7 @@ describe("each harness an agent runs shows its own mark", () => {
   })
 
   test("the marks are the shapes in assets/harness, drawn in one color", () => {
-    for (const file of files.filter((f) => f !== "claude-code.svg" && f !== "codex.svg")) {
+    for (const file of files.filter((f) => f !== "codex.svg")) {
       const harness = harnessOf(file.replace(/\.svg$/, ""))
       expect([file, harness ? LOGOS[harness] : undefined]).toEqual([file, assetPaths(file)])
     }
@@ -46,6 +46,8 @@ describe("each harness an agent runs shows its own mark", () => {
     expect(harnessOf("mimo")).toBe("mimo")
     expect(harnessOf("grokbot")).toBe("grok-bot")
     expect(harnessOf("zcode")).toBe("zcode")
+    expect(harnessOf("agy")).toBe("agy")
+    expect(harnessOf("antigravity")).toBe("agy")
     expect(harnessOf("something-new")).toBe("other")
     expect(harnessOf(undefined)).toBeUndefined()
   })
