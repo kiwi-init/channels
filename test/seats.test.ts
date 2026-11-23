@@ -64,6 +64,8 @@ test("what each harness says about itself", () => {
   expect(sameHarness("claude", "grok")).toBe(false);
   expect(canonicalHarness("kimi")).toBe("kimi-code");
   expect(canonicalHarness("mimo")).toBe("mimocode");
+  expect(canonicalHarness("agy")).toBe("antigravity");
+  expect(sameHarness("agy", "antigravity")).toBe(true);
 });
 
 test("a hook that names its harness is that harness's, whatever the session that started it left in the environment", () => {

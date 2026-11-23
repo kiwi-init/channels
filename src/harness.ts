@@ -183,16 +183,19 @@ function kimiModel(env: Env): string | undefined {
   return slug(tomlString(/^\s*model\s*=(.*)$/m.exec(section)?.[1]));
 }
 
+export function agyModelName(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const normalized = v
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized === "auto" || normalized === "none" ? undefined : slug(normalized);
+}
+
 function agyModel(env: Env): string | undefined {
   const dir = env.ANTIGRAVITY_APP_DATA_DIR || join(homedir(), ".gemini", "antigravity-cli");
   const settings = JSON.parse(readFileSync(join(dir, "settings.json"), "utf8")) as { model?: unknown };
-  if (typeof settings.model !== "string") return undefined;
-  return slug(
-    settings.model
-      .toLowerCase()
-      .replace(/[^a-z0-9.]+/g, "-")
-      .replace(/^-+|-+$/g, ""),
-  );
+  return agyModelName(settings.model);
 }
 
 function tomlString(v: string | undefined): string | undefined {

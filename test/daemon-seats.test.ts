@@ -623,7 +623,16 @@ describe("reachOf", () => {
 });
 
 describe("activityEnv", () => {
-  const base = { HOME: "/home/x", CLAUDECODE: "1", CLAUDE_PID: "7", CLAUDE_CODE_SESSION_ID: "theirs", CODEX_THREAD_ID: "t" };
+  const base = {
+    HOME: "/home/x",
+    CLAUDECODE: "1",
+    CLAUDE_PID: "7",
+    CLAUDE_CODE_SESSION_ID: "theirs",
+    CODEX_THREAD_ID: "t",
+    ANTIGRAVITY_AGENT: "1",
+    ANTIGRAVITY_CONVERSATION_ID: "conv-1",
+    ANTIGRAVITY_TRAJECTORY_ID: "traj-1",
+  };
   const seat = (r: Partial<SeatRecord>): SeatRecord => ({ alias: "test", as: "a", ...r });
 
   test("names the seat's own harness session and drops the daemon's inherited one", () => {

@@ -145,7 +145,7 @@ export function baseName(h: Here): string {
  */
 export function canonicalHarness(h: string | undefined): string | undefined {
   if (!h) return undefined;
-  const card: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode", grokbot: "grok-bot" };
+  const card: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode", grokbot: "grok-bot", agy: "antigravity" };
   return card[h] ?? h;
 }
 
@@ -374,13 +374,14 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     if (!pick) return [];
     if (opts.claim !== false && who.session && (pick.session !== who.session || (who.pid && pick.pid !== who.pid))) {
       // The previous holder's process goes with it: this session's, or none.
-      const rest = omit(pick, "pid", "model", "harnessSession", "loop", "started", "upKey");
+      const rest = omit(pick, "pid", "model", "harnessSession", "loop", "started", "upKey", "tmux");
       const taken: Binding = {
         ...rest,
         session: who.session,
         ...(who.pid ? { pid: who.pid, ...startOf(who.pid) } : {}),
         ...(who.model ? { model: who.model } : {}),
         ...(who.harness && !pick.harness ? { harness: who.harness } : {}),
+        ...tmuxPlaceFrom(env),
         at: Date.now(),
         seen: Date.now(),
       };

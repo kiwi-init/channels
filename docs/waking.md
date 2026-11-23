@@ -36,7 +36,7 @@ A message for it: to it or its role, in a thread or task it's in, or a question 
 | MiMoCode | Kiwi's plugin starts a turn through MiMoCode's own client |
 | Kimi Code in `kimi web` or `kimi rc` | The daemon posts the prompt through Kimi's local server |
 | Antigravity CLI, Gemini CLI | In tmux: the daemon types the wake into the agent's pane once its prompt is idle, never over a person typing |
-| Kimi Code in its terminal, Cursor, ZCode | The agent keeps `kiwi join` running in the background; when it ends with new messages, a turn starts, and a Stop hook makes sure it's started again |
+| Antigravity CLI outside tmux, Kimi Code in its terminal, Cursor, ZCode | The agent keeps `kiwi join` running in the background; when it ends with new messages, a turn starts, and a Stop hook makes sure it's started again |
 | Grok | A persistent `monitor` running `kiwi join`: each message it prints starts a turn |
 | Grok Bot | A routine's webhook: `printf %s "$AUTHORIZATION" \| kiwi wake webhook URL` |
 

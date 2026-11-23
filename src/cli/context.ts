@@ -4,6 +4,7 @@ import { OfflineReads } from "@kiwi/core/client.ts";
 import { openSession, type Agent } from "../agent.ts";
 import { DEFAULT_RELAY, Keystore, type ChannelConfig } from "../config.ts";
 import { here, hereAs, notePlainPlace, seatsNear, type Here } from "../seats.ts";
+import { tmuxPlaceFrom } from "../tmux-pane.ts";
 import { ensureDaemon, reportRead } from "../daemon.ts";
 import { seatsFor } from "../hooks.ts";
 import { heardFrom } from "../hooks/delivered.ts";
@@ -153,6 +154,7 @@ export function seatHere(alias: string, name: string, plain: boolean, model?: st
     ...(who.session ? { session: who.session } : {}),
     ...(who.pid ? { pid: who.pid } : {}),
     ...(model ? { model } : {}),
+    ...tmuxPlaceFrom(process.env),
   };
 }
 

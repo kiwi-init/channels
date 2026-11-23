@@ -25,17 +25,17 @@ function pathHere(who: Here, webhook: boolean, pane: string | undefined = tmuxPl
   });
 }
 
-export function wokenBy(waking: boolean, who: Here = here(), webhook = false): string | null {
+export function wokenBy(waking: boolean, who: Here = here(), webhook = false, pane: string | undefined = tmuxPlaceFrom(process.env).tmux?.pane): string | null {
   if (!waking) return null;
   if (kimiServed(who)) return wakeWords("kimi-server");
-  const via = viaOf(pathHere(who, webhook));
+  const via = viaOf(pathHere(who, webhook, pane));
   return via ? wakeWords(via) : null;
 }
 
-export function listenMode(waking: boolean, who: Here = here(), webhook = false): ListenMode {
-  if (!waking || wokenBy(waking, who, webhook)) return "read";
+export function listenMode(waking: boolean, who: Here = here(), webhook = false, pane: string | undefined = tmuxPlaceFrom(process.env).tmux?.pane): ListenMode {
+  if (!waking || wokenBy(waking, who, webhook, pane)) return "read";
   if (who.harness === "grok") return "stream";
-  return who.harness === "kimi" || who.harness === "cursor" || who.harness === "zcode" ? "once" : "read";
+  return who.harness === "kimi" || who.harness === "cursor" || who.harness === "zcode" || who.harness === "agy" ? "once" : "read";
 }
 
 export function startListener(mc: string, harness: Here["harness"]): string | null {
@@ -45,6 +45,7 @@ export function startListener(mc: string, harness: Here["harness"]): string | nu
   if (harness === "grok") return `Now, once for this session: start the monitor tool with command \`${join}\`, description "${join}", persistent: true.`;
   if (harness === "zcode") return `Now, and again every time it wakes you: call the Bash tool with command \`${join}\`, run_in_background: true, and no timeout.`;
   if (harness === "cursor") return `Now, and again every time it wakes you: run \`${join}\` with the Shell tool as a background command (is_background: true).`;
+  if (harness === "agy") return `Now, and again every time it wakes you: call the run_command tool with CommandLine \`${join}\`, WaitMsBeforeAsync: 500, and leave IsDaemon false.`;
   return null;
 }
 
@@ -53,6 +54,7 @@ export function runInBackground(harness: Here["harness"]): string | null {
   if (harness === "grok") return "with the monitor tool (persistent: true)";
   if (harness === "zcode") return "with the Bash tool as a background task (run_in_background: true, no timeout)";
   if (harness === "cursor") return "with the Shell tool as a background command (is_background: true)";
+  if (harness === "agy") return "with the run_command tool as a background task (WaitMsBeforeAsync: 500, IsDaemon false)";
   return null;
 }
 
@@ -97,6 +99,14 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
       start,
       "Each message for you arrives as monitor output and starts a turn. Answer it, then end the turn; the monitor keeps running.",
       "If the monitor stops (Grok stops one that prints too much), start it again the same way.",
+    ].join("\n");
+  }
+  if (harness === "agy" && start) {
+    return [
+      KEEP_A_LISTENER,
+      start,
+      "It ends when a message for you arrives, and Antigravity CLI starts your next turn with its output. The messages are marked read already and won't be shown again, so read all of that output: if the notice names an output file, read that whole file.",
+      'Don\'t poll it with manage_task or set a timer while it runs. Before you end any turn, check manage_task with Action "list" shows it running; if not, start it.',
     ].join("\n");
   }
   return null;
