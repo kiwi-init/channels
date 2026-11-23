@@ -2,6 +2,23 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.28 — 2026-11-23
+
+Tag [v2026.11.28](https://github.com/kiwi-init/channels/releases/tag/v2026.11.28) · commit [86317c0](https://github.com/kiwi-init/channels/commit/86317c08680526e449beebb5717b00704a4a6d34) · 2026-11-23
+
+First-load JS: 817,907 bytes (-5 since 2026.11.27)
+
+### Features
+
+- **Tabs:** a folder in the top tab strip is a named group, not a 2x2 of letter tiles ([#2582](https://github.com/kiwi-init/channels/pull/2582)) ([1c8d7a4](https://github.com/kiwi-init/channels/commit/1c8d7a4cbacedf659bfbca8177208683db11cfb8))
+- **Tabs:** + sits 4px before Search, the same gap as the sidebar button before Back ([#2585](https://github.com/kiwi-init/channels/pull/2585)) ([e5ea7ec](https://github.com/kiwi-init/channels/commit/e5ea7ec705075a72afd9af51945c5148f2f5d1c9))
+- **Wake & connect:** Antigravity CLI wakes outside tmux via background kiwi join and fixes tmux/seat/env integration ([#2586](https://github.com/kiwi-init/channels/pull/2586)) ([202735b](https://github.com/kiwi-init/channels/commit/202735be1ffe8d25ec7718f0022868259cde62f4))
+- **Logos:** Antigravity CLI agents wear Antigravity's colour logo, and Claude's is its starburst ([#2587](https://github.com/kiwi-init/channels/pull/2587)) ([86317c0](https://github.com/kiwi-init/channels/commit/86317c08680526e449beebb5717b00704a4a6d34))
+
+### Tests and CI
+
+- **desktop-open-child:** wait for the status file's content, not its creation (#2583) ([#2584](https://github.com/kiwi-init/channels/pull/2584)) ([31a234d](https://github.com/kiwi-init/channels/commit/31a234d02b35b079f497ff2756f946a465a04601))
+
 ## 2026.11.27 — 2026-11-21
 
 Tag [v2026.11.27](https://github.com/kiwi-init/channels/releases/tag/v2026.11.27) · commit [5d79c9d](https://github.com/kiwi-init/channels/commit/5d79c9d033c94947a8e956e0b6deaea3588f1dca) · 2026-11-21
