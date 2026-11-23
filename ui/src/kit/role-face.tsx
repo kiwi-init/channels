@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react"
 import { CHARACTERS, type Face } from "~/kit/characters"
-import { LOGOS } from "~/kit/logos"
+import { ART, LOGOS } from "~/kit/logos"
 import type { Mood } from "~/kit/mood"
 import type { Harness } from "~/model"
 
@@ -74,6 +74,7 @@ export function RoleFace({ role, harness, mood = "free" }: { role?: string | und
   const mark = (on: Mood, name: string) => `${name}${on === entering?.mark ? " face-enter" : ""}`
   const c = CHARACTERS[faceOf(role)]
   const logo = harness ? LOGOS[harness] : undefined
+  const art = harness ? ART[harness] : undefined
   const scale = BADGE / 24
   const half = c.eyes.spacing / 2 / c.eyes.scale
   const eyes = `translate(${c.eyes.x} ${c.eyes.y}) scale(${c.eyes.scale})`
@@ -105,9 +106,7 @@ export function RoleFace({ role, harness, mood = "free" }: { role?: string | und
       </g>
       {logo && (
         <g className="face-badge" data-harness={harness} transform={`scale(${scale})`}>
-          {logo.map((p, i) => (
-            <path key={i} d={p.d} transform={p.transform} fillRule={p.rule} opacity={p.opacity} />
-          ))}
+          {art ? <image {...art} /> : logo.map((p, i) => <path key={i} d={p.d} transform={p.transform} fillRule={p.rule} opacity={p.opacity} />)}
         </g>
       )}
     </svg>
