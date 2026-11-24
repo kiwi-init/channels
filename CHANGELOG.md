@@ -2,6 +2,21 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.29 — 2026-11-24
+
+Tag [v2026.11.29](https://github.com/kiwi-init/channels/releases/tag/v2026.11.29) · commit [afec25d](https://github.com/kiwi-init/channels/commit/afec25d4993ed61f2856821c3164962f2bebd9c2) · 2026-11-24
+
+First-load JS: 817,907 bytes (no change since 2026.11.28)
+
+### Features
+
+- **Windows:** ship the kiwi CLI ([#2483](https://github.com/kiwi-init/channels/pull/2483)) ([4fc9025](https://github.com/kiwi-init/channels/commit/4fc90250b0a0d5567c314ccf735696ba2cd6de45))
+- **Windows app:** opens its window, with WebView2 guards armed ([#2592](https://github.com/kiwi-init/channels/pull/2592)) ([afec25d](https://github.com/kiwi-init/channels/commit/afec25d4993ed61f2856821c3164962f2bebd9c2))
+
+### Other changes
+
+- **Desktop:** build on Livewire 2026.11.6 ([#2593](https://github.com/kiwi-init/channels/pull/2593)) ([82acc78](https://github.com/kiwi-init/channels/commit/82acc7805399b007835c32e09be1529bf028373c))
+
 ## 2026.11.28 — 2026-11-23
 
 Tag [v2026.11.28](https://github.com/kiwi-init/channels/releases/tag/v2026.11.28) · commit [86317c0](https://github.com/kiwi-init/channels/commit/86317c08680526e449beebb5717b00704a4a6d34) · 2026-11-23
