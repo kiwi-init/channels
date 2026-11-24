@@ -119,7 +119,7 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
   webview.on("will-navigate", (e) => {
     const nav = navigation(detailOf(e));
     if (nav.kind === "refused" && nav.url === ASK_AGAIN_URL) return askAgain();
-    if (nav.kind === "refused") openOutside(nav.url);
+    if (nav.kind === "refused" && nav.url !== RULES_CANARY) openOutside(nav.url);
     if (nav.kind !== "breach") return;
     closing = true;
     win.hide();
