@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { hostKey, mismatches, pinFor, PINS, sha256 } from "./eb-pins.ts";
+import { hostKey, hutchBinary, mismatches, pinFor, PINS, sha256 } from "./eb-pins.ts";
 
 const key = hostKey();
 const pin = pinFor(PINS.hutch.platforms, key, "Hutch archive");
@@ -18,7 +18,7 @@ async function fetchHutch(): Promise<void> {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-hutch-"));
   try {
     fs.writeFileSync(path.join(tmp, "hutch.tar.gz"), bytes);
-    const tar = spawnSync("tar", ["-xzf", path.join(tmp, "hutch.tar.gz"), "-C", tmp], { stdio: "inherit" });
+    const tar = spawnSync("tar", ["-xzf", "hutch.tar.gz"], { stdio: "inherit", cwd: tmp });
     if (tar.status !== 0) throw new Error("eb: couldn't unpack Hutch");
     const top = path.join(tmp, `hutch-v${PINS.hutch.version}-${key}`);
     const bad = mismatches(top, pin.files);
@@ -35,7 +35,7 @@ if (mismatches(root, pin.files).length) await fetchHutch();
 const bad = mismatches(root, pin.files);
 if (bad.length) throw new Error(`eb: the pinned Hutch in ${root} changed: ${bad.join("; ")}`);
 
-const hutch = path.join(root, "bin", "hutch");
+const hutch = path.join(root, hutchBinary());
 const run = spawnSync(hutch, ["electrobun", ...process.argv.slice(2)], {
   stdio: "inherit",
   cwd: desktop,

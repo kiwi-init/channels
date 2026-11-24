@@ -93,7 +93,7 @@ jobs:
       - name: Build
         run: |
           mkdir -p dist
-          for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
+          for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64 windows-x64 windows-arm64; do
             bun scripts/build-cli.ts --target "bun-$t" --outfile "dist/kiwi-$t"
           done
           codesign --force --sign - dist/kiwi-darwin-arm64 dist/kiwi-darwin-x64
@@ -104,9 +104,10 @@ jobs:
           cd dist
           for f in kiwi-*; do
             gzip -9 -n -k "$f"
-            case "$f" in *-arm64) bcj=--arm64 ;; *) bcj=--x86 ;; esac
+            case "$f" in *-arm64|*-arm64.exe) bcj=--arm64 ;; *) bcj=--x86 ;; esac
             xz "$bcj" --lzma2=preset=9 -T0 -k "$f"
           done
+          for f in kiwi-windows-*.exe; do zip -9 -q -X "${f%.exe}.zip" "$f"; done
           bun ../scripts/cli-downloads.ts .
 
       - name: Upload

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const SCRIPT = join(import.meta.dir, "..", "scripts", "cli-downloads.ts");
-const TARGETS = ["kiwi-darwin-arm64", "kiwi-darwin-x64", "kiwi-linux-x64", "kiwi-linux-arm64"];
+const TARGETS = ["kiwi-darwin-arm64", "kiwi-darwin-x64", "kiwi-linux-x64", "kiwi-linux-arm64", "kiwi-windows-x64.exe", "kiwi-windows-arm64.exe"];
 
 function release(sizes: Record<string, number>): string {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-cli-downloads-"));
@@ -23,7 +23,14 @@ function check(dir: string) {
 
 const raw = Object.fromEntries(TARGETS.map((t) => [t, 80_000_000]));
 
-const packed = { "kiwi-darwin-arm64": 24_000_000, "kiwi-darwin-x64": 31_000_000, "kiwi-linux-x64": 38_000_000, "kiwi-linux-arm64": 33_000_000 };
+const packed = {
+  "kiwi-darwin-arm64": 24_000_000,
+  "kiwi-darwin-x64": 31_000_000,
+  "kiwi-linux-x64": 38_000_000,
+  "kiwi-linux-arm64": 33_000_000,
+  "kiwi-windows-x64.exe": 41_000_000,
+  "kiwi-windows-arm64.exe": 36_000_000,
+};
 
 test("every CLI download within its target's budget, counting the smaller of .xz and .gz, passes", () => {
   const dir = release({
@@ -40,6 +47,7 @@ test("every CLI download within its target's budget, counting the smaller of .xz
     expect(r.code).toBe(0);
     expect(r.out).toContain("kiwi-linux-x64.xz: 38.0 MB (from 80.0 MB)");
     expect(r.out).toContain("kiwi-darwin-arm64.xz: 24.0 MB (from 80.0 MB)");
+    expect(r.out).toContain("kiwi-windows-x64.exe.xz: 41.0 MB (from 80.0 MB)");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

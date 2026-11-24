@@ -2,13 +2,13 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-import { fileSha256, hostKey, pinFor, PINS, treeSha256 } from "./eb-pins.ts";
+import { fileSha256, hostKey, hutchBinary, pinFor, PINS, treeSha256 } from "./eb-pins.ts";
 
 const desktop = path.resolve(import.meta.dirname, "..");
 const key = hostKey();
 
 const hutch = process.env.ELECTROBUN_HUTCH_BINARY;
-const pinnedHutch = pinFor(PINS.hutch.platforms, key, "Hutch archive").files["bin/hutch"];
+const pinnedHutch = pinFor(PINS.hutch.platforms, key, "Hutch archive").files[hutchBinary()];
 if (!hutch || fileSha256(hutch) !== pinnedHutch) throw new Error("eb-pre-build: this build isn't running the pinned Hutch; build through desktop/scripts/eb.ts (bun run build:eb, start:eb)");
 
 const devkit = treeSha256(path.join(desktop, ".hutch", "devkit", "api"));

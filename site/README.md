@@ -106,5 +106,6 @@ name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 A tag's release stamps its version into these names (`scripts/stamp.ts`) and commits
 them to main; the site deploys only from a tag, after its GitHub release exists. The names
 come from `desktop/src/update-asset.ts` (Mac) and `desktop/scripts/linux-files.ts` (Linux).
-There is no Windows app or Windows CLI. Links point at
+There is no Windows app yet; the Windows CLI ships as `kiwi-windows-x64.zip` and
+`kiwi-windows-arm64.zip`. Links point at
 `github.com/kiwi-init/channels/releases/latest/download/<file>`.
