@@ -102,10 +102,11 @@ name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 - `Channels-2026.11.28-mac-arm64.dmg` (Apple silicon only: Intel Macs get the CLI)
 - `Channels-2026.11.28-linux-x86_64.AppImage` (Linux: Arch is the supported distribution)
 - `Channels-2026.11.28-linux-aarch64.AppImage` (ARM64 Linux, the same build for arm64)
+- `Channels-2026.11.28-windows-x64-Setup.zip` (Windows: `Channels-Setup.exe` and the `.installer` folder it reads)
 
 A tag's release stamps its version into these names (`scripts/stamp.ts`) and commits
 them to main; the site deploys only from a tag, after its GitHub release exists. The names
-come from `desktop/src/update-asset.ts` (Mac) and `desktop/scripts/linux-files.ts` (Linux).
-There is no Windows app yet; the Windows CLI ships as `kiwi-windows-x64.zip` and
-`kiwi-windows-arm64.zip`. Links point at
+come from `desktop/src/update-asset.ts` (Mac), `desktop/scripts/linux-files.ts` (Linux) and
+release-build.yml's Windows job, which renames Electrobun's `win-x64-Channels-Setup.zip`.
+The Windows CLI ships as `kiwi-windows-x64.zip` and `kiwi-windows-arm64.zip`. Links point at
 `github.com/kiwi-init/channels/releases/latest/download/<file>`.

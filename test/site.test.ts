@@ -164,9 +164,15 @@ test("ARM64 Linux gets the aarch64 AppImage", async () => {
   expect(page.download.href).toMatch(/\/Channels-[\d.]+-linux-aarch64\.AppImage$/);
 });
 
-test("Windows, Android and 32-bit ARM Linux keep the button on the release page", async () => {
+test("Windows downloads the x64 installer", async () => {
+  const page = load("/", "", { userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" });
+  await settle();
+  expect(page.download.href).toMatch(/\/Channels-[\d.]+-windows-x64-Setup\.zip$/);
+  expect(page.download.title).toBe("Windows · x64");
+});
+
+test("Android and 32-bit ARM Linux keep the button on the release page", async () => {
   for (const userAgent of [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
     "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36",
     "Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
   ]) {

@@ -51,7 +51,9 @@ let showCantRead: (u: Unreadable) => void = () => {};
 export const showUnreadable = (u: Unreadable): void => showCantRead(u);
 
 function askAgain(): void {
-  ebHost.app.relaunch(ownAppImage(process.env["APPIMAGE"], process.env["APPDIR"], process.execPath) ?? path.join(path.dirname(process.execPath), "launcher"));
+  ebHost.app.relaunch(
+    ownAppImage(process.env["APPIMAGE"], process.env["APPDIR"], process.execPath) ?? path.join(path.dirname(process.execPath), process.platform === "win32" ? "launcher.exe" : "launcher"),
+  );
   Utils.quit();
 }
 
@@ -82,7 +84,7 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
   let view: BrowserView | null = null;
   const bridge = bunBridge(
     table,
-    () => onOurPage(committedPage()),
+    () => onOurPage(committedPage(view?.id)),
     (frame) => view?.executeJavascript(toPageScript(frame)),
     () => {
       keys.pageGone();
@@ -103,7 +105,7 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
     url: null,
     frame: { width: WINDOW_SIZE.width, height: WINDOW_SIZE.height },
     windowState: "main",
-    titleBarStyle: mac ? "hiddenInset" : "hidden",
+    titleBarStyle: mac ? "hiddenInset" : process.platform === "win32" ? "default" : "hidden",
     hidden: true,
     spellCheck: true,
     preload,
@@ -117,7 +119,7 @@ export async function createWindow(keyring: KeyringState | null = null, unreadab
   webview.on("will-navigate", (e) => {
     const nav = navigation(detailOf(e));
     if (nav.kind === "refused" && nav.url === ASK_AGAIN_URL) return askAgain();
-    if (nav.kind === "refused") openOutside(nav.url);
+    if (nav.kind === "refused" && nav.url !== RULES_CANARY) openOutside(nav.url);
     if (nav.kind !== "breach") return;
     closing = true;
     win.hide();

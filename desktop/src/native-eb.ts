@@ -7,20 +7,45 @@ import { linuxWallpaper } from "./wallpaper-path.ts";
 
 export const mac = process.platform === "darwin";
 
+const windows = process.platform === "win32";
+
+const linux = !mac && !windows;
+
 const binDir = path.dirname(process.execPath);
 const shellPath = path.join(binDir, `libkiwi-shell.${suffix}`);
 
-const shell = dlopen(shellPath, {
-  kiwi_deny_permissions: { args: [], returns: FFIType.bool },
-  kiwi_watch_commits: { args: [], returns: FFIType.bool },
-  kiwi_committed_url: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
-}).symbols;
+const shell = windows
+  ? null
+  : dlopen(shellPath, {
+      kiwi_deny_permissions: { args: [], returns: FFIType.bool },
+      kiwi_watch_commits: { args: [], returns: FFIType.bool },
+      kiwi_committed_url: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+    }).symbols;
 
-const sandboxPages = mac ? null : dlopen(shellPath, { kiwi_sandbox_pages: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages;
+function webview2Guards() {
+  try {
+    return dlopen(path.join(binDir, "libNativeWrapper.dll"), {
+      webview2DenyPermissions: { args: [], returns: FFIType.bool },
+      webview2OwnDownloadsOnly: { args: [], returns: FFIType.bool },
+      webview2AllowOnly: { args: [FFIType.ptr], returns: FFIType.bool },
+      webview2KeepWebSecurity: { args: [], returns: FFIType.bool },
+      webview2CommittedUrl: { args: [FFIType.u32, FFIType.ptr, FFIType.u32], returns: FFIType.u32 },
+    }).symbols;
+  } catch {
+    // An Electrobun wrapper older than the guards has none of these: missingGuard says so, and no window opens.
+    return null;
+  }
+}
 
-export const windowLook = dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols.kiwi_window_look;
+const webview2 = windows ? webview2Guards() : null;
 
-const clearShell = mac ? null : dlopen(shellPath, { kiwi_window_clear: { args: [], returns: FFIType.void } }).symbols;
+const sandboxPages = linux ? dlopen(shellPath, { kiwi_sandbox_pages: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.bool } }).symbols.kiwi_sandbox_pages : null;
+
+const lookShell = windows ? null : dlopen(shellPath, { kiwi_window_look: { args: [FFIType.ptr, FFIType.f64, FFIType.f64, FFIType.u32, FFIType.u32], returns: FFIType.void } }).symbols;
+
+export const windowLook = (win: Pointer, minWidth: number, minHeight: number, light: number, dark: number): void => void lookShell?.kiwi_window_look(win, minWidth, minHeight, light, dark);
+
+const clearShell = linux ? dlopen(shellPath, { kiwi_window_clear: { args: [], returns: FFIType.void } }).symbols : null;
 
 export const clearWindow = (): void => void clearShell?.kiwi_window_clear();
 
@@ -61,10 +86,12 @@ export function windowLooks(): string {
 
 const wallpaperShell = mac
   ? dlopen(shellPath, { kiwi_wallpaper_pixels: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 } }).symbols
-  : dlopen(shellPath, {
-      kiwi_image_pixels: { args: [FFIType.cstring, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
-      kiwi_image_pixels_sized: { args: [FFIType.cstring, FFIType.i32, FFIType.i32, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
-    }).symbols;
+  : linux
+    ? dlopen(shellPath, {
+        kiwi_image_pixels: { args: [FFIType.cstring, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+        kiwi_image_pixels_sized: { args: [FFIType.cstring, FFIType.i32, FFIType.i32, FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
+      }).symbols
+    : null;
 
 const WALLPAPER_BYTES = 24 * 24 * 4;
 
@@ -80,7 +107,7 @@ function stampOf(file: string): string | null {
 }
 
 function decodeOnce(file: string, width: number, height: number): Uint8Array | null {
-  if (!("kiwi_image_pixels_sized" in wallpaperShell)) return null;
+  if (!wallpaperShell || !("kiwi_image_pixels_sized" in wallpaperShell)) return null;
   const stamp = stampOf(file);
   if (stamp === null) return null;
   const key = `${file}\0${stamp}\0${width}x${height}`;
@@ -97,6 +124,7 @@ export async function wallpaperImage(dark: boolean, width: number, height: numbe
 }
 
 export async function wallpaperPixels(dark: boolean): Promise<Uint8Array | null> {
+  if (!wallpaperShell) return null;
   if ("kiwi_wallpaper_pixels" in wallpaperShell) {
     const out = new Uint8Array(WALLPAPER_BYTES);
     return Number(wallpaperShell.kiwi_wallpaper_pixels(ptr(out), out.length)) === out.length ? out : null;
@@ -105,16 +133,16 @@ export async function wallpaperPixels(dark: boolean): Promise<Uint8Array | null>
   return file ? decodeOnce(file, 24, 24) : null;
 }
 
-const trayHost = mac ? null : dlopen(shellPath, { kiwi_tray_host: { args: [], returns: FFIType.bool } }).symbols.kiwi_tray_host;
+const trayHost = linux ? dlopen(shellPath, { kiwi_tray_host: { args: [], returns: FFIType.bool } }).symbols.kiwi_tray_host : null;
 
-const colorScheme = mac ? null : dlopen(shellPath, { kiwi_follow_color_scheme: { args: [], returns: FFIType.bool } }).symbols.kiwi_follow_color_scheme;
+const colorScheme = linux ? dlopen(shellPath, { kiwi_follow_color_scheme: { args: [], returns: FFIType.bool } }).symbols.kiwi_follow_color_scheme : null;
 
-const drops = mac
-  ? null
-  : dlopen(shellPath, {
+const drops = linux
+  ? dlopen(shellPath, {
       kiwi_watch_drops: { args: [], returns: FFIType.bool },
       kiwi_take_drop: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
-    }).symbols;
+    }).symbols
+  : null;
 
 const dropBuffer = new Uint8Array(65536);
 
@@ -127,13 +155,13 @@ export function droppedPaths(): string[] {
   return new TextDecoder().decode(dropBuffer.subarray(0, n)).split("\n").filter(Boolean);
 }
 
-const paste = mac
-  ? null
-  : dlopen(shellPath, {
+const paste = linux
+  ? dlopen(shellPath, {
       kiwi_watch_paste: { args: [], returns: FFIType.bool },
       kiwi_take_paste: { args: [], returns: FFIType.u64 },
       kiwi_paste_bytes: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.u64 },
-    }).symbols;
+    }).symbols
+  : null;
 
 export const watchPaste = (): void => void paste?.kiwi_watch_paste();
 
@@ -145,13 +173,13 @@ export function pastedPng(max: number): Uint8Array | null {
   return Number(paste.kiwi_paste_bytes(ptr(out), n <= max ? n : 0)) === n ? out : null;
 }
 
-const windowKeys = mac ? null : dlopen(shellPath, { kiwi_window_keys: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool } }).symbols.kiwi_window_keys;
+const windowKeys = linux ? dlopen(shellPath, { kiwi_window_keys: { args: [FFIType.ptr, FFIType.function], returns: FFIType.bool } }).symbols.kiwi_window_keys : null;
 
 let shortcuts: JSCallback | null = null;
 
-const guards = dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols;
+const guards = windows ? null : dlopen(shellPath, { kiwi_guard_downloads: { args: [], returns: FFIType.bool }, kiwi_allow_only: { args: [FFIType.ptr], returns: FFIType.bool } }).symbols;
 
-const core = dlopen(path.join(binDir, `libElectrobunCore.${suffix}`), {
+const core = dlopen(path.join(binDir, windows ? "ElectrobunCore.dll" : `libElectrobunCore.${suffix}`), {
   setWebviewHTMLContent: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.void },
   updatePreloadScriptToWebView: { args: [FFIType.u32, FFIType.ptr, FFIType.ptr, FFIType.bool], returns: FFIType.void },
 }).symbols;
@@ -164,8 +192,12 @@ const PAGE_ONLY = cString(PAGE_URL);
 
 const committedBuffer = new Uint8Array(4096);
 
-export function committedPage(): string | null {
-  const n = Number(shell.kiwi_committed_url(ptr(committedBuffer), committedBuffer.length));
+export function committedPage(view: number | undefined): string | null {
+  const n = shell
+    ? Number(shell.kiwi_committed_url(ptr(committedBuffer), committedBuffer.length))
+    : webview2 && view !== undefined
+      ? webview2.webview2CommittedUrl(view, ptr(committedBuffer), committedBuffer.length)
+      : 0;
   return n > 0 && n < committedBuffer.length ? new TextDecoder().decode(committedBuffer.subarray(0, n)) : null;
 }
 
@@ -173,7 +205,17 @@ export const setPageHtml = (view: number, html: Uint8Array<ArrayBuffer>): void =
 
 export const setPreload = (view: number, source: string): void => core.updatePreloadScriptToWebView(view, PRELOAD_ID, cString(source), false);
 
+function missingWebview2Guard(): string | null {
+  if (!webview2) return "this build's WebView2 wrapper has no guards; not opening a window that could grant the microphone, save any file or navigate away";
+  if (!webview2.webview2KeepWebSecurity()) return "WebView2 already runs with web security off; not opening a window whose page could read other sites";
+  if (!webview2.webview2DenyPermissions()) return "the web view's permission handler wasn't found; not opening a window that could grant the microphone";
+  if (!webview2.webview2OwnDownloadsOnly()) return "the web view's download handler wasn't found; not opening a window that could save any file into Downloads";
+  if (!webview2.webview2AllowOnly(PAGE_ONLY)) return "the web view's navigation handler wasn't found; not opening a window whose page could navigate away";
+  return null;
+}
+
 export function missingGuard(): string | null {
+  if (!shell || !guards) return missingWebview2Guard();
   if (!shell.kiwi_deny_permissions()) return "the web view's permission handler wasn't found; not opening a window that could grant the microphone";
   if (!guards.kiwi_guard_downloads()) return "the web view's download handler wasn't found; not opening a window that could save any file into Downloads";
   if (!guards.kiwi_allow_only(PAGE_ONLY)) return "the web view's navigation handler wasn't found; not opening a window whose page could navigate away";
@@ -191,9 +233,9 @@ export function onShortcut(window: Pointer | null, pressed: (action: number) => 
   return windowKeys(window, shortcuts.ptr);
 }
 
-const badge = dlopen(shellPath, { kiwi_badge: { args: [FFIType.i32], returns: mac ? FFIType.void : FFIType.bool } }).symbols.kiwi_badge;
+const badge = windows ? null : dlopen(shellPath, { kiwi_badge: { args: [FFIType.i32], returns: mac ? FFIType.void : FFIType.bool } }).symbols.kiwi_badge;
 
-export const showBadge = (count: number): void => void badge(Math.max(0, Math.min(Math.trunc(count), 1_000_000)));
+export const showBadge = (count: number): void => void badge?.(Math.max(0, Math.min(Math.trunc(count), 1_000_000)));
 
 export function sandboxOff(): string | null {
   if (!sandboxPages) return null;

@@ -13,16 +13,24 @@ if (-not (Test-Path -LiteralPath $launcher)) { $problems += "Channels-Setup.exe 
 $installer | Wait-Process -Timeout 120 -ErrorAction SilentlyContinue
 Remove-Item Env:ELECTROBUN_INSTALLER_UI_AUTOCLOSE
 $find = { Get-Process | Where-Object { $_.MainWindowTitle -eq "Channels" } | Select-Object -First 1 }
+$ours = { Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase) } }
 $win = & $find
-if (-not $win -and (Test-Path -LiteralPath $launcher)) {
+if (-not $win -and (& $ours)) { Write-Output "the installer opened the app; waiting for its window" }
+elseif (-not $win -and (Test-Path -LiteralPath $launcher)) {
   Write-Output "the installer didn't open the app; starting it"
   $env:ELECTROBUN_CONSOLE = "1"
   Start-Process -FilePath $launcher -WorkingDirectory (Split-Path $launcher) -RedirectStandardOutput (Join-Path $stage "app.out") -RedirectStandardError (Join-Path $stage "app.err") | Out-Null
 }
-for ($i = 0; $i -lt 60 -and -not $win; $i++) { Start-Sleep -Milliseconds 500; $win = & $find }
-if (-not $win) { $problems += "no window titled Channels within 30 s" } else { Write-Output "window: $($win.ProcessName) pid $($win.Id) titled $($win.MainWindowTitle)" }
-Start-Sleep -Seconds 8
-if ($win -and -not (Get-Process -Id $win.Id -ErrorAction SilentlyContinue)) { $problems += "the window's process quit within 8 s" }
+for ($i = 0; $i -lt 90 -and -not $win; $i++) { Start-Sleep -Milliseconds 500; $win = & $find }
+if (-not $win) { $problems += "no window titled Channels within 45 s" } else { Write-Output "window: $($win.ProcessName) pid $($win.Id) titled $($win.MainWindowTitle)" }
+$mainLog = Join-Path $root "main.log"
+$startup = $null
+for ($i = 0; $i -lt 60 -and ($i -lt 16 -or ($win -and -not $startup)); $i++) {
+  Start-Sleep -Milliseconds 500
+  $startup = Select-String -LiteralPath $mainLog -Pattern "startup, ms since Bun started" -ErrorAction SilentlyContinue | Select-Object -Last 1
+}
+if ($win -and -not (Get-Process -Id $win.Id -ErrorAction SilentlyContinue)) { $problems += "the window's process quit within $([math]::Round($i / 2)) s" }
+if ($startup) { Write-Output $startup.Line } else { Write-Output "no startup line in $mainLog yet" }
 if ($Shot) {
   Add-Type -AssemblyName System.Windows.Forms, System.Drawing
   $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
