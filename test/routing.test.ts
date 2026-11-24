@@ -2,6 +2,7 @@
 // only when someone else says so, and handing work over is giving it to someone with a note. What
 // older clients sent for routing (needs, dependencies, a handoff's branch and files) is ignored.
 
+import { spawnOwnedSync } from "./owned.ts";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -385,7 +386,7 @@ describe("reading the machine", () => {
 
   test("the repo and branch of a folder, none when HEAD is detached or there's no repo", () => {
     const dir = mkdtempSync(join(tmpdir(), "kiwi-where-"));
-    const git = (...args: string[]) => Bun.spawnSync(["git", "-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir });
+    const git = (...args: string[]) => spawnOwnedSync(["git", "-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir });
     try {
       expect(detectWhere(dir)).toEqual({});
       git("init", "-q", "-b", "main");

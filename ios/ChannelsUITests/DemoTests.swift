@@ -29,6 +29,26 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
+    func testStepCard() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
+        XCTAssertTrue(general.waitForExistence(timeout: 15))
+        general.tap()
+        XCTAssertTrue(app.staticTexts["A step for you"].waitForExistence(timeout: 5), "the sample's step card")
+        XCTAssertTrue(app.staticTexts["bun run sign"].exists, "the step's command")
+        add(shot(app, "demo step"))
+
+        let done = app.buttons["Done"].firstMatch
+        XCTAssertTrue(done.waitForExistence(timeout: 5), "the step's Done")
+        done.tap()
+        XCTAssertTrue(app.staticTexts["Couldn't send · Try again"].waitForExistence(timeout: 5), "Done went to the engine, which the sample refuses")
+        XCTAssertTrue(done.isEnabled, "the step stays open to try again")
+        add(shot(app, "demo step refused"))
+    }
+
+    @MainActor
     private func shot(_ app: XCUIApplication, _ name: String) -> XCTAttachment {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

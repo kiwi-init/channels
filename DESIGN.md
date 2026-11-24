@@ -146,13 +146,14 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   blueprint (below) prints an off-grid ruler number in `decide` and says
   `off grid` in its notes.
 - Rules of place:
-  - One grid. The window is three columns, `--side-w | 1fr | --side-w` (320
-    at Default): the sidebar, the work, the second sidebar. The top bar
+  - One grid. The window is three columns, `--nav-w | 1fr | --side-w` (320
+    each at Default): the sidebar, the work, the second sidebar. The top bar
     shares them. Nothing else places the big parts: no margins, no absolute
     positions, no measuring in script.
-  - The window's true centre. The two sides are the same width, so the work
-    is on the window's centre by construction. Settings and Home centre on
-    the window too. A window under 1180px wide has no third column and
+  - The work's centre. The two sides start at the same width, so the work
+    starts on the window's centre; a dragged sidebar moves only its own
+    edge, and the composer stays centred in the conversation. Settings and
+    Home centre on the window. A window under 1180px wide has no third column and
     centres the work in what is left.
   - Channels are tabs. The top bar's row is a browser's tab strip (`.rail`
     on grid row 1): Home, then one tab per channel with a 16px icon, the
@@ -162,25 +163,35 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     when it is dragged, makes room for the open search field, and starts
     at the same place in Settings and on Home. Nothing in the row sits
     on anything else (`scripts/ui-layout.ts` checks every screen). The row
-    has no title. The strip is part of the frame. The open tab takes the
-    page's colour, rounds its top corners and stands on the strip's bottom
-    edge, so it reads as joined to the page; Home is a small icon tab and
+    has no title. The strip is part of the frame. The open tab is shaped
+    like a pane: the page's colour, `--r-ctl` on all four corners,
+    `--pane-gap` under the window's top and standing on the strip's bottom
+    edge; Home is a small icon tab and
     can be the open one, and Settings, which is no channel, has none. Tabs share the
     strip equally, up to 15rem each, and + ends it, beside Search. A name
     that needs more than its share takes the room its neighbours don't use
     (`data-fit="roomy"`). When the names can't all fit, only the longest
     are cut, to one width, with a short fade and no ellipsis (`tight`).
-    When a cut name would show less than 3em, every tab but the open one
-    is its icon (`icons`). `shell/rail.tsx` picks the mode from the
-    strip's own overflow; nothing wraps or scrolls. A window 760px wide or
+    When a cut name would show less than 3em, every tab is its icon, the
+    open one too, marked by its background (`icons`). `shell/rail.tsx`
+    picks the mode from the strip's own overflow; nothing wraps or
+    scrolls. Tabs stay where they are: opening one moves nothing. You put
+    them in order by dragging. A tab dropped on another's outer quarter
+    or in a gap goes there and the others make room; dropped on its
+    middle half, the two become a folder where the target sat. A folder
+    drags as one unit and never joins. The order and the folders are
+    saved together by channel (`Prefs.tabOrder`, `folders`): with none
+    saved the strip keeps today's order, a new channel joins at the end,
+    and one that is gone drops out. A drop back where it started, or
+    outside the strip, saves nothing. A window 760px wide or
     less, or a portrait one, keeps the title and a row of 40px tiles under
     it.
   - The sidebar's width is yours. Its right edge drags (`shell/side-width.ts`,
     `.side-grip`): 14rem to 28rem, snapped to 8px, kept in rem so it follows
     the text size, and never so wide that the work has under 480px. Arrow
     keys step 8px (32 with Shift), a double-click puts 18rem back. It sets
-    `--side-want`, which `--side-w` reads, so the second sidebar takes the
-    same width and the centre holds.
+    `--nav-want`, which `--nav-w` reads; the second sidebar keeps
+    `--side-w`, so dragging resizes the sidebar and the work, never Now.
   - Two layouts (Settings > Appearance > Layout, `@kiwi/app/layout.ts`, kept
     on this computer), for where the views go (Needs you, Specs, Agents,
     GitHub). Sidebar, the default: they are rows under the channel's name.
@@ -207,13 +218,13 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
     hidden auto`): strips wrap, long code and diff lines wrap, a diagram
     shrinks to fit. The one exception is the image annotator's zoomed
     picture.
-  - Two layers: one frame below, the page above. The tab row, the top bar
-    and the sidebar are one surface, the frame (glass, below). The work is
-    the page: panes laid on the frame as rounded cards (`r-card`) with
-    `--pane-gap` (6px) between them and around them, at the top, the
-    bottom and both sides. Only the open tab joins the page, from above, in
-    the page's colour with 8px flares. Nothing in the sidebar cuts across
-    the frame: its open row is a pill on it.
+  - Two layers: one frame below, the page above. The tab row and the top
+    bar are the frame (glass, below). Everything else is the page: panes
+    laid on the frame, `bg` at `r-ctl`, with `--pane-gap` (6px) between
+    them and around them, at the top, the bottom and both sides. The
+    sidebar is a pane too: it can't close, ⌘\ collapses it, and the
+    Settings gear sits in its foot. So are Settings' list and page, and the
+    empty content area while a channel opens. Nothing in the sidebar cuts across it: its open row is a pill on it.
   - The page is panes (`panes/`). A channel starts as the conversation
     with Now docked on the right. ⌘D splits right, ⇧⌘D splits down, ⌘W
     closes the focused pane (the window when one is left), and ⌥⌘ arrows
@@ -303,7 +314,8 @@ The defaults (`tokens.css`, `channels.ts`), with OLED Black beside them:
   the frame stays solid `bg-3`. Labels on glass use `--ink-3-glass`. And the
   composer (§10) is frosted, so the thread scrolls under it. Nothing else
   takes a blur.
-- Sizes on `:root`: `--side-w 18rem` (the sidebar and the second sidebar),
+- Sizes on `:root`: `--nav-w` (the sidebar, 18rem until dragged),
+  `--side-w 18rem` (the second sidebar), `--pane-gap` (6px),
   `--panel-w` (the right panel's width once someone has dragged it wider),
   `--top-h` (`--ctl` + 16px: the top bar, which drags the window),
   `--gutter 40px` (each side of a view's content), `--col 47.5rem`
@@ -418,7 +430,8 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   hover. Section heads are never uppercase.
 - `Empty`, `Loading`, `Toasts` (`ink` pill with `on-ink` text, bottom
   centre; one goes after 2.6 s, an error stays with a Dismiss button until
-  dismissed; copying goes through `copyText`, which says Copied or why not), `.codebox` (a `bg-3` box of mono text with Copy), `Boundary`
+  dismissed, and may carry one action button before it, such as Copy link
+  when a link couldn't open; copying goes through `copyText`, which says Copied or why not), `.codebox` (a `bg-3` box of mono text with Copy), `Boundary`
   (every channel view renders inside one).
 - Icons: `Icon` in `ui/src/kit/icons.tsx`, 16px line icons drawn in
   `currentColor` at a 1.4 stroke on a 16 grid, plus Hugeicons (24 grid, 1.5
@@ -442,7 +455,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
 
 ## 9. App patterns
 
-- **Shell.** One grid on the frame, three columns: the sidebar (`--side-w`), the
+- **Shell.** One grid on the frame, three columns: the sidebar (`--nav-w`), the
   work, the second sidebar (`--side-w`). There is no separate rail. The top
   bar (`--top-h`) spans them, drags the window and reads like a browser's:
   at its left the sidebar toggle (after the traffic lights on a Mac), then
@@ -455,11 +468,12 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   every view but the conversation, whose banner already says it. Search
   opens into a field a sidebar wide that grows from its button, and the
   tabs make room for it. Pointing at a tab drops its name under it. The
-  Settings gear sits in the window's bottom-left corner. ⌘\ hides the
+  Settings gear sits in the sidebar pane's bottom-left corner. ⌘\ hides the
   sidebar: its column goes to the work, the toggle, the tabs and Search
   stay where they are, and touching the window's left edge slides the
-  sidebar in over the work until the pointer leaves it. No borders
-  between the columns.
+  sidebar pane in over the work, with `--shadow-pop`, until the pointer
+  leaves it. No borders between the columns: the gaps between panes
+  separate them.
 - **Sidebar.** Under the tiles, the channel's name (its menu: settings,
   invite, mute, end), then the channel's views as rows with an icon: Needs
   you in `decide` with its count, only while something waits; Specs; Agents;
@@ -622,7 +636,7 @@ The shared classes are in `base.css`; the React bits in `ui/src/kit/`.
   with mono times.
 - **Settings.** The sidebar trades the channels for Settings' sections (the
   open one on `wash-2`) under a `‹ Settings` back
-  button. The page sits beside them and reaches the window's right edge, its
+  button. The page is a pane beside them, reaching the window's right edge, its
   content centred on the window, up to 720px: a `t-display` title (a quiet line under it only when it
   says a scope or a limit), then groups of rows on the page under mono group
   heads, hairlines between rows: a title, a quiet line only when it says what

@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
@@ -40,7 +41,7 @@ describe("gif reactions", () => {
   test("kiwi react --list names every gif an agent may use", async () => {
     const home = mkdtempSync(join(tmpdir(), "kiwi-gifs-"));
     try {
-      const p = Bun.spawn(kiwiCmd(["react", "--list"]), { cwd: home, env: { ...process.env, KIWI_HOME: home, KIWI_NO_HOOKS: "1" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+      const p = spawnOwned(kiwiCmd(["react", "--list"]), { cwd: home, env: { ...process.env, KIWI_HOME: home, KIWI_NO_HOOKS: "1" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
       const out = await new Response(p.stdout).text();
       expect(await p.exited).toBe(0);
       for (const g of pack) expect(out).toContain(`${g.reaction}/${g.name}`);

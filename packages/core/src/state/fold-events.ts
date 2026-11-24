@@ -50,7 +50,9 @@ import {
   worked,
 } from "./tasks.ts";
 import { addResetRefusal, clearOnCard, markReset, resetRefusal } from "./reset.ts";
-import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
+import type { Charter, CheckpointAsk, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
+import { checkpointAskRefusal, keepAsk } from "./checkpoint-asks.ts";
+import type { CheckpointDaily } from "../checkpoint-schedule.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
 
 const trustOnly = (what: string): string => `only the owner, or a person they fully trust, ${what}`;
@@ -90,6 +92,8 @@ export interface FoldCtx {
   quietMs: number;
   reviewReset: boolean;
   tapToAnswer: boolean;
+  checkpointDaily: CheckpointDaily | null;
+  checkpointAsks: CheckpointAsk[];
   landing: Landing | null;
   landingSteps: StepSpec[] | null;
   passedAsks: Map<number, string>;
@@ -455,6 +459,25 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
+    case "checkpoint.daily.set": {
+      if (!member.owner) {
+        reject("only the owner sets when every agent is asked for its checkpoints");
+        break;
+      }
+      c.checkpointDaily = ev.daily;
+      break;
+    }
+
+    case "checkpoint.ask": {
+      const refused = checkpointAskRefusal(c, m, ev, member);
+      if (refused) {
+        reject(refused);
+        break;
+      }
+      c.checkpointAsks = keepAsk(c.checkpointAsks, { seq: m.seq, at: m.rts ?? at, by: member.name, asks: ev.asks, unreachable: ev.unreachable, occurrence: ev.occurrence ?? null });
+      break;
+    }
+
     case "review.reset.waive": {
       const target = members.get(ev.member);
       if (!target?.active) reject(`no member named ${ev.member}`);
@@ -635,6 +658,31 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     case "task.nudge":
     case "task.wake":
       break;
+
+    case "task.snapshot": {
+      const task = tasks.get(ev.task);
+      const { op, task: _id, ...facts } = ev;
+      void [op, _id];
+      if (!task) reject(`no task ${taskId(ev.task)}`);
+      else if (task.owner !== m.from) reject(`only ${taskId(task.id)}'s owner saves its snapshot`);
+      else if (task.state === "done") reject(`${taskId(task.id)} is already done`);
+      else task.snapshot = { ...facts, seq: m.seq, by: m.from, ts: at };
+      break;
+    }
+
+    case "task.wait":
+    case "task.wait.end": {
+      const task = tasks.get(ev.task);
+      if (!task) reject(`no task ${taskId(ev.task)}`);
+      else if (task.state === "done") reject(`${taskId(task.id)} is already done`);
+      else if (task.owner !== m.from && !isPerson(member) && !c.leads(member)) reject(`only ${taskId(task.id)}'s owner, the lead or a person sets or ends its wait`);
+      else if (ev.op === "task.wait.end") {
+        if (!task.wait) reject(`${taskId(task.id)} isn't waiting`);
+        else delete task.wait;
+      } else if (ev.until !== undefined && ev.until <= at) reject(`the wait on ${taskId(task.id)} would already be over`);
+      else task.wait = { reason: ev.reason.trim(), by: m.from, seq: m.seq, at, ...(ev.until !== undefined ? { until: ev.until } : {}) };
+      break;
+    }
 
     case "task.first": {
       const task = tasks.get(ev.task);

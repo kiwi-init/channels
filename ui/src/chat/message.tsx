@@ -25,6 +25,7 @@ import { wordsPlain, wordsRaw, wrote } from "~/words"
 import { withNames } from "~/chat/linked"
 import { showMenu } from "~/kit/menu-open"
 import { later } from "~/kit/later"
+import { loadSpecCard, specCardNow } from "~/specs/card-load"
 import { copyText } from "~/kit/toasts"
 import { personGo } from "~/person-go"
 import { SENT } from "~/sent"
@@ -35,7 +36,7 @@ const Gifs = lazy(() => import("~/chat/gif-picker"))
 const Changes = lazy(() => import("~/chat/changes"))
 const PermissionCard = lazy(() => import("~/chat/permission-card"))
 const QuestionCard = lazy(() => import("~/chat/question-card"))
-const SpecCard = later(() => import("~/specs/card").then((m) => m.SpecCard))
+const SpecCard = later(loadSpecCard)
 const BlockFilesView = later(() => import("~/chat/block-files").then((m) => m.BlockFilesView))
 
 export const QUICK = ["👍", "🔥", "👀", "✅"]
@@ -247,6 +248,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
   const editing = useEditing(channel.code, m.seq, at)
   const ask = m.ask ? channel.asks.find((a) => a.id === m.ask) : undefined
   const spec = channel.specs?.find((s) => s.ask === m.seq)
+  const [SpecView] = useState(() => specCardNow() ?? SpecCard)
   const cited = useMemo(() => (typeof quote === "object" ? quotedExcerpt(m, quote) : null), [m, quote])
   const said = cited ? cited.rest : wordsRaw(m.text)
   const body = m.docMedia ? withoutMediaNames(said, m.docMedia) : said
@@ -353,7 +355,7 @@ export const MessageRow = memo(function MessageRow({ channel, m, compact, names,
         {m.task !== undefined && <TaskChip channel={channel} id={m.task} />}
         {spec && !inThread && (
           <Suspense fallback={<Wait />}>
-            <SpecCard channel={channel} spec={spec} />
+            <SpecView channel={channel} spec={spec} />
           </Suspense>
         )}
         {m.prs?.map((pr) => (

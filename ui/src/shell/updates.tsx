@@ -3,8 +3,9 @@ import { Fragment, useEffect, useState } from "react"
 
 import { Icon } from "~/kit/icons"
 import { copyText } from "~/kit/toasts"
-import { useActions, useAppAccount } from "~/nav"
+import { useActions, useApp, useAppAccount, useToast } from "~/nav"
 import { t } from "~/i18n/i18n"
+import { backCard } from "~/shell/back-card"
 import { showAsk } from "~/shell/enroll-hidden"
 
 type Card = { key: string; text: string; detail?: string; path?: string; act?: string; busy?: string; onAct?: () => void; progress?: number }
@@ -12,7 +13,13 @@ type Card = { key: string; text: string; detail?: string; path?: string; act?: s
 function useCards(): Card[] {
   const actions = useActions()
   const account = useAppAccount()
+  const toast = useToast()
+  const back = useApp().app.computer?.back ?? null
   const cards: Card[] = []
+  if (back) {
+    const card = backCard(back, actions.bringAgentsBack, toast)
+    cards.push({ ...card, onAct: () => void card.onAct() })
+  }
   const ask = account?.enrollAsk
   if (ask && ask.stage !== "elsewhere") cards.push({ key: "ask", text: t("shell.updates.sign.in.ask", { name: ask.label }), act: t("shell.updates.review"), onAct: showAsk })
   const moved = account?.moved

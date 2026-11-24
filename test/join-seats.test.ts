@@ -1,6 +1,7 @@
 // Joining without busywork: no --as (agents are called by what they run in, made unique by the
 // owner's side), a seat per agent in its checkout (no -c/--as afterwards, two agents in one checkout
 // each act as themselves, a restart takes its seat back), and Claude Code's hooks doing the listening.
+import { spawnOwned } from "./owned.ts";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -45,7 +46,7 @@ describe("joining without --as", () => {
     const code = created(await ok(owner, ["create", "shared", "--as", "boss"]));
     const h = scratch("same");
     // A's Claude Code is a process that's running for now.
-    const aProcess = Bun.spawn(["sleep", "120"]);
+    const aProcess = spawnOwned(["sleep", "120"]);
     const A = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "A", CLAUDE_PID: String(aProcess.pid) };
     const B = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "B", CLAUDE_PID: String(process.pid) };
     const a = youAre((await join_(owner, h, code, A)).out);
@@ -69,7 +70,7 @@ describe("joining without --as", () => {
 
     // A third live Claude Code that never joined isn't anyone here. (The same process under a new
     // session id, after /clear, is still the same agent: that's why it's a different process here.)
-    const cProcess = Bun.spawn(["sleep", "120"]);
+    const cProcess = spawnOwned(["sleep", "120"]);
     const C = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "C", CLAUDE_PID: String(cProcess.pid) };
     const refused = await run(h, ["send", "who am i"], C);
     cProcess.kill();

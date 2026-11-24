@@ -1,8 +1,8 @@
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { blobId } from "@kiwi/core/crypto.ts";
-import { MAX_BLOB_BYTES, MAX_CT_LENGTH, type Envelope, type ReadMark, type SlotTake } from "@kiwi/core/protocol.ts";
-import { BadRequest, Conflict, Forbidden, ReadOnly, Taken, TooLarge, TooMany } from "../failures.ts";
+import { AFTER_SKEW_MS, MAX_BLOB_BYTES, MAX_CT_LENGTH, type Envelope, type ReadMark, type SendAfter, type SlotTake } from "@kiwi/core/protocol.ts";
+import { BadRequest, Conflict, Forbidden, MovedOn, OffClock, ReadOnly, Taken, TooLarge, TooMany } from "../failures.ts";
 import { Policy, upgradeFor, type RoomPolicy } from "../policy.ts";
 import { fits, StoredEnvelope } from "../schema.ts";
 import { readMeta } from "./auth.ts";
@@ -103,9 +103,10 @@ interface Repeat {
 export interface Slots {
   take?: SlotTake;
   free?: readonly string[];
+  after?: SendAfter;
 }
 
-export const append = Effect.fn("Room.append")(function* (iv: string, ct: string, e: number, sender: string, slots: Slots = {}, cid?: string) {
+export const append = Effect.fn("Room.append")(function* (iv: string, ct: string, e: number, sender: string, slots: Slots = {}, cid?: string, occ?: string) {
   const db = yield* RoomStore;
   const policy = yield* Policy;
   if (db.isReadOnly(sender)) return yield* new ReadOnly({ message: READ_ONLY });
@@ -127,9 +128,13 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
 
   const cap = policy.bytesPerChannel;
   if (ct.length > cap) return yield* new TooLarge({ message: `that message is bigger than this channel may hold (${formatBytes(cap)})` });
-  const seq = db.head() + 1;
+  const head = db.head();
+  const prior = cid ? db.priorSend(sender, cid, ts - SEND_MEMORY_MS) : null;
+  const after = prior ? undefined : slots.after;
+  if (after && head !== after.head) return yield* new MovedOn({ message: `the channel moved on: its last message is #${head}, not #${after.head}` });
+  if (after && Math.abs(ts - after.at) > AFTER_SKEW_MS) return yield* new OffClock({ message: `the relay's clock is more than ${AFTER_SKEW_MS / 1000}s from the time this send was judged at` });
+  const seq = head + 1;
   const store = (): Envelope | Repeat => {
-    const prior = cid ? db.priorSend(sender, cid, ts - SEND_MEMORY_MS) : null;
     if (prior) return { repeat: true, seq: prior.seq, ts: prior.ts } satisfies Repeat;
     const was = db.storedBytes();
     let bytes = was;
@@ -137,13 +142,13 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
     if (bytes + ct.length > cap) bytes -= db.dropOldestBlobs(bytes + ct.length - cap);
     if (bytes + ct.length > cap) bytes -= db.dropSnapshot();
 
-    db.insert(seq, ts, iv, ct, e, cid ? { sender, cid, since: ts - SEND_MEMORY_MS } : undefined);
+    db.insert(seq, ts, iv, ct, e, cid ? { sender, cid, since: ts - SEND_MEMORY_MS } : undefined, occ);
     if (slots.free?.length) db.freeSlots(slots.free, sender);
     if (slots.take) db.takeSlot(slots.take.id, sender, seq, ts + slots.take.ttl, ts);
     bytes += ct.length;
     if (bytes === was + ct.length) db.countMessage({ bytes, day, n: today + 1 });
     else db.setCounters({ bytes, day, n: today + 1 });
-    return { seq, ts, iv, ct, e };
+    return { seq, ts, iv, ct, e, ...(occ ? { occ } : {}) };
   };
   return store();
 });

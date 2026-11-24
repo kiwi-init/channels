@@ -1,5 +1,6 @@
 // A listener stays quiet through routine drops, and says something only when the relay stays away.
 
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -83,7 +84,7 @@ test("tail started while the relay is down keeps waiting instead of exiting", as
   let server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
   const port = server.port;
   const env = { ...process.env, KIWI_HOME: dir, KIWI_RELAY: server.url.origin, CLAUDE_CONFIG_DIR: dir, CLAUDECODE: "" };
-  const cli = (...args: string[]) => Bun.spawn(kiwiCmd(args), { cwd: dir, env, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  const cli = (...args: string[]) => spawnOwned(kiwiCmd(args), { cwd: dir, env, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
   try {
     expect(await cli("create", "r", "--as", "lead").exited).toBe(0);
     server.stop(true);

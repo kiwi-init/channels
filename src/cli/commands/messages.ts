@@ -33,7 +33,7 @@ import {
   type Step,
 } from "@kiwi/core/protocol.ts";
 import { recipients, waitsLines, waitsOf, type Busy, type Marks, type Reached } from "@kiwi/core/receipts.ts";
-import { asksOnSameWork, openAsksOnWork, chooseThread, inGeneral, longForGeneral, parseTaskId, taskId, wentTo, type ChannelState } from "@kiwi/core/state.ts";
+import { asksOnSameWork, decidedOnWork, openAsksOnWork, chooseThread, findRoom, inGeneral, longForGeneral, parseTaskId, taskId, wentTo, type ChannelState } from "@kiwi/core/state.ts";
 import { bareHandleNote } from "../handles.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
@@ -115,16 +115,28 @@ export const messageCommands: Record<string, Command> = {
         const named = opt.task === undefined ? where.task : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
         const dm = opt.dm ?? where.dm;
         const reArgs = [...(list(opt.re) ?? []), ...(where.re ?? []).map(String)];
-        const chosen = chooseThread(state, s.me, { ...(named !== undefined ? { task: named } : {}), main: opt.main || where.main, ...(dm ? { dm } : {}), reply: reArgs.length > 0 });
+        const room = opt.room ?? where.room;
+        const chosen = chooseThread(state, s.me, {
+          ...(named !== undefined ? { task: named } : {}),
+          main: opt.main || where.main,
+          ...(room ? { room } : {}),
+          ...(dm ? { dm } : {}),
+          reply: reArgs.length > 0,
+        });
         if (typeof chosen === "string") return yield* die(chosen);
         const to = chosen.to ?? where.to;
         const kind = (opt.kind ?? "msg") as Kind;
         if (!CHAT_KINDS.includes(kind)) return yield* die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
         const re = reArgs.map((x) => Number(x.replace(/^#/, ""))).filter((n) => n > 0);
+        const asked = chosen.room ? findRoom(state, chosen.room) : null;
+        const parentRoom = re.length ? state.roomOf.get(re[0]!) : undefined;
+        if (asked && parentRoom !== undefined && parentRoom !== asked.id)
+          return yield* die(
+            `#${re[0]} is in #${findRoom(state, parentRoom)?.name ?? parentRoom}, and a reply stays in its message's room: leave out --to '#${asked.name}' to answer there; nothing was sent`,
+          );
         const imgs = yield* images;
         const files = yield* attachments(s);
         const asking = opt.ask || !!opt.wait;
-        const room = opt.room ?? where.room;
         const doc =
           !asking && kind === "msg" ? docPlaceOf(state, { ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}), ...(room ? { room } : {}), re }) : null;
         const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
@@ -366,7 +378,7 @@ export const messageCommands: Record<string, Command> = {
         );
       const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
       const task = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
-      const held = list(opt.holds)?.map((h) => [h, parseTaskId(h)] as const);
+      const held = list(opt.holds?.join(","))?.map((h) => [h, parseTaskId(h)] as const);
       const bad = held?.find(([, id]) => id === null);
       if (bad) return yield* die(`--holds takes tasks and asks, like T7,#18: "${bad[0]}" isn't one`);
       const holds = held?.flatMap(([, id]) => (id === null ? [] : [id]));
@@ -378,10 +390,15 @@ export const messageCommands: Record<string, Command> = {
       const named = [...new Set([...(task !== undefined ? [`T${task}`] : []), ...(held?.map(([raw]) => raw) ?? [])])];
       const heldText = named.length ? `, holding ${named.join(", ")}` : "";
       const ids = [...new Set([...(task !== undefined ? [task] : []), ...(holds ?? [])])];
+      const decidedBefore = (state: ChannelState, messages: readonly Message[]) => {
+        for (const { ask, answer } of decidedOnWork(state, messages, ids))
+          out(`decided before on this work: #${ask.seq} ${ask.from}: ${firstLine(ask.body)} → ${answer.from}: ${firstLine(answer.body)}`);
+      };
       const sameWork = (seq: number, to: readonly string[]) =>
         Effect.gen(function* () {
           if (!ids.length) return;
-          const { state } = yield* s.state();
+          const { state, messages } = yield* s.state();
+          decidedBefore(state, messages);
           for (const a of asksOnSameWork(state, s.me, to, ids).filter((x) => x.seq !== seq)) {
             const shared = ids.filter((id) => a.task === id || a.holds?.includes(id)).map((id) => (state.tasks.has(id) ? taskId(id) : `#${id}`));
             out(`also open on ${shared.join(", ")}: #${a.seq} ${a.from} → ${a.to?.join(", ")}: ${firstLine(a.body)}`);
@@ -398,10 +415,11 @@ export const messageCommands: Record<string, Command> = {
           );
           const { state, messages } = yield* s.state();
           for (const n of yield* waitingOn(s, state, messages, { seq, body, to: [lead], task, re })) out(n);
+          decidedBefore(state, messages);
         });
       if (ids.length && !opt.also && area === undefined && !opt.step && decision !== "irreversible" && opt.handoff === undefined) {
         const { state } = yield* s.state();
-        const open = openAsksOnWork(state, ids).find((a) => a.from !== s.me && a.seq !== re);
+        const open = openAsksOnWork(state, ids).find((a) => a.seq !== re);
         if (open) {
           const shared = ids.filter((id) => open.task === id || open.holds?.includes(id)).map((id) => (state.tasks.has(id) ? taskId(id) : `#${id}`));
           out(`already open on ${shared.join(", ")}: #${open.seq} ${open.from} → ${open.to?.join(", ")}: ${firstLine(open.body)}`);

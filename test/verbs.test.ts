@@ -1,5 +1,6 @@
 // The agent CLI in about ten verbs: listen, send, show, status, note (plus join, log, task, leave, help).
 // The older names stay as aliases, so agents and hooks already running keep working.
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { messageLink } from "@kiwi/core/message-link.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
@@ -31,7 +32,7 @@ const scratch = (tag: string) => {
 };
 
 function spawn(home: string, args: string[], stdin: "ignore" | Blob = "ignore") {
-  return Bun.spawn(kiwiCmd(args), {
+  return spawnOwned(kiwiCmd(args), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1" },
     stdin,
@@ -383,6 +384,41 @@ describe("review rounds through the CLI", () => {
     expect(await ok(rev, "status")).toContain(`#${first} dev → `);
     const elsewhere = await ok(other, "ask-human", "--holds", `#${want}`, "Ship it this week?");
     expect(elsewhere).not.toContain("also open on");
+  });
+
+  test("ask-human holds the asker's own open decision on a task too, and the next ask there shows what was decided (#2253)", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "pick the badge shape", "--ask", want));
+    const first = seqOf(await ok(dev, "ask-human", "--holds", `T${t}`, "--option", "A: round", "--option", "B: square", "Round or square?"));
+    const head = async () => /head #(\d+)/.exec(await ok(dev, "status"))![1];
+    const before = await head();
+    const stopped = await run(dev, "ask-human", "--holds", `T${t}`, "--option", "A: 4px", "--option", "B: 8px", "Which corner radius?");
+    expect(stopped.code).not.toBe(0);
+    expect(stopped.out).toContain(`already open on T${t}: #${first} dev`);
+    expect(stopped.err).toContain("one open decision per task");
+    expect(await head()).toBe(before);
+    await ok(owner, "--as", "human", "reply", first, "A: round");
+    const next = await ok(dev, "ask-human", "--holds", `T${t}`, "--option", "A: 4px", "--option", "B: 8px", "Which corner radius?");
+    expect(next).toMatch(/^escalated #\d+ to /);
+    expect(next).toContain(`decided before on this work: #${first} dev: Round or square? → human: A: round`);
+  });
+
+  test("ask-human holds every task given, whether --holds repeats or lists them with commas (#2545)", async () => {
+    const pair = async (what: string) => [taskNo(await ok(dev, "task", "add", `${what} one`, "--ask", want)), taskNo(await ok(dev, "task", "add", `${what} two`, "--ask", want))] as const;
+    const [a, b] = await pair("repeat");
+    const [c, d] = await pair("commas");
+    const asks: [string[], number[], string][] = [
+      [["--holds", `T${a}`, "--holds", `T${b}`], [Number(a), Number(b)], "Repeated holds?"],
+      [["--holds", `T${c},T${d}`], [Number(c), Number(d)], "Comma holds?"],
+    ];
+    for (const [flags, ids, question] of asks) {
+      expect(await ok(dev, "ask-human", ...flags, "--option", "A: yes", "--option", "B: no", question)).toContain(`holding T${ids[0]}, T${ids[1]}`);
+      const sent = (await ok(dev, "log", "--json", "-n", "40"))
+        .trim()
+        .split("\n")
+        .map((l) => JSON.parse(l) as { body?: string; holds?: number[] })
+        .find((m) => m.body?.includes(question));
+      expect(sent?.holds).toEqual(ids);
+    }
   });
 
   test("task proof puts a link on the task, and refuses one that isn't https", async () => {

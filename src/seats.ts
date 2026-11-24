@@ -19,8 +19,8 @@ import { basename, dirname, join, resolve } from "node:path";
 import { agyHere, deepcodeAncestor, geminiAncestor, kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord, type SeatTaken } from "./config.ts";
 import { pinnedFor } from "./harness-bin.ts";
-import { holdsSeat, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
-import { pidAlive } from "./pid.ts";
+import { holdsSeat, seatHeldAway, seatHolds, seatRefusal, upLaunch } from "./hold.ts";
+import { pidAlive, processStart } from "./pid.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { tmuxPlaceFrom } from "./tmux-pane.ts";
 
@@ -145,7 +145,7 @@ export function baseName(h: Here): string {
  */
 export function canonicalHarness(h: string | undefined): string | undefined {
   if (!h) return undefined;
-  const card: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode", grokbot: "grok-bot" };
+  const card: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode", grokbot: "grok-bot", agy: "antigravity" };
   return card[h] ?? h;
 }
 
@@ -288,11 +288,19 @@ export interface SeatOptions {
   listeners?: () => Listener[];
   /** Record this session on the seat it takes (default true). */
   claim?: boolean;
+  env?: Record<string, string | undefined>;
+}
+
+function startOf(pid: number | undefined): { started?: string } {
+  const started = pid ? processStart(pid) : null;
+  return started ? { started } : {};
 }
 
 export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
   const dir = seatHome(loadConfig(), from);
   const who = opts.who ?? here();
+  const env = opts.env ?? process.env;
+  const launch = upLaunch(env);
   const live = opts.listeners?.() ?? [];
   const listening = (alias: string, as: string) => live.some((l) => l.alias === alias && l.as === as);
   // A listener this very session started (its session, or its harness's process).
@@ -308,15 +316,15 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     !above.some((b) => !!who.session && b.session === who.session) &&
     // That agent's seat, if it has one here, must be one a session could hold: not joined from a plain terminal,
     // not without a session (whose agent may just not be listening right now), not held by another live session.
-    !seatHeldAway(cfg, l.alias, l.as) &&
+    !seatHeldAway(cfg, l.alias, l.as, env) &&
     !everywhere.some((b) => b.alias === l.alias && b.as === l.as && !!b.session && heldElsewhere(b, who, listening)) &&
     !above.some((b) => b.alias === l.alias && b.as === l.as && (b.plain || !b.session || heldElsewhere(b, who, listening))) &&
     !live.some((o) => o.alias === l.alias && o.as === l.as && !ours(o));
   for (let d = resolve(dir); !tooBroad(d); d = dirname(d)) {
     const atDir = seatsAt(cfg, d).filter((b) => cfg.channels[b.alias] && (!opts.alias || b.alias === opts.alias));
-    const loop = atDir.filter((b) => holdsSeat(b));
+    const loop = atDir.filter((b) => holdsSeat(b, env));
     if (loop.length) return loop;
-    const seats = atDir.filter((b) => !seatHeldAway(cfg, b.alias, b.as));
+    const seats = atDir.filter((b) => !seatHeldAway(cfg, b.alias, b.as, env) && (launch === null || b.upKey === launch));
     const mine = who.session ? seats.filter((b) => b.session === who.session) : [];
     if (mine.length) {
       // Note that this session still uses it, so nobody takes it for stale (seats with no process to check).
@@ -325,7 +333,7 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     // This session listens as an agent from here: that's who it is, even when its seat was lost (a later join
     // from a plain terminal replaced it). It gets its seat back, beside the others.
     // Recorded where the listener runs, never deeper (the first level up from here that holds its folder).
-    const heard = live.find((l) => ours(l) && !!l.cwd && within(l.cwd, d) && cfg.channels[l.alias] && (!opts.alias || l.alias === opts.alias) && heardOk(l));
+    const heard = launch !== null ? undefined : live.find((l) => ours(l) && !!l.cwd && within(l.cwd, d) && cfg.channels[l.alias] && (!opts.alias || l.alias === opts.alias) && heardOk(l));
     if (heard) {
       const seat: Binding = {
         alias: heard.alias,
@@ -366,13 +374,14 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     if (!pick) return [];
     if (opts.claim !== false && who.session && (pick.session !== who.session || (who.pid && pick.pid !== who.pid))) {
       // The previous holder's process goes with it: this session's, or none.
-      const rest = omit(pick, "pid", "model", "harnessSession", "loop");
+      const rest = omit(pick, "pid", "model", "harnessSession", "loop", "started", "upKey", "tmux");
       const taken: Binding = {
         ...rest,
         session: who.session,
-        ...(who.pid ? { pid: who.pid } : {}),
+        ...(who.pid ? { pid: who.pid, ...startOf(who.pid) } : {}),
         ...(who.model ? { model: who.model } : {}),
         ...(who.harness && !pick.harness ? { harness: who.harness } : {}),
+        ...tmuxPlaceFrom(env),
         at: Date.now(),
         seen: Date.now(),
       };
@@ -391,7 +400,7 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     }
     return [pick];
   }
-  return seatsHeldAnywhere(who, opts).filter((b, i, all) => (!opts.alias || b.alias === opts.alias) && all.findIndex((o) => sameSeat(o, b)) === i);
+  return seatsHeldAnywhere(who, { ...opts, env }).filter((b, i, all) => (!opts.alias || b.alias === opts.alias) && all.findIndex((o) => sameSeat(o, b)) === i);
 }
 
 const TAKEN_KEPT_MS = 7 * 86_400_000;
@@ -471,7 +480,7 @@ function keepSeen(dir: string, mine: Binding[], who: Here): Binding[] {
   const stale = mine.filter((m) => moved(m) || (!m.pid && Date.now() - (m.seen ?? m.at ?? 0) > SEEN_EVERY_MS));
   if (!stale.length) return mine;
   const now = Date.now();
-  const fresh = (b: Binding): Binding => ({ ...b, ...(moved(b) ? { pid: who.pid } : {}), seen: now });
+  const fresh = (b: Binding): Binding => (moved(b) ? { ...omit(b, "started"), pid: who.pid, ...startOf(who.pid), seen: now } : { ...b, seen: now });
   updateConfig((c) =>
     store(
       c,
@@ -482,11 +491,13 @@ function keepSeen(dir: string, mine: Binding[], who: Here): Binding[] {
   return mine.map((m) => (stale.includes(m) ? fresh(m) : m));
 }
 
-export function seatsHeldAnywhere(who: Here = here(), opts: Pick<SeatOptions, "claim"> = {}): Binding[] {
+export function seatsHeldAnywhere(who: Here = here(), opts: Pick<SeatOptions, "claim" | "env"> = {}): Binding[] {
   if (!who.session) return [];
   const cfg = loadConfig();
+  const env = opts.env ?? process.env;
+  const launch = upLaunch(env);
   return Object.keys(cfg.bindings ?? {}).flatMap((d) => {
-    const mine = seatsAt(cfg, d).filter((b) => b.session === who.session && cfg.channels[b.alias] && !seatHeldAway(cfg, b.alias, b.as));
+    const mine = seatsAt(cfg, d).filter((b) => b.session === who.session && cfg.channels[b.alias] && !seatHeldAway(cfg, b.alias, b.as, env) && (launch === null || b.upKey === launch));
     return opts.claim !== false ? keepSeen(d, mine, who) : mine;
   });
 }

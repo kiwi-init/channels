@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { Info, MemberRow } from "@kiwi/core/client.ts";
 import { home } from "../config.ts";
-import { KEEP_MAX, type Reach } from "@kiwi/core/protocol.ts";
+import { KEEP_MAX, type Reach, type Unarmed } from "@kiwi/core/protocol.ts";
 import type { WakeCommand, WakePath } from "@kiwi/core/wake.ts";
 import type { PairedPerson } from "./pair.ts";
 
@@ -29,6 +29,7 @@ export type DaemonVerb =
   | "listening"
   | "hold"
   | "listeners"
+  | "unarmed"
   | "read"
   | "mark"
   | "peek"
@@ -98,8 +99,44 @@ export interface DaemonListener {
   harness: string | null;
   session: string | null;
   pid: number | null;
+  proc: ListenerProc | null;
   marks: boolean | null;
   at: number;
+}
+
+export interface ListenerProc {
+  pid: number;
+  started: string;
+}
+
+export type ListenerHolder = Pick<DaemonListener, "session" | "pid" | "harness" | "proc">;
+
+function readProc(v: unknown): ListenerProc | null {
+  if (!v || typeof v !== "object") return null;
+  const pid = "pid" in v ? v.pid : null;
+  const started = "started" in v ? v.started : null;
+  return typeof pid === "number" && Number.isInteger(pid) && pid > 0 && typeof started === "string" && started ? { pid, started } : null;
+}
+
+export function readHolder(v: unknown): ListenerHolder | null {
+  if (!v || typeof v !== "object") return null;
+  const session = "session" in v && typeof v.session === "string" && v.session ? v.session : null;
+  const harness = "harness" in v && typeof v.harness === "string" && v.harness ? v.harness : null;
+  const pid = "pid" in v && typeof v.pid === "number" && Number.isInteger(v.pid) && v.pid > 0 ? v.pid : null;
+  return { session, pid, harness, proc: "proc" in v ? readProc(v.proc) : null };
+}
+
+export interface ProcessLook {
+  alive: (pid: number) => boolean;
+  startOf: (pid: number) => string | null;
+}
+
+export function supersedes(by: DaemonListener, holder: DaemonListener, look: ProcessLook): boolean {
+  if (!holder.proc) return false;
+  if (by.proc && by.proc.pid === holder.proc.pid && by.proc.started === holder.proc.started) return true;
+  if (!look.alive(holder.proc.pid)) return true;
+  const started = look.startOf(holder.proc.pid);
+  return started !== null && started !== holder.proc.started;
 }
 
 const optionalText = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
@@ -118,6 +155,7 @@ export function readListener(x: unknown): DaemonListener | null {
     harness: optionalText(r.harness),
     session: optionalText(r.session),
     pid: typeof r.pid === "number" && Number.isInteger(r.pid) && r.pid > 0 ? r.pid : null,
+    proc: readProc(r.proc),
     marks: typeof r.marks === "boolean" ? r.marks : null,
     at: typeof r.at === "number" ? r.at : Date.now(),
   };
@@ -130,6 +168,8 @@ export interface DaemonSeat {
   read: DaemonRead | null;
   wake: { on: boolean; path: WakePath; last: DaemonWake | null };
   reach: Reach | null;
+  unarmed: Unarmed | null;
+  untaken: Unarmed | null;
 }
 
 export interface DaemonPeek {

@@ -517,6 +517,8 @@ async function handle(ask: Ask): Promise<unknown> {
       return room(ask.code).image(ask.seq, ask.index);
     case "answer":
       return room(ask.code).answer(ask.seq, ask.text);
+    case "answerStep":
+      return room(ask.code).answerStep(ask.seq, ask.reply);
     case "react":
       return room(ask.code).react(ask.seq, ask.emoji);
     case "approve":

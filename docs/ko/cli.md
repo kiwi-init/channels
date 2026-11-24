@@ -49,7 +49,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | --- | --- |
 | `kiwi specs` | 열린 스펙과 각각의 상태 |
 | `kiwi spec show N` · `spec write N --file spec.md` | 사람의 메시지 #N에 대한 스펙 읽기 또는 쓰기 |
-| `kiwi spec ready N` | 리뷰를 통과하면 준비됨으로 표시해, 사람에게 승인 카드가 보이게 함 |
+| `kiwi spec ready N` | 리뷰를 통과하면 준비됨으로 표시해, 사람에게 승인 카드가 보이게 함. 리뷰가 아직 변경을 요청하면 `--undo`로 표시를 거둠 |
 | `kiwi spec tick N "words"` | 그 단어가 들어 있는 완료 조건 체크박스를 체크 |
 | `kiwi spec start N` | 승인된 스펙을 맡아 작업으로 계획 |
 | `kiwi spec comment N "…" --on "line"` | 스펙이나 스펙의 한 줄에 댓글 |
@@ -57,6 +57,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task start T7` · `task done T7` | 아무도 맡지 않았으면 작업 맡기 · 작업 끝내기 |
 | `kiwi task assign T7 [NAME] ["next"]` | 현재 상태와 함께 작업 넘기기 |
 | `kiwi task checkpoint T7 --file note.md` | 다음 세션을 위한 작업 현재 상태. 루프에서는 `--fresh` |
+| `kiwi task wait T7 "이유" [--until 12h]` · `task wait T7 --end` | 무언가 일어날 때까지 누구의 차례도 아닙니다. 시계가 멈추고 보드에는 "waiting: 이유"가 표시됩니다. `--until`로 상한을 둡니다. 차례인 사람의 게시나 `--end`로 그때부터 시계가 다시 갑니다 |
 | `kiwi task review T7 --at SHA` | 리뷰 라운드 열기(실행 작업이면 `--run ID`) |
 | `kiwi task approve T7 --round N` · `reject` | 그 라운드에 대한 리뷰어의 판정. 판정은 Kiwi의 라운드와 작업 스레드에 남고, PR에는 적지 않습니다 |
 | `kiwi task kept T7 [--at SHA] [--onto REF]` | 승인된 작업에 새 커밋이 생긴 뒤, 여전히 승인된 코드인지(같은 트리이거나 대상 브랜치의 깨끗한 머지뿐인지) 이 체크아웃에서 확인하고 기록해 승인을 유지합니다 |
@@ -68,6 +69,8 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task steps T7` | 단계와 그 ID. 리드나 사람이 바꿀 수 있으며(`add`, `remove`, `move`, `by`, `skip`, `wait`, `run`), 리뷰는 다시 열리지 않습니다 |
 | `kiwi task close T7 "이유"` | 리드 또는 사람: 남은 단계 없이 완료하고, 이유를 남깁니다 |
 | `kiwi task` | 작업 보드. 열린 작업마다 누구 차례인지도 보여 줍니다 |
+
+각 턴이 끝날 때 Stop 훅은 열려 있는 내 작업 각각이 디스크에서 어디까지 와 있는지도 기록합니다. 대상은 브랜치 이름이 그 작업을 가리키는 워크트리(`T7-…` 또는 그 풀 리퀘스트의 브랜치)이며, 브랜치, 마지막 커밋, 커밋하지 않은 파일, `origin`보다 앞서거나 뒤처진 정도를 기록합니다. 바뀐 것이 없거나 그런 워크트리가 없는 작업은 기록하지 않습니다. `kiwi task show T7`와 새 세션은 이 기록을 내 체크포인트 옆에 보여 주며, 체크포인트를 대신하지 않습니다. 커밋하지 않은 파일은 그 체크아웃의 것이므로 다른 사람의 수정이 들어 있을 수 있습니다. 종료로 중간에 끊긴 턴은 기록되지 않습니다.
 
 ## 이 컴퓨터
 

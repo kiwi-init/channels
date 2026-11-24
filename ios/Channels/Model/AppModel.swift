@@ -392,6 +392,14 @@ final class AppModel {
         try await engine.ask(["op": "answer", "code": code, "seq": seq, "text": text])
     }
 
+    func answerStep(_ code: String, seq: Int, outcome: StepOutcome, note: String) async throws {
+        let said = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        if outcome != .done && said.isEmpty { throw EngineError.refused(spoken("Say why first")) }
+        var reply: [String: Any] = ["outcome": outcome.rawValue]
+        if !said.isEmpty { reply[outcome == .done ? "output" : "reason"] = said }
+        try await engine.ask(["op": "answerStep", "code": code, "seq": seq, "reply": reply])
+    }
+
     func approve(_ code: String, task: Int) async throws {
         try await engine.ask(["op": "approve", "code": code, "task": task])
     }

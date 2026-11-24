@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -88,7 +89,7 @@ console.log(JSON.stringify(out));
 `,
     );
     const run = (...steps: string[]) => {
-      const r = Bun.spawnSync(["bun", script, ...steps], {
+      const r = spawnOwnedSync(["bun", script, ...steps], {
         cwd: dir,
         env: { PATH: process.env["PATH"] ?? "", HOME: home, SHELL: "/bin/zsh", TMPDIR: process.env["TMPDIR"] ?? "/tmp", KIWI_INSTALL: join(dir, "install"), HOMEBREW_PREFIX: join(dir, "brew") },
       });

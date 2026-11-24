@@ -1,6 +1,6 @@
 import { GENERAL_ROOM, ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
 import { personOf, rootOf, sentTo, type Seat } from "@kiwi/core/room-rules.ts";
-import { answersDecisions, decidersOf, dmPlace, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { answersAsk, answersDecisions, decidersOf, dmPlace, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { roomOfMessage } from "@kiwi/core/state/rooms.ts";
 import type { FoldMember, Room } from "@kiwi/core/state/types.ts";
 
@@ -109,12 +109,21 @@ export function roomView(r: RoomInput): RoomView {
   const bySeq = new Map(r.messages.map((m) => [m.seq, m]));
   const repliesTo = new Map<number, Message[]>();
   for (const m of r.messages) for (const seq of m.re ?? []) repliesTo.set(seq, [...(repliesTo.get(seq) ?? []), m]);
+  const decides = answersDecisions(state.members, me);
   const { decisions, escalations, questions } = asksFor(
     heldAsks(state).filter((m) => !m.permission),
     me,
-    answersDecisions(state.members, me),
+    decides,
   );
-  const waiting = new Set([...decisions, ...escalations].map((m) => m.seq));
+  const askedOfMe = (m: Message): boolean =>
+    !m.permission && m.from !== me && answersAsk(state.members, m, me) && (!m.to?.length || m.to.includes(me) || m.to.includes("*") || (decides && !!m.esc && !m.handoff));
+  const waiting = new Set(state.openAsks.filter(askedOfMe).map((m) => m.seq));
+  const counted = (m: Message, replies: readonly Message[]): readonly Message[] =>
+    replies.filter((r) => !ignored(state.trust.get(r.seq)) && (!state.tapToAnswer || !m.esc || !!r.pick || !!r.stepReply));
+  const stepAnswerOf = (m: Message): MessageView["stepAnswer"] => {
+    const r = counted(m, repliesTo.get(m.seq) ?? []).find((x) => x.kind !== "event" && x.from !== m.from && answersAsk(state.members, m, x.from));
+    return r ? { by: r.from, outcome: r.stepReply?.outcome ?? null } : null;
+  };
   const root = rootOf(me, state.members);
   const myself = (name: string) => name === me || rootOf(name, state.members) === root;
   const here = placeFromKey(r.place) || roomOfKey(state, me, r.place) ? r.place : "main";
@@ -128,7 +137,7 @@ export function roomView(r: RoomInput): RoomView {
   const messageView = (m: Message, prev: Message | undefined): MessageView => {
     const re = m.re?.length === 1 ? m.re[0]! : null;
     const quoted = re !== null && prev?.seq !== re ? bySeq.get(re) : undefined;
-    const chosen = m.choices?.length ? chosenOf(m, repliesTo.get(m.seq) ?? [], decidersOf(state, m)) : undefined;
+    const chosen = m.choices?.length ? chosenOf(m, counted(m, repliesTo.get(m.seq) ?? []), decidersOf(state, m)) : undefined;
     const place = state.placeOf.get(m.seq);
     return {
       seq: m.seq,
@@ -144,6 +153,8 @@ export function roomView(r: RoomInput): RoomView {
       choices: m.choices ?? [],
       chosen: chosen ? { choice: chosen.choice, by: chosen.by } : null,
       waiting: waiting.has(m.seq),
+      step: m.step ?? null,
+      stepAnswer: m.step ? stepAnswerOf(m) : null,
       images: m.imgs?.length ?? 0,
       task: place?.kind === "task" ? place.task : (m.task ?? null),
       reactions: chipsFor(state, m.seq, me, (name) => state.members.get(name)?.display ?? name),

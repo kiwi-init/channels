@@ -1,4 +1,5 @@
 import type { DeviceLink } from "@kiwi/core/devices.ts";
+import type { Step, StepReply } from "@kiwi/core/protocol.ts";
 import type { ChannelIdentityView, PersonView, PublicPerson } from "../../desktop/src/bridge.ts";
 
 export interface Saved {
@@ -30,6 +31,7 @@ export type Ask =
   | { op: "send"; code: string; body: string; re: number | null; imgs: Picture[]; place?: string }
   | { op: "image"; code: string; seq: number; index: number }
   | { op: "answer"; code: string; seq: number; text: string }
+  | { op: "answerStep"; code: string; seq: number; reply: StepReply }
   | { op: "react"; code: string; seq: number; emoji: string | null }
   | { op: "approve"; code: string; task: number }
   | { op: "sendBack"; code: string; task: number; why: string }
@@ -101,6 +103,8 @@ export interface MessageView {
   choices: string[];
   chosen: { choice: string; by: string } | null;
   waiting: boolean;
+  step: Step | null;
+  stepAnswer: { by: string; outcome: StepReply["outcome"] | null } | null;
   images: number;
   task: number | null;
   reactions: ReactionView[];

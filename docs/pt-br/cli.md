@@ -49,7 +49,7 @@ Cada instalação e cada atualização roda depois `kiwi cleanup`, que remove o 
 | --- | --- |
 | `kiwi specs` | As especificações abertas e em que pé cada uma está |
 | `kiwi spec show N` · `spec write N --file spec.md` | Lê ou escreve a especificação da mensagem #N da pessoa |
-| `kiwi spec ready N` | Marca como pronta quando as revisões passam, para o card de aprovação da pessoa aparecer |
+| `kiwi spec ready N` | Marca como pronta quando as revisões passam, para o card de aprovação da pessoa aparecer. `--undo` retira a marca enquanto uma revisão ainda pede mudanças |
 | `kiwi spec tick N "words"` | Marca a caixa do Pronto quando cuja linha diz essas palavras |
 | `kiwi spec start N` | Pega uma especificação aprovada e a planeja em tarefas |
 | `kiwi spec comment N "…" --on "line"` | Comenta a especificação, ou uma linha dela |
@@ -57,6 +57,7 @@ Cada instalação e cada atualização roda depois `kiwi cleanup`, que remove o 
 | `kiwi task start T7` · `task done T7` | Pega uma tarefa se ninguém estiver com ela · termina |
 | `kiwi task assign T7 [NAME] ["next"]` | Passa adiante, com o pé em que está |
 | `kiwi task checkpoint T7 --file note.md` | Em que pé está o trabalho, para a próxima sessão. `--fresh` num loop |
+| `kiwi task wait T7 "por quê" [--until 12h]` · `task wait T7 --end` | Ninguém tem a vez até algo acontecer: o relógio pausa e o quadro mostra "waiting: por quê". `--until` limita a espera; uma postagem de quem tem a vez ou `--end` retoma o relógio a partir dali |
 | `kiwi task review T7 --at SHA` | Abre uma rodada de revisão (`--run ID` para uma tarefa de execução) |
 | `kiwi task approve T7 --round N` · `reject` | O veredito de quem revisa sobre aquela rodada. Ele fica no Kiwi, na rodada e na conversa da tarefa, não no PR |
 | `kiwi task kept T7 [--at SHA] [--onto REF]` | Depois de um novo commit numa tarefa aprovada: confere neste checkout se ainda é o código aprovado (a mesma árvore, ou só merges limpos do branch de destino) e registra isso, para a aprovação continuar valendo |
@@ -68,6 +69,8 @@ Cada instalação e cada atualização roda depois `kiwi cleanup`, que remove o 
 | `kiwi task steps T7` | Os passos com seus ids. O líder ou uma pessoa os altera (`add`, `remove`, `move`, `by`, `skip`, `wait`, `run`), o que nunca reabre a revisão |
 | `kiwi task close T7 "motivo"` | O líder ou uma pessoa: concluída sem os passos restantes, com o motivo guardado |
 | `kiwi task` | O quadro, com de quem é a vez em cada tarefa aberta |
+
+No fim de cada turno, o hook Stop também registra onde cada tarefa aberta sua está no disco: a worktree cujo branch tem o nome da tarefa (`T7-…`, ou o branch do pull request dela), com o branch, o último commit, os arquivos não commitados e quanto ela está à frente ou atrás de `origin`. Nada é registrado quando isso não mudou, nem para uma tarefa sem essa worktree. `kiwi task show T7` e uma sessão nova mostram esse registro ao lado do seu checkpoint, que ele nunca substitui. Os arquivos não commitados são dessa checkout, então podem incluir edições de outra pessoa. Um turno interrompido por um desligamento não é registrado.
 
 ## Este computador
 

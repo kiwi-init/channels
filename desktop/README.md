@@ -33,8 +33,8 @@ bun run typecheck:eb                                  # fetches the devkit into 
   (bundled into the main process) isn't the pinned one; `eb-post-build.ts` checks every
   Electrobun file that ships against its pin, and lets nothing unpinned into
   `Contents/MacOS` on a Mac or `bin/` on Linux, so a swapped core fails the build.
-  `eb-pins-check.ts linux-arm64` checks that core's files on every Linux CI run, since no
-  job builds there. A new Electrobun means new pins (`eb-bump.ts --version X`), reviewed like code.
+  `eb-pins-check.ts linux-arm64` checks that core's files on every Linux CI run, since only
+  the release's `desktop-linux-eb-arm64` job builds there. A new Electrobun means new pins (`eb-bump.ts --version X`), reviewed like code.
 - `electrobun.config.ts` — Electrobun 2.0.4, pinned exact, `mainProcess: "bun"`. A build
   is `com.kiwiinit.channels.dev` unless `CHANNELS_EB_RELEASE=1` (the release) or
   `CHANNELS_EB_IDENTIFIER` (a test's own id) says otherwise, so a local run never shares
@@ -75,10 +75,12 @@ bun run typecheck:eb                                  # fetches the devkit into 
   build on a Mac with Channels installed: macOS keeps its preferences and WebKit data under
   the real home whatever `HOME` says.
 
-- Release, Linux (job `desktop-linux-eb`, on ubuntu-24.04, the oldest glibc it runs on):
-  `Channels-<version>-linux-x86_64.AppImage` only (`scripts/package-linux.ts`), checked by
+- Release, Linux (jobs `desktop-linux-eb` on ubuntu-24.04 and `desktop-linux-eb-arm64` on
+  ubuntu-24.04-arm, the oldest glibc each runs on): `Channels-<version>-linux-x86_64.AppImage`
+  and `Channels-<version>-linux-aarch64.AppImage` (`scripts/package-linux.ts`), each checked by
   `eb-driver-check.ts --release` and `scripts/linux-packages-check.sh`, probed extracted
-  (`scripts/package-probe.ts`) and started under Xvfb. Linux support is Arch only: there is
+  (`scripts/package-probe.ts`) and started under Xvfb. An arm64 install updates from the
+  aarch64 file (`swapAsset` in `src/update-asset.ts`). Linux support is Arch only: there is
   no .deb, and CI checks the AppImage on a stock Arch container (`scripts/distro-check`).
   There is no pacman package either: it would lose the AppImage's self-update and gain
   nothing, since the app already uses Arch's own WebKitGTK.
@@ -136,10 +138,9 @@ wlroots family Hyprland (Omarchy) belongs to, checks tiling, floating, scale 2 a
 and leaves a PNG of each state with `results.json` in the folder it is given. CI runs it on
 Ubuntu 26.04 and keeps the PNGs as the `wlroots-check` artifact.
 
-On an Apple silicon Mac, run it in an Ubuntu 26.04 arm64 VM (UTM or Lume). Hutch and the
-devkit and the core's files are pinned for linux-arm64, but no CI job builds there, so an
-arm64 build is the first to try it, and the first to say which of its files (like `bin/bun`)
-still need a pin.
+On an Apple silicon Mac, run it in an Ubuntu 26.04 arm64 VM (UTM or Lume). Hutch, the
+devkit and the app's files, `bin/bun` too, are pinned for linux-arm64, and the release's
+`desktop-linux-eb-arm64` job builds there.
 
 ```sh
 sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev libpipewire-0.3-dev \

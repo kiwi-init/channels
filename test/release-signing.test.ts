@@ -1,6 +1,7 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { expect, test } from "bun:test";
 
-const run = (rehearsal: string) => Bun.spawnSync(["bun", "desktop/scripts/eb-release.ts", "missing-release-eb", "missing-out"], { env: { PATH: process.env["PATH"] ?? "", REHEARSAL: rehearsal } });
+const run = (rehearsal: string) => spawnOwnedSync(["bun", "desktop/scripts/eb-release.ts", "missing-release-eb", "missing-out"], { env: { PATH: process.env["PATH"] ?? "", REHEARSAL: rehearsal } });
 
 test("a tag release without the Mac signing secrets fails instead of publishing an unsigned app", () => {
   const r = run("false");

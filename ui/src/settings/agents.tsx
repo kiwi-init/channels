@@ -5,10 +5,11 @@ import { useState, type ReactNode } from "react"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
 import { failedToast } from "~/kit/failed"
-import { LOGOS } from "~/kit/logos"
+import { ART, LOGOS } from "~/kit/logos"
 import { RoleFace } from "~/kit/role-face"
 import type { Finding, Harness, ThisComputer } from "~/model"
 import { useApp } from "~/nav"
+import { backRow } from "~/settings/back-row"
 import { Personalities } from "~/settings/personalities"
 import { acts, esc, field, fine, join, row, say, Sheet, toggle, words, type Acts } from "~/settings/sheet"
 
@@ -28,6 +29,7 @@ const HOOK_SAYS: Record<Hook["state"], { state: Key; action: Key; label: Key; lo
 
 function HarnessMark({ harness }: { harness: Harness }) {
   const logo = LOGOS[harness]
+  const art = ART[harness]
   if (!logo)
     return (
       <span className="set-harness-mark is-face" aria-hidden="true">
@@ -36,9 +38,7 @@ function HarnessMark({ harness }: { harness: Harness }) {
     )
   return (
     <svg className="set-harness-mark" viewBox="0 0 24 24" data-harness={harness} aria-hidden="true">
-      {logo.map((p, i) => (
-        <path key={i} d={p.d} transform={p.transform} fillRule={p.rule} opacity={p.opacity} />
-      ))}
+      {art ? <image {...art} /> : logo.map((p, i) => <path key={i} d={p.d} transform={p.transform} fillRule={p.rule} opacity={p.opacity} />)}
     </svg>
   )
 }
@@ -125,6 +125,10 @@ export function AgentsPage() {
       () => setCheck("failed")
     )
   }
+  const bring = () =>
+    void actions.bringAgentsBack().catch(() => {
+      // the shared run state already says kiwi up didn't answer
+    })
   const a = acts()
   const kiwi = kiwiState(computer)
   const md = join([
@@ -150,6 +154,7 @@ export function AgentsPage() {
     computer
       ? [
           checkRow(check, a, run),
+          backRow(computer.run, a, bring),
           computer.contextLine === null
             ? ""
             : toggle(

@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,7 +12,7 @@ const MAIN = join(import.meta.dir, "../src/cli/main.ts");
 const spawned = new Map<string, Bun.Subprocess[]>();
 
 function daemon(dir: string) {
-  const proc = Bun.spawn([process.execPath, MAIN, "daemon"], { cwd: dir, env: { ...process.env, KIWI_HOME: dir }, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+  const proc = spawnOwned([process.execPath, MAIN, "daemon"], { cwd: dir, env: { ...process.env, KIWI_HOME: dir }, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
   spawned.set(dir, [...(spawned.get(dir) ?? []), proc]);
   return proc;
 }
@@ -103,7 +104,7 @@ test("a daemon whose lock and socket another daemon took exits by itself and lea
 test("a stale lock whose pid now belongs to something else frees the lock without killing it", async () => {
   const { isKiwiDaemon, lockPath, takeLock } = await import("../src/daemon/lock.ts");
   const dir = mkdtempSync(join(tmpdir(), "kiwi-lock-reused-"));
-  const stranger = Bun.spawn(["sleep", "30"], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+  const stranger = spawnOwned(["sleep", "30"], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
   const lock = lockPath(dir);
   writeFileSync(lock, String(stranger.pid));
   const { utimesSync } = await import("node:fs");
@@ -116,6 +117,7 @@ test("a stale lock whose pid now belongs to something else frees the lock withou
   expect(isKiwiDaemon("/Users/jow/.kiwi/bin/kiwi daemon")).toBe(true);
   expect(isKiwiDaemon("/opt/homebrew/bin/bun /repo/src/cli/main.ts daemon")).toBe(true);
   expect(isKiwiDaemon("C:\\kiwi\\kiwi.exe daemon")).toBe(true);
+  expect(isKiwiDaemon("/Applications/Channels.app/Contents/MacOS/bun --no-env-file --no-install /Applications/Channels.app/Contents/Resources/kiwi.js daemon")).toBe(true);
   expect(isKiwiDaemon("sleep 30")).toBe(false);
   expect(isKiwiDaemon("/usr/bin/kiwi-daemon-helper")).toBe(false);
   expect(isKiwiDaemon("vim kiwi daemon.md")).toBe(false);

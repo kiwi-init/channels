@@ -198,4 +198,18 @@
         <item quantity="many">%d trabalhando</item>
         <item quantity="other">%d trabalhando</item>
     </plurals>
+    <string name="step_for_you">Um passo para você</string>
+    <string name="step_label">Passo</string>
+    <string name="step_needs_person">Precisa de uma pessoa: %1$s</string>
+    <string name="step_expected">Esperado</string>
+    <string name="step_output_hint">Saída (opcional)</string>
+    <string name="step_why_cant">Por que você não consegue?</string>
+    <string name="step_why_not_needed">Por que não é necessário?</string>
+    <string name="step_done">Feito</string>
+    <string name="step_cant">Não consigo</string>
+    <string name="step_not_needed">Não é necessário</string>
+    <string name="step_send">Enviar</string>
+    <string name="step_needs_reason">Diga o motivo primeiro</string>
+    <string name="step_answered">%1$s · %2$s</string>
+    <string name="step_replied">%1$s respondeu</string>
 </resources>

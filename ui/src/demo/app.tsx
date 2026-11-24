@@ -5,7 +5,8 @@ import { DEMO_PREFS } from "~/demo/data"
 import { DEMO_HANDLES, navWithDemoHandles, renamedAgents, withDemoHandles } from "~/demo/handles"
 import { useDemo } from "~/demo/provider"
 import { pressCopyOnceReady, refuseCopies } from "~/demo/copy-refused"
-import { SHOTS } from "~/demo/shots"
+import { DEMO_FROZEN, SHOTS } from "~/demo/shots"
+import { SceneFrozen } from "~/meadow/settle"
 import { seedThreadDoc } from "~/demo/thread-doc"
 import { docThread } from "@kiwi/core/doc/threads.ts"
 import type { Prefs } from "~/model"
@@ -71,5 +72,9 @@ export function DemoApp() {
   }, [shown])
   const inChannel = !!nav.channel
   const broken = useMemo(() => (shot?.broken && !mended ? { channel: inChannel, retry: () => setMended(true) } : undefined), [inChannel, mended])
-  return <Root app={shown} nav={DEMO_HANDLES ? navWithDemoHandles(nav, app) : nav} go={go} broken={broken} />
+  return (
+    <SceneFrozen value={DEMO_FROZEN}>
+      <Root app={shown} nav={DEMO_HANDLES ? navWithDemoHandles(nav, app) : nav} go={go} broken={broken} />
+    </SceneFrozen>
+  )
 }

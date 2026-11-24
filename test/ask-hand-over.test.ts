@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,7 +9,7 @@ import { personaOf, type Persona } from "@kiwi/core/personality.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { handedNote } from "@kiwi/core/format.ts";
-import { handedAskOf, handedOver, handedTo, readHandedOver } from "@kiwi/core/state.ts";
+import { answerAddress, handedAskOf, handedOver, handedTo, readHandedOver } from "@kiwi/core/state.ts";
 import { unreadText, withHanded } from "../src/hooks/answer.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, kiwiCmd, pairComputer, setupChannel, type OwnerSetup, type PairedComputer } from "./owner.ts";
@@ -88,6 +89,14 @@ describe("readHandedOver: what the Lead's list reads back (T504)", () => {
     expect(handedAskOf({ from: "puma", re: [5] }, byNumber)).toBeUndefined();
     expect(handedAskOf({ from: "scout", re: [4] }, byNumber)).toBeUndefined();
     expect(handedAskOf({ from: "puma" }, byNumber)).toBeUndefined();
+  });
+
+  test("an answer to a handed ask goes to the lead and the asker, on both asks; any other answer keeps one of each (#2520)", () => {
+    const handed = { seq: 4, from: "wren", to: ["puma"], body: handedOver("wren", "Count where?", {}) };
+    const byNumber = (seq: number) => [handed].find((m) => m.seq === seq);
+    expect(answerAddress({ seq: 7, from: "puma", re: [4] }, byNumber)).toEqual({ to: ["puma", "wren"], re: [7, 4] });
+    expect(answerAddress({ seq: 8, from: "puma", re: [5] }, byNumber)).toEqual({ to: ["puma"], re: [8] });
+    expect(answerAddress({ seq: 9, from: "puma" }, byNumber)).toEqual({ to: ["puma"], re: [9] });
   });
 
   test("a bare question, and a message that isn't a hand-over", () => {
@@ -297,10 +306,11 @@ describe("kiwi ask-human says where the question went (T503)", () => {
   const owner = scratch("owner");
   const puma = scratch("puma");
   const wren = scratch("wren");
+  const kite = scratch("kite");
   let server: ReturnType<typeof startRelay>;
   let held = "";
   const ok = async (home: string, ...args: string[]): Promise<string> => {
-    const p = Bun.spawn(kiwiCmd(args), {
+    const p = spawnOwned(kiwiCmd(args), {
       cwd: home,
       env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: server.url.origin, KIWI_NO_HOOKS: "1", CLAUDECODE: "" },
       stdin: "ignore",
@@ -332,6 +342,7 @@ describe("kiwi ask-human says where the question went (T503)", () => {
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "handover", "--as", "boss"))![1]!;
     await seatAs(puma, code, "puma", "lead");
     await seatAs(wren, code, "wren", "builder");
+    await seatAs(kite, code, "kite", "builder");
     const want = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "a calmer tab bar"))![1]!;
     held = /\bT(\d+)\b/.exec(await ok(wren, "task", "add", "Tab bar look", "--ask", want))![1]!;
   });
@@ -412,7 +423,22 @@ describe("kiwi ask-human says where the question went (T503)", () => {
     expect(out).toMatch(/^sent #\d+ to puma, the Lead, with a step, holding T\d+: your personality doesn't ask people, so the Lead passes it to a person; wait/);
   });
 
+  test("a Builder gives out no work and answers no ask handed to the Lead while one leads (#2253 items 2 and 3)", async () => {
+    const refused = (...args: string[]) =>
+      ok(kite, ...args).then(
+        () => "",
+        (e: Error) => e.message,
+      );
+    expect(await refused("task", "add", "Tab icons", "--from", `T${held}`, "--owner", "wren")).toContain("the Lead gives out work while puma leads");
+    const mine = /\bT(\d+)\b/.exec(await ok(kite, "task", "add", "Tab icons", "--from", `T${held}`, "--owner", "kite"))![1]!;
+    expect(await refused("task", "assign", `T${mine}`, "wren")).toContain(`ask @puma to give T${mine} to wren`);
+    const seq = /^sent #(\d+)/.exec(await ok(wren, "ask-human", "--holds", `T${mine}`, "--option", "A: line", "--option", "B: fill", "Line or filled icons?"))![1]!;
+    expect(await refused("reply", seq, "A: line")).toContain(`#${seq} is handed to puma, the Lead`);
+    expect(await ok(puma, "reply", seq, "A: line")).toMatch(/^sent #\d+/);
+  });
+
   test("the Lead's own decision is escalated to the person as before", async () => {
-    expect(await ok(puma, "ask-human", "--holds", `T${held}`, "--option", "A: glass", "--option", "B: flat", "Which look?")).toMatch(/^escalated #\d+ to human with 2 options, holding T\d+/);
+    const own = /\bT(\d+)\b/.exec(await ok(puma, "task", "add", "Tab bar icons", "--from", `T${held}`))![1]!;
+    expect(await ok(puma, "ask-human", "--holds", `T${own}`, "--option", "A: glass", "--option", "B: flat", "Which look?")).toMatch(/^escalated #\d+ to human with 2 options, holding T\d+/);
   });
 });

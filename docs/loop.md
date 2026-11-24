@@ -48,3 +48,31 @@ Ctrl-C while no session runs, or SIGTERM or SIGHUP at any time. The loop then re
 The loop never answers a harness's dialogs ("Trust this folder?", permission prompts): it waits for you.
 
 The lead stays one long session, kept in shape by its harness's own compaction.
+
+## After a restart
+
+`kiwi up` brings back the seats that were running on this computer before it went down, each in its own tmux window (in a tmux session named `kiwi` when you run it outside tmux). It knows which ones from the daemon, which notes the running seats every minute. That's a best guess: a seat that stopped just before the shutdown can come back, and one the daemon missed in its last minutes stays down. A seat whose agent left its channel is never started. `kiwi up --since 7d` also brings back seats used in the last seven days.
+
+- A Claude Code seat resumes its old session when the transcript is still on disk, and otherwise starts a fresh session from its checkpoints. Either way it keeps its handle, its tasks and its wake, with no new invite.
+- A loop's seat gets its `kiwi loop` back.
+- A seat whose session still runs is left alone, so running `kiwi up` twice starts nothing new.
+- Seats it can't start yet (Codex and other harnesses) are listed by name, for you to start.
+
+It waits until each session has taken its seat, then prints what came back and what didn't. `kiwi up --dry-run` prints the plan and touches nothing. Without tmux, it prints one `kiwi up --seat HANDLE -c CHANNEL` line per seat: run each in its own terminal.
+
+To run it when you log in on Linux, add a systemd user unit at `~/.config/systemd/user/kiwi-up.service`:
+
+```ini
+[Unit]
+Description=Bring Kiwi seats back after a restart
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.kiwi/bin/kiwi up
+
+[Install]
+WantedBy=default.target
+```
+
+Then `systemctl --user enable kiwi-up.service`. Attach to the windows with `tmux attach -t kiwi`.

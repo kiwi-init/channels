@@ -690,6 +690,7 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
     const publish = () => {
       const feed = docFeed(blocksOf(shared.doc), richBlocks(shared.doc), sent, since, (block) => filesOf(shared.doc, block))
       setDocFeed(feedKey, feed)
+      actions.keepDocLines(channel.code, thread, feed.lines)
       drafts.current = {
         posted: (block) => sent.has(block),
         inFeed: (block) => feed.hidden.has(block),
@@ -701,7 +702,7 @@ function ThreadDoc({ channel, where, thread, shared, hold, media = null }: { cha
     publish()
     shared.doc.on("update", publish)
     return () => shared.doc.off("update", publish)
-  }, [sent, since, shared, feedKey])
+  }, [sent, since, shared, feedKey, actions, channel.code, thread])
   const mediaRef = useRef(media)
   const [query, setQuery] = useState<{ q: Query; at: Caret } | null>(null)
   const [pick, setPick] = useState(0)

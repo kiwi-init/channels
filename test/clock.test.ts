@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { clockOf, nudgesDue, skipsDue } from "@kiwi/core/clock.ts";
-import { describeEvent, formatTask, formatTasks } from "@kiwi/core/format.ts";
+import { clockOf, nudgeRefusal, nudgesDue, skipsDue } from "@kiwi/core/clock.ts";
+import { describeEvent, formatMessage, formatTask, formatTasks } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { MAX_QUIET_MINUTES, PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type NudgeStep, type Payload, type WakeGot, type WakeSeen } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
@@ -372,10 +372,10 @@ describe("the board and the task page say when a task is quiet, and the words on
     const words = (step: NudgeStep) =>
       describeEvent({ ...due1, ev: step === 0 ? { op: "task.nudge", task: id, mover: "mac", since: epoch, step, day: 1 } : { op: "task.nudge", task: id, mover: "mac", since: epoch, step } }, s);
     expect(([0, 1, 2, 3] as const).map(words)).toEqual([
-      `noted that T${id} “ship” has waited a day in mac's queue`,
-      `marked T${id} “ship” quiet with mac: a wake is attempted`,
-      `marked T${id} “ship” still quiet with mac: due to the lead`,
-      `marked T${id} “ship” still quiet with mac: due in the owner's Needs you`,
+      `Kiwi clock: T${id} “ship” has waited a day in mac's queue (posted by mac's daemon)`,
+      `Kiwi clock: T${id} “ship” quiet with mac: a wake is attempted (posted by mac's daemon)`,
+      `Kiwi clock: T${id} “ship” still quiet with mac: due to the lead (posted by mac's daemon)`,
+      `Kiwi clock: T${id} “ship” still quiet with mac: due in the owner's Needs you (posted by mac's daemon)`,
     ]);
   });
 });
@@ -574,7 +574,8 @@ describe("one waker: the attempt, what came of it, and when the lead is told ear
     expect(s.rejected.get(early.seq)).toBe(`T${id} hasn't been quiet long enough for step 2 of its clock`);
     expect(s.rejected.get(plain.seq)).toBe(`T${id} hasn't been quiet long enough for step 2 of its clock`);
     expect(s.rejected.has(told.seq)).toBe(false);
-    expect(describeEvent(told, s)).toBe(`marked T${id} “ship” quiet with mac, with no wake attempted: due to the lead`);
+    expect(describeEvent(told, s)).toBe(`Kiwi clock: T${id} “ship” quiet with mac, with no wake attempted: due to the lead (posted by owl's daemon)`);
+    expect(formatMessage(told, undefined, s)).toEndWith(`[event]: Kiwi clock: T${id} “ship” quiet with mac, with no wake attempted: due to the lead (posted by owl's daemon)`);
     expect(s.tasks.get(id)!.clock!.step).toBe(2);
     expect(due(c)).toEqual([]);
     expect(formatTask(s, s.tasks.get(id)!, c.now()).split("\n")).toContain("  quiet 20m with mac (told to the lead; no wake attempted)");
@@ -633,7 +634,7 @@ describe("one waker: the attempt, what came of it, and when the lead is told ear
     c.wait(N);
     const told = await c.told("owl", id, "mac", epoch, "read");
     expect(c.state().rejected.has(told.seq)).toBe(false);
-    expect(describeEvent(told, c.state())).toBe(`marked T${id} “ship” still quiet with mac, who was shown the wake: due to the lead`);
+    expect(describeEvent(told, c.state())).toBe(`Kiwi clock: T${id} “ship” still quiet with mac, who was shown the wake: due to the lead (posted by owl's daemon)`);
   });
 
   test("a delivered wake nobody read goes to the lead after 5 min, once", async () => {
@@ -648,7 +649,7 @@ describe("one waker: the attempt, what came of it, and when the lead is told ear
     expect(c.state().rejected.has(told.seq)).toBe(false);
     expect(skips(c)).toEqual([]);
     expect(due(c)).toEqual([]);
-    expect(describeEvent(told, c.state())).toBe(`marked T${id} “ship” quiet with mac, whose wake was delivered and not read: due to the lead`);
+    expect(describeEvent(told, c.state())).toBe(`Kiwi clock: T${id} “ship” quiet with mac, whose wake was delivered and not read: due to the lead (posted by owl's daemon)`);
   });
 
   test("progress or a new mover ends the attempt: its receipts are refused and the new clock has none", async () => {
@@ -841,5 +842,124 @@ describe("N is a channel setting the owner can change (#3930 §2)", () => {
     expect(resumed.rejected.has(step.seq)).toBe(false);
     expect(resumed.tasks.get(id)!.clock).toEqual(whole.tasks.get(id)!.clock);
     expect(nudgesDue(resumed, c.now() + 5 * MIN)).toEqual(nudgesDue(whole, c.now() + 5 * MIN));
+  });
+});
+
+describe("what the clock says is due on a lead's task is what the fold accepts (#2491)", () => {
+  const signedLead = { name: "Lead", role: "lead" as const, capabilities: [], areas: [], instructions: "" };
+  const signedAs = (lead: Name | null, gone: readonly Name[] = []): Roster =>
+    roster.map((m) => ({ ...m, role: undefined, active: m.active && !gone.some((n) => n === m.name), ...(m.name === lead ? { persona: signedLead } : {}) }));
+
+  const postDue = async (c: Channel, r: Roster, skips = false): Promise<Message[]> => {
+    const s = fold(c.log, r, c.now());
+    const marks = skips ? skipsDue(s, c.now()) : nudgesDue(s, c.now());
+    const posted: Message[] = [];
+    for (const d of marks) {
+      const from = d.step === 1 ? d.to : "jon";
+      posted.push(await c.ev(from as Name, { op: "task.nudge", task: d.task, mover: d.mover, since: d.since, step: d.step, ...(d.wake ? { wake: d.wake } : {}) }));
+    }
+    return posted;
+  };
+
+  const refusals = (c: Channel, r: Roster, posted: readonly Message[]) => {
+    const s = fold(c.log, r, c.now());
+    return posted.map((m) => s.rejected.get(m.seq) ?? null);
+  };
+
+  const climbs = async (c: Channel, r: Roster, id: number, epoch: number): Promise<void> => {
+    for (const step of [1, 2, 3]) {
+      c.wait(N);
+      const posted = await postDue(c, r);
+      expect(posted).toHaveLength(1);
+      expect(refusals(c, r, posted)).toEqual([null]);
+      const after = fold(c.log, r, c.now());
+      expect(clockOf(after, after.tasks.get(id)!, c.now())).toMatchObject({ epoch, step });
+    }
+    expect(nudgesDue(fold(c.log, r, c.now()), c.now())).toEqual([]);
+  };
+
+  test("a signed lead's own act on a task nobody owns: each step of its ladder is accepted", async () => {
+    const c = channel();
+    const r = signedAs("owl");
+    const id = await c.add();
+    c.wait(N);
+    const noted = await c.update("owl", id, { note: "looking for an owner" });
+    const s = fold(c.log, r, c.now());
+    expect(s.lead).toBe("owl");
+    expect(clockOf(s, s.tasks.get(id)!, c.now())).toMatchObject({ mover: "owl", party: "@lead", epoch: noted.seq });
+    await climbs(c, r, id, noted.seq);
+  });
+
+  test("the skip past an unattempted wake on a signed lead's act is accepted", async () => {
+    const c = channel();
+    const r = signedAs("owl");
+    const id = await c.add({ owner: "win", review: "*" });
+    await c.update("win", id, { state: "review", at: A });
+    const owls = await c.say("owl", "msg", "routing it now", { task: id });
+    c.wait(N);
+    const posted = await postDue(c, r, true);
+    expect(posted.map((m) => m.ev)).toEqual([{ op: "task.nudge", task: id, mover: "@lead", since: owls.seq, step: 2, wake: "none" }]);
+    expect(refusals(c, r, posted)).toEqual([null]);
+  });
+
+  test("a lead replaced by a signed one: the new lead's ladder is accepted, and the old lead's act no longer sets the epoch", async () => {
+    const c = channel();
+    const id = await c.add();
+    c.wait(N);
+    await c.update("owl", id, { note: "looking for an owner" });
+    const zeds = await c.update("zed", id, { note: "I lead now" });
+    for (const r of [signedAs("zed", ["owl"]), roster.map((m) => (m.name === "zed" ? { ...m, persona: signedLead } : m))]) {
+      const s = fold(c.log, r, c.now());
+      expect(s.lead).toBe("zed");
+      expect(clockOf(s, s.tasks.get(id)!, c.now())).toMatchObject({ mover: "zed", party: "@lead", epoch: zeds.seq });
+    }
+    await climbs(c, signedAs("zed", ["owl"]), id, zeds.seq);
+  });
+
+  test("a signed lead whose key is gone hands the ladder to the next signed lead, and its steps are accepted", async () => {
+    const c = channel();
+    const r = roster.map((m) => ({ ...m, role: undefined, ...(m.name === "owl" || m.name === "zed" ? { persona: signedLead } : {}) }));
+    const id = await c.add();
+    await c.ev("jon", { op: "member.gone", member: "owl", pk: ids.owl!.pk });
+    c.wait(N);
+    const zeds = await c.update("zed", id, { note: "I lead now" });
+    const s = fold(c.log, r, c.now());
+    expect(s.lead).toBe("zed");
+    expect(clockOf(s, s.tasks.get(id)!, c.now())).toMatchObject({ mover: "zed", party: "@lead", epoch: zeds.seq });
+    await climbs(c, r, id, zeds.seq);
+  });
+
+  test("with no new message, a mark's verdict turns from refused to accepted once as time passes, across a wait's end too", async () => {
+    const c = channel();
+    const HOUR = 3_600_000;
+    const id = await c.add({ owner: "win" });
+    await c.update("win", id, { state: "doing" });
+    await c.ev("owl", { op: "task.steps", task: id, edit: { kind: "add", step: { words: "change window", by: "zed" } } });
+    const wait = await c.ev("owl", { op: "task.steps", task: id, edit: { kind: "wait", id: "s1", reason: "window at 23:00", ms: HOUR } });
+    const until = wait.rts! + HOUR;
+    const s = c.state();
+    const accepted = (at: number) => nudgeRefusal(s, { op: "task.nudge", task: id, mover: "win", since: wait.seq, step: 1 }, { seq: s.head + 1, at, by: "win" }) === null;
+    const times = Array.from({ length: (3 * N) / 1_000 + 1 }, (_, i) => until - N + i * 1_000);
+    const verdicts = times.map(accepted);
+    const first = verdicts.indexOf(true);
+    expect(times[first]).toBe(until + N);
+    expect(verdicts.slice(first).every(Boolean)).toBe(true);
+    expect(nudgeRefusal(s, { op: "task.nudge", task: id, mover: "win", since: wait.seq, step: 1 }, { seq: s.head + 1, at: until - 1, by: "win" })).toBe(
+      `T${id}'s clock moved on: it is nobody's since #${wait.seq}`,
+    );
+  });
+
+  test("with no lead here, a task nobody owns is the owner's, a person, and nothing is due", async () => {
+    const c = channel();
+    const id = await c.add();
+    c.wait(N);
+    await c.update("owl", id, { note: "looking for an owner" });
+    c.wait(3 * N);
+    for (const r of [signedAs(null, ["owl"]), signedAs("owl", ["owl"])]) {
+      const s = fold(c.log, r, c.now());
+      expect(s.lead).toBeNull();
+      expect(clockOf(s, s.tasks.get(id)!, c.now())).toMatchObject({ mover: "jon", party: "@lead", paged: false });
+      expect([...nudgesDue(s, c.now()), ...skipsDue(s, c.now())]).toEqual([]);
+    }
   });
 });

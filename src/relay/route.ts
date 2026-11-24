@@ -29,6 +29,10 @@ import {
   allow,
   take,
   append,
+  answerOccurrence,
+  checkpointView,
+  claimOccurrence,
+  setCheckpointSchedule,
   leaseNow,
   approve,
   authenticate,
@@ -251,6 +255,47 @@ const holds = (req: Request, etag: string) => (req.headers.get("if-none-match") 
 const tagged = (etag: string, data: () => unknown) =>
   Effect.map(Request_, ({ req }) => ({ res: holds(req, etag) ? new Response(null, { status: 304, headers: { etag } }) : Response.json(data(), { headers: { etag } }) }));
 
+const AFTER_PATH = /^\/messages\/after\/(\d{1,15})$/;
+
+const postMessage = (me: string, head?: number) =>
+  Effect.gen(function* () {
+    const db = yield* RoomStore;
+    const { noRateLimits } = yield* Policy;
+    const counted = take(`${db.roomId}:${me}`, noRateLimits ? Infinity : MESSAGES_PER_MINUTE);
+    if ("retryAfter" in counted) return yield* new TooMany({ message: "too many messages; wait a minute", retryAfter: counted.retryAfter });
+    const b = yield* json<{ iv?: string; ct?: string; e?: number; slot?: unknown; free?: unknown; cid?: unknown; wake?: unknown; occurrence?: unknown; at?: unknown }>().pipe(
+      Effect.tapError(() => Effect.sync(counted.refund)),
+    );
+    if (b.slot !== undefined && !wellFormedSlot(b.slot)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slot" }));
+    if (b.free !== undefined && !wellFormedFreed(b.free)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slots to free" }));
+    if (b.cid !== undefined && !wellFormedSendId(b.cid)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad send id" }));
+    if (head !== undefined && b.occurrence !== undefined) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "a send on a known head takes no occurrence" }));
+    const at = b.at;
+    if (head !== undefined && (typeof at !== "number" || !Number.isSafeInteger(at) || at < 0))
+      return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "a send on a known head carries the time it was judged at" }));
+    const occurrence = b.occurrence === undefined ? null : yield* claimOccurrence(b.occurrence, me, b.cid).pipe(Effect.tapError(() => Effect.sync(counted.refund)));
+    yield* leaseNow;
+    const e = yield* append(
+      b.iv as string,
+      b.ct as string,
+      Number(b.e ?? 0),
+      me,
+      { ...(b.slot ? { take: b.slot } : {}), ...(b.free ? { free: b.free } : {}), ...(head !== undefined && typeof at === "number" ? { after: { head, at } } : {}) },
+      b.cid,
+      occurrence ?? undefined,
+    ).pipe(Effect.tapError(() => Effect.sync(counted.refund)));
+    if ("repeat" in e) {
+      counted.refund();
+      const occ = occurrence ? db.occOf(e.seq) : null;
+      return { data: { seq: e.seq, ts: e.ts, ...(occ ? { occ } : {}) }, fx: {} };
+    }
+    if (occurrence) yield* answerOccurrence(occurrence, e.seq);
+    return {
+      data: { seq: e.seq, ts: e.ts, ...(e.occ ? { occ: e.occ } : {}) },
+      fx: { broadcast: [msgFrame(e)], ...watchFrame(e), ...wakesFor(db, b.wake, me, e.seq), expireAt: (yield* touch) ?? undefined },
+    };
+  });
+
 const routes: RoomRoute[] = [
   {
     method: "GET",
@@ -382,31 +427,8 @@ const routes: RoomRoute[] = [
       }),
   },
   { method: "GET", path: PAGE_PATH, guard: "member", run: ({ me }, m) => Effect.map(servePage(me, Number(m[1])), (data) => ({ data })) },
-  {
-    method: "POST",
-    path: "/messages",
-    guard: "member",
-    run: ({ me }) =>
-      Effect.gen(function* () {
-        const db = yield* RoomStore;
-        const { noRateLimits } = yield* Policy;
-        const counted = take(`${db.roomId}:${me}`, noRateLimits ? Infinity : MESSAGES_PER_MINUTE);
-        if ("retryAfter" in counted) return yield* new TooMany({ message: "too many messages; wait a minute", retryAfter: counted.retryAfter });
-        const b = yield* json<{ iv?: string; ct?: string; e?: number; slot?: unknown; free?: unknown; cid?: unknown; wake?: unknown }>().pipe(Effect.tapError(() => Effect.sync(counted.refund)));
-        if (b.slot !== undefined && !wellFormedSlot(b.slot)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slot" }));
-        if (b.free !== undefined && !wellFormedFreed(b.free)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slots to free" }));
-        if (b.cid !== undefined && !wellFormedSendId(b.cid)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad send id" }));
-        yield* leaseNow;
-        const e = yield* append(b.iv as string, b.ct as string, Number(b.e ?? 0), me, { ...(b.slot ? { take: b.slot } : {}), ...(b.free ? { free: b.free } : {}) }, b.cid).pipe(
-          Effect.tapError(() => Effect.sync(counted.refund)),
-        );
-        if ("repeat" in e) {
-          counted.refund();
-          return { data: { seq: e.seq, ts: e.ts }, fx: {} };
-        }
-        return { data: { seq: e.seq, ts: e.ts }, fx: { broadcast: [msgFrame(e)], ...watchFrame(e), ...wakesFor(db, b.wake, me, e.seq), expireAt: (yield* touch) ?? undefined } };
-      }),
-  },
+  { method: "POST", path: "/messages", guard: "member", run: ({ me }) => postMessage(me) },
+  { method: "POST", path: AFTER_PATH, guard: "member", run: ({ me }, m) => postMessage(me, Number(m[1])) },
   {
     // A member read everything up to seq: everyone's clients hear it, so a sender sees "Read".
     method: "POST",
@@ -499,6 +521,18 @@ const routes: RoomRoute[] = [
         return { data: { at }, fx: { broadcast: [frame({ t: "info" })] } };
       }),
   },
+  {
+    method: "PUT",
+    path: "/checkpoints/schedule",
+    guard: "owner",
+    run: () =>
+      Effect.gen(function* () {
+        const { daily } = yield* json<{ daily?: unknown }>();
+        const fx = yield* setCheckpointSchedule(daily ?? null);
+        return { data: { next: fx.checkpointAt }, fx };
+      }),
+  },
+  { method: "GET", path: "/checkpoints", guard: "member", run: () => Effect.map(checkpointView, (data) => ({ data })) },
   {
     method: "PUT",
     path: "/title",

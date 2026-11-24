@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { chromium, webkit, type Browser } from "playwright-core";
+import { chromium, webkit, type Browser, type Page } from "playwright-core";
 
 const at = process.argv.indexOf("--dist");
 const dist = at > 0 ? (process.argv[at + 1] ?? "ui/dist") : "ui/dist";
@@ -15,6 +15,8 @@ const SIZES = [
   [420, 800],
 ] as const;
 const SETTLE_MS = 1500;
+const REOPEN = ["thread-doc-events"] as const;
+const DOC_LATE_MS = 4000;
 const DRAWN_MS = 15_000;
 const FRAMES = 60;
 
@@ -61,39 +63,102 @@ const watchRows = (): void => {
   requestAnimationFrame(frame);
 };
 
+const watchReveal = (seenAt: number): void => {
+  const w = window as Window & { reveal?: { at: number; listed: string[]; seen: string[] | null } };
+  const docRows = (): { list: HTMLElement; view: DOMRect; rows: HTMLElement[] } | null => {
+    const list = document.querySelector<HTMLElement>(".feed .feed-list");
+    const feed = list?.closest<HTMLElement>(".feed");
+    if (!list || !feed || list.hasAttribute("data-unfinished") || !list.querySelector("[data-seq]")) return null;
+    return { list, view: feed.getBoundingClientRect(), rows: [...list.querySelectorAll<HTMLElement>(":scope > [data-seq]")].filter((row) => (row.dataset.seq ?? "").includes(".")) };
+  };
+  const seen = (): void => {
+    const now = docRows();
+    if (!w.reveal || !now) return;
+    w.reveal.seen = now.rows
+      .filter((row) => {
+        const box = row.getBoundingClientRect();
+        return box.bottom > now.view.top && box.top < now.view.bottom;
+      })
+      .map((row) => row.dataset.seq ?? "");
+  };
+  const look = (): void => {
+    const now = docRows();
+    if (!now) return void requestAnimationFrame(look);
+    w.reveal = { at: Math.round(performance.now()), listed: now.rows.map((row) => row.dataset.seq ?? ""), seen: null };
+    window.setTimeout(seen, Math.max(0, seenAt - performance.now()));
+  };
+  requestAnimationFrame(look);
+};
+
+type Reveal = { at: number; listed: string[]; seen: string[] | null } | null;
+
+const SEEN_AT_MS = 1500;
+
 async function moves(browser: Browser, shot: string, width: number, height: number): Promise<{ moved: string | null; grew: string[] }> {
   const page = await browser.newPage({ viewport: { width, height } });
   try {
     await page.addInitScript(watchRows);
     await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
-    await page.waitForSelector(".feed", { timeout: 15_000 });
-    await page.waitForLoadState("networkidle");
-    await page
-      .waitForFunction(() => !document.querySelector(".feed .md-plain"), undefined, { timeout: DRAWN_MS })
-      .catch(() => {
-        // A row whose markdown never parses keeps its plain text for good; the frames below still say whether the view moves.
-      });
-    await page.waitForTimeout(SETTLE_MS);
-    await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
-    const moved = await page.evaluate(
-      (frames) =>
-        new Promise<string | null>((done) => {
-          const read = () => [...document.querySelectorAll<HTMLElement>(".feed")].map((f) => `${Math.round(f.scrollTop)}/${f.scrollHeight}`).join(" ");
-          const seen = [read()];
-          const tick = () => {
-            seen.push(read());
-            if (seen.length <= frames) return void requestAnimationFrame(tick);
-            const changed = new Set(seen);
-            done(changed.size === 1 ? null : `${changed.size} positions in ${frames} frames: ${[...changed].slice(0, 6).join(" → ")}`);
-          };
-          requestAnimationFrame(tick);
-        }),
-      FRAMES,
-    );
-    return { moved, grew: await page.evaluate(() => (window as Window & { grew?: string[] }).grew ?? []) };
+    return await measure(page);
   } finally {
     await page.close();
   }
+}
+
+async function reopens(browser: Browser, shot: string, width: number, height: number): Promise<{ moved: string | null; grew: string[]; reveal: Reveal; after: string[] }> {
+  const page = await browser.newPage({ viewport: { width, height } });
+  try {
+    await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}`);
+    await page.waitForFunction(() => [...document.querySelectorAll<HTMLElement>(".feed-list > [data-seq]")].some((row) => (row.dataset.seq ?? "").includes(".")), undefined, { timeout: DRAWN_MS });
+    await page.waitForTimeout(SETTLE_MS);
+    await page.addInitScript(watchRows);
+    await page.addInitScript(watchReveal, SEEN_AT_MS);
+    await page.goto(`http://127.0.0.1:${server.port}/?shot=${shot}&docLate=${DOC_LATE_MS}`);
+    await page.waitForFunction((after) => performance.now() > after, DOC_LATE_MS + SETTLE_MS, { timeout: DOC_LATE_MS + DRAWN_MS });
+    const seen = await measure(page);
+    const after = await page.evaluate(() => {
+      const feed = document.querySelector<HTMLElement>(".feed");
+      if (!feed) return [];
+      const view = feed.getBoundingClientRect();
+      return [...feed.querySelectorAll<HTMLElement>(".feed-list > [data-seq]")]
+        .filter((row) => (row.dataset.seq ?? "").includes("."))
+        .map((row) => {
+          const box = row.getBoundingClientRect();
+          return `${row.dataset.seq ?? ""}@${Math.round(box.top - view.top)}..${Math.round(box.bottom - view.top)}/${Math.round(view.height)}`;
+        });
+    });
+    return { ...seen, after, reveal: await page.evaluate(() => (window as Window & { reveal?: { at: number; listed: string[]; seen: string[] | null } }).reveal ?? null) };
+  } finally {
+    await page.close();
+  }
+}
+
+async function measure(page: Page): Promise<{ moved: string | null; grew: string[] }> {
+  await page.waitForSelector(".feed", { timeout: 15_000 });
+  await page.waitForLoadState("networkidle");
+  await page
+    .waitForFunction(() => !document.querySelector(".feed .md-plain"), undefined, { timeout: DRAWN_MS })
+    .catch(() => {
+      // A row whose markdown never parses keeps its plain text for good; the frames below still say whether the view moves.
+    });
+  await page.waitForTimeout(SETTLE_MS);
+  await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+  const moved = await page.evaluate(
+    (frames) =>
+      new Promise<string | null>((done) => {
+        const read = () => [...document.querySelectorAll<HTMLElement>(".feed")].map((f) => `${Math.round(f.scrollTop)}/${f.scrollHeight}`).join(" ");
+        const seen = [read()];
+        const tick = () => {
+          seen.push(read());
+          if (seen.length <= frames) return void requestAnimationFrame(tick);
+          const changed = new Set(seen);
+          done(changed.size === 1 ? null : `${changed.size} positions in ${frames} frames: ${[...changed].slice(0, 6).join(" → ")}`);
+        };
+        requestAnimationFrame(tick);
+      }),
+    FRAMES,
+  );
+  return { moved, grew: await page.evaluate(() => (window as Window & { grew?: string[] }).grew ?? []) };
 }
 
 const browser = engine === "webkit" ? await webkit.launch() : await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
@@ -107,6 +172,21 @@ try {
       if (grew.length) failed++;
       console.log(
         `${grew.length ? "✗" : "✓"} ${shot} at ${width}x${height}: rows keep their height once the feed shows${grew.length ? `: ${grew.length} changes, ${grew.slice(0, 4).join(", ")}` : ""}`,
+      );
+    }
+  for (const shot of REOPEN)
+    for (const [width, height] of SIZES) {
+      const { moved, grew, reveal, after } = await reopens(browser, shot, width, height);
+      const late = `reopened with its doc ${DOC_LATE_MS} ms late`;
+      if (moved) failed++;
+      console.log(`${moved ? "✗" : "✓"} ${shot} at ${width}x${height} ${late} holds still${moved ? `: ${moved}` : ""}`);
+      if (grew.length) failed++;
+      console.log(`${grew.length ? "✗" : "✓"} ${shot} at ${width}x${height} ${late}: rows keep their height${grew.length ? `: ${grew.length} changes, ${grew.slice(0, 4).join(", ")}` : ""}`);
+      const kept = !!reveal && reveal.at < DOC_LATE_MS && reveal.listed.length > 0 && !!reveal.seen?.length;
+      if (!kept) failed++;
+      const why = kept || !reveal ? "" : `; doc lines once the doc is in: ${after.join(" ") || "none"}`;
+      console.log(
+        `${kept ? "✓" : "✗"} ${shot} at ${width}x${height} ${late}: the kept doc lines are in its first frame and in view at ${SEEN_AT_MS} ms${reveal ? ` (shown at ${reveal.at} ms with ${reveal.listed.length} doc lines, ${reveal.seen?.length ?? 0} in view at ${SEEN_AT_MS} ms)` : ": never shown"}${why}`,
       );
     }
 } finally {

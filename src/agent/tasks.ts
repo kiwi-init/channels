@@ -9,15 +9,18 @@ import {
   REVIEW_SUMMARY_MAX_LENGTH,
   TASK_STATES,
   TASK_BODY_MAX_LENGTH,
+  TASK_WAIT_REASON_MAX,
   TASK_TITLE_LIMIT,
   ignored,
   type Event,
   type IssueRef,
   type KeptEvidence,
+  type SendAfter,
   type TaskState,
   type Verdict,
 } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
+import type { SnapshotFacts } from "@kiwi/core/task-snapshot.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { wellFormedRunId } from "@kiwi/core/checks.ts";
 import { currentStep, landedStepRefusal, stepById, stepText, type StepEdit, type StepSpec } from "@kiwi/core/steps.ts";
@@ -41,11 +44,13 @@ import {
   type ReviewRound,
   type Spec,
   type Task,
+  leadHoldsFor,
 } from "@kiwi/core/state.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { parseIssueRef, taskDigest, taskOfIssue } from "@kiwi/core/work.ts";
 import { handBackText, heldBy, reviewedBy } from "@kiwi/core/handback.ts";
 import { branchAreas } from "../areas.ts";
+import type { AskBody } from "@kiwi/core/state/checkpoint-asks.ts";
 import { SessionMessaging } from "./messaging.ts";
 import { oneLook } from "./shared.ts";
 
@@ -94,6 +99,8 @@ export class SessionTasks extends SessionMessaging {
       if (opts.re !== undefined && (!state.placeOf.has(opts.re) || ignored(state.trust.get(opts.re)))) return yield* new Rejected(`no message #${opts.re}`);
       if (opts.from !== undefined && !state.tasks.has(opts.from)) return yield* new Rejected(`no task ${taskId(opts.from)} to come from`);
       const owner = opts.owner && (yield* this.resolveTo([opts.owner], state))?.[0];
+      const lead = owner && owner !== this.me ? leadHoldsFor(state, this.me) : null;
+      if (lead !== null) return yield* new Rejected(`the Lead gives out work while ${lead} leads: file it without --owner and ask @${lead} to assign it to ${owner}`);
       const review = opts.review === undefined ? undefined : yield* this.reviewer(state, opts.review);
       const lander = opts.lander && (yield* this.resolveTo([opts.lander], state))?.[0];
       const steps = opts.steps ? yield* this.stepSpecs(state, opts.steps) : undefined;
@@ -106,7 +113,7 @@ export class SessionTasks extends SessionMessaging {
           ...(review ? { review } : {}),
           ...(opts.issue ? { issue: opts.issue } : {}),
           ...(opts.from !== undefined ? { from: opts.from } : {}),
-          ...(steps ? { steps } : opts.noSteps ? { then: "none" as const } : {}),
+          ...(steps ? { steps } : opts.noSteps ? { then: "none" as const } : opts.issue && state.landing === null && state.landingSteps === null ? { then: "merge" as const } : {}),
           ...(lander ? { lander } : {}),
         },
         `task: ${title}`,
@@ -327,6 +334,8 @@ export class SessionTasks extends SessionMessaging {
       if (!target || !state.members.get(target)?.active) return yield* new Rejected(`no member named ${to}`);
       const task = state.tasks.get(id);
       if (target === this.me && !(task && !task.owner && task.leftBy)) return yield* new Rejected("hand it to someone else");
+      const lead = target === this.me ? null : leadHoldsFor(state, this.me);
+      if (lead !== null) return yield* new Rejected(`the Lead gives out work while ${lead} leads: ask @${lead} to give ${taskId(id)} to ${target}`);
       const after = yield* this.taskUpdate(id, {
         owner: target,
         ...(next ? { note: next } : {}),
@@ -390,8 +399,33 @@ export class SessionTasks extends SessionMessaging {
     oneLook,
   );
 
-  readonly taskNudge = Effect.fn("AgentSession.taskNudge")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.nudge" }>, to?: string) {
-    return yield* this.event(ev, `${taskId(ev.task)} quiet`, to ? [to] : undefined);
+  readonly taskNudge = Effect.fn("AgentSession.taskNudge")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.nudge" }>, to: string | undefined, after: SendAfter) {
+    return yield* this.event(ev, `${taskId(ev.task)} quiet`, to ? [to] : undefined, undefined, { after });
+  });
+
+  readonly taskSnapshot = Effect.fn("AgentSession.taskSnapshot")({ self: this }, function* (this: SessionTasks, id: number, facts: SnapshotFacts) {
+    return yield* this.event({ op: "task.snapshot", task: id, ...facts }, `${taskId(id)} on disk: ${facts.branch ?? "detached HEAD"} at ${facts.head.slice(0, 9)}`);
+  });
+
+  readonly checkpointAsk = Effect.fn("AgentSession.checkpointAsk")({ self: this }, function* (this: SessionTasks, body: AskBody, occurrence: string) {
+    const asked = body.asks.map((a) => a.agent);
+    const words = asked.length ? `daily checkpoint request: ${asked.join(", ")}` : "daily checkpoint request: no agent with open work is running";
+    return yield* this.event({ op: "checkpoint.ask", ...body, occurrence }, words, asked, undefined, { occurrence });
+  });
+
+  readonly taskWait = Effect.fn("AgentSession.taskWait")({ self: this }, function* (this: SessionTasks, id: number, wait: { reason: string; until?: number } | "end") {
+    const { state } = yield* this.state();
+    const t = state.tasks.get(id);
+    if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
+    if (wait === "end") {
+      if (!t.wait) return yield* new Rejected(`${taskId(id)} isn't waiting`);
+      return yield* this.confirm(yield* this.event({ op: "task.wait.end", task: id }, `${taskId(id)}: the wait ended`));
+    }
+    const reason = wait.reason.trim();
+    if (!reason || /[\r\n]/.test(reason) || reason.length > TASK_WAIT_REASON_MAX)
+      return yield* new Rejected(`a wait says what it waits for, on one line of at most ${TASK_WAIT_REASON_MAX} characters`);
+    const ev = { op: "task.wait" as const, task: id, reason, ...(wait.until !== undefined ? { until: wait.until } : {}) };
+    return yield* this.confirm(yield* this.event(ev, `${taskId(id)} waits: ${reason}`));
   });
 
   readonly taskWake = Effect.fn("AgentSession.taskWake")({ self: this }, function* (this: SessionTasks, ev: Extract<Event, { op: "task.wake" }>) {
@@ -477,6 +511,20 @@ export class SessionTasks extends SessionMessaging {
       if (!spec) return yield* new Rejected(`#${ask} has no spec`);
       if (spec.ready?.v === spec.v) return spec;
       const seq = yield* this.event({ op: "spec.ready", ask, v: spec.v }, `spec of #${ask} ready for approval`);
+      const after = yield* this.confirm(seq);
+      return after.specs.get(ask)!;
+    },
+    oneLook,
+  );
+
+  readonly unreadySpec = Effect.fn("AgentSession.unreadySpec")(
+    { self: this },
+    function* (this: SessionTasks, ask: number) {
+      const { state } = yield* this.state();
+      const spec = state.specs.get(ask);
+      if (!spec) return yield* new Rejected(`#${ask} has no spec`);
+      if (spec.ready?.v !== spec.v) return spec;
+      const seq = yield* this.event({ op: "spec.unready", ask, v: spec.v }, `spec of #${ask} back from ready`);
       const after = yield* this.confirm(seq);
       return after.specs.get(ask)!;
     },

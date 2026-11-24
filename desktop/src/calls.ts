@@ -79,6 +79,8 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     keepAgents: (code, agents) => t.call("keepAgents", code, agents),
     daemonStatus: () => t.call("daemonStatus"),
     doctor: () => t.call("doctor"),
+    bringBack: () => t.call("bringBack"),
+    upPlan: () => t.call("upPlan"),
     daemonAdopt: () => t.call("daemonAdopt"),
     installCli: () => t.call("installCli"),
     keysAtRest: () => t.call("keysAtRest"),

@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from "
 import { getRandomValues, timingSafeEqual } from "node:crypto";
 import type { Socket } from "bun";
 import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
-import { KEEP_MAX, type Message } from "@kiwi/core/protocol.ts";
+import { AFTER_SKEW_MS, KEEP_MAX, type Message } from "@kiwi/core/protocol.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, writePrivate, type Config } from "../config.ts";
 import { readCursor } from "../config/cursors.ts";
 import { keepProof, saveMachine, takeDeviceList } from "../machine.ts";
@@ -10,11 +10,24 @@ import { isNewerList, listedComputer, readDeviceList, type DeviceLink } from "@k
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
-import { listenedPath, pullsWake, viaOf } from "@kiwi/core/wake.ts";
+import { listenedPath, pulledPath, viaOf } from "@kiwi/core/wake.ts";
+import { seatHeldAway } from "../hold.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
-import { DAEMON_PROTOCOL, daemonSock, daemonToken, readKeepAsk, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
+import {
+  DAEMON_PROTOCOL,
+  daemonSock,
+  daemonToken,
+  readKeepAsk,
+  readListener,
+  supersedes,
+  type DaemonEvent,
+  type DaemonListener,
+  type DaemonRead,
+  type DaemonSeat,
+  type DaemonVerb,
+} from "./protocol.ts";
 import { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
-import { pidAlive } from "../pid.ts";
+import { pidAlive, processStart } from "../pid.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { hooksRows } from "../hooks/install/extra.ts";
 import { computerSettings } from "./settings.ts";
@@ -28,8 +41,11 @@ import { throttled } from "./throttle.ts";
 import { readAdmitRoom, startAdmitter } from "./admit.ts";
 import { addDocWake, docWakeTold, pendingDocWakes, tellDocWakes } from "../config/doc-wakes.ts";
 import { watchClock, watchedPeers, type ClockWatcher } from "./clock-watch.ts";
+import { checkpointAskFor } from "@kiwi/core/state/checkpoint-asks.ts";
+import { CHECKPOINT_WINDOW_MS } from "@kiwi/core/checkpoint-schedule.ts";
 import { followDocs } from "./doc-follow.ts";
 import { pathOf, seatWakes } from "./wake.ts";
+import { sampleRunning } from "../up/sample.ts";
 
 export const ACTIVITY_EVERY_MS = 3_000;
 const PROBE_ANSWER_GAP_MS = 500;
@@ -38,6 +54,7 @@ const MAX_QUEUED_BYTES = 64 * 1024 * 1024;
 const lineEncoder = new TextEncoder();
 const TICK_MS = 5_000;
 const PRUNE_EVERY_MS = 24 * 3600_000;
+const RUNNING_EVERY_MS = 60_000;
 const HOOK_FILES_KEEP_MS = 7 * 24 * 3600_000;
 const ORPHAN_MS = 10 * 60_000;
 const RETRY_FIRST_MS = 5_000;
@@ -61,15 +78,19 @@ export interface DaemonOptions {
   tickMs?: number;
   orphanMs?: number;
   wakeOutstandingMs?: number;
+  wakeTakeMs?: number;
   listenerGraceMs?: number;
   retryFirstMs?: number;
+  presenceSettleMs?: number;
 }
 
 const WAKE_DELAY_MS = 2_000;
 const FOLLOW_OPS: ReadonlySet<string> = new Set(["doc.open", "task.add", "task.claim", "task.update", "task.delete", "task.first"]);
 const WAKE_GAP_MS = 60_000;
 const WAKE_OUTSTANDING_MS = 10 * 60_000;
+const WAKE_TAKE_MS = 60_000;
 const LISTENER_GRACE_MS = 60_000;
+const PRESENCE_SETTLE_MS = 3_000;
 
 export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promise<Daemon> {
   const sock = daemonSock(dir);
@@ -143,8 +164,16 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       ...(seat.reach ? { reach: seat.reach } : {}),
       ...(read ? { readAt: read.at } : {}),
       ...(seat.wakeVia ? { wake: seat.wakeVia } : {}),
+      ...(seat.unarmed && seat.wakeVia && !hookHeld(seat.alias, seat.agent) ? { unarmed: seat.unarmed } : {}),
+      ...(seat.untaken ? { untaken: seat.untaken } : {}),
     };
   };
+
+  function hookHeld(alias: string, agent: string): boolean {
+    return [...conns].some((c) => !c.dead && [...c.held].some((l) => l.kind === "hook" && l.channel === alias && l.agent === agent));
+  }
+
+  const seatsOf = (alias: string, agent: string): Seat[] => [...seats.values()].filter((s) => s.alias === alias && s.agent === agent);
 
   const attachedTo = (seat: Seat): Attached => {
     const held = [...conns].filter((c) => !c.dead).flatMap((c) => [...c.held].filter((l) => l.channel === seat.alias && l.agent === seat.agent));
@@ -160,7 +189,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     return true;
   };
   const livePath = async (cfg: Config, seat: Seat, attached: Attached, activity = seat.activity) =>
-    listenedPath(await pathOf(cfg, seat.alias, seat.agent), listenedLately(seat, attached), activity?.state === "idle");
+    pulledPath(
+      listenedPath(await pathOf(cfg, seat.alias, seat.agent), listenedLately(seat, attached), activity?.state === "idle"),
+      { harness: seatRecordFor(cfg, seat.alias, seat.agent)?.harness, held: seatHeldAway(cfg, seat.alias, seat.agent, {}) },
+      attached === "listener",
+    );
 
   const refreshActivity = async (seat: Seat, force = false): Promise<void> => {
     const cfg = loadConfig();
@@ -169,9 +202,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const { harnessActivity } = await import("../harness.ts");
     const now = env ? await harnessActivity(env) : undefined;
     const attached = attachedTo(seat);
-    const pulled = attached === "listener" && pullsWake(record?.harness);
     const path = await livePath(cfg, seat, attached, now);
-    const via = wakeOn(cfg, seat.alias, seat.agent) ? (viaOf(path) ?? (pulled ? "listener" : null)) : null;
+    const via = wakeOn(cfg, seat.alias, seat.agent) ? viaOf(path) : null;
     const reach = reachOf(attached, record, now, pidAlive, path.kind !== "none");
     if (!force && JSON.stringify(now) === JSON.stringify(seat.activity) && via === seat.wakeVia && reach === seat.reach) return;
     seat.activity = now;
@@ -187,6 +219,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     wakeDelayMs: opts.wakeDelayMs ?? WAKE_DELAY_MS,
     wakeGapMs: opts.wakeGapMs ?? WAKE_GAP_MS,
     wakeOutstandingMs: opts.wakeOutstandingMs ?? WAKE_OUTSTANDING_MS,
+    wakeTakeMs: opts.wakeTakeMs ?? WAKE_TAKE_MS,
     stopped: () => stopped,
     current,
   });
@@ -216,7 +249,22 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       },
       reachable: (name) => [...seat.heard.values()].some((h) => h.presence.from === name && h.presence.reach !== "unreachable" && Date.now() - h.at < 3 * beaconMs),
       stateOf: () => stateOf(seat),
-      nudge: (ev, to) => posting(async (session) => (await import("../agent.ts")).runAgent(session.taskNudge(ev, to))),
+      nudge: async (ev, to, after) => {
+        const session = await sessionOf(seat);
+        if (!session) return null;
+        try {
+          return await (await import("../agent.ts")).runAgent(session.taskNudge(ev, to, after));
+        } catch (err) {
+          // A head that moved is the watcher's to read again; any other refusal or an unreachable relay means nothing was appended.
+          const { RelayError } = await import("@kiwi/core/client.ts");
+          if (!(err instanceof RelayError)) return null;
+          return err.tag === "MovedOn" ? "moved" : err.tag === "OffClock" ? "off-clock" : null;
+        }
+      },
+      offClock: () =>
+        void process.stderr.write(
+          `kiwi daemon: ${seat.alias}/${seat.agent}: the relay's clock and this computer's differ by more than ${AFTER_SKEW_MS / 1000}s, so quiet-task marks are held; kiwi doctor shows the difference\n`,
+        ),
       got: async (ev) => void (await posting(async (session) => (await import("../agent.ts")).runAgent(session.taskWake(ev)))),
       pending: () => pendingDocWakes(seat.alias, seat.agent),
       told: (block) => docWakeTold(seat.alias, seat.agent, block),
@@ -224,6 +272,42 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       drop: (blocks) => tellDocWakes(seat.alias, seat.agent, blocks),
       wake: () => scheduleWake(seat),
     });
+  };
+
+  const answeredOccurrences = new Set<string>();
+  const answerCheckpoint = async (seat: Seat, occurrence: string): Promise<void> => {
+    const key = `${seat.alias}\u0000${occurrence}`;
+    if (answeredOccurrences.has(key)) return;
+    answeredOccurrences.add(key);
+    if (answeredOccurrences.size > 64) answeredOccurrences.delete(answeredOccurrences.values().next().value ?? key);
+    const state = await stateOf(seat);
+    if (!state) return;
+    const now = Date.now();
+    const running = (name: string): boolean => {
+      const local = [...seats.values()].find((s) => s.alias === seat.alias && s.agent === name);
+      if (local) return local.reach === "running";
+      return [...seat.heard.values()].some((h) => h.presence.from === name && h.presence.reach === "running" && now - h.at < 3 * beaconMs);
+    };
+    const body = checkpointAskFor(state, running);
+    if (!body) return;
+    const session = await sessionOf(seat);
+    if (!session) return;
+    try {
+      await (await import("../agent.ts")).runAgent(session.checkpointAsk(body, occurrence));
+    } catch {
+      // Another client answered this occurrence first, or the relay was out of reach: the relay keeps one request per occurrence.
+      return;
+    }
+    if (body.asks.some((a) => a.agent === seat.agent)) scheduleWake(seat);
+  };
+
+  const answerWhenSynced = (seat: Seat): void => {
+    const owed = seat.owedCheckpoint;
+    if (!owed || seat.ctl.signal.aborted) return;
+    if (Date.now() >= owed.due + CHECKPOINT_WINDOW_MS) return void (seat.owedCheckpoint = null);
+    if (seat.synced !== "yes") return;
+    seat.owedCheckpoint = null;
+    void answerCheckpoint(seat, owed.occurrence);
   };
 
   const seatInfo = async (s: Seat): Promise<DaemonSeat> => {
@@ -235,6 +319,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       read: reads.get(readKey(s.alias, s.agent)) ?? null,
       wake: { on: wakeOn(cfg, s.alias, s.agent), path: await livePath(cfg, s, attachedTo(s)), last: s.lastWake },
       reach: s.reach,
+      unarmed: s.unarmed,
+      untaken: s.untaken,
     };
   };
 
@@ -291,6 +377,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   };
 
   const endSeat = (seat: Seat): void => {
+    clearTimeout(seat.checkpointTimer);
     seat.docs?.stop();
     seat.docs = null;
     seat.clock?.stop();
@@ -300,6 +387,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (seat.markTimer) clearTimeout(seat.markTimer);
     if (seat.activityTimer) clearInterval(seat.activityTimer);
     if (seat.wakeTimer) clearTimeout(seat.wakeTimer);
+    if (seat.taking) clearTimeout(seat.taking.timer);
+    seat.taking = null;
     seat.wakeChild?.kill();
     seat.activityTimer = null;
     seat.wakeTimer = null;
@@ -405,6 +494,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     seat.probe = probe;
     seat.rows = null;
     seat.openedAt = Date.now();
+    seat.synced = "no";
     seat.announce = () => void presence(fieldsOf(seat)).catch(() => {});
     void refreshActivity(seat, true).catch(() => seat.announce?.());
     stopBeacon(seat);
@@ -458,6 +548,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         ch,
         ctl: new AbortController(),
         subs: new Set(),
+        unarmed: null,
+        untaken: null,
+        taking: null,
         head,
         activity: undefined,
         reach: null,
@@ -482,6 +575,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         fetchingRows: false,
         heard: new Map(),
         openedAt: null,
+        synced: "no",
+        owedCheckpoint: null,
+        checkpointTimer: undefined,
         listenerAt: 0,
         docs: null,
         clock: null,
@@ -527,6 +623,19 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           },
           onRoster: () => tell(seat, { event: "roster" }),
           onInfo: () => tell(seat, { event: "info" }),
+          onCheckpoint: (due) => {
+            seat.owedCheckpoint = due;
+            answerWhenSynced(seat);
+          },
+          onReady: (_head, more) => {
+            if (more || seat.synced !== "no") return;
+            seat.synced = "settling";
+            clearTimeout(seat.checkpointTimer);
+            seat.checkpointTimer = setTimeout(() => {
+              if (seat.synced === "settling") seat.synced = "yes";
+              answerWhenSynced(seat);
+            }, opts.presenceSettleMs ?? PRESENCE_SETTLE_MS);
+          },
           onRequest: () => {
             tell(seat, { event: "request" });
             admitter.watch({ relay: c.relay, roomId: c.roomId, ownerPk: c.ownerPk }, 0);
@@ -737,7 +846,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           const { channel, as, session } = params;
           if (typeof channel !== "string" || !channel || typeof as !== "string" || !as) throw new Error('read needs {"channel", "as", "session"?}');
           reads.set(readKey(channel, as), { at: Date.now(), session: typeof session === "string" && session ? session : null });
-          [...seats.values()].find((s) => s.alias === channel && s.agent === as)?.announce?.();
+          const read = [...seats.values()].find((s) => s.alias === channel && s.agent === as);
+          if (read) read.untaken = null;
+          read?.announce?.();
           sendLine(conn, JSON.stringify({ id, ok: true }));
           break;
         }
@@ -772,13 +883,34 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "hold": {
           const l = readListener({ ...params, at: Date.now() });
           if (!l) throw new Error('hold needs {"channel", "as", "kind": "listen" or "hook", "cwd"?, "harness"?, "session"?, "pid"?}');
-          const others = [...conns].filter((c) => c !== conn && !c.dead).flatMap((c) => [...c.held]);
-          const taken = l.kind === "hook" && others.some((h) => h.kind === "hook" && h.channel === l.channel && h.agent === l.agent && h.session === l.session);
-          if (!taken) {
+          const same = (h: DaemonListener) => h.kind === "hook" && h.channel === l.channel && h.agent === l.agent && h.session === l.session;
+          const others = [...conns].filter((c) => c !== conn && !c.dead);
+          if (l.kind === "hook") for (const c of others) for (const h of [...c.held]) if (same(h) && supersedes(l, h, { alive: pidAlive, startOf: processStart })) c.held.delete(h);
+          const holder = l.kind === "hook" ? others.flatMap((c) => [...c.held]).find(same) : undefined;
+          if (!holder) {
             conn.held.add(l);
+            if (l.kind === "hook")
+              for (const seat of seatsOf(l.channel, l.agent).filter((s) => s.unarmed)) {
+                seat.unarmed = null;
+                seat.announce?.();
+              }
             reachMoved(l.channel, l.agent);
           }
-          sendLine(conn, JSON.stringify({ id, ok: true, held: !taken }));
+          const named = holder ? { holder: { session: holder.session, pid: holder.pid, harness: holder.harness, proc: holder.proc } } : {};
+          sendLine(conn, JSON.stringify({ id, ok: true, held: !holder, ...named }));
+          break;
+        }
+        case "unarmed": {
+          const channel = typeof params.channel === "string" && params.channel ? params.channel : null;
+          const agent = typeof params.as === "string" && params.as ? params.as : null;
+          const why = typeof params.why === "string" && params.why ? params.why.slice(0, 300) : null;
+          if (!channel || !agent || !why) throw new Error('unarmed needs {"channel", "as", "why"}');
+          if (wakeOn(loadConfig(), channel, agent) && !hookHeld(channel, agent))
+            for (const seat of seatsOf(channel, agent)) {
+              seat.unarmed = { since: seat.unarmed?.since ?? Date.now(), why };
+              seat.announce?.();
+            }
+          sendLine(conn, JSON.stringify({ id, ok: true }));
           break;
         }
         case "listeners":
@@ -902,8 +1034,16 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     pruneHookFiles(dir, HOOK_FILES_KEEP_MS);
   };
   pruneNow();
+  let sampledAt = 0;
+  const sampleNow = (): void => {
+    if (Date.now() - sampledAt < RUNNING_EVERY_MS) return;
+    sampledAt = Date.now();
+    sampleRunning(dir);
+  };
+  sampleNow();
   const tick = setInterval(() => {
     pruneNow();
+    sampleNow();
     if (!existsSync(dir) || !beatLock(lock)) return void stop();
     void seatSync.now();
     void orphaned().then((dead) => {

@@ -48,3 +48,31 @@ kiwi loop --harness kimi                          # inside tmux: Kimi's first pr
 루프는 하네스의 대화 상자("Trust this folder?", 권한 요청)에 절대 답하지 않습니다. 사람을 기다립니다.
 
 리드는 하나의 긴 세션으로 남고, 하네스 자체의 컴팩션으로 상태를 유지합니다.
+
+## 재시작한 뒤
+
+`kiwi up`은 이 컴퓨터가 꺼지기 전에 실행 중이던 자리를 되살립니다. 자리마다 tmux 창을 하나씩 씁니다 (tmux 밖에서 실행하면 `kiwi`라는 tmux 세션 안에 만듭니다). 어떤 자리인지는 데몬이 압니다. 데몬은 실행 중인 자리를 1분마다 기록합니다. 이는 추정입니다. 꺼지기 직전에 멈춘 자리가 돌아올 수도 있고, 마지막 몇 분 동안 데몬이 놓친 자리는 멈춘 채로 남습니다. 에이전트가 채널을 떠난 자리는 시작하지 않습니다. `kiwi up --since 7d`는 지난 7일 동안 쓴 자리도 되살립니다.
+
+- Claude Code 자리는 트랜스크립트가 디스크에 남아 있으면 이전 세션을 이어 가고, 없으면 체크포인트에서 새 세션을 시작합니다. 어느 쪽이든 핸들, 작업, 깨우기 설정이 그대로이고 새 초대는 필요 없습니다.
+- 루프의 자리는 `kiwi loop`를 다시 얻습니다.
+- 세션이 아직 실행 중인 자리는 건드리지 않으므로, `kiwi up`을 두 번 실행해도 새로 시작되는 것은 없습니다.
+- 아직 시작할 수 없는 자리 (Codex 및 다른 하네스)는 이름을 보여 주니 직접 시작하세요.
+
+각 세션이 자리에 앉을 때까지 기다린 뒤, 돌아온 것과 돌아오지 않은 것을 보여 줍니다. `kiwi up --dry-run`은 계획만 보여 주고 아무것도 바꾸지 않습니다. tmux가 없으면 자리마다 `kiwi up --seat HANDLE -c CHANNEL` 한 줄을 보여 줍니다. 각 줄을 따로 터미널에서 실행하세요.
+
+Linux에서 로그인할 때 실행하려면 `~/.config/systemd/user/kiwi-up.service`에 systemd 사용자 유닛을 추가하세요:
+
+```ini
+[Unit]
+Description=Bring Kiwi seats back after a restart
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.kiwi/bin/kiwi up
+
+[Install]
+WantedBy=default.target
+```
+
+그다음 `systemctl --user enable kiwi-up.service`를 실행합니다. 창에는 `tmux attach -t kiwi`로 붙을 수 있습니다.

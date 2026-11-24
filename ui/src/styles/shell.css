@@ -397,7 +397,8 @@
   animation: rise var(--fast) var(--ease);
 }
 
-.side-member.is-waiting .side-state {
+.side-member.is-waiting .side-state,
+.side-member.is-unarmed .side-state {
   color: var(--decide);
 }
 
@@ -495,7 +496,7 @@
 .side-grip {
   position: fixed;
   top: var(--top-h);
-  left: calc(var(--side-w) - 5px);
+  left: calc(var(--nav-w) - 5px);
   z-index: 7;
   -webkit-app-region: no-drag;
 }
@@ -606,7 +607,7 @@
 
 .app {
   display: grid;
-  grid-template-columns: var(--side-w) minmax(0, 1fr) var(--side-w);
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) var(--side-w);
   grid-template-rows: var(--top-h) auto minmax(0, 1fr);
   height: 100vh;
   background: var(--frame);
@@ -619,10 +620,10 @@
   bottom: 0;
   left: 0;
   z-index: 5;
-  width: var(--side-w);
+  width: var(--nav-w);
   background: var(--frame);
   box-shadow: var(--shadow-pop);
-  translate: calc(-1 * var(--side-w) - 48px) 0;
+  translate: calc(-1 * var(--nav-w) - 48px) 0;
   transition: translate var(--slow) var(--ease);
   pointer-events: none;
 }
@@ -647,21 +648,48 @@
   --ink-3-glass: color-mix(in srgb, var(--ink-3) 75%, var(--ink));
 }
 
-:root[data-glass]:not(.reduce-transparency) :is(.rail, .top, .side) {
+:root[data-glass]:not(.reduce-transparency) :is(.rail, .top) {
   --ink-3: var(--ink-3-glass);
 }
 
 @media (min-width: 761px) and (orientation: landscape) {
-  :root[data-glass]:not(.reduce-transparency) :is(.side, .side-foot) {
+  :root .app :is(.side, .set-nav) {
+    margin: var(--pane-gap) 0 var(--pane-gap) var(--pane-gap);
+    padding: 8px 8px 0;
+    border-bottom: 48px solid var(--bg);
+    border-radius: var(--r-ctl);
+    background: var(--bg);
+  }
+
+  .app .chan.is-bare .side {
+    width: calc(var(--nav-w) - var(--pane-gap));
+  }
+
+  .app .chan.is-bare.is-peek .side {
+    box-shadow: var(--shadow-pop);
+  }
+
+  .app::before {
+    content: none;
+  }
+
+  .content:has(> .set-main) {
     background: none;
   }
 
-  :root[data-glass]:not(.reduce-transparency) .side {
-    clip-path: inset(0 0 12px);
+  :root .app .content:not(:has(> .panes, > .set-main)) {
+    margin: var(--pane-gap);
+    border-radius: var(--r-ctl);
   }
 
-  :root[data-glass]:not(.reduce-transparency) .side-foot::before {
-    content: none;
+  :root .app .set-main {
+    margin: var(--pane-gap);
+    border-radius: var(--r-ctl);
+  }
+
+  .app .rail-foot {
+    bottom: calc(var(--pane-gap) + 8px);
+    left: calc(var(--pane-gap) + 8px);
   }
 }
 
@@ -680,7 +708,7 @@
 }
 
 :root[data-panel] .app {
-  grid-template-columns: var(--side-w) minmax(0, 1fr) max(var(--side-w), var(--panel-w));
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) max(var(--side-w), var(--panel-w));
 }
 
 :root[data-bare][data-panel] .app {
@@ -832,7 +860,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  width: var(--side-w);
+  width: var(--nav-w);
   padding: 0 8px 0 calc(8px + var(--ctl) + 8px + var(--history-w));
   pointer-events: none;
 }
@@ -947,6 +975,24 @@
     0 0 0 4px var(--ink-3);
 }
 
+.rail-folder.is-moving .tile {
+  opacity: 0.35;
+}
+
+@keyframes gap-open {
+  from {
+    width: 0;
+  }
+}
+
+.rail-list > li.rail-gap {
+  display: block;
+  flex: none;
+  align-self: stretch;
+  width: var(--gap);
+  animation: gap-open var(--slow) var(--ease);
+}
+
 .tile.is-new {
   animation: folder-pop var(--pop);
 }
@@ -965,6 +1011,10 @@
 
 .tile-name {
   display: none;
+}
+
+.tile-mark {
+  display: contents;
 }
 
 .tile-badge {
@@ -1084,7 +1134,7 @@
   bottom: 48px;
   left: 8px;
   z-index: 40;
-  width: calc(var(--side-w) - 16px);
+  width: calc(var(--nav-w) - 16px);
 }
 
 .rail-cards .side-card {
@@ -1134,7 +1184,7 @@
 
 :root[data-bare] .app > .rail,
 .chan.is-bare .side {
-  width: var(--side-w);
+  width: var(--nav-w);
 }
 
 :root[data-bare]:not([data-peek]) .app > .rail,
@@ -1146,7 +1196,7 @@
 :root[data-bare]:not([data-peek]) .app > .rail .tile {
   visibility: hidden;
   opacity: 0;
-  translate: calc(-1 * var(--side-w)) 0;
+  translate: calc(-1 * var(--nav-w)) 0;
   transition:
     translate var(--slow) var(--ease),
     opacity var(--fast) var(--ease),
@@ -1162,6 +1212,7 @@
   bottom: calc(var(--compose-space) + 16px);
   left: 40px;
   pointer-events: auto;
+  visibility: visible;
 }
 
 .side-views,
@@ -1234,7 +1285,7 @@
 .app .set-main {
   grid-row: 1 / -1;
   grid-column: 1 / -1;
-  padding-right: calc(var(--side-w) - var(--bar));
+  padding-right: calc(var(--nav-w) - var(--bar));
   border-top-left-radius: var(--r-ctl);
 }
 
@@ -1255,7 +1306,7 @@
   --tile: var(--ctl);
   --lead-pad: 8px;
   --tail-n: 1;
-  --tab-h: calc(var(--top-h) - 8px);
+  --tab-h: calc(var(--top-h) - var(--pane-gap));
 
   grid-row: 1;
   grid-column: 1 / -1;
@@ -1263,8 +1314,8 @@
   flex-wrap: nowrap;
   align-items: flex-end;
   gap: 0;
-  margin: 0 calc(8px + var(--tail-n) * (var(--ctl) + 8px)) 0 max(var(--side-w), calc(var(--lead-pad) + var(--ctl) + 8px + var(--history-w)));
-  padding: 0 8px;
+  margin: 0 calc(8px + var(--tail-n) * (var(--ctl) + 4px)) 0 max(var(--nav-w), calc(var(--lead-pad) + var(--ctl) + 8px + var(--history-w)));
+  padding: 0 0 0 8px;
   overflow: hidden;
   -webkit-app-region: drag;
 }
@@ -1283,6 +1334,7 @@
 
 :root[data-tabs] .top-tools {
   justify-self: end;
+  gap: 4px;
   width: auto;
   padding: 0 8px;
 }
@@ -1292,7 +1344,7 @@
 }
 
 :root[data-tabs][data-wm="floating"] .app > .rail {
-  margin-right: calc(8px + var(--tail-n) * (var(--ctl) + 8px) + var(--wm-w));
+  margin-right: calc(8px + var(--tail-n) * (var(--ctl) + 4px) + var(--wm-w));
 }
 
 :root[data-tabs][data-wm="floating"]:has(.top-tools.is-searching, .top-hold) .app > .rail {
@@ -1326,12 +1378,12 @@
 
 :root[data-tabs] .app > .rail .tile[data-code] {
   height: var(--tab-h);
-  border-radius: var(--r-ctl) var(--r-ctl) 0 0;
+  border-radius: var(--r-ctl);
   background: none;
   box-shadow: none;
 }
 
-:root[data-tabs] .app > .rail :is(.tile.is-add, .tile.is-folder, .wm-controls) {
+:root[data-tabs] .app > .rail .tile.is-add {
   align-self: center;
 }
 
@@ -1355,7 +1407,7 @@
   max-width: 15rem;
 }
 
-:root[data-tabs] .app > .rail[data-fit="icons"] .tile[data-code]:not(.is-on) {
+:root[data-tabs] .app > .rail[data-fit="icons"] .tile[data-code] {
   max-width: 15rem;
 }
 
@@ -1370,28 +1422,16 @@
 }
 
 :root[data-tabs] .app > .rail .tile[data-code].is-on {
-  min-width: max-content;
   font-weight: 500;
 }
 
-:root[data-tabs] .app > .rail .tile.is-on::before,
-:root[data-tabs] .app > .rail .tile.is-on::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  width: 8px;
-  height: 8px;
-  pointer-events: none;
+:root[data-tabs] .app > .rail :is(.tile.is-moving, .rail-folder.is-moving .tile) {
+  opacity: 0.35;
 }
 
-:root[data-tabs] .app > .rail .tile.is-on::before {
-  right: 100%;
-  background: radial-gradient(circle at 0 0, transparent 7.5px, var(--page) 8px);
-}
-
-:root[data-tabs] .app > .rail .tile.is-on::after {
-  left: 100%;
-  background: radial-gradient(circle at 100% 0, transparent 7.5px, var(--page) 8px);
+:root[data-tabs] .app > .rail .tile[data-code].is-drop {
+  background: var(--wash);
+  box-shadow: inset 0 0 0 2px var(--ink-3);
 }
 
 :root[data-tabs] .tile[data-code] > :first-child {
@@ -1421,10 +1461,27 @@
   mask-image: linear-gradient(to right, #000 calc(100% - 8px), transparent);
 }
 
+:root[data-tabs] .tile[data-code] .tile-name::after {
+  content: attr(data-name) / "";
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: 500;
+}
+
+:root[data-tabs] .tile[data-code] .tile-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 1rem;
+  margin: 0 8px 0 0;
+}
+
 :root[data-tabs] .tile[data-code] :is(.tile-badge, .tile-dot) {
   position: static;
   flex: none;
-  margin: 0 10px 0 0;
+  margin: 0;
   box-shadow: none;
 }
 
@@ -1439,15 +1496,19 @@
   background: var(--ink-3);
 }
 
-:root[data-tabs] .rail[data-fit="icons"] .tile[data-code]:not(.is-on) > :first-child {
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code] .tile-mark {
+  display: contents;
+}
+
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code] > :first-child {
   margin: 0 auto;
 }
 
-:root[data-tabs] .rail[data-fit="icons"] .tile[data-code]:not(.is-on) .tile-name {
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code] .tile-name {
   display: none;
 }
 
-:root[data-tabs] .rail[data-fit="icons"] .tile[data-code]:not(.is-on) :is(.tile-badge, .tile-dot) {
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code] :is(.tile-badge, .tile-dot) {
   position: absolute;
   top: calc(50% - 0.5rem - 3px);
   left: calc(50% + 0.5rem - 3px);
@@ -1461,17 +1522,93 @@
   font-size: 0;
 }
 
-:root[data-tabs] .rail[data-fit="icons"] .tile[data-code]:not(.is-on) .tile-dot {
+:root[data-tabs] .rail[data-fit="icons"] .tile[data-code] .tile-dot {
   background: var(--ink-3);
 }
 
-:root[data-tabs] .tile.is-folder .tile-dot {
-  bottom: -6px;
+:root[data-tabs] .app > .rail .tile.is-folder {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 6px;
+  align-self: auto;
+  width: auto;
+  min-width: calc(var(--ctl) + 8px);
+  max-width: 12rem;
+  height: var(--tab-h);
+  padding: 0 4px 0 12px;
+  background: var(--wash);
+  color: var(--ink-2);
+  font: 500 var(--t-ui) var(--ui);
 }
 
-:root[data-tabs] .folder-grid {
-  grid-template-columns: repeat(2, 0.75rem);
-  grid-auto-rows: 0.75rem;
+:root[data-tabs] .app > .rail .tile.is-folder:hover {
+  background: var(--wash-2);
+  color: var(--ink);
+}
+
+:root[data-tabs] .app > .rail .tile.is-folder.is-on {
+  background: var(--page);
+  color: var(--ink);
+}
+
+:root[data-tabs] .app > .rail .tile.is-folder > svg {
+  flex: none;
+}
+
+:root[data-tabs] .folder-name {
+  min-width: 0;
+  padding-right: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  mask-image: linear-gradient(to right, #000 calc(100% - 8px), transparent);
+}
+
+:root[data-tabs] .app > .rail .tile.is-folder :is(.tile-badge, .tile-dot) {
+  position: static;
+  flex: none;
+  margin: 0;
+  box-shadow: none;
+}
+
+:root[data-tabs] .app > .rail .tile.is-folder .tile-badge {
+  background: var(--decide-wash);
+  color: var(--decide);
+}
+
+:root[data-tabs] .app > .rail .tile.is-folder .tile-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  background: var(--ink-3);
+}
+
+:root[data-tabs] .app > .rail .rail-folder.is-open > .tile.is-folder {
+  border-radius: var(--r-ctl) 0 0 var(--r-ctl);
+}
+
+:root[data-tabs] .app > .rail .rail-folder-list .tile[data-code] {
+  border-radius: 0;
+  background: var(--wash);
+}
+
+:root[data-tabs] .app > .rail .rail-folder-list > li:last-child > .tile[data-code] {
+  border-radius: 0 var(--r-ctl) var(--r-ctl) 0;
+}
+
+:root[data-tabs] .app > .rail .rail-folder-list .tile[data-code]:hover {
+  background: var(--wash-2);
+}
+
+:root[data-tabs] .app > .rail .rail-folder-list .tile[data-code].is-on {
+  border-radius: var(--r-ctl);
+  background: var(--page);
+}
+
+:root[data-tabs] .rail[data-fit="icons"] .tile.is-folder {
+  padding: 0 8px;
+}
+
+:root[data-tabs] .rail[data-fit="icons"] .folder-name {
+  display: none;
 }
 
 @media (min-width: 1180px) and (orientation: landscape) {
@@ -1498,11 +1635,11 @@
 
 @media (max-width: 1179px), (orientation: portrait) {
   .app {
-    grid-template-columns: var(--side-w) minmax(0, 1fr);
+    grid-template-columns: var(--nav-w) minmax(0, 1fr);
   }
 
   :root[data-panel] .app {
-    grid-template-columns: var(--side-w) minmax(0, 1fr);
+    grid-template-columns: var(--nav-w) minmax(0, 1fr);
   }
 
   :root[data-bare] .app,
@@ -1626,7 +1763,7 @@
     left: 0;
     z-index: 15;
     display: flex;
-    width: min(var(--side-w), 100vw);
+    width: min(var(--nav-w), 100vw);
     margin: 0;
     padding-top: 16px;
     box-shadow: var(--shadow-pop);
@@ -1698,7 +1835,7 @@
 
 @keyframes content-fill {
   from {
-    clip-path: inset(0 0 0 var(--side-w));
+    clip-path: inset(0 0 0 var(--nav-w));
   }
 
   to {
@@ -1708,7 +1845,7 @@
 
 @keyframes content-yield {
   from {
-    box-shadow: calc(-1 * var(--side-w)) 0 0 var(--bg);
+    box-shadow: calc(-1 * var(--nav-w)) 0 0 var(--bg);
   }
 
   to {
@@ -1718,20 +1855,20 @@
 
 @keyframes page-fill {
   from {
-    translate: calc(var(--side-w) / 2) 0;
+    translate: calc(var(--nav-w) / 2) 0;
   }
 }
 
 @keyframes page-yield {
   from {
-    translate: calc(var(--side-w) / -2) 0;
+    translate: calc(var(--nav-w) / -2) 0;
   }
 }
 
 @keyframes main-fill {
   from {
-    translate: var(--side-w) 0;
-    clip-path: inset(0 var(--side-w) 0 0);
+    translate: var(--nav-w) 0;
+    clip-path: inset(0 var(--nav-w) 0 0);
   }
 
   to {
@@ -1742,6 +1879,6 @@
 
 @keyframes main-yield {
   from {
-    translate: calc(-1 * var(--side-w)) 0;
+    translate: calc(-1 * var(--nav-w)) 0;
   }
 }

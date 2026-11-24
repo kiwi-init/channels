@@ -67,6 +67,27 @@ describe("kiwi doctor", () => {
     }
   });
 
+  test("the relay's clock against this computer's: close is fine, far is named with what fixes it, and a relay that doesn't say is one to update", async () => {
+    const found = await checks({ KIWI_RELAY: openRelay.url.origin });
+    expect(found.some((f) => f.ok && /^clock {4}\d+\.\ds (behind|ahead of) the relay's$/.test(f.what))).toBe(true);
+    const at = (offMs: number) => Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json({ githubSignIn: false, now: Date.now() + offMs }) });
+    const behind = at(30_000);
+    try {
+      const far = (await checks({ KIWI_RELAY: behind.url.origin })).find((f) => !f.ok && f.what.startsWith("This computer's clock"));
+      expect(far?.what).toMatch(/^This computer's clock is 30\.\ds behind the relay's, and quiet-task marks are held when the two differ by more than 10s\.$/);
+      expect(far && "how" in far ? far.how : "").toContain("timedatectl set-ntp true");
+    } finally {
+      behind.stop(true);
+    }
+    const silent = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json({ githubSignIn: false }) });
+    try {
+      const old = (await checks({ KIWI_RELAY: silent.url.origin })).find((f) => !f.ok && f.what.includes("doesn't say what time it is"));
+      expect(old && "how" in old ? old.how : "").toBe("Update the relay.");
+    } finally {
+      silent.stop(true);
+    }
+  });
+
   test("an unreachable relay is reported as down, not as a missing link", async () => {
     const found = await checks({ KIWI_RELAY: "http://127.0.0.1:1" });
     const down = found.find((f) => !f.ok && f.what.includes("http://127.0.0.1:1"));

@@ -44,7 +44,9 @@ function processes(): Proc[] {
 
 const ending = (p: Proc): boolean => p.stat.startsWith("Z") || p.stat.includes("E");
 const building = (p: Proc): boolean => p.cmd.includes("/MacOS/bun build --compile");
-const installing = (p: Proc): boolean => building(p) || p.cmd.includes(".new-");
+const probing = (p: Proc): boolean => p.cmd.includes("/Resources/kiwi.js --version");
+const daemon = (p: Proc): boolean => p.cmd.endsWith("/Resources/kiwi.js daemon");
+const installing = (p: Proc): boolean => building(p) || probing(p) || p.cmd.includes(".new-");
 const short = (p: Proc): string => `${p.pid} ${p.cmd.replaceAll(app, "<app>").slice(0, 160)}`;
 
 function halfMade(dir: string): string[] {
@@ -73,9 +75,15 @@ interface Moment {
   due: (ours: Proc[], home: string, since: number | null) => boolean;
 }
 
+const onAppBun = existsSync(join(app, "Contents", "Resources", "kiwi.js")) && !app.startsWith("/Volumes/") && !app.includes("/AppTranslocation/");
+
 const MOMENTS: Moment[] = [
-  { name: "as its CLI build starts", due: (ours) => ours.some(building) },
-  { name: "0.3 s into its CLI build", due: (_ours, _home, since) => since !== null && Date.now() - since >= 300 },
+  ...(onAppBun
+    ? []
+    : [
+        { name: "as its CLI build starts", due: (ours: Proc[]) => ours.some(building) },
+        { name: "0.3 s into its CLI build", due: (_ours: Proc[], _home: string, since: number | null) => since !== null && Date.now() - since >= 300 },
+      ]),
   { name: "once the built CLI is on disk, before it is in place", due: (_ours, home) => halfMade(home).length > 0 },
 ];
 
@@ -91,7 +99,7 @@ async function quitAt(moment: Moment): Promise<string[]> {
     for (const p of all) if (p.ppid === child.pid) groups.add(p.pgid);
     return all.filter((p) => p.pid !== process.pid && !ending(p) && (groups.has(p.pgid) || p.cmd.includes(app)));
   };
-  const main = (ours: Proc[]): boolean => ours.some((p) => p.cmd.includes(join(macos, "bun")) && !building(p));
+  const main = (ours: Proc[]): boolean => ours.some((p) => p.cmd.includes(join(macos, "bun")) && !building(p) && !probing(p) && !daemon(p));
   const began = Date.now();
   let buildAt: number | null = null;
   let up = false;
@@ -137,6 +145,7 @@ const problems: string[] = [];
 if (id === "com.kiwiinit.channels" && !process.env.CI) {
   console.log(`not starting ${app}: it's a release build (${id}) and this isn't CI, so it would share the installed app's data; build one with CHANNELS_EB_IDENTIFIER to check it here`);
 } else {
+  if (onAppBun) console.log("the app runs kiwi on its own Bun here, so there is no CLI build to quit during: only the launcher's install is checked");
   for (const moment of MOMENTS) problems.push(...(await quitAt(moment)));
 }
 

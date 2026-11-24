@@ -183,13 +183,18 @@ if (id === "com.kiwiinit.channels" && !process.env.CI) {
   } catch {
     // The group is gone already: the app exited on its own, which the checks above report.
   }
-  const running = () => spawnSync("pgrep", ["-f", app], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
+  const all = () => spawnSync("pgrep", ["-f", app], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).map(Number);
+  const daemon = (pid: number) =>
+    spawnSync("ps", ["-o", "command=", "-www", "-p", String(pid)], { encoding: "utf8" })
+      .stdout.trim()
+      .endsWith("/Resources/kiwi.js daemon");
+  const running = () => all().filter((pid) => !daemon(pid));
   for (const end = sent + 10_000; running().length && Date.now() < end; await later(250));
   const left = running();
   const after = ((Date.now() - sent) / 1000).toFixed(1);
   for (const pid of left) console.error(`eb-env-check: still running ${after}s after SIGTERM, where it waits:\n${stuck(pid)}`);
   groupAt("the survivors, with their parents and ages", left);
-  killAll(left);
+  killAll(all());
   if (left.length) problems.push(`still running after the check: ${left.join(", ")}`);
   dropKeychain();
 }

@@ -49,8 +49,8 @@ function keep(next: number): void {
 function apply(next: number): void {
   rem = next
   const root = document.documentElement
-  if (next === START) root.style.removeProperty("--side-want")
-  else root.style.setProperty("--side-want", `${next}rem`)
+  if (next === START) root.style.removeProperty("--nav-want")
+  else root.style.setProperty("--nav-want", `${next}rem`)
   for (const l of listeners) l()
 }
 

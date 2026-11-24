@@ -3,11 +3,14 @@ import type { TextFont } from "@kiwi/app/theme.ts"
 import type { GithubHealth } from "@kiwi/core/github-health.ts"
 import type { Activity as CoreActivity, COLORS } from "@kiwi/core/protocol.ts"
 import type { HookHarness, HookState } from "@kiwi/core/harnesses.ts"
+import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { SharedWith } from "@kiwi/core/shared-seats.ts"
 import type { Reason } from "@kiwi/core/routing.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
-import type { DocBlockRef, GithubNote, Step, StepReply } from "@kiwi/core/protocol.ts"
+import type { DocLine, DocLines } from "@kiwi/channel/kept.ts"
+import type { DocBlockRef, GithubNote, Step, StepReply, Unarmed } from "@kiwi/core/protocol.ts"
+import type { CheckpointDaily } from "@kiwi/core/checkpoint-schedule.ts"
 import type { DocEvent } from "../../desktop/src/bridge.ts"
 
 export type Harness = "claude" | "codex" | "opencode" | "gemini" | "cursor" | "grok" | "kimi" | "mimo" | "pi" | "grok-bot" | "zcode" | "agy" | "other"
@@ -60,6 +63,7 @@ export interface Person {
   presence: Presence
   activity?: Activity
   reach?: "listening" | "running" | "wakes"
+  unarmed?: Unarmed
   harness?: Harness
   runs?: string
   model?: string
@@ -188,6 +192,7 @@ export type TaskMover =
   | { kind: "waiting"; owner: string; ahead: number }
   | { kind: "run"; behind: string; due: number }
   | { kind: "hold"; until: number; reason: Words }
+  | { kind: "wait"; reason: Words; until?: number }
   | { kind: "nobody" }
 
 export interface TaskQuiet {
@@ -257,7 +262,7 @@ export interface Spec {
   edits: number
   editors: string[]
   stage: SpecStage
-  ready?: true
+  ready?: SpecMark & { v: number }
   approved?: SpecMark & { v: number; text: Words }
   changed?: true
   result?: SpecMark & { verdict: "accepted" | "dropped"; note?: Words; auto?: true }
@@ -626,9 +631,19 @@ export interface Compacted {
   seq: number
 }
 
+export type CheckpointAgent = { name: string; state: "saved" } | { name: string; state: "pending"; tasks: number[]; lead: boolean } | { name: string; state: "unreachable" }
+
+export interface CheckpointRound {
+  seq: number
+  at: number
+  daily: boolean
+  agents: CheckpointAgent[]
+}
+
 export interface Channel {
   code: string
   title: string
+  docLines?: DocLines
   icon?: string
   youOwn: boolean
   youManageAgents?: boolean
@@ -654,6 +669,8 @@ export interface Channel {
   quietMinutes?: number
   reviewReset?: true
   tapToAnswer?: true
+  checkpointDaily?: CheckpointDaily
+  checkpoints?: CheckpointRound
   landing?: string
   rooms: Room[]
   directs: Direct[]
@@ -699,7 +716,7 @@ export interface Account {
   githubSignIn?: boolean
   computers: Computer[]
   version: string
-  update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available"; progress?: number; blocked?: true }
+  update?: { version: string; ready: boolean; state?: "downloading" | "ready" | "available"; progress?: number; blocked?: true; stuck?: true }
   uiUpdate?: { version: string }
   moved?: { from?: string; to: string }
   key?: string
@@ -774,6 +791,7 @@ export interface Prefs {
   lightTheme: string
   customThemes: CustomTheme[]
   folders: Folder[]
+  tabOrder: string[]
 }
 
 export interface Sign {
@@ -800,6 +818,7 @@ export interface Folder {
 }
 
 export interface Actions {
+  keepDocLines(code: string, thread: string, lines: readonly DocLine[]): void
   send(code: string, where: Where, text: string, opts?: SendExtras): Promise<boolean>
   retry(code: string, seq: number): void
   loadImage(code: string, spot: string): void
@@ -860,6 +879,8 @@ export interface Actions {
   setQuiet(code: string, minutes: string): void
   setReviewReset(code: string, on: boolean): void
   setTapToAnswer(code: string, on: boolean): void
+  askCheckpoints(code: string, running: readonly string[]): void
+  setCheckpointDaily(code: string, daily: CheckpointDaily | null): void
   setResetWaived(code: string, name: string, waived: boolean): void
   setLanding(code: string, then: string | null): void
   exportHistory(code: string, kind: "transcript" | "log"): Promise<void>
@@ -913,6 +934,7 @@ export interface Actions {
   savePersonalities(list: Personality[]): void
   setHooks(harness: HookHarness, on: boolean): Promise<void>
   checkComputer(): Promise<Finding[] | null>
+  bringAgentsBack(): Promise<BackRun>
   setContextLine(on: boolean): void
   computerSettings(id: string): Promise<[string, string[]][]>
   launchedFrom(ids: string[]): Promise<LaunchedAgent[]>
@@ -939,7 +961,11 @@ export interface ThisComputer {
   kiwi: { running: boolean; version?: string }
   hooks: { harness: HookHarness; label: string; state: Exclude<HookState, "absent"> }[]
   contextLine: boolean | null
+  back: { down: UpOutcome[]; apart: UpOutcome[] } | null
+  run: BackRun
 }
+
+export type BackRun = { at: "idle" } | { at: "working" } | { at: "done"; outcomes: UpOutcome[] } | { at: "no.answer" }
 
 export interface GoneChannel {
   code: string

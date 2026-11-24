@@ -2,11 +2,12 @@ import { BASE_WIRE_VERSION, baseFromWire, readableWire, toWire } from "@kiwi/cor
 import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts";
 import { ChannelGone, type RoomsSetting, type SendOptions } from "@kiwi/core/client.ts";
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
-import { olderRules, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
+import { olderRules, type ChannelIcon, type Message, type StepReply } from "@kiwi/core/protocol.ts";
+import { stepReplyText } from "@kiwi/app/step-reply.ts";
 import { permissionReply } from "@kiwi/core/permission.ts";
 import { wakeList } from "@kiwi/core/phone-wake.ts";
 import { rootOf } from "@kiwi/core/room-rules.ts";
-import { fold, MAIN, placeFromKey, taskId, type ChannelState, type FoldBase, type GuardFloor, type Task } from "@kiwi/core/state.ts";
+import { answerAddress, fold, MAIN, placeFromKey, taskId, type ChannelState, type FoldBase, type GuardFloor, type Task } from "@kiwi/core/state.ts";
 
 import type { ChannelIdentityView, FollowEvent, WireError } from "../../desktop/src/bridge.ts";
 import type { Keyring } from "../../desktop/src/keyring.ts";
@@ -293,7 +294,13 @@ export class Room {
   async answer(seq: number, text: string): Promise<number> {
     const ask = this.messages.find((m) => m.seq === seq);
     if (!ask) throw new Error("that question isn't here any more");
-    return this.sendWoken(text, { to: [ask.from], re: [ask.seq], kind: "msg" });
+    return this.sendWoken(text, { ...answerAddress(ask, (s) => this.messages.find((m) => m.seq === s)), kind: "msg", pick: true });
+  }
+
+  async answerStep(seq: number, reply: StepReply): Promise<number> {
+    const ask = this.messages.find((m) => m.seq === seq);
+    if (!ask?.step) throw new Error("that step isn't here any more");
+    return this.sendWoken(stepReplyText(reply), { to: [ask.from], re: [ask.seq], kind: "msg", side: true, stepReply: reply });
   }
 
   private sendWoken(body: string, opts: SendOptions): Promise<number> {

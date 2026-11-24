@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { describe, expect, test } from "bun:test";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -29,7 +30,7 @@ describe("each release bumps the Homebrew tap's cask and formula from its SHA256
     try {
       cpSync(TAP, join(dir, "tap"), { recursive: true });
       writeFileSync(join(dir, "SHA256SUMS"), SUMS);
-      const run = Bun.spawnSync(["bun", resolve(import.meta.dir, "../scripts/brew-bump.ts"), "v2026.10.0", join(dir, "SHA256SUMS"), join(dir, "tap")]);
+      const run = spawnOwnedSync(["bun", resolve(import.meta.dir, "../scripts/brew-bump.ts"), "v2026.10.0", join(dir, "SHA256SUMS"), join(dir, "tap")]);
       expect(run.exitCode).toBe(0);
       expect(readFileSync(join(dir, "tap", CASK), "utf8")).toContain('version "2026.10.0"');
       expect(readFileSync(join(dir, "tap", FORMULA), "utf8")).toContain("/download/v2026.10.0/kiwi-darwin-arm64");

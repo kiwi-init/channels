@@ -111,7 +111,7 @@ describe("the shell is one grid", () => {
   };
 
   test("three columns, the two sides the same width, so the work is on the window's centre", () => {
-    expect(rule(".app")).toContain("grid-template-columns: var(--side-w) minmax(0, 1fr) var(--side-w)");
+    expect(rule(".app")).toContain("grid-template-columns: var(--nav-w) minmax(0, 1fr) var(--side-w)");
     expect(rule(".top")).toContain("grid-template-columns: subgrid");
   });
 

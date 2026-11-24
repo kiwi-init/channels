@@ -9,10 +9,12 @@ import { lookup } from "node:dns/promises";
 import { accessSync, constants, existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, isAbsolute, join, sep } from "node:path";
+import { AFTER_SKEW_MS } from "@kiwi/core/protocol.ts";
 import { DEFAULT_RELAY, loadConfig } from "../config.ts";
 import { EXTRA_HARNESSES, extraInstalled, hooksInstalled } from "../hooks.ts";
 import { loadMachine, type MachineFile } from "../machine.ts";
 import { VERSION } from "../version.ts";
+import { launcher } from "../launcher.ts";
 
 /** One check. `how` is the plain fix, and only a problem has one. */
 export type Finding = { ok: true; what: string } | { ok: false; what: string; how: string };
@@ -44,7 +46,7 @@ function binVersion(bin: string): Promise<string | null> {
 /** The same file as this process: a dev checkout running itself must not spawn. */
 function sameBinary(bin: string): boolean {
   try {
-    return realpathSync(bin) === realpathSync(process.execPath);
+    return realpathSync(bin) === realpathSync(launcher ?? process.execPath);
   } catch {
     return false;
   }
@@ -132,7 +134,7 @@ const why = (err: unknown) => (err instanceof Error ? err.message : String(err))
  * A relay that doesn't answer is reported here, before any link advice.
  */
 const checkRelay = Effect.fn("Doctor.relay")(function* (relay: string) {
-  type Check = { finding: Finding; signIn: boolean };
+  type Check = { finding: Finding; signIn: boolean; clock?: Finding };
   let host: string;
   try {
     host = new URL(relay).hostname;
@@ -143,14 +145,16 @@ const checkRelay = Effect.fn("Doctor.relay")(function* (relay: string) {
     return { finding: { ok: false, what: `DNS for ${host} did not resolve.`, how: "Check the name, or the network, then run kiwi doctor again." }, signIn: false } satisfies Check;
   }
   const asked = Effect.gen(function* () {
+    const sent = Date.now();
     const res = yield* Effect.tryPromise({ try: () => fetch(new URL("/v1/config", relay), { signal: AbortSignal.timeout(8_000) }), catch: (err) => err });
+    const back = Date.now();
     if (!res.ok) {
       return {
         finding: { ok: false, what: `${relay}/v1/config returned ${res.status}.`, how: "The relay is up but not answering. Check that Kiwi is the thing listening there." },
         signIn: false,
       } satisfies Check;
     }
-    const body = (yield* Effect.tryPromise({ try: () => res.json(), catch: (err) => err })) as { githubSignIn?: unknown; dev?: unknown; workosClientId?: unknown };
+    const body = (yield* Effect.tryPromise({ try: () => res.json(), catch: (err) => err })) as { githubSignIn?: unknown; dev?: unknown; workosClientId?: unknown; now?: unknown };
     if (body && typeof body === "object" && typeof body.githubSignIn !== "boolean" && typeof body.workosClientId === "string") {
       return {
         finding: { ok: false, what: `${relay} is an older Kiwi relay without GitHub sign-in.`, how: "Update the relay and give it your GitHub App's client id and secret." },
@@ -161,7 +165,7 @@ const checkRelay = Effect.fn("Doctor.relay")(function* (relay: string) {
       return { finding: { ok: false, what: `${relay}/v1/config answered, but not as a Kiwi relay.`, how: "Point KIWI_RELAY at your Kiwi relay." }, signIn: false } satisfies Check;
     }
     const signIn = body.githubSignIn || body.dev === true;
-    return { finding: { ok: true, what: `relay    ${relay}  /v1/config answered` }, signIn } satisfies Check;
+    return { finding: { ok: true, what: `relay    ${relay}  /v1/config answered` }, signIn, clock: clockAgainst(body.now, (sent + back) / 2) } satisfies Check;
   });
   return yield* asked.pipe(
     Effect.catch((err) =>
@@ -172,6 +176,19 @@ const checkRelay = Effect.fn("Doctor.relay")(function* (relay: string) {
     ),
   );
 });
+
+export function clockAgainst(relayNow: unknown, here: number): Finding {
+  if (typeof relayNow !== "number" || !Number.isFinite(relayNow)) return { ok: false, what: "The relay doesn't say what time it is, so it takes no quiet-task marks.", how: "Update the relay." };
+  const off = relayNow - here;
+  const secs = Math.abs(off / 1000).toFixed(1);
+  const side = off > 0 ? "behind" : "ahead of";
+  if (Math.abs(off) <= AFTER_SKEW_MS / 2) return { ok: true, what: `clock    ${secs}s ${side} the relay's` };
+  return {
+    ok: false,
+    what: `This computer's clock is ${secs}s ${side} the relay's, and quiet-task marks are held when the two differ by more than ${AFTER_SKEW_MS / 1000}s.`,
+    how: "Turn on network time on this computer (timedatectl set-ntp true, or its date and time settings), then run kiwi doctor again.",
+  };
+}
 
 /** Whether this computer is one of its person's devices (kiwi login). Never a failure: agents still join by approval. */
 function checkPaired(): Finding {
@@ -223,6 +240,7 @@ export const checks = Effect.fn("Doctor.checks")(function* () {
   if (shadowed) found.push(shadowed);
   const relayCheck = yield* checkRelay(relay);
   found.push(relayCheck.finding);
+  if (relayCheck.clock) found.push(relayCheck.clock);
   found.push(checkPaired());
   found.push(checkHooks());
   return found;

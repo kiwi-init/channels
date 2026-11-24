@@ -7,10 +7,12 @@
 import { wellFormedArtifact, wellFormedCheck, wellFormedRunId, type CheckArtifact, type CheckAsk } from "./checks.ts";
 import { wellFormedStepEdit, wellFormedStepLanded, wellFormedStepSpecs, type StepEdit, type StepLanded, type StepSpec } from "./steps.ts";
 import { DEVICE_LIST_MAX, type DeviceLink } from "./devices.ts";
+import { wellFormedSnapshot, type SnapshotFacts } from "./task-snapshot.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
 
 import { MAX_ROOM_MEMBERS, type RoomMember, type RoomMeta } from "./room-rules.ts";
+import { parseOccurrence, wellFormedDaily, type CheckpointDaily } from "./checkpoint-schedule.ts";
 
 const sealedBox = (x: unknown): boolean =>
   !!x && typeof x === "object" && typeof (x as { iv?: unknown }).iv === "string" && typeof (x as { ct?: unknown }).ct === "string" && (x as { ct: string }).ct.length <= 64_000;
@@ -105,6 +107,15 @@ export const PAGE_LIMIT = 1_000;
 
 export const MORE_REFUSED = "too many page requests; slow down";
 
+export const AFTER_SKEW_MS = 10_000;
+
+export interface SendAfter {
+  head: number;
+  at: number;
+}
+
+export const wellFormedAfter = (x: SendAfter): boolean => Number.isSafeInteger(x.head) && x.head >= 0 && Number.isSafeInteger(x.at) && x.at >= 0;
+
 export interface SlotTake {
   id: string;
   ttl: number;
@@ -145,6 +156,7 @@ export interface Envelope {
   ct: string;
   /** Key epoch (membership channels): which channel key sealed this message. */
   e?: number;
+  occ?: string;
 }
 
 /** Frames the relay sends over the WebSocket. */
@@ -169,7 +181,8 @@ export type ServerFrame =
   | { t: "page" }
   | { t: "head"; seq: number; ts: number }
   | ({ t: "doc" } & DocEnvelope)
-  | { t: "doc.ready"; th: string; head: number };
+  | { t: "doc.ready"; th: string; head: number }
+  | { t: "checkpoint"; occurrence: string; due: number };
 
 export interface DocEnvelope {
   th: string;
@@ -294,8 +307,11 @@ export type Event =
       kept?: KeptEvidence;
     }
   | { op: "task.first"; task: number }
-  | { op: "task.nudge"; task: number; mover: string; since: number; step: NudgeStep; day?: number; wake?: WakeSeen }
+  | { op: "task.nudge"; task: number; mover: string; since: number; step: NudgeStep; day?: number; wake?: WakeSeen; waited?: string }
+  | { op: "task.wait"; task: number; reason: string; until?: number }
+  | { op: "task.wait.end"; task: number }
   | { op: "task.wake"; task: number; mover: string; since: number; got: WakeGot }
+  | ({ op: "task.snapshot"; task: number } & SnapshotFacts)
   | { op: "task.landed"; task: number; artifact: CheckArtifact }
   | ({ op: "task.landed"; task: number } & StepLanded)
   | { op: "task.steps"; task: number; edit: StepEdit }
@@ -363,6 +379,8 @@ export type Event =
   | { op: "review.reset.set"; on: boolean }
   /** Whether a person's decision closes only from its card (a tap, or words typed into the card) while a reply typed in the chat stays a reply. */
   | { op: "asks.tap.set"; on: boolean }
+  | { op: "checkpoint.daily.set"; daily: CheckpointDaily | null }
+  | { op: "checkpoint.ask"; asks: CheckpointOwed[]; unreachable: string[]; occurrence?: string }
   | { op: "review.reset.waive"; member: string; waived: boolean }
   /** The goal a person's message #ask stands for, in plain words, as its tasks' header (null: their own words again). The lead, the owner or who asked names it. */
   | { op: "ask.name"; ask: number; name: string | null }
@@ -383,11 +401,41 @@ export type Event =
   | { op: "spec.set"; ask: number; text: string }
   | { op: "spec.approve"; ask: number; v: number }
   | { op: "spec.ready"; ask: number; v: number }
+  | { op: "spec.unready"; ask: number; v: number }
   | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string }
   | { op: "spec.delete"; ask: number; why?: string }
   | { op: "specs.only.set"; on: boolean };
 
 export type SpecVerdict = "accepted" | "back" | "dropped";
+
+export interface CheckpointOwed {
+  agent: string;
+  tasks: number[];
+  lead?: true;
+}
+
+const MAX_CHECKPOINT_AGENTS = 64;
+const MAX_CHECKPOINT_TASKS = 64;
+
+function wellFormedOwed(x: unknown): x is CheckpointOwed {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  if (typeof o.agent !== "string" || !o.agent.trim() || o.agent.length > 64) return false;
+  if (!Array.isArray(o.tasks) || o.tasks.length > MAX_CHECKPOINT_TASKS) return false;
+  if (!o.tasks.every((t) => Number.isSafeInteger(t) && (t as number) > 0) || new Set(o.tasks).size !== o.tasks.length) return false;
+  if (o.lead !== undefined && o.lead !== true) return false;
+  return o.tasks.length > 0 || o.lead === true;
+}
+
+function wellFormedCheckpointAsk(e: Record<string, unknown>): boolean {
+  if (!Array.isArray(e.asks) || !Array.isArray(e.unreachable)) return false;
+  if (e.asks.length + e.unreachable.length === 0 || e.asks.length + e.unreachable.length > MAX_CHECKPOINT_AGENTS) return false;
+  if (!e.asks.every(wellFormedOwed)) return false;
+  if (!e.unreachable.every((u) => typeof u === "string" && !!u.trim() && u.length <= 64)) return false;
+  const names = [...(e.asks as CheckpointOwed[]).map((a) => a.agent), ...(e.unreachable as string[])];
+  if (new Set(names).size !== names.length) return false;
+  return e.occurrence === undefined || parseOccurrence(e.occurrence) !== null;
+}
 
 export const MAX_SPEC = 20_000;
 
@@ -441,6 +489,7 @@ const QUIET_OPS: ReadonlySet<string> = new Set([
   "devices",
   "spec.set",
   "doc.open",
+  "task.snapshot",
 ]);
 
 export const isRunning = (i: GithubNote): boolean => (i.event === "check_run" || i.event === "workflow_run") && i.conclusion === undefined;
@@ -955,7 +1004,9 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 28;
+export const EVENT_OPS_VERSION = 32;
+
+export const TASK_WAIT_REASON_MAX = 200;
 
 export const SESSION_PRINT_RE = /^[A-Za-z0-9_-]{16}$/;
 
@@ -1003,6 +1054,7 @@ export interface Message extends Payload {
   seq: number;
   /** When the relay stored it (one clock for everyone, unlike `ts`). */
   rts?: number;
+  rocc?: string;
   /** Signature checks out for `pk` (binding pk to the name is the fold's job). */
   sigOk: boolean;
 }
@@ -1051,6 +1103,23 @@ export function cleanActivity(x: unknown): Activity | null {
 
 export type Reach = "listening" | "running" | "unreachable";
 
+export interface Unarmed {
+  since: number;
+  why: string;
+}
+
+export const UNARMED_ALERT_MS = 5 * 60_000;
+const UNARMED_WHY_MAX = 300;
+
+export function readUnarmed(x: unknown): Unarmed | null {
+  if (!x || typeof x !== "object") return null;
+  const since = "since" in x ? x.since : null;
+  const why = "why" in x ? x.why : null;
+  return typeof since === "number" && Number.isFinite(since) && since > 0 && typeof why === "string" && why && why.length <= UNARMED_WHY_MAX ? { since, why } : null;
+}
+
+export const unarmedAlert = (u: Unarmed | undefined, now: number): string | null => (u && now - u.since >= UNARMED_ALERT_MS ? u.why : null);
+
 export function isReach(x: unknown): x is Reach {
   return x === "listening" || x === "running" || x === "unreachable";
 }
@@ -1069,6 +1138,8 @@ export interface Presence {
   reach?: Reach;
   readAt?: number;
   wake?: string;
+  unarmed?: Unarmed;
+  untaken?: Unarmed;
   ops?: number;
   ts: number;
   pk?: string;
@@ -1147,10 +1218,17 @@ function eventCheck(ev: unknown): boolean | null {
         e.mover.length > 0 &&
         n(e.since) &&
         (e.step === 0 ? n(e.day) : (e.step === 1 || e.step === 2 || e.step === 3) && e.day === undefined) &&
-        (e.wake === undefined || (e.step === 2 && WAKES_SEEN.some((w) => w === e.wake)))
+        (e.wake === undefined || (e.step === 2 && WAKES_SEEN.some((w) => w === e.wake))) &&
+        (e.waited === undefined || (e.step !== 0 && str(e.waited, TASK_WAIT_REASON_MAX) && e.waited.trim().length > 0))
       );
+    case "task.wait":
+      return n(e.task) && str(e.reason, TASK_WAIT_REASON_MAX) && e.reason.trim().length > 0 && !/[\r\n]/.test(e.reason) && (e.until === undefined || n(e.until));
+    case "task.wait.end":
+      return n(e.task);
     case "task.wake":
       return n(e.task) && str(e.mover, 64) && e.mover.length > 0 && n(e.since) && WAKE_GOTS.some((g) => g === e.got);
+    case "task.snapshot":
+      return n(e.task) && wellFormedSnapshot(e);
     case "task.landed":
       return n(e.task) && (e.step === undefined ? wellFormedArtifact(e.artifact) : wellFormedStepLanded(e));
     case "task.steps":
@@ -1328,6 +1406,10 @@ function eventCheck(ev: unknown): boolean | null {
     case "review.reset.set":
     case "asks.tap.set":
       return typeof e.on === "boolean";
+    case "checkpoint.daily.set":
+      return e.daily === null || wellFormedDaily(e.daily);
+    case "checkpoint.ask":
+      return wellFormedCheckpointAsk(e);
     case "review.reset.waive":
       return str(e.member, 64) && e.member.trim() !== "" && typeof e.waived === "boolean";
     case "merges.set":
@@ -1356,6 +1438,7 @@ function eventCheck(ev: unknown): boolean | null {
       return n(e.ask) && (e.ask as number) > 0 && str(e.text, MAX_SPEC) && (e.text as string).trim().length > 0;
     case "spec.approve":
     case "spec.ready":
+    case "spec.unready":
       return n(e.ask) && (e.ask as number) > 0 && n(e.v) && (e.v as number) > 0;
     case "spec.delete":
       return n(e.ask) && (e.ask as number) > 0 && opt(e.why, (x): x is string => str(x, MAX_SPEC_NOTE));

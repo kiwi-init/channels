@@ -49,7 +49,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | --- | --- |
 | `kiwi specs` | 未完了の仕様と、それぞれの状況 |
 | `kiwi spec show N` · `spec write N --file spec.md` | 人のメッセージ #N の仕様を読む・書く |
-| `kiwi spec ready N` | レビューが通ったら準備完了にし、その人に承認カードを表示します |
+| `kiwi spec ready N` | レビューが通ったら準備完了にし、その人に承認カードを表示します。レビューがまだ変更を求めているときは `--undo` で取り消します |
 | `kiwi spec tick N "words"` | その言葉を含む行の完了条件の項目にチェックを入れます |
 | `kiwi spec start N` | 承認済みの仕様を引き受け、タスクに分けて計画します |
 | `kiwi spec comment N "…" --on "line"` | 仕様全体、またはその 1 行にコメントします |
@@ -57,6 +57,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task start T7` · `task done T7` | 誰も持っていなければタスクを引き受ける · 完了する |
 | `kiwi task assign T7 [NAME] ["next"]` | 現在の状況を添えて引き継ぎます |
 | `kiwi task checkpoint T7 --file note.md` | 次のセッションのために、作業の状況を残します。ループ内では `--fresh` |
+| `kiwi task wait T7 "理由" [--until 12h]` · `task wait T7 --end` | 何かが起きるまで誰の番でもない状態にします。時計が止まり、ボードには「waiting: 理由」と表示されます。`--until` で上限を設けます。番の人の投稿か `--end` で、その時点から時計が再開します |
 | `kiwi task review T7 --at SHA` | レビューのラウンドを開きます（実行タスクには `--run ID`） |
 | `kiwi task approve T7 --round N` · `reject` | そのラウンドに対するレビュアーの判定。判定は Kiwi のラウンドとタスクのスレッドに残り、PR には書きません |
 | `kiwi task kept T7 [--at SHA] [--onto REF]` | 承認済みタスクに新しいコミットができたあと、それが承認されたコードのままか（同じツリー、または対象ブランチのクリーンなマージのみ）をこのチェックアウトで確かめて記録し、承認を保ちます |
@@ -68,6 +69,8 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task steps T7` | 手順とその ID。リードまたは人が変更でき（`add`、`remove`、`move`、`by`、`skip`、`wait`、`run`）、レビューは再開されません |
 | `kiwi task close T7 "理由"` | リードまたは人: 残りの手順なしで完了にし、理由を残します |
 | `kiwi task` | ボード。開いているタスクごとに誰の番かも表示します |
+
+各ターンの終わりに、Stop フックは、開いている自分のタスクそれぞれがディスク上でどこまで進んでいるかも記録します。対象は、ブランチ名がタスクを指すワークツリー（`T7-…`、またはそのプルリクエストのブランチ）で、ブランチ、最後のコミット、未コミットのファイル、`origin` より何コミット進んでいるか・遅れているかを記録します。変化がないとき、またはそのようなワークツリーがないタスクには何も記録しません。`kiwi task show T7` と新しいセッションは、これを自分のチェックポイントの横に表示し、チェックポイントを置き換えることはありません。未コミットのファイルはそのチェックアウトのものなので、他の人の編集が含まれることがあります。シャットダウンで中断されたターンは記録されません。
 
 ## このコンピューター
 

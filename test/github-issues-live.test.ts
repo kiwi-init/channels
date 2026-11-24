@@ -66,7 +66,7 @@ describe("kiwi task add --issue on a live channel", () => {
     for (const d of [dataDir, home]) rmSync(d, { recursive: true, force: true });
   });
 
-  test("an issue becomes a task titled after it, with its text and link, and only once", async () => {
+  test("an issue becomes a task titled after it, with its text and link, only once, and landing on the merge while the channel sets no landing (#2253 item 9)", async () => {
     const made = await run(dev.taskFromIssue("12"));
     expect(made).toMatchObject({ title: "Copy icons do nothing", issue: "ojow/channels#12" });
     const { state } = await run(dev.state());
@@ -75,6 +75,7 @@ describe("kiwi task add --issue on a live channel", () => {
       detail: "On code blocks and the invite.\n\nhttps://github.com/ojow/channels/issues/12",
       issue: { repo: "ojow/channels", number: 12 },
     });
+    expect(state.tasks.get(made.id)?.steps?.map((x) => x.words)).toEqual(["merge"]);
     expect(await refusal(dev.taskFromIssue("https://github.com/ojow/channels/issues/12"))).toBe(`ojow/channels#12 is already T${made.id}: Copy icons do nothing`);
   });
 
@@ -84,15 +85,25 @@ describe("kiwi task add --issue on a live channel", () => {
     expect(await refusal(dev.taskFromIssue("someone/else#1"))).toBe("someone/else isn't one of the channel's repos (ojow/channels)");
   });
 
-  test("the owner's app closes the issue when the task is done, only with Write to GitHub on", async () => {
+  test("the owner's app closes the issue when the task is done after its merge, only with Write to GitHub on", async () => {
     const { state } = await run(dev.state());
     const t = [...state.tasks.values()].find((x) => x.issue?.number === 12)!;
     await owner.ownerCh.send("turned on Write to GitHub", { kind: "event", ev: { op: "github.write.set", on: true } });
-    await owner.ownerCh.send(`T${t.id} done`, { kind: "event", ev: { op: "task.update", task: t.id, state: "done", note: "fixed in #370" } });
+    await owner.ownerCh.send(`T${t.id} done`, { kind: "event", ev: { op: "task.update", task: t.id, state: "done", verdict: "approved", note: "fixed in #370" } });
+    await owner.ownerCh.send(`T${t.id} step s1 done`, { kind: "event", ev: { op: "task.landed", task: t.id, step: "s1" } });
     const { state: after } = await run(dev.state());
     const due = issuesToClose(after, 0);
     expect(due).toMatchObject([{ repo: "ojow/channels", number: 12, reason: "completed", body: `Kiwi task T${t.id} done` }]);
     expect(await owner.ownerCh.closeIssue(due[0]!)).toEqual({ url: "https://github.com/ojow/channels/issues/12" });
     expect(calls.filter((c) => c.method === "PATCH").map((c) => JSON.parse(c.body))).toEqual([{ state: "closed", state_reason: "completed" }]);
+  });
+
+  test("a channel that sets how tasks land keeps its setting: an issue's task gets no default merge step (#2253 item 9)", async () => {
+    await owner.ownerCh.send("tasks finish on approval", { kind: "event", ev: { op: "landing.set", then: "none" } });
+    await run(dev.taskAdd("Docs for the copy icons", { issue: { repo: "ojow/channels", number: 99 } }));
+    const { state } = await run(dev.state());
+    const made = [...state.tasks.values()].find((x) => x.issue?.number === 99);
+    expect(made?.title).toBe("Docs for the copy icons");
+    expect(made?.steps ?? []).toEqual([]);
   });
 });

@@ -257,7 +257,7 @@ function versionRow(account: Account, a: Acts, check: { busy: boolean; result: U
     return row({
       mark: "new",
       label: t("settings.sections.update.out", { version: update.version }),
-      hint: update.blocked ? say("settings.sections.update.blocked") : say("settings.sections.update.on", {}, on),
+      hint: update.stuck ? say("settings.sections.update.stuck") : update.blocked ? say("settings.sections.update.blocked") : say("settings.sections.update.on", {}, on),
       line: withUi(main(a.act(update.blocked ? t("settings.sections.update.get") : t("settings.sections.update.download"), check.install))),
     })
   if (update)

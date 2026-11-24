@@ -48,3 +48,31 @@ kiwi loop --harness kimi                          # inside tmux: Kimi's first pr
 ループはハーネスのダイアログ（「Trust this folder?」や権限の確認）には決して答えません。あなたを待ちます。
 
 リードは 1 つの長いセッションのまま、ハーネス自身のコンパクションで整えられます。
+
+## 再起動のあと
+
+`kiwi up` は、このコンピューターが止まる前に動いていた席を呼び戻します。席ごとに tmux のウィンドウを 1 つ使います (tmux の外で実行したときは `kiwi` という名前の tmux セッションの中に作ります)。どの席かはデーモンが知っています。デーモンは動いている席を 1 分ごとに記録しています。これは推定です。止まる直前に終わった席が戻ることもあれば、最後の数分にデーモンが見逃した席は止まったままになります。エージェントがチャンネルを抜けた席は起動しません。`kiwi up --since 7d` は、過去 7 日間に使った席も呼び戻します。
+
+- Claude Code の席は、トランスクリプトがディスクに残っていれば前のセッションを再開し、なければチェックポイントから新しいセッションを始めます。どちらでもハンドル、タスク、起こし方はそのままで、招待し直す必要はありません。
+- ループの席には `kiwi loop` が戻ります。
+- セッションがまだ動いている席には触れません。なので `kiwi up` を 2 回実行しても新しく何かが起動することはありません。
+- まだ起動できない席 (Codex などのハーネス) は名前を一覧にするので、自分で起動してください。
+
+各セッションが席に着くまで待ってから、戻ったものと戻らなかったものを表示します。`kiwi up --dry-run` は計画を表示するだけで何も変えません。tmux がないときは、席ごとに `kiwi up --seat HANDLE -c CHANNEL` の行を表示します。それぞれ別のターミナルで実行してください。
+
+Linux でログイン時に実行するには、`~/.config/systemd/user/kiwi-up.service` に systemd のユーザーユニットを追加します:
+
+```ini
+[Unit]
+Description=Bring Kiwi seats back after a restart
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.kiwi/bin/kiwi up
+
+[Install]
+WantedBy=default.target
+```
+
+そのあと `systemctl --user enable kiwi-up.service` を実行します。ウィンドウには `tmux attach -t kiwi` でつなげます。

@@ -1,6 +1,7 @@
 // Agents in threads (T1460): what an agent says while doing a task goes
 // to that task's thread, among the agents working it (and the lead); --main and --dm say where
 // else; listening delivers your task threads and your direct thread, not other tasks' talk.
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -31,7 +32,7 @@ const scratch = (tag: string) => {
 };
 
 function spawn(home: string, args: string[]) {
-  return Bun.spawn(kiwiCmd(args), { cwd: home, env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  return spawnOwned(kiwiCmd(args), { cwd: home, env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
 }
 
 async function ok(home: string, ...args: string[]): Promise<string> {
@@ -99,6 +100,22 @@ describe("agents in threads", () => {
     expect(await ok(dev2, "send", "--to", `${task}`, "watching it")).toContain(`in ${task}'s thread`);
     expect(await ok(dev2, "send", "--to", "@lead", "one more")).toContain("to lead (direct)");
     expect(await fails(dev2, "send", "--to", `@lead,${task}`, "both")).toContain("--to names one place");
+
+    await ok(owner, "--as", "human", "room", "create", "design");
+    const roomSent = await ok(dev, "send", "--to", "#design", "mockups are up");
+    expect(roomSent).toContain("in #design");
+    expect(roomSent).not.toContain("thread");
+    const roomLine = (await ok(dev, "log", "-n", "50")).split("\n").find((l) => l.includes("mockups are up"));
+    expect(roomLine).toContain("[#design]");
+    expect(roomLine).not.toContain(`[${task}]`);
+    expect(await ok(dev, "send", "still on the lockfile")).toContain(`in ${task}'s thread`);
+    await ok(owner, "--as", "human", "room", "create", "ops");
+    const parent = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "--room", "ops", "deploy at noon?"))![1]!;
+    await ok(dev, "listen", "--now");
+    const crossed = await fails(dev, "send", "--to", "#design", "--re", parent, "noon works");
+    expect(crossed).toContain(`#${parent} is in #ops, and a reply stays in its message's room`);
+    expect((await ok(dev, "log", "-n", "80")).includes("noon works")).toBe(false);
+    expect(await ok(dev, "send", "--to", "#ops", "--re", parent, "noon works")).toContain("in #ops");
 
     // dev2, not on the task, asks in its thread: the answer in that conversation reaches dev2.
     const q = /#(\d+)/.exec(await ok(dev2, "send", "--task", task, "which lockfile?"))![1]!;

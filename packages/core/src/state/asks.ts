@@ -1,6 +1,6 @@
 import { asksPeople } from "../personality.ts";
-import { isDecisionKind, wellFormedArea, type DecisionKind, type Message, type Step } from "../protocol.ts";
-import { isPerson } from "./people.ts";
+import { ignored, isDecisionKind, wellFormedArea, type DecisionKind, type Message, type Step } from "../protocol.ts";
+import { answersAsk, isPerson } from "./people.ts";
 import { placeKey } from "./places.ts";
 import { commentedSpec } from "./specs.ts";
 import type { AskHead, ChannelState, Task } from "./types.ts";
@@ -92,6 +92,31 @@ export function openAsksOnWork(state: Pick<ChannelState, "openAsks" | "members" 
   );
 }
 
+interface Decided {
+  ask: Message;
+  answer: Message;
+}
+
+export function decidedOnWork(state: Pick<ChannelState, "openAsks" | "members" | "rejected" | "trust" | "tapToAnswer">, messages: readonly Message[], holds: readonly number[], limit = 3): Decided[] {
+  if (!holds.length) return [];
+  const open = new Set(state.openAsks.map((a) => a.seq));
+  const kept = (m: Message) => !state.rejected.has(m.seq) && !ignored(state.trust.get(m.seq));
+  const asks = new Map<number, Message>();
+  for (const m of messages)
+    if (m.esc && !m.permission && !m.handoff && !open.has(m.seq) && kept(m) && [...(m.task !== undefined ? [m.task] : []), ...(m.holds ?? [])].some((id) => holds.includes(id))) asks.set(m.seq, m);
+  const decided: Decided[] = [];
+  for (const r of messages) {
+    if (r.kind === "event" || !kept(r) || (state.tapToAnswer && !r.pick && !r.stepReply)) continue;
+    for (const seq of r.re ?? []) {
+      const ask = asks.get(seq);
+      if (!ask || !answersAsk(state.members, ask, r.from)) continue;
+      asks.delete(seq);
+      decided.push({ ask, answer: r });
+    }
+  }
+  return decided.slice(-limit);
+}
+
 export function asksOnSameWork(state: Pick<ChannelState, "openAsks" | "members" | "tasks" | "askHeads">, me: string, to: readonly string[], holds: readonly number[]): Message[] {
   if (!holds.length) return [];
   return askedOfPeopleByOthers(state, me).filter((a) => a.to?.some((n) => to.includes(n)) && heldBy(state, a).some((id) => holds.includes(id)));
@@ -102,6 +127,17 @@ export function leadForAsk(state: Pick<ChannelState, "members" | "lead">, me: st
   const lead = state.lead === null || state.lead === me ? undefined : state.members.get(state.lead);
   if (!self?.persona || asksPeople(self.persona) || !lead?.active || isPerson(lead)) return null;
   return lead.name;
+}
+
+export function leadHoldsFor(state: Pick<ChannelState, "members" | "lead">, me: string): string | null {
+  const role = state.members.get(me)?.persona?.role;
+  if (role !== "builder" && role !== "reviewer") return null;
+  const lead = state.lead === null || state.lead === me ? undefined : state.members.get(state.lead);
+  return lead?.active && !isPerson(lead) ? lead.name : null;
+}
+
+export function handedToLead(state: Pick<ChannelState, "openAsks" | "lead">, seq: number): Message | undefined {
+  return state.openAsks.find((a) => a.seq === seq && state.lead !== null && a.to?.includes(state.lead) && readHandedOver(String(a.body ?? ""))?.from === a.from);
 }
 
 export function directThreadStart(state: Pick<ChannelState, "placeOf">, seq: number): number | null {
@@ -217,6 +253,14 @@ export function handedAskOf<M extends Pick<Message, "seq" | "from" | "to" | "bod
       return handed;
   }
   return undefined;
+}
+
+export function answerAddress<M extends Pick<Message, "seq" | "from" | "to" | "body">>(
+  ask: Pick<Message, "seq" | "from" | "re">,
+  find: (seq: number) => M | undefined,
+): { to: string[]; re: number[] } {
+  const handed = handedAskOf(ask, find);
+  return handed ? { to: [ask.from, handed.from], re: [ask.seq, handed.seq] } : { to: [ask.from], re: [ask.seq] };
 }
 
 export interface HandedAsk {

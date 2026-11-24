@@ -54,6 +54,12 @@ class ScreensTest {
     fun general() = shoot("general") { ConversationScreen(it, Spot(DEV), back = {}) }
 
     @Test
+    fun unheldQuestion() = shoot("unheld-question", { unheldQuestion(it, waiting = true) }) { ConversationScreen(it, Spot(DEV), back = {}) }
+
+    @Test
+    fun stepForYou() = shoot("step-for-you", { stepAsked(it, waiting = true) }) { ConversationScreen(it, Spot(DEV), back = {}) }
+
+    @Test
     fun leadChat() = shoot("lead-chat") { ConversationScreen(it, Spot(DEV, LEAD_CHAT), back = {}) }
 
     @Test

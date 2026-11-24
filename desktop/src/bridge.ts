@@ -7,6 +7,7 @@ import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { HarnessRow, HookHarness, HookRow } from "@kiwi/core/harnesses.ts";
+import type { UpOutcome } from "@kiwi/core/up-outcome.ts";
 import type { WakeSeat } from "@kiwi/core/wake.ts";
 import type { SharedSeat } from "@kiwi/core/shared-seats.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
@@ -116,6 +117,7 @@ export const CHANNEL_CALLS = [
   "info",
   "title",
   "setTitle",
+  "setCheckpointSchedule",
   "rooms",
   "guard",
   "setCharter",
@@ -161,6 +163,8 @@ export type FollowEvent =
   | { _tag: "Info" }
   | { _tag: "Roster" }
   | { _tag: "Request" }
+  | { _tag: "Checkpoint"; occurrence: string; due: number }
+  | { _tag: "Synced" }
   | { _tag: "Status"; line: string }
   | { _tag: "Down" }
   | { _tag: "Failed"; error: WireError };
@@ -426,6 +430,10 @@ export interface KiwiBridge {
   keepAgents(code: string, agents: { pk: string; from: string }[]): Promise<KeepView | null>;
   daemonStatus(): Promise<DaemonStatus>;
   doctor(): Promise<DoctorFinding[] | null>;
+  /** Runs `kiwi up` on this computer: each seat comes back in its own tmux window, with its outcome. */
+  bringBack(): Promise<UpOutcome[] | null>;
+  /** What `kiwi up` would do now, changing nothing: each seat planned, running or skipped, and whether it ran before this boot. */
+  upPlan(): Promise<UpOutcome[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */
   daemonAdopt(): Promise<ComputerView>;
   /** Put the bundled kiwi binary in ~/.kiwi/bin and on the PATH (the app also does this on every start). */

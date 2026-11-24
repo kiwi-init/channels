@@ -27,6 +27,7 @@ import { isMuted } from "~/live/mute"
 import { noteOwned } from "~/live/owned"
 import { usePrefs } from "~/live/prefs"
 import { busyOf, reachedOf, receiptsOf, withReceipts } from "~/live/receipts"
+import { checkpointRoundOf } from "~/live/checkpoints"
 import { t } from "~/i18n/i18n"
 import { announce } from "~/kit/toasts"
 import { arrivals } from "~/live/persona-later"
@@ -120,6 +121,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     pkOf,
     github,
     older,
+    docLines,
+    keepDocLines,
   } = live
   const messages = useMemo(() => withReach(reach, shownWire, state.openAsks), [reach, shownWire, state.openAsks])
   const since = shownWire[0]?.seq
@@ -195,11 +198,13 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const docs = useMemo(() => Object.fromEntries(state.docs), [state.docs])
   const mergedAt = useMemo(() => [...state.github.prs.values()].flatMap((p) => (p.state === "merged" ? [p.at] : [])), [state.github.prs])
 
+  const checkpoints = useMemo(() => checkpointRoundOf(state), [state])
   const trusted = !isOwner && fullyTrusted(state.members.get(me))
   const channel = useMemo(
     (): Channel => ({
       code,
       title,
+      ...(Object.keys(docLines).length ? { docLines } : {}),
       ...(icon ? { icon } : {}),
       youOwn: isOwner,
       ...(!isOwner && people.some((p) => p.you && p.managesAgents) ? { youManageAgents: true } : {}),
@@ -224,6 +229,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.quietMs !== QUIET_MINUTES * 60_000 ? { quietMinutes: state.quietMs / 60_000 } : {}),
       ...(state.reviewReset ? { reviewReset: true as const } : {}),
       ...(state.tapToAnswer ? { tapToAnswer: true as const } : {}),
+      ...(state.checkpointDaily ? { checkpointDaily: state.checkpointDaily } : {}),
+      ...(checkpoints ? { checkpoints } : {}),
       ...(state.landing && state.landing !== "none" ? { landing: state.landing } : {}),
       ...(required.length ? { reviewStillRequired: { repos: required, check: reviewCheck } } : {}),
       rooms,
@@ -274,6 +281,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       state.quietMs,
       state.reviewReset,
       state.tapToAnswer,
+      state.checkpointDaily,
+      checkpoints,
       state.landing,
       required,
       reviewCheck,
@@ -419,8 +428,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   }, [owed])
 
   const run = useMemo(
-    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard: toDraft, refreshRequests, refreshRoster, foldFrom, older }),
-    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, toDraft, refreshRequests, refreshRoster, foldFrom, older]
+    (): Run => ({ code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, discard: toDraft, refreshRequests, refreshRoster, foldFrom, older, keepDocLines }),
+    [code, roomId, me, isOwner, ch, state, messages, roster, requests, send, post, retry, toDraft, refreshRequests, refreshRoster, foldFrom, older, keepDocLines]
   )
 
   useLayoutEffect(() => {

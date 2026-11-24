@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { perfCheck } from "../scripts/perf-check.ts";
+import { pairedCheck, perfCheck } from "../scripts/perf-check.ts";
 
 const { reference, limits: budgets } = (await Bun.file("scripts/perf-budgets.json").json()) as {
   reference: Record<"@1x" | "@4x", number>;
@@ -18,7 +18,7 @@ function run(tasksMs: number, i: number, speed = 1, calibrated = true, at: Parti
     file,
     JSON.stringify({
       "@1x": { reloadToFirstScreenMs: reload.total, ...calibration("@1x") },
-      "reload, in page": { firstScreenMs: reload.inPage },
+      "reload, in page": { seededFrameMs: reload.inPage },
       "@4x": { switchMedianMs: { Tasks: tasksMs, Agents: 90, Conversation: 95 }, ...calibration("@4x") },
       "typing while 10 agents post": { p95Ms: 30 },
       soak: { heapSlopeMBPerHour: 60, nodesSlopePerHour: 152000, listenersSlopePerHour: 22000 },
@@ -150,4 +150,130 @@ test("every workflow step that pipes perf-check runs under pipefail, so an over-
   });
   expect(steps.length).toBeGreaterThanOrEqual(1);
   for (const { path, run, shell } of steps) if (run!.includes("|")) expect({ path, shell }).toEqual({ path, shell: "bash" });
+});
+
+function pairRun(side: string, i: number, ms: { tasks?: number; agents?: number } = {}, extra: Record<string, unknown> = {}): string {
+  const file = join(dir, `perf-pair-${i}-${side}.json`);
+  writeFileSync(
+    file,
+    JSON.stringify({
+      control: side,
+      app: side === "base" ? "b".repeat(40) : "h".repeat(40),
+      "@1x": { reloadToFirstScreenMs: 500, calibrationMs: reference["@1x"] },
+      "reload, in page": { seededFrameMs: 425 },
+      "@4x": { switchMedianMs: { Tasks: ms.tasks ?? 150, Agents: ms.agents ?? 90, Conversation: 95 }, calibrationMs: reference["@4x"] },
+      "typing while 10 agents post": { p95Ms: 30 },
+      ...extra,
+    }),
+  );
+  return file;
+}
+
+const pair = (base: { tasks?: number; agents?: number }, head: { tasks?: number; agents?: number }, offset = 0) => [
+  ...[1, 4, 5, 8].map((i) => pairRun("base", offset + i, base)),
+  ...[2, 3, 6, 7].map((i) => pairRun("head", offset + i, head)),
+];
+
+test("paired: a head more than 15% and more than 10 ms slower than its base is a regression, even under the gate", () => {
+  const r = pairedCheck(pair({ tasks: 150 }, { tasks: 175 }, 100));
+  expect(r.code).toBe(1);
+  expect(r.text).toContain("| Tasks tab @4x | 150 | 175 | +25 ms (+17%) | 220 | regression |");
+});
+
+test("paired: slower by more than 15% but not by more than 10 ms, or by more than 10 ms but not 15%, is no regression", () => {
+  expect(pairedCheck(pair({ tasks: 50 }, { tasks: 59 }, 200)).code).toBe(0);
+  expect(pairedCheck(pair({ tasks: 150 }, { tasks: 170 }, 300)).code).toBe(0);
+});
+
+test("paired: a gate the base also misses doesn't fail a head that isn't a regression, and says so", () => {
+  const r = pairedCheck(pair({ agents: 250 }, { agents: 260 }, 400));
+  expect(r.code).toBe(0);
+  expect(r.text).toContain("over its gate, exempt: the base is over it too");
+  expect(r.text).toContain("Over a gate the base also misses (not a failure):");
+});
+
+test("paired: a head newly over a gate the base meets fails, and a regression on a red base still fails", () => {
+  const newlyRed = pairedCheck(pair({ agents: 110 }, { agents: 120 }, 500));
+  expect(newlyRed.code).toBe(1);
+  expect(newlyRed.text).toContain("over its gate 115, which the base meets (110)");
+  const worse = pairedCheck(pair({ agents: 250 }, { agents: 300 }, 600));
+  expect(worse.code).toBe(1);
+  expect(worse.text).toContain("| regression |");
+});
+
+test("paired: missing or failed runs can't earn the exemption", () => {
+  const files = pair({ agents: 250 }, { agents: 260 }, 700);
+  const twoHeads = files.filter((f) => !/-70[367]-head\.json$/.test(f));
+  const short = pairedCheck(twoHeads);
+  expect(short.code).toBe(1);
+  expect(short.text).toContain("head: 1 reports, 4 expected");
+  expect(short.text).toContain("| Agents tab @4x | 250 | not measured |");
+  expect(short.text).not.toContain("exempt: the base is over it too");
+  const failed = pairedCheck(files, ["run 3 head"]);
+  expect(failed.code).toBe(1);
+  expect(failed.text).toContain("run 3 head: the run failed");
+});
+
+test("paired: uncalibrated runs, mislabelled reports and one app on both sides fail closed", () => {
+  const files = pair({}, {}, 800);
+  const uncalibrated = [
+    ...files.slice(0, 6),
+    pairRun("head", 806, {}, { "@4x": { switchMedianMs: { Tasks: 150, Agents: 90, Conversation: 95 } } }),
+    pairRun("head", 807, {}, { "@4x": { switchMedianMs: { Tasks: 150, Agents: 90, Conversation: 95 } } }),
+  ];
+  expect(pairedCheck(uncalibrated).code).toBe(1);
+  const mislabelled = [...files.slice(0, 7), pairRun("head", 808, {}, { control: "base" })];
+  expect(pairedCheck(mislabelled).text).toContain("its control is base, its name says head");
+  const sameApp = [...files.slice(0, 4), ...[2, 3, 6, 7].map((i) => pairRun("head", 900 + i, {}, { app: "b".repeat(40) }))];
+  expect(pairedCheck(sameApp).text).toContain("base and head ran the same app commit");
+});
+
+const without = (metric: "Agents" | "Tasks", ms: { tasks?: number; agents?: number }) => {
+  const views: Record<string, number> = { Tasks: ms.tasks ?? 150, Agents: ms.agents ?? 90, Conversation: 95 };
+  delete views[metric];
+  return { "@4x": { switchMedianMs: views, calibrationMs: reference["@4x"] } };
+};
+
+test("paired: one missing value on either side fails that metric and names the file, never exempting it", () => {
+  const red = { agents: 250 };
+  const headGap = [
+    ...[1, 4, 5, 8].map((i) => pairRun("base", 1000 + i, red)),
+    ...[2, 3, 6].map((i) => pairRun("head", 1000 + i, { agents: 260 })),
+    pairRun("head", 1007, {}, without("Agents", { agents: 260 })),
+  ];
+  const h = pairedCheck(headGap);
+  expect(h.code).toBe(1);
+  expect(h.text).toContain("Agents tab @4x: perf-pair-1007-head.json has no usable value (the metric is missing)");
+  expect(h.text).toContain("| Agents tab @4x | 250 | not measured |");
+  expect(h.text).not.toContain("Agents tab @4x: 260, over its gate 115; the base is over it too");
+  const baseGap = [pairRun("base", 1101, {}, without("Agents", red)), ...[4, 5, 8].map((i) => pairRun("base", 1100 + i, red)), ...[2, 3, 6, 7].map((i) => pairRun("head", 1100 + i, { agents: 260 }))];
+  const b = pairedCheck(baseGap);
+  expect(b.code).toBe(1);
+  expect(b.text).toContain("Agents tab @4x: perf-pair-1101-base.json has no usable value (the metric is missing)");
+});
+
+test("paired: one unusable calibration on either side fails every scaled metric of that run, never exempting it", () => {
+  const red = { agents: 250 };
+  const offBounds = { "@4x": { switchMedianMs: { Tasks: 150, Agents: 260, Conversation: 95 }, calibrationMs: 5000 } };
+  const head = [...[1, 4, 5, 8].map((i) => pairRun("base", 1200 + i, red)), ...[2, 3, 6].map((i) => pairRun("head", 1200 + i, { agents: 260 })), pairRun("head", 1207, {}, offBounds)];
+  const h = pairedCheck(head);
+  expect(h.code).toBe(1);
+  expect(h.text).toContain("Agents tab @4x: perf-pair-1207-head.json has no usable value (its @4x calibration 5000 ms is outside");
+  expect(h.text).not.toContain("exempt: the base is over it too");
+  const base = [
+    pairRun("base", 1301, {}, { "@4x": { switchMedianMs: { Tasks: 150, Agents: 250, Conversation: 95 }, calibrationMs: 5000 } }),
+    ...[4, 5, 8].map((i) => pairRun("base", 1300 + i, red)),
+    ...[2, 3, 6, 7].map((i) => pairRun("head", 1300 + i, { agents: 260 })),
+  ];
+  expect(pairedCheck(base).text).toContain("perf-pair-1301-base.json has no usable value (its @4x calibration 5000 ms is outside");
+});
+
+test("paired: the thresholds are compared unrounded, and exactly 15% or exactly 10 ms is not a regression", () => {
+  expect(pairedCheck(pair({ tasks: 50 }, { tasks: 60 }, 1400)).code).toBe(0);
+  const justOverMs = pairedCheck(pair({ tasks: 50 }, { tasks: 60.04 }, 1500));
+  expect(justOverMs.code).toBe(1);
+  expect(justOverMs.text).toContain("| Tasks tab @4x | 50 | 60 | +10 ms (+20%) | 220 | regression |");
+  expect(pairedCheck(pair({ tasks: 100 }, { tasks: 115 }, 1600)).code).toBe(0);
+  expect(pairedCheck(pair({ tasks: 100 }, { tasks: 115.01 }, 1700)).code).toBe(1);
+  expect(pairedCheck(pair({ tasks: 140 }, { tasks: 161 }, 1800)).code).toBe(0);
 });

@@ -1,4 +1,5 @@
 // Per-harness hook files: write, idempotent re-install, uninstall leaves the user's own entries.
+import { spawnOwnedSync } from "./owned.ts";
 import { afterEach, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -920,7 +921,7 @@ function script(path: string, body: string): string {
 }
 
 function kiwiCli(args: string[], env: Record<string, string>): { code: number; out: string } {
-  const r = Bun.spawnSync([process.execPath, MAIN_TS, ...args], { cwd: scratch("hk-cli-cwd-"), env: { ...process.env, ...env }, stdout: "pipe", stderr: "pipe" });
+  const r = spawnOwnedSync([process.execPath, MAIN_TS, ...args], { cwd: scratch("hk-cli-cwd-"), env: { ...process.env, ...env }, stdout: "pipe", stderr: "pipe" });
   return { code: r.exitCode, out: r.stdout.toString() };
 }
 
@@ -1083,7 +1084,7 @@ test("a config.json that isn't JSON leaves every hook exiting 0, with one line n
   writeFileSync(join(home, "config.json"), "{ not json");
   const env = { KIWI_HOME: home, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "bad", AI_AGENT: "claude-code_2-1-296_agent" };
   for (const event of ["session-start", "prompt", "stop", "listen"]) {
-    const r = Bun.spawnSync([process.execPath, MAIN_TS, "hook", event], { cwd: home, env: { ...process.env, ...env }, stdin: new TextEncoder().encode("{}"), stdout: "pipe", stderr: "pipe" });
+    const r = spawnOwnedSync([process.execPath, MAIN_TS, "hook", event], { cwd: home, env: { ...process.env, ...env }, stdin: new TextEncoder().encode("{}"), stdout: "pipe", stderr: "pipe" });
     expect(r.exitCode).toBe(0);
     expect(r.stdout.toString()).toBe("");
     expect(r.stderr.toString()).toContain(`${join(home, "config.json")} isn't valid JSON`);

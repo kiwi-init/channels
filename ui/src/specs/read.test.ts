@@ -61,8 +61,11 @@ const channel = (more: Partial<Channel> = {}): Channel =>
 
 describe("a spec reads where it stands, in words a person reads", () => {
   test("a draft waits for its person; approved, it waits for an agent with its place in line", () => {
-    expect(stageLine(channel(), spec({ canJudge: true }))).toEqual({ word: "draft", tone: "tone-quiet", line: "waits for your approval" })
-    expect(stageLine(channel(), spec()).line).toBe("waits for maya to approve it")
+    const ready = { by: "atlas", at: NOW, v: 11 }
+    expect(stageLine(channel(), spec({ canJudge: true, ready }))).toEqual({ word: "draft", tone: "tone-quiet", line: "waits for your approval" })
+    expect(stageLine(channel(), spec({ ready })).line).toBe("waits for maya to approve it")
+    expect(stageLine(channel(), spec({ canJudge: true }))).toEqual({ word: "draft", tone: "tone-quiet", line: "not marked ready yet" })
+    expect(stageLine(channel(), spec()).line).toBe("not marked ready yet")
     expect(stageLine(channel({ free: [] }), spec({ stage: "queued", queue: 2 })).line).toBe("starts when an agent is free · 2nd in line · none free yet")
     expect(stageLine(channel({ free: ["win"] }), spec({ stage: "queued", queue: 1 })).line).toBe("starts when an agent is free · next in line · 1 free")
     expect(stageLine(channel(), spec({ stage: "queued", planner: "win" })).line).toBe("win is planning it")
@@ -74,11 +77,14 @@ describe("a spec reads where it stands, in words a person reads", () => {
     expect(stageLine(c, spec({ stage: "working", tasks: [1, 2, 3] })).line).toBe("win · 1 of 2 tasks done")
   })
 
-  test("it needs you when you may judge it and it's a draft, delivered or changed", () => {
-    expect(needsYou(spec({ canJudge: true }))).toBe(true)
-    expect(needsYou(spec())).toBe(false)
+  test("it needs you when you may judge it and it's a draft or a change marked ready, or delivered", () => {
+    const ready = { by: "atlas", at: NOW, v: 11 }
+    expect(needsYou(spec({ canJudge: true, ready }))).toBe(true)
+    expect(needsYou(spec({ canJudge: true }))).toBe(false)
+    expect(needsYou(spec({ ready }))).toBe(false)
     expect(needsYou(spec({ canJudge: true, stage: "working" }))).toBe(false)
-    expect(needsYou(spec({ canJudge: true, stage: "working", changed: true }))).toBe(true)
+    expect(needsYou(spec({ canJudge: true, stage: "working", changed: true, ready }))).toBe(true)
+    expect(needsYou(spec({ canJudge: true, stage: "working", changed: true }))).toBe(false)
     expect(needsYou(spec({ canJudge: true, stage: "delivered" }))).toBe(true)
   })
 })

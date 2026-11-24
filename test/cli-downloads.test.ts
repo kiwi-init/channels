@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,7 +17,7 @@ function release(sizes: Record<string, number>): string {
 }
 
 function check(dir: string) {
-  const r = Bun.spawnSync([process.execPath, SCRIPT, dir], { stdout: "pipe", stderr: "pipe" });
+  const r = spawnOwnedSync([process.execPath, SCRIPT, dir], { stdout: "pipe", stderr: "pipe" });
   return { code: r.exitCode, out: r.stdout.toString() + r.stderr.toString() };
 }
 

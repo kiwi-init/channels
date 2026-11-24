@@ -15,10 +15,11 @@ test("a harness's short names read as the product", () => {
 });
 
 test("every harness kiwi detects has a logo, and nothing else does", () => {
-  for (const h of ["claude-code", "codex", "opencode", "grok", "gemini", "cursor", "kimi-code", "mimocode", "grok-bot", "pi", "zcode"]) expect(knownHarness(h)).toBe(h);
+  for (const h of ["claude-code", "codex", "opencode", "grok", "gemini", "cursor", "kimi-code", "mimocode", "grok-bot", "pi", "zcode", "antigravity"]) expect(knownHarness(h)).toBe(h);
   expect(knownHarness("my-own-loop")).toBeNull();
   expect(knownHarness(undefined)).toBeNull();
   expect(monoHarness("grok")).toBe(true);
   expect(monoHarness("pi")).toBe(true);
+  expect(monoHarness("antigravity")).toBe(false);
   expect(monoHarness("claude-code")).toBe(false);
 });

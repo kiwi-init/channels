@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, describe, expect, test } from "bun:test";
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,6 +17,9 @@ function project(tests: Record<string, string>, flows: string[], mac: string[] =
   mkdirSync(join(dir, "test"));
   copyFileSync(join(SCRIPTS, "ci-tests.ts"), join(dir, "scripts", "ci-tests.ts"));
   copyFileSync(join(SCRIPTS, "ci-watchdog.ts"), join(dir, "scripts", "ci-watchdog.ts"));
+  copyFileSync(join(SCRIPTS, "ci-owned.ts"), join(dir, "scripts", "ci-owned.ts"));
+  mkdirSync(join(dir, "src", "daemon"), { recursive: true });
+  copyFileSync(join(SCRIPTS, "..", "src", "daemon", "procs.ts"), join(dir, "src", "daemon", "procs.ts"));
   writeFileSync(join(dir, "scripts", "ci-flows.ts"), `export const FLOWS: string[] = ${JSON.stringify(flows)};\nexport const MAC: string[] = ${JSON.stringify(mac)};\n`);
   for (const [name, body] of Object.entries(tests)) writeFileSync(join(dir, "test", `${name}.test.ts`), `import { expect, test } from "bun:test";\n${body}\n`);
   return dir;
@@ -27,7 +31,7 @@ async function run(dir: string, ...args: string[]): Promise<{ code: number; err:
 
 async function runWith(env: Record<string, string>, dir: string, ...args: string[]): Promise<{ code: number; err: string; ms: number }> {
   const started = Date.now();
-  const proc = Bun.spawn(["bun", "scripts/ci-tests.ts", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe", env: { ...process.env, ...env } });
+  const proc = spawnOwned(["bun", "scripts/ci-tests.ts", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe", env: { ...process.env, ...env } });
   const [code, err] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
   return { code, err, ms: Date.now() - started };
 }

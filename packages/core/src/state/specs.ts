@@ -14,6 +14,7 @@ type SpecEvent =
   | { op: "spec.set"; ask: number; text: string }
   | { op: "spec.approve"; ask: number; v: number }
   | { op: "spec.ready"; ask: number; v: number }
+  | { op: "spec.unready"; ask: number; v: number }
   | { op: "spec.result"; ask: number; verdict: SpecVerdict; note?: string }
   | { op: "spec.delete"; ask: number; why?: string };
 
@@ -80,6 +81,15 @@ export function foldSpec(
     if (!lead && !judge && !spec.editors.includes(m.from)) return "only who wrote the spec, the lead or a person who approves it marks it ready";
     if (ev.v !== spec.v) return `#${ev.ask}'s spec changed since that version: read it again, then mark it ready`;
     specs.set(ev.ask, { ...spec, ready: { ...mark, v: ev.v } });
+    return null;
+  }
+  if (ev.op === "spec.unready") {
+    if (!lead && !judge && !spec.editors.includes(m.from)) return "only who wrote the spec, the lead or a person who approves it takes back its ready mark";
+    if (ev.v !== spec.v) return `#${ev.ask}'s spec changed since that version: read it again, then take back its ready mark`;
+    if (spec.ready?.v !== spec.v) return `#${ev.ask}'s spec isn't marked ready at this version, so there's no mark to take back`;
+    const unmarked = { ...spec };
+    delete unmarked.ready;
+    specs.set(ev.ask, unmarked);
     return null;
   }
   if (ev.op === "spec.approve") {

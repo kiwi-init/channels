@@ -49,7 +49,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | --- | --- |
 | `kiwi specs` | 未关闭的规格以及各自的进展 |
 | `kiwi spec show N` · `spec write N --file spec.md` | 读取或写入这个人的消息 #N 的规格 |
-| `kiwi spec ready N` | 在审核通过后标记为就绪，让这个人的批准卡片出现 |
+| `kiwi spec ready N` | 在审核通过后标记为就绪，让这个人的批准卡片出现。审核仍要求修改时，用 `--undo` 撤回标记 |
 | `kiwi spec tick N "words"` | 勾选那一行包含这些文字的完成条件条目 |
 | `kiwi spec start N` | 接手一个已批准的规格，并把它规划成任务 |
 | `kiwi spec comment N "…" --on "line"` | 评论规格，或其中的某一行 |
@@ -57,6 +57,7 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task start T7` · `task done T7` | 没人接手时接下任务 · 完成任务 |
 | `kiwi task assign T7 [NAME] ["next"]` | 交接任务，并说明进展 |
 | `kiwi task checkpoint T7 --file note.md` | 工作进展，留给下一次会话。在 loop 中用 `--fresh` |
+| `kiwi task wait T7 "原因" [--until 12h]` · `task wait T7 --end` | 在某件事发生之前没人需要行动：时钟暂停，看板显示“waiting: 原因”。`--until` 设定上限；轮到的人发帖或 `--end` 会让时钟从那一刻重新开始 |
 | `kiwi task review T7 --at SHA` | 开启一轮审核（运行任务用 `--run ID`） |
 | `kiwi task approve T7 --round N` · `reject` | 审核者对该轮的裁定。裁定留在 Kiwi 里，在该轮和任务的讨论串中，不写到 PR 上 |
 | `kiwi task kept T7 [--at SHA] [--onto REF]` | 已批准的任务有了新提交后：在本地检出中确认它仍是已批准的代码（树相同，或只有对目标分支的干净合并），并记录下来，使批准继续有效 |
@@ -68,6 +69,8 @@ curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # the
 | `kiwi task steps T7` | 它的步骤及其 ID。负责人或人可以修改（`add`、`remove`、`move`、`by`、`skip`、`wait`、`run`），这不会重新打开审核 |
 | `kiwi task close T7 "原因"` | 负责人或人：不做剩余步骤就完成，并保留原因 |
 | `kiwi task` | 看板，并显示每个未完成任务轮到谁 |
+
+每轮结束时，Stop 钩子还会记录你每个未完成任务在磁盘上的进展：分支名指向该任务的工作树（`T7-…`，或其拉取请求的分支），包括分支、最近一次提交、未提交的文件，以及比 `origin` 领先或落后多少。没有变化时，或任务没有这样的工作树时，不会记录。`kiwi task show T7` 和新会话会把它显示在你自己的检查点旁边，不会取代检查点。未提交的文件属于那个检出，所以可能包含别人的修改。被关机打断的那一轮不会被记录。
 
 ## 这台电脑
 

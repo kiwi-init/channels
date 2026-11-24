@@ -1,3 +1,4 @@
+import { spawnOwned, spawnOwnedSync } from "./owned.ts";
 import { expect, test } from "bun:test";
 import { chmodSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -68,7 +69,7 @@ test("a relaunch waits for this process to end, then starts the app without the 
     const exe = join(root, "app.sh");
     writeFileSync(exe, `#!/bin/sh\nenv > '${out}'\n`);
     chmodSync(exe, 0o755);
-    const alive = Bun.spawn(["sleep", "1"]);
+    const alive = spawnOwned(["sleep", "1"]);
     const after = relaunchAfter(alive.pid, exe, {
       PATH: process.env["PATH"],
       HOME: "/home/a",
@@ -79,7 +80,7 @@ test("a relaunch waits for this process to end, then starts the app without the 
       LD_LIBRARY_PATH: "/tmp/.mount_old/Channels/bin",
       LD_PRELOAD: "/tmp/x.so",
     });
-    const sh = Bun.spawn(["/bin/sh", ...after.args], { env: after.env });
+    const sh = spawnOwned(["/bin/sh", ...after.args], { env: after.env });
     await Bun.sleep(400);
     expect(existsSync(out)).toBe(false);
     await alive.exited;
@@ -129,7 +130,7 @@ function swapFixture(): { root: string; parent: string; target: string; next: st
   mkdirSync(next, { recursive: true });
   writeFileSync(join(target, "v"), "old");
   writeFileSync(join(next, "v"), "new");
-  const done = Bun.spawnSync(["true"]);
+  const done = spawnOwnedSync(["true"]);
   return { root, parent, target, next, dir, marker: join(root, "update-failed"), pid: done.pid };
 }
 
@@ -138,7 +139,7 @@ test("a swap into a folder it can't write leaves the old app and a marker, so th
   try {
     chmodSync(f.parent, 0o555);
     const script = swapScript({ ...f, version: "0.20.0", relaunch: false });
-    expect(Bun.spawnSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
+    expect(spawnOwnedSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
     expect(readFileSync(join(f.target, "v"), "utf8")).toBe("old");
     expect(readFileSync(f.marker, "utf8")).toBe("0.20.0");
     expect(existsSync(f.dir)).toBe(false);
@@ -153,7 +154,7 @@ test("a swap that goes in replaces the app, clears an old marker and leaves no c
   try {
     writeFileSync(f.marker, "0.19.9");
     const script = swapScript({ ...f, version: "0.20.0", relaunch: false });
-    expect(Bun.spawnSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
+    expect(spawnOwnedSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
     expect(readFileSync(join(f.target, "v"), "utf8")).toBe("new");
     expect(existsSync(f.marker)).toBe(false);
     expect(readdirSync(f.parent)).toEqual(["Channels.app"]);
@@ -167,11 +168,11 @@ test("a swap never pulls the app from under a Channels that was opened again fro
   const exe = join(f.target, "Contents", "MacOS", "Channels");
   mkdirSync(join(f.target, "Contents", "MacOS"), { recursive: true });
   copyFileSync(process.execPath, exe, constants.COPYFILE_FICLONE);
-  const reopened = Bun.spawn([exe, "-e", "setTimeout(() => {}, 60000)"], { stdio: ["ignore", "ignore", "ignore"] });
+  const reopened = spawnOwned([exe, "-e", "setTimeout(() => {}, 60000)"], { stdio: ["ignore", "ignore", "ignore"] });
   try {
     await Bun.sleep(500);
     const script = swapScript({ ...f, version: "0.20.0", relaunch: true });
-    expect(Bun.spawnSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
+    expect(spawnOwnedSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
     expect(readFileSync(join(f.target, "v"), "utf8")).toBe("old");
     expect(readFileSync(join(f.next, "v"), "utf8")).toBe("new");
     expect(existsSync(f.marker)).toBe(false);
@@ -183,16 +184,38 @@ test("a swap never pulls the app from under a Channels that was opened again fro
   }
 }, 20_000);
 
+test("the kiwi daemon and hook listeners running on the app's bun don't stop the swap: they outlive the app, so the update goes in", async () => {
+  const f = swapFixture();
+  const bun = join(f.target, "Contents", "MacOS", "bun");
+  const cli = join(f.target, "Contents", "Resources", "kiwi.js");
+  mkdirSync(join(f.target, "Contents", "MacOS"), { recursive: true });
+  mkdirSync(join(f.target, "Contents", "Resources"), { recursive: true });
+  copyFileSync(process.execPath, bun, constants.COPYFILE_FICLONE);
+  writeFileSync(cli, "setTimeout(() => {}, 60000);");
+  const daemon = spawnOwned([bun, "--no-env-file", "--no-install", cli, "daemon"], { stdio: ["ignore", "ignore", "ignore"] });
+  try {
+    await Bun.sleep(500);
+    const script = swapScript({ ...f, version: "0.20.0", relaunch: false });
+    expect(spawnOwnedSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
+    expect(readFileSync(join(f.target, "v"), "utf8")).toBe("new");
+    expect(existsSync(f.dir)).toBe(false);
+  } finally {
+    daemon.kill();
+    await daemon.exited;
+    rmSync(f.root, { recursive: true, force: true });
+  }
+}, 20_000);
+
 test("a Channels still closing when the swap starts doesn't stop it: the swap waits for it to go", async () => {
   const f = swapFixture();
   const exe = join(f.target, "Contents", "MacOS", "Channels");
   mkdirSync(join(f.target, "Contents", "MacOS"), { recursive: true });
   copyFileSync(process.execPath, exe, constants.COPYFILE_FICLONE);
-  const closing = Bun.spawn([exe, "-e", "setTimeout(() => {}, 1500)"], { stdio: ["ignore", "ignore", "ignore"] });
+  const closing = spawnOwned([exe, "-e", "setTimeout(() => {}, 1500)"], { stdio: ["ignore", "ignore", "ignore"] });
   try {
     await Bun.sleep(500);
     const script = swapScript({ ...f, version: "0.20.0", relaunch: false });
-    expect(Bun.spawnSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
+    expect(spawnOwnedSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
     expect(readFileSync(join(f.target, "v"), "utf8")).toBe("new");
     expect(existsSync(f.dir)).toBe(false);
   } finally {
@@ -209,7 +232,7 @@ test("a swap into a new home makes its folder, moves the app in, leaves the old 
     const moved = join(f.root, "update-moved");
     const text = JSON.stringify({ from: f.target, to: home });
     const script = swapScript({ ...f, target: home, from: f.target, version: "0.20.0", relaunch: false, moved: { marker: moved, text } });
-    expect(Bun.spawnSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
+    expect(spawnOwnedSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
     expect(readFileSync(join(home, "v"), "utf8")).toBe("new");
     expect(readFileSync(join(f.target, "v"), "utf8")).toBe("old");
     expect(readFileSync(moved, "utf8")).toBe(text);
@@ -228,7 +251,7 @@ test("a swap into a new home that can't be made leaves the old app, marks the ve
     chmodSync(locked, 0o555);
     const moved = join(f.root, "update-moved");
     const script = swapScript({ ...f, target: join(locked, "Applications", "Channels.app"), from: f.target, version: "0.20.0", relaunch: false, moved: { marker: moved, text: "{}" } });
-    expect(Bun.spawnSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
+    expect(spawnOwnedSync(["/bin/sh", "-c", script]).exitCode).toBe(0);
     expect(readFileSync(join(f.target, "v"), "utf8")).toBe("old");
     expect(readFileSync(f.marker, "utf8")).toBe("0.20.0");
     expect(existsSync(moved)).toBe(false);

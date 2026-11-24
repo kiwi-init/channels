@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -45,7 +46,7 @@ const scratch = (tag: string) => {
 type Env = Record<string, string>;
 
 function spawn(home: string, args: string[], env: Env = {}, cwd = home, stdin?: string) {
-  return Bun.spawn(kiwiCmd(args), {
+  return spawnOwned(kiwiCmd(args), {
     cwd,
     env: { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ""}`, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "", KIWI_MODEL: "test-model", ...env },
     stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
@@ -495,7 +496,9 @@ describe("a Claude Code session whose seat another session took (#1676)", () => 
     mkdirSync(join(h, "listen-hooks"), { recursive: true });
     writeFileSync(join(h, "listen-hooks", "alpha.lead.L"), String(process.pid));
     expect((await run(h, ["hook", "listen"], lead, h, JSON.stringify({ session_id: "L", cwd: h }))).code).toBe(0);
-    expect(readFileSync(join(h, "wake.log"), "utf8")).toContain("\talpha\tlead\thooks\t0\tfailed\tthe hook listener didn't arm: another session holds the listen slot for lead in alpha\t");
+    expect(readFileSync(join(h, "wake.log"), "utf8")).toContain(
+      `\talpha\tlead\thooks\t0\tfailed\tthe hook listener didn't arm: the listen slot for lead in alpha is held by session L, listener pid ${process.pid}\t`,
+    );
   });
 
   test("a prompt in its pane says so, and the session that took the seat hears nothing about it", async () => {

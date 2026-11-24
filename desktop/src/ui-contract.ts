@@ -1,4 +1,4 @@
-export const UI_CONTRACT = "3.7.0";
+export const UI_CONTRACT = "3.9.0";
 
 export const UI_REQUIRES = "3.0.0";
 
@@ -19,6 +19,7 @@ export const CHANNEL_CALLS_SINCE: Readonly<Record<string, readonly string[]>> = 
   "1.21.0": ["sentRooms"],
   "3.1.0": ["putImage", "putFileData", "fileData"],
   "3.2.0": ["docList", "pruneDocs", "compactDoc", "docVersions", "docVersionState"],
+  "3.8.0": ["setCheckpointSchedule"],
 };
 
 export const CHANNEL_CALLS_BACKGROUND: readonly string[] = ["syncMarks", "sentRooms", "syncGithub", "githubStatus", "goneDevices", "docList", "pruneDocs", "compactDoc"];
@@ -188,6 +189,8 @@ export const UI_SURFACE_DELTAS: readonly (readonly [string, SurfaceDelta])[] = [
   ["3.5.0", { add: ["kiwi.copyText"], remove: [] }],
   ["3.6.0", { add: [], remove: [] }],
   ["3.7.0", { add: ["kiwi.onMaximized", "kiwi.windowMaximized", "push:maximized"], remove: [] }],
+  ["3.8.0", { add: [], remove: [] }],
+  ["3.9.0", { add: ["kiwi.bringBack", "kiwi.upPlan"], remove: [] }],
 ];
 
 export function buildSurfaces(firstVersion: string, firstSurfaces: readonly string[], deltas: readonly (readonly [string, SurfaceDelta])[]): Record<string, readonly string[]> {

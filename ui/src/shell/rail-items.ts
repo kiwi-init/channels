@@ -5,6 +5,29 @@ export type RailItem = { kind: "channel"; tile: ChannelTile } | { kind: "folder"
 
 export type DropTarget = { kind: "channel"; code: string } | { kind: "folder"; id: string } | { kind: "rail" }
 
+export type Moving = { kind: "channel"; code: string } | { kind: "folder"; id: string }
+
+export type Slot = { kind: "channel"; code: string } | { kind: "folder"; id: string } | { kind: "end" }
+
+export type Aim = { kind: "join"; target: { kind: "channel"; code: string } | { kind: "folder"; id: string } } | { kind: "slot"; before: Slot }
+
+export function keepOrder(before: readonly string[], now: readonly string[]): string[] {
+  const here = new Set(now)
+  const kept = before.filter((code) => here.has(code))
+  const placed = new Set(kept)
+  return [...kept, ...now.filter((code) => !placed.has(code))]
+}
+
+export function inOrder(tiles: readonly ChannelTile[], order: readonly string[]): ChannelTile[] {
+  const byCode = new Map(tiles.map((c) => [c.code, c]))
+  return order.flatMap((code) => byCode.get(code) ?? [])
+}
+
+export function cleanCodes(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return [...new Set((raw as unknown[]).filter((c): c is string => typeof c === "string" && c.length > 0))].slice(0, 1000)
+}
+
 export function railItems(channels: readonly ChannelTile[], folders: readonly Folder[]): RailItem[] {
   const byCode = new Map(channels.map((c) => [c.code, c]))
   const folderOf = new Map<string, Folder>()

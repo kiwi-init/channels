@@ -18,11 +18,19 @@ export async function say(page: Page, text: string): Promise<void> {
 }
 
 export async function switchTo(page: Page, name: string): Promise<void> {
-  await page.evaluate((title) => {
-    const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === title);
-    if (!tile) throw new Error(`no ${title} tile in the rail`);
-    tile.click();
-  }, name);
+  const clicked = await page
+    .waitForFunction(
+      (title) => {
+        const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button.tile')].find((b) => (b.getAttribute("aria-label") ?? "").split(",")[0] === title);
+        tile?.click();
+        return !!tile;
+      },
+      name,
+      { timeout: 15000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  if (!clicked) throw new Error(`no ${name} tile in the rail`);
   await page.waitForFunction((title) => document.querySelector('nav[aria-label="Channels"] button.tile[aria-current="page"]')?.getAttribute("aria-label")?.split(",")[0] === title, name, {
     timeout: 15000,
   });
@@ -133,9 +141,14 @@ export async function letIn(page: Page, waiting: () => boolean, timeoutMs = 1200
 }
 
 export async function view(page: Page, label: string, marker: string): Promise<number> {
+  return (await viewTimed(page, label, marker)).ms;
+}
+
+export async function viewTimed(page: Page, label: string, marker: string): Promise<{ ms: number; startMs: number; endMs: number }> {
   return page.evaluate(
     async ([name, text]) => {
       const flat = (s: string) => s.replace(/\s+/g, "");
+      const shownPane = () => document.querySelector<HTMLElement>(".panes > .pane.is-focus") ?? document.querySelector<HTMLElement>("main");
       const b = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Views"] button, section[aria-label="Rooms"] button')].find((x) => flat(x.textContent ?? "").startsWith(flat(name)));
       if (!b) throw new Error(`no ${name} view`);
       const t0 = performance.now();
@@ -143,17 +156,18 @@ export async function view(page: Page, label: string, marker: string): Promise<n
       const deadline = t0 + 15000;
       while (performance.now() < deadline) {
         await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
-        if ((b.getAttribute("aria-pressed") === "true" || b.getAttribute("aria-current") === "page") && new RegExp(text).test(document.querySelector("main")?.textContent ?? "")) break;
+        if ((b.getAttribute("aria-pressed") === "true" || b.getAttribute("aria-current") === "page") && new RegExp(text).test(shownPane()?.textContent ?? "")) break;
       }
       if (performance.now() >= deadline) {
         const views = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Views"] button, section[aria-label="Rooms"] button')]
           .map((x) => `${flat(x.textContent ?? "")}[${x.getAttribute("aria-pressed") ?? x.getAttribute("aria-current")}]`)
           .join(" | ");
-        const shown = (document.querySelector<HTMLElement>("main")?.innerText ?? "").replace(/\n+/g, " / ").slice(0, 1200);
-        throw new Error(`the ${name} view opened without ${text}; views: ${views}; main shows: ${shown}`);
+        const shown = (shownPane()?.innerText ?? "").replace(/\n+/g, " / ").slice(0, 1200);
+        throw new Error(`the ${name} view opened without ${text}; views: ${views}; the focused pane shows: ${shown}`);
       }
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      return Math.round(performance.now() - t0);
+      const t1 = performance.now();
+      return { ms: Math.round(t1 - t0), startMs: t0, endMs: t1 };
     },
     [label, marker] as const,
   );

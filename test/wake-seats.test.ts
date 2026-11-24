@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,7 +12,7 @@ const room = "a".repeat(32);
 const MAIN_TS = join(import.meta.dir, "..", "src", "cli", "main.ts");
 
 function kiwi(args: string[]): { code: number; out: string } {
-  const r = Bun.spawnSync([process.execPath, MAIN_TS, ...args], { cwd: home, env: { ...process.env, KIWI_HOME: home }, stdout: "pipe", stderr: "pipe" });
+  const r = spawnOwnedSync([process.execPath, MAIN_TS, ...args], { cwd: home, env: { ...process.env, KIWI_HOME: home }, stdout: "pipe", stderr: "pipe" });
   return { code: r.exitCode, out: r.stdout.toString() };
 }
 

@@ -6,6 +6,7 @@ import type { AgentSession } from "./agent.ts";
 import { loadJson, memberLoad } from "@kiwi/core/load.ts";
 import { ignored, type Message } from "@kiwi/core/protocol.ts";
 import { reviewBody } from "@kiwi/core/format.ts";
+import { launcher } from "./launcher.ts";
 import { taskId, type ChannelState } from "@kiwi/core/state.ts";
 
 type Cell = string | number | null;
@@ -184,6 +185,7 @@ function runQuery(sql: string, tables: Tables): Ran {
 }
 
 function workerArgv(): string[] {
+  if (launcher) return [launcher, QUERY_ARG];
   return /\.(ts|js)$/.test(Bun.main) ? [process.execPath, join(import.meta.dir, "cli", "main.ts"), QUERY_ARG] : [process.execPath, QUERY_ARG];
 }
 

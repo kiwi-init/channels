@@ -1,6 +1,6 @@
 import type { Socket, Subprocess } from "bun";
 import type { Channel, Info, MemberRow, Probe } from "@kiwi/core/client.ts";
-import type { Activity, Message, Presence, Reach } from "@kiwi/core/protocol.ts";
+import type { Activity, Message, Presence, Reach, Unarmed } from "@kiwi/core/protocol.ts";
 import type { WakeVia } from "@kiwi/core/wake.ts";
 import type { ClockWatcher } from "./clock-watch.ts";
 import type { DocFollower } from "./doc-follow.ts";
@@ -16,6 +16,9 @@ export interface Seat {
   head: number;
   activity: Activity | undefined;
   reach: Reach | null;
+  unarmed: Unarmed | null;
+  untaken: Unarmed | null;
+  taking: { thread: string; seqs: number[]; at: number; resumed: boolean; timer: ReturnType<typeof setTimeout> } | null;
   activityTimer: ReturnType<typeof setInterval> | null;
   announce: (() => void) | null;
   beacon: ReturnType<typeof setInterval> | null;
@@ -37,6 +40,9 @@ export interface Seat {
   fetchingRows: boolean;
   heard: Map<string, { presence: Presence & { sigOk: boolean }; at: number }>;
   openedAt: number | null;
+  synced: "no" | "settling" | "yes";
+  owedCheckpoint: { occurrence: string; due: number } | null;
+  checkpointTimer: ReturnType<typeof setTimeout> | undefined;
   listenerAt: number;
   docs: DocFollower | null;
   clock: ClockWatcher | null;

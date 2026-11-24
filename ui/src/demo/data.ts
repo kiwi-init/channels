@@ -2,8 +2,9 @@ import type { Account, Ask, Channel, ChannelTile, Device, Issue, LaunchedAgent, 
 import { nicknamesOf } from "~/names"
 import { omit } from "@kiwi/core/omit.ts"
 import { wrote } from "~/words"
+import { DEMO_NOW } from "~/demo/clock"
 
-const now = Date.now()
+const now = DEMO_NOW
 const m = (min: number): number => now - min * 60_000
 
 const DEMO_DAY = 86_400_000
@@ -49,6 +50,7 @@ export const DEMO_PREFS: Prefs = {
   lightTheme: "channels-light",
   customThemes: [],
   folders: [],
+  tabOrder: [],
 }
 
 export const DEMO_TILES: ChannelTile[] = [
@@ -1366,6 +1368,7 @@ export const DEMO_INTERLINKED: Channel = {
       edited: { by: "quill", at: m(12) },
       edits: 2,
       editors: ["quill"],
+      ready: { by: "quill", at: m(12), v: 3 },
       comments: [],
       stage: "draft",
       backs: [],

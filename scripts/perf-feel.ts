@@ -10,11 +10,15 @@ import { startLocalRelay } from "./local-relay.ts";
 import { approveSpec, composer, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, SEND, unfold, view, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { pageErrors } from "./page-errors.ts";
+import { readSeededFrame, reloadFromHost, watchSeededFrame } from "./seeded-frame.ts";
+import { TASK_VIEW } from "./task-view.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`What a person feels, measured: one channel with PERF_MESSAGES messages (400) and PERF_TASKS tasks (12), behind a relay PERF_RTT_MS away (0).
 Times sending (Enter to the composer emptied, and to the bubble on screen), opening a task, switching views, scrolling the whole channel (frames over 33 ms, blank frames),
-typing, and a reload to the first screen and to a live composer, each PERF_REPS times (5), plus every layout shift. --shots DIR saves a filmstrip of the reload and the send.
+typing, and a reload to the conversation and to a live composer, each PERF_REPS times (5), plus every layout shift.
+A reload's first screen is the conversation: in the page, the app's kiwi:first-message mark (markerTextMs keeps the old
+seeded text anywhere on the page); from the host, the first frame the newest seeded message is visible, the row the reload opens on. --shots DIR saves a filmstrip of the reload and the send.
 
   bun scripts/ui-harness.ts && bun scripts/perf-feel.ts [--json out.json] [--shots DIR]
 
@@ -284,7 +288,7 @@ async function details(page: Page, cdp: CDPSession, opening: boolean): Promise<{
 
 async function openTask(page: Page, id: number, marker: string): Promise<number> {
   return page.evaluate(
-    async ([task, text]) => {
+    async ([task, text, view]) => {
       const row = document.querySelector<HTMLElement>(`main a.pg-main[href="kiwi-task:${task}"]`);
       if (!row) throw new Error(`no row for T${task} on the board`);
       const t0 = performance.now();
@@ -292,12 +296,12 @@ async function openTask(page: Page, id: number, marker: string): Promise<number>
       const deadline = t0 + 15000;
       while (performance.now() < deadline) {
         await new Promise((r) => requestAnimationFrame(r));
-        if (document.querySelector('aside[aria-label="Details"]')?.textContent?.includes(text)) break;
+        if ([...document.querySelectorAll<HTMLElement>(view)].some((el) => el.checkVisibility() && (el.textContent ?? "").includes(text))) break;
       }
       if (performance.now() >= deadline) throw new Error(`T${task} opened without “${text}”`);
       return Math.round(performance.now() - t0);
     },
-    [id, marker] as const,
+    [id, marker, TASK_VIEW] as const,
   );
 }
 
@@ -433,26 +437,34 @@ try {
     .waitFor({ timeout: 60000 });
   await later(1500);
   await drain(page);
+  const newest = `M${MESSAGES - 1}: `;
+  const newestSeq = (await atlas(["log", "-n", "40", "--json"]))
+    .split("\n")
+    .flatMap((line) => (line.trim().startsWith("{") ? [JSON.parse(line) as { seq: number; body?: string }] : []))
+    .find((m) => m.body?.startsWith(newest))?.seq;
+  if (newestSeq === undefined) throw new Error(`perf-feel: ${newest.trim()} isn't in the last 40 messages`);
+  await watchSeededFrame(context, { seq: newestSeq, text: newest, budgetMs: 60_000 });
 
-  const reloads: { firstScreenMs: number; firstScreenInPageMs: number; liveInPageMs: number; shifts: number; moved: string[]; falseScreens: string[] }[] = [];
+  const reloads: { firstScreenMs: number; firstScreenInPageMs: number; markerTextMs: number; liveInPageMs: number; shifts: number; moved: string[]; falseScreens: string[] }[] = [];
   for (let i = 0; i < REPS; i++) {
     const at = performance.now();
     const run = async () => {
+      const epochBefore = Date.now();
       await page.reload();
-      await page
-        .getByText(`M${MESSAGES - 1}: `)
-        .filter({ visible: true })
-        .first()
-        .waitFor({ timeout: 60000 });
-      const firstScreenMs = Math.round(performance.now() - at);
+      await page.getByText(newest).filter({ visible: true }).first().waitFor({ timeout: 60000 });
+      const firstScreenMs = reloadFromHost(epochBefore, await readSeededFrame(page, 10_000)).reloadMs;
       await page.waitForFunction(() => (window as unknown as { __live?: number }).__live !== undefined, undefined, { timeout: 60000 });
       const inPage = await page.evaluate(() => {
         const w = window as unknown as { __live: number; __firstScreen?: number };
-        return { firstScreenInPageMs: Math.round(w.__firstScreen ?? -1), liveInPageMs: Math.round(w.__live) };
+        return {
+          firstScreenInPageMs: Math.round(performance.getEntriesByName("kiwi:first-message", "mark")[0]?.startTime ?? -1),
+          markerTextMs: Math.round(w.__firstScreen ?? -1),
+          liveInPageMs: Math.round(w.__live),
+        };
       });
       return { firstScreenMs, ...inPage };
     };
-    let r = { firstScreenMs: 0, firstScreenInPageMs: 0, liveInPageMs: 0 };
+    let r = { firstScreenMs: 0, firstScreenInPageMs: 0, markerTextMs: 0, liveInPageMs: 0 };
     if (i === 0) {
       const stop = TRACE ? trace(page, at) : null;
       await filmstrip(cdp, "reload", async () => (r = await run()));
@@ -466,6 +478,7 @@ try {
   report.reload = {
     firstScreenMs: median(reloads.map((r) => r.firstScreenMs)),
     firstScreenInPageMs: median(reloads.map((r) => r.firstScreenInPageMs)),
+    markerTextMs: median(reloads.map((r) => r.markerTextMs)),
     socketOpenInPageMs: median(reloads.map((r) => r.liveInPageMs)),
     layoutShift: median(reloads.map((r) => r.shifts)),
     falseScreens: reloads.reduce((n, r) => n + r.falseScreens.length, 0),

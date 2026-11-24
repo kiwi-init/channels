@@ -10,11 +10,7 @@ if (process.argv[2] === IDENTITY_ARG && process.argv.length === 3) {
   process.exit(0);
 }
 
-if (process.argv[2] === QUERY_ARG && process.argv.length === 3) {
-  const { runQueryWorker } = await import("../query.ts");
-  await runQueryWorker();
-  process.exit(0);
-}
+export const queryWorker = process.argv[2] === QUERY_ARG && process.argv.length === 3;
 
 const isRelay = process.argv[2] === "relay";
 const raw = process.argv.slice(2);
@@ -54,7 +50,7 @@ function parse() {
         image: { type: "string", multiple: true },
         attach: { type: "string", multiple: true },
         option: { type: "string", multiple: true },
-        holds: { type: "string" },
+        holds: { type: "string", multiple: true },
         check: { type: "string" },
         decider: { type: "string" },
         artifact: { type: "string" },
@@ -104,6 +100,8 @@ function parse() {
         all: { type: "boolean" },
         global: { type: "boolean" },
         fresh: { type: "boolean" },
+        until: { type: "string" },
+        end: { type: "boolean" },
         stale: { type: "boolean" },
         first: { type: "boolean" },
         json: { type: "boolean" },
@@ -145,6 +143,10 @@ function parse() {
         pid: { type: "string" },
         block: { type: "string" },
         seat: { type: "string" },
+        "dry-run": { type: "boolean" },
+        "bind-timeout": { type: "string" },
+        report: { type: "string" },
+        since: { type: "string" },
         n: { type: "string", short: "n" },
         help: { type: "boolean", short: "h" },
         version: { type: "boolean", short: "v" },

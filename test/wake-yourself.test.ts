@@ -1,6 +1,7 @@
+import { spawnOwned } from "./owned.ts";
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonListeners, daemonSock } from "../src/daemon.ts";
@@ -43,8 +44,8 @@ function baseEnv(home: string, env: Env): Env {
   return { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "", KIWI_MODEL: "test-model", ...env };
 }
 
-function spawn(home: string, args: string[], env: Env = {}, cwd = home, stdin?: string) {
-  return Bun.spawn(kiwiCmd(args), {
+function spawn(home: string, args: string[], env: Env = {}, cwd = home, stdin?: string, via: string[] = []) {
+  return spawnOwned([...via, ...kiwiCmd(args)], {
     cwd,
     env: baseEnv(home, env),
     stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
@@ -53,8 +54,8 @@ function spawn(home: string, args: string[], env: Env = {}, cwd = home, stdin?: 
   });
 }
 
-async function run(home: string, args: string[], env: Env = {}, cwd = home, stdin?: string): Promise<Ran> {
-  const p = spawn(home, args, env, cwd, stdin);
+async function run(home: string, args: string[], env: Env = {}, cwd = home, stdin?: string, via: string[] = []): Promise<Ran> {
+  const p = spawn(home, args, env, cwd, stdin, via);
   const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
   return { code: await p.exited, out, err };
 }
@@ -67,8 +68,8 @@ function printed(p: ReturnType<typeof spawn>): () => string {
   return () => text;
 }
 
-async function ok(home: string, args: string[], env: Env = {}, cwd = home): Promise<string> {
-  const r = await run(home, args, env, cwd);
+async function ok(home: string, args: string[], env: Env = {}, cwd = home, via: string[] = []): Promise<string> {
+  const r = await run(home, args, env, cwd, undefined, via);
   if (r.code !== 0) throw new Error(`kiwi ${args.join(" ")} exited ${r.code}: ${r.err}`);
   return r.out;
 }
@@ -109,7 +110,7 @@ function fakeKimi(home: string, cwd: string, env: Env, name = "kimi") {
   copyFileSync(Bun.which("bash") ?? "/bin/sh", bin);
   chmodSync(bin, 0o755);
   const io = scratch("kimi-io");
-  const proc = Bun.spawn([bin], { cwd, env: baseEnv(home, { TERM: "xterm-256color", NO_COLOR: "", ...env }), stdin: "pipe", stdout: "ignore", stderr: "ignore" });
+  const proc = spawnOwned([bin], { cwd, env: baseEnv(home, { TERM: "xterm-256color", NO_COLOR: "", ...env }), stdin: "pipe", stdout: "ignore", stderr: "ignore" });
   shells.push(proc);
   let n = 0;
   const line = (args: string[], tool: boolean, stdin: string | undefined, background: boolean) => {
@@ -524,6 +525,89 @@ describe("Cursor keeps its own listener running", () => {
   });
 });
 
+describe("Antigravity CLI keeps its own listener running outside tmux, and binds its pane inside tmux", () => {
+  test("outside tmux, join stays as the listener, kiwi wake reports it while armed, and Stop continues until `kiwi join` runs again; inside tmux, join records the pane and exits", async () => {
+    const owner = scratch("agy-own");
+    const code = created(await ok(owner, ["create", "agy-wake", "--as", "boss"]));
+    const bin = scratch("agy-bin");
+    symlinkSync(process.execPath, join(bin, "agy"));
+    const cli = join(bin, "agy-cli.ts");
+    writeFileSync(
+      cli,
+      "const child = Bun.spawn(process.argv.slice(2), { stdout: 'inherit', stderr: 'inherit' });\nfor (const s of ['SIGTERM', 'SIGINT']) process.on(s, () => child.kill());\nprocess.exit(await child.exited);\n",
+    );
+    const via = [join(bin, "agy"), cli];
+    const h = scratch("agy");
+    const agyDir = scratch("agy-home");
+    const A = { ANTIGRAVITY_AGENT: "1", ANTIGRAVITY_CONVERSATION_ID: "conv-agy-1", KIWI_AGY_DIR: agyDir, CLAUDECODE: "" };
+    const joining = spawn(h, ["join", code, "--timeout", "40s"], A, h, undefined, via);
+    shells.push(joining);
+    const joined = printed(joining);
+    await until(() => joined().includes("run_command tool as a background task (WaitMsBeforeAsync: 500, IsDaemon false)"), "the background hint");
+    await approve(owner);
+    await until(() => joined().includes("You're \""), "the brief");
+    const me = youAre(joined());
+    expect(joined()).toContain(`call the run_command tool with CommandLine \`${KIWI} join\`, WaitMsBeforeAsync: 500, and leave IsDaemon false.`);
+    await until(() => joined().includes("Listening now: this command ends when a message for you arrives."), "join listening");
+    await until(async () => (await listenersOf(h, me)).some((l) => l.session === "conv-agy-1" && l.harness === "agy"), "join listening for this agy conversation");
+    expect(await ok(h, ["wake"], A, h, via)).toContain("wakes via its background listener");
+
+    await ok(owner, ["send", "--to", me, "handed over by agy join"]);
+    expect(await joining.exited).toBe(0);
+    await until(() => joined().includes("handed over by agy join"), "join printing the message");
+    await until(async () => (await listenersOf(h, me)).length === 0, "join gone");
+    expect(await ok(h, ["wake"], A, h, via)).toContain("its background listener isn't running");
+
+    const stop = async (extra: Record<string, unknown> = {}, extraEnv: Env = {}) => {
+      const r = await run(
+        h,
+        ["--harness", "agy", "hook", "stop"],
+        { ANTIGRAVITY_CONVERSATION_ID: "conv-agy-1", CLAUDECODE: "", ...extraEnv },
+        h,
+        JSON.stringify({ conversationId: "conv-agy-1", workspacePaths: [h], cwd: h, modelName: "test-model", executionNum: 0, terminationReason: "NO_TOOL_CALL", fullyIdle: true, ...extra }),
+      );
+      expect(r.code).toBe(0);
+      return r.out ? (JSON.parse(r.out) as { decision: string; reason: string }) : null;
+    };
+
+    const deaf = await stop();
+    expect(deaf?.decision).toBe("continue");
+    expect(deaf?.reason).toContain("no Kiwi listener of yours is running for agy-wake");
+    expect(deaf?.reason).toContain("WaitMsBeforeAsync: 500");
+    expect(await stop({ continuationActive: true })).toBeNull();
+
+    const listener = spawn(h, ["join"], A, h, undefined, via);
+    shells.push(listener);
+    await until(async () => (await listenersOf(h, me)).some((l) => l.session === "conv-agy-1" && l.harness === "agy"), "the listener held for this agy conversation");
+    expect(await stop()).toBeNull();
+
+    await ok(owner, ["send", "--to", me, "wakes the agy listener"]);
+    expect(await new Response(listener.stdout).text()).toContain("wakes the agy listener");
+    expect(await listener.exited).toBe(0);
+    await until(async () => (await listenersOf(h, me)).length === 0, "the listener gone");
+    expect((await stop())?.decision).toBe("continue");
+
+    const tmuxHome = scratch("agy-tmux");
+    const T = {
+      ANTIGRAVITY_AGENT: "1",
+      ANTIGRAVITY_CONVERSATION_ID: "conv-agy-tmux",
+      KIWI_AGY_DIR: scratch("agy-tmux-hooks"),
+      CLAUDECODE: "",
+      TMUX: "/tmp/tmux-501/default,1,0",
+      TMUX_PANE: "%12",
+    };
+    const tmuxJoining = run(tmuxHome, ["join", code, "--timeout", "40s"], T, tmuxHome, undefined, via);
+    await approve(owner);
+    const tmuxJoined = await tmuxJoining;
+    expect(tmuxJoined.code).toBe(0);
+    expect(tmuxJoined.out).toContain("typing into its tmux pane");
+    expect(tmuxJoined.out).toContain("Don't keep a listener running.");
+    const saved = JSON.parse(readFileSync(join(tmuxHome, "config.json"), "utf8")) as { bindings: Record<string, { tmux?: { socket: string; pane: string } }> };
+    expect(Object.values(saved.bindings)[0]?.tmux).toEqual({ socket: "/tmp/tmux-501/default", pane: "%12" });
+    expect(await ok(tmuxHome, ["wake"], T, tmuxHome, via)).toContain("wakes via typing into its tmux pane");
+  });
+});
+
 describe("Grok Bot on a VM whose shell has Cursor's variables", () => {
   test("its seat is Grok Bot's, and a Cursor-shaped stop hook acts as Grok Bot: unread messages handed over, no listener asked for", async () => {
     const owner = scratch("gb-own");
@@ -541,7 +625,7 @@ describe("Grok Bot on a VM whose shell has Cursor's variables", () => {
         .flat()
         .map((b) => b.harness),
     ).toEqual(["grok-bot"]);
-    expect((await ok(h, ["wake"], B)).includes("Cursor gives Kiwi no way")).toBe(false);
+    expect((await ok(h, ["wake"], B)).includes("Cursor starts a turn only when")).toBe(false);
 
     await ok(owner, ["send", "--to", me, "for the grok bot"]);
     const r = await run(

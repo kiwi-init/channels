@@ -19,6 +19,7 @@ type WholeLog = Effect.Success<ReturnType<Channel["fx"]["history"]>>;
 
 const CACHE_TRIM_AT = 800;
 const CACHE_KEEP = 300;
+const UNREAD_KEPT = 800;
 
 const NOT_A_MEMBER = " isn't a member";
 
@@ -51,6 +52,7 @@ export class SessionState {
   protected partial = false;
   private replayed: { page: WholeLog | null } | null = null;
   private folded: ChannelState | null = null;
+  private unreadDroppedTo = 0;
   readonly opened: number;
 
   constructor(
@@ -212,7 +214,7 @@ export class SessionState {
     });
   }
 
-  protected foldState(messages: Message[], given: Roster, info?: Info): Effect.Effect<ChannelState, never, Relay | Cache> {
+  protected foldState(messages: Message[], given: Roster, info?: Info): Effect.Effect<ChannelState, never, Relay | Cache | Cursor> {
     return Effect.gen({ self: this }, function* () {
       this.roomsFloor ??= yield* orNone(this.ch.fx.rooms(info));
       this.guardFloor ??= yield* orNone(this.ch.fx.guard(info));
@@ -242,17 +244,55 @@ export class SessionState {
         }
       }
       if (kept.base && this.publish && (!strangers(kept.base.rejected, since) || fresh)) yield* this.publish(kept.base);
-      if (messages.length > CACHE_TRIM_AT && !this.partial) {
+      const above = messages.filter((m) => m.seq > since);
+      if (above.length > CACHE_TRIM_AT && !this.partial) {
         const trimmed = (): FoldBase | undefined => {
           const older: { base?: FoldBase } = {};
-          fold(messages.slice(0, messages.length - CACHE_KEEP), roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, (b) => void (older.base = b));
+          fold(above.slice(0, above.length - CACHE_KEEP), roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, (b) => void (older.base = b));
           return older.base;
         };
         let older = trimmed();
         if (older && strangers(older.rejected, since) && !fresh) older = (yield* refresh) ? trimmed() : undefined;
-        if (older) yield* (yield* Cache).trim(this.cfg.roomId, older);
+        if (older) {
+          yield* (yield* Cache).trim(this.cfg.roomId, older);
+          yield* this.keepTail(older);
+        }
       }
       return state;
+    });
+  }
+
+  private keepTail(older: FoldBase): Effect.Effect<void, never, Cursor> {
+    return Effect.gen({ self: this }, function* () {
+      const cursor = yield* Cursor;
+      const readTo = (yield* cursor.read(this.alias, this.me)) ?? older.n;
+      const seen = yield* cursor.seen(this.alias, this.me);
+      if (!this.log || this.partial || older.n <= (this.base?.n ?? 0)) return;
+      const unread = this.log.filter((m) => m.seq > readTo && m.seq <= older.n && !seen.has(m.seq));
+      const kept = unread.slice(-UNREAD_KEPT);
+      const lastDropped = unread.at(-kept.length - 1)?.seq;
+      if (lastDropped !== undefined) this.unreadDroppedTo = Math.max(this.unreadDroppedTo, lastDropped);
+      this.base = older;
+      this.log = [...kept, ...this.log.filter((m) => m.seq > older.n)];
+    });
+  }
+
+  private withDropped(messages: readonly Message[], since: number): Effect.Effect<readonly Message[], Refused, Relay> {
+    const to = this.unreadDroppedTo;
+    if (since >= to) return Effect.succeed(messages);
+    return Effect.gen({ self: this }, function* () {
+      const held = new Set(messages.map((m) => m.seq));
+      const paged: Message[] = [];
+      let from = since;
+      while (from < to) {
+        const page = yield* this.ch.fx.envelopes(from, Math.min(PAGE_LIMIT, to - from));
+        const fresh = page.messages.filter((e) => Number.isSafeInteger(e.seq) && e.seq > from && e.seq <= to).sort((a, b) => a.seq - b.seq);
+        const last = fresh.at(-1)?.seq;
+        if (last === undefined) return yield* new Rejected(`the relay sent nothing after #${from} while unread messages up to #${to} were still owed; nothing was marked read`);
+        for (const m of yield* Effect.forEach(fresh, (e) => this.ch.fx.decrypt(e))) if (m && !held.has(m.seq)) paged.push(m);
+        from = last;
+      }
+      return [...paged, ...messages];
     });
   }
 
@@ -332,7 +372,8 @@ export class SessionState {
   readonly unread = Effect.fn("AgentSession.unread")({ self: this }, function* (this: SessionState, d: Delivery = {}) {
     yield* this.unheld;
     const since = yield* this.cursor();
-    const { messages, state } = yield* this.state();
+    const { messages: window, state } = yield* this.state();
+    const messages = yield* this.withDropped(window, since);
     const cursor = yield* Cursor;
     const seen = yield* cursor.seen(this.alias, this.me);
     const unread = messages.filter((m) => m.seq > since && !seen.has(m.seq) && this.wants(m, state, d));
@@ -372,7 +413,7 @@ export class SessionState {
     const cursor = yield* Cursor;
     const since = (yield* cursor.read(this.alias, this.me)) ?? state.head;
     const seen = yield* cursor.seen(this.alias, this.me);
-    const seqs = messages.filter((m) => m.seq > since && !seen.has(m.seq) && this.wants(m, state, d)).map((m) => m.seq);
+    const seqs = (yield* this.withDropped(messages, since)).filter((m) => m.seq > since && !seen.has(m.seq) && this.wants(m, state, d)).map((m) => m.seq);
     return { unread: seqs.length, cursor: since, seqs };
   });
 

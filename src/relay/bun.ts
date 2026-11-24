@@ -48,6 +48,8 @@ import {
   relayConfig,
   authenticateSocket,
   errorResponse,
+  checkpointAlarm,
+  checkpointDeadline,
   expire,
   gateRoom,
   idleExpired,
@@ -425,6 +427,23 @@ export function startRelay(
       doneWith(db);
     }
   };
+  const checkpointTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const armCheckpoint = (roomId: string, at: number | null) => {
+    clearTimeout(checkpointTimers.get(roomId));
+    checkpointTimers.delete(roomId);
+    if (at === null) return;
+    const timer = setTimeout(() => fireCheckpoint(roomId), Math.min(Math.max(0, at - Date.now()), 2_147_000_000));
+    timer.unref?.();
+    checkpointTimers.set(roomId, timer);
+  };
+  const fireCheckpoint = (roomId: string) => {
+    checkpointTimers.delete(roomId);
+    const open = dbs.has(roomId);
+    const db = storeFor(roomId, false);
+    const fx = db.exists() ? runRoomSync(relay, db, checkpointAlarm(sockets.get(roomId)?.size ?? 0)) : null;
+    if (!open) closeDb(roomId);
+    if (fx) apply(roomId, fx);
+  };
   const apply = (roomId: string, fx: Effects, sender?: ServerWebSocket<SocketData>) => {
     const room = sockets.get(roomId) ?? new Set();
     if (fx.push && pusher) void wake(pusher, fx.push).catch((e: unknown) => console.error(`wake: ${e instanceof Error ? e.message : "error"}`));
@@ -451,7 +470,9 @@ export function startRelay(
       if (u.entry) people.query("INSERT OR REPLACE INTO owned (user, room, entry) VALUES (?, ?, ?)").run(u.user, u.room, JSON.stringify(u.entry));
       else people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(u.user, u.room);
     }
+    if (fx.checkpointAt !== undefined && !fx.wipe) armCheckpoint(roomId, fx.checkpointAt);
     if (fx.wipe) {
+      armCheckpoint(roomId, null);
       pageCache?.forget(roomId);
       const sql = sqls.get(roomId);
       if (sql) requestsGone(sql);
@@ -485,6 +506,14 @@ export function startRelay(
   };
   const sweeper = policy.expireAfterDays ? setInterval(sweep, 3_600_000) : undefined;
   sweeper?.unref?.();
+  for (const f of readdirSync(dataDir)) {
+    const m = /^([0-9a-f]{32})\.sqlite$/.exec(f);
+    if (!m) continue;
+    const db = storeFor(m[1]!, false);
+    const at = db.exists() ? checkpointDeadline(db) : null;
+    closeDb(m[1]!);
+    if (at !== null) armCheckpoint(m[1]!, at);
+  }
 
   let proxyHinted = false;
   const server = Bun.serve<SocketData>({
@@ -667,7 +696,7 @@ export function startRelay(
       },
     },
   });
-  return Object.assign(server, { sweep });
+  return Object.assign(server, { sweep, fireCheckpoint, checkpointArmed: (roomId: string) => checkpointTimers.has(roomId) });
 }
 
 function memoryPages(maxBytes: number, now: () => number): PageCache & { forget(roomId: string): void } {

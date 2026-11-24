@@ -3,8 +3,9 @@
 import { asksPeople, ROLE_LABEL } from "./personality.ts";
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
-import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange } from "./protocol.ts";
-import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
+import { snapshotLines } from "./task-snapshot.ts";
+import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange, unarmedAlert } from "./protocol.ts";
+import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust, Unarmed } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import { sentTo } from "./room-rules.ts";
 import {
@@ -195,10 +196,21 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return say("task.claim", { task: task(ev.task) });
     case "task.first":
       return say("task.first", { task: task(ev.task) });
-    case "task.nudge":
-      return say(ev.step === 2 && ev.wake ? `task.nudge.lead.${ev.wake}` : NUDGE_KEYS[ev.step], { task: task(ev.task), name: inlineText(ev.mover, 40) });
+    case "task.nudge": {
+      const mark = say(ev.step === 2 && ev.wake ? `task.nudge.lead.${ev.wake}` : NUDGE_KEYS[ev.step], { task: task(ev.task), name: inlineText(ev.mover, 40) });
+      return say("task.nudge.clock", {
+        what: ev.waited ? say("task.nudge.waited", { mark, reason: inlineText(ev.waited, 120) }) : mark,
+        poster: inlineText(nameOf(m.from), 40),
+      });
+    }
+    case "task.wait":
+      return say("task.wait", { task: task(ev.task), reason: inlineText(ev.reason, 120) });
+    case "task.wait.end":
+      return say("task.wait.end", { task: task(ev.task) });
     case "task.wake":
       return say(`task.wake.${ev.got}`, { task: task(ev.task), name: inlineText(ev.mover, 40) });
+    case "task.snapshot":
+      return say("task.snapshot", { task: task(ev.task), where: `${ev.branch ? inlineText(ev.branch, 80) : "detached HEAD"} at ${ev.head.slice(0, 9)} in ${inlineText(ev.path, 120)}` });
     case "task.landed":
       if (!("step" in ev)) return say("task.landed", { task: task(ev.task), at: artifactWords(ev.artifact) });
       return ev.artifact
@@ -274,6 +286,13 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
       return ev.on ? say("review.reset.on") : say("review.reset.off");
     case "asks.tap.set":
       return ev.on ? say("asks.tap.on") : say("asks.tap.off");
+    case "checkpoint.daily.set":
+      return ev.daily ? say("checkpoint.daily.set", { at: ev.daily.at, tz: inlineText(ev.daily.tz, 64) }) : say("checkpoint.daily.off");
+    case "checkpoint.ask": {
+      const names = ev.asks.map((a) => inlineText(nameOf(a.agent), 40)).join(", ");
+      if (ev.occurrence !== undefined) return names ? say("checkpoint.ask.daily", { names }) : say("checkpoint.ask.daily.none");
+      return names ? say("checkpoint.ask", { names }) : say("checkpoint.ask.none");
+    }
     case "review.reset.waive":
       return ev.waived ? say("review.reset.waived", { name: ev.member }) : say("review.reset.unwaived", { name: ev.member });
     case "merges.set":
@@ -306,6 +325,8 @@ export function describeEvent(m: Message, state?: ChannelState, nameOf: (handle:
     }
     case "spec.ready":
       return say("spec.ready", { ask: String(ev.ask) });
+    case "spec.unready":
+      return say("spec.unready", { ask: String(ev.ask) });
     case "spec.approve":
       return say("spec.approve", { ask: String(ev.ask) });
     case "specs.only.set":
@@ -601,10 +622,13 @@ export function presenceAnswers(on: { client: string; reach?: Reach; wake?: stri
   return on.client !== "daemon" || on.reach !== "unreachable" || (isWakeVia(on.wake) && !wakesInSession(on.wake));
 }
 
-export function presenceWords(on: { client: string; reach?: Reach; readAt?: number; wake?: string }, now = Date.now()): string {
+export function presenceWords(on: { client: string; reach?: Reach; readAt?: number; wake?: string; unarmed?: Unarmed; untaken?: Unarmed }, now = Date.now()): string {
   if (on.client !== "daemon") return `online (${inlineText(on.client, 40)})`;
   const wake = isWakeVia(on.wake) ? `wakes via ${wakeWords(on.wake)}` : "can't be woken";
-  return `${presenceAnswers(on) ? "reachable" : "not listening"} · ${wake} · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}`;
+  const alert = unarmedAlert(on.unarmed, now);
+  const unarmed = alert ? ` · listener not armed for ${ago(on.unarmed?.since ?? now, now).replace(/ ago$/, "")}: ${inlineText(alert, 200)}` : "";
+  const untaken = on.untaken ? ` · wake not taken for ${ago(on.untaken.since, now).replace(/ ago$/, "")}: ${inlineText(on.untaken.why, 300)}` : "";
+  return `${presenceAnswers(on) ? "reachable" : "not listening"} · ${wake} · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}${unarmed}${untaken}`;
 }
 
 export interface Snapshot {
@@ -945,6 +969,8 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now(), messa
     out.push("", "notes:");
     for (const n of t.notes) out.push(`  #${n.seq} ${inlineText(n.by, 40)}, ${ago(n.ts, now)}${n.checkpoint ? " (checkpoint)" : ""}: ${markedText(n.text)}`);
   }
+  if (t.snapshot)
+    out.push("", `on disk at the end of a turn, ${ago(t.snapshot.ts, now)} (#${t.snapshot.seq}), ${inlineText(t.snapshot.path, 200)}:`, ...snapshotLines(t.snapshot).map((l) => `  ${l}`));
   return out.join("\n");
 }
 

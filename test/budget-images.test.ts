@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -33,7 +34,7 @@ let server: ReturnType<typeof startRelay> | undefined;
 let proxy: ReturnType<typeof trafficProxy> | undefined;
 
 function spawn(home: string, args: string[]) {
-  return Bun.spawn(kiwiCmd(args), {
+  return spawnOwned(kiwiCmd(args), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: proxy!.url, KIWI_NO_HOOKS: "1" },
     stdin: "ignore",

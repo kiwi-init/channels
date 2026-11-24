@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { b64url, fromB64url } from "@kiwi/core/crypto.ts";
-import { generateIdentity } from "@kiwi/core/identity.ts";
+import { b64url, fromB64url, ownerFingerprint } from "@kiwi/core/crypto.ts";
+import { generateIdentity, sign, signedBy, verify, VerifyCouldNotRun } from "@kiwi/core/identity.ts";
 import { personaOf } from "@kiwi/core/personality.ts";
-import { makePin, MAX_PIN, pinned, readPin } from "@kiwi/core/pin.ts";
+import { makePin, MAX_PIN, pinFits, pinned, readPin } from "@kiwi/core/pin.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
 
 const room = "ef".repeat(16);
@@ -51,5 +51,46 @@ describe("a personality pinned in an invite", () => {
     expect(await readPin(token, "ab".repeat(16), owner.pk)).toEqual({ invalid: true });
     expect(await readPin(await makePin(await generateIdentity("other"), room, builder), room, owner.pk)).toEqual({ invalid: true });
     expect(await readPin(undefined, room, owner.pk)).toBeNull();
+  });
+});
+
+describe("a verifier that throws on a valid key and signature", () => {
+  const throwing = async <T>(name: string, run: () => Promise<T>): Promise<T> => {
+    const real = crypto.subtle.verify;
+    Object.defineProperty(crypto.subtle, "verify", { configurable: true, value: () => Promise.reject(new DOMException("injected", name)) });
+    try {
+      return await run();
+    } finally {
+      Object.defineProperty(crypto.subtle, "verify", { configurable: true, value: real });
+    }
+  };
+
+  for (const name of ["DataError", "OperationError"]) {
+    test(`a ${name} isn't read as a bad signature`, async () => {
+      const owner = await generateIdentity("human");
+      const signed = await sign(owner, { room });
+      expect(await signedBy(signed)).toBe(true);
+      const thrown = await throwing(name, () =>
+        signedBy(signed).then(
+          () => null,
+          (e: unknown) => e,
+        ),
+      );
+      expect(thrown).toBeInstanceOf(VerifyCouldNotRun);
+      expect((thrown as Error).message).toBe(`${name}: injected`);
+      expect(await throwing(name, () => verify(signed))).toBe(false);
+      const token = await makePin(owner, room, builder);
+      const code = { roomId: room, ownerFp: await ownerFingerprint(owner.pk) };
+      expect(await throwing(name, () => pinFits(token, code))).toEqual({ kind: "couldNotRun", why: `${name}: injected` });
+      expect(await pinFits(token, code)).toEqual({ kind: "fits" });
+    });
+  }
+
+  test("a key or signature of the wrong length is a bad signature, before WebCrypto runs", async () => {
+    const owner = await generateIdentity("human");
+    const signed = await sign(owner, { room });
+    const short = { ...signed, pk: b64url(fromB64url(signed.pk).slice(0, 31)) };
+    const long = { ...signed, sig: b64url(new Uint8Array([...fromB64url(signed.sig), 0])) };
+    expect(await throwing("OperationError", () => Promise.all([signedBy(short), signedBy(long)]))).toEqual([false, false]);
   });
 });

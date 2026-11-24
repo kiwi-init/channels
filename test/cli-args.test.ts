@@ -1,3 +1,4 @@
+import { spawnOwned } from "./owned.ts";
 import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,7 +10,7 @@ const home = mkdtempSync(join(tmpdir(), "kiwi-cli-args-"));
 afterAll(() => rmSync(home, { recursive: true, force: true }));
 
 async function kiwi(...args: string[]): Promise<{ code: number; out: string; err: string }> {
-  const p = Bun.spawn(["bun", join(import.meta.dir, "../src/cli/main.ts"), ...args], {
+  const p = spawnOwned(["bun", join(import.meta.dir, "../src/cli/main.ts"), ...args], {
     cwd: home,
     env: { ...process.env, KIWI_HOME: join(home, "kiwi"), KIWI_NO_HOOKS: "1", CLAUDE_CONFIG_DIR: join(home, "claude"), CLAUDECODE: "" },
     stdout: "pipe",

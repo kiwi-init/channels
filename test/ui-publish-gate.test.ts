@@ -1,3 +1,4 @@
+import { spawnOwnedSync } from "./owned.ts";
 import { afterAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -42,7 +43,7 @@ const gitEnv = {
 const dir = join(root, "repo");
 mkdirSync(dir, { recursive: true });
 const git = (...args: string[]): string => {
-  const r = Bun.spawnSync(["git", ...args], { cwd: dir, env: gitEnv });
+  const r = spawnOwnedSync(["git", ...args], { cwd: dir, env: gitEnv });
   if (r.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr.toString()}`);
   return r.stdout.toString().trim();
 };
@@ -63,7 +64,7 @@ let runs = 0;
 function gate(sha: string, live: string | null, event = "workflow_run"): { go: string; sha: string; said: string } {
   const out = join(root, `out-${++runs}`);
   writeFileSync(out, "");
-  const r = Bun.spawnSync(["bash", GATE], {
+  const r = spawnOwnedSync(["bash", GATE], {
     cwd: dir,
     env: {
       ...gitEnv,

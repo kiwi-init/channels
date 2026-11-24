@@ -173,6 +173,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
   const color: Color | null = human ? colorOf(state, m.name) : (m.color ?? null)
   const activity = human ? undefined : activityOf(here)
   const reach = human ? null : howHere(here)
+  const unarmed = human ? undefined : here?.unarmed
   const specs = m.card ? specsOf(m.card) : ""
   const load = loadOf(state, m)
   const shares = human ? [] : sharedWith(state.members, m.name)
@@ -206,6 +207,7 @@ function personOf(state: ChannelState, m: StateMember, record: RosterMember | un
     ...(human ? {} : workOf(state, m)),
     ...(!m.owner && !canPost(m.scopes) ? { readOnly: true } : {}),
     ...(!human && wakes.has(m.name) ? { wakes: wakes.get(m.name) === true } : {}),
+    ...(unarmed ? { unarmed } : {}),
     ...(human && m.addsAgents ? { addsAgents: true } : {}),
     ...(human && m.answersDecisions ? { answersDecisions: true } : {}),
     ...(human && m.managesAgents ? { managesAgents: true } : {}),
@@ -376,8 +378,12 @@ function eventText(m: Wire, state: ChannelState): string {
     case "role.set":
       return ev.role ? t("live.map.role", { name: nameIn(state, ev.member), role: ev.role }) : t("live.map.no.role", { name: nameIn(state, ev.member) })
     default:
-      return t("live.map.event", { who, what: eventWhat(m, state) })
+      return actText(m, state)
   }
+}
+
+function actText(m: Wire, state: ChannelState): string {
+  return m.ev?.op === "task.nudge" ? eventWhat(m, state) : t("live.map.event", { who: nameIn(state, m.from), what: eventWhat(m, state) })
 }
 
 function eventForYou(m: Wire, me: string): boolean {
@@ -630,7 +636,7 @@ export function leftOutOf(state: ChannelState, messages: readonly Wire[], me: st
         seq: m.seq,
         from: m.from,
         at: m.ts,
-        text: wrote(t("live.map.event", { who: nameIn(state, m.from), what: eventWhat(m, state) })),
+        text: wrote(actText(m, state)),
         where: { kind: "room", room: GENERAL_ROOM },
         system: true,
         leftOut,
@@ -760,6 +766,7 @@ function moverFor(state: ChannelState, t: CoreTask, now: number): TaskMover | un
   if (m.kind === "waiting") return { kind: "waiting", owner: m.owner, ahead: m.ahead }
   if (m.kind === "run") return { kind: "run", behind: m.behind, due: m.due }
   if (m.kind === "nobody") return { kind: "nobody" }
+  if (m.kind === "wait") return { kind: "wait", reason: wrote(m.reason), ...(m.until !== undefined ? { until: m.until } : {}) }
   return { kind: "hold", until: m.until, reason: wrote(m.reason) }
 }
 

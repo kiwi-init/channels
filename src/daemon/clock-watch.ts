@@ -1,6 +1,6 @@
-import { clockOf, nudgesDue, skipsDue, type NudgeDue } from "@kiwi/core/clock.ts";
+import { clockOf, nudgeRefusal, nudgesDue, skipsDue, type NudgeDue } from "@kiwi/core/clock.ts";
 import { channelOwner } from "@kiwi/core/mover.ts";
-import type { Event } from "@kiwi/core/protocol.ts";
+import { AFTER_SKEW_MS, type Event, type SendAfter } from "@kiwi/core/protocol.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
 import { UNREAD_MS, wakeSeen } from "@kiwi/core/state/clocks.ts";
 import type { Member, Task, Woke } from "@kiwi/core/state/types.ts";
@@ -50,7 +50,8 @@ export interface ClockSeat {
   wakes: () => Promise<boolean>;
   reachable: (name: string) => boolean;
   stateOf: () => Promise<ChannelState | null>;
-  nudge: (ev: Nudge, to: string | undefined) => Promise<number | null>;
+  nudge: (ev: Nudge, to: string | undefined, after: SendAfter) => Promise<number | "moved" | "off-clock" | null>;
+  offClock: () => void;
   got: (ev: Wake) => Promise<void>;
   pending: () => DocWakeItem[];
   told: (block: string) => boolean;
@@ -72,6 +73,7 @@ export interface ClockWatcher {
 const EVERY_MS = 30_000;
 const SOON_MS = 2_000;
 const AGAIN_MS = 60_000;
+const RACES = 3;
 
 interface Armed {
   block: string;
@@ -112,7 +114,7 @@ export const watchedPeers = (hosted: readonly HostedSeat[]): string[] =>
     .sort((a, b) => (a.key < b.key ? -1 : 1))
     .map((s) => s.agent);
 
-export function watchClock(seat: ClockSeat, now: () => number = Date.now, every: number = EVERY_MS): ClockWatcher {
+export function watchClock(seat: ClockSeat, now: () => number = Date.now, every: number = EVERY_MS, skew: number = AFTER_SKEW_MS): ClockWatcher {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let busy = false;
   let again = false;
@@ -123,6 +125,7 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
   const tried = new Set<string>();
   const sent = new Map<string, number>();
   const posted = new Set<string>();
+  let warned = false;
 
   const schedule = (delay: number): void => {
     if (timer || ended) return;
@@ -169,13 +172,31 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
     }
   };
 
+  const post = async (ev: Nudge, to: string | undefined): Promise<number | "held" | null> => {
+    for (let race = 0; race <= RACES; race++) {
+      const fresh = await seat.stateOf();
+      if (!fresh || ended) return "held";
+      const at = now();
+      const refused = (when: number): boolean => nudgeRefusal(fresh, ev, { seq: fresh.head + 1, at: when, by: seat.agent }) !== null;
+      if (refused(at - skew) || refused(at + skew)) return "held";
+      const got = await seat.nudge(ev, to, { head: fresh.head, at });
+      if (got === "off-clock" && !warned) {
+        warned = true;
+        seat.offClock();
+      }
+      if (got !== "moved" && got !== "off-clock") return got;
+    }
+    return "held";
+  };
+
   const attempt = async (state: ChannelState, due: NudgeDue, at: number): Promise<void> => {
     const key = keyOf(due);
     if (tried.has(key)) return;
     if (!(await seat.wakes())) return;
     tried.add(key);
-    const seq = await seat.nudge({ op: "task.nudge", task: due.task, mover: due.mover, since: due.since, step: 1 }, undefined);
-    if (seq === null || ended) return;
+    const seq = await post({ op: "task.nudge", task: due.task, mover: due.mover, since: due.since, step: 1, ...(due.waited ? { waited: due.waited } : {}) }, undefined);
+    if (seq === "held") tried.delete(key);
+    if (seq === null || seq === "held" || ended) return;
     const after = await seat.stateOf();
     const t = after?.tasks.get(due.task);
     const clock = after && t ? clockOf(after, t, now()) : undefined;
@@ -208,15 +229,27 @@ export function watchClock(seat: ClockSeat, now: () => number = Date.now, every:
     const clock = t ? clockOf(state, t, at) : undefined;
     const label = due.step === 2 ? (due.wake ?? wakeSeen(clock?.woke)) : undefined;
     sent.set(key, at);
-    if (t && clock && due.to === seat.agent && (due.step === 2 || due.step === 3)) {
+    const told = (): void => {
+      if (!t || !clock || due.to !== seat.agent || (due.step !== 2 && due.step !== 3)) return;
       seat.add(toldItem(t, { ...due, step: due.step }, clock.mover, wakeWords(clock.woke), at));
       seat.wake();
-    }
-    const seq = await seat.nudge(
-      { op: "task.nudge", task: due.task, mover: due.mover, since: due.since, step: due.step, ...(due.day !== undefined ? { day: due.day } : {}), ...(label ? { wake: label } : {}) },
+    };
+    const seq = await post(
+      {
+        op: "task.nudge",
+        task: due.task,
+        mover: due.mover,
+        since: due.since,
+        step: due.step,
+        ...(due.day !== undefined ? { day: due.day } : {}),
+        ...(label ? { wake: label } : {}),
+        ...(due.waited && due.step !== 0 ? { waited: due.waited } : {}),
+      },
       due.to,
     );
-    if (seq !== null) posted.add(key);
+    if (typeof seq !== "number") return;
+    posted.add(key);
+    told();
   };
 
   const look = async (): Promise<void> => {

@@ -7,6 +7,7 @@
 // bottom turns that into the line on stderr and the exit code, in one place.
 // A command's value, when it has one, is its exit code.
 
+import { launcher } from "../launcher.ts";
 import * as Exit from "effect/Exit";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import { AgentLive } from "../agent.ts";
@@ -14,7 +15,7 @@ import { VERSION } from "../version.ts";
 import { refreshListeners } from "../hooks.ts";
 import { forgetSecretCopies } from "../config/wipe.ts";
 import { helpFor } from "./help.ts";
-import { args, ignoredOptions, opt, unexpectedOptions } from "./args.ts";
+import { args, ignoredOptions, opt, queryWorker, unexpectedOptions } from "./args.ts";
 import { die, out } from "./context.ts";
 import { commandFor, COMMANDS, RENAMED } from "./commands.ts";
 import { fail } from "./fail.ts";
@@ -40,7 +41,12 @@ if (args[0] === "daemon") {
   };
 }
 
-if (import.meta.main) {
+async function main(): Promise<void> {
+  if (queryWorker) {
+    const { runQueryWorker } = await import("../query.ts");
+    await runQueryWorker();
+    process.exit(0);
+  }
   const cmd = opt.version ? "version" : args[0];
   if (cmd === "version") {
     out(VERSION);
@@ -55,6 +61,10 @@ if (import.meta.main) {
       if (args.length !== 1) throw new Error("usage: kiwi upgrade (or kiwi update)");
       const extra = unexpectedOptions([]);
       if (extra.length) throw new Error(`kiwi ${cmd} does not accept ${extra.map((name) => `--${name}`).join(", ")}`);
+      if (launcher) {
+        out(`kiwi here runs on the Channels app (${launcher}) and updates with it.\n`);
+        process.exit(0);
+      }
       const { upgrade } = await import("./upgrade.ts");
       await upgrade({ executable: process.execPath, source: /\.(ts|js)$/.test(Bun.main), version: VERSION, platform: process.platform, arch: process.arch, report: out });
       process.exit(0);
@@ -76,4 +86,11 @@ if (import.meta.main) {
     if (ignored.length) process.stderr.write(`kiwi: ${cmd} doesn't use ${ignored.map((o) => `--${o}`).join(", ")}, so ${ignored.length > 1 ? "they were" : "it was"} ignored\n`);
     process.exit(exit.value ?? 0);
   }
+}
+
+if (import.meta.main) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exit(1);
+  });
 }

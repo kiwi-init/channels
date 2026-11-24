@@ -83,6 +83,10 @@ jobs:
   build:
     if: github.event_name == 'push'
     needs: [on-main, ci-green]
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
     uses: ./.github/workflows/release-build.yml
     secrets: inherit
 
@@ -94,6 +98,8 @@ jobs:
       contents: write
       id-token: write
       attestations: write
+      pull-requests: read
+      issues: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -196,7 +202,7 @@ jobs:
 
       - id: app
         if: steps.stamp.outputs.needed == 'true'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.BUS_APP_CLIENT_ID }}
           private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
@@ -277,7 +283,7 @@ jobs:
         run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir "$RUNNER_TEMP"
 
       - id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.BUS_APP_CLIENT_ID }}
           private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}

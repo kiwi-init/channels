@@ -1,3 +1,4 @@
+import { record } from "./owned.ts";
 import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -90,7 +91,9 @@ async function socketSends(origin: string, headers: Record<string, string>, n: n
 
 function runFlag(flags: string[], env: Record<string, string> = {}): Promise<{ code: number | null; out: string }> {
   const data = tempDir("kiwi-dev-rate-flag-");
-  const p = spawn("bun", ["src/relay/bun.ts", "--port", "0", "--data", data, "--no-web", ...flags], { cwd: ROOT, env: { ...process.env, ...env } });
+  const args = ["src/relay/bun.ts", "--port", "0", "--data", data, "--no-web", ...flags];
+  const p = spawn("bun", args, { cwd: ROOT, env: { ...process.env, ...env } });
+  if (p.pid) record(p.pid, ["bun", ...args]);
   let out = "";
   const take = (d: Buffer) => {
     out += d.toString("utf8");

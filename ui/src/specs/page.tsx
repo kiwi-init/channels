@@ -137,12 +137,29 @@ function SpecMenu({ channel, spec, onEdit }: { channel: Channel; spec: Spec; onE
 function Gate({ channel, spec, editing, part }: { channel: Channel; spec: Spec; editing: boolean; part: SpecPart }) {
   const { actions, go } = useAct()
   const free = freeCount(channel)
-  if (spec.stage === "draft")
+  if (spec.stage === "draft" && !spec.ready)
+    return (
+      <div className="spec-gate is-draft is-not-ready">
+        <div className="spec-gate-text">
+          <p className="spec-gate-head">{t("specs.page.gate.not.ready")}</p>
+          <p className="spec-gate-sub">{t("specs.page.gate.not.ready.sub")}</p>
+        </div>
+        {spec.canJudge && !editing && (
+          <button type="button" className="btn is-quiet" onClick={() => actions.approveSpec(channel.code, spec.ask, spec.v)}>
+            {t("specs.page.approve.anyway")}
+          </button>
+        )}
+      </div>
+    )
+  if (spec.stage === "draft" && spec.ready)
     return (
       <div className="spec-gate is-draft">
         <div className="spec-gate-text">
           <p className="spec-gate-head">{spec.canJudge ? t("specs.page.gate.approve") : t("specs.page.gate.waiting", { who: nickname(channel, spec.by) })}</p>
-          {free > 0 && <p className="spec-gate-sub num">{t("specs.page.gate.free", { count: free })}</p>}
+          <p className="spec-gate-sub num">
+            {t("specs.page.gate.ready.by", { who: nickname(channel, spec.ready.by), v: String(spec.ready.v) })}
+            {free > 0 && ` · ${t("specs.page.gate.free", { count: free })}`}
+          </p>
         </div>
         {spec.canJudge && !editing && (
           <button type="button" className="btn is-primary" onClick={() => actions.approveSpec(channel.code, spec.ask, spec.v)}>

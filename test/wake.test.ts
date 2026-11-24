@@ -5,7 +5,7 @@ import { type Config } from "../src/config.ts";
 import { seatRecordFor } from "../src/daemon.ts";
 import { howMessagesReachYou } from "../src/hooks.ts";
 import { listenMode, wokenBy } from "../src/hooks/reach.ts";
-import { listenedPath, pullsWake, wakeArgv, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
+import { listenedPath, pulledPath, pullsWake, viaOf, wakeArgv, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
 import { wakeHarness } from "./wake-harness.ts";
 
 setDefaultTimeout(60_000);
@@ -182,10 +182,45 @@ describe("wake paths, commands and words", () => {
     expect(zcode).not.toMatch(/ listen\b/);
     expect(pullsWake("zcode")).toBe(true);
     expect(pullsWake("grok")).toBe(true);
+    expect(pullsWake("agy")).toBe(true);
     expect(pullsWake("gemini")).toBe(false);
+    const agy = howMessagesReachYou("kiwi -c ch --as bot", true, { harness: "agy", session: "conv-1" }, false, undefined);
+    expect(agy).toContain("call the run_command tool with CommandLine `kiwi -c ch --as bot join`, WaitMsBeforeAsync: 500, and leave IsDaemon false.");
+    expect(agy).toContain("Antigravity CLI starts your next turn with its output");
+    expect(agy).toContain('check manage_task with Action "list" shows it running; if not, start it.');
+    expect(agy).not.toMatch(/ listen\b/);
     const off = howMessagesReachYou("kiwi", false, { harness: "codex", session: "t" });
     expect(off).toContain("Kiwi won't wake you");
     expect(off).toContain("Run `kiwi join` at the start of every turn");
+  });
+
+  test("a seat that pulls its wakes is woken via its listener only while one is attached (T15716)", () => {
+    const seat = { harness: "cursor" as const, session: "chat-1" };
+    const cursor = wakePath(seat, true);
+    expect(pulledPath(cursor, seat, true)).toEqual({ kind: "listener" });
+    expect(viaOf(pulledPath(cursor, seat, true))).toBe("listener");
+    const unarmed = pulledPath(cursor, seat, false);
+    expect(unarmed.kind === "none" && unarmed.why.startsWith("its background listener isn't running")).toBe(true);
+    const agySeat = { harness: "agy" as const, session: "conv-1" };
+    const agy = wakePath(agySeat, true);
+    expect(pulledPath(agy, agySeat, true)).toEqual({ kind: "listener" });
+    expect(viaOf(pulledPath(agy, agySeat, true))).toBe("listener");
+    const agyUnarmed = pulledPath(agy, agySeat, false);
+    expect(agyUnarmed.kind === "none" && agyUnarmed.why.startsWith("its background listener isn't running")).toBe(true);
+    const agyTmux = wakePath({ ...agySeat, tmux: { pane: "%4" } }, true);
+    expect(pulledPath(agyTmux, agySeat, true)).toEqual({ kind: "command", via: "tmux-typing", session: "%4" });
+    const gemini = wakePath({ harness: "gemini", session: "g" }, true);
+    expect(pulledPath(gemini, { harness: "gemini" }, true)).toBe(gemini);
+    const codex = wakePath({ harness: "codex", session: "t" }, true);
+    expect(pulledPath(codex, { harness: "codex" }, true)).toBe(codex);
+  });
+
+  test("a held seat stays unwakeable even with a listener still attached (T15716)", () => {
+    const held = { harness: "cursor" as const, session: "chat-1", held: true };
+    const path = wakePath(held, true);
+    expect(path.kind === "none" && path.why.startsWith("its loop holds it between sessions")).toBe(true);
+    expect(pulledPath(path, held, true)).toBe(path);
+    expect(viaOf(pulledPath(path, held, true))).toBeNull();
   });
 
   test("Kimi Code and Grok are told the exact tool call that keeps them wakeable", () => {
@@ -215,12 +250,16 @@ describe("wake paths, commands and words", () => {
     expect(listenMode(true, { harness: "kimi", session: "k", pid: 7 })).toBe("once");
     expect(listenMode(true, { harness: "cursor", session: "c" })).toBe("once");
     expect(listenMode(true, { harness: "zcode", session: "z", pid: 7 })).toBe("once");
+    expect(listenMode(true, { harness: "agy", session: "c" }, false, undefined)).toBe("once");
+    expect(listenMode(true, { harness: "agy", session: "c" }, false, "%7")).toBe("read");
     expect(listenMode(true, { harness: "grok", session: "g" })).toBe("stream");
     expect(listenMode(true, { harness: "gemini" })).toBe("read");
     expect(listenMode(true, { harness: "grok-bot" }, true)).toBe("read");
     expect(listenMode(false, { harness: "grok", session: "g" })).toBe("read");
     expect(listenMode(true, {})).toBe("read");
     expect(wokenBy(true, { harness: "codex", session: "t" })).toBe("codex queue");
+    expect(wokenBy(true, { harness: "agy", session: "c" }, false, "%7")).toBe("typing into its tmux pane");
+    expect(wokenBy(true, { harness: "agy", session: "c" }, false, undefined)).toBeNull();
     expect(wokenBy(true, { harness: "grok-bot" }, true)).toBe("its routine's webhook");
     expect(wokenBy(true, { harness: "grok", session: "g" })).toBeNull();
     expect(wokenBy(false, { harness: "codex", session: "t" })).toBeNull();

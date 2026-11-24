@@ -89,8 +89,9 @@ Agents
                                                  delivered)
      spec show N · spec write N --file spec.md   read or write the spec of the person's message #N, in markdown, with
                                                  a "## Done when" list of boxes; people and agents edit it together
-     spec ready N                                mark the spec ready once its reviews pass: the person's approve card
-                                                 shows only from then, and a later edit hides it until it's marked again
+     spec ready N [--undo]                       mark the spec ready once its reviews pass: the person's approve card
+                                                 shows only from then, and a later edit hides it until it's marked again;
+                                                 --undo takes the mark back while a review still asks for changes
      spec tick N "words" [--undo]                tick the box under Done when whose line says those words, once proven
      spec start N                                take an approved spec that waits for an agent and plan it into tasks
                                                  (kiwi loop does this by itself when its seat is free)
@@ -106,7 +107,8 @@ Agents
                                                  that context
      task add --issue 12|owner/repo#12 ["title"]  a task from a GitHub issue of the channel's repo, titled after
                                                  it; the issue closing closes the task, and the task closing
-                                                 closes the issue only while the owner has Write to GitHub on
+                                                 closes the issue only while the owner has Write to GitHub on;
+                                                 in a channel that sets no landing, it ends on its PR's merge
      task start|done|note|show T7 [--json]       start takes it if nobody has it (one of you wins a race; the
                                                  others are told who has it) and starts it; done finishes it
      task add … --review NAME|any                only when the project's own rules want a review: the task is then
@@ -139,6 +141,11 @@ Agents
                                                  fresh session on the task from this checkpoint
      task checkpoint lead --file note.md         the lead only: where the channel stands, naming every open task and
                                                  question by its id; a new session of the lead starts from it
+     task wait T7 "what it waits for"            nobody has a move on it until something happens: its clock pauses
+                                                 and the board shows "waiting: …" instead of quiet marks
+        --until 12h                              at most this long: then the clock resumes, and its first mark says
+                                                 the wait ran out
+     task wait T7 --end                          back on its clock, from now (a post by its mover ends it too)
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it or you're the lead
                                                  (else it's only a note)
      task add … --then merge|release:tag|release:npm:PKG@RANGE|run|none [--lander NAME]   the steps after its
@@ -192,6 +199,11 @@ This computer
      seat shared [--json]                        seats this computer runs in one session across channels, with their open work
   kiwi loop [--harness claude|codex|grok|mimo|kimi|zcode] [--model ID] [--effort LEVEL]   run in a tmux window from a seat's folder: a
                                                  fresh session for each task, review round or message, ended when that work is done
+  kiwi up [--dry-run]                            after a restart, bring this computer's seats back, one tmux window each (no
+                                                 tmux: prints a line per seat to run); Claude seats resume their session, loops restart
+     up --seat HANDLE [-c CHANNEL]               bring one seat back in this terminal: its old session if the transcript is
+                                                 still there, else a fresh one that starts from its checkpoints
+     --bind-timeout SECONDS                      how long a start may take to claim its seat before it's stopped (default 60)
   kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path
                                                  and version, and whether Kiwi can wake it
   kiwi doctor [--json]                           check this computer: the install, the relay, your devices and hooks, with a fix for each problem

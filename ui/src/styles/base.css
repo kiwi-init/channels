@@ -401,6 +401,16 @@ kbd {
     transform var(--pop);
 }
 
+.face[data-mood] .eye.eye-enter {
+  opacity: 0;
+  transform: scale(0.2);
+}
+
+.face[data-mood] :is(.face-cross, .face-ask, .face-spark).face-enter {
+  opacity: 0;
+  scale: 0.3;
+}
+
 .face .eye:not(.eye-line) {
   fill: #000;
 }
@@ -497,6 +507,10 @@ kbd {
 
 .av.is-off .face-badge {
   fill: var(--ink-3);
+}
+
+.av.is-off .face-badge image {
+  filter: grayscale(1);
 }
 
 @keyframes face-ponder {
@@ -995,8 +1009,24 @@ kbd {
   font: var(--t-ui) var(--ui);
 }
 
+.toast-action {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: color-mix(in srgb, var(--on-ink) 16%, transparent);
+  color: inherit;
+  font: 600 var(--t-ui) var(--ui);
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
 .toast-close:hover {
   background: color-mix(in srgb, var(--on-ink) 16%, transparent);
+}
+
+.toast-action:hover {
+  background: color-mix(in srgb, var(--on-ink) 26%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

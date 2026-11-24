@@ -1,6 +1,6 @@
 .set {
   display: grid;
-  grid-template-columns: var(--side-w) minmax(0, 1fr);
+  grid-template-columns: var(--nav-w) minmax(0, 1fr);
   grid-template-rows: var(--top-h) minmax(0, 1fr);
   min-width: 0;
   min-height: 0;

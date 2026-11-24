@@ -1,5 +1,5 @@
 import { TASK_TITLE_MAX_LENGTH } from "@kiwi/core/protocol.ts"
-import { handedAskOf, taskId, taskSpecRefusal } from "@kiwi/core/state.ts"
+import { answerAddress, handedAskOf, taskId, taskSpecRefusal } from "@kiwi/core/state.ts"
 import { assignTask, type TaskSend } from "@kiwi/channel/task-actions.ts"
 import { forgetChannel, forgetPending, loadMember, loadPending, renameChannel } from "@kiwi/channel/store.ts"
 import { linkOf, type ChannelLink } from "@kiwi/channel/channel-ops.ts"
@@ -12,7 +12,7 @@ import { loadPicture } from "~/live/pictures"
 import { appCan } from "~/live/app-can"
 import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
-import { checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
+import { bringAgentsBack, checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { myUsage } from "~/live/usage"
 import { markSeenIn, READ_FLOOR, seenIn } from "@kiwi/app/threads.ts"
 import { markSeenTo } from "@kiwi/channel/news.ts"
@@ -99,6 +99,7 @@ export function makeActions(): Actions {
       markSeenTo(room, upTo)
     },
     openDoc: (code, thread, th, on) => link(code).doc(thread, th, on),
+    keepDocLines: (code, thread, lines) => openedRun(code)?.keepDocLines(thread, lines),
     findDoc: (code, thread) => findDoc(link(code), code, thread),
     docVersions: async (code, th) => (await rare()).versionsOf(link(code), th),
     restoreDocVersion: async (code, ...a) => (await rare()).restoreOf(link(code), ...a),
@@ -133,8 +134,7 @@ export function makeActions(): Actions {
         const run = need(code)
         const m = run.messages.find((x) => x.seq === Number(id))
         if (!m) throw new Error(t("live.actions.question.gone"))
-        const handed = handedAskOf(m, (seq) => run.messages.find((x) => x.seq === seq))
-        await run.send(text, { to: handed ? [m.from, handed.from] : [m.from], re: handed ? [m.seq, handed.seq] : [m.seq], kind: "msg", side: true, pick: true })
+        await run.send(text, { ...answerAddress(m, (seq) => run.messages.find((x) => x.seq === seq)), kind: "msg", side: true, pick: true })
       }),
     overrule: (code, id, text) =>
       attempt(t("live.actions.not.sent"), async () => {
@@ -199,6 +199,8 @@ export function makeActions(): Actions {
     setBranchPrefix: (code, typed) => attempt(t("live.actions.branch.prefix.not.changed"), async () => (await manage()).setBranchPrefix(code, typed)),
     setQuiet: (code, typed) => attempt(t("live.actions.quiet.not.changed"), async () => (await manage()).setQuiet(code, typed)),
     setTapToAnswer: (code, on) => attempt(t("live.actions.not.changed"), async () => (await manage()).setTapToAnswer(code, on)),
+    askCheckpoints: (code, running) => attempt(t("live.actions.checkpoints.not.asked"), async () => (await manage()).askCheckpoints(code, running)),
+    setCheckpointDaily: (code, daily) => attempt(t("live.actions.not.changed"), async () => (await manage()).setCheckpointDaily(code, daily)),
     setReviewReset: (code, on) => attempt(t("live.actions.not.changed"), async () => (await manage()).setReviewReset(code, on)),
     setResetWaived: (code, name, waived) => attempt(t("live.actions.not.changed"), async () => (await manage()).setResetWaived(code, name, waived)),
     setLanding: (code, then) => attempt(t("live.actions.landing.not.changed"), async () => (await manage()).setLanding(code, then)),
@@ -318,6 +320,7 @@ export function makeActions(): Actions {
     savePersonalities: (list) => attempt(t("live.actions.not.saved"), () => savePersonalities(list)),
     setHooks,
     checkComputer,
+    bringAgentsBack,
     computerSettings,
     launchedFrom: async (ids) => (await account()).launchedFrom(ids),
     setContextLine: (on) => attempt(t("live.actions.change.failed"), () => setContextLine(on)),

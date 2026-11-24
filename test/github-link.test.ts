@@ -81,14 +81,14 @@ describe("finishing the device flow", () => {
 
 describe("the relay's config", () => {
   test("carries the GitHub App's public client id only when the relay has one", async () => {
-    expect(await relayConfig(null, "Iv23abc").json()).toEqual({ githubSignIn: false, githubClientId: "Iv23abc" });
-    expect(await relayConfig(null).json()).toEqual({ githubSignIn: false });
-    expect(await relayConfig(null, "").json()).toEqual({ githubSignIn: false });
+    expect(await relayConfig(null, "Iv23abc").json()).toEqual({ now: expect.any(Number), githubSignIn: false, githubClientId: "Iv23abc" });
+    expect(await relayConfig(null).json()).toEqual({ now: expect.any(Number), githubSignIn: false });
+    expect(await relayConfig(null, "").json()).toEqual({ now: expect.any(Number), githubSignIn: false });
   });
 
   test("says whether the relay takes GitHub sign-in, or dev sign-in", async () => {
-    expect(await relayConfig({ verify: async () => null }, "Iv23abc").json()).toEqual({ githubSignIn: true, githubClientId: "Iv23abc" });
-    expect(await relayConfig(devHumanAuth()).json()).toEqual({ githubSignIn: false, dev: true });
+    expect(await relayConfig({ verify: async () => null }, "Iv23abc").json()).toEqual({ now: expect.any(Number), githubSignIn: true, githubClientId: "Iv23abc" });
+    expect(await relayConfig(devHumanAuth()).json()).toEqual({ now: expect.any(Number), githubSignIn: false, dev: true });
   });
 });
 

@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import * as Effect from "effect/Effect";
 import { chromium, type CDPSession, type Page } from "playwright-core";
+import { readSeededFrame, reloadFromHost, watchSeededFrame } from "./seeded-frame.ts";
+import { installLoad, loadRuns, loadsFrom, requireInside } from "./perf-load.ts";
+import { cpus, totalmem } from "node:os";
 import { RelayError } from "@kiwi/core/client.ts";
 import { chooseThread } from "@kiwi/core/state.ts";
 import { AgentSession, oneLook, runAgent } from "../src/agent.ts";
@@ -12,7 +15,7 @@ import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
 import { calibrate } from "./perf-calibrate.ts";
-import { approveSpec, composer, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, view, writeBlock } from "./perf-ui.ts";
+import { approveSpec, composer, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, view, viewTimed, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
 import { pageErrors } from "./page-errors.ts";
 
@@ -239,12 +242,42 @@ const TEXTS = [
 ];
 
 const SEEDED = "Seeded: a reload opens the channel here";
+const wholeEnv = (name: string, fallback: number, least: number): number => {
+  const raw = process.env[name]?.trim() ?? "";
+  const n = raw ? Number(raw) : fallback;
+  if (!Number.isSafeInteger(n) || n < least) throw new Error(`${name} must be a whole number of at least ${least}, not ${raw}`);
+  return n;
+};
+const ROUNDS = wholeEnv("PERF_SWITCH_ROUNDS", 3, 3);
+const CAL_REPS = wholeEnv("PERF_CALIBRATION_REPS", 5, 5);
+const LOAD = loadsFrom(process.env, VIEWS);
 const SPEC = "# Ship it at scale\n\n## Done when\n- [ ] the board holds every task";
-const report: Record<string, unknown> = { agents: AGENTS, tasks: TASKS, messages: MESSAGES, soakMinutes: SOAK_MIN };
+const report: Record<string, unknown> = {
+  agents: AGENTS,
+  tasks: TASKS,
+  messages: MESSAGES,
+  soakMinutes: SOAK_MIN,
+  control: process.env.PERF_CONTROL?.trim() || null,
+  app: process.env.PERF_APP_SHA?.trim() || null,
+  loads: LOAD,
+  switchRounds: ROUNDS,
+  calibrationReps: CAL_REPS,
+  runner: {
+    name: process.env.RUNNER_NAME ?? null,
+    imageOS: process.env.ImageOS ?? null,
+    imageVersion: process.env.ImageVersion ?? null,
+    cpu: cpus()[0]?.model ?? null,
+    cores: cpus().length,
+    memoryGB: Math.round((totalmem() / 2 ** 30) * 10) / 10,
+    runId: process.env.GITHUB_RUN_ID ?? null,
+    runAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
+  },
+};
 const agents = Array.from({ length: AGENTS }, (_, i) => `agent${i}`);
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript(WATCH);
+  await installLoad(context, LOAD, VIEWS);
   await context.addInitScript((marker: string) => {
     const w = window as unknown as { __firstScreen?: number };
     const seen = () => {
@@ -339,7 +372,7 @@ try {
 
   await post(early, perSender);
   const seeder = seats[0]!;
-  await patiently(() =>
+  const seededSeq = await patiently(() =>
     runAgent(
       oneLook(
         Effect.gen(function* () {
@@ -357,9 +390,12 @@ try {
   await mark(`${MESSAGES} messages, live`);
 
   let reloadMs = 0;
+  let reloadPolledMs = 0;
+  await watchSeededFrame(context, { seq: seededSeq, text: SEEDED, budgetMs: 60_000 });
   for (const throttle of [1, 4]) {
     if (!GATED || throttle === 1) {
       await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      const epochBefore = Date.now();
       const reloadAt = performance.now();
       await page.reload();
       await page
@@ -372,7 +408,11 @@ try {
           writeFileSync(join(tmpdir(), "kiwi-perf-scale-reload.txt"), await page.evaluate(() => document.body.innerText));
           throw e;
         });
-      reloadMs = Math.round(performance.now() - reloadAt);
+      reloadPolledMs = Math.round(performance.now() - reloadAt);
+      const frame = await readSeededFrame(page, 10_000);
+      const fromHost = reloadFromHost(epochBefore, frame);
+      if (LOAD.reload > 0) requireInside(await loadRuns(page), "reload", "", 0, frame.paintedByMs, `the reload at ${throttle}x`);
+      reloadMs = fromHost.reloadMs;
       const inPage = await page.evaluate(() => {
         const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
         return {
@@ -403,24 +443,41 @@ try {
           longTasks: ((window as unknown as { __long?: number[] }).__long ?? []).map((d) => Math.round(d)),
         };
       });
-      if (throttle === 1) report["reload, in page"] = inPage;
+      const probe = {
+        seededFrameMs: Math.round(frame.paintedByMs),
+        seenMs: Math.round(frame.seenMs),
+        paintWindowMs: Math.round(frame.paintedByMs - frame.seenMs),
+        frames: frame.frames,
+        resets: frame.resets,
+        navigationOffsetMs: fromHost.navigationOffsetMs,
+        clockSkewMs: Math.round(frame.clockSkewMs * 10) / 10,
+        polledMs: reloadPolledMs,
+        frameMs: reloadMs,
+      };
+      log("reload probe", JSON.stringify(probe));
+      if (throttle === 1) report["reload, in page"] = { ...inPage, ...probe };
       log("reload in page", JSON.stringify(inPage));
       await page.waitForTimeout(2000);
       await drain(page);
     }
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
-    const calibration = await calibrate(page);
+    const calibration = await calibrate(page, CAL_REPS);
     const switching = !GATED || throttle === 4;
     const views: Record<string, number[]> = { Agents: [], Conversation: [], Tasks: [] };
     const spent: Record<string, Record<string, number>[]> = { Agents: [], Conversation: [], Tasks: [] };
+    const windowWork: Record<string, Record<string, number>[]> = { Agents: [], Conversation: [], Tasks: [] };
     const markers: Record<string, string> = { Agents: agents.at(-1)!, Conversation: SEEDED, Tasks: "Ship it at scale" };
-    for (let i = 0; i < (switching ? 3 : 0); i++)
+    for (let i = 0; i < (switching ? ROUNDS : 0); i++)
       for (const v of ["Agents", "Conversation", "Tasks"]) {
         const before = await work(cdp);
-        views[v]!.push(await tab(page, v, markers[v]!));
+        const timed = await viewTimed(page, VIEWS[v] ?? v, markers[v]!);
+        const mid = await work(cdp);
+        views[v]!.push(timed.ms);
+        if ((LOAD.switch[v] ?? 0) > 0) requireInside(await loadRuns(page), "switch", v, timed.startMs, timed.endMs, `the ${v} switch, round ${i + 1}`);
+        windowWork[v]!.push(Object.fromEntries(Object.keys(mid).map((k) => [`${k}Ms`, Math.round(((mid[k] ?? 0) - (before[k] ?? 0)) * 1000)])));
         await page.waitForTimeout(500);
         const after = await work(cdp);
-        spent[v]!.push(Object.fromEntries(Object.keys(after).map((k) => [`${k}Ms`, Math.round(((after[k] ?? 0) - (before[k] ?? 0)) * 1000)])));
+        if (i < 3) spent[v]!.push(Object.fromEntries(Object.keys(after).map((k) => [`${k}Ms`, Math.round(((after[k] ?? 0) - (before[k] ?? 0)) * 1000)])));
       }
     if (!GATED) {
       await tab(page, "Conversation", markers.Conversation!);
@@ -445,11 +502,17 @@ try {
     report[`@${throttle}x`] = {
       calibrationMs: calibration.ms,
       calibrationRepsMs: calibration.reps,
+      calibrationAllRepsMedianMs: calibration.allRepsMedianMs,
       reloadToFirstScreenMs: throttle === 1 ? reloadMs : undefined,
+      reloadPolledMs: throttle === 1 ? reloadPolledMs : undefined,
       ...(switching
         ? {
-            switchMedianMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, median(v)])),
-            switchMs: views,
+            switchMedianMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, median(v.slice(0, 3))])),
+            switchMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, v.slice(0, 3)])),
+            switchRoundsMs: views,
+            switchFirstEntryMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, v[0] ?? null])),
+            switchWarmMedianMs: Object.fromEntries(Object.entries(views).map(([k, v]) => [k, median(v.slice(1))])),
+            switchRoundWorkMs: windowWork,
             switchWorkMs: Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Object.fromEntries(Object.keys(v[0] ?? {}).map((m) => [m, median(v.map((x) => x[m] ?? 0))]))])),
           }
         : {}),
@@ -470,6 +533,7 @@ try {
   await tab(page, "Conversation", SEEDED);
   await composer(page).click();
   await drain(page);
+  const typingFrom = await page.evaluate(() => performance.now());
   const typing = (async () => {
     for (let i = 0; i < 3; i++) {
       await page.keyboard.type("the build is green and the switch is fast now ", { delay: 40 });
@@ -478,6 +542,7 @@ try {
   })();
   const burst = Promise.all(seats.map((s, a) => say(s, `burst ${a}: ${TEXTS[a % TEXTS.length]}`)));
   await Promise.all([typing, burst]);
+  if (LOAD.key > 0) requireInside(await loadRuns(page), "key", "", typingFrom, await page.evaluate(() => performance.now()), "the typing scene's keys", 100);
   const typed = await drain(page);
   const keys = typed.events
     .filter((e) => e.name.startsWith("key"))

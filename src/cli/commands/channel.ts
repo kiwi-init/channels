@@ -111,7 +111,7 @@ export const channelCommands: Record<string, Command> = {
       }
       if (turn !== undefined) return yield* die("usage: kiwi wake [on|off|webhook URL|webhook off|seats|seat ROOM_ID AGENT on|off]");
       const seat = yield* Effect.promise(() => daemonSeat(s.alias, s.me));
-      out(seat ? wakeLine(seat.wake) : `the daemon holds no seat for ${s.me} in "${s.alias}" yet`);
+      out(seat ? `${wakeLine(seat.wake)}${unarmedLine(seat.unarmed)}${untakenLine(seat.untaken)}` : `the daemon holds no seat for ${s.me} in "${s.alias}" yet`);
     }),
 
   status: () =>
@@ -121,7 +121,14 @@ export const channelCommands: Record<string, Command> = {
       const on = new Map(
         [...online].map(([n, p]) => [
           n,
-          { client: p.client, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) },
+          {
+            client: p.client,
+            ...(p.reach ? { reach: p.reach } : {}),
+            ...(p.readAt === undefined ? {} : { readAt: p.readAt }),
+            ...(isWakeVia(p.wake) ? { wake: p.wake } : {}),
+            ...(p.unarmed ? { unarmed: p.unarmed } : {}),
+            ...(p.untaken ? { untaken: p.untaken } : {}),
+          },
         ]),
       );
       const snap = { alias: s.alias, check: reviewCheckOf(s.ch.roomId), me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
@@ -159,9 +166,21 @@ export const channelCommands: Record<string, Command> = {
     }),
 };
 
+function unarmedLine(u: DaemonSeat["unarmed"]): string {
+  return u ? ` · listener not armed for ${ago(u.since).replace(/ ago$/, "")}: ${u.why}` : "";
+}
+
+function untakenLine(u: DaemonSeat["untaken"]): string {
+  return u ? ` · wake not taken for ${ago(u.since).replace(/ ago$/, "")}: ${u.why}` : "";
+}
+
 function wakeLine(w: DaemonSeat["wake"]): string {
   const how =
-    w.path.kind === "hooks" ? `wakes via ${wakeWords("hooks")}` : w.path.kind === "extension" || w.path.kind === "command" ? `wakes via ${wakeWords(w.path.via)}` : `can't be woken: ${w.path.why}`;
+    w.path.kind === "hooks" || w.path.kind === "listener"
+      ? `wakes via ${wakeWords(w.path.kind)}`
+      : w.path.kind === "extension" || w.path.kind === "command"
+        ? `wakes via ${wakeWords(w.path.via)}`
+        : `can't be woken: ${w.path.why}`;
   const last = w.last ? ` · last wake ${ago(w.last.at)} via ${wakeWords(w.last.via)}, ${w.last.unread} unread, ${w.last.ok ? "ok" : "failed"}` : "";
   return `wake ${w.on ? "on" : "off"} · ${how}${last}`;
 }

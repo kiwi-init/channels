@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { chromium, webkit, type Page } from "playwright-core";
 import { pageErrors } from "./page-errors.ts";
+import { TASK_VIEW } from "./task-view.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -68,8 +69,7 @@ const NOW_ROW = ".page.is-now a[href^='kiwi-task:']";
 const TASK_PANE = ".panes > .pane:has(.task-page)";
 const gapOf = (page: Page): Promise<number> =>
   page.evaluate(() => {
-    const panes = document.querySelector(".panes");
-    return panes ? parseFloat(getComputedStyle(panes).getPropertyValue("--pane-gap")) || 0 : 0;
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--pane-gap")) || 0;
   });
 const boxOf = (page: Page, selector: string): Promise<Box | null> =>
   page.evaluate((s) => {
@@ -148,7 +148,7 @@ try {
             foot: strip.bottom - Math.max(...tiles.map((tile) => tile.bottom)),
             add: add.top >= strip.top && add.bottom <= strip.bottom,
             under: first.top - strip.bottom,
-            listEnd: side.bottom,
+            listEnd: side.bottom - Number.parseFloat(getComputedStyle(document.querySelector(".side")!).borderBottomWidth),
             gearTop: gear.top,
             gearFoot: innerHeight - gear.bottom,
           }
@@ -169,8 +169,8 @@ try {
     );
     expect(!!shell && near(shell.foot, 0) && shell.add, `standing on the strip's bottom edge, with + inside the strip (${shell?.foot} above it)`);
     await nothingClashes(page, "on the Mac");
-    expect(!!shell && near(shell.under, 0), `the channel's name starts right under the tab strip (${shell?.under})`);
-    expect(!!shell && shell.listEnd <= shell.gearTop && near(shell.gearFoot, 8), "Settings sits in the bottom-left corner, under the list");
+    expect(!!shell && near(shell.under, (await gapOf(page)) + 8), `the channel's name starts 8px inside the sidebar pane, under the tab strip (${shell?.under})`);
+    expect(!!shell && shell.listEnd <= shell.gearTop && near(shell.gearFoot, (await gapOf(page)) + 8), "Settings sits in the sidebar pane's bottom-left corner, under the list");
 
     const side = await page.evaluate(() => {
       const el = document.querySelector<HTMLElement>(".side");
@@ -244,7 +244,10 @@ try {
       const add = document.querySelector(".tile.is-add")?.getBoundingClientRect();
       return search && add ? { search: innerWidth - search.right, after: search.left - add.right } : null;
     });
-    expect(!!ends && near(ends.search, 8) && ends.after >= 8, `Search sits at the far end of the top row, 8px in, after the tabs (${ends?.search} in, ${ends?.after} after)`);
+    expect(
+      !!ends && near(ends.search, 8) && near(ends.after, 4),
+      `Search sits at the far end of the top row, 8px in, 4px after +, as the sidebar button sits 4px before Back (${ends?.search} in, ${ends?.after} after)`,
+    );
     const before = await placesOf(page, HEAD);
     const sideBefore = await placesOf(page, SIDE);
     const tabsBefore = await placesOf(page, TABS);
@@ -257,7 +260,18 @@ try {
     const tabsHidden = moved(tabsBefore, await placesOf(page, TABS));
     expect(tabsHidden.length === 0, `the tabs stay where they are with the sidebar hidden${tabsHidden.length ? `: ${tabsHidden.join("; ")}` : ""}`);
     await page.mouse.move(2, height / 2);
-    await page.waitForTimeout(900);
+    await page
+      .waitForFunction(
+        () => {
+          const side = document.querySelector(".chan.is-peek .side");
+          return !!side && side.getAnimations().every((a) => a.playState !== "running");
+        },
+        undefined,
+        { timeout: 5_000 },
+      )
+      .catch(() => {
+        // The sidebar never peeked or kept sliding: the reading below says which.
+      });
     const peek = await page.evaluate(() => {
       const side = document.querySelector(".side");
       const box = side?.getBoundingClientRect();
@@ -265,7 +279,7 @@ try {
       return box && main && side ? { on: !!document.querySelector(".chan.is-peek"), left: box.left, right: box.right, shown: getComputedStyle(side).visibility === "visible", main: main.left } : null;
     });
     expect(
-      !!peek && peek.on && peek.shown && near(peek.left, 0) && near(peek.main, await gapOf(page)),
+      !!peek && peek.on && peek.shown && near(peek.left, await gapOf(page)) && near(peek.main, await gapOf(page)),
       `touching the left edge slides the hidden sidebar in over the conversation (${JSON.stringify(peek)})`,
     );
     const sheet = await peekSheet(page);
@@ -324,6 +338,8 @@ try {
     await page.locator(NOW_ROW).first().click();
     await page.waitForSelector(TASK_PANE);
     await page.waitForTimeout(900);
+    const found = await page.evaluate((view) => [...document.querySelectorAll<HTMLElement>(view)].some((el) => el.checkVisibility() && !!el.querySelector(".task-page, .task-body")), TASK_VIEW);
+    expect(found, "the opened task shows where perf-feel looks for it (scripts/task-view.ts)");
     const panel = await boxOf(page, TASK_PANE);
     expect(
       !!slot && !!panel && near(slot.left, panel.left) && near(slot.top, panel.top) && near(slot.right, panel.right) && near(slot.bottom, panel.bottom),
@@ -356,6 +372,8 @@ try {
     await page.locator(NOW_ROW).first().click();
     await page.waitForSelector(TASK_PANE);
     await page.waitForTimeout(900);
+    const found = await page.evaluate((view) => [...document.querySelectorAll<HTMLElement>(view)].some((el) => el.checkVisibility() && !!el.querySelector(".task-page, .task-body")), TASK_VIEW);
+    expect(found, "the opened task shows where perf-feel looks for it (scripts/task-view.ts)");
     const panel = await boxOf(page, TASK_PANE);
     const chat = await boxOf(page, ".main");
     const composer = await boxOf(page, ".main .composer");
@@ -394,7 +412,7 @@ try {
     await open(page, "channel");
     const sideWidth = async (): Promise<number> => {
       const side = await boxOf(page, ".side");
-      return side ? side.right - side.left : 0;
+      return side ? side.right : 0;
     };
     const covered = async (): Promise<number> => {
       const side = await boxOf(page, ".side");
@@ -404,6 +422,7 @@ try {
     const grip = page.getByRole("separator", { name: "Resize the sidebar" });
     const gripBox = await grip.boundingBox();
     const sideBefore = await sideWidth();
+    const trackBefore = await boxOf(page, NOW_PANE);
     if (gripBox) {
       const [gx, gy] = [gripBox.x + gripBox.width / 2, gripBox.y + gripBox.height / 2];
       await page.mouse.move(gx, gy);
@@ -415,8 +434,14 @@ try {
     const composerWide = await boxOf(page, ".main .composer");
     const trackWide = await boxOf(page, NOW_PANE);
     expect(!!gripBox && sideWide === sideBefore + 64, `dragging the sidebar's edge 61px widens it by 64, on the grid (${sideBefore} → ${sideWide})`);
-    expect(!!composerWide && near(composerWide.x, width / 2), `the composer stays on the window's centre with a wider sidebar (${composerWide?.x.toFixed(1)} of ${width / 2})`);
-    expect(!!trackWide && near(width - trackWide.left, sideWide), `and Now takes the same width on the right (${trackWide ? width - trackWide.left : "?"} of ${sideWide})`);
+    expect(
+      !!composerWide && !!trackWide && near(composerWide.x, (sideWide + trackWide.left) / 2, 2),
+      `the composer stays on the conversation's centre with a wider sidebar (${composerWide?.x.toFixed(1)} of ${trackWide ? (sideWide + trackWide.left) / 2 : "?"})`,
+    );
+    expect(
+      !!trackWide && !!trackBefore && near(trackWide.left, trackBefore.left),
+      `and Now keeps its width on the right (${trackWide ? width - trackWide.left : "?"} of ${trackBefore ? width - trackBefore.left : "?"})`,
+    );
     await grip.focus();
     const under = [await covered()];
     await page.keyboard.press("Home");
@@ -606,7 +631,7 @@ try {
     expect(!!strip && strip.over <= 1 && strip.page <= 0, `nothing scrolls sideways (${strip?.over}px over in the strip, ${strip?.page}px in the page)`);
     expect(
       !!strip && strip.open.length === 1 && near(strip.open[0]!.bottom, strip.foot) && strip.open[0]!.shade === strip.ground && strip.frame !== strip.ground,
-      `one tab is open, in the page's colour and joined to it, on the frame's (${strip?.open.length} open, ${strip?.open[0]?.bottom} of ${strip?.foot}, ${strip?.ground} on ${strip?.frame})`,
+      `one tab is open, a pane in the page's colour standing on the strip's bottom edge, on the frame's (${strip?.open.length} open, ${strip?.open[0]?.bottom} of ${strip?.foot}, ${strip?.ground} on ${strip?.frame})`,
     );
     expect(!!strip && near(strip.addRight + 8, strip.search, 9) && tabs.every((tab) => tab.right <= strip.addLeft + 1), `+ ends the strip, beside Search (${strip?.addRight} before ${strip?.search})`);
     expect(tabs.length > 0 && tabs.every((tab) => tab.icon === 16), `every tab's icon is 16px (${[...new Set(tabs.map((tab) => tab.icon))].join(", ")})`);
@@ -639,9 +664,134 @@ try {
       expect(!!strip && near(tabs.at(-1)!.right, strip.addLeft, 1), "and the tabs still fill the strip");
     }
     if (fit === "icons") {
-      const rest = tabs.filter((tab) => !tab.on);
-      expect(rest.length > 0 && rest.every((tab) => !tab.shown) && tabs.filter((tab) => tab.on).every((tab) => tab.whole), "too many to name: tabs are their icons, and the open one keeps its name");
-      expect(Math.max(...rest.map((tab) => tab.width)) - Math.min(...rest.map((tab) => tab.width)) <= 1, `in equal shares (${rest.map((tab) => Math.round(tab.width)).join(", ")})`);
+      expect(tabs.length > 0 && tabs.every((tab) => !tab.shown), "too many to name: every tab is its icon, the open one marked by its background");
+      expect(Math.max(...widths) - Math.min(...widths) <= 1, `in equal shares (${widths.map((w) => Math.round(w)).join(", ")})`);
+    }
+    await page.close();
+  }
+  for (const [width, fit] of [
+    [1710, "roomy"],
+    [1280, "tight"],
+    [900, "icons"],
+  ] as const) {
+    console.log(`\nthe tabs stay put, tabs-8 at ${width} wide`);
+    const page = await browser.newPage({ viewport: { width, height: 800 } });
+    await page.goto(`${base}?shot=tabs-8&theme=dark`);
+    await page.waitForSelector(".rail .tile[data-code]");
+    await page.waitForTimeout(900);
+    const places = () =>
+      page.evaluate(() => ({
+        fit: document.querySelector<HTMLElement>(".rail")?.dataset["fit"],
+        tabs: [...document.querySelectorAll<HTMLElement>(".rail .tile[data-code]")].map((tab) => ({
+          code: tab.dataset["code"] ?? "",
+          x: tab.getBoundingClientRect().left,
+          mark: !!tab.querySelector(".tile-badge, .tile-dot"),
+        })),
+      }));
+    const before = await places();
+    const moved: string[] = [];
+    let marksChanged = 0;
+    let last = before;
+    for (const code of ["landing", "livewire", "notes", "kiwi"]) {
+      await page.click(`.rail .tile[data-code="${code}"]`);
+      await page.waitForTimeout(400);
+      const now = await places();
+      marksChanged += now.tabs.filter((tab) => last.tabs.find((was) => was.code === tab.code)?.mark !== tab.mark).length;
+      last = now;
+      const off = now.tabs.flatMap((tab, i) => {
+        const was = before.tabs[i];
+        return was && was.code === tab.code && near(was.x, tab.x, 0.5) ? [] : [`${tab.code} at ${i} x ${Math.round(tab.x)} (was ${was?.code} x ${Math.round(was?.x ?? 0)})`];
+      });
+      if (off.length || now.tabs.length !== before.tabs.length) moved.push(`after ${code}: ${off.join(", ")}`);
+    }
+    expect(before.fit === fit, `the strip is ${fit} here (${before.fit})`);
+    expect(marksChanged > 0, `unread marks come and go as tabs open and close (${marksChanged} changes)`);
+    expect(moved.length === 0, `opening 4 tabs in turn moves no tab, in order or on screen${moved.length ? `: ${moved.join("; ")}` : ""}`);
+    await page.close();
+  }
+  for (const [width, fit] of [
+    [1710, "roomy"],
+    [900, "icons"],
+  ] as const) {
+    console.log(`\ndragging tabs into order, tabs-8 at ${width} wide`);
+    const page = await browser.newPage({ viewport: { width, height: 800 } });
+    await page.goto(`${base}?shot=tabs-8&theme=dark`);
+    await page.waitForSelector(".rail .tile[data-code]");
+    await page.waitForTimeout(900);
+    const order = () => page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".rail [data-code], .rail [data-folder]")].map((el) => el.dataset["code"] ?? "[folder]").join(" "));
+    const active = () => page.evaluate(() => document.querySelector(".rail .tile.is-on")?.getAttribute("data-code") ?? null);
+    const saved = () => page.evaluate(() => localStorage.getItem("ui.prefs"));
+    const drag = async (from: string, to: string | null, at: number) => {
+      const fire = (step: { kind: string; on: "source" | "point"; from: string; to: string | null; at: number }) =>
+        page.evaluate((s) => {
+          const w = window as unknown as { __dt?: DataTransfer; __point?: { x: number; y: number } };
+          const source = document.querySelector<HTMLElement>(`.rail ${s.from}`);
+          if (!source) throw new Error(`no ${s.from}`);
+          if (s.kind === "dragstart") {
+            w.__dt = new DataTransfer();
+            const box = s.to ? document.querySelector<HTMLElement>(`.rail ${s.to}`)?.getBoundingClientRect() : null;
+            w.__point = box ? { x: box.left + box.width * s.at, y: box.top + box.height / 2 } : { x: innerWidth / 2, y: innerHeight / 2 };
+          }
+          const point = w.__point ?? { x: 0, y: 0 };
+          const box = source.getBoundingClientRect();
+          const el = s.on === "source" ? source : document.elementFromPoint(point.x, point.y);
+          const x = s.on === "source" ? box.left + box.width / 2 : point.x;
+          const y = s.on === "source" ? box.top + box.height / 2 : point.y;
+          el?.dispatchEvent(new DragEvent(s.kind, { bubbles: true, cancelable: true, dataTransfer: w.__dt ?? null, clientX: x, clientY: y }));
+        }, step);
+      const step = { from, to, at };
+      await fire({ kind: "dragstart", on: "source", ...step });
+      await page.waitForTimeout(150);
+      await fire({ kind: "dragover", on: "point", ...step });
+      await page.waitForTimeout(250);
+      await fire({ kind: "dragover", on: "point", ...step });
+      await page.waitForTimeout(150);
+      await fire({ kind: "drop", on: "point", ...step });
+      await fire({ kind: "dragend", on: "source", ...step });
+      await page.waitForTimeout(500);
+    };
+    const start = await order();
+    expect(start === "kiwi um reedy landing livewire interlinked notes ops", `with no saved order the tabs keep today's order (${start})`);
+    expect((await page.evaluate(() => document.querySelector<HTMLElement>(".rail")?.dataset["fit"])) === fit, `the strip is ${fit} here`);
+    await page.click('.rail .tile[data-code="reedy"]');
+    await page.waitForTimeout(400);
+    expect((await order()) === start && (await active()) === "reedy" && (await saved()) === null, "a click switches channel and moves nothing");
+    await drag('[data-code="ops"]', '[data-code="um"]', 0.1);
+    const placed = await order();
+    expect(placed === "kiwi ops um reedy landing livewire interlinked notes", `dragging ops onto um's left edge puts it before um, the others make room (${placed})`);
+    expect((await active()) === "reedy", "and the open channel stays open");
+    const kept = await saved();
+    await drag('[data-code="landing"]', '[data-code="landing"]', 0.5);
+    await drag('[data-code="notes"]', null, 0);
+    expect((await order()) === placed && (await saved()) === kept && (await active()) === "reedy", "dropping back where it started, or outside the strip, saves nothing and switches nothing");
+    if (fit === "roomy") {
+      await page.click('.rail [data-code="interlinked"]', { button: "right" });
+      await page.getByRole("menuitem", { name: "Delete channel…" }).click();
+      await page.getByRole("textbox", { name: "Type interlinked to confirm" }).fill("interlinked");
+      await page.getByRole("button", { name: "Delete channel", exact: true }).click();
+      await page.waitForTimeout(600);
+      const left = await order();
+      expect(left === "kiwi ops um reedy landing livewire notes", `a channel that's gone drops out and the rest keep their places (${left})`);
+      await drag('[data-code="livewire"]', '[data-code="notes"]', 0.5);
+      const grouped = await order();
+      expect(grouped === "kiwi ops um reedy landing [folder]", `dropping livewire on the middle of notes makes a folder where notes sat (${grouped})`);
+      await drag("[data-folder]", '[data-code="kiwi"]', 0.1);
+      const moved = await order();
+      expect(moved === "[folder] kiwi ops um reedy landing", `a folder drags as one unit (${moved})`);
+      await page.reload();
+      await page.waitForSelector(".rail .tile[data-code]");
+      await page.waitForTimeout(900);
+      const reloaded = await order();
+      expect(
+        reloaded === `${moved} interlinked`,
+        `the order and the folder survive a reload; the demo forgets the delete, so interlinked comes back at the end as a channel the order hasn't seen (${reloaded})`,
+      );
+      await page.click(".rail .tile.is-add");
+      await page.getByRole("dialog", { name: "New channel" }).getByRole("textbox").fill("fresh");
+      await page.getByRole("dialog", { name: "New channel" }).getByRole("button", { name: "Create channel" }).click();
+      await page.waitForTimeout(700);
+      const grown = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".rail .tile[data-code]")].map((el) => el.querySelector(".tile-name")?.textContent ?? ""));
+      expect(grown.at(-1) === "fresh" && (await order()).startsWith(moved), `a new channel joins at the end (${grown.join(", ")})`);
     }
     await page.close();
   }

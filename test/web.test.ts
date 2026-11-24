@@ -92,7 +92,7 @@ describe("dashboard on the Bun relay", () => {
 
   test("the API still answers under /v1", async () => {
     const res = await fetch(`${relay}/v1/config`);
-    expect(await res.json()).toEqual({ githubSignIn: false });
+    expect(await res.json()).toEqual({ now: expect.any(Number), githubSignIn: false });
     expect((await fetch(`${relay}/v1/nope`)).status).toBe(404);
   });
 

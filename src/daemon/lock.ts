@@ -30,7 +30,7 @@ function commandOf(pid: number): string {
 }
 
 export function isKiwiDaemon(command: string): boolean {
-  return /(^|[\s/\\])(kiwi(\.exe)?|main\.ts)\s+daemon(\s|$)/.test(command);
+  return /(^|[\s/\\])(kiwi(\.exe|\.js)?|main\.ts)\s+daemon(\s|$)/.test(command);
 }
 
 function holder(path: string): { pid: number | null; age: number } | null {

@@ -52,6 +52,8 @@ import {
   unnamedAsks,
   unnamedTasks,
   type ChannelState,
+  handedToLead,
+  leadHoldsFor,
 } from "@kiwi/core/state.ts";
 import type { BlockMedia } from "@kiwi/core/doc/blocks.ts";
 import { addressed, blockMedia, docPlaceOfMessage, dropBlock, editBlock, readDoc, writeBlock, type DocPlace } from "./docs.ts";
@@ -233,6 +235,9 @@ export class SessionMessaging extends SessionListen {
       const { messages, state } = yield* this.state();
       const orig = yield* this.message(seq, messages);
       if (!orig) return yield* new Rejected(`no message #${seq}`);
+      const lead = orig.from === this.me ? null : leadHoldsFor(state, this.me);
+      if (lead !== null && handedToLead(state, seq))
+        return yield* new Rejected(`#${seq} is handed to ${lead}, the Lead: only the Lead or a person answers it, so tell @${lead} what you know in a message instead`);
       const to = orig.from === this.me ? orig.to : [orig.from];
       yield* this.mayI({ kind, to });
       const block = at && kind === "msg" ? { th: at.th, id: yield* this.postedBlock(body, at, imgs, extra.files) } : undefined;
@@ -455,7 +460,7 @@ export class SessionMessaging extends SessionListen {
     oneLook,
   );
 
-  protected event(ev: Event, body: string, to?: string[], re?: number, slots: Pick<SendOptions, "slot" | "free"> = {}) {
+  protected event(ev: Event, body: string, to?: string[], re?: number, slots: Pick<SendOptions, "slot" | "free" | "occurrence" | "after"> = {}) {
     return Effect.gen({ self: this }, function* () {
       yield* this.mayI({ kind: "event", ev });
       return yield* this.ch.fx.send(body, { kind: "event", ev, to: to?.length ? [...new Set(to)].filter((n) => n !== this.me) : undefined, ...(re !== undefined ? { re: [re] } : {}), ...slots });

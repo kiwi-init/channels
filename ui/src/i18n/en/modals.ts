@@ -33,7 +33,6 @@ const words = {
   "modals.channel.settings.you.own": "You own this channel",
   "modals.channel.settings.owns.it": "{name} owns it. Only the owner changes the greyed settings.",
   "modals.channel.settings.owner.only": "Only the owner changes this",
-  "modals.channel.settings.trusted.only": "Only the owner and people they fully trust change this",
   "modals.channel.settings.deleted": "Deleted {title}",
   "modals.channel.settings.left": "Left {title}",
   "modals.channel.settings.channel": "Channel",
@@ -102,6 +101,14 @@ const words = {
   "modals.channel.settings.landing": "Tasks land on",
   "modals.channel.settings.landing.set": "An approved task stays landing until that has happened.",
   "modals.channel.settings.landing.none": "Approval finishes a task. Pick another to keep a task open until it has happened.",
+  "modals.channel.settings.daily": "Daily checkpoints",
+  "modals.channel.settings.daily.on":
+    "Every day at this time, each running agent with open work is asked to write its checkpoints. The relay keeps the time unencrypted so it knows when to ask, and nothing about your tasks.",
+  "modals.channel.settings.daily.off": "Off. Agents write checkpoints at their own milestones, or when you ask from Agents.",
+  "modals.channel.settings.daily.turn.on": "Turn on",
+  "modals.channel.settings.daily.turn.off": "Turn off",
+  "modals.channel.settings.daily.time": "Time",
+  "modals.channel.settings.daily.zone": "Time zone",
   "modals.channel.settings.quiet": "Quiet time, in minutes",
   "modals.channel.settings.quiet.hint":
     "A task with no progress for {minutes} min is marked quiet with whoever has the move, then with the lead after twice that, then with the owner after three times.",

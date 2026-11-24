@@ -1,5 +1,6 @@
+import { procOf } from "./procs.ts";
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { Socket } from "bun";
 import type { Info, MemberRow } from "@kiwi/core/client.ts";
@@ -12,8 +13,22 @@ import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import type { PairedPerson } from "./pair.ts";
 import { lockPath } from "./lock.ts";
+import { launcher } from "../launcher.ts";
 import type { AdmitRoom } from "./admit.ts";
-import { DAEMON_PROTOCOL, daemonSock, isDaemonEvent, readListener, withDeadline, type DaemonEvent, type DaemonHello, type DaemonListener, type DaemonPeek, type DaemonSeat } from "./protocol.ts";
+import {
+  DAEMON_PROTOCOL,
+  daemonSock,
+  isDaemonEvent,
+  readHolder,
+  readListener,
+  withDeadline,
+  type ListenerHolder,
+  type DaemonEvent,
+  type DaemonHello,
+  type DaemonListener,
+  type DaemonPeek,
+  type DaemonSeat,
+} from "./protocol.ts";
 
 const PEEK_MS = 300;
 
@@ -228,9 +243,17 @@ export function spawnDaemon(dir = home(), argv?: string[]): void {
   const abs = resolve(dir);
   const child = spawn(cmd[0]!, cmd.slice(1), { cwd: abs, env: { ...process.env, KIWI_HOME: abs }, stdio: "ignore", detached: true });
   child.unref();
+  const ledger = process.env.KIWI_TEST_SPAWNS;
+  if (ledger && child.pid)
+    try {
+      appendFileSync(ledger, `${JSON.stringify({ pid: child.pid, start: procOf(child.pid)?.start ?? null, group: true, cmd: cmd.join(" ") })}\n`);
+    } catch {
+      // The test run's ledger is gone: that run is over, and nothing is left to clean up after it.
+    }
 }
 
 function cliDaemonArgv(): string[] {
+  if (launcher) return [launcher, "daemon"];
   const argv = [process.execPath];
   const main = process.argv[1];
   if (main && main !== "daemon" && (main.endsWith(".ts") || main.endsWith(".js"))) argv.push(main);
@@ -303,6 +326,7 @@ export async function daemonUnpair(sock = daemonSock()): Promise<void> {
 
 export interface HeldListener {
   readonly held: boolean | null;
+  readonly holder: ListenerHolder | null;
   close(): void;
 }
 
@@ -310,17 +334,23 @@ export async function holdListener(entry: Omit<DaemonListener, "at">, sock = dae
   let conn: DaemonConn | null = null;
   let ended = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let holder: ListenerHolder | null = null;
   const attempt = async (): Promise<boolean | null> => {
+    let c: DaemonConn | null = null;
     try {
-      const c = await openConn(sock, 2_000);
+      c = await openConn(sock, 2_000);
       const r = await c.call("hold", { ...entry, as: entry.agent });
       if (ended || r.held !== true) {
         c.close();
+        if (!ended) holder = readHolder(r.holder);
         return ended ? null : false;
       }
       conn = c;
       return true;
     } catch {
+      // A hold the daemon didn't answer stays queued on this connection: left open, a stalled daemon would later
+      // grant it to nobody and refuse this listener's own retry as "another session" (#2502).
+      c?.close();
       return null;
     }
   };
@@ -338,6 +368,7 @@ export async function holdListener(entry: Omit<DaemonListener, "at">, sock = dae
   if (held !== false) watch();
   return {
     held,
+    holder,
     close: () => {
       ended = true;
       if (timer) clearTimeout(timer);
@@ -345,6 +376,15 @@ export async function holdListener(entry: Omit<DaemonListener, "at">, sock = dae
       conn = null;
     },
   };
+}
+
+export async function reportUnarmed(channel: string, agent: string, why: string, sock = daemonSock()): Promise<void> {
+  const c = await openConn(sock, 2_000);
+  try {
+    await c.call("unarmed", { channel, as: agent, why });
+  } finally {
+    c.close();
+  }
 }
 
 export async function daemonSeat(channel: string, agent: string, sock = daemonSock()): Promise<DaemonSeat | null> {

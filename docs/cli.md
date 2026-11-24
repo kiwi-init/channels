@@ -49,7 +49,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | --- | --- |
 | `kiwi specs` | The open specs and where each stands |
 | `kiwi spec show N` · `spec write N --file spec.md` | Read or write the spec of the person's message #N |
-| `kiwi spec ready N` | Mark it ready once its reviews pass, so the person's approve card shows |
+| `kiwi spec ready N` | Mark it ready once its reviews pass, so the person's approve card shows. `--undo` takes the mark back while a review still asks for changes |
 | `kiwi spec tick N "words"` | Tick the Done when box whose line says those words |
 | `kiwi spec start N` | Take an approved spec and plan it into tasks |
 | `kiwi spec comment N "…" --on "line"` | Comment on the spec, or one line of it |
@@ -57,6 +57,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi task start T7` · `task done T7` | Take a task if nobody has it · finish it |
 | `kiwi task assign T7 [NAME] ["next"]` | Hand it over, with where it stands |
 | `kiwi task checkpoint T7 --file note.md` | Where the work stands, for the next session. `--fresh` in a loop |
+| `kiwi task wait T7 "why" [--until 12h]` · `task wait T7 --end` | Nobody has a move until something happens: the clock pauses and the board shows "waiting: why". `--until` caps it; a post by its mover or `--end` resumes the clock from then |
 | `kiwi task review T7 --at SHA` | Open a review round (`--run ID` for a run task) |
 | `kiwi task approve T7 --round N` · `reject` | The reviewer's verdict on that round. It stays in Kiwi, on the round and in the task's thread, not on the pull request |
 | `kiwi task kept T7 [--at SHA] [--onto REF]` | After a new commit on an approved task: check in this checkout that it is still the approved code (the same tree, or only clean merges of the target branch) and record it, so the approval holds |
@@ -69,6 +70,8 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi task close T7 "why"` | The lead or a person: done without its remaining steps, with the reason kept |
 | `kiwi task` | The board, with whose move each open task is |
 
+At the end of each turn, the Stop hook also notes where each of your open tasks stands on disk: the worktree whose branch names the task (`T7-…`, or its pull request's branch), with its branch, last commit, uncommitted files and how far it is ahead of or behind `origin`. Nothing is noted when that hasn't changed, or for a task with no such worktree. `kiwi task show T7` and a new session show it beside your own checkpoint, which it never replaces. The uncommitted files are that checkout's, so they may include someone else's edits. A turn cut off by a shutdown isn't noted.
+
 ## This computer
 
 | Command | What it does |
@@ -78,6 +81,7 @@ Each install and each update then runs `kiwi cleanup`, which removes what older 
 | `kiwi unpair` | Stop taking asks from your app; the relay forgets this computer |
 | `kiwi daemon` | This computer's hub: key, certificate and every agent's seat. Starts on its own |
 | `kiwi loop` | A fresh session for each task, in a tmux window. `--harness`, `--model`, `--effort` |
+| `kiwi up` | After a restart, bring every seat here back, one tmux window each. `--dry-run`, `--seat HANDLE` ([After a restart](loop.md#after-a-restart)) |
 | `kiwi harnesses` | The harnesses here, their versions, and whether Kiwi can wake each |
 | `kiwi hooks install` · `uninstall` · `status` | The harness hooks |
 | `kiwi doctor` | Check the install, the relay, your devices and hooks, with a fix for each problem |

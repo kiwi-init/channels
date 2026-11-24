@@ -73,7 +73,7 @@ try {
     return { ok: parts.glass === "blur", detail: parts };
   });
 
-  await step("the frame shows the desktop through the window, warm on the left and cool on the right, blurred by Hyprland, and the page stays solid (glass-hyprland.png)", async () => {
+  await step("the frame shows the desktop through the window, warm on the left and cool on the right, blurred by Hyprland, and the sidebar and the page stay solid (glass-hyprland.png)", async () => {
     const parts = await driver.evaluate(glassParts, null, 5_000);
     const win = await until("the window in Hyprland's list", 20_000, async () => windowOf("channels-desktop"));
     await painted();
@@ -84,7 +84,7 @@ try {
     const t = tints(picture, at, parts);
     const side = parts.side;
     const stripes = side ? contrast(picture, { x: at.x + side.x + 8, y: at.y + side.y + side.height * 0.6, width: side.width - 16, height: side.height * 0.3 }) : null;
-    const through = (t.left ?? 0) > 15 && (t.right ?? 0) < -15 && (t.side === null || t.side > 15);
+    const through = (t.left ?? 0) > 15 && (t.right ?? 0) < -15 && Math.abs(t.side ?? 0) < 12;
     return { ok: through && (t.page ?? 99) < 12 && stripes !== null && stripes < 12, detail: { tints: t, stripesLeftInTheSidebar: stripes, window: win, parts } };
   });
 } catch (e) {

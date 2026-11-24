@@ -225,6 +225,8 @@ export class SessionListen extends SessionState {
           ...(isReach(mine.reach) ? { reach: mine.reach } : {}),
           ...(mine.read ? { readAt: mine.read.at } : {}),
           ...(myWake ? { wake: myWake } : {}),
+          ...(mine.unarmed ? { unarmed: mine.unarmed } : {}),
+          ...(mine.untaken ? { untaken: mine.untaken } : {}),
         });
       return found;
     });

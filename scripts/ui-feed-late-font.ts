@@ -83,7 +83,7 @@ try {
   await server.stop(true);
 }
 if (fails.length) {
-  console.error(`\n${fails.length} failed in ${engine}: a late font moved the conversation`);
+  console.error(`\n${fails.length} failed in ${engine}: a late font moved the conversation\n${fails.map((f) => `- ${f}`).join("\n")}`);
   process.exit(1);
 }
 console.log(`\na late font leaves the conversation where it was, in ${engine}`);

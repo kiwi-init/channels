@@ -1,5 +1,5 @@
 import { b64url, fromB64url, ownerFingerprint, type JoinCode } from "./crypto.ts";
-import { sign, verify, type Identity } from "./identity.ts";
+import { sign, signedBy, VerifyCouldNotRun, type Identity } from "./identity.ts";
 import { personaOf, type Persona, type Personality } from "./personality.ts";
 
 export interface Pin {
@@ -29,30 +29,54 @@ export interface PinFailed {
 
 const failed = (): PinFailed => ({ invalid: true });
 
-async function openPin(token: unknown, room: string): Promise<{ pk: string; pin: Pin } | PinFailed | null> {
+interface PinCouldNotRun {
+  couldNotRun: VerifyCouldNotRun;
+}
+
+function parsedPin(token: string): { room?: unknown; pk?: unknown; sig?: unknown; pin?: { id?: unknown; name?: unknown; hash?: unknown } } | null {
+  try {
+    return JSON.parse(new TextDecoder().decode(fromB64url(token)));
+  } catch {
+    // A token that isn't base64url JSON carries no signed pin.
+    return null;
+  }
+}
+
+async function openPin(token: unknown, room: string): Promise<{ pk: string; pin: Pin } | PinFailed | PinCouldNotRun | null> {
   if (token === undefined || token === null || token === "") return null;
   if (typeof token !== "string" || token.length > MAX_PIN || !/^[A-Za-z0-9_-]+$/.test(token)) return failed();
+  const o = parsedPin(token);
+  if (!o || typeof o !== "object" || o.room !== room || typeof o.pk !== "string" || typeof o.sig !== "string") return failed();
   try {
-    const o = JSON.parse(new TextDecoder().decode(fromB64url(token))) as { room?: unknown; pk?: unknown; sig?: unknown; pin?: { id?: unknown; name?: unknown; hash?: unknown } };
-    if (o.room !== room || typeof o.pk !== "string" || typeof o.sig !== "string" || !(await verify(o as { pk: string; sig: string }))) return failed();
-    const { id, name, hash } = o.pin ?? {};
-    if (typeof id !== "string" || !id || id.length > MAX_ID || typeof name !== "string" || !name.trim() || typeof hash !== "string" || !HASH_RE.test(hash)) return failed();
-    return { pk: o.pk, pin: { id, name: name.trim(), hash } };
-  } catch {
-    // A token that isn't base64url JSON, or whose key can't check a signature, failed verification.
-    return failed();
+    if (!(await signedBy(o))) return failed();
+  } catch (e) {
+    return { couldNotRun: e instanceof VerifyCouldNotRun ? e : new VerifyCouldNotRun(e) };
   }
+  const { id, name, hash } = o.pin ?? {};
+  if (typeof id !== "string" || !id || id.length > MAX_ID || typeof name !== "string" || !name.trim() || typeof hash !== "string" || !HASH_RE.test(hash)) return failed();
+  return { pk: o.pk, pin: { id, name: name.trim(), hash } };
 }
 
 export async function readPin(token: unknown, room: string, ownerPk: string): Promise<Pin | PinFailed | null> {
   const read = await openPin(token, room);
   if (!read || "invalid" in read) return read;
+  if ("couldNotRun" in read) return failed();
   return read.pk === ownerPk ? read.pin : failed();
 }
 
-export async function pinFits(token: string, code: JoinCode): Promise<boolean> {
+export type PinCheck = { kind: "fits" } | { kind: "invalid" } | { kind: "couldNotRun"; why: string };
+
+export async function pinFits(token: string, code: JoinCode): Promise<PinCheck> {
   const read = await openPin(token, code.roomId);
-  return !!read && !("invalid" in read) && (await ownerFingerprint(read.pk)) === code.ownerFp;
+  if (!read || "invalid" in read) return { kind: "invalid" };
+  if ("couldNotRun" in read) return { kind: "couldNotRun", why: read.couldNotRun.message };
+  let fp: string;
+  try {
+    fp = await ownerFingerprint(read.pk);
+  } catch (e) {
+    return { kind: "couldNotRun", why: new VerifyCouldNotRun(e).message };
+  }
+  return fp === code.ownerFp ? { kind: "fits" } : { kind: "invalid" };
 }
 
 export async function pinned(pin: Pick<Pin, "id" | "hash">, options: readonly Personality[]): Promise<Persona | null> {

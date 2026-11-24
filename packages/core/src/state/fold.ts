@@ -12,6 +12,7 @@ import {
   POWERS,
   powerChange,
   ROOM_ID_RE,
+  type Event as WireEvent,
   type Message,
   type Power,
   type Trust,
@@ -34,7 +35,7 @@ import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
-import { nudge, QUIET_MS, roll, tick, timedStep, wakeGot, type ClockView } from "./clocks.ts";
+import { nudge, QUIET_MS, roll, tick, timedStep, waitEndedBy, wakeGot, type ClockView } from "./clocks.ts";
 
 const CLOCK_BLIND_OPS: ReadonlySet<string> = new Set([
   "hello",
@@ -50,6 +51,7 @@ const CLOCK_BLIND_OPS: ReadonlySet<string> = new Set([
   "doc.open",
   "spec.set",
   "spec.ready",
+  "spec.unready",
   "spec.approve",
   "spec.result",
   "spec.delete",
@@ -431,6 +433,8 @@ function folding(
     quietMs: from?.quietMs ?? QUIET_MS,
     reviewReset: from?.reviewReset ?? false,
     tapToAnswer: from?.tapToAnswer ?? false,
+    checkpointDaily: from?.checkpointDaily ?? null,
+    checkpointAsks: from?.checkpointAsks ?? [],
     landing: from?.landing ?? null,
     landingSteps: from?.landingSteps ?? null,
     passedAsks,
@@ -450,15 +454,23 @@ function folding(
     return !by || ![...by].some((n) => answersAsk(members, m, n));
   };
   const clockView = (): ClockView => ({ tasks, members, github: ctx.github, branchPrefix: ctx.branchPrefix, quietMs: ctx.quietMs, openAsks: holding.filter(stillOpen) });
+  const present = (m: FoldMember | undefined): m is FoldMember => !!m && m.active && (m.owner || !gone.has(m.pk));
   const agentHere = (name: string): boolean => {
     const who = members.get(name);
-    return !!who && who.active && !isPerson(who);
+    return present(who) && !isPerson(who);
   };
-  const leadHere = (): string | undefined => (lead && members.get(lead)?.active ? lead : [...members.values()].find((x) => x.owner && x.active)?.name);
-  const standsFor = (name: string): string | undefined => (members.get(name)?.active ? name : [...members.values()].find((x) => x.owner && x.active)?.name);
+  const leadNow = (): string | null => {
+    const signedLead = [...members.values()].filter((m) => present(m) && signed.has(m.name) && m.persona?.role === "lead").sort((a, b) => a.joined - b.joined)[0]?.name;
+    return signedLead ?? (lead && present(members.get(lead)) && !signed.has(lead) ? lead : null);
+  };
+  const ownerHere = (): string | undefined => [...members.values()].find((x) => x.owner && x.active)?.name;
+  const leadHere = (): string | undefined => leadNow() ?? ownerHere();
+  const standsFor = (name: string): string | undefined => (present(members.get(name)) ? name : ownerHere());
   const timeTask = (t: Task): void => void (timedStep(t) ? timed.add(t.id) : timed.delete(t.id));
-  const tickTask = (t: Task | undefined, seq: number, at: number, by?: string): void => {
+  const keepsWait = (ev: WireEvent): boolean => ev.op === "task.snapshot" || (ev.op === "task.update" && ev.checkpoint === true);
+  const tickTask = (t: Task | undefined, seq: number, at: number, by?: string, endsWait = true): void => {
     if (!t) return;
+    if (t.wait && endsWait && by !== undefined && t.wait.seq !== seq && waitEndedBy(clockView(), t, by, at, leadHere())) delete t.wait;
     tick(clockView(), t, { seq, at, ...(by !== undefined ? { by } : {}) });
     timeTask(t);
   };
@@ -772,7 +784,7 @@ function folding(
           continue;
         }
       }
-      if (ev.op === "spec.set" || ev.op === "spec.ready" || ev.op === "spec.approve" || ev.op === "spec.result" || ev.op === "spec.delete") {
+      if (ev.op === "spec.set" || ev.op === "spec.ready" || ev.op === "spec.unready" || ev.op === "spec.approve" || ev.op === "spec.result" || ev.op === "spec.delete") {
         placeOf.set(m.seq, MAIN);
         const why = foldSpec(specs, askHeads, members, m, ev, at, leads(member));
         if (why) reject(why);
@@ -808,7 +820,7 @@ function folding(
       if (!rejected.has(m.seq) && ev.op !== "task.nudge" && ev.op !== "task.wake") {
         const subject = ev.op === "task.add" ? tasks.get(m.seq) : before && tasks.has(before.id) ? before : undefined;
         if (subject) {
-          tickTask(subject, m.seq, at, m.from);
+          tickTask(subject, m.seq, at, m.from, !keepsWait(ev));
           for (const other of tasks.values())
             if (other !== subject && other.state === "todo" && other.owner !== undefined && (other.owner === subject.owner || other.owner === ownedBy)) tickTask(other, m.seq, at);
         } else if (ev.op === "github") {
@@ -882,6 +894,8 @@ function folding(
       ...(ctx.quietMs !== QUIET_MS ? { quietMs: ctx.quietMs } : {}),
       ...(ctx.reviewReset ? { reviewReset: true as const } : {}),
       ...(ctx.tapToAnswer ? { tapToAnswer: true as const } : {}),
+      ...(ctx.checkpointDaily ? { checkpointDaily: ctx.checkpointDaily } : {}),
+      ...(ctx.checkpointAsks.length ? { checkpointAsks: ctx.checkpointAsks } : {}),
       landing: ctx.landing,
       ...(ctx.landingSteps ? { landingSteps: ctx.landingSteps } : {}),
       ...(passedAsks.size ? { passedAsks: [...passedAsks] } : {}),
@@ -935,9 +949,7 @@ function folding(
     member.scopes = scopesByKey.get(member.pk) ?? [];
     if (!member.owner && gone.has(member.pk)) member.active = false;
   }
-  const signedLead = [...members.values()].filter((m) => m.active && signed.has(m.name) && m.persona?.role === "lead").sort((a, b) => a.joined - b.joined)[0]?.name;
-  const legacyLead = lead && members.get(lead)?.active && !signed.has(lead) ? lead : null;
-  const theLead = signedLead ?? legacyLead;
+  const theLead = leadNow();
   for (const m of members.values()) {
     if (!signed.has(m.name)) {
       const leads = m.name === theLead;
@@ -998,6 +1010,8 @@ function folding(
     quietMs: ctx.quietMs,
     reviewReset: ctx.reviewReset,
     tapToAnswer: ctx.tapToAnswer,
+    checkpointDaily: ctx.checkpointDaily,
+    checkpointAsks: ctx.checkpointAsks,
     landing: ctx.landing,
     landingSteps: ctx.landingSteps,
     reactions,
