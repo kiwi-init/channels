@@ -29,6 +29,7 @@ import {
   type Page,
   type Split,
 } from "~/panes/store"
+import { note, type By, type Note, type Step } from "~/panes/history"
 
 const keptOf = (nav: Nav): Kept => ({ where: nav.where, tab: nav.tab, spec: nav.spec, part: nav.part, github: nav.github })
 
@@ -49,9 +50,51 @@ function save(): void {
   }, 300)
 }
 
-function put(code: string, layout: Layout): void {
+let by: By = "hand"
+
+function asApp(run: () => void): void {
+  const was = by
+  by = "app"
+  try {
+    run()
+  } finally {
+    by = was
+  }
+}
+
+function whatOf(leaf: Leaf | null): string {
+  if (!leaf) return "split"
+  const doc = leaf.doc
+  if (doc) return doc.kind === "panel" ? `panel:${doc.panel.kind}` : doc.kind
+  const nav = leaf.nav
+  if (!nav) return "main"
+  return nav.tab === "chat" ? nav.where.kind : `tab:${nav.tab}`
+}
+
+function spots(code: string, root: Node): Pick<Step, "screen" | "panes"> {
+  const host = document.querySelector<HTMLElement>(`[data-panes="${CSS.escape(code)}"]`)
+  const r = host?.getBoundingClientRect()
+  const w = r?.width || 1
+  const h = r?.height || 1
+  const side = host?.querySelector<HTMLElement>(".panes-probe")?.offsetWidth ?? 0
+  const f = (n: number) => Math.round(n * 100) / 100
+  return {
+    screen: { w: Math.round(r?.width ?? 0), h: Math.round(r?.height ?? 0) },
+    panes: boxes(root).leaves.map(({ leaf, box }) => ({
+      pane: leaf.id,
+      what: whatOf(leaf),
+      x: f(pixels(box.x, w, side) / w),
+      y: f(pixels(box.y, h, side) / h),
+      w: f(pixels(box.w, w, side) / w),
+      h: f(pixels(box.h, h, side) / h),
+    })),
+  }
+}
+
+function put(code: string, layout: Layout, step?: Note): void {
   setLayout(code, layout)
   save()
+  if (step) note({ ...step, at: Date.now(), code, by, ...spots(code, layout.root) })
 }
 
 const isBlank = (leaf: Leaf): boolean => leaf.doc?.kind === "blank"
@@ -89,7 +132,7 @@ export function splitAt(code: string, target: string, edge: Edge, page: Page): v
   if (now) return now.id === target ? focusPane(code, now.id) : movePane(code, now.id, target, edge)
   const leaf = fresh(code, page)
   const root = swap(layout.root, target, (found) => beside(edge, leaf, found))
-  if (root && root !== layout.root) put(code, { ...layout, root, focus: leaf.id })
+  if (root && root !== layout.root) put(code, { ...layout, root, focus: leaf.id }, { act: "open", pane: leaf.id, what: whatOf(leaf), target: whatOf(leafOf(layout.root, target)), edge })
 }
 
 export function fillPane(code: string, target: string, carry: Carry): void {
@@ -102,13 +145,13 @@ export function fillPane(code: string, target: string, carry: Carry): void {
   if (into) {
     if (into.id === target) return
     const root = swap(without(layout.root, into.id), target, () => into)
-    if (root) put(code, { ...layout, root, focus: into.id })
+    if (root) put(code, { ...layout, root, focus: into.id }, { act: "move", pane: into.id, what: whatOf(into), target: "blank", edge: "fill" })
     return
   }
   if (!("page" in carry)) return
   const leaf = { ...fresh(code, carry.page), id: target }
   const root = swap(layout.root, target, () => leaf)
-  if (root) put(code, { ...layout, root, focus: target })
+  if (root) put(code, { ...layout, root, focus: target }, { act: "open", pane: target, what: whatOf(leaf), target: "blank", edge: "fill" })
 }
 
 export function movePane(code: string, id: string, target: string, edge: Edge): void {
@@ -116,7 +159,7 @@ export function movePane(code: string, id: string, target: string, edge: Edge): 
   const leaf = leafOf(layout.root, id)
   if (!leaf || id === target || !leafOf(layout.root, target)) return
   const root = swap(without(layout.root, id), target, (found) => beside(edge, leaf, found))
-  if (root) put(code, { ...layout, root, focus: id })
+  if (root) put(code, { ...layout, root, focus: id }, { act: "move", pane: id, what: whatOf(leaf), target: whatOf(leafOf(layout.root, target)), edge })
 }
 
 export function closePane(code: string, id: string): void {
@@ -125,7 +168,7 @@ export function closePane(code: string, id: string): void {
   const top = layout.root
   const borrowed = top.kind === "split" && top.fix?.side === "b" && top.b.kind === "leaf" && top.b.id === id && !isNow(top.b)
   const root = borrowed ? { ...top, b: nowLeaf(code) } : without(top, id)
-  put(code, { root, focus: layout.focus === id ? MAIN : layout.focus, typing: layout.typing === id ? MAIN : layout.typing })
+  put(code, { root, focus: layout.focus === id ? MAIN : layout.focus, typing: layout.typing === id ? MAIN : layout.typing }, { act: "close", pane: id, what: whatOf(leafOf(top, id)) })
 }
 
 export function resizeSplit(code: string, id: string, size: { ratio: number } | { px: number }): void {
@@ -134,7 +177,7 @@ export function resizeSplit(code: string, id: string, size: { ratio: number } | 
     if (found.kind !== "split") return found
     return "px" in size && found.fix ? { ...found, fix: { ...found.fix, px: size.px } } : "ratio" in size ? { ...found, ratio: size.ratio } : found
   })
-  if (root && root !== layout.root) put(code, { ...layout, root })
+  if (root && root !== layout.root) put(code, { ...layout, root }, { act: "resize", pane: id, what: "split" })
 }
 
 const talks = (leaf: Leaf): boolean => !leaf.nav || (leaf.nav.tab === "chat" && composes(leaf.doc))
@@ -146,7 +189,9 @@ export function focusPane(code: string, id: string, moveTyping = true): void {
   if (layout.focus !== id || layout.typing !== typing) put(code, { ...layout, focus: id, typing })
 }
 
-export function panelGo(code: string, from: string, panel: Panel | null, room?: { id: string; edge: Edge }): void {
+export const panelGo = (...args: Parameters<typeof placePanel>): void => asApp(() => placePanel(...args))
+
+function placePanel(code: string, from: string, panel: Panel | null, room?: { id: string; edge: Edge }): void {
   const layout = layoutOf(code)
   const here = leafOf(layout.root, from)
   if (!panel) {
@@ -156,15 +201,18 @@ export function panelGo(code: string, from: string, panel: Panel | null, room?: 
   const doc: Doc = { kind: "panel", panel }
   const held = here?.doc?.kind === "panel" ? here : findLeaf(layout.root, (leaf) => leaf.doc?.kind === "panel")
   if (held?.nav) {
-    const root = swap(layout.root, held.id, () => ({ ...held, doc }))
-    if (root) put(code, { ...layout, root, focus: held.id })
+    const next = { ...held, doc }
+    const root = swap(layout.root, held.id, () => next)
+    if (root) put(code, { ...layout, root, focus: held.id }, { act: "replace", pane: held.id, what: whatOf(next), target: whatOf(held) })
     return
   }
   if (room && leafOf(layout.root, room.id)) return splitAt(code, room.id, room.edge, { at: "doc", doc })
   splitAt(code, dockedNow(layout.root)?.id === from || !here ? MAIN : from, "right", { at: "doc", doc })
 }
 
-export function showDoc(code: string, id: string | null, doc: Doc, shown: boolean, room?: { id: string; edge: Edge }): void {
+export const showDoc = (...args: Parameters<typeof placeDoc>): void => asApp(() => placeDoc(...args))
+
+function placeDoc(code: string, id: string | null, doc: Doc, shown: boolean, room?: { id: string; edge: Edge }): void {
   const layout = layoutOf(code)
   const here = id ? leafOf(layout.root, id) : null
   if (doc.kind === "activity") {
@@ -180,15 +228,17 @@ export function showDoc(code: string, id: string | null, doc: Doc, shown: boolea
   if (other && other.id !== here?.id) return shown ? focusPane(code, other.id) : movePane(code, other.id, MAIN, "right")
   if (here?.nav) {
     const where: Where = doc.kind === "task" ? { kind: "task", task: doc.task } : NOWHERE
-    const root = swap(layout.root, here.id, () => ({ ...here, nav: { ...here.nav!, tab: "chat", where }, doc }))
-    if (root) put(code, { ...layout, root })
+    const next: Leaf = { ...here, nav: { ...here.nav, tab: "chat", where }, doc }
+    const root = swap(layout.root, here.id, () => next)
+    if (root) put(code, { ...layout, root }, { act: "replace", pane: here.id, what: whatOf(next), target: whatOf(here) })
     return
   }
   if (doc.kind !== "now") return splitAt(code, MAIN, "right", { at: "doc", doc })
   const now = findLeaf(layout.root, isNow)
   if (!now) {
     const root = docked(code, layout.root)
-    return put(code, { ...layout, root, focus: dockedNow(root)?.id ?? MAIN })
+    const dock = dockedNow(root)
+    return put(code, { ...layout, root, focus: dock?.id ?? MAIN }, { act: "open", pane: dock?.id ?? MAIN, what: "now", target: whatOf(leafOf(layout.root, MAIN)), edge: "right" })
   }
   if (shown) return focusPane(code, now.id)
   movePane(code, now.id, MAIN, "right")
