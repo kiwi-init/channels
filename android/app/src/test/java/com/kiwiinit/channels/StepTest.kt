@@ -5,15 +5,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasScrollToNodeAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
+import android.view.View
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import com.kiwiinit.channels.engine.MessageView
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.kiwiinit.channels.engine.EngineException
 import com.kiwiinit.channels.engine.StepAnswer
@@ -151,6 +161,32 @@ class StepTest {
         compose.waitForIdle()
         assertEquals(listOf("docs/setup.md"), tried)
         compose.onNodeWithText("Done").assertIsEnabled()
+    }
+
+    @Test
+    fun theKeyboardOpeningForAStepNoteKeepsTheNoteInView() {
+        val model = answering(::answered)
+        stepAsked(model, waiting = true)
+        val room = model.rooms.getValue(DEV)
+        val after = (1..30).map { MessageView(STEP_SEQ + it, "hearty-badger", room.messages.last().at + it * 1_000.0, "msg", "Later message $it") }
+        model.rooms[DEV] = room.copy(messages = room.messages + after, head = after.last().seq, last = after.last(), latest = after.last())
+        lateinit var view: View
+        compose.setContent {
+            view = LocalView.current
+            ChannelsTheme {
+                Surface(Modifier.fillMaxSize()) { ConversationScreen(model, Spot(DEV), back = {}) }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Can't do it"))
+        compose.onNodeWithText("Can't do it").performClick()
+        compose.onNodeWithTag(STEP_NOTE).performClick()
+        compose.waitForIdle()
+        val keyboard = WindowInsetsCompat.Builder().setInsets(WindowInsetsCompat.Type.ime(), Insets.of(0, 0, 0, 300)).setVisible(WindowInsetsCompat.Type.ime(), true).build()
+        compose.runOnUiThread { ViewCompat.dispatchApplyWindowInsets(view, keyboard) }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitForIdle()
+        compose.onNodeWithTag(STEP_NOTE).assertIsDisplayed()
     }
 
     private fun open(model: AppModel, waiting: Boolean, step: StepView = SIGN_STEP, answer: StepAnswer? = null, links: UriHandler? = null) {
