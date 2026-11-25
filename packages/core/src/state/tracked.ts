@@ -57,7 +57,7 @@ export class TrackedMap<K, V> extends Map<K, V> {
 
 export const quietValues = <K, V>(map: ReadonlyMap<K, V>): MapIterator<V> => Map.prototype.values.call(map) as MapIterator<V>;
 
-export const quietEntries = <K, V>(map: ReadonlyMap<K, V>): MapIterator<[K, V]> => Map.prototype.entries.call(map) as MapIterator<[K, V]>;
+const quietEntries = <K, V>(map: ReadonlyMap<K, V>): MapIterator<[K, V]> => Map.prototype.entries.call(map) as MapIterator<[K, V]>;
 
 const copied = <V>(value: V): V => (typeof value === "object" && value !== null ? structuredClone(value) : value);
 

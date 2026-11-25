@@ -12,7 +12,7 @@ interface BoardKey {
   seen: unknown
 }
 
-export function boardKeyOf(state: ChannelState): BoardKey {
+function boardKeyOf(state: ChannelState): BoardKey {
   return {
     whole: Object.entries(state).filter(([k]) => !PER_MESSAGE.has(k)),
     seen: [
@@ -23,7 +23,7 @@ export function boardKeyOf(state: ChannelState): BoardKey {
   }
 }
 
-export const sameBoard = (a: BoardKey, b: BoardKey): boolean =>
+const sameBoard = (a: BoardKey, b: BoardKey): boolean =>
   a.whole.length === b.whole.length && a.whole.every(([k, v], i) => b.whole[i]![0] === k && Object.is(v, b.whole[i]![1])) && same(a.seen, b.seen)
 
 export function keptBoard(was: { state: ChannelState; key: BoardKey } | null, state: ChannelState): { state: ChannelState; key: BoardKey } {
