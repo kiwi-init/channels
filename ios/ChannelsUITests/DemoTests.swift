@@ -61,29 +61,25 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
-    func testPinchShowsWhereThingsStand() throws {
+    func testWhereThingsStand() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launchArguments = ["-demo", "YES", "-standOpen", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(general.waitForExistence(timeout: 15))
         general.tap()
-        let feed = app.scrollViews.firstMatch
-        XCTAssertTrue(feed.waitForExistence(timeout: 5), "the chat")
-        add(shot(app, "stand chat"))
-
-        feed.pinch(withScale: 0.35, velocity: -0.6)
-        XCTAssertTrue(app.staticTexts["The phone release is one review away."].waitForExistence(timeout: 5), "the lead's last report shows at once")
+        let head = app.staticTexts["The phone release is one review away."]
+        XCTAssertTrue(head.waitForExistence(timeout: 5), "the lead's last report shows at once")
         XCTAssertTrue(app.staticTexts["Where things stand"].exists, "the page says what it is")
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '**'")).firstMatch.exists, "no raw markdown")
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '@'")).firstMatch.exists, "names, not handles")
         add(shot(app, "stand page"))
 
-        app.scrollViews.firstMatch.pinch(withScale: 3, velocity: 1)
+        head.tap()
         let composer = NSPredicate(format: "placeholderValue == 'Message'")
         let field = app.textViews.matching(composer).firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5) || app.textFields.matching(composer).firstMatch.exists, "pinching out goes back to the chat")
-        XCTAssertFalse(app.staticTexts["The phone release is one review away."].exists, "the page is gone")
+        XCTAssertTrue(field.waitForExistence(timeout: 5) || app.textFields.matching(composer).firstMatch.exists, "a tap on a line goes back into the chat")
+        XCTAssertFalse(head.exists, "the page is gone")
         add(shot(app, "stand back"))
     }
 

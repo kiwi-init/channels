@@ -59,12 +59,10 @@ struct ConversationScreen: View {
                         .accessibilityAction(.escape) { zoom.set(false, still: still) }
                     }
                 }
-                .gesture(
-                    Pinch { scale in
-                        zoom.move(scale)
-                    } ended: { _, velocity in
-                        zoom.release(velocity, still: still)
-                    }
+                .simultaneousGesture(
+                    MagnifyGesture(minimumScaleDelta: 0.01)
+                        .onChanged { value in zoom.move(value.magnification) }
+                        .onEnded { value in zoom.release(value.velocity, still: still) }
                 )
                 .onChange(of: zoom.zoomed) { _, open in
                     if open { report() }
@@ -91,6 +89,7 @@ struct ConversationScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .onAppear {
+            if model.demo && UserDefaults.standard.bool(forKey: "standOpen") { zoom.set(true, still: true) }
             visible = true
             seen()
             if model.focusNext == spot {

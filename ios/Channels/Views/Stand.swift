@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 enum StandTarget: Equatable {
     case chat(Int?)
@@ -219,33 +218,4 @@ struct ZoomAway: ViewModifier {
 
 private func fade(_ depth: CGFloat, from: CGFloat, to: CGFloat) -> CGFloat {
     min(1, max(0, (depth - from) / (to - from)))
-}
-
-struct Pinch: UIGestureRecognizerRepresentable {
-    let changed: (CGFloat) -> Void
-    let ended: (CGFloat, CGFloat) -> Void
-
-    func makeCoordinator(converter: CoordinateSpaceConverter) -> Alongside {
-        Alongside()
-    }
-
-    func makeUIGestureRecognizer(context: Context) -> UIPinchGestureRecognizer {
-        let pinch = UIPinchGestureRecognizer()
-        pinch.delegate = context.coordinator
-        return pinch
-    }
-
-    func handleUIGestureRecognizerAction(_ pinch: UIPinchGestureRecognizer, context: Context) {
-        switch pinch.state {
-        case .began, .changed: changed(pinch.scale)
-        case .ended, .cancelled, .failed: ended(pinch.scale, pinch.velocity)
-        default: break
-        }
-    }
-
-    final class Alongside: NSObject, UIGestureRecognizerDelegate {
-        func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
-            true
-        }
-    }
 }
