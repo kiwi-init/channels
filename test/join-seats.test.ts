@@ -173,6 +173,39 @@ describe("joining without --as", () => {
     expect(seat().session).toBe("t1");
   });
 
+  test("the channels listing marks an idle seat without claiming it (#2590)", async () => {
+    const owner = scratch("own-list");
+    const code = created(await ok(owner, ["create", "idles", "--as", "boss"]));
+    const h = scratch("list");
+    const s1 = await join_(owner, h, code, { CODEX_THREAD_ID: "t1" });
+    const handle = youAre(s1.out);
+    await until(async () => (await daemonListening(daemonSock(h)).catch(() => [])).some((s) => s.agent === handle), "the joiner's daemon holding its seat");
+    await stopDaemon(daemonSock(h));
+    const cfgPath = join(h, "config.json");
+    const quiet = Date.now() - 13 * 3600_000;
+    const cfg = JSON.parse(readFileSync(cfgPath, "utf8")) as { bindings?: Record<string, unknown> };
+    for (const [d, v] of Object.entries(cfg.bindings ?? {})) {
+      const seats = (Array.isArray(v) ? v : [v]) as Record<string, unknown>[];
+      for (const s of seats)
+        if (s && typeof s === "object") {
+          s.at = quiet;
+          s.seen = quiet;
+        }
+      cfg.bindings![d] = Array.isArray(v) ? seats : seats[0]!;
+    }
+    writeFileSync(cfgPath, JSON.stringify(cfg));
+    const seat = (): { session?: string } => {
+      const c = JSON.parse(readFileSync(cfgPath, "utf8")) as { bindings?: Record<string, unknown> };
+      const v = c.bindings?.[h];
+      const seats = (Array.isArray(v) ? v : [v!]) as { session?: string }[];
+      return seats[0]!;
+    };
+    const listed = await run(h, ["channels"], { CODEX_THREAD_ID: "t2" });
+    expect(listed.code).toBe(0);
+    expect(listed.out).toContain("* idles");
+    expect(seat().session).toBe("t1");
+  });
+
   test("two Gemini CLIs in one checkout, both running, join as two agents: each is told apart by its own process", async () => {
     const owner = scratch("own-gem");
     const code = created(await ok(owner, ["create", "gems", "--as", "boss"]));

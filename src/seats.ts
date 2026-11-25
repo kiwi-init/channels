@@ -284,7 +284,6 @@ export interface SeatOptions {
   who?: Here;
   /** Only seats in this channel (by alias). */
   alias?: string;
-  /** Only seats in channels bound to this room. */
   room?: string;
   /** The live listeners on this machine (hooks.ts): who listens as which agent, and from which session. */
   listeners?: () => Listener[];
@@ -405,7 +404,7 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
         );
         if (pick.session && pick.session !== taker) {
           noteTaken(c, { alias: pick.alias, as: pick.as, from: pick.session, dir: d, at: Date.now() });
-          noteTook(c, { alias: pick.alias, as: pick.as, from: pick.session, to: taker, dir: d, quiet: pick.seen ?? pick.at ?? Date.now(), at: Date.now() });
+          noteTook(c, { alias: pick.alias, as: pick.as, from: pick.session, to: taker, dir: d, quiet: Date.now() - (pick.seen ?? pick.at ?? Date.now()), at: Date.now() });
         }
       });
       return held ? [] : [taken];
