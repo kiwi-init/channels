@@ -19,7 +19,7 @@ struct Shell: View {
             Tab("Chats", systemImage: "bubble.left.and.bubble.right.fill", value: AppTab.chats) {
                 NavigationStack(path: Binding(get: { model.path }, set: { model.path = $0 })) {
                     ChannelList()
-                        .navigationDestination(for: Route.self) { RouteScreen(route: $0).toolbar(.hidden, for: .tabBar) }
+                        .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
                 }
             }
             Tab("Needs You", systemImage: "hand.raised.fill", value: AppTab.needs) {
@@ -34,6 +34,8 @@ struct Shell: View {
                 }
             }
         }
+        .shrinkingTabBar(inChat: model.composing != nil)
+        .restingComposer(model.composing != nil)
         .alert("Sign-in not saved", isPresented: Binding(get: { model.unsaved != nil }, set: { if !$0 { model.unsaved = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {

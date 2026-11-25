@@ -28,38 +28,49 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
-    func testAChatIsTheWholeScreen() throws {
+    func testTabBarStaysInAChat() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(general.waitForExistence(timeout: 15))
-        XCTAssertTrue(app.tabBars.buttons["Needs You"].isHittable, "the tabs on the list")
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "lead-row").firstMatch.exists, "the lead, the first row of the channel")
-        add(shot(app, "chats"))
+        add(shot(app, "list with the tab bar"))
         general.tap()
         let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 15), "the composer")
-        XCTAssertFalse(app.tabBars.firstMatch.isHittable, "in a chat the tab bar steps away")
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the chat's composer")
+        let needs = app.tabBars.buttons["Needs You"].firstMatch
+        XCTAssertTrue(needs.waitForExistence(timeout: 5) && needs.isHittable, "the tab bar stays in a chat")
+        sleep(1)
+        add(shot(app, "chat at rest with the tab bar"))
         let newest = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Something else'")).firstMatch
         XCTAssertTrue(newest.waitForExistence(timeout: 5), "the newest item, the step's Something else")
+        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "the newest item ends above the resting composer")
+        XCTAssertGreaterThan(newest.frame.maxY, field.frame.minY - 40, "and no wide empty gap sits between them")
+
+        app.swipeDown()
+        app.swipeDown()
         sleep(1)
-        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "the newest item ends above the composer")
-        add(shot(app, "chat at rest"))
-        let elsewhere = app.buttons["needs-elsewhere"]
-        if elsewhere.exists {
-            add(shot(app, "chat with something waiting elsewhere"))
-            elsewhere.tap()
-            XCTAssertTrue(app.navigationBars["Needs You"].waitForExistence(timeout: 5), "the hand opens Needs You")
-            app.tabBars.buttons["Chats"].firstMatch.tap()
-            XCTAssertTrue(field.waitForExistence(timeout: 5), "and the chat is still open on Chats")
-        }
+        add(shot(app, "chat scrolled up, the tab bar small"))
+        XCTAssertTrue(app.tabBars.firstMatch.exists, "the tab bar is there after scrolling")
+        XCTAssertTrue(field.exists, "the composer is there after scrolling")
+        app.swipeUp()
+        app.swipeUp()
+        app.swipeUp()
+        sleep(1)
+        add(shot(app, "chat scrolled back down"))
+        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "back at the bottom, the newest item ends above the composer")
+        if !needs.isHittable { app.tabBars.buttons["Chats"].firstMatch.tap() }
+        XCTAssertTrue(needs.waitForHittable(timeout: 5), "the tab bar opens up again")
+
+        needs.tap()
+        XCTAssertTrue(app.navigationBars["Needs You"].waitForExistence(timeout: 5), "a tab opens from inside a chat")
+        app.tabBars.buttons["Chats"].firstMatch.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "back on Chats, the chat is still open")
         field.tap()
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        sleep(1)
         field.typeText("hi")
         add(shot(app, "chat typing"))
-        app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.tabBars.buttons["Needs You"].waitForHittable(timeout: 5), "back on the list, the tabs come back")
     }
 
     @MainActor
@@ -102,6 +113,7 @@ final class DemoTests: XCTestCase {
         return attachment
     }
 }
+
 extension XCUIElement {
     func waitForHittable(timeout: TimeInterval) -> Bool {
         let end = Date().addingTimeInterval(timeout)
