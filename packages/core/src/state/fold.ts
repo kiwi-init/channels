@@ -151,7 +151,7 @@ function folding(
   keep: ((base: FoldBase) => void) | undefined,
   lookAhead: boolean,
 ): ChannelState {
-  const from = given ? structuredClone(given) : null;
+  const from = given ? { ...given, tasks: structuredClone(given.tasks), leases: structuredClone(given.leases), rooms: structuredClone(given.rooms) } : null;
   const after = from?.n ?? -1;
   const ahead = <F extends { since: number }>(f: F | null | undefined): F | null => (f && f.since >= after ? f : null);
   const members = new Map<string, FoldMember>();

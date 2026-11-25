@@ -214,6 +214,31 @@ async function world(count: number, seed: number): Promise<World> {
   };
 }
 
+function frozen<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const inner of Object.values(value)) frozen(inner);
+  }
+  return value;
+}
+
+describe("a fold reads its base without changing it, so the base is shared, not copied, between folds", () => {
+  for (const seed of [1, 2, 3]) {
+    test(`seed ${seed}: a frozen base folds like the whole log, twice, and stays as it was`, async () => {
+      const w = await world(260, seed);
+      const full = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard);
+      for (let n = 1; n <= w.messages.length; n += 7) {
+        const base = capture(w.messages, w.roster, w.floors, n);
+        const before = structuredClone(base);
+        frozen(base);
+        same(fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, base), full);
+        same(fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, base), full);
+        expect(base).toEqual(before);
+      }
+    });
+  }
+});
+
 describe("a fold resumed from a snapshot folds to the same state as the whole log", () => {
   for (const seed of [1, 2, 3]) {
     test(`seed ${seed}: every cut point`, async () => {
