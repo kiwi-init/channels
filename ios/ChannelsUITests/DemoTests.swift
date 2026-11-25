@@ -61,6 +61,34 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
+    func testPinchShowsWhereThingsStand() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
+        XCTAssertTrue(general.waitForExistence(timeout: 15))
+        general.tap()
+        let feed = app.scrollViews.firstMatch
+        XCTAssertTrue(feed.waitForExistence(timeout: 5), "the chat")
+        add(shot(app, "stand chat"))
+
+        feed.pinch(withScale: 0.4, velocity: -1)
+        XCTAssertTrue(app.staticTexts["The phone release is one review away."].waitForExistence(timeout: 5), "the lead's last report shows at once")
+        XCTAssertTrue(app.staticTexts["#general"].exists, "the page names the chat it's about")
+        XCTAssertFalse(app.staticTexts["Where things stand in #general?"].exists, "the ask isn't a bubble")
+        add(shot(app, "stand page"))
+
+        app.scrollViews.firstMatch.swipeUp()
+        add(shot(app, "stand needs you"))
+
+        app.scrollViews.firstMatch.pinch(withScale: 2.5, velocity: 1)
+        let composer = NSPredicate(format: "placeholderValue == 'Message'")
+        let field = app.textViews.matching(composer).firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5) || app.textFields.matching(composer).firstMatch.exists, "pinching out goes back to the chat")
+        XCTAssertFalse(app.staticTexts["The phone release is one review away."].exists, "the page is gone")
+    }
+
+    @MainActor
     private func shot(_ app: XCUIApplication, _ name: String) -> XCTAttachment {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

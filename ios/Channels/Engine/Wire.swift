@@ -200,6 +200,27 @@ struct IconView: Codable, Sendable, Hashable {
     let data: String?
 }
 
+struct StandView: Codable, Sendable, Hashable {
+    struct Asked: Codable, Sendable, Hashable {
+        let seq: Int
+        let at: Double
+    }
+
+    struct Report: Codable, Sendable, Hashable {
+        let seq: Int
+        let at: Double
+        let shown: String
+    }
+
+    let label: String
+    let lead: String?
+    let asked: Asked?
+    let report: Report?
+    let now: [Int]
+    let next: [Int]
+    let done: [Int]
+}
+
 struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let code: String
     let title: String
@@ -228,6 +249,7 @@ struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let latestIn: String
     let place: String
     let places: [PlaceView]
+    var stand: StandView? = nil
 
     var id: String { code }
     var base: String { root ?? me }

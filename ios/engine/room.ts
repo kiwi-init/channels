@@ -20,7 +20,8 @@ import { approveTask, sendBackTask, type TaskSend } from "@kiwi/channel/task-act
 import { closedDigest } from "@kiwi/channel/task-digest.ts";
 import { TEND_SAFETY_MS, tendOwned } from "@kiwi/app/approval-tend.ts";
 import { ALLOW_ONCE, DENY } from "@kiwi/app/permission-settled.ts";
-import { isRoomKey, leadChatKey, roomKeysFor, roomOfKey, roomView } from "./view.ts";
+import { askedFor, STAND_AGAIN_MS, standAsk } from "./stand.ts";
+import { isRoomKey, leadChatKey, roomKeysFor, roomOfKey, roomView, standLabel } from "./view.ts";
 import type { Connection, NeedView, Picture, RoomView } from "./wire.ts";
 
 const WINDOW = 400;
@@ -264,6 +265,20 @@ export class Room {
       ...(re !== null ? { re: [re] } : {}),
       ...(imgs.length ? { imgs: [...imgs] } : {}),
     });
+  }
+
+  async askReport(place: string): Promise<number | null> {
+    const state = this.state;
+    if (!state) throw new Error("this channel is still loading");
+    const root = rootOf(this.me, state.members);
+    const lead = state.lead;
+    if (!lead || lead === this.me || lead === root) return null;
+    const key = place === leadChatKey(state, this.me) ? "main" : place;
+    const label = standLabel(state, this.me, key);
+    const mine = (name: string) => name === this.me || rootOf(name, state.members) === root;
+    const last = this.messages.findLast((m) => mine(m.from) && askedFor(m, lead) === label);
+    if (last && Date.now() - (last.rts ?? last.ts) < STAND_AGAIN_MS) return last.seq;
+    return this.sendWoken(standAsk(label), { kind: "msg", to: [lead], dm: true });
   }
 
   async marks(local: Readonly<Record<string, number>>, write: boolean): Promise<Record<string, number>> {

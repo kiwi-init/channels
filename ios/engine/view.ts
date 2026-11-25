@@ -14,6 +14,7 @@ import { named, namedMarkdown } from "@kiwi/app/mentions.ts";
 import { lastPreview } from "@kiwi/app/preview.ts";
 import { preview } from "../../ui/src/chat/preview.ts";
 import { reviewsFor } from "@kiwi/channel/task-actions.ts";
+import { hiddenBy, standBoard, standsIn, standView, type StandScope } from "./stand.ts";
 import type { AskView, Connection, IconView, MemberView, MessageView, NeedView, PlaceView, ReviewView, RoomView, TaskView } from "./wire.ts";
 
 const SHOWN = 300;
@@ -106,6 +107,26 @@ export function leadChatKey(state: Pick<ChannelState, "lead" | "members">, me: s
   return state.lead && state.lead !== me && state.lead !== root ? placeKey(dmPlace(root, state.lead)) : null;
 }
 
+export function standLabel(state: ChannelState, me: string, key: string): string {
+  if (isRoomKey(key)) return `#${roomOfKey(state, me, key)?.name ?? "room"}`;
+  const p = placeFromKey(key);
+  if (!p || p.kind === "main") return "#general";
+  if (p.kind === "task") return taskId(p.task);
+  const root = rootOf(me, state.members);
+  const others = p.with.filter((n) => n !== root);
+  return others.length === 1 ? `@${others[0]}` : p.with.map((n) => `@${n}`).join(" & ");
+}
+
+function standScope(state: ChannelState, me: string, key: string): StandScope {
+  if (isRoomKey(key)) return { kind: "none" };
+  const p = placeFromKey(key);
+  if (!p || p.kind === "main") return { kind: "all" };
+  if (p.kind === "task") return { kind: "task", task: p.task };
+  const root = rootOf(me, state.members);
+  const others = p.with.filter((n) => n !== root);
+  return others.length === 1 ? { kind: "owner", owner: others[0]! } : { kind: "none" };
+}
+
 export function roomView(r: RoomInput): RoomView {
   const { state, me } = r;
   const bySeq = new Map(r.messages.map((m) => [m.seq, m]));
@@ -129,8 +150,11 @@ export function roomView(r: RoomInput): RoomView {
   const root = rootOf(me, state.members);
   const myself = (name: string) => name === me || rootOf(name, state.members) === root;
   const here = placeFromKey(r.place) || roomOfKey(state, me, r.place) ? r.place : "main";
-  const visible = r.messages.filter((m) => shownIn(m, state, here));
-  const general = here === "main" ? visible : r.messages.filter((m) => shownIn(m, state, "main"));
+  const lead = state.lead && !myself(state.lead) ? state.lead : null;
+  const stands = standsIn(r.messages, lead, myself);
+  const hidden = hiddenBy(stands);
+  const visible = r.messages.filter((m) => shownIn(m, state, here) && !hidden(m));
+  const general = here === "main" ? visible : r.messages.filter((m) => shownIn(m, state, "main") && !hidden(m));
   const shown = visible.slice(-SHOWN);
   const nicknames = new Map([...state.members.values()].map((m) => [m.name, m.display || m.name]));
   const said = (text: string) => namedMarkdown(text, nicknames);
@@ -165,14 +189,14 @@ export function roomView(r: RoomInput): RoomView {
 
   const messages = shown.map((m, i) => messageView(m, i > 0 ? shown[i - 1] : visible[visible.length - shown.length - 1]));
   const sideKey = leadChatKey(state, me);
-  const sideAll = sideKey ? r.messages.filter((m) => shownIn(m, state, sideKey)) : [];
+  const sideAll = sideKey ? r.messages.filter((m) => shownIn(m, state, sideKey) && !hidden(m)) : [];
   const sideShown = sideAll.slice(-SHOWN);
   const side = sideShown.map((m, i) => messageView(m, i > 0 ? sideShown[i - 1] : sideAll[sideAll.length - sideShown.length - 1]));
   const lastChat = general.findLast((m) => m.kind !== "event");
   const lastIn = new Map<string, Message>();
   const countIn = new Map<string, number>();
   for (const m of r.messages) {
-    if (m.kind === "event" || isQuiet(m) || ignored(state.trust.get(m.seq))) continue;
+    if (m.kind === "event" || isQuiet(m) || ignored(state.trust.get(m.seq)) || hidden(m)) continue;
     const key = spotOf(state, m);
     lastIn.set(key, m);
     countIn.set(key, (countIn.get(key) ?? 0) + 1);
@@ -181,7 +205,7 @@ export function roomView(r: RoomInput): RoomView {
   const keyOf = (m: Message) => spotOf(state, m);
   const roomKeys = roomKeysFor(state, me);
   const latest = lastPreview(
-    r.messages.filter((m) => keyOf(m) !== sideKey),
+    r.messages.filter((m) => keyOf(m) !== sideKey && !hidden(m)),
     (seq) => state.trust.get(seq),
   );
   const latestIn = latest ? keyOf(latest) : "main";
@@ -306,5 +330,6 @@ export function roomView(r: RoomInput): RoomView {
     latestIn,
     place: here,
     places,
+    stand: standView(standLabel(state, me, here), lead, stands, r.messages, said, standBoard(tasks, standScope(state, me, here))),
   };
 }
