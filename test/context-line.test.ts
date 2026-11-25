@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { tokensWord } from "@kiwi/core/format.ts";
 import { CONTEXT_LINE, cleanActivity } from "@kiwi/core/protocol.ts";
-import { fold, type Roster } from "@kiwi/core/state.ts";
+import { fold, type Roster, type Task } from "@kiwi/core/state.ts";
 import { contextLineOn } from "../src/config.ts";
 import { crossing, nudgeShort, nudgeText, openTasksOf } from "../src/hooks/context-line.ts";
 
@@ -71,14 +71,15 @@ describe("the nudge", () => {
 
   test("the open tasks are the seat's own that aren't done or archived", () => {
     const roster: Roster = [];
-    const state = fold([], roster);
-    const task = (id: number, owner: string, extra: object = {}) => state.tasks.set(id, { id, title: `t${id}`, owner, state: "doing", notes: [], ...extra } as never);
+    const tasks = new Map<number, Task>();
+    const task = (id: number, owner: string, extra: Partial<Task> = {}) =>
+      tasks.set(id, { id, title: `t${id}`, owner, state: "doing", notes: [], createdBy: owner, createdAt: 0, updatedAt: 0, workedBy: [], rounds: [], ...extra });
     task(3, "ana");
     task(1, "ana");
     task(2, "bo");
     task(4, "ana", { state: "done" });
     task(5, "ana", { archived: true });
-    expect(openTasksOf(state, "ana")).toEqual([1, 3]);
+    expect(openTasksOf({ ...fold([], roster), tasks }, "ana")).toEqual([1, 3]);
   });
 });
 

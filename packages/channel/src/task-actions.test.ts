@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { describe, expect, test } from "bun:test";
 
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
@@ -34,7 +35,7 @@ async function sendAs(from: string, s: TaskSend): Promise<number> {
 }
 
 const state = (): ChannelState => fold(log, roster);
-const task = (id: number): Task => {
+const task = (id: number): Frozen<Task> => {
   const t = state().tasks.get(id);
   if (!t) throw new Error(`no task ${id}`);
   return t;
@@ -98,7 +99,7 @@ describe("taskActions", () => {
   test("in review with only closed rounds, there's no round to approve, so only send back", async () => {
     const id = await inReview("jon");
     const t = task(id);
-    const closed: Task = { ...t, rounds: t.rounds.map((r) => ({ ...r, result: { kind: "withdrawn", seq: 0 } })) };
+    const closed: Frozen<Task> = { ...t, rounds: t.rounds.map((r) => ({ ...r, result: { kind: "withdrawn", seq: 0 } })) };
     expect(taskActions(closed, "jon", true)).toEqual({ kind: "open", review: "send-back" });
   });
 

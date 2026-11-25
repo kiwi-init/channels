@@ -1,6 +1,7 @@
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
+import { thawed, type Frozen } from "@kiwi/core/state.ts"
 
-export function withReach(reach: readonly Wire[], shown: readonly Wire[], asks: readonly Wire[]): readonly Wire[] {
+export function withReach(reach: readonly Wire[], shown: readonly Wire[], asks: Frozen<readonly Wire[]>): readonly Wire[] {
   const first = shown[0]?.seq ?? Infinity
   const held = new Set(shown.map((m) => m.seq))
   const older = reach.filter((m) => m.seq < first)
@@ -8,7 +9,7 @@ export function withReach(reach: readonly Wire[], shown: readonly Wire[], asks: 
   if (!older.length && !missing.length) return shown
   const bySeq = new Map<number, Wire>()
   for (const m of older) bySeq.set(m.seq, m)
-  for (const m of missing) bySeq.set(m.seq, m)
+  for (const m of missing) bySeq.set(m.seq, thawed<Wire>(m))
   for (const m of shown) bySeq.set(m.seq, m)
   return [...bySeq.values()].sort((a, b) => a.seq - b.seq)
 }

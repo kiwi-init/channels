@@ -24,7 +24,7 @@ export function specsOf(state: ChannelState, me: string): Spec[] {
         v: s.v,
         edited: { by: s.by, at: s.at },
         edits: s.edits,
-        editors: s.editors,
+        editors: [...s.editors],
         stage: specStage(state, s),
         ...(s.ready?.v === s.v ? { ready: { by: s.ready.by, at: s.ready.at, v: s.ready.v } } : {}),
         ...(s.approved ? { approved: { by: s.approved.by, at: s.approved.at, v: s.approved.v, text: wrote(s.approved.text) } } : {}),

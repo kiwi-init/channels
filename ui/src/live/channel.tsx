@@ -220,7 +220,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
       ...(state.compactProposal ? { proposal: state.compactProposal } : {}),
       newMembers,
       newPowers,
-      repos: state.repos,
+      repos: [...state.repos],
       prs,
       issues,
       ...(github ? { github } : {}),

@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { BASE_WIRE_VERSION, baseFromWire, readableWire, toWire } from "@kiwi/core/base-wire.ts";
 import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts";
 import { ChannelGone, type RoomsSetting, type SendOptions } from "@kiwi/core/client.ts";
@@ -360,7 +361,7 @@ export class Room {
     }
   }
 
-  private reviewing(id: number): Task {
+  private reviewing(id: number): Frozen<Task> {
     const task = this.state?.tasks.get(id);
     if (!task || task.state !== "review") throw new Error(`${taskId(id)} isn't waiting for a review any more`);
     return task;

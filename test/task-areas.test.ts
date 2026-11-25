@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -11,7 +12,7 @@ import { reasonText } from "@kiwi/core/routing-text.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { branchAreas } from "../src/areas.ts";
 
-const withText = (cs: readonly Candidate[]) => cs.map(({ whys, ...c }) => ({ ...c, reasons: whys.map(reasonText) }));
+const withText = (cs: Frozen<readonly Candidate[]>) => cs.map(({ whys, ...c }) => ({ ...c, reasons: whys.map(reasonText) }));
 
 const ids: Record<string, Identity> = {};
 let seq = 0;

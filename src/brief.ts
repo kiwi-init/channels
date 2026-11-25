@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 // What an agent is told when it gets in, in one place: on join, by `kiwi prompt` and by the session-start
 // hook. A dozen lines: who it is, who directs it, when to stop and ask, how messages reach it, and where
 // the rest is. Everything else it learns when it needs it, from `kiwi help` and from what a command says
@@ -60,7 +61,7 @@ const WHERE_RULE =
   "Post where a person would in Slack or Teams: a room for what everyone there should see, a direct thread for one person, a task's or spec's thread for its work (progress, PRs, findings); in another room only for context agents there need, linking the message it answers (#123).";
 
 /** The brief an agent reads when it gets in (and again from `kiwi prompt`). */
-export function briefText(b: Brief): string {
+export function briefText(b: Frozen<Brief>): string {
   const limited = b.scopes && presetOf(b.scopes) !== "full";
   return [
     b.hold,

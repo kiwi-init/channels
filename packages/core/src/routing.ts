@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 import { MAX_AREAS, type TaskState } from "./protocol.ts";
 import { isPerson, type ChannelState, type Task } from "./state.ts";
 
@@ -24,8 +25,8 @@ const WARM = 4;
 
 const OPEN_STATES = new Set<TaskState>(["todo", "doing", "review"]);
 
-function kin(state: ChannelState, t: Task): { task: Task; why: Why; weight: number }[] {
-  const out: { task: Task; why: Why; weight: number }[] = [];
+function kin(state: ChannelState, t: Frozen<Task>): Frozen<{ task: Task; why: Why; weight: number }[]> {
+  const out: { task: Frozen<Task>; why: Why; weight: number }[] = [];
   const parent = t.from === undefined ? undefined : state.tasks.get(t.from);
   if (parent) out.push({ task: parent, why: { kind: "from", task: parent.id }, weight: 3 });
   for (const x of state.tasks.values()) {
@@ -38,7 +39,7 @@ function kin(state: ChannelState, t: Task): { task: Task; why: Why; weight: numb
   return out;
 }
 
-const touched = (t: Task, name: string) => t.owner === name || t.workedBy.includes(name) || t.touched?.[name] !== undefined;
+const touched = (t: Frozen<Task>, name: string) => t.owner === name || t.workedBy.includes(name) || t.touched?.[name] !== undefined;
 
 const AREA_DEPTH = 3;
 const RECENT_WORK = 10;
@@ -58,7 +59,7 @@ export function areasOf(files: readonly string[]): string[] {
     .map(([a]) => a);
 }
 
-export function taskAreas(state: ChannelState, t: Task): string[] {
+export function taskAreas(state: ChannelState, t: Frozen<Task>): readonly string[] {
   if (t.areas?.length) return t.areas;
   const parent = t.from === undefined ? undefined : state.tasks.get(t.from);
   if (parent?.areas?.length) return parent.areas;
@@ -72,7 +73,7 @@ function sharedAreas(want: readonly string[], have: readonly string[]): string[]
   return want.filter((w) => have.some((h) => overlaps(w, h)));
 }
 
-export function taskCandidates(state: ChannelState, id: number): Candidate[] {
+export function taskCandidates(state: ChannelState, id: number): Frozen<Candidate[]> {
   const t = state.tasks.get(id);
   if (!t) return [];
   const family = kin(state, t);
@@ -80,7 +81,7 @@ export function taskCandidates(state: ChannelState, id: number): Candidate[] {
   return [...state.members.values()]
     .filter((m) => m.active && !isPerson(m))
     .map((m) => {
-      const hits: { task: Task; why: Why; weight: number }[] = [];
+      const hits: { task: Frozen<Task>; why: Frozen<Why>; weight: number }[] = [];
       if (touched(t, m.name)) hits.push({ task: t, why: { kind: "worked", task: t.id }, weight: 4 });
       for (const k of family) if (touched(k.task, m.name)) hits.push({ task: k.task, why: k.why, weight: k.weight });
       const best = want.length
@@ -93,16 +94,16 @@ export function taskCandidates(state: ChannelState, id: number): Candidate[] {
         : undefined;
       if (best?.shared.length) hits.push({ task: best.x, why: { kind: "areas", task: best.x.id, areas: best.shared.slice(0, 2) }, weight: 2 });
       const fresh = m.card?.fresh;
-      const isWarm = (x: Task) => fresh !== undefined && (x.touched?.[m.name] ?? 0) >= fresh;
+      const isWarm = (x: Frozen<Task>) => fresh !== undefined && (x.touched?.[m.name] ?? 0) >= fresh;
       const warmHit = hits.some((h) => isWarm(h.task));
       const score = hits.reduce((n, h) => n + h.weight, 0) + (warmHit ? WARM : 0);
-      const whys = hits.map((h): Reason => ({ ...h.why, warm: isWarm(h.task) }));
+      const whys = hits.map((h): Frozen<Reason> => ({ ...h.why, warm: isWarm(h.task) }));
       const queue = [...state.tasks.values()].filter((x) => x.id !== t.id && x.owner === m.name && OPEN_STATES.has(x.state)).length;
       return { name: m.name, score, queue, whys, warm: warmHit };
     })
     .sort((a, b) => b.score - a.score || a.queue - b.queue || a.name.localeCompare(b.name));
 }
 
-export function pickFor(candidates: readonly Candidate[]): Candidate | null {
+export function pickFor(candidates: Frozen<readonly Candidate[]>): Frozen<Candidate | null> {
   return candidates.find((c) => c.score > 0 && c.queue < BUSY_QUEUE) ?? null;
 }

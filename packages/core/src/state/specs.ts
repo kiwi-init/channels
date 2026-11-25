@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import type { Message, SpecVerdict } from "../protocol.ts";
 import { askOfMessage } from "./asks.ts";
 import { answersDecisions, isPerson, sameAuthor } from "./people.ts";
@@ -20,7 +21,7 @@ type SpecEvent =
 
 export const specLease = (ask: number): string => `spec/${ask}`;
 
-export function specGate(specs: ReadonlyMap<number, Spec>, ask: number | undefined): string | null {
+export function specGate(specs: Frozen<ReadonlyMap<number, Spec>>, ask: number | undefined): string | null {
   if (ask === undefined) return "a task is a step of a spec: file it under the person's message whose approved spec it serves (--ask N)";
   const spec = specs.get(ask);
   if (!spec) return `#${ask} has no spec yet: write one (kiwi spec write ${ask} --file spec.md), and a person approves it before any task is filed`;
@@ -36,7 +37,7 @@ export function taskSpecRefusal(state: Pick<ChannelState, "specs" | "specsOnly" 
   return specGate(state.specs, ask);
 }
 
-export function judgesSpec(members: ReadonlyMap<string, Member>, head: Pick<AskHead, "by">, name: string): boolean {
+export function judgesSpec(members: Frozen<ReadonlyMap<string, Member>>, head: Pick<AskHead, "by">, name: string): boolean {
   const m = members.get(name);
   if (!m?.active || !isPerson(m)) return false;
   return m.owner || sameAuthor(members.get(head.by), m) || answersDecisions(members, name);
@@ -112,7 +113,7 @@ export function foldSpec(
   return null;
 }
 
-export function commentedSpec(specs: ReadonlyMap<number, Pick<Spec, "ask" | "result" | "comments">>, seq: number): number | undefined {
+export function commentedSpec(specs: Frozen<ReadonlyMap<number, Pick<Spec, "ask" | "result" | "comments">>>, seq: number): number | undefined {
   if (specs.get(seq) && !specs.get(seq)!.result) return seq;
   for (const spec of specs.values()) if (!spec.result && spec.comments?.some((c) => c.seq === seq)) return spec.ask;
   return undefined;
@@ -126,7 +127,7 @@ export function noteSpecComment(specs: Map<number, Spec>, parent: number | undef
   specs.set(spec.ask, { ...spec, comments: [...(spec.comments ?? []), { seq: m.seq, by: m.from }].slice(-MAX_COMMENTS) });
 }
 
-export function specOfComment(state: Pick<ChannelState, "specs">, seq: number): Spec | undefined {
+export function specOfComment(state: Pick<ChannelState, "specs">, seq: number): Frozen<Spec | undefined> {
   for (const spec of state.specs.values()) if (!spec.result && spec.comments?.some((c) => c.seq === seq)) return spec;
   return undefined;
 }
@@ -138,7 +139,7 @@ export function onSpec(state: Pick<ChannelState, "specs" | "askHeads" | "tasks" 
   return new Set(named.filter((n): n is string => !!n && !!state.members.get(n)?.active));
 }
 
-export function unansweredComments(spec: Pick<Spec, "comments" | "by" | "v">, me: string): number[] {
+export function unansweredComments(spec: Frozen<Pick<Spec, "comments" | "by" | "v">>, me: string): number[] {
   const comments = spec.comments ?? [];
   const answered = (c: { seq: number; by: string }, i: number) => comments.slice(i + 1).some((l) => l.by !== c.by) || (spec.v > c.seq && spec.by !== c.by);
   return comments.filter((c, i) => c.by !== me && !answered(c, i)).map((c) => c.seq);
@@ -150,7 +151,7 @@ export function closesOnItsOwn(state: Pick<ChannelState, "tasks">, spec: Spec): 
   return !spec.result && doneWhen(spec.text).length > 0 && specStage(state, spec) === "delivered";
 }
 
-export function cancelledWithSpec(state: Pick<ChannelState, "tasks">, ask: number): Task[] {
+export function cancelledWithSpec<T extends Frozen<Task>>(state: { tasks: ReadonlyMap<number, T> }, ask: number): T[] {
   return specTasks(state, ask).filter((t) => t.state !== "done" && !t.archived);
 }
 
@@ -172,7 +173,7 @@ const unticked = (text: string): string =>
     .join("\n")
     .trim();
 
-export function changedAfterApproval(spec: Pick<Spec, "changes">, seq: number): boolean {
+export function changedAfterApproval(spec: Frozen<Pick<Spec, "changes">>, seq: number): boolean {
   return !!spec.changes?.includes(seq);
 }
 
@@ -202,13 +203,13 @@ export function doneWhen(text: string): DoneWhen[] {
   return listed.map(({ text, done }) => ({ text, done }));
 }
 
-export function specTasks(state: Pick<ChannelState, "tasks">, ask: number): Task[] {
+export function specTasks<T extends Frozen<Task>>(state: { tasks: ReadonlyMap<number, T> }, ask: number): T[] {
   return [...state.tasks.values()].filter((t) => t.ask === ask).sort((a, b) => a.id - b.id);
 }
 
-const working = (t: Task): boolean => t.state !== "done" && !t.archived && !t.cancelled;
+const working = (t: Frozen<Task>): boolean => t.state !== "done" && !t.archived && !t.cancelled;
 
-export function specStage(state: Pick<ChannelState, "tasks">, spec: Spec): SpecStage {
+export function specStage(state: Pick<ChannelState, "tasks">, spec: Frozen<Spec>): SpecStage {
   if (spec.result) return spec.result.verdict === "accepted" ? "accepted" : "dropped";
   if (!spec.approved) return "draft";
   const work = specTasks(state, spec.ask).filter((t) => !t.cancelled);
@@ -218,13 +219,13 @@ export function specStage(state: Pick<ChannelState, "tasks">, spec: Spec): SpecS
   return work.length > 0 && closed > back && doneWhen(spec.text).every((b) => b.done) ? "delivered" : "queued";
 }
 
-const queuedSince = (spec: Spec): number => Math.max(spec.approved?.seq ?? 0, spec.backs.at(-1)?.seq ?? 0);
+const queuedSince = (spec: Frozen<Spec>): number => Math.max(spec.approved?.seq ?? 0, spec.backs.at(-1)?.seq ?? 0);
 
-export function specQueue(state: Pick<ChannelState, "specs" | "tasks">): Spec[] {
+export function specQueue(state: Pick<ChannelState, "specs" | "tasks">): Frozen<Spec[]> {
   return [...state.specs.values()].filter((s) => specStage(state, s) === "queued" && !changedSinceApproval(s)).sort((a, b) => queuedSince(a) - queuedSince(b));
 }
 
-function specOfTask(state: Pick<ChannelState, "specs" | "tasks">, task: number): Spec | undefined {
+function specOfTask(state: Pick<ChannelState, "specs" | "tasks">, task: number): Frozen<Spec | undefined> {
   const ask = state.tasks.get(task)?.ask;
   return ask === undefined ? undefined : state.specs.get(ask);
 }

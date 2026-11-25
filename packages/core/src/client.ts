@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 // Client for one membership channel: create it, ask to join, approve, send
 // (signed), read history, stream live messages and presence, leave, close.
 // Runs in Bun and in the browser.
@@ -481,15 +482,15 @@ export class Channel {
     return run(this.fx.drainGithub());
   }
 
-  syncGithubRules(repos: readonly string[], known: readonly GithubRules[]): Promise<number> {
+  syncGithubRules(repos: readonly string[], known: Frozen<readonly GithubRules[]>): Promise<number> {
     return run(this.fx.syncGithubRules(repos, known));
   }
 
-  syncGithubReleases(repos: readonly string[], known: readonly GithubRelease[]): Promise<number> {
+  syncGithubReleases(repos: readonly string[], known: readonly Frozen<GithubRelease>[]): Promise<number> {
     return run(this.fx.syncGithubReleases(repos, known));
   }
 
-  syncGithub(repo: string, known: GithubState): Promise<number> {
+  syncGithub(repo: string, known: Frozen<GithubState>): Promise<number> {
     return run(this.fx.syncGithub(repo, known));
   }
 

@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 import { isReviewCheck } from "./protocol.ts";
 import { sameHead } from "./stage.ts";
 import { rulesOf, shaKey, type GithubState } from "./state/github.ts";
@@ -7,9 +8,9 @@ export interface RetiredHead {
   sha: string;
 }
 
-const stillRequired = (github: GithubState, repo: string, check: string): boolean | undefined => rulesOf(github, repo)?.required.includes(check);
+const stillRequired = (github: Frozen<GithubState>, repo: string, check: string): boolean | undefined => rulesOf(github, repo)?.required.includes(check);
 
-export function retiredHeads(state: { repos: readonly string[]; github: GithubState }, check: string): RetiredHead[] {
+export function retiredHeads(state: Frozen<{ repos: readonly string[]; github: GithubState }>, check: string): RetiredHead[] {
   const connected = new Set(state.repos.map((r) => r.toLowerCase()));
   const out = new Map<string, RetiredHead>();
   for (const pr of state.github.prs.values()) {

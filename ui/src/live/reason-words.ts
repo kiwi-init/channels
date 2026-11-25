@@ -1,8 +1,9 @@
+import type { Frozen } from "@kiwi/core/state.ts"
 import "~/i18n/en/live-later"
 import type { Reason } from "@kiwi/core/routing.ts"
 import { t } from "~/i18n/i18n"
 
-function whyWords(r: Reason): string {
+function whyWords(r: Frozen<Reason>): string {
   const task = `T${r.task}`
   switch (r.kind) {
     case "worked":
@@ -20,4 +21,4 @@ function whyWords(r: Reason): string {
   }
 }
 
-export const reasonWords = (r: Reason | undefined): string => (!r ? t("live.why.context") : r.warm ? t("live.why.warm", { why: whyWords(r) }) : whyWords(r))
+export const reasonWords = (r: Frozen<Reason> | undefined): string => (!r ? t("live.why.context") : r.warm ? t("live.why.warm", { why: whyWords(r) }) : whyWords(r))

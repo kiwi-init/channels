@@ -1,10 +1,11 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { personaLines, type Persona } from "@kiwi/core/personality.ts";
 import { home } from "../config.ts";
 
-export function personaMark(p: Persona | undefined): string {
+export function personaMark(p: Frozen<Persona | undefined>): string {
   if (!p) return "none";
   return createHash("sha256")
     .update(JSON.stringify([p.name, p.role, p.capabilities, p.areas, p.instructions, ...(p.askPeople === undefined ? [] : [p.askPeople])]))
@@ -34,7 +35,7 @@ export function notePersonaTold(alias: string, as: string, session: string, mark
   }
 }
 
-export function personaChange(told: string | null, now: Persona | undefined, mc: string, max: number): string | null {
+export function personaChange(told: string | null, now: Frozen<Persona | undefined>, mc: string, max: number): string | null {
   if (told === personaMark(now) || (told === null && !now)) return null;
   const text = now ? ["The owner changed your personality:", ...personaLines(now, true)].join("\n") : "The owner took your personality away: its role and instructions no longer apply.";
   if (text.length <= max) return text;

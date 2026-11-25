@@ -1,10 +1,11 @@
+import type { Frozen } from "./types.ts";
 import { GENERAL_ROOM, ignored, type Trust } from "../protocol.ts";
 import { taskId } from "./tasks.ts";
 import type { ChannelState, Place, PlaceSummary, Task } from "./types.ts";
 
 export const MAIN: Place = { kind: "main" };
 
-export function placeKey(p: Place): string {
+export function placeKey(p: Frozen<Place>): string {
   return p.kind === "main" ? "main" : p.kind === "task" ? `task:${p.task}` : `dm:${p.with[0]}~${p.with[1]}`;
 }
 
@@ -20,7 +21,7 @@ export function dmPlace(a: string, b: string): Place {
   return { kind: "dm", with: a < b ? [a, b] : [b, a] };
 }
 
-export function threadMembers(state: Pick<ChannelState, "members" | "tasks" | "lead">, place: Place): string[] {
+export function threadMembers(state: Pick<ChannelState, "members" | "tasks" | "lead">, place: Frozen<Place>): string[] {
   const active = (n: string | undefined): n is string => !!n && !!state.members.get(n)?.active;
   if (place.kind === "main") return [...state.members.values()].filter((m) => m.active).map((m) => m.name);
   if (place.kind === "dm") return place.with.filter(active);

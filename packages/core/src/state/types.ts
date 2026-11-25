@@ -288,7 +288,28 @@ export interface PlaceSummary {
   done?: boolean;
 }
 
-export interface ChannelState {
+export type Frozen<T> = T extends string | number | boolean | bigint | symbol | null | undefined
+  ? T
+  : T extends (...args: never[]) => unknown
+    ? T
+    : T extends ReadonlyMap<infer K, infer V>
+      ? ReadonlyMap<K, Frozen<V>>
+      : T extends ReadonlySet<infer V>
+        ? ReadonlySet<Frozen<V>>
+        : T extends readonly unknown[]
+          ? { readonly [K in keyof T]: Frozen<T[K]> }
+          : T extends object
+            ? { readonly [P in keyof T]: Frozen<T[P]> }
+            : T;
+
+export type ChannelState = Frozen<ChannelStateDraft>;
+
+export function thawed<T>(value: Frozen<T>): T;
+export function thawed(value: unknown): unknown {
+  return structuredClone(value);
+}
+
+export interface ChannelStateDraft {
   members: Map<string, Member>;
   tasks: Map<number, Task>;
   facts: Map<string, Fact>;

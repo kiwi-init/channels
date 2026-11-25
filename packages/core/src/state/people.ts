@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import type { Color, Message } from "../protocol.ts";
 import { canPost } from "../scopes.ts";
 import type { ChannelState, Member } from "./types.ts";
@@ -44,7 +45,7 @@ export function answersDecisions(members: ReadonlyMap<string, Pick<Member, "acti
   return !!m?.active && !!m.answersDecisions;
 }
 
-export function fullyTrusted(m: Pick<Member, "kind" | "owner" | "active" | "scopes" | "addsAgents" | "answersDecisions" | "managesAgents"> | undefined): boolean {
+export function fullyTrusted(m: Frozen<Pick<Member, "kind" | "owner" | "active" | "scopes" | "addsAgents" | "answersDecisions" | "managesAgents"> | undefined>): boolean {
   return !!m && m.kind === "human" && !m.owner && m.active && canPost(m.scopes) && !!m.addsAgents && !!m.answersDecisions && !!m.managesAgents;
 }
 
@@ -52,7 +53,7 @@ export function trustedOf(state: Pick<ChannelState, "members">): string[] {
   return [...state.members.values()].filter(fullyTrusted).map((x) => x.name);
 }
 
-export function answersAsk(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, m: Pick<Message, "from" | "esc" | "to" | "handoff" | "step">, name: string): boolean {
+export function answersAsk(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, m: Frozen<Pick<Message, "from" | "esc" | "to" | "handoff" | "step">>, name: string): boolean {
   return m.esc ? !!m.to?.includes(name) || (!m.handoff && !m.step && answersDecisions(members, name)) : name !== m.from;
 }
 
@@ -80,7 +81,7 @@ export const isLeadRole = (role: string | undefined) => {
   return r === LEAD || r === LEGACY_LEAD;
 };
 
-export function allowedOnHold(m: Pick<Message, "kind" | "to" | "ev">, isPersonName: (name: string) => boolean): boolean {
+export function allowedOnHold(m: Frozen<Pick<Message, "kind" | "to" | "ev">>, isPersonName: (name: string) => boolean): boolean {
   if (m.kind === "event") return m.ev?.op === "hello" || m.ev?.op === "release";
   return !!m.to?.length && !m.to.includes("*") && m.to.every(isPersonName);
 }

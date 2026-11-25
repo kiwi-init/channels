@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 import { inlineText } from "./membership.ts";
 import { changedSinceApproval, doneWhen, freeAgents, onSpec, specPlanner, specQueue, specStage, specTasks, specTitle, unansweredComments, type SpecStage } from "./state/specs.ts";
 import { taskId } from "./state/tasks.ts";
@@ -5,7 +6,7 @@ import type { ChannelState, Spec } from "./state/types.ts";
 
 const ordinal = (n: number): string => (n === 1 ? "next" : `${n}${n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th"} in line`);
 
-function specStageText(state: ChannelState, spec: Spec): string {
+function specStageText(state: ChannelState, spec: Frozen<Spec>): string {
   const stage: SpecStage = specStage(state, spec);
   const asker = state.askHeads.get(spec.ask)?.by;
   switch (stage) {
@@ -39,16 +40,16 @@ function specStageText(state: ChannelState, spec: Spec): string {
   }
 }
 
-function doneLine(spec: Spec): string {
+function doneLine(spec: Frozen<Spec>): string {
   const boxes = doneWhen(spec.text);
   return boxes.length ? ` · ${boxes.filter((b) => b.done).length}/${boxes.length} done when` : "";
 }
 
-export function specLine(state: ChannelState, spec: Spec): string {
+export function specLine(state: ChannelState, spec: Frozen<Spec>): string {
   return `#${spec.ask} ${inlineText(specTitle(spec, state.askHeads.get(spec.ask)), 80)} · ${specStageText(state, spec)}${doneLine(spec)}`;
 }
 
-export function commentsWaiting(state: ChannelState, me: string): { spec: Spec; seqs: number[] }[] {
+export function commentsWaiting(state: ChannelState, me: string): Frozen<{ spec: Spec; seqs: number[] }[]> {
   return [...state.specs.values()]
     .filter((sp) => !sp.result && onSpec(state, sp.ask).has(me))
     .map((spec) => ({ spec, seqs: unansweredComments(spec, me) }))
@@ -68,7 +69,7 @@ export function formatSpecs(state: ChannelState, all = false): string {
   return list.map((s) => specLine(state, s)).join("\n");
 }
 
-export function formatSpec(state: ChannelState, spec: Spec): string {
+export function formatSpec(state: ChannelState, spec: Frozen<Spec>): string {
   const head = state.askHeads.get(spec.ask);
   const tasks = specTasks(state, spec.ask);
   const lines = [
@@ -86,7 +87,7 @@ export function formatSpec(state: ChannelState, spec: Spec): string {
   return lines.filter((l) => l !== null).join("\n");
 }
 
-export function planningText(state: ChannelState, spec: Spec, mc = "kiwi"): string {
+export function planningText(state: ChannelState, spec: Frozen<Spec>, mc = "kiwi"): string {
   const back = spec.backs.at(-1);
   const done = specTasks(state, spec.ask).filter((t) => t.state === "done").length;
   const why = back

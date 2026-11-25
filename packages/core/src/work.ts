@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 // The Work view (T1150): what each agent is doing, what changed, what needs a person, and each
 // task's whole story as one feed. Everything is read from the folded state and the log every
 // client already holds; nothing new crosses the relay. What a person may not see in strict
@@ -15,7 +16,7 @@ export { prLinks, taskOfBranch, taskPr } from "./prs.ts";
 /** Quiet this long, with nothing in progress, and an agent reads as idle. */
 const IDLE_AFTER_MS = 15 * 60_000;
 
-function visible(state: ChannelState, m: Message): boolean {
+function visible(state: ChannelState, m: Frozen<Message>): boolean {
   return !ignored(state.trust.get(m.seq));
 }
 
@@ -123,13 +124,13 @@ export interface AgentRow {
   online: boolean;
 }
 
-const at = (m: Message) => m.rts ?? m.ts;
+const at = (m: Frozen<Message>) => m.rts ?? m.ts;
 
 /** One row per agent in the channel: what it's doing, its status line, and whether it's working, blocked, idle or away. */
-export function agentRows(state: ChannelState, messages: Message[], online: Set<string>, now = Date.now()): AgentRow[] {
+export function agentRows(state: ChannelState, messages: Message[], online: Set<string>, now = Date.now()): Frozen<AgentRow[]> {
   const agents = [...state.members.values()].filter((m) => m.active && !isPerson(m));
   return agents
-    .map((a): AgentRow => {
+    .map((a): Frozen<AgentRow> => {
       const mine = [...state.tasks.values()].filter((t) => t.owner === a.name).sort((x, y) => x.id - y.id);
       const doing = mine.find((t) => t.state === "doing");
       const blockingAsk = state.openAsks.find((m) => m.from === a.name && m.kind === "blocking" && visible(state, m));
@@ -334,7 +335,7 @@ export function prsByTask(state: ChannelState, messages: Message[], ids: Iterabl
       if (!list) fates.set(pr.url, (list = []));
       list.push({ seq, fate });
     }
-  const byBranch = new Map<number, [string, GithubPr][]>();
+  const byBranch = new Map<number, [string, Frozen<GithubPr>][]>();
   for (const [key, gh] of state.github.prs) {
     const id = taskOfPr(gh, state);
     if (id === null) continue;
@@ -382,7 +383,7 @@ function ownPrs(state: ChannelState, messages: Message[], id: number): PrRef[] {
   return prs;
 }
 
-export function taskDigest(state: ChannelState, messages: Message[], t: Task): string {
+export function taskDigest(state: ChannelState, messages: Message[], t: Frozen<Task>): string {
   const feed = taskFeed(state, messages, t.id);
   const prs = [...new Map(ownPrs(state, messages, t.id).map((p) => [p.url, `${p.repo}#${p.number}`])).values()];
   const said = feed.reduce((n, i) => n + (i.type === "thread" ? i.messages.length : 0), 0);
@@ -467,7 +468,7 @@ export function tasksClosedOnGithub(state: ChannelState, after: number): TaskClo
   return out.sort((a, b) => a.seq - b.seq || a.task - b.task);
 }
 
-export function taskOfIssue(state: ChannelState, ref: IssueRef): Task | undefined {
+export function taskOfIssue(state: ChannelState, ref: IssueRef): Frozen<Task | undefined> {
   const key = prKey(ref.repo, ref.number);
   return [...state.tasks.values()].find((t) => t.issue && t.state !== "done" && prKey(t.issue.repo, t.issue.number) === key);
 }

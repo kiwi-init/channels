@@ -107,7 +107,7 @@ export interface MessageView {
   event: boolean;
   mine: boolean;
   quote: QuoteView | null;
-  choices: string[];
+  choices: readonly string[];
   chosen: { choice: string; by: string } | null;
   waiting: boolean;
   step: Step | null;
@@ -143,7 +143,7 @@ export interface AskView {
   plain: string;
   at: number;
   label: string;
-  choices: string[];
+  choices: readonly string[];
   task: number | null;
   place: string;
 }
@@ -219,7 +219,7 @@ export interface RoomView {
   side: MessageView[];
   sideKey: string | null;
   tasks: TaskView[];
-  asks: AskView[];
+  asks: readonly AskView[];
   reviews: ReviewView[];
   needs: NeedView[];
   last: MessageView | null;

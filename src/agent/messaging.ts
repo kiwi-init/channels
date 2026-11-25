@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { personaAnswers } from "@kiwi/core/personality.ts";
 import * as Deferred from "effect/Deferred";
@@ -164,7 +165,7 @@ export class SessionMessaging extends SessionListen {
     });
   });
 
-  private mayI(m: { kind: Kind; ev?: Event; to?: string[] }) {
+  private mayI(m: { kind: Kind; ev?: Frozen<Event>; to?: string[] }) {
     return Effect.gen({ self: this }, function* () {
       const { state } = yield* this.state();
       const me = state.members.get(this.me);

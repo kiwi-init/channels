@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 import { wellFormedArtifact, wellFormedRunId, type CheckArtifact } from "./checks.ts";
 
 type StepDetector = { kind: "pr-merged" } | { kind: "answered"; ask: number };
@@ -130,9 +131,9 @@ export function thenChanged(t: StepHolder, then: string): boolean {
   return have.length !== want.length || have.some((words, i) => words !== want[i]);
 }
 
-export const currentStep = (t: StepHolder): LandingStep | undefined => t.steps?.find((s) => s.progress.kind === "open");
+export const currentStep = <S extends Frozen<LandingStep>>(t: { steps?: readonly S[] }): S | undefined => t.steps?.find((s) => s.progress.kind === "open");
 
-export const stepById = (t: StepHolder, id: string): LandingStep | undefined => t.steps?.find((s) => s.id === id);
+export const stepById = <S extends Frozen<LandingStep>>(t: { steps?: readonly S[] }, id: string): S | undefined => t.steps?.find((s) => s.id === id);
 
 export function mintSteps(t: StepHolder, specs: readonly StepSpec[]): LandingStep[] {
   return specs.map((spec) => {
@@ -166,9 +167,9 @@ export function stepMove(step: LandingStep, lander: string | undefined, now: num
   return name ? { kind: "member", name } : { kind: "nobody" };
 }
 
-export const stepText = (step: Pick<LandingStep, "id" | "words">): string => (step.words ? `${step.id} “${step.words}”` : step.id);
+export const stepText = (step: Frozen<Pick<LandingStep, "id" | "words">>): string => (step.words ? `${step.id} “${step.words}”` : step.id);
 
-export function landedStepRefusal(t: StepHolder & { id: number }, id: string): string | null {
+export function landedStepRefusal(t: Frozen<StepHolder & { id: number }>, id: string): string | null {
   const step = stepById(t, id);
   const current = currentStep(t);
   const now = current ? `its current step is ${stepText(current)}` : "it has no step left";

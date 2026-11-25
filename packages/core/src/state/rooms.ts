@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import { inlineText } from "../membership.ts";
 import { GENERAL_ROOM, MAX_ROOM_NAME, type Message } from "../protocol.ts";
 import type { ChannelState, Room } from "./types.ts";
@@ -8,7 +9,7 @@ export function roomName(name: unknown): string {
   return inlineText(name, MAX_ROOM_NAME);
 }
 
-export function findRoom(state: ChannelState, nameOrId: string): Room | null {
+export function findRoom(state: ChannelState, nameOrId: string): Frozen<Room | null> {
   const t = nameOrId.trim().replace(/^#/, "");
   return state.rooms.get(t) ?? [...state.rooms.values()].find((r) => r.name.toLowerCase() === t.toLowerCase()) ?? null;
 }

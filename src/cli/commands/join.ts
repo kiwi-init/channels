@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { MAX_PIN, pinFits } from "@kiwi/core/pin.ts";
 import { inviteCheck } from "@kiwi/core/invite-check.ts";
 import { repairPin, REPAIR_BUDGET_MS } from "../../pin-repair.ts";
@@ -39,7 +40,7 @@ const MODEL_WAIT_MS = 5_000;
 
 const POKE_EVERY_MS = 60_000;
 
-function ignoredOnResume(seat: Pick<Member, "display" | "persona"> | undefined): string[] {
+function ignoredOnResume(seat: Frozen<Pick<Member, "display" | "persona"> | undefined>): string[] {
   const lines: string[] = [];
   if (opt.persona !== undefined) {
     const keeps = seat?.persona ? `it keeps ${seat.persona.name}` : "it keeps no personality";
