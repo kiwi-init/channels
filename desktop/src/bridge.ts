@@ -441,6 +441,8 @@ export interface KiwiBridge {
   /** A newer proper release: being downloaded, ready to restart into, or only available. */
   keysAtRest(): Promise<KeysAtRest>;
   wallpaperTints(dark: boolean): Promise<string[]>;
+  /** Smart Tiling: Jev picks, for each pane kind, the spot this person most likely wants. Null without a TypeSafe key, offline or on a refusal. */
+  tilingPick(ask: TilingAsk): Promise<TilingPicks | null>;
   wallpaperBackdrop(dark: boolean): Promise<string | null>;
   windowControl(action: "minimize" | "maximize" | "close"): Promise<void>;
   windowMaximized(): Promise<boolean>;
@@ -492,6 +494,29 @@ export interface KiwiBridge {
   machines(): Promise<MachineView[]>;
   settingsOn(machinePk: string): Promise<FromMachine<ComputerSettings>>;
 }
+
+export type TilingEdge = "left" | "right" | "top" | "bottom";
+
+export interface TilingSpot {
+  pane: string;
+  edge: TilingEdge;
+  usual?: true;
+}
+
+interface TilingPlace {
+  beside: string;
+  edge: TilingEdge | "fill";
+}
+
+export interface TilingAsk {
+  screen: { w: number; h: number };
+  panes: { id: string; what: string; x: number; y: number; w: number; h: number }[];
+  spots: TilingSpot[];
+  kinds: string[];
+  past: (TilingPlace & { what: string; by: "app" | "hand"; then: "kept" | "moved" | "closed" | "resized"; to?: TilingPlace })[];
+}
+
+export type TilingPicks = Record<string, { pane: string; edge: TilingEdge; p: number }>;
 
 export interface KeysAtRest {
   sealed: boolean;

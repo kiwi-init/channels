@@ -85,6 +85,7 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     installCli: () => t.call("installCli"),
     keysAtRest: () => t.call("keysAtRest"),
     wallpaperTints: (dark) => t.call("wallpaperTints", dark),
+    tilingPick: (ask) => t.call("tilingPick", ask),
     wallpaperBackdrop: (dark) => t.call("wallpaperBackdrop", dark),
     windowControl: (action) => t.call("windowControl", action),
     windowMaximized: () => t.call("windowMaximized"),

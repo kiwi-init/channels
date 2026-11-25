@@ -19,6 +19,7 @@ export interface Note {
   what: string
   target?: string
   edge?: Edge | "fill"
+  smart?: true
 }
 
 export interface Step extends Note {
@@ -72,6 +73,8 @@ function load(): Step[] {
     return []
   }
 }
+
+export const steps = (): readonly Step[] => (held ??= load())
 
 export function note(step: Step): void {
   held = remember(held ?? load(), step)

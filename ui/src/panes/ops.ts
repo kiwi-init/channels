@@ -29,7 +29,8 @@ import {
   type Page,
   type Split,
 } from "~/panes/store"
-import { note, type By, type Note, type Step } from "~/panes/history"
+import { note, steps, type By, type Note, type Step } from "~/panes/history"
+import { relearn, smartSpot } from "~/panes/smart"
 
 const keptOf = (nav: Nav): Kept => ({ where: nav.where, tab: nav.tab, spec: nav.spec, part: nav.part, github: nav.github })
 
@@ -62,10 +63,11 @@ function asApp(run: () => void): void {
   }
 }
 
+const docWhat = (doc: Doc): string => (doc.kind === "panel" ? `panel:${doc.panel.kind}` : doc.kind)
+
 function whatOf(leaf: Leaf | null): string {
   if (!leaf) return "split"
-  const doc = leaf.doc
-  if (doc) return doc.kind === "panel" ? `panel:${doc.panel.kind}` : doc.kind
+  if (leaf.doc) return docWhat(leaf.doc)
   const nav = leaf.nav
   if (!nav) return "main"
   return nav.tab === "chat" ? nav.where.kind : `tab:${nav.tab}`
@@ -94,7 +96,10 @@ function spots(code: string, root: Node): Pick<Step, "screen" | "panes"> {
 function put(code: string, layout: Layout, step?: Note): void {
   setLayout(code, layout)
   save()
-  if (step) note({ ...step, at: Date.now(), code, by, ...spots(code, layout.root) })
+  if (!step) return
+  const seen = spots(code, layout.root)
+  note({ ...step, at: Date.now(), code, by, ...seen })
+  relearn(code, layout.root, seen, steps())
 }
 
 const isBlank = (leaf: Leaf): boolean => leaf.doc?.kind === "blank"
@@ -126,13 +131,14 @@ const beside = (edge: Edge, leaf: Leaf, found: Node): Split => {
   return { kind: "split", id: nextId("split"), dir: edge === "left" || edge === "right" ? "row" : "column", ratio: 0.5, a: first ? leaf : found, b: first ? found : leaf }
 }
 
-export function splitAt(code: string, target: string, edge: Edge, page: Page): void {
+export function splitAt(code: string, target: string, edge: Edge, page: Page, smart = false): void {
   const layout = layoutOf(code)
   const now = page.at === "doc" && page.doc.kind === "now" ? findLeaf(layout.root, isNow) : null
   if (now) return now.id === target ? focusPane(code, now.id) : movePane(code, now.id, target, edge)
   const leaf = fresh(code, page)
   const root = swap(layout.root, target, (found) => beside(edge, leaf, found))
-  if (root && root !== layout.root) put(code, { ...layout, root, focus: leaf.id }, { act: "open", pane: leaf.id, what: whatOf(leaf), target: whatOf(leafOf(layout.root, target)), edge })
+  if (root && root !== layout.root)
+    put(code, { ...layout, root, focus: leaf.id }, { act: "open", pane: leaf.id, what: whatOf(leaf), target: whatOf(leafOf(layout.root, target)), edge, ...(smart ? { smart: true } : {}) })
 }
 
 export function fillPane(code: string, target: string, carry: Carry): void {
@@ -206,6 +212,8 @@ function placePanel(code: string, from: string, panel: Panel | null, room?: { id
     if (root) put(code, { ...layout, root, focus: held.id }, { act: "replace", pane: held.id, what: whatOf(next), target: whatOf(held) })
     return
   }
+  const smart = smartSpot(code, layout.root, docWhat(doc))
+  if (smart) return splitAt(code, smart.id, smart.edge, { at: "doc", doc }, true)
   if (room && leafOf(layout.root, room.id)) return splitAt(code, room.id, room.edge, { at: "doc", doc })
   splitAt(code, dockedNow(layout.root)?.id === from || !here ? MAIN : from, "right", { at: "doc", doc })
 }
@@ -221,6 +229,8 @@ function placeDoc(code: string, id: string | null, doc: Doc, shown: boolean, roo
     if (here && isBlank(here)) return fillPane(code, here.id, { page: { at: "doc", doc } })
     const blank = findLeaf(layout.root, isBlank)
     if (blank) return fillPane(code, blank.id, { page: { at: "doc", doc } })
+    const smart = smartSpot(code, layout.root, "activity")
+    if (smart) return splitAt(code, smart.id, smart.edge, { at: "doc", doc }, true)
     const at = room && leafOf(layout.root, room.id) ? room : { id: here?.id ?? MAIN, edge: "right" as const }
     return splitAt(code, at.id, at.edge, { at: "doc", doc })
   }
@@ -233,7 +243,10 @@ function placeDoc(code: string, id: string | null, doc: Doc, shown: boolean, roo
     if (root) put(code, { ...layout, root }, { act: "replace", pane: here.id, what: whatOf(next), target: whatOf(here) })
     return
   }
-  if (doc.kind !== "now") return splitAt(code, MAIN, "right", { at: "doc", doc })
+  if (doc.kind !== "now") {
+    const smart = smartSpot(code, layout.root, docWhat(doc))
+    return splitAt(code, smart?.id ?? MAIN, smart?.edge ?? "right", { at: "doc", doc }, smart !== null)
+  }
   const now = findLeaf(layout.root, isNow)
   if (!now) {
     const root = docked(code, layout.root)
