@@ -1,5 +1,6 @@
 package com.kiwiinit.channels.ui
 
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -295,7 +296,7 @@ private fun Header(
                 val dm = place?.let { room.other(it) }
                 if (dm != null) Face(dm, room.member(dm), 40.dp) else ChannelAvatar(room, 40.dp)
                 Column(Modifier.weight(1f)) {
-                    Text(room.spotTitle(place?.key ?: "main"), style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    Text(room.spotTitle(place?.key ?: "main"), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Status(room, place)
                 }
             }
@@ -332,6 +333,7 @@ private fun Status(room: RoomView, place: PlaceView?) {
             fontWeight = FontWeight.Medium,
             color = if (needs > 0) tone.decide else tone.ink3,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -376,12 +378,13 @@ private fun BackMenu(model: AppModel, spot: Spot, previous: Spot?, pick: (Spot) 
         DropdownMenuItem(
             text = {
                 Column(Modifier.widthIn(max = 260.dp)) {
-                    Text(row.fullTitle, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                    Text(row.fullTitle, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         row.line(w).let { line -> prefix?.let { "$it · $line" } ?: line },
                         style = MaterialTheme.typography.bodySmall,
                         color = tone.ink3,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             },
