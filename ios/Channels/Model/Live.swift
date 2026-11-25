@@ -3,12 +3,34 @@ import Foundation
 
 typealias AgentsLiveActivity = ActivityKit.Activity<AgentsActivity>
 
+struct LiveKeys: Decodable, Sendable {
+    let room: String
+    let keys: [String]
+}
+
+struct LiveTokenResult: Decodable, Sendable {
+    let room: String
+    let ok: Bool
+    let error: String?
+}
+
 @MainActor
 final class LiveAgents {
+    struct Token: Sendable {
+        var start: String? = nil
+        var update: String? = nil
+        var room: String? = nil
+    }
+
     static let offKey = "liveOff"
+    static var off: Bool { UserDefaults.standard.bool(forKey: offKey) }
     private static let grace: Duration = .seconds(30)
     private static let stale: TimeInterval = 180
     private var ending: [String: Task<Void, Never>] = [:]
+    private var watching = false
+    private var watched: Set<String> = []
+    private(set) var startToken: String?
+    var told: ((Token) -> Void)?
 
     static func agents(_ room: RoomView) -> [AgentsActivity.Agent] {
         let order = { (m: MemberView) in (m.name == room.lead ? 0 : 1, m.display) }
@@ -58,6 +80,43 @@ final class LiveAgents {
         }
     }
 
+    func watchTokens() {
+        guard !watching else { return }
+        watching = true
+        Task.detached { [weak self] in
+            for await data in AgentsLiveActivity.pushToStartTokenUpdates {
+                await self?.heard(Token(start: Self.hex(data)))
+            }
+        }
+        Task.detached { [weak self] in
+            for await activity in AgentsLiveActivity.activityUpdates {
+                let id = activity.id
+                let room = activity.attributes.channel
+                await self?.watch(id, room)
+            }
+        }
+        for activity in AgentsLiveActivity.activities { watch(activity.id, activity.attributes.channel) }
+    }
+
+    private func watch(_ id: String, _ room: String) {
+        guard watched.insert(id).inserted else { return }
+        Task.detached { [weak self] in
+            guard let activity = Self.find(id) else { return }
+            for await data in activity.pushTokenUpdates {
+                await self?.heard(Token(update: Self.hex(data), room: room))
+            }
+        }
+    }
+
+    private func heard(_ token: Token) {
+        if let start = token.start { startToken = start }
+        told?(token)
+    }
+
+    nonisolated private static func hex(_ data: Data) -> String {
+        data.map { String(format: "%02x", $0) }.joined()
+    }
+
     nonisolated private static func find(_ id: String) -> AgentsLiveActivity? {
         AgentsLiveActivity.activities.first { $0.id == id }
     }
@@ -72,7 +131,8 @@ final class LiveAgents {
 
     private func start(_ attributes: AgentsActivity, _ agents: [AgentsActivity.Agent]) {
         do {
-            _ = try AgentsLiveActivity.request(attributes: attributes, content: content(agents))
+            let activity = try AgentsLiveActivity.request(attributes: attributes, content: content(agents), pushType: .token)
+            if watching { watch(activity.id, attributes.channel) }
         } catch {
             Trouble.note("live: couldn't start", error)
         }

@@ -24,7 +24,7 @@ export interface PushDropResult {
 
 const newTag = (): string => b64url(crypto.getRandomValues(new Uint8Array(16)));
 
-const roomOf = (seat: ChannelIdentityView): string | null => {
+export const roomOf = (seat: ChannelIdentityView): string | null => {
   if (seat.roomId) return seat.roomId;
   try {
     return seat.code ? decodeJoinCode(seat.code).roomId : null;
