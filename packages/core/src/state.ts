@@ -5,7 +5,7 @@
 // without the relay ever reading any of it.
 // Conflicts resolve deterministically: the earlier sequence number wins.
 
-export { fold, folded, type Folded } from "./state/fold.ts";
+export { fold } from "./state/fold.ts";
 export {
   askedOfPeopleByOthers,
   askGroups,

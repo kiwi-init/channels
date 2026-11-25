@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
 
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
-import { fold, folded, type ChannelState } from "@kiwi/core/state.ts"
+import { fold, type ChannelState } from "@kiwi/core/state.ts"
+import { folded } from "@kiwi/core/state/fold-on.ts"
 import { rendered } from "~/live/rendered"
 import { keptBoard, PER_MESSAGE, SEAT_COUNTERS } from "~/live/board"
 import { groupsOf, historyOf, issuesOf, prsOf, tasksFrom } from "~/live/map"

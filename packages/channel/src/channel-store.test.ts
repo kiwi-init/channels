@@ -5,7 +5,7 @@ import { FOLD_RULES, PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type 
 import { fold, type FoldBase } from "@kiwi/core/state.ts";
 import type { ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts";
 import { ChannelLink } from "./channel-ops.ts";
-import { APP_BEACON_MS, ChannelStore, PAGE, PRESENCE_SETTLE_MS, REACH, WINDOW } from "./channel-store.ts";
+import { APP_BEACON_MS, ChannelStore, foldOnLoaded, PAGE, PRESENCE_SETTLE_MS, REACH, WINDOW } from "./channel-store.ts";
 import { PRESENCE_TTL } from "./online.ts";
 import { REFOLLOW_MS } from "./refollow.ts";
 import type { StoredMember } from "./store.ts";
@@ -186,6 +186,7 @@ describe("a channel store", () => {
   });
 
   test("a chat append folds onto the last state: untouched maps are the same objects, and the last state does not change", async () => {
+    await foldOnLoaded;
     const r = relay(0);
     const { store, close } = await opened(r);
     const signed = (seq: number): Message => ({ ...msg(seq), pk: "pk-atlas" });

@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test"
 
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
-import { fold, folded, type ChannelState, type Roster } from "@kiwi/core/state.ts"
-import { same } from "@kiwi/core/state/tracked.ts"
+import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts"
+import { folded } from "@kiwi/core/state/fold-on.ts"
+import { same } from "@kiwi/core/state/same.ts"
 import { rendered } from "~/live/rendered"
 import { shownSame, wordsRaw, wrote } from "~/words"
 import { messagesOf, rowCache, type Pictures, type RowCache } from "~/live/map"

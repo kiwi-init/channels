@@ -31,7 +31,7 @@ import { rootOf, sentTo } from "../room-rules.ts";
 import { askHeadOf, askOfMessage, fileTask } from "./asks.ts";
 import { cancelledWithSpec, closesOnItsOwn, foldSpec, noteSpecComment, specGate } from "./specs.ts";
 import { backToReview, checkChangeRefusal, closeCancelled, landingTouchedByAsk, landingTouchedByClose, taskId } from "./tasks.ts";
-import { linkSafe, prKey, releasesFrom, repoKey, runKey, type GithubState } from "./github.ts";
+import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
@@ -89,7 +89,7 @@ import type {
 } from "./types.ts";
 import { inRoom } from "../room-rules.ts";
 import { packAuthors, unpackAuthors } from "./authors.ts";
-import { mirrored, same, TrackedMap, unrecorded } from "./tracked.ts";
+import { same } from "./same.ts";
 
 const STALE_MS = 24 * 3_600_000;
 const SENT_WINDOW_MS = 2 * STALE_MS;
@@ -153,30 +153,7 @@ function folding(
   keep: ((base: FoldBase) => void) | undefined,
   lookAhead: boolean,
 ): ChannelStateDraft {
-  return cursor(messages, roster, roomsFloor, guardFloor, given, lookAhead, false).finish(now, keep);
-}
-
-export interface Folded {
-  readonly state: ChannelState;
-  readonly misses: readonly string[];
-  next(batch: readonly Message[], now: number): ChannelState | null;
-}
-
-export function folded(messages: Message[], roster: Roster, now: number, roomsFloor?: RoomsFloor | null, guardFloor?: GuardFloor | null, given?: FoldBase | null, verify = false): Folded {
-  const c = cursor(messages, roster, roomsFloor, guardFloor, given, true, true, verify);
-  let state: ChannelState = c.publish(now);
-  return {
-    get state() {
-      return state;
-    },
-    get misses() {
-      return c.misses;
-    },
-    next(batch, at) {
-      if (batch.length && !c.more(batch)) return null;
-      return (state = c.publish(at));
-    },
-  };
+  return cursor(messages, roster, roomsFloor, guardFloor, given, lookAhead).finish(now, keep);
 }
 
 type Floor = { pk: string; scopes: Scope[]; since: number };
@@ -234,24 +211,46 @@ function leadOf(members: ReadonlyMap<string, FoldMember>, lead: string | null, s
   return signedLead ?? (lead && present(members.get(lead)) && !signed.has(lead) ? lead : null);
 }
 
-interface Cursor {
-  readonly misses: string[];
-  more(batch: readonly Message[]): boolean;
-  finish(now: number, keep: ((base: FoldBase) => void) | undefined): ChannelStateDraft;
-  publish(now: number): ChannelState;
+interface Inner {
+  maps: Record<string, Map<unknown, unknown>>;
+  from: FoldBase | null;
+  stepped: readonly Message[];
+  stillOpen: (m: Message) => boolean;
+  scopesByKey: Map<string, Scope[]>;
+  floors: Floor[];
+  roleFloors: RoleFloor[];
+  lead: string | null;
+  guards: GuardFloors;
+  ctx: FoldCtx;
+  placesBefore: NonNullable<FoldBase["placesBefore"]>;
+  specsOnly: ChannelStateDraft["specsOnly"];
+  head: number;
+  seen: Set<number>;
+  forward: Set<number>;
+  askers: Map<number, string>;
+  decisions: Set<number>;
+  finalize: (v: Finishing, at: number) => string | null;
+  step: (m: Message) => void;
+  at: (now: number) => void;
 }
 
-function cursor(
+export interface Cursor {
+  finish(now: number, keep: ((base: FoldBase) => void) | undefined): ChannelStateDraft;
+  inner(): Inner;
+}
+
+export type MakeMap = (entries?: Iterable<readonly [unknown, unknown]> | null) => Map<unknown, unknown>;
+
+export function cursor(
   messages: Message[],
   roster: Roster,
   roomsFloor: RoomsFloor | null | undefined,
   guardFloor: GuardFloor | null | undefined,
   given: FoldBase | null | undefined,
   lookAhead: boolean,
-  tracking: boolean,
-  verify = false,
+  make: MakeMap = (entries) => new Map(entries),
 ): Cursor {
-  const shown = <K, V>(entries?: Iterable<readonly [K, V]> | null): Map<K, V> => (tracking ? new TrackedMap<K, V>(entries) : new Map(entries));
+  const shown = <K, V>(entries?: Iterable<readonly [K, V]> | null): Map<K, V> => make(entries) as Map<K, V>;
   let now = 0;
   const forward = new Set<number>();
   const from = given ? structuredClone(given) : null;
@@ -1148,123 +1147,33 @@ function cursor(
       releases: ctx.github.releases,
       runs: ctx.github.runs,
     }) as unknown as Record<string, Map<unknown, unknown>>;
-  const misses: string[] = [];
-  let mirror: Record<string, Map<unknown, unknown>> | null = null;
-  let last: ChannelStateDraft | null = null;
-  const kept = <T>(value: T, was: T | undefined): T => (was !== undefined && same(value, was) ? was : typeof value === "object" && value !== null ? structuredClone(value) : value);
+  const inner = (): Inner => ({
+    maps: shownMaps(),
+    from,
+    stepped,
+    stillOpen,
+    scopesByKey,
+    floors,
+    roleFloors,
+    lead,
+    guards,
+    ctx,
+    placesBefore,
+    specsOnly,
+    head,
+    seen,
+    forward,
+    askers,
+    decisions,
+    finalize,
+    step,
+    at: (at) => void (now = at),
+  });
 
-  const reused = <T>(value: T, was: T | undefined): T => (was !== undefined && same(value, was) ? was : value);
-
-  const publish = (at: number): ChannelState => {
-    now = at;
-    const openAsks = [...(from?.asks ?? []), ...stepped].filter(stillOpen);
-    const drafts = shownMaps();
-    if (verify && mirror) for (const [name, map] of Object.entries(drafts)) for (const key of unrecorded(map as TrackedMap<unknown, unknown>, mirror[name]!)) misses.push(`${name}:${String(key)}`);
-    const next: Record<string, Map<unknown, unknown>> = {};
-    for (const [name, map] of Object.entries(drafts)) {
-      next[name] = mirrored(map as TrackedMap<unknown, unknown>, mirror?.[name] ?? null);
-      (map as TrackedMap<unknown, unknown>).rest();
-    }
-    mirror = next;
-    const shownAs = <T>(name: string): T => next[name] as T;
-    const v: Finishing = {
-      own: false,
-      members: new Map([...shownAs<Map<string, FoldMember>>("members")].map(([name, m]) => [name, structuredClone(m)])),
-      tasks: shownAs("tasks"),
-      facts: shownAs("facts"),
-      leases: shownAs("leases"),
-      scopesByKey: new Map(scopesByKey),
-      floors: floors.slice(),
-      roleFloors: roleFloors.slice(),
-      lead,
-      guards: { ...guards },
-      guarded: { charter: ctx.charter, hold: ctx.hold, repos: ctx.repos },
-    };
-    const theLead = finalize(v, at);
-    const github: GithubState = {
-      prs: shownAs("prs"),
-      checks: shownAs("githubChecks"),
-      issues: shownAs("issues"),
-      rules: shownAs("rules"),
-      releases: shownAs("releases"),
-      runs: shownAs("runs"),
-      runsSince: ctx.github.runsSince,
-      runsForgotten: ctx.github.runsForgotten,
-    };
-    const was = last;
-    const places = summarize(shownAs("placeOf"), v.tasks, shownAs("trust"), placesBefore);
-    const state: ChannelStateDraft = {
-      members: reused(v.members, was?.members),
-      tasks: reused(v.tasks, was?.tasks),
-      facts: reused(v.facts, was?.facts),
-      docs: shownAs("docs"),
-      leases: reused(v.leases, was?.leases),
-      trust: shownAs("trust"),
-      scopeSets: shownAs("scopeSets"),
-      roleSets: shownAs("roleSets"),
-      gone: shownAs("gone"),
-      nicknames: shownAs("nicknames"),
-      rejected: shownAs("rejected"),
-      openAsks: was && openAsks.length === was.openAsks.length && openAsks.every((m, i) => m === was.openAsks[i]) ? was.openAsks : openAsks,
-      askHeads: shownAs("askHeads"),
-      specs: shownAs("specs"),
-      specsOnly,
-      checks: shownAs("checks"),
-      threadOf: shownAs("threadOf"),
-      threadPeople: shownAs("threadPeople"),
-      lead: theLead ?? null,
-      rooms: shownAs("rooms"),
-      secret: shownAs("secret"),
-      roomOf: shownAs("roomOf"),
-      placeOf: shownAs("placeOf"),
-      places: was && same(places, was.places) ? was.places : places,
-      charter: kept(v.guarded.charter, was?.charter),
-      compact: kept(ctx.compact, was?.compact),
-      compactProposal: kept(ctx.compactProposal, was?.compactProposal),
-      repos: kept(v.guarded.repos, was?.repos),
-      github: was && (Object.keys(github) as (keyof GithubState)[]).every((k) => github[k] === was.github[k]) ? was.github : github,
-      hold: kept(v.guarded.hold, was?.hold),
-      githubWrite: ctx.githubWrite,
-      branchPrefix: ctx.branchPrefix,
-      quietMs: ctx.quietMs,
-      reviewReset: ctx.reviewReset,
-      tapToAnswer: ctx.tapToAnswer,
-      checkpointDaily: kept(ctx.checkpointDaily, was?.checkpointDaily),
-      checkpointAsks: kept(ctx.checkpointAsks, was?.checkpointAsks),
-      landing: kept(ctx.landing, was?.landing),
-      landingSteps: kept(ctx.landingSteps, was?.landingSteps),
-      reactions: shownAs("reactions"),
-      edits: shownAs("edits"),
-      deleted: shownAs("deleted"),
-      head,
-    };
-    last = state;
-    return state;
-  };
-
-  const more = (batch: readonly Message[]): boolean => {
-    let top = head;
-    for (const m of batch) {
-      if (m.seq <= top || seen.has(m.seq) || forward.has(m.seq)) return false;
-      if (m.kind === "event" && (m.ev?.op !== "react" || m.newer !== undefined)) return false;
-      if (m.permission || m.perm || m.settled) return false;
-      top = m.seq;
-    }
-    for (const m of batch) {
-      seen.add(m.seq);
-      if ((m.kind === "ask" || m.kind === "blocking") && !m.permission) {
-        askers.set(m.seq, m.from);
-        if (m.esc) decisions.add(m.seq);
-      }
-    }
-    for (const m of batch) step(m);
-    return true;
-  };
-
-  return { misses, more, finish, publish };
+  return { finish, inner };
 }
 
-interface Finishing {
+export interface Finishing {
   own: boolean;
   members: Map<string, FoldMember>;
   tasks: Map<number, Task>;

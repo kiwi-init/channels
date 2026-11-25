@@ -1,7 +1,7 @@
 import { useState } from "react"
 
 import type { ChannelState } from "@kiwi/core/state.ts"
-import { same } from "@kiwi/core/state/tracked.ts"
+import { same } from "@kiwi/core/state/same.ts"
 import { shownSame } from "~/words"
 
 export const PER_MESSAGE: ReadonlySet<string> = new Set(["head", "members", "trust", "threadOf", "threadPeople", "roomOf", "placeOf", "places", "askHeads", "rejected"])

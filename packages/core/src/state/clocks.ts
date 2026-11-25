@@ -6,7 +6,7 @@ import { heldStep, pausingStep, runSight } from "./landing-steps.ts";
 import { landerOf, openRound, taskId } from "./tasks.ts";
 import { needsReset } from "./reset.ts";
 import type { ChannelState, Task, TaskClock, Woke } from "./types.ts";
-import { quietValues } from "./tracked.ts";
+import { quietValues } from "./same.ts";
 
 export const QUIET_MS = QUIET_MINUTES * 60_000;
 export const QUEUE_MS = 24 * 60 * 60_000;

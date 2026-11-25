@@ -7,7 +7,8 @@ import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import type { GithubChore, GithubHealth } from "@kiwi/core/github-health.ts";
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
-import { fold, folded, nextExpiry, type ChannelState, type Folded, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
+import { fold, nextExpiry, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
+import type { Folded } from "@kiwi/core/state/fold-on.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
 import type { Reach } from "./history-fill.ts";
 import { planCached, reopenCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
@@ -32,6 +33,12 @@ import type { Scrollback } from "./back.ts";
 import { dropWarm, foldedFor, keepWarm, LEAN, leanLoaded, leanNow, LIGHT, warmOf, type Warm } from "./warm.ts";
 
 let images: typeof import("./image-bytes.ts") | null = null;
+let foldOn: typeof import("@kiwi/core/state/fold-on.ts") | null = null;
+export const foldOnLoaded = import("@kiwi/core/state/fold-on.ts")
+  .then((m) => void (foldOn = m))
+  .catch(() => {
+    // without the incremental fold, each change folds in full: slower, but the same state
+  });
 void import("./image-bytes.ts").then((m) => (images = m)).catch(() => {});
 const holdAll = (messages: Message[]): Message[] => (images ? images.holdAll(messages) : messages);
 const holdImages = (m: Message): Message => (images ? images.holdImages(m) : m);
@@ -224,7 +231,8 @@ export class ChannelStore {
           return next;
         }
       }
-      const next = folded(messages, people, now, rooms, guard, base);
+      if (!foldOn) return fold(messages, people, now, rooms, guard, base);
+      const next = foldOn.folded(messages, people, now, rooms, guard, base);
       cursor = { folded: next, messages, roster: people, rooms, guard, base };
       return next.state;
     });

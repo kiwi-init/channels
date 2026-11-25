@@ -1,5 +1,5 @@
 import { named } from "@kiwi/app/mentions.ts"
-import { same, type Leaf } from "@kiwi/core/state/tracked.ts"
+import { same, type Leaf } from "@kiwi/core/state/same.ts"
 
 export class Words {
   readonly #text: string

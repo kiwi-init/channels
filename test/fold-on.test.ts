@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Message } from "@kiwi/core/protocol.ts";
-import { fold, folded, type ChannelState, type FoldBase } from "@kiwi/core/state.ts";
+import { fold, type ChannelState, type FoldBase } from "@kiwi/core/state.ts";
+import { folded } from "@kiwi/core/state/fold-on.ts";
 import { TrackedMap } from "@kiwi/core/state/tracked.ts";
 import { rng, roster, SEC, stream, T0 } from "./fold-stream.ts";
 
