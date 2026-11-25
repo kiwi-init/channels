@@ -6,7 +6,7 @@ final class TitleTests: XCTestCase {
     }
 
     @MainActor
-    func testTheTitleOpensWhoIsWorkingAndHoldingItJumps() throws {
+    func testTheTitleOpensWhoIsWorking() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "YES", "-shot", "channel", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
@@ -21,18 +21,6 @@ final class TitleTests: XCTestCase {
         add(shot(app, "title sheet"))
         app.navigationBars["channels-dev"].buttons["Done"].tap()
         XCTAssertTrue(working.waitForNonExistence(timeout: 5), "Done closes the sheet")
-
-        pill.press(forDuration: 0.8)
-        XCTAssertTrue(app.buttons["lead"].waitForExistence(timeout: 5), "holding the title opens the jump menu, with the lead chat in it")
-        add(shot(app, "jump menu"))
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap()
-
-        let updates = app.buttons["updates"]
-        XCTAssertTrue(updates.waitForExistence(timeout: 5), "an Updates icon in the top bar")
-        updates.press(forDuration: 0.8)
-        let first = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "GitHub")).firstMatch
-        XCTAssertTrue(first.waitForExistence(timeout: 5), "holding Updates lists the latest few")
-        add(shot(app, "updates menu"))
     }
 
     @MainActor

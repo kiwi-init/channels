@@ -5,44 +5,27 @@ struct TitlePill: View {
     let spot: Spot
     let go: (Spot) -> Void
     let answer: (AskView) -> Void
-    @Environment(AppModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var still
     @State private var overview = false
-    @State private var drag: CGFloat = 0
-    @State private var armed = false
-
-    private static let commit: CGFloat = 56
-
-    private var neighbors: [RoomView] { model.channels }
 
     var body: some View {
         VStack(spacing: 1) {
-            title
+            Button {
+                overview = true
+            } label: {
+                Text(room.spotTitle(spot.place))
+                    .font(.headline)
+                    .foregroundStyle(Tone.ink)
+                    .lineLimit(1)
+                    .frame(maxWidth: 240)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("titlePill")
+            .accessibilityHint(spoken("Shows who is working"))
             if let status = room.status(of: spot.place) {
                 line(status)
             }
         }
-        .offset(x: still ? 0 : drag)
-        .opacity(1 - min(abs(drag) / 160, 0.6))
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 12)
-                .onChanged { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                    drag = band(value.translation.width)
-                    armed = several && abs(value.translation.width) > Self.commit
-                }
-                .onEnded { value in
-                    let fling = value.predictedEndTranslation.width
-                    let go = several && (armed || abs(fling) > Self.commit * 2.5)
-                    armed = false
-                    guard go else {
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { drag = 0 }
-                        return
-                    }
-                    swipe(fling < 0 ? 1 : -1)
-                }
-        )
-        .sensoryFeedback(.selection, trigger: armed) { _, now in now }
         .sheet(isPresented: $overview) {
             Overview(room: room, spot: spot) { next in
                 overview = false
@@ -51,30 +34,6 @@ struct TitlePill: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-    }
-
-    private var several: Bool { neighbors.count > 1 }
-
-    private func band(_ x: CGFloat) -> CGFloat {
-        let limit: CGFloat = several ? 120 : 28
-        return limit * tanh(x / (limit * 1.6))
-    }
-
-    private var title: some View {
-        Menu {
-            jumps
-        } label: {
-            Text(room.spotTitle(spot.place))
-                .font(.headline)
-                .foregroundStyle(Tone.ink)
-                .lineLimit(1)
-                .frame(maxWidth: 240)
-                .contentShape(Rectangle())
-        } primaryAction: {
-            overview = true
-        }
-        .accessibilityIdentifier("titlePill")
-        .accessibilityHint(spoken("Shows who is working. Touch and hold to jump."))
     }
 
     @ViewBuilder private func line(_ status: String) -> some View {
@@ -88,51 +47,6 @@ struct TitlePill: View {
             .accessibilityIdentifier("titleNeeds")
         } else {
             Text(status).font(.caption).foregroundStyle(Tone.ink3).lineLimit(1)
-        }
-    }
-
-    @ViewBuilder private var jumps: some View {
-        Section(room.title) {
-            ForEach(Overview.places(room), id: \.self) { key in
-                jump(Spot(code: room.code, place: key), room.spotTitle(key), Overview.symbol(room, key))
-            }
-        }
-        let others = neighbors.filter { $0.code != room.code }
-        if !others.isEmpty {
-            Section("Channels") {
-                ForEach(others, id: \.code) { other in
-                    jump(Spot(code: other.code), other.title, "number")
-                }
-            }
-        }
-    }
-
-    private func jump(_ to: Spot, _ title: String, _ symbol: String) -> some View {
-        Button {
-            go(to)
-        } label: {
-            Label(title, systemImage: to == spot ? "checkmark" : symbol)
-        }
-    }
-
-    private func swipe(_ step: Int) {
-        let list = neighbors
-        guard list.count > 1, let at = list.firstIndex(where: { $0.code == room.code }) else { return }
-        let next = Spot(code: list[(at + step + list.count) % list.count].code)
-        guard !still else {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                drag = 0
-                go(next)
-            }
-            return
-        }
-        let away: CGFloat = step > 0 ? -160 : 160
-        withAnimation(.easeIn(duration: 0.12)) {
-            drag = away
-        } completion: {
-            go(next)
-            drag = -away
-            withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { drag = 0 }
         }
     }
 }

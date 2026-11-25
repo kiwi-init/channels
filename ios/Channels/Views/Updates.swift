@@ -4,24 +4,11 @@ struct UpdatesButton: View {
     let room: RoomView
     @State private var open = false
 
-    private var latest: [MessageView] {
-        Array(room.messages.reversed().lazy.filter(\.event).prefix(3))
-    }
-
     var body: some View {
-        Menu {
-            ForEach(latest, id: \.seq) { m in
-                Button {
-                    open = true
-                } label: {
-                    Text("\(room.display(m.from)) \(m.body)")
-                    Text(When.short(m.date))
-                }
-            }
+        Button {
+            open = true
         } label: {
             Image(systemName: "waveform.path.ecg")
-        } primaryAction: {
-            open = true
         }
         .accessibilityLabel(spoken("Updates"))
         .accessibilityIdentifier("updates")
