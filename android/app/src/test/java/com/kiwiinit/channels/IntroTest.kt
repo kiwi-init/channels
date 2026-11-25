@@ -33,7 +33,7 @@ class IntroTest {
         open(Spot(DEV, "task:543"))
         compose.onNodeWithText("Lead of channels-dev").assertDoesNotExist()
         compose.onNodeWithText("Android Builder · In review in channels-dev").assertExists()
-        compose.onNodeWithText("No messages yet").assertExists()
+        compose.onNodeWithText("The start of this task's thread").assertExists()
     }
 
     @Test

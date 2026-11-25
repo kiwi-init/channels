@@ -340,7 +340,7 @@ fun Intro(room: RoomView) {
             val state = TASK_STATES.firstOrNull { it.first == task.state }?.second?.let { stringResource(it) } ?: task.state
             listOf(
                 listOfNotNull(task.owner?.let { room.display(it) }, stringResource(R.string.state_in, state, room.title)).joinToString(" · "),
-                if (empty) stringResource(R.string.no_messages_yet) else stringResource(R.string.start_of_task_thread),
+                stringResource(R.string.start_of_task_thread),
             )
         }
         person == null -> listOf(if (empty) stringResource(R.string.no_messages_yet) else stringResource(R.string.start_of_thread))
