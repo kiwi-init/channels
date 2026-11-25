@@ -81,6 +81,7 @@ import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.model.asksIn
 import com.kiwiinit.channels.model.elsewhere
 import com.kiwiinit.channels.model.other
+import com.kiwiinit.channels.model.reviewsIn
 import com.kiwiinit.channels.model.row
 import com.kiwiinit.channels.model.rows
 import com.kiwiinit.channels.model.spotTitle
@@ -173,7 +174,7 @@ fun ConversationScreen(
                             state = state,
                             follow = follow,
                             elsewhere = if (at.general) shown.elsewhere() else emptyList(),
-                            reviews = if (at.general) shown.reviews else emptyList(),
+                            reviews = shown.reviewsIn(at.place),
                             reply = { m ->
                                 answering = null
                                 sendingBack = null

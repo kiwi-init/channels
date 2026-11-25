@@ -104,6 +104,10 @@ fun RoomView.elsewhere(): List<AskView> = asks.filter { it.place != "main" && it
 
 val RoomView.roomPlaces: List<PlaceView> get() = places.filter { it.kind == "room" }
 
+fun RoomView.taskIn(key: String): Int? = placeView(key)?.task ?: if (key.startsWith("task:")) key.removePrefix("task:").toIntOrNull() else null
+
+fun RoomView.reviewsIn(key: String): List<ReviewView> = if (key == "main") reviews else taskIn(key)?.let { task -> reviews.filter { it.task == task } } ?: emptyList()
+
 fun RoomView.showing(key: String, feed: Feed?): RoomView = copy(place = key, messages = feed?.messages ?: emptyList(), whole = feed?.whole ?: false)
 
 fun RoomView.spotTitle(key: String): String {
