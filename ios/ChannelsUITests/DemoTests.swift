@@ -74,7 +74,7 @@ final class DemoTests: XCTestCase {
 
         feed.pinch(withScale: 0.4, velocity: -1)
         XCTAssertTrue(app.staticTexts["The phone release is one review away."].waitForExistence(timeout: 5), "the lead's last report shows at once")
-        XCTAssertTrue(app.staticTexts["#general"].exists, "the page names the chat it's about")
+        XCTAssertTrue(app.staticTexts["Where things stand"].exists, "the page says what it is")
         XCTAssertFalse(app.staticTexts["Where things stand in #general?"].exists, "the ask isn't a bubble")
         add(shot(app, "stand page"))
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum StandTarget: Equatable {
     case chat(Int?)
@@ -31,110 +32,129 @@ struct StandLine: Identifiable {
 struct StandPage: View {
     let room: RoomView
     let stand: StandView
-    let needs: [NeedView]
-    let asks: [AskView]
-    let reviews: [ReviewView]
+    let waiting: Int
     let go: (StandTarget) -> Void
-    var answer: (AskView) -> Void = { _ in }
-    var sendBack: (ReviewView) -> Void = { _ in }
 
     private var catchingUp: Bool {
         guard let asked = stand.asked else { return false }
         return Date.now.timeIntervalSince1970 * 1000 - asked.at < 10 * 60_000
     }
 
-    private var waitsOnYou: Bool { !needs.isEmpty || !asks.isEmpty || !reviews.isEmpty }
+    private var head: StandLine? {
+        stand.report.flatMap { StandLine.split($0.shown).first }
+    }
 
-    private var board: Bool { stand.report == nil && !(stand.now.isEmpty && stand.next.isEmpty && stand.done.isEmpty) }
+    private var lines: [StandLine] {
+        if let report = stand.report { return Array(StandLine.split(report.shown).dropFirst()) }
+        let rows: [(String, [Int])] = [(spoken("Now"), stand.now), (spoken("Next"), stand.next), (spoken("Done"), stand.done)]
+        var out = rows.compactMap { label, ids -> String? in
+            let named = ids.compactMap { id in room.tasks.first { $0.id == id } }.map { "\($0.title) (\(taskLabel($0.id)))" }
+            return named.isEmpty ? nil : "**\(label):** \(named.joined(separator: ", "))"
+        }
+        if waiting > 0 { out.insert("**\(spoken("Needs you")):** \(spoken("\(waiting) waiting on you"))", at: min(1, out.count)) }
+        return out.enumerated().map { StandLine(id: $0.offset, text: $0.element, target: StandLine.target(of: $0.element)) }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                header
-                if let report = stand.report {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(StandLine.split(report.shown)) { line in
-                            Button {
-                                go(line.target)
-                            } label: {
-                                Prose(text: line.text, step: line.id == 0 ? .title : .body, weight: line.id == 0 ? .semibold : .regular)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.vertical, 9)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            if line.id == 0 { Rectangle().fill(Tone.line).frame(height: 0.5).padding(.vertical, 4) }
-                        }
+                Text("Where things stand")
+                    .type(.ui, .medium)
+                    .foregroundStyle(Tone.ink3)
+                    .padding(.bottom, 14)
+                if let head {
+                    Button {
+                        go(head.target)
+                    } label: {
+                        Text(plain(head.text))
+                            .font(.system(.title2, weight: .semibold))
+                            .foregroundStyle(Tone.ink)
+                            .multilineTextAlignment(.leading)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Tone.raised, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-                }
-                if waitsOnYou {
-                    heading("Needs you")
-                    ForEach(asks, id: \.seq) { ask in AskLine(ask: ask, room: room) { answer(ask) } }
-                    ForEach(reviews, id: \.task) { review in ReviewLine(review: review, room: room) { sendBack(review) } }
-                    ForEach(needs, id: \.id) { need in NeedLine(need: need, room: room) }
-                }
-                if board {
-                    tasks("Working on now", stand.now)
-                    tasks("Next", stand.next)
-                    tasks("Done", stand.done)
-                }
-                if stand.report == nil && !waitsOnYou && !board && !catchingUp {
-                    Text("Nothing going on here yet")
-                        .type(.ui)
+                    .buttonStyle(.plain)
+                } else if catchingUp {
+                    Text("The lead is catching up…")
+                        .font(.system(.title2, weight: .semibold))
                         .foregroundStyle(Tone.ink3)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 60)
                 }
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(lines) { line in
+                        Button {
+                            go(line.target)
+                        } label: {
+                            Prose(text: line.text, ink: Tone.ink2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, head == nil && !catchingUp ? 0 : 28)
+                if lines.isEmpty && head == nil && !catchingUp {
+                    Text("Nothing going on here yet")
+                        .font(.system(.title2, weight: .semibold))
+                        .foregroundStyle(Tone.ink3)
+                }
+                footer.padding(.top, 36)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            .padding(.horizontal, 28)
+            .padding(.top, 64)
+            .padding(.bottom, 40)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scrollBounceBehavior(.basedOnSize)
         .background(Tone.canvas)
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(stand.label).type(.display, .bold).foregroundStyle(Tone.ink).lineLimit(1)
-            HStack(spacing: 6) {
-                if catchingUp {
-                    ProgressView().controlSize(.mini)
-                    Text("The lead is catching up…")
-                } else if let report = stand.report {
-                    Text(spoken("From the lead · \(When.short(Date(timeIntervalSince1970: report.at / 1000)))"))
-                } else if stand.lead == nil {
-                    Text("From the board")
-                }
+    @ViewBuilder private var footer: some View {
+        HStack(spacing: 6) {
+            if let report = stand.report {
+                Text(spoken("From the lead · \(When.short(Date(timeIntervalSince1970: report.at / 1000)))"))
+                if catchingUp { ProgressView().controlSize(.mini) }
+            } else if stand.lead == nil {
+                Text("From the board")
             }
-            .type(.ui)
-            .foregroundStyle(Tone.ink3)
         }
-        .padding(.top, 8)
-        .padding(.bottom, 16)
+        .type(.meta)
+        .foregroundStyle(Tone.ink3)
     }
 
-    private func heading(_ title: LocalizedStringKey) -> some View {
-        Text(title)
-            .type(.ui, .semibold)
-            .foregroundStyle(Tone.ink2)
-            .padding(.top, 24)
-            .padding(.bottom, 2)
+    private func plain(_ markdown: String) -> AttributedString {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
+        do {
+            return try AttributedString(markdown: markdown, options: options)
+        } catch {
+            Trouble.note("markdown", error)
+            return AttributedString(markdown)
+        }
+    }
+}
+
+struct Pinch: UIGestureRecognizerRepresentable {
+    let changed: (CGFloat) -> Void
+    let ended: (CGFloat) -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Alongside {
+        Alongside()
     }
 
-    @ViewBuilder private func tasks(_ title: LocalizedStringKey, _ ids: [Int]) -> some View {
-        let rows = ids.compactMap { id in room.tasks.first { $0.id == id } }
-        if !rows.isEmpty {
-            heading(title)
-            ForEach(rows, id: \.id) { task in
-                Button {
-                    go(.task(task.id))
-                } label: {
-                    TaskRow(task: task, room: room).padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
-            }
+    func makeUIGestureRecognizer(context: Context) -> UIPinchGestureRecognizer {
+        let pinch = UIPinchGestureRecognizer()
+        pinch.delegate = context.coordinator
+        return pinch
+    }
+
+    func handleUIGestureRecognizerAction(_ pinch: UIPinchGestureRecognizer, context: Context) {
+        switch pinch.state {
+        case .began, .changed: changed(pinch.scale)
+        case .ended, .cancelled, .failed: ended(pinch.scale)
+        default: break
+        }
+    }
+
+    final class Alongside: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            true
         }
     }
 }

@@ -12,7 +12,7 @@ struct ConversationScreen: View {
     @State private var follow = Follow()
     @State private var visible = false
     @State private var zoomed = false
-    @State private var pinch: CGFloat = 1
+    @State private var live: CGFloat?
     @FocusState private var typing: Bool
     @Environment(\.scenePhase) private var scene
 
@@ -24,67 +24,60 @@ struct ConversationScreen: View {
         Group {
             if let room = model.shown(spot) {
                 ZStack {
-                    if zoomed, let stand = room.stand {
+                    Conversation(
+                        room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
+                        reviews: reviews(room), needs: needs(room), worker: worker(room)
+                    ) { ask in
+                        answer(ask)
+                    } sendBack: { review in
+                        sendBack(review)
+                    }
+                    .id(spot.id)
+                    .overlay(alignment: .bottomTrailing) {
+                        if !follow.atBottom {
+                            JumpButton(follow: follow) { follow.jumps += 1 }
+                                .padding(.trailing, 16)
+                                .padding(.bottom, 4)
+                                .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        }
+                    }
+                    .animation(.snappy(duration: 0.25), value: follow.atBottom)
+                    .scaleEffect(1 - 0.32 * depth)
+                    .opacity(1 - depth)
+                    .allowsHitTesting(!zoomed)
+                    .accessibilityHidden(zoomed)
+                    .accessibilityAction(named: Text("Where things stand")) { zoom(true) }
+                    if depth > 0, let stand = room.stand {
                         let wide = standSpot(room)
-                        StandPage(room: room, stand: stand, needs: needs(room, at: wide), asks: asks(room, at: wide), reviews: reviews(room, at: wide)) { target in
+                        StandPage(room: room, stand: stand, waiting: needs(room, at: wide).count + asks(room, at: wide).count + reviews(room, at: wide).count) { target in
                             land(target)
-                        } answer: { ask in
-                            zoom(false)
-                            answer(ask)
-                        } sendBack: { review in
-                            zoom(false)
-                            sendBack(review)
                         }
-                        .gesture(
-                            MagnifyGesture().onEnded { value in
-                                if value.magnification > 1.15 { zoom(false) }
-                            }
-                        )
+                        .scaleEffect(1.08 - 0.08 * depth)
+                        .opacity(depth)
+                        .allowsHitTesting(zoomed)
                         .accessibilityAction(.escape) { zoom(false) }
-                        .transition(.scale(scale: 1.12).combined(with: .opacity))
-                    } else {
-                        Conversation(
-                            room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
-                            reviews: reviews(room), needs: needs(room), worker: worker(room)
-                        ) { ask in
-                            answer(ask)
-                        } sendBack: { review in
-                            sendBack(review)
-                        }
-                        .id(spot.id)
-                        .overlay(alignment: .bottomTrailing) {
-                            if !follow.atBottom {
-                                JumpButton(follow: follow) { follow.jumps += 1 }
-                                    .padding(.trailing, 16)
-                                    .padding(.bottom, 4)
-                                    .transition(.scale(scale: 0.5).combined(with: .opacity))
-                            }
-                        }
-                        .animation(.snappy(duration: 0.25), value: follow.atBottom)
-                        .scaleEffect(pinch)
-                        .simultaneousGesture(
-                            MagnifyGesture()
-                                .onChanged { value in pinch = min(1, max(0.8, value.magnification)) }
-                                .onEnded { value in
-                                    if value.magnification < 0.85 {
-                                        zoom(true)
-                                    } else {
-                                        withAnimation(.snappy) { pinch = 1 }
-                                    }
-                                }
-                        )
-                        .accessibilityAction(named: Text("Where things stand")) { zoom(true) }
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
                     }
                 }
+                .gesture(
+                    Pinch { scale in
+                        live = zoomed ? 1 - min(1, max(0, (scale - 1) / 0.6)) : min(1, max(0, (1 - scale) / 0.45))
+                    } ended: { scale in
+                        let open = zoomed ? scale < 1.15 : scale < 0.82
+                        if open == zoomed {
+                            withAnimation(.smooth(duration: 0.3)) { live = nil }
+                        } else {
+                            zoom(open)
+                        }
+                    }
+                )
                 .sensoryFeedback(.impact(weight: .medium), trigger: zoomed)
                 .bar(.bottom) {
                     if !zoomed && (talks(room) || answering != nil || sendingBack != nil) {
                         Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing)
                     }
                 }
-                .navigationTitle(zoomed ? spoken("Where things stand") : room.spotTitle(spot.place))
-                .subtitle(zoomed ? nil : room.status(of: spot.place))
+                .navigationTitle(room.spotTitle(spot.place))
+                .subtitle(room.status(of: spot.place))
                 .toolbar {
                     if room.messages.contains(where: \.event) {
                         ToolbarItem(placement: .topBarTrailing) { UpdatesButton(room: room) }
@@ -140,11 +133,13 @@ struct ConversationScreen: View {
         spot.place == room.sideKey ? Spot(code: spot.code) : spot
     }
 
+    private var depth: CGFloat { live ?? (zoomed ? 1 : 0) }
+
     private func zoom(_ out: Bool) {
         guard out != zoomed else { return }
         withAnimation(.smooth(duration: 0.32)) {
             zoomed = out
-            pinch = 1
+            live = nil
         }
         guard out else { return }
         typing = false
