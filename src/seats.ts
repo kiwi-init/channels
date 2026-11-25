@@ -17,7 +17,7 @@ import { readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { agyHere, deepcodeAncestor, geminiAncestor, kimiAncestor, kimiCodePid, mimoHere, piHere, zcodePid, type ProcessTree } from "./ancestry.ts";
-import { loadConfig, updateConfig, type Config, type SeatRecord, type SeatTaken } from "./config.ts";
+import { loadConfig, updateConfig, type Config, type SeatRecord, type SeatTaken, type SeatTook } from "./config.ts";
 import { pinnedFor } from "./harness-bin.ts";
 import { holdsSeat, seatHeldAway, seatHolds, seatRefusal, upLaunch } from "./hold.ts";
 import { pidAlive, processStart } from "./pid.ts";
@@ -284,6 +284,8 @@ export interface SeatOptions {
   who?: Here;
   /** Only seats in this channel (by alias). */
   alias?: string;
+  /** Only seats in channels bound to this room. */
+  room?: string;
   /** The live listeners on this machine (hooks.ts): who listens as which agent, and from which session. */
   listeners?: () => Listener[];
   /** Record this session on the seat it takes (default true). */
@@ -321,7 +323,7 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     !above.some((b) => b.alias === l.alias && b.as === l.as && (b.plain || !b.session || heldElsewhere(b, who, listening))) &&
     !live.some((o) => o.alias === l.alias && o.as === l.as && !ours(o));
   for (let d = resolve(dir); !tooBroad(d); d = dirname(d)) {
-    const atDir = seatsAt(cfg, d).filter((b) => cfg.channels[b.alias] && (!opts.alias || b.alias === opts.alias));
+    const atDir = seatsAt(cfg, d).filter((b) => cfg.channels[b.alias] && (!opts.alias || b.alias === opts.alias) && (!opts.room || cfg.channels[b.alias]?.roomId === opts.room));
     const loop = atDir.filter((b) => holdsSeat(b, env));
     if (loop.length) return loop;
     const seats = atDir.filter((b) => !seatHeldAway(cfg, b.alias, b.as, env) && (launch === null || b.upKey === launch));
@@ -333,7 +335,13 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
     // This session listens as an agent from here: that's who it is, even when its seat was lost (a later join
     // from a plain terminal replaced it). It gets its seat back, beside the others.
     // Recorded where the listener runs, never deeper (the first level up from here that holds its folder).
-    const heard = launch !== null ? undefined : live.find((l) => ours(l) && !!l.cwd && within(l.cwd, d) && cfg.channels[l.alias] && (!opts.alias || l.alias === opts.alias) && heardOk(l));
+    const heard =
+      launch !== null
+        ? undefined
+        : live.find(
+            (l) =>
+              ours(l) && !!l.cwd && within(l.cwd, d) && cfg.channels[l.alias] && (!opts.alias || l.alias === opts.alias) && (!opts.room || cfg.channels[l.alias]?.roomId === opts.room) && heardOk(l),
+          );
     if (heard) {
       const seat: Binding = {
         alias: heard.alias,
@@ -385,6 +393,7 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
         at: Date.now(),
         seen: Date.now(),
       };
+      const taker = who.session;
       let held = false;
       updateConfig((c) => {
         held = seatHeldAway(c, pick.alias, pick.as);
@@ -394,7 +403,10 @@ export function seatsFor(from: string, opts: SeatOptions = {}): Binding[] {
           d,
           seatsAt(c, d).map((b) => (b.alias === pick.alias && b.as === pick.as ? taken : b)),
         );
-        if (pick.session && pick.session !== who.session) noteTaken(c, { alias: pick.alias, as: pick.as, from: pick.session, dir: d, at: Date.now() });
+        if (pick.session && pick.session !== taker) {
+          noteTaken(c, { alias: pick.alias, as: pick.as, from: pick.session, dir: d, at: Date.now() });
+          noteTook(c, { alias: pick.alias, as: pick.as, from: pick.session, to: taker, dir: d, quiet: pick.seen ?? pick.at ?? Date.now(), at: Date.now() });
+        }
       });
       return held ? [] : [taken];
     }
@@ -421,6 +433,26 @@ export function claimTaken(session: string | undefined, still: readonly Binding[
     else delete c.taken;
   });
   return lost;
+}
+
+const TOOK_KEPT_MS = 7 * 86_400_000;
+
+function noteTook(c: Config, t: SeatTook): void {
+  const recent = (c.took ?? []).filter((o) => t.at - o.at < TOOK_KEPT_MS && !(o.to === t.to && o.from === t.from && sameSeat(o, t)));
+  c.took = [...recent, t];
+}
+
+export function claimTook(session: string | undefined): SeatTook[] {
+  if (!session || !loadConfig().took?.some((t) => t.to === session)) return [];
+  let took: SeatTook[] = [];
+  updateConfig((c) => {
+    const all = c.took ?? [];
+    took = all.filter((t) => t.to === session);
+    const left = all.filter((t) => t.to !== session);
+    if (left.length) c.took = left;
+    else delete c.took;
+  });
+  return took;
 }
 
 export function notePlace(seats: readonly Binding[], env: Record<string, string | undefined> = process.env): void {

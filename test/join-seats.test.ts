@@ -5,7 +5,7 @@ import { spawnOwned } from "./owned.ts";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { daemonListening, daemonSock } from "../src/daemon.ts";
+import { daemonListening, daemonSock, stopDaemon } from "../src/daemon.ts";
 import { HANDLE, youAre, created, joinSeats } from "./join-seats-setup.ts";
 
 setDefaultTimeout(60_000);
@@ -76,6 +76,101 @@ describe("joining without --as", () => {
     cProcess.kill();
     expect(refused.code).toBe(1);
     expect(refused.err).toContain("in another session");
+  });
+
+  test("a session that takes an idle session's seat is told once, with the handle, channel, session and quiet time (#2590)", async () => {
+    const owner = scratch("own-idle");
+    const code = created(await ok(owner, ["create", "idles", "--as", "boss"]));
+    const h = scratch("idle");
+    const s1 = await join_(owner, h, code, { CODEX_THREAD_ID: "t1" });
+    const handle = youAre(s1.out);
+    await until(async () => (await daemonListening(daemonSock(h)).catch(() => [])).some((s) => s.agent === handle), "the joiner's daemon holding its seat");
+    await stopDaemon(daemonSock(h));
+    const cfgPath = join(h, "config.json");
+    const quiet = Date.now() - 13 * 3600_000;
+    const aged = JSON.parse(readFileSync(cfgPath, "utf8")) as { bindings?: Record<string, unknown> };
+    for (const [d, v] of Object.entries(aged.bindings ?? {})) {
+      const seats = (Array.isArray(v) ? v : [v]) as Record<string, unknown>[];
+      for (const s of seats)
+        if (s && typeof s === "object") {
+          s.at = quiet;
+          s.seen = quiet;
+        }
+      aged.bindings![d] = Array.isArray(v) ? seats : seats[0]!;
+    }
+    writeFileSync(cfgPath, JSON.stringify(aged));
+    const seat = (): { session?: string } => {
+      const c = JSON.parse(readFileSync(cfgPath, "utf8")) as { bindings?: Record<string, unknown> };
+      const v = c.bindings?.[h];
+      const seats = (Array.isArray(v) ? v : [v!]) as { session?: string }[];
+      return seats[0]!;
+    };
+    const first = await run(h, ["status"], { CODEX_THREAD_ID: "t2" });
+    expect(first.code).toBe(0);
+    expect(first.out).toContain(handle);
+    expect(seat().session).toBe("t2");
+    const notices = first.err.split("\n").filter((l) => l.includes("t1"));
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain(handle);
+    expect(notices[0]).toContain("idles");
+    expect(notices[0]).toMatch(/13/);
+    const second = await run(h, ["status"], { CODEX_THREAD_ID: "t2" });
+    expect(second.code).toBe(0);
+    expect(second.err).not.toContain("t1");
+  });
+
+  test("a command that targets another channel leaves the idle seat beside it alone, even when resolving that channel fails (#2590)", async () => {
+    const owner = scratch("own-two");
+    const codeA = created(await ok(owner, ["create", "idles", "--as", "boss"]));
+    const codeB = created(await ok(owner, ["create", "elsewhere", "--as", "boss"]));
+    const h = scratch("two");
+    const s1 = await join_(owner, h, codeA, { CODEX_THREAD_ID: "t1" });
+    const handle = youAre(s1.out);
+    await until(async () => (await daemonListening(daemonSock(h)).catch(() => [])).some((s) => s.agent === handle), "the joiner's daemon holding its seat");
+    const b = spawn(h, ["join", codeB, "--timeout", "40s"], { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s3", CLAUDE_PID: String(process.pid) });
+    let bOut = "";
+    const reader = b.stdout.getReader();
+    const reading = (async () => {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) return;
+        bOut += new TextDecoder().decode(value);
+      }
+    })();
+    await until(() => bOut.includes("waiting for the owner"), "the second join asking");
+    let listed = "";
+    await until(async () => {
+      listed = await ok(owner, ["--as", "human", "-c", "elsewhere", "requests"]);
+      return /\d{3}-\d{3}/.test(listed);
+    }, "request listed with a code");
+    await ok(owner, ["--as", "human", "-c", "elsewhere", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes"]);
+    expect(await b.exited).toBe(0);
+    await reading;
+    await stopDaemon(daemonSock(h));
+    const cfgPath = join(h, "config.json");
+    const quiet = Date.now() - 13 * 3600_000;
+    const cfg = JSON.parse(readFileSync(cfgPath, "utf8")) as { bindings?: Record<string, unknown> };
+    for (const [d, v] of Object.entries(cfg.bindings ?? {})) {
+      const seats = (Array.isArray(v) ? v : [v]) as Record<string, unknown>[];
+      for (const s of seats)
+        if (s && typeof s === "object" && s.harness === "codex") {
+          s.at = quiet;
+          s.seen = quiet;
+        }
+      cfg.bindings![d] = Array.isArray(v) ? seats : seats[0]!;
+    }
+    writeFileSync(cfgPath, JSON.stringify(cfg));
+    const seat = (): { session?: string } => {
+      const c = JSON.parse(readFileSync(cfgPath, "utf8")) as { bindings?: Record<string, unknown> };
+      const v = c.bindings?.[h];
+      const seats = (Array.isArray(v) ? v : [v!]) as { session?: string; harness?: string }[];
+      return seats.find((s) => s.harness === "codex")!;
+    };
+    await run(h, ["status", "-c", "elsewhere"], { CODEX_THREAD_ID: "t2" });
+    expect(seat().session).toBe("t1");
+    const unknown = await run(h, ["status", "-c", "nope"], { CODEX_THREAD_ID: "t2" });
+    expect(unknown.code).not.toBe(0);
+    expect(seat().session).toBe("t1");
   });
 
   test("two Gemini CLIs in one checkout, both running, join as two agents: each is told apart by its own process", async () => {
