@@ -107,8 +107,10 @@ final class DemoTests: XCTestCase {
         XCTAssertFalse(needs.exists, "and the menu goes with it")
         me.tap()
         XCTAssertTrue(needs.waitForExistence(timeout: 5))
-        needs.tap()
-        XCTAssertTrue(app.navigationBars["Needs You"].waitForExistence(timeout: 5), "Needs You from your menu")
+        let you = app.descendants(matching: .any).matching(identifier: "menu-you").firstMatch
+        XCTAssertTrue(you.exists)
+        you.press(forDuration: 0.3, thenDragTo: needs)
+        XCTAssertTrue(app.navigationBars["Needs You"].waitForExistence(timeout: 5), "drag across your menu and let go on Needs You")
     }
 
     @MainActor
