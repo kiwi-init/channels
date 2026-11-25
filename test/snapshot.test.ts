@@ -239,6 +239,33 @@ describe("a fold reads its base without changing it, so the base is shared, not 
   }
 });
 
+test("what two folds share from one base can't be changed through either result", async () => {
+  const w = await world(260, 1);
+  const base = capture(w.messages, w.roster, w.floors, 120);
+  const before = structuredClone(base);
+  const first = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, base);
+  const second = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, base);
+  const maps = Object.entries(first).flatMap(([key, value]) => (value instanceof Map ? [[key, value] as const] : []));
+  const shared = maps.flatMap(([key, map]) => {
+    const other = (second as unknown as Record<string, unknown>)[key];
+    return other instanceof Map ? [...map.entries()].flatMap(([k, v]) => (v && typeof v === "object" && other.get(k) === v ? [v as object] : [])) : [];
+  });
+  const inBase = new Set<unknown>();
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== "object" || inBase.has(value)) return;
+    inBase.add(value);
+    for (const inner of Object.values(value)) walk(inner);
+  };
+  walk(base);
+  const fromBase = shared.filter((value) => inBase.has(value));
+  expect(fromBase.length).toBeGreaterThan(0);
+  for (const value of fromBase) expect(() => Object.assign(value, { changed: true })).toThrow(TypeError);
+  const task = [...first.tasks.values()][0]!;
+  task.title = "changed in the first result";
+  expect(second.tasks.get(task.id)?.title).not.toBe("changed in the first result");
+  expect(base).toEqual(before);
+});
+
 describe("a fold resumed from a snapshot folds to the same state as the whole log", () => {
   for (const seed of [1, 2, 3]) {
     test(`seed ${seed}: every cut point`, async () => {
