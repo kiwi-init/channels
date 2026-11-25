@@ -2,14 +2,14 @@ import { signRequest } from "@kiwi/core/auth.ts";
 import type { Channel } from "@kiwi/core/client.ts";
 import { LIVE_PATH, liveState, sealLive, type LiveState } from "@kiwi/core/live.ts";
 import type { Activity } from "@kiwi/core/protocol.ts";
-import type { ChannelState } from "@kiwi/core/state/types.ts";
+import type { ChannelState, Task } from "@kiwi/core/state/types.ts";
 
 export const LIVE_IDLE_MS = 90_000;
 export const LIVE_CHECK_MS = 30_000;
 export const LIVE_REFRESH_MS = 10 * 60_000;
 export const LIVE_ABSENT_MS = 60 * 60_000;
 
-export type LiveAbout = Omit<Parameters<typeof liveState>[0], "since">;
+export type LiveAbout = Omit<Parameters<typeof liveState>[0], "since"> & { since?: number | null };
 
 export interface LiveIo {
   put(state: LiveState): Promise<number>;
@@ -70,7 +70,7 @@ export class LiveBlobs {
     this.checkedAt = now;
     const about = await this.io.about();
     if (!about) return;
-    const state = liveState({ ...about, since: this.since });
+    const state = liveState({ ...about, since: about.since ?? this.since });
     const sig = JSON.stringify({ ...state, s: 0 });
     if (this.on && sig === this.sig && !stale) return;
     const status = await this.io.put(state);
@@ -95,12 +95,14 @@ export class LiveBlobs {
 export function liveAbout(state: ChannelState, agent: string, title: string): LiveAbout | null {
   const me = state.members.get(agent);
   if (!me) return null;
-  const task = [...state.tasks.values()].find((t) => t.owner === agent && t.state === "doing");
+  const started = (t: Task): number => (t.clock?.key.startsWith(`${agent}|work|`) ? t.clock.at : 0);
+  const task = [...state.tasks.values()].filter((t) => t.owner === agent && t.state === "doing" && !t.archived).sort((a, b) => started(b) - started(a) || b.updatedAt - a.updatedAt)[0];
   return {
     name: me.display ?? me.name,
     face: state.lead === agent ? "lead" : (me.persona?.role ?? "default"),
     color: me.color ?? null,
     task: task ? `T${task.id} ${task.title}` : null,
+    since: task && started(task) ? started(task) : null,
     title,
   };
 }
