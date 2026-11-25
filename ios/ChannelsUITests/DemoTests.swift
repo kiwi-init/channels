@@ -68,7 +68,7 @@ final class DemoTests: XCTestCase {
         let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(general.waitForExistence(timeout: 15))
         general.tap()
-        let head = app.staticTexts["The phone release is one review away."]
+        let head = app.buttons["The phone release is one review away."]
         XCTAssertTrue(head.waitForExistence(timeout: 5), "the lead's last report shows at once")
         XCTAssertTrue(app.staticTexts["Where things stand"].exists, "the page says what it is")
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '**'")).firstMatch.exists, "no raw markdown")
