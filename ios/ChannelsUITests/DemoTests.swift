@@ -12,8 +12,9 @@ final class DemoTests: XCTestCase {
         let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(general.waitForExistence(timeout: 5))
         general.tap()
-        let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 15), "the chat's message field")
+        let composer = NSPredicate(format: "placeholderValue == 'Message'")
+        let field = app.textViews.matching(composer).firstMatch.exists ? app.textViews.matching(composer).firstMatch : app.textFields.matching(composer).firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the chat's message field")
         field.tap()
         field.typeText("hello")
         app.buttons["Send"].firstMatch.tap()
@@ -28,71 +29,38 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
-    func testTabBarStaysInAChat() throws {
+    func testAChatIsTheWholeScreen() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(general.waitForExistence(timeout: 15))
-        XCTAssertTrue(app.buttons["tab-needs"].waitForHittable(timeout: 5), "the tabs outside a chat")
-        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "lead-row").firstMatch.exists, "the lead, at the top of the channel in Chats")
-        add(shot(app, "list with the tab bar"))
+        XCTAssertTrue(app.tabBars.buttons["Needs You"].isHittable, "the tabs on the list")
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "lead-row").firstMatch.exists, "the lead, the first row of the channel")
+        add(shot(app, "chats"))
         general.tap()
         let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5), "the chat's composer in the bar")
-        let needs = app.buttons["tab-needs"]
-        XCTAssertTrue(needs.waitForHittable(timeout: 5), "in a chat all three tabs stay, as icons beside the composer")
-        XCTAssertTrue(app.buttons["tab-chats"].isHittable && app.buttons["tab-you"].isHittable)
-        XCTAssertEqual(needs.frame.midY, field.frame.midY, accuracy: 2, "one row: the tab icons and the composer")
-        XCTAssertGreaterThan(field.frame.width, needs.frame.width * 3, "the composer takes the wide pill")
-        sleep(1)
-        add(shot(app, "chat at rest with the tab bar"))
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "the composer")
+        XCTAssertFalse(app.tabBars.firstMatch.isHittable, "in a chat the tab bar steps away")
         let newest = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Something else'")).firstMatch
         XCTAssertTrue(newest.waitForExistence(timeout: 5), "the newest item, the step's Something else")
-        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "the newest item ends above the bar")
-        XCTAssertGreaterThan(newest.frame.maxY, field.frame.minY - 40, "and no wide empty gap sits between them")
-
-        app.swipeDown()
-        app.swipeDown()
         sleep(1)
-        add(shot(app, "chat scrolled up"))
-        XCTAssertTrue(field.exists && needs.exists, "the bar is there after scrolling")
-        app.swipeUp()
-        app.swipeUp()
-        app.swipeUp()
-        sleep(1)
-        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "back at the bottom, the newest item ends above the bar")
-
-        needs.tap()
-        XCTAssertTrue(app.navigationBars["Needs You"].waitForExistence(timeout: 5), "a tab opens from inside a chat")
-        app.buttons["tab-chats"].tap()
-        XCTAssertTrue(field.waitForHittable(timeout: 5), "back on Chats, the chat is still open")
+        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "the newest item ends above the composer")
+        add(shot(app, "chat at rest"))
+        let elsewhere = app.buttons["needs-elsewhere"]
+        if elsewhere.exists {
+            add(shot(app, "chat with something waiting elsewhere"))
+            elsewhere.tap()
+            XCTAssertTrue(app.navigationBars["Needs You"].waitForExistence(timeout: 5), "the hand opens Needs You")
+            app.tabBars.buttons["Chats"].firstMatch.tap()
+            XCTAssertTrue(field.waitForExistence(timeout: 5), "and the chat is still open on Chats")
+        }
         field.tap()
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the composer opens over the keyboard")
-        XCTAssertFalse(needs.exists, "and the bar steps aside")
-        app.typeText("hi")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        field.typeText("hi")
         add(shot(app, "chat typing"))
-    }
-
-    @MainActor
-    func testMessageTheLeadFromTheBar() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
-        app.launch()
-        let pill = app.buttons["lead-composer"]
-        XCTAssertTrue(pill.waitForHittable(timeout: 15), "outside a chat, the pill beside the tabs writes to the lead")
-        XCTAssertTrue(app.buttons["tab-needs"].isHittable, "beside the tabs")
-        XCTAssertEqual(pill.frame.midY, app.buttons["tab-needs"].frame.midY, accuracy: 2, "one row")
-        add(shot(app, "chats at rest"))
-        pill.tap()
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the composer opens over the keyboard")
-        XCTAssertFalse(pill.exists, "in place of the bar")
-        app.typeText("status?")
-        add(shot(app, "lead composer open"))
-        app.buttons["Send"].firstMatch.tap()
-        XCTAssertTrue(pill.waitForHittable(timeout: 5), "sent, the bar comes back")
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch.exists, "and you stay on Chats")
-        add(shot(app, "lead message sent"))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.tabBars.buttons["Needs You"].waitForHittable(timeout: 5), "back on the list, the tabs come back")
     }
 
     @MainActor
@@ -135,7 +103,6 @@ final class DemoTests: XCTestCase {
         return attachment
     }
 }
-
 extension XCUIElement {
     func waitForHittable(timeout: TimeInterval) -> Bool {
         let end = Date().addingTimeInterval(timeout)

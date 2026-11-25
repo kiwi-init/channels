@@ -13,59 +13,27 @@ extension AppModel {
 
 struct Shell: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var still
-    @State private var keyboard = false
-    @State private var home: CGFloat = 0
-
-    private var barShown: Bool { !keyboard && model.docked == nil && !model.leadOpen }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            page(.chats) {
+        TabView(selection: Binding(get: { model.tab }, set: { model.tab = $0 })) {
+            Tab("Chats", systemImage: "bubble.left.and.bubble.right.fill", value: AppTab.chats) {
                 NavigationStack(path: Binding(get: { model.path }, set: { model.path = $0 })) {
                     ChannelList()
-                        .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
+                        .navigationDestination(for: Route.self) { RouteScreen(route: $0).toolbar(.hidden, for: .tabBar) }
                 }
             }
-            page(.needs) {
+            Tab("Needs You", systemImage: "hand.raised.fill", value: AppTab.needs) {
                 NavigationStack {
                     NeedsScreen()
                 }
             }
-            page(.you) {
+            .badge(model.waiting)
+            Tab("You", systemImage: "person.crop.circle.fill", value: AppTab.you) {
                 NavigationStack {
                     SettingsScreen()
                 }
             }
-            if model.leadOpen {
-                Color.black.opacity(0.001)
-                    .ignoresSafeArea()
-                    .onTapGesture { model.leadOpen = false }
-                    .accessibilityHidden(true)
-            }
         }
-        .bar(.bottom) {
-            if model.leadOpen, let room = model.leadRoom, let spot = room.leadSpot {
-                LeadDock(room: room, spot: spot)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else if barShown {
-                TabBar()
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, home > 20 ? -12 : 12)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .onGeometryChange(for: CGFloat.self) {
-            $0.safeAreaInsets.bottom
-        } action: {
-            if !keyboard { home = $0 }
-        }
-        .animation(Bar.spring(still), value: model.leadOpen)
-        .onChange(of: model.path) { _, _ in model.leadOpen = false }
-        .onChange(of: model.tab) { _, _ in model.leadOpen = false }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
         .alert("Sign-in not saved", isPresented: Binding(get: { model.unsaved != nil }, set: { if !$0 { model.unsaved = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -77,14 +45,6 @@ struct Shell: View {
                 if UserDefaults.standard.string(forKey: "shot") == "live" { LivePreview() }
             }
         #endif
-    }
-
-    private func page<Content: View>(_ tab: AppTab, @ViewBuilder _ content: () -> Content) -> some View {
-        let shown = model.tab == tab
-        return content()
-            .opacity(shown ? 1 : 0)
-            .allowsHitTesting(shown)
-            .accessibilityHidden(!shown)
     }
 
     #if DEBUG

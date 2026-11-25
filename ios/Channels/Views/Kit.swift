@@ -216,10 +216,6 @@ enum Haptic {
     @MainActor static func tap() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
-
-    @MainActor static func tick() {
-        UISelectionFeedbackGenerator().selectionChanged()
-    }
 }
 
 func taskLabel(_ id: Int) -> String { "T\(id)" }

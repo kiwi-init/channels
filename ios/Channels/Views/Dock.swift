@@ -67,7 +67,6 @@ struct Dock: View {
     @Binding var answering: AskView?
     @Binding var sendingBack: ReviewView?
     var typing: FocusState<Bool>.Binding
-    var onRest: () -> Void = {}
     @Environment(AppModel.self) private var model
     @State private var draft = ""
     @State private var sending = false
@@ -132,10 +131,6 @@ struct Dock: View {
             let back = now.trimmingCharacters(in: .whitespacesAndNewlines)
             if !back.isEmpty && sent.text.contains(back) { draft = "" }
         }
-        .onChange(of: typing.wrappedValue) { _, _ in settle() }
-        .onChange(of: choosing) { _, _ in settle() }
-        .onChange(of: sending) { _, _ in settle() }
-        .onChange(of: replyTo == nil && !deciding) { _, _ in settle() }
         .onChange(of: picked) { _, items in
             guard !items.isEmpty else { return }
             picked = []
@@ -281,11 +276,6 @@ struct Dock: View {
         if let answering { return spoken("Answer \(room.display(answering.from))") }
         if let here, here.kind == "dm", let other = room.other(in: here) { return spoken("Message \(room.display(other))") }
         return spoken("Message")
-    }
-
-    private func settle() {
-        guard !typing.wrappedValue, !choosing, !sending, attached.isEmpty, replyTo == nil, !deciding else { return }
-        onRest()
     }
 
     private func restore(_ key: Spot) {
