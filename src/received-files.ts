@@ -5,7 +5,7 @@ import * as Effect from "effect/Effect";
 import { initSync, toMarkdownBytes, type Format } from "@firecrawl/anydoc-wasm";
 import type { Channel } from "@kiwi/core/client.ts";
 import type { FileAttachment, Message } from "@kiwi/core/protocol.ts";
-import { planNames, saveNamed } from "./attach.ts";
+import { caseRuleOf, planNames, saveNamed, type CaseRule } from "./attach.ts";
 import { home } from "./config.ts";
 
 export const ANYDOC_VERSION = "0.2.4";
@@ -90,18 +90,22 @@ function anydocReady(): Promise<boolean> {
   return ready;
 }
 
-export function messagePlan(m: Pick<Message, "seq" | "imgs" | "files">) {
-  const planned = planNames(m.seq, [
-    ...(m.imgs ?? []).map((img) => ({ kind: "image" as const, img, name: img.name, fallback: "image" as const, markdown: false })),
-    ...(m.files ?? []).map((file) => ({ kind: "file" as const, file, name: file.name, fallback: "file" as const, markdown: documentFormat(file.name) !== null })),
-  ]);
+export function messagePlan(m: Pick<Message, "seq" | "imgs" | "files">, rule: CaseRule) {
+  const planned = planNames(
+    m.seq,
+    [
+      ...(m.imgs ?? []).map((img) => ({ kind: "image" as const, img, name: img.name, fallback: "image" as const, markdown: false })),
+      ...(m.files ?? []).map((file) => ({ kind: "file" as const, file, name: file.name, fallback: "file" as const, markdown: documentFormat(file.name) !== null })),
+    ],
+    rule,
+  );
   return {
     imgs: planned.flatMap((p) => (p.kind === "image" ? [{ img: p.img, saveAs: p.saveAs }] : [])),
     files: planned.flatMap((p) => (p.kind === "file" ? [{ file: p.file, saveAs: p.saveAs }] : [])),
   };
 }
 
-export const keepFiles = (ch: Channel, m: Message, dir: string, plan: { file: FileAttachment; saveAs: string }[] = messagePlan(m).files) =>
+export const keepFiles = (ch: Channel, m: Message, dir: string, plan: { file: FileAttachment; saveAs: string }[] = messagePlan(m, caseRuleOf(dir)).files) =>
   Effect.gen(function* () {
     if (!plan.length) return { saved: [] as string[], markdown: [] as string[] };
     const loaded = yield* Effect.forEach(
@@ -129,7 +133,7 @@ export const keepFiles = (ch: Channel, m: Message, dir: string, plan: { file: Fi
 
 export const saveMessage = (ch: Channel, m: Message, dir: string) =>
   Effect.gen(function* () {
-    const plan = messagePlan(m);
+    const plan = messagePlan(m, caseRuleOf(dir));
     const fetched = yield* Effect.forEach(
       plan.imgs,
       (p) =>

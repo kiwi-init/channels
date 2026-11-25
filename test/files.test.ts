@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
-import { loadFiles, saveFiles } from "../src/attach.ts";
+import { caseRuleOf, loadFiles, saveFiles } from "../src/attach.ts";
 import { keepFiles, messagePlan } from "../src/received-files.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel, Relay } from "@kiwi/core/client.ts";
@@ -146,14 +146,14 @@ const plannedFile = (name: string): FileAttachment => ({ name, mime: "applicatio
 const plannedImage = (name: string) => ({ name, mime: "image/png" });
 
 test("one message's images, files and Markdown copies never share a path", () => {
-  const twoAndReal = messagePlan({ seq: 9, imgs: [plannedImage("image.png"), plannedImage("image.png")], files: [plannedFile("2-image.png")] });
+  const twoAndReal = messagePlan({ seq: 9, imgs: [plannedImage("image.png"), plannedImage("image.png")], files: [plannedFile("2-image.png")] }, "exact");
   expect(twoAndReal.imgs.map((p) => p.saveAs)).toEqual(["#9-image.png", "#9-3-image.png"]);
   expect(twoAndReal.files.map((p) => p.saveAs)).toEqual(["#9-2-image.png"]);
-  const alike = messagePlan({ seq: 9, files: [plannedFile("a b.png"), plannedFile("a_b.png")] });
+  const alike = messagePlan({ seq: 9, files: [plannedFile("a b.png"), plannedFile("a_b.png")] }, "exact");
   expect(alike.files.map((p) => p.saveAs)).toEqual(["#9-a_b.png", "#9-2-a_b.png"]);
-  const crossed = messagePlan({ seq: 9, imgs: [plannedImage("image.png")], files: [plannedFile("image.png")] });
+  const crossed = messagePlan({ seq: 9, imgs: [plannedImage("image.png")], files: [plannedFile("image.png")] }, "exact");
   expect([...crossed.imgs, ...crossed.files].map((p) => p.saveAs)).toEqual(["#9-image.png", "#9-2-image.png"]);
-  const copy = messagePlan({ seq: 9, files: [plannedFile("report.pdf"), plannedFile("report.pdf.md")] });
+  const copy = messagePlan({ seq: 9, files: [plannedFile("report.pdf"), plannedFile("report.pdf.md")] }, "exact");
   expect(copy.files.map((p) => p.saveAs)).toEqual(["#9-report.pdf", "#9-2-report.pdf.md"]);
 });
 
@@ -175,8 +175,20 @@ test("an attachment keeps its path when an earlier one fails to download and lat
   expect(again.saved.map((p) => [...readFileSync(p)])).toEqual([[1], [2]]);
 });
 
-test("names that differ only in case get their own files, so a case-insensitive disk keeps both", () => {
-  const cased = messagePlan({ seq: 9, imgs: [plannedImage("Image.png"), plannedImage("image.png")], files: [plannedFile("Report.PDF"), plannedFile("report.pdf.md")] });
-  expect(cased.imgs.map((p) => p.saveAs)).toEqual(["#9-Image.png", "#9-2-image.png"]);
-  expect(cased.files.map((p) => p.saveAs)).toEqual(["#9-Report.PDF", "#9-2-report.pdf.md"]);
+test("names that differ only in case keep their own names on a case-sensitive disk and get their own files on one that ignores case", () => {
+  const m = { seq: 9, imgs: [plannedImage("Image.png"), plannedImage("image.png")], files: [plannedFile("Report.PDF"), plannedFile("report.pdf.md")] };
+  const exact = messagePlan(m, "exact");
+  expect(exact.imgs.map((p) => p.saveAs)).toEqual(["#9-Image.png", "#9-image.png"]);
+  expect(exact.files.map((p) => p.saveAs)).toEqual(["#9-Report.PDF", "#9-report.pdf.md"]);
+  const folded = messagePlan(m, "folded");
+  expect(folded.imgs.map((p) => p.saveAs)).toEqual(["#9-Image.png", "#9-2-image.png"]);
+  expect(folded.files.map((p) => p.saveAs)).toEqual(["#9-Report.PDF", "#9-2-report.pdf.md"]);
+});
+
+test("the destination's case rule is read from the folder itself, and the probe leaves nothing behind", () => {
+  const dir = join(scratch, "case-probe");
+  const rule = caseRuleOf(dir);
+  writeFileSync(join(dir, "probe-case"), "");
+  expect(rule).toBe(existsSync(join(dir, "PROBE-CASE")) ? "folded" : "exact");
+  expect(readdirSync(dir)).toEqual(["probe-case"]);
 });

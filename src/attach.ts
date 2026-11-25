@@ -1,7 +1,8 @@
 // Loading local image files into message attachments. Bun/Node only: reads
 // from disk, so the web app and the Worker never import this.
 
-import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { home } from "./config.ts";
 import { shrinkImage } from "@kiwi/core/node/shrink-image.ts";
@@ -82,6 +83,7 @@ export function saveImages(seq: number, imgs: InlineImage[], dir: string): strin
     planNames(
       seq,
       imgs.map((img) => ({ name: img.name, fallback: "image" as const, markdown: false, bytes: Buffer.from(img.data, "base64") })),
+      caseRuleOf(dir),
     ),
     dir,
   );
@@ -92,6 +94,7 @@ export function saveFiles(seq: number, files: { name: string; bytes: Uint8Array 
     planNames(
       seq,
       files.map((f) => ({ ...f, fallback: "file" as const, markdown: false })),
+      caseRuleOf(dir),
     ),
     dir,
   );
@@ -99,9 +102,28 @@ export function saveFiles(seq: number, files: { name: string; bytes: Uint8Array 
 
 export type Attachment = { name: string; fallback: "image" | "file"; markdown: boolean };
 
-export function planNames<T extends Attachment>(seq: number, items: T[]): (T & { saveAs: string })[] {
+export type CaseRule = "exact" | "folded";
+
+export function caseRuleOf(dir: string): CaseRule {
+  ensureDir(dir);
+  const name = `.kiwi-case-${process.pid}-${randomUUID()}`;
+  const probe = join(dir, name);
+  try {
+    writeFileSync(probe, "", { flag: "wx", mode: 0o600 });
+  } catch {
+    // A folder this user can't write to fails the save itself; folding here only keeps names apart until then.
+    return "folded";
+  }
+  try {
+    return existsSync(join(dir, name.toUpperCase())) ? "folded" : "exact";
+  } finally {
+    rmSync(probe, { force: true });
+  }
+}
+
+export function planNames<T extends Attachment>(seq: number, items: T[], rule: CaseRule): (T & { saveAs: string })[] {
   const taken = new Set<string>();
-  const key = (name: string) => name.toLowerCase();
+  const key = (name: string) => (rule === "folded" ? name.toLowerCase() : name);
   const fits = (name: string, markdown: boolean) => !taken.has(key(name)) && !(markdown && taken.has(key(`${name}.md`)));
   const take = (name: string, markdown: boolean) => {
     taken.add(key(name));
@@ -121,11 +143,15 @@ export function planNames<T extends Attachment>(seq: number, items: T[]): (T & {
   });
 }
 
-export function saveNamed(items: { saveAs: string; bytes: Uint8Array }[], dir: string): string[] {
+function ensureDir(dir: string): void {
   const downloads = join(home(), "downloads");
   const locked = inside(downloads, dir);
   mkdirSync(dir, locked ? { recursive: true, mode: 0o700 } : { recursive: true });
   if (locked) lockDirs(dir, downloads);
+}
+
+export function saveNamed(items: { saveAs: string; bytes: Uint8Array }[], dir: string): string[] {
+  ensureDir(dir);
   return items.map((item) => {
     const path = join(dir, item.saveAs);
     writeFileSync(path, item.bytes, { mode: 0o600 });
