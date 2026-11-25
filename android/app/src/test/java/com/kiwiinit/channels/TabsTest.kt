@@ -35,12 +35,13 @@ class TabsTest {
     fun chatsKeepsItsScrollAcrossTabs() {
         val model = sample(RuntimeEnvironment.getApplication())
         val room = model.rooms.getValue(DEV)
-        model.rooms[DEV] = room.copy(places = room.places + (1..30).map { PlaceView("room:r%02d".format(it), "room", "r%02d".format(it)) })
+        model.rooms[DEV] = room.copy(places = room.places + (1..60).map { PlaceView("room:r%02d".format(it), "room", "r%02d".format(it)) })
         compose.setContent {
             ChannelsTheme {
                 Surface(Modifier.fillMaxSize()) { Home(model, open = {}, tasks = {}) }
             }
         }
+        compose.onNodeWithText("# r01", substring = true).assertDoesNotExist()
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("# r01", substring = true))
         compose.onNodeWithText("# r01", substring = true).assertIsDisplayed()
         compose.onNodeWithText("You").performClick()
