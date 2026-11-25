@@ -57,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
@@ -105,6 +106,7 @@ fun ConversationScreen(
     var answering by remember { mutableStateOf<AskView?>(null) }
     var sendingBack by remember { mutableStateOf<ReviewView?>(null) }
     var updates by rememberSaveable { mutableStateOf(false) }
+    var composing by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val view = LocalView.current
@@ -175,6 +177,7 @@ fun ConversationScreen(
                             follow = follow,
                             elsewhere = if (at.general) shown.elsewhere() else emptyList(),
                             reviews = shown.reviewsIn(at.place),
+                            composing = composing,
                             reply = { m ->
                                 answering = null
                                 sendingBack = null
@@ -212,6 +215,7 @@ fun ConversationScreen(
             clearReply = { replyTo = null },
             clearAnswer = { answering = null },
             clearSendBack = { sendingBack = null },
+            modifier = Modifier.onFocusChanged { composing = it.hasFocus },
         )
     }
     if (updates) UpdatesSheet(room) { updates = false }

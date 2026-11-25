@@ -207,6 +207,7 @@ fun Conversation(
     reply: (MessageView) -> Unit,
     answer: (AskView) -> Unit,
     sendBack: (ReviewView) -> Unit,
+    composing: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -233,7 +234,7 @@ fun Conversation(
             follow.unseen += room.messages.count { it.seq > before && !it.mine && !it.event }
         }
     }
-    val typing = WindowInsets.isImeVisible
+    val typing = WindowInsets.isImeVisible && composing
     LaunchedEffect(typing) {
         if (!typing) return@LaunchedEffect
         delay(250)
