@@ -20,16 +20,16 @@ struct AgentsLive: Widget {
             let agents = context.state.agents
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    LiveFace(agent: agents.first, size: 40, dot: !agents.isEmpty)
+                    LiveFace(agent: agents.first, size: 40, dot: !agents.isEmpty).padding(.leading, 6)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Clock(agents: agents).font(.headline.monospacedDigit())
+                    Clock(agents: agents).font(.headline.monospacedDigit()).padding(.trailing, 6)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     Text(context.attributes.title).font(.headline).lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Rows(agents: Array(agents.prefix(2)))
+                    Rows(agents: Array(agents.prefix(2))).padding(.horizontal, 6).padding(.top, 8).padding(.bottom, 4)
                 }
             } compactLeading: {
                 LiveFace(agent: agents.first, size: 22, dot: !agents.isEmpty)

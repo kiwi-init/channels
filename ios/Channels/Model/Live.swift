@@ -16,7 +16,7 @@ final class LiveAgents {
                 name: m.display,
                 face: m.face ?? "default",
                 color: m.color.flatMap { Palette.fills[$0] },
-                task: m.doing.first.flatMap { id in room.tasks.first { $0.id == id }.map { "T\(id) \($0.title)" } },
+                task: room.tasks.filter { m.doing.contains($0.id) && $0.state == "doing" }.max { $0.updatedAt < $1.updatedAt }.map { "T\($0.id) \($0.title)" },
                 since: m.activity?.since.map { Date(timeIntervalSince1970: $0 / 1000) }
             )
         }

@@ -5,7 +5,7 @@ struct LockScreen: View {
     let agents: [AgentsActivity.Agent]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 6) {
                 Text(title).font(.headline).lineLimit(1)
                 Spacer(minLength: 8)
@@ -18,7 +18,8 @@ struct LockScreen: View {
             }
             Rows(agents: Array(agents.prefix(3)))
         }
-        .padding(16)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 20)
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
     }
@@ -28,23 +29,25 @@ struct Rows: View {
     let agents: [AgentsActivity.Agent]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             ForEach(agents, id: \.self) { agent in
-                HStack(spacing: 10) {
+                HStack(alignment: .top, spacing: 12) {
                     LiveFace(agent: agent, size: 30)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(agent.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(agent.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                            Spacer(minLength: 8)
+                            if let since = agent.since {
+                                Text(since, style: .timer)
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(width: 60, alignment: .trailing)
+                            }
+                        }
                         if let task = agent.task {
                             Text(task).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
-                    }
-                    Spacer(minLength: 8)
-                    if let since = agent.since {
-                        Text(since, style: .timer)
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 56, alignment: .trailing)
                     }
                 }
             }
