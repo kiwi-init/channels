@@ -562,7 +562,7 @@ export function startRelay(
           proxyHinted = true;
           process.stderr.write(`${trustProxyHint(proxy)}\n`);
         }
-        const mailbox = await onMailboxHttp(req, mailboxes, ip ? { ip, allow: writeAllowed } : {});
+        const mailbox = await onMailboxHttp(req, mailboxes, ip ? { ip, allow: (from) => writeAllowed(`${instance}:${from}`) } : {});
         if (mailbox) return mailbox;
         const machine = await onMachineHttp(req, machines, {
           now: clock,
