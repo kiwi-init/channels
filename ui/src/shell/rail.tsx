@@ -218,7 +218,13 @@ export function Rail() {
       const next = f.dropResult({ order, folders }, from, aim, f.newFolderId)
       if (!next) return
       setFresh(next.folders.find((x) => !folders.some((y) => y.id === x.id))?.id ?? null)
-      actions.setPrefs({ folders: next.folders, tabOrder: next.order })
+      actions.setPrefs({
+        folders: f.liveFolders(
+          next.folders,
+          tiles.map((c) => c.code)
+        ),
+        tabOrder: next.order,
+      })
     })
   }
   const gapAt = (at: number) => (moving && aimed.at === at ? <li key="gap" className="rail-gap" aria-hidden="true" style={{ "--gap": `${gap}px` } as CSSProperties} /> : null)
@@ -259,7 +265,10 @@ export function Rail() {
           if (tabs) return dropTabs(aim, from)
           if (!code) return
           void import("~/shell/folders").then((f) => {
-            const next = f.dropOn(folders, code, target, f.newFolderId)
+            const next = f.liveFolders(
+              f.dropOn(folders, code, target, f.newFolderId),
+              tiles.map((c) => c.code)
+            )
             setFresh(next.find((x) => !folders.some((y) => y.id === x.id))?.id ?? null)
             save(next)
           })
@@ -275,6 +284,7 @@ export function Rail() {
             openMenu.set(
               m.railMenu(target, at, {
                 folders,
+                channels: tiles.map((c) => c.code),
                 title: (code) => tiles.find((c) => c.code === code)?.title ?? code,
                 muted: (code) => prefs.muted.includes(code),
                 setMute: (code, on) => actions.setMute(code, null, on),

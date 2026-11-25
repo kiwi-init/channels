@@ -16,6 +16,7 @@ function rail(folders: Folder[], muted: string[] = [], member = false) {
     opened,
     settings: member ? (code: string) => void opened.push(code) : null,
     folders,
+    channels: ["a", "b", "c"],
     title: (code: string) => `#${code}`,
     muted: (code: string) => muted.includes(code),
     setMute: (code: string, on: boolean) => void mutes.push([code, on]),
@@ -134,5 +135,33 @@ describe("the rail's menus are the app's one context menu (T1826)", () => {
 
   test("a folder that is gone opens nothing", () => {
     expect(railMenu({ kind: "folder", id: "x" }, at, rail([]))).toBeNull()
+  })
+})
+
+describe("the tab menu offers only folders you can see (T288)", () => {
+  test("folders whose channels were all left or deleted aren't offered, and a save drops them", () => {
+    const ghosts: Folder[] = [1, 2, 3, 4, 5].map((n) => ({ id: `g${n}`, name: "Folder", codes: [`gone${n}`], open: false }))
+    const side: Folder = { id: "s", name: "Side projects", codes: ["b", "gone6"], open: false }
+    const r = rail([...ghosts, side])
+    const menu = railMenu({ kind: "channel", code: "a" }, at, r)
+    expect(labels(menu)).toEqual(["Mute channel", "Add to Side projects", "New folder"])
+    menu?.groups[0]?.[1]?.run()
+    expect(r.saved[0]).toEqual([{ id: "s", name: "Side projects", codes: ["b", "a"], open: false }])
+  })
+
+  test("a channel in a folder whose other channels are gone is still taken out of it", () => {
+    const r = rail([{ id: "s", name: "Side", codes: ["gone", "a"], open: false }])
+    const menu = railMenu({ kind: "channel", code: "a" }, at, r)
+    expect(labels(menu)).toEqual(["Mute channel", "Take out of Side"])
+    menu?.groups[0]?.[1]?.run()
+    expect(r.saved[0]).toEqual([])
+  })
+
+  test("two folders with the same name are told apart by their channels", () => {
+    const r = rail([
+      { id: "x", name: "Folder", codes: ["b"], open: false },
+      { id: "y", name: "Folder", codes: ["c"], open: false },
+    ])
+    expect(labels(railMenu({ kind: "channel", code: "a" }, at, r))).toEqual(["Mute channel", "Add to Folder · #b", "Add to Folder · #c", "New folder"])
   })
 })

@@ -3,13 +3,14 @@ import "~/i18n/en/modals"
 
 import type { OpenMenu } from "~/kit/menu-open"
 import type { Folder } from "~/model"
-import { dropOn, folderName, newFolderId, renamed, ungrouped } from "~/shell/folders"
+import { dropOn, folderName, liveFolders, newFolderId, renamed, ungrouped } from "~/shell/folders"
 import { t } from "~/i18n/i18n"
 
 export type RailTarget = { kind: "folder"; id: string } | { kind: "channel"; code: string }
 
 interface Rail {
   folders: readonly Folder[]
+  channels: readonly string[]
   title: (code: string) => string
   muted: (code: string) => boolean
   setMute: (code: string, on: boolean) => void
@@ -23,7 +24,9 @@ interface Rail {
 }
 
 export function railMenu(target: RailTarget, at: { x: number; y: number }, rail: Rail): OpenMenu | null {
-  const { folders, save } = rail
+  const { save } = rail
+  const folders = liveFolders(rail.folders, rail.channels)
+  const named = (f: Folder) => (folders.filter((o) => o.name === f.name).length > 1 ? `${f.name} · ${f.codes.map(rail.title).join(", ")}` : f.name)
   if (target.kind === "folder") {
     const folder = folders.find((f) => f.id === target.id)
     if (!folder) return null
@@ -49,7 +52,7 @@ export function railMenu(target: RailTarget, at: { x: number; y: number }, rail:
           : holder
             ? [{ label: t("shell.rail.menu.take.out", { name: holder.name }), run: () => save(dropOn(folders, code, { kind: "rail" }, newFolderId)) }]
             : [
-                ...folders.map((f) => ({ label: t("shell.rail.menu.add.to", { name: f.name }), run: () => save(dropOn(folders, code, { kind: "folder", id: f.id }, newFolderId)) })),
+                ...folders.map((f) => ({ label: t("shell.rail.menu.add.to", { name: named(f) }), run: () => save(dropOn(folders, code, { kind: "folder", id: f.id }, newFolderId)) })),
                 { label: t("shell.rail.menu.new.folder"), run: () => save([...folders, { id: newFolderId(), name: folderName(), codes: [code], open: true }]) },
               ]),
       ],
