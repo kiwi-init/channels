@@ -42,7 +42,11 @@
             Task {
                 while true {
                     try? await Task.sleep(for: .milliseconds(1500))
-                    add("Busy \(seq + 1): arrived while you type", from: "builder")
+                    let long = (seq + 1).isMultiple(of: 4)
+                    add(
+                        long
+                            ? "Busy \(seq + 1): a long one. It runs on for a while, the way an agent explains what it found, so the bubble is many lines tall.\n\nA second paragraph, with more to say about where things stand and what comes next, before it ends."
+                            : "Busy \(seq + 1): arrived while you type", from: "builder")
                     show()
                 }
             }
