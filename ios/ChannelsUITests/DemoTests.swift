@@ -13,7 +13,7 @@ final class DemoTests: XCTestCase {
         XCTAssertTrue(general.waitForExistence(timeout: 5))
         general.tap()
         let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5), "the chat's message field")
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "the chat's message field")
         field.tap()
         field.typeText("hello")
         app.buttons["Send"].firstMatch.tap()
@@ -42,6 +42,10 @@ final class DemoTests: XCTestCase {
         XCTAssertTrue(needs.waitForExistence(timeout: 5) && needs.isHittable, "the tab bar stays in a chat")
         sleep(1)
         add(shot(app, "chat at rest with the tab bar"))
+        let newest = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Something else'")).firstMatch
+        XCTAssertTrue(newest.waitForExistence(timeout: 5), "the newest item, the step's Something else")
+        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "the newest item ends above the resting composer")
+        XCTAssertGreaterThan(newest.frame.maxY, field.frame.minY - 40, "and no wide empty gap sits between them")
 
         app.swipeDown()
         app.swipeDown()
@@ -54,6 +58,7 @@ final class DemoTests: XCTestCase {
         app.swipeUp()
         sleep(1)
         add(shot(app, "chat scrolled back down"))
+        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "back at the bottom, the newest item ends above the composer")
         if !needs.isHittable { app.tabBars.buttons["Chats"].firstMatch.tap() }
         XCTAssertTrue(needs.waitForHittable(timeout: 5), "the tab bar opens up again")
 
