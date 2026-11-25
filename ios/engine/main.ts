@@ -13,7 +13,7 @@ import { personMachines, type Asker, type PairedComputer } from "../../desktop/s
 import { withoutPurchaseLinks } from "./refusal.ts";
 import { acceptSeat, withAccess } from "../../desktop/src/seats.ts";
 import { needsOf } from "./needs.ts";
-import { registerPush } from "./push.ts";
+import { registerPush, unregisterPush } from "./push.ts";
 import { Room } from "./room.ts";
 import type { Ask, EnrollStart, Fetched, Push, Reply, RoomView, Saved } from "./wire.ts";
 
@@ -498,6 +498,11 @@ async function handle(ask: Ask): Promise<unknown> {
   switch (ask.op) {
     case "start":
       return start(ask.saved, ask.kept ?? {});
+    case "signOut": {
+      const was = saved;
+      start({ relay: ask.relay, person: null, seats: [] });
+      return was ? unregisterPush(was.relay, was.seats) : [];
+    }
     case "enrollBegin":
       return enrollBegin(ask.relay, ask.label, ask.os, ask.user, ask.waitMs);
     case "enrollAsk":

@@ -558,9 +558,10 @@ final class AppModel {
         let relay = relay
         Task {
             do {
-                try await engine.ask(["op": "start", "saved": ["relay": relay, "person": NSNull(), "seats": []]])
+                let dropped = try await engine.ask(["op": "signOut", "relay": relay], as: [PushDrop].self)
+                for seat in dropped where !seat.ok { Trouble.note("push: \(seat.label) still registered: \(seat.error ?? "")") }
             } catch {
-                Trouble.note("start after unlink", error)
+                Trouble.note("sign out", error)
             }
         }
     }
