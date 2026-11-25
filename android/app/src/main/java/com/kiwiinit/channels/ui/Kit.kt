@@ -166,7 +166,7 @@ fun Face(name: String, member: MemberView?, size: Dp = 32.dp, modifier: Modifier
     }
 }
 
-private fun initials(name: String): String {
+internal fun initials(name: String): String {
     val words = name.split(' ', '-', '_', '.').filter { it.isNotEmpty() }
     val letters = words.take(2).joinToString("") { it.first().uppercase() }
     return letters.ifEmpty { "?" }
