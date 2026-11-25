@@ -769,7 +769,7 @@ function moveOf(state: ChannelState, m: Wire, ev: TaskUpdate): Move | null {
   return null
 }
 
-function historyOf(state: ChannelState, messages: readonly Wire[], me: string): Map<number, TaskEvent[]> {
+export function historyOf(state: ChannelState, messages: readonly Wire[], me: string): Map<number, TaskEvent[]> {
   const out = new Map<number, TaskEvent[]>()
   const named = new Set<string>()
   const add = (id: number, e: TaskEvent) => {
@@ -865,10 +865,13 @@ function stepsFor(state: ChannelState, t: Frozen<CoreTask>, me: string, now: num
 }
 
 export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string, messages: readonly Wire[], now = Date.now()): Task[] {
+  return tasksFrom(state, held, me, historyOf(state, messages, me), now)
+}
+
+export function tasksFrom(state: ChannelState, held: ReadonlySet<number>, me: string, history: ReadonlyMap<number, TaskEvent[]>, now: number): Task[] {
   const waiting = tasksAwaitingPeople(state)
   const you = state.members.get(me)
   const person = !!you && isPerson(you)
-  const history = historyOf(state, messages, me)
   return [...state.tasks.values()].map((t): Task => {
     const stage = stageOf(state, t)
     const linked = taskPr(state, t.id)?.pr ?? stage.pr

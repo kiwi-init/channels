@@ -19,6 +19,8 @@ import { withReach } from "~/live/reach"
 import { capUnsent, changeUnsent, landedOut, newSendId, nextUnsentKey, ownMedia, resendDue, retryUnsent, unsentBlock, unsentIn } from "~/live/unsent"
 import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, rowCache, nextOf, peopleOf, prsOf, roomsOf, taskMentionsOf, theirsOf, type Pending } from "~/live/map"
 import { useTasksNow } from "~/live/tasks-now"
+import { useBoard } from "~/live/board"
+import { TASK_TICK_MS } from "~/tasks/tick"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
 import { usePublishFace } from "~/live/face"
@@ -46,7 +48,7 @@ import { giveBackBlock } from "~/chat/doc/give-back"
 import { stashText } from "~/chat/stash"
 import { dmInRoom, dmRoomOf, dmsOnce } from "~/live/dm"
 import { freeOf, specAsksOf, specsOf } from "~/live/specs"
-import { clock } from "~/kit/time"
+import { clock, useNow } from "~/kit/time"
 import type { Channel, SendExtras, Where } from "~/model"
 import { nicknamesOf } from "~/names"
 
@@ -164,9 +166,11 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const mapped = useMemo(() => kept(code, withReceipts(rows, receipts)), [code, rows, receipts])
   const leftOut = useMemo(() => (isOwner ? leftOutOf(state, shownWire, me) : []), [isOwner, state, shownWire, me])
   const listed = useTasksNow(state, asks.held, me, messages)
-  const taskGroups = useMemo(() => groupsOf(state, me), [state, me])
-  const specs = useMemo(() => specsOf(state, me), [state, me])
-  const free = useMemo(() => freeOf(state), [state])
+  const board = useBoard(state)
+  const tick = useNow(TASK_TICK_MS)
+  const taskGroups = useMemo(() => groupsOf(board, me, tick), [board, me, tick])
+  const specs = useMemo(() => specsOf(board, me), [board, me])
+  const free = useMemo(() => freeOf(board), [board])
   const everyAsk = useMemo(() => [...asks.asks, ...specAsksOf(specs)], [asks.asks, specs])
   const from = roomsFrom(roomId)
   const { muted } = usePrefs()
@@ -192,8 +196,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
 
   const facts = useMemo(() => [...state.facts.values()].sort((a, b) => a.key.localeCompare(b.key)).map((f) => ({ key: f.key, value: f.value, by: f.by, at: f.ts })), [state.facts])
   const next = nextOf(state)
-  const prs = useMemo(() => prsOf(state), [state])
-  const issues = useMemo(() => issuesOf(state), [state])
+  const prs = useMemo(() => prsOf(board), [board])
+  const issues = useMemo(() => issuesOf(board), [board])
   const reviewCheck = reviewCheckOf(roomId)
   const required = useMemo(() => reviewStillRequired(state, reviewCheck), [state, reviewCheck])
   const docs = useMemo(() => Object.fromEntries(state.docs), [state.docs])

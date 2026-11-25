@@ -1153,6 +1153,8 @@ function cursor(
   let last: ChannelStateDraft | null = null;
   const kept = <T>(value: T, was: T | undefined): T => (was !== undefined && same(value, was) ? was : typeof value === "object" && value !== null ? structuredClone(value) : value);
 
+  const reused = <T>(value: T, was: T | undefined): T => (was !== undefined && same(value, was) ? was : value);
+
   const publish = (at: number): ChannelState => {
     now = at;
     const openAsks = [...(from?.asks ?? []), ...stepped].filter(stillOpen);
@@ -1192,11 +1194,11 @@ function cursor(
     const was = last;
     const places = summarize(shownAs("placeOf"), v.tasks, shownAs("trust"), placesBefore);
     const state: ChannelStateDraft = {
-      members: v.members,
-      tasks: v.tasks,
-      facts: v.facts,
+      members: reused(v.members, was?.members),
+      tasks: reused(v.tasks, was?.tasks),
+      facts: reused(v.facts, was?.facts),
       docs: shownAs("docs"),
-      leases: v.leases,
+      leases: reused(v.leases, was?.leases),
       trust: shownAs("trust"),
       scopeSets: shownAs("scopeSets"),
       roleSets: shownAs("roleSets"),
