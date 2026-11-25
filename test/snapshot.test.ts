@@ -214,6 +214,70 @@ async function world(count: number, seed: number): Promise<World> {
   };
 }
 
+const withFact = (base: FoldBase): FoldBase => ({ ...base, facts: [...base.facts, { key: "shared", value: "kept", by: "own", ts: T0, seq: base.n }] });
+
+describe("a fold shares its base instead of copying it, and owns it from then on", () => {
+  for (const seed of [1, 2, 3]) {
+    test(`seed ${seed}: two folds from one base each fold like the whole log, and the base stays equal to a copy taken before them`, async () => {
+      const w = await world(260, seed);
+      const full = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard);
+      for (let n = 1; n <= w.messages.length; n += 7) {
+        const base = capture(w.messages, w.roster, w.floors, n);
+        const before = structuredClone(base);
+        same(fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, base), full);
+        same(fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, base), full);
+        expect(base).toEqual(before);
+      }
+    });
+  }
+
+  test("a caller that kept the base, or a Fact inside it, can't change a result the fold returned", async () => {
+    const w = await world(120, 4);
+    const base = withFact(capture(w.messages, w.roster, w.floors, 60));
+    const fact = base.facts.find((f) => f.key === "shared");
+    if (!fact) throw new Error("no shared fact");
+    const result = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, base);
+    expect(result.facts.get("shared")?.value).toBe("kept");
+    expect(() => Object.assign(fact, { value: "changed" })).toThrow(TypeError);
+    expect(() => base.facts.push({ ...fact, key: "other" })).toThrow(TypeError);
+    expect(() => Object.assign(base, { n: 0 })).toThrow(TypeError);
+    expect(result.facts.get("shared")?.value).toBe("kept");
+    expect(result.facts.has("other")).toBe(false);
+  });
+
+  test("a base frozen only at its top has its children frozen too once a fold takes it", async () => {
+    const w = await world(120, 5);
+    const base = Object.freeze(withFact(capture(w.messages, w.roster, w.floors, 60)));
+    const fact = base.facts.find((f) => f.key === "shared");
+    if (!fact) throw new Error("no shared fact");
+    expect(Object.isFrozen(fact)).toBe(false);
+    const result = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, base);
+    expect([Object.isFrozen(base.facts), Object.isFrozen(fact)]).toEqual([true, true]);
+    expect(() => Object.assign(fact, { value: "changed" })).toThrow(TypeError);
+    expect(result.facts.get("shared")?.value).toBe("kept");
+  });
+
+  test("each fold writes its own copy of the base's tasks, never the base's", async () => {
+    const w = await world(260, 6);
+    const base = capture(w.messages, w.roster, w.floors, 130);
+    const id = base.tasks[0]?.id;
+    if (id === undefined) throw new Error("no task in the base");
+    const one = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, base).tasks.get(id);
+    const two = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, base).tasks.get(id);
+    expect(one).toBeDefined();
+    expect(one).not.toBe(two);
+    expect(base.tasks.some((t) => t === one || t === two)).toBe(false);
+    expect(Object.isFrozen(one)).toBe(false);
+  });
+
+  test("the base a fold hands out is owned already: it can't be changed before it's folded from", async () => {
+    const w = await world(120, 7);
+    const base = capture(w.messages, w.roster, w.floors, 60);
+    expect(Object.isFrozen(base)).toBe(true);
+    expect(() => base.members.push({ name: "mallory", lastSeen: 0, messages: 0 })).toThrow(TypeError);
+  });
+});
+
 describe("a fold resumed from a snapshot folds to the same state as the whole log", () => {
   for (const seed of [1, 2, 3]) {
     test(`seed ${seed}: every cut point`, async () => {

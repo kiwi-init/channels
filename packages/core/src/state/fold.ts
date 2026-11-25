@@ -130,6 +130,21 @@ function touch(task: Task | undefined, name: string, at: number): void {
 
 const PASSED_ASKS_KEPT = 500;
 
+const ownedBases = new WeakSet<FoldBase>();
+
+function freezeDeep(value: unknown): void {
+  if (value === null || typeof value !== "object") return;
+  Object.freeze(value);
+  for (const inner of Object.values(value)) freezeDeep(inner);
+}
+
+function ownedBase(base: FoldBase): FoldBase {
+  if (ownedBases.has(base)) return base;
+  freezeDeep(base);
+  ownedBases.add(base);
+  return base;
+}
+
 export function fold(
   messages: Message[],
   roster: Roster,
@@ -152,7 +167,8 @@ function folding(
   keep: ((base: FoldBase) => void) | undefined,
   lookAhead: boolean,
 ): ChannelStateDraft {
-  const from = given ? structuredClone(given) : null;
+  const shared = given ? ownedBase(given) : null;
+  const from = shared ? { ...shared, tasks: structuredClone(shared.tasks), leases: structuredClone(shared.leases), rooms: structuredClone(shared.rooms) } : null;
   const after = from?.n ?? -1;
   const ahead = <F extends { since: number }>(f: F | null | undefined): F | null => (f && f.since >= after ? f : null);
   const members = new Map<string, FoldMember>();
@@ -860,88 +876,90 @@ function folding(
   const keptSpecs = [...specs.values()].filter((sp) => !sp.result || !closedLongAgo(sp.result.at, hw));
   const filedUnder = new Set([...tasks.values()].flatMap((t) => (t.ask !== undefined ? [t.ask] : [])).concat(keptSpecs.map((sp) => sp.ask)));
   keep?.(
-    structuredClone({
-      n: head,
-      members: [...members.values()].map((m) => ({
-        name: m.name,
-        role: m.role,
-        about: m.about,
-        color: m.color,
-        picture: m.picture,
-        card: m.card,
-        lastSeen: m.lastSeen,
-        messages: m.messages,
-        ...(m.ops ? { ops: { ...m.ops } } : {}),
-        ...(m.reset ? { reset: m.reset } : {}),
-      })),
-      lead,
-      charter: ctx.charter,
-      compact: ctx.compact,
-      compactProposal: ctx.compactProposal,
-      repos: ctx.repos,
-      github: {
-        prs: [...ctx.github.prs.values()].filter((p) => p.state === "open" || !closedLongAgo(p.at, hw)),
-        checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]),
-        issues: [...ctx.github.issues.values()].filter((i) => i.state === "open" || !closedLongAgo(i.at, hw) || taskIssues.has(prKey(i.repo, i.number))),
-        rules: [...ctx.github.rules.values()],
-        releases: [...ctx.github.releases.values()].flat(),
-        runs: [...ctx.github.runs.values()],
-        runsSince: ctx.github.runsSince,
-        runsForgotten: ctx.github.runsForgotten,
-      },
-      hold: ctx.hold,
-      githubWrite: ctx.githubWrite,
-      branchPrefix: ctx.branchPrefix,
-      ...(ctx.quietMs !== QUIET_MS ? { quietMs: ctx.quietMs } : {}),
-      ...(ctx.reviewReset ? { reviewReset: true as const } : {}),
-      ...(ctx.tapToAnswer ? { tapToAnswer: true as const } : {}),
-      ...(ctx.checkpointDaily ? { checkpointDaily: ctx.checkpointDaily } : {}),
-      ...(ctx.checkpointAsks.length ? { checkpointAsks: ctx.checkpointAsks } : {}),
-      landing: ctx.landing,
-      ...(ctx.landingSteps ? { landingSteps: ctx.landingSteps } : {}),
-      ...(passedAsks.size ? { passedAsks: [...passedAsks] } : {}),
-      ...(questions.size ? { stepQuestions: [...questions.values()] } : {}),
-      scopesByKey: [...scopesByKey],
-      scopeSets: [...scopeSets],
-      roleSets: [...roleSets],
-      gone: [...gone],
-      nicknames: [...nicknames],
-      tasks: [...tasks.values()].map((t) => (carded(t) ? card(t) : t)),
-      facts: [...facts.values()],
-      docs: [...docs],
-      leases: [...leases.values()],
-      reactions: recent(reactions).map(([seq, by]): [number, [string, Reaction][]] => [seq, [...by]]),
-      reactSeqs: [...reactSeqs].filter((seq) => seq > cut),
-      chatBy: recent(chatBy),
-      authors: packAuthors(chatBy),
-      edits: recent(edits),
-      deleted: [...deleted],
-      trust: recent(trust),
-      rejected: recent(rejected),
-      sent: keptSent,
-      oldSent: [...old].map(([hash, seq]): [number, number] => [seq, hash]),
-      sentKeys: [...keyIndex.keys()],
-      sentFloors: [...sentFloors].filter(([, floor]) => floor > hw - SENT_WINDOW_MS),
-      hw,
-      placesBefore: [...summarize(new Map([...placeOf].filter(([seq]) => seq <= cut)), tasks, trust, placesBefore).values()].map((p): [Place, number, number] => [p.place, p.count, p.last]),
-      asks: openAsks.map((m) => (m.imgs?.length ? { ...m, imgs: m.imgs.map((i) => omit(i, "data")) } : m)),
-      askHeads: [...askHeads.values()].filter((h) => h.id > cut || filedUnder.has(h.id)),
-      specs: keptSpecs,
-      specsOnly,
-      checks: [...checks.values()],
-      answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
-      threadOf: keptThreads,
-      threadPeople: [...threadPeople].filter(([root]) => root > cut || keptRoots.has(root)).map(([seq, people]): [number, string[]] => [seq, [...people]]),
-      rooms: [...rooms.values()],
-      secret: [...secret].map(([id, r]): [string, SecretRoom] => [id, { ...r }]),
-      roomOf: recent(roomOf),
-      placeOf: recent(placeOf),
-      personaLeads: [...personaLead],
-      powers: [...powers].map(([name, p]): [string, Partial<Record<Power, boolean>>] => [name, { ...p }]),
-      folded: EVENT_OPS_VERSION,
-      rules: from ? Math.min(from.rules ?? 0, FOLD_RULES) : FOLD_RULES,
-      ...(skipped ? { skipped: true as const } : {}),
-    }),
+    ownedBase(
+      structuredClone({
+        n: head,
+        members: [...members.values()].map((m) => ({
+          name: m.name,
+          role: m.role,
+          about: m.about,
+          color: m.color,
+          picture: m.picture,
+          card: m.card,
+          lastSeen: m.lastSeen,
+          messages: m.messages,
+          ...(m.ops ? { ops: { ...m.ops } } : {}),
+          ...(m.reset ? { reset: m.reset } : {}),
+        })),
+        lead,
+        charter: ctx.charter,
+        compact: ctx.compact,
+        compactProposal: ctx.compactProposal,
+        repos: ctx.repos,
+        github: {
+          prs: [...ctx.github.prs.values()].filter((p) => p.state === "open" || !closedLongAgo(p.at, hw)),
+          checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]),
+          issues: [...ctx.github.issues.values()].filter((i) => i.state === "open" || !closedLongAgo(i.at, hw) || taskIssues.has(prKey(i.repo, i.number))),
+          rules: [...ctx.github.rules.values()],
+          releases: [...ctx.github.releases.values()].flat(),
+          runs: [...ctx.github.runs.values()],
+          runsSince: ctx.github.runsSince,
+          runsForgotten: ctx.github.runsForgotten,
+        },
+        hold: ctx.hold,
+        githubWrite: ctx.githubWrite,
+        branchPrefix: ctx.branchPrefix,
+        ...(ctx.quietMs !== QUIET_MS ? { quietMs: ctx.quietMs } : {}),
+        ...(ctx.reviewReset ? { reviewReset: true as const } : {}),
+        ...(ctx.tapToAnswer ? { tapToAnswer: true as const } : {}),
+        ...(ctx.checkpointDaily ? { checkpointDaily: ctx.checkpointDaily } : {}),
+        ...(ctx.checkpointAsks.length ? { checkpointAsks: ctx.checkpointAsks } : {}),
+        landing: ctx.landing,
+        ...(ctx.landingSteps ? { landingSteps: ctx.landingSteps } : {}),
+        ...(passedAsks.size ? { passedAsks: [...passedAsks] } : {}),
+        ...(questions.size ? { stepQuestions: [...questions.values()] } : {}),
+        scopesByKey: [...scopesByKey],
+        scopeSets: [...scopeSets],
+        roleSets: [...roleSets],
+        gone: [...gone],
+        nicknames: [...nicknames],
+        tasks: [...tasks.values()].map((t) => (carded(t) ? card(t) : t)),
+        facts: [...facts.values()],
+        docs: [...docs],
+        leases: [...leases.values()],
+        reactions: recent(reactions).map(([seq, by]): [number, [string, Reaction][]] => [seq, [...by]]),
+        reactSeqs: [...reactSeqs].filter((seq) => seq > cut),
+        chatBy: recent(chatBy),
+        authors: packAuthors(chatBy),
+        edits: recent(edits),
+        deleted: [...deleted],
+        trust: recent(trust),
+        rejected: recent(rejected),
+        sent: keptSent,
+        oldSent: [...old].map(([hash, seq]): [number, number] => [seq, hash]),
+        sentKeys: [...keyIndex.keys()],
+        sentFloors: [...sentFloors].filter(([, floor]) => floor > hw - SENT_WINDOW_MS),
+        hw,
+        placesBefore: [...summarize(new Map([...placeOf].filter(([seq]) => seq <= cut)), tasks, trust, placesBefore).values()].map((p): [Place, number, number] => [p.place, p.count, p.last]),
+        asks: openAsks.map((m) => (m.imgs?.length ? { ...m, imgs: m.imgs.map((i) => omit(i, "data")) } : m)),
+        askHeads: [...askHeads.values()].filter((h) => h.id > cut || filedUnder.has(h.id)),
+        specs: keptSpecs,
+        specsOnly,
+        checks: [...checks.values()],
+        answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
+        threadOf: keptThreads,
+        threadPeople: [...threadPeople].filter(([root]) => root > cut || keptRoots.has(root)).map(([seq, people]): [number, string[]] => [seq, [...people]]),
+        rooms: [...rooms.values()],
+        secret: [...secret].map(([id, r]): [string, SecretRoom] => [id, { ...r }]),
+        roomOf: recent(roomOf),
+        placeOf: recent(placeOf),
+        personaLeads: [...personaLead],
+        powers: [...powers].map(([name, p]): [string, Partial<Record<Power, boolean>>] => [name, { ...p }]),
+        folded: EVENT_OPS_VERSION,
+        rules: from ? Math.min(from.rules ?? 0, FOLD_RULES) : FOLD_RULES,
+        ...(skipped ? { skipped: true as const } : {}),
+      }),
+    ),
   );
 
   passFloors(Infinity);

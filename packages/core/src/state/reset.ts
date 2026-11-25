@@ -38,7 +38,7 @@ export function addResetRefusal(members: ReadonlyMap<string, Pick<Member, "reset
   return named && mark ? `${since(named, mark)}: a new task's review goes to someone else until it rejoins from a new session` : null;
 }
 
-export function markReset(on: boolean, giver: Pick<Member, "reset" | "card">, verdict: number): void {
+export function markReset(on: boolean, giver: Member, verdict: number): void {
   const session = giver.card?.session;
   if (!on || giver.reset?.kind === "waived" || !sessionPrint(session)) return;
   giver.reset = { kind: "needs", verdict, session };
@@ -61,6 +61,6 @@ export function resetLine(state: Frozen<{ reviewReset: boolean; members: Readonl
     .join(" · ");
 }
 
-export function clearOnCard(member: Pick<Member, "reset">, session: unknown): void {
+export function clearOnCard(member: Member, session: unknown): void {
   if (member.reset?.kind === "needs" && sessionPrint(session) && session !== member.reset.session) member.reset = undefined;
 }
