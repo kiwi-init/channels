@@ -141,17 +141,6 @@ export function fold(
   return folding(messages, roster, now, roomsFloor, guardFloor, given, keep, true);
 }
 
-function sealedDeep(value: unknown): void {
-  if (!value || typeof value !== "object" || Object.isFrozen(value)) return;
-  Object.freeze(value);
-  for (const inner of Object.values(value)) sealedDeep(inner);
-}
-
-function sealed(base: FoldBase): FoldBase {
-  if (!Object.isFrozen(base)) sealedDeep(base);
-  return base;
-}
-
 function folding(
   messages: Message[],
   roster: Roster,
@@ -162,7 +151,7 @@ function folding(
   keep: ((base: FoldBase) => void) | undefined,
   lookAhead: boolean,
 ): ChannelState {
-  const from = given ? { ...sealed(given), tasks: structuredClone(given.tasks), leases: structuredClone(given.leases), rooms: structuredClone(given.rooms) } : null;
+  const from = given ? structuredClone(given) : null;
   const after = from?.n ?? -1;
   const ahead = <F extends { since: number }>(f: F | null | undefined): F | null => (f && f.since >= after ? f : null);
   const members = new Map<string, FoldMember>();
