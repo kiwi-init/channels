@@ -42,6 +42,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -56,6 +59,8 @@ import androidx.compose.ui.res.stringResource
 import com.kiwiinit.channels.R
 
 private fun chat(spot: Spot): String = "chat/${Uri.encode(spot.code)}/${Uri.encode(spot.place)}"
+
+private val NavBackStackEntry.settled: Boolean get() = lifecycle.currentState == Lifecycle.State.RESUMED
 
 
 
@@ -93,8 +98,7 @@ private fun EngineHost(engine: Engine) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Ready(model: AppModel) {
-    val nav = rememberNavController()
+internal fun Ready(model: AppModel, nav: NavHostController = rememberNavController()) {
     val slide = tween<androidx.compose.ui.unit.IntOffset>(320)
     NavHost(
         navController = nav,
@@ -105,8 +109,8 @@ private fun Ready(model: AppModel) {
         popEnterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, slide) { it / 4 } + fadeIn(tween(220)) },
         popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, slide) + fadeOut(tween(220)) },
     ) {
-        composable("list") {
-            Home(model, open = { nav.navigate(chat(it)) }, tasks = { nav.navigate("tasks/${Uri.encode(it)}") })
+        composable("list") { entry ->
+            Home(model, open = { if (entry.settled) nav.navigate(chat(it)) }, tasks = { if (entry.settled) nav.navigate("tasks/${Uri.encode(it)}") })
         }
         composable(
             "chat/{code}/{place}",
@@ -114,10 +118,10 @@ private fun Ready(model: AppModel) {
         ) { entry ->
             val code = entry.arguments?.getString("code") ?: ""
             val place = entry.arguments?.getString("place") ?: "main"
-            ConversationScreen(model = model, start = Spot(code, place), back = { nav.popBackStack() })
+            ConversationScreen(model = model, start = Spot(code, place), back = { if (entry.settled) nav.popBackStack() })
         }
         composable("tasks/{code}", arguments = listOf(navArgument("code") { type = NavType.StringType })) { entry ->
-            TasksScreen(model, entry.arguments?.getString("code") ?: "", open = { nav.navigate(chat(it)) }, back = { nav.popBackStack() })
+            TasksScreen(model, entry.arguments?.getString("code") ?: "", open = { if (entry.settled) nav.navigate(chat(it)) }, back = { if (entry.settled) nav.popBackStack() })
         }
     }
     if (model.relinking) {
