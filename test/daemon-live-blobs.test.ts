@@ -86,6 +86,13 @@ describe("an agent's live blob", () => {
     expect(r.calls.at(-1)).toEqual(["put", expect.objectContaining({ s: 99_000 })]);
   });
 
+  test("the clock starts when the agent started its task, not its session", async () => {
+    const r = rig();
+    r.set({ name: "builder-one", face: "builder", task: "T52 Relay", since: 42_000, title: "channels" });
+    await r.live.tick(working);
+    expect(r.calls.at(-1)).toEqual(["put", expect.objectContaining({ s: 42_000 })]);
+  });
+
   test("an older relay without the route is left alone for an hour", async () => {
     const r = rig(404);
     await r.live.tick(working);
@@ -125,11 +132,13 @@ describe("an agent's live blob", () => {
       ]),
       tasks: new Map([
         [7, { id: 7, title: "Old work", owner: "tender-marten", state: "done" }],
-        [52, { id: 52, title: "Relay: Live Activity pushes", owner: "tender-marten", state: "doing" }],
+        [50, { id: 50, title: "iPhone: Live Activity", owner: "tender-marten", state: "doing", updatedAt: 9_000, clock: { key: "tender-marten|work|", seq: 1, at: 2_000 } }],
+        [52, { id: 52, title: "Relay: Live Activity pushes", owner: "tender-marten", state: "doing", updatedAt: 3_000, clock: { key: "tender-marten|work|", seq: 2, at: 5_000 } }],
+        [60, { id: 60, title: "Parked", owner: "tender-marten", state: "doing", updatedAt: 9_500, clock: { key: "~none", seq: 3, at: 9_000 } }],
       ]),
     } as unknown as ChannelState;
-    expect(liveAbout(state, "tender-marten", "channels")).toEqual({ name: "builder-one", face: "builder", color: "green", task: "T52 Relay: Live Activity pushes", title: "channels" });
-    expect(liveAbout(state, "tidy-gazelle", "channels")).toEqual({ name: "tidy-gazelle", face: "lead", color: null, task: null, title: "channels" });
+    expect(liveAbout(state, "tender-marten", "channels")).toEqual({ name: "builder-one", face: "builder", color: "green", task: "T52 Relay: Live Activity pushes", since: 5_000, title: "channels" });
+    expect(liveAbout(state, "tidy-gazelle", "channels")).toEqual({ name: "tidy-gazelle", face: "lead", color: null, task: null, since: null, title: "channels" });
     expect(liveAbout(state, "nobody", "channels")).toBeNull();
   });
 });
