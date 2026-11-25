@@ -357,7 +357,7 @@ fun Intro(room: RoomView) {
     ) {
         if (person != null) Face(person, room.member(person), 72.dp) else ChannelAvatar(room, 72.dp)
         Text(
-            if (person != null) room.display(person) else room.spotTitle(room.place),
+            if (person != null) room.display(person) else task?.let { "${taskLabel(it.id)} ${it.title}" } ?: room.spotTitle(room.place),
             style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
