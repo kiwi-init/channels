@@ -1,5 +1,4 @@
 import { fromB64url } from "@kiwi/core/crypto.ts";
-import { canonical } from "@kiwi/core/identity.ts";
 import type { PinCheck } from "@kiwi/core/pin.ts";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -13,14 +12,11 @@ export type PinRepair =
   | { kind: "outOfTime" }
   | { kind: "couldNotRun"; why: string };
 
-const hex = (b64: unknown) => (typeof b64 === "string" ? Array.from(fromB64url(b64), (b) => b.toString(16).padStart(2, "0")).join("") : b64);
-
-function signedContent(token: string): string | null {
+function payloadOf(token: string): string | null {
   try {
-    const o = JSON.parse(new TextDecoder().decode(fromB64url(token))) as Record<string, unknown>;
-    return canonical({ ...o, pk: hex(o.pk), sig: hex(o.sig) });
+    return String.fromCharCode(...fromB64url(token));
   } catch {
-    // A variant that doesn't decode carries no signed content, so it can't be the owner's token.
+    // A variant that isn't base64url decodes to no payload, so it can't be the owner's token.
     return null;
   }
 }
@@ -35,8 +31,8 @@ export async function repairPin(token: string, check: (variant: string) => Promi
     for (const [i, result] of checks.entries()) {
       if (result.kind === "couldNotRun") return { kind: "couldNotRun", why: result.why };
       if (result.kind !== "fits") continue;
-      const content = signedContent(variants[i]!);
-      if (content !== null && !found.has(content)) found.set(content, { token: variants[i]!, at });
+      const payload = payloadOf(variants[i]!);
+      if (payload !== null && !found.has(payload)) found.set(payload, { token: variants[i]!, at });
     }
   }
   if (found.size > 1) return { kind: "ambiguous" };

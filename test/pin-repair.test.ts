@@ -69,7 +69,7 @@ describe("the search's limits", () => {
     expect(await repairPin(token, fitsAt(first, last), never)).toEqual({ kind: "ambiguous" });
   });
 
-  test("variants that spell the same signed token differently count once", async () => {
+  test("two spellings of one signature that decode to different bytes are ambiguous", async () => {
     const { token, fits } = await invite();
     const o = JSON.parse(new TextDecoder().decode(fromB64url(token))) as { sig: string };
     const spelled = (sig: string) => b64url(new TextEncoder().encode(JSON.stringify({ ...o, sig })));
@@ -80,7 +80,11 @@ describe("the search's limits", () => {
     const diff = differing(plain, alias)[0]!;
     const both = async (t: string): Promise<PinCheck> => (t === plain || t === alias ? { kind: "fits" } : fits(t));
     const bent = `${plain.slice(0, diff)}${plain[diff] === "A" || alias[diff] === "A" ? "Q" : "A"}${plain.slice(diff + 1)}`;
-    expect(await repairPin(bent, both, never)).toMatchObject({ kind: "repaired", at: diff + 1 });
+    expect(await repairPin(bent, both, never)).toEqual({ kind: "ambiguous" });
+  });
+
+  test("outer spellings that decode to the same bytes count once", async () => {
+    expect(await repairPin("abc", fitsAt("abd", "abe"), never)).toMatchObject({ kind: "repaired", token: "abd" });
   });
 
   test("a search past its deadline is refused", async () => {
