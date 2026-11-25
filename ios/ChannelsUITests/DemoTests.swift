@@ -29,6 +29,35 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
+    func testTabBarStaysInAChat() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
+        XCTAssertTrue(general.waitForExistence(timeout: 15))
+        general.tap()
+        let composer = NSPredicate(format: "placeholderValue == 'Message'")
+        let field = app.textViews.matching(composer).firstMatch.exists ? app.textViews.matching(composer).firstMatch : app.textFields.matching(composer).firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the chat's message field")
+        let needs = app.tabBars.buttons["Needs You"].firstMatch
+        XCTAssertTrue(needs.waitForExistence(timeout: 5) && needs.isHittable, "the tab bar stays in a chat")
+        add(shot(app, "chat with the tab bar"))
+
+        field.tap()
+        field.typeText("hi")
+        add(shot(app, "chat typing with the tab bar"))
+        app.swipeDown()
+        app.swipeDown()
+        add(shot(app, "chat scrolled with the tab bar"))
+
+        XCTAssertTrue(needs.isHittable, "the tab bar is there after scrolling")
+        needs.tap()
+        XCTAssertTrue(app.navigationBars["Needs You"].waitForExistence(timeout: 5), "a tab opens from inside a chat")
+        app.tabBars.buttons["Chats"].firstMatch.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "back on Chats, the chat is still open")
+    }
+
+    @MainActor
     func testSampleOffersNoLinkAgain() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
