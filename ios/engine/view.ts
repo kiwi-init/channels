@@ -133,7 +133,7 @@ export function roomView(r: RoomInput): RoomView {
   const shown = visible.slice(-SHOWN);
   const nicknames = new Map([...state.members.values()].map((m) => [m.name, m.display || m.name]));
   const said = (text: string) => namedMarkdown(text, nicknames);
-  const plain = (text: string) => named(text, nicknames);
+  const plain = (text: string) => named(preview(text), nicknames);
 
   const messageView = (m: Message, prev: Message | undefined): MessageView => {
     const re = m.re?.length === 1 ? m.re[0]! : null;
@@ -150,7 +150,7 @@ export function roomView(r: RoomInput): RoomView {
       plain: plain(m.body),
       event: m.kind === "event",
       mine: myself(m.from),
-      quote: quoted && quoted.kind !== "event" ? { seq: quoted.seq, from: quoted.from, words: oneLine(preview(plain(quoted.body)), QUOTE_CHARS) } : null,
+      quote: quoted && quoted.kind !== "event" ? { seq: quoted.seq, from: quoted.from, words: oneLine(plain(quoted.body), QUOTE_CHARS) } : null,
       choices: m.choices ?? [],
       chosen: chosen ? { choice: chosen.choice, by: chosen.by } : null,
       waiting: waiting.has(m.seq),

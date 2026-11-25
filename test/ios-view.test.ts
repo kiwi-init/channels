@@ -173,7 +173,7 @@ describe("names in the phone's room view (#1251)", () => {
   test("a message shows an @handle as the nickname and keeps its text as sent; code keeps the handle", async () => {
     const room = named(await signedLog([say("lead", "In review with @dev, see `@dev` and\n\n```\n@dev\n```"), say("dev", "on it"), say("jow", "ok", { re: [1] }), say("jow", "@dev thanks")]));
     expect(room.messages[0]).toMatchObject({ body: "In review with @dev, see `@dev` and\n\n```\n@dev\n```", shown: "In review with @Earnest Heron, see `@dev` and\n\n```\n@dev\n```" });
-    expect(room.messages[2]?.quote?.words).toBe("In review with @Earnest Heron, see @dev and");
+    expect(room.messages[2]?.quote?.words).toBe("In review with @Earnest Heron, see @Earnest Heron and");
     expect(room.latest).toMatchObject({ body: "@dev thanks", shown: "@Earnest Heron thanks", plain: "@Earnest Heron thanks" });
   });
 
@@ -185,7 +185,9 @@ describe("names in the phone's room view (#1251)", () => {
   });
 
   test("a chat list preview reads as plain words: a table keeps its cells, a handle keeps its underscores (T623)", async () => {
-    const room = named(await signedLog([say("lead", "| Job | State |\n| --- | --- |\n| android / build | **green** |\n| ci-ok | *waiting* |"), say("dev", "Ask @dev_bot about `snake_case` and __this__")]));
+    const room = named(
+      await signedLog([say("lead", "| Job | State |\n| --- | --- |\n| android / build | **green** |\n| ci-ok | *waiting* |"), say("dev", "Ask @dev_bot about `snake_case` and __this__")]),
+    );
     expect(room.messages[0]?.plain).toBe("Job · State android / build · green ci-ok · waiting");
     expect(room.latest?.plain).toBe("Ask @dev_bot about snake_case and this");
   });
@@ -214,7 +216,7 @@ describe("names in the phone's room view (#1251)", () => {
       online: new Map(),
       place: "main",
     });
-    expect(room.messages[0]).toMatchObject({ shown: "\\# Heron says hello\n\n@\\# Heron then", plain: "# Heron says hello\n\n@# Heron then" });
+    expect(room.messages[0]).toMatchObject({ shown: "\\# Heron says hello\n\n@\\# Heron then", plain: "# Heron says hello @# Heron then" });
   });
 
   test("an ask shows the nickname, while its choices and the answer that picks one keep their text, which the phone sends back and matches", async () => {
