@@ -24,7 +24,7 @@ if (process.argv.includes("--help")) {
 Reports cold load, the reload to the first screen, each view's switch at 1x and 4x CPU, key delay while agents post, and heap, DOM nodes and listeners over time.
 PERF_TASKS_FIRST=1 makes the tasks before the messages, so a reload has to keep them from beyond the newest 2000.
 PERF_SOAK_POST=0 keeps the soak's sampling and views but has no agent post: an idle control.
-PERF_ALLOC=1 makes the soak's sampled profile count every allocation, collected ones too, and report it per message sent.
+PERF_ALLOC=1 makes the soak's 8 KiB sampling heap profile keep collected objects too, so it estimates allocation per message sent.
 PERF_GL=swiftshader draws with the CPU, as CI's runners do: on a Mac that's how to see what CI sees.
 --gated measures only what scripts/perf-check.ts gates: the reload at 1x, the views at 4x and typing, without the 1x views, details toggles, profiles or second reload.
 

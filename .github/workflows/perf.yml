@@ -16,7 +16,7 @@ on:
         type: string
         default: ""
       soak_alloc:
-        description: "yes makes the diagnosis soak sample every allocation, collected ones too, per message sent, on an unminified build (needs soak_only)"
+        description: "yes makes the diagnosis soak estimate allocation per message sent from an 8 KiB sampling heap profile that keeps collected objects, on an unminified build (only with soak_only)"
         type: string
         default: ""
       jobs:
@@ -63,7 +63,7 @@ jobs:
       - uses: ./.github/actions/browser
       - run: bun scripts/ui-harness.ts
         env:
-          HARNESS_MINIFY: ${{ inputs.soak_alloc == 'yes' && '0' || '' }}
+          HARNESS_MINIFY: ${{ inputs.soak_only != '' && inputs.soak_alloc == 'yes' && '0' || '' }}
       - name: perf-scale's reload probe ends only when the seeded row is shown two frames running, never on a delayed, held, hidden, off-screen or one-frame row
         run: bun scripts/perf-frame-probe.ts
       - name: perf-scale, one soak for a diagnosis
