@@ -77,7 +77,7 @@ private fun Screen(title: String, back: () -> Unit, content: @Composable (Paddin
 }
 
 @Composable
-fun NeedsList(model: AppModel) {
+fun NeedsList(model: AppModel, open: (Spot) -> Unit = {}) {
     val many = model.channels.size > 1
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         BigTitle(stringResource(R.string.needs_you))

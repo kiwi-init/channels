@@ -66,6 +66,9 @@ class ScreensTest {
     fun needs() = shoot("needs") { Home(it, open = {}, tasks = {}, first = Tab.Needs) }
 
     @Test
+    fun needsRequests() = shoot("needs-requests", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList(), reviews = emptyList()); withRequests(it) }) { Home(it, open = {}, tasks = {}, first = Tab.Needs) }
+
+    @Test
     fun needsReview() = shoot("needs-review", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList()) }) { Home(it, open = {}, tasks = {}, first = Tab.Needs) }
 
     @Test
