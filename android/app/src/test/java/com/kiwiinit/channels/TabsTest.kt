@@ -15,6 +15,7 @@ import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.kiwiinit.channels.engine.PlaceView
 import com.kiwiinit.channels.theme.ChannelsTheme
 import com.kiwiinit.channels.ui.Home
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -41,12 +42,15 @@ class TabsTest {
                 Surface(Modifier.fillMaxSize()) { Home(model, open = {}, tasks = {}) }
             }
         }
-        compose.onNodeWithText("# r01", substring = true).assertDoesNotExist()
-        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("# r01", substring = true))
-        compose.onNodeWithText("# r01", substring = true).assertIsDisplayed()
+        val top = hasText("Teamlead", substring = true)
+        compose.onNode(top).assertExists()
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("Nothing open"))
+        compose.waitForIdle()
+        assertTrue(compose.onAllNodes(top).fetchSemanticsNodes().isEmpty())
         compose.onNodeWithText("You").performClick()
         compose.onNodeWithText("Chats").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("# r01", substring = true).assertIsDisplayed()
+        assertTrue(compose.onAllNodes(top).fetchSemanticsNodes().isEmpty())
+        compose.onNodeWithText("Nothing open").assertIsDisplayed()
     }
 }
