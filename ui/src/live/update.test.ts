@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
 
 import type { UpdateCheckView, UpdateView } from "@kiwi/secrets/secrets.ts"
-import { downloadAndRestart, macDownload, swapStuck, type Updater } from "~/live/update"
+import { downloadAndRestart, macDownload, type Updater } from "~/live/update"
+import { swapStuck } from "~/live/update-stuck"
 
 const URL = "https://github.com/kiwi-init/channels/releases/tag/v2026.10.8"
 const at = (state: UpdateView["state"], extra: Partial<UpdateView> = {}): UpdateView => ({ version: "2026.10.8", state, url: URL, ...extra })

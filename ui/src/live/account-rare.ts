@@ -6,7 +6,8 @@ import { Plain } from "~/kit/failed"
 import { announce } from "~/kit/toasts"
 import { devices, enrollAsk, github, githubBusy, githubCode, githubGate, listenForCodes, moved, selfEnroll } from "~/live/account"
 import { postDevicesNow } from "~/live/devices"
-import { downloadAndRestart, stuckHere } from "~/live/update"
+import { downloadAndRestart } from "~/live/update"
+import { stuckHere } from "~/live/update-stuck"
 import type { KeptAgent, LaunchedAgent } from "~/model"
 
 const ENROLLING_MS = 2_000
