@@ -124,6 +124,13 @@ fun RoomView.dmWith(key: String): String? {
 
 fun RoomView.reviewsIn(key: String): List<ReviewView> = if (key == "main") reviews else taskIn(key)?.let { task -> reviews.filter { it.task == task } } ?: emptyList()
 
+fun RoomView.needsIn(key: String): List<NeedView> {
+    if (key == "main") return needs
+    taskIn(key)?.let { task -> return needs.filter { it.task == task } }
+    val other = placeView(key)?.let { other(it) } ?: dmWith(key) ?: return emptyList()
+    return needs.filter { it.from == other }
+}
+
 fun RoomView.showing(key: String, feed: Feed?): RoomView = copy(place = key, messages = feed?.messages ?: emptyList(), whole = feed?.whole ?: false)
 
 fun RoomView.spotTitle(key: String): String {

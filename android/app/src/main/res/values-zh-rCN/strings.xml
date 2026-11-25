@@ -213,6 +213,7 @@
     <string name="allow_once">允许一次</string>
     <string name="deny">拒绝</string>
     <string name="let_in">允许加入</string>
+    <string name="turn_away">拒绝</string>
     <string name="only_can_allow">只有 %1$s 能允许</string>
     <string name="you_can_deny">你可以拒绝</string>
     <string name="join_pinned">受邀时已指定性格：请在电脑上允许其加入</string>

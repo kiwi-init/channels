@@ -365,7 +365,7 @@ private fun ReviewRow(model: AppModel, room: RoomView, review: ReviewView, open:
 private class Act(val title: String, val color: Color, val go: suspend () -> Unit)
 
 @Composable
-private fun NeedRow(model: AppModel, room: RoomView, need: NeedView, open: (Spot) -> Unit) {
+internal fun NeedRow(model: AppModel, room: RoomView, need: NeedView, open: ((Spot) -> Unit)?, modifier: Modifier = Modifier.fillMaxWidth().padding(16.dp)) {
     val tone = Tone.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -400,6 +400,7 @@ private fun NeedRow(model: AppModel, room: RoomView, need: NeedView, open: (Spot
     val allowOnce = stringResource(R.string.allow_once)
     val deny = stringResource(R.string.deny)
     val letIn = stringResource(R.string.let_in)
+    val turnAway = stringResource(R.string.turn_away)
     val approve = stringResource(R.string.approve)
     val ask = need.ask
     val v = need.v
@@ -408,7 +409,14 @@ private fun NeedRow(model: AppModel, room: RoomView, need: NeedView, open: (Spot
             if (need.canAllow) Act(allowOnce, ink) { model.allow(room.code, need.id, true) } else null,
             Act(deny, tone.alert) { model.allow(room.code, need.id, false) },
         )
-        "join" -> if (need.pinned || !room.isOwner) emptyList() else listOf(Act(letIn, ink) { model.letIn(room.code, need.id) })
+        "join" -> if (!room.isOwner) {
+            emptyList()
+        } else {
+            listOfNotNull(
+                if (need.pinned) null else Act(letIn, ink) { model.letIn(room.code, need.id) },
+                Act(turnAway, tone.alert) { model.turnAway(room.code, need.id) },
+            )
+        }
         else -> if (ask != null && v != null) listOf(Act(approve, ink) { model.approveSpec(room.code, ask, v) }) else emptyList()
     }
     val allower = need.allower
@@ -420,7 +428,7 @@ private fun NeedRow(model: AppModel, room: RoomView, need: NeedView, open: (Spot
         else -> null
     }
 
-    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (asker != null) Face(asker, room.member(asker), 24.dp)
             Text(
@@ -506,9 +514,11 @@ private fun NeedRow(model: AppModel, room: RoomView, need: NeedView, open: (Spot
         } else if (note != null) {
             Text(note, style = MaterialTheme.typography.labelMedium, color = tone.ink3)
         }
-        Row(Modifier.fillMaxWidth()) {
-            Spacer(Modifier.weight(1f))
-            OpenLink("open-need-${need.id}") { open(Spot(room.code, need.task?.let { "task:$it" } ?: "main")) }
+        if (open != null) {
+            Row(Modifier.fillMaxWidth()) {
+                Spacer(Modifier.weight(1f))
+                OpenLink("open-need-${need.id}") { open(Spot(room.code, need.task?.let { "task:$it" } ?: "main")) }
+            }
         }
     }
 }

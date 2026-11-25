@@ -493,6 +493,16 @@ class AppModel(private val app: Application, private val calls: (suspend (JsonOb
         )
     }
 
+    suspend fun turnAway(code: String, id: String) {
+        ask(
+            buildJsonObject {
+                put("op", "turnAway")
+                put("code", code)
+                put("id", id)
+            },
+        )
+    }
+
     suspend fun approveSpec(code: String, ask: Int, v: Int) {
         ask(
             buildJsonObject {

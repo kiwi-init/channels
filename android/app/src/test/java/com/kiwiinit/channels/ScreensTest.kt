@@ -78,6 +78,9 @@ class ScreensTest {
     fun needsRequests() = shoot("needs-requests", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList(), reviews = emptyList()); withRequests(it) }) { Home(it, open = {}, tasks = {}, first = Tab.Needs) }
 
     @Test
+    fun generalRequests() = shoot("general-requests", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList(), reviews = emptyList()); withRequests(it) }) { ConversationScreen(it, Spot(DEV), back = {}) }
+
+    @Test
     fun needsReview() = shoot("needs-review", { it.rooms[DEV] = it.rooms.getValue(DEV).copy(asks = emptyList()) }) { Home(it, open = {}, tasks = {}, first = Tab.Needs) }
 
     @Test
