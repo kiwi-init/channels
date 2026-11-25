@@ -205,4 +205,8 @@
     <string name="step_needs_reason">Say why first</string>
     <string name="step_answered">%1$s · %2$s</string>
     <string name="step_replied">%1$s replied</string>
+    <string name="state_in">%1$s in %2$s</string>
+    <string name="start_of_task_thread">The start of this task\'s thread</string>
+    <string name="start_of_thread">The start of this thread</string>
+    <string name="in_channel">In %1$s</string>
 </resources>

@@ -106,6 +106,14 @@ val RoomView.roomPlaces: List<PlaceView> get() = places.filter { it.kind == "roo
 
 fun RoomView.taskIn(key: String): Int? = placeView(key)?.task ?: if (key.startsWith("task:")) key.removePrefix("task:").toIntOrNull() else null
 
+fun RoomView.dmWith(key: String): String? {
+    if (!key.startsWith("dm:")) return null
+    val pair = key.removePrefix("dm:").split("~")
+    val self = root ?: me
+    if (pair.size != 2 || self !in pair) return null
+    return pair.firstOrNull { it != self }
+}
+
 fun RoomView.reviewsIn(key: String): List<ReviewView> = if (key == "main") reviews else taskIn(key)?.let { task -> reviews.filter { it.task == task } } ?: emptyList()
 
 fun RoomView.showing(key: String, feed: Feed?): RoomView = copy(place = key, messages = feed?.messages ?: emptyList(), whole = feed?.whole ?: false)
