@@ -479,7 +479,7 @@ async function enrollCancel(): Promise<void> {
 
 async function enrollBegin(relay: string, label: string, os: string, user?: string, waitMs = OPEN_WAIT_MS): Promise<EnrollStart> {
   await enrollCancel();
-  if (saved?.person || saved?.device) throw new Error("this phone is already one of your devices");
+  if (saved?.device) throw new Error("this phone is already one of your devices");
   const stop = new AbortController();
   opening = stop;
   const signIn = await relaySignIn(relay, user, stop, waitMs).finally(() => {
@@ -560,11 +560,12 @@ async function enrollFinish(): Promise<Saved> {
   await e.enrollee.keep();
   if (enrolling !== e) throw new Error("signing in was cancelled, so this phone kept nothing");
   enrolling = null;
-  if (saved?.person || saved?.device) throw new Error("this phone is already one of your devices, so it kept nothing");
+  if (saved?.device) throw new Error("this phone is already one of your devices, so it kept nothing");
   const { grant, device } = e;
   if (!grant || !device?.xpk || !device.xsk) throw new Error("the grant came without this phone's keys: sign in again");
   const key = { name: device.name, pk: device.pk, sk: device.sk, xpk: device.xpk, xsk: device.xsk };
-  start({ relay: grant.relay, person: null, device: { key, links: grant.links, person: grant.person }, seats: [] });
+  const held = saved?.relay === grant.relay ? saved.seats : [];
+  start({ relay: grant.relay, person: null, device: { key, links: grant.links, person: grant.person }, seats: held });
   keep(saved!);
   const ring = keyring!;
   for (const c of grant.channels) {
@@ -572,7 +573,7 @@ async function enrollFinish(): Promise<Saved> {
     if (room) bookAsked.add(room);
   }
   const name = handleFor(grant.person.name);
-  for (const c of grant.channels) {
+  for (const c of grant.channels.filter((c) => !held.some((s) => s.code === c.code))) {
     await ring.requestJoin(c.code, name).catch((err: unknown) => post({ type: "log", line: `couldn't ask to join ${c.label}: ${err instanceof Error ? err.message : String(err)}` }));
   }
   watchJoins();

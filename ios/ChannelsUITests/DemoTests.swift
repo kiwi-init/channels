@@ -29,6 +29,18 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
+    func testSampleOffersNoLinkAgain() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["A sample channel. Sign in to see yours."].waitForExistence(timeout: 15))
+        app.buttons["You"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Relay"].waitForExistence(timeout: 5), "the You screen")
+        add(shot(app, "demo you"))
+        XCTAssertFalse(app.buttons["Link Again"].exists, "the sample can't link, so it doesn't offer to")
+    }
+
+    @MainActor
     func testStepCard() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]

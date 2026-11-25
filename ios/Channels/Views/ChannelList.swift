@@ -38,7 +38,7 @@ struct ChannelList: View {
                 } description: {
                     Text(model.enrolled ? "This iPhone joins the channels your computer had when it approved it." : "Link your Mac again to bring your channels.")
                 } actions: {
-                    if !model.enrolled {
+                    if !model.enrolled && !model.demo {
                         Button("Link Again") { model.relinkAsked = true }
                     }
                 }

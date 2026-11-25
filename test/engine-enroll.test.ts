@@ -199,6 +199,54 @@ describe("the phone engine signs in and enrolls (T640)", () => {
     await s.ownerCh.close();
   });
 
+  test("a phone linked before sign-in signs in, keeps the channels it has and asks only for the new ones (T61)", async () => {
+    await ask({ op: "start", saved: { relay, person: null, seats: [] } });
+    const s = await setupChannel(relay, { ownerName: "jow", personName: "Jow", human: "dev:phone6" });
+    const person = await withExchangeKey(s.person);
+    const held: { device: Identity | null; links: DeviceLink[] } = { device: null, links: [] };
+    const enroll = async (channels: { label: string; code: string }[]): Promise<Saved> => {
+      const host = desktop(person, "phone6", channels, held);
+      await host.poll();
+      await ask({ op: "enrollBegin", relay, label: "iPhone", os: "iOS 27", user: "phone6" });
+      const waiting = ask<{ digits: string }>({ op: "enrollWait" });
+      const id = await answered(host);
+      await host.confirm(id, (await waiting).digits);
+      await ask({ op: "enrollCheck" });
+      return ask<Saved>({ op: "enrollFinish" });
+    };
+    const first = await enroll([{ label: "onemouse", code: s.code }]);
+    await letIn(s, () => pushes.some((p) => p.type === "saved" && p.saved.seats.some((c) => c.code === s.code && c.access)));
+    const kept = pushes.findLast((p) => p.type === "saved" && p.saved.seats.some((c) => c.code === s.code && c.access));
+    const legacy = kept?.type === "saved" ? kept.saved.seats : [];
+    expect(legacy.map((c) => c.pk)).toEqual([first.seats[0]!.pk]);
+
+    await ask({ op: "start", saved: { relay, person: null, seats: legacy } });
+    const other = await setupChannel(relay, { personName: "Jow", human: "dev:phone6b" });
+    const again = await enroll([
+      { label: "onemouse", code: s.code },
+      { label: "twomouse", code: other.code },
+    ]);
+
+    expect(again.person).toBeNull();
+    expect(again.device?.person.pk).toBe(person.pk);
+    expect(again.seats.map((c) => [c.code, c.pk === legacy[0]!.pk, Boolean(c.access)])).toEqual([
+      [s.code, true, true],
+      [other.code, false, false],
+    ]);
+    await expect(ask({ op: "enrollBegin", relay, label: "iPhone", os: "iOS 27", user: "phone6" })).rejects.toThrow("already one of your devices");
+    await s.ownerCh.close();
+    await other.ownerCh.close();
+  });
+
+  test("a phone that holds its person's key may sign in again (T61)", async () => {
+    const s = await setupChannel(relay, { personName: "Jow", human: "dev:phone7" });
+    await ask({ op: "start", saved: { relay, person: await withExchangeKey(s.person), seats: [] } });
+    expect(await ask<EnrollStart>({ op: "enrollBegin", relay, label: "iPhone", os: "iOS 27", user: "phone7" })).toEqual({ url: null, code: "" });
+    await ask({ op: "enrollCancel" });
+    await ask({ op: "start", saved: { relay, person: null, seats: [] } });
+    await s.ownerCh.close();
+  });
+
   test("a dev relay needs the sign-in name", async () => {
     await expect(ask({ op: "enrollBegin", relay, label: "Pixel 9", os: "Android 16" })).rejects.toThrow("dev sign-in");
   });

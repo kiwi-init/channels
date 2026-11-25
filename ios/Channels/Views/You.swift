@@ -65,7 +65,7 @@ struct SettingsScreen: View {
             }
             .listRowBackground(Tone.raised)
             AppearanceSection()
-            if !model.enrolled {
+            if !model.enrolled && !model.demo {
                 Section {
                     Button {
                         model.relinkAsked = true
