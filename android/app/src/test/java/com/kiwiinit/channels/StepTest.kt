@@ -3,7 +3,10 @@ package com.kiwiinit.channels
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -134,11 +137,33 @@ class StepTest {
         compose.onNodeWithText("https://example.com/review").assertExists()
     }
 
-    private fun open(model: AppModel, waiting: Boolean, step: StepView = SIGN_STEP, answer: StepAnswer? = null) {
+    @Test
+    fun aLinkNoAppOpensDoesNothing() {
+        val tried = mutableListOf<String>()
+        val noApp = object : UriHandler {
+            override fun openUri(uri: String) {
+                tried += uri
+                throw IllegalArgumentException("Can't open $uri.")
+            }
+        }
+        open(answering(::answered), waiting = true, step = StepView(why = "Read the setup notes.", needsPerson = "you", links = listOf("docs/setup.md")), links = noApp)
+        compose.onNodeWithText("docs/setup.md").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf("docs/setup.md"), tried)
+        compose.onNodeWithText("Done").assertIsEnabled()
+    }
+
+    private fun open(model: AppModel, waiting: Boolean, step: StepView = SIGN_STEP, answer: StepAnswer? = null, links: UriHandler? = null) {
         stepAsked(model, waiting, step, answer)
         compose.setContent {
             ChannelsTheme {
-                Surface(Modifier.fillMaxSize()) { ConversationScreen(model, Spot(DEV), back = {}) }
+                Surface(Modifier.fillMaxSize()) {
+                    if (links == null) {
+                        ConversationScreen(model, Spot(DEV), back = {})
+                    } else {
+                        CompositionLocalProvider(LocalUriHandler provides links) { ConversationScreen(model, Spot(DEV), back = {}) }
+                    }
+                }
             }
         }
         compose.waitForIdle()
