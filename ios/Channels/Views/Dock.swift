@@ -332,34 +332,44 @@ struct Dock: View {
         error = nil
         Haptic.tap()
         let from = spot
-        let pictures = attached.enumerated().map { i, a in Outgoing(name: "photo-\(i + 1).jpg", mime: "image/jpeg", data: a.data.base64EncodedString()) }
+        let typed = draft
+        let photos = attached
+        let quoting = replyTo
+        let review = sendingBack
+        let ask = answering
+        let pictures = photos.enumerated().map { i, a in Outgoing(name: "photo-\(i + 1).jpg", mime: "image/jpeg", data: a.data.base64EncodedString()) }
+        clear(sent: text, from)
+        attached = []
+        replyTo = nil
         Task {
+            var unsent = typed
             do {
-                var body = text
-                if let review = sendingBack {
+                if let review {
                     try await model.sendBack(from.code, task: review.task, why: text)
-                    sendingBack = nil
-                    body = ""
-                } else if let ask = answering {
+                    if sendingBack?.task == review.task { sendingBack = nil }
+                    unsent = ""
+                } else if let ask {
                     try await model.answer(from.code, seq: ask.seq, text: text)
-                    answering = nil
-                    body = ""
+                    if answering?.seq == ask.seq { answering = nil }
+                    unsent = ""
                 }
-                if body.isEmpty, drafting == from, draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { clear(sent: text, from) }
-                if !pictures.isEmpty { try await model.send(from, body, re: replyTo?.seq, pictures: pictures) }
-                if drafting == from {
-                    if draft.trimmingCharacters(in: .whitespacesAndNewlines) == text { clear(sent: text, from) }
-                    attached = []
-                    replyTo = nil
-                } else {
-                    model.keep(Draft(), from.code, from.place)
-                }
+                if !pictures.isEmpty { try await model.send(from, unsent.isEmpty ? "" : text, re: quoting?.seq, pictures: pictures) }
             } catch {
                 Trouble.note("send from the composer", error)
                 self.error = error.localizedDescription
+                putBack(Draft(text: unsent, attached: photos), quoting, from)
             }
             sending = false
         }
+    }
+
+    private func putBack(_ unsent: Draft, _ quoting: MessageView?, _ key: Spot) {
+        if model.draft(key.code, key.place).isEmpty { model.keep(unsent, key.code, key.place) }
+        guard drafting == key, Draft(text: draft, attached: attached).isEmpty else { return }
+        sent = nil
+        draft = unsent.text
+        attached = unsent.attached
+        if replyTo == nil && answering == nil && sendingBack == nil { replyTo = quoting }
     }
 }
 
