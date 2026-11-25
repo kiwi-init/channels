@@ -133,6 +133,7 @@ export interface TaskView {
   createdAt: number;
   last: string | null;
   archived: boolean;
+  since: number | null;
 }
 
 export interface AskView {

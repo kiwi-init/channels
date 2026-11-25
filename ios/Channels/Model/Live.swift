@@ -12,14 +12,21 @@ final class LiveAgents {
     static func agents(_ room: RoomView) -> [AgentsActivity.Agent] {
         let order = { (m: MemberView) in (m.name == room.lead ? 0 : 1, m.display) }
         return room.members.filter { $0.isAgent && $0.working }.sorted { order($0) < order($1) }.map { m in
-            AgentsActivity.Agent(
+            let task = current(m, room)
+            return AgentsActivity.Agent(
                 name: m.display,
                 face: m.face ?? "default",
                 color: m.color.flatMap { Palette.fills[$0] },
-                task: room.tasks.filter { m.doing.contains($0.id) && $0.state == "doing" }.max { $0.updatedAt < $1.updatedAt }.map { "T\($0.id) \($0.title)" },
-                since: m.activity?.since.map { Date(timeIntervalSince1970: $0 / 1000) }
+                task: task.map { "T\($0.id) \($0.title)" },
+                since: task?.since.map { Date(timeIntervalSince1970: $0 / 1000) }
             )
         }
+    }
+
+    private static func current(_ m: MemberView, _ room: RoomView) -> TaskView? {
+        let doing = room.tasks.filter { m.doing.contains($0.id) && $0.state == "doing" }
+        let started: (TaskView) -> Double = { $0.since ?? 0 }
+        return doing.max { started($0) == started($1) ? $0.updatedAt < $1.updatedAt : started($0) < started($1) }
     }
 
     func follow(_ rooms: [String: RoomView]) {

@@ -110,6 +110,7 @@ struct TaskView: Codable, Sendable, Hashable, Identifiable {
     let createdAt: Double
     let last: String?
     let archived: Bool
+    var since: Double? = nil
 
     var updated: Date { Date(timeIntervalSince1970: updatedAt / 1000) }
 }

@@ -263,6 +263,7 @@ export function roomView(r: RoomInput): RoomView {
       createdAt: t.createdAt,
       last: t.notes.at(-1)?.text ?? null,
       archived: !!t.archived,
+      since: t.state === "doing" && t.owner && t.clock?.key.startsWith(`${t.owner}|work|`) ? t.clock.at : null,
     }));
   const asks: Frozen<AskView[]> = [...decisions, ...escalations, ...questions].map((m) => {
     const place = state.placeOf.get(m.seq);
