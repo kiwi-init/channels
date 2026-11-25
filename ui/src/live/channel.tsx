@@ -17,7 +17,7 @@ import { useNewMembers, useNewPowers } from "~/live/defaults"
 import { kept } from "~/live/keep"
 import { withReach } from "~/live/reach"
 import { capUnsent, changeUnsent, landedOut, newSendId, nextUnsentKey, ownMedia, resendDue, retryUnsent, unsentBlock, unsentIn } from "~/live/unsent"
-import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, nextOf, peopleOf, prsOf, roomsOf, taskMentionsOf, theirsOf, type Pending } from "~/live/map"
+import { asksOf, directsOf, groupsOf, issuesOf, leftOutOf, messagesOf, formerOf, rowCache, nextOf, peopleOf, prsOf, roomsOf, taskMentionsOf, theirsOf, type Pending } from "~/live/map"
 import { useTasksNow } from "~/live/tasks-now"
 import { iconUrl } from "~/live/icon"
 import { usePinsHere } from "~/live/pins"
@@ -156,7 +156,8 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
   const mine = useMemo(() => new Set(pending.some((p) => p.failed !== undefined && p.id) ? messages.flatMap((m) => (m.from === me ? [m.id] : [])) : []), [pending, messages, me])
   const unsent = useMemo(() => landedOut(pending, mine), [pending, mine])
-  const rows = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, unsent), [state, messages, me, asks.askOf, pictures, unsent])
+  const [cache] = useState(rowCache)
+  const rows = useMemo(() => messagesOf(state, messages, me, asks.askOf, pictures, unsent, cache), [state, messages, me, asks.askOf, pictures, unsent, cache])
   const busy = useMemo(() => busyOf(people), [people])
   const reached = useMemo(() => reachedOf(online, asleep, answered), [online, asleep, answered])
   const receipts = useMemo(() => receiptsOf(state, shownWire, me, marks, pkOf, clock, busy, undefined, reached), [state, shownWire, me, marks, pkOf, busy, reached])
