@@ -58,6 +58,20 @@ final class JumpTests: XCTestCase {
     }
 
     @MainActor
+    func testNoJumpButtonAfterHistoryArrives() async throws {
+        let screen = try Screen.list(["-history", "YES"])
+        try await screen.enter(after: .milliseconds(300))
+        let app = screen.app
+        let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "the composer")
+        field.tap()
+        try await watch(screen, "history arriving with the keyboard open", for: .seconds(5))
+        field.typeText("done this message is from my iphone")
+        app.buttons["Send"].firstMatch.tap()
+        try await watch(screen, "the first message sent after the history", for: .seconds(4))
+    }
+
+    @MainActor
     private func watch(_ screen: Screen, _ moment: String, for span: Duration) async throws {
         let end = ContinuousClock.now + span
         var run = 0

@@ -3,7 +3,7 @@
 
     @MainActor
     enum Busy {
-        static func run(_ json: String, into model: AppModel) {
+        static func run(_ json: String, into model: AppModel, history: Bool = false) {
             guard var room = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
                 let first = (room["messages"] as? [[String: Any]])?.first
             else { return }
@@ -33,6 +33,21 @@
                 else { return }
                 model.rooms[view.code] = view
             }
+            let long =
+                "a long one. It runs on for a while, the way an agent explains what it found, so the bubble is many lines tall.\n\nA second paragraph, with more to say about where things stand and what comes next, before it ends."
+            if history {
+                show()
+                Task {
+                    for batch in [40, 30, 10] {
+                        try? await Task.sleep(for: .milliseconds(1200))
+                        for _ in 0..<batch {
+                            add("History \(seq + 1): \(seq.isMultiple(of: 3) ? long : "short")", from: seq.isMultiple(of: 2) ? "lead" : "builder")
+                        }
+                        show()
+                    }
+                }
+                return
+            }
             for n in 1...80 {
                 add(
                     n.isMultiple(of: 3) ? "Busy \(n): a longer line that wraps onto a second line in the bubble, the way agents write" : "Busy \(n): short",
@@ -42,11 +57,7 @@
             Task {
                 while true {
                     try? await Task.sleep(for: .milliseconds(1500))
-                    let long = (seq + 1).isMultiple(of: 4)
-                    add(
-                        long
-                            ? "Busy \(seq + 1): a long one. It runs on for a while, the way an agent explains what it found, so the bubble is many lines tall.\n\nA second paragraph, with more to say about where things stand and what comes next, before it ends."
-                            : "Busy \(seq + 1): arrived while you type", from: "builder")
+                    add("Busy \(seq + 1): \((seq + 1).isMultiple(of: 4) ? long : "arrived while you type")", from: "builder")
                     show()
                 }
             }

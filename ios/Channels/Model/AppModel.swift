@@ -127,6 +127,7 @@ final class AppModel {
                     rooms[room.code] = room
                     phase = .ready
                     if UserDefaults.standard.bool(forKey: "busy") { Busy.run(json, into: self) }
+                    if UserDefaults.standard.bool(forKey: "history") { Busy.run(json, into: self, history: true) }
                     return
                 } catch {
                     Trouble.note("CHANNELS_FIXTURE", error)
