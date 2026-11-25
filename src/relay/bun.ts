@@ -35,6 +35,7 @@ import { allow as allowPerMinute, utcDay } from "./room/limits.ts";
 import { clientAddress, parseTrustProxy, trustProxyFromArgs, trustProxyHint, trustsAProxy, untrustedProxy, writeAllowed, type TrustProxy } from "./address.ts";
 import { onAdminHttp, type PeopleAdmin } from "./admin.ts";
 import { onStripeHttp, type StripeBook } from "./stripe.ts";
+import { onBookHttp, type BookStore, type StoredSlot } from "./book.ts";
 import { PeopleBook, type LeaseAsk } from "./people.ts";
 import { Policy, policyFrom, type RelayPolicy, type RoomPolicy } from "./policy.ts";
 import {
@@ -156,6 +157,8 @@ export function startRelay(
   people.run("DROP TABLE IF EXISTS account_vaults");
   people.run("CREATE TABLE IF NOT EXISTS account_asks (user TEXT PRIMARY KEY, rec TEXT NOT NULL, at INTEGER NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS account_fresh (user TEXT PRIMARY KEY, rec TEXT NOT NULL)");
+  people.run("CREATE TABLE IF NOT EXISTS book_links (person TEXT PRIMARY KEY, links TEXT NOT NULL)");
+  people.run("CREATE TABLE IF NOT EXISTS book_slots (person TEXT NOT NULL, device TEXT NOT NULL, at INTEGER NOT NULL, boxes TEXT NOT NULL, PRIMARY KEY (person, device))");
   people.run("DROP TABLE IF EXISTS account_moves");
   people.run("DROP TABLE IF EXISTS account_adoptions");
   const machineSockets = new Map<string, { ws: ServerWebSocket<SocketData>; since: number }>();
@@ -195,6 +198,24 @@ export function startRelay(
       machineSockets.get(mpk)?.ws.close(4000, "unpaired");
       machineSockets.delete(mpk);
     },
+  };
+  const books: BookStore = {
+    links: async (person) => {
+      const row = people.query("SELECT links FROM book_links WHERE person = ?").get(person) as { links: string } | null;
+      return row ? (JSON.parse(row.links) as unknown[]) : null;
+    },
+    slots: async (person) =>
+      (people.query("SELECT device, at, boxes FROM book_slots WHERE person = ?").all(person) as { device: string; at: number; boxes: string }[]).map((r): StoredSlot => ({
+        device: r.device,
+        at: r.at,
+        boxes: JSON.parse(r.boxes) as Record<string, string>,
+      })),
+    keep: async (person, links, slot, drop) =>
+      people.transaction(() => {
+        people.query("INSERT OR REPLACE INTO book_links (person, links) VALUES (?, ?)").run(person, JSON.stringify(links));
+        people.query("INSERT OR REPLACE INTO book_slots (person, device, at, boxes) VALUES (?, ?, ?, ?)").run(person, slot.device, slot.at, JSON.stringify(slot.boxes));
+        for (const device of drop) people.query("DELETE FROM book_slots WHERE person = ? AND device = ?").run(person, device);
+      })(),
   };
   const personMachines: PersonMachinesStore = {
     machines: async (person) =>
@@ -549,6 +570,11 @@ export function startRelay(
           ...(ip ? { perAddress: () => allowPerMinute(`machine-ip:${instance}:${ip}`, MACHINE_WRITES_PER_ADDRESS, clock()) } : {}),
         });
         if (machine instanceof Response) return machine;
+        const book = await onBookHttp(req, books, {
+          now: clock,
+          ...(ip ? { perAddress: () => allowPerMinute(`book-ip:${instance}:${ip}`, MACHINE_WRITES_PER_ADDRESS, clock()) } : {}),
+        });
+        if (book) return book;
         const person = await onPersonHttp(req, personMachines, { now: clock });
         if (person) return person;
         const paid = await onStripeHttp(req, opts.stripeWebhookSecret ?? process.env.STRIPE_WEBHOOK_SECRET, stripeBook, clock());

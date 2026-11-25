@@ -65,6 +65,7 @@ import {
   type MachineStore,
   type PersonMachine,
 } from "./machine.ts";
+import { bookPerson, onBookHttp, signedBookRequest, type BookStore, type StoredSlot } from "./book.ts";
 import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, sameFresh, type AccountStore, type FreshRecord } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
@@ -641,6 +642,30 @@ export class PersonMachines extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS machines (mpk TEXT PRIMARY KEY)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS book_links (k INTEGER PRIMARY KEY CHECK (k = 1), links TEXT NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS book_slots (device TEXT PRIMARY KEY, at INTEGER NOT NULL, boxes TEXT NOT NULL)");
+  }
+
+  private books(): BookStore {
+    const sql = this.ctx.storage.sql;
+    return {
+      links: async () => {
+        const row = sql.exec("SELECT links FROM book_links").toArray()[0] as { links: string } | undefined;
+        return row ? (JSON.parse(row.links) as unknown[]) : null;
+      },
+      slots: async () =>
+        (sql.exec("SELECT device, at, boxes FROM book_slots").toArray() as { device: string; at: number; boxes: string }[]).map((r): StoredSlot => ({
+          device: r.device,
+          at: r.at,
+          boxes: JSON.parse(r.boxes) as Record<string, string>,
+        })),
+      keep: async (_person, links, slot, drop) =>
+        this.ctx.storage.transactionSync(() => {
+          sql.exec("INSERT OR REPLACE INTO book_links (k, links) VALUES (1, ?)", JSON.stringify(links));
+          sql.exec("INSERT OR REPLACE INTO book_slots (device, at, boxes) VALUES (?, ?, ?)", slot.device, slot.at, JSON.stringify(slot.boxes));
+          for (const device of drop) sql.exec("DELETE FROM book_slots WHERE device = ?", device);
+        }),
+    };
   }
 
   async add(mpk: string): Promise<void> {
@@ -664,7 +689,7 @@ export class PersonMachines extends DurableObject<Env> {
         machines: async (person: string) => (await this.listed(person)).map((l) => l.machine),
         lists: async (person: string) => (await this.listed(person)).flatMap((l) => (l.links ? [l.links] : [])),
       };
-      return (await onPersonHttp(req, store)) ?? withCors(errorResponse(new NotFound({ message: "not found" })));
+      return (await onBookHttp(req, this.books())) ?? (await onPersonHttp(req, store)) ?? withCors(errorResponse(new NotFound({ message: "not found" })));
     } catch (err) {
       return withCors(errorResponse(err));
     }
@@ -851,6 +876,16 @@ export default {
       const user = await accountUser(req, human(env));
       if (user instanceof Response) return user;
       return env.ACCOUNTS.get(env.ACCOUNTS.idFromName(user)).serve(user, req);
+    }
+    const bookOf = bookPerson(url.pathname);
+    if (bookOf) {
+      const ip = req.headers.get("cf-connecting-ip");
+      if (req.method === "PUT" && ip && !(await env.MACHINE_WRITES.limit({ key: `book:${ip}` })).success) {
+        return withCors(errorResponse(new TooMany({ message: "too many channel book writes from this address; try again in a few minutes" })));
+      }
+      const refused = await signedBookRequest(req.method === "PUT" ? req.clone() : req, Date.now());
+      if (refused) return refused;
+      return env.PERSON_MACHINES.get(env.PERSON_MACHINES.idFromName(bookOf)).fetch(req);
     }
     if (url.pathname.startsWith("/v1/person/")) {
       const signed = await signedPersonRequest(req, Date.now());
