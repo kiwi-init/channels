@@ -19,7 +19,7 @@ final class TitleTests: XCTestCase {
         XCTAssertTrue(working.waitForExistence(timeout: 5), "a tap opens who is working")
         XCTAssertTrue(app.staticTexts["Rooms"].exists, "the sheet lists the rooms")
         add(shot(app, "title sheet"))
-        app.buttons["Done"].tap()
+        app.navigationBars["channels-dev"].buttons["Done"].tap()
         XCTAssertTrue(working.waitForNonExistence(timeout: 5), "Done closes the sheet")
 
         pill.press(forDuration: 0.8)
