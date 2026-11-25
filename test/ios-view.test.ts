@@ -184,6 +184,12 @@ describe("names in the phone's room view (#1251)", () => {
     expect(room.messages[2]?.quote?.words).toBe("Link Again is hidden on a phone that still has its keys: one two");
   });
 
+  test("a chat list preview reads as plain words: a table keeps its cells, a handle keeps its underscores (T623)", async () => {
+    const room = named(await signedLog([say("lead", "| Job | State |\n| --- | --- |\n| android / build | **green** |\n| ci-ok | *waiting* |"), say("dev", "Ask @dev_bot about `snake_case` and __this__")]));
+    expect(room.messages[0]?.plain).toBe("Job · State android / build · green ci-ok · waiting");
+    expect(room.latest?.plain).toBe("Ask @dev_bot about snake_case and this");
+  });
+
   test("a nickname is shown as text, never as Markdown", async () => {
     const room = named(await signedLog([say("lead", "Ping @dev")]), "Earnest _Heron_ *1*");
     expect(room.messages[0]).toMatchObject({ body: "Ping @dev", shown: "Ping @Earnest \\_Heron\\_ \\*1\\*", plain: "Ping @Earnest _Heron_ *1*" });
