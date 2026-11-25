@@ -2837,6 +2837,34 @@
         }
       }
     },
+    "Nobody is working" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作業中のエージェントはいません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "작업 중인 에이전트 없음"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ninguém está trabalhando"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有进行中的工作"
+          }
+        }
+      }
+    },
     "Not Delivered" : {
       "localizations" : {
         "ja" : {
