@@ -198,4 +198,8 @@
     <string name="step_needs_reason">先に理由を書いてください</string>
     <string name="step_answered">%1$s · %2$s</string>
     <string name="step_replied">%1$sが返信しました</string>
+    <string name="state_in">%1$s（%2$s）</string>
+    <string name="start_of_task_thread">このタスクのスレッドの始まり</string>
+    <string name="start_of_thread">このスレッドの始まり</string>
+    <string name="in_channel">%1$s のメンバー</string>
 </resources>

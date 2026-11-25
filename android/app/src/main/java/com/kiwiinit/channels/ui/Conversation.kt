@@ -117,6 +117,9 @@ import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Buzz
 import com.kiwiinit.channels.model.Pending
 import com.kiwiinit.channels.model.Spot
+import com.kiwiinit.channels.model.dmWith
+import com.kiwiinit.channels.model.spotTitle
+import com.kiwiinit.channels.model.taskIn
 import com.kiwiinit.channels.model.taskLabel
 import com.kiwiinit.channels.theme.Radius
 import com.kiwiinit.channels.theme.Tone
@@ -323,23 +326,38 @@ private fun TimeLine(at: Long) {
 
 @Composable
 fun Intro(room: RoomView) {
-    val lead = if (room.place == "main") null else room.lead
+    val place = room.placeView(room.place)
+    val person = if (room.place == room.sideKey) room.lead else place?.let { room.other(it) } ?: room.dmWith(room.place)
+    val task = room.taskIn(room.place)?.let { id -> room.tasks.firstOrNull { it.id == id } }
+    val empty = room.messages.isEmpty()
     val tone = Tone.current
-    val lines: List<String> = if (lead == null) {
-        val names = room.members.filter { it.name != room.me }.map { it.display }
-        listOf(stringResource(R.string.you_and, names.joinToString(", ")), if (room.messages.isEmpty()) stringResource(R.string.no_messages_yet) else stringResource(R.string.start_of_general))
-    } else {
-        val member = room.member(lead)
-        val now = if (member?.working == true) member.doing.firstOrNull()?.let { stringResource(R.string.working_on_cap, taskLabel(it)) } ?: stringResource(R.string.working_cap) else null
-        listOfNotNull(stringResource(R.string.lead_of, room.title), now ?: if (room.messages.isEmpty()) stringResource(R.string.everyone_reads) else null)
+    val lines: List<String> = when {
+        room.place == "main" -> {
+            val names = room.members.filter { it.name != room.me }.map { it.display }
+            listOf(stringResource(R.string.you_and, names.joinToString(", ")), if (empty) stringResource(R.string.no_messages_yet) else stringResource(R.string.start_of_general))
+        }
+        task != null -> {
+            val state = TASK_STATES.firstOrNull { it.first == task.state }?.second?.let { stringResource(it) } ?: task.state
+            listOf(
+                listOfNotNull(task.owner?.let { room.display(it) }, stringResource(R.string.state_in, state, room.title)).joinToString(" · "),
+                if (empty) stringResource(R.string.no_messages_yet) else stringResource(R.string.start_of_task_thread),
+            )
+        }
+        person == null -> listOf(if (empty) stringResource(R.string.no_messages_yet) else stringResource(R.string.start_of_thread))
+        else -> {
+            val member = room.member(person)
+            val now = if (member?.working == true) member.doing.firstOrNull()?.let { stringResource(R.string.working_on_cap, taskLabel(it)) } ?: stringResource(R.string.working_cap) else null
+            val role = if (person == room.lead) stringResource(R.string.lead_of, room.title) else stringResource(R.string.in_channel, room.title)
+            listOfNotNull(role, now ?: if (empty) stringResource(R.string.everyone_reads) else null)
+        }
     }
     Column(
         Modifier.fillMaxWidth().padding(start = 32.dp, end = 32.dp, top = if (room.messages.isEmpty()) 72.dp else 28.dp, bottom = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (lead != null) Face(lead, room.member(lead), 72.dp) else ChannelAvatar(room, 72.dp)
+        if (person != null) Face(person, room.member(person), 72.dp) else ChannelAvatar(room, 72.dp)
         Text(
-            if (lead != null) room.display(lead) else room.title,
+            if (person != null) room.display(person) else room.spotTitle(room.place),
             style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),

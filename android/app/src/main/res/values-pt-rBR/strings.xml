@@ -212,4 +212,8 @@
     <string name="step_needs_reason">Diga o motivo primeiro</string>
     <string name="step_answered">%1$s · %2$s</string>
     <string name="step_replied">%1$s respondeu</string>
+    <string name="state_in">%1$s em %2$s</string>
+    <string name="start_of_task_thread">O início da conversa desta tarefa</string>
+    <string name="start_of_thread">O início desta conversa</string>
+    <string name="in_channel">Em %1$s</string>
 </resources>

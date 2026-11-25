@@ -123,7 +123,7 @@ fun TasksScreen(model: AppModel, code: String, open: (Spot) -> Unit, back: () ->
     }
 }
 
-private val TASK_STATES = listOf("doing" to R.string.state_doing, "review" to R.string.state_review, "todo" to R.string.state_todo, "done" to R.string.state_done)
+internal val TASK_STATES = listOf("doing" to R.string.state_doing, "review" to R.string.state_review, "todo" to R.string.state_todo, "done" to R.string.state_done)
 
 @Composable
 private fun TaskRow(room: RoomView, task: TaskView, open: () -> Unit) {
