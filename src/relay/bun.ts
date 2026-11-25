@@ -448,6 +448,16 @@ export function startRelay(
       doneWith(db);
     }
   };
+  const liveOut = async (p: Pusher, { room, sends }: NonNullable<Effects["live"]>) => {
+    const dead = (await p.live?.(sends)) ?? [];
+    if (!dead.length || !existsSync(file(room))) return;
+    const db = storeFor(room, false);
+    try {
+      db.dropDeadLive(dead);
+    } finally {
+      doneWith(db);
+    }
+  };
   const checkpointTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const armCheckpoint = (roomId: string, at: number | null) => {
     clearTimeout(checkpointTimers.get(roomId));
@@ -468,6 +478,7 @@ export function startRelay(
   const apply = (roomId: string, fx: Effects, sender?: ServerWebSocket<SocketData>) => {
     const room = sockets.get(roomId) ?? new Set();
     if (fx.push && pusher) void wake(pusher, fx.push).catch((e: unknown) => console.error(`wake: ${e instanceof Error ? e.message : "error"}`));
+    if (fx.live && pusher) void liveOut(pusher, fx.live).catch((e: unknown) => console.error(`live: ${e instanceof Error ? e.message : "error"}`));
     for (const ws of room) for (const f of (ws.data.watch ? fx.watch : undefined) ?? fx.broadcast ?? []) ws.send(f);
     if (fx.others) for (const ws of room) if (ws !== sender && !ws.data.watch) ws.send(fx.others);
     if (fx.ephemeral) for (const ws of room) if (ws !== sender && ws.data.presence) ws.send(fx.ephemeral);
