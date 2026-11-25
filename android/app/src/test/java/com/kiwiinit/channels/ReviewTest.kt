@@ -30,7 +30,7 @@ class ReviewTest {
     fun aTaskThreadInReviewShowsItsReviewCard() {
         open(Spot(DEV, "task:543"))
         compose.onNodeWithText("Approve").assertExists()
-        compose.onNodeWithText("Send back").assertExists()
+        compose.onNodeWithText("Send back…").assertExists()
     }
 
     @Test
