@@ -3,6 +3,7 @@ import UIKit
 
 struct ConversationScreen: View {
     @Environment(AppModel.self) private var model
+    @Environment(Lock.self) private var lock
     @State private var spot: Spot
     @State private var replyTo: MessageView?
     @State private var answering: AskView?
@@ -77,6 +78,7 @@ struct ConversationScreen: View {
         }
         .onDisappear { visible = false }
         .onChange(of: scene) { _, _ in seen() }
+        .onChange(of: lock.locked) { _, _ in seen() }
         .task(id: spot) {
             follow = Follow()
             await model.open(spot.code, place: spot.place == model.rooms[spot.code]?.sideKey ? "main" : spot.place)
@@ -109,7 +111,7 @@ struct ConversationScreen: View {
     }
 
     private func seen() {
-        guard visible, scene == .active else { return }
+        guard visible, scene == .active, !lock.hides else { return }
         model.markRead(spot)
     }
 }
