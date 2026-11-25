@@ -43,18 +43,22 @@ final class DemoTests: XCTestCase {
         XCTAssertTrue(needs.waitForExistence(timeout: 5) && needs.isHittable, "the tab bar stays in a chat")
         add(shot(app, "chat with the tab bar"))
 
-        field.tap()
-        field.typeText("hi")
-        add(shot(app, "chat typing with the tab bar"))
         app.swipeDown()
         app.swipeDown()
-        add(shot(app, "chat scrolled with the tab bar"))
+        add(shot(app, "chat scrolled back with the tab bar"))
+        app.swipeUp()
+        add(shot(app, "chat scrolled on with the tab bar"))
+        XCTAssertTrue(app.tabBars.firstMatch.exists, "the tab bar is there after scrolling")
+        app.swipeDown()
+        XCTAssertTrue(needs.waitForHittable(timeout: 5), "the tab bar opens up again")
 
-        XCTAssertTrue(needs.isHittable, "the tab bar is there after scrolling")
         needs.tap()
         XCTAssertTrue(app.navigationBars["Needs You"].waitForExistence(timeout: 5), "a tab opens from inside a chat")
         app.tabBars.buttons["Chats"].firstMatch.tap()
         XCTAssertTrue(field.waitForExistence(timeout: 5), "back on Chats, the chat is still open")
+        field.tap()
+        field.typeText("hi")
+        add(shot(app, "chat typing with the tab bar"))
     }
 
     @MainActor
@@ -95,5 +99,16 @@ final class DemoTests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         return attachment
+    }
+}
+
+extension XCUIElement {
+    func waitForHittable(timeout: TimeInterval) -> Bool {
+        let end = Date().addingTimeInterval(timeout)
+        while Date() < end {
+            if exists && isHittable { return true }
+            usleep(200_000)
+        }
+        return exists && isHittable
     }
 }
