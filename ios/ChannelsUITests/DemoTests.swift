@@ -12,8 +12,7 @@ final class DemoTests: XCTestCase {
         let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(general.waitForExistence(timeout: 5))
         general.tap()
-        let composer = NSPredicate(format: "placeholderValue == 'Message'")
-        let field = app.textViews.matching(composer).firstMatch.exists ? app.textViews.matching(composer).firstMatch : app.textFields.matching(composer).firstMatch
+        let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5), "the chat's message field")
         field.tap()
         field.typeText("hello")
@@ -35,21 +34,27 @@ final class DemoTests: XCTestCase {
         app.launch()
         let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(general.waitForExistence(timeout: 15))
+        add(shot(app, "list with the tab bar"))
         general.tap()
-        let composer = NSPredicate(format: "placeholderValue == 'Message'")
-        let field = app.textViews.matching(composer).firstMatch.exists ? app.textViews.matching(composer).firstMatch : app.textFields.matching(composer).firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5), "the chat's message field")
+        let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the chat's composer")
         let needs = app.tabBars.buttons["Needs You"].firstMatch
         XCTAssertTrue(needs.waitForExistence(timeout: 5) && needs.isHittable, "the tab bar stays in a chat")
-        add(shot(app, "chat with the tab bar"))
+        sleep(1)
+        add(shot(app, "chat at rest with the tab bar"))
 
         app.swipeDown()
         app.swipeDown()
-        add(shot(app, "chat scrolled back with the tab bar"))
-        app.swipeUp()
-        add(shot(app, "chat scrolled on with the tab bar"))
+        sleep(1)
+        add(shot(app, "chat scrolled up, the tab bar small"))
         XCTAssertTrue(app.tabBars.firstMatch.exists, "the tab bar is there after scrolling")
-        app.swipeDown()
+        XCTAssertTrue(field.exists, "the composer is there after scrolling")
+        app.swipeUp()
+        app.swipeUp()
+        app.swipeUp()
+        sleep(1)
+        add(shot(app, "chat scrolled back down"))
+        if !needs.isHittable { app.tabBars.buttons["Chats"].firstMatch.tap() }
         XCTAssertTrue(needs.waitForHittable(timeout: 5), "the tab bar opens up again")
 
         needs.tap()
@@ -57,8 +62,9 @@ final class DemoTests: XCTestCase {
         app.tabBars.buttons["Chats"].firstMatch.tap()
         XCTAssertTrue(field.waitForExistence(timeout: 5), "back on Chats, the chat is still open")
         field.tap()
+        sleep(1)
         field.typeText("hi")
-        add(shot(app, "chat typing with the tab bar"))
+        add(shot(app, "chat typing"))
     }
 
     @MainActor

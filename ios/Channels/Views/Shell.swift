@@ -34,7 +34,8 @@ struct Shell: View {
                 }
             }
         }
-        .shrinkingTabBar()
+        .shrinkingTabBar(inChat: model.composing != nil)
+        .restingComposer(model.composing != nil)
         .alert("Sign-in not saved", isPresented: Binding(get: { model.unsaved != nil }, set: { if !$0 { model.unsaved = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
