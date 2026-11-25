@@ -100,10 +100,11 @@ class AnswerTest {
         model.keep(Draft(attached = listOf(Attached("p1", ImageBitmap(4, 4), ByteArray(8), "image/jpeg"))), spot)
         val room = model.rooms.getValue(DEV)
         val ask = room.asks.first { it.seq == ASK_SEQ }
+        val focus = FocusRequester()
         compose.setContent {
             ChannelsTheme {
                 Surface(Modifier.fillMaxSize()) {
-                    Dock(model, room, spot, replyTo = null, answering = ask, sendingBack = null, focus = FocusRequester(), clearReply = {}, clearAnswer = clearAnswer, clearSendBack = {})
+                    Dock(model, room, spot, replyTo = null, answering = ask, sendingBack = null, focus = focus, clearReply = {}, clearAnswer = clearAnswer, clearSendBack = {})
                 }
             }
         }
