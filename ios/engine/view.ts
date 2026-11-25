@@ -11,6 +11,7 @@ import type { Online } from "@kiwi/channel/online.ts";
 import { knownHarness, monoHarness } from "@kiwi/app/harness.ts";
 import { named, namedMarkdown } from "@kiwi/app/mentions.ts";
 import { lastPreview } from "@kiwi/app/preview.ts";
+import { preview } from "../../ui/src/chat/preview.ts";
 import { reviewsFor } from "@kiwi/channel/task-actions.ts";
 import type { AskView, Connection, IconView, MemberView, MessageView, NeedView, PlaceView, ReviewView, RoomView, TaskView } from "./wire.ts";
 
@@ -149,7 +150,7 @@ export function roomView(r: RoomInput): RoomView {
       plain: plain(m.body),
       event: m.kind === "event",
       mine: myself(m.from),
-      quote: quoted && quoted.kind !== "event" ? { seq: quoted.seq, from: quoted.from, words: oneLine(plain(quoted.body), QUOTE_CHARS) } : null,
+      quote: quoted && quoted.kind !== "event" ? { seq: quoted.seq, from: quoted.from, words: oneLine(preview(plain(quoted.body)), QUOTE_CHARS) } : null,
       choices: m.choices ?? [],
       chosen: chosen ? { choice: chosen.choice, by: chosen.by } : null,
       waiting: waiting.has(m.seq),

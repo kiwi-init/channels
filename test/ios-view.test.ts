@@ -178,7 +178,9 @@ describe("names in the phone's room view (#1251)", () => {
   });
 
   test("a reply's quote reads as plain words, not Markdown (T405)", async () => {
-    const room = named(await signedLog([say("lead", "**Link Again is hidden** on a [phone](https://example.com) that still has its `keys`:\n\n- one\n- two"), say("dev", "on it"), say("jow", "why?", { re: [1] })]));
+    const room = named(
+      await signedLog([say("lead", "**Link Again is hidden** on a [phone](https://example.com) that still has its `keys`:\n\n- one\n- two"), say("dev", "on it"), say("jow", "why?", { re: [1] })]),
+    );
     expect(room.messages[2]?.quote?.words).toBe("Link Again is hidden on a phone that still has its keys: one two");
   });
 
