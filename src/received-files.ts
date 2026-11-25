@@ -138,13 +138,6 @@ const writeFiles = (files: { file: FileAttachment; saveAs: string; bytes: Uint8A
     return { saved, markdown };
   });
 
-export const keepFiles = (ch: Channel, m: Message, dir: string) =>
-  Effect.gen(function* () {
-    const bytes = yield* fetchFiles(ch, m.files ?? []);
-    if (!bytes.some((b) => b)) return { saved: [] as string[], markdown: [] as string[] };
-    return yield* writeFiles(arrived(messagePlan(m, caseRuleOf(dir)).files, bytes), dir);
-  });
-
 export const saveMessage = (ch: Channel, m: Message, dir: string) =>
   Effect.gen(function* () {
     const imgBytes = yield* fetchImages(ch, m.imgs ?? []);

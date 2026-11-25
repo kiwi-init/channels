@@ -77,29 +77,6 @@ function lockDirs(dir: string, root: string): void {
   }
 }
 
-/** Write message #seq's images into `dir` as `#<seq>-<name>`; returns the paths. Files are 0600. Directories under ~/.kiwi/downloads are 0700; a directory the caller named keeps its own mode. */
-export function saveImages(seq: number, imgs: InlineImage[], dir: string): string[] {
-  return saveNamed(
-    planNames(
-      seq,
-      imgs.map((img) => ({ name: img.name, fallback: "image" as const, markdown: false, bytes: Buffer.from(img.data, "base64") })),
-      caseRuleOf(dir),
-    ),
-    dir,
-  );
-}
-
-export function saveFiles(seq: number, files: { name: string; bytes: Uint8Array }[], dir: string): string[] {
-  return saveNamed(
-    planNames(
-      seq,
-      files.map((f) => ({ ...f, fallback: "file" as const, markdown: false })),
-      caseRuleOf(dir),
-    ),
-    dir,
-  );
-}
-
 export type Attachment = { name: string; fallback: "image" | "file"; markdown: boolean };
 
 export type CaseRule = "exact" | "folded";

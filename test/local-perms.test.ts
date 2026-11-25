@@ -3,7 +3,7 @@ import { afterEach, expect, test } from "bun:test";
 import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { saveImages } from "../src/attach.ts";
+import { caseRuleOf, planNames, saveNamed } from "../src/attach.ts";
 import { home, writeCursor, writePrivate } from "../src/config.ts";
 import { installHooks, uninstallHooks } from "../src/hooks.ts";
 import type { InlineImage } from "@kiwi/core/protocol.ts";
@@ -28,8 +28,17 @@ function scratch(prefix: string): string {
 
 const png = (name: string): InlineImage => ({ name, mime: "image/png", data: Buffer.from("png").toString("base64") });
 const mode = (p: string) => statSync(p).mode & 0o777;
+const savedImages = (seq: number, imgs: InlineImage[], dir: string): string[] =>
+  saveNamed(
+    planNames(
+      seq,
+      imgs.map((img) => ({ name: img.name, fallback: "image" as const, markdown: false, bytes: Buffer.from(img.data, "base64") })),
+      caseRuleOf(dir),
+    ),
+    dir,
+  );
 
-test("saveImages writes 0600 files, and 0700 directories only under downloads", () => {
+test("a saved image is a 0600 file, and its directories are 0700 only under downloads", () => {
   const dir = scratch("kiwi-dl-");
   chmodSync(dir, 0o755);
   process.env.KIWI_HOME = dir;
@@ -38,7 +47,7 @@ test("saveImages writes 0600 files, and 0700 directories only under downloads", 
   mkdirSync(room, { recursive: true });
   chmodSync(join(dir, "downloads"), 0o755);
   chmodSync(room, 0o755);
-  const saved = saveImages(4, [png("shot.png")], room)[0];
+  const saved = savedImages(4, [png("shot.png")], room)[0];
   if (!saved) throw new Error("no saved image");
   expect(mode(saved)).toBe(0o600);
   expect(mode(room)).toBe(0o700);
@@ -46,7 +55,7 @@ test("saveImages writes 0600 files, and 0700 directories only under downloads", 
 
   const user = scratch("kiwi-user-");
   chmodSync(user, 0o755);
-  const elsewhere = saveImages(5, [png("other.png")], user)[0];
+  const elsewhere = savedImages(5, [png("other.png")], user)[0];
   if (!elsewhere) throw new Error("no saved image");
   expect(mode(elsewhere)).toBe(0o600);
   expect(mode(user)).toBe(0o755);
