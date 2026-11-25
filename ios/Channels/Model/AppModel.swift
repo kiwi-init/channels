@@ -210,6 +210,7 @@ final class AppModel {
             try await engine.ask(["op": "start", "saved": object, "kept": Kept.load(codes)])
             phase = .ready
             PushDelegate.onToken = { [weak self] token in Task { await self?.registerPush(token) } }
+            PushDelegate.onTap = { [weak self] tag in self?.openPush(tag) }
             Task { await PushTags.ask() }
         } catch {
             phase = .broken(error.localizedDescription)
@@ -333,6 +334,11 @@ final class AppModel {
             pushing = nil
             if phase == .ready, push.stale(Set(rooms.keys)), let token = push.token { await registerPush(token) }
         }
+    }
+
+    private func openPush(_ tag: String) {
+        guard let code = push.byTag[tag] else { return }
+        jump(.place(Spot(code: code)))
     }
 
     private func registerPush(_ token: String) async {
