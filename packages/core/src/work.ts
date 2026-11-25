@@ -335,7 +335,7 @@ export function prsByTask(state: ChannelState, messages: Message[], ids: Iterabl
       if (!list) fates.set(pr.url, (list = []));
       list.push({ seq, fate });
     }
-  const byBranch = new Map<number, [string, GithubPr][]>();
+  const byBranch = new Map<number, [string, Frozen<GithubPr>][]>();
   for (const [key, gh] of state.github.prs) {
     const id = taskOfPr(gh, state);
     if (id === null) continue;

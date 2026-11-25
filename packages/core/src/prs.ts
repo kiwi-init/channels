@@ -42,11 +42,11 @@ export function prLinks(text: string): { url: string; repo: string; number: numb
   return [...seen.values()];
 }
 
-type TaskPr = { pr: GithubPr; checks?: PrChecks };
+type TaskPr = { pr: Frozen<GithubPr>; checks?: PrChecks };
 
 const prIndexes = new WeakMap<ChannelState["github"], Map<number, TaskPr>>();
 
-const rankPr = (p: GithubPr): number => (p.state === "open" ? 1 : 0);
+const rankPr = (p: Frozen<GithubPr>): number => (p.state === "open" ? 1 : 0);
 
 const betterPr = (p: Frozen<GithubPr>, held: Frozen<GithubPr> | undefined): boolean => !held || rankPr(p) > rankPr(held) || (rankPr(p) === rankPr(held) && p.at > held.at);
 
@@ -80,7 +80,7 @@ export function prOfTask(github: Frozen<GithubState>, prefix: string | null, t: 
 function taskPrIndex(state: ChannelState): Map<number, TaskPr> {
   const known = prIndexes.get(state.github);
   if (known) return known;
-  const best = new Map<number, GithubPr>();
+  const best = new Map<number, Frozen<GithubPr>>();
   for (const p of state.github.prs.values()) {
     const id = taskOfPr(p, state);
     if (id === null) continue;
