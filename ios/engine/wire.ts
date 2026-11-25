@@ -43,6 +43,7 @@ export type Ask =
   | { op: "sendBack"; code: string; task: number; why: string }
   | { op: "allow"; code: string; id: string; allow: boolean }
   | { op: "letIn"; code: string; id: string }
+  | { op: "turnAway"; code: string; id: string }
   | { op: "approveSpec"; code: string; ask: number; v: number }
   | { op: "open"; code: string; place: string }
   | { op: "marks"; code: string; marks: Record<string, number>; write: boolean }
