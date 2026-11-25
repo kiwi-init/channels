@@ -49,11 +49,12 @@ struct ConversationScreen: View {
                 .bar(.bottom) {
                     if docks(room) {
                         Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing) {
-                            if RestingComposer.available { open = false }
+                            open = false
                         }
                     }
                 }
-                .onChange(of: resting(room), initial: true) { _, now in rest(now) }
+                .onChange(of: visible && talks(room), initial: true) { _, now in rest(now) }
+                .onChange(of: visible && docks(room), initial: true) { _, now in dock(now) }
                 .navigationTitle(room.spotTitle(spot.place))
                 .subtitle(room.status(of: spot.place))
                 .toolbar {
@@ -84,6 +85,7 @@ struct ConversationScreen: View {
         .onDisappear {
             visible = false
             rest(false)
+            dock(false)
         }
         .onChange(of: model.openComposer) { _, asked in
             guard asked == spot else { return }
@@ -101,11 +103,7 @@ struct ConversationScreen: View {
 
     private func docks(_ room: RoomView) -> Bool {
         if answering != nil || sendingBack != nil { return true }
-        return talks(room) && (!RestingComposer.available || open || replyTo != nil)
-    }
-
-    private func resting(_ room: RoomView) -> Bool {
-        visible && RestingComposer.available && talks(room) && !docks(room)
+        return talks(room) && (open || replyTo != nil)
     }
 
     private func rest(_ now: Bool) {
@@ -113,6 +111,14 @@ struct ConversationScreen: View {
             model.composing = spot
         } else if model.composing == spot {
             model.composing = nil
+        }
+    }
+
+    private func dock(_ now: Bool) {
+        if now {
+            model.docked = spot
+        } else if model.docked == spot {
+            model.docked = nil
         }
     }
 
@@ -228,68 +234,11 @@ extension View {
         }
     }
 
-    @ViewBuilder func shrinkingTabBar(inChat: Bool) -> some View {
-        if #available(iOS 26.0, *) {
-            self.tabBarMinimizeBehavior(inChat ? .onScrollUp : .onScrollDown)
-        } else {
-            self
-        }
-    }
-
-    @ViewBuilder func restingComposer(_ shown: Bool) -> some View {
-        if #available(iOS 26.1, *) {
-            self.tabViewBottomAccessory(isEnabled: shown) { RestingComposer() }
-        } else {
-            self
-        }
-    }
-
     @ViewBuilder func bar<Content: View>(_ edge: VerticalEdge, @ViewBuilder content: () -> Content) -> some View {
         if #available(iOS 26.0, *) {
             self.safeAreaBar(edge: edge, spacing: 0, content: content)
         } else {
             self.safeAreaInset(edge: edge, spacing: 0, content: content)
-        }
-    }
-}
-
-struct RestingComposer: View {
-    static var available: Bool {
-        if #available(iOS 26.1, *) { true } else { false }
-    }
-
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        if let spot = model.composing {
-            let draft = model.draft(spot.code, spot.place)
-            let text = draft.text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ")
-            Button {
-                model.openComposer = spot
-            } label: {
-                HStack(spacing: 10) {
-                    if !draft.attached.isEmpty {
-                        Image(systemName: "photo").foregroundStyle(Tone.ink2)
-                    }
-                    Text(text.isEmpty ? spoken("Message") : text)
-                        .type(.body)
-                        .foregroundStyle(text.isEmpty ? Tone.ink3 : Tone.ink)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 16)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("composer")
-            .accessibilityLabel(text.isEmpty ? spoken("Message") : text)
-            .onGeometryChange(for: CGFloat.self) {
-                $0.frame(in: .global).minY
-            } action: {
-                model.restingTop = $0
-            }
-            .onDisappear { model.restingTop = nil }
         }
     }
 }

@@ -13,29 +13,64 @@ extension AppModel {
 
 struct Shell: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var still
+    @State private var fold: Fold?
+    @State private var keyboard = false
+    @State private var home: CGFloat = 0
+
+    private var barShown: Bool { !keyboard && model.docked == nil }
 
     var body: some View {
-        TabView(selection: Binding(get: { model.tab }, set: { model.tab = $0 })) {
-            Tab("Chats", systemImage: "bubble.left.and.bubble.right.fill", value: AppTab.chats) {
+        ZStack(alignment: .bottom) {
+            page(.chats) {
                 NavigationStack(path: Binding(get: { model.path }, set: { model.path = $0 })) {
                     ChannelList()
                         .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
                 }
             }
-            Tab("Needs You", systemImage: "hand.raised.fill", value: AppTab.needs) {
+            page(.needs) {
                 NavigationStack {
                     NeedsScreen()
                 }
             }
-            .badge(model.waiting)
-            Tab("You", systemImage: "person.crop.circle.fill", value: AppTab.you) {
+            page(.you) {
                 NavigationStack {
                     SettingsScreen()
                 }
             }
+            if fold != nil {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .onTapGesture { fold = nil }
+                    .accessibilityHidden(true)
+            }
+            if barShown, fold == .channel || fold == .me {
+                FoldMenu(fold: $fold)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+                    .transition(.scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
+            }
         }
-        .shrinkingTabBar(inChat: model.composing != nil)
-        .restingComposer(model.composing != nil)
+        .animation(Bar.spring(still), value: fold)
+        .bar(.bottom) {
+            if barShown {
+                TabBar(fold: $fold)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, home > 20 ? -12 : 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) {
+            $0.safeAreaInsets.bottom
+        } action: {
+            if !keyboard { home = $0 }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
+        .onChange(of: model.tab) { _, _ in fold = nil }
+        .onChange(of: model.path) { _, _ in fold = nil }
+        .onChange(of: model.composing) { _, _ in fold = nil }
         .alert("Sign-in not saved", isPresented: Binding(get: { model.unsaved != nil }, set: { if !$0 { model.unsaved = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -47,6 +82,14 @@ struct Shell: View {
                 if UserDefaults.standard.string(forKey: "shot") == "live" { LivePreview() }
             }
         #endif
+    }
+
+    private func page<Content: View>(_ tab: AppTab, @ViewBuilder _ content: () -> Content) -> some View {
+        let shown = model.tab == tab
+        return content()
+            .opacity(shown ? 1 : 0)
+            .allowsHitTesting(shown)
+            .accessibilityHidden(!shown)
     }
 
     #if DEBUG

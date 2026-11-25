@@ -34,42 +34,81 @@ final class DemoTests: XCTestCase {
         app.launch()
         let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(general.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["tab-needs"].waitForHittable(timeout: 5), "the tabs outside a chat")
         add(shot(app, "list with the tab bar"))
         general.tap()
         let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5), "the chat's composer")
-        let needs = app.tabBars.buttons["Needs You"].firstMatch
-        XCTAssertTrue(needs.waitForExistence(timeout: 5) && needs.isHittable, "the tab bar stays in a chat")
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the chat's composer in the bar")
+        let tabs = app.buttons["tabs"]
+        XCTAssertTrue(tabs.waitForHittable(timeout: 5), "in a chat the tabs fold into one button beside the composer")
+        XCTAssertFalse(app.buttons["tab-needs"].exists, "and the tab pill gives the composer its room")
+        XCTAssertEqual(tabs.frame.midY, field.frame.midY, accuracy: 2, "one row: the tabs button and the composer")
         sleep(1)
         add(shot(app, "chat at rest with the tab bar"))
         let newest = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Something else'")).firstMatch
         XCTAssertTrue(newest.waitForExistence(timeout: 5), "the newest item, the step's Something else")
-        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "the newest item ends above the resting composer")
+        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "the newest item ends above the bar")
         XCTAssertGreaterThan(newest.frame.maxY, field.frame.minY - 40, "and no wide empty gap sits between them")
 
         app.swipeDown()
         app.swipeDown()
         sleep(1)
-        add(shot(app, "chat scrolled up, the tab bar small"))
-        XCTAssertTrue(app.tabBars.firstMatch.exists, "the tab bar is there after scrolling")
-        XCTAssertTrue(field.exists, "the composer is there after scrolling")
+        add(shot(app, "chat scrolled up"))
+        XCTAssertTrue(field.exists && tabs.exists, "the bar is there after scrolling")
         app.swipeUp()
         app.swipeUp()
         app.swipeUp()
         sleep(1)
-        add(shot(app, "chat scrolled back down"))
-        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "back at the bottom, the newest item ends above the composer")
-        if !needs.isHittable { app.tabBars.buttons["Chats"].firstMatch.tap() }
-        XCTAssertTrue(needs.waitForHittable(timeout: 5), "the tab bar opens up again")
+        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "back at the bottom, the newest item ends above the bar")
 
+        tabs.tap()
+        let needs = app.buttons["tab-needs"]
+        XCTAssertTrue(needs.waitForHittable(timeout: 5), "the tabs button opens the tabs")
+        add(shot(app, "chat with the tabs open"))
         needs.tap()
         XCTAssertTrue(app.navigationBars["Needs You"].waitForExistence(timeout: 5), "a tab opens from inside a chat")
-        app.tabBars.buttons["Chats"].firstMatch.tap()
-        XCTAssertTrue(field.waitForExistence(timeout: 5), "back on Chats, the chat is still open")
+        app.buttons["tab-chats"].tap()
+        XCTAssertTrue(field.waitForHittable(timeout: 5), "back on Chats, the chat is still open")
         field.tap()
-        sleep(1)
-        field.typeText("hi")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the composer opens over the keyboard")
+        XCTAssertFalse(tabs.exists, "and the bar steps aside")
+        app.typeText("hi")
         add(shot(app, "chat typing"))
+    }
+
+    @MainActor
+    func testTabBarUnfoldsChannelAndYou() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let channel = app.buttons["fold-channel"]
+        XCTAssertTrue(channel.waitForHittable(timeout: 15), "the channel's mark in the bar")
+        channel.tap()
+        XCTAssertTrue(app.buttons["unfolded"].waitForExistence(timeout: 5), "the channel unfolds into the wide pill")
+        XCTAssertTrue(app.buttons["tabs"].waitForHittable(timeout: 5), "and the tabs fold into one button")
+        let room = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'menu-channel-'")).firstMatch
+        XCTAssertTrue(room.waitForExistence(timeout: 5), "the channels to jump to, above the bar")
+        sleep(1)
+        add(shot(app, "bar with the channel open"))
+        room.tap()
+        let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "picking a channel opens its chat")
+
+        app.navigationBars.buttons.firstMatch.tap()
+        let me = app.buttons["fold-me"]
+        XCTAssertTrue(me.waitForHittable(timeout: 5), "your mark in the bar")
+        me.tap()
+        let needs = app.descendants(matching: .any).matching(identifier: "menu-needs").firstMatch
+        XCTAssertTrue(needs.waitForExistence(timeout: 5), "your menu, above the bar")
+        sleep(1)
+        add(shot(app, "bar with you open"))
+        app.buttons["tabs"].tap()
+        XCTAssertTrue(app.buttons["tab-needs"].waitForHittable(timeout: 5), "the tabs button folds it back")
+        XCTAssertFalse(needs.exists, "and the menu goes with it")
+        me.tap()
+        XCTAssertTrue(needs.waitForExistence(timeout: 5))
+        needs.tap()
+        XCTAssertTrue(app.navigationBars["Needs You"].waitForExistence(timeout: 5), "Needs You from your menu")
     }
 
     @MainActor
