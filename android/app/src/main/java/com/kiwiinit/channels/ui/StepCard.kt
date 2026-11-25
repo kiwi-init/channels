@@ -130,7 +130,13 @@ fun StepCard(model: AppModel, room: RoomView, message: MessageView, step: StepVi
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
                 textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable { links.openUri(link) },
+                modifier = Modifier.clickable {
+                    try {
+                        links.openUri(link)
+                    } catch (e: IllegalArgumentException) {
+                        // No app on the phone opens this kind of link; the tap does nothing, as one in a message does.
+                    }
+                },
             )
         }
         if (open) {

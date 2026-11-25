@@ -3,7 +3,7 @@ import { verifyRequest } from "@kiwi/core/auth.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { wellFormedPush } from "@kiwi/core/push.ts";
 import type { ChannelIdentityView } from "../desktop/src/bridge.ts";
-import { registerPush } from "../ios/engine/push.ts";
+import { registerPush, unregisterPush } from "../ios/engine/push.ts";
 
 const TOKEN = "ab".repeat(32);
 
@@ -51,5 +51,38 @@ describe("the phone registers its push token", () => {
       ["code-one", true, undefined],
       ["code-two", false, "the relay returned 403"],
     ]);
+  });
+});
+
+describe("the phone drops its push token on sign out", () => {
+  test("each channel it holds gets a DELETE /push signed by that channel's member key; a seat still asking is left alone", async () => {
+    const seats = [await seat("one", "room-one"), await seat("two", "room-two"), await seat("asking", "room-three", null)];
+    const seen: { url: string; method: string; body: unknown; auth: string }[] = [];
+    const f = (async (url: string | URL, init?: RequestInit) => {
+      seen.push({ url: String(url), method: String(init?.method), body: init?.body, auth: String((init?.headers as Record<string, string> | undefined)?.authorization) });
+      return new Response("{}", { status: String(url).includes("room-two") ? 403 : 200 });
+    }) as typeof fetch;
+
+    const got = await unregisterPush("https://relay.example", seats, f);
+
+    expect(got).toEqual([
+      { code: "code-one", label: "#one", ok: true },
+      { code: "code-two", label: "#two", ok: false, error: "the relay returned 403" },
+    ]);
+    expect(seen.map((s) => [s.url, s.method, s.body])).toEqual([
+      ["https://relay.example/v1/rooms/room-one/push", "DELETE", undefined],
+      ["https://relay.example/v1/rooms/room-two/push", "DELETE", undefined],
+    ]);
+    for (const [i, roomId] of ["room-one", "room-two"].entries()) {
+      expect(await verifyRequest(seen[i]!.auth.replace(/^Bearer /, ""), roomId, "DELETE", "/push")).toBe(seats[i]!.pk);
+    }
+  });
+
+  test("a relay it can't reach comes back per channel instead of throwing", async () => {
+    const f = (async () => {
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+
+    expect(await unregisterPush("https://relay.example", [await seat("one", "room-one")], f)).toEqual([{ code: "code-one", label: "#one", ok: false, error: "offline" }]);
   });
 });
