@@ -19,6 +19,10 @@ export function humanOf(state: Pick<ChannelState, "members">, name: string): str
   return (theirs.find((x) => rootOf(x.name, state.members) === x.name) ?? theirs[0])?.name ?? null;
 }
 
+export function seatsOf(state: Pick<ChannelState, "members">, person: string): string[] {
+  return [...state.members.values()].filter((x) => x.active && isPerson(x) && rootOf(x.name, state.members) === person).map((x) => x.name);
+}
+
 export function sponsorsAgent(members: ReadonlyMap<string, Pick<Member, "name" | "pk" | "kind" | "owner" | "active" | "sponsor">>, by: string, agent: string): boolean {
   const seat = members.get(by);
   const target = members.get(agent);

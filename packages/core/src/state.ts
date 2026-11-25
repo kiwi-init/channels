@@ -41,6 +41,7 @@ export {
   ON_HOLD,
   ownerOf,
   sameAuthor,
+  seatsOf,
   sponsorsAgent,
   trustedOf,
 } from "./state/people.ts";

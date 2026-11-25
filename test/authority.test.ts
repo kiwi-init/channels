@@ -9,7 +9,8 @@ import { wants } from "../src/agent.ts";
 import { charterLines, formatMessage, formatStatus, holdLine, who } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormed, type Event, type Handoff, type Kind, type Message } from "@kiwi/core/protocol.ts";
-import { decidersOf, fold, fullyTrusted, humanOf, ownerOf, trustedOf, type Roster } from "@kiwi/core/state.ts";
+import { answersAsk, decidersOf, fold, fullyTrusted, humanOf, ownerOf, seatsOf, trustedOf, type Roster } from "@kiwi/core/state.ts";
+import { answersAsHuman } from "@kiwi/core/permission.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -80,6 +81,15 @@ describe("a person's phone seat is that person, not a second human (T398)", () =
     expect(humanOf(s, "pal")).toBe("jow");
     expect(who("jow", s, "pal")).toBe("jow (your human, owner)");
     expect(who("jow-2", s, "pal")).toBe("jow-2 (your human, owner)");
+  });
+
+  test("the phone still answers as the owner: escalations reach both seats, and its answers count", async () => {
+    const s = await phone();
+    expect(seatsOf(s, "jow")).toEqual(["jow", "jow-2"]);
+    expect(answersAsHuman(s, "pal", "jow-2")).toBe(true);
+    expect(answersAsHuman(s, "pal", "jow")).toBe(true);
+    const step = { from: "pal", esc: true as const, to: seatsOf(s, "jow"), step: { title: "Plug in the phone" } } as unknown as Message;
+    expect(answersAsk(s.members, step, "jow-2")).toBe(true);
   });
 
   test("status lists the phone seat under its person, not as a fully trusted second human", async () => {
