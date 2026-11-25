@@ -33,7 +33,8 @@ const board = () =>
         const cfg = yield* keys.config;
         const aliases = Object.keys(cfg.channels).sort();
         if (!aliases.length) return yield* die("no channels yet (see: kiwi join)");
-        const me = opt.as ?? process.env.KIWI_AS ?? bindingFor(process.cwd())?.as ?? (yield* die("--global needs to know who you are: pass --as NAME, or run it from your bound folder"));
+        const me =
+          opt.as ?? process.env.KIWI_AS ?? bindingFor(process.cwd(), { claim: false })?.as ?? (yield* die("--global needs to know who you are: pass --as NAME, or run it from your bound folder"));
         yield* keepDaemon;
         for (const alias of aliases) {
           const c = cfg.channels[alias]!;

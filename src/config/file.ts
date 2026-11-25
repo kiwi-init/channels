@@ -50,6 +50,16 @@ export interface SeatTaken {
   at: number;
 }
 
+export interface SeatTook {
+  alias: string;
+  as: string;
+  from: string;
+  to: string;
+  dir: string;
+  quiet: number;
+  at: number;
+}
+
 export function allSeats(cfg: Pick<Config, "bindings">): SeatRecord[] {
   return Object.values(cfg.bindings ?? {}).flatMap((v) => (Array.isArray(v) ? v : [v]));
 }
@@ -77,6 +87,7 @@ export interface Config {
   asking?: Record<string, { as: string; at: number }>;
   bindings?: Record<string, SeatRecord | SeatRecord[]>;
   taken?: SeatTaken[];
+  took?: SeatTook[];
   claudeHooks?: "on" | "off";
   harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok" | "kimi" | "pi" | "mimo" | "zcode" | "agy", "on" | "off">>;
   zcodeHooksTurnedOn?: string[];
