@@ -304,4 +304,6 @@ export default {
   "settings.personalities.role.explorer": "探索者",
   "settings.personalities.role.releaser": "リリース担当",
   "settings.personalities.role.lead": "リード",
+  "settings.sections.features": "新機能",
+  "settings.sections.features.open": "新機能を見る",
 } satisfies Catalog

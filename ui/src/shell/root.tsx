@@ -36,6 +36,7 @@ const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const AppSide = later(() => import("~/shell/app-side").then((m) => m.AppSide))
 const Blueprint = later(() => import("~/kit/blueprint").then((m) => m.Blueprint))
 const LimitDialog = later(() => import("~/usage/limit").then((m) => m.LimitDialog))
+const WhatsNewWatch = later(() => import("~/whatsnew/watch").then((m) => m.WhatsNewWatch))
 
 const RailOnce = memo(Rail)
 const PaletteOnce = memo(Palette)
@@ -173,6 +174,9 @@ function Shown({ app, nav, go, broken }: RootProps) {
         <ImageViewsOnce />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
         <LimitWatch />
+        <Suspense fallback={null}>
+          <WhatsNewWatch />
+        </Suspense>
         {(blueprint || import.meta.env.VITE_KIWI_BLUEPRINT === "1") && (
           <Suspense fallback={null}>
             <Blueprint drawn={blueprint} />
