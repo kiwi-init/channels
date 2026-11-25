@@ -3,7 +3,7 @@
 // each act as themselves, a restart takes its seat back), and Claude Code's hooks doing the listening.
 import { spawnOwned } from "./owned.ts";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { daemonListening, daemonSock, stopDaemon } from "../src/daemon.ts";
 import { HANDLE, youAre, created, joinSeats } from "./join-seats-setup.ts";
@@ -101,7 +101,7 @@ describe("joining without --as", () => {
     writeFileSync(cfgPath, JSON.stringify(aged));
     const seat = (): { session?: string } => {
       const c = JSON.parse(readFileSync(cfgPath, "utf8")) as { bindings?: Record<string, unknown> };
-      const v = c.bindings?.[h];
+      const v = c.bindings?.[realpathSync(h)];
       const seats = (Array.isArray(v) ? v : [v!]) as { session?: string }[];
       return seats[0]!;
     };
@@ -162,7 +162,7 @@ describe("joining without --as", () => {
     writeFileSync(cfgPath, JSON.stringify(cfg));
     const seat = (): { session?: string } => {
       const c = JSON.parse(readFileSync(cfgPath, "utf8")) as { bindings?: Record<string, unknown> };
-      const v = c.bindings?.[h];
+      const v = c.bindings?.[realpathSync(h)];
       const seats = (Array.isArray(v) ? v : [v!]) as { session?: string; harness?: string }[];
       return seats.find((s) => s.harness === "codex")!;
     };
@@ -196,7 +196,7 @@ describe("joining without --as", () => {
     writeFileSync(cfgPath, JSON.stringify(cfg));
     const seat = (): { session?: string } => {
       const c = JSON.parse(readFileSync(cfgPath, "utf8")) as { bindings?: Record<string, unknown> };
-      const v = c.bindings?.[h];
+      const v = c.bindings?.[realpathSync(h)];
       const seats = (Array.isArray(v) ? v : [v!]) as { session?: string }[];
       return seats[0]!;
     };
