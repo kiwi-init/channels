@@ -75,10 +75,10 @@ log.push({ ...step, seq: log.length + 1, rts: stepAt, sigOk: await verify(step) 
 
 const report = [
   "**The phone release is one review away.**",
-  "- **Now:** @dev is on T12, the composer that kept your text after Send. The fix is in, tests are running.",
-  "- **Done:** T9, Needs you cards on the phone.",
-  "- **Needs you:** T14, role faces, waits for your review. The 1.4 build needs your signature.",
-  "- **Next:** T15, search across channels.",
+  "- **Now:** @dev fixes the composer, T12. Tests are running.",
+  "- **Done:** Needs you cards, T9.",
+  "- **Needs you:** a review of T14, and your signature on the 1.4 build.",
+  "- **Next:** search across channels, T15.",
 ].join("\n");
 const asked = log.length + 1;
 const stand: [string, string, { to: string[]; dm: true; re?: number[] }][] = [

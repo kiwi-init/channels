@@ -206,10 +206,16 @@ struct StandView: Codable, Sendable, Hashable {
         let at: Double
     }
 
+    struct Line: Codable, Sendable, Hashable {
+        let text: String
+        let task: Int?
+        let seq: Int?
+    }
+
     struct Report: Codable, Sendable, Hashable {
         let seq: Int
         let at: Double
-        let shown: String
+        let lines: [Line]
     }
 
     let label: String

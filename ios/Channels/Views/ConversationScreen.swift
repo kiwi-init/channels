@@ -42,8 +42,10 @@ struct ConversationScreen: View {
                         }
                     }
                     .animation(.snappy(duration: 0.25), value: follow.atBottom)
-                    .scaleEffect(1 - 0.32 * depth)
-                    .opacity(1 - depth)
+                    .scrollDisabled(live != nil || zoomed)
+                    .clipShape(RoundedRectangle(cornerRadius: 44 * depth, style: .continuous))
+                    .scaleEffect(1 - Zoom.travel * depth)
+                    .opacity(1 - Zoom.fade(depth, from: 0.55, to: 1))
                     .allowsHitTesting(!zoomed)
                     .accessibilityHidden(zoomed)
                     .accessibilityAction(named: Text("Where things stand")) { zoom(true) }
@@ -52,17 +54,19 @@ struct ConversationScreen: View {
                         StandPage(room: room, stand: stand, waiting: needs(room, at: wide).count + asks(room, at: wide).count + reviews(room, at: wide).count) { target in
                             land(target)
                         }
-                        .scaleEffect(1.08 - 0.08 * depth)
-                        .opacity(depth)
+                        .opacity(Zoom.fade(depth, from: 0.3, to: 0.9))
+                        .offset(y: 28 * (1 - depth))
                         .allowsHitTesting(zoomed)
                         .accessibilityAction(.escape) { zoom(false) }
                     }
                 }
                 .gesture(
                     Pinch { scale in
-                        live = zoomed ? 1 - min(1, max(0, (scale - 1) / 0.6)) : min(1, max(0, (1 - scale) / 0.45))
-                    } ended: { scale in
-                        let open = zoomed ? scale < 1.15 : scale < 0.82
+                        let size = zoomed ? (1 - Zoom.travel) * scale : scale
+                        live = min(1, max(0, (1 - size) / Zoom.travel))
+                    } ended: { scale, velocity in
+                        let reached = live ?? (zoomed ? 1 : 0)
+                        let open = velocity < -0.6 ? true : velocity > 0.6 ? false : reached > Zoom.snap
                         if open == zoomed {
                             withAnimation(.smooth(duration: 0.3)) { live = nil }
                         } else {
@@ -70,10 +74,11 @@ struct ConversationScreen: View {
                         }
                     }
                 )
-                .sensoryFeedback(.impact(weight: .medium), trigger: zoomed)
+                .sensoryFeedback(.impact(weight: .light), trigger: depth > Zoom.snap)
                 .bar(.bottom) {
                     if !zoomed && (talks(room) || answering != nil || sendingBack != nil) {
                         Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing)
+                            .opacity(1 - depth)
                     }
                 }
                 .navigationTitle(room.spotTitle(spot.place))
@@ -137,7 +142,7 @@ struct ConversationScreen: View {
 
     private func zoom(_ out: Bool) {
         guard out != zoomed else { return }
-        withAnimation(.smooth(duration: 0.32)) {
+        withAnimation(.spring(duration: 0.38, bounce: 0.12)) {
             zoomed = out
             live = nil
         }
@@ -201,6 +206,15 @@ struct ConversationScreen: View {
     private func seen() {
         guard visible, scene == .active, !lock.hides else { return }
         model.markRead(spot)
+    }
+}
+
+enum Zoom {
+    static let travel: CGFloat = 0.55
+    static let snap: CGFloat = 0.45
+
+    static func fade(_ depth: CGFloat, from: CGFloat, to: CGFloat) -> CGFloat {
+        min(1, max(0, (depth - from) / (to - from)))
     }
 }
 

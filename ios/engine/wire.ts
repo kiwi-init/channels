@@ -200,11 +200,17 @@ export interface PlaceView {
 
 export type IconView = { kind: "robot"; robot: string } | { kind: "emoji"; emoji: string } | { kind: "image"; mime: string; data: string };
 
+export interface StandLineView {
+  text: string;
+  task: number | null;
+  seq: number | null;
+}
+
 export interface StandView {
   label: string;
   lead: string | null;
   asked: { seq: number; at: number } | null;
-  report: { seq: number; at: number; shown: string } | null;
+  report: { seq: number; at: number; lines: StandLineView[] } | null;
   now: number[];
   next: number[];
   done: number[];

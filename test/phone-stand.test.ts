@@ -4,7 +4,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 
-import { askedFor, standAsk, standBoard } from "../ios/engine/stand.ts";
+import { askedFor, reportLines, standAsk, standBoard } from "../ios/engine/stand.ts";
 import { roomView } from "../ios/engine/view.ts";
 import type { RoomView, TaskView } from "../ios/engine/wire.ts";
 
@@ -85,7 +85,10 @@ describe("pinching a chat asks the lead where things stand (T830)", () => {
     expect(stand.label).toBe("#general");
     expect(stand.lead).toBe("lead");
     expect(stand.report?.seq).toBe(6);
-    expect(stand.report?.shown).toContain("Composer fix is halfway.");
+    expect(stand.report?.lines).toEqual([
+      { text: "Composer fix is halfway.", task: null, seq: null },
+      { text: "Now: dev on T1", task: 1, seq: null },
+    ]);
     expect(stand.asked?.seq).toBe(8);
   });
 
@@ -109,6 +112,22 @@ describe("pinching a chat asks the lead where things stand (T830)", () => {
     expect(room.messages.map((m) => m.seq)).toEqual([4, 5, 6, 7, 8]);
     expect(room.stand.lead).toBeNull();
     expect(room.stand.report).toBeNull();
+  });
+
+  test("a report reads as plain lines: no markdown, code left out, each line pointing at its task or message", () => {
+    const body = "## **Release is close.**\n\n- **Now:** [T12](https://x) is green, see #40\n```\nbun test\n```\n> **Next:** `T15`";
+    expect(
+      reportLines(body, (t) =>
+        t
+          .replace(/^\s*(#{1,6}\s+|>\s*|[-*+]\s+)/, "")
+          .replace(/\*\*|`|\[|\]\([^)]*\)/g, "")
+          .trim(),
+      ),
+    ).toEqual([
+      { text: "Release is close.", task: null, seq: null },
+      { text: "Now: T12 is green, see #40", task: 12, seq: 40 },
+      { text: "Next: T15", task: 15, seq: null },
+    ]);
   });
 
   test("the board picks a chat's tasks: all in #general, one in its thread, a person's in a direct chat", () => {

@@ -1,6 +1,6 @@
 import type { Message } from "@kiwi/core/protocol.ts";
 
-import type { StandView, TaskView } from "./wire.ts";
+import type { StandLineView, StandView, TaskView } from "./wire.ts";
 
 export const STAND_AGAIN_MS = 2 * 60_000;
 const ASKED = /^\*\*Where things stand in (.+?)\?\*\*/;
@@ -60,12 +60,25 @@ export function standBoard(tasks: readonly TaskView[], scope: StandScope): Pick<
   return { now: ids(["doing", "review"]), next: ids(["todo"]), done: ids(["done"]) };
 }
 
+export function reportLines(body: string, plain: (text: string) => string): StandLineView[] {
+  return body
+    .replace(/```[\s\S]*?(```|$)/g, "\n")
+    .split("\n")
+    .flatMap((line) => {
+      const text = plain(line).replace(/(^|[\s(])@(?=\S)/g, "$1");
+      if (!text) return [];
+      const task = /\bT(\d+)\b/.exec(line)?.[1];
+      const seq = /(?:^|[\s(])#(\d+)\b/.exec(line)?.[1];
+      return [{ text, task: task ? Number(task) : null, seq: seq ? Number(seq) : null }];
+    });
+}
+
 export function standView(
   label: string,
   lead: string | null,
   stands: Stands,
   messages: readonly Message[],
-  said: (text: string) => string,
+  plain: (text: string) => string,
   board: Pick<StandView, "now" | "next" | "done">,
 ): StandView {
   const ours = new Set([...stands.asks].filter(([, l]) => l === label).map(([seq]) => seq));
@@ -77,7 +90,7 @@ export function standView(
     label,
     lead,
     asked: waiting ? { seq: waiting.seq, at: waiting.rts ?? waiting.ts } : null,
-    report: answer ? { seq: answer.seq, at: answer.rts ?? answer.ts, shown: said(answer.body) } : null,
+    report: answer ? { seq: answer.seq, at: answer.rts ?? answer.ts, lines: reportLines(answer.body, plain) } : null,
     ...board,
   };
 }

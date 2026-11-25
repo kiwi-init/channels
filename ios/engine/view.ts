@@ -330,6 +330,6 @@ export function roomView(r: RoomInput): RoomView {
     latestIn,
     place: here,
     places,
-    stand: standView(standLabel(state, me, here), lead, stands, r.messages, said, standBoard(tasks, standScope(state, me, here))),
+    stand: standView(standLabel(state, me, here), lead, stands, r.messages, plain, standBoard(tasks, standScope(state, me, here))),
   };
 }

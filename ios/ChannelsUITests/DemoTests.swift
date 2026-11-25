@@ -72,20 +72,19 @@ final class DemoTests: XCTestCase {
         XCTAssertTrue(feed.waitForExistence(timeout: 5), "the chat")
         add(shot(app, "stand chat"))
 
-        feed.pinch(withScale: 0.4, velocity: -1)
+        feed.pinch(withScale: 0.35, velocity: -0.6)
         XCTAssertTrue(app.staticTexts["The phone release is one review away."].waitForExistence(timeout: 5), "the lead's last report shows at once")
         XCTAssertTrue(app.staticTexts["Where things stand"].exists, "the page says what it is")
-        XCTAssertFalse(app.staticTexts["Where things stand in #general?"].exists, "the ask isn't a bubble")
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '**'")).firstMatch.exists, "no raw markdown")
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '@'")).firstMatch.exists, "names, not handles")
         add(shot(app, "stand page"))
 
-        app.scrollViews.firstMatch.swipeUp()
-        add(shot(app, "stand needs you"))
-
-        app.scrollViews.firstMatch.pinch(withScale: 2.5, velocity: 1)
+        app.scrollViews.firstMatch.pinch(withScale: 3, velocity: 1)
         let composer = NSPredicate(format: "placeholderValue == 'Message'")
         let field = app.textViews.matching(composer).firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5) || app.textFields.matching(composer).firstMatch.exists, "pinching out goes back to the chat")
         XCTAssertFalse(app.staticTexts["The phone release is one review away."].exists, "the page is gone")
+        add(shot(app, "stand back"))
     }
 
     @MainActor

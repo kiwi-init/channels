@@ -10,23 +10,6 @@ struct StandLine: Identifiable {
     let id: Int
     let text: String
     let target: StandTarget
-
-    static func split(_ shown: String) -> [StandLine] {
-        shown.split(separator: "\n", omittingEmptySubsequences: true)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-            .enumerated()
-            .map { index, line in
-                let text = line.replacing(#/^[-*+]\s+/#, with: "")
-                return StandLine(id: index, text: text, target: target(of: text))
-            }
-    }
-
-    static func target(of text: String) -> StandTarget {
-        if let task = text.firstMatch(of: #/\bT(\d+)\b/#).flatMap({ Int($0.1) }) { return .task(task) }
-        if let seq = text.firstMatch(of: #/(?:^|\s|\()#(\d+)\b/#).flatMap({ Int($0.1) }) { return .chat(seq) }
-        return .chat(nil)
-    }
 }
 
 struct StandPage: View {
@@ -40,19 +23,24 @@ struct StandPage: View {
         return Date.now.timeIntervalSince1970 * 1000 - asked.at < 10 * 60_000
     }
 
-    private var head: StandLine? {
-        stand.report.flatMap { StandLine.split($0.shown).first }
+    private var reported: [StandLine] {
+        (stand.report?.lines ?? []).enumerated().map { index, line in
+            StandLine(id: index, text: line.text, target: line.task.map { .task($0) } ?? .chat(line.seq))
+        }
     }
 
+    private var head: StandLine? { reported.first }
+
     private var lines: [StandLine] {
-        if let report = stand.report { return Array(StandLine.split(report.shown).dropFirst()) }
+        if stand.report != nil { return Array(reported.dropFirst()) }
         let rows: [(String, [Int])] = [(spoken("Now"), stand.now), (spoken("Next"), stand.next), (spoken("Done"), stand.done)]
-        var out = rows.compactMap { label, ids -> String? in
-            let named = ids.compactMap { id in room.tasks.first { $0.id == id } }.map { "\($0.title) (\(taskLabel($0.id)))" }
-            return named.isEmpty ? nil : "**\(label):** \(named.joined(separator: ", "))"
+        var out: [(String, StandTarget)] = rows.compactMap { label, ids in
+            let tasks = ids.compactMap { id in room.tasks.first { $0.id == id } }
+            guard let first = tasks.first else { return nil }
+            return ("\(label): \(tasks.map { "\($0.title) \(taskLabel($0.id))" }.joined(separator: ", "))", .task(first.id))
         }
-        if waiting > 0 { out.insert("**\(spoken("Needs you")):** \(spoken("\(waiting) waiting on you"))", at: min(1, out.count)) }
-        return out.enumerated().map { StandLine(id: $0.offset, text: $0.element, target: StandLine.target(of: $0.element)) }
+        if waiting > 0 { out.insert(("\(spoken("Needs you")): \(spoken("\(waiting) waiting on you"))", .chat(nil)), at: min(1, out.count)) }
+        return out.enumerated().map { StandLine(id: $0.offset, text: $0.element.0, target: $0.element.1) }
     }
 
     var body: some View {
@@ -61,44 +49,48 @@ struct StandPage: View {
                 Text("Where things stand")
                     .type(.ui, .medium)
                     .foregroundStyle(Tone.ink3)
-                    .padding(.bottom, 14)
+                    .padding(.bottom, 12)
                 if let head {
                     Button {
                         go(head.target)
                     } label: {
-                        Text(plain(head.text))
+                        Text(quiet(head.text, label: false))
                             .font(.system(.title2, weight: .semibold))
                             .foregroundStyle(Tone.ink)
                             .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 } else if catchingUp {
                     Text("The lead is catching up…")
                         .font(.system(.title2, weight: .semibold))
                         .foregroundStyle(Tone.ink3)
+                } else if lines.isEmpty {
+                    Text("Nothing going on here yet")
+                        .font(.system(.title2, weight: .semibold))
+                        .foregroundStyle(Tone.ink3)
                 }
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 16) {
                     ForEach(lines) { line in
                         Button {
                             go(line.target)
                         } label: {
-                            Prose(text: line.text, ink: Tone.ink2)
+                            Text(quiet(line.text, label: true))
+                                .type(.body)
+                                .foregroundStyle(Tone.ink2)
+                                .multilineTextAlignment(.leading)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.top, head == nil && !catchingUp ? 0 : 28)
-                if lines.isEmpty && head == nil && !catchingUp {
-                    Text("Nothing going on here yet")
-                        .font(.system(.title2, weight: .semibold))
-                        .foregroundStyle(Tone.ink3)
-                }
-                footer.padding(.top, 36)
+                .padding(.top, 24)
+                footer.padding(.top, 32)
             }
             .padding(.horizontal, 28)
-            .padding(.top, 64)
+            .padding(.top, 56)
             .padding(.bottom, 40)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -119,20 +111,24 @@ struct StandPage: View {
         .foregroundStyle(Tone.ink3)
     }
 
-    private func plain(_ markdown: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
-        do {
-            return try AttributedString(markdown: markdown, options: options)
-        } catch {
-            Trouble.note("markdown", error)
-            return AttributedString(markdown)
+    private func quiet(_ text: String, label: Bool) -> AttributedString {
+        var out = AttributedString(text)
+        if label, let colon = text.firstIndex(of: ":"), text.distance(from: text.startIndex, to: colon) <= 16 {
+            let end = out.index(out.startIndex, offsetByCharacters: text.distance(from: text.startIndex, to: colon) + 1)
+            out[out.startIndex..<end].foregroundColor = Tone.ink
         }
+        for match in text.matches(of: #/\bT\d+\b/#) {
+            let start = out.index(out.startIndex, offsetByCharacters: text.distance(from: text.startIndex, to: match.range.lowerBound))
+            let end = out.index(start, offsetByCharacters: text.distance(from: match.range.lowerBound, to: match.range.upperBound))
+            out[start..<end].underlineStyle = Text.LineStyle(pattern: .solid, color: Tone.ink3)
+        }
+        return out
     }
 }
 
 struct Pinch: UIGestureRecognizerRepresentable {
     let changed: (CGFloat) -> Void
-    let ended: (CGFloat) -> Void
+    let ended: (CGFloat, CGFloat) -> Void
 
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Alongside {
         Alongside()
@@ -147,7 +143,7 @@ struct Pinch: UIGestureRecognizerRepresentable {
     func handleUIGestureRecognizerAction(_ pinch: UIPinchGestureRecognizer, context: Context) {
         switch pinch.state {
         case .began, .changed: changed(pinch.scale)
-        case .ended, .cancelled, .failed: ended(pinch.scale)
+        case .ended, .cancelled, .failed: ended(pinch.scale, pinch.velocity)
         default: break
         }
     }
