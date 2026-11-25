@@ -220,4 +220,5 @@
     <string name="open_conversation">打开对话</string>
     <string name="only_owner_lets_in">只有频道所有者能允许其加入。</string>
     <string name="join_code">验证码</string>
+    <string name="lock_turned_off">关闭</string>
 </resources>

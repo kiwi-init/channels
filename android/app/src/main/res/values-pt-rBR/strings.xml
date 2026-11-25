@@ -234,4 +234,5 @@
     <string name="open_conversation">Abrir a conversa</string>
     <string name="only_owner_lets_in">Só o dono do canal pode deixar entrar.</string>
     <string name="join_code">Código</string>
+    <string name="lock_turned_off">Desativado</string>
 </resources>

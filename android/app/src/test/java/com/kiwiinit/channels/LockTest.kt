@@ -9,6 +9,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -24,6 +27,7 @@ import com.kiwiinit.channels.model.Lock
 import com.kiwiinit.channels.model.Words
 import com.kiwiinit.channels.theme.ChannelsTheme
 import com.kiwiinit.channels.ui.Guarded
+import com.kiwiinit.channels.ui.SettingsScreen
 import java.time.Duration
 import org.junit.Assert.assertFalse
 import org.junit.Rule
@@ -55,6 +59,30 @@ class LockTest {
         ShadowSystemClock.advanceBy(Duration.ofSeconds(45))
         lock.back(prompt)
         assertFalse(lock.locked)
+    }
+
+    @Test
+    fun aLockTurnedOffStaysOpen() {
+        val app = RuntimeEnvironment.getApplication()
+        val activity = Robolectric.buildActivity(FragmentActivity::class.java).setup().get()
+        val lock = Lock(app, linked = true, guarding = { true }) { Words(app.resources) }
+        lock.turn(false)
+        assertFalse(lock.locked)
+        val prompt = lock.prompt(activity)
+        lock.left()
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(45))
+        lock.back(prompt)
+        assertFalse(lock.locked)
+        assertFalse(Lock(app, linked = true, guarding = { true }) { Words(app.resources) }.locked)
+    }
+
+    @Test
+    fun theYouTabTurnsTheLockOff() {
+        val model = sample(RuntimeEnvironment.getApplication())
+        compose.setContent { ChannelsTheme { SettingsScreen(model) } }
+        compose.onNode(isToggleable()).assertIsOn().performClick()
+        compose.onNode(isToggleable()).assertIsOff()
+        assertFalse(model.lock.on)
     }
 
     @Test

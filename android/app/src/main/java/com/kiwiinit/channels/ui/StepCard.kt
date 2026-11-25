@@ -1,5 +1,6 @@
 package com.kiwiinit.channels.ui
 
+import android.content.ClipData
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -69,6 +73,7 @@ fun StepCard(model: AppModel, room: RoomView, message: MessageView, step: StepVi
     val tone = Tone.current
     val view = LocalView.current
     val links = LocalUriHandler.current
+    val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     var sending by remember(message.seq) { mutableStateOf<StepOutcome?>(null) }
     var failed by remember(message.seq) { mutableStateOf(false) }
@@ -111,14 +116,23 @@ fun StepCard(model: AppModel, room: RoomView, message: MessageView, step: StepVi
         step.todo.forEachIndexed { i, line ->
             Text("${i + 1}. $line", style = MaterialTheme.typography.bodyMedium, color = tone.onThem)
         }
+        val copy = stringResource(R.string.copy)
         step.run.forEach { command ->
-            Text(
-                command,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = tone.onThem,
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(tone.wash2).padding(horizontal = 8.dp, vertical = 6.dp),
-            )
+            Row(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(tone.wash2)
+                    .clickable(onClickLabel = copy) {
+                        scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(copy, command))) }
+                        view.buzz(Buzz.Done)
+                    }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(command, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = tone.onThem, modifier = Modifier.weight(1f))
+                Icon(Icons.Filled.ContentCopy, contentDescription = null, tint = tone.ink3, modifier = Modifier.size(14.dp))
+            }
         }
         step.expect?.let { expected ->
             Text(stringResource(R.string.step_expected), style = MaterialTheme.typography.labelMedium, color = tone.ink3)
