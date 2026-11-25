@@ -120,7 +120,7 @@ test("a verifier that throws makes join say verification could not run, before a
 
 test("an invite token with one character changed in the copy joins with the token the owner signed, and says so", async () => {
   const { code, ownerCh, token } = await ownedWithInvite();
-  const at = token.length - 30;
+  const at = 0;
   const { exit, out, err } = await run(code, flip(token, at), "4s");
   expect(exit).toBe(3);
   expect(err).toContain(
