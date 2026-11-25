@@ -89,6 +89,8 @@ struct StandPage: View {
                 .padding(.top, 24)
                 footer.padding(.top, 32)
             }
+            .animation(.smooth(duration: 0.35), value: stand.report?.seq)
+            .animation(.smooth(duration: 0.35), value: catchingUp)
             .padding(.horizontal, 28)
             .padding(.top, 56)
             .padding(.bottom, 40)
@@ -124,6 +126,99 @@ struct StandPage: View {
         }
         return out
     }
+}
+
+@Observable @MainActor
+final class ZoomState {
+    static let travel: CGFloat = 0.55
+    static let snap: CGFloat = 0.45
+
+    private(set) var live: CGFloat?
+    private(set) var zoomed = false
+    private(set) var pinching = false
+    private(set) var ticks = 0
+    private var ticked = false
+
+    var depth: CGFloat { live ?? (zoomed ? 1 : 0) }
+    var active: Bool { pinching || zoomed }
+
+    func move(_ scale: CGFloat) {
+        if !pinching {
+            pinching = true
+            ticked = false
+        }
+        let size = zoomed ? (1 - Self.travel) * scale : scale
+        let depth = min(1, max(0, (1 - size) / Self.travel))
+        let past = zoomed ? depth < Self.snap : depth > Self.snap
+        if past && !ticked {
+            ticked = true
+            ticks += 1
+        }
+        live = depth
+    }
+
+    func release(_ velocity: CGFloat, still: Bool) {
+        let reached = depth
+        let open = velocity < -0.8 ? true : velocity > 0.8 ? false : reached > Self.snap
+        let rate = -velocity * (zoomed ? 1 - Self.travel : 1) / Self.travel
+        let gap = (open ? 1 : 0) - reached
+        if open != zoomed && !ticked { ticks += 1 }
+        let spring = Animation.interpolatingSpring(Spring(duration: 0.42, bounce: 0.12), initialVelocity: abs(gap) > 0.01 ? max(-8, min(8, rate / gap)) : 0)
+        withAnimation(still ? .easeInOut(duration: 0.25) : spring) {
+            zoomed = open
+            live = nil
+            pinching = false
+        }
+    }
+
+    func set(_ open: Bool, still: Bool) {
+        guard open != zoomed else { return }
+        ticks += 1
+        withAnimation(still ? .easeInOut(duration: 0.25) : .spring(duration: 0.42, bounce: 0.12)) {
+            zoomed = open
+            live = nil
+            pinching = false
+        }
+    }
+}
+
+struct ZoomOut: ViewModifier {
+    let zoom: ZoomState
+    @Environment(\.accessibilityReduceMotion) private var still
+
+    func body(content: Content) -> some View {
+        let depth = zoom.depth
+        content
+            .overlay { Tone.canvas.opacity(fade(depth, from: 0.45, to: 0.95)).allowsHitTesting(false) }
+            .clipShape(RoundedRectangle(cornerRadius: still ? 0 : 44 * depth, style: .continuous))
+            .scaleEffect(still ? 1 : 1 - ZoomState.travel * depth)
+            .scrollDisabled(zoom.active)
+            .sensoryFeedback(.impact(weight: .light), trigger: zoom.ticks)
+    }
+}
+
+struct ZoomIn: ViewModifier {
+    let zoom: ZoomState
+    @Environment(\.accessibilityReduceMotion) private var still
+
+    func body(content: Content) -> some View {
+        let depth = zoom.depth
+        content
+            .opacity(fade(depth, from: 0.35, to: 0.9))
+            .offset(y: still ? 0 : 24 * (1 - depth))
+    }
+}
+
+struct ZoomAway: ViewModifier {
+    let zoom: ZoomState
+
+    func body(content: Content) -> some View {
+        content.opacity(1 - fade(zoom.depth, from: 0, to: 0.4))
+    }
+}
+
+private func fade(_ depth: CGFloat, from: CGFloat, to: CGFloat) -> CGFloat {
+    min(1, max(0, (depth - from) / (to - from)))
 }
 
 struct Pinch: UIGestureRecognizerRepresentable {

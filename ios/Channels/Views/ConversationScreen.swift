@@ -11,8 +11,8 @@ struct ConversationScreen: View {
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
     @State private var visible = false
-    @State private var zoomed = false
-    @State private var live: CGFloat?
+    @State private var zoom = ZoomState()
+    @Environment(\.accessibilityReduceMotion) private var still
     @FocusState private var typing: Bool
     @Environment(\.scenePhase) private var scene
 
@@ -24,6 +24,9 @@ struct ConversationScreen: View {
         Group {
             if let room = model.shown(spot) {
                 ZStack {
+                    if zoom.active {
+                        Tone.raised.ignoresSafeArea()
+                    }
                     Conversation(
                         room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
                         reviews: reviews(room), needs: needs(room), worker: worker(room)
@@ -42,43 +45,34 @@ struct ConversationScreen: View {
                         }
                     }
                     .animation(.snappy(duration: 0.25), value: follow.atBottom)
-                    .scrollDisabled(live != nil || zoomed)
-                    .clipShape(RoundedRectangle(cornerRadius: 44 * depth, style: .continuous))
-                    .scaleEffect(1 - Zoom.travel * depth)
-                    .opacity(1 - Zoom.fade(depth, from: 0.55, to: 1))
-                    .allowsHitTesting(!zoomed)
-                    .accessibilityHidden(zoomed)
-                    .accessibilityAction(named: Text("Where things stand")) { zoom(true) }
-                    if depth > 0, let stand = room.stand {
+                    .modifier(ZoomOut(zoom: zoom))
+                    .allowsHitTesting(!zoom.zoomed)
+                    .accessibilityHidden(zoom.zoomed)
+                    .accessibilityAction(named: Text("Where things stand")) { zoom.set(true, still: still) }
+                    if zoom.active, let stand = room.stand {
                         let wide = standSpot(room)
                         StandPage(room: room, stand: stand, waiting: needs(room, at: wide).count + asks(room, at: wide).count + reviews(room, at: wide).count) { target in
                             land(target)
                         }
-                        .opacity(Zoom.fade(depth, from: 0.3, to: 0.9))
-                        .offset(y: 28 * (1 - depth))
-                        .allowsHitTesting(zoomed)
-                        .accessibilityAction(.escape) { zoom(false) }
+                        .modifier(ZoomIn(zoom: zoom))
+                        .allowsHitTesting(zoom.zoomed)
+                        .accessibilityAction(.escape) { zoom.set(false, still: still) }
                     }
                 }
                 .gesture(
                     Pinch { scale in
-                        let size = zoomed ? (1 - Zoom.travel) * scale : scale
-                        live = min(1, max(0, (1 - size) / Zoom.travel))
-                    } ended: { scale, velocity in
-                        let reached = live ?? (zoomed ? 1 : 0)
-                        let open = velocity < -0.6 ? true : velocity > 0.6 ? false : reached > Zoom.snap
-                        if open == zoomed {
-                            withAnimation(.smooth(duration: 0.3)) { live = nil }
-                        } else {
-                            zoom(open)
-                        }
+                        zoom.move(scale)
+                    } ended: { _, velocity in
+                        zoom.release(velocity, still: still)
                     }
                 )
-                .sensoryFeedback(.impact(weight: .light), trigger: depth > Zoom.snap)
+                .onChange(of: zoom.zoomed) { _, open in
+                    if open { report() }
+                }
                 .bar(.bottom) {
-                    if !zoomed && (talks(room) || answering != nil || sendingBack != nil) {
+                    if !zoom.zoomed && (talks(room) || answering != nil || sendingBack != nil) {
                         Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing)
-                            .opacity(1 - depth)
+                            .modifier(ZoomAway(zoom: zoom))
                     }
                 }
                 .navigationTitle(room.spotTitle(spot.place))
@@ -138,15 +132,7 @@ struct ConversationScreen: View {
         spot.place == room.sideKey ? Spot(code: spot.code) : spot
     }
 
-    private var depth: CGFloat { live ?? (zoomed ? 1 : 0) }
-
-    private func zoom(_ out: Bool) {
-        guard out != zoomed else { return }
-        withAnimation(.spring(duration: 0.38, bounce: 0.12)) {
-            zoomed = out
-            live = nil
-        }
-        guard out else { return }
+    private func report() {
         typing = false
         let place = spot.place == model.rooms[spot.code]?.sideKey ? "main" : spot.place
         Task {
@@ -159,7 +145,7 @@ struct ConversationScreen: View {
     }
 
     private func land(_ target: StandTarget) {
-        zoom(false)
+        zoom.set(false, still: still)
         switch target {
         case .chat(let seq):
             guard let seq else { return }
@@ -206,15 +192,6 @@ struct ConversationScreen: View {
     private func seen() {
         guard visible, scene == .active, !lock.hides else { return }
         model.markRead(spot)
-    }
-}
-
-enum Zoom {
-    static let travel: CGFloat = 0.55
-    static let snap: CGFloat = 0.45
-
-    static func fade(_ depth: CGFloat, from: CGFloat, to: CGFloat) -> CGFloat {
-        min(1, max(0, (depth - from) / (to - from)))
     }
 }
 
