@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test"
 
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import { fold, folded, type ChannelState, type Roster } from "@kiwi/core/state.ts"
+import { same } from "@kiwi/core/state/tracked.ts"
+import { rendered } from "~/live/rendered"
+import { shownSame, wordsRaw, wrote } from "~/words"
 import { messagesOf, rowCache, type Pictures, type RowCache } from "~/live/map"
 import { rng, roster as streamRoster, SEC, stream } from "../../../test/fold-stream.ts"
 
@@ -35,7 +38,7 @@ describe("message rows are kept between new messages (T17818)", () => {
     const before = shown(f.state, log, cache)
     const more = [...log, wire({})]
     const after = shown(f.next([more.at(-1)!], 0)!, more, cache)
-    expect(after).toEqual(oracle(more))
+    expect(rendered(after)).toEqual(rendered(oracle(more)))
     for (const [i, row] of before.entries()) expect(after[i]).toBe(row)
   })
 
@@ -45,7 +48,7 @@ describe("message rows are kept between new messages (T17818)", () => {
     const before = shown(f.state, log, cache)
     const more = [...log, wire({ kind: "event", body: "", ev: { op: "react", seq: 2, emoji: "👍" } })]
     const after = shown(f.next([more.at(-1)!], 0)!, more, cache)
-    expect(after).toEqual(oracle(more))
+    expect(rendered(after)).toEqual(rendered(oracle(more)))
     expect(after.find((m) => m.seq === 2)?.reactions).toEqual([{ emoji: "👍", by: ["win"] }])
     for (const row of before) if (row.seq !== 2) expect(after.find((m) => m.seq === row.seq)).toBe(row)
     expect(after.find((m) => m.seq === 2)).not.toBe(before.find((m) => m.seq === 2))
@@ -56,7 +59,7 @@ describe("message rows are kept between new messages (T17818)", () => {
     const state = fold(log, roster, 0)
     shown(state, log, cache)
     const after = shown(state, log, cache, "jow", loaded)
-    expect(after).toEqual(oracle(log, "jow", loaded))
+    expect(rendered(after)).toEqual(rendered(oracle(log, "jow", loaded)))
     expect(after.find((m) => m.seq === 4)?.images?.[0]).toMatchObject({ url: "blob:shown" })
   })
 
@@ -64,9 +67,9 @@ describe("message rows are kept between new messages (T17818)", () => {
     const { log, cache } = fresh()
     const state = fold(log, roster, 0)
     shown(state, log, cache)
-    expect(shown(state, log, cache, "ann")).toEqual(oracle(log, "ann"))
+    expect(rendered(shown(state, log, cache, "ann"))).toEqual(rendered(oracle(log, "ann")))
     const renamed = roster.map((m) => (m.name === "ann" ? { ...m, display: "Ann" } : m))
-    expect(shown(fold(log, renamed, 0), log, cache)).toEqual(oracle(log, "jow", waiting, renamed))
+    expect(rendered(shown(fold(log, renamed, 0), log, cache))).toEqual(rendered(oracle(log, "jow", waiting, renamed)))
   })
 
   test("a link to a pull request follows the pull request's state", () => {
@@ -81,17 +84,17 @@ describe("message rows are kept between new messages (T17818)", () => {
       })
     const open = [...log, github("open")]
     const merged = [...open, github("merged")]
-    expect(shown(fold(open, roster, 0), open, cache)).toEqual(oracle(open))
-    expect(shown(fold(merged, roster, 0), merged, cache)).toEqual(oracle(merged))
+    expect(rendered(shown(fold(open, roster, 0), open, cache))).toEqual(rendered(oracle(open)))
+    expect(rendered(shown(fold(merged, roster, 0), merged, cache))).toEqual(rendered(oracle(merged)))
   })
 
   test("two channels with the same seqs keep their own rows", () => {
     const { log, cache } = fresh()
     const other = log.map((m) => ({ ...m, body: `other ${m.seq}` }))
     const theirs = rowCache()
-    expect(shown(fold(log, roster, 0), log, cache)).toEqual(oracle(log))
-    expect(shown(fold(other, roster, 0), other, theirs)).toEqual(oracle(other))
-    expect(shown(fold(log, roster, 0), log, cache)).toEqual(oracle(log))
+    expect(rendered(shown(fold(log, roster, 0), log, cache))).toEqual(rendered(oracle(log)))
+    expect(rendered(shown(fold(other, roster, 0), other, theirs))).toEqual(rendered(oracle(other)))
+    expect(rendered(shown(fold(log, roster, 0), log, cache))).toEqual(rendered(oracle(log)))
   })
 
   test("rows of messages no longer held leave the cache", () => {
@@ -119,10 +122,37 @@ describe("message rows are kept between new messages (T17818)", () => {
         const held = messages.slice(0, at)
         const state = f.next(batch, now) ?? (f = folded(held, people, now)).state
         const me = r() < 0.1 ? "win" : "jow"
-        expect(shown(state, held, cache, me)).toEqual(messagesOf(fold(held, people, now), held, me, new Map(), waiting, []))
+        expect(rendered(shown(state, held, cache, me))).toEqual(rendered(messagesOf(fold(held, people, now), held, me, new Map(), waiting, [])))
         steps++
       }
     }
     expect(steps).toBeGreaterThan(300)
   }, 120_000)
+  test("an event row whose text changes is built again while the cache context stays (review #17915)", () => {
+    next = 0
+    const cache = rowCache()
+    const log = [
+      wire({ from: "jow", pk: "pk-jow", kind: "event", body: "", ev: { op: "task.add", title: "Old title" } }),
+      wire({ from: "jow", pk: "pk-jow", kind: "event", body: "", ev: { op: "task.update", task: 1, note: "a note" } }),
+    ]
+    const state = fold(log, roster, 0)
+    const before = shown(state, log, cache)
+    const task = state.tasks.get(1)!
+    const renamed = { ...state, tasks: new Map([[1, { ...task, title: "New title" }]]) } as ChannelState
+    const cached = shown(renamed, log, cache)
+    const uncached = messagesOf(renamed, log, "jow", new Map(), waiting, [])
+    const text = (rows: typeof before, seq: number) => wordsRaw(rows.find((m) => m.seq === seq)!.text)
+    expect(text(before, 2)).toContain("Old title")
+    expect(text(uncached, 2)).toContain("New title")
+    expect(text(cached, 2)).toBe(text(uncached, 2))
+    expect(rendered(cached)).toEqual(rendered(uncached))
+  })
+
+  test("rows compare their words by text, also nested", () => {
+    expect(shownSame(wrote("a"), wrote("b"))).toBe(false)
+    expect(shownSame(wrote("a"), wrote("a"))).toBe(true)
+    expect(shownSame({ notes: [{ text: wrote("a") }] }, { notes: [{ text: wrote("b") }] })).toBe(false)
+    expect(shownSame(new Map([[1, [{ text: wrote("a") }]]]), new Map([[1, [{ text: wrote("a") }]]]))).toBe(true)
+    expect(same(wrote("a"), wrote("a"))).toBe(false)
+  })
 })

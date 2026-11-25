@@ -1,4 +1,5 @@
 import { named } from "@kiwi/app/mentions.ts"
+import { same, type Leaf } from "@kiwi/core/state/tracked.ts"
 
 export class Words {
   readonly #text: string
@@ -23,3 +24,7 @@ export const wordsRaw = (value: Words): string => Words.raw(value)
 export const wordsPlain = (value: Words, nicknames: ReadonlyMap<string, string>): string => named(Words.raw(value), nicknames)
 
 export const wordsSame = (a: Words, b: Words): boolean => Words.raw(a) === Words.raw(b)
+
+const wordsLeaf: Leaf = (a, b) => (a instanceof Words || b instanceof Words ? a instanceof Words && b instanceof Words && wordsSame(a, b) : undefined)
+
+export const shownSame = (a: unknown, b: unknown): boolean => same(a, b, wordsLeaf)

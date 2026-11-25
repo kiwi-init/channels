@@ -14,7 +14,6 @@ import { moverOf, type Mover } from "@kiwi/core/mover.ts"
 import { currentStep, stepMove, type LandingStep } from "@kiwi/core/steps.ts"
 import { runSight } from "@kiwi/core/state/landing-steps.ts"
 import { sharedWith } from "@kiwi/core/state/reset.ts"
-import { same } from "@kiwi/core/state/tracked.ts"
 import { editable, GENERAL_ROOM, ignored, isQuiet, isRasterMime, isOverlay, type Message as Wire } from "@kiwi/core/protocol.ts"
 import { rootOf, sentTo } from "@kiwi/core/room-rules.ts"
 import { dmDocOf, dmRoomWith } from "~/live/dm"
@@ -96,7 +95,7 @@ import type {
 import { mentions } from "~/live/mention"
 import { phraseOf } from "~/live/said"
 import { specLineTest } from "~/specs/quote"
-import { type Words, wrote } from "~/words"
+import { shownSame, type Words, wrote } from "~/words"
 import { seenAt } from "@kiwi/app/threads.ts"
 
 type Seen = Readonly<Record<string, number>>
@@ -555,7 +554,7 @@ export function messagesOf(
     const was = cache.rows.get(seq)
     if (was && inputs && was.inputs && sameList(inputs, was.inputs)) return was.row
     const fresh = build()
-    const row = was && !inputs && same(fresh, was.row) ? was.row : fresh
+    const row = was && !inputs && shownSame(fresh, was.row) ? was.row : fresh
     cache.rows.set(seq, { inputs, row })
     return row
   }

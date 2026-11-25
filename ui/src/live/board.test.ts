@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 
 import type { Message as Wire } from "@kiwi/core/protocol.ts"
 import { fold, folded, type ChannelState } from "@kiwi/core/state.ts"
+import { rendered } from "~/live/rendered"
 import { keptBoard, PER_MESSAGE, SEAT_COUNTERS } from "~/live/board"
 import { groupsOf, historyOf, issuesOf, prsOf, tasksFrom } from "~/live/map"
 import { freeOf, specsOf } from "~/live/specs"
@@ -106,7 +107,7 @@ describe("the task board is kept between chat messages (T17818)", () => {
         board = keptBoard(board, state)
         if (board === was) kept++
         const me = r() < 0.2 ? "win" : "jow"
-        expect(boardOf(board.state, state, held, me, now)).toEqual(boardOf(state, state, held, me, now))
+        expect(rendered(boardOf(board.state, state, held, me, now))).toEqual(rendered(boardOf(state, state, held, me, now)))
         steps++
       }
     }
@@ -162,7 +163,7 @@ describe("the task board is kept between chat messages (T17818)", () => {
         rolled++
         expect(after).not.toBe(board)
       }
-      expect(boardOf(after.state, later, [...messages, late], "jow", at)).toEqual(boardOf(later, later, [...messages, late], "jow", at))
+      expect(rendered(boardOf(after.state, later, [...messages, late], "jow", at))).toEqual(rendered(boardOf(later, later, [...messages, late], "jow", at)))
     }
     expect(rolled).toBeGreaterThan(0)
   })

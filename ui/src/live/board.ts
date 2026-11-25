@@ -2,6 +2,7 @@ import { useState } from "react"
 
 import type { ChannelState } from "@kiwi/core/state.ts"
 import { same } from "@kiwi/core/state/tracked.ts"
+import { shownSame } from "~/words"
 
 export const PER_MESSAGE: ReadonlySet<string> = new Set(["head", "members", "trust", "threadOf", "threadPeople", "roomOf", "placeOf", "places", "askHeads", "rejected"])
 
@@ -40,7 +41,7 @@ export function useBoard(state: ChannelState): ChannelState {
 
 export function useStable<T>(value: T): T {
   const [kept, setKept] = useState(() => ({ value }))
-  if (same(kept.value, value)) return kept.value
+  if (shownSame(kept.value, value)) return kept.value
   setKept({ value })
   return value
 }
