@@ -23,6 +23,7 @@ if (process.argv.includes("--help")) {
   console.log(`A busy channel, measured: PERF_AGENTS agents (10), PERF_TASKS tasks (100), PERF_MESSAGES messages (2000), then PERF_SOAK_MIN minutes (20) of agents posting.
 Reports cold load, the reload to the first screen, each view's switch at 1x and 4x CPU, key delay while agents post, and heap, DOM nodes and listeners over time.
 PERF_TASKS_FIRST=1 makes the tasks before the messages, so a reload has to keep them from beyond the newest 2000.
+PERF_ALLOC=1 makes the soak's sampled profile count every allocation, collected ones too, and report it per message sent.
 PERF_GL=swiftshader draws with the CPU, as CI's runners do: on a Mac that's how to see what CI sees.
 --gated measures only what scripts/perf-check.ts gates: the reload at 1x, the views at 4x and typing, without the 1x views, details toggles, profiles or second reload.
 
@@ -38,6 +39,7 @@ const TASKS = Number(process.env.PERF_TASKS ?? 100);
 const MESSAGES = Number(process.env.PERF_MESSAGES ?? 2000);
 const SOAK_MIN = Number(process.env.PERF_SOAK_MIN ?? 20);
 const GATED = process.argv.includes("--gated");
+const ALLOC = process.env.PERF_ALLOC === "1";
 const jsonAt = process.argv.indexOf("--json");
 const OUT = jsonAt > 0 ? process.argv[jsonAt + 1] : undefined;
 const data = mkdtempSync(join(tmpdir(), "kiwi-perf-scale-"));
@@ -563,7 +565,7 @@ try {
   log(`soak: ${SOAK_MIN} minutes`);
   const blocksAtStart = await docBlocks(page);
   await cdp.send("HeapProfiler.collectGarbage");
-  await cdp.send("HeapProfiler.startSampling", { samplingInterval: 8192 });
+  await cdp.send("HeapProfiler.startSampling", { samplingInterval: 8192, ...(ALLOC ? { includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true } : {}) });
   const soakEnd = Date.now() + SOAK_MIN * 60000;
   let soakSent = 0;
   const posting = Promise.all(
@@ -594,8 +596,15 @@ try {
   await cdp.send("HeapProfiler.collectGarbage");
   const { profile: sampled } = (await cdp.send("HeapProfiler.getSamplingProfile")) as unknown as { profile: { head: HeapSite } };
   await cdp.send("HeapProfiler.stopSampling");
-  report["soak: what was allocated in it and is still held, by file (sampled)"] = { docBlocksAtStart: blocksAtStart, docBlocksAtEnd: await docBlocks(page), ...liveByChunk(sampled.head) };
-  log("soak held", JSON.stringify(report["soak: what was allocated in it and is still held, by file (sampled)"]));
+  const sampledKey = ALLOC ? "soak: everything allocated in it, collected or not, by file (sampled)" : "soak: what was allocated in it and is still held, by file (sampled)";
+  const bySite = liveByChunk(sampled.head);
+  report[sampledKey] = {
+    docBlocksAtStart: blocksAtStart,
+    docBlocksAtEnd: await docBlocks(page),
+    ...bySite,
+    ...(ALLOC ? { messagesSent: soakSent, perMessageKB: soakSent ? Math.round((bySite.totalMB * 1024) / soakSent) : null } : {}),
+  };
+  log(ALLOC ? "soak allocated" : "soak held", JSON.stringify(report[sampledKey]));
   const soak = idle;
   const soakHeap = heap.filter((h) => h.phase.startsWith("soak"));
   const first = soakHeap[0];
