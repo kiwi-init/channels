@@ -239,7 +239,7 @@ describe("a fold shares its base instead of copying it, and owns it from then on
     const result = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, base);
     expect(result.facts.get("shared")?.value).toBe("kept");
     expect(() => Object.assign(fact, { value: "changed" })).toThrow(TypeError);
-    expect(() => base.facts.push({ ...fact, key: "other" })).toThrow(TypeError);
+    expect(() => Object.assign(base.facts, { [base.facts.length]: { ...fact, key: "other" } })).toThrow(TypeError);
     expect(() => Object.assign(base, { n: 0 })).toThrow(TypeError);
     expect(result.facts.get("shared")?.value).toBe("kept");
     expect(result.facts.has("other")).toBe(false);
@@ -274,7 +274,7 @@ describe("a fold shares its base instead of copying it, and owns it from then on
     const w = await world(120, 7);
     const base = capture(w.messages, w.roster, w.floors, 60);
     expect(Object.isFrozen(base)).toBe(true);
-    expect(() => base.members.push({ name: "mallory", lastSeen: 0, messages: 0 })).toThrow(TypeError);
+    expect(() => Object.assign(base.members, { [base.members.length]: { name: "mallory", lastSeen: 0, messages: 0 } })).toThrow(TypeError);
   });
 });
 

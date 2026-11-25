@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 export const MAX_ROOM_MEMBERS = 200;
 
 export interface RoomMember {
@@ -65,7 +66,7 @@ export function rootOf(name: string, members: ReadonlyMap<string, Seat>): string
   return seat ? rootName(seat, [...members.values()]) : name;
 }
 
-export function leaveSeal(known: { n: number; meta?: RoomMeta; leaving?: string[] } | undefined, opened: RoomMeta, n: number, members: ReadonlyMap<string, Seat>): boolean {
+export function leaveSeal(known: Frozen<{ n: number; meta?: RoomMeta; leaving?: string[] }> | undefined, opened: RoomMeta, n: number, members: ReadonlyMap<string, Seat>): boolean {
   if (!known?.meta || !known.leaving?.length || known.meta.dm || known.meta.self || opened.dm || opened.self) return false;
   if (n !== known.n + 1 || opened.name !== known.meta.name) return false;
   const staying = known.meta.members.filter((m) => !known.leaving?.includes(rootOf(m.name, members)));
@@ -115,7 +116,7 @@ export const sentTo = (room: { members?: readonly RoomMember[] } | undefined, na
 export const sentHere = (state: { rooms: ReadonlyMap<string, { members?: readonly RoomMember[] }>; members: ReadonlyMap<string, Seat> }, room: string, name: string): boolean =>
   sentTo(state.rooms.get(room), name, state.members);
 
-export const inRoom = (meta: Pick<RoomMeta, "members">, name: string, pk: string | undefined): boolean => !!pk && meta.members.some((m) => m.name === name && m.pk === pk);
+export const inRoom = (meta: Frozen<Pick<RoomMeta, "members">>, name: string, pk: string | undefined): boolean => !!pk && meta.members.some((m) => m.name === name && m.pk === pk);
 
 export const publicView = <M extends { sealed?: unknown; opened?: unknown; proven?: unknown }>(messages: readonly M[]): M[] =>
   messages.flatMap((m) => (m.sealed ? [] : m.opened || m.proven !== undefined ? [Object.fromEntries(Object.entries(m).filter(([k]) => k !== "opened" && k !== "proven")) as M] : [m]));

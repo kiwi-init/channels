@@ -68,6 +68,8 @@ import type {
   AskHead,
   ChannelState,
   ChannelStateDraft,
+  FoldBaseDraft,
+  Frozen,
   Edit,
   Fact,
   FoldBase,
@@ -88,6 +90,7 @@ import type {
   StepQuestion,
 } from "./types.ts";
 import { inRoom } from "../room-rules.ts";
+import { thawed } from "./types.ts";
 import { packAuthors, unpackAuthors } from "./authors.ts";
 
 const STALE_MS = 24 * 3_600_000;
@@ -97,7 +100,7 @@ const SENT_CAP = 3_000;
 const STEP_RULES = 27;
 const closedLongAgo = (at: number, hw: number) => hw - at > GITHUB_CLOSED_KEEP_MS;
 
-function taskFromOlder(t: FoldBase["tasks"][number], stepless: boolean): Task {
+function taskFromOlder(t: FoldBaseDraft["tasks"][number], stepless: boolean): Task {
   const rest = omit(t, "then", "landed");
   const task: Task = rest.run ? { ...rest, run: { id: rest.run.id, seq: rest.run.seq, by: rest.run.by } } : rest;
   if (stepless && t.then && !task.steps && task.state !== "done") seedSteps(task, stepsOfThen(t.then), "then");
@@ -168,7 +171,9 @@ function folding(
   lookAhead: boolean,
 ): ChannelStateDraft {
   const shared = given ? ownedBase(given) : null;
-  const from = shared ? { ...shared, tasks: structuredClone(shared.tasks), leases: structuredClone(shared.leases), rooms: structuredClone(shared.rooms) } : null;
+  const from = shared
+    ? { ...shared, tasks: thawed<FoldBaseDraft["tasks"]>(shared.tasks), leases: thawed<FoldBaseDraft["leases"]>(shared.leases), rooms: thawed<FoldBaseDraft["rooms"]>(shared.rooms) }
+    : null;
   const after = from?.n ?? -1;
   const ahead = <F extends { since: number }>(f: F | null | undefined): F | null => (f && f.since >= after ? f : null);
   const members = new Map<string, FoldMember>();
@@ -295,7 +300,7 @@ function folding(
     return lead === "roster" ? undefined : lead;
   };
   const leads = (member: FoldMember): boolean => member.owner || isLeadRole(member.role) || (logged(member) ?? (signed.has(member.name) && member.persona?.role === "lead"));
-  const scopesByKey = new Map<string, Scope[]>();
+  const scopesByKey = new Map<string, readonly Scope[]>();
   for (const r of roster) scopesByKey.set(r.pk, scopesOf(r));
   for (const [pk, scopes] of from?.scopesByKey ?? []) scopesByKey.set(pk, scopes);
   const floors = roster
@@ -308,7 +313,7 @@ function folding(
       scopesByKey.set(f.pk, f.scopes);
     }
   };
-  const scopeSets = new Map<string, { seq: number; scopes: Scope[] }>(from?.scopeSets);
+  const scopeSets = new Map<string, Frozen<{ seq: number; scopes: Scope[] }>>(from?.scopeSets);
   const roleSets = new Map<string, { seq: number; role: string | null; about?: string | null }>(from?.roleSets);
   const gone = new Map<string, number>(from?.gone);
   const nicknames = new Map<string, Nickname>(from?.nicknames);
@@ -374,18 +379,18 @@ function folding(
   const askers = new Map([...(from?.asks ?? []), ...messages].flatMap((a): [number, string][] => ((a.kind === "ask" || a.kind === "blocking") && !a.permission ? [[a.seq, a.from]] : [])));
   const decisions = new Set([...(from?.asks ?? []), ...messages].flatMap((a): number[] => ((a.kind === "ask" || a.kind === "blocking") && a.esc && !a.permission ? [a.seq] : [])));
   const settledBy = new Map<number, Set<string>>();
-  const holding: Message[] = (from?.asks ?? []).filter((a) => !!a.holds?.length && !a.permission);
-  const holdsOf = new Map(holding.map((a): [number, number[]] => [a.seq, a.holds ?? []]));
+  const holding: Frozen<Message>[] = (from?.asks ?? []).filter((a) => !!a.holds?.length && !a.permission);
+  const holdsOf = new Map(holding.map((a): [number, number[]] => [a.seq, [...(a.holds ?? [])]]));
   const timed = new Set<number>();
   const permReplies = new Map<number, Message[]>();
   const permBySeq = new Map<number, Message>();
   const threadOf = new Map<number, number>(from?.threadOf);
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
   const askHeads = new Map<number, AskHead>(from?.askHeads?.map((h) => [h.id, h]));
-  const specs = new Map<number, Spec>(from?.specs?.map((sp) => [sp.ask, sp]));
+  const specs = new Map<number, Frozen<Spec>>(from?.specs?.map((sp) => [sp.ask, sp]));
   if (stepless) migrateChecks(tasks, new Map(from?.checks?.map((c) => [c.seq, c])));
   const checks = new Map<number, CheckState>(from?.checks?.map((c) => [c.seq, checkFrom(c)]));
-  const questions = new Map<number, StepQuestion>(from?.stepQuestions?.map((q) => [q.seq, q]));
+  const questions = new Map<number, Frozen<StepQuestion>>(from?.stepQuestions?.map((q) => [q.seq, q]));
   const passedAsks = new Map<number, string>(from?.passedAsks);
   const closeOnItsOwn = (ask: number, m: Pick<Message, "seq" | "from">, at: number): void => {
     const spec = specs.get(ask);
@@ -397,7 +402,7 @@ function folding(
   const known = new Map<string, Room>(from?.rooms.map((r) => [r.id, r]));
   const rooms = new Map<string, Room>([[GENERAL_ROOM, known.get(GENERAL_ROOM) ?? { id: GENERAL_ROOM, name: GENERAL_ROOM, createdBy: null, at: 0 }]]);
   const roomsSince = roomsFloor?.since ?? -1;
-  const secret = new Map<string, SecretRoom>(from?.secret?.map(([id, r]): [string, SecretRoom] => [id, { ...r }]));
+  const secret = new Map<string, Frozen<SecretRoom>>(from?.secret);
   for (const r of ahead(roomsFloor)?.list ?? []) {
     const name = roomName(r.name);
     if (!ROOM_ID_RE.test(r.id) || !name || (rooms.size >= MAX_ROOMS && !rooms.has(r.id))) continue;
@@ -406,7 +411,7 @@ function folding(
   for (const [id, r] of known) if (!rooms.has(id)) rooms.set(id, r);
   const nameTaken = (name: string, except?: string) => [...rooms.values()].some((r) => r.id !== except && !r.members && r.name.toLowerCase() === name.toLowerCase());
   const roomOf = new Map<number, string>(from?.roomOf);
-  const placeOf = new Map<number, Place>(from?.placeOf);
+  const placeOf = new Map<number, Frozen<Place>>(from?.placeOf);
   const ctx: FoldCtx = {
     members,
     signed,
@@ -462,7 +467,7 @@ function folding(
   for (const m of messages) if (m.seq > after) (seen.has(m.seq) ? doubled : seen).add(m.seq);
 
   const typedOnly = (m: Pick<Message, "pick" | "stepReply">, ask: number): boolean => ctx.tapToAnswer && decisions.has(ask) && !m.pick && !m.stepReply;
-  const stillOpen = (m: Message): boolean => {
+  const stillOpen = (m: Frozen<Message>): boolean => {
     if (m.kind !== "ask" && m.kind !== "blocking") return false;
     if (ignored(trust.get(m.seq)) || closedAsks.has(m.seq)) return false;
     if (m.permission)
@@ -940,7 +945,7 @@ function folding(
         sentKeys: [...keyIndex.keys()],
         sentFloors: [...sentFloors].filter(([, floor]) => floor > hw - SENT_WINDOW_MS),
         hw,
-        placesBefore: [...summarize(new Map([...placeOf].filter(([seq]) => seq <= cut)), tasks, trust, placesBefore).values()].map((p): [Place, number, number] => [p.place, p.count, p.last]),
+        placesBefore: [...summarize(new Map([...placeOf].filter(([seq]) => seq <= cut)), tasks, trust, placesBefore).values()].map((p): Frozen<[Place, number, number]> => [p.place, p.count, p.last]),
         asks: openAsks.map((m) => (m.imgs?.length ? { ...m, imgs: m.imgs.map((i) => omit(i, "data")) } : m)),
         askHeads: [...askHeads.values()].filter((h) => h.id > cut || filedUnder.has(h.id)),
         specs: keptSpecs,
@@ -950,7 +955,7 @@ function folding(
         threadOf: keptThreads,
         threadPeople: [...threadPeople].filter(([root]) => root > cut || keptRoots.has(root)).map(([seq, people]): [number, string[]] => [seq, [...people]]),
         rooms: [...rooms.values()],
-        secret: [...secret].map(([id, r]): [string, SecretRoom] => [id, { ...r }]),
+        secret: [...secret].map(([id, r]): [string, Frozen<SecretRoom>] => [id, { ...r }]),
         roomOf: recent(roomOf),
         placeOf: recent(placeOf),
         personaLeads: [...personaLead],
@@ -965,7 +970,7 @@ function folding(
   passFloors(Infinity);
   passRoleFloors(Infinity);
   for (const member of members.values()) {
-    member.scopes = scopesByKey.get(member.pk) ?? [];
+    member.scopes = [...(scopesByKey.get(member.pk) ?? [])];
     if (!member.owner && gone.has(member.pk)) member.active = false;
   }
   const theLead = leadNow();

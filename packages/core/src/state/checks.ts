@@ -24,13 +24,13 @@ export interface CheckState {
 
 const answerOf = (a: CheckAnswer): CheckAnswer => ({ choice: a.choice, pass: a.pass, by: a.by, seq: a.seq });
 
-export const checkFrom = (c: CheckState): CheckState => ({
+export const checkFrom = (c: Frozen<CheckState>): CheckState => ({
   seq: c.seq,
   by: c.by,
   phase: c.phase,
   decider: c.decider,
-  choices: c.choices,
-  holds: c.holds,
+  choices: [...c.choices],
+  holds: [...c.holds],
   ...(c.replaces !== undefined ? { replaces: c.replaces } : {}),
   ...(c.answer ? { answer: answerOf(c.answer) } : {}),
   ...(c.answers ? { answers: c.answers.map(answerOf) } : {}),

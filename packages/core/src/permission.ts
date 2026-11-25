@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 import type { Message } from "./protocol.ts";
 import { personOf } from "./room-rules.ts";
 import { humanOf, isPerson, ownerOf } from "./state/people.ts";
@@ -420,7 +421,7 @@ export function permissionReply(ask: Message, allow: boolean, state: Pick<Channe
   return ask.permission && ask.sig && state.trust.get(ask.seq) === "verified" ? { ask: ask.id, by: ask.from, of: ask.sig, allow } : null;
 }
 
-export function permissionAnswer(ask: Message, reply: Message, state: Pick<ChannelState, "trust" | "members"> & { bySeq: ReadonlyMap<number, Message> }): "allow" | "deny" | null {
+export function permissionAnswer(ask: Frozen<Message>, reply: Frozen<Message>, state: Pick<ChannelState, "trust" | "members"> & { bySeq: ReadonlyMap<number, Message> }): "allow" | "deny" | null {
   const shown = ask.permission;
   if (!shown || ask.esc !== true || state.trust.get(ask.seq) !== "verified") return null;
   const perm = reply.perm;

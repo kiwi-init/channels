@@ -40,7 +40,7 @@ interface AskView {
   members: Map<string, FoldMember>;
   trusted: (pk: string, member: FoldMember) => boolean;
   checkpointDaily: CheckpointDaily | null;
-  checkpointAsks: CheckpointAsk[];
+  checkpointAsks: Frozen<CheckpointAsk[]>;
 }
 
 interface AskEvent {
@@ -75,7 +75,7 @@ export function checkpointAskRefusal(c: AskView, m: Pick<Message, "pk" | "rts" |
   return "only the owner or a person they trust asks every agent for its checkpoints";
 }
 
-export const keepAsk = (kept: readonly CheckpointAsk[], ask: CheckpointAsk): CheckpointAsk[] => [...kept, ask].slice(-CHECKPOINT_ASKS_KEPT);
+export const keepAsk = (kept: Frozen<CheckpointAsk[]>, ask: Frozen<CheckpointAsk>): Frozen<CheckpointAsk[]> => [...kept, ask].slice(-CHECKPOINT_ASKS_KEPT);
 
 type CheckpointItem = { kind: "task"; task: number; state: "saved" | "pending" | "closed" } | { kind: "lead"; state: "saved" | "pending" };
 

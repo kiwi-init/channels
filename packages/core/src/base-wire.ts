@@ -1,6 +1,6 @@
 import { isLanding, outgrown, quietMinutes, type Trust } from "./protocol.ts";
 import { wellFormedStepSpecs } from "./steps.ts";
-import type { FoldBase, Place } from "./state.ts";
+import type { FoldBase, Frozen, Place } from "./state.ts";
 import type { GithubCheck, RunAttempt } from "./state/github.ts";
 
 export const BASE_WIRE_VERSION = 8;
@@ -40,7 +40,7 @@ type Wire = Omit<FoldBase, "trust" | "threadOf" | "roomOf" | "placeOf" | "oldSen
   trust: Column<Trust>;
   threadOf: Column<number>;
   roomOf: Column<string>;
-  placeOf: Column<Place>;
+  placeOf: Column<Frozen<Place>>;
   oldSent?: Column<number>;
   github?: Omit<BaseGithub, "checks"> & { checks: [string, WireCheck[]][] };
 };
@@ -49,13 +49,13 @@ const jobUrl = (repo: string, wf: number, job: number): string => `https://githu
 
 const JOB_URL = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/actions\/runs\/(\d+)\/job\/(\d+)$/;
 
-function onlyAttempt(c: GithubCheck): RunAttempt | undefined {
+function onlyAttempt(c: Frozen<GithubCheck>): Frozen<RunAttempt> | undefined {
   const a = c.attempts?.length === 1 ? c.attempts[0] : undefined;
   if (!a || c.run === undefined || a.run !== c.run || a.attempt !== (c.attempt ?? 1) || a.conclusion !== c.conclusion || a.completed !== c.completedAt) return undefined;
   return Object.keys(a).every((k) => k === "run" || k === "attempt" || k === "started" || k === "conclusion" || k === "completed") ? a : undefined;
 }
 
-function checkToWire(repo: string, check: GithubCheck): WireCheck {
+function checkToWire(repo: string, check: Frozen<GithubCheck>): WireCheck {
   const { url, attempts, ...c } = check;
   const m = url ? JOB_URL.exec(url) : null;
   const wf = m && m[1] === repo && c.run !== undefined && m[3] === String(c.run) && m[2] === String(Number(m[2])) ? Number(m[2]) : undefined;
@@ -63,7 +63,7 @@ function checkToWire(repo: string, check: GithubCheck): WireCheck {
   return {
     ...c,
     ...(wf !== undefined ? { wf } : url !== undefined ? { url } : {}),
-    ...(one ? { once: one.started !== undefined ? { started: one.started } : {} } : attempts ? { attempts } : {}),
+    ...(one ? { once: one.started !== undefined ? { started: one.started } : {} } : attempts ? { attempts: [...attempts] } : {}),
   };
 }
 
@@ -94,7 +94,7 @@ const githubToWire = (g: BaseGithub): Wire["github"] => ({ ...g, checks: g.check
 
 const githubFromWire = (g: NonNullable<Wire["github"]>): BaseGithub => ({ ...g, checks: g.checks.map(([k, runs]) => [k, runs.map((c) => checkFromWire(repoOfSha(k), c))]) });
 
-function column<V>(pairs: [number, V][]): Column<V> {
+function column<V>(pairs: readonly (readonly [number, V])[]): Column<V> {
   let last = 0;
   return {
     d: pairs.map(([k]) => {

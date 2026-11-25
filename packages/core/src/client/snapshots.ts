@@ -1,3 +1,4 @@
+import type { Frozen } from "../state/types.ts";
 import * as Effect from "effect/Effect";
 import { decodedWhole, olderRules, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type DocEnvelope } from "../protocol.ts";
 import { MissingKey } from "../refusals.ts";
@@ -69,7 +70,7 @@ export class ChannelSnapshots {
       yield* this.ch.ownerOnly();
       yield* this.history.keyFor(this.ch.access.epoch);
       const { keptSeals } = yield* Effect.promise(() => import("../private-room.ts"));
-      const kept = base.secret ? { ...base, secret: base.secret.map(([id, r]): [string, SecretRoom] => [id, { ...r, seals: keptSeals(r.seals, (x) => x.n) }]) } : base;
+      const kept = base.secret ? { ...base, secret: base.secret.map(([id, r]): [string, Frozen<SecretRoom>] => [id, { ...r, seals: keptSeals(r.seals, (x) => x.n) }]) } : base;
       const sealed = yield* Effect.promise(() => sealSnapshot(this.ch.identity, this.ch.access, kept));
       if (!sealed) return yield* new MissingKey(this.ch.access.keys[String(this.ch.access.epoch)] ? SNAPSHOT_TOO_LARGE : "can't seal a snapshot without this epoch's key");
       return (yield* this.ch.request<{ n: number }>("/snapshot", { method: "PUT", body: JSON.stringify({ snapshot: sealed }) })).n;

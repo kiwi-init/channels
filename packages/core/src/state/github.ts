@@ -81,12 +81,12 @@ export interface GithubRun {
 }
 
 export interface GithubState {
-  prs: Map<string, GithubPr>;
-  checks: Map<string, Map<string, GithubCheck>>;
-  issues: Map<string, GithubIssue>;
-  rules: Map<string, GithubRules>;
-  releases: Map<string, GithubRelease[]>;
-  runs: Map<string, GithubRun>;
+  prs: Map<string, Frozen<GithubPr>>;
+  checks: Map<string, Map<string, Frozen<GithubCheck>>>;
+  issues: Map<string, Frozen<GithubIssue>>;
+  rules: Map<string, Frozen<GithubRules>>;
+  releases: Map<string, Frozen<GithubRelease[]>>;
+  runs: Map<string, Frozen<GithubRun>>;
   runsSince: number | null;
   runsForgotten: number | null;
 }
@@ -279,13 +279,13 @@ export function linkSafe<T extends { url?: string }>(x: T): Omit<T, "url"> & { u
   return x.url === undefined || handoffUrl(x.url) ? x : omit(x, "url");
 }
 
-export function releasesFrom(list: readonly GithubRelease[] | undefined): Map<string, GithubRelease[]> {
-  const g = { releases: new Map<string, GithubRelease[]>() };
+export function releasesFrom(list: Frozen<GithubRelease[]> | undefined): Map<string, Frozen<GithubRelease[]>> {
+  const g = { releases: new Map<string, Frozen<GithubRelease[]>>() };
   for (const r of list ?? []) addRelease(g, r);
   return g.releases;
 }
 
-export function addRelease(g: Pick<GithubState, "releases">, r: GithubRelease): void {
+export function addRelease(g: Pick<GithubState, "releases">, r: Frozen<GithubRelease>): void {
   const key = repoKey(r.repo);
   const kept = (g.releases.get(key) ?? []).filter((x) => x.tag !== r.tag);
   kept.push(r);

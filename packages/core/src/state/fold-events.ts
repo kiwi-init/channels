@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import {
   GENERAL_ROOM,
   MAX_CHARTER,
@@ -69,8 +70,8 @@ export interface FoldCtx {
   powers: Map<string, Partial<Record<Power, boolean>>>;
   leads: (member: FoldMember) => boolean;
   keysByName: Map<string, Set<string>>;
-  scopesByKey: Map<string, Scope[]>;
-  scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
+  scopesByKey: Map<string, readonly Scope[]>;
+  scopeSets: Map<string, Frozen<{ seq: number; scopes: Scope[] }>>;
   roleSets: Map<string, { seq: number; role: string | null; about?: string | null }>;
   gone: Map<string, number>;
   nicknames: Map<string, Nickname>;
@@ -80,7 +81,7 @@ export interface FoldCtx {
   docs: Map<string, string>;
   leases: Map<string, Lease>;
   rooms: Map<string, Room>;
-  secret: Map<string, SecretRoom>;
+  secret: Map<string, Frozen<SecretRoom>>;
   roomsSince: number;
   nameTaken: (name: string, except?: string) => boolean;
   charter: Charter | null;
@@ -93,9 +94,9 @@ export interface FoldCtx {
   reviewReset: boolean;
   tapToAnswer: boolean;
   checkpointDaily: CheckpointDaily | null;
-  checkpointAsks: CheckpointAsk[];
+  checkpointAsks: Frozen<CheckpointAsk[]>;
   landing: Landing | null;
-  landingSteps: StepSpec[] | null;
+  landingSteps: Frozen<StepSpec[]> | null;
   passedAsks: Map<number, string>;
   compact: Compact | null;
   compactProposal: Compact | null;

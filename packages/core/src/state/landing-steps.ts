@@ -18,7 +18,7 @@ const id = (t: Frozen<Task>): string => `T${t.id}`;
 
 export const artifactWords = (a: CheckArtifact): string => (a.kind === "pr" ? `${a.repo}#${a.pr} at ${a.sha.slice(0, 7)}` : a.kind === "run" ? `run ${a.id}` : `${a.pkg}@${a.version}`);
 
-export function seedSteps(task: Task, specs: readonly StepSpec[], from?: "then"): void {
+export function seedSteps(task: Task, specs: Frozen<StepSpec[]>, from?: "then"): void {
   const made = mintSteps(task, specs).map((s): LandingStep => (from ? { ...s, from } : s));
   if (made.length) task.steps = [...(task.steps ?? []), ...made];
 }
@@ -174,7 +174,7 @@ export function stepObservations(view: StepView & { tasks: Frozen<ReadonlyMap<nu
 
 const asks = (step: LandingStep, ask: number): boolean => step.detector?.kind === "answered" && step.detector.ask === ask;
 
-export function migrateChecks(tasks: ReadonlyMap<number, Task>, checks: ReadonlyMap<number, CheckState>): void {
+export function migrateChecks(tasks: ReadonlyMap<number, Task>, checks: ReadonlyMap<number, Frozen<CheckState>>): void {
   for (const check of checks.values()) {
     if (check.phase !== "pre-ship" || check.closed !== undefined || check.supersededBy !== undefined) continue;
     for (const held of check.holds) {
@@ -208,7 +208,7 @@ export function seeAnswered(task: Task, passed: ReadonlyMap<number, string>, mar
   }
 }
 
-export function checkStep(task: Task, check: CheckState): void {
+export function checkStep(task: Task, check: Frozen<CheckState>): void {
   if (task.state === "done" || check.phase !== "pre-ship") return;
   const replaced = check.replaces;
   const was = replaced === undefined ? undefined : task.steps?.find((s) => asks(s, replaced) && s.progress.kind === "open");
@@ -227,7 +227,7 @@ export function checkStep(task: Task, check: CheckState): void {
   task.steps = [...steps.slice(0, place), { ...made, from: "check" }, ...steps.slice(place)];
 }
 
-export function checkAnswered(tasks: ReadonlyMap<number, Task>, check: CheckState, mark: StepMark): void {
+export function checkAnswered(tasks: ReadonlyMap<number, Task>, check: Frozen<CheckState>, mark: StepMark): void {
   if (check.answer?.pass !== true) return;
   for (const held of check.holds) {
     const task = tasks.get(held);

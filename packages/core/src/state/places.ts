@@ -30,9 +30,14 @@ export function threadMembers(state: Pick<ChannelState, "members" | "tasks" | "l
   return [...new Set([t.owner, ...t.workedBy, t.review !== "*" ? t.review : undefined, state.lead ?? undefined, ...(t.posters ?? [])].filter(active))];
 }
 
-export function summarize(placeOf: Map<number, Place>, tasks: Map<number, Task>, trust: Map<number, Trust>, before: Iterable<[Place, number, number]> = []): Map<string, PlaceSummary> {
+export function summarize(
+  placeOf: ReadonlyMap<number, Frozen<Place>>,
+  tasks: ReadonlyMap<number, Task>,
+  trust: ReadonlyMap<number, Trust>,
+  before: Iterable<Frozen<[Place, number, number]>> = [],
+): Map<string, PlaceSummary> {
   const out = new Map<string, PlaceSummary>();
-  const add = (place: Place, count: number, last: number) => {
+  const add = (place: Frozen<Place>, count: number, last: number) => {
     const real = place.kind === "task" && !tasks.has(place.task) ? MAIN : place;
     const key = placeKey(real);
     const s = out.get(key);

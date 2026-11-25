@@ -157,12 +157,12 @@ export async function openBaseRooms(c: RoomCache, base: FoldBase): Promise<FoldB
   const secret: [string, SecretRoom][] = [];
   const rooms = new Map(base.rooms.map((r) => [r.id, r]));
   for (const r of base.rooms) if (!r.members) c.publicRooms?.add(r.id);
-  for (const r of base.rooms) if (r.members) c.memberRooms?.set(r.id, { members: r.members, ...(r.dm ? { dm: true as const } : {}), ...(r.self ? { self: true as const } : {}) });
+  for (const r of base.rooms) if (r.members) c.memberRooms?.set(r.id, { members: [...r.members], ...(r.dm ? { dm: true as const } : {}), ...(r.self ? { self: true as const } : {}) });
   for (const [id, room] of base.secret ?? []) {
     const had = c.roomSeals.get(id) ?? [];
-    c.roomSeals.set(id, [...room.seals.map((seal, i) => ({ seq: -(room.seals.length - i), seal })), ...had.filter((x) => x.seq > 0)]);
+    c.roomSeals.set(id, [...room.seals.map((seal, i) => ({ seq: -(room.seals.length - i), seal: { ...seal, keys: [...seal.keys] } })), ...had.filter((x) => x.seq > 0)]);
     const now = await replay(c, id);
-    secret.push([id, { n: now?.n ?? room.n, seals: room.seals, ...(now?.meta ? { meta: now.meta } : {}) }]);
+    secret.push([id, { n: now?.n ?? room.n, seals: room.seals.map((seal) => ({ ...seal, keys: [...seal.keys] })), ...(now?.meta ? { meta: now.meta } : {}) }]);
     if (now?.meta)
       rooms.set(id, {
         ...(rooms.get(id) ?? { id, createdBy: null, at: 0 }),

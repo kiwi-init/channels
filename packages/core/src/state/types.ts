@@ -282,7 +282,7 @@ export interface Fact {
 export type Place = { kind: "main" } | { kind: "task"; task: number } | { kind: "dm"; with: [string, string] };
 
 export interface PlaceSummary {
-  place: Place;
+  place: Frozen<Place>;
   last: number;
   count: number;
   done?: boolean;
@@ -317,22 +317,22 @@ export interface ChannelStateDraft {
   leases: Map<string, Lease>;
   trust: Map<number, Trust>;
   rejected: Map<number, string>;
-  scopeSets: Map<string, { seq: number; scopes: Scope[]; persona?: Persona | null }>;
+  scopeSets: Map<string, Frozen<{ seq: number; scopes: Scope[]; persona?: Persona | null }>>;
   roleSets: Map<string, { seq: number; role: string | null; about?: string | null }>;
   gone: Map<string, number>;
   nicknames: Map<string, Nickname>;
-  openAsks: Message[];
+  openAsks: Frozen<Message>[];
   askHeads: Map<number, AskHead>;
-  specs: Map<number, Spec>;
+  specs: Map<number, Frozen<Spec>>;
   specsOnly: number | null;
   checks: Map<number, CheckState>;
   threadOf: Map<number, number>;
   threadPeople: Map<number, Set<string>>;
   lead: string | null;
   rooms: Map<string, Room>;
-  secret: Map<string, SecretRoom>;
+  secret: Map<string, Frozen<SecretRoom>>;
   roomOf: Map<number, string>;
-  placeOf: Map<number, Place>;
+  placeOf: Map<number, Frozen<Place>>;
   places: Map<string, PlaceSummary>;
   charter: Charter | null;
   repos: string[];
@@ -344,9 +344,9 @@ export interface ChannelStateDraft {
   reviewReset: boolean;
   tapToAnswer: boolean;
   checkpointDaily: CheckpointDaily | null;
-  checkpointAsks: CheckpointAsk[];
+  checkpointAsks: Frozen<CheckpointAsk[]>;
   landing: Landing | null;
-  landingSteps: StepSpec[] | null;
+  landingSteps: Frozen<StepSpec[]> | null;
   compact: Compact | null;
   compactProposal: Compact | null;
   reactions: Map<number, Map<string, Reaction>>;
@@ -401,7 +401,9 @@ export interface SecretRoom {
 
 export type PersonaLead = boolean | "roster";
 
-export interface FoldBase {
+export type FoldBase = Frozen<FoldBaseDraft>;
+
+export interface FoldBaseDraft {
   n: number;
   members: {
     name: string;

@@ -46,7 +46,7 @@ export function judgesSpec(members: Frozen<ReadonlyMap<string, Member>>, head: P
 const JUDGES = "only the person who asked, the owner or a person who answers decisions approves a spec or judges what it delivered";
 
 export function foldSpec(
-  specs: Map<number, Spec>,
+  specs: Map<number, Frozen<Spec>>,
   askHeads: ReadonlyMap<number, AskHead>,
   members: ReadonlyMap<string, Member>,
   m: Pick<Message, "seq" | "from">,
@@ -119,7 +119,7 @@ export function commentedSpec(specs: Frozen<ReadonlyMap<number, Pick<Spec, "ask"
   return undefined;
 }
 
-export function noteSpecComment(specs: Map<number, Spec>, parent: number | undefined, root: number, m: Pick<Message, "seq" | "from">): void {
+export function noteSpecComment(specs: Map<number, Frozen<Spec>>, parent: number | undefined, root: number, m: Pick<Message, "seq" | "from">): void {
   if (parent === undefined) return;
   const ask = commentedSpec(specs, parent) ?? (root < m.seq ? commentedSpec(specs, root) : undefined);
   const spec = ask === undefined ? undefined : specs.get(ask);
@@ -147,7 +147,7 @@ export function unansweredComments(spec: Frozen<Pick<Spec, "comments" | "by" | "
 
 const allTicked = (text: string): boolean => doneWhen(text).every((b) => b.done);
 
-export function closesOnItsOwn(state: Pick<ChannelState, "tasks">, spec: Spec): boolean {
+export function closesOnItsOwn(state: Pick<ChannelState, "tasks">, spec: Frozen<Spec>): boolean {
   return !spec.result && doneWhen(spec.text).length > 0 && specStage(state, spec) === "delivered";
 }
 
