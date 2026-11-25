@@ -1,4 +1,5 @@
 import { bookClient, followBooks, openBook, type ChannelBook } from "@kiwi/core/book.ts";
+import { Channel, ChannelGone } from "@kiwi/core/client.ts";
 import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import { claimDevice, readDeviceList, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { EnrollGrant } from "@kiwi/core/enroll.ts";
@@ -10,6 +11,7 @@ import { pollToken, startDevice, type SignInFetch } from "@kiwi/core/github-devi
 import type { ChannelIdentityView, EnrollPersonView, EnrollStatusView, FromMachine } from "../../desktop/src/bridge.ts";
 import { createEnrollee, type Enrollee } from "../../desktop/src/devices.ts";
 import { Keyring } from "../../desktop/src/keyring.ts";
+import { channelAccess } from "../../desktop/src/seats.ts";
 import { personMachines, type Asker, type PairedComputer } from "../../desktop/src/remote.ts";
 import { withoutPurchaseLinks } from "./refusal.ts";
 import { acceptSeat, withAccess } from "../../desktop/src/seats.ts";
@@ -298,7 +300,35 @@ async function followBook(): Promise<void> {
     bookAsked.add(entry.room);
     await ring.requestJoin(entry.code, name).catch((err: unknown) => post({ type: "log", line: `couldn't ask to join ${entry.label}: ${said(err)}` }));
   }
+  for (const tucked of saved.hidden ?? []) {
+    if (keyring !== ring || !saved) return;
+    if (await leftForReal(tucked.seat, device.person.pk, saved.relay)) forgetHidden(tucked.seat);
+  }
   watchJoins();
+}
+
+async function leftForReal(seat: ChannelIdentityView, person: string, relay: string): Promise<boolean> {
+  const access = channelAccess(seat);
+  if (!access) return true;
+  const ch = new Channel(access, relay, { name: seat.idName ?? seat.label, pk: seat.pk, sk: seat.sk });
+  try {
+    const members = await ch.members();
+    if (members.some((m) => m.active && m.person === person && m.pk !== seat.pk && m.device?.as !== "phone")) return false;
+    await ch.leave();
+  } catch (err) {
+    if (!(err instanceof ChannelGone)) {
+      post({ type: "log", line: `couldn't check ${seat.label}: ${said(err)}` });
+      return false;
+    }
+  }
+  return true;
+}
+
+function forgetHidden(seat: ChannelIdentityView): void {
+  if (!saved) return;
+  keep({ ...saved, hidden: (saved.hidden ?? []).filter((h) => h.seat.code !== seat.code) });
+  const room = roomOfSeat(seat);
+  if (room) bookAsked.delete(room);
 }
 
 function hideSeat(seat: ChannelIdentityView, at: number): void {

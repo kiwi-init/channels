@@ -10,7 +10,7 @@ import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
 import type { Push, Reply, Saved } from "../ios/engine/wire.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
-import { setupChannel } from "./owner.ts";
+import { joinPerson, setupChannel } from "./owner.ts";
 
 setDefaultTimeout(60_000);
 
@@ -154,5 +154,48 @@ describe("the phone's channels follow the desktop's (T30)", () => {
     expect(lastSaved()?.hidden?.some((h) => h.seat.code === s.code) ?? false).toBe(false);
     await s.ownerCh.close();
     await b.ch.close();
+  });
+
+  test("a channel the person really left, with no other device of theirs still in it, the phone leaves too (T302)", async () => {
+    const mine = await setupChannel(relay, { ownerName: "jow", personName: "Jow", human: "dev:book2" });
+    const person = await withExchangeKey(mine.person);
+    const desk = desktop(person, "book2", [{ label: "onemouse", code: mine.code }]);
+    await ask({ op: "start", saved: { relay, person: null, seats: [] } });
+    pushes.length = 0;
+    await signIn(desk, "book2");
+    expect(await within(20_000, live(mine.code), approving(mine.ownerCh, person))).toBe(true);
+
+    const maya = await setupChannel(relay, { ownerName: "maya", personName: "Maya", human: "dev:maya2" });
+    const deskSeat = await joinPerson(maya, "jow", person);
+    desk.channels.push({ label: "mayas", code: maya.code });
+    await desk.host.poll();
+    await ask({ op: "nudge" });
+    expect(await within(20_000, live(maya.code), approving(maya.ownerCh, person))).toBe(true);
+    const phoneSeat = lastSaved()!.seats.find((c) => c.code === maya.code)!;
+
+    await deskSeat.ch.leave();
+    desk.channels.splice(1, 1);
+    await desk.host.poll();
+    await ask({ op: "nudge" });
+    expect(await within(20_000, gone(maya.code))).toBe(true);
+    const asPhone = new Channel(phoneSeat.access as ChannelAccess, relay, { name: phoneSeat.label, pk: phoneSeat.pk, sk: phoneSeat.sk });
+    const left = () =>
+      asPhone.head().then(
+        () => null,
+        (e: unknown) => e,
+      );
+    let why: unknown = null;
+    expect(
+      await within(
+        20_000,
+        () => why !== null,
+        async () => void (why = await left()),
+      ),
+    ).toBe(true);
+    expect(why).toMatchObject({ why: "removed", how: "left" });
+    expect(await within(5_000, () => !(lastSaved()?.hidden ?? []).some((h) => h.seat.code === maya.code))).toBe(true);
+    expect(lastSaved()?.seats.some((c) => c.code === mine.code)).toBe(true);
+    await mine.ownerCh.close();
+    await maya.ownerCh.close();
   });
 });
