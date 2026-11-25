@@ -1,7 +1,7 @@
 import type { Color, Message } from "../protocol.ts";
 import { canPost } from "../scopes.ts";
 import type { ChannelState, Member } from "./types.ts";
-import { personOf } from "../room-rules.ts";
+import { personOf, rootOf } from "../room-rules.ts";
 
 export const isPerson = (m: { kind?: string; owner?: boolean }) => m.kind === "human" || !!m.owner;
 
@@ -14,7 +14,9 @@ export const sameAuthor = (author: Seat | undefined, editor: Seat | undefined): 
 export function humanOf(state: Pick<ChannelState, "members">, name: string): string | null {
   const m = state.members.get(name);
   if (!m || isPerson(m) || !m.sponsor) return null;
-  return [...state.members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === m.sponsor!.user)?.name ?? null;
+  const seats = [...state.members.values()];
+  const theirs = seats.filter((x) => x.active && isPerson(x) && personOf(x, seats) === `person:${m.sponsor!.user}`);
+  return (theirs.find((x) => rootOf(x.name, state.members) === x.name) ?? theirs[0])?.name ?? null;
 }
 
 export function sponsorsAgent(members: ReadonlyMap<string, Pick<Member, "name" | "pk" | "kind" | "owner" | "active" | "sponsor">>, by: string, agent: string): boolean {

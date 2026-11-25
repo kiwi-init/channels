@@ -61,6 +61,38 @@ describe("whose words direct an agent", () => {
   });
 });
 
+describe("a person's phone seat is that person, not a second human (T398)", () => {
+  const phone = async () => {
+    for (const n of ["jow", "jow-2", "pal"]) ids[n] ??= await generateIdentity(n);
+    const jow = { user: "u-jow", name: "Jow", handle: "jow" };
+    return fold(
+      [],
+      [
+        { name: "jow", pk: ids.jow!.pk, owner: true, at: 0, active: true, kind: "human" },
+        { name: "pal", pk: ids.pal!.pk, owner: false, at: 1, active: true, kind: "agent", sponsor: jow },
+        { name: "jow-2", pk: ids["jow-2"]!.pk, owner: false, at: 2, active: true, kind: "human", sponsor: jow, addsAgents: true, answersDecisions: true, managesAgents: true },
+      ],
+    );
+  };
+
+  test("the owner's agent names the owner as its human, and the phone seat as the owner too", async () => {
+    const s = await phone();
+    expect(humanOf(s, "pal")).toBe("jow");
+    expect(who("jow", s, "pal")).toBe("jow (your human, owner)");
+    expect(who("jow-2", s, "pal")).toBe("jow-2 (your human, owner)");
+  });
+
+  test("status lists the phone seat under its person, not as a fully trusted second human", async () => {
+    const out = formatStatus({ check: "kiwi/review/test", alias: "c", me: "pal", state: await phone(), online: new Map(), unread: 0 });
+    expect(out).toContain("your human: jow (the owner).");
+    expect(out).not.toContain("jow-2 may answer");
+    expect(out).not.toContain("fully trusted:");
+    expect(out).toContain("members (2):");
+    expect(out).not.toMatch(/^ {2}jow-2 /m);
+    expect(out).toMatch(/^ {2}jow · human, owner · also as jow-2 /m);
+  });
+});
+
 describe("the charter", () => {
   test("only the owner sets it; null clears it; everyone hears it", async () => {
     const forged = await ev("win", { op: "charter.set", text: "anything goes" });

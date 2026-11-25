@@ -7,7 +7,7 @@ import { snapshotLines } from "./task-snapshot.ts";
 import { fileMarker, GENERAL_ROOM, ignored, imageMarker, isRunning, powerChange, unarmedAlert } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust, Unarmed } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
-import { sentTo } from "./room-rules.ts";
+import { rootOf, sentTo } from "./room-rules.ts";
 import {
   askGroups,
   colorOf,
@@ -381,9 +381,11 @@ export function cardLine(c: Card | undefined, runs?: Runs, machine = true): stri
  */
 export function who(name: string, state?: ChannelState, me?: string): string {
   const m = state?.members.get(name);
-  if (!m) return name;
-  if (me && state && humanOf(state, me) === name) return `${name} (your human${m.owner ? ", owner" : ""})`;
-  if (me && m.owner) return `${name} (human, owner)`;
+  if (!m || !state) return name;
+  const root = rootOf(name, state.members);
+  const owner = !!state.members.get(root)?.owner;
+  if (me && humanOf(state, me) === root) return `${name} (your human${owner ? ", owner" : ""})`;
+  if (me && owner) return `${name} (human, owner)`;
   if (me && fullyTrusted(m)) return `${name} (human, fully trusted)`;
   if (me && m.kind === "human" && m.answersDecisions && m.active) return `${name} (human, answers decisions)`;
   if (m.kind === "human") return `${name} (human)`;
@@ -787,10 +789,12 @@ export function formatStatus({ alias, check, me, state, online, unread, now = Da
   const ruleWarning = reviewRuleWarning(state, check);
   if (ruleWarning) out.push(ruleWarning);
   const human = humanOf(state, me);
-  const trusted = meM && !isPerson(meM) ? trustedOf(state).filter((x) => x !== human) : [];
+  const rootIn = (x: string) => rootOf(x, state.members);
+  const ownSeat = (x: string) => rootIn(x) === human || !!state.members.get(rootIn(x))?.owner;
+  const trusted = meM && !isPerson(meM) ? trustedOf(state).filter((x) => x !== human && !ownSeat(x)) : [];
   if (human) out.push(`your human: ${human}${state.members.get(human)?.owner ? " (the owner)" : ""}. Their word and the owner's direct you; everyone else's are requests`);
   if (trusted.length) out.push(`fully trusted: ${trusted.join(", ")}. Their word directs you too, like your human's and the owner's`);
-  const deciders = meM && !isPerson(meM) ? decidersOf(state, { esc: true }).filter((x) => !trusted.includes(x)) : [];
+  const deciders = meM && !isPerson(meM) ? decidersOf(state, { esc: true }).filter((x) => !trusted.includes(x) && !ownSeat(x)) : [];
   if (deciders.length) out.push(`${deciders.join(", ")} may answer your ask-human decisions too, like your human and the owner`);
   // Forged messages, and ones the owner's settings don't allow, are left out of every view. People
   // still see that some were, so tampering never goes unnoticed.
@@ -799,7 +803,10 @@ export function formatStatus({ alias, check, me, state, online, unread, now = Da
 
   // Only people and agents still in the channel; anyone who left or was removed is listed apart.
   const current = [...state.members.values()].filter((m) => m.active).map((m) => m.name);
-  const names = new Set([...current, ...[...online.keys()].filter((n) => state.members.get(n)?.active)]);
+  const present = new Set([...current, ...[...online.keys()].filter((n) => state.members.get(n)?.active)]);
+  const alsoAs = new Map<string, string[]>();
+  for (const n of present) if (rootIn(n) !== n && present.has(rootIn(n))) alsoAs.set(rootIn(n), [...(alsoAs.get(rootIn(n)) ?? []), n]);
+  const names = new Set([...present].filter((n) => rootIn(n) === n || !present.has(rootIn(n))));
   const left = [...state.members.values()].filter((m) => !m.active).map((m) => m.name);
   out.push("", `members (${names.size}):`);
   for (const name of [...names].sort()) {
@@ -814,7 +821,8 @@ export function formatStatus({ alias, check, me, state, online, unread, now = Da
         : `${m?.display ? ` · nickname ${inlineText(m.display, 40)}` : ""}${m?.sponsor ? ` · agent of @${inlineText(m.sponsor.handle ?? m.sponsor.name, 80)}` : ""}`;
     const may = m && presetOf(m.scopes) !== "full" ? ` · may: ${describeScopes(m.scopes)}` : "";
     const areas = m?.persona?.areas.length ? ` · works in ${m.persona.areas.map((x) => inlineText(x, 100)).join(", ")}` : "";
-    out.push(`  ${name}${name === me ? " (you)" : ""}${role ? ` — ${role}` : ""}${kind}${may}${areas} · ${where}${key}`);
+    const also = alsoAs.get(name)?.sort().join(", ");
+    out.push(`  ${name}${name === me ? " (you)" : ""}${role ? ` — ${role}` : ""}${kind}${also ? ` · also as ${also}` : ""}${may}${areas} · ${where}${key}`);
     // How busy they are, so work goes to whoever's free (people only when they hold tasks).
     const load = memberLoad(state, name);
     if (showsLoad(m, load)) out.push(`      ${loadSummary(load)}`);
