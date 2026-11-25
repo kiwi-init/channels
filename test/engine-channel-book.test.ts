@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
+import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { createDeviceHost, type DeviceHost } from "../desktop/src/devices.ts";
@@ -125,13 +126,19 @@ describe("the phone's channels follow the desktop's (T30)", () => {
     expect(await within(20_000, live(b.code), approving(b.ch, person))).toBe(true);
     expect(lastSaved()?.seats.some((c) => c.code === b.code && !!c.access)).toBe(true);
 
-    const phoneInA = lastSaved()!.seats.find((c) => c.code === s.code)!.pk;
+    const seatA = lastSaved()!.seats.find((c) => c.code === s.code)!;
     desk.channels.splice(0, 1);
     await desk.host.poll();
     await ask({ op: "nudge" });
     expect(await within(20_000, gone(s.code))).toBe(true);
     expect(lastSaved()?.seats.some((c) => c.code === s.code)).toBe(false);
-    expect((await s.ownerCh.members()).some((m) => m.pk === phoneInA)).toBe(false);
+    const asPhone = new Channel(seatA.access as ChannelAccess, relay, { name: seatA.label, pk: seatA.pk, sk: seatA.sk });
+    expect(
+      await asPhone.head().then(
+        () => null,
+        (e: unknown) => e,
+      ),
+    ).toMatchObject({ why: "removed", how: "left" });
     expect(lastSaved()?.seats.some((c) => c.code === b.code)).toBe(true);
     await s.ownerCh.close();
     await b.ch.close();

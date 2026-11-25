@@ -1,4 +1,5 @@
 import { accountClient, type AccountClient } from "@kiwi/core/account.ts";
+import { bookClient, bookReaders, nextEntries, openBook, sealBook, type BookEntry } from "@kiwi/core/book.ts";
 import {
   approvingDevice,
   certUntil,
@@ -13,7 +14,7 @@ import {
   type DeviceList,
 } from "@kiwi/core/devices.ts";
 import { askToEnroll, enrollDigits, enrollMailbox, enrollNonce, readEnrollGrant, revealMatches, type EnrollGrant, type Enrollment } from "@kiwi/core/enroll.ts";
-import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
+import { canonical, generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { personFingerprint } from "@kiwi/core/fingerprint.ts";
 import type { Mailbox } from "@kiwi/core/mailbox.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
@@ -74,6 +75,7 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
   let synced: { relay: string; client: AccountClient; device: Identity } | null = null;
   let removed: DeviceNewsView["removed"] = null;
   let renewedAt = -Infinity;
+  let shared: { entries: BookEntry[]; key: string; at: number } | null = null;
 
   const cutOff = (by: string) => {
     synced = null;
@@ -149,6 +151,31 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
     for (const d of dueForRenewal(list, now())) await extend(s.client, s.device, { op: "renew", device: d.device, until: certUntil(now()) });
   };
 
+  const shareBook = async (s: { device: Identity }) => {
+    const list = await readList(deps.links());
+    if (!approvingDevice(list, s.device.pk, now())) return;
+    const client = bookClient(deps.relayUrl(), s.device, list.person, deps.fetchImpl);
+    if (!shared) {
+      const slots = await client.slots();
+      if (!slots) return;
+      const mine = slots.find((x) => x.device === s.device.pk);
+      const opened = mine ? await openBook(s.device, mine, list, now()) : null;
+      shared = { entries: opened?.channels ?? [], key: "", at: mine?.at ?? 0 };
+    }
+    const entries = nextEntries(shared.entries, deps.channels(), now());
+    const readers = bookReaders(list, now());
+    const key = canonical({ entries, readers, version: list.version });
+    if (key === shared.key) return;
+    const at = Math.max(now(), shared.at + 1);
+    try {
+      if (!(await client.put(deps.links(), at, await sealBook(s.device, list.person, readers, entries, at)))) return;
+    } catch (err) {
+      shared = null;
+      throw err;
+    }
+    shared = { entries, key, at };
+  };
+
   const live = async (id: string): Promise<{ client: AccountClient; device: Identity; e: Enrollment }> => {
     const s = await sync();
     if (!s) throw new Error("sign in to approve a device");
@@ -188,6 +215,11 @@ export function createDeviceHost(deps: DeviceHostDeps): DeviceHost {
         await renewDue(s);
       } catch {
         // Another app renewed first, or the relay is away: the list stays as it was, and the next round tries again.
+      }
+      try {
+        await shareBook(s);
+      } catch {
+        // The relay is away or kept a newer book from this app: the next round reads it back and writes again.
       }
       const e = await s.client.enrollment();
       if (!e) {

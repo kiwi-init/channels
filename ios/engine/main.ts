@@ -1,3 +1,5 @@
+import { bookClient, followBooks, openBook, type ChannelBook } from "@kiwi/core/book.ts";
+import { ChannelGone } from "@kiwi/core/client.ts";
 import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import { claimDevice, readDeviceList, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { EnrollGrant } from "@kiwi/core/enroll.ts";
@@ -25,6 +27,7 @@ const ENROLL_EVERY_MS = 1_500;
 const JOINS_EVERY_MS = 5_000;
 const OPEN_WAIT_MS = 20_000;
 const HOST_FETCH_MS = 25_000;
+const BOOK_EVERY_MS = 5 * 60_000;
 
 interface Hosts {
   webkit?: { messageHandlers?: { kiwi?: Handler } };
@@ -47,6 +50,10 @@ let computers = new Map<string, PairedComputer>();
 let computersKnown = false;
 let computersTimer: ReturnType<typeof setInterval> | null = null;
 let joinsTimer: ReturnType<typeof setInterval> | null = null;
+let bookTimer: ReturnType<typeof setInterval> | null = null;
+let bookRun: Promise<void> | null = null;
+const bookSeen = new Map<string, number>();
+const bookAsked = new Set<string>();
 let enrolling: Enrolling | null = null;
 let opening: AbortController | null = null;
 const fetches = new Map<number, (got: Fetched) => void>();
@@ -88,6 +95,10 @@ function stopAll(): void {
   computersTimer = null;
   if (joinsTimer) clearInterval(joinsTimer);
   joinsTimer = null;
+  if (bookTimer) clearInterval(bookTimer);
+  bookTimer = null;
+  bookSeen.clear();
+  bookAsked.clear();
   for (const room of rooms.values()) room.stop();
   rooms.clear();
   for (const k of keeping.values()) clearTimeout(k.timer);
@@ -126,6 +137,10 @@ function start(next: Saved, kept: Record<string, unknown> = {}): number {
   for (const seat of next.seats) openRoom(ring, seat, seat.code ? kept[seat.code] : null);
   void warm(ring, kept);
   watchJoins();
+  if (next.device) {
+    followBookSoon();
+    bookTimer = setInterval(followBookSoon, BOOK_EVERY_MS);
+  }
   if (next.person) {
     const load = () => void listComputers().catch(() => {});
     load();
@@ -231,6 +246,72 @@ async function takeList(links: unknown): Promise<void> {
     return;
   }
   keep({ ...saved, device: { ...device, links: links as DeviceLink[] } });
+}
+
+const roomOfSeat = (s: ChannelIdentityView): string | null => {
+  if (s.roomId) return s.roomId;
+  try {
+    return s.code ? decodeJoinCode(s.code).roomId : null;
+  } catch {
+    // A seat whose code doesn't decode matches no channel in the book.
+    return null;
+  }
+};
+
+function followBookSoon(): void {
+  bookRun ??= followBook()
+    .catch((err: unknown) => post({ type: "log", line: `channel book: ${said(err)}` }))
+    .finally(() => {
+      bookRun = null;
+    });
+}
+
+async function followBook(): Promise<void> {
+  const ring = keyring;
+  const device = saved?.device;
+  if (!ring || !device?.key.xsk || !saved) return;
+  const read = await readDeviceList(device.links);
+  if (!read.ok) return;
+  const slots = await bookClient(saved.relay, device.key, device.person.pk).slots();
+  if (!slots || keyring !== ring) return;
+  const books: ChannelBook[] = [];
+  for (const slot of slots) {
+    if ((bookSeen.get(slot.device) ?? -Infinity) > slot.at) continue;
+    const book = await openBook(device.key, slot, read.list);
+    if (!book) continue;
+    bookSeen.set(slot.device, book.at);
+    books.push(book);
+  }
+  const name = handleFor(device.person.name);
+  for (const entry of followBooks(books).values()) {
+    if (keyring !== ring) return;
+    const seat = seats().find((s) => roomOfSeat(s) === entry.room);
+    if ("left" in entry) {
+      if (seat?.code && !(seat.at && seat.at > entry.at)) await leaveSeat(ring, seat);
+      continue;
+    }
+    if (seat || bookAsked.has(entry.room)) continue;
+    bookAsked.add(entry.room);
+    await ring.requestJoin(entry.code, name).catch((err: unknown) => post({ type: "log", line: `couldn't ask to join ${entry.label}: ${said(err)}` }));
+  }
+  watchJoins();
+}
+
+async function leaveSeat(ring: Keyring, seat: ChannelIdentityView): Promise<void> {
+  const code = seat.code!;
+  if (seat.access) {
+    try {
+      await ring.call(code, "leave");
+    } catch (err) {
+      if (!(err instanceof ChannelGone)) {
+        post({ type: "log", line: `couldn't leave ${seat.label}: ${said(err)}` });
+        return;
+      }
+    }
+  }
+  if (keyring !== ring) return;
+  drop(code);
+  await ring.forget(code);
 }
 
 const asking = (s: ChannelIdentityView): boolean => !!s.code && !!s.requestId && !s.access;
@@ -486,6 +567,10 @@ async function enrollFinish(): Promise<Saved> {
   start({ relay: grant.relay, person: null, device: { key, links: grant.links, person: grant.person }, seats: [] });
   keep(saved!);
   const ring = keyring!;
+  for (const c of grant.channels) {
+    const room = roomOfSeat({ label: c.label, pk: "", sk: "", code: c.code });
+    if (room) bookAsked.add(room);
+  }
   const name = handleFor(grant.person.name);
   for (const c of grant.channels) {
     await ring.requestJoin(c.code, name).catch((err: unknown) => post({ type: "log", line: `couldn't ask to join ${c.label}: ${err instanceof Error ? err.message : String(err)}` }));
@@ -540,6 +625,7 @@ async function handle(ask: Ask): Promise<unknown> {
     case "nudge":
       keyring?.nudge();
       for (const r of rooms.values()) r.nudge();
+      followBookSoon();
       return null;
     case "push":
       return saved ? registerPush(saved.relay, seats(), ask.token, ask.sandbox) : [];
