@@ -49,10 +49,8 @@ struct ConversationScreen: View {
                 .bar(.bottom) {
                     if docks(room) {
                         Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing) {
-                            if Resting.available { open = false }
+                            if RestingComposer.available { open = false }
                         }
-                    } else if resting(room) {
-                        Color.clear.frame(height: model.restingRoom).allowsHitTesting(false)
                     }
                 }
                 .onChange(of: resting(room), initial: true) { _, now in rest(now) }
@@ -103,11 +101,11 @@ struct ConversationScreen: View {
 
     private func docks(_ room: RoomView) -> Bool {
         if answering != nil || sendingBack != nil { return true }
-        return talks(room) && (!Resting.available || open || replyTo != nil)
+        return talks(room) && (!RestingComposer.available || open || replyTo != nil)
     }
 
     private func resting(_ room: RoomView) -> Bool {
-        visible && Resting.available && talks(room) && !docks(room)
+        visible && RestingComposer.available && talks(room) && !docks(room)
     }
 
     private func rest(_ now: Bool) {
@@ -255,17 +253,12 @@ extension View {
     }
 }
 
-enum Resting {
+struct RestingComposer: View {
     static var available: Bool {
         if #available(iOS 26.1, *) { true } else { false }
     }
-}
 
-@available(iOS 26.0, *)
-struct RestingComposer: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
-    @State private var height: CGFloat = 0
 
     var body: some View {
         if let spot = model.composing {
@@ -291,18 +284,6 @@ struct RestingComposer: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("composer")
             .accessibilityLabel(text.isEmpty ? spoken("Message") : text)
-            .onGeometryChange(for: CGFloat.self) {
-                $0.size.height
-            } action: {
-                height = $0
-            }
-            .onChange(of: height, initial: true) { _, _ in room() }
-            .onChange(of: placement, initial: true) { _, _ in room() }
-            .onDisappear { model.restingRoom = 0 }
         }
-    }
-
-    private func room() {
-        model.restingRoom = placement == .inline ? 0 : height + 8
     }
 }
