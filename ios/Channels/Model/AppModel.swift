@@ -493,7 +493,7 @@ final class AppModel {
 
     private func syncMarks(_ code: String, write: Bool) async {
         guard let room = rooms[code], room.gone == nil else { return }
-        let keys = ["main"] + (room.sideKey.map { [$0] } ?? [])
+        let keys = ["main"] + (room.sideKey.map { [$0] } ?? []) + room.places.filter { $0.kind == "room" }.map(\.key)
         let local = marks(code, keys)
         if write && (local.isEmpty || wroteMarks[code] == local) { return }
         let merged: [String: Int]

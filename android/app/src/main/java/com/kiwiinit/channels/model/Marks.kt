@@ -1,5 +1,7 @@
 package com.kiwiinit.channels.model
 
+import com.kiwiinit.channels.engine.MessageView
+
 const val MARKS_EVERY_MS = 45_000L
 
 class Raised(val seen: Map<String, Int>, val placeSeen: Map<String, Int>) {
@@ -21,4 +23,16 @@ fun raisedMarks(code: String, keys: List<String>, merged: Map<String, Int>, seen
         }
     }
     return Raised(main, side)
+}
+
+fun settledPending(code: String, sideKey: String?, side: List<MessageView>?, pending: Map<String, List<Pending>>, feeds: Map<String, Feed>): Map<String, List<Pending>> {
+    val out = mutableMapOf<String, List<Pending>>()
+    for ((id, list) in pending) {
+        if (!id.startsWith("$code|") || list.isEmpty()) continue
+        val key = id.removePrefix("$code|")
+        val have = (if (key == sideKey) side.orEmpty() else feeds[id]?.messages.orEmpty()).map { it.seq }.toSet()
+        val kept = list.filter { item -> item.seq?.let { it !in have } ?: true }
+        if (kept.size != list.size) out[id] = kept
+    }
+    return out
 }

@@ -265,11 +265,11 @@ extension AppModel {
 
     func settle(_ code: String) {
         guard let room = rooms[code] else { return }
-        let have = Set(room.messages.map(\.seq) + (room.side ?? []).map(\.seq))
-        for key in ["main"] + (room.sideKey.map { [$0] } ?? []) {
-            let id = "\(code)|\(key)"
-            guard let list = pending[id], !list.isEmpty else { continue }
-            pending[id] = list.filter { item in item.seq.map { !have.contains($0) } ?? true }
+        for (id, list) in pending where id.hasPrefix("\(code)|") && !list.isEmpty {
+            let key = String(id.dropFirst(code.count + 1))
+            let have = Set((key == room.sideKey ? room.side ?? [] : feeds[id]?.messages ?? []).map(\.seq))
+            let kept = list.filter { item in item.seq.map { !have.contains($0) } ?? true }
+            if kept.count != list.count { pending[id] = kept }
         }
     }
 }
