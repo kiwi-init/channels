@@ -30,14 +30,9 @@ extension AppTab {
 }
 
 extension AppModel {
-    var here: RoomView? {
-        let code: String? =
-            switch path.last {
-            case .place(let spot): spot.code
-            case .tasks(let code): code
-            case nil: nil
-            }
-        return code.flatMap { rooms[$0] } ?? channels.first
+    var leadRoom: RoomView? {
+        let room = lastCode.flatMap { rooms[$0] }.flatMap { $0.gone == nil ? $0 : nil } ?? channels.first
+        return room?.leadSpot == nil ? nil : room
     }
 
     func pick(_ next: AppTab) {
@@ -59,10 +54,9 @@ enum Bar {
 struct TabBar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
-    @Binding var picking: Bool
     @Namespace private var space
 
-    private var compact: Bool { picking || model.composing != nil }
+    private var compact: Bool { model.composing != nil || model.leadRoom != nil }
 
     var body: some View {
         Melt(spacing: Bar.gap) {
@@ -71,7 +65,6 @@ struct TabBar: View {
                     ForEach(AppTab.order, id: \.self) { tab in
                         TabButton(tab: tab, compact: compact, space: space) {
                             Haptic.tap()
-                            picking = false
                             model.pick(tab)
                         }
                     }
@@ -80,25 +73,20 @@ struct TabBar: View {
                 .frame(width: compact ? Bar.icons : nil)
                 .frame(maxWidth: compact ? Bar.icons : .infinity, maxHeight: .infinity)
                 .melting("tabs", in: space)
-                if model.composing != nil, !picking {
+                if model.composing != nil {
                     Composer()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .melting("side", in: space)
                         .transition(.blurReplace)
-                } else if let room = model.here {
-                    ChannelCapsule(room: room, open: picking) {
-                        Haptic.tap()
-                        picking.toggle()
-                    }
-                    .frame(maxWidth: compact ? .infinity : 170, maxHeight: .infinity)
-                    .fixedSize(horizontal: !compact, vertical: false)
-                    .melting("side", in: space)
-                    .transition(.blurReplace)
+                } else if let room = model.leadRoom {
+                    LeadPill(room: room)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .melting("side", in: space)
+                        .transition(.blurReplace)
                 }
             }
         }
         .frame(height: Bar.height)
-        .animation(Bar.spring(still), value: picking)
         .animation(Bar.spring(still), value: model.composing)
         .animation(Bar.spring(still), value: model.tab)
     }
@@ -156,43 +144,6 @@ private struct TabButton: View {
     }
 }
 
-private struct ChannelCapsule: View {
-    let room: RoomView
-    let open: Bool
-    let toggle: () -> Void
-
-    var body: some View {
-        Button(action: toggle) {
-            HStack(spacing: 10) {
-                ChannelAvatar(room: room, size: 40)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(room.title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Tone.ink)
-                        .lineLimit(1)
-                    if open, let line = room.status(of: "main") {
-                        Text(line).type(.meta).foregroundStyle(Tone.ink3).lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Tone.ink3)
-                    .rotationEffect(.degrees(open ? 180 : 0))
-            }
-            .padding(.leading, 11)
-            .padding(.trailing, 16)
-            .frame(maxHeight: .infinity)
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("fold-channel")
-        .accessibilityLabel(room.title)
-        .accessibilityValue(room.status(of: "main") ?? "")
-        .accessibilityAddTraits(open ? .isSelected : [])
-    }
-}
-
 struct Composer: View {
     @Environment(AppModel.self) private var model
 
@@ -224,87 +175,74 @@ struct Composer: View {
     }
 }
 
-struct ChannelMenu: View {
-    @Environment(AppModel.self) private var model
-    @Binding var picking: Bool
-
-    var body: some View {
-        DragMenu(
-            choices: model.channels.prefix(6).map { room in
-                Choice(id: "channel-\(room.code)", title: room.title, line: room.status(of: "main"), room: room) {
-                    picking = false
-                    model.jump(.place(Spot(code: room.code)))
-                }
-            })
-    }
-}
-
-struct Choice: Identifiable {
-    let id: String
-    let title: String
-    let line: String?
+struct LeadPill: View {
     let room: RoomView
-    let run: () -> Void
-}
-
-struct DragMenu: View {
-    let choices: [Choice]
-    @State private var hover: Int?
-
-    private static let row: CGFloat = 56
-    private static let inset: CGFloat = 6
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(choices.enumerated()), id: \.element.id) { at, choice in
-                HStack(spacing: 12) {
-                    ChannelAvatar(room: choice.room, size: 36)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(choice.title).type(.body).foregroundStyle(Tone.ink).lineLimit(1)
-                        if let line = choice.line {
-                            Text(line).type(.meta).foregroundStyle(Tone.ink3).lineLimit(1)
-                        }
+        if let lead = room.lead, let spot = room.leadSpot {
+            let draft = model.draft(spot.code, spot.place).text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ")
+            let sent = model.leadSent.map { Date.now.timeIntervalSince($0) < 2.5 } ?? false
+            Button {
+                model.leadOpen = true
+            } label: {
+                HStack(spacing: 10) {
+                    Face(name: lead, member: room.member(lead), size: 34)
+                    if sent {
+                        Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Tone.live)
+                        Text(spoken("Sent to \(room.display(lead))")).type(.body).foregroundStyle(Tone.ink2).lineLimit(1)
+                    } else {
+                        Text(draft.isEmpty ? spoken("Message \(room.display(lead)) directly") : draft)
+                            .type(.body)
+                            .foregroundStyle(draft.isEmpty ? Tone.ink3 : Tone.ink)
+                            .lineLimit(1)
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 12)
-                .frame(height: Self.row)
-                .background {
-                    if hover == at {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Tone.ink.opacity(0.09)).padding(.horizontal, 6)
-                    }
-                }
-                .contentShape(Rectangle())
-                .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityIdentifier("menu-\(choice.id)")
-                .accessibilityAction { choice.run() }
+                .padding(.leading, 14)
+                .padding(.trailing, 18)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Capsule())
+                .animation(.easeOut(duration: 0.2), value: sent)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("lead-composer")
+            .accessibilityLabel(draft.isEmpty ? spoken("Message \(room.display(lead)) directly") : draft)
+            .task(id: model.leadSent) {
+                guard model.leadSent != nil else { return }
+                try? await Task.sleep(for: .seconds(2.5))
+                model.leadSent = nil
             }
         }
-        .padding(.vertical, Self.inset)
-        .glass(28)
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { drag in
-                    let now = index(drag.location.y)
-                    guard now != hover else { return }
-                    hover = now
-                    if now != nil { Haptic.tick() }
-                }
-                .onEnded { drag in
-                    hover = nil
-                    guard let at = index(drag.location.y) else { return }
-                    Haptic.tap()
-                    choices[at].run()
-                }
-        )
     }
+}
 
-    private func index(_ y: CGFloat) -> Int? {
-        let at = Int(((y - Self.inset) / Self.row).rounded(.down))
-        return choices.indices.contains(at) ? at : nil
+struct LeadDock: View {
+    let room: RoomView
+    let spot: Spot
+    @Environment(AppModel.self) private var model
+    @State private var replyTo: MessageView?
+    @State private var answering: AskView?
+    @State private var sendingBack: ReviewView?
+    @FocusState private var typing: Bool
+
+    var body: some View {
+        Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing) {
+            model.leadOpen = false
+        }
+        .onAppear {
+            Task {
+                try? await Task.sleep(for: .milliseconds(60))
+                typing = true
+            }
+        }
+        .onChange(of: model.pending[spot.id]?.count ?? 0) { old, now in
+            guard now > old else { return }
+            model.leadSent = .now
+            typing = false
+            model.leadOpen = false
+        }
     }
-
 }
 
 struct Melt<Content: View>: View {

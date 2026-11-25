@@ -14,11 +14,10 @@ extension AppModel {
 struct Shell: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
-    @State private var picking = false
     @State private var keyboard = false
     @State private var home: CGFloat = 0
 
-    private var barShown: Bool { !keyboard && model.docked == nil }
+    private var barShown: Bool { !keyboard && model.docked == nil && !model.leadOpen }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -38,23 +37,19 @@ struct Shell: View {
                     SettingsScreen()
                 }
             }
-            if picking {
+            if model.leadOpen {
                 Color.black.opacity(0.001)
                     .ignoresSafeArea()
-                    .onTapGesture { picking = false }
+                    .onTapGesture { model.leadOpen = false }
                     .accessibilityHidden(true)
             }
-            if barShown, picking {
-                ChannelMenu(picking: $picking)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 10)
-                    .transition(.scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
-            }
         }
-        .animation(Bar.spring(still), value: picking)
         .bar(.bottom) {
-            if barShown {
-                TabBar(picking: $picking)
+            if model.leadOpen, let room = model.leadRoom, let spot = room.leadSpot {
+                LeadDock(room: room, spot: spot)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if barShown {
+                TabBar()
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, home > 20 ? -12 : 12)
@@ -66,11 +61,11 @@ struct Shell: View {
         } action: {
             if !keyboard { home = $0 }
         }
+        .animation(Bar.spring(still), value: model.leadOpen)
+        .onChange(of: model.path) { _, _ in model.leadOpen = false }
+        .onChange(of: model.tab) { _, _ in model.leadOpen = false }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
-        .onChange(of: model.tab) { _, _ in picking = false }
-        .onChange(of: model.path) { _, _ in picking = false }
-        .onChange(of: model.composing) { _, _ in picking = false }
         .alert("Sign-in not saved", isPresented: Binding(get: { model.unsaved != nil }, set: { if !$0 { model.unsaved = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {

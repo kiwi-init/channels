@@ -52,6 +52,9 @@ final class AppModel {
     var composing: Spot?
     var openComposer: Spot?
     var docked: Spot?
+    var lastCode: String?
+    var leadOpen = false
+    var leadSent: Date?
     var enrolled = false
     var joining = 0
     var unsaved: String?

@@ -72,6 +72,7 @@ struct ConversationScreen: View {
         .toolbar(.visible, for: .navigationBar)
         .onAppear {
             visible = true
+            model.lastCode = spot.code
             seen()
             if model.focusNext == spot {
                 model.focusNext = nil

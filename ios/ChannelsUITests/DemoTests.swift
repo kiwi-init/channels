@@ -35,6 +35,7 @@ final class DemoTests: XCTestCase {
         let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(general.waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["tab-needs"].waitForHittable(timeout: 5), "the tabs outside a chat")
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "lead-row").firstMatch.exists, "the lead, at the top of the channel in Chats")
         add(shot(app, "list with the tab bar"))
         general.tap()
         let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
@@ -74,28 +75,24 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
-    func testTabBarChannelCapsule() throws {
+    func testMessageTheLeadFromTheBar() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
-        let channel = app.buttons["fold-channel"]
-        XCTAssertTrue(channel.waitForHittable(timeout: 15), "the channel capsule in the bar")
-        XCTAssertFalse(channel.label.isEmpty, "it says which channel")
+        let pill = app.buttons["lead-composer"]
+        XCTAssertTrue(pill.waitForHittable(timeout: 15), "outside a chat, the pill beside the tabs writes to the lead")
         XCTAssertTrue(app.buttons["tab-needs"].isHittable, "beside the tabs")
-        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "lead-row").firstMatch.exists, "the lead, at the top of the channel in Chats")
-        channel.tap()
-        let room = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'menu-channel-'")).firstMatch
-        XCTAssertTrue(room.waitForExistence(timeout: 5), "the channels to jump to, above the bar")
-        XCTAssertTrue(app.buttons["tab-needs"].isHittable, "the tabs stay, as icons")
-        sleep(1)
-        add(shot(app, "bar with the channels open"))
-        channel.tap()
-        XCTAssertFalse(room.waitForExistence(timeout: 1), "tapping the capsule again closes it")
-        channel.tap()
-        XCTAssertTrue(room.waitForExistence(timeout: 5))
-        room.press(forDuration: 0.3, thenDragTo: room)
-        let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5), "picking a channel opens its chat")
+        XCTAssertEqual(pill.frame.midY, app.buttons["tab-needs"].frame.midY, accuracy: 2, "one row")
+        add(shot(app, "chats at rest"))
+        pill.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the composer opens over the keyboard")
+        XCTAssertFalse(pill.exists, "in place of the bar")
+        app.typeText("status?")
+        add(shot(app, "lead composer open"))
+        app.buttons["Send"].firstMatch.tap()
+        XCTAssertTrue(pill.waitForHittable(timeout: 5), "sent, the bar comes back")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch.exists, "and you stay on Chats")
+        add(shot(app, "lead message sent"))
     }
 
     @MainActor
