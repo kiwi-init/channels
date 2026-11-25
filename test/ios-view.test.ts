@@ -147,6 +147,22 @@ describe("one person, several seats", () => {
     expect(person("jow-2")).toBe("person:u1");
     expect(person("lead")).not.toBe(person("dev"));
   });
+
+  test("a phone seat shows its person's picture from the desktop seat; an agent and a person without one show none (T715)", async () => {
+    const phone = await generateIdentity("jow-2");
+    const face = { mime: "image/png" as const, data: "iVBORw0KGgo=" };
+    const people: Roster = [
+      ...roster,
+      { name: "jow-2", pk: phone.pk, owner: false, at: 0, active: true, kind: "human", sponsor: { name: "Jow", handle: "jow", user: "u1" } },
+    ];
+    const log = await signedLog([ev("jow", { op: "picture.set", member: "jow", picture: face }), say("lead", "hi")]);
+    const room = roomView({ ...inputOf(log, "jow-2"), state: fold(log, people, T0 + 120_000) });
+    const picture = (name: string) => room.members.find((m) => m.name === name)?.picture;
+    expect(picture("jow")).toBe("iVBORw0KGgo=");
+    expect(picture("jow-2")).toBe("iVBORw0KGgo=");
+    expect(picture("lead")).toBeNull();
+    expect(picture("dev")).toBeNull();
+  });
 });
 
 describe("names in the phone's room view (#1251)", () => {
