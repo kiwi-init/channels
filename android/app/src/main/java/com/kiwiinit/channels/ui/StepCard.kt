@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material3.Button
@@ -111,14 +112,20 @@ fun StepCard(model: AppModel, room: RoomView, message: MessageView, step: StepVi
         step.todo.forEachIndexed { i, line ->
             Text("${i + 1}. $line", style = MaterialTheme.typography.bodyMedium, color = tone.onThem)
         }
-        step.run.forEach { command ->
-            Text(
-                command,
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
-                color = tone.onThem,
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(tone.wash2).padding(horizontal = 8.dp, vertical = 6.dp),
-            )
+        if (step.run.isNotEmpty()) {
+            SelectionContainer {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    step.run.forEach { command ->
+                        Text(
+                            command,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = tone.onThem,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(tone.wash2).padding(horizontal = 8.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+            }
         }
         step.expect?.let { expected ->
             Text(stringResource(R.string.step_expected), style = MaterialTheme.typography.labelMedium, color = tone.ink3)

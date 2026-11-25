@@ -10,13 +10,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.fragment.app.FragmentActivity
 import com.kiwiinit.channels.R
 
 class Lock(private val app: Context, linked: Boolean, private val guarding: () -> Boolean, private val words: () -> Words) {
-    var locked by mutableStateOf(linked)
+    private val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    var on by mutableStateOf(!prefs.getBoolean(OFF, false))
         private set
-    val on: Boolean get() = true
+    var locked by mutableStateOf(linked && on)
+        private set
     private var leftAt: Long? = null
     private var asking = false
 
@@ -43,7 +46,9 @@ class Lock(private val app: Context, linked: Boolean, private val guarding: () -
         )
 
     fun turn(on: Boolean) {
-        if (on) return
+        this.on = on
+        prefs.edit { putBoolean(OFF, !on) }
+        if (!on) locked = false
     }
 
     fun left() {
@@ -52,14 +57,14 @@ class Lock(private val app: Context, linked: Boolean, private val guarding: () -
 
     fun back(prompt: BiometricPrompt) {
         val at = leftAt
-        if (at != null && guarding() && SystemClock.elapsedRealtime() - at > GRACE_MS) locked = true
+        if (at != null && on && guarding() && SystemClock.elapsedRealtime() - at > GRACE_MS) locked = true
         leftAt = null
         unlock(prompt)
     }
 
     fun unlock(prompt: BiometricPrompt) {
         if (!locked || asking) return
-        if (!available || !guarding()) {
+        if (!available || !on || !guarding()) {
             locked = false
             return
         }
@@ -74,6 +79,8 @@ class Lock(private val app: Context, linked: Boolean, private val guarding: () -
 
     private companion object {
         const val GRACE_MS = 30_000L
+        const val PREFS = "lock"
+        const val OFF = "off"
         const val ALLOWED = BIOMETRIC_WEAK or DEVICE_CREDENTIAL
     }
 }

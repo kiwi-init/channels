@@ -220,4 +220,5 @@
     <string name="open_conversation">会話を開く</string>
     <string name="only_owner_lets_in">参加を許可できるのはチャンネルのオーナーだけです。</string>
     <string name="join_code">コード</string>
+    <string name="lock_turned_off">オフ</string>
 </resources>

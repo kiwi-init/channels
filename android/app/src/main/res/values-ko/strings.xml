@@ -220,4 +220,5 @@
     <string name="open_conversation">대화 열기</string>
     <string name="only_owner_lets_in">채널 소유자만 입장을 허용할 수 있습니다.</string>
     <string name="join_code">코드</string>
+    <string name="lock_turned_off">끔</string>
 </resources>

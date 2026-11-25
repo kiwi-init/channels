@@ -227,4 +227,5 @@
     <string name="open_conversation">Open the conversation</string>
     <string name="only_owner_lets_in">Only the channel\'s owner can let them in.</string>
     <string name="join_code">Code</string>
+    <string name="lock_turned_off">Off</string>
 </resources>

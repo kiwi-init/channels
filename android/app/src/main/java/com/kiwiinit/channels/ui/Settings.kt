@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -28,6 +29,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,7 +94,13 @@ fun SettingsScreen(model: AppModel) {
             Group {
                 Setting(Icons.Filled.Forum, tone.live, stringResource(R.string.channels), "${model.channels.size}")
                 Setting(Icons.Filled.Router, tone.doing, stringResource(R.string.relay), relayHost)
-                Setting(Icons.Filled.Lock, tone.ink3, stringResource(R.string.lock), guarded)
+                if (model.lock.available) {
+                    Setting(Icons.Filled.Lock, tone.ink3, stringResource(R.string.lock), if (model.lock.on) guarded else stringResource(R.string.lock_turned_off), switch = model.lock.on) {
+                        model.lock.turn(!model.lock.on)
+                    }
+                } else {
+                    Setting(Icons.Filled.Lock, tone.ink3, stringResource(R.string.lock), guarded)
+                }
                 Setting(Icons.Filled.LanguageIcon, MaterialTheme.colorScheme.primary, stringResource(R.string.language), languageName) { picking = true }
             }
             if (!model.enrolled) {
@@ -187,9 +196,14 @@ private fun Group(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun Setting(icon: ImageVector, tint: Color, title: String, value: String?, tap: (() -> Unit)? = null) {
+private fun Setting(icon: ImageVector, tint: Color, title: String, value: String?, switch: Boolean? = null, tap: (() -> Unit)? = null) {
+    val touch = when {
+        tap == null -> Modifier
+        switch != null -> Modifier.toggleable(value = switch, role = Role.Switch) { tap() }
+        else -> Modifier.clickable(onClick = tap)
+    }
     Row(
-        Modifier.fillMaxWidth().then(if (tap != null) Modifier.clickable(onClick = tap) else Modifier).padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().then(touch).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(tint), contentAlignment = Alignment.Center) {
@@ -200,5 +214,6 @@ private fun Setting(icon: ImageVector, tint: Color, title: String, value: String
         if (value != null) {
             Text(value, style = MaterialTheme.typography.bodyMedium, color = Tone.current.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp))
         }
+        if (switch != null) Switch(checked = switch, onCheckedChange = null, modifier = Modifier.padding(start = 12.dp))
     }
 }
