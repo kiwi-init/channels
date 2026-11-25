@@ -172,10 +172,11 @@ export const joinCommands: Record<string, Command> = {
         const given = pin;
         const fits = (t: string) => pinFits(t, decodeJoinCode(code));
         const check = yield* Effect.promise(() => fits(given));
-        const repair = check.kind === "invalid" ? yield* Effect.promise(() => repairPin(given, fits, Date.now() + REPAIR_BUDGET_MS)) : null;
-        if (check.kind === "couldNotRun") {
+        const repair = check.kind === "invalid" ? yield* Effect.promise(() => repairPin(given, fits, REPAIR_BUDGET_MS)) : null;
+        const why = check.kind === "couldNotRun" ? check.why : repair?.kind === "couldNotRun" ? repair.why : null;
+        if (why !== null) {
           yield* doneAsking;
-          return yield* die(`verification could not run: ${check.why}, run the command again; nothing was sent`);
+          return yield* die(`verification could not run: ${why}, run the command again; nothing was sent (invite check ${inviteCheck(given)})`);
         }
         if (repair?.kind === "repaired") {
           pin = repair.token;

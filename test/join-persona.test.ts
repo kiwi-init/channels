@@ -111,7 +111,8 @@ test("a verifier that throws makes join say verification could not run, before a
   );
   const { exit, out, err } = await run(code, token, "8s", { BUN_OPTIONS: `--preload=${preload}` });
   expect([exit, err]).toEqual([1, expect.stringContaining("verification could not run: OperationError: injected verifier failure, run the command again")]);
-  expect(err).not.toContain("failed verification");
+  expect(err).toContain(`nothing was sent (invite check ${inviteCheck(token)})`);
+  expect(err).not.toContain("Could not verify");
   expect(err).not.toMatch(/^\s+at /m);
   expect(out).not.toContain("asked to join");
   expect(await ownerCh.requests({})).toEqual([]);

@@ -25,49 +25,99 @@ describe("an invite token with one character changed in the copy", () => {
     const at = token.length - 20;
     const bent = swapped(token, at);
     expect((await fits(bent)).kind).toBe("invalid");
-    expect(await repairPin(bent, fits, Date.now() + 60_000)).toEqual({ kind: "repaired", token, at: at + 1, was: bent[at]!, is: token[at]! });
+    expect(await repairPin(bent, fits, 60_000)).toEqual({ kind: "repaired", token, at: at + 1, was: bent[at]!, is: token[at]! });
   });
 
   test("a change that breaks the JSON is put back too", async () => {
     const { token, fits } = await invite();
     const bent = `${token[0] === "e" ? "f" : "e"}${token.slice(1)}`;
     expect((await fits(bent)).kind).toBe("invalid");
-    expect(await repairPin(bent, fits, Date.now() + 60_000)).toMatchObject({ kind: "repaired", token, at: 1 });
+    expect(await repairPin(bent, fits, 60_000)).toMatchObject({ kind: "repaired", token, at: 1 });
   });
 
   test("two changes, a dropped character or another owner's token are not repaired", async () => {
     const { token, fits } = await invite();
-    expect(await repairPin(swapped(swapped(token, 40), token.length - 10), fits, Date.now() + 60_000)).toEqual({ kind: "none" });
-    expect(await repairPin(`${token.slice(0, 100)}${token.slice(101)}`, fits, Date.now() + 60_000)).toEqual({ kind: "none" });
+    expect(await repairPin(swapped(swapped(token, 40), token.length - 10), fits, 60_000)).toEqual({ kind: "none" });
+    expect(await repairPin(`${token.slice(0, 100)}${token.slice(101)}`, fits, 60_000)).toEqual({ kind: "none" });
     const other = await makePin(await generateIdentity("other"), room, builder);
-    expect(await repairPin(swapped(other, other.length - 20), fits, Date.now() + 60_000)).toEqual({ kind: "none" });
+    expect(await repairPin(swapped(other, other.length - 20), fits, 60_000)).toEqual({ kind: "none" });
   });
 });
 
 describe("the search's limits", () => {
-  const token = "abcdef";
+  const token = b64url(new TextEncoder().encode(JSON.stringify({ v: "abcdefghijkl" })));
+  const readable = (i: number) =>
+    [..."ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"]
+      .map((c) => `${token.slice(0, i)}${c}${token.slice(i + 1)}`)
+      .find((t) => {
+        if (t === token) return false;
+        try {
+          return typeof JSON.parse(new TextDecoder().decode(fromB64url(t))) === "object";
+        } catch {
+          // A variant that isn't JSON is no use as a stand-in for a signed token.
+          return false;
+        }
+      })!;
+  const first = readable(8);
+  const last = readable(token.length - 4);
   const fitsAt =
     (...good: string[]) =>
     async (t: string): Promise<PinCheck> =>
       good.includes(t) ? { kind: "fits" } : { kind: "invalid" };
 
   test("two variants with different payloads that both verify are ambiguous", async () => {
-    expect(await repairPin(token, fitsAt("Abcdef", "abcdeA"), never)).toEqual({ kind: "ambiguous" });
+    expect(await repairPin(token, fitsAt(first, last), never)).toEqual({ kind: "ambiguous" });
   });
 
-  test("variants that decode to the same bytes count once", async () => {
-    expect(await repairPin("abc", fitsAt("abd", "abe"), never)).toMatchObject({ kind: "repaired", token: "abd" });
+  test("variants that spell the same signed token differently count once", async () => {
+    const { token, fits } = await invite();
+    const o = JSON.parse(new TextDecoder().decode(fromB64url(token))) as { sig: string };
+    const spelled = (sig: string) => b64url(new TextEncoder().encode(JSON.stringify({ ...o, sig })));
+    const pair = (at: number) => [spelled(`${o.sig.slice(0, at)}-${o.sig.slice(at + 1)}`), spelled(`${o.sig.slice(0, at)}+${o.sig.slice(at + 1)}`)] as const;
+    const differing = (a: string, b: string) => [...a].flatMap((c, i) => (c === b[i] ? [] : [i]));
+    const at = [...Array(o.sig.length).keys()].find((i) => differing(...pair(i)).length === 1)!;
+    const [plain, alias] = pair(at);
+    const diff = differing(plain, alias)[0]!;
+    const both = async (t: string): Promise<PinCheck> => (t === plain || t === alias ? { kind: "fits" } : fits(t));
+    const bent = `${plain.slice(0, diff)}${plain[diff] === "A" || alias[diff] === "A" ? "Q" : "A"}${plain.slice(diff + 1)}`;
+    expect(await repairPin(bent, both, never)).toMatchObject({ kind: "repaired", at: diff + 1 });
   });
 
   test("a search past its deadline is refused", async () => {
     let clock = 0;
-    const tick = () => (clock += 1_000);
-    expect(await repairPin(token, fitsAt("abcdeA"), 3_000, tick)).toEqual({ kind: "outOfTime" });
+    const slow = async (t: string): Promise<PinCheck> => {
+      clock += 1;
+      return fitsAt(last)(t);
+    };
+    expect(await repairPin(token, slow, 100, () => clock)).toEqual({ kind: "outOfTime" });
   });
 
-  test("a variant whose check can't run, like one with a malformed key, is not a match and the search goes on", async () => {
-    const check = async (t: string): Promise<PinCheck> => (t === "abcdeA" ? { kind: "fits" } : { kind: "couldNotRun", why: "DataError: bad key" });
-    expect(await repairPin(token, check, never)).toMatchObject({ kind: "repaired", token: "abcdeA" });
+  test("a match found in the batch that crosses the deadline is still refused", async () => {
+    let clock = 0;
+    const lastBatchIsLate = async (t: string): Promise<PinCheck> => {
+      if (t.slice(0, -1) === token.slice(0, -1)) clock = 1_000;
+      return fitsAt(last)(t);
+    };
+    expect(await repairPin(token, lastBatchIsLate, 500, () => clock)).toEqual({ kind: "outOfTime" });
+    expect(await repairPin(token, fitsAt(last), 500, () => 0)).toMatchObject({ kind: "repaired", token: last });
+  });
+
+  test("a check that can't run stops the search and says so, even after a match", async () => {
+    const check = async (t: string): Promise<PinCheck> => (t === first ? { kind: "fits" } : t === last ? { kind: "couldNotRun", why: "OperationError: injected" } : { kind: "invalid" });
+    expect(await repairPin(token, check, never)).toEqual({ kind: "couldNotRun", why: "OperationError: injected" });
+  });
+
+  test("every one-character variant of a real token is told fits or invalid, never could-not-run", async () => {
+    const { token: real, fits } = await invite();
+    const bent = swapped(real, real.length - 20);
+    const kinds = new Set<string>();
+    const counted = async (t: string) => {
+      const r = await fits(t);
+      kinds.add(r.kind);
+      return r;
+    };
+    await repairPin(bent, counted, never);
+    expect([...kinds].sort()).toEqual(["fits", "invalid"]);
   });
 
   test("the worst case, a token as long as MAX_PIN, finishes inside the budget", async () => {
