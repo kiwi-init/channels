@@ -25,6 +25,14 @@ final class TitleTests: XCTestCase {
         pill.press(forDuration: 0.8)
         XCTAssertTrue(app.buttons["lead"].waitForExistence(timeout: 5), "holding the title opens the jump menu, with the lead chat in it")
         add(shot(app, "jump menu"))
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap()
+
+        let updates = app.buttons["updates"]
+        XCTAssertTrue(updates.waitForExistence(timeout: 5), "an Updates icon in the top bar")
+        updates.press(forDuration: 0.8)
+        let first = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "GitHub")).firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 5), "holding Updates lists the latest few")
+        add(shot(app, "updates menu"))
     }
 
     @MainActor
