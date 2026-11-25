@@ -51,6 +51,15 @@ class ScreensTest {
     fun list() = shoot("list") { Home(it, open = {}, tasks = {}) }
 
     @Test
+    fun listLongNames() = shoot("list-long-names", {
+        val room = it.rooms.getValue(DEV)
+        it.rooms[DEV] = room.copy(
+            title = "the-channel-with-a-name-so-long-it-runs-past-the-edge",
+            members = room.members.map { m -> if (m.name == room.lead) m.copy(display = "🦊 Teamlead Channels") else m },
+        )
+    }) { Home(it, open = {}, tasks = {}) }
+
+    @Test
     fun general() = shoot("general") { ConversationScreen(it, Spot(DEV), back = {}) }
 
     @Test

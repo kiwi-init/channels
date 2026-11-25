@@ -125,7 +125,7 @@ fun ConversationList(model: AppModel, open: (Spot) -> Unit, tasks: (String) -> U
 private fun ChannelHeader(room: RoomView) {
     val tone = Tone.current
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 4.dp).semantics { heading() }, verticalAlignment = Alignment.CenterVertically) {
-        Text(room.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = tone.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(room.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = tone.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         if (room.working > 0) Text(" · " + pluralStringResource(R.plurals.n_working, room.working, room.working), style = MaterialTheme.typography.titleSmall, color = tone.doing)
         if (room.connection == com.kiwiinit.channels.engine.Connection.Connecting) Text(" · " + stringResource(R.string.connecting_lower), style = MaterialTheme.typography.titleSmall, color = tone.ink3)
     }
@@ -146,7 +146,7 @@ private fun PlainRow(title: String, line: String, open: () -> Unit, icon: @Compo
         icon()
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (line.isNotEmpty()) Text(line, style = MaterialTheme.typography.bodyMedium, color = tone.ink3, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
     }

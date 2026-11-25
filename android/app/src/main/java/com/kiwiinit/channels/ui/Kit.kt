@@ -1,5 +1,6 @@
 package com.kiwiinit.channels.ui
 
+import android.icu.text.BreakIterator
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.text.format.DateFormat
@@ -166,9 +167,9 @@ fun Face(name: String, member: MemberView?, size: Dp = 32.dp, modifier: Modifier
     }
 }
 
-private fun initials(name: String): String {
+internal fun initials(name: String): String {
     val words = name.split(' ', '-', '_', '.').filter { it.isNotEmpty() }
-    val letters = words.take(2).joinToString("") { it.first().uppercase() }
+    val letters = words.take(2).joinToString("") { it.substring(0, BreakIterator.getCharacterInstance().apply { setText(it) }.next()).uppercase() }
     return letters.ifEmpty { "?" }
 }
 

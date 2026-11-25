@@ -1,5 +1,6 @@
 package com.kiwiinit.channels.ui
 
+import androidx.compose.foundation.layout.widthIn
 import android.content.pm.PackageManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -212,7 +213,7 @@ private fun Setting(icon: ImageVector, tint: Color, title: String, value: String
         Spacer(Modifier.width(14.dp))
         Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         if (value != null) {
-            Text(value, style = MaterialTheme.typography.bodyMedium, color = Tone.current.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp))
+            Text(value, style = MaterialTheme.typography.bodyMedium, color = Tone.current.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp).widthIn(max = 180.dp))
         }
         if (switch != null) Switch(checked = switch, onCheckedChange = null, modifier = Modifier.padding(start = 12.dp))
     }

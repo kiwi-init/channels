@@ -1,5 +1,6 @@
 package com.kiwiinit.channels.ui
 
+import androidx.compose.ui.text.style.TextOverflow
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
@@ -360,6 +361,7 @@ private fun Bar(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Col
             style = MaterialTheme.typography.labelLarge,
             color = tone.ink2,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         IconButton(onClick = cancel) { Icon(Icons.Filled.Cancel, contentDescription = stringResource(R.string.cancel), tint = tone.ink3) }
