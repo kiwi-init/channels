@@ -48,7 +48,10 @@ export type Ask =
   | { op: "marks"; code: string; marks: Record<string, number>; write: boolean }
   | { op: "nudge" }
   | { op: "push"; token: string; sandbox: boolean }
-  | { op: "signOut"; relay: string };
+  | { op: "signOut"; relay: string }
+  | { op: "liveToken"; start?: string; update?: string; room?: string; sandbox: boolean }
+  | { op: "liveKeys" }
+  | { op: "liveOff" };
 
 export interface Picture {
   name: string;

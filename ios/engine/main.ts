@@ -16,6 +16,7 @@ import { personMachines, type Asker, type PairedComputer } from "../../desktop/s
 import { withoutPurchaseLinks } from "./refusal.ts";
 import { acceptSeat, withAccess } from "../../desktop/src/seats.ts";
 import { needsOf } from "./needs.ts";
+import { liveKeys, registerLive, unregisterLive } from "./live.ts";
 import { registerPush, unregisterPush } from "./push.ts";
 import { Room } from "./room.ts";
 import type { Ask, EnrollStart, Fetched, HiddenSeat, Push, Reply, RoomView, Saved } from "./wire.ts";
@@ -618,7 +619,9 @@ async function handle(ask: Ask): Promise<unknown> {
     case "signOut": {
       const was = saved;
       start({ relay: ask.relay, person: null, seats: [] });
-      return was ? unregisterPush(was.relay, was.seats) : [];
+      if (!was) return [];
+      void unregisterLive(was.relay, was.seats);
+      return unregisterPush(was.relay, was.seats);
     }
     case "enrollBegin":
       return enrollBegin(ask.relay, ask.label, ask.os, ask.user, ask.waitMs);
@@ -666,6 +669,12 @@ async function handle(ask: Ask): Promise<unknown> {
       return null;
     case "push":
       return saved ? registerPush(saved.relay, seats(), ask.token, ask.sandbox) : [];
+    case "liveToken":
+      return saved ? registerLive(saved.relay, seats(), ask) : [];
+    case "liveKeys":
+      return liveKeys(seats());
+    case "liveOff":
+      return saved ? unregisterLive(saved.relay, seats()) : [];
   }
 }
 

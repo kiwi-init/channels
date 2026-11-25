@@ -3,17 +3,19 @@ import SwiftUI
 struct LockScreen: View {
     let title: String
     let agents: [AgentsActivity.Agent]
+    var count: Int? = nil
 
     var body: some View {
+        let working = count ?? agents.count
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 6) {
                 Text(title).font(.headline).lineLimit(1)
                 Spacer(minLength: 8)
-                if agents.isEmpty {
+                if working == 0 {
                     Text("Nobody is working").font(.subheadline).foregroundStyle(.secondary)
                 } else {
                     Circle().fill(.green).frame(width: 7, height: 7)
-                    Text("\(agents.count) working").font(.subheadline).foregroundStyle(.secondary)
+                    Text("\(working) working").font(.subheadline).foregroundStyle(.secondary)
                 }
             }
             Rows(agents: Array(agents.prefix(3)))
@@ -57,12 +59,14 @@ struct Rows: View {
 
 struct Clock: View {
     let agents: [AgentsActivity.Agent]
+    var count: Int? = nil
 
     var body: some View {
-        if agents.count > 1 {
-            Text("\(agents.count)").foregroundStyle(.green)
-        } else if let since = agents.first?.since {
+        let working = count ?? agents.count
+        if working == 1, let since = agents.first?.since {
             Text(since, style: .timer).multilineTextAlignment(.trailing).foregroundStyle(.green)
+        } else if working > 0 {
+            Text("\(working)").foregroundStyle(.green)
         }
     }
 }
