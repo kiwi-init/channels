@@ -13,7 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.kiwiinit.channels.R
 
-class Lock(private val app: Context, linked: Boolean, private val words: () -> Words) {
+class Lock(private val app: Context, linked: Boolean, private val guarding: () -> Boolean, private val words: () -> Words) {
     var locked by mutableStateOf(linked)
         private set
     private var leftAt: Long? = null
@@ -47,14 +47,14 @@ class Lock(private val app: Context, linked: Boolean, private val words: () -> W
 
     fun back(prompt: BiometricPrompt) {
         val at = leftAt
-        if (at != null && SystemClock.elapsedRealtime() - at > GRACE_MS) locked = true
+        if (at != null && guarding() && SystemClock.elapsedRealtime() - at > GRACE_MS) locked = true
         leftAt = null
         unlock(prompt)
     }
 
     fun unlock(prompt: BiometricPrompt) {
         if (!locked || asking) return
-        if (!available) {
+        if (!available || !guarding()) {
             locked = false
             return
         }

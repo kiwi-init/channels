@@ -14,19 +14,27 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.fragment.app.FragmentActivity
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
+import com.kiwiinit.channels.model.Lock
+import com.kiwiinit.channels.model.Words
 import com.kiwiinit.channels.theme.ChannelsTheme
 import com.kiwiinit.channels.ui.Guarded
+import java.time.Duration
+import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowSystemClock
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = RobolectricDeviceQualifiers.Pixel7)
@@ -36,6 +44,18 @@ class LockTest {
 
     @get:Rule
     val rules: RuleChain = RuleChain.outerRule(Registered).around(compose)
+
+    @Test
+    fun aPhoneNotLinkedYetIsNotLockedWhenItComesBackFromSigningIn() {
+        val app = RuntimeEnvironment.getApplication()
+        val activity = Robolectric.buildActivity(FragmentActivity::class.java).setup().get()
+        val lock = Lock(app, linked = false, guarding = { false }) { Words(app.resources) }
+        val prompt = lock.prompt(activity)
+        lock.left()
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(45))
+        lock.back(prompt)
+        assertFalse(lock.locked)
+    }
 
     @Test
     fun backOnTheLockScreenKeepsTheConversationBehindIt() {

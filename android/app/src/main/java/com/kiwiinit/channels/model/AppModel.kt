@@ -107,7 +107,7 @@ class AppModel(private val app: Application, private val calls: (suspend (JsonOb
 
     var words = Words(app.resources)
     val vault = Vault(app)
-    val lock = Lock(app, vault.exists()) { words }
+    val lock = Lock(app, vault.exists(), { phase != Phase.Unlinked }) { words }
     val buzz = MutableSharedFlow<Buzz>(extraBufferCapacity = 8)
 
     var engine by mutableStateOf<Engine?>(null)
