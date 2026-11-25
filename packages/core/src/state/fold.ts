@@ -314,9 +314,9 @@ function folding(
     }
   };
   const scopeSets = new Map<string, Frozen<{ seq: number; scopes: Scope[] }>>(from?.scopeSets);
-  const roleSets = new Map<string, { seq: number; role: string | null; about?: string | null }>(from?.roleSets);
+  const roleSets = new Map<string, Frozen<{ seq: number; role: string | null; about?: string | null }>>(from?.roleSets);
   const gone = new Map<string, number>(from?.gone);
-  const nicknames = new Map<string, Nickname>(from?.nicknames);
+  const nicknames = new Map<string, Frozen<Nickname>>(from?.nicknames);
   for (const m of members.values()) {
     const nick = isPerson(m) ? undefined : nicknames.get(m.pk);
     if (nick) m.display = nick.nickname ?? undefined;
@@ -346,16 +346,16 @@ function folding(
   const runsKept = !!from && !older;
   const stepless = older && (from.rules ?? 0) < STEP_RULES;
   const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, older ? taskFromOlder(t, stepless) : t]));
-  const facts = new Map<string, Fact>(from?.facts.map((f) => [f.key, f]));
+  const facts = new Map<string, Frozen<Fact>>(from?.facts.map((f) => [f.key, f]));
   const docs = new Map<string, string>(from?.docs);
   const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
-  const reactions = new Map<number, Map<string, Reaction>>(from?.reactions.map(([seq, by]) => [seq, new Map(by)]));
+  const reactions = new Map<number, Map<string, Frozen<Reaction>>>(from?.reactions.map(([seq, by]) => [seq, new Map(by)]));
   const reactSeqs = new Set<number>(from?.reactSeqs);
   const chatBy = new Map<number, string>(unpackAuthors(from?.authors) ?? from?.chatBy);
-  const edits = new Map<number, Edit>(from?.edits);
+  const edits = new Map<number, Frozen<Edit>>(from?.edits);
   const deleted = new Map<number, number>(from?.deleted);
   let skipped = from?.skipped === true;
-  const trust = new Map<number, Trust>(from?.trust);
+  const trust = new Map<number, Frozen<Trust>>(from?.trust);
   const rejected = new Map<number, string>(from?.rejected);
   const sent = new Map<string, number>();
   const sentAt = new Map<string, number>();
@@ -386,7 +386,7 @@ function folding(
   const permBySeq = new Map<number, Message>();
   const threadOf = new Map<number, number>(from?.threadOf);
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
-  const askHeads = new Map<number, AskHead>(from?.askHeads?.map((h) => [h.id, h]));
+  const askHeads = new Map<number, Frozen<AskHead>>(from?.askHeads?.map((h) => [h.id, h]));
   const specs = new Map<number, Frozen<Spec>>(from?.specs?.map((sp) => [sp.ask, sp]));
   if (stepless) migrateChecks(tasks, new Map(from?.checks?.map((c) => [c.seq, c])));
   const checks = new Map<number, CheckState>(from?.checks?.map((c) => [c.seq, checkFrom(c)]));
