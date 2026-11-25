@@ -44,6 +44,7 @@ import { watchClock, watchedPeers, type ClockWatcher } from "./clock-watch.ts";
 import { checkpointAskFor } from "@kiwi/core/state/checkpoint-asks.ts";
 import { CHECKPOINT_WINDOW_MS } from "@kiwi/core/checkpoint-schedule.ts";
 import { followDocs } from "./doc-follow.ts";
+import { liveAbout, LiveBlobs, relayLiveIo } from "./live-blobs.ts";
 import { pathOf, seatWakes } from "./wake.ts";
 import { sampleRunning } from "../up/sample.ts";
 
@@ -205,6 +206,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const path = await livePath(cfg, seat, attached, now);
     const via = wakeOn(cfg, seat.alias, seat.agent) ? viaOf(path) : null;
     const reach = reachOf(attached, record, now, pidAlive, path.kind !== "none");
+    void seat.live?.tick(now).catch(() => {});
     if (!force && JSON.stringify(now) === JSON.stringify(seat.activity) && via === seat.wakeVia && reach === seat.reach) return;
     seat.activity = now;
     seat.wakeVia = via;
@@ -382,6 +384,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     seat.docs = null;
     seat.clock?.stop();
     seat.clock = null;
+    void seat.live?.close();
+    seat.live = null;
     seat.ctl.abort();
     stopBeacon(seat);
     if (seat.markTimer) clearTimeout(seat.markTimer);
@@ -583,6 +587,12 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         clock: null,
       };
       seat.clock = clockFor(seat);
+      seat.live = new LiveBlobs(
+        relayLiveIo(ch, async () => {
+          const state = await stateOf(seat);
+          return state ? liveAbout(state, agent, alias) : null;
+        }),
+      );
       seat.docs = followDocs(
         seat,
         () => stateOf(seat),
