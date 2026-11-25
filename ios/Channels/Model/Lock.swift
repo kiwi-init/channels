@@ -25,6 +25,12 @@ final class Lock {
         !UserDefaults.standard.bool(forKey: Lock.offKey)
     }
 
+    var hides: Bool {
+        if locked { return true }
+        guard on, let leftAt else { return false }
+        return Date.now.timeIntervalSince(leftAt) > Lock.grace
+    }
+
     var available: Bool {
         LAContext().canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
     }

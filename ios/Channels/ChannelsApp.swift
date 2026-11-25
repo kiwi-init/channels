@@ -17,6 +17,7 @@ struct ChannelsApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                .environment(lock)
                 .onChange(of: lock.locked && model.phase == .ready, initial: true) { _, shut in
                     if shut {
                         cover.show { Task { await lock.unlock() } }
