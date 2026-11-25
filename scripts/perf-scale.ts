@@ -17,6 +17,11 @@ import { startLocalRelay } from "./local-relay.ts";
 import { calibrate } from "./perf-calibrate.ts";
 import { approveSpec, composer, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, view, viewTimed, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
+import { measureBase, type BaseSeed } from "./perf-base.ts";
+import { WINDOW } from "@kiwi/channel/channel-store.ts";
+import { foldRoster } from "@kiwi/channel/fold-roster.ts";
+import { trimmed } from "@kiwi/channel/trim.ts";
+import { publicView } from "@kiwi/core/room-rules.ts";
 import { pageErrors } from "./page-errors.ts";
 
 if (process.argv.includes("--help")) {
@@ -25,6 +30,9 @@ Reports cold load, the reload to the first screen, each view's switch at 1x and 
 PERF_TASKS_FIRST=1 makes the tasks before the messages, so a reload has to keep them from beyond the newest 2000.
 PERF_SOAK_POST=0 keeps the soak's sampling and views but has no agent post: an idle control.
 PERF_ALLOC=1 makes the soak's 8 KiB sampling heap profile keep collected objects too, so it estimates allocation per message sent.
+PERF_TASK_NOTES gives every task that many notes of about 1.5 KB (0), so the fold base grows the way real task notes grow it.
+PERF_BASE=large seeds a fold base the size of a busy real channel's (at least 3.4 MB): 600 tasks with 7 notes each and 4000 messages, unless PERF_TASKS, PERF_MESSAGES or PERF_TASK_NOTES set one.
+The report's "fold base before the soak" is that base, folded from the channel's history outside the sampled interval: its UTF-8 JSON size and its mix.
 PERF_GL=swiftshader draws with the CPU, as CI's runners do: on a Mac that's how to see what CI sees.
 --gated measures only what scripts/perf-check.ts gates: the reload at 1x, the views at 4x and typing, without the 1x views, details toggles, profiles or second reload.
 
@@ -34,10 +42,15 @@ Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium 
   process.exit(0);
 }
 
+const PERF_BASE_SMALL = { tasks: 100, messages: 2000, taskNotes: 0 };
+const PERF_BASE_LARGE = { tasks: 600, messages: 4000, taskNotes: 7 };
 const ROOT = resolve(import.meta.dir, "..");
 const AGENTS = Number(process.env.PERF_AGENTS ?? 10);
-const TASKS = Number(process.env.PERF_TASKS ?? 100);
-const MESSAGES = Number(process.env.PERF_MESSAGES ?? 2000);
+const PRESET = process.env.PERF_BASE === "large" ? PERF_BASE_LARGE : process.env.PERF_BASE ? null : PERF_BASE_SMALL;
+if (!PRESET) throw new Error(`PERF_BASE is large or empty, not ${process.env.PERF_BASE}`);
+const TASKS = Number(process.env.PERF_TASKS || PRESET.tasks);
+const MESSAGES = Number(process.env.PERF_MESSAGES || PRESET.messages);
+const TASK_NOTES = Number(process.env.PERF_TASK_NOTES || PRESET.taskNotes);
 const SOAK_MIN = Number(process.env.PERF_SOAK_MIN ?? 20);
 const GATED = process.argv.includes("--gated");
 const ALLOC = process.env.PERF_ALLOC === "1";
@@ -101,6 +114,17 @@ const say = (s: AgentSession, body: string, task?: number) =>
       ),
     ),
   );
+
+const seatBase = (seat: AgentSession) =>
+  Effect.gen(function* () {
+    const ch = seat.ch;
+    const [{ messages }, members, rooms, guard] = yield* Effect.all(
+      [ch.fx.history(0), ch.fx.members(), Effect.orElseSucceed(ch.fx.rooms(), () => null), Effect.orElseSucceed(ch.fx.guard(), () => null)],
+      { concurrency: "unbounded" },
+    );
+    const base = trimmed(publicView(messages), foldRoster(members.filter((m) => !m.unverified)), Date.now(), rooms, guard, null, WINDOW, 0);
+    return base ? measureBase(base, WINDOW) : null;
+  });
 
 const median = (xs: number[]) => {
   const s = [...xs].sort((a, b) => a - b);
@@ -245,6 +269,8 @@ const TEXTS = [
 ];
 
 const SEEDED = "Seeded: a reload opens the channel here";
+const noteText = (task: number, k: number): string =>
+  `Checkpoint ${k + 1} for task ${task}.\n\n${Array.from({ length: 6 }, (_, i) => TEXTS[(task + k + i) % TEXTS.length]).join("\n\n")}`.slice(0, 1536);
 const wholeEnv = (name: string, fallback: number, least: number): number => {
   const raw = process.env[name]?.trim() ?? "";
   const n = raw ? Number(raw) : fallback;
@@ -259,6 +285,7 @@ const report: Record<string, unknown> = {
   agents: AGENTS,
   tasks: TASKS,
   messages: MESSAGES,
+  seed: { preset: process.env.PERF_BASE || "small", agents: AGENTS, tasks: TASKS, messages: MESSAGES, taskNotes: TASK_NOTES } satisfies BaseSeed & { preset: string },
   soakMinutes: SOAK_MIN,
   control: process.env.PERF_CONTROL?.trim() || null,
   app: process.env.PERF_APP_SHA?.trim() || null,
@@ -383,6 +410,7 @@ try {
         const title = `Task ${n}: ${["speed up the switch", "fix the relay retry", "polish the sidebar", "write the stable criteria"][n % 4]} (${s.me})`;
         const id = await patiently(() => runAgent(s.taskAdd(title, { owner: s.me, re: ask })));
         tasks.push(id);
+        for (let k = 0; k < TASK_NOTES; k++) await patiently(() => runAgent(s.taskUpdate(id, { note: noteText(n, k) })));
         if (n % 3 === 1) await patiently(() => runAgent(s.taskUpdate(id, { state: "doing" })));
         if (n % 3 === 2) await patiently(() => runAgent(s.taskUpdate(id, { state: "done" })));
       }
@@ -581,6 +609,9 @@ try {
   };
   log("typing", JSON.stringify(report[`typing while ${AGENTS} agents post`]));
 
+  const base = await patiently(() => runAgent(seatBase(seats[0]!)));
+  report["fold base before the soak"] = base;
+  log("fold base before the soak", JSON.stringify(base));
   log(`soak: ${SOAK_MIN} minutes`);
   const blocksAtStart = await docBlocks(page);
   await cdp.send("HeapProfiler.collectGarbage");
