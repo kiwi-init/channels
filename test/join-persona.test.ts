@@ -7,7 +7,7 @@ import { b64url, decodeJoinCode, fromB64url } from "@kiwi/core/crypto.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { inviteCheck } from "@kiwi/core/invite-check.ts";
-import { makePin } from "@kiwi/core/pin.ts";
+import { makePin, MAX_PIN } from "@kiwi/core/pin.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "./owner.ts";
@@ -135,6 +135,17 @@ test("a valid invite token joins without any repair notice", async () => {
   const { code, token } = await ownedWithInvite();
   const { err } = await run(code, token, "4s");
   expect(err).not.toContain("one character in the invite token");
+});
+
+test("an invite token one character longer than MAX_PIN can't be read, is never searched for a repair, and nothing is sent", async () => {
+  const { code, ownerCh, token } = await ownedWithInvite();
+  const long = `${token}${"A".repeat(MAX_PIN + 1 - token.length)}`;
+  expect(long.length).toBe(MAX_PIN + 1);
+  const { out, err } = await run(code, long, "8s");
+  expect(err).toContain(`This invite token couldn't be read. Copy a fresh invite and try again; nothing was sent (invite check ${inviteCheck(long)})`);
+  expect(err).not.toContain("one character in the invite token");
+  expect(out).not.toContain("asked to join");
+  expect(await ownerCh.requests({})).toEqual([]);
 });
 
 test("an invite token outside the token alphabet can't be read and nothing is sent", async () => {

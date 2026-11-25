@@ -3,8 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
-import { caseRuleOf, loadFiles, saveFiles } from "../src/attach.ts";
-import { keepFiles, messagePlan, saveMessage } from "../src/received-files.ts";
+import { caseRuleOf, loadFiles, planNames, saveNamed } from "../src/attach.ts";
+import { messagePlan, saveMessage } from "../src/received-files.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel, Relay } from "@kiwi/core/client.ts";
 import type { RelayApi } from "@kiwi/core/client/relay.ts";
@@ -48,6 +48,16 @@ afterAll(() => {
   rmSync(dataDir, { recursive: true, force: true });
   rmSync(scratch, { recursive: true, force: true });
 });
+
+const savedFiles = (seq: number, files: { name: string; bytes: Uint8Array }[], dir: string): string[] =>
+  saveNamed(
+    planNames(
+      seq,
+      files.map((f) => ({ ...f, fallback: "file" as const, markdown: false })),
+      caseRuleOf(dir),
+    ),
+    dir,
+  );
 
 test("a file of several pieces goes to the relay encrypted, travels on the message, and reads back byte for byte", async () => {
   const bytes = noise(2 * FILE_PIECE_BYTES + 12_345);
@@ -116,7 +126,7 @@ test("the cli reads a local file with its type, refuses a folder, an empty file 
   const huge = join(scratch, "huge.bin");
   writeFileSync(huge, new Uint8Array(MAX_FILE_BYTES + 1));
   expect(() => loadFiles([huge])).toThrow(/at most 25 MB/);
-  const [path] = saveFiles(42, [{ name: "a report (final).pdf", bytes: new Uint8Array([1, 2, 3]) }], join(scratch, "out"));
+  const [path] = savedFiles(42, [{ name: "a report (final).pdf", bytes: new Uint8Array([1, 2, 3]) }], join(scratch, "out"));
   expect(path).toBe(join(scratch, "out", "#42-a_report__final_.pdf"));
   expect([...readFileSync(path!)]).toEqual([1, 2, 3]);
   expect(statSync(path!).mode & 0o777).toBe(0o600);
@@ -129,10 +139,10 @@ test("two attachments with the same name save as two files, and saving again giv
     { name: "notes.md", bytes: new Uint8Array([2]) },
     { name: "image.png", bytes: new Uint8Array([3]) },
   ];
-  const paths = saveFiles(17, items, out);
+  const paths = savedFiles(17, items, out);
   expect(paths).toEqual([join(out, "#17-image.png"), join(out, "#17-notes.md"), join(out, "#17-2-image.png")]);
   expect(paths.map((p) => [...readFileSync(p)])).toEqual([[1], [2], [3]]);
-  expect(saveFiles(17, items, out)).toEqual(paths);
+  expect(savedFiles(17, items, out)).toEqual(paths);
 });
 
 test("a message with a file shows it as a marker beside the text", async () => {
@@ -167,12 +177,12 @@ test("an attachment keeps its path when an earlier one fails to download and lat
   ]);
   const fetchWith = (missing: FileAttachment | null) =>
     ({ fx: { file: (f: FileAttachment) => (f === missing ? Effect.fail(new Error("gone")) : Effect.succeed(bytes.get(f))) } }) as unknown as Channel;
-  const run = (ch: Channel) => Effect.runPromise(Effect.provideService(keepFiles(ch, m, out), Relay, {} as RelayApi));
+  const run = (ch: Channel) => Effect.runPromise(Effect.provideService(saveMessage(ch, m, out), Relay, {} as RelayApi));
   const first = await run(fetchWith(files[0]!));
-  expect(first.saved).toEqual([join(out, "#31-2-image.png")]);
+  expect(first.kept.saved).toEqual([join(out, "#31-2-image.png")]);
   const again = await run(fetchWith(null));
-  expect(again.saved).toEqual([join(out, "#31-image.png"), join(out, "#31-2-image.png")]);
-  expect(again.saved.map((p) => [...readFileSync(p)])).toEqual([[1], [2]]);
+  expect(again.kept.saved).toEqual([join(out, "#31-image.png"), join(out, "#31-2-image.png")]);
+  expect(again.kept.saved.map((p) => [...readFileSync(p)])).toEqual([[1], [2]]);
 });
 
 test("showing a message with nothing to save never touches the destination folder", async () => {
@@ -184,7 +194,6 @@ test("showing a message with nothing to save never touches the destination folde
   const nowhere = "/dev/null/kiwi-downloads";
   expect(await run(saveMessage(ch, text, nowhere))).toEqual({ images: [], kept: { saved: [], markdown: [] } });
   expect(await run(saveMessage(ch, failed, nowhere))).toEqual({ images: [], kept: { saved: [], markdown: [] } });
-  expect(await run(keepFiles(ch, text, nowhere))).toEqual({ saved: [], markdown: [] });
   const local = join(scratch, "untouched");
   await run(saveMessage(ch, failed, local));
   expect(existsSync(local)).toBe(false);
