@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,13 +44,16 @@ enum class Tab { Chats, Needs, Settings }
 @Composable
 fun Home(model: AppModel, open: (Spot) -> Unit, tasks: (String) -> Unit, first: Tab = Tab.Chats) {
     var tab by rememberSaveable { mutableStateOf(first) }
+    val tabs = rememberSaveableStateHolder()
     BackHandler(enabled = tab != Tab.Chats) { tab = Tab.Chats }
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (tab) {
-                Tab.Chats -> ConversationList(model, open, tasks)
-                Tab.Needs -> NeedsList(model, open)
-                Tab.Settings -> SettingsScreen(model)
+            tabs.SaveableStateProvider(tab) {
+                when (tab) {
+                    Tab.Chats -> ConversationList(model, open, tasks)
+                    Tab.Needs -> NeedsList(model, open)
+                    Tab.Settings -> SettingsScreen(model)
+                }
             }
         }
         NavigationBar {
