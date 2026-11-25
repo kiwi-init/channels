@@ -128,8 +128,8 @@ function addRun(g: GithubState, i: GithubNote, seq: number): void {
 export const runsUnknownSince = (g: Frozen<GithubState>, task: { id: number; createdRts?: number }): boolean =>
   task.createdRts === undefined || g.runsSince === null || g.runsSince > task.id || (g.runsForgotten !== null && g.runsForgotten >= task.createdRts);
 
-export function runStart(g: Frozen<GithubState>, id: string, since: number): GithubRun | undefined {
-  let first: GithubRun | undefined;
+export function runStart(g: Frozen<GithubState>, id: string, since: number): Frozen<GithubRun> | undefined {
+  let first: Frozen<GithubRun> | undefined;
   for (const r of g.runs.values()) if ((r.title === id || String(r.run) === id) && r.started >= since && (!first || r.started < first.started)) first = r;
   return first;
 }
@@ -307,7 +307,7 @@ export function releaseOf(g: Frozen<GithubState>, pr: GithubPr): Frozen<GithubRe
   return g.releases.get(repoKey(pr.repo))?.find((r) => r.prs.includes(pr.number) || (!!pr.merge && r.shas.some((s) => sameCommit(s, pr.merge!))));
 }
 
-export function issueOf(g: Frozen<GithubState>, ref: { repo: string; number: number }): GithubIssue | undefined {
+export function issueOf(g: Frozen<GithubState>, ref: { repo: string; number: number }): Frozen<GithubIssue> | undefined {
   return g.issues.get(prKey(ref.repo, ref.number));
 }
 

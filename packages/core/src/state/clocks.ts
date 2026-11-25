@@ -90,7 +90,7 @@ export const timedStep = (t: Task): boolean => {
 
 const headOf = (view: ClockView, t: Task): string | undefined => prOfTask(view.github, view.branchPrefix, t)?.sha;
 
-export function rolled<T extends Frozen<Task>>(view: ClockView, t: T, now: number): T["clock"] | TaskClock | undefined {
+export function rolled<T extends Frozen<Task>>(view: ClockView, t: T, now: number): T["clock"] | undefined {
   if (t.state === "done" || t.archived) return undefined;
   const cur = partyOf(view, t, now);
   const was = t.clock;
@@ -136,7 +136,7 @@ export function tick(view: ClockView, t: Task, mark: { seq: number; at: number; 
 type Nudge = { mover: string; since: number; step: NudgeStep; day?: number; wake?: WakeSeen };
 type Rung = Nudge & { step: 1 | 2 | 3 };
 
-export const wokeFor = (clock: Frozen<TaskClock>, since: number): Woke | undefined => (clock.woke?.since === since ? clock.woke : undefined);
+export const wokeFor = (clock: Frozen<TaskClock>, since: number): Frozen<Woke> | undefined => (clock.woke?.since === since ? clock.woke : undefined);
 
 export const wakeSeen = (woke: Woke | undefined): WakeSeen => (!woke ? "none" : woke.read !== undefined ? "read" : woke.delivered !== undefined ? "delivered" : "attempted");
 

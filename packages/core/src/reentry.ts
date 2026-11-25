@@ -38,7 +38,7 @@ export function leadCheckpointRefusal(state: ChannelState, me: string, text: str
   return left.length ? `a lead checkpoint names everything still open, each task (T7) and question (#123) by its id; this one leaves out ${left.join(", ")}` : null;
 }
 
-function leadCheckpoint(state: ChannelState, me: string): Fact | undefined {
+function leadCheckpoint(state: ChannelState, me: string): Frozen<Fact> | undefined {
   const f = state.facts.get(leadCheckpointKey(me));
   return state.lead === me && f?.by === me && f.expires === undefined ? f : undefined;
 }

@@ -7,7 +7,7 @@ import { changedSinceApproval, landerOf, openRound, setAsideBySpec, specPlanner,
 
 export type Work = { kind: "coding"; task: number } | { kind: "reviewing"; task: number; round: number } | { kind: "answering" } | { kind: "planning"; ask: number };
 
-const live = (t: Frozen<Task | undefined>): t is Task => !!t && t.state !== "done" && !t.archived;
+const live = (t: Frozen<Task | undefined>): t is Frozen<Task> => !!t && t.state !== "done" && !t.archived;
 
 const openTasks = (state: ChannelState) => [...state.tasks.values()].filter((t) => live(t) && !setAsideBySpec(state, t.id)).sort((a, b) => a.id - b.id);
 

@@ -11,7 +11,7 @@ export type StepMark = { seq: number; by: string; at: number };
 
 export interface StepView {
   github: Frozen<GithubState>;
-  prOf: (task: Frozen<Task>) => GithubPr | undefined;
+  prOf: (task: Frozen<Task>) => Frozen<GithubPr> | undefined;
 }
 
 const id = (t: Frozen<Task>): string => `T${t.id}`;
@@ -37,12 +37,12 @@ export const hasOpenSteps = (task: Task): boolean => currentStep(task) !== undef
 
 const beforeApproval = (task: Frozen<Task>): boolean => task.state !== "landing" && task.state !== "done" && !task.archived;
 
-export const heldStep = (task: Frozen<Task>): LandingStep | undefined => {
+export const heldStep = (task: Frozen<Task>): Frozen<LandingStep> | undefined => {
   const step = beforeApproval(task) ? currentStep(task) : undefined;
   return step?.hold ? step : undefined;
 };
 
-export type Pause = { step: LandingStep; kind: "hold"; until: number; reason: string } | { step: LandingStep; kind: "run"; due: number; behind: string };
+export type Pause = { step: Frozen<LandingStep>; kind: "hold"; until: number; reason: string } | { step: Frozen<LandingStep>; kind: "run"; due: number; behind: string };
 
 export function pausingStep(github: Frozen<GithubState>, task: Frozen<Task>, now: number): Pause | undefined {
   const step = heldStep(task);
@@ -148,7 +148,7 @@ export function landedRefusal(view: StepView, task: Task, artifact: CheckArtifac
 
 export interface StepObservation {
   task: Frozen<Task>;
-  step: LandingStep;
+  step: Frozen<LandingStep>;
   artifact: CheckArtifact;
   key: string;
 }

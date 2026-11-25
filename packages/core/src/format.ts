@@ -596,7 +596,7 @@ export function reviewRuleWarning(state: ChannelState, check: string): string | 
     : null;
 }
 
-export function askLine(head: AskHead | null): string {
+export function askLine(head: Frozen<AskHead> | null): string {
   if (!head) return "unfiled (no person's message holds these)";
   const words = inlineText(head.words, head.goal ? 60 : 120);
   const said = `#${head.id} ${inlineText(head.by, 40)}: ${words ? `“${words}”` : "(no text)"}`;

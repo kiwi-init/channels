@@ -1,7 +1,7 @@
 import type { Frozen } from "@kiwi/core/state.ts";
 import type { Handoff, Message } from "@kiwi/core/protocol.ts";
 
-export const handoffOf = (m: Frozen<Message>): Handoff | null => (m.esc && m.handoff ? m.handoff : null);
+export const handoffOf = (m: Frozen<Message>): Frozen<Handoff> | null => (m.esc && m.handoff ? m.handoff : null);
 
 function handoffHost(h: Handoff): string {
   try {

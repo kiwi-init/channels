@@ -656,8 +656,8 @@ export interface Channel {
   next?: string
   mergedAt?: number[]
   hold?: { note?: string; by: string; at: number }
-  compact?: Compacted
-  proposal?: Compacted
+  compact?: Frozen<Compacted>
+  proposal?: Frozen<Compacted>
   newMembers?: "read" | "write"
   newPowers?: Powers
   repos: string[]
@@ -670,7 +670,7 @@ export interface Channel {
   quietMinutes?: number
   reviewReset?: true
   tapToAnswer?: true
-  checkpointDaily?: CheckpointDaily
+  checkpointDaily?: Frozen<CheckpointDaily>
   checkpoints?: CheckpointRound
   landing?: string
   rooms: Room[]

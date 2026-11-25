@@ -48,9 +48,9 @@ const prIndexes = new WeakMap<ChannelState["github"], Map<number, TaskPr>>();
 
 const rankPr = (p: GithubPr): number => (p.state === "open" ? 1 : 0);
 
-const betterPr = (p: GithubPr, held: GithubPr | undefined): boolean => !held || rankPr(p) > rankPr(held) || (rankPr(p) === rankPr(held) && p.at > held.at);
+const betterPr = (p: Frozen<GithubPr>, held: Frozen<GithubPr> | undefined): boolean => !held || rankPr(p) > rankPr(held) || (rankPr(p) === rankPr(held) && p.at > held.at);
 
-export function proofPr(github: Frozen<GithubState>, t: Frozen<Pick<Task, "proof">>): GithubPr | undefined {
+export function proofPr(github: Frozen<GithubState>, t: Frozen<Pick<Task, "proof">>): Frozen<GithubPr> | undefined {
   for (const p of [...(t.proof ?? [])].reverse())
     for (const l of prLinks(p.url)) {
       const pr = github.prs.get(prKey(l.repo, l.number));
@@ -71,8 +71,8 @@ export function taskOfPr(pr: Pick<GithubPr, "branch" | "seq" | "mergedAt">, stat
   return t && openedAfter(pr, t) ? t.id : null;
 }
 
-export function prOfTask(github: Frozen<GithubState>, prefix: string | null, t: Frozen<Pick<Task, "id" | "createdAt" | "proof">>): GithubPr | undefined {
-  let best: GithubPr | undefined;
+export function prOfTask(github: Frozen<GithubState>, prefix: string | null, t: Frozen<Pick<Task, "id" | "createdAt" | "proof">>): Frozen<GithubPr> | undefined {
+  let best: Frozen<GithubPr> | undefined;
   for (const p of github.prs.values()) if (branchLinks(p, prefix, t) && betterPr(p, best)) best = p;
   return best ?? proofPr(github, t);
 }

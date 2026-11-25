@@ -9,7 +9,7 @@ type Stage = "open" | "building" | "proving" | "red" | "yours" | "done" | "dropp
 export interface TaskStage {
   stage: Stage;
   declared?: true;
-  pr?: GithubPr;
+  pr?: Frozen<GithubPr>;
   waitingOn?: string;
   judgedAt?: string;
 }
@@ -30,11 +30,11 @@ function lastVerdict(t: Frozen<Task>): Frozen<ReviewRound | undefined> {
   return [...t.rounds].reverse().find((r) => r.result.kind === "approved" || r.result.kind === "rejected");
 }
 
-export function linkedPr(state: ChannelState, t: Frozen<Task>): GithubPr | undefined {
+export function linkedPr(state: ChannelState, t: Frozen<Task>): Frozen<GithubPr> | undefined {
   return taskPr(state, t.id)?.pr ?? proofPr(state.github, t);
 }
 
-const failedAt = (state: ChannelState, pr: GithubPr): readonly string[] => checksOf(state, pr)?.failed ?? [];
+const failedAt = (state: ChannelState, pr: Frozen<GithubPr>): readonly string[] => checksOf(state, pr)?.failed ?? [];
 
 export function stageOf(state: ChannelState, t: Frozen<Task>): TaskStage {
   const pr = linkedPr(state, t);
@@ -42,7 +42,7 @@ export function stageOf(state: ChannelState, t: Frozen<Task>): TaskStage {
   const head = pr?.state === "open" ? pr.sha : undefined;
   const owed = t.review ? { waitingOn: t.review } : {};
   const verdict = lastVerdict(t);
-  const moved = (r: Frozen<ReviewRound | undefined>): r is ReviewRound & { at: string } => !!r?.at && !!head && !approvedAt(r, head);
+  const moved = (r: Frozen<ReviewRound | undefined>): r is Frozen<ReviewRound> & { at: string } => !!r?.at && !!head && !approvedAt(r, head);
   if (t.state === "done" && t.cancelled) return { stage: "dropped", ...withPr };
   if (pr?.state === "merged" && !failedAt(state, pr).length) return { stage: "done", pr };
   if ((t.state === "done" || t.state === "landing") && verdict?.result.kind === "approved" && moved(verdict)) return { stage: "yours", ...withPr, ...owed, judgedAt: verdict.at };
@@ -55,7 +55,7 @@ export function stageOf(state: ChannelState, t: Frozen<Task>): TaskStage {
   return { stage: t.owner ? "building" : "open", ...withPr };
 }
 
-function checksText(state: ChannelState, pr: GithubPr): string {
+function checksText(state: ChannelState, pr: Frozen<GithubPr>): string {
   const c = checksOf(state, pr);
   if (!c) return "none yet";
   const parts = [
@@ -66,7 +66,7 @@ function checksText(state: ChannelState, pr: GithubPr): string {
   return `${parts.join(", ")}${c.required ? `, of the required ${c.required.map((n) => inlineText(n, 60)).join(", ")}` : ", of every check (no merge rules read)"}`;
 }
 
-export function prLines(state: ChannelState, pr: GithubPr): string[] {
+export function prLines(state: ChannelState, pr: Frozen<GithubPr>): string[] {
   const rules = rulesOf(state.github, pr.repo);
   return [
     `  pr: ${pr.repo}#${pr.number} ${pr.state}${pr.branch ? ` from ${inlineText(pr.branch, 120)}` : ""}${pr.url ? ` · ${inlineText(pr.url, 300)}` : ""}`,

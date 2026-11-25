@@ -18,7 +18,7 @@ export interface Clock {
   quiet: number;
   paged: boolean;
   step: 0 | 1 | 2 | 3;
-  woke?: Woke;
+  woke?: Frozen<Woke>;
 }
 
 export function clockOf(state: Board, t: Frozen<Task>, now: number): Clock | undefined {
