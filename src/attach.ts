@@ -78,26 +78,55 @@ function lockDirs(dir: string, root: string): void {
 
 /** Write message #seq's images into `dir` as `#<seq>-<name>`; returns the paths. Files are 0600. Directories under ~/.kiwi/downloads are 0700; a directory the caller named keeps its own mode. */
 export function saveImages(seq: number, imgs: InlineImage[], dir: string): string[] {
-  return saveAll(
-    seq,
-    imgs.map((img) => ({ name: img.name, bytes: Buffer.from(img.data, "base64") })),
+  return saveNamed(
+    planNames(
+      seq,
+      imgs.map((img) => ({ name: img.name, fallback: "image" as const, markdown: false, bytes: Buffer.from(img.data, "base64") })),
+    ),
     dir,
-    "image",
   );
 }
 
 export function saveFiles(seq: number, files: { name: string; bytes: Uint8Array }[], dir: string): string[] {
-  return saveAll(seq, files, dir, "file");
+  return saveNamed(
+    planNames(
+      seq,
+      files.map((f) => ({ ...f, fallback: "file" as const, markdown: false })),
+    ),
+    dir,
+  );
 }
 
-function saveAll(seq: number, items: { name: string; bytes: Uint8Array }[], dir: string, fallback: string): string[] {
+export type Attachment = { name: string; fallback: "image" | "file"; markdown: boolean };
+
+export function planNames<T extends Attachment>(seq: number, items: T[]): (T & { saveAs: string })[] {
+  const taken = new Set<string>();
+  const fits = (name: string, markdown: boolean) => !taken.has(name) && !(markdown && taken.has(`${name}.md`));
+  const take = (name: string, markdown: boolean) => {
+    taken.add(name);
+    if (markdown) taken.add(`${name}.md`);
+    return name;
+  };
+  const planned = items.map((item) => {
+    const base = item.name.replace(/[^A-Za-z0-9_.-]/g, "_") || item.fallback;
+    const own = `#${seq}-${base}`;
+    return { item, base, own: fits(own, item.markdown) ? take(own, item.markdown) : null };
+  });
+  return planned.map(({ item, base, own }) => {
+    if (own !== null) return { ...item, saveAs: own };
+    let k = 2;
+    while (!fits(`#${seq}-${k}-${base}`, item.markdown)) k++;
+    return { ...item, saveAs: take(`#${seq}-${k}-${base}`, item.markdown) };
+  });
+}
+
+export function saveNamed(items: { saveAs: string; bytes: Uint8Array }[], dir: string): string[] {
   const downloads = join(home(), "downloads");
   const locked = inside(downloads, dir);
   mkdirSync(dir, locked ? { recursive: true, mode: 0o700 } : { recursive: true });
   if (locked) lockDirs(dir, downloads);
   return items.map((item) => {
-    const safe = item.name.replace(/[^A-Za-z0-9_.-]/g, "_") || fallback;
-    const path = join(dir, `#${seq}-${safe}`);
+    const path = join(dir, item.saveAs);
     writeFileSync(path, item.bytes, { mode: 0o600 });
     try {
       chmodSync(path, 0o600);

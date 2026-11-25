@@ -2,13 +2,16 @@ import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as Effect from "effect/Effect";
 import { loadFiles, saveFiles } from "../src/attach.ts";
+import { keepFiles, messagePlan } from "../src/received-files.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
-import { Channel } from "@kiwi/core/client.ts";
+import { Channel, Relay } from "@kiwi/core/client.ts";
+import type { RelayApi } from "@kiwi/core/client/relay.ts";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import { formatMessage } from "@kiwi/core/format.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
-import { FILE_PIECE_BYTES, fileAttachment, MAX_FILE_BYTES, MAX_FILES, type FileAttachment } from "@kiwi/core/protocol.ts";
+import { FILE_PIECE_BYTES, fileAttachment, MAX_FILE_BYTES, MAX_FILES, type FileAttachment, type Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { checked } from "./check.ts";
 
@@ -119,9 +122,55 @@ test("the cli reads a local file with its type, refuses a folder, an empty file 
   expect(statSync(path!).mode & 0o777).toBe(0o600);
 });
 
+test("two attachments with the same name save as two files, and saving again gives the same paths", () => {
+  const out = join(scratch, "same-name");
+  const items = [
+    { name: "image.png", bytes: new Uint8Array([1]) },
+    { name: "notes.md", bytes: new Uint8Array([2]) },
+    { name: "image.png", bytes: new Uint8Array([3]) },
+  ];
+  const paths = saveFiles(17, items, out);
+  expect(paths).toEqual([join(out, "#17-image.png"), join(out, "#17-notes.md"), join(out, "#17-2-image.png")]);
+  expect(paths.map((p) => [...readFileSync(p)])).toEqual([[1], [2], [3]]);
+  expect(saveFiles(17, items, out)).toEqual(paths);
+});
+
 test("a message with a file shows it as a marker beside the text", async () => {
   const f = await memberCh.putFile("slides.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", noise(FILE_PIECE_BYTES + 1));
   const seq = await memberCh.send("the deck", { files: [f] });
   const got = (await ownerCh.history(seq - 1)).messages.find((m) => m.seq === seq)!;
   expect(formatMessage(got)).toContain("the deck [file: slides.pptx (1.0MB)]");
+});
+
+const plannedFile = (name: string): FileAttachment => ({ name, mime: "application/octet-stream", size: 1, pieces: [] });
+const plannedImage = (name: string) => ({ name, mime: "image/png" });
+
+test("one message's images, files and Markdown copies never share a path", () => {
+  const twoAndReal = messagePlan({ seq: 9, imgs: [plannedImage("image.png"), plannedImage("image.png")], files: [plannedFile("2-image.png")] });
+  expect(twoAndReal.imgs.map((p) => p.saveAs)).toEqual(["#9-image.png", "#9-3-image.png"]);
+  expect(twoAndReal.files.map((p) => p.saveAs)).toEqual(["#9-2-image.png"]);
+  const alike = messagePlan({ seq: 9, files: [plannedFile("a b.png"), plannedFile("a_b.png")] });
+  expect(alike.files.map((p) => p.saveAs)).toEqual(["#9-a_b.png", "#9-2-a_b.png"]);
+  const crossed = messagePlan({ seq: 9, imgs: [plannedImage("image.png")], files: [plannedFile("image.png")] });
+  expect([...crossed.imgs, ...crossed.files].map((p) => p.saveAs)).toEqual(["#9-image.png", "#9-2-image.png"]);
+  const copy = messagePlan({ seq: 9, files: [plannedFile("report.pdf"), plannedFile("report.pdf.md")] });
+  expect(copy.files.map((p) => p.saveAs)).toEqual(["#9-report.pdf", "#9-2-report.pdf.md"]);
+});
+
+test("an attachment keeps its path when an earlier one fails to download and later arrives", async () => {
+  const files = [plannedFile("image.png"), plannedFile("image.png")];
+  const m = { seq: 31, kind: "msg", from: "x", ts: 0, text: "", files } as unknown as Message;
+  const out = join(scratch, "late");
+  const bytes = new Map([
+    [files[0], new Uint8Array([1])],
+    [files[1], new Uint8Array([2])],
+  ]);
+  const fetchWith = (missing: FileAttachment | null) =>
+    ({ fx: { file: (f: FileAttachment) => (f === missing ? Effect.fail(new Error("gone")) : Effect.succeed(bytes.get(f))) } }) as unknown as Channel;
+  const run = (ch: Channel) => Effect.runPromise(Effect.provideService(keepFiles(ch, m, out), Relay, {} as RelayApi));
+  const first = await run(fetchWith(files[0]!));
+  expect(first.saved).toEqual([join(out, "#31-2-image.png")]);
+  const again = await run(fetchWith(null));
+  expect(again.saved).toEqual([join(out, "#31-image.png"), join(out, "#31-2-image.png")]);
+  expect(again.saved.map((p) => [...readFileSync(p)])).toEqual([[1], [2]]);
 });

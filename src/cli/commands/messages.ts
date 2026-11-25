@@ -1,8 +1,8 @@
 import * as Effect from "effect/Effect";
 import { join as joinPath } from "node:path";
 import { oneLook, type AgentSession } from "../../agent.ts";
-import { saveImages } from "../../attach.ts";
-import { keepFiles } from "../../received-files.ts";
+import { saveNamed } from "../../attach.ts";
+import { keepFiles, messagePlan } from "../../received-files.ts";
 import { home } from "../../config.ts";
 import { alsoAnswers, formatShown, missingImages, parseDuration, presenceAnswers } from "@kiwi/core/format.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
@@ -27,7 +27,6 @@ import {
   AREA_MAX_LENGTH,
   isQuiet,
   PROTOCOL_VERSION,
-  type InlineImage,
   type Kind,
   type Message,
   type Step,
@@ -287,14 +286,22 @@ export const messageCommands: Record<string, Command> = {
       const root = state.threadOf.get(seq) ?? seq;
       const thread = yield* s.threadMessages(root, messages, state);
       const known = [...messages, ...thread.filter((x) => !messages.some((y) => y.seq === x.seq))];
-      const fetched = m.imgs?.length
-        ? yield* Effect.forEach(m.imgs, (img) => s.ch.fx.images([img]).pipe(Effect.orElseSucceed((): InlineImage[] => [])), { concurrency: 4 }).pipe(Effect.map((lists) => lists.flat()))
-        : [];
+      const plan = messagePlan(m);
+      const fetched = yield* Effect.forEach(
+        plan.imgs,
+        (p) =>
+          s.ch.fx.images([p.img]).pipe(
+            Effect.map((list) => list.map((img) => ({ saveAs: p.saveAs, bytes: Buffer.from(img.data, "base64") }))),
+            Effect.orElseSucceed(() => []),
+          ),
+        { concurrency: 4 },
+      );
+      const images = fetched.flat();
       const dir = args[2] ?? joinPath(home(), "downloads", s.ch.roomId);
-      const saved = fetched.length ? saveImages(seq, fetched, dir) : [];
-      const missing = m.imgs?.length ? missingImages(seq, m.imgs.length, fetched.length) : null;
+      const saved = images.length ? saveNamed(images, dir) : [];
+      const missing = m.imgs?.length ? missingImages(seq, m.imgs.length, images.length) : null;
       if (missing) process.stderr.write(`kiwi: ${missing}\n`);
-      const kept = yield* keepFiles(s.ch, m, dir);
+      const kept = yield* keepFiles(s.ch, m, dir, plan.files);
       out(formatShown(m, known, state, saved, s.me, !!opt.reveal && !!m.to?.includes(s.me), kept));
       const near = new Set([seq, ...(m.re ?? []), ...known.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);
       const rest = thread.filter((x) => !near.has(x.seq) && !ignored(state.trust.get(x.seq)));
