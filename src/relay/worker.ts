@@ -73,6 +73,7 @@ import { allow as allowPerMinute, utcDay } from "./room/limits.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";
 import { pusherFrom, type Pusher } from "./push.ts";
+import { onMeaningHttp } from "./meaning.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubItem, type GithubLink, type GithubRoutes } from "./github.ts";
 
 interface Env {
@@ -110,6 +111,10 @@ interface Env {
   APNS_TEAM_ID?: string;
   APNS_TOPIC?: string;
   FCM_SERVICE_ACCOUNT?: string;
+  /** Secret: the TypeSafe key behind search by meaning. Without it /v1/meaning answers 404. */
+  TYPESAFE_API_KEY?: string;
+  /** 20 searches by meaning per minute per signed-in person. */
+  MEANING_ASKS: RateLimit;
 }
 
 const edgeCache: PageCache = {
@@ -873,6 +878,8 @@ export default {
       return env.MACHINES.get(env.MACHINES.idFromName(signed.mpk)).fetch(req);
     }
     if (url.pathname === STRIPE_PATH) return (await onStripeHttp(req, env.STRIPE_WEBHOOK_SECRET, stripeBook(env)))!;
+    const meaning = await onMeaningHttp(req, human(env), { key: env.TYPESAFE_API_KEY, allow: async (user) => (await env.MEANING_ASKS.limit({ key: user })).success });
+    if (meaning) return meaning;
     if (isAdminPath(url.pathname)) return (await onAdminHttp(req, human(env), policyFrom(env as unknown as Record<string, string | undefined>), admin(env)))!;
     if (isAccountPath(url.pathname)) {
       const ip = req.headers.get("cf-connecting-ip");

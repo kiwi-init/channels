@@ -15,6 +15,7 @@ import { clockLayer, MAX_REQUEST_BYTES, MAX_SNAPSHOT_REQUEST_BYTES } from "./htt
 import { devHostOk, devHumanAuth, devRequestOk, githubHumanAuth, Human, HUMAN_HEADER, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
+import { MEANING_ASKS_PER_MINUTE, onMeaningHttp } from "./meaning.ts";
 import { ACCOUNT_ASKS_PER_MINUTE, accountUser, isAccountPath, onAccountHttp, sameEnrollment, sameFresh, type AccountStore, type FreshRecord } from "./account.ts";
 import { ENROLL_TTL_MS, type Enrollment } from "@kiwi/core/enroll.ts";
 import {
@@ -592,6 +593,8 @@ export function startRelay(
         if (paid) return paid;
         const admined = await onAdminHttp(req, human, policy, admin, clock());
         if (admined) return admined;
+        const meant = await onMeaningHttp(req, human, { key: process.env.TYPESAFE_API_KEY, allow: async (user) => allowPerMinute(`meaning:${instance}:${user}`, MEANING_ASKS_PER_MINUTE, clock()) });
+        if (meant) return meant;
         if (isAccountPath(url.pathname)) {
           if (req.method === "OPTIONS") return corsPreflight();
           const user = await accountUser(req, human);

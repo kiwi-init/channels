@@ -42,6 +42,11 @@ describe("WHATSNEW.md reads as features, each shown once", () => {
     for (const n of notes) expect(n.body).not.toBe("")
   })
 
+  test("search by meaning sends messages to Jev, so it starts off", async () => {
+    const notes = readNotes(await Bun.file(new URL("../../../WHATSNEW.md", import.meta.url)).text())
+    expect(notes.find((n) => n.id === "meaning")).toMatchObject({ toggle: true })
+  })
+
   test("kept choices survive bad entries", () => {
     const store = (v: string | null) => ({ getItem: () => v, setItem: () => undefined })
     expect(readFeatures(store('{"on":["meaning","Bad Id",3],"seen":["meaning"]}'))).toEqual({ on: ["meaning"], seen: ["meaning"] })
