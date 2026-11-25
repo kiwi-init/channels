@@ -9,6 +9,12 @@ struct PushSeat: Codable, Sendable {
     let error: String?
 }
 
+struct PushDrop: Codable, Sendable {
+    let label: String
+    let ok: Bool
+    let error: String?
+}
+
 final class PushDelegate: NSObject, UIApplicationDelegate {
     @MainActor static var onToken: ((String) -> Void)?
 
