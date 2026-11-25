@@ -30,9 +30,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = RobolectricDeviceQualifiers.Pixel7)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class LongNamesTest {
     private val compose = createAndroidComposeRule<ComponentActivity>()
 
