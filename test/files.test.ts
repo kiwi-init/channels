@@ -174,3 +174,9 @@ test("an attachment keeps its path when an earlier one fails to download and lat
   expect(again.saved).toEqual([join(out, "#31-image.png"), join(out, "#31-2-image.png")]);
   expect(again.saved.map((p) => [...readFileSync(p)])).toEqual([[1], [2]]);
 });
+
+test("names that differ only in case get their own files, so a case-insensitive disk keeps both", () => {
+  const cased = messagePlan({ seq: 9, imgs: [plannedImage("Image.png"), plannedImage("image.png")], files: [plannedFile("Report.PDF"), plannedFile("report.pdf.md")] });
+  expect(cased.imgs.map((p) => p.saveAs)).toEqual(["#9-Image.png", "#9-2-image.png"]);
+  expect(cased.files.map((p) => p.saveAs)).toEqual(["#9-Report.PDF", "#9-2-report.pdf.md"]);
+});

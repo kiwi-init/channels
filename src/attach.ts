@@ -101,10 +101,11 @@ export type Attachment = { name: string; fallback: "image" | "file"; markdown: b
 
 export function planNames<T extends Attachment>(seq: number, items: T[]): (T & { saveAs: string })[] {
   const taken = new Set<string>();
-  const fits = (name: string, markdown: boolean) => !taken.has(name) && !(markdown && taken.has(`${name}.md`));
+  const key = (name: string) => name.toLowerCase();
+  const fits = (name: string, markdown: boolean) => !taken.has(key(name)) && !(markdown && taken.has(key(`${name}.md`)));
   const take = (name: string, markdown: boolean) => {
-    taken.add(name);
-    if (markdown) taken.add(`${name}.md`);
+    taken.add(key(name));
+    if (markdown) taken.add(key(`${name}.md`));
     return name;
   };
   const planned = items.map((item) => {

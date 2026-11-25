@@ -127,6 +127,24 @@ export const keepFiles = (ch: Channel, m: Message, dir: string, plan: { file: Fi
     return { saved, markdown };
   });
 
+export const saveMessage = (ch: Channel, m: Message, dir: string) =>
+  Effect.gen(function* () {
+    const plan = messagePlan(m);
+    const fetched = yield* Effect.forEach(
+      plan.imgs,
+      (p) =>
+        ch.fx.images([p.img]).pipe(
+          Effect.map((list) => list.map((img) => ({ saveAs: p.saveAs, bytes: Buffer.from(img.data, "base64") }))),
+          Effect.orElseSucceed(() => []),
+        ),
+      { concurrency: 4 },
+    );
+    const images = fetched.flat();
+    const saved = images.length ? saveNamed(images, dir) : [];
+    const kept = yield* keepFiles(ch, m, dir, plan.files);
+    return { images: saved, kept };
+  });
+
 async function markdownCopy(name: string, bytes: Uint8Array): Promise<string | null> {
   const format = documentFormat(name);
   if (!format || !(await anydocReady())) return null;

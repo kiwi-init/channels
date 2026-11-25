@@ -10,7 +10,7 @@ import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { fold } from "@kiwi/core/state.ts";
 import { stagedAnydoc } from "../scripts/assets-stage.ts";
-import { anydocWasmPath, documentFormat, keepFiles } from "../src/received-files.ts";
+import { anydocWasmPath, documentFormat, keepFiles, saveMessage } from "../src/received-files.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { checked } from "./check.ts";
 
@@ -125,4 +125,31 @@ test("the installed anydoc package is the version and wasm the source pins, so t
   const staged = stagedAnydoc();
   expect(staged.name).toBe("anydoc-0.2.4.wasm");
   expect(Buffer.from(staged.bytes).equals(Buffer.from(wasm))).toBe(true);
+});
+
+test("kiwi show saves a mixed message to distinct paths, each with its own bytes, beside a real Markdown copy, and again to the same paths", async () => {
+  const png = new Uint8Array([137, 80, 78, 71, 9]);
+  const files = [
+    await memberCh.putFile("image.png", "application/octet-stream", new TextEncoder().encode("a file named image.png")),
+    await memberCh.putFile("table.csv", "text/csv", new TextEncoder().encode("name,count\nkiwi,3\n")),
+    await memberCh.putFile("table.csv.md", "text/markdown", new TextEncoder().encode("# attached as table.csv.md\n")),
+  ];
+  const seq = await memberCh.send("mixed", { imgs: [{ name: "image.png", mime: "image/png", data: Buffer.from(png).toString("base64") }], files });
+  const m = (await ownerCh.history(seq - 1)).messages.find((x) => x.seq === seq)!;
+  const dir = join(kiwiHome, "mixed");
+  const first = await run(saveMessage(ownerCh, m, dir));
+  const at = (name: string) => join(dir, `#${seq}-${name}`);
+  expect(first.images).toEqual([at("image.png")]);
+  expect(first.kept).toEqual({ saved: [at("2-image.png"), at("table.csv"), at("2-table.csv.md")], markdown: [at("table.csv.md")] });
+  expect([...readFileSync(at("image.png"))]).toEqual([...png]);
+  expect(readFileSync(at("2-image.png"), "utf8")).toBe("a file named image.png");
+  expect(readFileSync(at("table.csv"), "utf8")).toBe("name,count\nkiwi,3\n");
+  expect(readFileSync(at("table.csv.md"), "utf8")).toContain("| kiwi | 3 |");
+  expect(readFileSync(at("2-table.csv.md"), "utf8")).toBe("# attached as table.csv.md\n");
+  const shown = formatShown(m, [m], fold([m], []), first.images, undefined, false, first.kept);
+  const paths = [...first.images, ...first.kept.saved, ...first.kept.markdown];
+  expect(new Set(paths).size).toBe(paths.length);
+  const tokens = shown.split(/[\s,]+/);
+  expect(paths.map((p) => tokens.filter((t) => t === p).length)).toEqual(paths.map(() => 1));
+  expect(await run(saveMessage(ownerCh, m, dir))).toEqual(first);
 });
