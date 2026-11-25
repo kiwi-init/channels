@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
 import { caseRuleOf, loadFiles, saveFiles } from "../src/attach.ts";
-import { keepFiles, messagePlan } from "../src/received-files.ts";
+import { keepFiles, messagePlan, saveMessage } from "../src/received-files.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel, Relay } from "@kiwi/core/client.ts";
 import type { RelayApi } from "@kiwi/core/client/relay.ts";
@@ -173,6 +173,21 @@ test("an attachment keeps its path when an earlier one fails to download and lat
   const again = await run(fetchWith(null));
   expect(again.saved).toEqual([join(out, "#31-image.png"), join(out, "#31-2-image.png")]);
   expect(again.saved.map((p) => [...readFileSync(p)])).toEqual([[1], [2]]);
+});
+
+test("showing a message with nothing to save never touches the destination folder", async () => {
+  const gone = () => Effect.fail(new Error("gone"));
+  const ch = { fx: { file: gone, images: gone } } as unknown as Channel;
+  const run = <A>(fx: Effect.Effect<A, never, Relay>) => Effect.runPromise(Effect.provideService(fx, Relay, {} as RelayApi));
+  const text = { seq: 40, kind: "msg", from: "x", ts: 0, text: "just words" } as unknown as Message;
+  const failed = { ...text, seq: 41, imgs: [plannedImage("a.png")], files: [plannedFile("b.pdf")] } as unknown as Message;
+  const nowhere = "/dev/null/kiwi-downloads";
+  expect(await run(saveMessage(ch, text, nowhere))).toEqual({ images: [], kept: { saved: [], markdown: [] } });
+  expect(await run(saveMessage(ch, failed, nowhere))).toEqual({ images: [], kept: { saved: [], markdown: [] } });
+  expect(await run(keepFiles(ch, text, nowhere))).toEqual({ saved: [], markdown: [] });
+  const local = join(scratch, "untouched");
+  await run(saveMessage(ch, failed, local));
+  expect(existsSync(local)).toBe(false);
 });
 
 test("names that differ only in case keep their own names on a case-sensitive disk and get their own files on one that ignores case", () => {

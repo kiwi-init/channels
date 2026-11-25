@@ -4,7 +4,7 @@ import { dirname, extname, join } from "node:path";
 import * as Effect from "effect/Effect";
 import { initSync, toMarkdownBytes, type Format } from "@firecrawl/anydoc-wasm";
 import type { Channel } from "@kiwi/core/client.ts";
-import type { FileAttachment, Message } from "@kiwi/core/protocol.ts";
+import type { FileAttachment, ImageAttachment, Message } from "@kiwi/core/protocol.ts";
 import { caseRuleOf, planNames, saveNamed, type CaseRule } from "./attach.ts";
 import { home } from "./config.ts";
 
@@ -105,24 +105,31 @@ export function messagePlan(m: Pick<Message, "seq" | "imgs" | "files">, rule: Ca
   };
 }
 
-export const keepFiles = (ch: Channel, m: Message, dir: string, plan: { file: FileAttachment; saveAs: string }[] = messagePlan(m, caseRuleOf(dir)).files) =>
+const fetchFiles = (ch: Channel, files: FileAttachment[]) => Effect.forEach(files, (f) => ch.fx.file(f).pipe(Effect.orElseSucceed(() => null)), { concurrency: 2 });
+
+const fetchImages = (ch: Channel, imgs: ImageAttachment[]) =>
+  Effect.forEach(
+    imgs,
+    (img) =>
+      ch.fx.images([img]).pipe(
+        Effect.map((list) => list.map((got) => Buffer.from(got.data, "base64"))[0] ?? null),
+        Effect.orElseSucceed(() => null),
+      ),
+    { concurrency: 4 },
+  );
+
+const arrived = <P extends { saveAs: string }>(plan: P[], bytes: (Uint8Array | null)[]) =>
+  plan.flatMap((p, i) => {
+    const got = bytes[i];
+    return got ? [{ ...p, bytes: got }] : [];
+  });
+
+const writeFiles = (files: { file: FileAttachment; saveAs: string; bytes: Uint8Array }[], dir: string) =>
   Effect.gen(function* () {
-    if (!plan.length) return { saved: [] as string[], markdown: [] as string[] };
-    const loaded = yield* Effect.forEach(
-      plan,
-      (p) =>
-        ch.fx.file(p.file).pipe(
-          Effect.map((bytes) => (bytes ? { name: p.file.name, saveAs: p.saveAs, bytes } : null)),
-          Effect.orElseSucceed(() => null),
-        ),
-      { concurrency: 2 },
-    );
-    const files = loaded.flatMap((f) => (f ? [f] : []));
-    if (!files.length) return { saved: [], markdown: [] };
     const saved = saveNamed(files, dir);
     const markdown: string[] = [];
     for (const f of files) {
-      const md = yield* Effect.promise(() => markdownCopy(f.name, f.bytes));
+      const md = yield* Effect.promise(() => markdownCopy(f.file.name, f.bytes));
       if (md === null) continue;
       const path = `${join(dir, f.saveAs)}.md`;
       writeFileSync(path, md, { mode: 0o600 });
@@ -131,21 +138,23 @@ export const keepFiles = (ch: Channel, m: Message, dir: string, plan: { file: Fi
     return { saved, markdown };
   });
 
+export const keepFiles = (ch: Channel, m: Message, dir: string) =>
+  Effect.gen(function* () {
+    const bytes = yield* fetchFiles(ch, m.files ?? []);
+    if (!bytes.some((b) => b)) return { saved: [] as string[], markdown: [] as string[] };
+    return yield* writeFiles(arrived(messagePlan(m, caseRuleOf(dir)).files, bytes), dir);
+  });
+
 export const saveMessage = (ch: Channel, m: Message, dir: string) =>
   Effect.gen(function* () {
+    const imgBytes = yield* fetchImages(ch, m.imgs ?? []);
+    const fileBytes = yield* fetchFiles(ch, m.files ?? []);
+    if (![...imgBytes, ...fileBytes].some((b) => b)) return { images: [] as string[], kept: { saved: [] as string[], markdown: [] as string[] } };
     const plan = messagePlan(m, caseRuleOf(dir));
-    const fetched = yield* Effect.forEach(
-      plan.imgs,
-      (p) =>
-        ch.fx.images([p.img]).pipe(
-          Effect.map((list) => list.map((img) => ({ saveAs: p.saveAs, bytes: Buffer.from(img.data, "base64") }))),
-          Effect.orElseSucceed(() => []),
-        ),
-      { concurrency: 4 },
-    );
-    const images = fetched.flat();
+    const images = arrived(plan.imgs, imgBytes);
     const saved = images.length ? saveNamed(images, dir) : [];
-    const kept = yield* keepFiles(ch, m, dir, plan.files);
+    const files = arrived(plan.files, fileBytes);
+    const kept = files.length ? yield* writeFiles(files, dir) : { saved: [] as string[], markdown: [] as string[] };
     return { images: saved, kept };
   });
 
