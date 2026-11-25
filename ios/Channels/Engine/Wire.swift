@@ -172,8 +172,8 @@ struct NeedView: Codable, Sendable, Hashable, Identifiable {
 
     var line: String {
         switch kind {
-        case "permission": "Allow \(title ?? "a tool")?"
-        case "join": "\(name ?? "Someone") wants to join"
+        case "permission": spoken("Allow \(title ?? spoken("a tool"))?")
+        case "join": spoken("\(name ?? spoken("Someone")) wants to join")
         default: spoken("Approve the spec of #\(ask ?? 0)")
         }
     }
