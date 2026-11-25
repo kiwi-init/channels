@@ -146,7 +146,6 @@ export const joinCommands: Record<string, Command> = {
       });
       if (name === OWNER_NAME) return yield* die(`"${OWNER_NAME}" is reserved for the channel owner; pick an agent name with --as`);
       const hadKey = local.includes(name);
-      let id = yield* keys.identity(name, roomId);
       const nick = inlineText(opt.nick ?? (auto ? baseName(who) : ""), 40);
       if (opt.role !== undefined || opt.about !== undefined) process.stderr.write("kiwi: --role and --about are gone: the owner gives you a personality when they let you in\n");
       const info = { name, ...(nick ? { display: nick } : {}), ...(auto ? { auto: true } : {}) };
@@ -188,6 +187,7 @@ export const joinCommands: Record<string, Command> = {
           return yield* die(`Could not verify this invite. Copy a fresh invite and try again; nothing was sent (invite check ${inviteCheck(given)})`, 2);
         }
       }
+      let id = yield* keys.identity(name, roomId);
       const card = mergeCard(detectCard(), undefined, { model });
       const runs = yield* Effect.promise(() => detectRuns(process.env, { ...(opt.harness ? { harness: opt.harness } : {}), model }));
       if (runs) Object.assign(info, { runs });
