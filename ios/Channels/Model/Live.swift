@@ -1,0 +1,96 @@
+import ActivityKit
+import CryptoKit
+import Foundation
+
+typealias AgentsLiveActivity = ActivityKit.Activity<AgentsActivity>
+
+@MainActor
+final class LiveAgents {
+    private static let grace: Duration = .seconds(30)
+    private static let stale: TimeInterval = 180
+    private var ending: [String: Task<Void, Never>] = [:]
+
+    static func key(_ code: String) -> String {
+        SHA256.hash(data: Data(code.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func agents(_ room: RoomView) -> [AgentsActivity.Agent] {
+        let order = { (m: MemberView) in (m.name == room.lead ? 0 : 1, m.display) }
+        return room.members.filter { $0.isAgent && $0.working }.sorted { order($0) < order($1) }.map { m in
+            AgentsActivity.Agent(
+                name: m.display,
+                face: m.face ?? "default",
+                color: m.color.flatMap { Palette.fills[$0] },
+                task: m.doing.first.flatMap { id in room.tasks.first { $0.id == id }.map { "T\(id) \($0.title)" } },
+                since: m.activity?.since.map { Date(timeIntervalSince1970: $0 / 1000) }
+            )
+        }
+    }
+
+    func follow(_ rooms: [String: RoomView]) {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        var shown = Dictionary(AgentsLiveActivity.activities.map { ($0.attributes.channel, $0) }, uniquingKeysWith: { first, _ in first })
+        for room in rooms.values where room.gone == nil {
+            let key = Self.key(room.code)
+            let agents = Self.agents(room)
+            if let activity = shown.removeValue(forKey: key) {
+                if agents.isEmpty {
+                    end(activity, key)
+                } else {
+                    ending.removeValue(forKey: key)?.cancel()
+                    update(activity, agents)
+                }
+            } else if !agents.isEmpty {
+                start(AgentsActivity(channel: key, title: room.title), agents)
+            }
+        }
+        for (key, activity) in shown { end(activity, key) }
+    }
+
+    func stop() {
+        for task in ending.values { task.cancel() }
+        ending = [:]
+        for id in AgentsLiveActivity.activities.map(\.id) {
+            Task.detached { await Self.find(id)?.end(nil, dismissalPolicy: .immediate) }
+        }
+    }
+
+    nonisolated private static func find(_ id: String) -> AgentsLiveActivity? {
+        AgentsLiveActivity.activities.first { $0.id == id }
+    }
+
+    func code(for key: String, in rooms: [String: RoomView]) -> String? {
+        rooms.keys.first { Self.key($0) == key }
+    }
+
+    private func content(_ agents: [AgentsActivity.Agent]) -> ActivityContent<AgentsActivity.ContentState> {
+        ActivityContent(state: AgentsActivity.ContentState(agents: agents), staleDate: .now + Self.stale)
+    }
+
+    private func start(_ attributes: AgentsActivity, _ agents: [AgentsActivity.Agent]) {
+        do {
+            _ = try AgentsLiveActivity.request(attributes: attributes, content: content(agents))
+        } catch {
+            Trouble.note("live: couldn't start", error)
+        }
+    }
+
+    private func update(_ activity: AgentsLiveActivity, _ agents: [AgentsActivity.Agent]) {
+        guard activity.content.state.agents != agents else { return }
+        let next = content(agents)
+        let id = activity.id
+        Task.detached { await Self.find(id)?.update(next) }
+    }
+
+    private func end(_ activity: AgentsLiveActivity, _ key: String) {
+        guard ending[key] == nil else { return }
+        let last = ActivityContent(state: AgentsActivity.ContentState(agents: []), staleDate: nil)
+        let id = activity.id
+        ending[key] = Task { [weak self] in
+            try? await Task.sleep(for: Self.grace)
+            if Task.isCancelled { return }
+            await Task.detached { await Self.find(id)?.end(last, dismissalPolicy: .after(.now + 60)) }.value
+            self?.ending[key] = nil
+        }
+    }
+}
