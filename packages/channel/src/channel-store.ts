@@ -7,7 +7,7 @@ import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts";
 import type { GithubChore, GithubHealth } from "@kiwi/core/github-health.ts";
 import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts";
-import { fold, nextExpiry, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
+import { fold, folded, nextExpiry, type ChannelState, type Folded, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts";
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "./channel-ops.ts";
 import type { Reach } from "./history-fill.ts";
 import { planCached, reopenCached, readKept, rememberKept, rememberRow, rememberRows } from "./history.ts";
@@ -100,6 +100,17 @@ const on = <T>(dep: ReadonlySignal<T>, run: (value: T) => void | (() => void)): 
     const value = dep.value;
     return untracked(() => run(value));
   });
+
+interface Live {
+  folded: Folded;
+  messages: readonly Message[];
+  roster: Roster;
+  rooms: RoomsSetting | null;
+  guard: GuardFloor | null;
+  base: FoldBase | null;
+}
+
+const grew = (was: readonly Message[], now: readonly Message[]): boolean => now.length >= was.length && was.every((m, i) => now[i] === m);
 
 const merged = (prev: Message[], more: Message[]) => {
   const seen = new Set(prev.map((p) => p.seq));
@@ -198,12 +209,24 @@ export class ChannelStore {
     this.keyOf = computed(() => new Map(admitted.value.filter((r) => r.active).map((r) => [r.name, r.pk])));
     this.rosterForFold = computed(() => foldRoster(admitted.value));
     let held = foldedFor(was, Date.now());
+    let cursor: Live | null = null;
     this.state = computed(() => {
       const refolds = this.expired.value;
       const [messages, roster, rooms, guard, base] = [this.messages.value, this.roster.value, this.roomsFloor.value, this.guardFloor.value, this.base.value];
       if (held && refolds === 0 && held.messages === messages && held.roster === roster && held.roomsFloor === rooms && held.guardFloor === guard && held.base === base) return held.state;
       held = null;
-      return fold(messages, this.rosterForFold.value, Date.now(), rooms, guard, base);
+      const people = this.rosterForFold.value;
+      const now = Date.now();
+      if (cursor && cursor.roster === people && cursor.rooms === rooms && cursor.guard === guard && cursor.base === base && grew(cursor.messages, messages)) {
+        const next = cursor.folded.next(messages.slice(cursor.messages.length), now);
+        if (next) {
+          cursor.messages = messages;
+          return next;
+        }
+      }
+      const next = folded(messages, people, now, rooms, guard, base);
+      cursor = { folded: next, messages, roster: people, rooms, guard, base };
+      return next.state;
     });
     this.caughtUp = computed(() => {
       const start = this.start.value;

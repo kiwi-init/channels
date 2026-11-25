@@ -185,6 +185,29 @@ describe("a channel store", () => {
     close();
   });
 
+  test("a chat append folds onto the last state: untouched maps are the same objects, and the last state does not change", async () => {
+    const r = relay(0);
+    const { store, close } = await opened(r);
+    const signed = (seq: number): Message => ({ ...msg(seq), pk: "pk-atlas" });
+    r.say({ _tag: "Message", message: signed(1), row: null });
+    await sleep(40);
+    const before = store.handle.value.state;
+    expect(before.trust.get(1)).toBe("verified");
+    const was = JSON.stringify([...before.trust, ...before.members.values()]);
+    r.say({ _tag: "Message", message: signed(2), row: null });
+    await sleep(40);
+    const after = store.handle.value.state;
+    expect(after).not.toBe(before);
+    expect(after.head).toBe(2);
+    expect(after.trust.get(2)).toBe("verified");
+    expect(after.tasks).toBe(before.tasks);
+    expect(after.rooms).toBe(before.rooms);
+    expect(after.github).toBe(before.github);
+    expect(after.trust).not.toBe(before.trust);
+    expect(JSON.stringify([...before.trust, ...before.members.values()])).toBe(was);
+    close();
+  });
+
   test("a read mark changes the handle but keeps the folded state: nothing refolds", async () => {
     const r = relay(0);
     const { store, close } = await opened(r);
