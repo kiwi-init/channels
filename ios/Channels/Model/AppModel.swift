@@ -75,6 +75,7 @@ final class AppModel {
     @ObservationIgnored var keptUnread: Set<String> = []
     @ObservationIgnored private var front = true
     @ObservationIgnored private var leaving: UIBackgroundTaskIdentifier = .invalid
+    @ObservationIgnored private var pushing: Task<Void, Never>?
 
     var channels: [RoomView] {
         rooms.values.filter { $0.gone == nil }.sorted { (($0.latest ?? $0.last)?.at ?? 0) > (($1.latest ?? $1.last)?.at ?? 0) }
@@ -249,6 +250,7 @@ final class AppModel {
                     }
                 }
             }
+            let wentLive = room.connection == .live && rooms[room.code]?.connection != .live
             feeds["\(room.code)|\(room.place)"] = Feed(messages: room.messages, whole: room.whole)
             defer { settle(room.code) }
             let grew = (room.messages.last?.seq ?? 0) > (rooms[room.code]?.messages.last?.seq ?? Int.max)
@@ -258,9 +260,11 @@ final class AppModel {
                 rooms[room.code] = room
             }
             if room.connection == .live { pullOnce(room.code) }
+            if wentLive { pushSoon() }
         case .gone(let code):
             rooms[code] = nil
             Kept.drop(code)
+            pushSoon()
         case .kept(let code, let sealed):
             Kept.save(code, sealed)
         case .log:
@@ -319,6 +323,16 @@ final class AppModel {
                     "Kept nothing. If your computer never showed \(fingerprint), someone else answered this iPhone. Your computer may still list it under Devices: remove it there."
             ))
         await cancelEnroll()
+    }
+
+    private func pushSoon() {
+        guard pushing == nil, push.token != nil else { return }
+        pushing = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self else { return }
+            pushing = nil
+            if phase == .ready, push.stale(Set(rooms.keys)), let token = push.token { await registerPush(token) }
+        }
     }
 
     private func registerPush(_ token: String) async {
