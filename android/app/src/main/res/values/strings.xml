@@ -209,4 +209,22 @@
     <string name="start_of_task_thread">The start of this task\'s thread</string>
     <string name="start_of_thread">The start of this thread</string>
     <string name="in_channel">In %1$s</string>
+    <string name="permission_for_you">Permission for you</string>
+    <string name="join_person">A person wants to join</string>
+    <string name="join_agent">An agent wants to join</string>
+    <string name="spec_ready">Spec ready for you</string>
+    <string name="spec_changed">Spec changed: approve again</string>
+    <string name="use_a_tool">Use a tool</string>
+    <string name="someone">Someone</string>
+    <string name="from_computer">from %1$s\'s computer</string>
+    <string name="allow_once">Allow once</string>
+    <string name="deny">Deny</string>
+    <string name="let_in">Let in</string>
+    <string name="only_can_allow">Only %1$s can allow this one</string>
+    <string name="you_can_deny">You can deny this one</string>
+    <string name="join_pinned">Invited with a personality: let them in on your computer</string>
+    <string name="join_same_code">Let them in only if their screen shows the same code</string>
+    <string name="open_conversation">Open the conversation</string>
+    <string name="only_owner_lets_in">Only the channel\'s owner can let them in.</string>
+    <string name="join_code">Code</string>
 </resources>

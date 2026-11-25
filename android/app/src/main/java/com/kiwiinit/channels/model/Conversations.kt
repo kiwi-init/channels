@@ -5,6 +5,7 @@ import androidx.compose.runtime.saveable.listSaver
 import com.kiwiinit.channels.engine.AskView
 import com.kiwiinit.channels.engine.Connection
 import com.kiwiinit.channels.engine.MessageView
+import com.kiwiinit.channels.engine.NeedView
 import com.kiwiinit.channels.engine.PlaceView
 import com.kiwiinit.channels.engine.ReviewView
 import com.kiwiinit.channels.engine.RoomView
@@ -39,12 +40,13 @@ data class Row(
     val asks: List<AskView>,
     val reviews: List<ReviewView>,
     val draft: Draft?,
+    val others: List<NeedView> = emptyList(),
 ) {
     val id: String get() = spot.id
     val last: MessageView? get() = place?.last
     val lastAt: Double get() = last?.at ?: 0.0
-    val needs: Int get() = asks.size + reviews.size
-    val need: String? get() = (asks.firstOrNull()?.plain ?: reviews.firstOrNull()?.let { "${taskLabel(it.task)} ${it.title}" })?.oneLine()
+    val needs: Int get() = asks.size + reviews.size + others.size
+    val need: String? get() = (asks.firstOrNull()?.plain ?: reviews.firstOrNull()?.let { "${taskLabel(it.task)} ${it.title}" } ?: others.firstOrNull()?.let { it.title ?: it.name })?.oneLine()
     val lead: String? get() = if (kind == RowKind.Lead) room.lead else null
 
     val working: Boolean
@@ -156,6 +158,7 @@ fun AppModel.section(room: RoomView, many: Boolean): List<Row> {
         asks = room.asksIn("main"),
         reviews = room.reviews,
         draft = drafts[general.id],
+        others = room.needs,
     )
     for (place in room.roomPlaces) {
         val at = Spot(room.code, place.key)
@@ -188,4 +191,4 @@ fun AppModel.rows(filter: Filter = Filter.All): List<Row> {
 
 fun AppModel.row(spot: Spot): Row? = rows(Filter.All).firstOrNull { it.spot == spot }
 
-val AppModel.needing: Int get() = channels.sumOf { it.asks.size + it.reviews.size }
+val AppModel.needing: Int get() = channels.sumOf { it.asks.size + it.reviews.size + it.needs.size }

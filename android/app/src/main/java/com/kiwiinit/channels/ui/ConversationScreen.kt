@@ -315,7 +315,7 @@ private fun Status(room: RoomView, place: PlaceView?) {
     val dm: MemberView? = dmName?.let { room.member(it) }
     val busy = if (dm != null && dm.working) dm.doing.firstOrNull()?.let { stringResource(R.string.working_on, taskLabel(it)) } ?: stringResource(R.string.working) else null
     val main = place?.kind == "main"
-    val needs = if (main) room.asks.size + room.reviews.size else 0
+    val needs = if (main) room.asks.size + room.reviews.size + room.needs.size else 0
     val parts = listOfNotNull(
         if (place?.kind == "dm") (busy ?: (if (dm?.here == true) stringResource(R.string.here) else stringResource(R.string.away))) else null,
         if (room.connection == Connection.Connecting) stringResource(R.string.connecting) else null,

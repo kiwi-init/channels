@@ -202,4 +202,22 @@
     <string name="start_of_task_thread">这是此任务讨论串的开始</string>
     <string name="start_of_thread">这是此讨论串的开始</string>
     <string name="in_channel">%1$s 的成员</string>
+    <string name="permission_for_you">需要你授权</string>
+    <string name="join_person">有人想加入</string>
+    <string name="join_agent">有智能体想加入</string>
+    <string name="spec_ready">规格等你批准</string>
+    <string name="spec_changed">规格已更改：请重新批准</string>
+    <string name="use_a_tool">使用工具</string>
+    <string name="someone">某人</string>
+    <string name="from_computer">来自 %1$s 的电脑</string>
+    <string name="allow_once">允许一次</string>
+    <string name="deny">拒绝</string>
+    <string name="let_in">允许加入</string>
+    <string name="only_can_allow">只有 %1$s 能允许</string>
+    <string name="you_can_deny">你可以拒绝</string>
+    <string name="join_pinned">受邀时已指定性格：请在电脑上允许其加入</string>
+    <string name="join_same_code">只有对方屏幕显示相同的验证码时才允许加入</string>
+    <string name="open_conversation">打开对话</string>
+    <string name="only_owner_lets_in">只有频道所有者能允许其加入。</string>
+    <string name="join_code">验证码</string>
 </resources>

@@ -472,6 +472,38 @@ class AppModel(private val app: Application, private val calls: (suspend (JsonOb
         )
     }
 
+    suspend fun allow(code: String, id: String, allow: Boolean) {
+        ask(
+            buildJsonObject {
+                put("op", "allow")
+                put("code", code)
+                put("id", id)
+                put("allow", allow)
+            },
+        )
+    }
+
+    suspend fun letIn(code: String, id: String) {
+        ask(
+            buildJsonObject {
+                put("op", "letIn")
+                put("code", code)
+                put("id", id)
+            },
+        )
+    }
+
+    suspend fun approveSpec(code: String, ask: Int, v: Int) {
+        ask(
+            buildJsonObject {
+                put("op", "approveSpec")
+                put("code", code)
+                put("ask", ask)
+                put("v", v)
+            },
+        )
+    }
+
     private fun <T> read(serializer: KSerializer<T>, value: JsonElement): T =
         try {
             wire.decodeFromJsonElement(serializer, value)

@@ -136,6 +136,34 @@ data class ReviewView(
 }
 
 @Serializable
+data class NeedView(
+    val kind: String,
+    val id: String,
+    val at: Double,
+    val from: String? = null,
+    val title: String? = null,
+    val summary: String? = null,
+    val code: String? = null,
+    val canAllow: Boolean = false,
+    val allower: String? = null,
+    val task: Int? = null,
+    val name: String? = null,
+    val who: String? = null,
+    val runs: String? = null,
+    val machine: String? = null,
+    val sponsor: String? = null,
+    val pinned: Boolean = false,
+    val ask: Int? = null,
+    val v: Int? = null,
+    val changed: Boolean = false,
+    val text: String? = null,
+    val by: String? = null,
+) {
+    val asker: String? get() = from ?: by
+    val millis: Long get() = at.toLong()
+}
+
+@Serializable
 data class PlaceView(
     val key: String,
     val kind: String,
@@ -179,6 +207,7 @@ data class RoomView(
     val tasks: List<TaskView> = emptyList(),
     val asks: List<AskView> = emptyList(),
     val reviews: List<ReviewView> = emptyList(),
+    val needs: List<NeedView> = emptyList(),
     val last: MessageView? = null,
     val latest: MessageView? = null,
     val latestIn: String = "main",

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -38,16 +39,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.kiwiinit.channels.engine.AskView
 import com.kiwiinit.channels.engine.EngineException
+import com.kiwiinit.channels.engine.NeedView
 import com.kiwiinit.channels.engine.ReviewView
 import com.kiwiinit.channels.engine.RoomView
 import com.kiwiinit.channels.engine.TaskView
@@ -77,19 +82,20 @@ private fun Screen(title: String, back: () -> Unit, content: @Composable (Paddin
 }
 
 @Composable
-fun NeedsList(model: AppModel) {
+fun NeedsList(model: AppModel, open: (Spot) -> Unit = {}) {
     val many = model.channels.size > 1
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         BigTitle(stringResource(R.string.needs_you))
         LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)) {
-            if (model.channels.none { it.asks.isNotEmpty() || it.reviews.isNotEmpty() }) {
+            if (model.channels.none { it.asks.isNotEmpty() || it.reviews.isNotEmpty() || it.needs.isNotEmpty() }) {
                 item(key = "none") { Centered(stringResource(R.string.nothing_needs_you), stringResource(R.string.nothing_needs_you_lead), Modifier.padding(top = 80.dp)) }
             }
             for (room in model.channels) {
-                if (room.asks.isEmpty() && room.reviews.isEmpty()) continue
+                if (room.asks.isEmpty() && room.reviews.isEmpty() && room.needs.isEmpty()) continue
                 if (many) item(key = "head-${room.code}") { Header(room.title, Tone.current.ink3) }
-                items(room.asks, key = { "ask-${room.code}-${it.seq}" }) { ask -> Card { NeedsYouRow(model, room, ask) } }
-                items(room.reviews, key = { "review-${room.code}-${it.task}" }) { review -> Card { ReviewRow(model, room, review) } }
+                items(room.needs, key = { "need-${room.code}-${it.id}" }) { need -> Card { NeedRow(model, room, need, open) } }
+                items(room.asks, key = { "ask-${room.code}-${it.seq}" }) { ask -> Card { NeedsYouRow(model, room, ask, open) } }
+                items(room.reviews, key = { "review-${room.code}-${it.task}" }) { review -> Card { ReviewRow(model, room, review, open) } }
             }
         }
     }
@@ -167,7 +173,7 @@ private fun Card(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun NeedsYouRow(model: AppModel, room: RoomView, ask: AskView) {
+private fun NeedsYouRow(model: AppModel, room: RoomView, ask: AskView, open: (Spot) -> Unit) {
     val tone = Tone.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -242,19 +248,23 @@ private fun NeedsYouRow(model: AppModel, room: RoomView, ask: AskView) {
                 }
             }
         } else {
-            Text(
-                if (ask.choices.isEmpty()) stringResource(R.string.answer) else stringResource(R.string.something_else),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { replying = true }.padding(vertical = 6.dp, horizontal = 4.dp),
-            )
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (ask.choices.isEmpty()) stringResource(R.string.answer) else stringResource(R.string.something_else),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { replying = true }.padding(vertical = 6.dp, horizontal = 4.dp),
+                )
+                Spacer(Modifier.weight(1f))
+                OpenLink("open-ask-${ask.seq}") { open(Spot(room.code, ask.place ?: ask.task?.let { "task:$it" } ?: "main")) }
+            }
         }
         if (failed) Text(stringResource(R.string.send_failed), style = MaterialTheme.typography.labelMedium, color = tone.alert)
     }
 }
 
 @Composable
-private fun ReviewRow(model: AppModel, room: RoomView, review: ReviewView) {
+private fun ReviewRow(model: AppModel, room: RoomView, review: ReviewView, open: (Spot) -> Unit) {
     val tone = Tone.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
@@ -314,12 +324,16 @@ private fun ReviewRow(model: AppModel, room: RoomView, review: ReviewView) {
                 Text(stringResource(R.string.approve), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                 if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
             }
-            Text(
-                stringResource(R.string.send_back),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = !busy) { why = "" }.padding(vertical = 6.dp, horizontal = 4.dp),
-            )
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.send_back),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(enabled = !busy) { why = "" }.padding(vertical = 6.dp, horizontal = 4.dp),
+                )
+                Spacer(Modifier.weight(1f))
+                OpenLink("open-review-${review.task}") { open(Spot(room.code, "task:${review.task}")) }
+            }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BasicTextField(
@@ -346,6 +360,167 @@ private fun ReviewRow(model: AppModel, room: RoomView, review: ReviewView) {
         }
         if (failed) Text(stringResource(R.string.send_failed), style = MaterialTheme.typography.labelMedium, color = tone.alert)
     }
+}
+
+private class Act(val title: String, val color: Color, val go: suspend () -> Unit)
+
+@Composable
+private fun NeedRow(model: AppModel, room: RoomView, need: NeedView, open: (Spot) -> Unit) {
+    val tone = Tone.current
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+    var busy by remember(need.id) { mutableStateOf<String?>(null) }
+    var failed by remember(need.id) { mutableStateOf<String?>(null) }
+    var whole by remember(need.id) { mutableStateOf(false) }
+    val ink = MaterialTheme.colorScheme.onSurface
+
+    fun act(action: Act) {
+        if (busy != null) return
+        busy = action.title
+        failed = null
+        view.buzz(Buzz.Tap)
+        scope.launch {
+            try {
+                action.go()
+                view.buzz(Buzz.Done)
+            } catch (e: EngineException) {
+                failed = e.message
+                view.buzz(Buzz.Fail)
+            }
+            busy = null
+        }
+    }
+
+    val asker = if (need.kind == "join") null else need.asker
+    val label = when (need.kind) {
+        "permission" -> stringResource(R.string.permission_for_you)
+        "join" -> if (need.who == "human") stringResource(R.string.join_person) else stringResource(R.string.join_agent)
+        else -> if (need.changed) stringResource(R.string.spec_changed) else stringResource(R.string.spec_ready)
+    }
+    val allowOnce = stringResource(R.string.allow_once)
+    val deny = stringResource(R.string.deny)
+    val letIn = stringResource(R.string.let_in)
+    val approve = stringResource(R.string.approve)
+    val ask = need.ask
+    val v = need.v
+    val actions = when (need.kind) {
+        "permission" -> listOfNotNull(
+            if (need.canAllow) Act(allowOnce, ink) { model.allow(room.code, need.id, true) } else null,
+            Act(deny, tone.alert) { model.allow(room.code, need.id, false) },
+        )
+        "join" -> if (need.pinned || !room.isOwner) emptyList() else listOf(Act(letIn, ink) { model.letIn(room.code, need.id) })
+        else -> if (ask != null && v != null) listOf(Act(approve, ink) { model.approveSpec(room.code, ask, v) }) else emptyList()
+    }
+    val allower = need.allower
+    val note = when {
+        need.kind == "permission" && !need.canAllow -> if (allower != null) stringResource(R.string.only_can_allow, room.display(allower)) else stringResource(R.string.you_can_deny)
+        need.kind == "join" && need.pinned -> stringResource(R.string.join_pinned)
+        need.kind == "join" && !room.isOwner -> stringResource(R.string.only_owner_lets_in)
+        need.kind == "join" && !need.code.isNullOrEmpty() -> stringResource(R.string.join_same_code)
+        else -> null
+    }
+
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (asker != null) Face(asker, room.member(asker), 24.dp)
+            Text(
+                listOfNotNull(asker?.let { room.display(it) }, need.task?.let(::taskLabel), When.short(words(), need.millis)).joinToString(" · "),
+                style = MaterialTheme.typography.labelMedium,
+                color = tone.ink3,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = tone.decide)
+        }
+        when (need.kind) {
+            "permission" -> {
+                Text(need.title ?: stringResource(R.string.use_a_tool), style = MaterialTheme.typography.bodyLarge, color = ink)
+                need.summary?.takeIf { it.isNotEmpty() }?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = tone.ink2) }
+                need.code?.takeIf { it.isNotEmpty() }?.let { code ->
+                    Text(
+                        code,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        color = tone.ink2,
+                        maxLines = if (whole) Int.MAX_VALUE else 6,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(tone.wash2).clickable { whole = !whole }.padding(8.dp),
+                    )
+                }
+            }
+            "join" -> {
+                Text(need.name ?: stringResource(R.string.someone), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = ink)
+                val sponsor = need.sponsor?.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.from_computer, room.display(it)) }
+                val about = listOfNotNull(need.runs, need.machine, sponsor).filter { it.isNotEmpty() }
+                if (about.isNotEmpty()) Text(about.joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = tone.ink2)
+                val codeWord = stringResource(R.string.join_code)
+                need.code?.takeIf { it.isNotEmpty() }?.let { code ->
+                    Text(
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(color = tone.ink3)) { append(codeWord) }
+                            append(" ")
+                            withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(if (code.length == 6) "${code.take(3)}-${code.takeLast(3)}" else code) }
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ink,
+                    )
+                }
+            }
+            else -> {
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = tone.ink3)) { append("#${ask ?: 0} ") }
+                        append(need.title.orEmpty())
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = ink,
+                )
+                need.text?.takeIf { it.isNotEmpty() }?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = tone.ink2,
+                        maxLines = if (whole) Int.MAX_VALUE else 8,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable { whole = !whole },
+                    )
+                }
+            }
+        }
+        for (action in actions) {
+            Row(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(tone.wash2)
+                    .clickable(enabled = busy == null) { act(action) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(action.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = action.color, modifier = Modifier.weight(1f))
+                if (busy == action.title) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            }
+        }
+        val problem = failed
+        if (problem != null) {
+            Text(problem, style = MaterialTheme.typography.labelMedium, color = tone.alert)
+        } else if (note != null) {
+            Text(note, style = MaterialTheme.typography.labelMedium, color = tone.ink3)
+        }
+        Row(Modifier.fillMaxWidth()) {
+            Spacer(Modifier.weight(1f))
+            OpenLink("open-need-${need.id}") { open(Spot(room.code, need.task?.let { "task:$it" } ?: "main")) }
+        }
+    }
+}
+
+@Composable
+private fun OpenLink(tag: String, go: () -> Unit) {
+    Text(
+        stringResource(R.string.open_conversation),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.testTag(tag).clip(RoundedCornerShape(8.dp)).clickable(onClick = go).padding(vertical = 6.dp, horizontal = 4.dp),
+    )
 }
 
 private val ASK_LABELS = mapOf(

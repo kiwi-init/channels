@@ -48,7 +48,7 @@ fun Home(model: AppModel, open: (Spot) -> Unit, tasks: (String) -> Unit, first: 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
                 Tab.Chats -> ConversationList(model, open, tasks)
-                Tab.Needs -> NeedsList(model)
+                Tab.Needs -> NeedsList(model, open)
                 Tab.Settings -> SettingsScreen(model)
             }
         }

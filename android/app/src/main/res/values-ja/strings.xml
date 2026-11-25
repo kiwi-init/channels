@@ -202,4 +202,22 @@
     <string name="start_of_task_thread">このタスクのスレッドの始まり</string>
     <string name="start_of_thread">このスレッドの始まり</string>
     <string name="in_channel">%1$s のメンバー</string>
+    <string name="permission_for_you">あなたへの権限の確認</string>
+    <string name="join_person">参加を希望している人がいます</string>
+    <string name="join_agent">参加を希望しているエージェントがいます</string>
+    <string name="spec_ready">あなたの確認待ちの仕様</string>
+    <string name="spec_changed">仕様が変更されました: もう一度承認してください</string>
+    <string name="use_a_tool">ツールの使用</string>
+    <string name="someone">誰か</string>
+    <string name="from_computer">%1$s のコンピューターから</string>
+    <string name="allow_once">1回だけ許可</string>
+    <string name="deny">拒否</string>
+    <string name="let_in">参加を許可</string>
+    <string name="only_can_allow">これを許可できるのは %1$s だけです</string>
+    <string name="you_can_deny">これは拒否できます</string>
+    <string name="join_pinned">パーソナリティ付きで招待されています: コンピューターで参加を許可してください</string>
+    <string name="join_same_code">相手の画面に同じコードが表示されている場合だけ参加を許可してください</string>
+    <string name="open_conversation">会話を開く</string>
+    <string name="only_owner_lets_in">参加を許可できるのはチャンネルのオーナーだけです。</string>
+    <string name="join_code">コード</string>
 </resources>

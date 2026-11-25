@@ -216,4 +216,22 @@
     <string name="start_of_task_thread">O início da conversa desta tarefa</string>
     <string name="start_of_thread">O início desta conversa</string>
     <string name="in_channel">Em %1$s</string>
+    <string name="permission_for_you">Permissão para você</string>
+    <string name="join_person">Uma pessoa quer entrar</string>
+    <string name="join_agent">Um agente quer entrar</string>
+    <string name="spec_ready">Especificação pronta para você</string>
+    <string name="spec_changed">A especificação mudou: aprove de novo</string>
+    <string name="use_a_tool">Usar uma ferramenta</string>
+    <string name="someone">Alguém</string>
+    <string name="from_computer">do computador de %1$s</string>
+    <string name="allow_once">Permitir uma vez</string>
+    <string name="deny">Negar</string>
+    <string name="let_in">Deixar entrar</string>
+    <string name="only_can_allow">Só %1$s pode permitir isto</string>
+    <string name="you_can_deny">Você pode negar isto</string>
+    <string name="join_pinned">Convidado com uma personalidade: deixe entrar no seu computador</string>
+    <string name="join_same_code">Deixe entrar só se a tela mostrar o mesmo código</string>
+    <string name="open_conversation">Abrir a conversa</string>
+    <string name="only_owner_lets_in">Só o dono do canal pode deixar entrar.</string>
+    <string name="join_code">Código</string>
 </resources>
