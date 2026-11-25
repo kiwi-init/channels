@@ -69,12 +69,13 @@ describe("the phone drops its push token on sign out", () => {
       { code: "code-one", label: "#one", ok: true },
       { code: "code-two", label: "#two", ok: false, error: "the relay returned 403" },
     ]);
-    expect(seen.map((s) => [s.url, s.method, s.body])).toEqual([
+    expect([...seen].sort((a, b) => a.url.localeCompare(b.url)).map((s) => [s.url, s.method, s.body])).toEqual([
       ["https://relay.example/v1/rooms/room-one/push", "DELETE", undefined],
       ["https://relay.example/v1/rooms/room-two/push", "DELETE", undefined],
     ]);
     for (const [i, roomId] of ["room-one", "room-two"].entries()) {
-      expect(await verifyRequest(seen[i]!.auth.replace(/^Bearer /, ""), roomId, "DELETE", "/push")).toBe(seats[i]!.pk);
+      const sent = seen.find((s) => s.url.endsWith(`/rooms/${roomId}/push`));
+      expect(await verifyRequest(sent?.auth.replace(/^Bearer /, "") ?? "", roomId, "DELETE", "/push")).toBe(seats[i]?.pk ?? "no seat");
     }
   });
 
