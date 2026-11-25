@@ -184,3 +184,28 @@ describe("the Durable Object's mailbox store", () => {
     expect(await (await call(store, `/v1/mailbox/${id}/a`))?.json()).toEqual({ box: "again" });
   });
 });
+
+describe("each relay keeps its own count of pairing writes (T123)", () => {
+  test("an address that used up one relay's writes can still pair on another relay in the same process", async () => {
+    const dirs = [mkdtempSync(join(tmpdir(), "kiwi-mailbox-a-")), mkdtempSync(join(tmpdir(), "kiwi-mailbox-b-"))];
+    const [a, b] = dirs.map((d) => startRelay({ port: 0, hostname: "127.0.0.1", dataDir: d }));
+    try {
+      let refused = false;
+      for (let i = 0; i < 40 && !refused; i++) {
+        const box = await openMailbox(a!.url.origin, newSecret());
+        refused = await box.put("a", { i }).then(
+          () => false,
+          (err: unknown) => err instanceof Error && /too many pairing attempts/.test(err.message),
+        );
+      }
+      expect(refused).toBe(true);
+      const other = await openMailbox(b!.url.origin, newSecret());
+      await other.put("a", { ok: true });
+      expect(await other.get<{ ok: boolean }>("a")).toEqual({ ok: true });
+    } finally {
+      a!.stop(true);
+      b!.stop(true);
+      for (const d of dirs) rmSync(d, { recursive: true, force: true });
+    }
+  });
+});
