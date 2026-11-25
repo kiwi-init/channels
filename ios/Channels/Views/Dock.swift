@@ -89,7 +89,7 @@ struct Dock: View {
 
     private var mentionable: [MemberView] {
         guard let mention else { return [] }
-        return room.members.filter { $0.name != room.me && ($0.name.lowercased().hasPrefix(mention) || $0.display.lowercased().hasPrefix(mention)) }
+        return othersOf(room.members, me: room.me).filter { $0.name.lowercased().hasPrefix(mention) || $0.display.lowercased().hasPrefix(mention) }
     }
 
     var body: some View {

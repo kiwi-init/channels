@@ -118,6 +118,7 @@ import com.kiwiinit.channels.model.Buzz
 import com.kiwiinit.channels.model.Pending
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.model.dmWith
+import com.kiwiinit.channels.model.othersOf
 import com.kiwiinit.channels.model.spotTitle
 import com.kiwiinit.channels.model.taskIn
 import com.kiwiinit.channels.model.taskLabel
@@ -333,7 +334,7 @@ fun Intro(room: RoomView) {
     val tone = Tone.current
     val lines: List<String> = when {
         room.place == "main" -> {
-            val names = room.members.filter { it.name != room.me }.map { it.display }
+            val names = othersOf(room.members, room.me).map { it.display }
             listOf(stringResource(R.string.you_and, names.joinToString(", ")), if (empty) stringResource(R.string.no_messages_yet) else stringResource(R.string.start_of_general))
         }
         task != null -> {

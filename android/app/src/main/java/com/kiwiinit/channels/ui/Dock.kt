@@ -88,6 +88,7 @@ import com.kiwiinit.channels.model.MAX_IMAGE_BYTES
 import com.kiwiinit.channels.model.WEBP_FLOOR
 import com.kiwiinit.channels.model.capped
 import com.kiwiinit.channels.model.fitImage
+import com.kiwiinit.channels.model.othersOf
 import com.kiwiinit.channels.model.Draft
 import com.kiwiinit.channels.model.Outgoing
 import com.kiwiinit.channels.model.Spot
@@ -179,7 +180,7 @@ fun Dock(
     val mentionable = if (mention == null) {
         emptyList()
     } else {
-        room.members.filter { it.name != room.me && (it.name.lowercase().startsWith(mention) || it.display.lowercase().startsWith(mention)) }
+        othersOf(room.members, room.me).filter { it.name.lowercase().startsWith(mention) || it.display.lowercase().startsWith(mention) }
     }
     val placeholder = when {
         room.connection != Connection.Live -> stringResource(R.string.connecting)

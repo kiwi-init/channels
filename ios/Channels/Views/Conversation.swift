@@ -245,7 +245,7 @@ struct Intro: View {
     private var lines: [String] {
         let empty = room.messages.isEmpty
         if room.place == "main" {
-            let names = room.members.filter { $0.name != room.me }.map(\.display)
+            let names = othersOf(room.members, me: room.me).map(\.display)
             return [spoken("You, \(names.joined(separator: ", "))"), empty ? spoken("No messages yet") : spoken("The start of #general")]
         }
         if let task {
