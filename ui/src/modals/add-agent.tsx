@@ -8,6 +8,7 @@ import type { Channel } from "~/model"
 import { useApp } from "~/nav"
 import { Modal } from "~/kit/modal"
 import { CopyBox, copyResult, type CopyResult } from "~/modals/invite"
+import { inviteCheck } from "@kiwi/core/invite-check.ts"
 
 type Taken = Map<string, "in" | "asking">
 
@@ -168,6 +169,8 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
   const [persona, setPersona] = useState("")
   const problem = nameProblem(name, taken)
   const { line, failed, copy, retry } = useJoinCommand(channel.code, name, channel.youOwn ? persona : "")
+  const token = line ? /--persona ([A-Za-z0-9_-]+)/.exec(line)?.[1] : undefined
+  const check = token && !failed ? inviteCheck(token) : null
   useEffect(() => {
     if (!channel.youOwn) wantPersona(channel.code, name, persona)
   }, [channel.code, channel.youOwn, name, persona])
@@ -191,6 +194,7 @@ function RunCommand({ channel, name, setName, taken }: NameProps) {
         ) : (
           <CopyBox text={line} onCopy={copy} label={t("modals.add.agent.copy.command")} disabled={!!problem} wrap />
         )}
+        {check && <span className="field-hint">{t("modals.add.agent.invite.check", { check })}</span>}
       </div>
     </>
   )
