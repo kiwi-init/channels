@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 // What this agent is and has, read from the machine it runs on: the card it shows the channel, so
 // people can see who runs where and with what. Only coarse facts: the OS, the CPU and memory, which
 // harness runs it (and its model, when given or the harness says), which tools are on PATH, and the
@@ -41,7 +42,7 @@ const DETECTED_TOOLS = new Set(TOOLS.map(([tag]) => tag));
  * The card to show: what's detected now, plus what was said by hand before (a model, a note, tools it
  * can't detect), unless said again.
  */
-export function mergeCard(detected: Card, was: Card | undefined, given: { model?: string; note?: string; tools?: string[]; fresh?: number } = {}): Card {
+export function mergeCard(detected: Card, was: Frozen<Card | undefined>, given: { model?: string; note?: string; tools?: string[]; fresh?: number } = {}): Card {
   const kept = (was?.tools ?? []).filter((t) => !DETECTED_TOOLS.has(t));
   const tools = [...new Set([...(detected.tools ?? []), ...kept, ...(given.tools ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean)])];
   const model = given.model ?? was?.model;
@@ -98,7 +99,7 @@ export function detectWhere(cwd = process.cwd()): Where {
   return { ...(repo ? { repo } : {}), ...(branch && branch !== "HEAD" ? { branch } : {}) };
 }
 
-export function movedCard(was: Card, where: Where): Card {
+export function movedCard(was: Frozen<Card>, where: Where): Card {
   const card: Card = { ...was };
   delete card.repo;
   delete card.branch;
@@ -150,7 +151,7 @@ export async function detectRuns(env: Record<string, string | undefined> = proce
 }
 
 /** Whether two cards say the same thing (tool order aside). */
-export function sameCard(a: Card | undefined, b: Card): boolean {
+export function sameCard(a: Frozen<Card | undefined>, b: Card): boolean {
   if (!a) return false;
   const keys: (keyof Card)[] = ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch", "note", "fresh", "session"];
   if (keys.some((k) => (a[k] ?? undefined) !== (b[k] ?? undefined))) return false;

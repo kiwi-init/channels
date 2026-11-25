@@ -1,8 +1,9 @@
+import type { Frozen } from "./state/types.ts";
 import { inlineText } from "./membership.ts";
 import { BUSY_QUEUE, pickFor, type Candidate, type Reason, type Why } from "./routing.ts";
 import { taskId, type Task } from "./state.ts";
 
-function whyText(w: Why): string {
+function whyText(w: Frozen<Why>): string {
   switch (w.kind) {
     case "worked":
       return `worked ${taskId(w.task)} before`;
@@ -19,9 +20,9 @@ function whyText(w: Why): string {
   }
 }
 
-export const reasonText = (r: Reason): string => (r.warm ? `${whyText(r)} (this session)` : whyText(r));
+export const reasonText = (r: Frozen<Reason>): string => (r.warm ? `${whyText(r)} (this session)` : whyText(r));
 
-export function formatCandidates(t: Task, candidates: readonly Candidate[]): string {
+export function formatCandidates(t: Frozen<Task>, candidates: Frozen<readonly Candidate[]>): string {
   const out = [`who has ${taskId(t.id)}'s context (${inlineText(t.title, 120)}):`];
   if (!candidates.length) out.push("  no agents here");
   for (const c of candidates) {

@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { choiceIn } from "@kiwi/core/checks.ts";
 import type { PermissionShown } from "@kiwi/core/permission.ts";
 import type { DecisionKind, Message } from "@kiwi/core/protocol.ts";
@@ -5,17 +6,17 @@ import { holdsWork, type ChannelState } from "@kiwi/core/state.ts";
 import { handoffOf } from "./handoff";
 
 export interface AsksForMe {
-  decisions: Message[];
-  escalations: Message[];
-  questions: Message[];
+  decisions: Frozen<Message[]>;
+  escalations: Frozen<Message[]>;
+  questions: Frozen<Message[]>;
 }
 
-const isEscalationTo = (m: Message, me: string) => !!m.esc && !!m.to?.includes(me);
+const isEscalationTo = (m: Frozen<Message>, me: string) => !!m.esc && !!m.to?.includes(me);
 
-export const heldAsks = (state: Pick<ChannelState, "openAsks" | "tasks" | "askHeads" | "members">): Message[] => state.openAsks.filter((m) => holdsWork(state, m));
+export const heldAsks = (state: Pick<ChannelState, "openAsks" | "tasks" | "askHeads" | "members">): Frozen<Message[]> => state.openAsks.filter((m) => holdsWork(state, m));
 
-export function asksFor(openAsks: Message[], me: string, decides = false): AsksForMe {
-  const deciding = (m: Message) => decides && !!m.esc && !m.permission && !m.handoff && !m.step;
+export function asksFor(openAsks: Frozen<Message[]>, me: string, decides = false): AsksForMe {
+  const deciding = (m: Frozen<Message>) => decides && !!m.esc && !m.permission && !m.handoff && !m.step;
   const mine = openAsks.filter((m) => m.from !== me && (m.to?.includes(me) || m.to?.includes("*") || deciding(m)));
   const decisions = mine.filter((m) => (!!m.to?.includes(me) || deciding(m)) && !handoffOf(m));
   const rest = mine.filter((m) => !decisions.includes(m));
@@ -26,7 +27,7 @@ export function asksFor(openAsks: Message[], me: string, decides = false): AsksF
   };
 }
 
-export function permissionAsks({ decisions, escalations }: Pick<AsksForMe, "decisions" | "escalations">, now: number): { m: Message; p: PermissionShown }[] {
+export function permissionAsks({ decisions, escalations }: Pick<AsksForMe, "decisions" | "escalations">, now: number): Frozen<{ m: Message; p: PermissionShown }[]> {
   return [...decisions, ...escalations].flatMap((m) => (m.permission && now <= m.permission.expiresAt ? [{ m, p: m.permission }] : []));
 }
 
@@ -38,9 +39,9 @@ const KIND_LABEL: Record<DecisionKind, string> = {
   choice: "Decision for you",
 };
 
-export const decisionLabel = (m: Pick<Message, "decision" | "step">): string => (m.step ? "A step for you" : m.decision ? KIND_LABEL[m.decision] : "Decision for you");
+export const decisionLabel = (m: Frozen<Pick<Message, "decision" | "step">>): string => (m.step ? "A step for you" : m.decision ? KIND_LABEL[m.decision] : "Decision for you");
 
-export function askLabel(m: Message, me: string): string {
+export function askLabel(m: Frozen<Message>, me: string): string {
   if (isEscalationTo(m, me)) return decisionLabel(m);
   return m.to?.includes(me) ? "Question for you" : "Question for everyone";
 }

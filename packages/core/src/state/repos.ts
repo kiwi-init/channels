@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import { MAX_REPOS, REPO_RE, type Card } from "../protocol.ts";
 import type { ChannelState } from "./types.ts";
 
@@ -12,7 +13,7 @@ export function reposOf(list: readonly unknown[]): string[] {
   return out.slice(0, MAX_REPOS);
 }
 
-export function outsideRepos(state: Pick<ChannelState, "repos">, card: Card | undefined): boolean {
+export function outsideRepos(state: Pick<ChannelState, "repos">, card: Frozen<Card | undefined>): boolean {
   if (!card?.repo || !state.repos.length) return false;
   const repo = card.repo.toLowerCase();
   return !state.repos.some((r) => r.toLowerCase() === repo);

@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 import { stageOf, type TaskStage } from "./stage.ts";
 import { releaseOf, tasksAwaitingPeople, type ChannelState, type Task } from "./state.ts";
 
@@ -17,7 +18,7 @@ export function needsYou(state: Pick<ChannelState, "openAsks" | "placeOf" | "tas
   return held.has(id);
 }
 
-export function statusOf(state: ChannelState, t: Task): TaskStatus {
+export function statusOf(state: ChannelState, t: Frozen<Task>): TaskStatus {
   const stage = stageOf(state, t);
   if (stage.stage === "dropped") return { status: "cancelled", stage };
   if (stage.stage === "done") {

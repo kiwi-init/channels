@@ -7,6 +7,7 @@ import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
 import type { Personality } from "@kiwi/core/personality.ts"
 import type { SharedWith } from "@kiwi/core/shared-seats.ts"
 import type { Reason } from "@kiwi/core/routing.ts"
+import type { Frozen } from "@kiwi/core/state.ts"
 import type { PipeIn } from "@kiwi/core/doc/held-pipe.ts"
 import type { DocLine, DocLines } from "@kiwi/channel/kept.ts"
 import type { DocBlockRef, GithubNote, Step, StepReply, Unarmed } from "@kiwi/core/protocol.ts"
@@ -69,7 +70,7 @@ export interface Person {
   model?: string
   machine?: string
   specs?: string
-  tools?: string[]
+  tools?: readonly string[]
   repo?: string
   branch?: string
   outside?: boolean
@@ -238,7 +239,7 @@ export interface Task {
   steps?: TaskStep[]
   closedWith?: Words
   youReview?: "verdict" | "send-back"
-  suggested?: { name: string; reason?: Reason }
+  suggested?: { name: string; reason?: Frozen<Reason> }
   leftBy?: string
   mentions?: number
 }
@@ -510,7 +511,7 @@ export interface JoinAsk {
   revoked?: true
   sponsor?: string
   key?: string
-  said?: { machine?: string; tools?: string[]; repo?: string; outside: boolean } | "nothing"
+  said?: { machine?: string; tools?: readonly string[]; repo?: string; outside: boolean } | "nothing"
   pin?: { name: string; persona: string | null | undefined } | { failed: true }
   freeName?: string
   code: string

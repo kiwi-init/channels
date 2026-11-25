@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import { type Landing, type OldTaskState, type TaskState, type Verdict } from "../protocol.ts";
 import type { CheckAsk, CheckPhase } from "../checks.ts";
 import type { CheckState } from "./checks.ts";
@@ -28,7 +29,7 @@ export function reviewWaysOut(id: number, review: string, round: number): string
   return `${reviewerTitle(review)} answers kiwi task approve ${t} --round ${round}; the lead or a person can move the review (kiwi task review ${t} --review OTHER) or close the task (kiwi task close ${t} "why")`;
 }
 
-export function openRound(task: Task): ReviewRound | undefined {
+export function openRound<T extends Frozen<Task>>(task: T): T["rounds"][number] | undefined {
   const last = task.rounds.at(-1);
   return last?.result.kind === "open" ? last : undefined;
 }
@@ -44,7 +45,13 @@ export function closeCancelled(task: Task, mark: { seq: number; by: string; at: 
   task.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: note });
 }
 
-export function verdictRefusal(task: Task, verdict: Verdict, ev: { state?: string; round?: number; at?: string; body?: "review" }, mayFinish: boolean, open: ReviewRound | undefined): string | null {
+export function verdictRefusal(
+  task: Task,
+  verdict: Verdict,
+  ev: { state?: string; round?: number; at?: string; body?: "review" },
+  mayFinish: boolean,
+  open: Frozen<ReviewRound | undefined>,
+): string | null {
   const id = taskId(task.id);
   if ((verdict === "approved" && ev.state !== "done") || (verdict === "rejected" && ev.state !== "doing")) return "an approval finishes the task and a rejection sends it back to doing";
   if (task.state === "landing") return `${id} is already approved: it lands next`;
@@ -61,20 +68,20 @@ type LandingChange = { state?: string; verdict?: Verdict; close?: string; then?:
 
 export const landerOf = (task: Pick<Task, "lander" | "owner">): string | undefined => task.lander ?? task.owner;
 
-export const newRun = (task: Task, run: { id: string } | undefined): boolean => !!run && !!task.run && task.run.id !== run.id;
+export const newRun = (task: Frozen<Task>, run: { id: string } | undefined): boolean => !!run && !!task.run && task.run.id !== run.id;
 
 export function runRefusal(run: { id: string; started?: number } | undefined, received: number | undefined): string | null {
   if (run?.started === undefined) return null;
   return received === undefined || run.started > received ? `run ${run.id} can't have started after its proof arrived` : null;
 }
 
-function landerAfter(task: Task, ev: LandingChange): string | undefined {
+function landerAfter(task: Frozen<Task>, ev: LandingChange): string | undefined {
   const lander = ev.lander === undefined ? task.lander : ev.lander || undefined;
   const owner = ev.owner === undefined ? task.owner : ev.owner || undefined;
   return lander ?? owner;
 }
 
-export function landingRefusal(task: Task, ev: LandingChange, from: { person: boolean; lead: boolean }): string | null {
+export function landingRefusal(task: Frozen<Task>, ev: LandingChange, from: { person: boolean; lead: boolean }): string | null {
   const id = taskId(task.id);
   const trusted = from.person || from.lead;
   if (ev.close !== undefined) return trusted ? (task.state === "done" ? `${id} is already done` : null) : `only a person or the lead closes ${id} with a reason`;
@@ -92,7 +99,7 @@ export function landingReopens(task: Task, ev: LandingChange): boolean {
   return (ev.then !== undefined && thenChanged(task, ev.then)) || landerAfter(task, ev) !== landerOf(task) || newRun(task, ev.run);
 }
 
-const landingHeld = (tasks: ReadonlyMap<number, Task>, phase: CheckPhase, holds: readonly number[]): Task[] =>
+const landingHeld = <T extends Frozen<Task>>(tasks: ReadonlyMap<number, T>, phase: CheckPhase, holds: readonly number[]): T[] =>
   phase !== "pre-ship"
     ? []
     : holds.flatMap((id) => {
@@ -100,27 +107,27 @@ const landingHeld = (tasks: ReadonlyMap<number, Task>, phase: CheckPhase, holds:
         return t?.state === "landing" ? [t] : [];
       });
 
-const liveCheck = (checks: ReadonlyMap<number, CheckState>, id: number): CheckState | undefined => {
+const liveCheck = (checks: Frozen<ReadonlyMap<number, CheckState>>, id: number): Frozen<CheckState | undefined> => {
   const c = checks.get(id);
   return c && c.closed === undefined && c.supersededBy === undefined ? c : undefined;
 };
 
-export function landingTouchedByAsk(
-  tasks: ReadonlyMap<number, Task>,
+export function landingTouchedByAsk<T extends Frozen<Task>>(
+  tasks: ReadonlyMap<number, T>,
   checks: ReadonlyMap<number, CheckState>,
   m: { check?: CheckAsk; choices?: readonly string[]; holds?: readonly number[] },
-): Task[] {
+): T[] {
   if (!m.check || !m.choices?.length) return [];
   const was = m.check.replaces === undefined ? undefined : liveCheck(checks, m.check.replaces);
   return [...new Set([...landingHeld(tasks, m.check.phase, m.holds ?? []), ...(was ? landingHeld(tasks, was.phase, was.holds) : [])])];
 }
 
-export const landingTouchedByClose = (tasks: ReadonlyMap<number, Task>, checks: ReadonlyMap<number, CheckState>, ask: number): Task[] => {
+export const landingTouchedByClose = <T extends Frozen<Task>>(tasks: ReadonlyMap<number, T>, checks: Frozen<ReadonlyMap<number, CheckState>>, ask: number): T[] => {
   const c = liveCheck(checks, ask);
   return c ? landingHeld(tasks, c.phase, c.holds) : [];
 };
 
-export function checkChangeRefusal(touched: readonly Task[], from: { person: boolean; lead: boolean }, change: "adds a check to" | "replaces a check on" | "closes a check on"): string | null {
+export function checkChangeRefusal(touched: Frozen<readonly Task[]>, from: { person: boolean; lead: boolean }, change: "adds a check to" | "replaces a check on" | "closes a check on"): string | null {
   if (!touched.length || from.person || from.lead) return null;
   return `only a person or the lead ${change} ${touched.map((t) => taskId(t.id)).join(", ")} once it's approved`;
 }
@@ -142,13 +149,13 @@ export function backToReview(task: Task, mark: { seq: number; by: string; ts: nu
   task.notes.push({ seq: mark.seq, by: mark.by, ts: mark.ts, text: `${why}: back to review` });
 }
 
-export function reviewMoveRefusal(task: Task, from: { name: string; person: boolean; lead: boolean }, review: string | null | undefined): string | null {
+export function reviewMoveRefusal(task: Frozen<Task>, from: { name: string; person: boolean; lead: boolean }, review: string | null | undefined): string | null {
   if (review === undefined || !task.review) return null;
   if (from.person || from.lead || from.name === task.review) return null;
   return `only a person, the lead or ${task.review === "*" ? "a reviewer" : task.review} changes who reviews ${taskId(task.id)}`;
 }
 
-export function reviewClaimRefusal(task: Task, from: string, review: string | null | undefined): string | null {
+export function reviewClaimRefusal(task: Frozen<Task>, from: string, review: string | null | undefined): string | null {
   const id = taskId(task.id);
   if (review !== from) return `a claim takes ${id}'s review for the one claiming it`;
   if (task.review !== "*") return task.review ? `${id}'s review isn't open to anyone: ${task.review} reviews it` : `${id} has no review to take`;
@@ -156,7 +163,7 @@ export function reviewClaimRefusal(task: Task, from: string, review: string | nu
   return null;
 }
 
-export function revisedOut(task: Task, from: string, open: ReviewRound | undefined): number | null {
+export function revisedOut(task: Frozen<Task>, from: string, open: Frozen<ReviewRound | undefined>): number | null {
   const last = task.rounds.at(-1);
   return !open && last?.result.kind === "rejected" && (from === task.owner || from === task.createdBy) ? last.n : null;
 }
@@ -206,6 +213,6 @@ export function titlesLookAlike(a: string, b: string): boolean {
   return shared >= 2 && shared / Math.min(wa.length, wb.length) >= 0.6;
 }
 
-export function similarOpenTasks(state: ChannelState, title: string): Task[] {
+export function similarOpenTasks(state: ChannelState, title: string): Frozen<Task[]> {
   return [...state.tasks.values()].filter((t) => OPEN_FOR_TITLE.has(t.state) && titlesLookAlike(title, t.title)).sort((a, b) => a.id - b.id);
 }

@@ -1,3 +1,4 @@
+import type { Frozen } from "../state/types.ts";
 import * as Effect from "effect/Effect";
 import { cleanGithubNote, GITHUB_SYNC_LISTS, MAX_GITHUB_ITEMS, wellFormedEvent, type GithubNote, type MergeMethod } from "../protocol.ts";
 import type { GithubStatus } from "../github-health.ts";
@@ -36,9 +37,9 @@ const sameRules = (a: GithubRulesInfo, b: GithubRulesInfo | undefined): boolean 
 export interface GithubFx {
   setGithubRepos(repos: string[], token?: string | null): Effect.Effect<string[], Refused, Relay>;
   drainGithub(): Effect.Effect<number, Refused, Relay>;
-  syncGithubRules(repos: readonly string[], known: readonly GithubRules[]): Effect.Effect<number, Refused, Relay>;
-  syncGithubReleases(repos: readonly string[], known: readonly GithubRelease[]): Effect.Effect<number, Refused, Relay>;
-  syncGithub(repo: string, known: GithubState): Effect.Effect<number, Refused, Relay>;
+  syncGithubRules(repos: readonly string[], known: Frozen<readonly GithubRules[]>): Effect.Effect<number, Refused, Relay>;
+  syncGithubReleases(repos: readonly string[], known: readonly Frozen<GithubRelease>[]): Effect.Effect<number, Refused, Relay>;
+  syncGithub(repo: string, known: Frozen<GithubState>): Effect.Effect<number, Refused, Relay>;
   githubStatus(): Effect.Effect<GithubStatus, Refused, Relay>;
   githubDiff(repo: string, sha: string): Effect.Effect<GithubDiff, Refused, Relay>;
   retireReview(head: RetiredHead): Effect.Effect<{ url: string | null }, Refused, Relay>;

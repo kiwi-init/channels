@@ -514,7 +514,7 @@ export interface Card {
   cpu?: string;
   memory?: string;
   /** Tools and capabilities on its machine: docker, gpu, xcode, cargo… */
-  tools?: string[];
+  tools?: readonly string[];
   /** The repository it works in ("owner/repo") and the branch it's on. */
   repo?: string;
   branch?: string;

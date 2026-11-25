@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 import { ago, markedText, taskStateWord } from "./format.ts";
 import { inlineText } from "./membership.ts";
 import { CHECKPOINT_MAX_LENGTH } from "./protocol.ts";
@@ -22,7 +23,7 @@ interface Block {
   elsewhere?: string;
 }
 
-function partIn(t: Task, me: string): Part | null {
+function partIn(t: Frozen<Task>, me: string): Part | null {
   if (t.state === "done" || t.archived) return null;
   if (t.owner === me) return "owner";
   if (t.review === me && openRound(t)) return "reviewer";

@@ -67,6 +67,7 @@ import { permissionAnswer } from "../permission.ts";
 import type {
   AskHead,
   ChannelState,
+  ChannelStateDraft,
   Edit,
   Fact,
   FoldBase,
@@ -150,7 +151,7 @@ function folding(
   given: FoldBase | null | undefined,
   keep: ((base: FoldBase) => void) | undefined,
   lookAhead: boolean,
-): ChannelState {
+): ChannelStateDraft {
   const from = given ? structuredClone(given) : null;
   const after = from?.n ?? -1;
   const ahead = <F extends { since: number }>(f: F | null | undefined): F | null => (f && f.since >= after ? f : null);

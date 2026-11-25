@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { describeEvent, formatStatus, formatTask, formatTasks } from "@kiwi/core/format.ts";
 import { memberLoad } from "@kiwi/core/load.ts";
 import { wellFormedEvent, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
-import { fold as foldWith, similarOpenTasks, titlesLookAlike, type Roster, type Task } from "@kiwi/core/state.ts";
+import { fold as foldWith, similarOpenTasks, titlesLookAlike, type Roster } from "@kiwi/core/state.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 
 const roster: Roster = [];
@@ -116,6 +116,6 @@ describe("near-duplicate titles", () => {
     const cancel = await msg(a, "a", { op: "task.add", title: "Fix the login button" });
     const cancelled = await msg(a, "a", { op: "task.update", task: cancel.seq, state: "cancelled" });
     const s = fold([open, done, finish, cancel, cancelled]);
-    expect(similarOpenTasks(s, "fix the login button!").map((t: Task) => t.id)).toEqual([open.seq]);
+    expect(similarOpenTasks(s, "fix the login button!").map((t) => t.id)).toEqual([open.seq]);
   });
 });

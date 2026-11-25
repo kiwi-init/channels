@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts"
 import { freeHandle, seededPick } from "@kiwi/core/handles.ts"
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
 import { nameKey, runsLine } from "@kiwi/core/membership.ts"
@@ -411,7 +412,7 @@ const FAIL_WORDS: Readonly<Record<string, Key>> = {
 const QUEUED = new Set(["queued", "waiting", "pending", "requested"])
 const CHECK_ORDER: Record<Check["state"], number> = { fail: 0, running: 1, waiting: 2, pass: 3, skipped: 4 }
 
-function checkOf(c: GithubCheck, required: boolean): Check {
+function checkOf(c: Frozen<GithubCheck>, required: boolean): Check {
   const base = { name: c.name, ...(required ? { required: true } : {}), ...(c.url ? { url: c.url } : {}) }
   if (!c.conclusion) return QUEUED.has(c.status ?? "") ? { ...base, state: "waiting", word: t("live.map.check.queued") } : { ...base, state: "running", word: t("live.map.check.running") }
   if (c.conclusion === "success") return { ...base, state: "pass", word: t("live.map.check.passed") }
@@ -736,13 +737,13 @@ function historyOf(state: ChannelState, messages: readonly Wire[], me: string): 
   return out
 }
 
-function suggestionFor(state: ChannelState, t: CoreTask): Task["suggested"] {
+function suggestionFor(state: ChannelState, t: Frozen<CoreTask>): Task["suggested"] {
   if (t.owner || t.state === "done") return undefined
   const top = pickFor(taskCandidates(state, t.id))
   return top ? { name: top.name, ...(top.whys[0] ? { reason: top.whys[0] } : {}) } : undefined
 }
 
-function landsOf(t: CoreTask): Task["lands"] {
+function landsOf(t: Frozen<CoreTask>): Task["lands"] {
   if (!t.steps?.length) return undefined
   const by = landerOf(t)
   const waits = landingWaits(t)
@@ -751,7 +752,7 @@ function landsOf(t: CoreTask): Task["lands"] {
 
 const TROUBLE: Record<NonNullable<Extract<Mover, { kind: "member" }>["why"]>, RunTrouble> = { "run failed": "failed", "run can't be seen": "unseen", "run overran": "overran" }
 
-function moverFor(state: ChannelState, t: CoreTask, now: number): TaskMover | undefined {
+function moverFor(state: ChannelState, t: Frozen<CoreTask>, now: number): TaskMover | undefined {
   const m = moverOf(state, t, now)
   if (!m) return undefined
   if (m.kind === "member")
@@ -770,12 +771,12 @@ function moverFor(state: ChannelState, t: CoreTask, now: number): TaskMover | un
   return { kind: "hold", until: m.until, reason: wrote(m.reason) }
 }
 
-function quietFor(state: ChannelState, t: CoreTask, now: number): TaskQuiet | undefined {
+function quietFor(state: ChannelState, t: Frozen<CoreTask>, now: number): TaskQuiet | undefined {
   const c = clockOf(state, t, now)
   return c?.paged ? { with: c.mover, since: c.since, from: c.since + state.quietMs, every: state.quietMs, step: c.step } : undefined
 }
 
-function stepNow(state: ChannelState, t: CoreTask, s: LandingStep, me: string, now: number): Pick<TaskStep, "wait" | "run" | "trouble" | "yours"> {
+function stepNow(state: ChannelState, t: Frozen<CoreTask>, s: LandingStep, me: string, now: number): Pick<TaskStep, "wait" | "run" | "trouble" | "yours"> {
   const move = stepMove(s, landerOf(t), now, s.run ? runSight(state.github, t, s) : "blind")
   if (move.kind === "waiting") return { wait: { reason: wrote(move.reason), until: move.until } }
   if (move.kind === "run") return { run: { due: move.due } }
@@ -783,7 +784,7 @@ function stepNow(state: ChannelState, t: CoreTask, s: LandingStep, me: string, n
   return { ...(move.why ? { trouble: TROUBLE[move.why] } : {}), ...(move.name === me ? { yours: true as const } : {}) }
 }
 
-function stepsFor(state: ChannelState, t: CoreTask, me: string, now: number): TaskStep[] | undefined {
+function stepsFor(state: ChannelState, t: Frozen<CoreTask>, me: string, now: number): TaskStep[] | undefined {
   if (!t.steps?.length) return undefined
   const current = currentStep(t)
   const lander = landerOf(t)

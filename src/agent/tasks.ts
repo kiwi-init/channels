@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import * as Effect from "effect/Effect";
 import {
   CHECKPOINT_MAX_LENGTH,
@@ -69,7 +70,7 @@ function shortTitle(title: string): string {
   return `${(word > TASK_TITLE_LIMIT / 2 ? cut.slice(0, word) : cut).trimEnd()}…`;
 }
 
-function judgedRound(t: Task, open: ReviewRound | undefined, round: number | undefined, at: string | undefined): Effect.Effect<ReviewRound, Rejected> {
+function judgedRound(t: Frozen<Task>, open: Frozen<ReviewRound | undefined>, round: number | undefined, at: string | undefined): Effect.Effect<Frozen<ReviewRound>, Rejected> {
   const id = taskId(t.id);
   const wanted = at?.trim() || undefined;
   if (!open) return Effect.fail(new Rejected(`${id} has no review round open`));
@@ -548,12 +549,12 @@ export class SessionTasks extends SessionMessaging {
     { self: this },
     function* (this: SessionTasks, ask: number, ttlSec: number) {
       const { state } = yield* this.state();
-      const spec: Spec | undefined = state.specs.get(ask);
+      const spec: Frozen<Spec | undefined> = state.specs.get(ask);
       if (!spec) return yield* new Rejected(`#${ask} has no spec`);
       const stage = specStage(state, spec);
       if (stage === "draft") return yield* new Rejected(`#${ask}'s spec isn't approved yet: comment on it, or wait for a person to approve it`);
       if (stage !== "queued") return yield* new Rejected(`#${ask}'s spec is ${stage}, so there's nothing to start: kiwi spec show ${ask}`);
-      const lease: Lease = yield* this.lease(specLease(ask), ttlSec, `planning #${ask}`);
+      const lease: Frozen<Lease> = yield* this.lease(specLease(ask), ttlSec, `planning #${ask}`);
       return { spec, lease };
     },
     oneLook,

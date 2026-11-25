@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 import { inlineText } from "./membership.ts";
 import { isPerson } from "./state/people.ts";
 import { landerOf, openRound } from "./state/tasks.ts";
@@ -34,7 +35,7 @@ function settle(state: Board, name: string | undefined | null, move: MoveFor, qu
 
 const leadOr = (state: Board, name: string | undefined, move: MoveFor, unowned: MoveFor): Mover => (name ? settle(state, name, move) : settle(state, state.lead, unowned));
 
-function heldBy(state: Board, t: Task): Mover | undefined {
+function heldBy(state: Board, t: Frozen<Task>): Mover | undefined {
   const oldest = state.openAsks.filter((m) => m.holds?.includes(t.id)).sort((a, b) => a.seq - b.seq)[0];
   if (!oldest) return undefined;
   const named = oldest.to ?? [];
@@ -45,13 +46,13 @@ function heldBy(state: Board, t: Task): Mover | undefined {
   return settle(state, person ?? named[0], "answer", oldest.seq);
 }
 
-function queued(state: Board, t: Task, owner: string): Mover {
+function queued(state: Board, t: Frozen<Task>, owner: string): Mover {
   const theirs = [...state.tasks.values()].filter((x) => x.owner === owner && !x.archived);
   const ahead = theirs.filter((x) => x.state === "doing" || (x.state === "todo" && x.id < t.id)).length;
   return ahead ? { kind: "waiting", owner, ahead } : settle(state, owner, "start");
 }
 
-function stepMover(state: Board, t: Task, step: LandingStep, now: number): Mover {
+function stepMover(state: Board, t: Frozen<Task>, step: LandingStep, now: number): Mover {
   const move = stepMove(step, landerOf(t), now, step.run ? runSight(state.github, t, step) : "blind");
   if (move.kind === "waiting") return { kind: "hold", step: stepText(step), until: move.until, left: move.until - now, reason: move.reason };
   if (move.kind === "run") return { kind: "run", step: stepText(step), behind: move.behind, due: move.due, left: move.due - now };
@@ -60,12 +61,12 @@ function stepMover(state: Board, t: Task, step: LandingStep, now: number): Mover
   return settled.kind === "member" ? { ...settled, step: stepText(step), ...(move.why ? { why: move.why } : {}) } : settled;
 }
 
-function landingMover(state: Board, t: Task, now: number): Mover {
+function landingMover(state: Board, t: Frozen<Task>, now: number): Mover {
   const step = currentStep(t);
   return step ? stepMover(state, t, step, now) : leadOr(state, landerOf(t), "land", "assign");
 }
 
-export function moverOf(state: Board, t: Task, now: number = Date.now()): Mover | undefined {
+export function moverOf(state: Board, t: Frozen<Task>, now: number = Date.now()): Mover | undefined {
   if (t.state === "done" || t.archived) return undefined;
   const held = heldBy(state, t);
   if (held) return held;

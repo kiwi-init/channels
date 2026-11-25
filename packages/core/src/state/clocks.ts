@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import { QUIET_MINUTES, type NudgeStep, type WakeGot, type WakeSeen } from "../protocol.ts";
 import { prOfTask } from "../prs.ts";
 import { currentStep, stepMove } from "../steps.ts";
@@ -25,7 +26,7 @@ type Party = { key: string; mover: string };
 const lead = (move: string): Party => ({ key: `${LEAD}|${move}`, mover: LEAD });
 const member = (name: string, move: string, more = ""): Party => ({ key: `${name}|${move}|${more}`, mover: name });
 
-function landingParty(view: ClockView, t: Task, now: number): Party {
+function landingParty(view: ClockView, t: Frozen<Task>, now: number): Party {
   const step = currentStep(t);
   const lander = landerOf(t);
   if (!step) return lander ? member(lander, "land") : lead("assign");
@@ -34,12 +35,12 @@ function landingParty(view: ClockView, t: Task, now: number): Party {
   return move.kind === "member" ? member(move.name, "land", `${step.id}|${move.why ?? ""}`) : lead("assign");
 }
 
-function queueParty(view: ClockView, t: Task, owner: string): Party {
+function queueParty(view: ClockView, t: Frozen<Task>, owner: string): Party {
   for (const x of view.tasks.values()) if (x.owner === owner && !x.archived && (x.state === "doing" || (x.state === "todo" && x.id < t.id))) return { key: `${WAITING}${owner}`, mover: owner };
   return member(owner, "start");
 }
 
-function partyOf(view: ClockView, t: Task, now: number): Party {
+function partyOf(view: ClockView, t: Frozen<Task>, now: number): Party {
   const question = view.openAsks.filter((m) => m.holds?.includes(t.id)).sort((a, b) => a.seq - b.seq)[0];
   if (question) return { key: `?${question.seq}`, mover: `?${question.seq}` };
   if (pausingStep(view.github, t, now)) return NONE;
@@ -53,7 +54,7 @@ function partyOf(view: ClockView, t: Task, now: number): Party {
   return t.review && t.review !== "*" ? member(t.review, "review", String(round.n)) : lead("route");
 }
 
-function heldEnd(view: ClockView, t: Task): number | undefined {
+function heldEnd(view: ClockView, t: Frozen<Task>): number | undefined {
   const step = heldStep(t);
   if (!step?.hold) return undefined;
   const sight = step.run ? runSight(view.github, t, step) : "blind";
@@ -62,20 +63,20 @@ function heldEnd(view: ClockView, t: Task): number | undefined {
   return running && due !== undefined ? Math.max(until ?? due, due) : until;
 }
 
-export const waitActive = (t: Task, now: number): boolean => !!t.wait && t.state !== "done" && (t.wait.until === undefined || now < t.wait.until);
+export const waitActive = (t: Frozen<Task>, now: number): boolean => !!t.wait && t.state !== "done" && (t.wait.until === undefined || now < t.wait.until);
 
 export function waitEndedBy(view: ClockView, t: Task, by: string, now: number, lead: string | undefined): boolean {
   const mover = partyOf(view, { ...t, wait: undefined }, now).mover;
   return mover === LEAD ? by === lead : mover === by;
 }
 
-function deadlines(view: ClockView, t: Task): (number | undefined)[] {
+function deadlines(view: ClockView, t: Frozen<Task>): (number | undefined)[] {
   if (t.state !== "landing") return [heldEnd(view, t), t.wait?.until];
   const step = currentStep(t);
   return [step?.wait?.until, step?.run?.due, t.wait?.until];
 }
 
-function passedDeadline(view: ClockView, t: Task, now: number): number | undefined {
+function passedDeadline(view: ClockView, t: Frozen<Task>, now: number): number | undefined {
   const passed = deadlines(view, t).filter((x): x is number => x !== undefined && x <= now);
   return passed.length ? Math.max(...passed) : undefined;
 }
@@ -89,7 +90,7 @@ export const timedStep = (t: Task): boolean => {
 
 const headOf = (view: ClockView, t: Task): string | undefined => prOfTask(view.github, view.branchPrefix, t)?.sha;
 
-export function rolled(view: ClockView, t: Task, now: number): TaskClock | undefined {
+export function rolled<T extends Frozen<Task>>(view: ClockView, t: T, now: number): T["clock"] | TaskClock | undefined {
   if (t.state === "done" || t.archived) return undefined;
   const cur = partyOf(view, t, now);
   const was = t.clock;
@@ -108,7 +109,7 @@ type Act = NonNullable<TaskClock["acts"]>[number];
 
 const acted = (clock: TaskClock, by: string, seq: number, at: number): Act[] => [...(clock.acts ?? []).filter((a) => a[0] !== by), [by, seq, at]];
 
-export function actOf(clock: TaskClock, name: string): { seq: number; at: number; step: 0 | 1 | 2 | 3 } | undefined {
+export function actOf(clock: Frozen<TaskClock>, name: string): { seq: number; at: number; step: 0 | 1 | 2 | 3 } | undefined {
   const act = clock.acts?.find((a) => a[0] === name);
   return act && act[1] > clock.seq ? { seq: act[1], at: act[2], step: act[3] ?? 0 } : undefined;
 }
@@ -135,7 +136,7 @@ export function tick(view: ClockView, t: Task, mark: { seq: number; at: number; 
 type Nudge = { mover: string; since: number; step: NudgeStep; day?: number; wake?: WakeSeen };
 type Rung = Nudge & { step: 1 | 2 | 3 };
 
-export const wokeFor = (clock: TaskClock, since: number): Woke | undefined => (clock.woke?.since === since ? clock.woke : undefined);
+export const wokeFor = (clock: Frozen<TaskClock>, since: number): Woke | undefined => (clock.woke?.since === since ? clock.woke : undefined);
 
 export const wakeSeen = (woke: Woke | undefined): WakeSeen => (!woke ? "none" : woke.read !== undefined ? "read" : woke.delivered !== undefined ? "delivered" : "attempted");
 

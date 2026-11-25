@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import { omit } from "../omit.ts";
 import { handoffUrl, type GithubNote, type MergeMethod } from "../protocol.ts";
 
@@ -124,16 +125,16 @@ function addRun(g: GithubState, i: GithubNote, seq: number): void {
   }
 }
 
-export const runsUnknownSince = (g: GithubState, task: { id: number; createdRts?: number }): boolean =>
+export const runsUnknownSince = (g: Frozen<GithubState>, task: { id: number; createdRts?: number }): boolean =>
   task.createdRts === undefined || g.runsSince === null || g.runsSince > task.id || (g.runsForgotten !== null && g.runsForgotten >= task.createdRts);
 
-export function runStart(g: GithubState, id: string, since: number): GithubRun | undefined {
+export function runStart(g: Frozen<GithubState>, id: string, since: number): GithubRun | undefined {
   let first: GithubRun | undefined;
   for (const r of g.runs.values()) if ((r.title === id || String(r.run) === id) && r.started >= since && (!first || r.started < first.started)) first = r;
   return first;
 }
 
-function behind(i: GithubNote, was: GithubCheck): boolean {
+function behind(i: GithubNote, was: Frozen<GithubCheck>): boolean {
   const order = i.run && was.run ? i.run - was.run || (i.attempt ?? 1) - (was.attempt ?? 1) : 0;
   return order < 0 || (order === 0 && !!was.conclusion && !i.conclusion);
 }
@@ -154,7 +155,7 @@ function attemptsWith(attempts: readonly RunAttempt[] | undefined, i: GithubNote
   return [...(attempts ?? []).filter((a) => a !== was), next].sort((a, b) => a.run - b.run || a.attempt - b.attempt).slice(-MAX_ATTEMPTS);
 }
 
-export function succeededBy(check: GithubCheck, run: number, x: number): boolean {
+export function succeededBy(check: Frozen<GithubCheck>, run: number, x: number): boolean {
   const attempts =
     check.attempts ??
     (check.run !== undefined
@@ -247,7 +248,7 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
   }
 }
 
-export function githubNews(g: GithubState, notes: readonly GithubNote[]): GithubNote[] {
+export function githubNews(g: Frozen<GithubState>, notes: readonly GithubNote[]): GithubNote[] {
   return notes.filter((i) => {
     if (i.event === "pull_request" && i.number) {
       const was = g.prs.get(prKey(i.repo, i.number));
@@ -270,7 +271,7 @@ export function githubNews(g: GithubState, notes: readonly GithubNote[]): Github
 
 export const repoKey = (repo: string): string => repo.toLowerCase();
 
-export function rulesOf(g: GithubState, repo: string): GithubRules | undefined {
+export function rulesOf(g: Frozen<GithubState>, repo: string): Frozen<GithubRules | undefined> {
   return g.rules.get(repoKey(repo));
 }
 
@@ -301,15 +302,15 @@ export function dropRelease(g: Pick<GithubState, "releases">, repo: string, tag:
 
 const sameCommit = (a: string, b: string): boolean => a.length >= 7 && b.length >= 7 && (a.startsWith(b) || b.startsWith(a));
 
-export function releaseOf(g: GithubState, pr: GithubPr): GithubRelease | undefined {
+export function releaseOf(g: Frozen<GithubState>, pr: GithubPr): Frozen<GithubRelease | undefined> {
   if (pr.state !== "merged") return undefined;
   return g.releases.get(repoKey(pr.repo))?.find((r) => r.prs.includes(pr.number) || (!!pr.merge && r.shas.some((s) => sameCommit(s, pr.merge!))));
 }
 
-export function issueOf(g: GithubState, ref: { repo: string; number: number }): GithubIssue | undefined {
+export function issueOf(g: Frozen<GithubState>, ref: { repo: string; number: number }): GithubIssue | undefined {
   return g.issues.get(prKey(ref.repo, ref.number));
 }
 
-export function prChecks(g: GithubState, pr: GithubPr): GithubCheck[] {
+export function prChecks(g: Frozen<GithubState>, pr: GithubPr): Frozen<GithubCheck[]> {
   return pr.sha ? [...(g.checks.get(shaKey(pr.repo, pr.sha))?.values() ?? [])] : [];
 }
