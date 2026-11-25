@@ -1,10 +1,6 @@
 import SwiftUI
 import UIKit
 
-enum Fold: Hashable {
-    case tabs, channel, me
-}
-
 extension AppTab {
     static let order: [AppTab] = [.chats, .needs, .you]
 
@@ -53,7 +49,7 @@ extension AppModel {
 enum Bar {
     static let height: CGFloat = 62
     static let gap: CGFloat = 10
-    static let pair: CGFloat = 112
+    static let icons: CGFloat = 150
 
     static func spring(_ still: Bool) -> Animation {
         still ? .easeInOut(duration: 0.2) : .interpolatingSpring(mass: 0.9, stiffness: 260, damping: 20)
@@ -63,119 +59,55 @@ enum Bar {
 struct TabBar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
-    @Binding var fold: Fold?
+    @Binding var picking: Bool
     @Namespace private var space
 
-    private var wide: Bool { fold == .tabs || (fold == nil && model.composing == nil) }
+    private var compact: Bool { picking || model.composing != nil }
 
     var body: some View {
         Melt(spacing: Bar.gap) {
             HStack(spacing: Bar.gap) {
-                left
-                    .frame(width: wide ? nil : Bar.height)
-                    .frame(maxWidth: wide ? .infinity : Bar.height, maxHeight: .infinity)
-                    .melting("left", in: space)
-                right
-                    .frame(width: wide ? Bar.pair : nil)
-                    .frame(maxWidth: wide ? Bar.pair : .infinity, maxHeight: .infinity)
-                    .melting("right", in: space)
+                HStack(spacing: 0) {
+                    ForEach(AppTab.order, id: \.self) { tab in
+                        TabButton(tab: tab, compact: compact, space: space) {
+                            Haptic.tap()
+                            picking = false
+                            model.pick(tab)
+                        }
+                    }
+                }
+                .padding(4)
+                .frame(width: compact ? Bar.icons : nil)
+                .frame(maxWidth: compact ? Bar.icons : .infinity, maxHeight: .infinity)
+                .melting("tabs", in: space)
+                if model.composing != nil, !picking {
+                    Composer()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .melting("side", in: space)
+                        .transition(.blurReplace)
+                } else if let room = model.here {
+                    ChannelCapsule(room: room, open: picking) {
+                        Haptic.tap()
+                        picking.toggle()
+                    }
+                    .frame(maxWidth: compact ? .infinity : 170, maxHeight: .infinity)
+                    .fixedSize(horizontal: !compact, vertical: false)
+                    .melting("side", in: space)
+                    .transition(.blurReplace)
+                }
             }
         }
         .frame(height: Bar.height)
-        .animation(Bar.spring(still), value: fold)
+        .animation(Bar.spring(still), value: picking)
         .animation(Bar.spring(still), value: model.composing)
         .animation(Bar.spring(still), value: model.tab)
     }
 
-    @ViewBuilder private var left: some View {
-        if wide {
-            HStack(spacing: 0) {
-                ForEach(AppTab.order, id: \.self) { tab in
-                    TabButton(tab: tab, space: space) {
-                        Haptic.tap()
-                        fold = nil
-                        model.pick(tab)
-                    }
-                }
-            }
-            .padding(4)
-            .transition(.blurReplace)
-        } else {
-            Button {
-                Haptic.tap()
-                fold = fold == nil ? .tabs : nil
-            } label: {
-                Image(systemName: model.tab.symbol)
-                    .font(.system(size: 21, weight: .semibold))
-                    .foregroundStyle(Tone.ink)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("tabs")
-            .accessibilityLabel(Text("Show Tabs"))
-            .transition(.blurReplace)
-        }
-    }
-
-    @ViewBuilder private var right: some View {
-        let room = model.here
-        switch fold {
-        case .channel:
-            if let room {
-                Unfolded(title: room.title, line: room.status(of: "main")) {
-                    ChannelAvatar(room: room, size: 46)
-                } close: {
-                    fold = nil
-                }
-                .transition(.blurReplace)
-            }
-        case .me:
-            Unfolded(title: model.person, line: mine) {
-                Face(name: model.person, member: room?.member(room?.me ?? ""), size: 46)
-            } close: {
-                fold = nil
-            }
-            .transition(.blurReplace)
-        case nil where model.composing != nil:
-            Composer()
-                .transition(.blurReplace)
-        default:
-            HStack(spacing: 4) {
-                if let room {
-                    Button {
-                        Haptic.tap()
-                        fold = .channel
-                    } label: {
-                        ChannelAvatar(room: room, size: 46)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("fold-channel")
-                    .accessibilityLabel(room.title)
-                }
-                Button {
-                    Haptic.tap()
-                    fold = .me
-                } label: {
-                    Face(name: model.person, member: room?.member(room?.me ?? ""), size: 46)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("fold-me")
-                .accessibilityLabel(model.person)
-            }
-            .padding(.horizontal, 8)
-            .transition(.blurReplace)
-        }
-    }
-
-    private var mine: String {
-        if model.waiting > 0 { return spoken("\(model.waiting) need you") }
-        return model.enrolled ? spoken("One of your devices") : spoken("Linked to your Mac")
-    }
 }
 
 private struct TabButton: View {
     let tab: AppTab
+    let compact: Bool
     let space: Namespace.ID
     let pick: () -> Void
     @Environment(AppModel.self) private var model
@@ -186,7 +118,7 @@ private struct TabButton: View {
         Button(action: pick) {
             VStack(spacing: 2) {
                 Image(systemName: tab.symbol)
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.system(size: compact ? 20 : 19, weight: .semibold))
                     .frame(height: 24)
                     .overlay(alignment: .topTrailing) {
                         if tab == .needs, model.waiting > 0 {
@@ -199,10 +131,13 @@ private struct TabButton: View {
                                 .offset(x: 12, y: -5)
                         }
                     }
-                Text(tab.title)
-                    .font(.system(size: 11, weight: .medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                if !compact {
+                    Text(tab.title)
+                        .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .transition(.opacity)
+                }
             }
             .foregroundStyle(lit ? Tone.ink : Tone.ink2)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -221,144 +156,94 @@ private struct TabButton: View {
     }
 }
 
-private struct Unfolded<Mark: View>: View {
-    let title: String
-    let line: String?
-    @ViewBuilder let mark: () -> Mark
-    let close: () -> Void
+private struct ChannelCapsule: View {
+    let room: RoomView
+    let open: Bool
+    let toggle: () -> Void
 
     var body: some View {
-        Button {
-            Haptic.tap()
-            close()
-        } label: {
+        Button(action: toggle) {
             HStack(spacing: 10) {
-                mark()
+                ChannelAvatar(room: room, size: 40)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(.system(size: 16, weight: .semibold))
+                    Text(room.title)
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Tone.ink)
                         .lineLimit(1)
-                    if let line {
+                    if open, let line = room.status(of: "main") {
                         Text(line).type(.meta).foregroundStyle(Tone.ink3).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Tone.ink3)
+                    .rotationEffect(.degrees(open ? 180 : 0))
             }
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.leading, 11)
+            .padding(.trailing, 16)
+            .frame(maxHeight: .infinity)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("unfolded")
+        .accessibilityIdentifier("fold-channel")
+        .accessibilityLabel(room.title)
+        .accessibilityValue(room.status(of: "main") ?? "")
+        .accessibilityAddTraits(open ? .isSelected : [])
     }
 }
 
 struct Composer: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var still
-    @State private var swipe: CGFloat = 0
 
     var body: some View {
         if let spot = model.composing {
             let draft = model.draft(spot.code, spot.place)
             let text = draft.text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ")
-            HStack(spacing: 10) {
-                if !draft.attached.isEmpty {
-                    Image(systemName: "photo").foregroundStyle(Tone.ink2)
-                }
-                Text(text.isEmpty ? spoken("Message") : text)
-                    .type(.body)
-                    .foregroundStyle(text.isEmpty ? Tone.ink3 : Tone.ink)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 20)
-            .offset(x: swipe * 0.5)
-            .opacity(1 - min(abs(swipe) / 240, 0.5))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Capsule())
-            .onTapGesture { model.openComposer = spot }
-            .gesture(
-                DragGesture(minimumDistance: 14)
-                    .onChanged { swipe = $0.translation.width }
-                    .onEnded { end in
-                        let dx = end.translation.width + (end.predictedEndTranslation.width - end.translation.width) * 0.3
-                        withAnimation(Bar.spring(still)) { swipe = 0 }
-                        if abs(dx) > 80 { hop(spot, dx < 0 ? 1 : -1) }
+            Button {
+                model.openComposer = spot
+            } label: {
+                HStack(spacing: 10) {
+                    if !draft.attached.isEmpty {
+                        Image(systemName: "photo").foregroundStyle(Tone.ink2)
                     }
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
+                    Text(text.isEmpty ? spoken("Message") : text)
+                        .type(.body)
+                        .foregroundStyle(text.isEmpty ? Tone.ink3 : Tone.ink)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("composer")
             .accessibilityLabel(text.isEmpty ? spoken("Message") : text)
-            .accessibilityAction { model.openComposer = spot }
         }
-    }
-
-    private func hop(_ spot: Spot, _ by: Int) {
-        let spots = model.rows(.all).map(\.spot)
-        guard let at = spots.firstIndex(of: spot), spots.indices.contains(at + by) else { return }
-        Haptic.tap()
-        model.jump(.place(spots[at + by]))
     }
 }
 
-struct FoldMenu: View {
+struct ChannelMenu: View {
     @Environment(AppModel.self) private var model
-    @Binding var fold: Fold?
+    @Binding var picking: Bool
 
     var body: some View {
-        switch fold {
-        case .channel: DragMenu(choices: rooms)
-        case .me: DragMenu(choices: mine)
-        default: EmptyView()
-        }
-    }
-
-    private var rooms: [Choice] {
-        model.channels.prefix(6).map { room in
-            Choice(id: "channel-\(room.code)", title: room.title, line: room.status(of: "main"), mark: .room(room)) {
-                fold = nil
-                model.jump(.place(Spot(code: room.code)))
-            }
-        }
-    }
-
-    private var mine: [Choice] {
-        var out: [Choice] = []
-        if let room = model.here, let lead = room.lead, let spot = room.leadSpot {
-            out.append(
-                Choice(id: "lead", title: spoken("Message \(room.display(lead)) directly"), line: room.title, mark: .face(lead, room.member(lead))) {
-                    fold = nil
-                    model.jump(.place(spot))
-                })
-        }
-        out.append(
-            Choice(id: "needs", title: spoken("Needs You"), line: model.waiting > 0 ? spoken("\(model.waiting) need you") : nil, mark: .symbol(AppTab.needs.symbol)) {
-                fold = nil
-                model.tab = .needs
+        DragMenu(
+            choices: model.channels.prefix(6).map { room in
+                Choice(id: "channel-\(room.code)", title: room.title, line: room.status(of: "main"), room: room) {
+                    picking = false
+                    model.jump(.place(Spot(code: room.code)))
+                }
             })
-        out.append(
-            Choice(id: "you", title: spoken("You"), line: nil, mark: .symbol(AppTab.you.symbol)) {
-                fold = nil
-                model.tab = .you
-            })
-        return out
     }
 }
 
 struct Choice: Identifiable {
-    enum Mark {
-        case room(RoomView)
-        case face(String, MemberView?)
-        case symbol(String)
-    }
-
     let id: String
     let title: String
     let line: String?
-    let mark: Mark
+    let room: RoomView
     let run: () -> Void
 }
 
@@ -373,7 +258,7 @@ struct DragMenu: View {
         VStack(spacing: 0) {
             ForEach(Array(choices.enumerated()), id: \.element.id) { at, choice in
                 HStack(spacing: 12) {
-                    mark(choice.mark)
+                    ChannelAvatar(room: choice.room, size: 36)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(choice.title).type(.body).foregroundStyle(Tone.ink).lineLimit(1)
                         if let line = choice.line {
@@ -420,18 +305,6 @@ struct DragMenu: View {
         return choices.indices.contains(at) ? at : nil
     }
 
-    @ViewBuilder private func mark(_ mark: Choice.Mark) -> some View {
-        switch mark {
-        case .room(let room): ChannelAvatar(room: room, size: 36)
-        case .face(let name, let member): Face(name: name, member: member, size: 36)
-        case .symbol(let symbol):
-            Image(systemName: symbol)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Tone.ink2)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(Tone.raised))
-        }
-    }
 }
 
 struct Melt<Content: View>: View {

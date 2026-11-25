@@ -75,6 +75,17 @@ struct ChannelRows: View {
 
     var body: some View {
         Group {
+            if let spot = room.leadSpot, let lead = room.lead, let row = model.row(spot) {
+                Button {
+                    model.go(.place(spot))
+                } label: {
+                    ConvoRow(title: row.title, line: row.line, at: row.last?.date, unread: row.unread) {
+                        Face(name: lead, member: room.member(lead), size: 44)
+                    }
+                }
+                .flatRow()
+                .accessibilityIdentifier("lead-row")
+            }
             ForEach(rooms, id: \.self) { spot in
                 Button {
                     model.go(.place(spot))

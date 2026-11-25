@@ -14,7 +14,7 @@ extension AppModel {
 struct Shell: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
-    @State private var fold: Fold?
+    @State private var picking = false
     @State private var keyboard = false
     @State private var home: CGFloat = 0
 
@@ -38,23 +38,23 @@ struct Shell: View {
                     SettingsScreen()
                 }
             }
-            if fold != nil {
+            if picking {
                 Color.black.opacity(0.001)
                     .ignoresSafeArea()
-                    .onTapGesture { fold = nil }
+                    .onTapGesture { picking = false }
                     .accessibilityHidden(true)
             }
-            if barShown, fold == .channel || fold == .me {
-                FoldMenu(fold: $fold)
+            if barShown, picking {
+                ChannelMenu(picking: $picking)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 10)
                     .transition(.scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
             }
         }
-        .animation(Bar.spring(still), value: fold)
+        .animation(Bar.spring(still), value: picking)
         .bar(.bottom) {
             if barShown {
-                TabBar(fold: $fold)
+                TabBar(picking: $picking)
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, home > 20 ? -12 : 12)
@@ -68,9 +68,9 @@ struct Shell: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboard = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboard = false }
-        .onChange(of: model.tab) { _, _ in fold = nil }
-        .onChange(of: model.path) { _, _ in fold = nil }
-        .onChange(of: model.composing) { _, _ in fold = nil }
+        .onChange(of: model.tab) { _, _ in picking = false }
+        .onChange(of: model.path) { _, _ in picking = false }
+        .onChange(of: model.composing) { _, _ in picking = false }
         .alert("Sign-in not saved", isPresented: Binding(get: { model.unsaved != nil }, set: { if !$0 { model.unsaved = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
