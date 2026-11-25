@@ -2876,7 +2876,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "작업 중인 사람이 없습니다"
+            "value" : "작업 중인 에이전트 없음"
           }
         },
         "pt-BR" : {
@@ -2888,7 +2888,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没有人在工作"
+            "value" : "没有进行中的工作"
           }
         }
       }
