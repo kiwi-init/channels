@@ -79,6 +79,13 @@ struct Conversation: View {
     var answer: (AskView) -> Void = { _ in }
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
+    @State private var feedBottom: CGFloat = 0
+
+    private var covered: CGFloat {
+        guard let top = model.restingTop, feedBottom > 0 else { return 0 }
+        let overlap = feedBottom - top
+        return overlap > 0 ? overlap + 6 : 0
+    }
 
     private var solo: Bool {
         room.placeView(room.place).map { $0.kind == "dm" && $0.withMe } ?? false
@@ -123,6 +130,16 @@ struct Conversation: View {
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, 12)
+            }
+            .contentMargins(.bottom, covered, for: .scrollContent)
+            .onGeometryChange(for: CGFloat.self) {
+                $0.frame(in: .global).maxY - $0.safeAreaInsets.bottom
+            } action: {
+                feedBottom = $0
+            }
+            .onChange(of: covered) { _, now in
+                Trouble.note("layout: iOS \(UIDevice.current.systemVersion), feed ends at \(Int(feedBottom)), composer starts at \(Int(model.restingTop ?? 0)), room \(Int(now))")
+                if follow.atBottom { position.scrollTo(edge: .bottom) }
             }
             .scrollPosition($position)
             .defaultScrollAnchor(.bottom)

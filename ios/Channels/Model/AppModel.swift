@@ -51,6 +51,7 @@ final class AppModel {
     var focusNext: Spot?
     var composing: Spot?
     var openComposer: Spot?
+    var restingTop: CGFloat?
     var enrolled = false
     var joining = 0
     var unsaved: String?

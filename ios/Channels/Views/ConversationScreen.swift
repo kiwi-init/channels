@@ -284,6 +284,12 @@ struct RestingComposer: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("composer")
             .accessibilityLabel(text.isEmpty ? spoken("Message") : text)
+            .onGeometryChange(for: CGFloat.self) {
+                $0.frame(in: .global).minY
+            } action: {
+                model.restingTop = $0
+            }
+            .onDisappear { model.restingTop = nil }
         }
     }
 }
