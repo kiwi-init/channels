@@ -4,6 +4,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import com.kiwiinit.channels.engine.AskView
 import com.kiwiinit.channels.engine.Connection
+import com.kiwiinit.channels.engine.MemberView
 import com.kiwiinit.channels.engine.MessageView
 import com.kiwiinit.channels.engine.PlaceView
 import com.kiwiinit.channels.engine.ReviewView
@@ -103,6 +104,8 @@ fun RoomView.asksIn(key: String): List<AskView> =
 fun RoomView.elsewhere(): List<AskView> = asks.filter { it.place != "main" && it.place != sideKey && it.place?.let(::isRoomKey) != true }
 
 val RoomView.roomPlaces: List<PlaceView> get() = places.filter { it.kind == "room" }
+
+fun othersOf(members: List<MemberView>, me: String): List<MemberView> = members.filter { it.name != me }
 
 fun RoomView.taskIn(key: String): Int? = placeView(key)?.task ?: if (key.startsWith("task:")) key.removePrefix("task:").toIntOrNull() else null
 
