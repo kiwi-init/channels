@@ -14,7 +14,9 @@ import com.kiwiinit.channels.engine.NeedView
 import com.kiwiinit.channels.model.AppModel
 import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.model.needing
+import com.kiwiinit.channels.model.needsIn
 import com.kiwiinit.channels.theme.ChannelsTheme
+import com.kiwiinit.channels.ui.ConversationScreen
 import com.kiwiinit.channels.ui.NeedsList
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -72,6 +74,45 @@ class RequestsTest {
         show()
         compose.onNodeWithTag("open-need-$PERMISSION").performScrollTo().performClick()
         assertEquals(listOf(Spot(DEV, "task:543")), opened)
+    }
+
+    @Test
+    fun turnAwayAnswersTheJoinRequest() {
+        show()
+        compose.onNodeWithText("Turn away").performScrollTo().performClick()
+        compose.waitForIdle()
+        val away = calls.single { it.getValue("op").jsonPrimitive.content == "turnAway" }
+        assertEquals("join-1", away.getValue("id").jsonPrimitive.content)
+    }
+
+    @Test
+    fun generalShowsItsRequestsInTheConversation() {
+        val model = sample(RuntimeEnvironment.getApplication()) { request ->
+            calls += request
+            JsonNull
+        }
+        withRequests(model)
+        compose.setContent {
+            ChannelsTheme {
+                Surface(Modifier.fillMaxSize()) { ConversationScreen(model, Spot(DEV), back = {}) }
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("calm-heron").assertExists()
+        compose.onNodeWithText("git push origin Channels543-device-job").assertExists()
+        compose.onNodeWithText("Turn away").performClick()
+        compose.waitForIdle()
+        assertEquals("join-1", calls.single { it.getValue("op").jsonPrimitive.content == "turnAway" }.getValue("id").jsonPrimitive.content)
+    }
+
+    @Test
+    fun aTaskThreadShowsOnlyItsRequests() {
+        val model = sample(RuntimeEnvironment.getApplication())
+        withRequests(model)
+        val room = model.rooms.getValue(DEV)
+        assertEquals(listOf(PERMISSION, "join-1"), room.needsIn("main").map { it.id })
+        assertEquals(listOf(PERMISSION), room.needsIn("task:543").map { it.id })
+        assertEquals(emptyList<String>(), room.needsIn("task:7").map { it.id })
     }
 
     private fun show() {

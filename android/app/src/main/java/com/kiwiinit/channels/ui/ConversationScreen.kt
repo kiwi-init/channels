@@ -83,6 +83,7 @@ import com.kiwiinit.channels.model.Spot
 import com.kiwiinit.channels.model.asksIn
 import com.kiwiinit.channels.model.elsewhere
 import com.kiwiinit.channels.model.other
+import com.kiwiinit.channels.model.needsIn
 import com.kiwiinit.channels.model.reviewsIn
 import com.kiwiinit.channels.model.row
 import com.kiwiinit.channels.model.rows
@@ -178,6 +179,7 @@ fun ConversationScreen(
                             follow = follow,
                             elsewhere = if (at.general) shown.elsewhere() else emptyList(),
                             reviews = shown.reviewsIn(at.place),
+                            needs = shown.needsIn(at.place),
                             composing = composing,
                             reply = { m ->
                                 answering = null
