@@ -23,6 +23,8 @@ if (process.argv.includes("--help")) {
   console.log(`A busy channel, measured: PERF_AGENTS agents (10), PERF_TASKS tasks (100), PERF_MESSAGES messages (2000), then PERF_SOAK_MIN minutes (20) of agents posting.
 Reports cold load, the reload to the first screen, each view's switch at 1x and 4x CPU, key delay while agents post, and heap, DOM nodes and listeners over time.
 PERF_TASKS_FIRST=1 makes the tasks before the messages, so a reload has to keep them from beyond the newest 2000.
+PERF_SOAK_POST=0 keeps the soak's sampling and views but has no agent post: an idle control.
+PERF_ALLOC=1 makes the soak's 8 KiB sampling heap profile keep collected objects too, so it estimates allocation per message sent.
 PERF_GL=swiftshader draws with the CPU, as CI's runners do: on a Mac that's how to see what CI sees.
 --gated measures only what scripts/perf-check.ts gates: the reload at 1x, the views at 4x and typing, without the 1x views, details toggles, profiles or second reload.
 
@@ -38,6 +40,7 @@ const TASKS = Number(process.env.PERF_TASKS ?? 100);
 const MESSAGES = Number(process.env.PERF_MESSAGES ?? 2000);
 const SOAK_MIN = Number(process.env.PERF_SOAK_MIN ?? 20);
 const GATED = process.argv.includes("--gated");
+const ALLOC = process.env.PERF_ALLOC === "1";
 const jsonAt = process.argv.indexOf("--json");
 const OUT = jsonAt > 0 ? process.argv[jsonAt + 1] : undefined;
 const data = mkdtempSync(join(tmpdir(), "kiwi-perf-scale-"));
@@ -286,6 +289,24 @@ try {
     };
     new MutationObserver((_, obs) => seen() && obs.disconnect()).observe(document, { childList: true, subtree: true, characterData: true });
   }, SEEDED);
+  if (ALLOC)
+    await context.addInitScript(() => {
+      const w = window as unknown as { __clones: { calls: number; measured: number; chars: number } };
+      w.__clones = { calls: 0, measured: 0, chars: 0 };
+      const real = globalThis.structuredClone;
+      globalThis.structuredClone = ((value: unknown, options?: StructuredSerializeOptions) => {
+        const c = w.__clones;
+        if (c.calls++ % 25 === 0) {
+          try {
+            c.chars += JSON.stringify(value)?.length ?? 0;
+            c.measured++;
+          } catch {
+            // A value JSON can't write, like one with a Map, is counted without a size.
+          }
+        }
+        return real(value, options);
+      }) as typeof structuredClone;
+    });
   const page = await context.newPage();
   await pageErrors(page, (e) => log(`page error: ${e}`), { observers: false });
   const cdp = await context.newCDPSession(page);
@@ -563,11 +584,12 @@ try {
   log(`soak: ${SOAK_MIN} minutes`);
   const blocksAtStart = await docBlocks(page);
   await cdp.send("HeapProfiler.collectGarbage");
-  await cdp.send("HeapProfiler.startSampling", { samplingInterval: 8192 });
+  const clonesAtStart = ALLOC ? await page.evaluate(() => ({ ...(window as unknown as { __clones: { calls: number; measured: number; chars: number } }).__clones })) : null;
+  await cdp.send("HeapProfiler.startSampling", { samplingInterval: 8192, ...(ALLOC ? { includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true } : {}) });
   const soakEnd = Date.now() + SOAK_MIN * 60000;
   let soakSent = 0;
   const posting = Promise.all(
-    agents.map(async (agent, a) => {
+    (process.env.PERF_SOAK_POST === "0" ? [] : agents).map(async (agent, a) => {
       while (Date.now() < soakEnd) {
         const n = MESSAGES + soakSent++;
         const to = n % 5 === 0 && tasks.length ? ["--to", `T${tasks[n % tasks.length]!}`] : [];
@@ -594,8 +616,24 @@ try {
   await cdp.send("HeapProfiler.collectGarbage");
   const { profile: sampled } = (await cdp.send("HeapProfiler.getSamplingProfile")) as unknown as { profile: { head: HeapSite } };
   await cdp.send("HeapProfiler.stopSampling");
-  report["soak: what was allocated in it and is still held, by file (sampled)"] = { docBlocksAtStart: blocksAtStart, docBlocksAtEnd: await docBlocks(page), ...liveByChunk(sampled.head) };
-  log("soak held", JSON.stringify(report["soak: what was allocated in it and is still held, by file (sampled)"]));
+  const sampledKey = ALLOC ? "soak: everything allocated in it, collected or not, by file (sampled)" : "soak: what was allocated in it and is still held, by file (sampled)";
+  const bySite = liveByChunk(sampled.head);
+  report[sampledKey] = {
+    docBlocksAtStart: blocksAtStart,
+    docBlocksAtEnd: await docBlocks(page),
+    ...bySite,
+    ...(ALLOC ? { messagesSent: soakSent, perMessageKB: soakSent ? Math.round((bySite.totalMB * 1024) / soakSent) : null } : {}),
+  };
+  if (clonesAtStart) {
+    const end = await page.evaluate(() => ({ ...(window as unknown as { __clones: { calls: number; measured: number; chars: number } }).__clones }));
+    const calls = end.calls - clonesAtStart.calls;
+    const measured = end.measured - clonesAtStart.measured;
+    const avgChars = measured ? (end.chars - clonesAtStart.chars) / measured : 0;
+    const key = "soak: structuredClone calls in the page, with the JSON size of every 25th";
+    report[key] = { calls, perMessage: soakSent ? Math.round(calls / soakSent) : null, avgKB: Math.round(avgChars / 1024), estimatedMB: mb(calls * avgChars) };
+    log("soak clones", JSON.stringify(report[key]));
+  }
+  log(ALLOC ? "soak allocated" : "soak held", JSON.stringify(report[sampledKey]));
   const soak = idle;
   const soakHeap = heap.filter((h) => h.phase.startsWith("soak"));
   const first = soakHeap[0];

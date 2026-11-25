@@ -11,6 +11,14 @@ on:
         description: "0 keeps the soak on the conversation, with no tour of the views each minute"
         type: string
         default: ""
+      soak_post:
+        description: "0 has no agent post during the diagnosis soak, an idle control for soak_alloc (needs soak_only)"
+        type: string
+        default: ""
+      soak_alloc:
+        description: "yes makes the diagnosis soak estimate allocation per message sent from an 8 KiB sampling heap profile that keeps collected objects, on an unminified build (only with soak_only)"
+        type: string
+        default: ""
       jobs:
         description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a thread doc's updates cost, at a short and a long thread, no gate), upgrade (an older release's data opened by this build), replies (three agents answer one message, in the app), or all"
         type: string
@@ -54,6 +62,8 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/browser
       - run: bun scripts/ui-harness.ts
+        env:
+          HARNESS_MINIFY: ${{ inputs.soak_only != '' && inputs.soak_alloc == 'yes' && '0' || '' }}
       - name: perf-scale's reload probe ends only when the seeded row is shown two frames running, never on a delayed, held, hidden, off-screen or one-frame row
         run: bun scripts/perf-frame-probe.ts
       - name: perf-scale, one soak for a diagnosis
@@ -61,6 +71,8 @@ jobs:
         env:
           PERF_SOAK_MIN: ${{ inputs.soak_only }}
           PERF_SOAK_TABS: ${{ inputs.soak_tabs }}
+          PERF_ALLOC: ${{ inputs.soak_alloc == 'yes' && '1' || '' }}
+          PERF_SOAK_POST: ${{ inputs.soak_post }}
         run: bun scripts/perf-scale.ts --gated --json "$RUNNER_TEMP/perf-soak.json"
       - name: the merge base the paired check compares against
         id: base

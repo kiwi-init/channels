@@ -15,10 +15,12 @@ if (import.meta.main) {
     console.log(`Builds ui/ into ui/dist-harness for the app smoke and the perf harnesses: the production bundle with only import.meta.env.DEV
 set, so the plain-browser key store works: they drive the app in a browser with no desktop bridge.
 
+HARNESS_MINIFY=0 keeps names unminified, so an allocation profile names the functions.
+
   bun scripts/ui-harness.ts`);
     process.exit(0);
   }
-  const build = Bun.spawn(["bun", "x", "vite", "build", "--mode", "harness", "--outDir", HARNESS_DIST, "--logLevel", "warn"], {
+  const build = Bun.spawn(["bun", "x", "vite", "build", "--mode", "harness", "--outDir", HARNESS_DIST, "--logLevel", "warn", ...(process.env.HARNESS_MINIFY === "0" ? ["--minify", "false"] : [])], {
     cwd: join(ROOT, "ui"),
     env: { ...process.env, NODE_ENV: "production" },
     stdout: "inherit",
