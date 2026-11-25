@@ -327,6 +327,7 @@ class AppModel(private val app: Application, private val calls: (suspend (JsonOb
                 val data = ask(buildJsonObject { put("op", "enrollFinish") }).toString().toByteArray()
                 store(data)
                 linking = Linking.Idle
+                relinkAsked = false
                 rooms.clear()
                 begin(data)
             } catch (e: EngineException) {
