@@ -133,6 +133,7 @@ export interface TaskView {
   createdAt: number;
   last: string | null;
   archived: boolean;
+  since: number | null;
 }
 
 export interface AskView {
@@ -201,6 +202,7 @@ export type IconView = { kind: "robot"; robot: string } | { kind: "emoji"; emoji
 
 export interface RoomView {
   code: string;
+  roomId: string | null;
   title: string;
   icon: IconView;
   me: string;

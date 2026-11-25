@@ -53,6 +53,7 @@ final class AppModel {
     var joining = 0
     var unsaved: String?
     private let push = PushTags()
+    private let live = LiveAgents()
     private let github = GitHubSheet()
 
     var relinking: Bool {
@@ -262,10 +263,12 @@ final class AppModel {
             }
             if room.connection == .live { pullOnce(room.code) }
             if wentLive { pushSoon() }
+            if !demo { live.follow(rooms) }
         case .gone(let code):
             rooms[code] = nil
             Kept.drop(code)
             pushSoon()
+            if !demo { live.follow(rooms) }
         case .kept(let code, let sealed):
             Kept.save(code, sealed)
         case .log:
@@ -530,6 +533,19 @@ final class AppModel {
         return out
     }
 
+    func liveSwitched(_ on: Bool) {
+        if on {
+            if !demo { live.follow(rooms) }
+        } else {
+            live.stop()
+        }
+    }
+
+    func openLive(_ url: URL) {
+        guard url.scheme == AgentsActivity.scheme, url.host() == "live", let code = live.code(for: url.lastPathComponent, in: rooms) else { return }
+        jump(.place(Spot(code: code)))
+    }
+
     func startDemo() {
         do {
             let room = try Demo.room()
@@ -563,6 +579,7 @@ final class AppModel {
         Vault.wipe()
         Kept.wipe()
         push.forget()
+        live.stop()
         keeping = nil
         unsaved = nil
         rooms = [:]

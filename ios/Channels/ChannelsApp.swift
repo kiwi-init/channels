@@ -17,6 +17,7 @@ struct ChannelsApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                .onOpenURL { model.openLive($0) }
                 .environment(lock)
                 .onChange(of: lock.locked && model.phase == .ready, initial: true) { _, shut in
                     if shut {
