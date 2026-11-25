@@ -139,7 +139,7 @@ class AppModel(private val app: Application, private val calls: (suspend (JsonOb
     val drafts = mutableStateMapOf<String, Draft>()
     val feeds = mutableStateMapOf<String, Feed>()
     val pending = mutableStateMapOf<String, List<Pending>>()
-    val sentAs = mutableStateMapOf<Int, String>()
+    val sentAs = mutableStateMapOf<String, Map<Int, String>>()
     val visited = mutableStateListOf<Spot>()
 
     val relinking: Boolean
@@ -679,7 +679,7 @@ class AppModel(private val app: Application, private val calls: (suspend (JsonOb
         scope.launch {
             try {
                 val seq = send(spot, item.body, item.re)
-                sentAs[seq] = item.id
+                sentAs[spot.code] = (sentAs[spot.code] ?: emptyMap()) + (seq to item.id)
                 pending[spot.id] = (pending[spot.id] ?: emptyList()).map { if (it.id == item.id) it.copy(seq = seq) else it }
                 settle(spot.code)
             } catch (e: EngineException) {

@@ -212,7 +212,7 @@ fun Conversation(
 ) {
     val scope = rememberCoroutineScope()
     val pending = model.pending[spot.id] ?: emptyList()
-    val sent = model.sentAs.toMap()
+    val sent = model.sentAs[room.code] ?: emptyMap()
     val lines = remember(room.messages, elsewhere, reviews, pending, sent) { Line.build(room.messages, elsewhere, reviews, pending, sent) }
     val shown = remember(lines) { lines.asReversed() }
     val solo = room.placeView(room.place)?.let { it.kind == "dm" && it.withMe } ?: false

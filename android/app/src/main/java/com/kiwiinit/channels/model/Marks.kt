@@ -27,10 +27,9 @@ fun raisedMarks(code: String, keys: List<String>, merged: Map<String, Int>, seen
 
 fun settledPending(code: String, sideKey: String?, side: List<MessageView>?, pending: Map<String, List<Pending>>, feeds: Map<String, Feed>): Map<String, List<Pending>> {
     val out = mutableMapOf<String, List<Pending>>()
-    for (key in listOf("main") + listOfNotNull(sideKey)) {
-        val id = "$code|$key"
-        val list = pending[id] ?: continue
-        if (list.isEmpty()) continue
+    for ((id, list) in pending) {
+        if (!id.startsWith("$code|") || list.isEmpty()) continue
+        val key = id.removePrefix("$code|")
         val have = (if (key == sideKey) side.orEmpty() else feeds[id]?.messages.orEmpty()).map { it.seq }.toSet()
         val kept = list.filter { item -> item.seq?.let { it !in have } ?: true }
         if (kept.size != list.size) out[id] = kept
