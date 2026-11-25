@@ -102,8 +102,10 @@ export function tilingPicks(ask: TilingAsk, reply: unknown): TilingPicks {
 }
 
 function lookup(file: string, args: string[]): Promise<string | null> {
+  const env = childEnv();
+  if (file === "security") for (const name of ["HOME", "CFFIXED_USER_HOME"]) delete env[name];
   return new Promise((resolve) => {
-    execFile(file, args, { timeout: KEY_MS, env: childEnv() }, (err, stdout) => resolve(err ? null : stdout.trim() || null));
+    execFile(file, args, { timeout: KEY_MS, env }, (err, stdout) => resolve(err ? null : stdout.trim() || null));
   });
 }
 
