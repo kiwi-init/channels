@@ -1,4 +1,6 @@
 import { MAX_PIN, pinFits } from "@kiwi/core/pin.ts";
+import { inviteCheck } from "@kiwi/core/invite-check.ts";
+import { repairPin, REPAIR_BUDGET_MS } from "../../pin-repair.ts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
@@ -163,17 +165,27 @@ export const joinCommands: Record<string, Command> = {
       }
       if (opt.persona !== undefined && (opt.persona.length > MAX_PIN || !/^[A-Za-z0-9_-]+$/.test(opt.persona))) {
         yield* doneAsking;
-        return yield* die("--persona takes the token from the owner's invite, as it was copied");
+        return yield* die(`This invite token couldn't be read. Copy a fresh invite and try again; nothing was sent (invite check ${inviteCheck(opt.persona)})`);
       }
-      const token = opt.persona;
-      const check = token === undefined ? null : yield* Effect.promise(() => pinFits(token, decodeJoinCode(code)));
-      if (check?.kind === "couldNotRun") {
-        yield* doneAsking;
-        return yield* die(`verification could not run: ${check.why}, run the command again; nothing was sent`);
-      }
-      if (check?.kind === "invalid") {
-        yield* doneAsking;
-        return yield* die("this invite token failed verification: it isn't signed by this channel's owner for this channel. Ask the owner for the invite again and copy it whole; nothing was sent", 2);
+      let pin = opt.persona;
+      if (pin !== undefined) {
+        const given = pin;
+        const fits = (t: string) => pinFits(t, decodeJoinCode(code));
+        const check = yield* Effect.promise(() => fits(given));
+        const repair = check.kind === "invalid" ? yield* Effect.promise(() => repairPin(given, fits, Date.now() + REPAIR_BUDGET_MS)) : null;
+        if (check.kind === "couldNotRun") {
+          yield* doneAsking;
+          return yield* die(`verification could not run: ${check.why}, run the command again; nothing was sent`);
+        }
+        if (repair?.kind === "repaired") {
+          pin = repair.token;
+          process.stderr.write(
+            `kiwi: one character in the invite token didn't match what the owner signed (character ${repair.at} is ${repair.is}, not ${repair.was}); joining with the corrected token (invite check ${inviteCheck(pin)})\n`,
+          );
+        } else if (repair) {
+          yield* doneAsking;
+          return yield* die(`Could not verify this invite. Copy a fresh invite and try again; nothing was sent (invite check ${inviteCheck(given)})`, 2);
+        }
       }
       const card = mergeCard(detectCard(), undefined, { model });
       const runs = yield* Effect.promise(() => detectRuns(process.env, { ...(opt.harness ? { harness: opt.harness } : {}), model }));
@@ -270,7 +282,7 @@ export const joinCommands: Record<string, Command> = {
           const local = Object.values((yield* keys.config).channels).find((c) => c.roomId === roomId);
           if (access && (access.keys[String(access.epoch)] ?? local?.keys[String(access.epoch)])) return { access, how: "resumed" as const };
         }
-        const claims = () => Effect.promise(async () => ({ ...(await computerClaimFor(roomId, id.pk)), card, ...(opt.persona ? { pin: opt.persona } : {}) }));
+        const claims = () => Effect.promise(async () => ({ ...(await computerClaimFor(roomId, id.pk)), card, ...(pin ? { pin } : {}) }));
         const req = yield* Channel.fx.requestJoin(relay, code, id, info, yield* claims()).pipe(
           Effect.catchIf(outForGood, () =>
             Effect.gen(function* () {

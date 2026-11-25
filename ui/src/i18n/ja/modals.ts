@@ -18,6 +18,7 @@ export default {
   "modals.add.agent.command.failed": "コマンドを作成できませんでした。",
   "modals.add.agent.try.again": "再試行",
   "modals.add.agent.copy.command": "コマンドをコピー",
+  "modals.add.agent.invite.check": "招待チェック {check}。参加が拒否されると、受け取ったトークンのチェックが表示されます。両者が違えば、コマンドが途中で変わっています。",
   "modals.copy.manual": "コピーできませんでした。ここで選択されています。Ctrl+C(Mac では ⌘C)でコピーしてください。",
   "modals.copy.manual.label": "コピーするテキスト",
   "modals.copy.manual.select": "もう一度選択",

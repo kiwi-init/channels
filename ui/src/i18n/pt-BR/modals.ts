@@ -18,6 +18,7 @@ export default {
   "modals.add.agent.command.failed": "Não deu para gerar o comando.",
   "modals.add.agent.try.again": "Tentar de novo",
   "modals.add.agent.copy.command": "Copiar comando",
+  "modals.add.agent.invite.check": "Verificação do convite {check}. Um pedido de entrada recusado mostra a verificação do token recebido; se as duas forem diferentes, o comando mudou no caminho.",
   "modals.copy.manual": "Não deu para copiar. O texto está selecionado aqui: pressione Ctrl+C, ou ⌘C no Mac.",
   "modals.copy.manual.label": "Texto para copiar",
   "modals.copy.manual.select": "Selecionar de novo",

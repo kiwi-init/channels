@@ -18,6 +18,7 @@ export default {
   "modals.add.agent.command.failed": "无法生成命令。",
   "modals.add.agent.try.again": "重试",
   "modals.add.agent.copy.command": "复制命令",
+  "modals.add.agent.invite.check": "邀请校验 {check}。加入被拒时会显示收到的令牌的校验值；两者不同说明命令在传递中被改动了。",
   "modals.copy.manual": "无法复制。内容已在此处选中:按 Ctrl+C(Mac 上按 ⌘C)复制。",
   "modals.copy.manual.label": "要复制的文本",
   "modals.copy.manual.select": "重新选择",

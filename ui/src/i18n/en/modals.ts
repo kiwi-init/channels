@@ -19,6 +19,7 @@ const words = {
   "modals.add.agent.command.failed": "Couldn't make the command.",
   "modals.add.agent.try.again": "Try again",
   "modals.add.agent.copy.command": "Copy command",
+  "modals.add.agent.invite.check": "Invite check {check}. A refused join prints the check of the token it received; if the two differ, the command changed on the way.",
   "modals.copy.manual": "Couldn't copy it for you. It's selected here: press Ctrl+C, or ⌘C on a Mac.",
   "modals.copy.manual.label": "Text to copy",
   "modals.copy.manual.select": "Select it again",

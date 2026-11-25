@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { b64url, decodeJoinCode, fromB64url } from "@kiwi/core/crypto.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
+import { inviteCheck } from "@kiwi/core/invite-check.ts";
 import { makePin } from "@kiwi/core/pin.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -52,7 +53,8 @@ const edited = (token: string, change: (o: { pk: string; sig: string }) => void)
 
 const withBentKey = (token: string) => {
   const o = JSON.parse(new TextDecoder().decode(fromB64url(token))) as { pk: string };
-  o.pk = `${o.pk.slice(0, 15)}${o.pk[15] === "Z" ? "J" : "Z"}${o.pk.slice(16)}`;
+  const bend = (k: string, at: number) => `${k.slice(0, at)}${k[at] === "Z" ? "J" : "Z"}${k.slice(at + 1)}`;
+  o.pk = bend(bend(o.pk, 5), 35);
   return b64url(new TextEncoder().encode(JSON.stringify(o)));
 };
 
@@ -70,7 +72,7 @@ function run(code: string, persona: string, timeout: string, extra: Record<strin
 test("an invite token that fails verification stops the join before any request", async () => {
   const { code, ownerCh, token } = await ownedWithInvite();
   const { exit, out, err } = await run(code, withBentKey(token), "8s");
-  expect([exit, err]).toEqual([2, expect.stringContaining("this invite token failed verification")]);
+  expect([exit, err]).toEqual([2, expect.stringContaining("Could not verify this invite. Copy a fresh invite and try again; nothing was sent (invite check ")]);
   expect(out).not.toContain("asked to join");
   expect(await ownerCh.requests({})).toEqual([]);
 });
@@ -87,16 +89,17 @@ test("a verifying token still reaches the owner as a pinned request", async () =
 const notSigned = async (persona: (token: string) => string) => {
   const { code, ownerCh, token } = await ownedWithInvite();
   const { exit, out, err } = await run(code, persona(token), "8s");
-  expect([exit, err]).toEqual([2, expect.stringContaining("this invite token failed verification: it isn't signed by this channel's owner for this channel")]);
+  expect([exit, err]).toEqual([2, expect.stringContaining(`Could not verify this invite. Copy a fresh invite and try again; nothing was sent (invite check ${inviteCheck(persona(token))})`)]);
   expect(err).not.toMatch(/^\s+at /m);
   expect(out).not.toContain("asked to join");
   expect(await ownerCh.requests({})).toEqual([]);
 };
 
-test("an invite token with a wrong signature still says it isn't signed by the owner", () =>
-  notSigned((token) => edited(token, (o) => void (o.sig = `${o.sig.slice(0, 20)}${o.sig[20] === "A" ? "B" : "A"}${o.sig.slice(21)}`))));
+const flip = (s: string, at: number) => `${s.slice(0, at)}${s[at] === "A" ? "B" : "A"}${s.slice(at + 1)}`;
 
-test("an invite token whose key is cut short still says it isn't signed by the owner", () => notSigned((token) => edited(token, (o) => void (o.pk = o.pk.slice(0, 40)))));
+test("an invite token whose signature is wrong in two places can't be verified", () => notSigned((token) => edited(token, (o) => void (o.sig = flip(flip(o.sig, 20), 60)))));
+
+test("an invite token whose key is cut short can't be verified", () => notSigned((token) => edited(token, (o) => void (o.pk = o.pk.slice(0, 40)))));
 
 test("a verifier that throws makes join say verification could not run, before any request", async () => {
   const { code, ownerCh, token } = await ownedWithInvite();
@@ -110,6 +113,34 @@ test("a verifier that throws makes join say verification could not run, before a
   expect([exit, err]).toEqual([1, expect.stringContaining("verification could not run: OperationError: injected verifier failure, run the command again")]);
   expect(err).not.toContain("failed verification");
   expect(err).not.toMatch(/^\s+at /m);
+  expect(out).not.toContain("asked to join");
+  expect(await ownerCh.requests({})).toEqual([]);
+});
+
+test("an invite token with one character changed in the copy joins with the token the owner signed, and says so", async () => {
+  const { code, ownerCh, token } = await ownedWithInvite();
+  const at = token.length - 30;
+  const { exit, out, err } = await run(code, flip(token, at), "4s");
+  expect(exit).toBe(3);
+  expect(err).toContain(
+    `kiwi: one character in the invite token didn't match what the owner signed (character ${at + 1} is ${token[at]}, not ${flip(token, at)[at]}); joining with the corrected token (invite check ${inviteCheck(token)})`,
+  );
+  expect(out).toContain("asked to join as dev");
+  const req = (await ownerCh.requests({}))[0];
+  expect(req?.pin).toMatchObject({ id: "builder", name: "Builder" });
+});
+
+test("a valid invite token joins without any repair notice", async () => {
+  const { code, token } = await ownedWithInvite();
+  const { err } = await run(code, token, "4s");
+  expect(err).not.toContain("one character in the invite token");
+});
+
+test("an invite token outside the token alphabet can't be read and nothing is sent", async () => {
+  const { code, ownerCh, token } = await ownedWithInvite();
+  const broken = `${token.slice(0, 50)}+${token.slice(51)}`;
+  const { out, err } = await run(code, broken, "8s");
+  expect(err).toContain(`This invite token couldn't be read. Copy a fresh invite and try again; nothing was sent (invite check ${inviteCheck(broken)})`);
   expect(out).not.toContain("asked to join");
   expect(await ownerCh.requests({})).toEqual([]);
 });

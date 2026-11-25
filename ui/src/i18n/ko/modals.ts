@@ -18,6 +18,7 @@ export default {
   "modals.add.agent.command.failed": "명령을 만들지 못했습니다.",
   "modals.add.agent.try.again": "다시 시도",
   "modals.add.agent.copy.command": "명령 복사",
+  "modals.add.agent.invite.check": "초대 확인 {check}. 참여가 거부되면 받은 토큰의 확인 값이 표시됩니다. 두 값이 다르면 명령이 도중에 바뀐 것입니다.",
   "modals.copy.manual": "복사하지 못했습니다. 여기에 선택되어 있으니 Ctrl+C(Mac에서는 ⌘C)를 누르세요.",
   "modals.copy.manual.label": "복사할 텍스트",
   "modals.copy.manual.select": "다시 선택",
