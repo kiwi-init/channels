@@ -1,9 +1,10 @@
 import * as Context from "effect/Context";
 import { b64url, fromB64url } from "@kiwi/core/crypto.ts";
 import { PAGE_BYTES, PAGE_LIMIT, type DocEnvelope, type Envelope, type ReadMark } from "@kiwi/core/protocol.ts";
+import { MAX_LIVE_BLOBS, type LiveBlob, type LiveTokens } from "@kiwi/core/live.ts";
 import type { PushRegistration } from "@kiwi/core/push.ts";
 import type { Policy } from "../policy.ts";
-import type { PushTarget } from "../push.ts";
+import type { LiveTarget, PushTarget } from "../push.ts";
 import type { DirectoryUpdate } from "./directory.ts";
 import { utcDay } from "./limits.ts";
 import type { RequestBody } from "./requests.ts";
@@ -114,6 +115,7 @@ interface Warm {
   blobs: boolean | null;
   notes: boolean | null;
   push: boolean | null;
+  live: boolean | null;
   sends: Map<string, Sent> | null;
   counters: Counters | null | undefined;
 }
@@ -133,7 +135,7 @@ const warmRooms = new WeakMap<Sql, Warm>();
 
 type Revised = "roster" | "info";
 
-const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map(), blobs: null, notes: null, push: null, sends: null, counters: undefined });
+const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map(), blobs: null, notes: null, push: null, live: null, sends: null, counters: undefined });
 
 export function forgetRoom(sql: Sql): void {
   warmRooms.delete(sql);
@@ -454,6 +456,77 @@ export class RoomDb {
         ...pks,
       )
       .map((r) => ({ ...r, sandbox: r.sandbox === 1 }));
+  }
+
+  private hasLive(): boolean {
+    const w = this.warm;
+    w.live ??= this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'live'").length > 0;
+    return w.live;
+  }
+
+  private makeLive(): void {
+    if (this.hasLive()) return;
+    this.sql.run("CREATE TABLE IF NOT EXISTS live (pk TEXT PRIMARY KEY, iv TEXT NOT NULL, ct TEXT NOT NULL, at INTEGER NOT NULL)");
+    this.sql.run("CREATE TABLE IF NOT EXISTS live_tokens (pk TEXT PRIMARY KEY, start TEXT, upd TEXT, sandbox INTEGER NOT NULL, started INTEGER, at INTEGER NOT NULL)");
+    this.warm.live = true;
+  }
+
+  setLive(pk: string, b: LiveBlob, at: number): void {
+    this.makeLive();
+    this.sql.run("INSERT OR REPLACE INTO live (pk, iv, ct, at) VALUES (?, ?, ?, ?)", pk, b.iv, b.ct, at);
+  }
+
+  dropLive(pk: string): boolean {
+    if (!this.hasLive() || !this.sql.all("SELECT 1 FROM live WHERE pk = ?", pk).length) return false;
+    this.sql.run("DELETE FROM live WHERE pk = ?", pk);
+    return true;
+  }
+
+  liveBlobs(since: number): LiveBlob[] {
+    if (!this.hasLive()) return [];
+    return this.sql.all<LiveBlob>(`SELECT l.iv, l.ct FROM live l JOIN members m ON m.pk = l.pk WHERE m.active = 1 AND l.at > ? ORDER BY l.at DESC LIMIT ${MAX_LIVE_BLOBS}`, since);
+  }
+
+  setLiveTokens(pk: string, t: LiveTokens, at: number): void {
+    this.makeLive();
+    const was = this.sql.all<{ start: string | null; upd: string | null; started: number | null }>("SELECT start, upd, started FROM live_tokens WHERE pk = ?", pk)[0];
+    this.sql.run(
+      "INSERT OR REPLACE INTO live_tokens (pk, start, upd, sandbox, started, at) VALUES (?, ?, ?, ?, ?, ?)",
+      pk,
+      t.start ?? was?.start ?? null,
+      t.update ?? was?.upd ?? null,
+      t.sandbox ? 1 : 0,
+      was?.started ?? null,
+      at,
+    );
+  }
+
+  dropLiveTokens(pk: string): void {
+    if (this.hasLive()) this.sql.run("DELETE FROM live_tokens WHERE pk = ?", pk);
+  }
+
+  liveTargets(): LiveTarget[] {
+    if (!this.hasLive()) return [];
+    return this.sql
+      .all<Omit<LiveTarget, "sandbox"> & { sandbox: number }>("SELECT t.pk, t.start, t.upd, t.sandbox, t.started FROM live_tokens t JOIN members m ON m.pk = t.pk WHERE m.active = 1")
+      .map((r) => ({ ...r, sandbox: r.sandbox === 1 }));
+  }
+
+  liveStarted(pk: string, at: number | null): void {
+    if (this.hasLive()) this.sql.run("UPDATE live_tokens SET started = ? WHERE pk = ?", at, pk);
+  }
+
+  liveEnded(pk: string): void {
+    if (this.hasLive()) this.sql.run("UPDATE live_tokens SET upd = NULL, started = NULL WHERE pk = ?", pk);
+  }
+
+  dropDeadLive(tokens: readonly string[]): void {
+    if (!this.hasLive()) return;
+    for (const token of tokens) {
+      this.sql.run("UPDATE live_tokens SET start = NULL WHERE start = ?", token);
+      this.sql.run("UPDATE live_tokens SET upd = NULL, started = NULL WHERE upd = ?", token);
+    }
+    this.sql.run("DELETE FROM live_tokens WHERE start IS NULL AND upd IS NULL");
   }
 
   private hasNotes(): boolean {

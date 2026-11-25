@@ -2,7 +2,7 @@ import * as Context from "effect/Context";
 import type { GoneHow } from "@kiwi/core/protocol.ts";
 import type { GithubLink } from "../github.ts";
 import type { Lease, LeaseAsk, Person } from "../people.ts";
-import type { Wake } from "../push.ts";
+import type { LiveSend, Wake } from "../push.ts";
 
 export interface Effects {
   broadcast?: string[];
@@ -18,6 +18,7 @@ export interface Effects {
   directory?: DirectoryUpdate[];
   github?: GithubLink[];
   push?: { room: string; wakes: Wake[] };
+  live?: { room: string; sends: LiveSend[] };
   expireAt?: number;
   checkpointAt?: number | null;
   lease?: { user: string; ask: LeaseAsk };

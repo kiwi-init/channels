@@ -16,6 +16,7 @@ import type * as Layer from "effect/Layer";
 import { verifyRequest } from "@kiwi/core/auth.ts";
 import { ownerFingerprint } from "@kiwi/core/crypto.ts";
 import { GITHUB_SYNC_LISTS, MAX_BLOB_BYTES, PAGE_LIMIT, reviewCheckOf, wellFormedFreed, wellFormedSendId, wellFormedSlot } from "@kiwi/core/protocol.ts";
+import { LIVE_PATH, LIVE_TOKEN_PATH } from "@kiwi/core/live.ts";
 import { PUSH_PATH } from "@kiwi/core/push.ts";
 import { BadRequest, Forbidden, NotFound, NotOwner, Refused, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
@@ -61,6 +62,10 @@ import {
   registerPush,
   unregisterPush,
   wakesFor,
+  dropLive,
+  putLive,
+  registerLive,
+  unregisterLive,
   NOTES_PER_MINUTE,
   MESSAGES_PER_MINUTE,
   missingFingerprint,
@@ -458,6 +463,34 @@ const routes: RoomRoute[] = [
     path: PUSH_PATH,
     guard: "member",
     run: ({ me }) => Effect.map(unregisterPush(me), (data) => ({ data })),
+  },
+  {
+    method: "PUT",
+    path: LIVE_PATH,
+    guard: "member",
+    run: ({ me }) => Effect.flatMap(json<unknown>(), (b) => putLive(me, b)),
+  },
+  {
+    method: "DELETE",
+    path: LIVE_PATH,
+    guard: "member",
+    run: ({ me }) => dropLive(me),
+  },
+  {
+    method: "PUT",
+    path: LIVE_TOKEN_PATH,
+    guard: "member",
+    run: ({ me }) =>
+      Effect.map(
+        Effect.flatMap(json<unknown>(), (b) => registerLive(me, b)),
+        (data) => ({ data }),
+      ),
+  },
+  {
+    method: "DELETE",
+    path: LIVE_TOKEN_PATH,
+    guard: "member",
+    run: ({ me }) => Effect.map(unregisterLive(me), (data) => ({ data })),
   },
   {
     method: "GET",

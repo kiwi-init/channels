@@ -290,6 +290,7 @@ export class Channel extends DurableObject<Env> {
       }
     }
     if (fx.push && this.pusher) this.ctx.waitUntil(this.wake(this.pusher, fx.push).catch((e: unknown) => console.error(`wake: ${e instanceof Error ? e.message : "error"}`)));
+    if (fx.live && this.pusher) this.ctx.waitUntil(this.liveOut(this.pusher, fx.live).catch((e: unknown) => console.error(`live: ${e instanceof Error ? e.message : "error"}`)));
     if (fx.github?.length) {
       await Promise.allSettled(fx.github.map((l) => this.env.REPOS.get(this.env.REPOS.idFromName(l.repo)).fetch("https://repos/apply", { method: "POST", body: JSON.stringify(l) })));
     }
@@ -324,6 +325,11 @@ export class Channel extends DurableObject<Env> {
   private async wake(pusher: Pusher, { room, wakes }: NonNullable<Effects["push"]>): Promise<void> {
     const dead = await pusher.send(wakes);
     if (dead.length) this.store(room).dropPushTokens(dead);
+  }
+
+  private async liveOut(pusher: Pusher, { room, sends }: NonNullable<Effects["live"]>): Promise<void> {
+    const dead = (await pusher.live?.(sends)) ?? [];
+    if (dead.length) this.store(room).dropDeadLive(dead);
   }
 
   async enqueueGithub(roomId: string, item: GithubItem): Promise<boolean> {
