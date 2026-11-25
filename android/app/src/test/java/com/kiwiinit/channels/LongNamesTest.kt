@@ -5,7 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
@@ -50,7 +51,7 @@ class LongNamesTest {
         val model = sample(RuntimeEnvironment.getApplication())
         model.rooms[DEV] = model.rooms.getValue(DEV).copy(title = LONG)
         show(model, Tab.Chats)
-        compose.onNodeWithText(" · 2 working").assertIsDisplayed()
+        compose.onNodeWithText(" · 2 working").assertWidthIsAtLeast(60.dp)
     }
 
     @Test
@@ -68,8 +69,9 @@ class LongNamesTest {
         }
         model.keepLink()
         shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("https://$LONG.example.com", model.relay)
         show(model, Tab.Settings)
-        compose.onNodeWithText("Relay").assertIsDisplayed()
+        compose.onNodeWithText("Relay").assertWidthIsAtLeast(40.dp)
     }
 
     private fun show(model: AppModel, tab: Tab) {

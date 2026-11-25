@@ -1,6 +1,6 @@
 package com.kiwiinit.channels.ui
 
-import java.text.BreakIterator
+import android.icu.text.BreakIterator
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.text.format.DateFormat
