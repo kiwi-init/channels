@@ -16,6 +16,7 @@ import com.kiwiinit.channels.R
 class Lock(private val app: Context, linked: Boolean, private val guarding: () -> Boolean, private val words: () -> Words) {
     var locked by mutableStateOf(linked)
         private set
+    val on: Boolean get() = true
     private var leftAt: Long? = null
     private var asking = false
 
@@ -40,6 +41,10 @@ class Lock(private val app: Context, linked: Boolean, private val guarding: () -
                 }
             },
         )
+
+    fun turn(on: Boolean) {
+        if (on) return
+    }
 
     fun left() {
         leftAt = SystemClock.elapsedRealtime()

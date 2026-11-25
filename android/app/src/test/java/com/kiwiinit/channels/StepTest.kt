@@ -5,7 +5,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.TextToolbar
+import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.test.assertIsEnabled
@@ -19,6 +23,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import android.view.View
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
@@ -40,6 +46,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -203,5 +210,35 @@ class StepTest {
             }
         }
         compose.waitForIdle()
+    }
+
+    @Test
+    fun aStepCommandCanBeSelectedToCopy() {
+        val toolbar = Toolbar()
+        val model = sample(RuntimeEnvironment.getApplication())
+        stepAsked(model, waiting = true)
+        compose.setContent {
+            CompositionLocalProvider(LocalTextToolbar provides toolbar) {
+                ChannelsTheme {
+                    Surface(Modifier.fillMaxSize()) { ConversationScreen(model, Spot(DEV), back = {}) }
+                }
+            }
+        }
+        compose.onNodeWithText("bun run sign").performTouchInput { longClick() }
+        compose.waitForIdle()
+        assertNotNull(toolbar.copy)
+    }
+
+    private class Toolbar : TextToolbar {
+        var copy: (() -> Unit)? = null
+        override val status: TextToolbarStatus get() = if (copy == null) TextToolbarStatus.Hidden else TextToolbarStatus.Shown
+
+        override fun hide() {
+            copy = null
+        }
+
+        override fun showMenu(rect: Rect, onCopyRequested: (() -> Unit)?, onPasteRequested: (() -> Unit)?, onCutRequested: (() -> Unit)?, onSelectAllRequested: (() -> Unit)?) {
+            copy = onCopyRequested
+        }
     }
 }
