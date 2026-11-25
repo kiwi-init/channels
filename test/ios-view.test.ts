@@ -173,8 +173,15 @@ describe("names in the phone's room view (#1251)", () => {
   test("a message shows an @handle as the nickname and keeps its text as sent; code keeps the handle", async () => {
     const room = named(await signedLog([say("lead", "In review with @dev, see `@dev` and\n\n```\n@dev\n```"), say("dev", "on it"), say("jow", "ok", { re: [1] }), say("jow", "@dev thanks")]));
     expect(room.messages[0]).toMatchObject({ body: "In review with @dev, see `@dev` and\n\n```\n@dev\n```", shown: "In review with @Earnest Heron, see `@dev` and\n\n```\n@dev\n```" });
-    expect(room.messages[2]?.quote?.words).toBe("In review with @Earnest Heron, see `@dev` and ``` @dev ```");
+    expect(room.messages[2]?.quote?.words).toBe("In review with @Earnest Heron, see @dev and");
     expect(room.latest).toMatchObject({ body: "@dev thanks", shown: "@Earnest Heron thanks", plain: "@Earnest Heron thanks" });
+  });
+
+  test("a reply's quote reads as plain words, not Markdown (T405)", async () => {
+    const room = named(
+      await signedLog([say("lead", "**Link Again is hidden** on a [phone](https://example.com) that still has its `keys`:\n\n- one\n- two"), say("dev", "on it"), say("jow", "why?", { re: [1] })]),
+    );
+    expect(room.messages[2]?.quote?.words).toBe("Link Again is hidden on a phone that still has its keys: one two");
   });
 
   test("a nickname is shown as text, never as Markdown", async () => {
