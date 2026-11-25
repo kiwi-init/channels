@@ -724,10 +724,11 @@ try {
     const drag = async (from: string, to: string | null, at: number) => {
       const fire = (step: { kind: string; on: "source" | "point"; from: string; to: string | null; at: number }) =>
         page.evaluate((s) => {
-          const w = window as unknown as { __dt?: DataTransfer; __point?: { x: number; y: number } };
-          const source = document.querySelector<HTMLElement>(`.rail ${s.from}`);
+          const w = window as unknown as { __dt?: DataTransfer; __point?: { x: number; y: number }; __source?: HTMLElement };
+          const source = s.kind === "dragend" ? w.__source : document.querySelector<HTMLElement>(`.rail ${s.from}`);
           if (!source) throw new Error(`no ${s.from}`);
           if (s.kind === "dragstart") {
+            w.__source = source;
             w.__dt = new DataTransfer();
             const box = s.to ? document.querySelector<HTMLElement>(`.rail ${s.to}`)?.getBoundingClientRect() : null;
             w.__point = box ? { x: box.left + box.width * s.at, y: box.top + box.height / 2 } : { x: innerWidth / 2, y: innerHeight / 2 };
