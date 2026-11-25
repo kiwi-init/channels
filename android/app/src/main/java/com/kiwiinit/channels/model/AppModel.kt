@@ -691,14 +691,7 @@ class AppModel(private val app: Application, private val calls: (suspend (JsonOb
 
     fun settle(code: String) {
         val room = rooms[code] ?: return
-        val have = (room.messages.map { it.seq } + (room.side ?: emptyList()).map { it.seq }).toSet()
-        for (key in listOf("main") + listOfNotNull(room.sideKey)) {
-            val id = "$code|$key"
-            val list = pending[id] ?: continue
-            if (list.isEmpty()) continue
-            val kept = list.filter { item -> item.seq?.let { it !in have } ?: true }
-            if (kept.size != list.size) pending[id] = kept
-        }
+        pending.putAll(settledPending(code, room.sideKey, room.side, pending.toMap(), feeds.toMap()))
     }
 
     private fun deviceName(): String =
