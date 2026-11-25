@@ -201,6 +201,7 @@ export type IconView = { kind: "robot"; robot: string } | { kind: "emoji"; emoji
 
 export interface RoomView {
   code: string;
+  roomId: string | null;
   title: string;
   icon: IconView;
   me: string;

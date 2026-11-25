@@ -1,5 +1,4 @@
 import ActivityKit
-import CryptoKit
 import Foundation
 
 typealias AgentsLiveActivity = ActivityKit.Activity<AgentsActivity>
@@ -9,10 +8,6 @@ final class LiveAgents {
     private static let grace: Duration = .seconds(30)
     private static let stale: TimeInterval = 180
     private var ending: [String: Task<Void, Never>] = [:]
-
-    static func key(_ code: String) -> String {
-        SHA256.hash(data: Data(code.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
-    }
 
     static func agents(_ room: RoomView) -> [AgentsActivity.Agent] {
         let order = { (m: MemberView) in (m.name == room.lead ? 0 : 1, m.display) }
@@ -31,7 +26,7 @@ final class LiveAgents {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         var shown = Dictionary(AgentsLiveActivity.activities.map { ($0.attributes.channel, $0) }, uniquingKeysWith: { first, _ in first })
         for room in rooms.values where room.gone == nil {
-            let key = Self.key(room.code)
+            guard let key = room.roomId else { continue }
             let agents = Self.agents(room)
             if let activity = shown.removeValue(forKey: key) {
                 if agents.isEmpty {
@@ -60,7 +55,7 @@ final class LiveAgents {
     }
 
     func code(for key: String, in rooms: [String: RoomView]) -> String? {
-        rooms.keys.first { Self.key($0) == key }
+        rooms.values.first { $0.roomId == key }?.code
     }
 
     private func content(_ agents: [AgentsActivity.Agent]) -> ActivityContent<AgentsActivity.ContentState> {

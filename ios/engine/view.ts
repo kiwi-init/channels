@@ -1,4 +1,6 @@
 import type { Frozen } from "@kiwi/core/state.ts";
+
+import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import { GENERAL_ROOM, ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
 import { personOf, rootOf, sentTo, type Seat } from "@kiwi/core/room-rules.ts";
 import { answersAsk, answersDecisions, decidersOf, dmPlace, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
@@ -67,6 +69,15 @@ function memberView(m: FoldMember, state: ChannelState, online: ReadonlyMap<stri
     person: personOf(m, [...state.members.values()]),
   };
 }
+
+const roomIdOf = (code: string): string | null => {
+  try {
+    return decodeJoinCode(code).roomId;
+  } catch {
+    // A code that doesn't decode leaves the room without an id; it then gets no Live Activity.
+    return null;
+  }
+};
 
 const ROOM_KEY = /^room:(.+)$/;
 
@@ -280,6 +291,7 @@ export function roomView(r: RoomInput): RoomView {
 
   return {
     code: r.code,
+    roomId: roomIdOf(r.code),
     title: r.title,
     icon: iconView(r.icon, r.title),
     me,

@@ -202,6 +202,7 @@ struct IconView: Codable, Sendable, Hashable {
 
 struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let code: String
+    var roomId: String? = nil
     let title: String
     let icon: IconView?
     let me: String
