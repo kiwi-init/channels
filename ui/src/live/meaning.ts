@@ -1,42 +1,62 @@
-import { relayUrl } from "@kiwi/secrets/relay.ts"
-import { bridge } from "@kiwi/secrets/secrets.ts"
+import { bridge, type KiwiBridge } from "@kiwi/secrets/secrets.ts"
+import { useEffect, useSyncExternalStore } from "react"
 
 export type MeaningItem = { id: number; from: string; where: string; text: string }
-export type MeaningHit = { id: number; p: number }
+type MeaningOut = Awaited<ReturnType<KiwiBridge["searchMeaning"]>>
+type KeyState = Awaited<ReturnType<KiwiBridge["typesafeKey"]>>
+type KeySaved = Awaited<ReturnType<KiwiBridge["setTypesafeKey"]>>
 
-let on: Promise<boolean> | null = null
+const listeners = new Set<() => void>()
+let key: KeyState | null = null
+let asked = false
 
-export function meaningOn(): Promise<boolean> {
-  on ??= fetch(`${relayUrl()}/v1/meaning`).then(
-    (res) => res.ok,
-    () => false
-  )
-  const asked = on
-  void asked.then((yes) => {
-    if (!yes && on === asked) on = null
-  })
-  return asked
-}
+export const meaningCan = (): boolean => typeof bridge()?.searchMeaning === "function"
 
-async function token(): Promise<string | null> {
-  const b = bridge()
-  const mine = (await b?.getToken()) ?? null
-  if (mine || import.meta.env.VITE_KIWI_DEMO !== "1" || !b) return mine
-  return (await b.devSignIn("demo").catch(() => null))?.token ?? null
-}
-
-export async function searchMeaning(query: string, items: MeaningItem[]): Promise<MeaningHit[] | null> {
+export async function searchMeaning(query: string, items: MeaningItem[]): Promise<MeaningOut> {
   try {
-    const signed = await token()
-    if (!signed) return null
-    const res = await fetch(`${relayUrl()}/v1/meaning`, {
-      method: "POST",
-      headers: { "x-human-token": signed, "content-type": "application/json" },
-      body: JSON.stringify({ query, items }),
-    })
-    return res.ok ? ((await res.json()) as { hits: MeaningHit[] }).hits : null
+    const out = await bridge()!.searchMeaning({ query, items })
+    if ("failed" in out && out.failed !== "unreachable") void loadKey()
+    return out
   } catch {
-    // No reach to the relay: the row says Jev couldn't be reached.
-    return null
+    // An app that lost its main process for a moment: the row says Jev couldn't be reached.
+    return { failed: "unreachable" }
   }
+}
+
+function told(next: KeyState): void {
+  key = next
+  for (const l of [...listeners]) l()
+}
+
+async function loadKey(): Promise<void> {
+  const b = bridge()
+  if (!b || typeof b.typesafeKey !== "function") return
+  try {
+    told(await b.typesafeKey())
+  } catch {
+    // No answer: the field stays as it was and asks again next time it shows.
+    asked = false
+  }
+}
+
+export function useTypesafeKey(): KeyState | null {
+  const now = useSyncExternalStore(
+    (l) => {
+      listeners.add(l)
+      return () => void listeners.delete(l)
+    },
+    () => key
+  )
+  useEffect(() => {
+    if (asked) return
+    asked = true
+    void loadKey()
+  }, [])
+  return now
+}
+
+export async function saveTypesafeKey(raw: string | null): Promise<KeySaved> {
+  const out = await bridge()!.setTypesafeKey(raw)
+  if (out.ok) told(out.key)
+  return out
 }

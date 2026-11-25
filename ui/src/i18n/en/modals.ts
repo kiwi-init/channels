@@ -262,6 +262,16 @@ const words = {
   "modals.whatsnew.title": "What's new",
   "modals.whatsnew.sub": "New in Channels. Turn on what you'd like to try.",
   "modals.whatsnew.done": "Done",
+  "modals.whatsnew.key.placeholder": "Your TypeSafe API key",
+  "modals.whatsnew.key.save": "Save key",
+  "modals.whatsnew.key.checking": "Checking…",
+  "modals.whatsnew.key.saved": "Your TypeSafe key ending in {ends} is saved on this computer.",
+  "modals.whatsnew.key.remove": "Remove key",
+  "modals.whatsnew.key.hint": "Your key stays on this computer, and searches go from here straight to TypeSafe under your account.",
+  "modals.whatsnew.key.get": "Get a key",
+  "modals.whatsnew.key.why.malformed": "That doesn't look like a TypeSafe key.",
+  "modals.whatsnew.key.why.refused": "TypeSafe didn't take that key.",
+  "modals.whatsnew.key.why.unreachable": "Couldn't reach TypeSafe to check the key. Try again.",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

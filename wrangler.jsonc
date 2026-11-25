@@ -73,8 +73,7 @@
     { "name": "MACHINE_WRITES", "namespace_id": "870204", "simple": { "limit": 60, "period": 60 } },
     { "name": "MAILBOX_READS", "namespace_id": "870205", "simple": { "limit": 600, "period": 60 } },
     { "name": "ROOM_JOINS", "namespace_id": "870206", "simple": { "limit": 300, "period": 60 } },
-    { "name": "ROOM_CREATES", "namespace_id": "870207", "simple": { "limit": 10, "period": 60 } },
-    { "name": "MEANING_ASKS", "namespace_id": "870208", "simple": { "limit": 20, "period": 60 } }
+    { "name": "ROOM_CREATES", "namespace_id": "870207", "simple": { "limit": 10, "period": 60 } }
   ],
   // No request logs: room ids and timing are nobody's business, and a closed
   // channel must leave nothing behind.

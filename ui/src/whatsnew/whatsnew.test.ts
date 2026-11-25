@@ -30,8 +30,8 @@ Scrolls smoother.
 describe("WHATSNEW.md reads as features, each shown once", () => {
   test("each ## heading with an id is a feature; toggle: off marks one that starts off", () => {
     expect(readNotes(md)).toEqual([
-      { id: "meaning", title: "Search by meaning", since: "2026-11-25", toggle: true, body: "Find messages by what they mean." },
-      { id: "feed", title: "Faster feed", since: null, toggle: false, body: "Scrolls smoother." },
+      { id: "meaning", title: "Search by meaning", since: "2026-11-25", toggle: true, needs: null, body: "Find messages by what they mean." },
+      { id: "feed", title: "Faster feed", since: null, toggle: false, needs: null, body: "Scrolls smoother." },
     ])
   })
 
@@ -44,7 +44,7 @@ describe("WHATSNEW.md reads as features, each shown once", () => {
 
   test("search by meaning sends messages to Jev, so it starts off", async () => {
     const notes = readNotes(await Bun.file(new URL("../../../WHATSNEW.md", import.meta.url)).text())
-    expect(notes.find((n) => n.id === "meaning")).toMatchObject({ toggle: true })
+    expect(notes.find((n) => n.id === "meaning")).toMatchObject({ toggle: true, needs: "typesafe-key" })
   })
 
   test("kept choices survive bad entries", () => {

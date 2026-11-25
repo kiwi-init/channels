@@ -114,9 +114,11 @@ export default {
   "chat.search.box.meaning": "Buscar pelo sentido",
   "chat.search.box.meaning.asking": "Buscando pelo sentido…",
   "chat.search.box.meaning.sends": {
-    one: "Envia sua busca e {count} mensagem recente pelo relay ao Jev da TypeSafe.",
-    other: "Envia sua busca e as {count} mensagens mais recentes pelo relay ao Jev da TypeSafe.",
+    one: "Envia sua busca e {count} mensagem recente deste computador ao Jev da TypeSafe, com a sua chave.",
+    other: "Envia sua busca e as {count} mensagens mais recentes deste computador ao Jev da TypeSafe, com a sua chave.",
   },
+  "chat.search.box.meaning.no.key": "Adicione sua chave da TypeSafe em Novidades para ativar.",
+  "chat.search.box.meaning.refused": "A TypeSafe recusou sua chave. Troque em Ajustes › Sobre.",
   "chat.search.box.meaning.off": "Ative em Novidades.",
   "chat.search.box.meaning.failed": "Não foi possível falar com o Jev. Tente de novo.",
   "chat.search.box.meaning.none": "Nada aqui tem sentido parecido.",

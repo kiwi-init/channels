@@ -30,3 +30,44 @@
   color: var(--ink-2);
   font: 400 var(--t-meta) var(--ui);
 }
+
+.key-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  justify-items: start;
+}
+
+.key-field-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.key-field-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.key-field-hint,
+.key-field-why {
+  margin: 0;
+  font: 400 var(--t-meta) var(--ui);
+}
+
+.key-field-hint {
+  color: var(--ink-3);
+}
+
+.key-field-why {
+  color: var(--alert);
+}
+
+.key-field-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}

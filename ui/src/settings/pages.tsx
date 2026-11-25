@@ -21,6 +21,7 @@ import { updateFound } from "~/settings/update-check"
 import { UsageBar } from "~/usage/meter"
 import { askWhatsNew, setFeature, useOn } from "~/whatsnew/features"
 import { NOTES } from "~/whatsnew/list"
+import { TypesafeKeyField } from "~/whatsnew/typesafe-key"
 import { useUsage, type SeenUsage } from "~/usage/store"
 import { canUpgrade, levelOf, planHint, planName, resetsIn, seemsUnlimited, upgradeLabel, usageHint, usedOf } from "~/usage/words"
 
@@ -290,13 +291,14 @@ function featureRows(a: Acts, on: readonly string[]): string[] {
   if (!NOTES.length) return []
   return [
     `## ${esc(t("settings.sections.features"))}`,
-    ...NOTES.filter((n) => n.toggle).map((n) =>
+    ...NOTES.filter((n) => n.toggle).flatMap((n) => [
       toggle(
         on.includes(n.id),
         a.act(n.title, () => setFeature(n.id, !on.includes(n.id))),
         esc(firstLine(n.body))
-      )
-    ),
+      ),
+      on.includes(n.id) && n.needs ? field(`needs-${n.needs}`) : "",
+    ]),
     a.act(t("settings.sections.features.open"), askWhatsNew),
   ]
 }
@@ -360,7 +362,9 @@ export function AboutPage() {
         md={md}
         seal={a.seal}
         field={(name) =>
-          name === "relay" ? (
+          name === "needs-typesafe-key" ? (
+            <TypesafeKeyField />
+          ) : name === "relay" ? (
             <InlineEdit value={relay} label={t("settings.sections.relay")} verb={t("settings.sections.relay.change")} onSave={(url) => (url.trim() === relay ? undefined : setMoving(url))} />
           ) : name === "relay-failed" && relayFailed?.raw ? (
             <Details raw={relayFailed.raw} />

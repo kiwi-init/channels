@@ -1,9 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
-import { devHumanAuth } from "../src/relay/human.ts";
-import { meaningAsk, meaningRequest, meaningScores, onMeaningHttp, scoreMeaning } from "../src/relay/meaning.ts";
+import { useHost } from "../desktop/src/host.ts";
+import { meaningAsk, meaningRequest, meaningScores, searchMeaning, setTypesafeKey, typesafeKey, type Ask } from "../desktop/src/meaning.ts";
+import { openStore, snapshot, store, type StoreFile } from "../desktop/src/store.ts";
+import { fakeHost } from "./fake-host.ts";
+
+useHost(fakeHost().host);
 
 const item = (id: number, text = "release goes out friday") => ({ id, from: "ana", where: "# general", text });
+const saved: StoreFile[] = [];
+const open = (file: Partial<StoreFile> = {}) => openStore({ where: () => "/data/kiwi-store.bin", load: () => ({ ok: true, file, resave: false }), save: (f) => void saved.push(f) });
+const yes: Ask = async (body) => ({
+  status: 200,
+  body: { answers: Object.fromEntries(Object.keys((body as { questions: object }).questions).map((k, i) => [k, { type: "noul", noul: i === 0 ? 0.9 : 0.1 }])) },
+});
 
 describe("a meaning search sends Jev only what it needs, and reads its answers back", () => {
   test("an ask names a query and messages, each with an id, who, where and text", () => {
@@ -40,52 +50,40 @@ describe("a meaning search sends Jev only what it needs, and reads its answers b
   });
 });
 
-const post = (body: unknown, token: string | null = "dev:ana") =>
-  new Request("http://relay/v1/meaning", { method: "POST", headers: token ? { "x-human-token": token } : {}, body: typeof body === "string" ? body : JSON.stringify(body) });
-const yes = async (body: object) => ({ answers: Object.fromEntries(Object.keys((body as { questions: object }).questions).map((k, i) => [k, { type: "noul", noul: i === 0 ? 0.9 : 0.1 }])) });
-
-describe("the relay asks Jev with its own key, for signed-in people only", () => {
-  const human = devHumanAuth();
-  const routes = { key: "k", allow: async () => true, ask: yes };
-
-  test("off without a key: GET and POST both answer 404", async () => {
-    expect((await onMeaningHttp(new Request("http://relay/v1/meaning"), human, { ...routes, key: undefined }))!.status).toBe(404);
-    expect((await onMeaningHttp(post({ query: "ship", items: [item(1)] }), human, { ...routes, key: undefined }))!.status).toBe(404);
+describe("search by meaning runs on the person's own TypeSafe key, from this computer", () => {
+  test("without a key nothing is sent", async () => {
+    open();
+    let sent = 0;
+    expect(await searchMeaning({ query: "ship", items: [item(1)] }, async () => (sent++, null))).toEqual({ failed: "no-key" });
+    expect(sent).toBe(0);
   });
 
-  test("with a key, GET says it is on, and other paths are not this route", async () => {
-    expect(await (await onMeaningHttp(new Request("http://relay/v1/meaning"), human, routes))!.json()).toEqual({ on: true });
-    expect(await onMeaningHttp(new Request("http://relay/v1/me/usage"), human, routes)).toBeNull();
-  });
-
-  test("a search needs sign-in, a fair rate and a well-formed ask", async () => {
-    expect((await onMeaningHttp(post({ query: "ship", items: [item(1)] }, null), human, routes))!.status).toBe(401);
-    expect((await onMeaningHttp(post({ query: "ship", items: [item(1)] }), human, { ...routes, allow: async () => false }))!.status).toBe(429);
-    expect((await onMeaningHttp(post("not json"), human, routes))!.status).toBe(400);
-    expect((await onMeaningHttp(post({ query: "", items: [] }), human, routes))!.status).toBe(400);
-  });
-
-  test("the key goes to Jev, never back, and hits come best first", async () => {
-    const seen: string[] = [];
-    const res = await onMeaningHttp(post({ query: "ship", items: Array.from({ length: 10 }, (_, i) => item(i)) }), human, {
-      ...routes,
-      ask: async (body, key) => {
-        seen.push(key);
-        return yes(body);
-      },
-    });
-    const text = await res!.text();
-    expect(res!.status).toBe(200);
-    expect(seen).toEqual(["k", "k"]);
-    expect(text).not.toContain('"k"');
-    expect((JSON.parse(text) as { hits: { id: number; p: number }[] }).hits.slice(0, 2)).toEqual([
+  test("with a key, its own key goes to Jev and hits come best first", async () => {
+    open({ typesafe: { key: "apikey_mine_1234" } });
+    const keys: string[] = [];
+    const out = await searchMeaning({ query: "ship", items: Array.from({ length: 10 }, (_, i) => item(i)) }, async (body, key) => (keys.push(key), yes(body, key)));
+    expect(keys).toEqual(["apikey_mine_1234", "apikey_mine_1234"]);
+    expect("hits" in out && out.hits.slice(0, 2)).toEqual([
       { id: 0, p: 0.9 },
       { id: 8, p: 0.9 },
     ]);
   });
 
-  test("when Jev answers no group at all, the search fails rather than finding nothing", async () => {
-    expect(await scoreMeaning({ query: "ship", items: [item(1)] }, "k", async () => null)).toBeNull();
-    expect((await onMeaningHttp(post({ query: "ship", items: [item(1)] }), human, { ...routes, ask: async () => null }))!.status).toBe(502);
+  test("a refused key and no answer at all are told apart", async () => {
+    open({ typesafe: { key: "apikey_mine_1234" } });
+    expect(await searchMeaning({ query: "ship", items: [item(1)] }, async () => ({ status: 401, body: null }))).toEqual({ failed: "key-refused" });
+    expect(await searchMeaning({ query: "ship", items: [item(1)] }, async () => null)).toEqual({ failed: "unreachable" });
+  });
+
+  test("a key is saved only after TypeSafe takes it, shows only its last four, and never reaches the UI's snapshot", async () => {
+    open();
+    expect(await setTypesafeKey("short")).toEqual({ ok: false, why: "malformed" });
+    expect(await setTypesafeKey("apikey_bad_00000", async () => ({ status: 401, body: null }))).toEqual({ ok: false, why: "refused" });
+    expect(store.typesafe).toBeUndefined();
+    expect(await setTypesafeKey("  apikey_good_9876 ", yes)).toEqual({ ok: true, key: { set: true, ends: "9876" } });
+    expect(saved.at(-1)?.typesafe).toEqual({ key: "apikey_good_9876" });
+    expect(JSON.stringify(snapshot())).not.toContain("apikey_good");
+    expect(await setTypesafeKey(null)).toEqual({ ok: true, key: { set: false, ends: null } });
+    expect(typesafeKey()).toEqual({ set: false, ends: null });
   });
 });

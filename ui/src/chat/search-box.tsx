@@ -1,6 +1,5 @@
 import "~/i18n/en/chat-later"
 import { AiSearch02Icon, Download01Icon } from "@hugeicons/core-free-icons"
-import { bridge } from "@kiwi/secrets/secrets.ts"
 import { marks, terms } from "@kiwi/core/search-rank.ts"
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react"
 
@@ -10,7 +9,7 @@ import { t } from "~/i18n/i18n"
 import { cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { GlyphIcon, Icon } from "~/kit/icons"
 import { keysHint, mod } from "~/kit/keys"
-import { meaningOn, searchMeaning } from "~/live/meaning"
+import { meaningCan, searchMeaning, useTypesafeKey } from "~/live/meaning"
 import { askWhatsNew, useFeature } from "~/whatsnew/features"
 import { ago } from "~/kit/time"
 import type { Channel, Message, OlderSearch } from "~/model"
@@ -26,7 +25,7 @@ const MEANING_HIT: Hit = { kind: "meaning" }
 
 type Pull = { asked: number; until?: number } | { failed: string }
 
-type Meant = { query: string; state: "asking" | "done" | "failed"; hits: Hit[] }
+type Meant = { query: string; state: "asking" | "done" | "failed"; hits: Hit[]; why?: "no-key" | "key-refused" | "unreachable" }
 
 const real = (hit: Hit): boolean => hit.kind !== "fetch" && hit.kind !== "meaning"
 
@@ -94,16 +93,10 @@ export function SearchBox({
   const [older, setOlder] = useState<{ query: string; found: OlderSearch } | null>(null)
   const [pull, setPull] = useState<Pull | null>(null)
   const [round, setRound] = useState(0)
-  const [canMean, setCanMean] = useState(false)
+  const [canMean] = useState(meaningCan)
   const meaningWanted = useFeature("meaning")
-  useEffect(() => {
-    if (typeof bridge()?.getToken !== "function") return
-    let gone = false
-    void meaningOn().then((on) => !gone && setCanMean(on))
-    return () => {
-      gone = true
-    }
-  }, [])
+  const keyState = useTypesafeKey()
+  const keyless = keyState !== null && !keyState.set
   const [meant, setMeant] = useState<Meant | null>(null)
   useEffect(() => {
     const q = settled.trim()
@@ -176,25 +169,25 @@ export function SearchBox({
 
   const askMeaning = () => {
     const q = settled.trim()
-    if (!meaningWanted) return askWhatsNew()
+    if (!meaningWanted || keyless) return askWhatsNew()
     if (!q || meantNow?.state === "asking" || !pool.items.length) return
     setMeant({ query: q, state: "asking", hits: [] })
     const land = (next: Meant) => setMeant((m) => (m?.query === q ? next : m))
     void searchMeaning(q, pool.items).then(
-      (scored) =>
+      (out) =>
         land(
-          scored
+          "hits" in out
             ? {
                 query: q,
                 state: "done",
-                hits: scored
+                hits: out.hits
                   .filter((s) => s.p >= MEANING_SURE)
                   .slice(0, MEANING_SHOWN)
                   .flatMap((s) => pool.hits.get(s.id) ?? []),
               }
-            : { query: q, state: "failed", hits: [] }
+            : { query: q, state: "failed", hits: [], why: out.failed }
         ),
-      () => land({ query: q, state: "failed", hits: [] })
+      () => land({ query: q, state: "failed", hits: [], why: "unreachable" })
     )
   }
 
@@ -341,7 +334,7 @@ export function SearchBox({
                 {hit.kind === "fetch" ? (
                   <FetchRow pull={pull} since={more?.since ?? null} upTo={more?.upTo ?? 0} />
                 ) : hit.kind === "meaning" ? (
-                  <MeaningRow meant={meantNow} count={pool.items.length} off={!meaningWanted} />
+                  <MeaningRow meant={meantNow} count={pool.items.length} off={!meaningWanted} keyless={keyless} />
                 ) : hit.kind === "older" ? (
                   <span className="search-msg">
                     <span className="search-line">
@@ -391,7 +384,7 @@ export function SearchBox({
   )
 }
 
-function MeaningRow({ meant, count, off }: { meant: Meant | null; count: number; off: boolean }) {
+function MeaningRow({ meant, count, off, keyless }: { meant: Meant | null; count: number; off: boolean; keyless: boolean }) {
   const asking = meant?.state === "asking"
   return (
     <span className="search-msg search-fetch" aria-busy={asking}>
@@ -403,11 +396,15 @@ function MeaningRow({ meant, count, off }: { meant: Meant | null; count: number;
       <span className="search-text">
         {off
           ? t("chat.search.box.meaning.off")
-          : meant?.state === "failed"
-            ? t("chat.search.box.meaning.failed")
-            : meant?.state === "done"
-              ? t("chat.search.box.meaning.none")
-              : t("chat.search.box.meaning.sends", { count })}
+          : keyless || meant?.why === "no-key"
+            ? t("chat.search.box.meaning.no.key")
+            : meant?.why === "key-refused"
+              ? t("chat.search.box.meaning.refused")
+              : meant?.state === "failed"
+                ? t("chat.search.box.meaning.failed")
+                : meant?.state === "done"
+                  ? t("chat.search.box.meaning.none")
+                  : t("chat.search.box.meaning.sends", { count })}
       </span>
     </span>
   )

@@ -9,5 +9,6 @@ The changelog lists every change; this file lists only what someone would want t
 - id: meaning
 - since: 2026-11-25
 - toggle: off
+- needs: typesafe-key
 
-Find messages by what they mean, not only by their words: "when do we ship" finds "release goes out friday". Pick Search by meaning at the top of the search results, or press ⌘ Enter. It sends your search and the channel's newest messages through the Channels relay to TypeSafe's Jev to rank them. The relay keeps none of it.
+Find messages by what they mean, not only by their words: "when do we ship" finds "release goes out friday". It runs on your own TypeSafe key, which stays on this computer: your search and the channel's newest messages go from here straight to TypeSafe's Jev under your account, never through the Channels relay. Pick Search by meaning at the top of the search results, or press ⌘ Enter.

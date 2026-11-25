@@ -208,9 +208,11 @@ const words = {
   "chat.search.box.meaning": "Search by meaning",
   "chat.search.box.meaning.asking": "Searching by meaning…",
   "chat.search.box.meaning.sends": {
-    one: "Sends your search and the latest {count} message through the relay to TypeSafe's Jev.",
-    other: "Sends your search and the latest {count} messages through the relay to TypeSafe's Jev.",
+    one: "Sends your search and the latest {count} message from this computer to TypeSafe's Jev, with your key.",
+    other: "Sends your search and the latest {count} messages from this computer to TypeSafe's Jev, with your key.",
   },
+  "chat.search.box.meaning.no.key": "Add your TypeSafe key in What's new to turn it on.",
+  "chat.search.box.meaning.refused": "TypeSafe refused your key. Change it in Settings › About.",
   "chat.search.box.meaning.off": "Turn it on in What's new.",
   "chat.search.box.meaning.failed": "Couldn't reach Jev. Try again.",
   "chat.search.box.meaning.none": "Nothing here is close in meaning.",
