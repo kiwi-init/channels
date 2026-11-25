@@ -68,12 +68,34 @@ struct Face: View {
         .frame(width: size, height: size)
     }
 
+    @ViewBuilder
     private var person: some View {
-        Text(letter)
-            .font(.system(size: (size * 0.42).rounded(), weight: .semibold))
-            .foregroundStyle(tint ?? Tone.ink2)
-            .frame(width: size, height: size)
-            .background(Circle().fill(tint.map { $0.opacity(0.18) } ?? Tone.raised))
+        if let picture = member?.picture.flatMap(Pictures.image) {
+            Image(uiImage: picture)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        } else {
+            Text(letter)
+                .font(.system(size: (size * 0.42).rounded(), weight: .semibold))
+                .foregroundStyle(tint ?? Tone.ink2)
+                .frame(width: size, height: size)
+                .background(Circle().fill(tint.map { $0.opacity(0.18) } ?? Tone.raised))
+        }
+    }
+}
+
+@MainActor
+enum Pictures {
+    private static let decoded = NSCache<NSString, UIImage>()
+
+    static func image(_ data: String) -> UIImage? {
+        let key = data as NSString
+        if let hit = decoded.object(forKey: key) { return hit }
+        guard let raw = Data(base64Encoded: data), let image = UIImage(data: raw) else { return nil }
+        decoded.setObject(image, forKey: key)
+        return image
     }
 }
 

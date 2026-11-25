@@ -27,11 +27,15 @@ struct SettingsScreen: View {
         }
     }
 
+    private var me: MemberView? {
+        model.rooms.values.lazy.compactMap { room in room.members.first { $0.name == room.me } }.first { $0.picture != nil }
+    }
+
     var body: some View {
         List {
             Section {
                 VStack(spacing: 4) {
-                    Face(name: model.person, member: nil, size: 80).padding(.bottom, 8)
+                    Face(name: model.person, member: me, size: 80).padding(.bottom, 8)
                     Text(model.person).font(.title2.weight(.bold)).foregroundStyle(Tone.ink)
                     Text(model.enrolled ? "One of your devices" : "Linked to your Mac").type(.ui).foregroundStyle(Tone.ink3)
                 }
