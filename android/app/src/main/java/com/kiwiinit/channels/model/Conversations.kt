@@ -105,7 +105,10 @@ fun RoomView.elsewhere(): List<AskView> = asks.filter { it.place != "main" && it
 
 val RoomView.roomPlaces: List<PlaceView> get() = places.filter { it.kind == "room" }
 
-fun othersOf(members: List<MemberView>, me: String): List<MemberView> = members.filter { it.name != me }
+fun othersOf(members: List<MemberView>, me: String): List<MemberView> {
+    val mine = members.firstOrNull { it.name == me }?.person
+    return members.filter { it.name != me && (mine == null || it.person != mine) }
+}
 
 fun RoomView.taskIn(key: String): Int? = placeView(key)?.task ?: if (key.startsWith("task:")) key.removePrefix("task:").toIntOrNull() else null
 

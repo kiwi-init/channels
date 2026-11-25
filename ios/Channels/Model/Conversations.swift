@@ -101,6 +101,11 @@ struct Row: Identifiable {
     }
 }
 
+func othersOf(_ members: [MemberView], me: String) -> [MemberView] {
+    let mine = members.first { $0.name == me }?.person
+    return members.filter { $0.name != me && (mine == nil || $0.person != mine) }
+}
+
 extension RoomView {
     var open: [NeedView] { needs ?? [] }
 
