@@ -7,6 +7,12 @@ export interface Saved {
   person: PersonView | null;
   seats: ChannelIdentityView[];
   device?: EnrolledPhone | null;
+  hidden?: HiddenSeat[];
+}
+
+export interface HiddenSeat {
+  at: number;
+  seat: ChannelIdentityView;
 }
 
 interface EnrolledPhone {

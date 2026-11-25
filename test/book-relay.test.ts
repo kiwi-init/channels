@@ -122,19 +122,51 @@ describe("the channel book at the relay (T30)", () => {
 
 describe("following the book (T30)", () => {
   let a = "";
+  let b = "";
   let roomA = "";
   beforeAll(async () => {
     a = await codeFor();
+    b = await codeFor();
     roomA = (nextEntries([], [{ label: "a", code: a }], 1)[0] as { room: string }).room;
   });
 
   test("a channel gone from the desktop's list becomes a leave, kept for a while, and the joined time stays put", () => {
-    const first = nextEntries([], [{ label: "a", code: a }], 10);
-    expect(nextEntries(first, [{ label: "a", code: a }], 20)).toEqual(first);
-    const left = nextEntries(first, [], 30);
-    expect(left).toEqual([{ room: roomA, at: 30, left: true }]);
+    const first = nextEntries(
+      [],
+      [
+        { label: "a", code: a },
+        { label: "b", code: b },
+      ],
+      10,
+    );
+    expect(
+      nextEntries(
+        first,
+        [
+          { label: "a", code: a },
+          { label: "b", code: b },
+        ],
+        20,
+      ),
+    ).toEqual(first);
+    const left = nextEntries(first, [{ label: "b", code: b }], 30);
+    expect(left).toContainEqual({ room: roomA, at: 30, left: true });
+    expect(nextEntries(left, [{ label: "b", code: b }], 40)).toEqual(left);
+    expect(nextEntries(left, [{ label: "b", code: b }], 30 + 31 * 86_400_000).some((e) => e.room === roomA)).toBe(false);
+  });
+
+  test("a desktop that lists no channels at all leaves the book as it was (T302)", () => {
+    const first = nextEntries(
+      [],
+      [
+        { label: "a", code: a },
+        { label: "b", code: b },
+      ],
+      10,
+    );
+    expect(nextEntries(first, [], 20)).toEqual(first);
+    const left = nextEntries(first, [{ label: "b", code: b }], 30);
     expect(nextEntries(left, [], 40)).toEqual(left);
-    expect(nextEntries(left, [], 30 + 31 * 86_400_000)).toEqual([]);
   });
 
   test("the newest word on a channel wins across desktops", () => {
