@@ -280,17 +280,19 @@ fun Conversation(
                     is Line.Ask -> AskLine(model, room, line.ask) { answer(line.ask) }
                     is Line.Review -> ReviewLine(model, room, line.review) { sendBack(line.review) }
                     is Line.Sending -> PendingBubble(model, line.item, spot)
-                    is Line.Need -> NeedRow(
-                        model,
-                        room,
-                        line.need,
-                        open = null,
-                        modifier = Modifier.padding(top = 10.dp)
-                            .widthIn(max = 320.dp)
-                            .clip(RoundedCornerShape(Radius.bubble))
-                            .background(Tone.current.them)
-                            .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
-                    )
+                    is Line.Need -> Row(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                        Spacer(Modifier.width(38.dp))
+                        NeedRow(
+                            model,
+                            room,
+                            line.need,
+                            open = null,
+                            modifier = Modifier.widthIn(max = 300.dp)
+                                .clip(RoundedCornerShape(Radius.bubble))
+                                .background(Tone.current.them)
+                                .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
+                        )
+                    }
                     is Line.Bubble -> BubbleRow(
                         model = model,
                         room = room,
