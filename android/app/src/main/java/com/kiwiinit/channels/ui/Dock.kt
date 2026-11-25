@@ -172,7 +172,8 @@ fun Dock(
     }
 
     val hasText = value.text.isNotBlank()
-    val canSend = !sending && room.connection == Connection.Live && (hasText || attached.isNotEmpty())
+    val deciding = answering != null || sendingBack != null
+    val canSend = !sending && room.connection == Connection.Live && (hasText || (!deciding && attached.isNotEmpty()))
     val here = room.placeView(spot.place)
     val mention = mentioning.find(value.text)?.groupValues?.get(1)?.lowercase()
     val mentionable = if (mention == null) {
@@ -217,15 +218,18 @@ fun Dock(
         val pictures = attached.mapIndexed { i, a -> Outgoing("photo-${i + 1}.${if (a.mime == "image/webp") "webp" else "jpg"}", a.mime, Base64.encodeToString(a.data, Base64.NO_WRAP)) }
         scope.launch {
             try {
-                if (pictures.isEmpty() && review != null) {
+                var body = text
+                if (review != null) {
                     model.sendBack(from.code, review.task, text)
                     clearSendBack()
-                } else if (pictures.isEmpty() && ask != null) {
+                    body = ""
+                } else if (ask != null) {
                     model.answer(from.code, ask.seq, text)
                     clearAnswer()
-                } else {
-                    model.send(from, text, re, pictures)
+                    body = ""
                 }
+                if (body.isEmpty() && current == from && value.text.trim() == text) value = TextFieldValue("")
+                if (pictures.isNotEmpty()) model.send(from, body, re, pictures)
                 if (current == from) {
                     if (value.text.trim() == text) value = TextFieldValue("")
                     attached = emptyList()
