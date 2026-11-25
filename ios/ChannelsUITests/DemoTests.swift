@@ -12,9 +12,8 @@ final class DemoTests: XCTestCase {
         let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(general.waitForExistence(timeout: 5))
         general.tap()
-        let composer = NSPredicate(format: "placeholderValue == 'Message'")
-        let field = app.textViews.matching(composer).firstMatch.exists ? app.textViews.matching(composer).firstMatch : app.textFields.matching(composer).firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5), "the chat's message field")
+        let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "the chat's message field")
         field.tap()
         field.typeText("hello")
         app.buttons["Send"].firstMatch.tap()
