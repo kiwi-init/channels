@@ -112,7 +112,7 @@ async function ownedBy(person: Identity, human: string): Promise<{ code: string;
 const approving = (ch: Channel, person: Identity) => () => ch.autoApprove(person.pk, [], []).catch(() => []);
 
 describe("the phone's channels follow the desktop's (T30)", () => {
-  test("a channel joined on the desktop reaches the phone, and one left there leaves it, without signing in again", async () => {
+  test("a channel joined on the desktop reaches the phone, and one left there hides on it, without signing in again", async () => {
     const s = await setupChannel(relay, { ownerName: "jow", personName: "Jow", human: "dev:book1" });
     const person = await withExchangeKey(s.person);
     const desk = desktop(person, "book1", [{ label: "onemouse", code: s.code }]);
@@ -132,14 +132,26 @@ describe("the phone's channels follow the desktop's (T30)", () => {
     await ask({ op: "nudge" });
     expect(await within(20_000, gone(s.code))).toBe(true);
     expect(lastSaved()?.seats.some((c) => c.code === s.code)).toBe(false);
+    expect(lastSaved()?.hidden?.some((h) => h.seat.code === s.code && !!h.seat.access)).toBe(true);
     const asPhone = new Channel(seatA.access as ChannelAccess, relay, { name: seatA.label, pk: seatA.pk, sk: seatA.sk });
-    expect(
-      await asPhone.head().then(
-        () => null,
-        (e: unknown) => e,
-      ),
-    ).toMatchObject({ why: "removed", how: "left" });
+    expect(await asPhone.head().then(() => "member")).toBe("member");
     expect(lastSaved()?.seats.some((c) => c.code === b.code)).toBe(true);
+
+    const before = pushes.length;
+    desk.channels.splice(0, desk.channels.length);
+    await desk.host.poll();
+    await ask({ op: "nudge" });
+    await Bun.sleep(3_000);
+    expect(pushes.slice(before).some((p) => p.type === "gone")).toBe(false);
+    expect(lastSaved()?.seats.some((c) => c.code === b.code)).toBe(true);
+
+    pushes.length = 0;
+    desk.channels.push({ label: "onemouse", code: s.code });
+    await desk.host.poll();
+    await ask({ op: "nudge" });
+    expect(await within(20_000, live(s.code))).toBe(true);
+    expect(lastSaved()?.seats.some((c) => c.code === s.code && !!c.access)).toBe(true);
+    expect(lastSaved()?.hidden?.some((h) => h.seat.code === s.code) ?? false).toBe(false);
     await s.ownerCh.close();
     await b.ch.close();
   });

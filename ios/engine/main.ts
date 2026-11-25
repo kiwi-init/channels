@@ -1,5 +1,4 @@
 import { bookClient, followBooks, openBook, type ChannelBook } from "@kiwi/core/book.ts";
-import { ChannelGone } from "@kiwi/core/client.ts";
 import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import { claimDevice, readDeviceList, type DeviceLink, type DeviceList } from "@kiwi/core/devices.ts";
 import type { EnrollGrant } from "@kiwi/core/enroll.ts";
@@ -17,7 +16,7 @@ import { acceptSeat, withAccess } from "../../desktop/src/seats.ts";
 import { needsOf } from "./needs.ts";
 import { registerPush, unregisterPush } from "./push.ts";
 import { Room } from "./room.ts";
-import type { Ask, EnrollStart, Fetched, Push, Reply, RoomView, Saved } from "./wire.ts";
+import type { Ask, EnrollStart, Fetched, HiddenSeat, Push, Reply, RoomView, Saved } from "./wire.ts";
 
 interface Handler {
   postMessage(json: string): void;
@@ -287,31 +286,33 @@ async function followBook(): Promise<void> {
     if (keyring !== ring) return;
     const seat = seats().find((s) => roomOfSeat(s) === entry.room);
     if ("left" in entry) {
-      if (seat?.code && !(seat.at && seat.at > entry.at)) await leaveSeat(ring, seat);
+      if (seat?.code && !(seat.at && seat.at > entry.at)) hideSeat(seat, entry.at);
       continue;
     }
-    if (seat || bookAsked.has(entry.room)) continue;
+    const tucked = saved.hidden?.find((h) => roomOfSeat(h.seat) === entry.room);
+    if (tucked && !seat && entry.at > tucked.at) {
+      showSeat(ring, tucked);
+      continue;
+    }
+    if (seat || tucked || bookAsked.has(entry.room)) continue;
     bookAsked.add(entry.room);
     await ring.requestJoin(entry.code, name).catch((err: unknown) => post({ type: "log", line: `couldn't ask to join ${entry.label}: ${said(err)}` }));
   }
   watchJoins();
 }
 
-async function leaveSeat(ring: Keyring, seat: ChannelIdentityView): Promise<void> {
-  const code = seat.code!;
-  if (seat.access) {
-    try {
-      await ring.call(code, "leave");
-    } catch (err) {
-      if (!(err instanceof ChannelGone)) {
-        post({ type: "log", line: `couldn't leave ${seat.label}: ${said(err)}` });
-        return;
-      }
-    }
-  }
-  if (keyring !== ring) return;
+function hideSeat(seat: ChannelIdentityView, at: number): void {
+  const code = seat.code;
+  if (!saved || !code) return;
   drop(code);
-  await ring.forget(code);
+  keep({ ...saved, seats: saved.seats.filter((c) => c.code !== code), hidden: [...(saved.hidden ?? []).filter((h) => h.seat.code !== code), { at, seat }] });
+}
+
+function showSeat(ring: Keyring, tucked: HiddenSeat): void {
+  if (!saved) return;
+  const code = tucked.seat.code;
+  keep({ ...saved, seats: [...saved.seats, tucked.seat], hidden: (saved.hidden ?? []).filter((h) => h.seat.code !== code) });
+  openRoom(ring, tucked.seat);
 }
 
 const asking = (s: ChannelIdentityView): boolean => !!s.code && !!s.requestId && !s.access;
