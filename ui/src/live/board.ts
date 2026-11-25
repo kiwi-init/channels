@@ -23,8 +23,7 @@ function boardKeyOf(state: ChannelState): BoardKey {
   }
 }
 
-const sameBoard = (a: BoardKey, b: BoardKey): boolean =>
-  a.whole.length === b.whole.length && a.whole.every(([k, v], i) => b.whole[i]![0] === k && Object.is(v, b.whole[i]![1])) && same(a.seen, b.seen)
+const sameBoard = (a: BoardKey, b: BoardKey): boolean => a.whole.length === b.whole.length && a.whole.every(([k, v], i) => b.whole[i]![0] === k && Object.is(v, b.whole[i]![1])) && same(a.seen, b.seen)
 
 export function keptBoard(was: { state: ChannelState; key: BoardKey } | null, state: ChannelState): { state: ChannelState; key: BoardKey } {
   if (was?.state === state) return was
