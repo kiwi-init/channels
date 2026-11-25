@@ -3,11 +3,12 @@ import * as Effect from "effect/Effect";
 import { OfflineReads } from "@kiwi/core/client.ts";
 import { openSession, type Agent } from "../agent.ts";
 import { DEFAULT_RELAY, Keystore, type ChannelConfig } from "../config.ts";
-import { here, hereAs, notePlainPlace, seatsNear, type Here } from "../seats.ts";
+import { claimTook, here, hereAs, notePlainPlace, seatsNear, type Here } from "../seats.ts";
 import { tmuxPlaceFrom } from "../tmux-pane.ts";
 import { ensureDaemon, reportRead } from "../daemon.ts";
 import { seatsFor } from "../hooks.ts";
 import { heardFrom } from "../hooks/delivered.ts";
+import { tookText } from "../hooks/taken.ts";
 import { heldAway, heldText, seatHeldAway } from "../hold.ts";
 import { BadName } from "@kiwi/core/refusals.ts";
 import { NAME_RE } from "@kiwi/core/membership.ts";
@@ -28,6 +29,11 @@ export function relayUrl(): string {
 }
 
 export const acting: { alias?: string; name?: string } = {};
+
+function reportSeatTook(): void {
+  const text = tookText(claimTook(here().session));
+  if (text) process.stderr.write(text + "\n");
+}
 
 export const config = Effect.gen(function* () {
   return yield* (yield* Keystore).config;
@@ -56,6 +62,7 @@ export const channelAlias = Effect.fn("kiwi.channelAlias")(function* (code?: str
   const elsewhere = (alias: string) => !!linked && !linked.includes(alias);
   const away = (alias: string) => die(`that link is to a message in ${linked?.join(" or ")}, not in ${alias}: pass -c ${linked?.[0]}`);
   const ours = explicit ? [] : seatsFor(process.cwd());
+  if (!explicit) reportSeatTook();
   const named = opt.as ?? process.env.KIWI_AS;
   const fits = ours.length > 1 && named ? ours.filter((b) => b.as === named) : ours;
   const [seat, ...others] = fits;
@@ -90,7 +97,8 @@ export const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConf
   const explicit = opt.as ?? process.env.KIWI_AS;
   let raw = explicit;
   if (!raw && ch) {
-    const ours = seatsFor(process.cwd());
+    const ours = seatsFor(process.cwd(), { room: ch.roomId });
+    reportSeatTook();
     const cfg = yield* keys.config;
     const [bound, ...also] = ours.filter((b) => cfg.channels[b.alias]?.roomId === ch.roomId);
     const heard = answered();

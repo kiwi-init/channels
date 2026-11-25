@@ -58,6 +58,7 @@ function readBook(x: unknown): (ChannelBook & { pk: string; sig: string }) | nul
 }
 
 export function nextEntries(before: readonly BookEntry[], now: readonly { label: string; code: string }[], at: number): BookEntry[] {
+  if (now.length === 0 && before.some((e) => !("left" in e))) return [...before];
   const held = new Map(before.map((e) => [e.room, e]));
   const out = new Map<string, BookEntry>();
   for (const c of now) {

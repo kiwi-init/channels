@@ -4,6 +4,7 @@ import type { Activity, Message, Presence, Reach, Unarmed } from "@kiwi/core/pro
 import type { WakeVia } from "@kiwi/core/wake.ts";
 import type { ClockWatcher } from "./clock-watch.ts";
 import type { DocFollower } from "./doc-follow.ts";
+import type { LiveBlobs } from "./live-blobs.ts";
 import type { DaemonListener, DaemonWake } from "./protocol.ts";
 
 export interface Seat {
@@ -20,6 +21,7 @@ export interface Seat {
   untaken: Unarmed | null;
   taking: { thread: string; seqs: number[]; at: number; resumed: boolean; timer: ReturnType<typeof setTimeout> } | null;
   activityTimer: ReturnType<typeof setInterval> | null;
+  live?: LiveBlobs | null;
   announce: (() => void) | null;
   beacon: ReturnType<typeof setInterval> | null;
   lastProbe: number;

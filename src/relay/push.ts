@@ -1,4 +1,5 @@
 import { b64url } from "@kiwi/core/crypto.ts";
+import type { LiveBlob } from "@kiwi/core/live.ts";
 import type { PushPlatform, PushWake } from "@kiwi/core/push.ts";
 import { pkcs8Of } from "./github-app.ts";
 
@@ -14,8 +15,25 @@ export interface Wake extends PushTarget {
   seq: number;
 }
 
+export interface LiveTarget {
+  pk: string;
+  start: string | null;
+  upd: string | null;
+  sandbox: boolean;
+  started: number | null;
+}
+
+export interface LiveSend {
+  token: string;
+  sandbox: boolean;
+  event: "start" | "update" | "end";
+  room: string;
+  blobs: LiveBlob[];
+}
+
 export interface Pusher {
   send(wakes: readonly Wake[]): Promise<string[]>;
+  live?(sends: readonly LiveSend[]): Promise<string[]>;
 }
 
 export interface PushConfig {
@@ -34,8 +52,22 @@ export const FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 const GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token";
 const APNS_JWT_MS = 40 * 60_000;
 const WAKE_TTL_S = 86_400;
+export const LIVE_STALE_S = 900;
+const LIVE_DISMISS_S = 60;
 
 const apnsBody = (w: PushWake) => ({ aps: { alert: { title: "Channels", body: "New message" }, "mutable-content": 1, sound: "default" }, k: w.tag, s: w.seq });
+
+export function liveBody(s: LiveSend, secs: number): { aps: Record<string, unknown> } {
+  const aps: Record<string, unknown> = { timestamp: secs, event: s.event, "content-state": { s: s.blobs.map((b) => [b.iv, b.ct]) } };
+  if (s.event === "end") aps["dismissal-date"] = secs + LIVE_DISMISS_S;
+  else aps["stale-date"] = secs + LIVE_STALE_S;
+  if (s.event === "start") {
+    aps["attributes-type"] = "AgentsActivity";
+    aps.attributes = { channel: s.room, title: "" };
+    aps.alert = { title: "Channels", body: "Agents are working" };
+  }
+  return { aps };
+}
 
 const fcmMessage = (token: string, w: PushWake) => ({ message: { token, data: { k: w.tag, s: String(w.seq) }, android: { priority: "HIGH", ttl: `${WAKE_TTL_S}s` } } });
 
@@ -129,26 +161,36 @@ export function pusherFrom(c: PushConfig): Pusher | null {
     return pending.token;
   };
 
-  const toApns = async (w: Wake): Promise<boolean> => {
-    if (!apns) return false;
-    const res = await get(`${w.sandbox ? APNS_SANDBOX_HOST : APNS_HOST}/3/device/${w.token}`, {
+  const postApns = async (a: NonNullable<typeof apns>, what: string, token: string, sandbox: boolean, headers: Record<string, string>, body: object): Promise<boolean> => {
+    const res = await get(`${sandbox ? APNS_SANDBOX_HOST : APNS_HOST}/3/device/${token}`, {
       method: "POST",
-      headers: {
-        authorization: `bearer ${await apnsAuth(apns.key, apns.keyId, apns.team)}`,
-        "apns-topic": apns.topic,
-        "apns-push-type": "alert",
-        "apns-priority": "10",
-        "apns-expiration": String(Math.floor(now() / 1000) + WAKE_TTL_S),
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(apnsBody(w)),
+      headers: { authorization: `bearer ${await apnsAuth(a.key, a.keyId, a.team)}`, ...headers, "content-type": "application/json" },
+      body: JSON.stringify(body),
     });
     if (res.ok) return false;
     if (res.status === 403) apnsJwt = null;
     if (res.status === 410) return true;
     const reason = ((await res.json().catch(() => ({}))) as { reason?: unknown }).reason;
-    console.error(`apns refused a wake: ${res.status} ${typeof reason === "string" ? reason : ""}`);
+    console.error(`apns refused ${what}: ${res.status} ${typeof reason === "string" ? reason : ""}`);
     return res.status === 400 && (reason === "BadDeviceToken" || reason === "DeviceTokenNotForTopic");
+  };
+
+  const toApns = async (w: Wake): Promise<boolean> => {
+    if (!apns) return false;
+    const expires = String(Math.floor(now() / 1000) + WAKE_TTL_S);
+    return postApns(apns, "a wake", w.token, w.sandbox, { "apns-topic": apns.topic, "apns-push-type": "alert", "apns-priority": "10", "apns-expiration": expires }, apnsBody(w));
+  };
+
+  const toLive = async (s: LiveSend): Promise<boolean> => {
+    if (!apns) return false;
+    const secs = Math.floor(now() / 1000);
+    const headers = {
+      "apns-topic": `${apns.topic}.push-type.liveactivity`,
+      "apns-push-type": "liveactivity",
+      "apns-priority": s.event === "update" ? "5" : "10",
+      "apns-expiration": String(secs + LIVE_STALE_S),
+    };
+    return postApns(apns, `a live ${s.event}`, s.token, s.sandbox, headers, liveBody(s, secs));
   };
 
   const toFcm = async (w: Wake): Promise<boolean> => {
@@ -168,17 +210,20 @@ export function pusherFrom(c: PushConfig): Pusher | null {
     return res.status === 400 && text.includes("registration token");
   };
 
+  const deadOf = async <T extends { token: string }>(items: readonly T[], one: (x: T) => Promise<boolean>, what: string): Promise<string[]> => {
+    const dead = await Promise.all(
+      items.map((x) =>
+        one(x).catch((e: unknown) => {
+          console.error(`${what} failed: ${e instanceof Error ? e.message : "error"}`);
+          return false;
+        }),
+      ),
+    );
+    return items.filter((_, i) => dead[i]).map((x) => x.token);
+  };
+
   return {
-    async send(wakes) {
-      const dead = await Promise.all(
-        wakes.map((w) =>
-          (w.platform === "apns" ? toApns(w) : toFcm(w)).catch((e: unknown) => {
-            console.error(`a wake failed: ${e instanceof Error ? e.message : "error"}`);
-            return false;
-          }),
-        ),
-      );
-      return wakes.filter((_, i) => dead[i]).map((w) => w.token);
-    },
+    live: (sends) => deadOf(sends, toLive, "a live push"),
+    send: (wakes) => deadOf(wakes, (w) => (w.platform === "apns" ? toApns(w) : toFcm(w)), "a wake"),
   };
 }

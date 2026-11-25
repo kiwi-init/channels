@@ -44,7 +44,7 @@ export const channelCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const keys = yield* Keystore;
       const cfg = yield* keys.config;
-      const here = seatsFor(process.cwd());
+      const here = seatsFor(process.cwd(), { claim: false });
       for (const [alias, c] of Object.entries(cfg.channels)) {
         const agents = (yield* keys.identitiesIn(c.roomId)).filter((n) => n !== c.owner && n !== c.person);
         out(

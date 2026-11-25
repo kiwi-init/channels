@@ -81,6 +81,12 @@ class ScreensTest {
     fun updatesSheet() = shoot("updates-sheet", { githubBurst(it) }) { Updates(it.rooms.getValue(DEV), close = {}) }
 
     @Test
+    fun taskThread() = shoot("task-thread") { ConversationScreen(it, Spot(DEV, "task:543"), back = {}) }
+
+    @Test
+    fun emptyRoom() = shoot("empty-room", { emptyRoom(it) }) { ConversationScreen(it, Spot(DEV, EMPTY_ROOM), back = {}) }
+
+    @Test
     fun settings() = shoot("settings") { Home(it, open = {}, tasks = {}, first = Tab.Settings) }
 
     @Test

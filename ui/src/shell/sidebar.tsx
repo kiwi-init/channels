@@ -153,6 +153,7 @@ export function Sidebar({ channel }: { channel: Channel }) {
           {
             noFolders: true,
             folders: [],
+            channels: [],
             save: () => {},
             title: () => channel.title,
             muted: (code) => now?.().prefs.muted.includes(code) ?? false,
