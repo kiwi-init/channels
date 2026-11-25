@@ -143,4 +143,22 @@ describe("folding each new message on the last state", () => {
     const misses = Array.from({ length: 10 }, (_, i) => run(i + 1, 160, { check: false }).misses).flat();
     expect(misses.length).toBeGreaterThan(0);
   }, 60_000);
+
+  test("a malformed re keeps the order a full fold has: the head moves past it, and a later message folds on (review #17922)", () => {
+    const { messages } = stream(1, 6);
+    const chat = (seq: number, over: Partial<Message>): Message =>
+      ({ ...messages[0]!, id: `bad-${seq}`, seq, kind: "msg", body: `chat ${seq}`, from: "win", pk: "w".repeat(43), ts: T0 + seq * SEC, rts: T0 + seq * SEC, ...over }) as Message;
+    const bad = chat(7, { re: 5 as unknown as number[] });
+    const good = chat(8, {});
+    const at = T0 + 9 * SEC;
+    const whole = fold([...messages, bad], roster(), at);
+    expect(whole.head).toBe(7);
+    const f = folded(messages, roster(), at);
+    const onBad = f.next([bad], at) ?? folded([...messages, bad], roster(), at).state;
+    expect(onBad.head).toBe(7);
+    expect(JSON.stringify(plain(onBad))).toBe(JSON.stringify(plain(whole)));
+    const afterGood = f.next([good], at);
+    expect(afterGood?.head).toBe(8);
+    expect(JSON.stringify(plain(afterGood))).toBe(JSON.stringify(plain(fold([...messages, bad, good], roster(), at))));
+  });
 });

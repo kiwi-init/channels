@@ -557,11 +557,11 @@ function cursor(
   const step = (m: Message): void => {
     if (m.seq <= after) return;
     stepped.push(m);
+    if (Array.isArray(m.re)) for (const r of m.re) if (typeof r === "number" && r > m.seq) forward.add(r);
     passFloors(m.seq);
     passRoleFloors(m.seq);
     passGuard(m.seq);
     try {
-      for (const r of m.re ?? []) if (r > m.seq) forward.add(r);
       head = Math.max(head, m.seq);
       const at = m.rts ?? m.ts;
       rollTimed(at);
