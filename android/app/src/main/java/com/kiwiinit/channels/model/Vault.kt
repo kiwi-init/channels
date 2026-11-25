@@ -18,8 +18,9 @@ class VaultException(why: String, cause: Throwable) : Exception(why, cause)
 
 class Vault(context: Context) {
     private val file = AtomicFile(File(context.noBackupFilesDir, "linked.bin"))
+    private val backup = File(file.baseFile.path + ".bak")
 
-    fun exists(): Boolean = file.baseFile.exists()
+    fun exists(): Boolean = file.baseFile.exists() || backup.exists()
 
     fun load(): ByteArray? {
         if (!exists()) return null
