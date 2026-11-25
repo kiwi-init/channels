@@ -16,6 +16,10 @@ enum Shrink {
     static let top: CGFloat = 0.92
     static let steps = 5
 
+    static func attach(_ data: Data) async -> Data? {
+        await Task.detached(priority: .userInitiated) { UIImage(data: data).flatMap(jpeg) }.value
+    }
+
     static func jpeg(_ image: UIImage) -> Data? {
         let size = image.size
         var scale = min(1, maxSide / max(size.width, size.height))
@@ -24,7 +28,11 @@ enum Shrink {
             let format = UIGraphicsImageRendererFormat()
             format.scale = 1
             format.opaque = true
-            let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: target)) }
+            let resized = UIGraphicsImageRenderer(size: target, format: format).image { context in
+                UIColor.white.setFill()
+                context.fill(CGRect(origin: .zero, size: target))
+                image.draw(in: CGRect(origin: .zero, size: target))
+            }
             if let fit = best(resized) { return fit }
             guard let low = resized.jpegData(compressionQuality: floor) else { return nil }
             if target.width <= 1 && target.height <= 1 { return nil }
@@ -289,7 +297,7 @@ struct Dock: View {
         var lost = 0
         for item in items {
             do {
-                guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let jpeg = Shrink.jpeg(image) else {
+                guard let data = try await item.loadTransferable(type: Data.self), let jpeg = await Shrink.attach(data), let image = UIImage(data: jpeg) else {
                     lost += 1
                     continue
                 }
