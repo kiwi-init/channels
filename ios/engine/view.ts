@@ -1,5 +1,4 @@
 import type { Frozen } from "@kiwi/core/state.ts";
-
 import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import { GENERAL_ROOM, ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
 import { personOf, rootOf, sentTo, type Seat } from "@kiwi/core/room-rules.ts";

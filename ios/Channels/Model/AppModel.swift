@@ -533,6 +533,14 @@ final class AppModel {
         return out
     }
 
+    func liveSwitched(_ on: Bool) {
+        if on {
+            if !demo { live.follow(rooms) }
+        } else {
+            live.stop()
+        }
+    }
+
     func openLive(_ url: URL) {
         guard url.scheme == AgentsActivity.scheme, url.host() == "live", let code = live.code(for: url.lastPathComponent, in: rooms) else { return }
         jump(.place(Spot(code: code)))

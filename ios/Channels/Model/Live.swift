@@ -5,6 +5,7 @@ typealias AgentsLiveActivity = ActivityKit.Activity<AgentsActivity>
 
 @MainActor
 final class LiveAgents {
+    static let offKey = "liveOff"
     private static let grace: Duration = .seconds(30)
     private static let stale: TimeInterval = 180
     private var ending: [String: Task<Void, Never>] = [:]
@@ -30,7 +31,7 @@ final class LiveAgents {
     }
 
     func follow(_ rooms: [String: RoomView]) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard !UserDefaults.standard.bool(forKey: Self.offKey), ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         var shown = Dictionary(AgentsLiveActivity.activities.map { ($0.attributes.channel, $0) }, uniquingKeysWith: { first, _ in first })
         for room in rooms.values where room.gone == nil {
             guard let key = room.roomId else { continue }
