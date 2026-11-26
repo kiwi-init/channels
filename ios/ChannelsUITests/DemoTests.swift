@@ -114,6 +114,73 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
+    func testKeyboardLeavesTheBarAtRest() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
+        XCTAssertTrue(general.waitForExistence(timeout: 15))
+        general.tap()
+        let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
+        let needs = app.buttons["tab-needs"]
+        let keyboard = app.keyboards.firstMatch
+        let newest = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Something else'")).firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 15) && needs.waitForHittable(timeout: 5), "the chat's row")
+        sleep(1)
+        let row = needs.frame
+        let rest = field.frame
+
+        func type(_ how: String) {
+            field.tap()
+            XCTAssertTrue(keyboard.waitForExistence(timeout: 5), "\(how): the keyboard is up")
+            XCTAssertFalse(needs.isHittable, "\(how): the tabs melt into the composer while typing")
+        }
+        func atRest(_ how: String, newestAbove: Bool = true) {
+            XCTAssertTrue(keyboard.waitForNonExistence(timeout: 5), "\(how): the keyboard goes")
+            XCTAssertTrue(needs.waitForHittable(timeout: 5), "\(how): the tabs come back")
+            sleep(1)
+            XCTAssertEqual(needs.frame.midY, row.midY, accuracy: 1, "\(how): the row is back where it rests")
+            XCTAssertEqual(needs.frame.height, row.height, accuracy: 1, "\(how): at its height")
+            XCTAssertEqual(field.frame.height, rest.height, accuracy: 1, "\(how): the composer is one line again")
+            XCTAssertEqual(field.frame.midY, rest.midY, accuracy: 1, "\(how): and sits in the row")
+            if newestAbove {
+                XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "\(how): the newest item ends above the bar")
+            }
+            add(shot(app, "at rest after \(how)"))
+        }
+
+        type("drag")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
+        atRest("drag", newestAbove: false)
+        app.swipeUp()
+        app.swipeUp()
+        app.swipeUp()
+        sleep(1)
+
+        type("feed tap")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.45)).tap()
+        atRest("feed tap")
+
+        type("send")
+        field.typeText("hi")
+        app.buttons["Send"].firstMatch.tap()
+        XCTAssertTrue(keyboard.exists, "sending keeps the keyboard up")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.96, dy: 0.45)).tap()
+        atRest("send then feed tap")
+
+        type("back")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(keyboard.waitForNonExistence(timeout: 5), "back: the keyboard goes with the chat")
+        XCTAssertTrue(app.buttons["channel"].waitForHittable(timeout: 5), "back: the list's row")
+        XCTAssertEqual(needs.frame.midY, row.midY, accuracy: 1, "back: the list's row rests where the chat's did")
+        general.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "reopened")
+        sleep(1)
+        XCTAssertFalse(keyboard.exists, "reopening the chat doesn't bring the keyboard back")
+        atRest("reopen")
+    }
+
+    @MainActor
     func testSampleOffersNoLinkAgain() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
