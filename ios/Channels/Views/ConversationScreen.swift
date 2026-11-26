@@ -11,6 +11,8 @@ struct ConversationScreen: View {
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
     @State private var visible = false
+    @State private var zoom = ZoomState()
+    @Environment(\.accessibilityReduceMotion) private var still
     @FocusState private var typing: Bool
     @Environment(\.scenePhase) private var scene
 
@@ -21,33 +23,54 @@ struct ConversationScreen: View {
     var body: some View {
         Group {
             if let room = model.shown(spot) {
-                Conversation(
-                    room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
-                    reviews: reviews(room), needs: needs(room), worker: worker(room)
-                ) { ask in
-                    replyTo = nil
-                    sendingBack = nil
-                    answering = ask
-                    typing = true
-                } sendBack: { review in
-                    replyTo = nil
-                    answering = nil
-                    sendingBack = review
-                    typing = true
-                }
-                .id(spot.id)
-                .overlay(alignment: .bottomTrailing) {
-                    if !follow.atBottom {
-                        JumpButton(follow: follow) { follow.jumps += 1 }
-                            .padding(.trailing, 16)
-                            .padding(.bottom, 4)
-                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                ZStack {
+                    if zoom.active {
+                        Tone.raised.ignoresSafeArea()
+                    }
+                    Conversation(
+                        room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
+                        reviews: reviews(room), needs: needs(room), worker: worker(room)
+                    ) { ask in
+                        answer(ask)
+                    } sendBack: { review in
+                        sendBack(review)
+                    }
+                    .id(spot.id)
+                    .overlay(alignment: .bottomTrailing) {
+                        if !follow.atBottom {
+                            JumpButton(follow: follow) { follow.jumps += 1 }
+                                .padding(.trailing, 16)
+                                .padding(.bottom, 4)
+                                .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        }
+                    }
+                    .animation(.snappy(duration: 0.25), value: follow.atBottom)
+                    .modifier(ZoomOut(zoom: zoom))
+                    .allowsHitTesting(!zoom.zoomed)
+                    .accessibilityHidden(zoom.zoomed)
+                    .accessibilityAction(named: Text("Where things stand")) { zoom.set(true, still: still) }
+                    if zoom.active, let stand = room.stand {
+                        let wide = standSpot(room)
+                        StandPage(room: room, stand: stand, waiting: needs(room, at: wide).count + asks(room, at: wide).count + reviews(room, at: wide).count) { target in
+                            land(target)
+                        }
+                        .modifier(ZoomIn(zoom: zoom))
+                        .allowsHitTesting(zoom.zoomed)
+                        .accessibilityAction(.escape) { zoom.set(false, still: still) }
                     }
                 }
-                .animation(.snappy(duration: 0.25), value: follow.atBottom)
+                .simultaneousGesture(
+                    MagnifyGesture(minimumScaleDelta: 0.01)
+                        .onChanged { value in zoom.move(value.magnification) }
+                        .onEnded { value in zoom.release(value.velocity, still: still) }
+                )
+                .onChange(of: zoom.zoomed) { _, open in
+                    if open { report() }
+                }
                 .bar(.bottom) {
-                    if talks(room) || answering != nil || sendingBack != nil {
+                    if !zoom.zoomed && (talks(room) || answering != nil || sendingBack != nil) {
                         Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing)
+                            .modifier(ZoomAway(zoom: zoom))
                     }
                 }
                 .navigationTitle(room.spotTitle(spot.place))
@@ -79,6 +102,7 @@ struct ConversationScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .onAppear {
+            if model.demo && UserDefaults.standard.bool(forKey: "standOpen") { zoom.set(true, still: true) }
             visible = true
             seen()
             if model.focusNext == spot {
@@ -102,7 +126,60 @@ struct ConversationScreen: View {
         spot.general || spot.place == room.sideKey || room.placeView(spot.place)?.kind == "room"
     }
 
-    private func needs(_ room: RoomView) -> [NeedView] {
+    private func answer(_ ask: AskView) {
+        replyTo = nil
+        sendingBack = nil
+        answering = ask
+        typing = true
+    }
+
+    private func sendBack(_ review: ReviewView) {
+        replyTo = nil
+        answering = nil
+        sendingBack = review
+        typing = true
+    }
+
+    private func standSpot(_ room: RoomView) -> Spot {
+        spot.place == room.sideKey ? Spot(code: spot.code) : spot
+    }
+
+    private func report() {
+        typing = false
+        let place = spot.place == model.rooms[spot.code]?.sideKey ? "main" : spot.place
+        Task {
+            do {
+                try await model.askReport(spot.code, place: place)
+            } catch {
+                Trouble.note("report", error)
+            }
+        }
+    }
+
+    private func land(_ target: StandTarget) {
+        zoom.set(false, still: still)
+        switch target {
+        case .chat(let seq):
+            guard let seq else { return }
+            Task {
+                try? await Task.sleep(for: .milliseconds(350))
+                withAnimation(Motion.ease) { position.scrollTo(id: "b\(seq)", anchor: .center) }
+            }
+        case .task(let id):
+            let place = "task:\(id)"
+            guard place != spot.place else { return }
+            model.go(.place(Spot(code: spot.code, place: place)))
+        }
+    }
+
+    private func asks(_ room: RoomView, at: Spot) -> [AskView] {
+        if at.general { return room.asks }
+        if let task = room.placeView(at.place)?.task ?? room.taskIn(at.place) { return room.asks.filter { $0.task == task } }
+        return room.asks.filter { $0.place == at.place }
+    }
+
+    private func needs(_ room: RoomView, at: Spot? = nil) -> [NeedView] {
+        let spot = at ?? spot
         if spot.general { return room.open }
         let place = room.placeView(spot.place)
         if let task = place?.task ?? room.taskIn(spot.place) { return room.open.filter { $0.task == task } }
@@ -110,7 +187,8 @@ struct ConversationScreen: View {
         return []
     }
 
-    private func reviews(_ room: RoomView) -> [ReviewView] {
+    private func reviews(_ room: RoomView, at: Spot? = nil) -> [ReviewView] {
+        let spot = at ?? spot
         if spot.general { return room.reviews }
         guard let task = room.placeView(spot.place)?.task ?? room.taskIn(spot.place) else { return [] }
         return room.reviews.filter { $0.task == task }

@@ -4,6 +4,7 @@ import { generateIdentity, sign, verify } from "@kiwi/core/identity.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 
+import { standAsk, standBoard } from "../engine/stand.ts";
 import { roomView } from "../engine/view.ts";
 
 const out = process.argv[2];
@@ -72,6 +73,24 @@ const step = await sign(ids.lead!, {
 });
 log.push({ ...step, seq: log.length + 1, rts: stepAt, sigOk: await verify(step) });
 
+const report = [
+  "**The phone release is one review away.**",
+  "- **Now:** @dev fixes the composer, T12. Tests are running.",
+  "- **Done:** Needs you cards, T9.",
+  "- **Needs you:** a review of T14, and your signature on the 1.4 build.",
+  "- **Next:** search across channels, T15.",
+].join("\n");
+const asked = log.length + 1;
+const stand: [string, string, { to: string[]; dm: true; re?: number[] }][] = [
+  ["jow", standAsk("#general"), { to: ["lead"], dm: true }],
+  ["lead", report, { to: ["jow"], dm: true, re: [asked] }],
+];
+for (const [i, [from, body, more]] of stand.entries()) {
+  const ts = stepAt + (i + 1) * 30_000;
+  const signed = await sign(ids[from]!, { v: 1 as const, id: crypto.randomUUID(), from, kind: "msg" as const, body, ts, ...more });
+  log.push({ ...signed, seq: log.length + 1, rts: ts, sigOk: await verify(signed) });
+}
+
 const room = roomView({
   code: "fixture",
   title: "channels-dev",
@@ -138,6 +157,7 @@ const task = (id: number, title: string, state: "todo" | "doing" | "review" | "d
   createdAt: ago(min + 120),
   last: null,
   archived: false,
+  since: state === "doing" && owner ? ago(min) : null,
 });
 const tasks = [
   task(12, "Composer empties after Send, every time", "doing", "dev", 2),
@@ -146,4 +166,4 @@ const tasks = [
   task(9, "Needs you cards on the phone", "done", "dev", 240),
 ];
 const members = room.members.map((m) => (m.name === "dev" ? { ...m, activity: { state: "working", tool: "Edit", since: ago(2) }, doing: [12] } : m));
-writeFileSync(out, JSON.stringify({ ...room, tasks, members }));
+writeFileSync(out, JSON.stringify({ ...room, tasks, members, stand: { ...room.stand, ...standBoard(tasks, { kind: "all" }) } }));

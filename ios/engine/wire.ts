@@ -45,6 +45,7 @@ export type Ask =
   | { op: "letIn"; code: string; id: string }
   | { op: "turnAway"; code: string; id: string }
   | { op: "approveSpec"; code: string; ask: number; v: number }
+  | { op: "askReport"; code: string; place: string }
   | { op: "open"; code: string; place: string }
   | { op: "marks"; code: string; marks: Record<string, number>; write: boolean }
   | { op: "nudge" }
@@ -205,6 +206,22 @@ export interface PlaceView {
 
 export type IconView = { kind: "robot"; robot: string } | { kind: "emoji"; emoji: string } | { kind: "image"; mime: string; data: string };
 
+export interface StandLineView {
+  text: string;
+  task: number | null;
+  seq: number | null;
+}
+
+export interface StandView {
+  label: string;
+  lead: string | null;
+  asked: { seq: number; at: number } | null;
+  report: { seq: number; at: number; lines: StandLineView[] } | null;
+  now: number[];
+  next: number[];
+  done: number[];
+}
+
 export interface RoomView {
   code: string;
   roomId: string | null;
@@ -234,4 +251,5 @@ export interface RoomView {
   latestIn: string;
   place: string;
   places: PlaceView[];
+  stand: StandView;
 }

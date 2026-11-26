@@ -61,6 +61,29 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
+    func testWhereThingsStand() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "YES", "-standOpen", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
+        XCTAssertTrue(general.waitForExistence(timeout: 15))
+        general.tap()
+        let head = app.buttons["The phone release is one review away."]
+        XCTAssertTrue(head.waitForExistence(timeout: 5), "the lead's last report shows at once")
+        XCTAssertTrue(app.staticTexts["Where things stand"].exists, "the page says what it is")
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '**'")).firstMatch.exists, "no raw markdown")
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '@'")).firstMatch.exists, "names, not handles")
+        add(shot(app, "stand page"))
+
+        head.tap()
+        let composer = NSPredicate(format: "placeholderValue == 'Message'")
+        let field = app.textViews.matching(composer).firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5) || app.textFields.matching(composer).firstMatch.exists, "a tap on a line goes back into the chat")
+        XCTAssertFalse(head.exists, "the page is gone")
+        add(shot(app, "stand back"))
+    }
+
+    @MainActor
     private func shot(_ app: XCUIApplication, _ name: String) -> XCTAttachment {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

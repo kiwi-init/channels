@@ -482,6 +482,10 @@ final class AppModel {
         try await engine.ask(["op": "letIn", "code": code, "id": id])
     }
 
+    func askReport(_ code: String, place: String) async throws {
+        try await engine.ask(["op": "askReport", "code": code, "place": place])
+    }
+
     func turnAway(_ code: String, id: String) async throws {
         try await engine.ask(["op": "turnAway", "code": code, "id": id])
     }

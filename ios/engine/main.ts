@@ -655,6 +655,8 @@ async function handle(ask: Ask): Promise<unknown> {
     case "letIn":
       await room(ask.code).letIn(ask.id);
       return null;
+    case "askReport":
+      return room(ask.code).askReport(ask.place);
     case "turnAway":
       await room(ask.code).turnAway(ask.id);
       return null;

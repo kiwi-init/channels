@@ -1012,6 +1012,8 @@ struct Prose: View {
     }()
 
     let text: String
+    var step: Step = .body
+    var weight: Font.Weight = .regular
     var ink: Color = Tone.ink
     var link: Color = Tone.accent
     var code: Color = Tone.wash2
@@ -1023,7 +1025,7 @@ struct Prose: View {
                 switch block {
                 case .text(let s):
                     Text(inline(s))
-                        .type(.body)
+                        .type(step, weight)
                         .foregroundStyle(ink)
                         .tint(link)
                 case .code(let s):
