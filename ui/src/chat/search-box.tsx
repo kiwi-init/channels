@@ -391,7 +391,7 @@ function MeaningRow({ meant, count, off, keyless }: { meant: Meant | null; count
       <span className="search-line">
         <GlyphIcon glyph={AiSearch02Icon} size={14} />
         <span className="search-who">{asking ? t("chat.search.box.meaning.asking") : t("chat.search.box.meaning")}</span>
-        <span className="search-when">{keysHint("Enter")}</span>
+        <span className="search-when">{keysHint("↩")}</span>
       </span>
       <span className="search-text">
         {off
