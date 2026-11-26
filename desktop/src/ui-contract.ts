@@ -1,4 +1,4 @@
-export const UI_CONTRACT = "3.10.0";
+export const UI_CONTRACT = "3.11.0";
 
 export const UI_REQUIRES = "3.0.0";
 
@@ -192,6 +192,7 @@ export const UI_SURFACE_DELTAS: readonly (readonly [string, SurfaceDelta])[] = [
   ["3.8.0", { add: [], remove: [] }],
   ["3.9.0", { add: ["kiwi.bringBack", "kiwi.upPlan"], remove: [] }],
   ["3.10.0", { add: ["kiwi.searchMeaning", "kiwi.setTypesafeKey", "kiwi.typesafeKey"], remove: [] }],
+  ["3.11.0", { add: ["kiwi.bringBackOnly", "kiwi.upChoices"], remove: [] }],
 ];
 
 export function buildSurfaces(firstVersion: string, firstSurfaces: readonly string[], deltas: readonly (readonly [string, SurfaceDelta])[]): Record<string, readonly string[]> {

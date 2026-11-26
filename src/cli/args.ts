@@ -143,6 +143,7 @@ function parse() {
         pid: { type: "string" },
         block: { type: "string" },
         seat: { type: "string" },
+        only: { type: "string", multiple: true },
         "dry-run": { type: "boolean" },
         "bind-timeout": { type: "string" },
         report: { type: "string" },

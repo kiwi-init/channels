@@ -100,6 +100,7 @@ export default {
   "live.wakes.desktop.only": "이 컴퓨터의 에이전트는 데스크톱 앱만 깨울 수 있습니다",
   "live.wakes.not.here": "{agent}은(는) 이 컴퓨터에서 실행되지 않아 깨울 수 없습니다",
   "live.computer.desktop.only": "Channels 데스크톱 앱이 필요합니다",
+  "live.computer.back.no.plan": "kiwi up이 이 컴퓨터의 에이전트를 알려 주지 않았습니다",
   "live.computer.not.changed": "kiwi가 변경하지 않았습니다",
   "live.computer.hook.installed": "켜짐",
   "live.computer.hook.partial": "일부 켜짐",

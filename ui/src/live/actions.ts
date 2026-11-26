@@ -12,7 +12,7 @@ import { loadPicture } from "~/live/pictures"
 import { appCan } from "~/live/app-can"
 import { setNewMemberPowers, setNewMemberScopes } from "~/live/defaults"
 import { deleteTheme, saveTheme, setPrefs } from "~/live/prefs"
-import { bringAgentsBack, checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
+import { backChoices, bringAgentsBack, bringPickedBack, checkComputer, computerSettings, setContextLine, setHooks } from "~/live/computer"
 import { myUsage } from "~/live/usage"
 import { markSeenIn, READ_FLOOR, seenIn } from "@kiwi/app/threads.ts"
 import { markSeenTo } from "@kiwi/channel/news.ts"
@@ -321,6 +321,8 @@ export function makeActions(): Actions {
     setHooks,
     checkComputer,
     bringAgentsBack,
+    backChoices,
+    bringPickedBack,
     computerSettings,
     launchedFrom: async (ids) => (await account()).launchedFrom(ids),
     setContextLine: (on) => attempt(t("live.actions.change.failed"), () => setContextLine(on)),

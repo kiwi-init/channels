@@ -31,6 +31,7 @@ const NewChannelDialog = later(() => import("~/start/new-channel").then((m) => m
 const EnrollDialog = later(() => import("~/settings/enroll").then((m) => m.EnrollDialog))
 const JoinDialog = later(() => import("~/start/join").then((m) => m.JoinDialog))
 const NewRoomDialog = later(() => import("~/shell/new-room").then((m) => m.NewRoomDialog))
+const BringBackDialog = later(() => import("~/shell/back-picker").then((m) => m.BringBackDialog))
 const Welcome = later(() => import("~/start/welcome").then((m) => m.Welcome))
 const Waiting = later(() => import("~/start/waiting").then((m) => m.Waiting))
 const AppSide = later(() => import("~/shell/app-side").then((m) => m.AppSide))
@@ -162,6 +163,11 @@ function Shown({ app, nav, go, broken }: RootProps) {
         {nav.dialog === "join" && (
           <Suspense fallback={null}>
             <JoinDialog />
+          </Suspense>
+        )}
+        {nav.dialog === "bring-back" && (
+          <Suspense fallback={null}>
+            <BringBackDialog />
           </Suspense>
         )}
         {app.account?.enrollAsk && (

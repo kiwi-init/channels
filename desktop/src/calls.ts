@@ -81,6 +81,8 @@ export function makeBridge(t: BridgeTransport): KiwiBridge {
     doctor: () => t.call("doctor"),
     bringBack: () => t.call("bringBack"),
     upPlan: () => t.call("upPlan"),
+    upChoices: () => t.call("upChoices"),
+    bringBackOnly: (picks) => t.call("bringBackOnly", picks),
     daemonAdopt: () => t.call("daemonAdopt"),
     installCli: () => t.call("installCli"),
     keysAtRest: () => t.call("keysAtRest"),

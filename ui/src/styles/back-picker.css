@@ -1,0 +1,116 @@
+.back-form {
+  display: grid;
+  gap: 12px;
+}
+
+.back-form > .modal-foot {
+  align-items: center;
+  margin-top: 8px;
+}
+
+.back-form > .modal-foot > .back-hint {
+  margin-right: auto;
+}
+
+.back-hint {
+  color: var(--ink-3);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.back-hint.is-error {
+  color: var(--alert);
+}
+
+.back-failed {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.back-pick {
+  display: grid;
+  gap: 12px;
+}
+
+.back-no-tmux {
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--decide-wash);
+  color: var(--ink);
+  font: var(--t-meta) / 1.5 var(--ui);
+}
+
+.back-group {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.back-group legend {
+  margin-bottom: 4px;
+  color: var(--ink-3);
+  font: 600 var(--t-meta) var(--ui);
+}
+
+.back-seat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--ctl);
+  padding: 0 8px;
+  border-radius: var(--r-row);
+  font: var(--t-ui) var(--ui);
+}
+
+label.back-seat {
+  cursor: pointer;
+}
+
+label.back-seat:hover {
+  background: var(--wash);
+}
+
+.back-seat.is-on {
+  background: var(--wash-2);
+}
+
+.back-seat input {
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.back-seat.is-still {
+  padding-left: 31px;
+  color: var(--ink-2);
+}
+
+.back-seat-name {
+  flex: none;
+}
+
+.back-seat-folder,
+.back-seat-state {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--t-meta) var(--ui);
+  white-space: nowrap;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+.back-seat-folder {
+  font-family: var(--mono);
+}
+
+.back-seat-state.tone-live {
+  color: var(--live);
+}
+
+.back-lines {
+  display: grid;
+  gap: 6px;
+}

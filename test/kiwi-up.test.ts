@@ -9,11 +9,12 @@ import { abandonReserved, adoptReserved, bindHeldSeat, holdSeat, reserveSeat, SE
 import { claudeArgv, claudeTranscript } from "../src/loop/claude.ts";
 import { processStart } from "../src/pid.ts";
 import { seatsFor } from "../src/seats.ts";
-import { readUpOutcomes } from "@kiwi/core/up-outcome.ts";
+import { onlyArgs, readUpChoices, readUpOutcomes, readUpPicks } from "@kiwi/core/up-outcome.ts";
 import { outcomeJson, outcomeLine, upAll } from "../src/up/all.ts";
 import { printedLine, seatArgv, tmuxLauncher, type Launcher } from "../src/up/launch.ts";
 import { sessionLiveness, type Probe } from "../src/up/liveness.ts";
-import { NO_SAMPLE, planUp, runningAtShutdown, usedSince, withMembers } from "../src/up/plan.ts";
+import { NO_SAMPLE, planJson, planUp, runningAtShutdown, usedSince, withMembers, type SeatPlan } from "../src/up/plan.ts";
+import { pickSeats, readSelection } from "../src/up/select.ts";
 import { beforeThisBoot, nextRunning, noteRunning, readRunning } from "../src/up/running.ts";
 import { FRESH_PROMPT, RESUMED_PROMPT, restoreSeat, type RestoreDeps } from "../src/up/restore.ts";
 import type { Report } from "../src/up/ready.ts";
@@ -595,4 +596,133 @@ test("kiwi up --json reads back on the desktop side, seat by seat, and anything 
   ]);
   expect(readUpOutcomes("not json")).toBeNull();
   expect(readUpOutcomes(JSON.stringify({ findings: [] }))).toBeNull();
+});
+
+const noOpen = () => ({
+  load: loadConfig,
+  sleep: async () => {},
+  now: () => Date.now(),
+  newId: () => "0".repeat(16),
+  report: (): Report | null => ({ result: "restored", why: "it resumed its session" }),
+  forget: () => {},
+  token: () => "t",
+  keyOf: (t: string) => t,
+  reserve: () => ({ kind: "held" as const, prior: [] }),
+  abandon: () => {},
+});
+
+function twoChannels(): string {
+  const other = join(home, "other");
+  mkdirSync(other);
+  updateConfig((c) => {
+    c.channels.ops = { roomId: "r2", ownerPk: "o", ownerXpk: "x", epoch: 0, keys: {}, relay: "http://127.0.0.1:1", code: "mc2-y" };
+  });
+  place(dir, deadClaude("a"), deadClaude("b"));
+  place(other, { ...deadClaude("c"), alias: "ops" });
+  return other;
+}
+
+function pickFrom(plans: SeatPlan[], given: string[] | undefined): SeatPlan[] | string {
+  const selection = readSelection(given);
+  return typeof selection === "string" ? selection : pickSeats(plans, selection);
+}
+
+function picked(plans: SeatPlan[], given: string[]): SeatPlan[] {
+  const got = pickFrom(plans, given);
+  if (typeof got === "string") throw new Error(got);
+  return got;
+}
+
+const names = (got: SeatPlan[] | string) => (typeof got === "string" ? got : got.map((p) => `${p.alias}/${p.as}`));
+
+test("--only starts only the picked seats: two channels, three seats, one picked", async () => {
+  const other = twoChannels();
+  const opened: string[] = [];
+  const launcher: Launcher = { name: "tmux", open: (at) => (opened.push(`${at.alias}/${at.as}`), null) };
+  const outcomes = await upAll(picked(planUp(loadConfig(), testLive), ["ops/c"]), launcher, ["/bin/kiwi"], 60, 1_000, noOpen());
+  expect(opened).toEqual(["ops/c"]);
+  expect(outcomes.map((o) => [o.plan.alias, o.plan.as, o.plan.dir, o.result])).toEqual([["ops", "c", other, "restored"]]);
+});
+
+test("--only selectors are a union without duplicates, and without --only every seat is planned", () => {
+  twoChannels();
+  const plans = planUp(loadConfig(), testLive);
+  expect(names(pickFrom(plans, ["ch", "ch/a", "ops/c"]))).toEqual(["ch/a", "ch/b", "ops/c"]);
+  expect(names(pickFrom(plans, ["ch/b", "ch/b"]))).toEqual(["ch/b"]);
+  expect(names(pickFrom(plans, undefined))).toEqual(["ch/a", "ch/b", "ops/c"]);
+});
+
+test("an invalid or unknown --only selector is refused before anything is planned to start", () => {
+  twoChannels();
+  const plans = planUp(loadConfig(), testLive);
+  expect(["", "ch/", "/a", "ch/a/b", " ch", "ch/a "].map((bad) => pickFrom(plans, [bad]))).toEqual(
+    ["", "ch/", "/a", "ch/a/b", " ch", "ch/a "].map((bad) => `--only takes CHANNEL or CHANNEL/HANDLE, not "${bad}"`),
+  );
+  expect(pickFrom(plans, ["ch/a", "nope", "ops/zz"])).toBe(`--only "nope", "ops/zz": no seat on this computer matches, so nothing started`);
+});
+
+test("a picked seat that came back since the plan was shown is reported running and never started twice", async () => {
+  const other = twoChannels();
+  expect(planUp(loadConfig(), testLive).find((p) => p.as === "c")?.kind).toBe("restore");
+  place(other, { ...deadClaude("c"), alias: "ops", pid: process.pid, started: processStart(process.pid) ?? "" });
+  const opened: string[] = [];
+  const outcomes = await upAll(picked(planUp(loadConfig(), testLive), ["ops/c"]), { name: "tmux", open: (at) => (opened.push(at.as), null) }, ["/bin/kiwi"], 60, 1_000, noOpen());
+  expect(opened).toEqual([]);
+  expect(outcomes.map((o) => [o.plan.as, o.result])).toEqual([["c", "running"]]);
+});
+
+test("kiwi up --only refuses a bad selector, an unknown seat and --seat on the command line, starting nothing", async () => {
+  twoChannels();
+  const before = JSON.stringify(loadConfig());
+  const run = async (...args: string[]) => {
+    const p = spawnOwned(["bun", join(import.meta.dir, "../src/cli/main.ts"), "up", ...args], {
+      cwd: home,
+      env: { ...process.env, KIWI_HOME: home, KIWI_NO_HOOKS: "1", KIWI_TMUX: "kiwi-test-no-tmux", CLAUDE_CONFIG_DIR: join(home, "claude"), CLAUDECODE: "" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
+    return { code: await p.exited, out, err };
+  };
+  const bad = await run("--only", "ch/a/b");
+  expect(bad.code).not.toBe(0);
+  expect(bad.err).toContain(`--only takes CHANNEL or CHANNEL/HANDLE, not "ch/a/b"`);
+  const unknown = await run("--only", "ops/zz", "--json");
+  expect(unknown.code).not.toBe(0);
+  expect(unknown.out).toBe("");
+  expect(unknown.err).toContain(`--only "ops/zz": no seat on this computer matches, so nothing started`);
+  const withSeat = await run("--seat", "a", "--only", "ch");
+  expect(withSeat.code).not.toBe(0);
+  expect(withSeat.err).toContain("--only picks among every seat; drop --seat");
+  expect(JSON.stringify(loadConfig())).toBe(before);
+}, 30_000);
+
+test("the desktop side reads the picker's plan with tmux, and passes only well-formed picks to kiwi up --only", () => {
+  const plan = { kind: "restore" as const, harness: "claude" as const, alias: "ch", as: "dev", dir: "/w" };
+  const seats = [planJson(plan, true)];
+  expect(readUpChoices(JSON.stringify({ seats, tmux: false }))).toEqual({
+    seats: [{ channel: "ch", handle: "dev", folder: "/w", result: "planned", why: "kiwi up --seat dev -c ch", before: true }],
+    tmux: false,
+  });
+  expect(readUpChoices(JSON.stringify({ seats }))).toBeNull();
+  expect(readUpChoices("not json")).toBeNull();
+  expect(
+    readUpPicks([
+      { channel: "ch", handle: "dev" },
+      { channel: "my ch", handle: "x;y" },
+    ]),
+  ).toEqual([
+    { channel: "ch", handle: "dev" },
+    { channel: "my ch", handle: "x;y" },
+  ]);
+  expect(onlyArgs([{ channel: "ch", handle: "dev" }])).toEqual(["--only=ch/dev"]);
+  expect([[], [{ channel: "ch" }], [{ channel: "ch/x", handle: "dev" }], [{ channel: "ch", handle: " dev" }], [{ channel: "", handle: "dev" }], "ch/dev", null].map(readUpPicks)).toEqual([
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+  ]);
 });

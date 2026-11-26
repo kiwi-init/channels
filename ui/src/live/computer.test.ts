@@ -66,9 +66,19 @@ const fake = {
     ]
   },
 }
+const picked: { channel: string; handle: string }[][] = []
+let choices: { seats: { channel: string; handle: string; folder: string; result: "planned"; why: string }[]; tmux: boolean } | null = {
+  seats: [{ channel: "kiwi", handle: "atlas", folder: "/w", result: "planned", why: "kiwi up --seat atlas -c kiwi" }],
+  tmux: true,
+}
+const picker = {
+  upChoices: async () => choices,
+  bringBackOnly: async (picks: { channel: string; handle: string }[]) => (picked.push(picks), picks.map((p) => ({ ...p, folder: "/w", result: "restored" as const, why: "it resumed its session" }))),
+}
 let bridged = false
-mock.module("@kiwi/secrets/secrets.ts", () => ({ bridge: () => (bridged ? fake : null) }))
-const { backPrompt, bringAgentsBack, checkComputer, loadUpPlan, upPlanNow, computerNow, computerSettings, loadComputer, setContextLine, setHooks } = await import("~/live/computer")
+let older = false
+mock.module("@kiwi/secrets/secrets.ts", () => ({ bridge: () => (bridged ? (older ? fake : Object.assign(Object.create(fake), picker)) : null) }))
+const { backChoices, bringPickedBack, canPickBack, backPrompt, bringAgentsBack, checkComputer, loadUpPlan, upPlanNow, computerNow, computerSettings, loadComputer, setContextLine, setHooks } = await import("~/live/computer")
 const { backCard } = await import("~/shell/back-card")
 const { backRow } = await import("~/settings/back-row")
 const { acts } = await import("~/settings/sheet")
@@ -106,6 +116,7 @@ describe("Settings > Agents shows this computer", () => {
       ],
       contextLine: false,
       back: null,
+      pick: true,
       run: { at: "idle" },
     })
   })
@@ -215,5 +226,36 @@ describe("the restart card's Bring them back says only what happened, and Settin
     await card().onAct()
     expect(toasts.at(-1)).toEqual(["Your agents are back", "info"])
     expect(settingsRow()).toContain("1 back\\, 0 not back")
+  })
+})
+
+describe("the Bring them back picker's calls (spec #18549)", () => {
+  test("an app with the picker's calls offers it; an older app keeps the one button", async () => {
+    expect(canPickBack()).toBe(true)
+    await loadComputer()
+    expect(computerNow()?.pick).toBe(true)
+    older = true
+    expect(canPickBack()).toBe(false)
+    await loadComputer()
+    expect(computerNow()?.pick).toBe(false)
+    older = false
+  })
+
+  test("an empty selection sends nothing, and a selection sends exactly the checked seats", async () => {
+    picked.length = 0
+    const before = presses
+    await bringPickedBack([])
+    expect(picked).toEqual([])
+    expect(presses).toBe(before)
+    const run = await bringPickedBack([{ channel: "kiwi", handle: "atlas" }])
+    expect(picked).toEqual([[{ channel: "kiwi", handle: "atlas" }]])
+    expect(run).toEqual({ at: "done", outcomes: [{ channel: "kiwi", handle: "atlas", folder: "/w", result: "restored", why: "it resumed its session" }] })
+    expect(presses).toBe(before)
+  })
+
+  test("a plan that doesn't answer is an error, not an empty list", async () => {
+    expect((await backChoices()).seats.map((s) => s.handle)).toEqual(["atlas"])
+    choices = null
+    await expect(backChoices()).rejects.toThrow("kiwi up didn't say which agents this computer has")
   })
 })

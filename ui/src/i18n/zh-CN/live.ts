@@ -100,6 +100,7 @@ export default {
   "live.wakes.desktop.only": "只有桌面应用能唤醒这台电脑上的智能体",
   "live.wakes.not.here": "{agent}不在这台电脑上运行，因此无法唤醒",
   "live.computer.desktop.only": "这需要 Channels 桌面应用",
+  "live.computer.back.no.plan": "kiwi up 没有返回这台电脑上的智能体",
   "live.computer.not.changed": "kiwi 没有更改",
   "live.computer.hook.installed": "已开启",
   "live.computer.hook.partial": "部分开启",

@@ -21,7 +21,7 @@ import { homeOf } from "~/home"
 import { CALM_CHANNELS, CALM_TILES } from "~/demo/home-calm"
 import { openedTab, TABS_3, TABS_8 } from "~/demo/tabs"
 import { DEMO_FROZEN } from "~/demo/shots"
-import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
+import type { UpChoices, UpOutcome } from "@kiwi/core/up-outcome.ts"
 import type { Account, Actions, App, BackRun, Enrolling, Finding, GithubSignIn, ThisComputer, Channel, ChannelTile, GoneChannel, Message, Person, Prefs, Spec, Task, TaskStep, Usage } from "~/model"
 import { deletedTheme, savedTheme } from "~/theme/themes"
 import { announce } from "~/kit/toasts"
@@ -69,6 +69,7 @@ const COMPUTER: ThisComputer = {
   ],
   contextLine: false,
   back: null,
+  pick: true,
   run: { at: "idle" },
 }
 
@@ -85,6 +86,14 @@ const RESTARTED: NonNullable<ThisComputer["back"]> = {
   ],
   apart: [{ channel: "kiwi", handle: "sage", folder: "~/code/kiwi", result: "skipped", why: "kiwi up doesn't restore codex seats yet", skip: "unsupported", before: true }],
 }
+
+const CHOICES: UpOutcome[] = [
+  { channel: "kiwi", handle: "atlas", folder: "~/code/kiwi", result: "planned", why: "kiwi up --seat atlas -c kiwi", before: true },
+  { channel: "kiwi", handle: "win", folder: "~/code/kiwi", result: "planned", why: "kiwi up --seat win -c kiwi", before: true },
+  { channel: "kiwi", handle: "lead", folder: "~/code/kiwi", result: "running", why: "its session is still running", before: true },
+  { channel: "kiwi", handle: "sage", folder: "~/code/kiwi", result: "skipped", why: "kiwi up doesn't restore codex seats yet", skip: "unsupported", before: true },
+  { channel: "site", handle: "scout", folder: "~/code/site", result: "planned", why: "kiwi up --seat scout -c site", before: true },
+]
 
 const BROUGHT_BACK: UpOutcome[] = [
   { channel: "kiwi", handle: "atlas", folder: "~/code/kiwi", result: "restored", why: "it resumed its session" },
@@ -363,6 +372,7 @@ export type Scenario =
   | "spec-not-ready"
   | "forgotten-computer"
   | "restarted"
+  | "restarted-no-tmux"
   | "unarmed"
   | "invite-failed"
   | "review-reset"
@@ -689,7 +699,7 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
   })
   const [shownUsage] = useState(usage)
   const [ownPersonalities, setOwnPersonalities] = useState<Personality[]>([])
-  const [computer, setComputer] = useState<ThisComputer>(scenario === "restarted" ? { ...COMPUTER, back: RESTARTED } : COMPUTER)
+  const [computer, setComputer] = useState<ThisComputer>(scenario === "restarted" || scenario === "restarted-no-tmux" ? { ...COMPUTER, back: RESTARTED } : COMPUTER)
   const [arrived, setArrived] = useState(open)
   useEffect(() => {
     if (scenario !== "slow-open") return
@@ -1260,6 +1270,23 @@ export function useDemo(scenario: Scenario, open: string | null, look: Partial<P
         return new Promise<BackRun>((done) =>
           setTimeout(() => {
             const run: BackRun = { at: "done", outcomes: BROUGHT_BACK }
+            setComputer((c) => ({ ...c, back: null, run }))
+            done(run)
+          }, 400)
+        )
+      },
+      backChoices: async (): Promise<UpChoices> => ({ seats: CHOICES, tmux: scenario !== "restarted-no-tmux" }),
+      bringPickedBack: (picks) => {
+        setComputer((c) => ({ ...c, run: { at: "working" } }))
+        return new Promise<BackRun>((done) =>
+          setTimeout(() => {
+            const outcomes = picks.map((p): UpOutcome => ({
+              ...p,
+              folder: CHOICES.find((s) => s.channel === p.channel && s.handle === p.handle)?.folder ?? "",
+              result: "restored",
+              why: "it resumed its session",
+            }))
+            const run: BackRun = { at: "done", outcomes }
             setComputer((c) => ({ ...c, back: null, run }))
             done(run)
           }, 400)

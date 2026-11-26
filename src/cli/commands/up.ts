@@ -18,12 +18,13 @@ import { planJson, planUp, runningAtShutdown, usedSince, withMembers, type Choos
 import { beforeThisBoot, readRunning } from "../../up/running.ts";
 import { forgetLaunch, forgetReport, isReportId, launchSeen, readReport, writeReport } from "../../up/ready.ts";
 import { restoreSeat, type RestoreDeps } from "../../up/restore.ts";
+import { pickSeats, readSelection } from "../../up/select.ts";
 import { abandonReserved, keyOf, newSeatToken, reserveSeat } from "../../hold.ts";
 import { randomBytes } from "node:crypto";
 import { args, opt } from "../args.ts";
 import { type Command, die, keepDaemon, out } from "../context.ts";
 
-const USAGE = "usage: kiwi up [--dry-run] [--json] [--since 7d] [--bind-timeout SECONDS] · kiwi up --seat HANDLE [-c CHANNEL] [--bind-timeout SECONDS]";
+const USAGE = "usage: kiwi up [--dry-run] [--json] [--since 7d] [--only CHANNEL[/HANDLE]]... [--bind-timeout SECONDS] · kiwi up --seat HANDLE [-c CHANNEL] [--bind-timeout SECONDS]";
 const BIND_MS = 60_000;
 const SETTLE_MS = 15_000;
 const READY_MS = 15_000;
@@ -190,14 +191,21 @@ const oneSeat = (handle: string, bindMs: number, report: string | null) =>
 
 const everySeat = (bindMs: number) =>
   Effect.gen(function* () {
+    const selection = readSelection(opt.only);
+    if (typeof selection === "string") return yield* die(`${selection}; ${USAGE}`);
     const choose = chooser(opt.since);
     if (typeof choose === "string") return yield* die(choose);
-    const planned = planUp(loadConfig(), (b) => sessionLiveness(b), choose);
-    if (!planned.length) return out(opt.json ? JSON.stringify({ seats: [] }) : "no seats on this computer");
+    const planned = pickSeats(
+      planUp(loadConfig(), (b) => sessionLiveness(b), choose),
+      selection,
+    );
+    if (typeof planned === "string") return yield* die(planned);
+    const tmux = Bun.which(process.env.KIWI_TMUX || "tmux");
+    if (!planned.length) return out(opt.json ? JSON.stringify({ seats: [], tmux: tmux !== null }) : "no seats on this computer");
     const plans = withMembers(planned, yield* membership(planned));
     if (opt["dry-run"] && opt.json) {
       const ran = new Set((ranBefore() ?? []).map((s) => `${s.alias}\u0000${s.as}`));
-      return out(JSON.stringify({ seats: plans.map((p) => planJson(p, ran.has(`${p.alias}\u0000${p.as}`))) }));
+      return out(JSON.stringify({ seats: plans.map((p) => planJson(p, ran.has(`${p.alias}\u0000${p.as}`))), tmux: tmux !== null }));
     }
     if (opt["dry-run"]) {
       for (const p of plans)
@@ -208,7 +216,6 @@ const everySeat = (bindMs: number) =>
         );
       return;
     }
-    const tmux = Bun.which(process.env.KIWI_TMUX || "tmux");
     const launcher = tmux ? tmuxLauncher(tmux) : null;
     if (!launcher && !opt.json && plans.some((p) => p.kind === "restore" || p.kind === "loop")) out("tmux isn't installed: run each line below in its own terminal");
     const outcomes = yield* Effect.promise(() =>
@@ -237,6 +244,7 @@ export const upCommands: Record<string, Command> = {
       const bindMs = yield* bindTimeout;
       if (opt.seat !== undefined) {
         if (opt["dry-run"]) return yield* die(`--dry-run plans every seat; drop --seat. ${USAGE}`);
+        if (opt.only !== undefined) return yield* die(`--only picks among every seat; drop --seat. ${USAGE}`);
         const report = opt.report ?? null;
         if (report !== null && !isReportId(report)) return yield* die(USAGE);
         return yield* oneSeat(opt.seat, bindMs, report);

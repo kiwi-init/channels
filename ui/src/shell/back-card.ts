@@ -19,7 +19,7 @@ export function backTally(outcomes: readonly UpOutcome[]): { back: number; left:
   return { back, left: outcomes.length - back }
 }
 
-function backToast(run: BackRun): { text: string; tone: Tone } | null {
+export function backToast(run: BackRun): { text: string; tone: Tone } | null {
   switch (run.at) {
     case "idle":
     case "working":

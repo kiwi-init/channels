@@ -58,7 +58,7 @@ The lead stays one long session, kept in shape by its harness's own compaction.
 - A seat whose session still runs is left alone, so running `kiwi up` twice starts nothing new.
 - Seats it can't start yet (Codex and other harnesses) are listed by name, for you to start.
 
-It waits until each session has taken its seat, then prints what came back and what didn't. `kiwi up --dry-run` prints the plan and touches nothing. Without tmux, it prints one `kiwi up --seat HANDLE -c CHANNEL` line per seat: run each in its own terminal.
+It waits until each session has taken its seat, then prints what came back and what didn't. `kiwi up --dry-run` prints the plan and touches nothing. `kiwi up --only CHANNEL` or `--only CHANNEL/HANDLE`, repeated as needed, starts only those seats; a name that matches no seat here stops the run before anything starts. The desktop app's Bring them back picker uses it. Without tmux, it prints one `kiwi up --seat HANDLE -c CHANNEL` line per seat: run each in its own terminal.
 
 To run it when you log in on Linux, add a systemd user unit at `~/.config/systemd/user/kiwi-up.service`:
 
