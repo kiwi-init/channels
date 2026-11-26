@@ -1,24 +1,26 @@
 import "~/i18n/en/shell-later"
-import { Fragment, useEffect, useState } from "react"
+import { Fragment, useEffect, useState, useSyncExternalStore } from "react"
 
 import { Icon } from "~/kit/icons"
 import { copyText } from "~/kit/toasts"
 import { useActions, useApp, useAppAccount, useToast } from "~/nav"
 import { t } from "~/i18n/i18n"
 import { backCard } from "~/shell/back-card"
+import { backDismissed, backHidden, dismissBack } from "~/shell/back-dismissed"
 import { showAsk } from "~/shell/enroll-hidden"
 
-type Card = { key: string; text: string; detail?: string; path?: string; act?: string; busy?: string; onAct?: () => void; progress?: number }
+type Card = { key: string; text: string; detail?: string; path?: string; act?: string; busy?: string; onAct?: () => void; dismiss?: string; onDismiss?: () => void; progress?: number }
 
 function useCards(): Card[] {
   const actions = useActions()
   const account = useAppAccount()
   const toast = useToast()
   const back = useApp().app.computer?.back ?? null
+  const dismissed = useSyncExternalStore(backDismissed.subscribe, backDismissed.get)
   const cards: Card[] = []
-  if (back) {
+  if (back && !backHidden(back.down, dismissed)) {
     const card = backCard(back, actions.bringAgentsBack, toast)
-    cards.push({ ...card, onAct: () => void card.onAct() })
+    cards.push({ ...card, onAct: () => void card.onAct(), dismiss: t("shell.updates.back.dismiss"), onDismiss: () => dismissBack(back.down) })
   }
   const ask = account?.enrollAsk
   if (ask && ask.stage !== "elsewhere") cards.push({ key: "ask", text: t("shell.updates.sign.in.ask", { name: ask.label }), act: t("shell.updates.review"), onAct: showAsk })
@@ -96,6 +98,11 @@ function SideCard({ card }: { card: Card }) {
           }}
         >
           {busy && card.busy ? card.busy : card.act}
+        </button>
+      )}
+      {card.dismiss && (
+        <button type="button" className="btn is-small is-quiet" onClick={() => card.onDismiss?.()}>
+          {card.dismiss}
         </button>
       )}
       {pct !== null && (
