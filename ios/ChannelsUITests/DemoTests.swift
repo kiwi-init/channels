@@ -84,6 +84,25 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
+    func testLongGeneralOpens() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "YES", "-demoLong", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
+        XCTAssertTrue(general.waitForExistence(timeout: 15))
+        general.tap()
+        let composer = NSPredicate(format: "placeholderValue == 'Message'")
+        let view = app.textViews.matching(composer).firstMatch
+        let field = view.waitForExistence(timeout: 10) ? view : app.textFields.matching(composer).firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "a #general of 300 long messages opens, as a real one does")
+        field.tap()
+        field.typeText("still here")
+        app.buttons["Send"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["still here"].waitForExistence(timeout: 10), "the chat answers after opening")
+        add(shot(app, "long general"))
+    }
+
+    @MainActor
     private func shot(_ app: XCUIApplication, _ name: String) -> XCTAttachment {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
