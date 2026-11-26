@@ -48,7 +48,6 @@ struct ConversationScreen: View {
                 .bar(.bottom) {
                     if talks(room) || answering != nil || sendingBack != nil {
                         Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing, tabs: true)
-                            .padding(.bottom, 4)
                     } else {
                         ListBar()
                     }

@@ -38,6 +38,8 @@ final class DemoTests: XCTestCase {
         let channel = app.buttons["channel"]
         XCTAssertTrue(needs.waitForHittable(timeout: 5) && channel.isHittable, "one row on the list: the tabs and the channel")
         XCTAssertEqual(needs.frame.midY, channel.frame.midY, accuracy: 2)
+        let listRow = needs.frame.midY
+        let listHeight = needs.frame.height
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "lead-row").firstMatch.exists, "the lead, the first row of the channel")
         add(shot(app, "list with the bar"))
 
@@ -57,6 +59,8 @@ final class DemoTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 15), "the chat's composer")
         XCTAssertTrue(needs.waitForHittable(timeout: 5), "in a chat the tabs stay, as icons")
         XCTAssertEqual(needs.frame.midY, field.frame.midY, accuracy: 4, "one row: the tab icons and the composer")
+        XCTAssertEqual(needs.frame.midY, listRow, accuracy: 1, "the row sits where it sat on the list")
+        XCTAssertEqual(needs.frame.height, listHeight, accuracy: 1, "and keeps its height")
         let newest = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Something else'")).firstMatch
         XCTAssertTrue(newest.waitForExistence(timeout: 5), "the newest item, the step's Something else")
         sleep(1)

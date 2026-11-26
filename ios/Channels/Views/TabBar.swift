@@ -43,7 +43,7 @@ extension AppModel {
 enum Bar {
     static let height: CGFloat = 62
     static let gap: CGFloat = 10
-    static let compact: CGFloat = 44
+    static let icons: CGFloat = 156
 
     static func spring(_ still: Bool) -> Animation {
         still ? .easeInOut(duration: 0.2) : .interpolatingSpring(mass: 0.9, stiffness: 260, damping: 20)
@@ -65,9 +65,9 @@ struct TabsPill: View {
                 }
             }
         }
-        .padding(compact ? 2 : 4)
-        .frame(width: compact ? Bar.compact * 3 : nil, height: compact ? Bar.compact : Bar.height)
-        .frame(maxWidth: compact ? Bar.compact * 3 : .infinity)
+        .padding(4)
+        .frame(width: compact ? Bar.icons : nil, height: Bar.height)
+        .frame(maxWidth: compact ? Bar.icons : .infinity)
     }
 }
 
@@ -84,8 +84,8 @@ private struct TabButton: View {
         Button(action: pick) {
             VStack(spacing: 2) {
                 Image(systemName: tab.symbol)
-                    .font(.system(size: compact ? 17 : 19, weight: .semibold))
-                    .frame(height: compact ? 22 : 24)
+                    .font(.system(size: compact ? 20 : 19, weight: .semibold))
+                    .frame(height: 24)
                     .overlay(alignment: .topTrailing) {
                         if tab == .needs, model.waiting > 0 {
                             Text(verbatim: "\(model.waiting)")
