@@ -80,10 +80,7 @@ struct Conversation: View {
     var answer: (AskView) -> Void = { _ in }
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
-    @State private var feedTop: CGFloat = 0
-    @State private var feedHeight: CGFloat = 0
-
-    private var feedBottom: CGFloat { feedHeight > 0 ? (feedTop + feedHeight).rounded() : 0 }
+    @State private var feedBottom: CGFloat = 0
 
     private var footer: CGFloat {
         guard model.barTop > 0, feedBottom > 0 else { return ((model.barHeight > 0 ? model.barHeight : Bar.height) + 6).rounded() }
@@ -137,19 +134,14 @@ struct Conversation: View {
             .scrollPosition($position)
             .defaultScrollAnchor(.bottom)
             .defaultScrollAnchor(.bottom, for: .sizeChanges)
-            .onScrollGeometryChange(for: CGFloat.self) {
-                $0.containerSize.height - $0.contentInsets.bottom
-            } action: { _, visible in
-                feedHeight = visible
-            }
             .onGeometryChange(for: CGFloat.self) {
-                $0.frame(in: .global).minY
+                $0.frame(in: .global).maxY.rounded()
             } action: {
-                feedTop = $0
+                feedBottom = $0
             }
             .overlay {
                 GeometryReader { g in
-                    let show = !typing && model.barTop > 0 && (follow.far || (!follow.atBottom && follow.unseen > 0))
+                    let show = !typing && model.barTop > 0 && follow.far
                     ZStack {
                         if show {
                             JumpButton(follow: follow) { follow.jumps += 1 }
@@ -164,13 +156,13 @@ struct Conversation: View {
             .onTapGesture { if typing { typing = false } }
             .softBars()
             .onScrollGeometryChange(for: Bool.self) { geo in
-                geo.visibleRect.maxY >= geo.contentSize.height - 60
+                geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 60
             } action: { _, near in
                 follow.atBottom = near
                 if near { follow.unseen = 0 }
             }
             .onScrollGeometryChange(for: Bool.self) { geo in
-                geo.contentSize.height - geo.visibleRect.maxY > geo.containerSize.height
+                geo.contentSize.height - geo.contentOffset.y - geo.containerSize.height > geo.containerSize.height
             } action: { _, far in
                 follow.far = far
             }
