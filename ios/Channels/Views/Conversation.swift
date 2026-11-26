@@ -139,7 +139,11 @@ struct Conversation: View {
             } action: {
                 feedBottom = $0
             }
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentInsets.bottom } action: { _, now in insetBottom = now }
+            .onScrollGeometryChange(for: CGFloat.self) {
+                $0.contentInsets.bottom
+            } action: { _, now in
+                insetBottom = now
+            }
             .scrollDismissesKeyboard(.interactively)
             .softBars()
             .onScrollGeometryChange(for: Bool.self) { geo in
