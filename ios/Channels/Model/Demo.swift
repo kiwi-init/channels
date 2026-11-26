@@ -5,11 +5,27 @@ enum Demo {
 
     static func room() throws -> RoomView {
         guard let url = Bundle.main.url(forResource: "sample", withExtension: "json") else { throw EngineError.missing }
-        let raw = try JSONSerialization.jsonObject(with: try Data(contentsOf: url))
+        let sample = try JSONSerialization.jsonObject(with: try Data(contentsOf: url))
+        let raw = UserDefaults.standard.bool(forKey: "demoLong") ? long(sample, rows: 300) : sample
         let newest = latest(raw) ?? 0
         let shift = newest > 0 ? Date.now.timeIntervalSince1970 * 1000 - newest : 0
         let moved = try JSONSerialization.data(withJSONObject: move(raw, by: shift))
         return try JSONDecoder().decode(RoomView.self, from: moved)
+    }
+
+    private static func long(_ value: Any, rows: Int) -> Any {
+        guard var room = value as? [String: Any], let messages = room["messages"] as? [[String: Any]] else { return value }
+        let chat = messages.filter { ($0["event"] as? Bool) == false && ($0["body"] as? String)?.isEmpty == false }
+        guard !chat.isEmpty, let first = messages.compactMap({ $0["at"].flatMap(stamp) }).min() else { return value }
+        let top = (messages.compactMap { $0["seq"] as? Int }.max() ?? 0) + 1
+        let earlier = (0..<rows).map { i -> [String: Any] in
+            var m = chat[i % chat.count]
+            m["seq"] = top + i
+            m["at"] = first - Double(rows - i) * 60_000
+            return m
+        }
+        room["messages"] = earlier + messages
+        return room
     }
 
     private static func stamp(_ value: Any) -> Double? {
