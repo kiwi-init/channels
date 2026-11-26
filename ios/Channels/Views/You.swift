@@ -6,6 +6,7 @@ struct SettingsScreen: View {
     @State private var confirm = false
     @State private var guarded = SettingsScreen.lockWords()
     @AppStorage(Lock.offKey) private var lockOff = false
+    @AppStorage(LiveAgents.offKey) private var liveOff = false
 
     private var relayHost: String {
         URL(string: model.relay)?.host() ?? model.relay
@@ -65,6 +66,16 @@ struct SettingsScreen: View {
                     } label: {
                         Setting(symbol: "lock.fill", tint: Tone.ink3, title: "Lock")
                     }
+                }
+                Toggle(
+                    isOn: Binding(
+                        get: { !liveOff },
+                        set: {
+                            liveOff = !$0
+                            model.liveSwitched($0)
+                        })
+                ) {
+                    Setting(symbol: "dot.radiowaves.left.and.right", tint: Tone.live, title: "Live Activity")
                 }
             }
             .listRowBackground(Tone.raised)

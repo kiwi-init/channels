@@ -1,3 +1,5 @@
+import type { Frozen } from "@kiwi/core/state.ts";
+import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import { GENERAL_ROOM, ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
 import { isPerson, personOf, rootOf, sentTo, type Seat } from "@kiwi/core/room-rules.ts";
 import { answersAsk, answersDecisions, decidersOf, dmPlace, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
@@ -77,6 +79,15 @@ function pictureOf(m: FoldMember, state: ChannelState): string | null {
   return seats.find((s) => s.active && isPerson(s) && s.picture && personOf(s, seats) === who)?.picture?.data ?? null;
 }
 
+const roomIdOf = (code: string): string | null => {
+  try {
+    return decodeJoinCode(code).roomId;
+  } catch {
+    // A code that doesn't decode leaves the room without an id; it then gets no Live Activity.
+    return null;
+  }
+};
+
 const ROOM_KEY = /^room:(.+)$/;
 
 export const isRoomKey = (key: string): boolean => ROOM_KEY.test(key);
@@ -88,13 +99,13 @@ interface Seen {
   members: ReadonlyMap<string, Seat>;
 }
 
-export function roomsFor(state: Seen, me: string): Room[] {
+export function roomsFor(state: Frozen<Seen>, me: string): Frozen<Room[]> {
   return [...state.rooms.values()].filter((r) => r.id !== GENERAL_ROOM && !r.dm && !r.self && sentTo(r, me, state.members));
 }
 
-export const roomKeysFor = (state: Seen, me: string): string[] => roomsFor(state, me).map((r) => roomKey(r.id));
+export const roomKeysFor = (state: Frozen<Seen>, me: string): string[] => roomsFor(state, me).map((r) => roomKey(r.id));
 
-export function roomOfKey(state: Seen, me: string, key: string): Room | null {
+export function roomOfKey(state: Frozen<Seen>, me: string, key: string): Frozen<Room | null> {
   const id = ROOM_KEY.exec(key)?.[1];
   return id ? (roomsFor(state, me).find((r) => r.id === id) ?? null) : null;
 }
@@ -126,7 +137,7 @@ export function roomView(r: RoomInput): RoomView {
     me,
     decides,
   );
-  const askedOfMe = (m: Message): boolean =>
+  const askedOfMe = (m: Frozen<Message>): boolean =>
     !m.permission && m.from !== me && answersAsk(state.members, m, me) && (!m.to?.length || m.to.includes(me) || m.to.includes("*") || (decides && !!m.esc && !m.handoff));
   const waiting = new Set(state.openAsks.filter(askedOfMe).map((m) => m.seq));
   const counted = (m: Message, replies: readonly Message[]): readonly Message[] =>
@@ -261,8 +272,9 @@ export function roomView(r: RoomInput): RoomView {
       createdAt: t.createdAt,
       last: t.notes.at(-1)?.text ?? null,
       archived: !!t.archived,
+      since: t.state === "doing" && t.owner && t.clock?.key.startsWith(`${t.owner}|work|`) ? t.clock.at : null,
     }));
-  const asks: AskView[] = [...decisions, ...escalations, ...questions].map((m) => {
+  const asks: Frozen<AskView[]> = [...decisions, ...escalations, ...questions].map((m) => {
     const place = state.placeOf.get(m.seq);
     return {
       seq: m.seq,
@@ -289,6 +301,7 @@ export function roomView(r: RoomInput): RoomView {
 
   return {
     code: r.code,
+    roomId: roomIdOf(r.code),
     title: r.title,
     icon: iconView(r.icon, r.title),
     me,

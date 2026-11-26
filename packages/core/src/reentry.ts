@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 import { ago, markedText, taskStateWord } from "./format.ts";
 import { inlineText } from "./membership.ts";
 import { CHECKPOINT_MAX_LENGTH } from "./protocol.ts";
@@ -22,7 +23,7 @@ interface Block {
   elsewhere?: string;
 }
 
-function partIn(t: Task, me: string): Part | null {
+function partIn(t: Frozen<Task>, me: string): Part | null {
   if (t.state === "done" || t.archived) return null;
   if (t.owner === me) return "owner";
   if (t.review === me && openRound(t)) return "reviewer";
@@ -37,7 +38,7 @@ export function leadCheckpointRefusal(state: ChannelState, me: string, text: str
   return left.length ? `a lead checkpoint names everything still open, each task (T7) and question (#123) by its id; this one leaves out ${left.join(", ")}` : null;
 }
 
-function leadCheckpoint(state: ChannelState, me: string): Fact | undefined {
+function leadCheckpoint(state: ChannelState, me: string): Frozen<Fact> | undefined {
   const f = state.facts.get(leadCheckpointKey(me));
   return state.lead === me && f?.by === me && f.expires === undefined ? f : undefined;
 }

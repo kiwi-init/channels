@@ -53,6 +53,7 @@ final class AppModel {
     var joining = 0
     var unsaved: String?
     private let push = PushTags()
+    private let live = LiveAgents()
     private let github = GitHubSheet()
 
     var relinking: Bool {
@@ -75,6 +76,7 @@ final class AppModel {
     @ObservationIgnored var keptUnread: Set<String> = []
     @ObservationIgnored private var front = true
     @ObservationIgnored private var leaving: UIBackgroundTaskIdentifier = .invalid
+    @ObservationIgnored private var liveing: Task<Void, Never>?
     @ObservationIgnored private var pushing: Task<Void, Never>?
 
     var channels: [RoomView] {
@@ -261,11 +263,17 @@ final class AppModel {
                 rooms[room.code] = room
             }
             if room.connection == .live { pullOnce(room.code) }
-            if wentLive { pushSoon() }
+            if wentLive {
+                pushSoon()
+                liveSoon()
+            }
+            if !demo { live.follow(rooms) }
         case .gone(let code):
             rooms[code] = nil
             Kept.drop(code)
             pushSoon()
+            liveSoon()
+            if !demo { live.follow(rooms) }
         case .kept(let code, let sealed):
             Kept.save(code, sealed)
         case .log:
@@ -339,6 +347,44 @@ final class AppModel {
     private func openPush(_ tag: String) {
         guard let code = push.byTag[tag] else { return }
         jump(.place(Spot(code: code)))
+    }
+
+    private func liveSoon() {
+        guard !demo, !LiveAgents.off, liveing == nil else { return }
+        liveing = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self else { return }
+            liveing = nil
+            guard phase == .ready else { return }
+            do {
+                let keys = try await engine.ask(["op": "liveKeys"], as: [LiveKeys].self)
+                LiveOpen.save(Dictionary(keys.map { ($0.room, $0.keys) }, uniquingKeysWith: { first, _ in first }))
+            } catch {
+                Trouble.note("live: couldn't read keys", error)
+            }
+            live.told = { [weak self] token in Task { await self?.sendLive(token) } }
+            live.watchTokens()
+            if let start = live.startToken { await sendLive(LiveAgents.Token(start: start)) }
+        }
+    }
+
+    private func sendLive(_ token: LiveAgents.Token) async {
+        guard phase == .ready, !demo, !LiveAgents.off else { return }
+        #if DEBUG
+            let sandbox = true
+        #else
+            let sandbox = false
+        #endif
+        var ask: [String: Any] = ["op": "liveToken", "sandbox": sandbox]
+        if let start = token.start { ask["start"] = start }
+        if let update = token.update { ask["update"] = update }
+        if let room = token.room { ask["room"] = room }
+        do {
+            let seats = try await engine.ask(ask, as: [LiveTokenResult].self)
+            for seat in seats where !seat.ok { Trouble.note("live: \(seat.room) refused: \(seat.error ?? "")") }
+        } catch {
+            Trouble.note("live: couldn't register", error)
+        }
     }
 
     private func registerPush(_ token: String) async {
@@ -436,6 +482,10 @@ final class AppModel {
         try await engine.ask(["op": "letIn", "code": code, "id": id])
     }
 
+    func turnAway(_ code: String, id: String) async throws {
+        try await engine.ask(["op": "turnAway", "code": code, "id": id])
+    }
+
     func approveSpec(_ code: String, ask: Int, v: Int) async throws {
         try await engine.ask(["op": "approveSpec", "code": code, "ask": ask, "v": v])
     }
@@ -530,6 +580,28 @@ final class AppModel {
         return out
     }
 
+    func liveSwitched(_ on: Bool) {
+        if on {
+            if !demo { live.follow(rooms) }
+            liveSoon()
+        } else {
+            live.stop()
+            guard !demo, phase == .ready else { return }
+            Task {
+                do {
+                    _ = try await engine.ask(["op": "liveOff"], as: [LiveTokenResult].self)
+                } catch {
+                    Trouble.note("live: couldn't take the tokens back", error)
+                }
+            }
+        }
+    }
+
+    func openLive(_ url: URL) {
+        guard url.scheme == AgentsActivity.scheme, url.host() == "live", let code = live.code(for: url.lastPathComponent, in: rooms) else { return }
+        jump(.place(Spot(code: code)))
+    }
+
     func startDemo() {
         do {
             let room = try Demo.room()
@@ -563,6 +635,8 @@ final class AppModel {
         Vault.wipe()
         Kept.wipe()
         push.forget()
+        live.stop()
+        LiveOpen.wipe()
         keeping = nil
         unsaved = nil
         rooms = [:]

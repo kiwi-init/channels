@@ -304,6 +304,8 @@ const words = {
   "settings.personalities.role.lead": "Lead",
   "settings.controls.save": "Save",
   "settings.controls.cancel": "Cancel",
+  "settings.sections.features": "New features",
+  "settings.sections.features.open": "See what's new",
 } as const satisfies Record<string, Msg>
 
 addWords(words)

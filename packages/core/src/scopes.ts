@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 // Member scopes: what each member may do in a channel, besides read.
 //
 // The owner signs a member's scopes into their record at approval, and changes
@@ -67,7 +68,7 @@ export function canPost(scopes: readonly Scope[]): boolean {
  * announcing yourself, your colour); null means nothing (letting go of a claim
  * only ever shrinks what you hold). Owner-only events are checked as such in fold.
  */
-function scopeFor(m: Pick<Message, "kind" | "ev">): Scope | "any" | null {
+function scopeFor(m: Frozen<Pick<Message, "kind" | "ev">>): Scope | "any" | null {
   if (m.kind === "ask" || m.kind === "blocking") return "ask";
   if (m.kind !== "event") return "post";
   switch (m.ev?.op) {
@@ -99,7 +100,7 @@ function scopeFor(m: Pick<Message, "kind" | "ev">): Scope | "any" | null {
 }
 
 /** Whether someone with `scopes` may send `m`, and if not, why. */
-export function refusal(scopes: readonly Scope[], m: Pick<Message, "kind" | "ev">): string | null {
+export function refusal(scopes: readonly Scope[], m: Frozen<Pick<Message, "kind" | "ev">>): string | null {
   const need = scopeFor(m);
   if (need === null) return null;
   if (need === "any") return canPost(scopes) ? null : "can only read";

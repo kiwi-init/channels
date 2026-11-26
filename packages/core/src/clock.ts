@@ -1,3 +1,4 @@
+import { thawed, type Frozen } from "./state/types.ts";
 import { inlineText } from "./membership.ts";
 import { channelOwner, moverOf } from "./mover.ts";
 import type { Event, NudgeStep, WakeSeen } from "./protocol.ts";
@@ -17,10 +18,10 @@ export interface Clock {
   quiet: number;
   paged: boolean;
   step: 0 | 1 | 2 | 3;
-  woke?: Woke;
+  woke?: Frozen<Woke>;
 }
 
-export function clockOf(state: Board, t: Task, now: number): Clock | undefined {
+export function clockOf(state: Board, t: Frozen<Task>, now: number): Clock | undefined {
   const c = rolled(state, t, now);
   const mover = moverOf(state, t, now);
   if (!c || mover?.kind !== "member") return undefined;
@@ -39,7 +40,7 @@ export function nudgeRefusal(state: Board, ev: NudgeEvent, mark: { seq: number; 
   if (!t) return `no task ${taskId(ev.task)}`;
   const owner = (): string | undefined => channelOwner(state);
   const here = (name: string): boolean => state.members.get(name)?.active === true;
-  return nudge(state, structuredClone(t), ev, mark, {
+  return nudge(state, thawed<Task>(t), ev, mark, {
     agentQueue: (name) => {
       const m = state.members.get(name);
       return !!m && m.active && !isPerson(m);
@@ -70,7 +71,7 @@ function target(state: Board, mover: string, step: 1 | 2 | 3): string | undefine
 
 const ladderStep = (quiet: number, every: number): 0 | 1 | 2 | 3 => (quiet >= 3 * every ? 3 : quiet >= 2 * every ? 2 : quiet >= every ? 1 : 0);
 
-function quietDue(state: Board, t: Task, now: number, every: number): NudgeDue[] {
+function quietDue(state: Board, t: Frozen<Task>, now: number, every: number): NudgeDue[] {
   const clock = clockOf(state, t, now);
   if (!clock?.paged) return [];
   const step = ladderStep(clock.quiet, every);
@@ -80,7 +81,7 @@ function quietDue(state: Board, t: Task, now: number, every: number): NudgeDue[]
   return [{ task: t.id, mover: clock.party, since: clock.epoch, step, ...(waited ? { waited } : {}), to: target(state, clock.mover, step) }];
 }
 
-function skipDue(state: Board, t: Task, now: number, every: number): NudgeDue[] {
+function skipDue(state: Board, t: Frozen<Task>, now: number, every: number): NudgeDue[] {
   const clock = clockOf(state, t, now);
   if (!clock?.paged || clock.step >= 2 || clock.quiet < every || clock.quiet >= 2 * every) return [];
   const woke = clock.woke;
@@ -93,7 +94,7 @@ export function skipsDue(state: Board, now: number): NudgeDue[] {
 }
 
 function queueDue(state: Board, now: number): NudgeDue[] {
-  const oldest = new Map<string, { t: Task; seq: number; at: number; day: number }>();
+  const oldest = new Map<string, { t: Frozen<Task>; seq: number; at: number; day: number }>();
   for (const t of state.tasks.values()) {
     const c = t.state === "todo" ? rolled(state, t, now) : undefined;
     if (!c || !queuedKey(c.key)) continue;

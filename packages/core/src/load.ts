@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 // How busy each member is, read from the task board every member
 // already holds (decrypted, in their own folded state). Nothing new crosses the
 // relay: a lead, the dashboard and `kiwi status` all compute the same
@@ -10,11 +11,11 @@ type LoadLevel = "free" | "busy" | "overloaded";
 export interface Load {
   level: LoadLevel;
   /** Tasks they're working on now ("doing"). */
-  current: Task[];
+  current: Frozen<Task[]>;
   /** Tasks assigned to them and not started ("todo"). */
-  queued: Task[];
+  queued: Frozen<Task[]>;
   /** Tasks of theirs waiting on a reviewer; they don't count as load. */
-  waiting: Task[];
+  waiting: Frozen<Task[]>;
 }
 
 /** People (and an owner, who is always a person) show load only when they hold tasks; agents always do. */

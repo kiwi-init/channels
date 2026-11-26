@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import { withinWindow, type CheckpointDaily } from "../checkpoint-schedule.ts";
 import type { CheckpointOwed, Message } from "../protocol.ts";
 import { leadCheckpointKey } from "./lead.ts";
@@ -20,7 +21,7 @@ interface BuildView {
   lead: string | null;
 }
 
-export function checkpointAskFor(view: BuildView, running: (agent: string) => boolean): AskBody | null {
+export function checkpointAskFor(view: Frozen<BuildView>, running: (agent: string) => boolean): AskBody | null {
   const owed = [...view.members.values()]
     .filter((m) => m.active && owesCheckpoints(m))
     .map((m): CheckpointOwed => {
@@ -85,23 +86,23 @@ interface StatusView {
   facts: ReadonlyMap<string, Fact>;
 }
 
-function taskItem(view: StatusView, agent: string, id: number, after: number): CheckpointItem {
+function taskItem(view: Frozen<StatusView>, agent: string, id: number, after: number): CheckpointItem {
   const t = view.tasks.get(id);
   if (t?.notes.some((n) => n.checkpoint && n.by === agent && n.seq > after)) return { kind: "task", task: id, state: "saved" };
   if (!t || t.state === "done" || t.archived) return { kind: "task", task: id, state: "closed" };
   return { kind: "task", task: id, state: "pending" };
 }
 
-function leadItem(view: StatusView, agent: string, after: number): CheckpointItem {
+function leadItem(view: Frozen<StatusView>, agent: string, after: number): CheckpointItem {
   const fact = view.facts.get(leadCheckpointKey(agent));
   return { kind: "lead", state: fact && fact.by === agent && fact.seq > after ? "saved" : "pending" };
 }
 
-function owedItems(view: StatusView, owed: CheckpointOwed, after: number): CheckpointItem[] {
+function owedItems(view: Frozen<StatusView>, owed: Frozen<CheckpointOwed>, after: number): CheckpointItem[] {
   return [...owed.tasks.map((id) => taskItem(view, owed.agent, id, after)), ...(owed.lead ? [leadItem(view, owed.agent, after)] : [])];
 }
 
-export function checkpointAskStatus(view: StatusView, ask: CheckpointAsk): AgentCheckpoints[] {
+export function checkpointAskStatus(view: Frozen<StatusView>, ask: Frozen<CheckpointAsk>): AgentCheckpoints[] {
   return [
     ...ask.asks.map((owed): AgentCheckpoints => {
       const items = owedItems(view, owed, ask.seq);
@@ -112,12 +113,12 @@ export function checkpointAskStatus(view: StatusView, ask: CheckpointAsk): Agent
 }
 
 export interface Owed {
-  ask: CheckpointAsk;
-  tasks: number[];
+  ask: Frozen<CheckpointAsk>;
+  tasks: readonly number[];
   lead: boolean;
 }
 
-export function owedBy(view: StatusView & { checkpointAsks: readonly CheckpointAsk[] }, me: string, now: number): Owed | null {
+export function owedBy(view: Frozen<StatusView & { checkpointAsks: readonly CheckpointAsk[] }>, me: string, now: number): Owed | null {
   const ask = view.checkpointAsks.findLast((a) => a.asks.some((o) => o.agent === me));
   if (!ask || now - ask.at >= CHECKPOINT_ASK_TTL_MS) return null;
   const owed = ask.asks.find((o) => o.agent === me);

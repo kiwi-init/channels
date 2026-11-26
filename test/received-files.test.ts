@@ -10,7 +10,7 @@ import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { fold } from "@kiwi/core/state.ts";
 import { stagedAnydoc } from "../scripts/assets-stage.ts";
-import { anydocWasmPath, documentFormat, keepFiles, saveMessage } from "../src/received-files.ts";
+import { anydocWasmPath, documentFormat, saveMessage } from "../src/received-files.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { checked } from "./check.ts";
 
@@ -67,7 +67,7 @@ async function received(name: string, mime: string, bytes: Uint8Array<ArrayBuffe
   return (await ownerCh.history(seq - 1)).messages.find((m) => m.seq === seq)!;
 }
 
-const keep = (m: Message, dir: string) => run(keepFiles(ownerCh, m, dir));
+const keep = async (m: Message, dir: string) => (await run(saveMessage(ownerCh, m, dir))).kept;
 
 test("documents are known by their extension, and other files are not", () => {
   expect(documentFormat("Plan.DOCX")).toBe("docx");

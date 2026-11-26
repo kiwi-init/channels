@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -13,7 +14,7 @@ import { fold, type Roster } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, pairComputer, setupChannel } from "./owner.ts";
 
-const withText = (cs: readonly Candidate[]) => cs.map(({ whys, ...c }) => ({ ...c, reasons: whys.map(reasonText) }));
+const withText = (cs: Frozen<readonly Candidate[]>) => cs.map(({ whys, ...c }) => ({ ...c, reasons: whys.map(reasonText) }));
 
 setDefaultTimeout(60_000);
 

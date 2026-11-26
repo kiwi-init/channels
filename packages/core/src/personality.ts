@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 import type { Scope } from "./scopes.ts";
 
 export const ROLES = ["builder", "reviewer", "bug-hunter", "explorer", "releaser", "lead"] as const;
@@ -71,11 +72,11 @@ export function personaOf(p: Personality): Persona {
   return { name: p.name, role: p.role, capabilities: p.capabilities, ...(p.askPeople === undefined ? {} : { askPeople: p.askPeople }), areas: p.areas, instructions: p.instructions };
 }
 
-export function asksPeople(p: Pick<Persona, "role" | "capabilities" | "askPeople">): boolean {
+export function asksPeople(p: Frozen<Pick<Persona, "role" | "capabilities" | "askPeople">>): boolean {
   return p.capabilities.includes("write") && (p.askPeople ?? ASKS_PEOPLE.includes(p.role));
 }
 
-const mayOf = (p: Pick<Persona, "role" | "capabilities" | "askPeople">): string[] =>
+const mayOf = (p: Frozen<Pick<Persona, "role" | "capabilities" | "askPeople">>): string[] =>
   p.capabilities.flatMap((c) => (c === "write" && asksPeople(p) ? [CAPABILITY_LABEL[c], "ask people"] : [CAPABILITY_LABEL[c]]));
 
 export function personaScopes(p: Pick<Persona, "capabilities">): Scope[] {
@@ -90,7 +91,7 @@ const oneLine = (s: string) =>
     .replace(/[\s\u2028\u2029]+/g, " ")
     .trim();
 
-export function personaLines(p: Persona, now = false): string[] {
+export function personaLines(p: Frozen<Persona>, now = false): string[] {
   const may = mayOf(p);
   const told = p.instructions
     .replace(/\r\n?|[\u2028\u2029]/g, "\n")

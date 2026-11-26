@@ -227,6 +227,7 @@
     <string name="allow_once">Permitir uma vez</string>
     <string name="deny">Negar</string>
     <string name="let_in">Deixar entrar</string>
+    <string name="turn_away">Recusar</string>
     <string name="only_can_allow">Só %1$s pode permitir isto</string>
     <string name="you_can_deny">Você pode negar isto</string>
     <string name="join_pinned">Convidado com uma personalidade: deixe entrar no seu computador</string>

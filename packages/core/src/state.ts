@@ -96,9 +96,11 @@ export {
   toRoster,
   type AskHead,
   type ChannelState,
+  type ChannelStateDraft,
   type Fact,
   type Lease,
   type FoldBase,
+  type Frozen,
   type GuardFloor,
   type Member,
   type Place,
@@ -108,4 +110,5 @@ export {
   type Roster,
   type Spec,
   type Task,
+  thawed,
 } from "./state/types.ts";

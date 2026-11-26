@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import { sessionPrint } from "../protocol.ts";
 import { taskId } from "./tasks.ts";
 import type { Member, Task } from "./types.ts";
@@ -43,12 +44,12 @@ export function markReset(on: boolean, giver: Pick<Member, "reset" | "card">, ve
   giver.reset = { kind: "needs", verdict, session };
 }
 
-export function sharedWith(members: ReadonlyMap<string, Pick<Member, "card" | "active">>, name: string): string[] {
+export function sharedWith(members: Frozen<ReadonlyMap<string, Pick<Member, "card" | "active">>>, name: string): string[] {
   const session = members.get(name)?.card?.session;
   return sessionPrint(session) ? [...members.entries()].flatMap(([other, m]) => (other !== name && m.active && m.card?.session === session ? [other] : [])) : [];
 }
 
-export function resetLine(state: { reviewReset: boolean; members: ReadonlyMap<string, Pick<Member, "card" | "active" | "reset">> }, name: string): string {
+export function resetLine(state: Frozen<{ reviewReset: boolean; members: ReadonlyMap<string, Pick<Member, "card" | "active" | "reset">> }>, name: string): string {
   const mark = state.members.get(name)?.reset;
   const shares = sharedWith(state.members, name);
   return [

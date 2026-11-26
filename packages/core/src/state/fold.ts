@@ -67,6 +67,7 @@ import { permissionAnswer } from "../permission.ts";
 import type {
   AskHead,
   ChannelState,
+  ChannelStateDraft,
   Edit,
   Fact,
   FoldBase,
@@ -88,6 +89,7 @@ import type {
 } from "./types.ts";
 import { inRoom } from "../room-rules.ts";
 import { packAuthors, unpackAuthors } from "./authors.ts";
+import { same } from "./same.ts";
 
 const STALE_MS = 24 * 3_600_000;
 const SENT_WINDOW_MS = 2 * STALE_MS;
@@ -150,11 +152,111 @@ function folding(
   given: FoldBase | null | undefined,
   keep: ((base: FoldBase) => void) | undefined,
   lookAhead: boolean,
-): ChannelState {
+): ChannelStateDraft {
+  return cursor(messages, roster, roomsFloor, guardFloor, given, lookAhead).finish(now, keep);
+}
+
+type Floor = { pk: string; scopes: Scope[]; since: number };
+type RoleFloor = { name: string; pk: string; role: string | null; about?: string | null; since: number };
+type GuardFloors = { charter: GuardFloor["charter"] | null; hold: GuardFloor["hold"] | null; repos: GuardFloor["repos"] | null };
+type Guarded = { charter: ChannelStateDraft["charter"]; hold: ChannelStateDraft["hold"]; repos: string[] };
+
+function setRoleIn(members: Map<string, FoldMember>, lead: string | null, target: FoldMember, role: string | null, about: string | null | undefined): string | null {
+  const leads = isLeadRole(role ?? undefined);
+  let next = lead;
+  if (leads) {
+    const was = lead && members.get(lead);
+    if (was && was !== target) was.role = undefined;
+    next = target.name;
+  } else if (lead === target.name) next = null;
+  target.role = leads ? LEAD : role || undefined;
+  if (about !== undefined) target.about = about || undefined;
+  return next;
+}
+
+function drainFloors(floors: Floor[], scopesByKey: Map<string, Scope[]>, seq: number): void {
+  while (floors.length && floors[0]!.since < seq) {
+    const f = floors.shift()!;
+    scopesByKey.set(f.pk, f.scopes);
+  }
+}
+
+function drainRoleFloors(floors: RoleFloor[], members: Map<string, FoldMember>, lead: string | null, seq: number): string | null {
+  let next = lead;
+  while (floors.length && floors[0]!.since < seq) {
+    const f = floors.shift()!;
+    const target = members.get(f.name);
+    if (target?.pk === f.pk) next = setRoleIn(members, next, target, f.role, f.about);
+  }
+  return next;
+}
+
+function drainGuard(floors: GuardFloors, out: Guarded, seq: number, ownerName: string): void {
+  if (floors.charter && floors.charter.since < seq) {
+    out.charter = floors.charter.text ? { text: floors.charter.text, by: ownerName, at: out.charter?.at ?? 0 } : null;
+    floors.charter = null;
+  }
+  if (floors.hold && floors.hold.since < seq) {
+    out.hold = floors.hold.on ? { ...(floors.hold.note ? { note: floors.hold.note } : {}), by: ownerName, at: out.hold?.at ?? 0 } : null;
+    floors.hold = null;
+  }
+  if (floors.repos && floors.repos.since < seq) {
+    out.repos = reposOf(floors.repos.list);
+    floors.repos = null;
+  }
+}
+
+function leadOf(members: ReadonlyMap<string, FoldMember>, lead: string | null, signed: ReadonlySet<string>, present: (m: FoldMember | undefined) => m is FoldMember): string | null {
+  const signedLead = [...members.values()].filter((m) => present(m) && signed.has(m.name) && m.persona?.role === "lead").sort((a, b) => a.joined - b.joined)[0]?.name;
+  return signedLead ?? (lead && present(members.get(lead)) && !signed.has(lead) ? lead : null);
+}
+
+interface Inner {
+  maps: Record<string, Map<unknown, unknown>>;
+  from: FoldBase | null;
+  stepped: readonly Message[];
+  stillOpen: (m: Message) => boolean;
+  scopesByKey: Map<string, Scope[]>;
+  floors: Floor[];
+  roleFloors: RoleFloor[];
+  lead: string | null;
+  guards: GuardFloors;
+  ctx: FoldCtx;
+  placesBefore: NonNullable<FoldBase["placesBefore"]>;
+  specsOnly: ChannelStateDraft["specsOnly"];
+  head: number;
+  seen: Set<number>;
+  forward: Set<number>;
+  askers: Map<number, string>;
+  decisions: Set<number>;
+  finalize: (v: Finishing, at: number) => string | null;
+  step: (m: Message) => void;
+  at: (now: number) => void;
+}
+
+export interface Cursor {
+  finish(now: number, keep: ((base: FoldBase) => void) | undefined): ChannelStateDraft;
+  inner(): Inner;
+}
+
+export type MakeMap = (entries?: Iterable<readonly [unknown, unknown]> | null) => Map<unknown, unknown>;
+
+export function cursor(
+  messages: Message[],
+  roster: Roster,
+  roomsFloor: RoomsFloor | null | undefined,
+  guardFloor: GuardFloor | null | undefined,
+  given: FoldBase | null | undefined,
+  lookAhead: boolean,
+  make: MakeMap = (entries) => new Map(entries),
+): Cursor {
+  const shown = <K, V>(entries?: Iterable<readonly [K, V]> | null): Map<K, V> => make(entries) as Map<K, V>;
+  let now = 0;
+  const forward = new Set<number>();
   const from = given ? structuredClone(given) : null;
   const after = from?.n ?? -1;
   const ahead = <F extends { since: number }>(f: F | null | undefined): F | null => (f && f.since >= after ? f : null);
-  const members = new Map<string, FoldMember>();
+  const members = shown<string, FoldMember>();
   const signed = new Set(roster.filter((r) => r.persona && r.kind !== "computer").map((r) => r.name));
   for (const r of [...roster].sort((a, b) => Number(a.active) - Number(b.active))) {
     if (r.kind === "computer") continue;
@@ -220,23 +322,8 @@ function folding(
     }
   }
   const ownerName = [...members.values()].find((x) => x.owner)?.name ?? "owner";
-  let charterFloor = ahead(guardFloor?.charter);
-  let holdFloor = ahead(guardFloor?.hold);
-  let reposFloor = ahead(guardFloor?.repos);
-  const passGuard = (seq: number) => {
-    if (charterFloor && charterFloor.since < seq) {
-      ctx.charter = charterFloor.text ? { text: charterFloor.text, by: ownerName, at: ctx.charter?.at ?? 0 } : null;
-      charterFloor = null;
-    }
-    if (holdFloor && holdFloor.since < seq) {
-      ctx.hold = holdFloor.on ? { ...(holdFloor.note ? { note: holdFloor.note } : {}), by: ownerName, at: ctx.hold?.at ?? 0 } : null;
-      holdFloor = null;
-    }
-    if (reposFloor && reposFloor.since < seq) {
-      ctx.repos = reposOf(reposFloor.list);
-      reposFloor = null;
-    }
-  };
+  const guards: GuardFloors = { charter: ahead(guardFloor?.charter), hold: ahead(guardFloor?.hold), repos: ahead(guardFloor?.repos) };
+  const passGuard = (seq: number) => drainGuard(guards, ctx, seq, ownerName);
   const humanFor = (a: Member) => (a.sponsor ? [...members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === a.sponsor!.user)?.name : undefined);
   const keysByName = new Map<string, Set<string>>();
   for (const r of roster) {
@@ -281,60 +368,44 @@ function folding(
   const scopesByKey = new Map<string, Scope[]>();
   for (const r of roster) scopesByKey.set(r.pk, scopesOf(r));
   for (const [pk, scopes] of from?.scopesByKey ?? []) scopesByKey.set(pk, scopes);
-  const floors = roster
+  const floors: Floor[] = roster
     .filter((r) => r.later && !r.owner && !!ahead(r.later))
     .map((r) => ({ pk: r.pk, ...r.later! }))
     .sort((a, b) => a.since - b.since);
-  const passFloors = (seq: number) => {
-    while (floors.length && floors[0]!.since < seq) {
-      const f = floors.shift()!;
-      scopesByKey.set(f.pk, f.scopes);
-    }
-  };
-  const scopeSets = new Map<string, { seq: number; scopes: Scope[] }>(from?.scopeSets);
-  const roleSets = new Map<string, { seq: number; role: string | null; about?: string | null }>(from?.roleSets);
-  const gone = new Map<string, number>(from?.gone);
-  const nicknames = new Map<string, Nickname>(from?.nicknames);
+  const passFloors = (seq: number) => drainFloors(floors, scopesByKey, seq);
+  const scopeSets = shown<string, { seq: number; scopes: Scope[] }>(from?.scopeSets);
+  const roleSets = shown<string, { seq: number; role: string | null; about?: string | null }>(from?.roleSets);
+  const gone = shown<string, number>(from?.gone);
+  const nicknames = shown<string, Nickname>(from?.nicknames);
   for (const m of members.values()) {
     const nick = isPerson(m) ? undefined : nicknames.get(m.pk);
     if (nick) m.display = nick.nickname ?? undefined;
   }
   const setRole = (target: FoldMember, role: string | null, about: string | null | undefined) => {
-    const leads = isLeadRole(role ?? undefined);
-    if (leads) {
-      const was = lead && members.get(lead);
-      if (was && was !== target) was.role = undefined;
-      lead = target.name;
-    } else if (lead === target.name) lead = null;
-    target.role = leads ? LEAD : role || undefined;
-    if (about !== undefined) target.about = about || undefined;
+    lead = setRoleIn(members, lead, target, role, about);
   };
-  const roleFloors = roster
+  const roleFloors: RoleFloor[] = roster
     .filter((r) => r.laterRole && !r.owner && r.active && !!ahead(r.laterRole))
     .map((r) => ({ name: r.name, pk: r.pk, ...r.laterRole! }))
     .sort((a, b) => a.since - b.since);
   const passRoleFloors = (seq: number) => {
-    while (roleFloors.length && roleFloors[0]!.since < seq) {
-      const f = roleFloors.shift()!;
-      const target = members.get(f.name);
-      if (target?.pk === f.pk) setRole(target, f.role, f.about);
-    }
+    lead = drainRoleFloors(roleFloors, members, lead, seq);
   };
   const older = !!from && olderRules(from);
   const runsKept = !!from && !older;
   const stepless = older && (from.rules ?? 0) < STEP_RULES;
-  const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, older ? taskFromOlder(t, stepless) : t]));
-  const facts = new Map<string, Fact>(from?.facts.map((f) => [f.key, f]));
-  const docs = new Map<string, string>(from?.docs);
-  const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
-  const reactions = new Map<number, Map<string, Reaction>>(from?.reactions.map(([seq, by]) => [seq, new Map(by)]));
+  const tasks = shown<number, Task>(from?.tasks.map((t) => [t.id, older ? taskFromOlder(t, stepless) : t]));
+  const facts = shown<string, Fact>(from?.facts.map((f) => [f.key, f]));
+  const docs = shown<string, string>(from?.docs);
+  const leases = shown<string, Lease>(from?.leases.map((l) => [l.name, l]));
+  const reactions = shown<number, Map<string, Reaction>>(from?.reactions.map(([seq, by]) => [seq, new Map(by)]));
   const reactSeqs = new Set<number>(from?.reactSeqs);
   const chatBy = new Map<number, string>(unpackAuthors(from?.authors) ?? from?.chatBy);
-  const edits = new Map<number, Edit>(from?.edits);
-  const deleted = new Map<number, number>(from?.deleted);
+  const edits = shown<number, Edit>(from?.edits);
+  const deleted = shown<number, number>(from?.deleted);
   let skipped = from?.skipped === true;
-  const trust = new Map<number, Trust>(from?.trust);
-  const rejected = new Map<number, string>(from?.rejected);
+  const trust = shown<number, Trust>(from?.trust);
+  const rejected = shown<number, string>(from?.rejected);
   const sent = new Map<string, number>();
   const sentAt = new Map<string, number>();
   const queue = new Map<string, string>();
@@ -362,12 +433,12 @@ function folding(
   const timed = new Set<number>();
   const permReplies = new Map<number, Message[]>();
   const permBySeq = new Map<number, Message>();
-  const threadOf = new Map<number, number>(from?.threadOf);
-  const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
-  const askHeads = new Map<number, AskHead>(from?.askHeads?.map((h) => [h.id, h]));
-  const specs = new Map<number, Spec>(from?.specs?.map((sp) => [sp.ask, sp]));
+  const threadOf = shown<number, number>(from?.threadOf);
+  const threadPeople = shown<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
+  const askHeads = shown<number, AskHead>(from?.askHeads?.map((h) => [h.id, h]));
+  const specs = shown<number, Spec>(from?.specs?.map((sp) => [sp.ask, sp]));
   if (stepless) migrateChecks(tasks, new Map(from?.checks?.map((c) => [c.seq, c])));
-  const checks = new Map<number, CheckState>(from?.checks?.map((c) => [c.seq, checkFrom(c)]));
+  const checks = shown<number, CheckState>(from?.checks?.map((c) => [c.seq, checkFrom(c)]));
   const questions = new Map<number, StepQuestion>(from?.stepQuestions?.map((q) => [q.seq, q]));
   const passedAsks = new Map<number, string>(from?.passedAsks);
   const closeOnItsOwn = (ask: number, m: Pick<Message, "seq" | "from">, at: number): void => {
@@ -378,9 +449,9 @@ function folding(
   let head = from?.n ?? 0;
 
   const known = new Map<string, Room>(from?.rooms.map((r) => [r.id, r]));
-  const rooms = new Map<string, Room>([[GENERAL_ROOM, known.get(GENERAL_ROOM) ?? { id: GENERAL_ROOM, name: GENERAL_ROOM, createdBy: null, at: 0 }]]);
+  const rooms = shown<string, Room>([[GENERAL_ROOM, known.get(GENERAL_ROOM) ?? { id: GENERAL_ROOM, name: GENERAL_ROOM, createdBy: null, at: 0 }]]);
   const roomsSince = roomsFloor?.since ?? -1;
-  const secret = new Map<string, SecretRoom>(from?.secret?.map(([id, r]): [string, SecretRoom] => [id, { ...r }]));
+  const secret = shown<string, SecretRoom>(from?.secret?.map(([id, r]): [string, SecretRoom] => [id, { ...r }]));
   for (const r of ahead(roomsFloor)?.list ?? []) {
     const name = roomName(r.name);
     if (!ROOM_ID_RE.test(r.id) || !name || (rooms.size >= MAX_ROOMS && !rooms.has(r.id))) continue;
@@ -388,8 +459,8 @@ function folding(
   }
   for (const [id, r] of known) if (!rooms.has(id)) rooms.set(id, r);
   const nameTaken = (name: string, except?: string) => [...rooms.values()].some((r) => r.id !== except && !r.members && r.name.toLowerCase() === name.toLowerCase());
-  const roomOf = new Map<number, string>(from?.roomOf);
-  const placeOf = new Map<number, Place>(from?.placeOf);
+  const roomOf = shown<number, string>(from?.roomOf);
+  const placeOf = shown<number, Place>(from?.placeOf);
   const ctx: FoldCtx = {
     members,
     signed,
@@ -418,12 +489,12 @@ function folding(
     compactProposal: from?.compactProposal ?? null,
     repos: reposOf(from?.repos ?? []),
     github: {
-      prs: new Map(from?.github?.prs.map((p) => [prKey(p.repo, p.number), linkSafe(p)])),
-      checks: new Map(from?.github?.checks.map(([k, runs]) => [k, new Map(runs.map((r) => [r.name, linkSafe(r)]))])),
-      issues: new Map(from?.github?.issues?.map((i) => [prKey(i.repo, i.number), linkSafe(i)])),
-      rules: new Map(from?.github?.rules?.map((r) => [repoKey(r.repo), r])),
-      releases: releasesFrom(from?.github?.releases),
-      runs: new Map(runsKept ? from.github?.runs?.map((r) => [runKey(r.repo, r.run), r]) : []),
+      prs: shown(from?.github?.prs.map((p) => [prKey(p.repo, p.number), linkSafe(p)] as const)),
+      checks: shown(from?.github?.checks.map(([k, runs]) => [k, new Map(runs.map((r) => [r.name, linkSafe(r)]))] as const)),
+      issues: shown(from?.github?.issues?.map((i) => [prKey(i.repo, i.number), linkSafe(i)] as const)),
+      rules: shown(from?.github?.rules?.map((r) => [repoKey(r.repo), r] as const)),
+      releases: shown(releasesFrom(from?.github?.releases)),
+      runs: shown(runsKept ? from.github?.runs?.map((r) => [runKey(r.repo, r.run), r] as const) : []),
       runsSince: runsKept ? (from.github?.runsSince ?? null) : null,
       runsForgotten: runsKept ? (from.github?.runsForgotten ?? null) : null,
     },
@@ -459,10 +530,7 @@ function folding(
     const who = members.get(name);
     return present(who) && !isPerson(who);
   };
-  const leadNow = (): string | null => {
-    const signedLead = [...members.values()].filter((m) => present(m) && signed.has(m.name) && m.persona?.role === "lead").sort((a, b) => a.joined - b.joined)[0]?.name;
-    return signedLead ?? (lead && present(members.get(lead)) && !signed.has(lead) ? lead : null);
-  };
+  const leadNow = (): string | null => leadOf(members, lead, signed, present);
   const ownerHere = (): string | undefined => [...members.values()].find((x) => x.owner && x.active)?.name;
   const leadHere = (): string | undefined => leadNow() ?? ownerHere();
   const standsFor = (name: string): string | undefined => (present(members.get(name)) ? name : ownerHere());
@@ -484,8 +552,11 @@ function folding(
   };
   for (const t of tasks.values()) timeTask(t);
 
-  for (const m of messages) {
-    if (m.seq <= after) continue;
+  const stepped: Message[] = [];
+  const step = (m: Message): void => {
+    if (m.seq <= after) return;
+    stepped.push(m);
+    if (Array.isArray(m.re)) for (const r of m.re) if (typeof r === "number" && r > m.seq) forward.add(r);
     passFloors(m.seq);
     passRoleFloors(m.seq);
     passGuard(m.seq);
@@ -496,7 +567,7 @@ function folding(
       if (doubled.has(m.seq)) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, `two messages at #${m.seq}`);
-        continue;
+        return;
       }
 
       const member = members.get(m.from);
@@ -504,30 +575,30 @@ function folding(
       trust.set(m.seq, t);
       if (t === "forged" || !member) {
         rejected.set(m.seq, member ? `not signed by ${m.from}'s key` : `${m.from} isn't a member`);
-        continue;
+        return;
       }
       const goneAt = gone.get(m.pk!);
       if (goneAt !== undefined && m.seq > goneAt) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, "sent after its key was removed");
-        continue;
+        return;
       }
       (member.ops ??= {})[m.pk!] = m.ops ?? 0;
       const first = sent.get(m.id) ?? (old.size ? old.get(idHash(m.id)) : undefined);
       if (first !== undefined && first !== m.seq) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, `a copy of #${first}, sent again`);
-        continue;
+        return;
       }
       if (m.rts !== undefined && m.rts - m.ts > STALE_MS) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, `signed more than a day before the relay got it`);
-        continue;
+        return;
       }
       if (m.ts < Math.max(hw - SENT_WINDOW_MS, sentFloors.get(m.pk!) ?? 0)) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, "signed too long before the latest messages");
-        continue;
+        return;
       }
       sent.set(m.id, m.seq);
       sentAt.set(m.id, m.ts);
@@ -553,32 +624,32 @@ function folding(
         if (why) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, why);
-          continue;
+          return;
         }
       }
       const refused = refusal(scopesByKey.get(m.pk!) ?? [], m);
       if (refused) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, `${m.from} ${refused}`);
-        continue;
+        return;
       }
       if (m.esc) {
         const may = new Set([humanFor(member), [...members.values()].find((x) => x.owner)?.name].filter(Boolean));
         if (isPerson(member) || m.kind === "event" || !m.to?.length || !m.to.every((n) => may.has(n))) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, "an escalation goes from an agent to its own human and the owner, no one else");
-          continue;
+          return;
         }
         if (m.check && !m.to.includes(m.check.decider)) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, "a check's decider is one of the people it asks");
-          continue;
+          return;
         }
         const notReplaced = replaceRefusal(checks, m);
         if (notReplaced) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, notReplaced);
-          continue;
+          return;
         }
       }
       const reopened = m.kind === "event" ? [] : landingTouchedByAsk(tasks, checks, m);
@@ -586,7 +657,7 @@ function folding(
       if (lateCheck) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, lateCheck);
-        continue;
+        return;
       }
       if (
         ctx.hold &&
@@ -598,7 +669,7 @@ function folding(
       ) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, ON_HOLD);
-        continue;
+        return;
       }
       if (m.kind !== "event") {
         const parent = earlierParent(m);
@@ -606,17 +677,17 @@ function folding(
         if (!rooms.has(room)) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, `no room ${room}`);
-          continue;
+          return;
         }
         if (!sentTo(rooms.get(room), m.from, members) && room !== GENERAL_ROOM) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, "only its members post in a members-only room");
-          continue;
+          return;
         }
         if (rooms.get(room)?.self) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, "a person's own room carries no messages");
-          continue;
+          return;
         }
         roomOf.set(m.seq, room);
         const superseded = openCheck(checks, m);
@@ -703,17 +774,17 @@ function folding(
       if (m.kind === "event" && m.newer !== undefined) {
         skipped = true;
         placeOf.set(m.seq, MAIN);
-        continue;
+        return;
       }
       const ev = m.ev;
-      if (m.kind !== "event" || !ev) continue;
+      if (m.kind !== "event" || !ev) return;
       const reject = (why: string) => rejected.set(m.seq, why);
       if (ev.op === "react") {
         reactSeqs.add(m.seq);
         const target = ev.seq < m.seq ? trust.get(ev.seq) : undefined;
         if (!target || ignored(target) || reactSeqs.has(ev.seq) || !placeOf.has(ev.seq)) {
           reject(`no message #${ev.seq} to react to`);
-          continue;
+          return;
         }
         let on = reactions.get(ev.seq);
         if (ev.emoji === null) on?.delete(m.from);
@@ -722,7 +793,7 @@ function folding(
           on.set(m.from, { emoji: ev.emoji, seq: m.seq, at });
         }
         if (on && !on.size) reactions.delete(ev.seq);
-        continue;
+        return;
       }
       if (ev.op === "msg.edit" || ev.op === "msg.delete") {
         const author = ev.seq < m.seq ? chatBy.get(ev.seq) : undefined;
@@ -734,7 +805,7 @@ function folding(
           deleted.set(ev.seq, at);
           edits.delete(ev.seq);
         }
-        continue;
+        return;
       }
       if (ev.op === "ask.close") {
         placeOf.set(m.seq, placeOf.get(ev.ask) ?? MAIN);
@@ -755,7 +826,7 @@ function folding(
             for (const t of reopens) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, `pre-ship check #${ev.ask} closed after the approval`);
           }
         }
-        continue;
+        return;
       }
       if (ev.op === "ask.name") {
         placeOf.set(m.seq, MAIN);
@@ -766,13 +837,13 @@ function folding(
         else if (goal === "") reject("a goal needs a name");
         else if (goal === null) askHeads.set(head.id, omit(head, "goal", "goalBy"));
         else askHeads.set(head.id, { ...head, goal, goalBy: m.from });
-        continue;
+        return;
       }
       if (ev.op === "specs.only.set") {
         placeOf.set(m.seq, MAIN);
         if (!member.owner) reject("only the owner says whether tasks come only from approved specs");
         else specsOnly = ev.on ? (specsOnly ?? m.seq) : null;
-        continue;
+        return;
       }
       if (ev.op === "task.add" && specsOnly !== null) {
         const re = earlierParent(m);
@@ -781,7 +852,7 @@ function folding(
         if (why) {
           placeOf.set(m.seq, MAIN);
           reject(why);
-          continue;
+          return;
         }
       }
       if (ev.op === "spec.set" || ev.op === "spec.ready" || ev.op === "spec.unready" || ev.op === "spec.approve" || ev.op === "spec.result" || ev.op === "spec.delete") {
@@ -791,7 +862,7 @@ function folding(
         else if (ev.op === "spec.delete" || (ev.op === "spec.result" && ev.verdict === "dropped"))
           for (const t of cancelledWithSpec({ tasks }, ev.ask)) closeCancelled(t, { seq: m.seq, by: m.from, at }, `cancelled with #${ev.ask}'s spec`);
         else closeOnItsOwn(ev.ask, m, at);
-        continue;
+        return;
       }
       placeOf.set(
         m.seq,
@@ -844,179 +915,274 @@ function folding(
       trust.set(m.seq, "forged");
       rejected.set(m.seq, "malformed message");
     }
-  }
+  };
+  for (const m of messages) step(m);
 
-  const openAsks = [...(from?.asks ?? []), ...messages.filter((m) => m.seq > after)].filter(stillOpen);
-
-  const cut = head - KEEP_SEQS;
-  const keyIndex = new Map<string, number>();
-  const keptSent = [...queue].map(([id, pk]): [string, number, number, number] => [id, sent.get(id)!, sentAt.get(id)!, keyIndex.get(pk) ?? keyIndex.set(pk, keyIndex.size).size - 1]);
-  const carded = (t: Task) => (t.state === "done" || t.cancelled) && closedLongAgo(t.updatedAt, hw);
-  const taskIssues = new Set([...tasks.values()].flatMap((t) => (t.issue && !carded(t) ? [prKey(t.issue.repo, t.issue.number)] : [])));
-  const recent = <T>(pairs: Iterable<[number, T]>) => [...pairs].filter(([seq]) => seq > cut);
-  const keptThreads = recent(threadOf);
-  const keptRoots = new Set(keptThreads.map(([, root]) => root));
-  const keptSpecs = [...specs.values()].filter((sp) => !sp.result || !closedLongAgo(sp.result.at, hw));
-  const filedUnder = new Set([...tasks.values()].flatMap((t) => (t.ask !== undefined ? [t.ask] : [])).concat(keptSpecs.map((sp) => sp.ask)));
-  keep?.(
-    structuredClone({
-      n: head,
-      members: [...members.values()].map((m) => ({
-        name: m.name,
-        role: m.role,
-        about: m.about,
-        color: m.color,
-        picture: m.picture,
-        card: m.card,
-        lastSeen: m.lastSeen,
-        messages: m.messages,
-        ...(m.ops ? { ops: { ...m.ops } } : {}),
-        ...(m.reset ? { reset: m.reset } : {}),
-      })),
-      lead,
+  const finish = (at: number, keep: ((base: FoldBase) => void) | undefined): ChannelStateDraft => {
+    now = at;
+    const openAsks = [...(from?.asks ?? []), ...stepped].filter(stillOpen);
+    const cut = head - KEEP_SEQS;
+    const keyIndex = new Map<string, number>();
+    const keptSent = [...queue].map(([id, pk]): [string, number, number, number] => [id, sent.get(id)!, sentAt.get(id)!, keyIndex.get(pk) ?? keyIndex.set(pk, keyIndex.size).size - 1]);
+    const carded = (t: Task) => (t.state === "done" || t.cancelled) && closedLongAgo(t.updatedAt, hw);
+    const taskIssues = new Set([...tasks.values()].flatMap((t) => (t.issue && !carded(t) ? [prKey(t.issue.repo, t.issue.number)] : [])));
+    const recent = <T>(pairs: Iterable<[number, T]>) => [...pairs].filter(([seq]) => seq > cut);
+    const keptThreads = recent(threadOf);
+    const keptRoots = new Set(keptThreads.map(([, root]) => root));
+    const keptSpecs = [...specs.values()].filter((sp) => !sp.result || !closedLongAgo(sp.result.at, hw));
+    const filedUnder = new Set([...tasks.values()].flatMap((t) => (t.ask !== undefined ? [t.ask] : [])).concat(keptSpecs.map((sp) => sp.ask)));
+    keep?.(
+      structuredClone({
+        n: head,
+        members: [...members.values()].map((m) => ({
+          name: m.name,
+          role: m.role,
+          about: m.about,
+          color: m.color,
+          picture: m.picture,
+          card: m.card,
+          lastSeen: m.lastSeen,
+          messages: m.messages,
+          ...(m.ops ? { ops: { ...m.ops } } : {}),
+          ...(m.reset ? { reset: m.reset } : {}),
+        })),
+        lead,
+        charter: ctx.charter,
+        compact: ctx.compact,
+        compactProposal: ctx.compactProposal,
+        repos: ctx.repos,
+        github: {
+          prs: [...ctx.github.prs.values()].filter((p) => p.state === "open" || !closedLongAgo(p.at, hw)),
+          checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]),
+          issues: [...ctx.github.issues.values()].filter((i) => i.state === "open" || !closedLongAgo(i.at, hw) || taskIssues.has(prKey(i.repo, i.number))),
+          rules: [...ctx.github.rules.values()],
+          releases: [...ctx.github.releases.values()].flat(),
+          runs: [...ctx.github.runs.values()],
+          runsSince: ctx.github.runsSince,
+          runsForgotten: ctx.github.runsForgotten,
+        },
+        hold: ctx.hold,
+        githubWrite: ctx.githubWrite,
+        branchPrefix: ctx.branchPrefix,
+        ...(ctx.quietMs !== QUIET_MS ? { quietMs: ctx.quietMs } : {}),
+        ...(ctx.reviewReset ? { reviewReset: true as const } : {}),
+        ...(ctx.tapToAnswer ? { tapToAnswer: true as const } : {}),
+        ...(ctx.checkpointDaily ? { checkpointDaily: ctx.checkpointDaily } : {}),
+        ...(ctx.checkpointAsks.length ? { checkpointAsks: ctx.checkpointAsks } : {}),
+        landing: ctx.landing,
+        ...(ctx.landingSteps ? { landingSteps: ctx.landingSteps } : {}),
+        ...(passedAsks.size ? { passedAsks: [...passedAsks] } : {}),
+        ...(questions.size ? { stepQuestions: [...questions.values()] } : {}),
+        scopesByKey: [...scopesByKey],
+        scopeSets: [...scopeSets],
+        roleSets: [...roleSets],
+        gone: [...gone],
+        nicknames: [...nicknames],
+        tasks: [...tasks.values()].map((t) => (carded(t) ? card(t) : t)),
+        facts: [...facts.values()],
+        docs: [...docs],
+        leases: [...leases.values()],
+        reactions: recent(reactions).map(([seq, by]): [number, [string, Reaction][]] => [seq, [...by]]),
+        reactSeqs: [...reactSeqs].filter((seq) => seq > cut),
+        chatBy: recent(chatBy),
+        authors: packAuthors(chatBy),
+        edits: recent(edits),
+        deleted: [...deleted],
+        trust: recent(trust),
+        rejected: recent(rejected),
+        sent: keptSent,
+        oldSent: [...old].map(([hash, seq]): [number, number] => [seq, hash]),
+        sentKeys: [...keyIndex.keys()],
+        sentFloors: [...sentFloors].filter(([, floor]) => floor > hw - SENT_WINDOW_MS),
+        hw,
+        placesBefore: [...summarize(new Map([...placeOf].filter(([seq]) => seq <= cut)), tasks, trust, placesBefore).values()].map((p): [Place, number, number] => [p.place, p.count, p.last]),
+        asks: openAsks.map((m) => (m.imgs?.length ? { ...m, imgs: m.imgs.map((i) => omit(i, "data")) } : m)),
+        askHeads: [...askHeads.values()].filter((h) => h.id > cut || filedUnder.has(h.id)),
+        specs: keptSpecs,
+        specsOnly,
+        checks: [...checks.values()],
+        answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
+        threadOf: keptThreads,
+        threadPeople: [...threadPeople].filter(([root]) => root > cut || keptRoots.has(root)).map(([seq, people]): [number, string[]] => [seq, [...people]]),
+        rooms: [...rooms.values()],
+        secret: [...secret].map(([id, r]): [string, SecretRoom] => [id, { ...r }]),
+        roomOf: recent(roomOf),
+        placeOf: recent(placeOf),
+        personaLeads: [...personaLead],
+        powers: [...powers].map(([name, p]): [string, Partial<Record<Power, boolean>>] => [name, { ...p }]),
+        folded: EVENT_OPS_VERSION,
+        rules: from ? Math.min(from.rules ?? 0, FOLD_RULES) : FOLD_RULES,
+        ...(skipped ? { skipped: true as const } : {}),
+      }),
+    );
+    const v: Finishing = { own: true, members, tasks, facts, leases, scopesByKey, floors, roleFloors, lead, guards, guarded: ctx };
+    const theLead = finalize(v, at);
+    return {
+      members: v.members,
+      tasks: v.tasks,
+      facts: v.facts,
+      docs,
+      leases: v.leases,
+      trust,
+      scopeSets,
+      roleSets,
+      gone,
+      nicknames,
+      rejected,
+      openAsks,
+      askHeads,
+      specs,
+      specsOnly,
+      checks,
+      threadOf,
+      threadPeople,
+      lead: theLead ?? null,
+      rooms,
+      secret,
+      roomOf,
+      placeOf,
+      places: summarize(placeOf, v.tasks, trust, placesBefore),
       charter: ctx.charter,
       compact: ctx.compact,
       compactProposal: ctx.compactProposal,
       repos: ctx.repos,
-      github: {
-        prs: [...ctx.github.prs.values()].filter((p) => p.state === "open" || !closedLongAgo(p.at, hw)),
-        checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]),
-        issues: [...ctx.github.issues.values()].filter((i) => i.state === "open" || !closedLongAgo(i.at, hw) || taskIssues.has(prKey(i.repo, i.number))),
-        rules: [...ctx.github.rules.values()],
-        releases: [...ctx.github.releases.values()].flat(),
-        runs: [...ctx.github.runs.values()],
-        runsSince: ctx.github.runsSince,
-        runsForgotten: ctx.github.runsForgotten,
-      },
+      github: ctx.github,
       hold: ctx.hold,
       githubWrite: ctx.githubWrite,
       branchPrefix: ctx.branchPrefix,
-      ...(ctx.quietMs !== QUIET_MS ? { quietMs: ctx.quietMs } : {}),
-      ...(ctx.reviewReset ? { reviewReset: true as const } : {}),
-      ...(ctx.tapToAnswer ? { tapToAnswer: true as const } : {}),
-      ...(ctx.checkpointDaily ? { checkpointDaily: ctx.checkpointDaily } : {}),
-      ...(ctx.checkpointAsks.length ? { checkpointAsks: ctx.checkpointAsks } : {}),
+      quietMs: ctx.quietMs,
+      reviewReset: ctx.reviewReset,
+      tapToAnswer: ctx.tapToAnswer,
+      checkpointDaily: ctx.checkpointDaily,
+      checkpointAsks: ctx.checkpointAsks,
       landing: ctx.landing,
-      ...(ctx.landingSteps ? { landingSteps: ctx.landingSteps } : {}),
-      ...(passedAsks.size ? { passedAsks: [...passedAsks] } : {}),
-      ...(questions.size ? { stepQuestions: [...questions.values()] } : {}),
-      scopesByKey: [...scopesByKey],
-      scopeSets: [...scopeSets],
-      roleSets: [...roleSets],
-      gone: [...gone],
-      nicknames: [...nicknames],
-      tasks: [...tasks.values()].map((t) => (carded(t) ? card(t) : t)),
-      facts: [...facts.values()],
-      docs: [...docs],
-      leases: [...leases.values()],
-      reactions: recent(reactions).map(([seq, by]): [number, [string, Reaction][]] => [seq, [...by]]),
-      reactSeqs: [...reactSeqs].filter((seq) => seq > cut),
-      chatBy: recent(chatBy),
-      authors: packAuthors(chatBy),
-      edits: recent(edits),
-      deleted: [...deleted],
-      trust: recent(trust),
-      rejected: recent(rejected),
-      sent: keptSent,
-      oldSent: [...old].map(([hash, seq]): [number, number] => [seq, hash]),
-      sentKeys: [...keyIndex.keys()],
-      sentFloors: [...sentFloors].filter(([, floor]) => floor > hw - SENT_WINDOW_MS),
-      hw,
-      placesBefore: [...summarize(new Map([...placeOf].filter(([seq]) => seq <= cut)), tasks, trust, placesBefore).values()].map((p): [Place, number, number] => [p.place, p.count, p.last]),
-      asks: openAsks.map((m) => (m.imgs?.length ? { ...m, imgs: m.imgs.map((i) => omit(i, "data")) } : m)),
-      askHeads: [...askHeads.values()].filter((h) => h.id > cut || filedUnder.has(h.id)),
-      specs: keptSpecs,
-      specsOnly,
-      checks: [...checks.values()],
-      answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
-      threadOf: keptThreads,
-      threadPeople: [...threadPeople].filter(([root]) => root > cut || keptRoots.has(root)).map(([seq, people]): [number, string[]] => [seq, [...people]]),
-      rooms: [...rooms.values()],
-      secret: [...secret].map(([id, r]): [string, SecretRoom] => [id, { ...r }]),
-      roomOf: recent(roomOf),
-      placeOf: recent(placeOf),
-      personaLeads: [...personaLead],
-      powers: [...powers].map(([name, p]): [string, Partial<Record<Power, boolean>>] => [name, { ...p }]),
-      folded: EVENT_OPS_VERSION,
-      rules: from ? Math.min(from.rules ?? 0, FOLD_RULES) : FOLD_RULES,
-      ...(skipped ? { skipped: true as const } : {}),
-    }),
-  );
-
-  passFloors(Infinity);
-  passRoleFloors(Infinity);
-  for (const member of members.values()) {
-    member.scopes = scopesByKey.get(member.pk) ?? [];
-    if (!member.owner && gone.has(member.pk)) member.active = false;
-  }
-  const theLead = leadNow();
-  for (const m of members.values()) {
-    if (!signed.has(m.name)) {
-      const leads = m.name === theLead;
-      const wasLead = isLeadRole(m.role);
-      const persona = (isPerson(m) || wasLead) && !leads ? undefined : carriedPersona(leads, wasLead ? undefined : m.role, m.about, m.scopes);
-      if (persona) m.persona = persona;
-      else delete m.persona;
-    }
-    delete m.role;
-    delete m.about;
-  }
-  for (const [key, fact] of facts) if (fact.expires !== undefined && fact.expires <= now) facts.delete(key);
-  for (const [name, lease] of leases) {
-    settle(lease, now);
-    if (!lease.holder && !lease.queue.length) leases.delete(name);
-  }
-
-  for (const t of [...tasks.values()]) {
-    if (t.state === "done" || !t.owner || members.get(t.owner)?.active !== false) continue;
-    tasks.set(t.id, { ...omit(t, "owner"), leftBy: t.owner, ...(t.state === "doing" ? { state: "todo" as const } : {}) });
-  }
-
-  passGuard(Infinity);
-
-  return {
-    members,
-    tasks,
-    facts,
-    docs,
-    leases,
-    trust,
-    scopeSets,
-    roleSets,
-    gone,
-    nicknames,
-    rejected,
-    openAsks,
-    askHeads,
-    specs,
-    specsOnly,
-    checks,
-    threadOf,
-    threadPeople,
-    lead: theLead ?? null,
-    rooms,
-    secret,
-    roomOf,
-    placeOf,
-    places: summarize(placeOf, tasks, trust, placesBefore),
-    charter: ctx.charter,
-    compact: ctx.compact,
-    compactProposal: ctx.compactProposal,
-    repos: ctx.repos,
-    github: ctx.github,
-    hold: ctx.hold,
-    githubWrite: ctx.githubWrite,
-    branchPrefix: ctx.branchPrefix,
-    quietMs: ctx.quietMs,
-    reviewReset: ctx.reviewReset,
-    tapToAnswer: ctx.tapToAnswer,
-    checkpointDaily: ctx.checkpointDaily,
-    checkpointAsks: ctx.checkpointAsks,
-    landing: ctx.landing,
-    landingSteps: ctx.landingSteps,
-    reactions,
-    edits,
-    deleted,
-    head,
+      landingSteps: ctx.landingSteps,
+      reactions,
+      edits,
+      deleted,
+      head,
+    };
   };
+  const finalize = (v: Finishing, at: number): string | null => {
+    drainFloors(v.floors, v.scopesByKey, Infinity);
+    v.lead = drainRoleFloors(v.roleFloors, v.members, v.lead, Infinity);
+    for (const member of v.members.values()) {
+      const scopes = v.scopesByKey.get(member.pk) ?? [];
+      member.scopes = v.own ? scopes : [...scopes];
+      if (!member.owner && gone.has(member.pk)) member.active = false;
+    }
+    const theLead = leadOf(v.members, v.lead, signed, present);
+    for (const m of v.members.values()) {
+      if (!signed.has(m.name)) {
+        const leads = m.name === theLead;
+        const wasLead = isLeadRole(m.role);
+        const persona = (isPerson(m) || wasLead) && !leads ? undefined : carriedPersona(leads, wasLead ? undefined : m.role, m.about, m.scopes);
+        if (persona) m.persona = persona;
+        else delete m.persona;
+      }
+      delete m.role;
+      delete m.about;
+    }
+    const expired = [...v.facts].flatMap(([key, fact]) => (fact.expires !== undefined && fact.expires <= at ? [key] : []));
+    if (expired.length) {
+      const facts = v.own ? v.facts : new Map(v.facts);
+      for (const key of expired) facts.delete(key);
+      v.facts = facts;
+    }
+    let leasesOwned = v.own;
+    for (const [name, lease] of [...v.leases]) {
+      const settled = v.own ? lease : structuredClone(lease);
+      settle(settled, at);
+      const drop = !settled.holder && !settled.queue.length;
+      if (!drop && (v.own || same(settled, lease))) continue;
+      if (!leasesOwned) {
+        v.leases = new Map(v.leases);
+        leasesOwned = true;
+      }
+      if (drop) v.leases.delete(name);
+      else v.leases.set(name, settled);
+    }
+    let tasksOwned = v.own;
+    for (const t of [...v.tasks.values()]) {
+      if (t.state === "done" || !t.owner || v.members.get(t.owner)?.active !== false) continue;
+      if (!tasksOwned) {
+        v.tasks = new Map(v.tasks);
+        tasksOwned = true;
+      }
+      v.tasks.set(t.id, { ...omit(t, "owner"), leftBy: t.owner, ...(t.state === "doing" ? { state: "todo" as const } : {}) });
+    }
+    drainGuard(v.guards, v.guarded, Infinity, ownerName);
+    return theLead;
+  };
+
+  const shownMaps = (): Record<string, Map<unknown, unknown>> =>
+    ({
+      members,
+      tasks,
+      facts,
+      docs,
+      leases,
+      trust,
+      scopeSets,
+      roleSets,
+      gone,
+      nicknames,
+      rejected,
+      askHeads,
+      specs,
+      checks,
+      threadOf,
+      threadPeople,
+      rooms,
+      secret,
+      roomOf,
+      placeOf,
+      reactions,
+      edits,
+      deleted,
+      prs: ctx.github.prs,
+      githubChecks: ctx.github.checks,
+      issues: ctx.github.issues,
+      rules: ctx.github.rules,
+      releases: ctx.github.releases,
+      runs: ctx.github.runs,
+    }) as unknown as Record<string, Map<unknown, unknown>>;
+  const inner = (): Inner => ({
+    maps: shownMaps(),
+    from,
+    stepped,
+    stillOpen,
+    scopesByKey,
+    floors,
+    roleFloors,
+    lead,
+    guards,
+    ctx,
+    placesBefore,
+    specsOnly,
+    head,
+    seen,
+    forward,
+    askers,
+    decisions,
+    finalize,
+    step,
+    at: (at) => void (now = at),
+  });
+
+  return { finish, inner };
+}
+
+export interface Finishing {
+  own: boolean;
+  members: Map<string, FoldMember>;
+  tasks: Map<number, Task>;
+  facts: Map<string, Fact>;
+  leases: Map<string, Lease>;
+  scopesByKey: Map<string, Scope[]>;
+  floors: Floor[];
+  roleFloors: RoleFloor[];
+  lead: string | null;
+  guards: GuardFloors;
+  guarded: Guarded;
 }

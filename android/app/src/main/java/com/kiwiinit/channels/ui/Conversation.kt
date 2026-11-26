@@ -109,6 +109,7 @@ import com.kiwiinit.channels.engine.Chosen
 import com.kiwiinit.channels.engine.Connection
 import com.kiwiinit.channels.engine.EngineException
 import com.kiwiinit.channels.engine.MessageView
+import com.kiwiinit.channels.engine.NeedView
 import com.kiwiinit.channels.engine.QuoteView
 import com.kiwiinit.channels.engine.ReactionView
 import com.kiwiinit.channels.engine.ReviewView
@@ -148,12 +149,14 @@ sealed interface Line {
 
     data class Sending(override val id: String, val item: Pending) : Line
 
+    data class Need(override val id: String, val need: NeedView) : Line
+
     companion object {
-        fun build(messages: List<MessageView>, asks: List<AskView>, reviews: List<ReviewView>, pending: List<Pending>, sentAs: Map<Int, String>): List<Line> {
+        fun build(messages: List<MessageView>, asks: List<AskView>, reviews: List<ReviewView>, pending: List<Pending>, sentAs: Map<Int, String>, needs: List<NeedView> = emptyList()): List<Line> {
             val out = mutableListOf<Line>()
             var prev: MessageView? = null
             var lastAt: MessageView? = null
-            val held: List<Pair<Double, Line>> = asks.map { it.at to Ask("a${it.seq}", it) } + reviews.map { it.at to Review("r${it.task}", it) }
+            val held: List<Pair<Double, Line>> = asks.map { it.at to Ask("a${it.seq}", it) } + reviews.map { it.at to Review("r${it.task}", it) } + needs.map { it.at to Need("n${it.kind}-${it.id}", it) }
             val waiting = ArrayDeque(held.sortedBy { it.first })
             val answers = mutableMapOf<String, ArrayDeque<Int>>()
             for (m in messages) m.chosen?.let { answers.getOrPut("${it.by}|${it.choice}") { ArrayDeque() } += m.seq }
@@ -208,6 +211,7 @@ fun Conversation(
     follow: Follow,
     elsewhere: List<AskView>,
     reviews: List<ReviewView>,
+    needs: List<NeedView> = emptyList(),
     reply: (MessageView) -> Unit,
     answer: (AskView) -> Unit,
     sendBack: (ReviewView) -> Unit,
@@ -217,7 +221,7 @@ fun Conversation(
     val scope = rememberCoroutineScope()
     val pending = model.pending[spot.id] ?: emptyList()
     val sent = model.sentAs[room.code] ?: emptyMap()
-    val lines = remember(room.messages, elsewhere, reviews, pending, sent) { Line.build(room.messages, elsewhere, reviews, pending, sent) }
+    val lines = remember(room.messages, elsewhere, reviews, pending, sent, needs) { Line.build(room.messages, elsewhere, reviews, pending, sent, needs) }
     val shown = remember(lines) { lines.asReversed() }
     val solo = room.placeView(room.place)?.let { it.kind == "dm" && it.withMe } ?: false
     var reveal by remember { mutableFloatStateOf(0f) }
@@ -276,6 +280,19 @@ fun Conversation(
                     is Line.Ask -> AskLine(model, room, line.ask) { answer(line.ask) }
                     is Line.Review -> ReviewLine(model, room, line.review) { sendBack(line.review) }
                     is Line.Sending -> PendingBubble(model, line.item, spot)
+                    is Line.Need -> Row(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                        Spacer(Modifier.width(38.dp))
+                        NeedRow(
+                            model,
+                            room,
+                            line.need,
+                            open = null,
+                            modifier = Modifier.widthIn(max = 300.dp)
+                                .clip(RoundedCornerShape(Radius.bubble))
+                                .background(Tone.current.them)
+                                .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
+                        )
+                    }
                     is Line.Bubble -> BubbleRow(
                         model = model,
                         room = room,

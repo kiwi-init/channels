@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import * as Effect from "effect/Effect";
 import { prOfTask, taskOfBranch } from "@kiwi/core/prs.ts";
 import type { ChannelState, Task } from "@kiwi/core/state.ts";
@@ -34,7 +35,7 @@ export function parseWorktrees(out: string): Worktree[] {
 
 export const worktreesOf = (dir: string): Effect.Effect<Worktree[]> => Effect.map(git(["worktree", "list", "--porcelain"], dir), (out) => (out ? parseWorktrees(out) : []));
 
-export function worktreeOfTask(t: Task, state: Pick<ChannelState, "github" | "branchPrefix">, trees: readonly Worktree[]): Worktree | null {
+export function worktreeOfTask(t: Frozen<Task>, state: Pick<ChannelState, "github" | "branchPrefix">, trees: readonly Worktree[]): Worktree | null {
   const pr = prOfTask(state.github, state.branchPrefix, t);
   const prefix = state.branchPrefix ?? DEFAULT_PREFIX;
   return trees.find((w) => w.branch !== null && (taskOfBranch(w.branch, prefix) === t.id || w.branch === pr?.branch)) ?? null;

@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { currentStep, type LandingStep } from "@kiwi/core/steps.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { reentryText } from "@kiwi/core/reentry.ts";
@@ -6,11 +7,11 @@ import { changedSinceApproval, landerOf, openRound, setAsideBySpec, specPlanner,
 
 export type Work = { kind: "coding"; task: number } | { kind: "reviewing"; task: number; round: number } | { kind: "answering" } | { kind: "planning"; ask: number };
 
-const live = (t: Task | undefined): t is Task => !!t && t.state !== "done" && !t.archived;
+const live = (t: Frozen<Task | undefined>): t is Frozen<Task> => !!t && t.state !== "done" && !t.archived;
 
 const openTasks = (state: ChannelState) => [...state.tasks.values()].filter((t) => live(t) && !setAsideBySpec(state, t.id)).sort((a, b) => a.id - b.id);
 
-function openSpecTask(state: ChannelState, me: string, setAside: ReadonlySet<string>): Task | undefined {
+function openSpecTask(state: ChannelState, me: string, setAside: ReadonlySet<string>): Frozen<Task | undefined> {
   return openTasks(state).find((t) => {
     const spec = t.ask === undefined ? undefined : state.specs.get(t.ask);
     if (!spec?.approved || spec.result || changedSinceApproval(spec)) return false;
@@ -25,16 +26,16 @@ function specToPlan(state: ChannelState, me: string, setAside: ReadonlySet<strin
   })?.ask;
 }
 
-const awaitingVerdict = (t: Task) => !!openRound(t);
+const awaitingVerdict = (t: Frozen<Task>) => !!openRound(t);
 
-const worksOn = (t: Task, me: string): boolean => (t.state === "landing" ? landerOf(t) : t.owner) === me;
+const worksOn = (t: Frozen<Task>, me: string): boolean => (t.state === "landing" ? landerOf(t) : t.owner) === me;
 
 const takes = (state: ChannelState, id: number, me: string): boolean => {
   const t = state.tasks.get(id);
   return !!t && worksOn(t, me);
 };
 
-const owesReview = (t: Task, me: string) => t.owner !== me && (t.review === me || (t.review === "*" && !t.workedBy.includes(me)));
+const owesReview = (t: Frozen<Task>, me: string) => t.owner !== me && (t.review === me || (t.review === "*" && !t.workedBy.includes(me)));
 
 function owedReview(state: ChannelState, me: string, setAside: ReadonlySet<string> = new Set()): Work | null {
   for (const t of openTasks(state)) {
@@ -170,7 +171,7 @@ export function workName(work: Work): string {
   }
 }
 
-function stepFocus(t: Task, step: LandingStep, me: string, mc: string): string {
+function stepFocus(t: Frozen<Task>, step: LandingStep, me: string, mc: string): string {
   const id = taskId(t.id);
   const mover = step.by ?? landerOf(t);
   return [
@@ -180,7 +181,7 @@ function stepFocus(t: Task, step: LandingStep, me: string, mc: string): string {
   ].join(" ");
 }
 
-function landingFocus(t: Task, me: string, mc: string): string {
+function landingFocus(t: Frozen<Task>, me: string, mc: string): string {
   const current = currentStep(t);
   if (current) return stepFocus(t, current, me, mc);
   const id = taskId(t.id);

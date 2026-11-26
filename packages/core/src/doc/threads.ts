@@ -1,3 +1,4 @@
+import type { Frozen } from "../state/types.ts";
 import { GENERAL_ROOM } from "../protocol.ts";
 import type { RoomMember } from "../room-rules.ts";
 import { placeKey } from "../state/places.ts";
@@ -6,7 +7,7 @@ import type { ThreadKeys } from "./hub.ts";
 
 export type DocWhere = Place | { kind: "room"; room: string };
 
-export const docThread = (w: DocWhere): string => (w.kind === "room" ? (w.room === GENERAL_ROOM ? "main" : `room:${w.room}`) : placeKey(w));
+export const docThread = (w: Frozen<DocWhere>): string => (w.kind === "room" ? (w.room === GENERAL_ROOM ? "main" : `room:${w.room}`) : placeKey(w));
 
 interface KnownRoom {
   members?: readonly RoomMember[];

@@ -41,6 +41,9 @@ struct Shell: View {
         }
         #if DEBUG
             .onAppear(perform: shot)
+            .overlay {
+                if UserDefaults.standard.string(forKey: "shot") == "live" { LivePreview() }
+            }
         #endif
     }
 

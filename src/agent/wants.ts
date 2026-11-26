@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { personaAnswers } from "@kiwi/core/personality.ts";
 import { isDirectedAt, isForAgent } from "@kiwi/core/client.ts";
 import { GENERAL_ROOM, ignored, type Message } from "@kiwi/core/protocol.ts";
@@ -15,7 +16,7 @@ export function waitingTask(state: ChannelState, me: string): number | undefined
   return [...state.tasks.values()].find((t) => t.owner === me && t.state !== "done" && t.review !== me && !!openRound(t))?.id;
 }
 
-function endsMyWait(me: string, seq: number, task: Task | undefined): boolean {
+function endsMyWait(me: string, seq: number, task: Frozen<Task> | undefined): boolean {
   const round = task?.rounds.at(-1);
   if (round && round.result.kind !== "open" && round.result.seq === seq && (round.by === me || task?.owner === me)) return true;
   return task?.handedOff?.seq === seq && task.handedOff.from === me;

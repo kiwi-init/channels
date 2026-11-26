@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import type { CheckArtifact } from "../checks.ts";
 import { arm, currentStep, mintSteps, STEPS_MAX, stepById, stepsOfThen, stepText, type LandingStep, type RunSight, type StepEdit, type StepSpec } from "../steps.ts";
 import type { CheckState } from "./checks.ts";
@@ -9,11 +10,11 @@ import type { Task } from "./types.ts";
 export type StepMark = { seq: number; by: string; at: number };
 
 export interface StepView {
-  github: GithubState;
-  prOf: (task: Task) => GithubPr | undefined;
+  github: Frozen<GithubState>;
+  prOf: (task: Frozen<Task>) => Frozen<GithubPr> | undefined;
 }
 
-const id = (t: Task): string => `T${t.id}`;
+const id = (t: Frozen<Task>): string => `T${t.id}`;
 
 export const artifactWords = (a: CheckArtifact): string => (a.kind === "pr" ? `${a.repo}#${a.pr} at ${a.sha.slice(0, 7)}` : a.kind === "run" ? `run ${a.id}` : `${a.pkg}@${a.version}`);
 
@@ -34,16 +35,16 @@ export function reseedThen(task: Task, then: string | undefined): void {
 
 export const hasOpenSteps = (task: Task): boolean => currentStep(task) !== undefined;
 
-const beforeApproval = (task: Task): boolean => task.state !== "landing" && task.state !== "done" && !task.archived;
+const beforeApproval = (task: Frozen<Task>): boolean => task.state !== "landing" && task.state !== "done" && !task.archived;
 
-export const heldStep = (task: Task): LandingStep | undefined => {
+export const heldStep = (task: Frozen<Task>): Frozen<LandingStep> | undefined => {
   const step = beforeApproval(task) ? currentStep(task) : undefined;
   return step?.hold ? step : undefined;
 };
 
-export type Pause = { step: LandingStep; kind: "hold"; until: number; reason: string } | { step: LandingStep; kind: "run"; due: number; behind: string };
+export type Pause = { step: Frozen<LandingStep>; kind: "hold"; until: number; reason: string } | { step: Frozen<LandingStep>; kind: "run"; due: number; behind: string };
 
-export function pausingStep(github: GithubState, task: Task, now: number): Pause | undefined {
+export function pausingStep(github: Frozen<GithubState>, task: Frozen<Task>, now: number): Pause | undefined {
   const step = heldStep(task);
   if (!step?.hold || step.progress.kind !== "open" || step.progress.seen) return undefined;
   const sight = step.run ? runSight(github, task, step) : "blind";
@@ -96,7 +97,7 @@ export function say(task: Task, step: LandingStep, mark: StepMark, said: { link?
   advance(task, mark);
 }
 
-export function runSight(github: GithubState, task: Task, step: LandingStep): RunSight {
+export function runSight(github: Frozen<GithubState>, task: Frozen<Task>, step: LandingStep): RunSight {
   const run = step.run?.id;
   if (run === undefined || runsUnknownSince(github, task)) return "blind";
   const seen = runStart(github, run, task.createdRts ?? Number.NEGATIVE_INFINITY);
@@ -118,7 +119,7 @@ export function observedRefusal(view: StepView, task: Task, step: LandingStep, a
   return `step ${stepText(step)} of ${id(task)} doesn't end on ${artifactWords(artifact)}`;
 }
 
-function missingAtMerge(github: GithubState, task: Task, pr: GithubPr & { sha: string }, merged: number): string | null {
+function missingAtMerge(github: Frozen<GithubState>, task: Task, pr: GithubPr & { sha: string }, merged: number): string | null {
   const round = task.rounds.filter((r) => r.rts === undefined || r.rts <= merged).at(-1);
   const result = round?.result;
   if (!round || result?.kind !== "approved" || result.rts === undefined || result.rts > merged) return "an approval before the merge";
@@ -146,13 +147,13 @@ export function landedRefusal(view: StepView, task: Task, artifact: CheckArtifac
 }
 
 export interface StepObservation {
-  task: Task;
-  step: LandingStep;
+  task: Frozen<Task>;
+  step: Frozen<LandingStep>;
   artifact: CheckArtifact;
   key: string;
 }
 
-export function stepObservations(view: StepView & { tasks: ReadonlyMap<number, Task> }): StepObservation[] {
+export function stepObservations(view: StepView & { tasks: Frozen<ReadonlyMap<number, Task>> }): StepObservation[] {
   const out: StepObservation[] = [];
   for (const t of view.tasks.values()) {
     if (t.state === "done" || t.archived) continue;
@@ -246,7 +247,7 @@ export function checkClosed(tasks: ReadonlyMap<number, Task>, check: CheckState,
   }
 }
 
-export function stepEditRefusal(task: Task, edit: StepEdit, from: { name: string; person: boolean; lead: boolean }): string | null {
+export function stepEditRefusal(task: Frozen<Task>, edit: StepEdit, from: { name: string; person: boolean; lead: boolean }): string | null {
   const trusted = from.person || from.lead;
   if (task.state === "done") return `${id(task)} is already done`;
   if (edit.kind === "add") {

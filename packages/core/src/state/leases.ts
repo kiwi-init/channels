@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import type { Lease } from "./types.ts";
 
 export const LEASE_WAIT_MS = 2 * 3_600_000;
@@ -47,10 +48,10 @@ export function free(lease: Lease, who: string, at: number, breaking: boolean): 
   return lease.queue.length < before;
 }
 
-export function nextIn(lease: Lease, at: number): string | undefined {
+export function nextIn(lease: Frozen<Lease>, at: number): string | undefined {
   return lease.queue.find((q) => q.joined + LEASE_WAIT_MS > at)?.name;
 }
 
-export function placeIn(lease: Lease, who: string): number {
+export function placeIn(lease: Frozen<Lease>, who: string): number {
   return lease.queue.findIndex((q) => q.name === who) + 1;
 }

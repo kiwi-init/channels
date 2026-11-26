@@ -19,6 +19,10 @@ on:
         description: "yes makes the diagnosis soak estimate allocation per message sent from an 8 KiB sampling heap profile that keeps collected objects, on an unminified build (only with soak_only)"
         type: string
         default: ""
+      soak_base:
+        description: "large seeds a fold base the size of a busy real channel's (at least 3.4 MB) before the diagnosis soak, the same one every run (only with soak_only; empty keeps the usual one)"
+        type: string
+        default: ""
       jobs:
         description: "scale (the default), desktop (the packaged Mac app's cold start and idle memory, reported with no gate), doc (what a thread doc's updates cost, at a short and a long thread, no gate), upgrade (an older release's data opened by this build), replies (three agents answer one message, in the app), or all"
         type: string
@@ -73,6 +77,7 @@ jobs:
           PERF_SOAK_TABS: ${{ inputs.soak_tabs }}
           PERF_ALLOC: ${{ inputs.soak_alloc == 'yes' && '1' || '' }}
           PERF_SOAK_POST: ${{ inputs.soak_post }}
+          PERF_BASE: ${{ inputs.soak_base }}
         run: bun scripts/perf-scale.ts --gated --json "$RUNNER_TEMP/perf-soak.json"
       - name: the merge base the paired check compares against
         id: base

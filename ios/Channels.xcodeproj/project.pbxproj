@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		06B002158D096E3677BDED9B /* ChannelsLive.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = EB2FE48C3AB7F52A4D12DEA8 /* ChannelsLive.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		60FE7087DF68C9EA4EA8B8B8 /* EnrichedMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = A302B3E3B4850F5B01587A23 /* EnrichedMarkdown */; };
 /* End PBXBuildFile section */
 
@@ -18,11 +19,33 @@
 			remoteGlobalIDString = 5C0DECA6145FF32BD41FCC89;
 			remoteInfo = Channels;
 		};
+		100B9016D87FAFD1FDF828D3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0288C98C5AF1DD952A3C3FCD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DD5472FA609B52796EC80B31;
+			remoteInfo = ChannelsLive;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		6906533EA2D71D968CE71765 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				06B002158D096E3677BDED9B /* ChannelsLive.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		D2CDBC171B1223B0D7669F52 /* Channels.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Channels.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		77E04ABBA7579CC5719E9FE3 /* ChannelsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ChannelsUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		EB2FE48C3AB7F52A4D12DEA8 /* ChannelsLive.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ChannelsLive.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -32,6 +55,13 @@
 				Info.plist,
 			);
 			target = 5C0DECA6145FF32BD41FCC89 /* Channels */;
+		};
+		152A35A0311CD2A840EDC2F1 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = DD5472FA609B52796EC80B31 /* ChannelsLive */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -53,6 +83,23 @@
 			path = ChannelsUITests;
 			sourceTree = "<group>";
 		};
+		E0E1EB6B25DB9C619457C60D /* ChannelsLive */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				152A35A0311CD2A840EDC2F1 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = ChannelsLive;
+			sourceTree = "<group>";
+		};
+		1EEE575C2CA12AA49AD2789E /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,6 +118,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		27D3205A91734892853D607C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -79,6 +133,7 @@
 			children = (
 				D2CDBC171B1223B0D7669F52 /* Channels.app */,
 				77E04ABBA7579CC5719E9FE3 /* ChannelsUITests.xctest */,
+				EB2FE48C3AB7F52A4D12DEA8 /* ChannelsLive.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -88,6 +143,8 @@
 			children = (
 				B0E496DC462AF70DAB01F48C /* Channels */,
 				17B576B74D70DD1A4C08F249 /* ChannelsUITests */,
+				E0E1EB6B25DB9C619457C60D /* ChannelsLive */,
+				1EEE575C2CA12AA49AD2789E /* Shared */,
 				599ACD9DAB642695245319D9 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -103,13 +160,16 @@
 				69399972B880673AEB8744DF /* Sources */,
 				B03942542BE701D9B2F9D666 /* Frameworks */,
 				53EADC0890FAFAB4871F75CD /* Resources */,
+				6906533EA2D71D968CE71765 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				669047E65639CB465AF7D543 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				B0E496DC462AF70DAB01F48C /* Channels */,
+				1EEE575C2CA12AA49AD2789E /* Shared */,
 			);
 			name = Channels;
 			packageProductDependencies = (
@@ -143,6 +203,29 @@
 			productReference = 77E04ABBA7579CC5719E9FE3 /* ChannelsUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		DD5472FA609B52796EC80B31 /* ChannelsLive */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C2F9E8CA64900B756696734F /* Build configuration list for PBXNativeTarget "ChannelsLive" */;
+			buildPhases = (
+				48ACEFC3ABE490D899B617A9 /* Sources */,
+				27D3205A91734892853D607C /* Frameworks */,
+				8929418946D547F98540A43D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				E0E1EB6B25DB9C619457C60D /* ChannelsLive */,
+				1EEE575C2CA12AA49AD2789E /* Shared */,
+			);
+			name = ChannelsLive;
+			packageProductDependencies = (
+			);
+			productName = ChannelsLive;
+			productReference = EB2FE48C3AB7F52A4D12DEA8 /* ChannelsLive.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -160,6 +243,10 @@
 						DevelopmentTeam = 57249C654W;
 						ProvisioningStyle = Automatic;
 						TestTargetID = 5C0DECA6145FF32BD41FCC89;
+					};
+					DD5472FA609B52796EC80B31 = {
+						DevelopmentTeam = 57249C654W;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -186,6 +273,7 @@
 			targets = (
 				5C0DECA6145FF32BD41FCC89 /* Channels */,
 				6EE2D3C526AF84960B854B37 /* ChannelsUITests */,
+				DD5472FA609B52796EC80B31 /* ChannelsLive */,
 			);
 		};
 /* End PBXProject section */
@@ -199,6 +287,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		8C2F5606C21FF9A7A3903AA3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8929418946D547F98540A43D /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -263,6 +358,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		48ACEFC3ABE490D899B617A9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -270,6 +372,11 @@
 			isa = PBXTargetDependency;
 			target = 5C0DECA6145FF32BD41FCC89 /* Channels */;
 			targetProxy = C789B0CCB117C299E6EEDFD2 /* PBXContainerItemProxy */;
+		};
+		669047E65639CB465AF7D543 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DD5472FA609B52796EC80B31 /* ChannelsLive */;
+			targetProxy = 100B9016D87FAFD1FDF828D3 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -287,6 +394,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Channels;
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Channels asks for Face ID before it shows your channels, and before it starts an agent that acts without asking.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Channels talks to a relay on your own network when you run one there.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -445,6 +553,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Channels;
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Channels asks for Face ID before it shows your channels, and before it starts an agent that acts without asking.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Channels talks to a relay on your own network when you run one there.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -497,6 +606,52 @@
 			};
 			name = Release;
 		};
+		047F6B7E36CF402ADD68A287 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ChannelsLive/ChannelsLive.entitlements;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ChannelsLive/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Channels;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.kiwiinit.channels.live;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		184F1A99E9A77B1EB809381D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ChannelsLive/ChannelsLive.entitlements;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ChannelsLive/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Channels;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.kiwiinit.channels.live;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -523,6 +678,15 @@
 			buildConfigurations = (
 				747D4F3F5E1BF0F671FB8F80 /* Debug */,
 				6CBC72043F7437C8C5FF6801 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C2F9E8CA64900B756696734F /* Build configuration list for PBXNativeTarget "ChannelsLive" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				047F6B7E36CF402ADD68A287 /* Debug */,
+				184F1A99E9A77B1EB809381D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

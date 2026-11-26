@@ -1,3 +1,4 @@
+import type { Frozen } from "./types.ts";
 import { choiceIn, type CheckAsk, type CheckPhase } from "../checks.ts";
 
 interface CheckAnswer {
@@ -37,7 +38,7 @@ export const checkFrom = (c: CheckState): CheckState => ({
   ...(c.supersededBy !== undefined ? { supersededBy: c.supersededBy } : {}),
 });
 
-export const checkPassed = (c: CheckState): boolean => c.closed === undefined && c.supersededBy === undefined && c.answer?.pass === true;
+export const checkPassed = (c: Frozen<CheckState>): boolean => c.closed === undefined && c.supersededBy === undefined && c.answer?.pass === true;
 
 export function replaceRefusal(checks: ReadonlyMap<number, CheckState>, m: { seq: number; from: string; check?: CheckAsk }): string | undefined {
   const id = m.check?.replaces;

@@ -1,3 +1,4 @@
+import type { Frozen } from "../state/types.ts";
 import { putMemberRecord } from "./member-record.ts";
 import { delegationLive } from "../delegation.ts";
 import { checkKeep, type DeviceClaim, type DeviceList } from "../devices.ts";
@@ -27,7 +28,7 @@ export interface MembersFx {
   setCanPost(pk: string, post: boolean): Effect.Effect<void, Refused, Relay>;
   updateScopes(m: Member, scopes: readonly Scope[], since: number): Effect.Effect<void, Refused, Relay>;
   updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Effect.Effect<void, Refused, Relay>;
-  updatePersona(m: Member, persona: Persona | null, since: number): Effect.Effect<void, Refused, Relay>;
+  updatePersona(m: Member, persona: Frozen<Persona | null>, since: number): Effect.Effect<void, Refused, Relay>;
   updateNickname(m: Member, nickname: string | null): Effect.Effect<void, Refused, Relay>;
   updatePowers(m: Member, powers: PersonPowers): Effect.Effect<void, Refused, Relay>;
   reconcilePosting(state: Reconciled, members?: Member[]): Effect.Effect<string[], Refused, Relay>;

@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { askGroups, releaseOf, type AskGroup, type AskHead, type ChannelState, type GithubRelease, type Task } from "@kiwi/core/state.ts";
 import { statusOf, type TaskStatus } from "@kiwi/core/status.ts";
 import { DONE_RECENTLY, STATE_LABEL } from "./task-labels";
@@ -25,21 +26,21 @@ const WEEK = 7 * 24 * 60 * 60 * 1000;
 export const NEXT_RELEASE_NOTE = "release.next";
 
 interface Fate {
-  task: Task;
+  task: Frozen<Task>;
   finished: boolean;
   status: TaskStatus["status"];
   release?: GithubRelease;
   at: number;
 }
 
-function fateOf(state: ChannelState, t: Task): Fate {
+function fateOf(state: ChannelState, t: Frozen<Task>): Frozen<Fate> {
   const { status, stage } = statusOf(state, t);
   const merged = stage.pr?.state === "merged" ? stage.pr : undefined;
   const release = status === "shipped" && merged ? releaseOf(state.github, merged) : undefined;
   return { task: t, finished: status === "done" || status === "shipped" || status === "cancelled", status, ...(release ? { release } : {}), at: Math.max(t.updatedAt, merged?.at ?? 0) };
 }
 
-function shows(f: Fate, view: View, now: number, waiting: ReadonlySet<number>): boolean {
+function shows(f: Frozen<Fate>, view: View, now: number, waiting: ReadonlySet<number>): boolean {
   const t = f.task;
   if (t.archived) return false;
   switch (view) {
@@ -61,7 +62,7 @@ export type GroupHead = { kind: "ask"; ask: AskHead | null } | { kind: "next"; n
 export interface TaskGroup {
   key: string;
   head: GroupHead;
-  tasks: Task[];
+  tasks: Frozen<Task[]>;
 }
 
 const ORDER: Record<Task["state"], number> = { doing: 0, review: 1, landing: 2, todo: 3, done: 4 };
@@ -88,7 +89,7 @@ export function taskGroups(state: ChannelState, view: View, now: number): TaskGr
   const finished = shown.filter((f) => f.finished).sort((a, b) => b.at - a.at);
   const next = finished.filter((f) => f.status === "done").map((f) => f.task);
   if (next.length) groups.push({ key: "next", head: { kind: "next", name: nextRelease(state, now) }, tasks: next });
-  const releases = new Map<string, { at: number; tasks: Task[] }>();
+  const releases = new Map<string, { at: number; tasks: Frozen<Task>[] }>();
   for (const f of finished) {
     if (!f.release) continue;
     const held = releases.get(f.release.tag) ?? { at: f.release.at, tasks: [] };

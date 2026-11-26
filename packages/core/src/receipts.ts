@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 // Read receipts: under your newest message, whether the agents it went to have read it. Agents tell
 // the relay how far they've read (a seq, never content: kiwi's listen and hooks do it as they
 // hand messages on), the relay passes each mark to every client, and this works out what a message's
@@ -42,7 +43,7 @@ export function readAt(marks: Marks, pk: string | undefined, seq: number): { at:
 
 export type Reach = Pick<ChannelState, "members" | "tasks" | "lead" | "rooms" | "roomOf">;
 
-function roomReach(m: Message, here: Room, state: Reach): string[] {
+function roomReach(m: Message, here: Frozen<Room>, state: Reach): string[] {
   const sender = state.members.get(m.from);
   const said = mentionsOf(m.body);
   const mentioned = [...state.members.keys()].filter((n) => said.has(n.toLowerCase()));

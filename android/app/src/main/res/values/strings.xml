@@ -220,6 +220,7 @@
     <string name="allow_once">Allow once</string>
     <string name="deny">Deny</string>
     <string name="let_in">Let in</string>
+    <string name="turn_away">Turn away</string>
     <string name="only_can_allow">Only %1$s can allow this one</string>
     <string name="you_can_deny">You can deny this one</string>
     <string name="join_pinned">Invited with a personality: let them in on your computer</string>

@@ -1,0 +1,32 @@
+.whatsnew-list {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.whatsnew-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.whatsnew-text {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.whatsnew-text h3 {
+  margin: 0;
+  color: var(--ink);
+  font: 500 var(--t-ui) var(--ui);
+}
+
+.whatsnew-text p {
+  margin: 0;
+  color: var(--ink-2);
+  font: 400 var(--t-meta) var(--ui);
+}

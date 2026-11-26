@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 // Plain-text rendering for agents: compact, greppable, one header line per message.
 
 import { asksPeople, ROLE_LABEL } from "./personality.ts";
@@ -348,7 +349,7 @@ export function runsStatus(runs: Runs): string {
 }
 
 /** "macos arm64 · claude-code · ojow/channels@main · tools: docker, gpu · note", one line. */
-export function cardLine(c: Card | undefined, runs?: Runs, machine = true): string {
+export function cardLine(c: Frozen<Card | undefined>, runs?: Runs, machine = true): string {
   if (!c) return "";
   const where = c.repo ? `${inlineText(c.repo, 80)}${c.branch ? `@${inlineText(c.branch, 80)}` : ""}` : "";
   const parts = [
@@ -528,7 +529,7 @@ export function stepEditText(edit: StepEdit): string {
   }
 }
 
-export function stepLines(state: ChannelState, t: Task, now: number): string[] {
+export function stepLines(state: ChannelState, t: Frozen<Task>, now: number): string[] {
   const steps = t.steps ?? [];
   if (!steps.length) return [];
   const current = t.state === "landing" ? currentStep(t) : undefined;
@@ -542,7 +543,7 @@ export function stepLines(state: ChannelState, t: Task, now: number): string[] {
   return [`  steps (${ended} of ${steps.length} ended${current ? `, ${current.id} is current` : ""}):`, ...rows];
 }
 
-function stepTail(state: ChannelState, t: Task, step: LandingStep, current: boolean, now: number): string {
+function stepTail(state: ChannelState, t: Frozen<Task>, step: LandingStep, current: boolean, now: number): string {
   if (step.progress.kind === "ended") {
     const end = step.progress.end;
     if (end.how === "skipped") return `  skipped ${ago(end.ts, now)} by ${inlineText(end.by, 40)}: ${inlineText(end.why, 200)}`;
@@ -573,7 +574,7 @@ function stepTail(state: ChannelState, t: Task, step: LandingStep, current: bool
   }
 }
 
-function taskLine(state: ChannelState, t: Task, now?: number): string {
+function taskLine(state: ChannelState, t: Frozen<Task>, now?: number): string {
   const owner = t.owner ? ` @${inlineText(t.owner, 40)}` : t.leftBy ? ` (${inlineText(t.leftBy, 40)} left)` : "";
   const review = t.review && t.state !== "done" && t.state !== "landing" ? ` [${reviewPhrase(t.review)}]` : "";
   const stage = stageOf(state, t);
@@ -582,7 +583,7 @@ function taskLine(state: ChannelState, t: Task, now?: number): string {
   return `  ${taskId(t.id).padEnd(5)} ${statusWord(statusOf(state, t)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}${waits ? ` · ${waits}` : ""}${moverTag(t, moverOf(state, t, now))}${quietTag(state, t, now)}`;
 }
 
-function quietTag(state: ChannelState, t: Task, now: number | undefined): string {
+function quietTag(state: ChannelState, t: Frozen<Task>, now: number | undefined): string {
   const clock = now === undefined ? undefined : clockOf(state, t, now);
   const quiet = clock ? quietText(clock, state.quietMs) : undefined;
   return quiet ? ` · ${quiet}` : "";
@@ -595,19 +596,19 @@ export function reviewRuleWarning(state: ChannelState, check: string): string | 
     : null;
 }
 
-export function askLine(head: AskHead | null): string {
+export function askLine(head: Frozen<AskHead> | null): string {
   if (!head) return "unfiled (no person's message holds these)";
   const words = inlineText(head.words, head.goal ? 60 : 120);
   const said = `#${head.id} ${inlineText(head.by, 40)}: ${words ? `“${words}”` : "(no text)"}`;
   return head.goal ? `${inlineText(head.goal, 80)} (from ${said})` : said;
 }
 
-function groupedLines(state: ChannelState, tasks: Task[], indent: string, now?: number): string[] {
+function groupedLines(state: ChannelState, tasks: Frozen<Task[]>, indent: string, now?: number): string[] {
   return askGroups(state, tasks).flatMap((g) => [`${indent}${askLine(g.head)}`, ...g.tasks.map((t) => `${indent}${taskLine(state, t, now)}`)]);
 }
 
 /** `build.cmd = cargo test  (win, 2h ago, 5h left)`. A value with several lines keeps its tail marked. */
-export function leaseLine(l: Lease, me: string, now = Date.now()): string {
+export function leaseLine(l: Frozen<Lease>, me: string, now = Date.now()): string {
   const who = (n: string) => (n === me ? "you" : inlineText(n, 40));
   const held = l.holder ? `${who(l.holder)}, ${left(l.until, now)}${l.note ? `: ${inlineText(l.note, 120)}` : ""}` : "free";
   return `${l.name}: ${held}${l.queue.length ? ` · next: ${l.queue.map((q) => who(q.name)).join(", ")}` : ""}`;
@@ -742,14 +743,14 @@ export function charterLines(state: ChannelState): string | null {
   return `goal (the owner's scope for this channel, in the app's Channel settings › Goal; escalate what falls outside it): ${markedText(state.charter.text)}`;
 }
 
-function heldLine(state: ChannelState, a: Message): string {
+function heldLine(state: ChannelState, a: Frozen<Message>): string {
   const held = heldBy(state, a).map((id) => (state.tasks.has(id) ? taskId(id) : `#${id}`));
   return `${a.step ? " [step]" : a.decision ? ` [${a.decision}]` : ""}${held.length ? ` · holds ${held.join(", ")}` : ""}`;
 }
 
 const HELD = /^(T\d+|#\d+)$/;
 
-function handedLines({ ask, handed }: HandedAsk, now: number): string[] {
+function handedLines({ ask, handed }: Frozen<HandedAsk>, now: number): string[] {
   const kind = handed.step ? " [step]" : handed.decision ? ` [${handed.decision}]` : "";
   const held = handed.holds.filter((h) => HELD.test(h));
   const under = handed.step
@@ -907,7 +908,7 @@ export function formatTasks(state: ChannelState, check: string, opts: { all?: bo
   return [...(warning ? [warning] : []), ...groupedLines(state, tasks, "", opts.now)].join("\n");
 }
 
-export function roundTag(t: Task | undefined, seq: number, named: number | undefined, say: EventSay = sayEvent): string {
+export function roundTag(t: Frozen<Task> | undefined, seq: number, named: number | undefined, say: EventSay = sayEvent): string {
   const r = t?.rounds.find((x) => x.seq === seq) ?? t?.rounds.find((x) => x.result.kind !== "open" && x.result.seq === seq) ?? (named !== undefined ? t?.rounds.find((x) => x.n === named) : undefined);
   if (!r) return named !== undefined ? say("round", { n: String(named) }) : "";
   return r.at ? say("round.at", { n: String(r.n), at: shortArtifact(r.at) }) : say("round", { n: String(r.n) });
@@ -917,7 +918,7 @@ function shortArtifact(at: string): string {
   return /^[0-9a-f]{13,64}$/i.test(at) ? at.slice(0, 12) : inlineText(at, 40);
 }
 
-function roundResult(r: ReviewRound): string {
+function roundResult(r: Frozen<ReviewRound>): string {
   switch (r.result.kind) {
     case "open":
       return "open";
@@ -934,7 +935,7 @@ export function reviewBody(m: Message): string | null {
 }
 
 /** One task in full. `_state` is kept so callers needn't change (it used to resolve dependencies). */
-export function formatTask(state: ChannelState, t: Task, now = Date.now(), messages: readonly Message[] = []): string {
+export function formatTask(state: ChannelState, t: Frozen<Task>, now = Date.now(), messages: readonly Message[] = []): string {
   const out = [
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
     `  status: ${statusWord(statusOf(state, t))} (${stateWord(t.state)})${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : t.leftBy ? ` · unassigned: ${inlineText(t.leftBy, 40)} left the channel` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,

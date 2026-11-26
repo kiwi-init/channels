@@ -167,8 +167,10 @@ struct NeedCard: View {
             out.append(Action(title: spoken("Deny"), symbol: "xmark.circle", tone: Tone.alert) { try await model.allow(code, id: need.id, allow: false) })
             return out
         case "join":
-            guard need.pinned != true, room.isOwner else { return [] }
-            return [Action(title: spoken("Let in"), symbol: "person.crop.circle.badge.checkmark", tone: Tone.ink) { try await model.letIn(code, id: need.id) }]
+            guard room.isOwner else { return [] }
+            let away = Action(title: spoken("Turn away"), symbol: "person.crop.circle.badge.xmark", tone: Tone.alert) { try await model.turnAway(code, id: need.id) }
+            guard need.pinned != true else { return [away] }
+            return [Action(title: spoken("Let in"), symbol: "person.crop.circle.badge.checkmark", tone: Tone.ink) { try await model.letIn(code, id: need.id) }, away]
         default:
             guard let ask = need.ask, let v = need.v else { return [] }
             return [Action(title: spoken("Approve"), symbol: "checkmark.circle", tone: Tone.ink) { try await model.approveSpec(code, ask: ask, v: v) }]

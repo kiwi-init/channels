@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import type { Channel } from "@kiwi/core/client.ts";
 import { LIVE_PATH, liveState, sealLive, type LiveState } from "@kiwi/core/live.ts";
@@ -95,7 +96,7 @@ export class LiveBlobs {
 export function liveAbout(state: ChannelState, agent: string, title: string): LiveAbout | null {
   const me = state.members.get(agent);
   if (!me) return null;
-  const started = (t: Task): number => (t.clock?.key.startsWith(`${agent}|work|`) ? t.clock.at : 0);
+  const started = (t: Frozen<Task>): number => (t.clock?.key.startsWith(`${agent}|work|`) ? t.clock.at : 0);
   const task = [...state.tasks.values()].filter((t) => t.owner === agent && t.state === "doing" && !t.archived).sort((a, b) => started(b) - started(a) || b.updatedAt - a.updatedAt)[0];
   return {
     name: me.display ?? me.name,

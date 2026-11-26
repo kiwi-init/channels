@@ -304,4 +304,6 @@ export default {
   "settings.personalities.role.explorer": "탐색가",
   "settings.personalities.role.releaser": "릴리스 담당",
   "settings.personalities.role.lead": "리드",
+  "settings.sections.features": "새 기능",
+  "settings.sections.features.open": "새 기능 보기",
 } satisfies Catalog

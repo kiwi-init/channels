@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { BASE_WIRE_VERSION, baseFromWire, readableWire, toWire } from "@kiwi/core/base-wire.ts";
 import type { CachedKept, CachedRow } from "@kiwi/core/cache-row.ts";
 import { ChannelGone, type RoomsSetting, type SendOptions } from "@kiwi/core/client.ts";
@@ -342,6 +343,17 @@ export class Room {
     }
   }
 
+  async turnAway(id: string): Promise<void> {
+    if (!this.isOwner) throw new Error("only the channel's owner answers join requests");
+    const req = this.requests.find((r) => r.id === id);
+    if (!req) throw new Error("that join request isn't waiting any more");
+    try {
+      await this.keyring.call(this.code, "deny", req.id);
+    } finally {
+      await this.refreshRequests();
+    }
+  }
+
   async approveSpec(ask: number, v: number): Promise<number> {
     const spec = this.state?.specs.get(ask);
     if (!spec) throw new Error(`#${ask} has no spec`);
@@ -360,7 +372,7 @@ export class Room {
     }
   }
 
-  private reviewing(id: number): Task {
+  private reviewing(id: number): Frozen<Task> {
     const task = this.state?.tasks.get(id);
     if (!task || task.state !== "review") throw new Error(`${taskId(id)} isn't waiting for a review any more`);
     return task;

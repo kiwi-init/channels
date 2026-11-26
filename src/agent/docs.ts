@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import type * as Y from "yjs";
 import type { Channel } from "@kiwi/core/client.ts";
 import { agentBlock } from "@kiwi/core/doc/agent.ts";
@@ -32,7 +33,7 @@ export function addressed(text: string, to: readonly string[] | undefined): stri
   return named.length ? `${named.map((n) => `@${n}`).join(" ")} ${text}` : text;
 }
 
-function placeOfReply(state: Pick<ChannelState, "placeOf" | "roomOf">, seq: number): Place | null {
+function placeOfReply(state: Pick<ChannelState, "placeOf" | "roomOf">, seq: number): Frozen<Place> | null {
   const place = state.placeOf.get(seq) ?? MAIN;
   if (place.kind === "dm") return null;
   return place.kind === "main" && (state.roomOf.get(seq) ?? GENERAL_ROOM) !== GENERAL_ROOM ? null : place;

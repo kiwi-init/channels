@@ -43,12 +43,16 @@ export type Ask =
   | { op: "sendBack"; code: string; task: number; why: string }
   | { op: "allow"; code: string; id: string; allow: boolean }
   | { op: "letIn"; code: string; id: string }
+  | { op: "turnAway"; code: string; id: string }
   | { op: "approveSpec"; code: string; ask: number; v: number }
   | { op: "open"; code: string; place: string }
   | { op: "marks"; code: string; marks: Record<string, number>; write: boolean }
   | { op: "nudge" }
   | { op: "push"; token: string; sandbox: boolean }
-  | { op: "signOut"; relay: string };
+  | { op: "signOut"; relay: string }
+  | { op: "liveToken"; start?: string; update?: string; room?: string; sandbox: boolean }
+  | { op: "liveKeys" }
+  | { op: "liveOff" };
 
 export interface Picture {
   name: string;
@@ -108,7 +112,7 @@ export interface MessageView {
   event: boolean;
   mine: boolean;
   quote: QuoteView | null;
-  choices: string[];
+  choices: readonly string[];
   chosen: { choice: string; by: string } | null;
   waiting: boolean;
   step: Step | null;
@@ -134,6 +138,7 @@ export interface TaskView {
   createdAt: number;
   last: string | null;
   archived: boolean;
+  since: number | null;
 }
 
 export interface AskView {
@@ -144,7 +149,7 @@ export interface AskView {
   plain: string;
   at: number;
   label: string;
-  choices: string[];
+  choices: readonly string[];
   task: number | null;
   place: string;
 }
@@ -202,6 +207,7 @@ export type IconView = { kind: "robot"; robot: string } | { kind: "emoji"; emoji
 
 export interface RoomView {
   code: string;
+  roomId: string | null;
   title: string;
   icon: IconView;
   me: string;
@@ -220,7 +226,7 @@ export interface RoomView {
   side: MessageView[];
   sideKey: string | null;
   tasks: TaskView[];
-  asks: AskView[];
+  asks: readonly AskView[];
   reviews: ReviewView[];
   needs: NeedView[];
   last: MessageView | null;

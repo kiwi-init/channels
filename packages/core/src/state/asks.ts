@@ -1,13 +1,16 @@
+import type { Frozen } from "./types.ts";
 import { asksPeople } from "../personality.ts";
 import { ignored, isDecisionKind, wellFormedArea, type DecisionKind, type Message, type Step } from "../protocol.ts";
 import { answersAsk, isPerson } from "./people.ts";
 import { placeKey } from "./places.ts";
 import { commentedSpec } from "./specs.ts";
-import type { AskHead, ChannelState, Task } from "./types.ts";
+import type { AskHead, ChannelState, ChannelStateDraft, Task } from "./types.ts";
 
 const ASK_WORDS_MAX = 200;
 
 type Lookup = Pick<ChannelState, "askHeads" | "threadOf" | "placeOf" | "tasks" | "specs">;
+
+type Filing = Pick<ChannelStateDraft, "askHeads" | "threadOf" | "placeOf" | "tasks" | "specs">;
 
 export function askHeadOf(m: Pick<Message, "seq" | "from" | "body">, at: number): AskHead {
   return {
@@ -33,7 +36,7 @@ export function askOfMessage(look: Lookup, seq: number): number | undefined {
   return look.askHeads.has(seq) ? seq : undefined;
 }
 
-export function fileTask(look: Lookup, task: Task, re: number | undefined, byPerson: boolean, at: number): number | undefined {
+export function fileTask(look: Filing, task: Task, re: number | undefined, byPerson: boolean, at: number): number | undefined {
   const fromMessage = re !== undefined ? askOfMessage(look, re) : undefined;
   if (fromMessage !== undefined) return fromMessage;
   const fromParent = task.from !== undefined ? look.tasks.get(task.from)?.ask : undefined;
@@ -61,12 +64,12 @@ export function mayNameGoal(state: Pick<ChannelState, "members" | "lead">, me: s
 }
 
 export interface AskGroup {
-  head: AskHead | null;
-  tasks: Task[];
+  head: Frozen<AskHead> | null;
+  tasks: Frozen<Task>[];
 }
 
-export function askGroups(state: Pick<ChannelState, "askHeads">, tasks: Task[]): AskGroup[] {
-  const groups = new Map<number | null, Task[]>();
+export function askGroups(state: Pick<ChannelState, "askHeads">, tasks: Frozen<Task[]>): AskGroup[] {
+  const groups = new Map<number | null, Frozen<Task>[]>();
   for (const t of tasks) {
     const key = t.ask !== undefined && state.askHeads.has(t.ask) ? t.ask : null;
     groups.set(key, [...(groups.get(key) ?? []), t]);
@@ -74,18 +77,18 @@ export function askGroups(state: Pick<ChannelState, "askHeads">, tasks: Task[]):
   return [...groups].sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : a - b)).map(([key, list]) => ({ head: key === null ? null : state.askHeads.get(key)!, tasks: list }));
 }
 
-export function heldBy(state: Pick<ChannelState, "tasks" | "askHeads">, m: Pick<Message, "task" | "holds">): number[] {
+export function heldBy(state: Pick<ChannelState, "tasks" | "askHeads">, m: Frozen<Pick<Message, "task" | "holds">>): number[] {
   return [...new Set([...(m.task !== undefined ? [m.task] : []), ...(m.holds ?? [])])].filter((id) => {
     const t = state.tasks.get(id);
     return t ? t.state !== "done" : state.askHeads.has(id);
   });
 }
 
-export function askedOfPeopleByOthers(state: Pick<ChannelState, "openAsks" | "members">, me: string): Message[] {
+export function askedOfPeopleByOthers(state: Pick<ChannelState, "openAsks" | "members">, me: string): Frozen<Message[]> {
   return state.openAsks.filter((a) => a.from !== me && !!a.to?.length && !a.to.includes(me) && a.to.some((n) => isPeopleTarget(state, n)));
 }
 
-export function openAsksOnWork(state: Pick<ChannelState, "openAsks" | "members" | "tasks" | "askHeads">, holds: readonly number[]): Message[] {
+export function openAsksOnWork(state: Pick<ChannelState, "openAsks" | "members" | "tasks" | "askHeads">, holds: readonly number[]): Frozen<Message[]> {
   if (!holds.length) return [];
   return state.openAsks.filter(
     (a) => a.esc && !a.permission && !a.handoff && !a.step && a.decision !== "irreversible" && !!a.to?.some((n) => isPeopleTarget(state, n)) && heldBy(state, a).some((id) => holds.includes(id)),
@@ -117,7 +120,7 @@ export function decidedOnWork(state: Pick<ChannelState, "openAsks" | "members" |
   return decided.slice(-limit);
 }
 
-export function asksOnSameWork(state: Pick<ChannelState, "openAsks" | "members" | "tasks" | "askHeads">, me: string, to: readonly string[], holds: readonly number[]): Message[] {
+export function asksOnSameWork(state: Pick<ChannelState, "openAsks" | "members" | "tasks" | "askHeads">, me: string, to: readonly string[], holds: readonly number[]): Frozen<Message[]> {
   if (!holds.length) return [];
   return askedOfPeopleByOthers(state, me).filter((a) => a.to?.some((n) => to.includes(n)) && heldBy(state, a).some((id) => holds.includes(id)));
 }
@@ -136,7 +139,7 @@ export function leadHoldsFor(state: Pick<ChannelState, "members" | "lead">, me: 
   return lead?.active && !isPerson(lead) ? lead.name : null;
 }
 
-export function handedToLead(state: Pick<ChannelState, "openAsks" | "lead">, seq: number): Message | undefined {
+export function handedToLead(state: Pick<ChannelState, "openAsks" | "lead">, seq: number): Frozen<Message | undefined> {
   return state.openAsks.find((a) => a.seq === seq && state.lead !== null && a.to?.includes(state.lead) && readHandedOver(String(a.body ?? ""))?.from === a.from);
 }
 
@@ -268,7 +271,7 @@ export interface HandedAsk {
   handed: Handed;
 }
 
-export function handedTo(state: Pick<ChannelState, "openAsks">, me: string): HandedAsk[] {
+export function handedTo(state: Pick<ChannelState, "openAsks">, me: string): Frozen<HandedAsk[]> {
   return state.openAsks
     .flatMap((ask) => {
       const handed = ask.from !== me && ask.to?.includes(me) ? readHandedOver(String(ask.body ?? "")) : null;
@@ -282,7 +285,7 @@ function isPeopleTarget(state: Pick<ChannelState, "members">, name: string): boo
   return !!m && isPerson(m);
 }
 
-export function holdsWork(state: Pick<ChannelState, "tasks" | "askHeads" | "members">, m: Pick<Message, "from" | "task" | "holds" | "permission" | "handoff">): boolean {
+export function holdsWork(state: Pick<ChannelState, "tasks" | "askHeads" | "members">, m: Frozen<Pick<Message, "from" | "task" | "holds" | "permission" | "handoff">>): boolean {
   const from = state.members.get(m.from);
   return (!!from && isPerson(from)) || !!m.permission || !!m.handoff || heldBy(state, m).length > 0;
 }

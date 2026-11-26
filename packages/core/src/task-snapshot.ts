@@ -1,3 +1,4 @@
+import type { Frozen } from "./state/types.ts";
 import { inlineText } from "./membership.ts";
 
 export const SNAPSHOT_DIRTY_SHOWN = 20;
@@ -42,7 +43,7 @@ export function wellFormedSnapshot(e: Record<string, unknown>): boolean {
   );
 }
 
-export function sameFacts(a: SnapshotFacts, b: SnapshotFacts): boolean {
+export function sameFacts(a: Frozen<SnapshotFacts>, b: SnapshotFacts): boolean {
   return (
     a.path === b.path &&
     a.branch === b.branch &&
@@ -57,13 +58,13 @@ export function sameFacts(a: SnapshotFacts, b: SnapshotFacts): boolean {
   );
 }
 
-const files = (s: SnapshotFacts): string => {
+const files = (s: Frozen<SnapshotFacts>): string => {
   const named = s.dirty.map((f) => inlineText(f, 80));
   const rest = s.more ? ` and ${s.more} more` : "";
   return `${named.join(", ")}${rest}`;
 };
 
-export function snapshotLines(s: SnapshotFacts): string[] {
+export function snapshotLines(s: Frozen<SnapshotFacts>): string[] {
   const at = `${s.branch ? `branch ${inlineText(s.branch, 80)}` : "detached HEAD"} at ${s.head.slice(0, 9)} “${inlineText(s.subject, 100)}”`;
   const base = s.base ? `, ${s.base.ahead} ahead and ${s.base.behind} behind ${inlineText(s.base.name, 60)}` : "";
   return [`${at}${base}`, s.dirty.length ? `uncommitted in that checkout, which may hold others' edits too: ${files(s)}` : "nothing uncommitted in that checkout"];

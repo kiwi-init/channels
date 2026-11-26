@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { GITHUB_SYNCED, isQuiet, type GithubNote } from "@kiwi/core/protocol.ts";
-import { fold, githubNews, prChecks, prKey, toRoster, type ChannelState } from "@kiwi/core/state.ts";
+import { fold, githubNews, prChecks, prKey, toRoster, type ChannelState, type ChannelStateDraft } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { githubAppFrom } from "../src/relay/github-app.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
@@ -192,7 +192,16 @@ describe("the owner's app fills the GitHub tab with what a linked repo already h
 });
 
 describe("what a sync adds to what the channel already knows", () => {
-  const empty = (): ChannelState["github"] => ({ prs: new Map(), checks: new Map(), issues: new Map(), rules: new Map(), releases: new Map(), runs: new Map(), runsSince: null, runsForgotten: null });
+  const empty = (): ChannelStateDraft["github"] => ({
+    prs: new Map(),
+    checks: new Map(),
+    issues: new Map(),
+    rules: new Map(),
+    releases: new Map(),
+    runs: new Map(),
+    runsSince: null,
+    runsForgotten: null,
+  });
   const note = (n: Partial<GithubNote>): GithubNote => ({ event: "pull_request", repo: "o/r", at: 1, action: GITHUB_SYNCED, ...n });
 
   test("keeps what's new or different, drops what's the same, and never steps back to an older run", () => {

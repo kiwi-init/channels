@@ -1,3 +1,4 @@
+import type { Frozen } from "@kiwi/core/state.ts";
 import { clockOf, nudgeRefusal, nudgesDue, skipsDue, type NudgeDue } from "@kiwi/core/clock.ts";
 import { channelOwner } from "@kiwi/core/mover.ts";
 import { AFTER_SKEW_MS, type Event, type SendAfter } from "@kiwi/core/protocol.ts";
@@ -14,7 +15,7 @@ export const clockBlock = (task: number, since: number): string => `clock:T${tas
 const toldBlock = (task: number, since: number, step: 2 | 3): string => `${clockBlock(task, since)}:${step}`;
 const WAKE_BLOCK = /^clock:T\d+:\d+$/;
 
-function toldItem(task: Task, due: NudgeDue & { step: 2 | 3 }, name: string, wake: string, at: number): DocWakeItem {
+function toldItem(task: Frozen<Task>, due: NudgeDue & { step: 2 | 3 }, name: string, wake: string, at: number): DocWakeItem {
   return {
     key: `task:${task.id}`,
     th: "",
@@ -28,7 +29,7 @@ function toldItem(task: Task, due: NudgeDue & { step: 2 | 3 }, name: string, wak
   };
 }
 
-export function clockWakeItem(task: Task, mover: string, since: number, quiet: number, at: number): DocWakeItem {
+export function clockWakeItem(task: Frozen<Task>, mover: string, since: number, quiet: number, at: number): DocWakeItem {
   return {
     key: `task:${task.id}`,
     th: "",
@@ -89,7 +90,7 @@ function wakeWords(woke: Woke | undefined): string {
   return `wake attempted, ${woke.delivered === undefined ? "not delivered" : "delivered"}, ${woke.read === undefined ? "not read" : "read"}`;
 }
 
-const human = (m: Member | undefined): string | undefined => m?.sponsor?.user;
+const human = (m: Frozen<Member | undefined>): string | undefined => m?.sponsor?.user;
 
 function evaluates(state: ChannelState, me: string, mover: string): boolean {
   const mine = state.members.get(me);
