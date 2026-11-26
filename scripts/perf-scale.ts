@@ -1,15 +1,12 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import * as Effect from "effect/Effect";
 import { chromium, type CDPSession, type Page } from "playwright-core";
 import { readSeededFrame, reloadFromHost, watchSeededFrame } from "./seeded-frame.ts";
 import { installLoad, loadRuns, loadsFrom, requireInside } from "./perf-load.ts";
 import { cpus, totalmem } from "node:os";
-import { RelayError } from "@kiwi/core/client.ts";
-import { chooseThread } from "@kiwi/core/state.ts";
-import { AgentSession, oneLook, runAgent } from "../src/agent.ts";
+import { AgentSession, runAgent } from "../src/agent.ts";
 import { loadConfig } from "../src/config.ts";
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
@@ -17,6 +14,7 @@ import { startLocalRelay } from "./local-relay.ts";
 import { calibrate } from "./perf-calibrate.ts";
 import { approveSpec, composer, firstRun, letIn, newChannel, channelSettings, eraseLine, ROWS, view, viewTimed, writeBlock } from "./perf-ui.ts";
 import { harnessDist } from "./ui-harness.ts";
+import { cliIn, patiently, PERF_BASE_LARGE, PERF_BASE_SMALL, say, SEEDED, seedChannel, TEXTS } from "./perf-seed.ts";
 import { measureBase, type BaseSeed } from "./perf-base.ts";
 import { WINDOW } from "@kiwi/channel/channel-store.ts";
 import { foldRoster } from "@kiwi/channel/fold-roster.ts";
@@ -42,9 +40,6 @@ Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium 
   process.exit(0);
 }
 
-const PERF_BASE_SMALL = { tasks: 100, messages: 2000, taskNotes: 0 };
-const PERF_BASE_LARGE = { tasks: 600, messages: 4000, taskNotes: 7 };
-const ROOT = resolve(import.meta.dir, "..");
 const AGENTS = Number(process.env.PERF_AGENTS ?? 10);
 const PRESET = process.env.PERF_BASE === "large" ? PERF_BASE_LARGE : process.env.PERF_BASE ? null : PERF_BASE_SMALL;
 if (!PRESET) throw new Error(`PERF_BASE is large or empty, not ${process.env.PERF_BASE}`);
@@ -57,64 +52,10 @@ const ALLOC = process.env.PERF_ALLOC === "1";
 const jsonAt = process.argv.indexOf("--json");
 const OUT = jsonAt > 0 ? process.argv[jsonAt + 1] : undefined;
 const data = mkdtempSync(join(tmpdir(), "kiwi-perf-scale-"));
-const cli = join(data, "cli");
-mkdirSync(join(cli, "bin"), { recursive: true });
+const cli = cliIn(join(data, "cli"), "scale");
 mkdirSync(join(data, "relay"));
-for (const opener of ["open", "xdg-open"]) {
-  writeFileSync(join(cli, "bin", opener), "#!/bin/sh\nexit 0\n");
-  chmodSync(join(cli, "bin", opener), 0o755);
-}
-process.env.KIWI_HOME = join(cli, "home");
-const running: ChildProcess[] = [];
-function kiwi(argv: string[]): Promise<string> {
-  const env = { KIWI_MODEL: "claude-sonnet-5-5", ...process.env, KIWI_HOME: join(cli, "home"), CLAUDE_CONFIG_DIR: join(cli, "no-claude"), PATH: `${join(cli, "bin")}:${process.env.PATH}` };
-  const p = spawn("bun", ["src/cli/main.ts", ...argv], { cwd: ROOT, env });
-  running.push(p);
-  let out = "";
-  p.stdout.on("data", (d) => (out += d));
-  p.stderr.on("data", (d) => (out += d));
-  return new Promise((ok, fail) =>
-    p.on("exit", (code) => {
-      running.splice(running.indexOf(p), 1);
-      if (code === 0) ok(out);
-      else fail(new Error(`kiwi ${argv.join(" ")} exited ${code}: ${out.trim().split("\n").pop()}`));
-    }),
-  );
-}
-async function as(agent: string, argv: string[]): Promise<string> {
-  for (;;) {
-    try {
-      return await kiwi(["-c", "scale", "--as", agent, ...argv]);
-    } catch (e) {
-      if (!String(e).includes("too many")) throw e;
-      await new Promise((r) => setTimeout(r, 5000));
-    }
-  }
-}
-async function patiently<A>(attempt: () => Promise<A>): Promise<A> {
-  for (;;) {
-    try {
-      return await attempt();
-    } catch (e) {
-      if (!(e instanceof RelayError && e.status === 429)) throw e;
-      await new Promise((r) => setTimeout(r, (e.retryAfter ?? 1) * 1000));
-    }
-  }
-}
-const say = (s: AgentSession, body: string, task?: number) =>
-  patiently(() =>
-    runAgent(
-      oneLook(
-        Effect.gen(function* () {
-          const { state } = yield* s.state();
-          const chosen = chooseThread(state, s.me, task === undefined ? {} : { task });
-          if (typeof chosen === "string") return yield* Effect.fail(new Error(chosen));
-          return yield* s.send(body, { kind: "msg", ...(chosen.to ? { to: chosen.to } : {}), ...(chosen.task !== undefined ? { task: chosen.task } : {}) });
-        }),
-      ),
-    ),
-  );
-
+process.env.KIWI_HOME = cli.home;
+const { kiwi, as } = cli;
 const seatBase = (seat: AgentSession) =>
   Effect.gen(function* () {
     const ch = seat.ch;
@@ -260,17 +201,6 @@ async function profile(cdp: CDPSession, run: () => Promise<unknown>): Promise<st
     .map(([k, v]) => `${(v / 1000).toFixed(1)}ms  ${k}`);
 }
 
-const TEXTS = [
-  "Numbers are in:\n\n- p50 0.3ms, p95 1ms\n- no refusals in 800 rooms\n\nThe change is in `src/relay/route.ts`:\n\n```ts\nconst program = answer(dispatch(routes, guards, otherwise))\n```",
-  "On it. I'll have win run the steady load first, then the cold runs.",
-  "Merged #398. The rails are darker and the page is a round sheet beside them, in light and dark.",
-  "| step | before | after |\n|---|---|---|\n| first paint | 420ms | 180ms |\n| switch | 270ms | 26ms |",
-  "PR is up: https://github.com/kiwi-init/channels/pull/417 — CI green, waiting on review.",
-];
-
-const SEEDED = "Seeded: a reload opens the channel here";
-const noteText = (task: number, k: number): string =>
-  `Checkpoint ${k + 1} for task ${task}.\n\n${Array.from({ length: 6 }, (_, i) => TEXTS[(task + k + i) % TEXTS.length]).join("\n\n")}`.slice(0, 1536);
 const wholeEnv = (name: string, fallback: number, least: number): number => {
   const raw = process.env[name]?.trim() ?? "";
   const n = raw ? Number(raw) : fallback;
@@ -280,7 +210,6 @@ const wholeEnv = (name: string, fallback: number, least: number): number => {
 const ROUNDS = wholeEnv("PERF_SWITCH_ROUNDS", 3, 3);
 const CAL_REPS = wholeEnv("PERF_CALIBRATION_REPS", 5, 5);
 const LOAD = loadsFrom(process.env, VIEWS);
-const SPEC = "# Ship it at scale\n\n## Done when\n- [ ] the board holds every task";
 const report: Record<string, unknown> = {
   agents: AGENTS,
   tasks: TASKS,
@@ -373,64 +302,28 @@ try {
   await mark("agents in, empty channel");
 
   const seedStart = Date.now();
-  const perSender = Math.ceil(MESSAGES / AGENTS);
-  const early = process.env.PERF_TASKS_FIRST ? 0 : Math.floor(perSender * 0.7);
-  let sent = 0;
-  const tasks: number[] = [];
-  const post = (from: number, to: number) =>
-    Promise.all(
-      seats.map(async (s, a) => {
-        for (let i = from; i < to; i++) {
-          const n = a * perSender + i;
-          if (n >= MESSAGES) return;
-          await say(s, `M${n}: ${TEXTS[n % TEXTS.length]}`, n % 4 === 0 && tasks.length ? tasks[n % tasks.length] : undefined);
-          sent++;
-          if (sent % 500 === 0 && !GATED) await mark(`${sent} messages`);
-        }
-      }),
-    );
-  await post(0, early);
-  const asked = "Scale it: ten agents and a hundred tasks";
-  await tab(page, "Conversation", "");
-  await writeBlock(page, asked);
-  let ask = 0;
-  while (!ask) {
-    const { messages } = await patiently(() => runAgent(seats[0]!.state()));
-    ask = messages.find((m) => m.body === asked)?.seq ?? 0;
-    if (!ask) await page.waitForTimeout(300);
-  }
-  await patiently(() => runAgent(seats[0]!.writeSpec(ask, SPEC)));
-  await patiently(() => runAgent(seats[0]!.readySpec(ask)));
-  await approveSpec(page);
-  const perAgent = Math.ceil(TASKS / AGENTS);
-  await Promise.all(
-    seats.map(async (s, a) => {
-      for (let i = 0; i < perAgent && a * perAgent + i < TASKS; i++) {
-        const n = a * perAgent + i;
-        const title = `Task ${n}: ${["speed up the switch", "fix the relay retry", "polish the sidebar", "write the stable criteria"][n % 4]} (${s.me})`;
-        const id = await patiently(() => runAgent(s.taskAdd(title, { owner: s.me, re: ask })));
-        tasks.push(id);
-        for (let k = 0; k < TASK_NOTES; k++) await patiently(() => runAgent(s.taskUpdate(id, { note: noteText(n, k) })));
-        if (n % 3 === 1) await patiently(() => runAgent(s.taskUpdate(id, { state: "doing" })));
-        if (n % 3 === 2) await patiently(() => runAgent(s.taskUpdate(id, { state: "done" })));
-      }
-    }),
-  );
-  log(`${tasks.length} tasks`);
-  await mark("tasks added");
-
-  await post(early, perSender);
-  const seeder = seats[0]!;
-  const seededSeq = await patiently(() =>
-    runAgent(
-      oneLook(
-        Effect.gen(function* () {
-          const { state } = yield* seeder.state();
-          const owner = [...state.members.values()].find((m) => m.owner)?.name;
-          return yield* seeder.send(SEEDED, { kind: "msg", ...(owner ? { to: [owner] } : {}) });
-        }),
-      ),
-    ),
+  const { tasks, seededSeq } = await seedChannel(
+    seats,
+    {
+      ask: async (text) => {
+        await tab(page, "Conversation", "");
+        await writeBlock(page, text);
+      },
+      approveSpec: () => approveSpec(page),
+    },
+    {
+      messages: MESSAGES,
+      tasks: TASKS,
+      taskNotes: TASK_NOTES,
+      tasksFirst: !!process.env.PERF_TASKS_FIRST,
+      sent: async (n) => {
+        if (n % 500 === 0 && !GATED) await mark(`${n} messages`);
+      },
+      tasksAdded: async (count) => {
+        log(`${count} tasks`);
+        await mark("tasks added");
+      },
+    },
   );
   report.seedSeconds = Math.round((Date.now() - seedStart) / 1000);
   const live = await drain(page);
@@ -684,8 +577,8 @@ try {
   else console.log(JSON.stringify(report, null, 2));
 } finally {
   await browser.close();
-  for (const p of running) p.kill();
-  await stopDaemon(daemonSock(join(cli, "home")));
+  cli.stop();
+  await stopDaemon(daemonSock(cli.home));
   relay.kill();
   rmSync(data, { recursive: true, force: true });
 }

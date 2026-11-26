@@ -1,6 +1,6 @@
 import { until, type Driver } from "./eb-drive.ts";
 
-const fillIn = ({ selector, value }: { selector: string; value: string }): boolean => {
+export const fillIn = ({ selector, value }: { selector: string; value: string }): boolean => {
   const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector);
   if (!el) return false;
   const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -9,9 +9,9 @@ const fillIn = ({ selector, value }: { selector: string; value: string }): boole
   return true;
 };
 
-const gone = ({ selector }: { selector: string }): boolean => !document.querySelector(selector);
+export const gone = ({ selector }: { selector: string }): boolean => !document.querySelector(selector);
 
-const clickButton = ({ name, within }: { name: string; within: string }): boolean => {
+export const clickButton = ({ name, within }: { name: string; within: string }): boolean => {
   const button = [...document.querySelectorAll<HTMLButtonElement>(`${within} button`)].find(
     (b) => (b.getAttribute("aria-label") ?? b.textContent ?? "").trim() === name && b.getClientRects().length > 0 && !b.disabled,
   );
