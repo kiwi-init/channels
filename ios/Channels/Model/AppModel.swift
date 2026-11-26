@@ -54,6 +54,7 @@ final class AppModel {
     var cardOpen = false
     var lastTab: AppTab = .chats
     var barHeight: CGFloat = 0
+    var barTop: CGFloat = 0
     @ObservationIgnored var chats: [Spot: Compose] = [:]
     var enrolled = false
     var joining = 0

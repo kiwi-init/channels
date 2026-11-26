@@ -217,6 +217,11 @@ struct RootBar: View {
             } action: {
                 if !model.cardOpen { model.barHeight = $0 }
             }
+            .onGeometryChange(for: CGFloat.self) {
+                $0.frame(in: .global).minY
+            } action: {
+                if !model.cardOpen { model.barTop = $0 }
+            }
         } else {
             Color.clear.frame(height: model.barHeight).accessibilityHidden(true)
         }
