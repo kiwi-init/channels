@@ -84,9 +84,9 @@ struct Conversation: View {
     @State private var insetBottom: CGFloat = 0
 
     private var footer: CGFloat {
-        if typing, model.barHeight > 0 { return model.barHeight + 6 }
+        if typing, model.barHeight > 0 { return (model.barHeight + 6).rounded() }
         guard model.barTop > 0, feedBottom > 0 else { return Bar.height + 48 }
-        return max(6, feedBottom - insetBottom - model.barTop + 6)
+        return max(6, feedBottom - insetBottom - model.barTop + 6).rounded()
     }
 
     private var solo: Bool {
@@ -192,8 +192,8 @@ struct Conversation: View {
                 try? await Task.sleep(for: .milliseconds(120))
                 proxy.scrollTo("feed-end", anchor: .bottom)
             }
-            .onChange(of: footer) { _, _ in
-                guard follow.atBottom || typing else { return }
+            .onChange(of: model.barHeight.rounded()) { old, now in
+                guard typing, abs(now - old) >= 1 else { return }
                 proxy.scrollTo("feed-end", anchor: .bottom)
             }
             .onChange(of: follow.jumps) {
