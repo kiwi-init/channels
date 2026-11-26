@@ -71,7 +71,7 @@ struct Conversation: View {
     @Binding var replyTo: MessageView?
     @Binding var position: ScrollPosition
     @Binding var follow: Follow
-    var typing: FocusState<Bool>.Binding
+    @Binding var typing: Bool
     var elsewhere: [AskView] = []
     var reviews: [ReviewView] = []
     var needs: [NeedView] = []
@@ -104,7 +104,7 @@ struct Conversation: View {
                     ) { line in
                         LineView(line: line, room: room, solo: solo) { m in
                             replyTo = m
-                            typing.wrappedValue = true
+                            typing = true
                         } jump: { seq in
                             let id = model.sentAs[room.code]?[seq].map { "p\($0)" } ?? "b\(seq)"
                             withAnimation(Motion.ease) { position.scrollTo(id: id, anchor: .center) }
@@ -159,7 +159,7 @@ struct Conversation: View {
             .onChange(of: follow.jumps) {
                 withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
             }
-            .onChange(of: typing.wrappedValue) { _, now in
+            .onChange(of: typing) { _, now in
                 guard now else { return }
                 Task {
                     try? await Task.sleep(for: .milliseconds(250))

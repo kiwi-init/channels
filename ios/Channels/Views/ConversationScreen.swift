@@ -5,13 +5,9 @@ struct ConversationScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(Lock.self) private var lock
     @State private var spot: Spot
-    @State private var replyTo: MessageView?
-    @State private var answering: AskView?
-    @State private var sendingBack: ReviewView?
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
     @State private var visible = false
-    @FocusState private var typing: Bool
     @Environment(\.scenePhase) private var scene
 
     init(start: Spot) {
@@ -19,21 +15,22 @@ struct ConversationScreen: View {
     }
 
     var body: some View {
+        @Bindable var compose = model.compose(spot)
         Group {
             if let room = model.shown(spot) {
                 Conversation(
-                    room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
+                    room: room, replyTo: $compose.replyTo, position: $position, follow: $follow, typing: $compose.typing, elsewhere: spot.general ? room.elsewhere() : [],
                     reviews: reviews(room), needs: needs(room), worker: worker(room)
                 ) { ask in
-                    replyTo = nil
-                    sendingBack = nil
-                    answering = ask
-                    typing = true
+                    compose.replyTo = nil
+                    compose.sendingBack = nil
+                    compose.answering = ask
+                    compose.typing = true
                 } sendBack: { review in
-                    replyTo = nil
-                    answering = nil
-                    sendingBack = review
-                    typing = true
+                    compose.replyTo = nil
+                    compose.answering = nil
+                    compose.sendingBack = review
+                    compose.typing = true
                 }
                 .id(spot.id)
                 .overlay(alignment: .bottomTrailing) {
@@ -45,13 +42,6 @@ struct ConversationScreen: View {
                     }
                 }
                 .animation(.snappy(duration: 0.25), value: follow.atBottom)
-                .bar(.bottom) {
-                    if talks(room) || answering != nil || sendingBack != nil {
-                        Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing, tabs: true)
-                    } else {
-                        ListBar()
-                    }
-                }
                 .navigationTitle(room.spotTitle(spot.place))
                 .subtitle(room.status(of: spot.place))
                 .toolbar {
@@ -75,7 +65,7 @@ struct ConversationScreen: View {
                 model.focusNext = nil
                 Task {
                     try? await Task.sleep(for: .milliseconds(350))
-                    typing = true
+                    model.compose(spot).typing = true
                 }
             }
         }
@@ -86,10 +76,6 @@ struct ConversationScreen: View {
             follow = Follow()
             await model.open(spot.code, place: spot.place == model.rooms[spot.code]?.sideKey ? "main" : spot.place)
         }
-    }
-
-    private func talks(_ room: RoomView) -> Bool {
-        spot.general || spot.place == room.sideKey || room.placeView(spot.place)?.kind == "room"
     }
 
     private func needs(_ room: RoomView) -> [NeedView] {

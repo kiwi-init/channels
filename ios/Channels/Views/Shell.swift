@@ -19,17 +19,24 @@ struct Shell: View {
             page(.chats) {
                 NavigationStack(path: Binding(get: { model.path }, set: { model.path = $0 })) {
                     ChannelList()
-                        .bar(.bottom) { ListBar() }
                         .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
                 }
             }
             page(.needs) {
                 NavigationStack {
                     NeedsScreen()
-                        .bar(.bottom) { ListBar(on: .needs) }
                 }
             }
+            if model.cardOpen {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .onTapGesture { withAnimation(Bar.spring(false)) { model.cardOpen = false } }
+                    .accessibilityHidden(true)
+            }
         }
+        .bar(.bottom) { RootBar() }
+        .onChange(of: model.path) { _, _ in model.cardOpen = false }
+        .onChange(of: model.tab) { _, _ in model.cardOpen = false }
         .sheet(isPresented: Binding(get: { model.showYou }, set: { model.showYou = $0 })) {
             NavigationStack {
                 SettingsScreen()
@@ -79,7 +86,7 @@ struct RouteScreen: View {
     var body: some View {
         switch route {
         case .place(let spot): ConversationScreen(start: spot)
-        case .tasks(let code): TasksScreen(code: code).bar(.bottom) { ListBar() }
+        case .tasks(let code): TasksScreen(code: code)
         }
     }
 }

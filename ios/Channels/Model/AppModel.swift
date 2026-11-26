@@ -51,6 +51,8 @@ final class AppModel {
     var focusNext: Spot?
     var lastCode: String?
     var showYou = false
+    var cardOpen = false
+    @ObservationIgnored var chats: [Spot: Compose] = [:]
     var enrolled = false
     var joining = 0
     var unsaved: String?

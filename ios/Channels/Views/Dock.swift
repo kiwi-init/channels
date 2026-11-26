@@ -68,6 +68,7 @@ struct Dock: View {
     @Binding var sendingBack: ReviewView?
     var typing: FocusState<Bool>.Binding
     var tabs = false
+    var space: Namespace.ID?
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
     @State private var home: CGFloat = 0
@@ -108,15 +109,11 @@ struct Dock: View {
             } else if let replyTo {
                 bar("arrowshape.turn.up.left.fill", Tone.accent, room.display(replyTo.from), replyTo.plain) { self.replyTo = nil }
             }
-            Melt(spacing: 6) {
-                HStack(alignment: .bottom, spacing: tabs ? Bar.gap : 8) {
-                    if tabs && !typing.wrappedValue {
-                        TabsPill(compact: true)
-                            .glassCapsule()
-                            .transition(.scale(scale: 0.4, anchor: .trailing).combined(with: .opacity))
-                    }
-                    if !tabs { plus }
-                    field
+            Group {
+                if space == nil {
+                    Melt(spacing: 6) { inputRow }
+                } else {
+                    inputRow
                 }
             }
             .animation(Bar.spring(still), value: typing.wrappedValue)
@@ -151,6 +148,23 @@ struct Dock: View {
             guard !items.isEmpty else { return }
             picked = []
             Task { await load(items) }
+        }
+    }
+
+    private var inputRow: some View {
+        HStack(alignment: .bottom, spacing: tabs ? Bar.gap : 8) {
+            if tabs && !typing.wrappedValue {
+                Group {
+                    if let space {
+                        TabsPill(compact: true).melting("tabs", in: space, Capsule())
+                    } else {
+                        TabsPill(compact: true).glassCapsule()
+                    }
+                }
+                .transition(.scale(scale: 0.4, anchor: .trailing).combined(with: .opacity))
+            }
+            if !tabs { plus }
+            field
         }
     }
 
@@ -201,7 +215,7 @@ struct Dock: View {
             }
         }
         .frame(minHeight: tabs ? Bar.height : 44)
-        .glass(tabs ? Bar.height / 2 : 22)
+        .sideGlass(space, radius: tabs ? Bar.height / 2 : 22)
     }
 
     private var mentions: some View {

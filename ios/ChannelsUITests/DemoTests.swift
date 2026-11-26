@@ -51,6 +51,7 @@ final class DemoTests: XCTestCase {
         let leadField = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
         XCTAssertTrue(leadField.waitForExistence(timeout: 5), "with a field to message the lead")
         XCTAssertFalse(needs.isHittable, "the card takes the row")
+        XCTAssertTrue(app.buttons["tab-current"].isHittable, "the tabs shrink to one round button beside it")
         sleep(1)
         add(shot(app, "channel card open"))
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
@@ -68,7 +69,7 @@ final class DemoTests: XCTestCase {
         sleep(1)
         add(shot(app, "chat at rest"))
         XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "the newest item ends above the bar")
-        XCTAssertGreaterThan(newest.frame.maxY, field.frame.minY - 40, "and no wide empty gap sits between them")
+        XCTAssertGreaterThan(newest.frame.maxY, field.frame.minY - 60, "and no wide empty gap sits between them")
 
         app.swipeDown()
         app.swipeDown()

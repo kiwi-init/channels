@@ -149,56 +149,123 @@ struct Squish: ButtonStyle {
     }
 }
 
-struct ListBar: View {
-    var on: AppTab = .chats
+@MainActor
+@Observable
+final class Compose {
+    var replyTo: MessageView?
+    var answering: AskView?
+    var sendingBack: ReviewView?
+    var typing = false
+}
+
+extension AppModel {
+    func compose(_ spot: Spot) -> Compose {
+        if let found = chats[spot] { return found }
+        let made = Compose()
+        chats[spot] = made
+        return made
+    }
+}
+
+extension RoomView {
+    func talks(at spot: Spot) -> Bool {
+        spot.general || spot.place == sideKey || placeView(spot.place)?.kind == "room"
+    }
+}
+
+struct RootBar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
-    @State private var open = false
-    @State private var swell = false
-    @State private var home: CGFloat = 0
     @Namespace private var space
 
-    var body: some View {
-        if model.tab == on { row }
+    private var chat: Spot? {
+        guard model.tab == .chats, case .place(let spot)? = model.path.last, let room = model.shown(spot) else { return nil }
+        let compose = model.compose(spot)
+        return room.talks(at: spot) || compose.answering != nil || compose.sendingBack != nil ? spot : nil
     }
 
-    private var row: some View {
+    var body: some View {
         Melt(spacing: 6) {
-            if open, let room = model.here {
-                ChannelCard(room: room) { open = false }
-                    .melting("side", in: space, RoundedRectangle(cornerRadius: 30, style: .continuous))
-                    .transition(.blurReplace)
+            if let spot = chat, let room = model.shown(spot) {
+                ChatBar(room: room, spot: spot, compose: model.compose(spot), space: space)
             } else {
-                HStack(spacing: Bar.gap) {
-                    TabsPill()
-                        .melting("tabs", in: space, Capsule())
-                    if let room = model.here {
-                        Button {
-                            Haptic.tap()
-                            grow()
-                        } label: {
-                            HStack(spacing: 8) {
-                                ChannelAvatar(room: room, size: 34)
-                                Text(room.title)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(Tone.ink)
-                                    .lineLimit(1)
-                            }
-                            .padding(.leading, 14)
-                            .padding(.trailing, 18)
-                            .frame(maxWidth: 160, maxHeight: .infinity)
-                            .fixedSize(horizontal: true, vertical: false)
-                            .contentShape(Capsule())
-                        }
-                        .buttonStyle(Squish())
-                        .scaleEffect(swell ? 1.18 : 1)
-                        .frame(height: Bar.height)
-                        .melting("side", in: space, Capsule())
-                        .accessibilityIdentifier("channel")
-                        .accessibilityLabel(room.title)
-                        .accessibilityValue(room.status(of: "main") ?? "")
+                ListRow(space: space)
+            }
+        }
+        .animation(Bar.spring(still), value: chat)
+    }
+}
+
+private struct ChatBar: View {
+    let room: RoomView
+    let spot: Spot
+    @Bindable var compose: Compose
+    let space: Namespace.ID
+    @FocusState private var typing: Bool
+
+    var body: some View {
+        Dock(
+            room: room, spot: spot, replyTo: $compose.replyTo, answering: $compose.answering, sendingBack: $compose.sendingBack, typing: $typing, tabs: true,
+            space: space
+        )
+        .onAppear { typing = compose.typing }
+        .onChange(of: spot) { _, _ in typing = compose.typing }
+        .onChange(of: compose.typing) { _, now in if typing != now { typing = now } }
+        .onChange(of: typing) { _, now in if compose.typing != now { compose.typing = now } }
+    }
+}
+
+private struct ListRow: View {
+    let space: Namespace.ID
+    @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var still
+    @State private var swell = false
+    @State private var home: CGFloat = 0
+
+    private var open: Bool { model.cardOpen }
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: Bar.gap) {
+            if open {
+                Button {
+                    Haptic.tap()
+                    close()
+                } label: {
+                    Image(systemName: model.tab.symbol)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Tone.accent)
+                        .frame(width: Bar.height, height: Bar.height)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(Squish())
+                .melting("tabs", in: space, Circle())
+                .accessibilityIdentifier("tab-current")
+                .accessibilityLabel(Text(model.tab.title))
+            } else {
+                TabsPill()
+                    .melting("tabs", in: space, Capsule())
+            }
+            if let room = model.here {
+                if open {
+                    ChannelCard(room: room) { close() }
+                        .melting("side", in: space, RoundedRectangle(cornerRadius: 30, style: .continuous))
                         .transition(.blurReplace)
+                } else {
+                    Button {
+                        Haptic.tap()
+                        grow()
+                    } label: {
+                        ChannelAvatar(room: room, size: 34)
+                            .frame(width: Bar.height, height: Bar.height)
+                            .contentShape(Circle())
                     }
+                    .buttonStyle(Squish())
+                    .scaleEffect(swell ? 1.18 : 1)
+                    .melting("side", in: space, Circle())
+                    .accessibilityIdentifier("channel")
+                    .accessibilityLabel(room.title)
+                    .accessibilityValue(room.status(of: "main") ?? "")
+                    .transition(.blurReplace)
                 }
             }
         }
@@ -210,28 +277,23 @@ struct ListBar: View {
         } action: {
             home = $0
         }
-        .background {
-            if open {
-                Color.black.opacity(0.001)
-                    .frame(width: 3000, height: 3000)
-                    .onTapGesture { open = false }
-                    .accessibilityHidden(true)
-            }
-        }
         .animation(Bar.spring(still), value: open)
-        .onChange(of: model.tab) { _, _ in open = false }
+    }
+
+    private func close() {
+        withAnimation(Bar.spring(still)) { model.cardOpen = false }
     }
 
     private func grow() {
         guard !still else {
-            open = true
+            model.cardOpen = true
             return
         }
         withAnimation(.easeOut(duration: 0.14)) { swell = true }
         Task {
             try? await Task.sleep(for: .milliseconds(140))
             swell = false
-            open = true
+            withAnimation(Bar.spring(still)) { model.cardOpen = true }
         }
     }
 }
@@ -342,6 +404,14 @@ extension View {
             self.glassEffect(.regular.tint(Tone.accentWash).interactive(), in: Capsule())
         } else {
             self.background(Tone.accentWash, in: Capsule())
+        }
+    }
+
+    @ViewBuilder func sideGlass(_ space: Namespace.ID?, radius: CGFloat) -> some View {
+        if let space {
+            self.melting("side", in: space, RoundedRectangle(cornerRadius: radius, style: .continuous))
+        } else {
+            self.glass(radius)
         }
     }
 
