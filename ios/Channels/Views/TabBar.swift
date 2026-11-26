@@ -53,6 +53,7 @@ enum Bar {
 
 struct TabsPill: View {
     var compact = false
+    var width = Bar.icons
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
     @Namespace private var plate
@@ -74,8 +75,8 @@ struct TabsPill: View {
             Task { @MainActor in withAnimation(Bar.spring(still)) { shown = model.tab } }
         }
         .onChange(of: model.tab) { _, now in withAnimation(Bar.spring(still)) { shown = now } }
-        .frame(width: compact ? Bar.icons : nil, height: Bar.height)
-        .frame(maxWidth: compact ? Bar.icons : .infinity)
+        .frame(width: compact ? width : nil, height: Bar.height)
+        .frame(maxWidth: compact ? width : .infinity)
     }
 }
 
@@ -216,11 +217,6 @@ struct RootBar: View {
                 $0.size.height
             } action: {
                 if !model.cardOpen { model.barHeight = $0 }
-            }
-            .onGeometryChange(for: CGFloat.self) {
-                $0.frame(in: .global).minY
-            } action: {
-                if !model.cardOpen { model.barTop = $0 }
             }
         } else {
             Color.clear.frame(height: model.barHeight).accessibilityHidden(true)

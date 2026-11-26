@@ -80,13 +80,9 @@ struct Conversation: View {
     var answer: (AskView) -> Void = { _ in }
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
-    @State private var feedBottom: CGFloat = 0
-    @State private var insetBottom: CGFloat = 0
 
     private var footer: CGFloat {
-        if typing, model.barHeight > 0 { return (model.barHeight + 6).rounded() }
-        guard model.barTop > 0, feedBottom > 0 else { return Bar.height + 48 }
-        return max(6, feedBottom - insetBottom - model.barTop + 6).rounded()
+        ((model.barHeight > 0 ? model.barHeight : Bar.height) + 6).rounded()
     }
 
     private var solo: Bool {
@@ -135,20 +131,10 @@ struct Conversation: View {
             }
             .scrollPosition($position)
             .defaultScrollAnchor(.bottom)
-            .ignoresSafeArea(.container, edges: .bottom)
-            .onGeometryChange(for: CGFloat.self) {
-                $0.frame(in: .global).maxY + $0.safeAreaInsets.bottom
-            } action: {
-                feedBottom = $0
-            }
-            .onScrollGeometryChange(for: CGFloat.self) {
-                $0.contentInsets.bottom
-            } action: { _, now in
-                insetBottom = now
-            }
+            .defaultScrollAnchor(.bottom, for: .sizeChanges)
             .overlay {
                 GeometryReader { g in
-                    let show = model.barTop > 0 && (follow.far || (!follow.atBottom && follow.unseen > 0))
+                    let show = !typing && model.barHeight > 0 && (follow.far || (!follow.atBottom && follow.unseen > 0))
                     ZStack {
                         if show {
                             JumpButton(follow: follow) { follow.jumps += 1 }
@@ -156,7 +142,7 @@ struct Conversation: View {
                         }
                     }
                     .animation(.snappy(duration: 0.25), value: show)
-                    .position(x: g.size.width - 38, y: (model.barTop - g.frame(in: .global).minY - 32).rounded())
+                    .position(x: g.size.width - 38, y: (g.size.height - model.barHeight - 24).rounded())
                 }
             }
             .scrollDismissesKeyboard(.interactively)
@@ -193,10 +179,6 @@ struct Conversation: View {
             .task(id: room.messages.isEmpty) {
                 guard !room.messages.isEmpty else { return }
                 try? await Task.sleep(for: .milliseconds(120))
-                proxy.scrollTo("feed-end", anchor: .bottom)
-            }
-            .onChange(of: model.barHeight.rounded()) { old, now in
-                guard typing, abs(now - old) >= 1 else { return }
                 proxy.scrollTo("feed-end", anchor: .bottom)
             }
             .onChange(of: follow.jumps) {

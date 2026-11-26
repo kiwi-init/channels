@@ -116,11 +116,11 @@ struct Dock: View {
                     inputRow
                 }
             }
-            .animation(Bar.spring(still), value: typing.wrappedValue)
         }
         .padding(.horizontal, tabs ? 16 : 12)
         .padding(.top, tabs ? 8 : 6)
         .padding(.bottom, tabs ? (typing.wrappedValue || home <= 20 ? 8 : -12) : 6)
+        .animation(Bar.spring(still), value: typing.wrappedValue)
         .onGeometryChange(for: CGFloat.self) {
             $0.safeAreaInsets.bottom
         } action: {
@@ -152,16 +152,20 @@ struct Dock: View {
     }
 
     private var inputRow: some View {
-        HStack(alignment: .bottom, spacing: tabs ? Bar.gap : 8) {
-            if tabs && !typing.wrappedValue {
+        HStack(alignment: .bottom, spacing: tabs ? 0 : 8) {
+            if tabs {
+                let pill = TabsPill(compact: true, width: typing.wrappedValue ? 0 : Bar.icons).clipped()
                 Group {
                     if let space {
-                        TabsPill(compact: true).melting("tabs", in: space, Capsule())
+                        pill.melting("tabs", in: space, Capsule())
                     } else {
-                        TabsPill(compact: true).glassCapsule()
+                        pill.glassCapsule()
                     }
                 }
-                .transition(.scale(scale: 0.4, anchor: .trailing).combined(with: .opacity))
+                .opacity(typing.wrappedValue ? 0 : 1)
+                .padding(.trailing, typing.wrappedValue ? 0 : Bar.gap)
+                .allowsHitTesting(!typing.wrappedValue)
+                .accessibilityHidden(typing.wrappedValue)
             }
             if !tabs { plus }
             field
