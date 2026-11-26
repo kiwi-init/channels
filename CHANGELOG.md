@@ -2,6 +2,33 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.31 — 2026-11-26
+
+Tag [v2026.11.31](https://github.com/kiwi-init/channels/releases/tag/v2026.11.31) · commit [c5e974f](https://github.com/kiwi-init/channels/commit/c5e974f3f8a0a2c630ebf3451b52e258e0bbe5db) · 2026-11-26
+
+First-load JS: 815,730 bytes (+299 since 2026.11.30)
+
+### Features
+
+- **Release:** bump-main opens a stamp PR instead of pushing to main (T18129, spec #18106) ([#2666](https://github.com/kiwi-init/channels/pull/2666)) ([85a8535](https://github.com/kiwi-init/channels/commit/85a8535aed0595b09d50bd944e29f7fe82eb7950))
+- **Desktop:** the agents-down card can be dismissed (T18198) ([#2667](https://github.com/kiwi-init/channels/pull/2667)) ([e4c8dd9](https://github.com/kiwi-init/channels/commit/e4c8dd974c8727cdff43c126ee573c179abf74b1))
+- **Android:** faces show the person's GitHub picture ([#2670](https://github.com/kiwi-init/channels/pull/2670)) ([37e9a06](https://github.com/kiwi-init/channels/commit/37e9a06b07bc7436cf9351aec04dd7310b8eeabe))
+- **macOS:** the main process runs on Livewire's JavaScriptCore host, no Bun shipped (Livewire T1323) ([#2665](https://github.com/kiwi-init/channels/pull/2665)) ([dfdbd19](https://github.com/kiwi-init/channels/commit/dfdbd1990583f0ccc17bd2175d61b106f94eea01))
+- **iPhone:** the Live Activity shows the channel, not agents (T1383) ([#2671](https://github.com/kiwi-init/channels/pull/2671)) ([598f2e7](https://github.com/kiwi-init/channels/commit/598f2e7d62e50725783a3656ccd58802f0785b19))
+- **Phones:** pinch a chat to see where things stand ([#2672](https://github.com/kiwi-init/channels/pull/2672)) ([0ed720e](https://github.com/kiwi-init/channels/commit/0ed720e7c5671631014fec7e4e76a0125c32a1f0))
+- **Semantic Search:** find messages by what they mean, with your own TypeSafe key ([#2633](https://github.com/kiwi-init/channels/pull/2633)) ([c5e974f](https://github.com/kiwi-init/channels/commit/c5e974f3f8a0a2c630ebf3451b52e258e0bbe5db))
+
+### Fixes
+
+- **TestFlight:** sign in the cloud, so CI never makes a certificate ([#2668](https://github.com/kiwi-init/channels/pull/2668)) ([3159edc](https://github.com/kiwi-init/channels/commit/3159edc9235931e274059f6f805a0e99eaed5446))
+- **iPhone:** the photo viewer pans and resets right (T67) ([#2662](https://github.com/kiwi-init/channels/pull/2662)) ([6c97bba](https://github.com/kiwi-init/channels/commit/6c97bba6da5acdb95e2ef3e85f30efc1d6c12ad9))
+- **TestFlight:** the unsigned archive keeps the team prefix in Info.plist, so the app and its Live Activity share their keychain (T1469) ([#2673](https://github.com/kiwi-init/channels/pull/2673)) ([2764d4b](https://github.com/kiwi-init/channels/commit/2764d4b36db9c4f45670a2a855c93b3c9bb81c61))
+- **iPhone:** #general opens again: the pinch's page sits over the chat, not in a ZStack with it ([#2674](https://github.com/kiwi-init/channels/pull/2674)) ([2beaadd](https://github.com/kiwi-init/channels/commit/2beaadddc9e84c5c52b6380b5eb56744f24cc9d9))
+
+### Other changes
+
+- **Desktop:** build on Livewire 2026.11.7 ([#2669](https://github.com/kiwi-init/channels/pull/2669)) ([f75b1fd](https://github.com/kiwi-init/channels/commit/f75b1fd70a926149cb7aa9723ee2e0e0b5777f85))
+
 ## 2026.11.30 — 2026-11-26
 
 Tag [v2026.11.30](https://github.com/kiwi-init/channels/releases/tag/v2026.11.30) · commit [5a25449](https://github.com/kiwi-init/channels/commit/5a2544953754ae434f9035c377c3d807729421dc) · 2026-11-26

@@ -96,13 +96,13 @@ alone at `/preview/<name>`.
 
 ## Download links
 
-`app.js` lists the desktop app files the v2026.11.30 release publishes, under the app's
+`app.js` lists the desktop app files the v2026.11.31 release publishes, under the app's
 name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 
-- `Channels-2026.11.30-mac-arm64.dmg` (Apple silicon only: Intel Macs get the CLI)
-- `Channels-2026.11.30-linux-x86_64.AppImage` (Linux: Arch is the supported distribution)
-- `Channels-2026.11.30-linux-aarch64.AppImage` (ARM64 Linux, the same build for arm64)
-- `Channels-2026.11.30-windows-x64-Setup.zip` (Windows: `Channels-Setup.exe` and the `.installer` folder it reads)
+- `Channels-2026.11.31-mac-arm64.dmg` (Apple silicon only: Intel Macs get the CLI)
+- `Channels-2026.11.31-linux-x86_64.AppImage` (Linux: Arch is the supported distribution)
+- `Channels-2026.11.31-linux-aarch64.AppImage` (ARM64 Linux, the same build for arm64)
+- `Channels-2026.11.31-windows-x64-Setup.zip` (Windows: `Channels-Setup.exe` and the `.installer` folder it reads)
 
 A tag's release stamps its version into these names (`scripts/stamp.ts`) and commits
 them to main; the site deploys only from a tag, after its GitHub release exists. The names
