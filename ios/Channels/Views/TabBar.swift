@@ -61,7 +61,7 @@ struct TabsPill: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(AppTab.order, id: \.self) { tab in
+            ForEach(width > 0 ? AppTab.order : [], id: \.self) { tab in
                 TabButton(tab: tab, lit: (shown ?? model.tab) == tab, compact: compact, plate: plate) {
                     Haptic.tap()
                     withAnimation(Bar.spring(still)) { model.pick(tab) }
@@ -217,6 +217,11 @@ struct RootBar: View {
                 $0.size.height
             } action: {
                 if !model.cardOpen { model.barHeight = $0 }
+            }
+            .onGeometryChange(for: CGFloat.self) {
+                $0.frame(in: .global).minY.rounded()
+            } action: {
+                if !model.cardOpen { model.barTop = $0 }
             }
         } else {
             Color.clear.frame(height: model.barHeight).accessibilityHidden(true)
