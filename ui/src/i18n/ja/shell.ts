@@ -67,6 +67,7 @@ export default {
   "shell.updates.back.why.unknown": "ここでは確認できません",
   "shell.updates.back.act": "呼び戻す",
   "shell.updates.back.busy": "呼び戻しています…",
+  "shell.updates.back.dismiss": "閉じる",
   "shell.updates.back.done": "エージェントが戻りました",
   "shell.updates.back.partial": "{back} 件が戻り、{left} 件は戻りませんでした。理由は設定 > エージェントにあります",
   "shell.updates.back.nothing": "ここで呼び戻すものはありません",

@@ -2,6 +2,79 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.30 — 2026-11-26
+
+Tag [v2026.11.30](https://github.com/kiwi-init/channels/releases/tag/v2026.11.30) · commit [5a25449](https://github.com/kiwi-init/channels/commit/5a2544953754ae434f9035c377c3d807729421dc) · 2026-11-26
+
+First-load JS: 815,431 bytes (-2,476 since 2026.11.29)
+
+### Features
+
+- **Relay:** Live Activity pushes from sealed agent blobs (T52) ([#2612](https://github.com/kiwi-init/channels/pull/2612)) ([8d07daf](https://github.com/kiwi-init/channels/commit/8d07daf45ad3848fa616e6c42eafc748c7c5416a))
+- **Daemon:** an agent at work puts its sealed live blob (T52) ([#2617](https://github.com/kiwi-init/channels/pull/2617)) ([3d0415c](https://github.com/kiwi-init/channels/commit/3d0415cd68dd605b1f420f04cc681a323be4e637))
+- **iPhone:** Live Activity on the Dynamic Island (T50) ([#2607](https://github.com/kiwi-init/channels/pull/2607)) ([33e610b](https://github.com/kiwi-init/channels/commit/33e610b5eaf610f6776724ecdb06e73aa5f0b1a3))
+- **iPhone:** the Live Activity follows the agents with the app closed (T52) ([#2652](https://github.com/kiwi-init/channels/pull/2652)) ([00e8617](https://github.com/kiwi-init/channels/commit/00e861781f5fe854b5e8384eeab99547226fc5a7))
+- **Android:** requests show in their conversation; a joining agent can be turned away (T520) ([#2648](https://github.com/kiwi-init/channels/pull/2648)) ([aa02491](https://github.com/kiwi-init/channels/commit/aa02491d700528c6efadc2ddcae675426971564f))
+- **What's new:** WHATSNEW.md beside the changelog, and a window with a switch for each feature that starts off ([#2644](https://github.com/kiwi-init/channels/pull/2644)) ([dc9d423](https://github.com/kiwi-init/channels/commit/dc9d423551def56b54126e009983b742ecdc352a))
+- **iPhone:** tap the chat title for who is working (T739) ([#2656](https://github.com/kiwi-init/channels/pull/2656)) ([dc83565](https://github.com/kiwi-init/channels/commit/dc8356555780b42e19fd09ca2b16776922199f93))
+
+### Fixes
+
+- **Android:** a step card link no app opens does nothing instead of crashing (T83) ([#2595](https://github.com/kiwi-init/channels/pull/2595)) ([c51c1e7](https://github.com/kiwi-init/channels/commit/c51c1e78c58bb2d7fa19cad1cc39a4c46cc63260))
+- **iPhone:** Sign Out stops push for every channel it held (T60) ([#2596](https://github.com/kiwi-init/channels/pull/2596)) ([2aec82f](https://github.com/kiwi-init/channels/commit/2aec82f08e56b64080219efda0105dbdfd0f3636))
+- **Android:** an answer or send-back with a photo answers it (T84) ([#2598](https://github.com/kiwi-init/channels/pull/2598)) ([b9bb464](https://github.com/kiwi-init/channels/commit/b9bb4648163d024532fdb1585d7884729d68409e))
+- Phones follow the desktop's channels without signing in again (T30) ([#2597](https://github.com/kiwi-init/channels/pull/2597)) ([ca1f1b8](https://github.com/kiwi-init/channels/commit/ca1f1b80eb13da889da4090b15e4b85a8a3aff1d))
+- **Android:** no unlock prompt before the phone is linked (T85) ([#2600](https://github.com/kiwi-init/channels/pull/2600)) ([5c807b4](https://github.com/kiwi-init/channels/commit/5c807b4cb4f0f64feed558aa431c19b25c494934))
+- **Android:** a double tap opens a chat once and goes back once (T87) ([#2601](https://github.com/kiwi-init/channels/pull/2601)) ([7a630a1](https://github.com/kiwi-init/channels/commit/7a630a13683030a7d1e32022e44a1def0cbd1bef))
+- **Android:** a task thread in review shows its review card (T88) ([#2605](https://github.com/kiwi-init/channels/pull/2605)) ([6d23078](https://github.com/kiwi-init/channels/commit/6d23078a73bde34a39f341963a28ad7d4de0f4f3))
+- **iPhone:** nothing is marked read under the lock cover (T66) ([#2603](https://github.com/kiwi-init/channels/pull/2603)) ([fcef905](https://github.com/kiwi-init/channels/commit/fcef9051c9f3a610e9be57bb45a8cbf0300cbdaf))
+- **Android:** a step card's note keeps its place when the keyboard opens (T89) ([#2606](https://github.com/kiwi-init/channels/pull/2606)) ([3941e97](https://github.com/kiwi-init/channels/commit/3941e971b7df9d2fcad43e26f364fd463b004b4f))
+- **iPhone:** Link Again signs a linked phone in and keeps its channels (T61) ([#2599](https://github.com/kiwi-init/channels/pull/2599)) ([1a80c25](https://github.com/kiwi-init/channels/commit/1a80c25734c504f10371734282ed1ec46f3eabca))
+- **iPhone:** a channel approved while the app is open gets push (T63) ([#2604](https://github.com/kiwi-init/channels/pull/2604)) ([b4ad87e](https://github.com/kiwi-init/channels/commit/b4ad87e36da5c6fe9317492c88970449cbb77c10))
+- **iPhone:** tapping a push opens its channel (T62) ([#2609](https://github.com/kiwi-init/channels/pull/2609)) ([41fafc7](https://github.com/kiwi-init/channels/commit/41fafc7d768df7d849e189f6fdd8429d61c0a8b4))
+- **Desktop:** the tab menu lists only real folders (T288) ([#2611](https://github.com/kiwi-init/channels/pull/2611)) ([cbfa53e](https://github.com/kiwi-init/channels/commit/cbfa53e2b511d7adff032bf77e2edae4d4c982d1))
+- **Seats:** no silent seat takeover from an idle session (T16810) ([#2614](https://github.com/kiwi-init/channels/pull/2614)) ([21ca090](https://github.com/kiwi-init/channels/commit/21ca0902e3ce279f735404c5e6153873bdd711c7))
+- **Android:** an empty room or task thread introduces itself, not the lead (T90) ([#2608](https://github.com/kiwi-init/channels/pull/2608)) ([4d21727](https://github.com/kiwi-init/channels/commit/4d21727d2fb2e5829bf37adf18ebe920f1acd2a4))
+- **Android:** Link again closes its sheet once it succeeds (T86) ([#2618](https://github.com/kiwi-init/channels/pull/2618)) ([7eeef09](https://github.com/kiwi-init/channels/commit/7eeef093a9acc4fdc5f90509a5b1337f3ce4f5d0))
+- **Phones:** a channel book never makes a phone leave (T302) ([#2616](https://github.com/kiwi-init/channels/pull/2616)) ([5135f0f](https://github.com/kiwi-init/channels/commit/5135f0f7624d216b8af7b6d1293b4b9fd71c081b))
+- **Phones:** rooms sync read marks and clear sent bubbles (T64) ([#2622](https://github.com/kiwi-init/channels/pull/2622)) ([014ae48](https://github.com/kiwi-init/channels/commit/014ae48c658fa19c5987c2e4675868b42cfe7a43))
+- **Android:** Needs you lists permission and join requests (T91) ([#2620](https://github.com/kiwi-init/channels/pull/2620)) ([8805287](https://github.com/kiwi-init/channels/commit/8805287c528a67cd99443c8415fafe63ecd23c62))
+- **Daemon:** an agent's live blob counts from its task (T52) ([#2625](https://github.com/kiwi-init/channels/pull/2625)) ([2fe63ae](https://github.com/kiwi-init/channels/commit/2fe63ae096117bffac0d189c0de29a3d00d55815))
+- **iPhone:** big photos attach without a hang (T68) ([#2623](https://github.com/kiwi-init/channels/pull/2623)) ([9711418](https://github.com/kiwi-init/channels/commit/97114186b64a09715d27d3bbfa99aff9fa56de30))
+- **Android:** Needs you lists permission and join requests (T91) ([#2620](https://github.com/kiwi-init/channels/pull/2620)) ([eba942e](https://github.com/kiwi-init/channels/commit/eba942efb640a23a00a428143de4e6df75300fa7))
+- **Join:** an invite token with one character changed in the copy still joins (T16849) ([#2613](https://github.com/kiwi-init/channels/pull/2613)) ([3272648](https://github.com/kiwi-init/channels/commit/32726488cf3118db0f88e16142e805046bac0620))
+- **kiwi show:** every attachment gets its own file (#2624) ([#2627](https://github.com/kiwi-init/channels/pull/2627)) ([cbba178](https://github.com/kiwi-init/channels/commit/cbba178f02be82aac3c0877417e02dd257e5faa2))
+- **Join:** a join refused before it sends anything leaves no key behind (T16850) ([#2630](https://github.com/kiwi-init/channels/pull/2630)) ([44cdfe6](https://github.com/kiwi-init/channels/commit/44cdfe6069f2beaabef61f467fb5c7c68a62347b))
+- **Android:** the app lock can be turned off; step commands copy on tap (T92) ([#2628](https://github.com/kiwi-init/channels/pull/2628)) ([a12d440](https://github.com/kiwi-init/channels/commit/a12d4408b94ad8ef3f9250fc74f49f11461b5366))
+- **CLI:** a person's phone seat reads as that person (T398) ([#2626](https://github.com/kiwi-init/channels/pull/2626)) ([d482057](https://github.com/kiwi-init/channels/commit/d4820571e1d3ae1e3c0438d8e9c780afd33682d5))
+- **Phones:** a reply's quote reads as plain words, not Markdown (T405) ([#2632](https://github.com/kiwi-init/channels/pull/2632)) ([3eecedd](https://github.com/kiwi-init/channels/commit/3eecedd00a9af2456ea276097d21f57913a86e35))
+- **Phones:** the intro line leaves out your own desktop seat (T475) ([#2635](https://github.com/kiwi-init/channels/pull/2635)) ([d76d18b](https://github.com/kiwi-init/channels/commit/d76d18b8e578ace8572ceeda9f48da68310d7308))
+- **iPhone:** the composer empties the moment you send, photos too (T410) ([#2637](https://github.com/kiwi-init/channels/pull/2637)) ([9013edb](https://github.com/kiwi-init/channels/commit/9013edb97da88ec660862e82f4456949bb603846))
+- **Android:** long names end in … and keep their labels; emoji avatars stay whole (T93) ([#2641](https://github.com/kiwi-init/channels/pull/2641)) ([f49cd7b](https://github.com/kiwi-init/channels/commit/f49cd7bc7290bfffb1bd21953cbbc6510a9a9482))
+- **Phones:** chat list previews read as plain words; a table keeps its cells (T623) ([#2642](https://github.com/kiwi-init/channels/pull/2642)) ([848b3ef](https://github.com/kiwi-init/channels/commit/848b3ef4324157c89c916385465cb7e6401b0e81))
+- **Android:** Chats keeps its scroll when you switch tabs and come back (T94) ([#2643](https://github.com/kiwi-init/channels/pull/2643)) ([3df0162](https://github.com/kiwi-init/channels/commit/3df01621d9ddfa57138be2ae898b35c63393635a))
+- **Android 10:** a write cut short doesn't drop the keys (T95) ([#2646](https://github.com/kiwi-init/channels/pull/2646)) ([34b88f8](https://github.com/kiwi-init/channels/commit/34b88f8696f7c1ace6562b6ca7af8c68bba23054))
+- **iPhone:** faces and the You tab show the person's GitHub picture (T715) ([#2647](https://github.com/kiwi-init/channels/pull/2647)) ([49385d7](https://github.com/kiwi-init/channels/commit/49385d7b12b22aec31465d6d37191ae412b589d2))
+- **iPhone:** Updates day headers, and words that stayed in English (T69) ([#2663](https://github.com/kiwi-init/channels/pull/2663)) ([5a25449](https://github.com/kiwi-init/channels/commit/5a2544953754ae434f9035c377c3d807729421dc))
+
+### Performance
+
+- **perf-scale:** measure allocation per incoming message (T17132) ([#2638](https://github.com/kiwi-init/channels/pull/2638)) ([7699e32](https://github.com/kiwi-init/channels/commit/7699e32e110bdb19b1fca2c799f95e33bfa3b030))
+- **Fold:** deep read-only state types, callers fixed (T17326) ([#2645](https://github.com/kiwi-init/channels/pull/2645)) ([f44b6d2](https://github.com/kiwi-init/channels/commit/f44b6d297715d9e94da29e33bf8997a4340c1a56))
+- **perf-scale:** seed a large fold base and measure it before the soak (T17335) ([#2649](https://github.com/kiwi-init/channels/pull/2649)) ([901cb23](https://github.com/kiwi-init/channels/commit/901cb2391d97ba8fa1df2b25cb78ce968f6f8cd9))
+- **Desktop RAM:** fold each new message onto the last state (T17818) ([#2660](https://github.com/kiwi-init/channels/pull/2660)) ([bbb95e6](https://github.com/kiwi-init/channels/commit/bbb95e6f09cebe5bfe04ff176030caf1e6057692))
+
+### Tests and CI
+
+- **Bun relay:** each relay counts its own pairing writes (T123) ([#2602](https://github.com/kiwi-init/channels/pull/2602)) ([d0eb9a6](https://github.com/kiwi-init/channels/commit/d0eb9a64b60d6822b84c34a8124aa5455072c708))
+- **test / flows:** #2590's seat tests read bindings by real path (#2639) ([#2640](https://github.com/kiwi-init/channels/pull/2640)) ([f291799](https://github.com/kiwi-init/channels/commit/f291799295169443a6bd2c083ee4ffe5ddb00a5f))
+- **Flows:** the idle-seat tests read bindings by realpath (T588) ([#2636](https://github.com/kiwi-init/channels/pull/2636)) ([6089a22](https://github.com/kiwi-init/channels/commit/6089a2276c1e254b3d99322ed7b12e0c3f4d749d))
+- **Tests:** the invite repair tests no longer depend on a random signature character (#2651) ([#2654](https://github.com/kiwi-init/channels/pull/2654)) ([98741ac](https://github.com/kiwi-init/channels/commit/98741acc660b93878fed16e04582ec4fa1b06126))
+- **Test:** the push sign-out test matches each DELETE by its room, not its arrival order (T17660, #2631) ([#2657](https://github.com/kiwi-init/channels/pull/2657)) ([36e2b2f](https://github.com/kiwi-init/channels/commit/36e2b2f589f47b2ccfcefae465cea161c1c4e0f5))
+- **Join and attachments:** a MAX_PIN test, and the save helpers only tests called are gone (T17661, #2634) ([#2658](https://github.com/kiwi-init/channels/pull/2658)) ([4bc61cf](https://github.com/kiwi-init/channels/commit/4bc61cf42557048f0bd5a3458a4cf9439268feff))
+- **CI:** iPhone UI tests run on the newest iOS simulator the runner has (T426) ([#2653](https://github.com/kiwi-init/channels/pull/2653)) ([2f7bf06](https://github.com/kiwi-init/channels/commit/2f7bf063f4effab85b0cf0edc57066789cbd69a7))
+- **ui-layout:** dragend goes to the tile the drag started from (#2578) ([#2659](https://github.com/kiwi-init/channels/pull/2659)) ([52bfcbd](https://github.com/kiwi-init/channels/commit/52bfcbd0dc9b7d0a8f9be12242992b6712790ee8))
+
 ## 2026.11.29 — 2026-11-24
 
 Tag [v2026.11.29](https://github.com/kiwi-init/channels/releases/tag/v2026.11.29) · commit [afec25d](https://github.com/kiwi-init/channels/commit/afec25d4993ed61f2856821c3164962f2bebd9c2) · 2026-11-24

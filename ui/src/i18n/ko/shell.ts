@@ -67,6 +67,7 @@ export default {
   "shell.updates.back.why.unknown": "여기서는 확인할 수 없음",
   "shell.updates.back.act": "되돌리기",
   "shell.updates.back.busy": "되돌리는 중…",
+  "shell.updates.back.dismiss": "닫기",
   "shell.updates.back.done": "에이전트가 돌아왔습니다",
   "shell.updates.back.partial": "{back}개 돌아옴, {left}개는 아님: 이유는 설정 > 에이전트에서 볼 수 있습니다",
   "shell.updates.back.nothing": "여기서 되돌릴 것이 없습니다",
