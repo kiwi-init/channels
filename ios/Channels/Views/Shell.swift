@@ -15,24 +15,28 @@ struct Shell: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        TabView(selection: Binding(get: { model.tab }, set: { model.tab = $0 })) {
-            Tab("Chats", systemImage: "bubble.left.and.bubble.right.fill", value: AppTab.chats) {
+        ZStack {
+            page(.chats) {
                 NavigationStack(path: Binding(get: { model.path }, set: { model.path = $0 })) {
                     ChannelList()
-                        .navigationDestination(for: Route.self) { RouteScreen(route: $0).toolbar(.hidden, for: .tabBar) }
+                        .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
                 }
+                .underBar(.chats)
             }
-            Tab("Needs You", systemImage: "hand.raised.fill", value: AppTab.needs) {
+            page(.needs) {
                 NavigationStack {
                     NeedsScreen()
                 }
+                .underBar(.needs)
             }
-            .badge(model.waiting)
-            Tab("You", systemImage: "person.crop.circle.fill", value: AppTab.you) {
-                NavigationStack {
-                    SettingsScreen()
-                }
+        }
+        .onChange(of: model.path) { _, _ in model.cardOpen = false }
+        .onChange(of: model.tab) { _, _ in model.cardOpen = false }
+        .sheet(isPresented: Binding(get: { model.showYou }, set: { model.showYou = $0 })) {
+            NavigationStack {
+                SettingsScreen()
             }
+            .presentationDragIndicator(.visible)
         }
         .alert("Sign-in not saved", isPresented: Binding(get: { model.unsaved != nil }, set: { if !$0 { model.unsaved = nil } })) {
             Button("OK", role: .cancel) {}
@@ -47,6 +51,14 @@ struct Shell: View {
         #endif
     }
 
+    private func page<Content: View>(_ tab: AppTab, @ViewBuilder _ content: () -> Content) -> some View {
+        let shown = model.tab == tab
+        return content()
+            .opacity(shown ? 1 : 0)
+            .allowsHitTesting(shown)
+            .accessibilityHidden(!shown)
+    }
+
     #if DEBUG
         private func shot() {
             guard let shot = UserDefaults.standard.string(forKey: "shot"), let first = model.channels.first else { return }
@@ -56,11 +68,35 @@ struct Shell: View {
             case "channel", "conversation": model.path = [.place(Spot(code: first.code, place: place))]
             case "needs": model.tab = .needs
             case "board", "tasks": model.path = [.tasks(first.code)]
-            case "settings": model.tab = .you
+            case "settings": model.showYou = true
             default: break
             }
         }
     #endif
+}
+
+private struct UnderBar: ViewModifier {
+    let tab: AppTab
+    @Environment(AppModel.self) private var model
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                if model.cardOpen {
+                    Color.black.opacity(0.001)
+                        .ignoresSafeArea()
+                        .onTapGesture { withAnimation(Bar.spring(false)) { model.cardOpen = false } }
+                        .accessibilityHidden(true)
+                }
+            }
+            .bar(.bottom) { RootBar(on: tab) }
+    }
+}
+
+extension View {
+    fileprivate func underBar(_ tab: AppTab) -> some View {
+        modifier(UnderBar(tab: tab))
+    }
 }
 
 struct RouteScreen: View {

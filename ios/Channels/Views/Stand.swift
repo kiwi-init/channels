@@ -208,14 +208,6 @@ struct ZoomIn: ViewModifier {
     }
 }
 
-struct ZoomAway: ViewModifier {
-    let zoom: ZoomState
-
-    func body(content: Content) -> some View {
-        content.opacity(1 - fade(zoom.depth, from: 0, to: 0.4))
-    }
-}
-
 private func fade(_ depth: CGFloat, from: CGFloat, to: CGFloat) -> CGFloat {
     min(1, max(0, (depth - from) / (to - from)))
 }

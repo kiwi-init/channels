@@ -67,7 +67,11 @@ struct Dock: View {
     @Binding var answering: AskView?
     @Binding var sendingBack: ReviewView?
     var typing: FocusState<Bool>.Binding
+    var tabs = false
+    var space: Namespace.ID?
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var still
+    @State private var home: CGFloat = 0
     @State private var draft = ""
     @State private var sending = false
     @State private var error: String?
@@ -105,14 +109,23 @@ struct Dock: View {
             } else if let replyTo {
                 bar("arrowshape.turn.up.left.fill", Tone.accent, room.display(replyTo.from), replyTo.plain) { self.replyTo = nil }
             }
-            HStack(alignment: .bottom, spacing: 8) {
-                plus
-                field
+            Group {
+                if space == nil {
+                    Melt(spacing: 6) { inputRow }
+                } else {
+                    inputRow
+                }
             }
+            .animation(Bar.spring(still), value: typing.wrappedValue)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 6)
-        .padding(.bottom, 6)
+        .padding(.horizontal, tabs ? 16 : 12)
+        .padding(.top, tabs ? 8 : 6)
+        .padding(.bottom, tabs ? (typing.wrappedValue || home <= 20 ? 8 : -12) : 6)
+        .onGeometryChange(for: CGFloat.self) {
+            $0.safeAreaInsets.bottom
+        } action: {
+            if !typing.wrappedValue { home = $0 }
+        }
         .animation(.snappy(duration: 0.25), value: mentionable.map(\.name))
         .photosPicker(isPresented: $choosing, selection: $picked, maxSelectionCount: 4, matching: .images)
         .onAppear { restore(spot) }
@@ -138,6 +151,23 @@ struct Dock: View {
         }
     }
 
+    private var inputRow: some View {
+        HStack(alignment: .bottom, spacing: tabs ? Bar.gap : 8) {
+            if tabs && !typing.wrappedValue {
+                Group {
+                    if let space {
+                        TabsPill(compact: true).melting("tabs", in: space, Capsule())
+                    } else {
+                        TabsPill(compact: true).glassCapsule()
+                    }
+                }
+                .transition(.scale(scale: 0.4, anchor: .trailing).combined(with: .opacity))
+            }
+            if !tabs { plus }
+            field
+        }
+    }
+
     private var plus: some View {
         Button {
             choosing = true
@@ -155,20 +185,37 @@ struct Dock: View {
     private var field: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !attached.isEmpty { tray }
-            HStack(alignment: .bottom, spacing: 6) {
+            HStack(alignment: .bottom, spacing: tabs ? 0 : 6) {
+                if tabs {
+                    Button {
+                        choosing = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 19, weight: .medium))
+                            .foregroundStyle(Tone.ink2)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 6)
+                    .padding(.bottom, (Bar.height - 44) / 2)
+                    .accessibilityLabel("Add photos")
+                }
                 TextField(placeholder, text: $draft, axis: .vertical)
                     .type(.body)
                     .foregroundStyle(Tone.ink)
-                    .lineLimit(1...6)
+                    .lineLimit(tabs && !typing.wrappedValue ? 1...1 : 1...6)
                     .focused(typing)
                     .accessibilityIdentifier("composer")
-                    .padding(.leading, 15)
-                    .padding(.vertical, 11)
-                if canSend || sending { sendButton }
+                    .padding(.leading, tabs ? 2 : 15)
+                    .padding(.vertical, tabs ? (Bar.height - 22) / 2 : 11)
+                if canSend || sending {
+                    sendButton.padding(.bottom, tabs ? (Bar.height - 44) / 2 : 0).padding(.trailing, tabs ? 3 : 0)
+                }
             }
         }
-        .frame(minHeight: 44)
-        .glass(22)
+        .frame(minHeight: tabs ? Bar.height : 44)
+        .sideGlass(space, radius: tabs ? Bar.height / 2 : 22)
     }
 
     private var mentions: some View {

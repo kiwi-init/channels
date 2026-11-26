@@ -28,6 +28,14 @@ struct ChannelList: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Tone.canvas)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack {
+                Spacer(minLength: 0)
+                YouButton()
+            }
+            .padding(.trailing, 14)
+            .background(Tone.canvas)
+        }
         .refreshable { await model.refresh() }
         .scrollDismissesKeyboard(.interactively)
         .animation(Motion.ease, value: model.waiting)
@@ -75,6 +83,17 @@ struct ChannelRows: View {
 
     var body: some View {
         Group {
+            if let spot = room.leadSpot, let lead = room.lead, let row = model.row(spot) {
+                Button {
+                    model.go(.place(spot))
+                } label: {
+                    ConvoRow(title: row.title, line: row.line, at: row.last?.date, unread: row.unread) {
+                        Face(name: lead, member: room.member(lead), size: 44)
+                    }
+                }
+                .flatRow()
+                .accessibilityIdentifier("lead-row")
+            }
             ForEach(rooms, id: \.self) { spot in
                 Button {
                     model.go(.place(spot))

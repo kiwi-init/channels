@@ -5,15 +5,11 @@ struct ConversationScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(Lock.self) private var lock
     @State private var spot: Spot
-    @State private var replyTo: MessageView?
-    @State private var answering: AskView?
-    @State private var sendingBack: ReviewView?
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
     @State private var visible = false
     @State private var zoom = ZoomState()
     @Environment(\.accessibilityReduceMotion) private var still
-    @FocusState private var typing: Bool
     @Environment(\.scenePhase) private var scene
 
     init(start: Spot) {
@@ -21,6 +17,7 @@ struct ConversationScreen: View {
     }
 
     var body: some View {
+        @Bindable var compose = model.compose(spot)
         Group {
             if let room = model.shown(spot) {
                 ZStack {
@@ -28,12 +25,18 @@ struct ConversationScreen: View {
                         Tone.raised.ignoresSafeArea()
                     }
                     Conversation(
-                        room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
+                        room: room, replyTo: $compose.replyTo, position: $position, follow: $follow, typing: $compose.typing, elsewhere: spot.general ? room.elsewhere() : [],
                         reviews: reviews(room), needs: needs(room), worker: worker(room)
                     ) { ask in
-                        answer(ask)
+                        compose.replyTo = nil
+                        compose.sendingBack = nil
+                        compose.answering = ask
+                        compose.typing = true
                     } sendBack: { review in
-                        sendBack(review)
+                        compose.replyTo = nil
+                        compose.answering = nil
+                        compose.sendingBack = review
+                        compose.typing = true
                     }
                     .id(spot.id)
                     .overlay(alignment: .bottomTrailing) {
@@ -67,12 +70,6 @@ struct ConversationScreen: View {
                 .onChange(of: zoom.zoomed) { _, open in
                     if open { report() }
                 }
-                .bar(.bottom) {
-                    if !zoom.zoomed && (talks(room) || answering != nil || sendingBack != nil) {
-                        Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing)
-                            .modifier(ZoomAway(zoom: zoom))
-                    }
-                }
                 .navigationTitle(room.spotTitle(spot.place))
                 .subtitle(room.status(of: spot.place))
                 .toolbar {
@@ -91,12 +88,13 @@ struct ConversationScreen: View {
         .onAppear {
             if model.demo && UserDefaults.standard.bool(forKey: "standOpen") { zoom.set(true, still: true) }
             visible = true
+            model.lastCode = spot.code
             seen()
             if model.focusNext == spot {
                 model.focusNext = nil
                 Task {
                     try? await Task.sleep(for: .milliseconds(350))
-                    typing = true
+                    model.compose(spot).typing = true
                 }
             }
         }
@@ -109,30 +107,12 @@ struct ConversationScreen: View {
         }
     }
 
-    private func talks(_ room: RoomView) -> Bool {
-        spot.general || spot.place == room.sideKey || room.placeView(spot.place)?.kind == "room"
-    }
-
-    private func answer(_ ask: AskView) {
-        replyTo = nil
-        sendingBack = nil
-        answering = ask
-        typing = true
-    }
-
-    private func sendBack(_ review: ReviewView) {
-        replyTo = nil
-        answering = nil
-        sendingBack = review
-        typing = true
-    }
-
     private func standSpot(_ room: RoomView) -> Spot {
         spot.place == room.sideKey ? Spot(code: spot.code) : spot
     }
 
     private func report() {
-        typing = false
+        model.compose(spot).typing = false
         let place = spot.place == model.rooms[spot.code]?.sideKey ? "main" : spot.place
         Task {
             do {
