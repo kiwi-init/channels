@@ -34,11 +34,14 @@ struct Shell: View {
                     .onTapGesture { withAnimation(Bar.spring(false)) { model.cardOpen = false } }
                     .accessibilityHidden(true)
             }
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                RootBar()
+            if model.tab != .chats || model.path.isEmpty {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    RootBar()
+                }
+                .ignoresSafeArea(.keyboard)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .ignoresSafeArea(.keyboard)
         }
         .onChange(of: model.path) { _, _ in model.cardOpen = false }
         .onChange(of: model.tab) { _, _ in model.cardOpen = false }

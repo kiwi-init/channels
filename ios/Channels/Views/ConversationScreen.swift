@@ -20,9 +20,7 @@ struct ConversationScreen: View {
             if let room = model.shown(spot) {
                 Conversation(
                     room: room, replyTo: $compose.replyTo, position: $position, follow: $follow, typing: $compose.typing, elsewhere: spot.general ? room.elsewhere() : [],
-                    reviews: reviews(room), needs: needs(room), worker: worker(room),
-                    draft: room.talks(at: spot) || compose.answering != nil || compose.sendingBack != nil
-                        ? AnyView(DraftRow(room: room, spot: spot, compose: compose)) : nil
+                    reviews: reviews(room), needs: needs(room), worker: worker(room)
                 ) { ask in
                     compose.replyTo = nil
                     compose.sendingBack = nil
@@ -35,9 +33,30 @@ struct ConversationScreen: View {
                     compose.typing = true
                 }
                 .id(spot.id)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if room.talks(at: spot) || compose.answering != nil || compose.sendingBack != nil {
+                        ChatComposer(room: room, spot: spot, compose: compose)
+                    }
+                }
                 .navigationTitle(room.spotTitle(spot.place))
-                .subtitle(room.status(of: spot.place))
                 .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        Button {
+                            Haptic.tap()
+                            model.details = spot
+                        } label: {
+                            VStack(spacing: 1) {
+                                ChatMark(room: room, spot: spot)
+                                HStack(spacing: 2) {
+                                    Text(room.spotTitle(spot.place)).font(.system(size: 11, weight: .medium)).foregroundStyle(Tone.ink).lineLimit(1)
+                                    Image(systemName: "chevron.right").font(.system(size: 8, weight: .bold)).foregroundStyle(Tone.ink3)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("chat-title")
+                        .accessibilityLabel(room.spotTitle(spot.place))
+                    }
                     if room.messages.contains(where: \.event) {
                         ToolbarItem(placement: .topBarTrailing) { UpdatesButton(room: room) }
                     }
@@ -174,7 +193,7 @@ extension View {
         }
     }
 }
-private struct DraftRow: View {
+private struct ChatComposer: View {
     let room: RoomView
     let spot: Spot
     @Bindable var compose: Compose
@@ -182,10 +201,23 @@ private struct DraftRow: View {
 
     var body: some View {
         Dock(
-            room: room, spot: spot, replyTo: $compose.replyTo, answering: $compose.answering, sendingBack: $compose.sendingBack, typing: $typing, inline: true
+            room: room, spot: spot, replyTo: $compose.replyTo, answering: $compose.answering, sendingBack: $compose.sendingBack, typing: $typing
         )
+        .background(Tone.canvas)
         .onAppear { typing = compose.typing }
         .onChange(of: compose.typing) { _, now in if typing != now { typing = now } }
         .onChange(of: typing) { _, now in if compose.typing != now { compose.typing = now } }
+    }
+}
+private struct ChatMark: View {
+    let room: RoomView
+    let spot: Spot
+
+    var body: some View {
+        if let place = room.placeView(spot.place), place.kind == "dm", let other = room.other(in: place) {
+            Face(name: other, member: room.member(other), size: 30)
+        } else {
+            ChannelAvatar(room: room, size: 30)
+        }
     }
 }

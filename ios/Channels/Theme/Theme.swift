@@ -51,8 +51,9 @@ enum Tone {
     static var decideWash: Color { Palettes.color("decide-wash", light: Shade(0xa35a00, 0.1), dark: Shade(0xf0a04f, 0.12)) }
     static var live: Color { Palettes.color("live", light: Shade(0x1f9a55), dark: Shade(0x97ad72)) }
     static var doing: Color { Palettes.color("doing", light: Shade(0x2f6fe4), dark: Shade(0x9188c4)) }
-    static var bubbleThem: Color { Palettes.color("bg-3", light: Shade(0xefeff1), dark: Shade(0x252021)) }
-    static var bubbleMine: Color { Palettes.color("ink", light: Shade(0x18181b), dark: Shade(0xddccc6)) }
+    static let bubbleThem = Color(Shade(0xe9e9eb), Shade(0x262628))
+    static let bubbleMine = Color(Shade(0x007aff), Shade(0x0a84ff))
+    static let onMine = Color.white
     static var popEdge: Color { Palettes.color("line-2", light: Shade(0x000000, 0.08), dark: Shade(0xddccc6, 0.11)) }
     static func member(_ name: String) -> Color {
         let fill = Palette.fills[name] ?? 0x8a7e7b

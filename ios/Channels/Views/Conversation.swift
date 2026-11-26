@@ -60,10 +60,6 @@ struct Line: Identifiable {
     }
 }
 
-final class Spots {
-    var draft: CGRect = .zero
-}
-
 struct Follow {
     var atBottom = true
     var far = false
@@ -81,16 +77,12 @@ struct Conversation: View {
     var reviews: [ReviewView] = []
     var needs: [NeedView] = []
     var worker: MemberView?
-    var draft: AnyView?
     var answer: (AskView) -> Void = { _ in }
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
-    @State private var spots = Spots()
     @State private var endSeen = true
 
-    private var footer: CGFloat {
-        typing ? 6 : (model.barHeight > 0 ? model.barHeight : Bar.height) + 6
-    }
+    private let footer: CGFloat = 8
 
     private var solo: Bool {
         room.placeView(room.place).map { $0.kind == "dm" && $0.withMe } ?? false
@@ -114,7 +106,7 @@ struct Conversation: View {
                             room.messages, asks: elsewhere, reviews: reviews, needs: needs, pending: model.pending["\(room.code)|\(room.place)"] ?? [],
                             sentAs: model.sentAs[room.code] ?? [:])
                     ) { line in
-                        LineView(line: line, room: room, solo: solo) { m in
+                        LineView(line: line, room: room, solo: solo, delivered: room.messages.last(where: \.mine)?.seq) { m in
                             replyTo = m
                             typing = true
                         } jump: { seq in
@@ -131,16 +123,6 @@ struct Conversation: View {
                     if let worker, worker.working {
                         WorkingRow(member: worker, room: room).id("working")
                     }
-                    if let draft {
-                        draft
-                            .id("draft")
-                            .padding(.top, 8)
-                            .onGeometryChange(for: CGRect.self) {
-                                $0.frame(in: .global)
-                            } action: {
-                                spots.draft = $0
-                            }
-                    }
                     Color.clear.frame(height: footer).id("feed-end").accessibilityHidden(true)
                         .onScrollVisibilityChange(threshold: 0.01) { endSeen = $0 }
                 }
@@ -152,7 +134,7 @@ struct Conversation: View {
             .defaultScrollAnchor(.bottom, for: .sizeChanges)
             .overlay {
                 GeometryReader { g in
-                    let show = !typing && !endSeen && model.barHeight > 0 && follow.far
+                    let show = !endSeen && follow.far
                     ZStack {
                         if show {
                             JumpButton(follow: follow) { follow.jumps += 1 }
@@ -160,13 +142,11 @@ struct Conversation: View {
                         }
                     }
                     .animation(.snappy(duration: 0.25), value: show)
-                    .position(x: g.size.width - 38, y: g.size.height - model.barHeight - 24)
+                    .position(x: g.size.width - 38, y: g.size.height - 32)
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            .onTapGesture(coordinateSpace: .global) { at in
-                if typing, !spots.draft.contains(at) { typing = false }
-            }
+            .onTapGesture { if typing { typing = false } }
             .onChange(of: typing) { _, now in
                 guard now else { return }
                 withAnimation(Bar.spring(false)) { proxy.scrollTo("feed-end", anchor: .bottom) }
@@ -230,25 +210,41 @@ struct WorkingRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Face(name: member.name, member: member, size: 22)
-            Dot(color: Tone.doing, size: 6)
-            Text(doing).type(.meta, .medium).foregroundStyle(Tone.ink2).lineLimit(1)
-            if let since = member.activity?.since {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Text(When.elapsed(from: Date(timeIntervalSince1970: since / 1000), to: context.date))
-                        .font(.mono(.stamp))
-                        .foregroundStyle(Tone.ink3)
+        HStack(alignment: .bottom, spacing: 8) {
+            Face(name: member.name, member: member, size: 30)
+            TypingDots()
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
+                .background {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 19, style: .continuous).fill(Tone.bubbleThem)
+                        Tail().fill(Tone.bubbleThem).scaleEffect(x: -1, anchor: .center)
+                    }
                 }
-            }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Tone.wash, in: RoundedRectangle(cornerRadius: Radius.ctl, style: .continuous))
         .padding(.top, 10)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("typing")
         .accessibilityLabel("\(room.display(member.name)) is working: \(doing)")
+    }
+}
+
+struct TypingDots: View {
+    @Environment(\.accessibilityReduceMotion) private var still
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: still)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(Tone.ink3)
+                        .frame(width: 8, height: 8)
+                        .opacity(still ? 0.6 : 0.35 + 0.65 * max(0, sin((t / 1.2 - Double(i) * 0.15) * 2 * .pi)))
+                }
+            }
+        }
     }
 }
 
@@ -316,6 +312,7 @@ struct LineView: View {
     let line: Line
     let room: RoomView
     let solo: Bool
+    var delivered: Int?
     let reply: (MessageView) -> Void
     let jump: (Int) -> Void
     let answer: (Int) -> Void
@@ -339,7 +336,7 @@ struct LineView: View {
                 .padding(.top, 14)
                 .padding(.bottom, 6)
         case .bubble(let m, let first, let last):
-            BubbleRow(message: m, first: first, last: last, room: room, solo: solo, reply: reply, jump: jump, answer: answer)
+            BubbleRow(message: m, first: first, last: last, room: room, solo: solo, reply: reply, jump: jump, answer: answer, delivered: m.seq == delivered)
         }
     }
 }
@@ -370,7 +367,7 @@ struct PendingBubble: View {
                 .accessibilityLabel("Not delivered")
             }
             VStack(alignment: .trailing, spacing: 3) {
-                Markdown(text: item.body, ink: Tone.onInk, link: Tone.onInk, code: Tone.onInk.opacity(0.18), underline: true)
+                Markdown(text: item.body, ink: Tone.onMine, link: Tone.onMine, code: Tone.onMine.opacity(0.18), underline: true)
                     .padding(.horizontal, 13)
                     .padding(.vertical, 8)
                     .background {
@@ -397,6 +394,7 @@ struct BubbleRow: View {
     let reply: (MessageView) -> Void
     let jump: (Int) -> Void
     let answer: (Int) -> Void
+    var delivered = false
     @State private var pull: CGFloat = 0
     @State private var armed = false
 
@@ -436,6 +434,9 @@ struct BubbleRow: View {
                     PollCard(poll: Poll(message), room: room, tail: last) {
                         if message.waiting { answer(message.seq) } else { reply(message) }
                     }
+                }
+                if delivered && message.mine {
+                    Text("Delivered").type(.stamp, .medium).foregroundStyle(Tone.ink3).padding(.trailing, 4)
                 }
             }
             if !message.mine { Spacer(minLength: 40) }
@@ -509,9 +510,9 @@ struct Bubble: View {
     @State private var tapback = false
 
     private var fill: Color { message.mine ? Tone.bubbleMine : Tone.bubbleThem }
-    private var ink: Color { message.mine ? Tone.onInk : Tone.ink }
-    private var link: Color { message.mine ? Tone.onInk : Tone.accent }
-    private var wash: Color { message.mine ? Tone.onInk.opacity(0.18) : Tone.wash2 }
+    private var ink: Color { message.mine ? Tone.onMine : Tone.ink }
+    private var link: Color { message.mine ? Tone.onMine : Tone.accent }
+    private var wash: Color { message.mine ? Tone.onMine.opacity(0.18) : Tone.wash2 }
     private var onlyPictures: Bool { message.images > 0 && message.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
