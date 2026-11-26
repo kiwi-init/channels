@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 extension AppModel {
     func go(_ route: Route) {
@@ -62,7 +63,14 @@ struct Shell: View {
     #if DEBUG
         private func shot() {
             guard let shot = UserDefaults.standard.string(forKey: "shot"), let first = model.channels.first else { return }
-            if let text = UserDefaults.standard.string(forKey: "draft") { model.keep(Draft(text: text), first.code, "main") }
+            if let text = UserDefaults.standard.string(forKey: "draft") {
+                let photo = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 400)).image { context in
+                    UIColor.systemTeal.setFill()
+                    context.fill(CGRect(x: 0, y: 0, width: 600, height: 400))
+                }
+                let attached = UserDefaults.standard.bool(forKey: "attach") ? [Attached(image: photo, data: photo.jpegData(compressionQuality: 0.7) ?? Data())] : []
+                model.keep(Draft(text: text, attached: attached), first.code, "main")
+            }
             let place = UserDefaults.standard.string(forKey: "place") ?? "main"
             switch shot {
             case "channel", "conversation": model.path = [.place(Spot(code: first.code, place: place))]

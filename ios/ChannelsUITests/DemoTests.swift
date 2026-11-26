@@ -181,6 +181,29 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
+    func testTypingWithAPhotoKeepsTheChat() throws {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-demo", "YES", "-lockOff", "YES", "-shot", "channel", "-draft", "First line\nSecond line", "-attach", "YES", "-language", "system", "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US",
+        ]
+        app.launch()
+        let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "the chat with a draft")
+        field.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard is up")
+        sleep(1)
+        add(shot(app, "typing with a photo"))
+        let newest = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Something else'")).firstMatch
+        XCTAssertTrue(newest.exists, "the feed is still there")
+        let tray = app.descendants(matching: .any).matching(identifier: "tray").firstMatch
+        XCTAssertTrue(tray.exists, "the photo sits in the composer")
+        let composerTop = min(tray.frame.minY, field.frame.minY)
+        XCTAssertLessThanOrEqual(newest.frame.maxY, composerTop + 1, "the newest item ends above the composer and its photo")
+        XCTAssertGreaterThan(newest.frame.maxY, composerTop - 160, "and stays near it, not scrolled away")
+    }
+
+    @MainActor
     func testSampleOffersNoLinkAgain() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]

@@ -293,6 +293,7 @@ struct Dock: View {
             .padding(.horizontal, 6)
             .padding(.top, 6)
         }
+        .accessibilityIdentifier("tray")
     }
 
     private var sendButton: some View {
