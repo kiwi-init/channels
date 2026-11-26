@@ -157,6 +157,7 @@ const task = (id: number, title: string, state: "todo" | "doing" | "review" | "d
   createdAt: ago(min + 120),
   last: null,
   archived: false,
+  since: state === "doing" && owner ? ago(min) : null,
 });
 const tasks = [
   task(12, "Composer empties after Send, every time", "doing", "dev", 2),
