@@ -26,13 +26,13 @@ struct Shell: View {
             page(.needs) {
                 NavigationStack {
                     NeedsScreen()
-                        .bar(.bottom) { ListBar() }
+                        .bar(.bottom) { ListBar(on: .needs) }
                 }
             }
             page(.you) {
                 NavigationStack {
                     SettingsScreen()
-                        .bar(.bottom) { ListBar() }
+                        .bar(.bottom) { ListBar(on: .you) }
                 }
             }
         }

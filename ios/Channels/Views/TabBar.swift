@@ -131,6 +131,7 @@ struct Squish: ButtonStyle {
 }
 
 struct ListBar: View {
+    var on: AppTab = .chats
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
     @State private var open = false
@@ -138,6 +139,10 @@ struct ListBar: View {
     @Namespace private var space
 
     var body: some View {
+        if model.tab == on { row }
+    }
+
+    private var row: some View {
         Melt(spacing: 6) {
             if open, let room = model.here {
                 ChannelCard(room: room) { open = false }
