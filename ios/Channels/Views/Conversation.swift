@@ -146,16 +146,19 @@ struct Conversation: View {
             } action: { _, now in
                 insetBottom = now
             }
-            .overlay(alignment: .bottomTrailing) {
-                if follow.far || (!follow.atBottom && follow.unseen > 0) {
-                    JumpButton(follow: follow) { follow.jumps += 1 }
-                        .padding(.trailing, 16)
-                        .padding(.bottom, max(10, feedBottom - model.barTop + 10))
-                        .ignoresSafeArea(.all, edges: .bottom)
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+            .overlay {
+                GeometryReader { g in
+                    let show = model.barTop > 0 && (follow.far || (!follow.atBottom && follow.unseen > 0))
+                    ZStack {
+                        if show {
+                            JumpButton(follow: follow) { follow.jumps += 1 }
+                                .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        }
+                    }
+                    .animation(.snappy(duration: 0.25), value: show)
+                    .position(x: g.size.width - 38, y: (model.barTop - g.frame(in: .global).minY - 32).rounded())
                 }
             }
-            .animation(.snappy(duration: 0.25), value: follow.far || (!follow.atBottom && follow.unseen > 0))
             .scrollDismissesKeyboard(.interactively)
             .onTapGesture { if typing { typing = false } }
             .softBars()
