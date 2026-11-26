@@ -53,6 +53,7 @@ enum Bar {
 struct TabsPill: View {
     var compact = false
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var still
     @Namespace private var plate
 
     var body: some View {
@@ -60,7 +61,7 @@ struct TabsPill: View {
             ForEach(AppTab.order, id: \.self) { tab in
                 TabButton(tab: tab, compact: compact, plate: plate) {
                     Haptic.tap()
-                    model.pick(tab)
+                    withAnimation(Bar.spring(still)) { model.pick(tab) }
                 }
             }
         }
@@ -98,16 +99,16 @@ private struct TabButton: View {
                     }
                 if !compact {
                     Text(tab.title)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
             }
-            .foregroundStyle(lit ? Tone.ink : Tone.ink2)
+            .foregroundStyle(lit ? Tone.accent : Tone.ink)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
                 if lit {
-                    Capsule().fill(Tone.ink.opacity(0.08)).matchedGeometryEffect(id: "plate", in: plate)
+                    Color.clear.lens().matchedGeometryEffect(id: "plate", in: plate)
                 }
             }
             .contentShape(Capsule())
@@ -125,8 +126,8 @@ struct Squish: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed && !still ? 0.9 : 1)
-            .animation(configuration.isPressed ? .easeOut(duration: 0.18) : .spring(response: 0.52, dampingFraction: 0.55), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !still ? 0.84 : 1)
+            .animation(configuration.isPressed ? .spring(response: 0.18, dampingFraction: 0.9) : .spring(response: 0.52, dampingFraction: 0.38), value: configuration.isPressed)
     }
 }
 
@@ -135,6 +136,7 @@ struct ListBar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
     @State private var open = false
+    @State private var swell = false
     @State private var home: CGFloat = 0
     @Namespace private var space
 
@@ -155,7 +157,7 @@ struct ListBar: View {
                     if let room = model.here {
                         Button {
                             Haptic.tap()
-                            open = true
+                            grow()
                         } label: {
                             HStack(spacing: 8) {
                                 ChannelAvatar(room: room, size: 34)
@@ -171,6 +173,7 @@ struct ListBar: View {
                             .contentShape(Capsule())
                         }
                         .buttonStyle(Squish())
+                        .scaleEffect(swell ? 1.18 : 1)
                         .frame(height: Bar.height)
                         .melting("side", in: space, Capsule())
                         .accessibilityIdentifier("channel")
@@ -199,6 +202,19 @@ struct ListBar: View {
         }
         .animation(Bar.spring(still), value: open)
         .onChange(of: model.tab) { _, _ in open = false }
+    }
+
+    private func grow() {
+        guard !still else {
+            open = true
+            return
+        }
+        withAnimation(.easeOut(duration: 0.14)) { swell = true }
+        Task {
+            try? await Task.sleep(for: .milliseconds(140))
+            swell = false
+            open = true
+        }
     }
 }
 
@@ -303,6 +319,14 @@ struct Melt<Content: View>: View {
 }
 
 extension View {
+    @ViewBuilder func lens() -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.regular.tint(Tone.accentWash).interactive(), in: Capsule())
+        } else {
+            self.background(Tone.accentWash, in: Capsule())
+        }
+    }
+
     @ViewBuilder func melting<S: Shape>(_ id: String, in space: Namespace.ID, _ shape: S) -> some View {
         if #available(iOS 26.0, *) {
             self.glassEffect(.regular.tint(Tone.glassTint).interactive(), in: shape).glassEffectID(id, in: space)
