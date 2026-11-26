@@ -5,7 +5,7 @@ import { FOLD_RULES, PROTOCOL_VERSION, SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE, type 
 import { fold, type FoldBase } from "@kiwi/core/state.ts";
 import type { ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts";
 import { ChannelLink } from "./channel-ops.ts";
-import { APP_BEACON_MS, ChannelStore, PAGE, PRESENCE_SETTLE_MS, REACH, WINDOW } from "./channel-store.ts";
+import { APP_BEACON_MS, ChannelStore, foldOnLoaded, PAGE, PRESENCE_SETTLE_MS, REACH, WINDOW } from "./channel-store.ts";
 import { PRESENCE_TTL } from "./online.ts";
 import { REFOLLOW_MS } from "./refollow.ts";
 import type { StoredMember } from "./store.ts";
@@ -182,6 +182,30 @@ describe("a channel store", () => {
     expect(notified).toBe(1);
     expect(r.lent.emitted).toContain("Head");
     stop();
+    close();
+  });
+
+  test("a chat append folds onto the last state: untouched maps are the same objects, and the last state does not change", async () => {
+    await foldOnLoaded;
+    const r = relay(0);
+    const { store, close } = await opened(r);
+    const signed = (seq: number): Message => ({ ...msg(seq), pk: "pk-atlas" });
+    r.say({ _tag: "Message", message: signed(1), row: null });
+    await sleep(40);
+    const before = store.handle.value.state;
+    expect(before.trust.get(1)).toBe("verified");
+    const was = JSON.stringify([...before.trust, ...before.members.values()]);
+    r.say({ _tag: "Message", message: signed(2), row: null });
+    await sleep(40);
+    const after = store.handle.value.state;
+    expect(after).not.toBe(before);
+    expect(after.head).toBe(2);
+    expect(after.trust.get(2)).toBe("verified");
+    expect(after.tasks).toBe(before.tasks);
+    expect(after.rooms).toBe(before.rooms);
+    expect(after.github).toBe(before.github);
+    expect(after.trust).not.toBe(before.trust);
+    expect(JSON.stringify([...before.trust, ...before.members.values()])).toBe(was);
     close();
   });
 

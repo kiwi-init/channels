@@ -6,6 +6,7 @@ import { heldStep, pausingStep, runSight } from "./landing-steps.ts";
 import { landerOf, openRound, taskId } from "./tasks.ts";
 import { needsReset } from "./reset.ts";
 import type { ChannelState, Task, TaskClock, Woke } from "./types.ts";
+import { quietValues } from "./same.ts";
 
 export const QUIET_MS = QUIET_MINUTES * 60_000;
 export const QUEUE_MS = 24 * 60 * 60_000;
@@ -36,7 +37,7 @@ function landingParty(view: ClockView, t: Frozen<Task>, now: number): Party {
 }
 
 function queueParty(view: ClockView, t: Frozen<Task>, owner: string): Party {
-  for (const x of view.tasks.values()) if (x.owner === owner && !x.archived && (x.state === "doing" || (x.state === "todo" && x.id < t.id))) return { key: `${WAITING}${owner}`, mover: owner };
+  for (const x of quietValues(view.tasks)) if (x.owner === owner && !x.archived && (x.state === "doing" || (x.state === "todo" && x.id < t.id))) return { key: `${WAITING}${owner}`, mover: owner };
   return member(owner, "start");
 }
 

@@ -95,7 +95,7 @@ import type {
 import { mentions } from "~/live/mention"
 import { phraseOf } from "~/live/said"
 import { specLineTest } from "~/specs/quote"
-import { type Words, wrote } from "~/words"
+import { shownSame, type Words, wrote } from "~/words"
 import { seenAt } from "@kiwi/app/threads.ts"
 
 type Seen = Readonly<Record<string, number>>
@@ -523,8 +523,41 @@ function pendingSpecMark(state: ChannelState, marks: SpecMarks, p: Pick<Pending,
   return line ? { specLine: true } : { onSpec: root }
 }
 
-export function messagesOf(state: ChannelState, messages: readonly Wire[], me: string, askOf: ReadonlyMap<number, string>, pictures: Pictures, pending: readonly Pending[]): Message[] {
+export interface RowCache {
+  context: readonly unknown[]
+  rows: Map<number, { inputs: readonly unknown[] | null; row: Message }>
+}
+
+export const rowCache = (): RowCache => ({ context: [], rows: new Map() })
+
+const sameList = (a: readonly unknown[], b: readonly unknown[]): boolean => a.length === b.length && a.every((x, i) => Object.is(x, b[i]))
+
+const seatsKey = (state: ChannelState): string => JSON.stringify([...state.members.values()].map((m) => [m.name, m.display, m.kind, m.owner, m.sponsor, m.scopes, m.active, m.persona, m.pk]))
+
+export function messagesOf(
+  state: ChannelState,
+  messages: readonly Wire[],
+  me: string,
+  askOf: ReadonlyMap<number, string>,
+  pictures: Pictures,
+  pending: readonly Pending[],
+  cache: RowCache = rowCache()
+): Message[] {
   const bySeq = new Map(messages.map((m) => [m.seq, m]))
+  const context = [me, seatsKey(state), state.rooms, pictures]
+  if (!sameList(context, cache.context)) {
+    cache.context = context
+    cache.rows.clear()
+  }
+  for (const seq of cache.rows.keys()) if (!bySeq.has(seq)) cache.rows.delete(seq)
+  const reused = (seq: number, inputs: readonly unknown[] | null, build: () => Message): Message => {
+    const was = cache.rows.get(seq)
+    if (was && inputs && was.inputs && sameList(inputs, was.inputs)) return was.row
+    const fresh = build()
+    const row = was && !inputs && shownSame(fresh, was.row) ? was.row : fresh
+    cache.rows.set(seq, { inputs, row })
+    return row
+  }
   const threads = new Map<number, { replies: number; last: number; people: string[] }>()
   const rootOf = (m: Wire): number | undefined => {
     const root = state.threadOf.get(m.seq)
@@ -552,32 +585,67 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       if (place.kind === "dm") continue
       const where: Where = place.kind === "task" && !SUMMARISED(m) ? { kind: "task", task: place.task } : { kind: "room", room: GENERAL_ROOM }
       const task = eventTask(m)
-      out.push({
-        seq: m.seq,
-        from: m.from,
-        at: m.ts,
-        text: wrote(eventText(m, state)),
-        where,
-        system: true,
-        ...(task !== undefined ? { task } : {}),
-        ...(m.ev?.op === "github" ? { github: m.ev.items } : {}),
-        ...(eventForYou(m, me) ? { mentionsYou: true } : {}),
-      })
+      out.push(
+        reused(m.seq, null, () => ({
+          seq: m.seq,
+          from: m.from,
+          at: m.ts,
+          text: wrote(eventText(m, state)),
+          where,
+          system: true,
+          ...(task !== undefined ? { task } : {}),
+          ...(m.ev?.op === "github" ? { github: m.ev.items } : {}),
+          ...(eventForYou(m, me) ? { mentionsYou: true } : {}),
+        }))
+      )
       continue
     }
-    const where = whereOf(state, m, me)
     const root = rootOf(m)
     const quoted = m.re?.[0]
     const target = quoted === undefined ? undefined : bySeq.get(quoted)
-    const reactions = reactionsOf(state, m.seq)
     const gone = state.deleted.has(m.seq)
     const changed = state.edits.get(m.seq)
     const text = gone ? "" : (changed?.body ?? m.body)
-    const prs = prLinks(text).map((link) => prOf(state, link))
+    const links = prLinks(text)
+    const thread = threads.get(m.seq)
+    const inputs = links.length
+      ? null
+      : [
+          m,
+          gone,
+          changed,
+          state.reactions.get(m.seq),
+          state.placeOf.get(m.seq),
+          state.roomOf.get(m.seq),
+          root,
+          target?.kind === "event",
+          (m.re ?? []).map((seq) => bySeq.get(seq)?.from ?? "").join("\u0000"),
+          thread ? `${thread.replies}\u0000${thread.last}\u0000${thread.people.join("\u0000")}` : "",
+          askOf.get(m.seq),
+          marks.lines.has(m.seq),
+          root !== undefined && state.specs.has(root),
+          m.kind === "done" && state.rejected.has(m.seq),
+        ]
+    out.push(reused(m.seq, inputs, () => row(m, root, quoted, target, gone, changed, text, links, thread)))
+  }
+  function row(
+    m: Wire,
+    root: number | undefined,
+    quoted: number | undefined,
+    target: Wire | undefined,
+    gone: boolean,
+    changed: ReturnType<typeof state.edits.get>,
+    text: string,
+    links: ReturnType<typeof prLinks>,
+    thread: ReturnType<typeof threads.get>
+  ): Message {
+    const where = whereOf(state, m, me)
+    const reactions = reactionsOf(state, m.seq)
+    const prs = links.map((link) => prOf(state, link))
     const said = phraseOf(m, me, (name) => (name === me ? "you" : nameIn(state, name)), new Set((m.re ?? []).flatMap((seq) => bySeq.get(seq)?.from ?? [])))
     const images = gone ? [] : (m.imgs ?? []).flatMap((img, i) => (isRasterMime(img.mime) ? [pictures.get(m.seq, i, img.name)] : []))
     const ask = askOf.get(m.seq)
-    out.push({
+    return {
       seq: m.seq,
       from: m.from,
       at: m.ts,
@@ -592,7 +660,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(root !== undefined && m.side ? { side: true as const } : {}),
       ...(marks.lines.has(m.seq) ? { specLine: true as const } : root !== undefined && state.specs.has(root) ? { onSpec: root } : {}),
       ...(quoted !== undefined && quoted !== root && target?.kind !== "event" ? { replyTo: quoted } : {}),
-      ...(threads.has(m.seq) ? { thread: threads.get(m.seq) } : {}),
+      ...(thread ? { thread } : {}),
       ...(m.kind === "done" && m.task !== undefined && !state.rejected.has(m.seq) ? { task: m.task, done: true } : {}),
       ...(prs.length ? { prs } : {}),
       ...(images.length ? { images } : {}),
@@ -602,7 +670,7 @@ export function messagesOf(state: ChannelState, messages: readonly Wire[], me: s
       ...(mentionsYou(m, me) ? { mentionsYou: true } : {}),
       ...(m.block ? { block: m.block.id } : {}),
       ...(m.lean ? { partial: true as const } : {}),
-    })
+    }
   }
   for (const p of pending) {
     if (p.seq !== undefined && bySeq.has(p.seq)) continue
@@ -700,7 +768,7 @@ function moveOf(state: ChannelState, m: Wire, ev: TaskUpdate): Move | null {
   return null
 }
 
-function historyOf(state: ChannelState, messages: readonly Wire[], me: string): Map<number, TaskEvent[]> {
+export function historyOf(state: ChannelState, messages: readonly Wire[], me: string): Map<number, TaskEvent[]> {
   const out = new Map<number, TaskEvent[]>()
   const named = new Set<string>()
   const add = (id: number, e: TaskEvent) => {
@@ -796,10 +864,13 @@ function stepsFor(state: ChannelState, t: Frozen<CoreTask>, me: string, now: num
 }
 
 export function tasksOf(state: ChannelState, held: ReadonlySet<number>, me: string, messages: readonly Wire[], now = Date.now()): Task[] {
+  return tasksFrom(state, held, me, historyOf(state, messages, me), now)
+}
+
+export function tasksFrom(state: ChannelState, held: ReadonlySet<number>, me: string, history: ReadonlyMap<number, TaskEvent[]>, now: number): Task[] {
   const waiting = tasksAwaitingPeople(state)
   const you = state.members.get(me)
   const person = !!you && isPerson(you)
-  const history = historyOf(state, messages, me)
   return [...state.tasks.values()].map((t): Task => {
     const stage = stageOf(state, t)
     const linked = taskPr(state, t.id)?.pr ?? stage.pr

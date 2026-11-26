@@ -12,6 +12,7 @@ import { sendOptions } from "~/live/channel"
 import { dmRoomOf } from "~/live/dm"
 import { asksOf, peopleOf } from "~/live/map"
 import { useTasksNow } from "~/live/tasks-now"
+import { useBoard } from "~/live/board"
 import { usePinsHere } from "~/live/pins"
 import { specAsksOf, specsOf } from "~/live/specs"
 import { withReach } from "~/live/reach"
@@ -43,7 +44,8 @@ const HomeMember = memo(function HomeMember({ member }: { member: StoredMember }
   const people = useMemo(() => peopleOf(state, roster, online, me, wakes), [state, roster, online, me, wakes])
   const asks = useMemo(() => asksOf(state, messages, me, isOwner, requests, roster, pins), [state, messages, me, isOwner, requests, roster, pins])
   const tasks = useTasksNow(state, asks.held, me, messages)
-  const specs = useMemo(() => specsOf(state, me), [state, me])
+  const board = useBoard(state)
+  const specs = useMemo(() => specsOf(board, me), [board, me])
   const nicknames = useMemo(() => nicknamesOf(state.members.values()), [state.members])
   const lead = state.lead
   const summary = useMemo(
