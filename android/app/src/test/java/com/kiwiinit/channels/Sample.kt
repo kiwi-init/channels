@@ -26,6 +26,8 @@ const val DESIGN_ROOM = "room:design01"
 
 private const val MINUTE = 60_000.0
 
+private const val PICTURE = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCABgAGADASIAAhEBAxEB/8QAGgABAQADAQEAAAAAAAAAAAAAAAMFBgcCBP/EADEQAAEEAQIDBgUDBQAAAAAAAAEAAgMSBAURBiFhMUFRcYGhEyJykcEjUrEHJDIzQ//EABoBAAIDAQEAAAAAAAAAAAAAAAABAwQFAgb/xAAiEQACAwACAQQDAAAAAAAAAAAAAQIDEQQSBRNBQpEhMVH/2gAMAwEAAhEDEQA/AOxW6pbqo2Sy8sekwtbqluqjZLIDC1uqW6qNksgMLW6pbqo2SyAwtbqluqjZLIDC1uqW6qNksgMIWSyjZLJkmFrJZRslkBhay+vHwMvIAMOPI5p7HbbA+pWb4e0ZjImZOW0Oe4bsYeYaPE9VsKuVcTstkUbeWovrBaaLPpubACZMaTYdpb8232XxWXR1h9b0ZmZG6XHaGZI58uQf0PXqnZw8WwYquZryaNQsllEkgkHcEJZUi/hayWUbJZAYQsllCyWTJcL2X2aNCMrU8aFw3a54sPEDmfYLGWWQ0DJGPrGJI47C9ST3A8vyuoJdlpxYn0efvDpaIi2jzoREQBoXFMIx9YlqNmyASD17fcFYiyynGGSJdakaCCImNZuPv+VhLLHtS7vDfoT9OO/wvZLKFksoybCNksoWSyZJheyWULJZAsOk8L67HqEDcedwbmMG3M/7AO8dfFZ9cYDy0gtJBHMELNYfFWqYzQ0zNmaO6Vu/v2+6u1crFkzMv8e2+1f0dNWK1/WYdKxzuQ/JcP04/wAnotKyuLtUnaQ2SOEEbfps/J3WDlmfLI58r3Pe47lzjuSnZylmQFT457tj/BeSZ8sj5JHFz3EucT3krzZQsllRNTqXsllCyWQPCFkso2SyeEmFrJZRBJIA5krd+HeDHStZkavZjTsRA07OP1Hu8hz8l3CuU3kSG66FK2bNRiY+Z4ZExz3nsa0bkrJwcP6tN/hgTD6wGfzsupYeHjYUXw8SCOFngwbb+firq1HiL5MzJ+Tfwj9nJ5uHNXhG78GQ/QQ7+CVjciGbHfTIikif+17S0+67Up5EEOTEY8iJksZ7WvaCPdOXEXswh5OXyicUsllvWv8ABUb2um0g0kHP4Dj8p8iez15eS0KVr4ZXxyscyRh2c1w2IKqTqlW8ZpU3wvWwPdkso2Sy4wnwhZLKNuq+nTcd2bqGNitdsZpGx7+G523TS07eJazfv6e6A34TdVzGbuJ/t2nuH7vPw+/gt7XiGJkEMcUTQ2NjQ1rR3AcgF7WrXBQjiPK33O6bmwiIpCEIiIALU+O9Abn4b87GZtmQt3dt/wBGDt9R3fbwW2IuJwU1jJKrZVTU4nA7JZZDivCGm8QZuNHsIw+zAOwNcNwPTfb0WJt1WU448Z6uDU4qS9z/2Q=="
+
 fun sample(app: Application, calls: (suspend (JsonObject) -> JsonElement)? = null): AppModel {
     val model = AppModel(app, calls)
     model.rooms[DEV] = dev()
@@ -81,7 +83,7 @@ private fun dev(): RoomView {
         charter = "Build Channels: the desktop app, the phones and the relay. One task, one branch, one PR.",
         lead = "lively-swan",
         members = listOf(
-            MemberView("jow", "Jow", "human", owner = true, here = true),
+            MemberView("jow", "Jow", "human", owner = true, here = true, picture = PICTURE),
             MemberView("lively-swan", "Teamlead Channels", "agent", role = "lead", lead = true, here = true, activity = ActivityView("working", "Bash"), harness = "claude-code", doing = listOf(535)),
             MemberView("hearty-badger", "Android Builder", "agent", here = true, activity = ActivityView("working"), harness = "claude-code", doing = listOf(543)),
             MemberView("gentle-jaguar", "Codex Builder", "agent", here = true, harness = "codex"),
@@ -130,7 +132,7 @@ private fun site(): RoomView {
         connection = Connection.Live,
         head = 2,
         whole = true,
-        members = listOf(MemberView("jow", "Jow", "human", owner = true, here = true), MemberView("quiet-heron", "Site Builder", "agent")),
+        members = listOf(MemberView("jow", "Jow", "human", owner = true, here = true, picture = PICTURE), MemberView("quiet-heron", "Site Builder", "agent")),
         messages = messages,
         last = messages.last(),
         latest = messages.last(),
