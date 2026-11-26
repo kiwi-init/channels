@@ -200,3 +200,163 @@ test("nothing is built or published unless the ci-green gate passes", () => {
   const through = (job: string, seen: Set<string> = new Set()): boolean => job === "ci-green" || needs(job).some((n) => !seen.has(n) && (seen.add(n), through(n, seen)));
   for (const job of ["build", "publish"]) expect({ job, gatedByCiGreen: through(job) }).toEqual({ job, gatedByCiGreen: true });
 });
+
+describe("bump-main opens the stamp as a pull request and never pushes to main", () => {
+  const open = step("bump-main", "Open the stamp PR");
+  const versions = readFileSync("packages/core/src/versions.ts", "utf8");
+  const bin = join(root, "pr-bin");
+  const temp = join(root, "pr-runner");
+  const log = join(temp, "gh.log");
+  const openFile = join(temp, "open-pr");
+  let n = 0;
+
+  beforeAll(() => {
+    mkdirSync(bin, { recursive: true });
+    mkdirSync(join(temp, "stamp"), { recursive: true });
+    writeFileSync(
+      join(bin, "gh"),
+      [
+        "#!/usr/bin/env bash",
+        'args="$*"; printf "%s\\n" "${args//$\'\\n\'/ }" >> "$GH_LOG"',
+        'case "$1 $2" in',
+        '  "pr list") cat "$GH_OPEN" 2>/dev/null || true ;;',
+        '  "pr create") echo "https://github.com/kiwi-init/channels/pull/9" ;;',
+        '  "api users/kiwi-bus%5Bbot%5D") echo 42 ;;',
+        '  "api users/"*) echo "Kiwi Person" ;;',
+        "esac",
+        "",
+      ].join("\n"),
+    );
+    chmodSync(join(bin, "gh"), 0o755);
+  });
+
+  const setup = (mainVersion = "1.0.0") => {
+    const name = `pr-${++n}`;
+    const origin = join(root, `${name}.git`);
+    mkdirSync(origin, { recursive: true });
+    spawnOwnedSync(["git", "init", "-q", "--bare", "-b", "main", origin], { env: gitEnv });
+    const git = repo(name);
+    const dir = join(root, name);
+    const write = (file: string, text: string) => {
+      mkdirSync(dirname(join(dir, file)), { recursive: true });
+      writeFileSync(join(dir, file), text);
+    };
+    write("packages/core/src/versions.ts", versions);
+    write("src/version.ts", 'export const VERSION = "1.0.0";\n');
+    write("CHANGELOG.md", "# Changelog\n\nold\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "base");
+    write("src/version.ts", 'export const VERSION = "1.0.1";\n');
+    write("CHANGELOG.md", "# Changelog\n\n## 1.0.1\n\nold\n");
+    writeFileSync(join(temp, "stamp", "stamp.patch"), `${git("diff")}\n`);
+    git("checkout", "-q", "--", ".");
+    if (mainVersion !== "1.0.0") {
+      write("src/version.ts", `export const VERSION = "${mainVersion}";\n`);
+      git("commit", "-q", "-a", "-m", `kiwi ${mainVersion}`);
+    }
+    git("remote", "add", "origin", origin);
+    git("push", "-q", "origin", "main");
+    writeFileSync(log, "");
+    rmSync(openFile, { force: true });
+    const main = () => git("rev-parse", "origin/main");
+    const before = main();
+    const run = () => {
+      const r = bash(open.run, dir, {
+        PATH: `${bin}:${gitEnv.PATH}`,
+        RUNNER_TEMP: temp,
+        GH_LOG: log,
+        GH_OPEN: openFile,
+        APP: "kiwi-bus",
+        GITHUB_ACTOR: "someone",
+        GITHUB_REF_NAME: "v1.0.1",
+        GITHUB_REPOSITORY: "kiwi-init/channels",
+        GITHUB_SERVER_URL: "https://github.com",
+        GITHUB_RUN_ID: "123",
+      });
+      git("fetch", "-q", "origin");
+      return r;
+    };
+    const creates = () =>
+      readFileSync(log, "utf8")
+        .split("\n")
+        .filter((l) => l.startsWith("pr create"));
+    const branch = () => spawnOwnedSync(["git", "rev-parse", "--verify", "-q", "refs/heads/release-stamp-1.0.1"], { cwd: origin, env: gitEnv }).stdout.toString().trim();
+    return { git, write, run, creates, branch, main, before };
+  };
+
+  test("a stamp opens one PR from release-stamp-<version>, labelled documentation and linking the run, and main stays where it was", () => {
+    const s = setup();
+    const r = s.run();
+    expect(r.code).toBe(0);
+    expect(s.main()).toBe(s.before);
+    expect(s.branch()).not.toBe("");
+    expect(s.git("show", "origin/release-stamp-1.0.1:src/version.ts")).toContain('"1.0.1"');
+    expect(s.git("log", "-1", "--format=%B", "origin/release-stamp-1.0.1")).toMatch(/^kiwi 1\.0\.1\n[\s\S]*Agent: release\.yml on behalf of Kiwi Person$/);
+    const created = s.creates();
+    expect(created).toHaveLength(1);
+    expect(created[0]).toContain("--base main --head release-stamp-1.0.1 --title kiwi 1.0.1 --label documentation");
+    expect(created[0]).toContain("https://github.com/kiwi-init/channels/actions/runs/123");
+    expect(created[0]).toContain("release.yml on behalf of Kiwi Person");
+  });
+
+  test("a rerun while that PR is open opens no second one and pushes nothing", () => {
+    const s = setup();
+    s.run();
+    const pushed = s.branch();
+    writeFileSync(openFile, "https://github.com/kiwi-init/channels/pull/9\n");
+    const r = s.run();
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("already open: https://github.com/kiwi-init/channels/pull/9");
+    expect(s.creates()).toHaveLength(1);
+    expect(s.branch()).toBe(pushed);
+  });
+
+  test("a rerun after a run that pushed the branch but opened no PR reuses that branch as it is and opens exactly one PR", () => {
+    const s = setup();
+    s.git("checkout", "-q", "-b", "release-stamp-1.0.1");
+    s.write("CHANGELOG.md", "# Changelog\n\n## 1.0.1\n\nedited by hand\n");
+    s.git("commit", "-q", "-a", "-m", "kiwi 1.0.1, edited");
+    s.git("push", "-q", "origin", "release-stamp-1.0.1");
+    s.git("checkout", "-q", "main");
+    const pushed = s.branch();
+    const r = s.run();
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("release-stamp-1.0.1 is already pushed");
+    expect(s.branch()).toBe(pushed);
+    expect(s.creates()).toHaveLength(1);
+    expect(s.main()).toBe(s.before);
+  });
+
+  test.each(["1.0.1", "1.0.2"])("when main already says %s, nothing is pushed and no PR opens", (version) => {
+    const s = setup(version);
+    const r = s.run();
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("main already says 1.0.1 or later: no stamp PR");
+    expect(s.creates()).toHaveLength(0);
+    expect(s.branch()).toBe("");
+    expect(s.main()).toBe(s.before);
+  });
+
+  test("a stamp that doesn't apply to main fails with the conflict in the log, and pushes nothing", () => {
+    const s = setup();
+    s.write("CHANGELOG.md", "# Changelog\n\nrewritten on main\n");
+    s.git("commit", "-q", "-a", "-m", "changelog moved on");
+    s.git("push", "-q", "origin", "main");
+    const before = s.main();
+    const r = s.run();
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("does not apply to main; the conflict:");
+    expect(r.out).toContain("<<<<<<<");
+    expect(s.creates()).toHaveLength(0);
+    expect(s.branch()).toBe("");
+    expect(s.main()).toBe(before);
+  });
+
+  test("the six-file check runs before the step that pushes, and no step pushes to main", () => {
+    const steps = release.jobs["bump-main"]?.steps ?? [];
+    const names = steps.map((s) => s.name);
+    expect(names.indexOf("Check the stamp only edits the stamped files")).toBeLessThan(names.indexOf("Open the stamp PR"));
+    expect(names.indexOf("Check the stamp only edits the stamped files")).toBeGreaterThan(-1);
+    for (const s of steps) expect({ step: s.name, pushesMain: /push[^\n]*(HEAD:main|origin main)/.test(s.run ?? "") }).toEqual({ step: s.name, pushesMain: false });
+  });
+});

@@ -207,6 +207,7 @@ jobs:
           client-id: ${{ vars.BUS_APP_CLIENT_ID }}
           private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
           permission-contents: write
+          permission-pull-requests: write
 
       - if: steps.stamp.outputs.needed == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -234,13 +235,13 @@ jobs:
           patch="$RUNNER_TEMP/stamp/stamp.patch"
           [ -s "$patch" ] || exit 0
           summary=$(git apply --summary "$patch")
-          [ -z "$summary" ] || { echo "::error::the stamp creates, deletes, renames or changes the mode of a file, so it isn't pushed to main: $summary"; exit 1; }
+          [ -z "$summary" ] || { echo "::error::the stamp creates, deletes, renames or changes the mode of a file, so no stamp PR opens: $summary"; exit 1; }
           stat=$(git apply --numstat "$patch")
           while IFS=$'\t' read -r _ _ file; do
-            grep -qxF -- "$file" <<<"$STAMPED" || { echo "::error::the stamp edits $file, which scripts/stamp.ts never writes, so it isn't pushed to main"; exit 1; }
+            grep -qxF -- "$file" <<<"$STAMPED" || { echo "::error::the stamp edits $file, which scripts/stamp.ts never writes, so no stamp PR opens"; exit 1; }
           done <<<"$stat"
 
-      - name: Commit the stamp to main
+      - name: Open the stamp PR
         if: steps.stamp.outputs.needed == 'true'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
@@ -248,20 +249,36 @@ jobs:
         run: |
           v="${GITHUB_REF_NAME#v}"
           patch="$RUNNER_TEMP/stamp/stamp.patch"
+          branch="release-stamp-$v"
           [ -s "$patch" ] || { echo "the tagged commit already said $v: nothing to commit"; exit 0; }
+          git fetch -q origin main && git reset -q --hard origin/main
+          cmp=$(V="$v" bun -e 'const { compareVersions } = await import("./packages/core/src/versions.ts"); const { VERSION } = await import("./src/version.ts"); console.log(compareVersions(VERSION, process.env.V ?? ""))')
+          [ "$cmp" -lt 0 ] || { echo "main already says $v or later: no stamp PR"; exit 0; }
+          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --base main --state open --json url --jq '.[0].url // ""')
+          [ -z "$open" ] || { echo "the stamp PR for $GITHUB_REF_NAME is already open: $open"; exit 0; }
           id=$(gh api "users/$APP%5Bbot%5D" --jq .id)
           who=$(gh api "users/$GITHUB_ACTOR" --jq '.name // .login')
-          git config user.name "$APP[bot]"
-          git config user.email "$id+$APP[bot]@users.noreply.github.com"
-          for attempt in 1 2 3; do
-            git fetch -q origin main && git reset -q --hard origin/main
-            cmp=$(V="$v" bun -e 'const { compareVersions } = await import("./packages/core/src/versions.ts"); const { VERSION } = await import("./src/version.ts"); console.log(compareVersions(VERSION, process.env.V ?? ""))')
-            [ "$cmp" -lt 0 ] || { echo "main already says $v or later: nothing to commit"; exit 0; }
-            git apply --3way "$patch"
+          if git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
+            echo "$branch is already pushed: its PR opens from it as it is"
+          else
+            git config user.name "$APP[bot]"
+            git config user.email "$id+$APP[bot]@users.noreply.github.com"
+            git checkout -q -b "$branch"
+            if ! git apply --3way "$patch"; then
+              echo "::error::the stamp of $GITHUB_REF_NAME does not apply to main; the conflict:"
+              git diff
+              exit 1
+            fi
             git commit -q -a -m "kiwi $v" -m "The release's stamp from $GITHUB_REF_NAME: the version in src/version.ts, package.json, desktop/package.json and the site's download names, and CHANGELOG.md's section." -m "Agent: release.yml on behalf of $who"
-            git push origin HEAD:main && exit 0
-          done
-          exit 1
+            git push -q origin "$branch"
+          fi
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          body="The version stamp of $GITHUB_REF_NAME for main: the release's stamp artifact, unchanged (version, changelog, site download names).
+
+          Release run: $run (artifact stamp: $run#artifacts)
+
+          release.yml on behalf of $who"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --title "kiwi $v" --label documentation --body "$body"
 
   bump-tap:
     needs: publish
