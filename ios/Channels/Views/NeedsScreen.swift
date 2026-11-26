@@ -82,6 +82,7 @@ struct NeedsScreen: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .clearsBar()
         .background(Tone.canvas)
         .overlay {
             if rooms.isEmpty {

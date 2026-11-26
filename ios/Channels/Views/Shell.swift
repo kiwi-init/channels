@@ -22,13 +22,21 @@ struct Shell: View {
                     ChannelList()
                         .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
                 }
-                .underBar(.chats)
             }
             page(.needs) {
                 NavigationStack {
                     NeedsScreen()
                 }
-                .underBar(.needs)
+            }
+            if model.cardOpen {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .onTapGesture { withAnimation(Bar.spring(false)) { model.cardOpen = false } }
+                    .accessibilityHidden(true)
+            }
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                RootBar()
             }
         }
         .onChange(of: model.path) { _, _ in model.cardOpen = false }
@@ -81,30 +89,6 @@ struct Shell: View {
             }
         }
     #endif
-}
-
-private struct UnderBar: ViewModifier {
-    let tab: AppTab
-    @Environment(AppModel.self) private var model
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                if model.cardOpen {
-                    Color.black.opacity(0.001)
-                        .ignoresSafeArea()
-                        .onTapGesture { withAnimation(Bar.spring(false)) { model.cardOpen = false } }
-                        .accessibilityHidden(true)
-                }
-            }
-            .bar(.bottom) { RootBar(on: tab) }
-    }
-}
-
-extension View {
-    fileprivate func underBar(_ tab: AppTab) -> some View {
-        modifier(UnderBar(tab: tab))
-    }
 }
 
 struct RouteScreen: View {

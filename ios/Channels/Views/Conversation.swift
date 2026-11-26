@@ -80,11 +80,9 @@ struct Conversation: View {
     var answer: (AskView) -> Void = { _ in }
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
-    @State private var feedBottom: CGFloat = 0
 
     private var footer: CGFloat {
-        guard model.barTop > 0, feedBottom > 0 else { return ((model.barHeight > 0 ? model.barHeight : Bar.height) + 6).rounded() }
-        return max(6, feedBottom - model.barTop + 6).rounded()
+        (model.barHeight > 0 ? model.barHeight : Bar.height) + 6
     }
 
     private var solo: Bool {
@@ -134,14 +132,9 @@ struct Conversation: View {
             .scrollPosition($position)
             .defaultScrollAnchor(.bottom)
             .defaultScrollAnchor(.bottom, for: .sizeChanges)
-            .onGeometryChange(for: CGFloat.self) {
-                $0.frame(in: .global).maxY.rounded()
-            } action: {
-                feedBottom = $0
-            }
             .overlay {
                 GeometryReader { g in
-                    let show = !typing && model.barTop > 0 && follow.far
+                    let show = !typing && model.barHeight > 0 && follow.far
                     ZStack {
                         if show {
                             JumpButton(follow: follow) { follow.jumps += 1 }
@@ -149,7 +142,7 @@ struct Conversation: View {
                         }
                     }
                     .animation(.snappy(duration: 0.25), value: show)
-                    .position(x: g.size.width - 38, y: (model.barTop - g.frame(in: .global).minY - 24).rounded())
+                    .position(x: g.size.width - 38, y: g.size.height - model.barHeight - 24)
                 }
             }
             .scrollDismissesKeyboard(.interactively)

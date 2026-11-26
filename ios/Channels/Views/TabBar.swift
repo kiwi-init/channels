@@ -192,7 +192,6 @@ extension RoomView {
 }
 
 struct RootBar: View {
-    var on: AppTab = .chats
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
     @Namespace private var space
@@ -204,27 +203,18 @@ struct RootBar: View {
     }
 
     var body: some View {
-        if model.tab == on {
-            Melt(spacing: 6) {
-                if let spot = chat, let room = model.shown(spot) {
-                    ChatBar(room: room, spot: spot, compose: model.compose(spot), space: space)
-                } else {
-                    ListRow(space: space)
-                }
+        Melt(spacing: 6) {
+            if let spot = chat, let room = model.shown(spot) {
+                ChatBar(room: room, spot: spot, compose: model.compose(spot), space: space)
+            } else {
+                ListRow(space: space)
             }
-            .animation(Bar.spring(still), value: chat)
-            .onGeometryChange(for: CGFloat.self) {
-                $0.size.height
-            } action: {
-                if !model.cardOpen { model.barHeight = $0 }
-            }
-            .onGeometryChange(for: CGFloat.self) {
-                $0.frame(in: .global).minY.rounded()
-            } action: {
-                if !model.cardOpen { model.barTop = $0 }
-            }
-        } else {
-            Color.clear.frame(height: model.barHeight).accessibilityHidden(true)
+        }
+        .animation(Bar.spring(still), value: chat)
+        .onGeometryChange(for: CGFloat.self) {
+            $0.size.height.rounded()
+        } action: {
+            if !model.cardOpen { model.barHeight = $0 }
         }
     }
 }
@@ -415,6 +405,20 @@ private struct LeadDock: View {
                 typing = false
                 done()
             }
+    }
+}
+
+private struct ClearsBar: ViewModifier {
+    @Environment(AppModel.self) private var model
+
+    func body(content: Content) -> some View {
+        content.contentMargins(.bottom, model.barHeight > 0 ? model.barHeight : Bar.height, for: .scrollContent)
+    }
+}
+
+extension View {
+    func clearsBar() -> some View {
+        modifier(ClearsBar())
     }
 }
 

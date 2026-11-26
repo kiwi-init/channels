@@ -27,6 +27,7 @@ struct ChannelList: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .clearsBar()
         .background(Tone.canvas)
         .safeAreaInset(edge: .top, spacing: 0) {
             HStack {
