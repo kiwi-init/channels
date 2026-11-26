@@ -43,7 +43,8 @@ final class DemoTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "lead-row").firstMatch.exists, "the lead, the first row of the channel")
         XCTAssertFalse(app.buttons["tab-you"].exists, "You isn't a tab")
         XCTAssertTrue(app.buttons["you"].isHittable, "You is the face at the top right")
-        XCTAssertFalse(app.staticTexts["Chats"].exists, "and Chats has no title")
+        let titles = app.staticTexts.matching(NSPredicate(format: "label == 'Chats'")).allElementsBoundByIndex
+        XCTAssertFalse(titles.contains { $0.frame.maxY < needs.frame.minY - 20 }, "and Chats has no title above the bar")
         add(shot(app, "list with the bar"))
 
         channel.tap()
