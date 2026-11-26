@@ -19,6 +19,8 @@ import { Themes } from "~/settings/themes"
 import { uiVersion } from "~/settings/ui-version"
 import { updateFound } from "~/settings/update-check"
 import { UsageBar } from "~/usage/meter"
+import { askWhatsNew, setFeature, useOn } from "~/whatsnew/features"
+import { NOTES } from "~/whatsnew/list"
 import { useUsage, type SeenUsage } from "~/usage/store"
 import { canUpgrade, levelOf, planHint, planName, resetsIn, seemsUnlimited, upgradeLabel, usageHint, usedOf } from "~/usage/words"
 
@@ -282,7 +284,24 @@ function versionRow(account: Account, a: Acts, check: { busy: boolean; result: U
   })
 }
 
-function aboutPage(account: Account, a: Acts, debug: boolean, relayFailed: Failure | null, check: Parameters<typeof versionRow>[2]): string {
+const firstLine = (body: string): string => body.split(/(?<=[.!?])\s/)[0] ?? body
+
+function featureRows(a: Acts, on: readonly string[]): string[] {
+  if (!NOTES.length) return []
+  return [
+    `## ${esc(t("settings.sections.features"))}`,
+    ...NOTES.filter((n) => n.toggle).map((n) =>
+      toggle(
+        on.includes(n.id),
+        a.act(n.title, () => setFeature(n.id, !on.includes(n.id))),
+        esc(firstLine(n.body))
+      )
+    ),
+    a.act(t("settings.sections.features.open"), askWhatsNew),
+  ]
+}
+
+function aboutPage(account: Account, a: Acts, debug: boolean, relayFailed: Failure | null, check: Parameters<typeof versionRow>[2], on: readonly string[]): string {
   const version = uiVersion()
   const relay = account.desktop
     ? row({
@@ -309,6 +328,7 @@ function aboutPage(account: Account, a: Acts, debug: boolean, relayFailed: Failu
       say("settings.sections.debug.hint"),
       "*"
     ),
+    ...featureRows(a, on),
     fine(say("settings.sections.licenses")),
   ])
 }
@@ -316,6 +336,7 @@ function aboutPage(account: Account, a: Acts, debug: boolean, relayFailed: Failu
 export function AboutPage() {
   const { app } = useApp()
   const debug = useDebugOptions()
+  const on = useOn()
   const [result, setResult] = useState<UpdateCheck | null>(null)
   const [busy, setBusy] = useState(false)
   const [relayFailed, setRelayFailed] = useState<Failure | null>(null)
@@ -332,7 +353,7 @@ export function AboutPage() {
       .finally(() => setBusy(false))
   }
   const a = acts()
-  const md = aboutPage(account, a, debug, relayFailed, { busy, result, run, install: actions.installUpdate })
+  const md = aboutPage(account, a, debug, relayFailed, { busy, result, run, install: actions.installUpdate }, on)
   return (
     <>
       <Sheet

@@ -254,4 +254,7 @@ export default {
   "modals.profile.remove.sub.agent": "从现在起，它将无法访问这个频道的消息。",
   "modals.profile.remove.sub.person": "从现在起，他们将无法访问这个频道的消息。",
   "modals.profile.remove": "移除",
+  "modals.whatsnew.title": "新功能",
+  "modals.whatsnew.sub": "Channels 的新功能。打开你想试试的。",
+  "modals.whatsnew.done": "完成",
 } satisfies Catalog

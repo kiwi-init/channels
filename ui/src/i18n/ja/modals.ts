@@ -257,4 +257,7 @@ export default {
   "modals.profile.remove.sub.agent": "今後このチャンネルのメッセージにアクセスできなくなります。",
   "modals.profile.remove.sub.person": "今後このチャンネルのメッセージにアクセスできなくなります。",
   "modals.profile.remove": "外す",
+  "modals.whatsnew.title": "新機能",
+  "modals.whatsnew.sub": "Channels の新しい機能です。試したいものをオンにしてください。",
+  "modals.whatsnew.done": "完了",
 } satisfies Catalog

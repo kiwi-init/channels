@@ -302,4 +302,6 @@ export default {
   "settings.personalities.role.explorer": "探索者",
   "settings.personalities.role.releaser": "发布者",
   "settings.personalities.role.lead": "负责人",
+  "settings.sections.features": "新功能",
+  "settings.sections.features.open": "查看新功能",
 } satisfies Catalog

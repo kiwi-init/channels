@@ -304,4 +304,6 @@ export default {
   "settings.personalities.role.explorer": "Explorador",
   "settings.personalities.role.releaser": "Responsável pela release",
   "settings.personalities.role.lead": "Líder",
+  "settings.sections.features": "Novos recursos",
+  "settings.sections.features.open": "Ver novidades",
 } satisfies Catalog
