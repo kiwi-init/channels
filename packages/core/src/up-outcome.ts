@@ -45,3 +45,52 @@ export function readUpOutcomes(stdout: string): UpOutcome[] | null {
     return o ? [o] : [];
   });
 }
+
+export interface UpChoices {
+  seats: UpOutcome[];
+  tmux: boolean;
+}
+
+export function readUpChoices(stdout: string): UpChoices | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    // kiwi up --dry-run --json writes one JSON value; anything else is no plan.
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || !("seats" in parsed) || !Array.isArray(parsed.seats) || !("tmux" in parsed) || typeof parsed.tmux !== "boolean") return null;
+  if (parsed.seats.length > SEATS_MAX) return null;
+  const seats: UpOutcome[] = [];
+  for (const row of parsed.seats) {
+    const o = readOutcome(row);
+    if (!o) return null;
+    seats.push(o);
+  }
+  return { seats, tmux: parsed.tmux };
+}
+
+export interface UpPick {
+  channel: string;
+  handle: string;
+}
+
+const part = (v: unknown): string | null => {
+  const s = text(v);
+  return s && s.trim() === s && !s.includes("/") ? s : null;
+};
+
+export function readUpPicks(x: unknown): [UpPick, ...UpPick[]] | null {
+  if (!Array.isArray(x) || x.length > SEATS_MAX) return null;
+  const picks: UpPick[] = [];
+  for (const p of x) {
+    const channel = typeof p === "object" && p !== null && "channel" in p ? part(p.channel) : null;
+    const handle = typeof p === "object" && p !== null && "handle" in p ? part(p.handle) : null;
+    if (!channel || !handle) return null;
+    picks.push({ channel, handle });
+  }
+  const [first, ...rest] = picks;
+  return first ? [first, ...rest] : null;
+}
+
+export const onlyArgs = (picks: readonly UpPick[]): string[] => picks.map((p) => `--only=${p.channel}/${p.handle}`);

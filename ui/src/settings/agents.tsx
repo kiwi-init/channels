@@ -8,7 +8,7 @@ import { failedToast } from "~/kit/failed"
 import { ART, LOGOS } from "~/kit/logos"
 import { RoleFace } from "~/kit/role-face"
 import type { Finding, Harness, ThisComputer } from "~/model"
-import { useApp } from "~/nav"
+import { useApp, useGo } from "~/nav"
 import { backRow } from "~/settings/back-row"
 import { Personalities } from "~/settings/personalities"
 import { acts, esc, field, fine, join, row, say, Sheet, toggle, words, type Acts } from "~/settings/sheet"
@@ -91,6 +91,7 @@ function checkRow(check: Check, a: Acts, run: () => void): string {
 
 export function AgentsPage() {
   const { app } = useApp()
+  const go = useGo()
   const [check, setCheck] = useState<Check>("idle")
   const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set())
   const { computer, actions } = app
@@ -126,9 +127,11 @@ export function AgentsPage() {
     )
   }
   const bring = () =>
-    void actions.bringAgentsBack().catch(() => {
-      // the shared run state already says kiwi up didn't answer
-    })
+    computer?.pick
+      ? go({ to: "dialog", dialog: "bring-back" })
+      : void actions.bringAgentsBack().catch(() => {
+          // the shared run state already says kiwi up didn't answer
+        })
   const a = acts()
   const kiwi = kiwiState(computer)
   const md = join([

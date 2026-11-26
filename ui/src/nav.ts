@@ -14,7 +14,7 @@ export type ChannelTab = "general" | "rooms" | "tasks" | "github" | "notes"
 
 type ModalView = { kind: "person"; name: string } | { kind: "channel"; tab?: ChannelTab; end?: true } | { kind: "invite" } | { kind: "add-agent" } | { kind: "versions"; thread: string; name: string }
 
-type Dialog = "new-channel" | "new-room" | "join" | "palette" | null
+type Dialog = "new-channel" | "new-room" | "join" | "palette" | "bring-back" | null
 
 export type Section = "account" | "appearance" | "computers" | "agents" | "about"
 

@@ -100,6 +100,7 @@ export default {
   "live.wakes.desktop.only": "Só o app para desktop acorda agentes neste computador",
   "live.wakes.not.here": "{agent} não roda neste computador, então não dá para acordá-lo daqui",
   "live.computer.desktop.only": "isso precisa do app Channels para desktop",
+  "live.computer.back.no.plan": "o kiwi up não disse quais agentes este computador tem",
   "live.computer.not.changed": "o kiwi não mudou isso",
   "live.computer.hook.installed": "ativado",
   "live.computer.hook.partial": "parcialmente ativado",

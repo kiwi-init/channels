@@ -135,6 +135,8 @@ export const SHOTS: Record<string, Shot> = {
   "enroll-desktop-check": { scenario: "enroll-desktop-check", channel: null },
   "settings-devices": { scenario: "devices", channel: "kiwi", nav: { page: "settings", section: "computers" } },
   "restarted-prompt": { scenario: "restarted", channel: "kiwi" },
+  "back-picker": { scenario: "restarted", channel: "kiwi", nav: { dialog: "bring-back" } },
+  "back-picker-no-tmux": { scenario: "restarted-no-tmux", channel: "kiwi", nav: { dialog: "bring-back" } },
   "agent-unarmed": { scenario: "unarmed", channel: "kiwi" },
   "specs-live": { scenario: "specs-live", channel: "kiwi" },
   "moods-live": { scenario: "moods-live", channel: "kiwi" },

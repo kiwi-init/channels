@@ -6,12 +6,12 @@ import type { DeviceHost } from "../devices.ts";
 import { readDoctorFindings } from "../doctor-view.ts";
 import { osName } from "./devices.ts";
 import { runKiwi } from "./kiwi.ts";
-import { readUpOutcomes } from "@kiwi/core/up-outcome.ts";
+import { onlyArgs, readUpChoices, readUpOutcomes, readUpPicks } from "@kiwi/core/up-outcome.ts";
 
 const BRING_BACK_MS = 10 * 60_000;
 const PLAN_MS = 60_000;
 
-export function daemonCalls(devices: DeviceHost): Serves<"daemonStatus" | "daemonAdopt" | "installCli" | "doctor" | "bringBack" | "upPlan"> {
+export function daemonCalls(devices: DeviceHost): Serves<"daemonStatus" | "daemonAdopt" | "installCli" | "doctor" | "bringBack" | "upPlan" | "upChoices" | "bringBackOnly"> {
   return {
     daemonStatus: async (): Promise<DaemonStatus> => {
       const hello = await daemonHello();
@@ -23,5 +23,11 @@ export function daemonCalls(devices: DeviceHost): Serves<"daemonStatus" | "daemo
     doctor: async () => readDoctorFindings((await runKiwi(["doctor", "--json"])).stdout),
     bringBack: async () => readUpOutcomes((await runKiwi(["up", "--json"], BRING_BACK_MS)).stdout),
     upPlan: async () => readUpOutcomes((await runKiwi(["up", "--dry-run", "--json"], PLAN_MS)).stdout),
+    upChoices: async () => readUpChoices((await runKiwi(["up", "--dry-run", "--json"], PLAN_MS)).stdout),
+    bringBackOnly: async (given) => {
+      const picks = readUpPicks(given);
+      if (!picks) throw new Error("pick at least one seat to bring back");
+      return readUpOutcomes((await runKiwi(["up", "--json", ...onlyArgs(picks)], BRING_BACK_MS)).stdout);
+    },
   };
 }

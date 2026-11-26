@@ -100,6 +100,7 @@ export default {
   "live.wakes.desktop.only": "このコンピューターでエージェントを起こせるのはデスクトップアプリだけです",
   "live.wakes.not.here": "{agent} はこのコンピューターで動いていないため、起こせません",
   "live.computer.desktop.only": "Channels デスクトップアプリが必要です",
+  "live.computer.back.no.plan": "kiwi up はこのコンピューターのエージェントを返しませんでした",
   "live.computer.not.changed": "kiwi は変更しませんでした",
   "live.computer.hook.installed": "オン",
   "live.computer.hook.partial": "一部オン",

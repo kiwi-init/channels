@@ -201,6 +201,7 @@ This computer
                                                  fresh session for each task, review round or message, ended when that work is done
   kiwi up [--dry-run]                            after a restart, bring this computer's seats back, one tmux window each (no
                                                  tmux: prints a line per seat to run); Claude seats resume their session, loops restart
+     up --only CHANNEL[/HANDLE]                  only those channels or seats (repeat it); an unknown one starts nothing
      up --seat HANDLE [-c CHANNEL]               bring one seat back in this terminal: its old session if the transcript is
                                                  still there, else a fresh one that starts from its checkpoints
      --bind-timeout SECONDS                      how long a start may take to claim its seat before it's stopped (default 60)

@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from "react"
 
 import type { ComputerSettings, SeatWake } from "@kiwi/core/computer-settings.ts"
 import type { HookHarness, HookRow, HookState } from "@kiwi/core/harnesses.ts"
-import type { UpOutcome } from "@kiwi/core/up-outcome.ts"
+import type { UpChoices, UpOutcome, UpPick } from "@kiwi/core/up-outcome.ts"
 import { harnessName } from "@kiwi/app/harness.ts"
 import { bridge } from "@kiwi/secrets/secrets.ts"
 import type { Key } from "~/i18n/en"
@@ -33,6 +33,7 @@ export async function loadComputer(): Promise<void> {
     hooks: shown(hooks),
     contextLine: line === null ? null : line === "on",
     back: backPrompt(plan.get()),
+    pick: canPickBack(),
     run: lastRun.get(),
   })
 }
@@ -74,14 +75,35 @@ export async function loadUpPlan(): Promise<void> {
   if (now) computer.set({ ...now, back: backPrompt(plan.get()) })
 }
 
-export async function bringAgentsBack(): Promise<BackRun> {
-  const b = need()
+async function runBack(call: () => Promise<UpOutcome[] | null>): Promise<BackRun> {
   setRun({ at: "working" })
-  const outcomes = await b.bringBack().catch(() => null)
+  const outcomes = await call().catch(() => null)
   const run: BackRun = outcomes ? { at: "done", outcomes } : { at: "no.answer" }
   setRun(run)
   await loadUpPlan().catch(() => {})
   return run
+}
+
+export async function bringAgentsBack(): Promise<BackRun> {
+  const b = need()
+  return runBack(() => b.bringBack())
+}
+
+export function canPickBack(): boolean {
+  const b = bridge()
+  return !!b && typeof b.upChoices === "function" && typeof b.bringBackOnly === "function"
+}
+
+export async function backChoices(): Promise<UpChoices> {
+  const got = await need().upChoices()
+  if (!got) throw new Error(t("live.computer.back.no.plan"))
+  return got
+}
+
+export async function bringPickedBack(picks: readonly UpPick[]): Promise<BackRun> {
+  if (!picks.length) return lastRun.get()
+  const b = need()
+  return runBack(() => b.bringBackOnly(picks.map((p) => ({ channel: p.channel, handle: p.handle }))))
 }
 
 export type BackPrompt = NonNullable<ThisComputer["back"]>

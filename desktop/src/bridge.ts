@@ -7,7 +7,7 @@ import type { FoldInputs, IndexHit, Searched } from "./search-types.ts";
 import type { ComputerSettings } from "@kiwi/core/computer-settings.ts";
 import type { DeviceLink } from "@kiwi/core/devices.ts";
 import type { HarnessRow, HookHarness, HookRow } from "@kiwi/core/harnesses.ts";
-import type { UpOutcome } from "@kiwi/core/up-outcome.ts";
+import type { UpChoices, UpOutcome, UpPick } from "@kiwi/core/up-outcome.ts";
 import type { WakeSeat } from "@kiwi/core/wake.ts";
 import type { SharedSeat } from "@kiwi/core/shared-seats.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
@@ -434,6 +434,10 @@ export interface KiwiBridge {
   bringBack(): Promise<UpOutcome[] | null>;
   /** What `kiwi up` would do now, changing nothing: each seat planned, running or skipped, and whether it ran before this boot. */
   upPlan(): Promise<UpOutcome[] | null>;
+  /** The same plan, with whether tmux is installed: what the Bring them back picker offers. */
+  upChoices(): Promise<UpChoices | null>;
+  /** Runs `kiwi up --only` for the picked seats; at least one, never every seat. */
+  bringBackOnly(picks: UpPick[]): Promise<UpOutcome[] | null>;
   /** Certify this machine's daemon key with the person key and hand the cert back. */
   daemonAdopt(): Promise<ComputerView>;
   /** Put the bundled kiwi binary in ~/.kiwi/bin and on the PATH (the app also does this on every start). */
