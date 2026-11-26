@@ -31,7 +31,7 @@ final class LiveAgents {
     private var watching = false
     private var watched: Set<String> = []
     private var marked: [String: LiveOpen.Mark] = [:]
-    private var thumbs: [String: (key: String, data: Data)] = [:]
+    private static var thumbs: [String: (key: String, data: Data)] = [:]
     private(set) var startToken: String?
     var told: ((Token) -> Void)?
 
@@ -60,7 +60,7 @@ final class LiveAgents {
         return first.map { String($0.prefix(90)) }
     }
 
-    private func mark(_ room: RoomView) -> LiveOpen.Mark {
+    static func mark(_ room: RoomView) -> LiveOpen.Mark {
         var mark = LiveOpen.Mark(letter: room.title.prefix(1).uppercased(), rgb: Palette.fills[Palette.tint(for: room.code)] ?? 0x8e8e93)
         guard room.icon?.kind == "image", let data = room.icon?.data else { return mark }
         let key = "\(data.count)|\(data.suffix(32))"
@@ -98,7 +98,7 @@ final class LiveAgents {
         var marks: [String: LiveOpen.Mark] = [:]
         for room in rooms.values where room.gone == nil {
             guard let key = room.roomId else { continue }
-            marks[key] = mark(room)
+            marks[key] = Self.mark(room)
             let state = Self.state(room)
             if let activity = shown.removeValue(forKey: key) {
                 if state.agents.isEmpty {
