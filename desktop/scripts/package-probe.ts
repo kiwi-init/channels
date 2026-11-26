@@ -6,7 +6,8 @@ type Reply = { id: number; ok: boolean; value?: unknown; error?: unknown };
 type Seat = { code?: string };
 type HostAsk = { type: string; id: number; entry?: Seat; code?: string };
 
-const USAGE = "usage: bun desktop/scripts/package-probe.ts BUN KIWI_JS KEYS_JS";
+const USAGE =
+  "usage: bun desktop/scripts/package-probe.ts RUNTIME KIWI_JS KEYS_JS (RUNTIME: the app's MacOS/bun, or MacOS/main on the JavaScriptCore host, which runs PACKAGE_PROBE_SELF: this file bundled for it)";
 const BODY = "sent from the package";
 const WAIT_MS = 20_000;
 
@@ -83,7 +84,9 @@ async function probe(bun: string, kiwiJs: string, keysJs: string): Promise<void>
   const data = join(home, "relay");
   const port = await freePort();
   const env = { ...process.env, KIWI_HOME: home };
-  const relay = Bun.spawn([bun, kiwiJs, "relay", "--port", String(port), "--hostname", "127.0.0.1", "--data", data, "--no-web"], { env, stdout: "pipe", stderr: "pipe" });
+  const onBun = bun.endsWith("/bun");
+  const relayCmd = onBun ? [bun, kiwiJs, "relay"] : [process.execPath, join(import.meta.dir, "..", "..", "src", "relay", "bun.ts")];
+  const relay = Bun.spawn([...relayCmd, "--port", String(port), "--hostname", "127.0.0.1", "--data", data, "--no-web"], { env, stdout: "pipe", stderr: "pipe" });
   try {
     const version = (await new Response(Bun.spawn([bun, kiwiJs, "version"], { env, stdout: "pipe" }).stdout).text()).trim();
     const url = `http://127.0.0.1:${port}`;
@@ -97,10 +100,12 @@ async function probe(bun: string, kiwiJs: string, keysJs: string): Promise<void>
       if (Date.now() > until || relay.exitCode !== null) throw new Error(`the package's kiwi relay didn't start: ${(await new Response(relay.stderr).text()).trim()}`);
       await Bun.sleep(100);
     }
-    const driven = Bun.spawn([bun, import.meta.path, "--drive", keysJs, url], { env, stdout: "pipe", stderr: "pipe" });
+    const self = process.env.PACKAGE_PROBE_SELF ?? import.meta.path;
+    const driven = Bun.spawn([bun, self, "--drive", keysJs, url], { env, stdout: "pipe", stderr: "pipe" });
     const [out, err, code] = await Promise.all([new Response(driven.stdout).text(), new Response(driven.stderr).text(), driven.exited]);
     if (code !== 0) throw new Error(`the package's keys worker failed: ${(err || out).trim()}`);
-    console.log(`package-probe: kiwi ${version} on bun ${(await new Response(Bun.spawn([bun, "--version"], { stdout: "pipe" }).stdout).text()).trim()}: ${out.trim()}`);
+    const runtime = onBun ? `bun ${(await new Response(Bun.spawn([bun, "--version"], { stdout: "pipe" }).stdout).text()).trim()}` : "the JavaScriptCore host";
+    console.log(`package-probe: kiwi ${version} on ${runtime}: ${out.trim()}`);
   } finally {
     relay.kill();
     await relay.exited;
