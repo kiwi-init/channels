@@ -43,6 +43,7 @@ jobs:
             -archivePath "$RUNNER_TEMP/Channels.xcarchive" \
             -derivedDataPath "$RUNNER_TEMP/ios" \
             CODE_SIGNING_ALLOWED=NO \
+            AppIdentifierPrefix=57249C654W. \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             archive
       - name: give the archive its entitlements
@@ -98,6 +99,9 @@ jobs:
           codesign -d --entitlements - --xml "$app" | plutil -p - | grep -q 'com.kiwiinit.channels.live'
           codesign -d --entitlements - --xml "$app"/PlugIns/ChannelsLive.appex | plutil -p - | grep -q 'com.kiwiinit.channels.live'
           codesign -dvv "$app" 2>&1 | grep -q "Authority=Apple Distribution"
+          for bundle in "$app" "$app"/PlugIns/ChannelsLive.appex; do
+            plutil -extract KiwiLiveKeychain raw "$bundle/Info.plist" | grep -qx "57249C654W.com.kiwiinit.channels.live"
+          done
       - name: forget the key
         if: always()
         run: rm -f "$RUNNER_TEMP/AuthKey.p8"
