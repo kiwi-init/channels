@@ -41,14 +41,13 @@ import {
   decidersOf,
   directThreadStart,
   handedOver,
-  humanOf,
+  escalationTargets,
   isPerson,
   landingTouchedByClose,
   leadForAsk,
   nextIn,
   ON_HOLD,
   ownerOf,
-  seatsOf,
   placeIn,
   taskId,
   unnamedAsks,
@@ -374,8 +373,7 @@ export class SessionMessaging extends SessionListen {
       if (me && isPerson(me)) return yield* new Rejected("escalating is for agents: you're a person, so you decide");
       if (handoff && handoff.expiresAt - Date.now() > HANDOFF_MAX_SECONDS * 1000 + 5000) return yield* new Rejected(`a browser handoff link lasts at most ${HANDOFF_MAX_SECONDS / 60} minutes`);
       if (re !== undefined && !(yield* this.message(re, messages))) return yield* new Rejected(`no message #${re}`);
-      const human = humanOf(state, this.me);
-      const to = [...new Set([...(human ? seatsOf(state, human) : []), ownerOf(state)].filter((n): n is string => !!n))];
+      const to = escalationTargets(state, this.me);
       if (!to.length) return yield* new Rejected("there's no person in this channel to escalate to");
       if (ask.choices && handoff) return yield* new Rejected("a browser handoff has its own Done and Couldn't answers; leave out the options");
       const unknown = ask.holds?.find((id) => !state.tasks.has(id) && !state.askHeads.has(id));
@@ -402,6 +400,7 @@ export class SessionMessaging extends SessionListen {
           }),
           { to: [lead], kind: "blocking", ...(ask.task !== undefined ? { task: ask.task } : {}), ...(re !== undefined ? { re: [re] } : {}) },
         );
+        yield* this.confirm(handed);
         return { seq: handed, to: [lead], also: [], lead };
       }
       const seq = yield* this.send(body, {
@@ -419,6 +418,7 @@ export class SessionMessaging extends SessionListen {
         ...(ask.permission ? { permission: ask.permission } : {}),
         ...(re !== undefined ? { re: [re] } : {}),
       });
+      yield* this.confirm(seq);
       return {
         seq,
         to,

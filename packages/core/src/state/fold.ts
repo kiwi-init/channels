@@ -20,7 +20,7 @@ import {
 import { inlineText } from "../membership.ts";
 import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
-import { allowedOnHold, answersAsk, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
+import { allowedOnHold, answersAsk, escalationTargets, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
 import { answerChecks, checkFrom, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
 import { checkAnswered, checkClosed, checkStep, migrateChecks, questionAnswered, questionWatched, seedSteps } from "./landing-steps.ts";
 import { choiceIn } from "../checks.ts";
@@ -74,7 +74,6 @@ import type {
   FoldMember,
   GuardFloor,
   Lease,
-  Member,
   Nickname,
   PersonaLead,
   Place,
@@ -324,7 +323,6 @@ export function cursor(
   const ownerName = [...members.values()].find((x) => x.owner)?.name ?? "owner";
   const guards: GuardFloors = { charter: ahead(guardFloor?.charter), hold: ahead(guardFloor?.hold), repos: ahead(guardFloor?.repos) };
   const passGuard = (seq: number) => drainGuard(guards, ctx, seq, ownerName);
-  const humanFor = (a: Member) => (a.sponsor ? [...members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === a.sponsor!.user)?.name : undefined);
   const keysByName = new Map<string, Set<string>>();
   for (const r of roster) {
     let set = keysByName.get(r.name);
@@ -634,7 +632,7 @@ export function cursor(
         return;
       }
       if (m.esc) {
-        const may = new Set([humanFor(member), [...members.values()].find((x) => x.owner)?.name].filter(Boolean));
+        const may = new Set(escalationTargets({ members }, m.from));
         if (isPerson(member) || m.kind === "event" || !m.to?.length || !m.to.every((n) => may.has(n))) {
           trust.set(m.seq, "refused");
           rejected.set(m.seq, "an escalation goes from an agent to its own human and the owner, no one else");

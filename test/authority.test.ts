@@ -8,13 +8,18 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { wants } from "../src/agent.ts";
 import { charterLines, formatMessage, formatStatus, holdLine, who } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { wellFormed, type Event, type Handoff, type Kind, type Message } from "@kiwi/core/protocol.ts";
-import { answersAsk, decidersOf, fold, fullyTrusted, humanOf, ownerOf, seatsOf, trustedOf, type Roster } from "@kiwi/core/state.ts";
+import { wellFormed, type Event, type Handoff, type Kind, type Message, type Step } from "@kiwi/core/protocol.ts";
+import { answersAsk, decidersOf, escalationTargets, fold, fullyTrusted, humanOf, ownerOf, seatsOf, trustedOf, type Roster } from "@kiwi/core/state.ts";
 import { answersAsHuman } from "@kiwi/core/permission.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
-async function msg(from: string, kind: Kind, body: string, extra: { to?: string[]; ev?: Event; re?: number[]; esc?: true; handoff?: Handoff } = {}): Promise<Message> {
+async function msg(
+  from: string,
+  kind: Kind,
+  body: string,
+  extra: { to?: string[]; ev?: Event; re?: number[]; esc?: true; handoff?: Handoff; choices?: string[]; holds?: number[]; step?: Step } = {},
+): Promise<Message> {
   seq++;
   const base = { v: 1 as const, id: crypto.randomUUID(), from, kind, body, ...extra, ts: seq };
   const p = await sign(ids[from]!, base);
@@ -90,6 +95,42 @@ describe("a person's phone seat is that person, not a second human (T398)", () =
     expect(answersAsHuman(s, "pal", "jow")).toBe(true);
     const step = { from: "pal", esc: true as const, to: seatsOf(s, "jow"), step: { title: "Plug in the phone" } } as unknown as Message;
     expect(answersAsk(s.members, step, "jow-2")).toBe(true);
+  });
+
+  test("an escalation to every seat of a person lands, with options, a step, and with or without --holds; the unmerged control too", async () => {
+    for (const n of ["jow", "jow-2", "jow-3", "pal", "ana", "win"]) ids[n] ??= await generateIdentity(n);
+    const jow = { user: "u-jow", name: "Jow", handle: "jow" };
+    const ana = { user: "u-ana", name: "Ana", handle: "ana" };
+    const seats: Roster = [
+      { name: "jow", pk: ids.jow!.pk, owner: true, at: 0, active: true, kind: "human" },
+      { name: "pal", pk: ids.pal!.pk, owner: false, at: 1, active: true, kind: "agent", sponsor: jow },
+      { name: "jow-2", pk: ids["jow-2"]!.pk, owner: false, at: 2, active: true, kind: "human", sponsor: jow },
+      { name: "jow-3", pk: ids["jow-3"]!.pk, owner: false, at: 3, active: true, kind: "human", sponsor: jow },
+      { name: "ana", pk: ids.ana!.pk, owner: false, at: 4, active: true, kind: "human", sponsor: ana },
+      { name: "win", pk: ids.win!.pk, owner: false, at: 5, active: true, kind: "agent", sponsor: ana },
+    ];
+    const s0 = fold([], seats);
+    expect(escalationTargets(s0, "pal")).toEqual(["jow", "jow-2", "jow-3"]);
+    expect(escalationTargets(s0, "win")).toEqual(["ana", "jow", "jow-2", "jow-3"]);
+    const task = await ev("jow", { op: "task.add", title: "held work" });
+    const step: Step = { why: "only a person can", needsPerson: "plug in the phone" };
+    const asks = [];
+    for (const from of ["pal", "win"]) {
+      const to = escalationTargets(s0, from);
+      asks.push(await msg(from, "blocking", "A or B?", { to, esc: true, choices: ["A", "B"] }));
+      asks.push(await msg(from, "blocking", "A or B?", { to, esc: true, choices: ["A", "B"], holds: [task.seq] }));
+      asks.push(await msg(from, "blocking", "do this", { to, esc: true, step }));
+      asks.push(await msg(from, "blocking", "do this", { to, esc: true, step, holds: [task.seq] }));
+    }
+    const s = fold([task, ...asks], seats);
+    for (const m of asks) {
+      expect(s.rejected.get(m.seq)).toBeUndefined();
+      expect(s.trust.get(m.seq)).toBe("verified");
+      expect(s.openAsks.map((a) => a.seq)).toContain(m.seq);
+      for (const reader of m.to!) expect(answersAsk(s.members, m, reader)).toBe(true);
+    }
+    const stray = await msg("pal", "blocking", "ana?", { to: ["jow", "ana"], esc: true });
+    expect(fold([stray], seats).rejected.get(stray.seq)).toContain("own human and the owner");
   });
 
   test("status lists the phone seat under its person, not as a fully trusted second human", async () => {
