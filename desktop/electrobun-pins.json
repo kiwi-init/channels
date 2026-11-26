@@ -1,5 +1,5 @@
 {
-  "electrobun": "2026.11.6",
+  "electrobun": "2026.11.7",
   "releasesBaseUrl": "https://github.com/kiwi-init/electrobun-livewire/releases/download",
   "hutch": {
     "version": "0.29.0",
@@ -47,7 +47,7 @@
     }
   },
   "devkit": {
-    "macos-arm64": "ad769999086abfc305bdc1c5a290bcc72d459b1ff0c05da446aadcceca9d091b",
+    "macos-arm64": "eb981738cd7809ae49f9614c7ceee4fd0264532e18f153a9ed49cf4cb410eb00",
     "linux-x64": "55be434231ac4f88c571b5c9498ad9a080bd50e095db4a08bbdb0db022177985",
     "linux-arm64": "55be434231ac4f88c571b5c9498ad9a080bd50e095db4a08bbdb0db022177985",
     "windows-x64": "55be434231ac4f88c571b5c9498ad9a080bd50e095db4a08bbdb0db022177985"
@@ -64,7 +64,7 @@
       "Contents/Resources/main.js": "db3593eeb506247d154a0c868bf05fb6c0a1dad82b7c7885c891d8b8a45b9755",
       "Contents/Resources/preload-full.js": "0de49cdec806dfc7f7e55da5ad02ce69a7211be6e9d656b2b10c06af691d6a3c",
       "Contents/Resources/preload-sandboxed.js": "d358fa4e85148ae6059eca9cfb398faf7a6c0710a03cdc972275f6a61670f3f9",
-      "Contents/Resources/uninstall": "8378ee386b341419e448a68d527da44c11520c2d7da1ff148aa723602ddf9fa7"
+      "Contents/Resources/uninstall": "80fbcb69100090f0afa782a0275baa630aeafbd268a4d5f03b47fd87b0ce3ab0"
     },
     "linux-x64": {
       "bin/launcher": "8046dc907cb36d770072d12e9ce15df6ab2f1653c58afd7ca6934fb20e5dff36",
@@ -96,7 +96,7 @@
       "bin/launcher.exe": "0568d8ed5aa03e79393389a3d6e43bbd3fe44b8d6c649565140bd2bba83c0d40",
       "bin/bun.exe": "cb1d8e6564e655e49d30cead359750a1cbbd12f42651caa4b62244d7bd93c244",
       "bin/ElectrobunCore.dll": "7f5ab496df3994e41aa28e7be5dd925764ad49951edf492234a1683e7c37c6ab",
-      "bin/libNativeWrapper.dll": "344b1c682dad2b770e16aa24ca80d17d7d00c860ff13d3832442722f6976b8e2",
+      "bin/libNativeWrapper.dll": "f1619396cf02c0392173156e7dc4f817809d2d51d5242b6369f1c50c89b2bd5f",
       "bin/libasar.dll": "5738e2307a90b8006bdae37b953355a5795a87141f9469ca0f683a75e90a097f",
       "bin/zig-zstd.exe": "22bbe1b7065227bc73b90db0c7989608262c79c79c36c409eeabb245dfa5e067",
       "bin/bspatch.exe": "630b1f24f9a796b462927bd2c58f4c26aea4d3385fd8c0cfa6f3e9da53be40ff",
