@@ -41,6 +41,7 @@ let manifest: UiManifest | null = null;
 const bundles = new Map<string, Uint8Array>();
 let held: Promise<void> = Promise.resolve();
 let release = (): void => {};
+const requests: string[] = [];
 const holdBundles = (): void => {
   held = new Promise((resolve) => (release = resolve));
 };
@@ -50,6 +51,7 @@ const channel = Bun.serve({
   idleTimeout: 0,
   fetch(request) {
     const name = new URL(request.url).pathname.slice(1);
+    requests.push(`${new Date().toISOString()} ${request.method} ${name}`);
     if (name === "manifest.json") return manifest ? Response.json(manifest) : new Response("none yet", { status: 404 });
     const bundle = bundles.get(name);
     return bundle ? held.then(() => new Response(new Blob([bundle as Uint8Array<ArrayBuffer>]))) : new Response("not found", { status: 404 });
@@ -197,6 +199,7 @@ try {
       for (const line of lines) console.error(`  ${line}`);
     }
     const state = engineState();
+    console.error(`the channel's requests: ${requests.length ? `\n  ${requests.join("\n  ")}` : "none"}`);
     console.error(`engine.json: ${state ? JSON.stringify({ current: state.current?.uiVersion ?? null, good: state.good.map((m) => m.uiVersion), bad: state.bad }) : "none"}`);
   }
   relay.kill();
