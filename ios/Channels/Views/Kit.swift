@@ -209,11 +209,16 @@ enum When {
         return date.formatted(.dateTime.month(.abbreviated).day())
     }
 
-    static func dayWord(_ date: Date, now: Date = .now) -> String {
+    static func day(_ date: Date, now: Date = .now) -> String {
         if Calendar.current.isDateInToday(date) { return spoken("Today") }
         if Calendar.current.isDateInYesterday(date) { return spoken("Yesterday") }
         if now.timeIntervalSince(date) < 6 * 86400 { return date.formatted(.dateTime.weekday(.wide)) }
-        return spoken("\(date.formatted(.dateTime.day().month(.abbreviated).year())) at")
+        return date.formatted(.dateTime.day().month(.abbreviated).year())
+    }
+
+    static func dayWord(_ date: Date, now: Date = .now) -> String {
+        let word = day(date, now: now)
+        return Calendar.current.isDateInYesterday(date) || now.timeIntervalSince(date) < 6 * 86400 ? word : spoken("\(word) at")
     }
 
     static func elapsed(from start: Date, to now: Date) -> String {
