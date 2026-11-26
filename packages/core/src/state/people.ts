@@ -27,7 +27,8 @@ export function seatsOf(state: Pick<ChannelState, "members">, person: string): s
 export function escalationTargets(state: Pick<ChannelState, "members">, agent: string): string[] {
   const human = humanOf(state, agent);
   const owner = ownerOf(state);
-  return [...new Set([...(human ? seatsOf(state, human) : []), ...(owner ? seatsOf(state, rootOf(owner, state.members)) : [])])];
+  const rooted = (name: string | null) => (name ? seatsOf(state, rootOf(name, state.members)) : []);
+  return [...new Set([...rooted(human), ...rooted(owner)])];
 }
 
 export function sponsorsAgent(members: ReadonlyMap<string, Pick<Member, "name" | "pk" | "kind" | "owner" | "active" | "sponsor">>, by: string, agent: string): boolean {

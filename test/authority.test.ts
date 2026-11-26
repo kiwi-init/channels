@@ -133,6 +133,24 @@ describe("a person's phone seat is that person, not a second human (T398)", () =
     expect(fold([stray], seats).rejected.get(stray.seq)).toContain("own human and the owner");
   });
 
+  test("with the human's first seat gone, the ask still reaches the seat that is left", async () => {
+    for (const n of ["jow", "ana", "ana-2", "win"]) ids[n] ??= await generateIdentity(n);
+    const ana = { user: "u-ana", name: "Ana", handle: "ana" };
+    const seats: Roster = [
+      { name: "jow", pk: ids.jow!.pk, owner: true, at: 0, active: true, kind: "human" },
+      { name: "ana", pk: ids.ana!.pk, owner: false, at: 1, active: false, kind: "human", sponsor: ana },
+      { name: "ana-2", pk: ids["ana-2"]!.pk, owner: false, at: 2, active: true, kind: "human", sponsor: ana },
+      { name: "win", pk: ids.win!.pk, owner: false, at: 3, active: true, kind: "agent", sponsor: ana },
+    ];
+    const s0 = fold([], seats);
+    expect(humanOf(s0, "win")).toBe("ana-2");
+    expect(escalationTargets(s0, "win")).toEqual(["ana-2", "jow"]);
+    const ask = await msg("win", "blocking", "A or B?", { to: escalationTargets(s0, "win"), esc: true, choices: ["A", "B"] });
+    const s = fold([ask], seats);
+    expect(s.rejected.get(ask.seq)).toBeUndefined();
+    expect(answersAsk(s.members, ask, "ana-2")).toBe(true);
+  });
+
   test("status lists the phone seat under its person, not as a fully trusted second human", async () => {
     const out = formatStatus({ check: "kiwi/review/test", alias: "c", me: "pal", state: await phone(), online: new Map(), unread: 0 });
     expect(out).toContain("your human: jow (the owner).");
