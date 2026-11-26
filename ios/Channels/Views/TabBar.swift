@@ -36,6 +36,7 @@ extension AppModel {
 
     func pick(_ next: AppTab) {
         if next == tab, next == .chats { path = [] }
+        lastTab = tab
         tab = next
     }
 }
@@ -55,17 +56,24 @@ struct TabsPill: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
     @Namespace private var plate
+    @State private var shown: AppTab?
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(AppTab.order, id: \.self) { tab in
-                TabButton(tab: tab, compact: compact, plate: plate) {
+                TabButton(tab: tab, lit: (shown ?? model.tab) == tab, compact: compact, plate: plate) {
                     Haptic.tap()
                     withAnimation(Bar.spring(still)) { model.pick(tab) }
                 }
             }
         }
         .padding(4)
+        .onAppear {
+            guard model.lastTab != model.tab, !still else { return }
+            shown = model.lastTab
+            Task { @MainActor in withAnimation(Bar.spring(still)) { shown = model.tab } }
+        }
+        .onChange(of: model.tab) { _, now in withAnimation(Bar.spring(still)) { shown = now } }
         .frame(width: compact ? Bar.icons : nil, height: Bar.height)
         .frame(maxWidth: compact ? Bar.icons : .infinity)
     }
@@ -73,12 +81,11 @@ struct TabsPill: View {
 
 private struct TabButton: View {
     let tab: AppTab
+    let lit: Bool
     let compact: Bool
     let plate: Namespace.ID
     let pick: () -> Void
     @Environment(AppModel.self) private var model
-
-    private var lit: Bool { model.tab == tab }
 
     var body: some View {
         Button(action: pick) {
@@ -129,9 +136,19 @@ struct YouButton: View {
             Haptic.tap()
             model.showYou = true
         } label: {
-            Face(name: model.person, member: nil, size: 36)
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
+            Group {
+                if model.person.isEmpty {
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Tone.ink2)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Tone.raised))
+                } else {
+                    Face(name: model.person, member: nil, size: 36)
+                }
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Circle())
         }
         .buttonStyle(Squish())
         .accessibilityIdentifier("you")
@@ -174,6 +191,7 @@ extension RoomView {
 }
 
 struct RootBar: View {
+    var on: AppTab = .chats
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
     @Namespace private var space
@@ -185,14 +203,23 @@ struct RootBar: View {
     }
 
     var body: some View {
-        Melt(spacing: 6) {
-            if let spot = chat, let room = model.shown(spot) {
-                ChatBar(room: room, spot: spot, compose: model.compose(spot), space: space)
-            } else {
-                ListRow(space: space)
+        if model.tab == on {
+            Melt(spacing: 6) {
+                if let spot = chat, let room = model.shown(spot) {
+                    ChatBar(room: room, spot: spot, compose: model.compose(spot), space: space)
+                } else {
+                    ListRow(space: space)
+                }
             }
+            .animation(Bar.spring(still), value: chat)
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.height
+            } action: {
+                if !model.cardOpen { model.barHeight = $0 }
+            }
+        } else {
+            Color.clear.frame(height: model.barHeight).accessibilityHidden(true)
         }
-        .animation(Bar.spring(still), value: chat)
     }
 }
 
