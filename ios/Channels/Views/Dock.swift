@@ -69,6 +69,7 @@ struct Dock: View {
     var typing: FocusState<Bool>.Binding
     var tabs = false
     var space: Namespace.ID?
+    var inline = false
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
     @State private var home: CGFloat = 0
@@ -109,17 +110,18 @@ struct Dock: View {
             } else if let replyTo {
                 bar("arrowshape.turn.up.left.fill", Tone.accent, room.display(replyTo.from), replyTo.plain) { self.replyTo = nil }
             }
-            Group {
-                if space == nil {
-                    Melt(spacing: 6) { inputRow }
-                } else {
-                    inputRow
-                }
+            if inline {
+                bubble
+            } else if space == nil {
+                Melt(spacing: 6) { inputRow }
+            } else {
+                inputRow
             }
         }
-        .padding(.horizontal, tabs ? 16 : 12)
+        .padding(.horizontal, inline ? 0 : tabs ? 16 : 12)
         .padding(.top, tabs ? 8 : 6)
-        .padding(.bottom, tabs ? (typing.wrappedValue || home <= 20 ? 8 : -12) : 6)
+        .padding(.bottom, inline ? 0 : tabs ? (typing.wrappedValue || home <= 20 ? 8 : -12) : 6)
+        .animation(Bar.spring(still), value: live)
         .animation(Bar.spring(still), value: typing.wrappedValue)
         .onGeometryChange(for: CGFloat.self) {
             $0.safeAreaInsets.bottom
@@ -170,6 +172,81 @@ struct Dock: View {
             if !tabs { plus }
             field
         }
+    }
+
+    private var live: Bool { typing.wrappedValue || hasText || !attached.isEmpty }
+
+    private var bubble: some View {
+        HStack(alignment: .bottom, spacing: 0) {
+            Spacer(minLength: live ? 40 : 56)
+            VStack(alignment: .trailing, spacing: 0) {
+                if !attached.isEmpty { tray }
+                HStack(alignment: .bottom, spacing: 0) {
+                    Button {
+                        choosing = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(live ? Tone.onInk.opacity(0.75) : Tone.ink3)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Add photos")
+                    TextField(placeholder, text: $draft, prompt: Text(placeholder).foregroundStyle(live ? Tone.onInk.opacity(0.55) : Tone.ink3), axis: .vertical)
+                        .type(.body)
+                        .foregroundStyle(Tone.onInk)
+                        .tint(Tone.onInk)
+                        .lineLimit(1...8)
+                        .focused(typing)
+                        .accessibilityIdentifier("composer")
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: live ? .infinity : nil, alignment: .leading)
+                        .fixedSize(horizontal: !live, vertical: false)
+                    if canSend || sending {
+                        inlineSend
+                    }
+                }
+                .padding(.leading, 4)
+                .padding(.trailing, canSend || sending ? 2 : 13)
+            }
+            .background {
+                ZStack {
+                    if live {
+                        RoundedRectangle(cornerRadius: 19, style: .continuous).fill(Tone.bubbleMine)
+                        Tail().fill(Tone.bubbleMine)
+                    } else {
+                        RoundedRectangle(cornerRadius: 19, style: .continuous)
+                            .strokeBorder(Tone.ink3.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    }
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 19, style: .continuous))
+            .onTapGesture { typing.wrappedValue = true }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("draft")
+    }
+
+    private var inlineSend: some View {
+        Button(action: send) {
+            ZStack {
+                if sending {
+                    ProgressView().tint(Tone.bubbleMine).controlSize(.mini)
+                } else {
+                    Image(systemName: "arrow.up").font(.system(size: 14, weight: .bold))
+                }
+            }
+            .foregroundStyle(Tone.bubbleMine)
+            .frame(width: 28, height: 28)
+            .background(Tone.onInk, in: Circle())
+            .padding(4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!canSend)
+        .transition(.scale.combined(with: .opacity))
+        .accessibilityLabel("Send")
     }
 
     private var plus: some View {

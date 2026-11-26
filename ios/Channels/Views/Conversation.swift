@@ -60,6 +60,10 @@ struct Line: Identifiable {
     }
 }
 
+final class Spots {
+    var draft: CGRect = .zero
+}
+
 struct Follow {
     var atBottom = true
     var far = false
@@ -77,12 +81,15 @@ struct Conversation: View {
     var reviews: [ReviewView] = []
     var needs: [NeedView] = []
     var worker: MemberView?
+    var draft: AnyView?
     var answer: (AskView) -> Void = { _ in }
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
+    @State private var spots = Spots()
+    @State private var endSeen = true
 
     private var footer: CGFloat {
-        (model.barHeight > 0 ? model.barHeight : Bar.height) + 6
+        typing ? 6 : (model.barHeight > 0 ? model.barHeight : Bar.height) + 6
     }
 
     private var solo: Bool {
@@ -124,7 +131,18 @@ struct Conversation: View {
                     if let worker, worker.working {
                         WorkingRow(member: worker, room: room).id("working")
                     }
+                    if let draft {
+                        draft
+                            .id("draft")
+                            .padding(.top, 8)
+                            .onGeometryChange(for: CGRect.self) {
+                                $0.frame(in: .global)
+                            } action: {
+                                spots.draft = $0
+                            }
+                    }
                     Color.clear.frame(height: footer).id("feed-end").accessibilityHidden(true)
+                        .onScrollVisibilityChange(threshold: 0.01) { endSeen = $0 }
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, 12)
@@ -134,7 +152,7 @@ struct Conversation: View {
             .defaultScrollAnchor(.bottom, for: .sizeChanges)
             .overlay {
                 GeometryReader { g in
-                    let show = !typing && model.barHeight > 0 && follow.far
+                    let show = !typing && !endSeen && model.barHeight > 0 && follow.far
                     ZStack {
                         if show {
                             JumpButton(follow: follow) { follow.jumps += 1 }
@@ -146,7 +164,13 @@ struct Conversation: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            .onTapGesture { if typing { typing = false } }
+            .onTapGesture(coordinateSpace: .global) { at in
+                if typing, !spots.draft.contains(at) { typing = false }
+            }
+            .onChange(of: typing) { _, now in
+                guard now else { return }
+                withAnimation(Bar.spring(false)) { proxy.scrollTo("feed-end", anchor: .bottom) }
+            }
             .softBars()
             .onScrollGeometryChange(for: Bool.self) { geo in
                 geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 60

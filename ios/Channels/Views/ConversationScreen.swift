@@ -20,7 +20,9 @@ struct ConversationScreen: View {
             if let room = model.shown(spot) {
                 Conversation(
                     room: room, replyTo: $compose.replyTo, position: $position, follow: $follow, typing: $compose.typing, elsewhere: spot.general ? room.elsewhere() : [],
-                    reviews: reviews(room), needs: needs(room), worker: worker(room)
+                    reviews: reviews(room), needs: needs(room), worker: worker(room),
+                    draft: room.talks(at: spot) || compose.answering != nil || compose.sendingBack != nil
+                        ? AnyView(DraftRow(room: room, spot: spot, compose: compose)) : nil
                 ) { ask in
                     compose.replyTo = nil
                     compose.sendingBack = nil
@@ -170,5 +172,20 @@ extension View {
         } else {
             self
         }
+    }
+}
+private struct DraftRow: View {
+    let room: RoomView
+    let spot: Spot
+    @Bindable var compose: Compose
+    @FocusState private var typing: Bool
+
+    var body: some View {
+        Dock(
+            room: room, spot: spot, replyTo: $compose.replyTo, answering: $compose.answering, sendingBack: $compose.sendingBack, typing: $typing, inline: true
+        )
+        .onAppear { typing = compose.typing }
+        .onChange(of: compose.typing) { _, now in if typing != now { typing = now } }
+        .onChange(of: typing) { _, now in if compose.typing != now { compose.typing = now } }
     }
 }

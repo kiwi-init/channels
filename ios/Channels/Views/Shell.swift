@@ -38,6 +38,7 @@ struct Shell: View {
                 Spacer(minLength: 0)
                 RootBar()
             }
+            .ignoresSafeArea(.keyboard)
         }
         .onChange(of: model.path) { _, _ in model.cardOpen = false }
         .onChange(of: model.tab) { _, _ in model.cardOpen = false }

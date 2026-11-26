@@ -204,13 +204,8 @@ struct RootBar: View {
 
     var body: some View {
         Melt(spacing: 6) {
-            if let spot = chat, let room = model.shown(spot) {
-                ChatBar(room: room, spot: spot, compose: model.compose(spot), space: space)
-            } else {
-                ListRow(space: space)
-            }
+            ListRow(space: space)
         }
-        .animation(Bar.spring(still), value: chat)
         .onGeometryChange(for: CGFloat.self) {
             $0.size.height.rounded()
         } action: {
