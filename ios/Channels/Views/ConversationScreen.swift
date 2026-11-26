@@ -60,7 +60,10 @@ struct ConversationScreen: View {
                 }
             }
         }
-        .onDisappear { visible = false }
+        .onDisappear {
+            visible = false
+            model.compose(spot).typing = false
+        }
         .onChange(of: scene) { _, _ in seen() }
         .onChange(of: lock.locked) { _, _ in seen() }
         .task(id: spot) {

@@ -84,6 +84,7 @@ struct Conversation: View {
     @State private var insetBottom: CGFloat = 0
 
     private var footer: CGFloat {
+        if typing, model.barHeight > 0 { return model.barHeight + 6 }
         guard model.barTop > 0, feedBottom > 0 else { return Bar.height + 48 }
         return max(6, feedBottom - insetBottom - model.barTop + 6)
     }
@@ -156,6 +157,7 @@ struct Conversation: View {
             }
             .animation(.snappy(duration: 0.25), value: follow.far || (!follow.atBottom && follow.unseen > 0))
             .scrollDismissesKeyboard(.interactively)
+            .onTapGesture { if typing { typing = false } }
             .softBars()
             .onScrollGeometryChange(for: Bool.self) { geo in
                 geo.visibleRect.maxY >= geo.contentSize.height - 60
