@@ -7,9 +7,6 @@ on:
         description: Upload to TestFlight (off exports and checks the signed app only, from any branch)
         type: boolean
         default: true
-  push:
-    branches: [main]
-    paths: ["ios/**"]
 
 permissions:
   contents: read
