@@ -98,8 +98,12 @@ function engineState(): { current: UiManifest | null; good: UiManifest[]; bad: R
   return file && existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
 }
 
+const outputs: string[] = [];
+
 async function run(what: (d: Driver) => Promise<void>): Promise<void> {
-  const started = launch(exe, env);
+  const output = join(root, `app-${outputs.length + 1}.log`);
+  outputs.push(output);
+  const started = launch(exe, env, output);
   try {
     const d = await attach(join(root, "driver.sock"));
     try {
@@ -186,6 +190,15 @@ try {
 } catch (e) {
   problems.push(e instanceof Error ? e.message : String(e));
 } finally {
+  if (problems.length) {
+    for (const [i, output] of outputs.entries()) {
+      const lines = existsSync(output) ? readFileSync(output, "utf8").trimEnd().split("\n").slice(-40) : [];
+      console.error(`the app's output, start ${i + 1} of ${outputs.length}${lines.length ? ":" : ": nothing"}`);
+      for (const line of lines) console.error(`  ${line}`);
+    }
+    const state = engineState();
+    console.error(`engine.json: ${state ? JSON.stringify({ current: state.current?.uiVersion ?? null, good: state.good.map((m) => m.uiVersion), bad: state.bad }) : "none"}`);
+  }
   relay.kill();
   void channel.stop(true);
   rmSync(root, { recursive: true, force: true });
