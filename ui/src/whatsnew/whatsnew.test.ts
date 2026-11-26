@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import { readFeatures } from "~/whatsnew/features"
+import { emptyStore } from "~/whatsnew/fresh"
 import { readNotes } from "~/whatsnew/notes"
 
 const md = `# What's new
@@ -52,5 +53,17 @@ describe("WHATSNEW.md reads as features, each shown once", () => {
     expect(readFeatures(store('{"on":["meaning","Bad Id",3],"seen":["meaning"]}'))).toEqual({ on: ["meaning"], seen: ["meaning"] })
     expect(readFeatures(store("not json"))).toEqual({ on: [], seen: [] })
     expect(readFeatures(store(null))).toEqual({ on: [], seen: [] })
+  })
+})
+
+describe("a fresh install starts with everything seen", () => {
+  test("storage with nothing in it is a fresh install; any kept key, or no storage at all, is not", () => {
+    expect(emptyStore(() => ({ length: 0 }))).toBe(true)
+    expect(emptyStore(() => ({ length: 3 }))).toBe(false)
+    expect(
+      emptyStore(() => {
+        throw new Error("SecurityError")
+      })
+    ).toBe(false)
   })
 })
