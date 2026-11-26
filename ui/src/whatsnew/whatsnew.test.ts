@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import { readFeatures } from "~/whatsnew/features"
-import { emptyStore } from "~/whatsnew/fresh"
+import { installDay, newerThan } from "~/whatsnew/fresh"
 import { readNotes } from "~/whatsnew/notes"
 
 const md = `# What's new
@@ -57,13 +57,39 @@ describe("WHATSNEW.md reads as features, each shown once", () => {
 })
 
 describe("a fresh install starts with everything seen", () => {
-  test("storage with nothing in it is a fresh install; any kept key, or no storage at all, is not", () => {
-    expect(emptyStore(() => ({ length: 0 }))).toBe(true)
-    expect(emptyStore(() => ({ length: 3 }))).toBe(false)
+  const store = (init: Record<string, string>) => {
+    const m = new Map(Object.entries(init))
+    return {
+      get length() {
+        return m.size
+      },
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+    }
+  }
+
+  test("empty storage at boot is a fresh install: it keeps today as the day it started, across later launches", () => {
+    const s = store({})
+    expect(installDay(() => s, "2026-11-26")).toBe("2026-11-26")
+    s.setItem("mc.appearance", "dark")
+    expect(installDay(() => s, "2026-12-01")).toBe("2026-11-26")
+  })
+
+  test("storage kept from before has no install day, and no storage at all has none either", () => {
+    expect(installDay(() => store({ "mc.appearance": "dark" }), "2026-11-26")).toBeNull()
     expect(
-      emptyStore(() => {
+      installDay(() => {
         throw new Error("SecurityError")
-      })
-    ).toBe(false)
+      }, "2026-11-26")
+    ).toBeNull()
+  })
+
+  test("a note shows when it landed after the install day, or always when there is none", () => {
+    expect(newerThan("2026-11-25", "2026-11-26")).toBe(false)
+    expect(newerThan("2026-11-26", "2026-11-26")).toBe(false)
+    expect(newerThan(null, "2026-11-26")).toBe(false)
+    expect(newerThan("2026-11-27", "2026-11-26")).toBe(true)
+    expect(newerThan("2026-11-25", null)).toBe(true)
+    expect(newerThan(null, null)).toBe(true)
   })
 })
