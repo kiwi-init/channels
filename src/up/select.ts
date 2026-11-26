@@ -32,3 +32,8 @@ export function pickSeats<P extends SeatAt>(plans: readonly P[], selection: Sele
   if (missing.length) return `--only ${missing.map((s) => `"${s.text}"`).join(", ")}: no seat on this computer matches, so nothing started`;
   return plans.filter((p) => selection.selectors.some((s) => matches(s, p)));
 }
+
+export function readersFor<P extends SeatAt>(every: readonly P[], picked: readonly P[]): P[] {
+  const channels = new Set(picked.map((p) => p.alias));
+  return every.filter((p) => channels.has(p.alias));
+}

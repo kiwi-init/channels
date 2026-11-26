@@ -12,8 +12,7 @@ const SEATS: UpOutcome[] = [
   { channel: "kiwi", handle: "sage", folder: "/w/kiwi", result: "skipped", why: "kiwi up doesn't restore codex seats yet", skip: "unsupported", before: true },
 ]
 
-const body = (load: PickerLoad, off: ReadonlySet<string> = new Set()) =>
-  renderToStaticMarkup(<PickerBody load={load} off={off} onToggle={() => {}} onRetry={() => {}} onCopy={() => {}} />)
+const body = (load: PickerLoad, off: ReadonlySet<string> = new Set()) => renderToStaticMarkup(<PickerBody load={load} off={off} onToggle={() => {}} onRetry={() => {}} onCopy={() => {}} />)
 
 describe("Bring them back picker (spec #18549)", () => {
   test("groups seats by channel in the order the plan lists them", () => {

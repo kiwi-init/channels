@@ -78,7 +78,8 @@ const picker = {
 let bridged = false
 let older = false
 mock.module("@kiwi/secrets/secrets.ts", () => ({ bridge: () => (bridged ? (older ? fake : Object.assign(Object.create(fake), picker)) : null) }))
-const { backChoices, bringPickedBack, canPickBack, backPrompt, bringAgentsBack, checkComputer, loadUpPlan, upPlanNow, computerNow, computerSettings, loadComputer, setContextLine, setHooks } = await import("~/live/computer")
+const { backChoices, bringPickedBack, canPickBack, backPrompt, bringAgentsBack, checkComputer, loadUpPlan, upPlanNow, computerNow, computerSettings, loadComputer, setContextLine, setHooks } =
+  await import("~/live/computer")
 const { backCard } = await import("~/shell/back-card")
 const { backRow } = await import("~/settings/back-row")
 const { acts } = await import("~/settings/sheet")

@@ -18,7 +18,7 @@ import { planJson, planUp, runningAtShutdown, usedSince, withMembers, type Choos
 import { beforeThisBoot, readRunning } from "../../up/running.ts";
 import { forgetLaunch, forgetReport, isReportId, launchSeen, readReport, writeReport } from "../../up/ready.ts";
 import { restoreSeat, type RestoreDeps } from "../../up/restore.ts";
-import { pickSeats, readSelection } from "../../up/select.ts";
+import { pickSeats, readersFor, readSelection } from "../../up/select.ts";
 import { abandonReserved, keyOf, newSeatToken, reserveSeat } from "../../hold.ts";
 import { randomBytes } from "node:crypto";
 import { args, opt } from "../args.ts";
@@ -195,14 +195,12 @@ const everySeat = (bindMs: number) =>
     if (typeof selection === "string") return yield* die(`${selection}; ${USAGE}`);
     const choose = chooser(opt.since);
     if (typeof choose === "string") return yield* die(choose);
-    const planned = pickSeats(
-      planUp(loadConfig(), (b) => sessionLiveness(b), choose),
-      selection,
-    );
+    const every = planUp(loadConfig(), (b) => sessionLiveness(b), choose);
+    const planned = pickSeats(every, selection);
     if (typeof planned === "string") return yield* die(planned);
     const tmux = Bun.which(process.env.KIWI_TMUX || "tmux");
     if (!planned.length) return out(opt.json ? JSON.stringify({ seats: [], tmux: tmux !== null }) : "no seats on this computer");
-    const plans = withMembers(planned, yield* membership(planned));
+    const plans = withMembers(planned, yield* membership(readersFor(every, planned)));
     if (opt["dry-run"] && opt.json) {
       const ran = new Set((ranBefore() ?? []).map((s) => `${s.alias}\u0000${s.as}`));
       return out(JSON.stringify({ seats: plans.map((p) => planJson(p, ran.has(`${p.alias}\u0000${p.as}`))), tmux: tmux !== null }));

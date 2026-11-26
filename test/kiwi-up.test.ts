@@ -14,7 +14,7 @@ import { outcomeJson, outcomeLine, upAll } from "../src/up/all.ts";
 import { printedLine, seatArgv, tmuxLauncher, type Launcher } from "../src/up/launch.ts";
 import { sessionLiveness, type Probe } from "../src/up/liveness.ts";
 import { NO_SAMPLE, planJson, planUp, runningAtShutdown, usedSince, withMembers, type SeatPlan } from "../src/up/plan.ts";
-import { pickSeats, readSelection } from "../src/up/select.ts";
+import { pickSeats, readersFor, readSelection } from "../src/up/select.ts";
 import { beforeThisBoot, nextRunning, noteRunning, readRunning } from "../src/up/running.ts";
 import { FRESH_PROMPT, RESUMED_PROMPT, restoreSeat, type RestoreDeps } from "../src/up/restore.ts";
 import type { Report } from "../src/up/ready.ts";
@@ -725,4 +725,30 @@ test("the desktop side reads the picker's plan with tmux, and passes only well-f
     null,
     null,
   ]);
+});
+
+test("--only still reads a picked channel's roster through every local seat in it: a picked seat without a usable key is checked through its neighbour", () => {
+  twoChannels();
+  const every = planUp(loadConfig(), testLive);
+  const pickedSeats = picked(every, ["ch/a"]);
+  const readers = readersFor(every, pickedSeats);
+  expect(names(readers)).toEqual(["ch/a", "ch/b"]);
+  const readableThrough = new Set(["b"]);
+  const member = (_alias: string, as: string) =>
+    readers.some((r) => readableThrough.has(r.as)) ? (as === "a" ? { kind: "member" as const } : { kind: "left" as const }) : { kind: "unverified" as const, why: "no agent here could read it" };
+  expect(withMembers(pickedSeats, member).map((p) => [p.as, p.kind])).toEqual([["a", "restore"]]);
+  const alone = () => (pickedSeats.some((r) => readableThrough.has(r.as)) ? { kind: "member" as const } : { kind: "unverified" as const, why: "no agent here could read it" });
+  expect(withMembers(pickedSeats, alone).map((p) => [p.as, p.kind])).toEqual([["a", "skipped"]]);
+  expect(names(readersFor(every, picked(every, ["ops/c"])))).toEqual(["ops/c"]);
+});
+
+test("the picker's plan decodes strictly: a malformed row or a missing tmux is no plan, an empty plan is a plan, and kiwi up --json outcomes stay lenient", () => {
+  const good = { channel: "work", handle: "a", folder: "/w", result: "planned" as const, why: "kiwi up --seat a -c work" };
+  expect(readUpChoices(JSON.stringify({ tmux: true, seats: [{ channel: "work", handle: "a", result: "planned" }] }))).toBeNull();
+  expect(readUpChoices(JSON.stringify({ tmux: true, seats: [good, { handle: "broken" }] }))).toBeNull();
+  expect(readUpChoices(JSON.stringify({ seats: [good] }))).toBeNull();
+  expect(readUpChoices(JSON.stringify({ tmux: "yes", seats: [good] }))).toBeNull();
+  expect(readUpChoices(JSON.stringify({ tmux: true, seats: [] }))).toEqual({ seats: [], tmux: true });
+  expect(readUpChoices(JSON.stringify({ tmux: false, seats: [good] }))).toEqual({ seats: [good], tmux: false });
+  expect(readUpOutcomes(JSON.stringify({ seats: [good, { handle: "broken" }] }))).toEqual([good]);
 });

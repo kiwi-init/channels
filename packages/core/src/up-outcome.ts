@@ -31,7 +31,7 @@ function readOutcome(x: unknown): UpOutcome | null {
   return channel && handle && folder !== null && why !== null && result ? { channel, handle, folder, result, why, ...(skip ? { skip } : {}), ...(before !== undefined ? { before } : {}) } : null;
 }
 
-function readSeats(stdout: string): { seats: UpOutcome[]; tmux: unknown } | null {
+export function readUpOutcomes(stdout: string): UpOutcome[] | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
@@ -40,15 +40,10 @@ function readSeats(stdout: string): { seats: UpOutcome[]; tmux: unknown } | null
     return null;
   }
   if (typeof parsed !== "object" || parsed === null || !("seats" in parsed) || !Array.isArray(parsed.seats)) return null;
-  const seats = parsed.seats.slice(0, SEATS_MAX).flatMap((s: unknown) => {
+  return parsed.seats.slice(0, SEATS_MAX).flatMap((s: unknown) => {
     const o = readOutcome(s);
     return o ? [o] : [];
   });
-  return { seats, tmux: "tmux" in parsed ? parsed.tmux : undefined };
-}
-
-export function readUpOutcomes(stdout: string): UpOutcome[] | null {
-  return readSeats(stdout)?.seats ?? null;
 }
 
 export interface UpChoices {
@@ -57,8 +52,22 @@ export interface UpChoices {
 }
 
 export function readUpChoices(stdout: string): UpChoices | null {
-  const read = readSeats(stdout);
-  return read && typeof read.tmux === "boolean" ? { seats: read.seats, tmux: read.tmux } : null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    // kiwi up --dry-run --json writes one JSON value; anything else is no plan.
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || !("seats" in parsed) || !Array.isArray(parsed.seats) || !("tmux" in parsed) || typeof parsed.tmux !== "boolean") return null;
+  if (parsed.seats.length > SEATS_MAX) return null;
+  const seats: UpOutcome[] = [];
+  for (const row of parsed.seats) {
+    const o = readOutcome(row);
+    if (!o) return null;
+    seats.push(o);
+  }
+  return { seats, tmux: parsed.tmux };
 }
 
 export interface UpPick {
