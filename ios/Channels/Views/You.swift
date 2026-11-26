@@ -125,7 +125,7 @@ struct SettingsScreen: View {
             }
         }
         .grouped()
-        .navigationTitle("You")
+        .toolbar(.hidden, for: .navigationBar)
         .confirmationDialog(model.enrolled ? "Sign out of this iPhone?" : "Unlink this iPhone?", isPresented: $confirm, titleVisibility: .visible) {
             Button(model.enrolled ? "Sign Out" : "Unlink", role: .destructive) {
                 model.unlink()

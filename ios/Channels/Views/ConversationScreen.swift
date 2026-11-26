@@ -5,13 +5,9 @@ struct ConversationScreen: View {
     @Environment(AppModel.self) private var model
     @Environment(Lock.self) private var lock
     @State private var spot: Spot
-    @State private var replyTo: MessageView?
-    @State private var answering: AskView?
-    @State private var sendingBack: ReviewView?
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
     @State private var visible = false
-    @FocusState private var typing: Bool
     @Environment(\.scenePhase) private var scene
 
     init(start: Spot) {
@@ -19,37 +15,24 @@ struct ConversationScreen: View {
     }
 
     var body: some View {
+        @Bindable var compose = model.compose(spot)
         Group {
             if let room = model.shown(spot) {
                 Conversation(
-                    room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
+                    room: room, replyTo: $compose.replyTo, position: $position, follow: $follow, typing: $compose.typing, elsewhere: spot.general ? room.elsewhere() : [],
                     reviews: reviews(room), needs: needs(room), worker: worker(room)
                 ) { ask in
-                    replyTo = nil
-                    sendingBack = nil
-                    answering = ask
-                    typing = true
+                    compose.replyTo = nil
+                    compose.sendingBack = nil
+                    compose.answering = ask
+                    compose.typing = true
                 } sendBack: { review in
-                    replyTo = nil
-                    answering = nil
-                    sendingBack = review
-                    typing = true
+                    compose.replyTo = nil
+                    compose.answering = nil
+                    compose.sendingBack = review
+                    compose.typing = true
                 }
                 .id(spot.id)
-                .overlay(alignment: .bottomTrailing) {
-                    if !follow.atBottom {
-                        JumpButton(follow: follow) { follow.jumps += 1 }
-                            .padding(.trailing, 16)
-                            .padding(.bottom, 4)
-                            .transition(.scale(scale: 0.5).combined(with: .opacity))
-                    }
-                }
-                .animation(.snappy(duration: 0.25), value: follow.atBottom)
-                .bar(.bottom) {
-                    if talks(room) || answering != nil || sendingBack != nil {
-                        Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing)
-                    }
-                }
                 .navigationTitle(room.spotTitle(spot.place))
                 .toolbar {
                     ToolbarItem(placement: .principal) {
@@ -80,26 +63,26 @@ struct ConversationScreen: View {
         .toolbar(.visible, for: .navigationBar)
         .onAppear {
             visible = true
+            model.lastCode = spot.code
             seen()
             if model.focusNext == spot {
                 model.focusNext = nil
                 Task {
                     try? await Task.sleep(for: .milliseconds(350))
-                    typing = true
+                    model.compose(spot).typing = true
                 }
             }
         }
-        .onDisappear { visible = false }
+        .onDisappear {
+            visible = false
+            model.compose(spot).typing = false
+        }
         .onChange(of: scene) { _, _ in seen() }
         .onChange(of: lock.locked) { _, _ in seen() }
         .task(id: spot) {
             follow = Follow()
             await model.open(spot.code, place: spot.place == model.rooms[spot.code]?.sideKey ? "main" : spot.place)
         }
-    }
-
-    private func talks(_ room: RoomView) -> Bool {
-        spot.general || spot.place == room.sideKey || room.placeView(spot.place)?.kind == "room"
     }
 
     private func needs(_ room: RoomView) -> [NeedView] {
@@ -191,14 +174,6 @@ extension View {
             self.scrollEdgeEffectStyle(.soft, for: .all)
         } else {
             self
-        }
-    }
-
-    @ViewBuilder func bar<Content: View>(_ edge: VerticalEdge, @ViewBuilder content: () -> Content) -> some View {
-        if #available(iOS 26.0, *) {
-            self.safeAreaBar(edge: edge, spacing: 0, content: content)
-        } else {
-            self.safeAreaInset(edge: edge, spacing: 0, content: content)
         }
     }
 }

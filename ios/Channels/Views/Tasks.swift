@@ -44,6 +44,7 @@ struct TasksScreen: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .clearsBar()
         .background(Tone.canvas)
         .overlay {
             if tasks.isEmpty {

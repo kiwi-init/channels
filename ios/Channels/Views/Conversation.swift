@@ -62,6 +62,7 @@ struct Line: Identifiable {
 
 struct Follow {
     var atBottom = true
+    var far = false
     var unseen = 0
     var jumps = 0
 }
@@ -71,7 +72,7 @@ struct Conversation: View {
     @Binding var replyTo: MessageView?
     @Binding var position: ScrollPosition
     @Binding var follow: Follow
-    var typing: FocusState<Bool>.Binding
+    @Binding var typing: Bool
     var elsewhere: [AskView] = []
     var reviews: [ReviewView] = []
     var needs: [NeedView] = []
@@ -79,6 +80,10 @@ struct Conversation: View {
     var answer: (AskView) -> Void = { _ in }
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
+
+    private var footer: CGFloat {
+        (model.barHeight > 0 ? model.barHeight : Bar.height) + 6
+    }
 
     private var solo: Bool {
         room.placeView(room.place).map { $0.kind == "dm" && $0.withMe } ?? false
@@ -104,7 +109,7 @@ struct Conversation: View {
                     ) { line in
                         LineView(line: line, room: room, solo: solo) { m in
                             replyTo = m
-                            typing.wrappedValue = true
+                            typing = true
                         } jump: { seq in
                             let id = model.sentAs[room.code]?[seq].map { "p\($0)" } ?? "b\(seq)"
                             withAnimation(Motion.ease) { position.scrollTo(id: id, anchor: .center) }
@@ -119,20 +124,40 @@ struct Conversation: View {
                     if let worker, worker.working {
                         WorkingRow(member: worker, room: room).id("working")
                     }
-                    Color.clear.frame(height: 6).id("bottom")
+                    Color.clear.frame(height: footer).id("feed-end").accessibilityHidden(true)
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, 12)
             }
             .scrollPosition($position)
             .defaultScrollAnchor(.bottom)
+            .defaultScrollAnchor(.bottom, for: .sizeChanges)
+            .overlay {
+                GeometryReader { g in
+                    let show = !typing && model.barHeight > 0 && follow.far
+                    ZStack {
+                        if show {
+                            JumpButton(follow: follow) { follow.jumps += 1 }
+                                .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        }
+                    }
+                    .animation(.snappy(duration: 0.25), value: show)
+                    .position(x: g.size.width - 38, y: g.size.height - model.barHeight - 24)
+                }
+            }
             .scrollDismissesKeyboard(.interactively)
+            .onTapGesture { if typing { typing = false } }
             .softBars()
             .onScrollGeometryChange(for: Bool.self) { geo in
-                geo.visibleRect.maxY >= geo.contentSize.height - 60
+                geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 60
             } action: { _, near in
                 follow.atBottom = near
                 if near { follow.unseen = 0 }
+            }
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                geo.contentSize.height - geo.contentOffset.y - geo.containerSize.height > geo.containerSize.height
+            } action: { _, far in
+                follow.far = far
             }
             .onScrollGeometryChange(for: Bool.self) { geo in
                 geo.contentSize.height > 0 && geo.visibleRect.minY + geo.contentInsets.top > geo.contentSize.height - 24
@@ -141,12 +166,12 @@ struct Conversation: View {
             }
             .onChange(of: model.pending["\(room.code)|\(room.place)"]?.count ?? 0) { old, now in
                 guard now > old else { return }
-                withAnimation(Motion.sent) { proxy.scrollTo("bottom", anchor: .bottom) }
+                withAnimation(Motion.sent) { proxy.scrollTo("feed-end", anchor: .bottom) }
             }
             .onChange(of: room.messages.last?.seq) { old, _ in
                 guard old != nil, let last = room.messages.last else { return }
                 if follow.atBottom || last.mine {
-                    withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
+                    withAnimation(Motion.ease) { proxy.scrollTo("feed-end", anchor: .bottom) }
                 } else if !last.event {
                     follow.unseen += 1
                 }
@@ -154,16 +179,16 @@ struct Conversation: View {
             .task(id: room.messages.isEmpty) {
                 guard !room.messages.isEmpty else { return }
                 try? await Task.sleep(for: .milliseconds(120))
-                proxy.scrollTo("bottom", anchor: .bottom)
+                proxy.scrollTo("feed-end", anchor: .bottom)
             }
             .onChange(of: follow.jumps) {
-                withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
+                withAnimation(Motion.ease) { proxy.scrollTo("feed-end", anchor: .bottom) }
             }
-            .onChange(of: typing.wrappedValue) { _, now in
+            .onChange(of: typing) { _, now in
                 guard now else { return }
                 Task {
                     try? await Task.sleep(for: .milliseconds(250))
-                    withAnimation(Motion.ease) { proxy.scrollTo("bottom", anchor: .bottom) }
+                    withAnimation(Motion.ease) { proxy.scrollTo("feed-end", anchor: .bottom) }
                 }
             }
         }
