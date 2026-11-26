@@ -16,7 +16,7 @@ export function savedBackDismissed(): string | null {
 
 export const backDismissed = store<string | null>(savedBackDismissed())
 
-export const downSet = (down: readonly Seat[]): string => [...new Set(down.map((s) => `${s.channel}/${s.handle}`))].sort().join("\n")
+const downSet = (down: readonly Seat[]): string => [...new Set(down.map((s) => `${s.channel}/${s.handle}`))].sort().join("\n")
 
 export const backHidden = (down: readonly Seat[], dismissed: string | null): boolean => dismissed !== null && dismissed === downSet(down)
 
