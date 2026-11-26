@@ -87,7 +87,7 @@ fun SettingsScreen(model: AppModel) {
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
             Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Face(model.person.ifEmpty { "?" }, null, 80.dp)
+                Face(model.person.ifEmpty { "?" }, model.rooms.values.firstNotNullOfOrNull { room -> room.member(room.me)?.takeIf { it.picture != null } }, 80.dp)
                 Text(model.person, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp))
                 Text(if (model.enrolled) stringResource(R.string.signed_in_device) else stringResource(R.string.linked_to_mac), style = MaterialTheme.typography.bodyMedium, color = tone.ink3)
             }
