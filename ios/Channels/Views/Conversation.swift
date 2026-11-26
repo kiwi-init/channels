@@ -80,10 +80,11 @@ struct Conversation: View {
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
     @State private var feedBottom: CGFloat = 0
+    @State private var insetBottom: CGFloat = 0
 
     private var footer: CGFloat {
         guard model.barTop > 0, feedBottom > 0 else { return Bar.height + 48 }
-        return max(6, feedBottom - model.barTop + 6)
+        return max(6, feedBottom - insetBottom - model.barTop + 6)
     }
 
     private var solo: Bool {
@@ -134,10 +135,11 @@ struct Conversation: View {
             .defaultScrollAnchor(.bottom)
             .ignoresSafeArea(.container, edges: .bottom)
             .onGeometryChange(for: CGFloat.self) {
-                $0.frame(in: .global).maxY
+                $0.frame(in: .global).maxY + $0.safeAreaInsets.bottom
             } action: {
                 feedBottom = $0
             }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentInsets.bottom } action: { _, now in insetBottom = now }
             .scrollDismissesKeyboard(.interactively)
             .softBars()
             .onScrollGeometryChange(for: Bool.self) { geo in
@@ -166,6 +168,10 @@ struct Conversation: View {
             .task(id: room.messages.isEmpty) {
                 guard !room.messages.isEmpty else { return }
                 try? await Task.sleep(for: .milliseconds(120))
+                proxy.scrollTo("feed-end", anchor: .bottom)
+            }
+            .onChange(of: footer) { _, _ in
+                guard follow.atBottom || typing else { return }
                 proxy.scrollTo("feed-end", anchor: .bottom)
             }
             .onChange(of: follow.jumps) {
