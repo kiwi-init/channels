@@ -15,6 +15,7 @@ const words = {
   "shell.updates.back.why.unknown": "can't check it here",
   "shell.updates.back.act": "Bring them back",
   "shell.updates.back.busy": "Bringing back…",
+  "shell.updates.back.dismiss": "Dismiss",
   "shell.updates.back.done": "Your agents are back",
   "shell.updates.back.partial": "{back} back, {left} not: Settings > Agents shows why",
   "shell.updates.back.nothing": "Nothing to bring back here",

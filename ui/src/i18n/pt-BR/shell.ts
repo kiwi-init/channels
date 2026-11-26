@@ -67,6 +67,7 @@ export default {
   "shell.updates.back.why.unknown": "não dá para verificar daqui",
   "shell.updates.back.act": "Trazer de volta",
   "shell.updates.back.busy": "Trazendo de volta…",
+  "shell.updates.back.dismiss": "Dispensar",
   "shell.updates.back.done": "Seus agentes voltaram",
   "shell.updates.back.partial": "{back} de volta, {left} não: Configurações > Agentes mostra por quê",
   "shell.updates.back.nothing": "Nada para trazer de volta aqui",
