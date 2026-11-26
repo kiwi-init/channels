@@ -15,9 +15,9 @@ struct TasksScreen: View {
     let code: String
     @Environment(AppModel.self) private var model
 
-    private static let groups: [(state: String, title: String)] = [
-        ("doing", spoken("Working")), ("review", spoken("In review")), ("todo", spoken("To do")), ("done", spoken("Done")),
-    ]
+    private static var groups: [(state: String, title: String)] {
+        [("doing", spoken("Working")), ("review", spoken("In review")), ("todo", spoken("To do")), ("done", spoken("Done"))]
+    }
 
     var body: some View {
         let room = model.rooms[code]

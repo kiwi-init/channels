@@ -91,13 +91,13 @@ struct Row: Identifiable {
     var line: String {
         if room.connection == .connecting && last == nil { return spoken("Connecting…") }
         if let need { return spoken("Needs you: \(need)") }
-        if let draft { return "Draft: \(draft.text.isEmpty ? "Photo" : draft.text.replacingOccurrences(of: "\n", with: " "))" }
+        if let draft { return spoken("Draft: \(draft.text.isEmpty ? spoken("Photo") : draft.text.replacingOccurrences(of: "\n", with: " "))") }
         guard let last else { return kind == .lead ? spoken("Message \(title) directly") : spoken("No messages yet") }
         let body =
             last.body.isEmpty && last.images > 0
             ? (last.images == 1 ? spoken("Photo") : spoken("\(last.images) Photos")) : last.plain.replacingOccurrences(of: "\n", with: " ")
         if kind == .lead { return last.mine ? spoken("You: \(body)") : body }
-        return "\(last.mine ? "You" : room.display(last.from))\(origin): \(body)"
+        return "\(last.mine ? spoken("You") : room.display(last.from))\(origin): \(body)"
     }
 }
 

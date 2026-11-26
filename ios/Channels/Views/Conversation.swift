@@ -930,6 +930,7 @@ struct Viewer: View {
     @State private var zoom: CGFloat = 1
     @State private var settled: CGFloat = 1
     @State private var drag: CGSize = .zero
+    @State private var panned: CGSize = .zero
 
     var body: some View {
         ZStack {
@@ -948,16 +949,22 @@ struct Viewer: View {
                                 withAnimation(Motion.ease) {
                                     zoom = 1
                                     settled = 1
+                                    drag = .zero
+                                    panned = .zero
                                 }
                             }
                         }
                         .simultaneously(
                             with: DragGesture()
-                                .onChanged { drag = $0.translation }
+                                .onChanged { move in
+                                    drag = zoom > 1 ? CGSize(width: panned.width + move.translation.width, height: panned.height + move.translation.height) : move.translation
+                                }
                                 .onEnded { end in
-                                    if zoom <= 1 && abs(end.translation.height) > 120 {
+                                    if zoom > 1 {
+                                        panned = drag
+                                    } else if abs(end.translation.height) > 120 {
                                         dismiss()
-                                    } else if zoom <= 1 {
+                                    } else {
                                         withAnimation(.spring(duration: 0.3)) { drag = .zero }
                                     }
                                 }
@@ -968,6 +975,7 @@ struct Viewer: View {
                         zoom = zoom > 1 ? 1 : 2.5
                         settled = zoom
                         drag = .zero
+                        panned = .zero
                     }
                 }
         }
@@ -987,7 +995,7 @@ struct Viewer: View {
                 .accessibilityLabel("Share")
             }
             .padding(.horizontal, 16)
-            .opacity(drag == .zero ? 1 : 0)
+            .opacity(zoom > 1 || drag == .zero ? 1 : 0)
         }
         .environment(\.colorScheme, .dark)
     }

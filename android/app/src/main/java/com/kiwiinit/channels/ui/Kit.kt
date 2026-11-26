@@ -116,6 +116,7 @@ fun View.buzz(kind: Buzz) {
 @Composable
 fun Face(name: String, member: MemberView?, size: Dp = 32.dp, modifier: Modifier = Modifier) {
     val tone = Tone.current
+    val photo = member?.takeIf { !it.isAgent }?.picture?.let(::photo)
     Box(modifier.size(size).clearAndSetSemantics {}) {
         if (member?.isAgent == true) {
             Box(
@@ -145,6 +146,8 @@ fun Face(name: String, member: MemberView?, size: Dp = 32.dp, modifier: Modifier
                         .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
                 )
             }
+        } else if (photo != null) {
+            Image(photo, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().clip(CircleShape))
         } else {
             val fill = member?.color?.let { Palette.fills[it] }
             val top = fill?.let { Color(it.first) } ?: tone.avatarTop
@@ -174,6 +177,22 @@ internal fun initials(name: String): String {
 }
 
 private val icons = LruCache<String, ImageBitmap>(16)
+
+private val photos = LruCache<String, ImageBitmap>(32)
+
+private fun photo(data: String): ImageBitmap? {
+    val key = "${data.length}|${data.takeLast(32)}"
+    photos.get(key)?.let { return it }
+    val raw = try {
+        Base64.decode(data, Base64.DEFAULT)
+    } catch (e: IllegalArgumentException) {
+        // A garbled picture falls back to the initials.
+        return null
+    }
+    val image = BitmapFactory.decodeByteArray(raw, 0, raw.size)?.asImageBitmap() ?: return null
+    photos.put(key, image)
+    return image
+}
 
 private fun picture(room: RoomView): ImageBitmap? {
     val data = room.icon?.data ?: return null

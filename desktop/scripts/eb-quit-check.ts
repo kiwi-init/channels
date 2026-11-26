@@ -99,7 +99,8 @@ async function quitAt(moment: Moment): Promise<string[]> {
     for (const p of all) if (p.ppid === child.pid) groups.add(p.pgid);
     return all.filter((p) => p.pid !== process.pid && !ending(p) && (groups.has(p.pgid) || p.cmd.includes(app)));
   };
-  const main = (ours: Proc[]): boolean => ours.some((p) => p.cmd.includes(join(macos, "bun")) && !building(p) && !probing(p) && !daemon(p));
+  const runtime = join(macos, existsSync(join(macos, "bun")) ? "bun" : "main");
+  const main = (ours: Proc[]): boolean => ours.some((p) => p.cmd.includes(runtime) && !building(p) && !probing(p) && !daemon(p));
   const began = Date.now();
   let buildAt: number | null = null;
   let up = false;

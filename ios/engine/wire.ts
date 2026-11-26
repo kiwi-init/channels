@@ -93,6 +93,7 @@ export interface MemberView {
   mono: boolean;
   doing: number[];
   person: string;
+  picture: string | null;
 }
 
 interface QuoteView {

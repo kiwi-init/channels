@@ -1,7 +1,7 @@
 import type { Frozen } from "@kiwi/core/state.ts";
 import { decodeJoinCode } from "@kiwi/core/crypto.ts";
 import { GENERAL_ROOM, ignored, isQuiet, ROBOT_FACES, type ChannelIcon, type Message } from "@kiwi/core/protocol.ts";
-import { personOf, rootOf, sentTo, type Seat } from "@kiwi/core/room-rules.ts";
+import { isPerson, personOf, rootOf, sentTo, type Seat } from "@kiwi/core/room-rules.ts";
 import { answersAsk, answersDecisions, decidersOf, dmPlace, MAIN, openRound, placeFromKey, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { roomOfMessage } from "@kiwi/core/state/rooms.ts";
 import type { FoldMember, Room } from "@kiwi/core/state/types.ts";
@@ -67,7 +67,17 @@ function memberView(m: FoldMember, state: ChannelState, online: ReadonlyMap<stri
     mono: harness !== null && monoHarness(harness),
     doing: [...state.tasks.values()].filter((t) => t.owner === m.name && t.state === "doing").map((t) => t.id),
     person: personOf(m, [...state.members.values()]),
+    picture: pictureOf(m, state),
   };
+}
+
+function pictureOf(m: FoldMember, state: ChannelState): string | null {
+  if (!isPerson(m)) return null;
+  if (m.picture) return m.picture.data;
+  const seats = [...state.members.values()];
+  const who = personOf(m, seats);
+  if (!who.startsWith("person:")) return null;
+  return seats.find((s) => s.active && isPerson(s) && s.picture && personOf(s, seats) === who)?.picture?.data ?? null;
 }
 
 const roomIdOf = (code: string): string | null => {

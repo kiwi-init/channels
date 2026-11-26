@@ -1,5 +1,5 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 export interface Driver {
@@ -67,9 +67,15 @@ export function appRoot(exe: string): string {
   return exe.endsWith(`/${LINUX_ENTRY}`) ? dirname(dirname(exe)) : exe;
 }
 
-export function launch(exe: string, env: NodeJS.ProcessEnv): ChildProcess {
+export function launch(exe: string, env: NodeJS.ProcessEnv, output?: string): ChildProcess {
   if (!existsSync(exe)) throw new Error(`no app at ${exe}`);
-  return spawn(exe, [], { env, stdio: "ignore", detached: true });
+  if (!output) return spawn(exe, [], { env, stdio: "ignore", detached: true });
+  const fd = openSync(output, "a");
+  try {
+    return spawn(exe, [], { env, stdio: ["ignore", fd, fd], detached: true });
+  } finally {
+    closeSync(fd);
+  }
 }
 
 export async function stop(app: ChildProcess): Promise<void> {

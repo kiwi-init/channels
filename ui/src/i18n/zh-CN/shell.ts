@@ -67,6 +67,7 @@ export default {
   "shell.updates.back.why.unknown": "在这里无法检查",
   "shell.updates.back.act": "让它们回来",
   "shell.updates.back.busy": "正在恢复…",
+  "shell.updates.back.dismiss": "关闭",
   "shell.updates.back.done": "你的智能体已回来",
   "shell.updates.back.partial": "{back} 个已回来，{left} 个没有：原因见 设置 > 智能体",
   "shell.updates.back.nothing": "这里没有需要恢复的",

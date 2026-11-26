@@ -68,12 +68,34 @@ struct Face: View {
         .frame(width: size, height: size)
     }
 
+    @ViewBuilder
     private var person: some View {
-        Text(letter)
-            .font(.system(size: (size * 0.42).rounded(), weight: .semibold))
-            .foregroundStyle(tint ?? Tone.ink2)
-            .frame(width: size, height: size)
-            .background(Circle().fill(tint.map { $0.opacity(0.18) } ?? Tone.raised))
+        if let picture = member?.picture.flatMap(Pictures.image) {
+            Image(uiImage: picture)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        } else {
+            Text(letter)
+                .font(.system(size: (size * 0.42).rounded(), weight: .semibold))
+                .foregroundStyle(tint ?? Tone.ink2)
+                .frame(width: size, height: size)
+                .background(Circle().fill(tint.map { $0.opacity(0.18) } ?? Tone.raised))
+        }
+    }
+}
+
+@MainActor
+enum Pictures {
+    private static let decoded = NSCache<NSString, UIImage>()
+
+    static func image(_ data: String) -> UIImage? {
+        let key = data as NSString
+        if let hit = decoded.object(forKey: key) { return hit }
+        guard let raw = Data(base64Encoded: data), let image = UIImage(data: raw) else { return nil }
+        decoded.setObject(image, forKey: key)
+        return image
     }
 }
 
@@ -187,11 +209,16 @@ enum When {
         return date.formatted(.dateTime.month(.abbreviated).day())
     }
 
-    static func dayWord(_ date: Date, now: Date = .now) -> String {
+    static func day(_ date: Date, now: Date = .now) -> String {
         if Calendar.current.isDateInToday(date) { return spoken("Today") }
         if Calendar.current.isDateInYesterday(date) { return spoken("Yesterday") }
         if now.timeIntervalSince(date) < 6 * 86400 { return date.formatted(.dateTime.weekday(.wide)) }
-        return spoken("\(date.formatted(.dateTime.day().month(.abbreviated).year())) at")
+        return date.formatted(.dateTime.day().month(.abbreviated).year())
+    }
+
+    static func dayWord(_ date: Date, now: Date = .now) -> String {
+        let word = day(date, now: now)
+        return Calendar.current.isDateInYesterday(date) || now.timeIntervalSince(date) < 6 * 86400 ? word : spoken("\(word) at")
     }
 
     static func elapsed(from start: Date, to now: Date) -> String {

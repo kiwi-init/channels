@@ -46,7 +46,7 @@ struct UpdatesSheet: View {
         NavigationStack {
             List {
                 ForEach(UpdatesDay.of(room.messages)) { group in
-                    Section(When.dayWord(group.day)) {
+                    Section(When.day(group.day)) {
                         ForEach(group.list, id: \.seq) { m in
                             HStack(alignment: .firstTextBaseline, spacing: 12) {
                                 Text("\(room.display(m.from)) \(m.body)")

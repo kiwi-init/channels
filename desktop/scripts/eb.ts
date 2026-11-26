@@ -45,6 +45,7 @@ const run = spawnSync(hutch, ["electrobun", ...process.argv.slice(2)], {
     ELECTROBUN_RELEASES_BASE_URL: PINS.releasesBaseUrl,
     HUTCH_DEFAULT_CLI: PINS.hutch.version,
     HUTCH_DEFAULT_ELECTROBUN: PINS.electrobun,
+    KIWI_UI_SEQ: process.env.KIWI_UI_SEQ ?? String(Date.now()),
   },
 });
 process.exit(run.status ?? 1);

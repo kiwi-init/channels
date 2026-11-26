@@ -74,8 +74,21 @@ struct ConversationScreen: View {
                     }
                 }
                 .navigationTitle(room.spotTitle(spot.place))
-                .subtitle(room.status(of: spot.place))
                 .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        TitlePill(room: room, spot: spot) { next in
+                            guard next != spot else { return }
+                            replyTo = nil
+                            answering = nil
+                            sendingBack = nil
+                            withAnimation(Motion.ease) { spot = next }
+                        } answer: { ask in
+                            replyTo = nil
+                            sendingBack = nil
+                            answering = ask
+                            typing = true
+                        }
+                    }
                     if room.messages.contains(where: \.event) {
                         ToolbarItem(placement: .topBarTrailing) { UpdatesButton(room: room) }
                     }
@@ -251,14 +264,6 @@ struct ChannelAvatar: View {
 }
 
 extension View {
-    @ViewBuilder func subtitle(_ text: String?) -> some View {
-        if #available(iOS 26.0, *), let text {
-            self.navigationSubtitle(text)
-        } else {
-            self
-        }
-    }
-
     @ViewBuilder func softBars() -> some View {
         if #available(iOS 26.0, *) {
             self.scrollEdgeEffectStyle(.soft, for: .all)
