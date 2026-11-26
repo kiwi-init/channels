@@ -29,14 +29,11 @@ struct ChannelList: View {
         .scrollContentBackground(.hidden)
         .background(Tone.canvas)
         .safeAreaInset(edge: .top, spacing: 0) {
-            HStack(alignment: .center) {
-                Text("Chats").font(.largeTitle.weight(.bold)).foregroundStyle(Tone.ink)
+            HStack {
                 Spacer(minLength: 0)
                 YouButton()
             }
-            .padding(.leading, 20)
             .padding(.trailing, 14)
-            .padding(.bottom, 4)
             .background(Tone.canvas)
         }
         .refreshable { await model.refresh() }

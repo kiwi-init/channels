@@ -88,8 +88,7 @@ struct NeedsScreen: View {
                 ContentUnavailableView("Nothing needs you", systemImage: "checkmark.circle", description: Text("Questions, permissions and reviews for you show up here."))
             }
         }
-        .navigationTitle("Needs You")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .alert("Couldn't do that", isPresented: Binding(get: { failed != nil }, set: { if !$0 { failed = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {

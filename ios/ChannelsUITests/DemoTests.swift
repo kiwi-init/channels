@@ -43,6 +43,7 @@ final class DemoTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "lead-row").firstMatch.exists, "the lead, the first row of the channel")
         XCTAssertFalse(app.buttons["tab-you"].exists, "You isn't a tab")
         XCTAssertTrue(app.buttons["you"].isHittable, "You is the face at the top right")
+        XCTAssertFalse(app.staticTexts["Chats"].exists, "and Chats has no title")
         add(shot(app, "list with the bar"))
 
         channel.tap()
@@ -82,7 +83,8 @@ final class DemoTests: XCTestCase {
         XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "back at the bottom, the newest item ends above the bar")
 
         needs.tap()
-        XCTAssertTrue(app.navigationBars["Needs You"].waitForExistence(timeout: 5), "a tab opens from inside a chat")
+        XCTAssertTrue(app.buttons["tab-needs"].waitForSelected(timeout: 5), "a tab opens from inside a chat")
+        XCTAssertFalse(app.navigationBars["Needs You"].exists, "with no title: the bar says where you are")
         app.buttons["tab-chats"].tap()
         XCTAssertTrue(field.waitForHittable(timeout: 5), "back on Chats, the chat is still open")
         field.tap()
@@ -135,6 +137,15 @@ final class DemoTests: XCTestCase {
 }
 
 extension XCUIElement {
+    func waitForSelected(timeout: TimeInterval) -> Bool {
+        let end = Date().addingTimeInterval(timeout)
+        while Date() < end {
+            if exists && isSelected { return true }
+            usleep(200_000)
+        }
+        return exists && isSelected
+    }
+
     func waitForHittable(timeout: TimeInterval) -> Bool {
         let end = Date().addingTimeInterval(timeout)
         while Date() < end {
