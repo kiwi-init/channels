@@ -9,56 +9,43 @@ struct ChannelsLive: WidgetBundle {
     }
 }
 
-struct Shown {
-    let agents: [AgentsActivity.Agent]
-    let count: Int
-    let title: String
-
-    init(_ attributes: AgentsActivity, _ state: AgentsActivity.ContentState) {
-        let sealed = state.sealed ?? []
-        guard state.agents.isEmpty, !sealed.isEmpty else {
-            agents = state.agents
-            count = state.agents.count
-            title = attributes.title
-            return
-        }
-        let opened = LiveOpen.open(sealed, room: attributes.channel)
-        agents = opened.agents
-        count = max(opened.agents.count, sealed.count)
-        title = attributes.title.isEmpty ? (opened.title ?? "Channels") : attributes.title
-    }
-}
-
 struct AgentsLive: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: AgentsActivity.self) { context in
-            let shown = Shown(context.attributes, context.state)
-            LockScreen(title: shown.title, agents: shown.agents, count: shown.count)
+            LockScreen(shown: LiveShown(context.attributes, context.state))
                 .activityBackgroundTint(.black)
                 .activitySystemActionForegroundColor(.white)
                 .widgetURL(context.attributes.link)
         } dynamicIsland: { context in
-            let shown = Shown(context.attributes, context.state)
-            let agents = shown.agents
+            let shown = LiveShown(context.attributes, context.state)
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    LiveFace(agent: agents.first, size: 40, dot: shown.count > 0).padding(.leading, 6)
+                    ChannelMark(shown: shown, size: 40).padding(.leading, 6)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Clock(agents: agents, count: shown.count).font(.headline.monospacedDigit()).padding(.trailing, 6)
+                    Counts(shown: shown).font(.headline.monospacedDigit()).padding(.trailing, 6)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     Text(shown.title).font(.headline).lineLimit(1)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Rows(agents: Array(agents.prefix(2))).padding(.horizontal, 6).padding(.top, 8).padding(.bottom, 4)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Status(count: shown.count, needs: shown.needs).font(.subheadline).foregroundStyle(.secondary)
+                        if let line = shown.line {
+                            Text(line).font(.subheadline).lineLimit(2)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 6)
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
                 }
             } compactLeading: {
-                LiveFace(agent: agents.first, size: 22, dot: shown.count > 0)
+                ChannelMark(shown: shown, size: 22)
             } compactTrailing: {
-                Clock(agents: agents, count: shown.count).font(.caption.monospacedDigit()).frame(maxWidth: 44)
+                Counts(shown: shown).font(.caption.monospacedDigit())
             } minimal: {
-                LiveFace(agent: agents.first, size: 22, dot: shown.count > 0)
+                ChannelMark(shown: shown, size: 22)
             }
             .widgetURL(context.attributes.link)
             .keylineTint(.green)

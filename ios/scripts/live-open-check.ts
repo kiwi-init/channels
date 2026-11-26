@@ -8,7 +8,7 @@ const shared = join(import.meta.dir, "..", "Shared");
 const dir = mkdtempSync(join(tmpdir(), "live-open-"));
 
 const builder = { name: "builder-one", face: "builder", color: "green", task: "T52 Relay: Live Activity pushes 🚀", since: 1_800_000_000_000, title: "channels" };
-const lead = { name: "tidy-gazelle", face: "lead", color: "blue", task: null, since: 1_799_999_000_000, title: "channels" };
+const lead = { name: "tidy-gazelle", face: "lead", color: "blue", task: null, since: 1_799_999_000_000, title: "channels", needs: 2, line: "Two things wait on you: T12 and #340 🚦" };
 
 const expected = {
   agents: [
@@ -16,6 +16,8 @@ const expected = {
     { name: "builder-one", face: "builder", color: 0x3fbf74, task: builder.task, since: 1_800_000_000 },
   ],
   title: "channels",
+  needs: 2,
+  line: lead.line,
   elsewhere: 0,
 };
 

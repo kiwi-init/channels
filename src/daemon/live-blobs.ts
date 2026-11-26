@@ -2,8 +2,10 @@ import type { Frozen } from "@kiwi/core/state.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import type { Channel } from "@kiwi/core/client.ts";
 import { LIVE_PATH, liveState, sealLive, type LiveState } from "@kiwi/core/live.ts";
-import type { Activity } from "@kiwi/core/protocol.ts";
+import { inlineText } from "@kiwi/core/membership.ts";
+import type { Activity, Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState, Task } from "@kiwi/core/state/types.ts";
+import { needsPerson } from "@kiwi/core/work.ts";
 
 export const LIVE_IDLE_MS = 90_000;
 export const LIVE_CHECK_MS = 30_000;
@@ -93,7 +95,16 @@ export class LiveBlobs {
   }
 }
 
-export function liveAbout(state: ChannelState, agent: string, title: string): LiveAbout | null {
+function leadLine(state: ChannelState, agent: string, messages: readonly Message[]): string | null {
+  const said = messages.findLast((m) => m.from === agent && m.kind === "msg" && !m.dm && state.placeOf.get(m.seq)?.kind !== "dm" && typeof m.body === "string");
+  const first = said?.body
+    .split("\n")
+    .map((l) => l.replace(/\*\*|`/g, "").replace(/^[\s#>*-]+/, ""))
+    .find((l) => l.trim());
+  return first ? inlineText(first, 90) : null;
+}
+
+export function liveAbout(state: ChannelState, agent: string, title: string, messages: readonly Message[] = []): LiveAbout | null {
   const me = state.members.get(agent);
   if (!me) return null;
   const started = (t: Frozen<Task>): number => (t.clock?.key.startsWith(`${agent}|work|`) ? t.clock.at : 0);
@@ -105,6 +116,7 @@ export function liveAbout(state: ChannelState, agent: string, title: string): Li
     task: task ? `T${task.id} ${task.title}` : null,
     since: task && started(task) ? started(task) : null,
     title,
+    ...(state.lead === agent ? { needs: needsPerson(state).length, line: leadLine(state, agent, messages) } : {}),
   };
 }
 

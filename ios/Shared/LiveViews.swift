@@ -1,24 +1,50 @@
 import SwiftUI
+import UIKit
+
+struct LiveShown {
+    let agents: [AgentsActivity.Agent]
+    let count: Int
+    let title: String
+    let needs: Int
+    let line: String?
+    let mark: LiveOpen.Mark?
+
+    var lead: AgentsActivity.Agent? { agents.first { $0.face == "lead" } ?? agents.first }
+
+    init(_ attributes: AgentsActivity, _ state: AgentsActivity.ContentState, marks: [String: LiveOpen.Mark] = LiveOpen.marks()) {
+        mark = marks[attributes.channel]
+        let sealed = state.sealed ?? []
+        guard state.agents.isEmpty, !sealed.isEmpty else {
+            agents = state.agents
+            count = state.agents.count
+            title = attributes.title
+            needs = state.needs ?? 0
+            line = state.line
+            return
+        }
+        let opened = LiveOpen.open(sealed, room: attributes.channel)
+        agents = opened.agents
+        count = max(opened.agents.count, sealed.count)
+        title = attributes.title.isEmpty ? (opened.title ?? "Channels") : attributes.title
+        needs = opened.needs ?? state.needs ?? 0
+        line = opened.line ?? state.line
+    }
+}
 
 struct LockScreen: View {
-    let title: String
-    let agents: [AgentsActivity.Agent]
-    var count: Int? = nil
+    let shown: LiveShown
 
     var body: some View {
-        let working = count ?? agents.count
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 6) {
-                Text(title).font(.headline).lineLimit(1)
-                Spacer(minLength: 8)
-                if working == 0 {
-                    Text("Nobody is working").font(.subheadline).foregroundStyle(.secondary)
-                } else {
-                    Circle().fill(.green).frame(width: 7, height: 7)
-                    Text("\(working) working").font(.subheadline).foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: 14) {
+            ChannelMark(shown: shown, size: 44)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(shown.title).font(.headline).lineLimit(1)
+                Status(count: shown.count, needs: shown.needs).font(.subheadline).foregroundStyle(.secondary)
+                if let line = shown.line {
+                    Text(line).font(.subheadline).lineLimit(2).padding(.top, 4)
                 }
             }
-            Rows(agents: Array(agents.prefix(3)))
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 20)
@@ -27,47 +53,64 @@ struct LockScreen: View {
     }
 }
 
-struct Rows: View {
-    let agents: [AgentsActivity.Agent]
+struct Status: View {
+    let count: Int
+    let needs: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ForEach(agents, id: \.self) { agent in
-                HStack(alignment: .top, spacing: 12) {
-                    LiveFace(agent: agent, size: 30)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(agent.name).font(.subheadline.weight(.semibold)).lineLimit(1)
-                            Spacer(minLength: 8)
-                            if let since = agent.since {
-                                Text(since, style: .timer)
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                                    .multilineTextAlignment(.trailing)
-                                    .frame(width: 60, alignment: .trailing)
-                            }
-                        }
-                        if let task = agent.task {
-                            Text(task).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                    }
-                }
+        HStack(spacing: 6) {
+            if count == 0 {
+                Text("Nobody is working")
+            } else {
+                Circle().fill(.green).frame(width: 7, height: 7)
+                Text("\(count) working")
+            }
+            if needs > 0 {
+                Text(verbatim: "·")
+                Circle().fill(.orange).frame(width: 7, height: 7)
+                Text("\(needs) needs you")
+            }
+        }
+        .lineLimit(1)
+    }
+}
+
+struct Counts: View {
+    let shown: LiveShown
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(shown.count, format: .number).foregroundStyle(.green)
+            if shown.needs > 0 {
+                Circle().fill(.orange).frame(width: 6, height: 6)
             }
         }
     }
 }
 
-struct Clock: View {
-    let agents: [AgentsActivity.Agent]
-    var count: Int? = nil
+struct ChannelMark: View {
+    let shown: LiveShown
+    let size: CGFloat
 
     var body: some View {
-        let working = count ?? agents.count
-        if working == 1, let since = agents.first?.since {
-            Text(since, style: .timer).multilineTextAlignment(.trailing).foregroundStyle(.green)
-        } else if working > 0 {
-            Text("\(working)").foregroundStyle(.green)
+        if let data = shown.mark?.picture, let image = UIImage(data: data) {
+            Image(uiImage: image).resizable().scaledToFill().frame(width: size, height: size).clipShape(Circle())
+        } else if let mark = shown.mark {
+            let tint = Color(rgb: mark.rgb)
+            Text(verbatim: mark.letter)
+                .font(.system(size: size * 0.42, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: size, height: size)
+                .background(tint.opacity(0.22), in: Circle())
+        } else {
+            LiveFace(agent: shown.lead, size: size)
         }
+    }
+}
+
+extension Color {
+    init(rgb: UInt32) {
+        self.init(red: Double((rgb >> 16) & 0xff) / 255, green: Double((rgb >> 8) & 0xff) / 255, blue: Double(rgb & 0xff) / 255)
     }
 }
 
@@ -81,8 +124,7 @@ struct LiveFace: View {
     }
 
     private var tint: Color {
-        guard let rgb = agent?.color else { return .white }
-        return Color(red: Double((rgb >> 16) & 0xff) / 255, green: Double((rgb >> 8) & 0xff) / 255, blue: Double(rgb & 0xff) / 255)
+        agent?.color.map { Color(rgb: $0) } ?? .white
     }
 
     var body: some View {

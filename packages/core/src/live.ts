@@ -25,9 +25,11 @@ export interface LiveState {
   t?: string;
   s: number;
   h: string;
+  w?: number;
+  r?: string;
 }
 
-export const LIVE_LIMITS = { n: 32, f: 16, c: 16, t: 64, h: 40 } as const;
+export const LIVE_LIMITS = { n: 32, f: 16, c: 16, t: 64, h: 40, r: 90 } as const;
 
 const IV = /^[A-Za-z0-9_-]{16}$/;
 const CT = new RegExp(`^[A-Za-z0-9_-]{22,${MAX_LIVE_CT}}$`);
@@ -56,7 +58,7 @@ const cut = (s: string, max: number): string => {
 const bytes = (s: LiveState): number => new TextEncoder().encode(JSON.stringify(s)).byteLength;
 
 function fitted(s: LiveState): LiveState {
-  for (const k of ["t", "h", "n"] as const) {
+  for (const k of ["r", "t", "h", "n"] as const) {
     while (bytes(s) > MAX_LIVE_PLAIN) {
       const len = Array.from(s[k] ?? "").length;
       if (len <= 2) break;
@@ -66,7 +68,7 @@ function fitted(s: LiveState): LiveState {
   return s;
 }
 
-export function liveState(x: { name: string; face: string; color?: string | null; task?: string | null; since: number; title: string }): LiveState {
+export function liveState(x: { name: string; face: string; color?: string | null; task?: string | null; since: number; title: string; needs?: number | null; line?: string | null }): LiveState {
   return fitted({
     v: 1,
     n: cut(x.name, LIVE_LIMITS.n),
@@ -75,6 +77,8 @@ export function liveState(x: { name: string; face: string; color?: string | null
     ...(x.task ? { t: cut(x.task, LIVE_LIMITS.t) } : {}),
     s: Math.floor(x.since),
     h: cut(x.title, LIVE_LIMITS.h),
+    ...(x.needs ? { w: Math.min(99, Math.floor(x.needs)) } : {}),
+    ...(x.line ? { r: cut(x.line, LIVE_LIMITS.r) } : {}),
   });
 }
 

@@ -216,7 +216,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const current = (seat: Seat): boolean => !stopped && seats.get(seat.key) === seat;
 
-  const { scheduleWake, stateOf, sessionOf, wakeable } = seatWakes({
+  const { scheduleWake, stateOf, viewOf, sessionOf, wakeable } = seatWakes({
     dir,
     wakeDelayMs: opts.wakeDelayMs ?? WAKE_DELAY_MS,
     wakeGapMs: opts.wakeGapMs ?? WAKE_GAP_MS,
@@ -589,8 +589,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       seat.clock = clockFor(seat);
       seat.live = new LiveBlobs(
         relayLiveIo(ch, async () => {
-          const state = await stateOf(seat);
-          return state ? liveAbout(state, agent, alias) : null;
+          const view = await viewOf(seat);
+          return view ? liveAbout(view.state, agent, alias, view.messages) : null;
         }),
       );
       seat.docs = followDocs(

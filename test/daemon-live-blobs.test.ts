@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
-import { openLive, type LiveState } from "@kiwi/core/live.ts";
-import type { Activity } from "@kiwi/core/protocol.ts";
+import { liveState, openLive, type LiveState } from "@kiwi/core/live.ts";
+import type { Activity, Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState } from "@kiwi/core/state/types.ts";
 import { LIVE_ABSENT_MS, LIVE_CHECK_MS, LIVE_IDLE_MS, LIVE_REFRESH_MS, liveAbout, LiveBlobs, relayLiveIo, type LiveAbout } from "../src/daemon/live-blobs.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -136,10 +136,42 @@ describe("an agent's live blob", () => {
         [52, { id: 52, title: "Relay: Live Activity pushes", owner: "tender-marten", state: "doing", updatedAt: 3_000, clock: { key: "tender-marten|work|", seq: 2, at: 5_000 } }],
         [60, { id: 60, title: "Parked", owner: "tender-marten", state: "doing", updatedAt: 9_500, clock: { key: "~none", seq: 3, at: 9_000 } }],
       ]),
+      openAsks: [],
+      placeOf: new Map(),
     } as unknown as ChannelState;
     expect(liveAbout(state, "tender-marten", "channels")).toEqual({ name: "builder-one", face: "builder", color: "green", task: "T52 Relay: Live Activity pushes", since: 5_000, title: "channels" });
-    expect(liveAbout(state, "tidy-gazelle", "channels")).toEqual({ name: "tidy-gazelle", face: "lead", color: null, task: null, since: null, title: "channels" });
+    expect(liveAbout(state, "tidy-gazelle", "channels")).toEqual({ name: "tidy-gazelle", face: "lead", color: null, task: null, since: null, title: "channels", needs: 0, line: null });
     expect(liveAbout(state, "nobody", "channels")).toBeNull();
+  });
+
+  test("the lead's blob carries its last public line, never one from a direct thread", () => {
+    const state = {
+      lead: "tidy-gazelle",
+      members: new Map([["tidy-gazelle", { name: "tidy-gazelle", persona: { role: "lead" } }]]),
+      tasks: new Map(),
+      openAsks: [],
+      placeOf: new Map([[3, { kind: "dm", with: ["jow", "tidy-gazelle"] }]]),
+    } as unknown as ChannelState;
+    const said = (seq: number, body: string, extra: object = {}) => ({ seq, from: "tidy-gazelle", kind: "msg", body, ts: seq, ...extra }) as unknown as Message;
+    const messages = [
+      said(1, "older"),
+      said(2, "**Got it:** the island shows the channel, `3 working`\n- **Now:** T1383"),
+      said(3, "a private word"),
+      said(4, "another private word", { dm: true }),
+      { seq: 5, from: "tender-marten", kind: "msg", body: "not the lead", ts: 5 } as unknown as Message,
+    ];
+    expect(liveAbout(state, "tidy-gazelle", "channels", messages)).toMatchObject({ needs: 0, line: "Got it: the island shows the channel, 3 working" });
+  });
+
+  test("a blob's needs count and lead line are optional, and the line is cut first when the blob runs long", () => {
+    const base = { name: "tidy-gazelle", face: "lead", since: 1_000, title: "channels" };
+    expect(liveState(base)).toEqual({ v: 1, n: "tidy-gazelle", f: "lead", s: 1_000, h: "channels" });
+    expect(liveState({ ...base, needs: 2, line: "Where it stands" })).toEqual({ v: 1, n: "tidy-gazelle", f: "lead", s: 1_000, h: "channels", w: 2, r: "Where it stands" });
+    const long = liveState({ ...base, task: "T".repeat(64), title: "c".repeat(40), needs: 3, line: "界".repeat(90) });
+    expect(new TextEncoder().encode(JSON.stringify(long)).byteLength).toBeLessThanOrEqual(340);
+    expect(long.t).toBe("T".repeat(64));
+    expect(long.h).toBe("c".repeat(40));
+    expect(long.r!.endsWith("…")).toBe(true);
   });
 });
 
