@@ -18,10 +18,16 @@ async function invite() {
 
 const swapped = (token: string, at: number) => `${token.slice(0, at)}${token[at] === "A" ? "B" : "A"}${token.slice(at + 1)}`;
 const never = Number.MAX_SAFE_INTEGER;
+const SIGNED = {
+  code: "mc2-7-_v7-_v7-_v7-_v7-_v7w-VTcFxOB8jOiLzSWR",
+  token:
+    "eyJyb29tIjoiZWZlZmVmZWZlZmVmZWZlZmVmZWZlZmVmZWZlZmVmZWYiLCJwaW4iOnsiaWQiOiJidWlsZGVyIiwibmFtZSI6IkJ1aWxkZXIiLCJoYXNoIjoiZDdkNTUyNjFjNWZhNjhhMGZiYTdmNmNhOTExNDAwZDAifSwicGsiOiI5eWRqSHVxeWFQNTRSaDBSODh2Z0VFSUg1Q3JiY0VwY2k1Z0ZySFZiX0FRIiwic2lnIjoiajZMTng3N29mOVBtYVJmbG1WTEhxcVJVMWpVTjRudXZvRUY4c0plQk5oRlpfWG5TdHpFemdwalEySDl5eVM2UTlrTHJGNC0yUEpzLW5tTEJTdF95Q2cifQ",
+};
 
 describe("an invite token with one character changed in the copy", () => {
   test("a change inside the signature is put back, naming the character", async () => {
-    const { token, fits } = await invite();
+    const { token, code } = SIGNED;
+    const fits = (t: string) => pinFits(t, decodeJoinCode(code));
     const at = token.length - 20;
     const bent = swapped(token, at);
     expect((await fits(bent)).kind).toBe("invalid");

@@ -110,6 +110,7 @@ struct TaskView: Codable, Sendable, Hashable, Identifiable {
     let createdAt: Double
     let last: String?
     let archived: Bool
+    var since: Double? = nil
 
     var updated: Date { Date(timeIntervalSince1970: updatedAt / 1000) }
 }
@@ -229,6 +230,7 @@ struct StandView: Codable, Sendable, Hashable {
 
 struct RoomView: Codable, Sendable, Hashable, Identifiable {
     let code: String
+    var roomId: String? = nil
     let title: String
     let icon: IconView?
     let me: String

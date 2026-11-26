@@ -213,6 +213,7 @@
     <string name="allow_once">한 번 허용</string>
     <string name="deny">거부</string>
     <string name="let_in">입장 허용</string>
+    <string name="turn_away">거절</string>
     <string name="only_can_allow">%1$s만 허용할 수 있습니다</string>
     <string name="you_can_deny">거부할 수 있습니다</string>
     <string name="join_pinned">성격이 지정된 초대입니다. 컴퓨터에서 입장을 허용하세요</string>

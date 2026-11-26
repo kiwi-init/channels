@@ -358,6 +358,17 @@ export class Room {
     }
   }
 
+  async turnAway(id: string): Promise<void> {
+    if (!this.isOwner) throw new Error("only the channel's owner answers join requests");
+    const req = this.requests.find((r) => r.id === id);
+    if (!req) throw new Error("that join request isn't waiting any more");
+    try {
+      await this.keyring.call(this.code, "deny", req.id);
+    } finally {
+      await this.refreshRequests();
+    }
+  }
+
   async approveSpec(ask: number, v: number): Promise<number> {
     const spec = this.state?.specs.get(ask);
     if (!spec) throw new Error(`#${ask} has no spec`);

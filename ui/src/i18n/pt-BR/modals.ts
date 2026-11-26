@@ -257,4 +257,7 @@ export default {
   "modals.profile.remove.sub.agent": "Perde o acesso às mensagens deste canal daqui em diante.",
   "modals.profile.remove.sub.person": "Perde o acesso às mensagens deste canal daqui em diante.",
   "modals.profile.remove": "Remover",
+  "modals.whatsnew.title": "Novidades",
+  "modals.whatsnew.sub": "Novo no Channels. Ative o que quiser experimentar.",
+  "modals.whatsnew.done": "Pronto",
 } satisfies Catalog

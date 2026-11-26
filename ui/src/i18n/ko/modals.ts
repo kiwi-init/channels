@@ -256,4 +256,7 @@ export default {
   "modals.profile.remove.sub.agent": "이제부터 이 채널의 메시지에 접근할 수 없습니다.",
   "modals.profile.remove.sub.person": "이제부터 이 채널의 메시지에 접근할 수 없습니다.",
   "modals.profile.remove": "제거",
+  "modals.whatsnew.title": "새 기능",
+  "modals.whatsnew.sub": "Channels의 새 기능입니다. 써 보고 싶은 기능을 켜세요.",
+  "modals.whatsnew.done": "완료",
 } satisfies Catalog

@@ -43,13 +43,17 @@ export type Ask =
   | { op: "sendBack"; code: string; task: number; why: string }
   | { op: "allow"; code: string; id: string; allow: boolean }
   | { op: "letIn"; code: string; id: string }
+  | { op: "turnAway"; code: string; id: string }
   | { op: "approveSpec"; code: string; ask: number; v: number }
   | { op: "askReport"; code: string; place: string }
   | { op: "open"; code: string; place: string }
   | { op: "marks"; code: string; marks: Record<string, number>; write: boolean }
   | { op: "nudge" }
   | { op: "push"; token: string; sandbox: boolean }
-  | { op: "signOut"; relay: string };
+  | { op: "signOut"; relay: string }
+  | { op: "liveToken"; start?: string; update?: string; room?: string; sandbox: boolean }
+  | { op: "liveKeys" }
+  | { op: "liveOff" };
 
 export interface Picture {
   name: string;
@@ -134,6 +138,7 @@ export interface TaskView {
   createdAt: number;
   last: string | null;
   archived: boolean;
+  since: number | null;
 }
 
 export interface AskView {
@@ -218,6 +223,7 @@ export interface StandView {
 
 export interface RoomView {
   code: string;
+  roomId: string | null;
   title: string;
   icon: IconView;
   me: string;

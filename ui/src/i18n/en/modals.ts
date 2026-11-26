@@ -259,6 +259,9 @@ const words = {
   "modals.profile.remove.sub.agent": "It loses access to this channel's messages from now on.",
   "modals.profile.remove.sub.person": "They lose access to this channel's messages from now on.",
   "modals.profile.remove": "Remove",
+  "modals.whatsnew.title": "What's new",
+  "modals.whatsnew.sub": "New in Channels. Turn on what you'd like to try.",
+  "modals.whatsnew.done": "Done",
 } as const satisfies Record<string, Msg>
 
 addWords(words)
