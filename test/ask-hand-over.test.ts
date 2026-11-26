@@ -272,6 +272,13 @@ describe("ask-human from a personality without Ask people (T503)", () => {
     expect((await message(alone, sent.seq)).esc).toBe(true);
   });
 
+  test("an ask the channel refuses fails with the reason, instead of a number that opens nothing (#2678)", async () => {
+    const id = crypto.randomUUID();
+    const first = await run(otter.escalate("Ship it?", undefined, undefined, { choices: ["A: yes", "B: no"], id }));
+    expect((await message(owner, first.seq)).esc).toBe(true);
+    await expect(run(otter.escalate("Ship it?", undefined, undefined, { choices: ["A: yes", "B: no"], id }))).rejects.toThrow(`a copy of #${first.seq}, sent again`);
+  });
+
   test("an area goes on the decision the person gets, and its hand-over names the Builder (T505)", async () => {
     const handed = await run(wren.escalate("Count where?", undefined, undefined, { choices: ["A: after", "B: right"], area: "Tab strip" }));
     expect((await message(owner, handed.seq)).body).toContain("Area: Tab strip");

@@ -42,6 +42,7 @@ export {
   ownerOf,
   sameAuthor,
   seatsOf,
+  escalationTargets,
   sponsorsAgent,
   trustedOf,
 } from "./state/people.ts";

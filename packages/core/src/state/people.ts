@@ -24,6 +24,13 @@ export function seatsOf(state: Pick<ChannelState, "members">, person: string): s
   return [...state.members.values()].filter((x) => x.active && isPerson(x) && rootOf(x.name, state.members) === person).map((x) => x.name);
 }
 
+export function escalationTargets(state: Pick<ChannelState, "members">, agent: string): string[] {
+  const human = humanOf(state, agent);
+  const owner = ownerOf(state);
+  const rooted = (name: string | null) => (name ? seatsOf(state, rootOf(name, state.members)) : []);
+  return [...new Set([...rooted(human), ...rooted(owner)])];
+}
+
 export function sponsorsAgent(members: ReadonlyMap<string, Pick<Member, "name" | "pk" | "kind" | "owner" | "active" | "sponsor">>, by: string, agent: string): boolean {
   const seat = members.get(by);
   const target = members.get(agent);
