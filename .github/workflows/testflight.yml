@@ -48,6 +48,15 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             archive
+      - name: give the archive its entitlements
+        run: |
+          app="$RUNNER_TEMP/Channels.xcarchive/Products/Applications/Channels.app"
+          for entitlements in ios/Channels/Channels.entitlements ios/ChannelsLive/ChannelsLive.entitlements; do
+            sed -e 's/$(AppIdentifierPrefix)/57249C654W./g' -e 's/<string>development</<string>production</' "$entitlements" > "$RUNNER_TEMP/$(basename "$entitlements")"
+          done
+          find "$app" -depth \( -name '*.dylib' -o -name '*.framework' \) -exec codesign -f -s - {} \;
+          codesign -f -s - --entitlements "$RUNNER_TEMP/ChannelsLive.entitlements" "$app/PlugIns/ChannelsLive.appex"
+          codesign -f -s - --entitlements "$RUNNER_TEMP/Channels.entitlements" "$app"
       - name: sign in the cloud and ${{ env.DESTINATION }}
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -85,12 +94,13 @@ jobs:
           app=$(ls -d ipa/Payload/*.app)
           for bundle in "$app" "$app"/PlugIns/*.appex; do
             echo "== $bundle"
-            codesign -dv "$bundle" 2>&1 | grep -E "Authority=|TeamIdentifier="
+            codesign -dvv "$bundle" 2>&1 | grep -E "Authority=|TeamIdentifier="
             codesign -d --entitlements - --xml "$bundle" | plutil -p -
           done
           codesign -d --entitlements - --xml "$app" | plutil -p - | grep -q '"aps-environment" => "production"'
           codesign -d --entitlements - --xml "$app" | plutil -p - | grep -q 'com.kiwiinit.channels.live'
-          codesign -dv "$app" 2>&1 | grep -q "Authority=Apple Distribution"
+          codesign -d --entitlements - --xml "$app"/PlugIns/ChannelsLive.appex | plutil -p - | grep -q 'com.kiwiinit.channels.live'
+          codesign -dvv "$app" 2>&1 | grep -q "Authority=Apple Distribution"
       - name: forget the key
         if: always()
         run: rm -f "$RUNNER_TEMP/AuthKey.p8"
