@@ -27,6 +27,7 @@ struct MemberView: Codable, Sendable, Hashable, Identifiable {
     let mono: Bool
     let doing: [Int]
     var person: String? = nil
+    var picture: String? = nil
 
     var id: String { name }
     var isAgent: Bool { kind == "agent" }
