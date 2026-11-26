@@ -134,7 +134,7 @@ struct Conversation: View {
             .defaultScrollAnchor(.bottom)
             .ignoresSafeArea(.container, edges: .bottom)
             .onGeometryChange(for: CGFloat.self) {
-                $0.frame(in: .global).maxY + $0.safeAreaInsets.bottom
+                $0.frame(in: .global).maxY
             } action: {
                 feedBottom = $0
             }
