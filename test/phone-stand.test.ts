@@ -131,7 +131,18 @@ describe("pinching a chat asks the lead where things stand (T830)", () => {
   });
 
   test("the board picks a chat's tasks: all in #general, one in its thread, a person's in a direct chat", () => {
-    const t = (id: number, state: TaskView["state"], owner: string | null): TaskView => ({ id, title: `t${id}`, state, owner, review: null, updatedAt: 0, createdAt: 0, last: null, archived: false, since: null });
+    const t = (id: number, state: TaskView["state"], owner: string | null): TaskView => ({
+      id,
+      title: `t${id}`,
+      state,
+      owner,
+      review: null,
+      updatedAt: 0,
+      createdAt: 0,
+      last: null,
+      archived: false,
+      since: null,
+    });
     const tasks = [t(1, "doing", "dev"), t(2, "review", "lead"), t(3, "todo", null), t(4, "done", "dev")];
     expect(standBoard(tasks, { kind: "all" })).toEqual({ now: [1, 2], next: [3], done: [4] });
     expect(standBoard(tasks, { kind: "task", task: 2 })).toEqual({ now: [2], next: [], done: [] });
