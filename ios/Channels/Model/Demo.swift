@@ -12,6 +12,13 @@ enum Demo {
         return try JSONDecoder().decode(RoomView.self, from: moved)
     }
 
+    static func another(_ room: RoomView) -> RoomView {
+        RoomView(
+            code: "pilot", title: "pilot", icon: nil, me: room.me, isOwner: room.isOwner, connection: room.connection, gone: nil, error: nil, head: 0,
+            whole: true, hold: nil, charter: nil, lead: room.lead, members: room.members, messages: [], side: nil, sideKey: room.sideKey, tasks: [], asks: [],
+            reviews: [], last: nil, latest: nil, latestIn: "main", place: "main", places: [])
+    }
+
     private static func stamp(_ value: Any) -> Double? {
         guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
         let ms = number.doubleValue

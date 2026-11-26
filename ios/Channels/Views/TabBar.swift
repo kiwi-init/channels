@@ -270,7 +270,7 @@ private struct ListRow: View {
             }
             if let room = model.here {
                 if open {
-                    ChannelCard(room: room) { close() }
+                    ChannelCard { close() }
                         .melting("side", in: space, RoundedRectangle(cornerRadius: 30, style: .continuous))
                         .transition(.blurReplace)
                 } else {
@@ -318,93 +318,6 @@ private struct ListRow: View {
             swell = false
             withAnimation(Bar.spring(still)) { model.cardOpen = true }
         }
-    }
-}
-
-private struct ChannelCard: View {
-    let room: RoomView
-    let close: () -> Void
-    @Environment(AppModel.self) private var model
-
-    private var working: [MemberView] {
-        Array(room.members.filter { $0.isAgent && $0.working }.prefix(4))
-    }
-
-    private var said: String? {
-        guard let lead = room.lead, let key = room.sideKey, let last = room.placeView(key)?.last, last.from == lead else { return nil }
-        let words = last.plain.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
-        return words.isEmpty ? nil : words
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button {
-                Haptic.tap()
-                close()
-            } label: {
-                HStack(spacing: 10) {
-                    ChannelAvatar(room: room, size: 36)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(room.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(Tone.ink).lineLimit(1)
-                        if let line = room.status(of: "main") {
-                            Text(line).type(.meta).foregroundStyle(Tone.ink3).lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(Tone.ink3)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("channel-card")
-            .accessibilityLabel(room.title)
-            if let said, let lead = room.lead {
-                HStack(alignment: .top, spacing: 8) {
-                    Face(name: lead, member: room.member(lead), size: 22)
-                    Text(said).type(.ui).foregroundStyle(Tone.ink).lineLimit(3)
-                }
-            }
-            ForEach(working) { member in
-                HStack(spacing: 8) {
-                    Face(name: member.name, member: member, size: 22)
-                    Text(member.display).type(.ui, .semibold).foregroundStyle(Tone.ink).lineLimit(1)
-                    if let task = member.doing.first {
-                        Text(verbatim: "\(taskLabel(task)) \(room.tasks.first { $0.id == task }?.title ?? "")")
-                            .type(.meta)
-                            .foregroundStyle(Tone.ink3)
-                            .lineLimit(1)
-                    }
-                }
-            }
-            if let spot = room.leadSpot {
-                LeadDock(room: room, spot: spot, done: close)
-                    .padding(.horizontal, -12)
-                    .padding(.bottom, -6)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
-    }
-}
-
-private struct LeadDock: View {
-    let room: RoomView
-    let spot: Spot
-    let done: () -> Void
-    @Environment(AppModel.self) private var model
-    @State private var replyTo: MessageView?
-    @State private var answering: AskView?
-    @State private var sendingBack: ReviewView?
-    @FocusState private var typing: Bool
-
-    var body: some View {
-        Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing)
-            .onChange(of: model.pending[spot.id]?.count ?? 0) { old, now in
-                guard now > old else { return }
-                typing = false
-                done()
-            }
     }
 }
 

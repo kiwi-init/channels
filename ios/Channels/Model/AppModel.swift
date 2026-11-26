@@ -52,6 +52,8 @@ final class AppModel {
     var lastCode: String?
     var showYou = false
     var cardOpen = false
+    var cardCode: String?
+    var cardAim: [String: String] = [:]
     var lastTab: AppTab = .chats
     var barHeight: CGFloat = 0
     @ObservationIgnored var chats: [Spot: Compose] = [:]
@@ -614,6 +616,10 @@ final class AppModel {
             engine.demo = true
             demo = true
             rooms = [room.code: room]
+            if UserDefaults.standard.bool(forKey: "twoChannels") {
+                let other = Demo.another(room)
+                rooms[other.code] = other
+            }
             path = []
             tab = .chats
             phase = .ready

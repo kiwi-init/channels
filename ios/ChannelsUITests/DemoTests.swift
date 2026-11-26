@@ -204,6 +204,46 @@ final class DemoTests: XCTestCase {
     }
 
     @MainActor
+    func testChannelCardReachesAnyoneAnywhere() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demo", "YES", "-twoChannels", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let channel = app.buttons["channel"]
+        XCTAssertTrue(channel.waitForHittable(timeout: 15))
+        channel.tap()
+        let card = app.buttons["channel-card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5), "the channel grows into its card")
+        XCTAssertEqual(card.label, "channels-dev")
+        let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["aim-lead"].isSelected, "the lead is who the card messages first")
+        XCTAssertEqual(field.placeholderValue, "Message lead")
+
+        app.buttons["aim-dev"].tap()
+        XCTAssertTrue(app.buttons["aim-dev"].waitForSelected(timeout: 3), "a tap on a row aims the field at them")
+        XCTAssertFalse(app.buttons["aim-lead"].isSelected)
+        XCTAssertEqual(field.placeholderValue, "Message dev")
+        sleep(1)
+        add(shot(app, "card aimed at an agent"))
+
+        app.buttons["aim-general"].tap()
+        XCTAssertTrue(app.buttons["aim-general"].waitForSelected(timeout: 3))
+        XCTAssertEqual(field.placeholderValue, "Message #general")
+
+        card.swipeLeft()
+        let pilot = app.buttons.matching(NSPredicate(format: "identifier == 'channel-card' AND label == 'pilot'")).firstMatch
+        XCTAssertTrue(pilot.waitForExistence(timeout: 5), "a swipe turns the card to the next channel")
+        XCTAssertTrue(app.buttons["aim-lead"].waitForSelected(timeout: 3), "where it messages that channel's lead")
+        sleep(1)
+        add(shot(app, "card on the next channel"))
+
+        pilot.swipeRight()
+        let back = app.buttons.matching(NSPredicate(format: "identifier == 'channel-card' AND label == 'channels-dev'")).firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: 5), "and back")
+        XCTAssertTrue(app.buttons["aim-general"].waitForSelected(timeout: 3), "the first channel kept its aim")
+    }
+
+    @MainActor
     func testSampleOffersNoLinkAgain() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-demo", "YES", "-lockOff", "YES", "-language", "system", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]

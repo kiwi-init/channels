@@ -69,6 +69,7 @@ struct Dock: View {
     var typing: FocusState<Bool>.Binding
     var tabs = false
     var space: Namespace.ID?
+    var prompt: String?
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var still
     @State private var home: CGFloat = 0
@@ -326,6 +327,7 @@ struct Dock: View {
         if sendingBack != nil { return spoken("What to change") }
         if let replyTo { return spoken("Reply to \(room.display(replyTo.from))") }
         if let answering { return spoken("Answer \(room.display(answering.from))") }
+        if let prompt { return prompt }
         if let here, here.kind == "dm", let other = room.other(in: here) { return spoken("Message \(room.display(other))") }
         return spoken("Message")
     }
