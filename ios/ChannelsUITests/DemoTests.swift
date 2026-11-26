@@ -93,7 +93,10 @@ final class DemoTests: XCTestCase {
         sleep(1)
         XCTAssertFalse(needs.isHittable, "and the tabs melt into it")
         field.typeText("hi")
+        sleep(1)
         add(shot(app, "chat typing"))
+        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "typing, the newest item ends above the composer")
+        XCTAssertGreaterThan(newest.frame.maxY, field.frame.minY - 60, "and stays right above it, not scrolled away")
     }
 
     @MainActor
