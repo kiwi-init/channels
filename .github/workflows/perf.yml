@@ -314,13 +314,15 @@ jobs:
             *) echo "pss_seed is large or tiny, not $SEED"; exit 1 ;;
           esac
           mkdir -p "$RUNNER_TEMP/pss"
+          failed=""
           for run in $(seq 1 "$RUNS"); do
             while read -r tag build; do
               echo "::group::$tag, run $run"
-              xvfb-run -a -s "-screen 0 1280x800x24" bun scripts/perf-desktop-pss.ts "$build" --label "$tag" --json "$RUNNER_TEMP/pss/$tag-run$run.json"
+              xvfb-run -a -s "-screen 0 1280x800x24" bun scripts/perf-desktop-pss.ts "$build" --label "$tag" --json "$RUNNER_TEMP/pss/$tag-run$run.json" < /dev/null || failed="$failed $tag-run$run"
               echo "::endgroup::"
             done < "$RUNNER_TEMP/builds.txt"
           done
+          [ -z "$failed" ] || { echo "::error::these runs failed or had invalid samples:$failed"; exit 1; }
       - name: the report
         if: ${{ !cancelled() }}
         run: |
@@ -332,7 +334,7 @@ jobs:
             done
             echo
             for f in "$RUNNER_TEMP"/pss/*.json; do
-              jq -r --arg r "$(basename "$f" .json)" '"**\($r)** web drops: \([.webDrops[]? | "\(.from) → \(.to)"] | join(", ") | if . == "" then "none" else . end); restarts: \(.restarts // [] | length)"' "$f"
+              jq -r --arg r "$(basename "$f" .json)" '"**\($r)** web drops: \([.webDrops[]? | "\(.from) → \(.to)"] | join(", ") | if . == "" then "none" else . end); restarts: \(.restarts // [] | length); invalid samples: \(.invalidSamples // [] | length)"' "$f"
             done
           } | tee -a "$GITHUB_STEP_SUMMARY"
       - if: ${{ !cancelled() }}

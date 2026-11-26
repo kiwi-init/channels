@@ -10,6 +10,7 @@ import { loadConfig } from "../src/config.ts";
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
 import { startLocalRelay } from "./local-relay.ts";
+import { changes, GROUPS, sampleOf, settings, stats, webDrops, type Group, type ProcRead, type Sample, type Settings } from "./perf-pss-samples.ts";
 import { cliIn, PERF_BASE_LARGE, say, SEEDED, seedChannel, TEXTS } from "./perf-seed.ts";
 
 if (process.argv.includes("--help") || !process.argv[2]) {
@@ -37,18 +38,14 @@ const flag = (name: string) => {
 };
 const LABEL = flag("--label") ?? "unlabeled";
 const OUT = flag("--json");
-const num = (name: string, fallback: number) => {
-  const n = Number(process.env[name] ?? fallback);
-  if (!Number.isFinite(n) || n < 0) throw new Error(`${name} must be a number of at least 0, not ${process.env[name]}`);
-  return n;
-};
-const AGENTS = num("PERF_AGENTS", 10);
-const WARM_MIN = num("PSS_WARM_MIN", 5);
-const LIVE_MIN = num("PSS_LIVE_MIN", 40);
-const IDLE_MIN = num("PSS_IDLE_MIN", 10);
-const EVERY_SEC = num("PSS_EVERY_SEC", 30);
-const MESSAGE_SEC = num("PSS_MESSAGE_SEC", 6);
-const SEED = { tasks: num("PERF_TASKS", PERF_BASE_LARGE.tasks), messages: num("PERF_MESSAGES", PERF_BASE_LARGE.messages), taskNotes: num("PERF_TASK_NOTES", PERF_BASE_LARGE.taskNotes) };
+let SET: Settings;
+try {
+  SET = settings(process.env, PERF_BASE_LARGE);
+} catch (e) {
+  console.error(String(e instanceof Error ? e.message : e));
+  process.exit(2);
+}
+const { agents: AGENTS, warmMin: WARM_MIN, liveMin: LIVE_MIN, idleMin: IDLE_MIN, everySec: EVERY_SEC, messageSec: MESSAGE_SEC, seed: SEED } = SET;
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-perf-pss-"));
 const appKiwi = join(root, ".kiwi");
@@ -66,7 +63,10 @@ const readOr = (path: string, fallback = ""): string => {
     return fallback;
   }
 };
-const pssKb = (pid: number): number => Number(/^Pss:\s+(\d+)/m.exec(readOr(`/proc/${pid}/smaps_rollup`))?.[1] ?? 0);
+const pssKb = (pid: number): number | null => {
+  const kb = /^Pss:\s+(\d+)/m.exec(readOr(`/proc/${pid}/smaps_rollup`))?.[1];
+  return kb === undefined ? null : Number(kb);
+};
 const argsOf = (pid: number): string[] => readOr(`/proc/${pid}/cmdline`).split("\0").filter(Boolean);
 const envOf = (pid: number, name: string): string | undefined =>
   readOr(`/proc/${pid}/environ`)
@@ -84,7 +84,6 @@ const TICKS = Number(execFileSync("getconf", ["CLK_TCK"], { encoding: "utf8" }).
 const BOOT = Number(/^btime (\d+)/m.exec(readOr("/proc/stat"))?.[1] ?? 0);
 const startedAt = (ticks: number) => new Date((BOOT + ticks / TICKS) * 1000).toISOString();
 
-type Group = "web" | "network" | "shell" | "daemon" | "other";
 interface Proc {
   pid: number;
   group: Group;
@@ -212,13 +211,6 @@ async function letAgentsIn(d: Driver, waiting: () => boolean): Promise<void> {
   await run("the general room", 30_000, () => d.evaluate(general, null, probe));
 }
 
-interface Sample {
-  at: string;
-  phase: "live" | "idle";
-  pss: Record<Group, number>;
-  pids: Record<Group, number[]>;
-}
-
 const { relay, port } = await startLocalRelay(join(root, "relay"), null, { rateLimits: false });
 const RELAY = `http://127.0.0.1:${port}`;
 const socket = join(root, "driver.sock");
@@ -296,10 +288,9 @@ try {
 
   const samples: Sample[] = [];
   const restarts: string[] = [];
-  let was: Record<Group, string> | null = null;
   let peak = -1;
-  const total = Math.round(((LIVE_MIN + IDLE_MIN) * 60) / EVERY_SEC);
-  const liveSamples = Math.round((LIVE_MIN * 60) / EVERY_SEC);
+  const total = SET.totalSamples;
+  const liveSamples = SET.liveSamples;
   for (let i = 0; i < total; i++) {
     const tick = Date.now() + EVERY_SEC * 1000;
     if (i === liveSamples) {
@@ -307,49 +298,42 @@ try {
       await poster;
       log(`idle: ${IDLE_MIN} min, nothing posted (${livePosted} live messages)`);
     }
-    const now = processes(session);
-    const groups: Group[] = ["web", "network", "shell", "daemon", "other"];
-    const pids = Object.fromEntries(
-      groups.map((g) => [
-        g,
-        now
-          .filter((p) => p.group === g)
-          .map((p) => p.pid)
-          .sort((a, b) => a - b),
-      ]),
-    ) as Record<Group, number[]>;
-    const pss = Object.fromEntries(groups.map((g) => [g, mib(pids[g].reduce((s, pid) => s + pssKb(pid), 0))])) as Record<Group, number>;
-    const at = new Date().toISOString();
-    const key = Object.fromEntries(groups.map((g) => [g, pids[g].join(" ")])) as Record<Group, string>;
-    if (was) for (const g of groups) if (key[g] !== was[g]) restarts.push(`${at} ${g}: [${was[g]}] became [${key[g]}]`);
-    was = key;
-    samples.push({ at, phase: i < liveSamples ? "live" : "idle", pss, pids });
-    if (pss.web > peak) {
-      peak = pss.web;
-      report.mappingsAtPeak = { at, mib: pss.web, ...Object.fromEntries(pids.web.map((pid) => [pid, mappings(pid)])) };
+    const reads: Partial<Record<Group, ProcRead[]>> = {};
+    for (const p of processes(session)) (reads[p.group] ??= []).push({ pid: p.pid, started: p.started, kb: pssKb(p.pid) });
+    const sample = sampleOf(new Date().toISOString(), i < liveSamples ? "live" : "idle", reads);
+    const before = samples.at(-1);
+    if (before) restarts.push(...changes(before, sample));
+    samples.push(sample);
+    if (sample.valid && sample.pss.web! > peak) {
+      peak = sample.pss.web!;
+      report.mappingsAtPeak = { at: sample.at, mib: peak, ...Object.fromEntries(sample.procs.web.map((r) => [r.pid, mappings(r.pid)])) };
     }
-    log(`[${i + 1}/${total}] ${groups.map((g) => `${g} ${pss[g]}`).join("  ")} MiB`);
+    log(`[${i + 1}/${total}] ${GROUPS.map((g) => `${g} ${sample.pss[g] ?? "?"}`).join("  ")} MiB${sample.valid ? "" : `  INVALID: ${sample.problems.join("; ")}`}`);
     await later(Math.max(0, tick - Date.now()));
   }
   posting = false;
   await poster;
 
-  const stats = (xs: number[]) => {
-    const s = [...xs].sort((a, b) => a - b);
-    return { min: s[0] ?? 0, median: s.length ? (s.length % 2 ? s[(s.length - 1) / 2]! : Math.round((s[s.length / 2 - 1]! + s[s.length / 2]!) / 2)) : 0, max: s.at(-1) ?? 0 };
-  };
-  const series = samples.map((s) => s.pss.web);
-  const drops = series.flatMap((v, i) => (i && series[i - 1]! - v >= 300 ? [{ at: samples[i]!.at, from: series[i - 1]!, to: v }] : []));
+  const valid = samples.filter((x) => x.valid);
+  const invalid = samples.filter((x) => !x.valid).map((x) => `${x.at} ${x.problems.join("; ")}`);
+  const series = samples.map((x) => x.pss.web);
+  const drops = webDrops(samples);
   report.workload = { ...(report.workload as object), livePosted };
-  report.perProcessMiB = Object.fromEntries((["web", "network", "shell", "daemon", "other"] as Group[]).map((g) => [g, stats(samples.map((s) => s.pss[g]))]));
+  report.perProcessMiB = Object.fromEntries(GROUPS.map((g) => [g, stats(valid.map((x) => x.pss[g]!))]));
+  report.validSamples = valid.length;
+  report.invalidSamples = invalid;
   report.webDrops = drops;
   report.webSeries = series;
   report.restarts = restarts;
   report.samples = samples;
   console.log(`\n${LABEL}: MiB PSS (min / median / max)`);
-  for (const [g, s] of Object.entries(report.perProcessMiB as Record<string, { min: number; median: number; max: number }>)) console.log(`  ${g.padEnd(8)} ${s.min} / ${s.median} / ${s.max}`);
+  for (const [g, x] of Object.entries(report.perProcessMiB as Record<string, ReturnType<typeof stats>>)) console.log(`  ${g.padEnd(8)} ${x ? `${x.min} / ${x.median} / ${x.max}` : "no valid sample"}`);
   console.log(`  web drops of 300 MiB or more: ${drops.map((x) => `${x.from} → ${x.to} at ${x.at.slice(11, 19)}`).join(", ") || "none"}`);
   if (restarts.length) console.log(`  restarts: ${restarts.join("; ")}`);
+  if (invalid.length) {
+    console.error(`  ${invalid.length} of ${samples.length} samples are invalid and left out of the numbers: ${invalid.join("; ")}`);
+    process.exitCode = 1;
+  }
 } finally {
   posting = false;
   if (OUT) writeFileSync(OUT, `${JSON.stringify(report, null, 2)}\n`);
