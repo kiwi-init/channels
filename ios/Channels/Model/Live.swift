@@ -1,5 +1,6 @@
 import ActivityKit
 import Foundation
+import UIKit
 
 typealias AgentsLiveActivity = ActivityKit.Activity<AgentsActivity>
 
@@ -29,6 +30,8 @@ final class LiveAgents {
     private var ending: [String: Task<Void, Never>] = [:]
     private var watching = false
     private var watched: Set<String> = []
+    private var marked: [String: LiveOpen.Mark] = [:]
+    private var thumbs: [String: (key: String, data: Data)] = [:]
     private(set) var startToken: String?
     var told: ((Token) -> Void)?
 
@@ -46,6 +49,43 @@ final class LiveAgents {
         }
     }
 
+    static func state(_ room: RoomView) -> AgentsActivity.ContentState {
+        AgentsActivity.ContentState(agents: agents(room), needs: room.asks.count + room.reviews.count + room.open.count, line: line(room))
+    }
+
+    static func line(_ room: RoomView) -> String? {
+        guard let lead = room.lead else { return nil }
+        let said = room.messages.last { $0.from == lead && !$0.event } ?? room.latest.flatMap { $0.from == lead && !$0.event ? $0 : nil }
+        let first = said?.plain.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
+        return first.map { String($0.prefix(90)) }
+    }
+
+    private func mark(_ room: RoomView) -> LiveOpen.Mark {
+        var mark = LiveOpen.Mark(letter: room.title.prefix(1).uppercased(), rgb: Palette.fills[Palette.tint(for: room.code)] ?? 0x8e8e93)
+        guard room.icon?.kind == "image", let data = room.icon?.data else { return mark }
+        let key = "\(data.count)|\(data.suffix(32))"
+        if let hit = thumbs[room.code], hit.key == key {
+            mark.picture = hit.data
+        } else if let image = Icons.picture(room), let small = Self.thumb(image) {
+            thumbs[room.code] = (key, small)
+            mark.picture = small
+        }
+        return mark
+    }
+
+    private static func thumb(_ image: UIImage) -> Data? {
+        let side: CGFloat = 96
+        guard image.size.width > 0, image.size.height > 0 else { return nil }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let scale = max(side / image.size.width, side / image.size.height)
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let out = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
+            image.draw(in: CGRect(x: (side - size.width) / 2, y: (side - size.height) / 2, width: size.width, height: size.height))
+        }
+        return out.jpegData(compressionQuality: 0.8)
+    }
+
     private static func current(_ m: MemberView, _ room: RoomView) -> TaskView? {
         let doing = room.tasks.filter { m.doing.contains($0.id) && $0.state == "doing" }
         let started: (TaskView) -> Double = { $0.since ?? 0 }
@@ -55,21 +95,27 @@ final class LiveAgents {
     func follow(_ rooms: [String: RoomView]) {
         guard !UserDefaults.standard.bool(forKey: Self.offKey), ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         var shown = Dictionary(AgentsLiveActivity.activities.map { ($0.attributes.channel, $0) }, uniquingKeysWith: { first, _ in first })
+        var marks: [String: LiveOpen.Mark] = [:]
         for room in rooms.values where room.gone == nil {
             guard let key = room.roomId else { continue }
-            let agents = Self.agents(room)
+            marks[key] = mark(room)
+            let state = Self.state(room)
             if let activity = shown.removeValue(forKey: key) {
-                if agents.isEmpty {
+                if state.agents.isEmpty {
                     end(activity, key)
                 } else {
                     ending.removeValue(forKey: key)?.cancel()
-                    update(activity, agents)
+                    update(activity, state)
                 }
-            } else if !agents.isEmpty {
-                start(AgentsActivity(channel: key, title: room.title), agents)
+            } else if !state.agents.isEmpty {
+                start(AgentsActivity(channel: key, title: room.title), state)
             }
         }
         for (key, activity) in shown { end(activity, key) }
+        if marks != marked {
+            marked = marks
+            LiveOpen.save(marks: marks)
+        }
     }
 
     func stop() {
@@ -125,22 +171,22 @@ final class LiveAgents {
         rooms.values.first { $0.roomId == key }?.code
     }
 
-    private func content(_ agents: [AgentsActivity.Agent]) -> ActivityContent<AgentsActivity.ContentState> {
-        ActivityContent(state: AgentsActivity.ContentState(agents: agents), staleDate: .now + Self.stale)
+    private func content(_ state: AgentsActivity.ContentState) -> ActivityContent<AgentsActivity.ContentState> {
+        ActivityContent(state: state, staleDate: .now + Self.stale)
     }
 
-    private func start(_ attributes: AgentsActivity, _ agents: [AgentsActivity.Agent]) {
+    private func start(_ attributes: AgentsActivity, _ state: AgentsActivity.ContentState) {
         do {
-            let activity = try AgentsLiveActivity.request(attributes: attributes, content: content(agents), pushType: .token)
+            let activity = try AgentsLiveActivity.request(attributes: attributes, content: content(state), pushType: .token)
             if watching { watch(activity.id, attributes.channel) }
         } catch {
             Trouble.note("live: couldn't start", error)
         }
     }
 
-    private func update(_ activity: AgentsLiveActivity, _ agents: [AgentsActivity.Agent]) {
-        guard activity.content.state.agents != agents else { return }
-        let next = content(agents)
+    private func update(_ activity: AgentsLiveActivity, _ state: AgentsActivity.ContentState) {
+        guard activity.content.state != state else { return }
+        let next = content(state)
         let id = activity.id
         Task.detached { await Self.find(id)?.update(next) }
     }

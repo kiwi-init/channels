@@ -27,6 +27,8 @@ struct Row: Encodable {
 struct Out: Encodable {
     let agents: [Row]
     let title: String
+    let needs: Int
+    let line: String
     let elsewhere: Int
 }
 
@@ -36,5 +38,5 @@ let elsewhere = LiveOpen.open(vector.sealed, room: "another-room-entirely", keys
 let rows = opened.agents.map { a in
     Row(name: a.name, face: a.face, color: a.color.map { Int($0) } ?? -1, task: a.task ?? "", since: a.since?.timeIntervalSince1970 ?? -1)
 }
-let out = Out(agents: rows, title: opened.title ?? "", elsewhere: elsewhere.agents.count)
+let out = Out(agents: rows, title: opened.title ?? "", needs: opened.needs ?? -1, line: opened.line ?? "", elsewhere: elsewhere.agents.count)
 print(String(decoding: try JSONEncoder().encode(out), as: UTF8.self))

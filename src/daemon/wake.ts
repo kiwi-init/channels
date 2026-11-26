@@ -3,6 +3,7 @@ import { appendFileSync, renameSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { loadConfig, type Config, type WakeHook } from "../config.ts";
 import { pendingDocWakes } from "../config/doc-wakes.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
 import { commandOf, findOnPath, runnable } from "../harness-bin.ts";
 import { seatHeldAway } from "../hold.ts";
@@ -117,6 +118,7 @@ interface WakeContext {
 export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, wakeTakeMs, stopped, current }: WakeContext): {
   scheduleWake: (seat: Seat, delay?: number) => void;
   stateOf: (seat: Seat) => Promise<ChannelState | null>;
+  viewOf: (seat: Seat) => Promise<{ state: ChannelState; messages: Message[] } | null>;
   sessionOf: (seat: Seat) => Promise<Session | null>;
   wakeable: (seat: Seat) => Promise<boolean>;
 } {
@@ -138,12 +140,14 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, wake
 
   const wakingDocs = (seat: Seat): number => pendingDocWakes(seat.alias, seat.agent).filter((w) => !seat.clock?.holds(w.block)).length;
 
-  const stateOf = async (seat: Seat): Promise<ChannelState | null> => {
+  const viewOf = async (seat: Seat): Promise<{ state: ChannelState; messages: Message[] } | null> => {
     const session = await sessionOf(seat);
     if (!session) return null;
     const { runAgent } = await import("../agent.ts");
-    return (await runAgent(session.state())).state;
+    return await runAgent(session.state());
   };
+
+  const stateOf = async (seat: Seat): Promise<ChannelState | null> => (await viewOf(seat))?.state ?? null;
 
   const unreadFor = async (seat: Seat): Promise<{ unread: number; cursor: number; seqs: number[] } | { unread: 0 }> => {
     const session = await sessionOf(seat);
@@ -420,5 +424,5 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, wake
     }
   };
 
-  return { scheduleWake, stateOf, sessionOf, wakeable: async (seat) => (await commandPath(seat)) !== null };
+  return { scheduleWake, stateOf, viewOf, sessionOf, wakeable: async (seat) => (await commandPath(seat)) !== null };
 }
