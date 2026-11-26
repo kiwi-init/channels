@@ -23,32 +23,34 @@ struct ConversationScreen: View {
     var body: some View {
         Group {
             if let room = model.shown(spot) {
-                ZStack {
+                Conversation(
+                    room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
+                    reviews: reviews(room), needs: needs(room), worker: worker(room)
+                ) { ask in
+                    answer(ask)
+                } sendBack: { review in
+                    sendBack(review)
+                }
+                .id(spot.id)
+                .overlay(alignment: .bottomTrailing) {
+                    if !follow.atBottom {
+                        JumpButton(follow: follow) { follow.jumps += 1 }
+                            .padding(.trailing, 16)
+                            .padding(.bottom, 4)
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    }
+                }
+                .animation(.snappy(duration: 0.25), value: follow.atBottom)
+                .modifier(ZoomOut(zoom: zoom))
+                .allowsHitTesting(!zoom.zoomed)
+                .accessibilityHidden(zoom.zoomed)
+                .accessibilityAction(named: Text("Where things stand")) { zoom.set(true, still: still) }
+                .background {
                     if zoom.active {
                         Tone.raised.ignoresSafeArea()
                     }
-                    Conversation(
-                        room: room, replyTo: $replyTo, position: $position, follow: $follow, typing: $typing, elsewhere: spot.general ? room.elsewhere() : [],
-                        reviews: reviews(room), needs: needs(room), worker: worker(room)
-                    ) { ask in
-                        answer(ask)
-                    } sendBack: { review in
-                        sendBack(review)
-                    }
-                    .id(spot.id)
-                    .overlay(alignment: .bottomTrailing) {
-                        if !follow.atBottom {
-                            JumpButton(follow: follow) { follow.jumps += 1 }
-                                .padding(.trailing, 16)
-                                .padding(.bottom, 4)
-                                .transition(.scale(scale: 0.5).combined(with: .opacity))
-                        }
-                    }
-                    .animation(.snappy(duration: 0.25), value: follow.atBottom)
-                    .modifier(ZoomOut(zoom: zoom))
-                    .allowsHitTesting(!zoom.zoomed)
-                    .accessibilityHidden(zoom.zoomed)
-                    .accessibilityAction(named: Text("Where things stand")) { zoom.set(true, still: still) }
+                }
+                .overlay {
                     if zoom.active, let stand = room.stand {
                         let wide = standSpot(room)
                         StandPage(room: room, stand: stand, waiting: needs(room, at: wide).count + asks(room, at: wide).count + reviews(room, at: wide).count) { target in
