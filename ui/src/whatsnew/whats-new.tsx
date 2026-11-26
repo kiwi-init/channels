@@ -6,6 +6,7 @@ import { Toggle } from "~/kit/form"
 import { Modal } from "~/kit/modal"
 import { markSeen, setFeature, useFeature } from "~/whatsnew/features"
 import type { Note } from "~/whatsnew/notes"
+import { TypesafeKeyField } from "~/whatsnew/typesafe-key"
 
 function Item({ note }: { note: Note }) {
   const on = useFeature(note.id)
@@ -14,6 +15,7 @@ function Item({ note }: { note: Note }) {
       <div className="whatsnew-text">
         <h3>{note.title}</h3>
         <p>{note.body}</p>
+        {on && note.needs === "typesafe-key" && <TypesafeKeyField />}
       </div>
       {note.toggle && <Toggle label={note.title} on={on} onChange={(next) => setFeature(note.id, next)} />}
     </li>

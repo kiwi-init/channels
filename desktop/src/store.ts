@@ -22,6 +22,8 @@ export interface StoreFile {
   device?: Identity;
   deviceLinks?: DeviceLink[];
   enrolled?: PublicPerson;
+  /** The person's own TypeSafe key, for search by meaning. Never in the snapshot the UI gets. */
+  typesafe?: { key: string };
 }
 
 export type VaultRead = { ok: true; file: Partial<StoreFile> | null; resave: boolean } | { ok: false; why: string; advice?: string };

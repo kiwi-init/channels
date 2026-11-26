@@ -1,3 +1,4 @@
+import "~/whatsnew/fresh"
 import { StrictMode, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import { createRoot } from "react-dom/client"
 

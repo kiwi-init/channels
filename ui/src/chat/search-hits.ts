@@ -4,9 +4,18 @@ import { preview } from "~/chat/preview"
 import type { Channel, Message, OlderHit, Task, Where } from "~/model"
 import { between, nickname } from "~/names"
 import { titleRank } from "~/tasks/title-rank"
-import { wordsPlain, wordsRaw } from "~/words"
+import { wordsPlain, wordsRaw, wrote } from "~/words"
 
-export type Hit = { kind: "task"; task: Task } | { kind: "message"; m: Message } | { kind: "older"; o: OlderHit } | { kind: "fetch" }
+export type Hit = { kind: "task"; task: Task } | { kind: "message"; m: Message } | { kind: "older"; o: OlderHit } | { kind: "fetch" } | { kind: "meaning" }
+
+export type MeaningPool = { items: { id: number; from: string; where: string; text: string }[]; hits: Map<number, Hit> }
+
+export const MEANING_SURE = 0.45
+export const MEANING_SHOWN = 8
+const MEANING_RECENT = 120
+const MEANING_MOST = 160
+const MEANING_TEXT = 600
+const LABEL = 80
 
 const TASKS = 8
 const MESSAGES = 50
@@ -67,6 +76,7 @@ export function hitKey(hit: Hit): string {
   if (hit.kind === "task") return `task-${hit.task.id}`
   if (hit.kind === "older") return `older-${hit.o.seq}`
   if (hit.kind === "fetch") return "fetch"
+  if (hit.kind === "meaning") return "meaning"
   return `message-${hit.m.seq}`
 }
 
@@ -80,4 +90,26 @@ export function whereLabel(channel: Pick<Channel, "rooms" | "nicknames">, where:
 export function hitText(text: string, wanted: string[]): string {
   const plain = preview(text)
   return snippet(marks(plain, wanted).some((s) => s.hit) ? plain : text, wanted)
+}
+
+export const hitSeq = (hit: Hit): number | null => (hit.kind === "message" ? hit.m.seq : hit.kind === "older" ? hit.o.seq : null)
+
+const label = (s: string): string => (s.trim() || "someone").slice(0, LABEL)
+
+export function meaningPool(channel: Pick<Channel, "messages" | "nicknames" | "rooms">, older: OlderHit[]): MeaningPool {
+  const items: MeaningPool["items"] = []
+  const hits = new Map<number, Hit>()
+  const add = (seq: number, from: string, where: Where, text: string, hit: Hit) => {
+    const said = text.replace(/\s+/g, " ").trim().slice(0, MEANING_TEXT)
+    if (!said || hits.has(seq) || items.length >= MEANING_MOST) return
+    items.push({ id: seq, from: label(nickname(channel, from)), where: label(whereLabel(channel, where)), text: said })
+    hits.set(seq, hit)
+  }
+  const recent = channel.messages
+    .filter((m) => !m.system && !m.pending && m.seq > 0)
+    .sort((a, b) => b.seq - a.seq)
+    .slice(0, MEANING_RECENT)
+  for (const m of recent) add(m.seq, m.from, m.where, wordsPlain(m.text, channel.nicknames), { kind: "message", m })
+  for (const o of older) add(o.seq, o.from, o.where, wordsPlain(wrote(o.text), channel.nicknames), { kind: "older", o })
+  return { items, hits }
 }

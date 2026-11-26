@@ -441,6 +441,12 @@ export interface KiwiBridge {
   /** A newer proper release: being downloaded, ready to restart into, or only available. */
   keysAtRest(): Promise<KeysAtRest>;
   wallpaperTints(dark: boolean): Promise<string[]>;
+  /** Search by meaning, with the person's own TypeSafe key: this computer asks Jev directly, best first. */
+  searchMeaning(ask: MeaningAsk): Promise<MeaningResult>;
+  /** Whether a TypeSafe key is saved, and its last four characters. The key itself never leaves the main process. */
+  typesafeKey(): Promise<TypesafeKey>;
+  /** Saves the person's TypeSafe key after one test call to TypeSafe, or removes it with null. */
+  setTypesafeKey(key: string | null): Promise<SetTypesafeKey>;
   wallpaperBackdrop(dark: boolean): Promise<string | null>;
   windowControl(action: "minimize" | "maximize" | "close"): Promise<void>;
   windowMaximized(): Promise<boolean>;
@@ -492,6 +498,25 @@ export interface KiwiBridge {
   machines(): Promise<MachineView[]>;
   settingsOn(machinePk: string): Promise<FromMachine<ComputerSettings>>;
 }
+
+export interface MeaningAsk {
+  query: string;
+  items: { id: number; from: string; where: string; text: string }[];
+}
+
+export interface MeaningHit {
+  id: number;
+  p: number;
+}
+
+export type MeaningResult = { hits: MeaningHit[] } | { failed: "no-key" | "key-refused" | "unreachable" };
+
+export interface TypesafeKey {
+  set: boolean;
+  ends: string | null;
+}
+
+export type SetTypesafeKey = { ok: true; key: TypesafeKey } | { ok: false; why: "malformed" | "refused" | "unreachable" };
 
 export interface KeysAtRest {
   sealed: boolean;

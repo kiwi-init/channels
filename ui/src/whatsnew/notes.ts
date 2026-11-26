@@ -3,11 +3,12 @@ export interface Note {
   title: string
   since: string | null
   toggle: boolean
+  needs: string | null
   body: string
 }
 
 const ID = /^[a-z0-9-]{1,40}$/
-const META = /^- (id|since|toggle): (.+)$/
+const META = /^- (id|since|toggle|needs): (.+)$/
 
 export function readNotes(md: string): Note[] {
   const out: Note[] = []
@@ -23,7 +24,7 @@ export function readNotes(md: string): Note[] {
     const id = meta.get("id") ?? ""
     const title = head.trim()
     if (!ID.test(id) || !title || out.some((n) => n.id === id)) continue
-    out.push({ id, title, since: meta.get("since") ?? null, toggle: meta.get("toggle") === "off", body: body.join("\n").replace(/\s+/g, " ").trim() })
+    out.push({ id, title, since: meta.get("since") ?? null, toggle: meta.get("toggle") === "off", needs: meta.get("needs") ?? null, body: body.join("\n").replace(/\s+/g, " ").trim() })
   }
   return out
 }

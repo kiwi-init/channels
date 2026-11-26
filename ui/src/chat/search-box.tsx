@@ -1,13 +1,16 @@
 import "~/i18n/en/chat-later"
-import { Download01Icon } from "@hugeicons/core-free-icons"
+import { AiSearch02Icon, Download01Icon } from "@hugeicons/core-free-icons"
 import { marks, terms } from "@kiwi/core/search-rank.ts"
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react"
 
 import "~/styles/search.css"
-import { hitKey, hitText, messageIndex, searchHits, whereLabel, type Hit } from "~/chat/search-hits"
+import { hitKey, hitSeq, hitText, MEANING_SHOWN, MEANING_SURE, meaningPool, messageIndex, searchHits, whereLabel, type Hit } from "~/chat/search-hits"
 import { t } from "~/i18n/i18n"
 import { cx, Dot, STATUS_WORDS } from "~/kit/bits"
 import { GlyphIcon, Icon } from "~/kit/icons"
+import { keysHint, mod } from "~/kit/keys"
+import { meaningCan, searchMeaning, useTypesafeKey } from "~/live/meaning"
+import { askWhatsNew, useFeature } from "~/whatsnew/features"
 import { ago } from "~/kit/time"
 import type { Channel, Message, OlderSearch } from "~/model"
 import { useActions, useGo } from "~/nav"
@@ -18,8 +21,13 @@ import { wordsPlain, wrote } from "~/words"
 const SETTLE_MS = 150
 const OLDER_SHOWN = 30
 const FETCH_HIT: Hit = { kind: "fetch" }
+const MEANING_HIT: Hit = { kind: "meaning" }
 
 type Pull = { asked: number; until?: number } | { failed: string }
+
+type Meant = { query: string; state: "asking" | "done" | "failed"; hits: Hit[]; why?: "no-key" | "key-refused" | "unreachable" }
+
+const real = (hit: Hit): boolean => hit.kind !== "fetch" && hit.kind !== "meaning"
 
 const date = (at: number) => new Date(at).toLocaleDateString([], { month: "short", day: "numeric", ...(new Date(at).getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }) })
 
@@ -85,6 +93,11 @@ export function SearchBox({
   const [older, setOlder] = useState<{ query: string; found: OlderSearch } | null>(null)
   const [pull, setPull] = useState<Pull | null>(null)
   const [round, setRound] = useState(0)
+  const [canMean] = useState(meaningCan)
+  const meaningWanted = useFeature("meaning")
+  const keyState = useTypesafeKey()
+  const keyless = keyState !== null && !keyState.set
+  const [meant, setMeant] = useState<Meant | null>(null)
   useEffect(() => {
     const q = settled.trim()
     if (!q) return
@@ -103,22 +116,29 @@ export function SearchBox({
   }, [actions, channel.code, settled, before, round])
   const olderNow = older?.query === settled.trim() ? older.found : null
   const more = olderNow?.state !== "none" ? (olderNow?.more ?? null) : null
-  const hits = useMemo((): Hit[] => {
+  const meantNow = meant?.query === settled.trim() ? meant : null
+  const pool = useMemo(() => meaningPool(channel, olderNow?.hits ?? []), [channel, olderNow])
+  const listing = useMemo(() => {
+    const meantHits = meantNow?.state === "done" ? meantNow.hits : []
+    const taken = new Set(meantHits.map(hitSeq))
     const seen = new Set(recent.flatMap((h) => (h.kind === "message" ? [h.m.seq] : [])))
     const olderHits = (olderNow?.hits ?? []).filter((o) => !seen.has(o.seq))
-    return [...recent, ...olderHits.slice(0, OLDER_SHOWN).map((o): Hit => ({ kind: "older", o })), ...(more ? [FETCH_HIT] : [])]
-  }, [recent, olderNow, more])
-  const view = useMemo(() => ({ hits, older: olderNow, query: settled.trim() }), [hits, olderNow, settled])
-  const waiting = settled.trim() !== "" && olderNow === null && hits.length === 0
+    const rest = [...recent, ...olderHits.slice(0, OLDER_SHOWN).map((o): Hit => ({ kind: "older", o }))].filter((h) => !taken.has(hitSeq(h)))
+    const row = canMean && settled.trim() !== "" && meantHits.length === 0 && pool.items.length > 0 ? [MEANING_HIT] : []
+    return { hits: [...row, ...meantHits, ...rest, ...(more ? [FETCH_HIT] : [])], meant: meantHits.length }
+  }, [recent, olderNow, more, meantNow, canMean, settled, pool])
+  const hits = listing.hits
+  const view = useMemo(() => ({ hits, meant: listing.meant, older: olderNow, query: settled.trim() }), [hits, listing.meant, olderNow, settled])
+  const waiting = settled.trim() !== "" && olderNow === null && !hits.some(real)
   const [kept, setKept] = useState(view)
   if (!waiting && kept !== view) setKept(view)
   const shown = waiting ? kept : view
-  const found = shown.hits.filter((h) => h.kind !== "fetch").length
+  const found = shown.hits.filter(real).length
   const wanted = useMemo(() => terms(settled), [settled])
   const [hitsWere, setHitsWere] = useState(shown.hits)
   if (hitsWere !== shown.hits) {
     setHitsWere(shown.hits)
-    setActive(0)
+    setActive(Math.max(0, shown.hits.findIndex(real)))
   }
   const current = Math.min(active, Math.max(0, shown.hits.length - 1))
   const open = focused && settled.trim() !== ""
@@ -147,8 +167,33 @@ export function SearchBox({
       )
   }
 
+  const askMeaning = () => {
+    const q = settled.trim()
+    if (!meaningWanted || keyless) return askWhatsNew()
+    if (!q || meantNow?.state === "asking" || !pool.items.length) return
+    setMeant({ query: q, state: "asking", hits: [] })
+    const land = (next: Meant) => setMeant((m) => (m?.query === q ? next : m))
+    void searchMeaning(q, pool.items).then(
+      (out) =>
+        land(
+          "hits" in out
+            ? {
+                query: q,
+                state: "done",
+                hits: out.hits
+                  .filter((s) => s.p >= MEANING_SURE)
+                  .slice(0, MEANING_SHOWN)
+                  .flatMap((s) => pool.hits.get(s.id) ?? []),
+              }
+            : { query: q, state: "failed", hits: [], why: out.failed }
+        ),
+      () => land({ query: q, state: "failed", hits: [], why: "unreachable" })
+    )
+  }
+
   const pick = (hit: Hit) => {
     if (hit.kind === "fetch") return fetchOlder()
+    if (hit.kind === "meaning") return askMeaning()
     setFocused(false)
     input.current?.blur()
     if (hit.kind === "task") {
@@ -188,13 +233,15 @@ export function SearchBox({
       if (shown.hits.length) setActive((current + (e.key === "ArrowDown" ? 1 : -1) + shown.hits.length) % shown.hits.length)
     } else if (e.key === "Enter") {
       e.preventDefault()
+      if (canMean && mod(e)) return askMeaning()
       const hit = shown.hits[current]
       if (open && hit) pick(hit)
     }
   }
 
-  const firstMessage = shown.hits.findIndex((h) => h.kind === "message")
-  const firstOlder = shown.hits.findIndex((h) => h.kind === "older")
+  const restAt = shown.meant + (shown.hits[0]?.kind === "meaning" ? 1 : 0)
+  const firstMessage = shown.hits.findIndex((h, i) => i >= restAt && h.kind === "message")
+  const firstOlder = shown.hits.findIndex((h, i) => i >= restAt && h.kind === "older")
   const olderMore = shown.older ? shown.older.hits.length - OLDER_SHOWN : 0
   const notes = (
     <>
@@ -254,7 +301,12 @@ export function SearchBox({
           {!waiting && found === 0 && shown.older?.state !== "indexing" && <p className="search-none">{t("chat.search.box.nothing", { query: shown.query })}</p>}
           {shown.hits.map((hit, i) => (
             <div key={hitKey(hit)}>
-              {i === 0 && hit.kind === "task" && (
+              {i === 0 && shown.meant > 0 && (
+                <div className="search-heading" aria-hidden="true">
+                  {t("chat.search.box.meaning.found")}
+                </div>
+              )}
+              {i === restAt && hit.kind === "task" && (
                 <div className="search-heading" aria-hidden="true">
                   {t("chat.search.box.tasks")}
                 </div>
@@ -281,6 +333,8 @@ export function SearchBox({
               >
                 {hit.kind === "fetch" ? (
                   <FetchRow pull={pull} since={more?.since ?? null} upTo={more?.upTo ?? 0} />
+                ) : hit.kind === "meaning" ? (
+                  <MeaningRow meant={meantNow} count={pool.items.length} off={!meaningWanted} keyless={keyless} />
                 ) : hit.kind === "older" ? (
                   <span className="search-msg">
                     <span className="search-line">
@@ -327,6 +381,32 @@ export function SearchBox({
         </div>
       )}
     </div>
+  )
+}
+
+function MeaningRow({ meant, count, off, keyless }: { meant: Meant | null; count: number; off: boolean; keyless: boolean }) {
+  const asking = meant?.state === "asking"
+  return (
+    <span className="search-msg search-fetch" aria-busy={asking}>
+      <span className="search-line">
+        <GlyphIcon glyph={AiSearch02Icon} size={14} />
+        <span className="search-who">{asking ? t("chat.search.box.meaning.asking") : t("chat.search.box.meaning")}</span>
+        <span className="search-when">{keysHint("↩")}</span>
+      </span>
+      <span className="search-text">
+        {off
+          ? t("chat.search.box.meaning.off")
+          : keyless || meant?.why === "no-key"
+            ? t("chat.search.box.meaning.no.key")
+            : meant?.why === "key-refused"
+              ? t("chat.search.box.meaning.refused")
+              : meant?.state === "failed"
+                ? t("chat.search.box.meaning.failed")
+                : meant?.state === "done"
+                  ? t("chat.search.box.meaning.none")
+                  : t("chat.search.box.meaning.sends", { count })}
+      </span>
+    </span>
   )
 }
 
