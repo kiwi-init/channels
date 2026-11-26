@@ -3,9 +3,16 @@ import path from "node:path";
 
 import { host } from "./host.ts";
 
+export function errorText(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const head = err.message ? `${err.name}: ${err.message}` : err.name;
+  const stack = err.stack ?? "";
+  if (stack.startsWith(head)) return stack;
+  return stack ? `${head}\n${stack}` : head;
+}
+
 function errorLine(err: unknown, at: Date): string {
-  const text = err instanceof Error ? (err.stack ?? `${err.name}: ${err.message}`) : String(err);
-  return `${at.toISOString()} ${text.replace(/\n/g, "\n  ")}\n`;
+  return `${at.toISOString()} ${errorText(err).replace(/\n/g, "\n  ")}\n`;
 }
 
 export const logFile = (): string => path.join(host().app.path("logs"), "main.log");
