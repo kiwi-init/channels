@@ -60,7 +60,7 @@ final class LanguageTests: XCTestCase {
 
     @MainActor
     private func youTab(_ app: XCUIApplication, _ label: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "identifier == 'tab-you' AND label == %@", label)).firstMatch
+        app.navigationBars[label].firstMatch
     }
 
     @MainActor

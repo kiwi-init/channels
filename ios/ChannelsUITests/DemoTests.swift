@@ -41,6 +41,8 @@ final class DemoTests: XCTestCase {
         let listRow = needs.frame.midY
         let listHeight = needs.frame.height
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "lead-row").firstMatch.exists, "the lead, the first row of the channel")
+        XCTAssertFalse(app.buttons["tab-you"].exists, "You isn't a tab")
+        XCTAssertTrue(app.buttons["you"].isHittable, "You is the face at the top right")
         add(shot(app, "list with the bar"))
 
         channel.tap()

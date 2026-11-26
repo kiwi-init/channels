@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 extension AppTab {
-    static let order: [AppTab] = [.chats, .needs, .you]
+    static let order: [AppTab] = [.chats, .needs]
 
     var title: LocalizedStringKey {
         switch self {
@@ -43,7 +43,7 @@ extension AppModel {
 enum Bar {
     static let height: CGFloat = 62
     static let gap: CGFloat = 10
-    static let icons: CGFloat = 156
+    static let icons: CGFloat = 112
 
     static func spring(_ still: Bool) -> Animation {
         still ? .easeInOut(duration: 0.2) : .interpolatingSpring(mass: 0.9, stiffness: 260, damping: 20)
@@ -118,6 +118,24 @@ private struct TabButton: View {
         .accessibilityLabel(Text(tab.title))
         .accessibilityValue(tab == .needs && model.waiting > 0 ? String(model.waiting) : String())
         .accessibilityAddTraits(lit ? .isSelected : [])
+    }
+}
+
+struct YouButton: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Button {
+            Haptic.tap()
+            model.showYou = true
+        } label: {
+            Face(name: model.person, member: nil, size: 36)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+        .buttonStyle(Squish())
+        .accessibilityIdentifier("you")
+        .accessibilityLabel(Text("You"))
     }
 }
 

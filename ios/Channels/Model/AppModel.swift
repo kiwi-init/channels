@@ -50,6 +50,7 @@ final class AppModel {
     var demo = false
     var focusNext: Spot?
     var lastCode: String?
+    var showYou = false
     var enrolled = false
     var joining = 0
     var unsaved: String?

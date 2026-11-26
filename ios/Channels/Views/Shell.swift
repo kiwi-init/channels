@@ -29,12 +29,12 @@ struct Shell: View {
                         .bar(.bottom) { ListBar(on: .needs) }
                 }
             }
-            page(.you) {
-                NavigationStack {
-                    SettingsScreen()
-                        .bar(.bottom) { ListBar(on: .you) }
-                }
+        }
+        .sheet(isPresented: Binding(get: { model.showYou }, set: { model.showYou = $0 })) {
+            NavigationStack {
+                SettingsScreen()
             }
+            .presentationDragIndicator(.visible)
         }
         .alert("Sign-in not saved", isPresented: Binding(get: { model.unsaved != nil }, set: { if !$0 { model.unsaved = nil } })) {
             Button("OK", role: .cancel) {}
@@ -66,7 +66,7 @@ struct Shell: View {
             case "channel", "conversation": model.path = [.place(Spot(code: first.code, place: place))]
             case "needs": model.tab = .needs
             case "board", "tasks": model.path = [.tasks(first.code)]
-            case "settings": model.tab = .you
+            case "settings": model.showYou = true
             default: break
             }
         }
