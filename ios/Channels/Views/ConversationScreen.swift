@@ -11,7 +11,6 @@ struct ConversationScreen: View {
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var follow = Follow()
     @State private var visible = false
-    @State private var open = false
     @FocusState private var typing: Bool
     @Environment(\.scenePhase) private var scene
 
@@ -29,12 +28,12 @@ struct ConversationScreen: View {
                     replyTo = nil
                     sendingBack = nil
                     answering = ask
-                    focus()
+                    typing = true
                 } sendBack: { review in
                     replyTo = nil
                     answering = nil
                     sendingBack = review
-                    focus()
+                    typing = true
                 }
                 .id(spot.id)
                 .overlay(alignment: .bottomTrailing) {
@@ -47,13 +46,13 @@ struct ConversationScreen: View {
                 }
                 .animation(.snappy(duration: 0.25), value: follow.atBottom)
                 .bar(.bottom) {
-                    if docks(room) {
-                        Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing) {
-                            if RestingComposer.available { open = false }
-                        }
+                    if talks(room) || answering != nil || sendingBack != nil {
+                        Dock(room: room, spot: spot, replyTo: $replyTo, answering: $answering, sendingBack: $sendingBack, typing: $typing, tabs: true)
+                            .padding(.bottom, 4)
+                    } else {
+                        ListBar()
                     }
                 }
-                .onChange(of: resting(room), initial: true) { _, now in rest(now) }
                 .navigationTitle(room.spotTitle(spot.place))
                 .subtitle(room.status(of: spot.place))
                 .toolbar {
@@ -71,56 +70,22 @@ struct ConversationScreen: View {
         .toolbar(.visible, for: .navigationBar)
         .onAppear {
             visible = true
+            model.lastCode = spot.code
             seen()
             if model.focusNext == spot {
                 model.focusNext = nil
-                open = true
                 Task {
                     try? await Task.sleep(for: .milliseconds(350))
                     typing = true
                 }
             }
         }
-        .onDisappear {
-            visible = false
-            rest(false)
-        }
-        .onChange(of: model.openComposer) { _, asked in
-            guard asked == spot else { return }
-            model.openComposer = nil
-            focus()
-        }
-        .onChange(of: replyTo != nil) { _, now in if now { focus() } }
+        .onDisappear { visible = false }
         .onChange(of: scene) { _, _ in seen() }
         .onChange(of: lock.locked) { _, _ in seen() }
         .task(id: spot) {
             follow = Follow()
             await model.open(spot.code, place: spot.place == model.rooms[spot.code]?.sideKey ? "main" : spot.place)
-        }
-    }
-
-    private func docks(_ room: RoomView) -> Bool {
-        if answering != nil || sendingBack != nil { return true }
-        return talks(room) && (!RestingComposer.available || open || replyTo != nil)
-    }
-
-    private func resting(_ room: RoomView) -> Bool {
-        visible && RestingComposer.available && talks(room) && !docks(room)
-    }
-
-    private func rest(_ now: Bool) {
-        if now {
-            model.composing = spot
-        } else if model.composing == spot {
-            model.composing = nil
-        }
-    }
-
-    private func focus() {
-        open = true
-        Task {
-            try? await Task.sleep(for: .milliseconds(60))
-            typing = true
         }
     }
 
@@ -228,62 +193,11 @@ extension View {
         }
     }
 
-    @ViewBuilder func shrinkingTabBar(inChat: Bool) -> some View {
-        if #available(iOS 26.0, *) {
-            self.tabBarMinimizeBehavior(inChat ? .onScrollUp : .onScrollDown)
-        } else {
-            self
-        }
-    }
-
-    @ViewBuilder func restingComposer(_ shown: Bool) -> some View {
-        if #available(iOS 26.1, *) {
-            self.tabViewBottomAccessory(isEnabled: shown) { RestingComposer() }
-        } else {
-            self
-        }
-    }
-
     @ViewBuilder func bar<Content: View>(_ edge: VerticalEdge, @ViewBuilder content: () -> Content) -> some View {
         if #available(iOS 26.0, *) {
             self.safeAreaBar(edge: edge, spacing: 0, content: content)
         } else {
             self.safeAreaInset(edge: edge, spacing: 0, content: content)
-        }
-    }
-}
-
-struct RestingComposer: View {
-    static var available: Bool {
-        if #available(iOS 26.1, *) { true } else { false }
-    }
-
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        if let spot = model.composing {
-            let draft = model.draft(spot.code, spot.place)
-            let text = draft.text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: " ")
-            Button {
-                model.openComposer = spot
-            } label: {
-                HStack(spacing: 10) {
-                    if !draft.attached.isEmpty {
-                        Image(systemName: "photo").foregroundStyle(Tone.ink2)
-                    }
-                    Text(text.isEmpty ? spoken("Message") : text)
-                        .type(.body)
-                        .foregroundStyle(text.isEmpty ? Tone.ink3 : Tone.ink)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 16)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("composer")
-            .accessibilityLabel(text.isEmpty ? spoken("Message") : text)
         }
     }
 }

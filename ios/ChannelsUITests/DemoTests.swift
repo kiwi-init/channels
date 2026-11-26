@@ -34,41 +34,54 @@ final class DemoTests: XCTestCase {
         app.launch()
         let general = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'general'")).firstMatch
         XCTAssertTrue(general.waitForExistence(timeout: 15))
+        let needs = app.buttons["tab-needs"]
+        let channel = app.buttons["channel"]
+        XCTAssertTrue(needs.waitForHittable(timeout: 5) && channel.isHittable, "one row on the list: the tabs and the channel")
+        XCTAssertEqual(needs.frame.midY, channel.frame.midY, accuracy: 2)
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "lead-row").firstMatch.exists, "the lead, the first row of the channel")
-        add(shot(app, "list with the tab bar"))
+        add(shot(app, "list with the bar"))
+
+        channel.tap()
+        let card = app.buttons["channel-card"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5), "the channel grows into its card")
+        let leadField = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
+        XCTAssertTrue(leadField.waitForExistence(timeout: 5), "with a field to message the lead")
+        XCTAssertFalse(needs.isHittable, "the card takes the row")
+        sleep(1)
+        add(shot(app, "channel card open"))
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
+        XCTAssertTrue(channel.waitForHittable(timeout: 5), "tapping outside folds it back")
+
         general.tap()
         let field = app.descendants(matching: .any).matching(identifier: "composer").firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5), "the chat's composer")
-        let needs = app.tabBars.buttons["Needs You"].firstMatch
-        XCTAssertTrue(needs.waitForExistence(timeout: 5) && needs.isHittable, "the tab bar stays in a chat")
-        sleep(1)
-        add(shot(app, "chat at rest with the tab bar"))
+        XCTAssertTrue(field.waitForExistence(timeout: 15), "the chat's composer")
+        XCTAssertTrue(needs.waitForHittable(timeout: 5), "in a chat the tabs stay, as icons")
+        XCTAssertEqual(needs.frame.midY, field.frame.midY, accuracy: 4, "one row: the tab icons and the composer")
         let newest = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Something else'")).firstMatch
         XCTAssertTrue(newest.waitForExistence(timeout: 5), "the newest item, the step's Something else")
-        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "the newest item ends above the resting composer")
+        sleep(1)
+        add(shot(app, "chat at rest"))
+        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "the newest item ends above the bar")
         XCTAssertGreaterThan(newest.frame.maxY, field.frame.minY - 40, "and no wide empty gap sits between them")
 
         app.swipeDown()
         app.swipeDown()
         sleep(1)
-        add(shot(app, "chat scrolled up, the tab bar small"))
-        XCTAssertTrue(app.tabBars.firstMatch.exists, "the tab bar is there after scrolling")
-        XCTAssertTrue(field.exists, "the composer is there after scrolling")
+        XCTAssertTrue(needs.isHittable && field.exists, "the bar is there after scrolling")
         app.swipeUp()
         app.swipeUp()
         app.swipeUp()
         sleep(1)
-        add(shot(app, "chat scrolled back down"))
-        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "back at the bottom, the newest item ends above the composer")
-        if !needs.isHittable { app.tabBars.buttons["Chats"].firstMatch.tap() }
-        XCTAssertTrue(needs.waitForHittable(timeout: 5), "the tab bar opens up again")
+        XCTAssertLessThanOrEqual(newest.frame.maxY, field.frame.minY + 1, "back at the bottom, the newest item ends above the bar")
 
         needs.tap()
         XCTAssertTrue(app.navigationBars["Needs You"].waitForExistence(timeout: 5), "a tab opens from inside a chat")
-        app.tabBars.buttons["Chats"].firstMatch.tap()
-        XCTAssertTrue(field.waitForExistence(timeout: 5), "back on Chats, the chat is still open")
+        app.buttons["tab-chats"].tap()
+        XCTAssertTrue(field.waitForHittable(timeout: 5), "back on Chats, the chat is still open")
         field.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the composer grows over the keyboard")
         sleep(1)
+        XCTAssertFalse(needs.isHittable, "and the tabs melt into it")
         field.typeText("hi")
         add(shot(app, "chat typing"))
     }

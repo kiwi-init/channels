@@ -49,8 +49,7 @@ final class AppModel {
     var tab: AppTab = .chats
     var demo = false
     var focusNext: Spot?
-    var composing: Spot?
-    var openComposer: Spot?
+    var lastCode: String?
     var enrolled = false
     var joining = 0
     var unsaved: String?

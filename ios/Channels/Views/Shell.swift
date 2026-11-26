@@ -15,27 +15,27 @@ struct Shell: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        TabView(selection: Binding(get: { model.tab }, set: { model.tab = $0 })) {
-            Tab("Chats", systemImage: "bubble.left.and.bubble.right.fill", value: AppTab.chats) {
+        ZStack {
+            page(.chats) {
                 NavigationStack(path: Binding(get: { model.path }, set: { model.path = $0 })) {
                     ChannelList()
+                        .bar(.bottom) { ListBar() }
                         .navigationDestination(for: Route.self) { RouteScreen(route: $0) }
                 }
             }
-            Tab("Needs You", systemImage: "hand.raised.fill", value: AppTab.needs) {
+            page(.needs) {
                 NavigationStack {
                     NeedsScreen()
+                        .bar(.bottom) { ListBar() }
                 }
             }
-            .badge(model.waiting)
-            Tab("You", systemImage: "person.crop.circle.fill", value: AppTab.you) {
+            page(.you) {
                 NavigationStack {
                     SettingsScreen()
+                        .bar(.bottom) { ListBar() }
                 }
             }
         }
-        .shrinkingTabBar(inChat: model.composing != nil)
-        .restingComposer(model.composing != nil)
         .alert("Sign-in not saved", isPresented: Binding(get: { model.unsaved != nil }, set: { if !$0 { model.unsaved = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -47,6 +47,14 @@ struct Shell: View {
                 if UserDefaults.standard.string(forKey: "shot") == "live" { LivePreview() }
             }
         #endif
+    }
+
+    private func page<Content: View>(_ tab: AppTab, @ViewBuilder _ content: () -> Content) -> some View {
+        let shown = model.tab == tab
+        return content()
+            .opacity(shown ? 1 : 0)
+            .allowsHitTesting(shown)
+            .accessibilityHidden(!shown)
     }
 
     #if DEBUG
@@ -71,7 +79,7 @@ struct RouteScreen: View {
     var body: some View {
         switch route {
         case .place(let spot): ConversationScreen(start: spot)
-        case .tasks(let code): TasksScreen(code: code)
+        case .tasks(let code): TasksScreen(code: code).bar(.bottom) { ListBar() }
         }
     }
 }

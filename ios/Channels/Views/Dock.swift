@@ -67,8 +67,9 @@ struct Dock: View {
     @Binding var answering: AskView?
     @Binding var sendingBack: ReviewView?
     var typing: FocusState<Bool>.Binding
-    var onRest: () -> Void = {}
+    var tabs = false
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var still
     @State private var draft = ""
     @State private var sending = false
     @State private var error: String?
@@ -106,10 +107,18 @@ struct Dock: View {
             } else if let replyTo {
                 bar("arrowshape.turn.up.left.fill", Tone.accent, room.display(replyTo.from), replyTo.plain) { self.replyTo = nil }
             }
-            HStack(alignment: .bottom, spacing: 8) {
-                plus
-                field
+            Melt(spacing: 6) {
+                HStack(alignment: .bottom, spacing: 8) {
+                    if tabs && !typing.wrappedValue {
+                        TabsPill(compact: true)
+                            .glassCapsule()
+                            .transition(.scale(scale: 0.4, anchor: .trailing).combined(with: .opacity))
+                    }
+                    plus
+                    field
+                }
             }
+            .animation(Bar.spring(still), value: typing.wrappedValue)
         }
         .padding(.horizontal, 12)
         .padding(.top, 6)
@@ -132,10 +141,6 @@ struct Dock: View {
             let back = now.trimmingCharacters(in: .whitespacesAndNewlines)
             if !back.isEmpty && sent.text.contains(back) { draft = "" }
         }
-        .onChange(of: typing.wrappedValue) { _, _ in settle() }
-        .onChange(of: choosing) { _, _ in settle() }
-        .onChange(of: sending) { _, _ in settle() }
-        .onChange(of: replyTo == nil && !deciding) { _, _ in settle() }
         .onChange(of: picked) { _, items in
             guard !items.isEmpty else { return }
             picked = []
@@ -281,11 +286,6 @@ struct Dock: View {
         if let answering { return spoken("Answer \(room.display(answering.from))") }
         if let here, here.kind == "dm", let other = room.other(in: here) { return spoken("Message \(room.display(other))") }
         return spoken("Message")
-    }
-
-    private func settle() {
-        guard !typing.wrappedValue, !choosing, !sending, attached.isEmpty, replyTo == nil, !deciding else { return }
-        onRest()
     }
 
     private func restore(_ key: Spot) {
