@@ -62,6 +62,7 @@ struct Line: Identifiable {
 
 struct Follow {
     var atBottom = true
+    var far = false
     var unseen = 0
     var jumps = 0
 }
@@ -144,6 +145,16 @@ struct Conversation: View {
             } action: { _, now in
                 insetBottom = now
             }
+            .overlay(alignment: .bottomTrailing) {
+                if follow.far || (!follow.atBottom && follow.unseen > 0) {
+                    JumpButton(follow: follow) { follow.jumps += 1 }
+                        .padding(.trailing, 16)
+                        .padding(.bottom, max(10, feedBottom - model.barTop + 10))
+                        .ignoresSafeArea(.all, edges: .bottom)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy(duration: 0.25), value: follow.far || (!follow.atBottom && follow.unseen > 0))
             .scrollDismissesKeyboard(.interactively)
             .softBars()
             .onScrollGeometryChange(for: Bool.self) { geo in
@@ -151,6 +162,11 @@ struct Conversation: View {
             } action: { _, near in
                 follow.atBottom = near
                 if near { follow.unseen = 0 }
+            }
+            .onScrollGeometryChange(for: Bool.self) { geo in
+                geo.contentSize.height - geo.visibleRect.maxY > geo.containerSize.height
+            } action: { _, far in
+                follow.far = far
             }
             .onScrollGeometryChange(for: Bool.self) { geo in
                 geo.contentSize.height > 0 && geo.visibleRect.minY + geo.contentInsets.top > geo.contentSize.height - 24

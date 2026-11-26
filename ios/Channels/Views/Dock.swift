@@ -430,7 +430,7 @@ struct JumpButton: View {
                 Image(systemName: "arrow.down")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Tone.ink)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 44, height: 44)
                     .glassCircle()
                 if follow.unseen > 0 {
                     Text("\(follow.unseen)")
@@ -442,10 +442,10 @@ struct JumpButton: View {
                         .offset(x: 4, y: -4)
                 }
             }
-            .padding(5)
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("jump")
         .accessibilityLabel(follow.unseen > 0 ? spoken("\(follow.unseen) new, jump to the latest") : spoken("Jump to the latest"))
     }
 }

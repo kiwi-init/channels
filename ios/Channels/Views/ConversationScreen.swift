@@ -33,15 +33,6 @@ struct ConversationScreen: View {
                     compose.typing = true
                 }
                 .id(spot.id)
-                .overlay(alignment: .bottomTrailing) {
-                    if !follow.atBottom {
-                        JumpButton(follow: follow) { follow.jumps += 1 }
-                            .padding(.trailing, 16)
-                            .padding(.bottom, 4)
-                            .transition(.scale(scale: 0.5).combined(with: .opacity))
-                    }
-                }
-                .animation(.snappy(duration: 0.25), value: follow.atBottom)
                 .navigationTitle(room.spotTitle(spot.place))
                 .subtitle(room.status(of: spot.place))
                 .toolbar {
