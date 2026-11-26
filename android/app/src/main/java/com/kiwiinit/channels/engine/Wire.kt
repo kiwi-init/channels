@@ -38,6 +38,7 @@ data class MemberView(
     val mono: Boolean = false,
     val doing: List<Int> = emptyList(),
     val person: String? = null,
+    val picture: String? = null,
 ) {
     val isAgent: Boolean get() = kind == "agent"
     val working: Boolean get() = activity?.state == "working"
