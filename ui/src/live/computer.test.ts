@@ -72,6 +72,8 @@ const { backPrompt, bringAgentsBack, checkComputer, loadUpPlan, upPlanNow, compu
 const { backCard } = await import("~/shell/back-card")
 const { backRow } = await import("~/settings/back-row")
 const { acts } = await import("~/settings/sheet")
+const { dismissBack } = await import("~/shell/back-dismissed")
+const { t } = await import("~/i18n/i18n")
 
 const toasts: [string, string][] = []
 const card = () =>
@@ -129,6 +131,14 @@ describe("Settings > Agents shows this computer", () => {
       ["sage", "unsupported"],
       ["nova", "unverified"],
     ])
+  })
+
+  test("dismissing the agents-down card keeps what Settings needs to bring them back (#18120)", () => {
+    const back = computerNow()?.back
+    if (!back) throw new Error("no agents down")
+    dismissBack(back.down)
+    expect(computerNow()?.back?.down.map((s) => s.handle)).toEqual(["atlas"])
+    expect(settingsRow()).toContain(t("settings.agents.back.run"))
   })
 
   test("Bring my agents back hands back each seat's outcome from kiwi up, and a second press finds the seat already running", async () => {
