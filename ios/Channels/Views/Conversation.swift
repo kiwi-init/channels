@@ -81,6 +81,7 @@ struct Conversation: View {
     var sendBack: (ReviewView) -> Void = { _ in }
     @Environment(AppModel.self) private var model
     @State private var endSeen = true
+    @State private var slide = Slide()
 
     private let footer: CGFloat = 8
 
@@ -128,7 +129,15 @@ struct Conversation: View {
                 }
                 .scrollTargetLayout()
                 .padding(.horizontal, 12)
+                .environment(\.slide, slide)
             }
+            .gesture(
+                Sideways(right: false) { dx in
+                    slide.x = min(Slide.width + 8, max(0, -dx) * 0.7)
+                } ended: {
+                    withAnimation(.spring(duration: 0.35, bounce: 0.15)) { slide.x = 0 }
+                }
+            )
             .scrollPosition($position)
             .defaultScrollAnchor(.bottom)
             .defaultScrollAnchor(.bottom, for: .sizeChanges)
@@ -395,6 +404,7 @@ struct BubbleRow: View {
     let jump: (Int) -> Void
     let answer: (Int) -> Void
     var delivered = false
+    @Environment(\.slide) private var slide
     @State private var pull: CGFloat = 0
     @State private var armed = false
 
@@ -442,8 +452,18 @@ struct BubbleRow: View {
             if !message.mine { Spacer(minLength: 40) }
         }
         .padding(.top, first ? 8 : 2)
-        .offset(x: -pull)
-        .background(alignment: .trailing) {
+        .overlay(alignment: .trailing) {
+            Text(When.clock(message.date))
+                .type(.stamp)
+                .foregroundStyle(Tone.ink3)
+                .fixedSize()
+                .frame(width: Slide.width, alignment: .trailing)
+                .offset(x: Slide.width + 4)
+                .opacity(Double(min(1, slide.x / Slide.width)))
+                .accessibilityHidden(true)
+        }
+        .offset(x: pull - slide.x)
+        .background(alignment: .leading) {
             Image(systemName: "arrowshape.turn.up.left.fill")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(armed ? Tone.accent : Tone.ink3)
@@ -451,11 +471,11 @@ struct BubbleRow: View {
                 .background(Tone.wash2, in: Circle())
                 .opacity(Double(min(1, pull / Self.replyAt)))
                 .scaleEffect(armed ? 1.1 : 0.85)
-                .offset(x: 36 - pull * 0.6)
+                .offset(x: -36 + pull * 0.6)
         }
         .gesture(
-            Leftward { dx in
-                pull = min(84, max(0, -dx) * 0.6)
+            Sideways(right: true) { dx in
+                pull = min(84, max(0, dx) * 0.6)
                 let now = pull >= Self.replyAt
                 if now != armed {
                     armed = now
@@ -470,12 +490,23 @@ struct BubbleRow: View {
     }
 }
 
-struct Leftward: UIGestureRecognizerRepresentable {
+@Observable
+final class Slide {
+    static let width: CGFloat = 56
+    var x: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    @Entry var slide = Slide()
+}
+
+struct Sideways: UIGestureRecognizerRepresentable {
+    let right: Bool
     let moved: (CGFloat) -> Void
     let ended: () -> Void
 
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Only {
-        Only()
+        Only(right: right)
     }
 
     func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
@@ -493,10 +524,17 @@ struct Leftward: UIGestureRecognizerRepresentable {
     }
 
     final class Only: NSObject, UIGestureRecognizerDelegate {
+        let right: Bool
+
+        init(right: Bool) {
+            self.right = right
+        }
+
         func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
             guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
             let v = pan.velocity(in: pan.view)
-            return v.x < 0 && -v.x > abs(v.y) * 1.3
+            let along = right ? v.x : -v.x
+            return along > 0 && along > abs(v.y) * 1.3
         }
     }
 }

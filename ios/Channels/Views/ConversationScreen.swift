@@ -9,6 +9,11 @@ struct ConversationScreen: View {
     @State private var follow = Follow()
     @State private var visible = false
     @Environment(\.scenePhase) private var scene
+    @Environment(\.dismiss) private var dismiss
+
+    private var elsewhereUnread: Int {
+        model.channels.filter { $0.code != spot.code && model.unread(Spot(code: $0.code, place: "main")) }.count
+    }
 
     init(start: Spot) {
         _spot = State(initialValue: start)
@@ -39,7 +44,28 @@ struct ConversationScreen: View {
                     }
                 }
                 .navigationTitle(room.spotTitle(spot.place))
+                .navigationBarBackButtonHidden()
                 .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold))
+                                if elsewhereUnread > 0 {
+                                    Text(verbatim: "\(elsewhereUnread)")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 7)
+                                        .frame(minHeight: 22)
+                                        .background(Tone.bubbleMine, in: Capsule())
+                                }
+                            }
+                            .foregroundStyle(Tone.bubbleMine)
+                        }
+                        .accessibilityIdentifier("back")
+                        .accessibilityLabel(elsewhereUnread > 0 ? spoken("Back, \(elsewhereUnread) unread") : spoken("Back"))
+                    }
                     ToolbarItem(placement: .principal) {
                         Button {
                             Haptic.tap()

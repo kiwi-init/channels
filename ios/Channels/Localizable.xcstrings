@@ -955,6 +955,12 @@
         }
       }
     },
+    "Back" : {
+
+    },
+    "Back, %lld unread" : {
+
+    },
     "Brings the channels you joined on your Mac since you linked." : {
       "localizations" : {
         "ja" : {
@@ -1599,6 +1605,9 @@
         }
       }
     },
+    "Delivered" : {
+
+    },
     "Deny" : {
       "localizations" : {
         "ja" : {
@@ -1626,6 +1635,9 @@
           }
         }
       }
+    },
+    "Dictate" : {
+
     },
     "Done" : {
       "localizations" : {
