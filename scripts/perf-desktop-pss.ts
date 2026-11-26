@@ -100,7 +100,7 @@ function processes(session: number): Proc[] {
     const st = statOf(pid);
     if (!st) continue;
     const args = argsOf(pid);
-    const daemon = args[1] === "daemon" && /^kiwi/.test(args[0]?.split("/").at(-1) ?? "") && envOf(pid, "KIWI_HOME") === appKiwi;
+    const daemon = args.includes("daemon") && envOf(pid, "KIWI_HOME") === appKiwi;
     if (st.session !== session && !daemon) continue;
     const group: Group = daemon ? "daemon" : st.comm.startsWith("WebKitWebProc") ? "web" : st.comm.startsWith("WebKitNetwork") ? "network" : st.comm === "bun" ? "shell" : "other";
     out.push({ pid, group, comm: st.comm, started: startedAt(st.startTicks) });
@@ -130,7 +130,7 @@ function mappings(pid: number): string[] {
 }
 
 function webkitOf(pid: number): { library: string | null; pkgConfig: string | null } {
-  const library = /(\/\S*lib(?:webkit2gtk|webkitgtk)\S*\.so\S*)/.exec(readOr(`/proc/${pid}/maps`))?.[1] ?? null;
+  const library = /(\/\S*\/lib(?:webkit2gtk|webkitgtk)-[\d.]+\.so\S*)/.exec(readOr(`/proc/${pid}/maps`))?.[1] ?? null;
   let pkgConfig: string | null = null;
   for (const name of ["webkit2gtk-4.1", "webkitgtk-6.0"]) {
     try {
@@ -286,7 +286,7 @@ try {
     processes: first,
   };
   report.workload = {
-    seed: { preset: "large", agents: AGENTS, ...SEED },
+    seed: { preset: SEED.tasks === PERF_BASE_LARGE.tasks && SEED.messages === PERF_BASE_LARGE.messages && SEED.taskNotes === PERF_BASE_LARGE.taskNotes ? "large" : "custom", agents: AGENTS, ...SEED },
     seedSeconds,
     messageEverySec: MESSAGE_SEC,
     phasesMin: { warmUp: WARM_MIN, live: LIVE_MIN, idle: IDLE_MIN },
