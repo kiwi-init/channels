@@ -74,7 +74,7 @@ permissions:
 jobs:
   perf:
     name: perf / scale and soak
-    if: ${{ inputs.jobs != 'desktop' && inputs.jobs != 'doc' && inputs.jobs != 'upgrade' && inputs.jobs != 'replies' }}
+    if: ${{ inputs.jobs != 'desktop' && inputs.jobs != 'doc' && inputs.jobs != 'upgrade' && inputs.jobs != 'replies' && inputs.jobs != 'pss' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -283,8 +283,6 @@ jobs:
         timeout-minutes: 60
         env:
           TAGS: ${{ inputs.pss_tags || 'v2026.11.29 v2026.11.30' }}
-          CHANNELS_EB_TEST: "1"
-          DASH_RELEASE_OFFLINE: "1"
         run: |
           for tag in $TAGS; do
             dir="$RUNNER_TEMP/build-$tag"
@@ -295,7 +293,7 @@ jobs:
               bun run ui:build
               (cd desktop && for i in 1 2 3; do bun run prepare:eb && exit 0; echo "electrobun prepare failed ($i of 3)"; [ "$i" -lt 3 ] && sleep 20; done; exit 1)
               mkdir -p dist && bun scripts/build-cli.ts --js dist/kiwi.js
-              cd desktop && bun scripts/eb.ts build --env=dev
+              cd desktop && CHANNELS_EB_TEST=1 DASH_RELEASE_OFFLINE=1 bun scripts/eb.ts build --env=dev
             )
             found=$(ls -d "$dir"/desktop/release-eb/build/dev-linux-*/*/bin/electrobun-launcher)
             [ "$(echo "$found" | wc -l)" = 1 ] || { echo "$tag: expected one test build, found: $found"; exit 1; }
