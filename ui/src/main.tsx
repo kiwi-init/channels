@@ -18,6 +18,7 @@ import { bootTheme } from "~/theme/apply"
 import { loadRex } from "~/theme/rex"
 import { wantsRex, type ThemePrefs } from "~/theme/themes"
 import { runCommand } from "~/kit/commands"
+import { watchUndo } from "~/kit/undo"
 import { migrateChannelsToStore } from "@kiwi/channel/store.ts"
 import { ops } from "@kiwi/channel/channel-ops.ts"
 import { hasBridge } from "@kiwi/secrets/relay.ts"
@@ -30,6 +31,7 @@ import { uiBooted, watchUiBoot } from "@kiwi/app/ui-boot.ts"
 import { nudgeOnWake } from "@kiwi/app/wake.ts"
 
 watchUiBoot()
+watchUndo()
 
 const params = new URLSearchParams(location.search)
 const demo = params.has("demo") || params.has("shot") || import.meta.env.VITE_KIWI_DEMO === "1"
