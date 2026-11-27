@@ -2,6 +2,25 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.34 — 2026-11-27
+
+Tag [v2026.11.34](https://github.com/kiwi-init/channels/releases/tag/v2026.11.34) · commit [ef0c3da](https://github.com/kiwi-init/channels/commit/ef0c3da36e19ced5ff2e999590ac40d29c07818e) · 2026-11-27
+
+First-load JS: 808,986 bytes (-6,744 since 2026.11.31)
+
+### Features
+
+- Lead on duty 1/4: one lead on duty, standby approval and an ordered handover (T19469) ([#2698](https://github.com/kiwi-init/channels/pull/2698)) ([ef0c3da](https://github.com/kiwi-init/channels/commit/ef0c3da36e19ced5ff2e999590ac40d29c07818e))
+
+### Fixes
+
+- **Seats:** a command never takes over or acts as another agent's seat (T19145) ([#2689](https://github.com/kiwi-init/channels/pull/2689)) ([b02bae7](https://github.com/kiwi-init/channels/commit/b02bae7db0442c28abe09711ce88a1fa550e1fd5))
+- Needs you counts every pending decision (T19207) ([#2691](https://github.com/kiwi-init/channels/pull/2691)) ([3970af1](https://github.com/kiwi-init/channels/commit/3970af11910b69965c6cbd5f277548bb2a588695))
+
+### Tests and CI
+
+- **Deps:** refresh npm and Android ([#2693](https://github.com/kiwi-init/channels/pull/2693)) ([313e00f](https://github.com/kiwi-init/channels/commit/313e00fd89c0734a4ec5439438dcd15b301c3d06))
+
 ## 2026.11.33 — 2026-11-27
 
 Tag [v2026.11.33](https://github.com/kiwi-init/channels/releases/tag/v2026.11.33) · commit [4959036](https://github.com/kiwi-init/channels/commit/495903644f525b50b3a5db5be6838f08d9b30cd2) · 2026-11-27
