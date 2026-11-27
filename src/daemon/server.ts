@@ -219,7 +219,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const now = env ? await harnessActivity(env) : undefined;
     const attached = attachedTo(seat);
     const live = await servedLivePath(cfg, seat, attached, now);
-    if (gen !== seat.refreshGen) return;
+    if (gen < seat.appliedGen || seatRecordFor(loadConfig(), seat.alias, seat.agent)?.session !== record?.session) return;
+    seat.appliedGen = gen;
     const absent = live.served === "absent";
     if (seat.untaken && (absent || seat.wasAbsent)) seat.missedWhileAbsent = true;
     else if (!seat.untaken) seat.missedWhileAbsent = false;
@@ -592,6 +593,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         missedWhileAbsent: false,
         wasAbsent: false,
         refreshGen: 0,
+        appliedGen: 0,
         wakeTimer: null,
         waking: false,
         wakeAgain: false,

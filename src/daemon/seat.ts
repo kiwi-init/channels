@@ -22,6 +22,7 @@ export interface Seat {
   missedWhileAbsent: boolean;
   wasAbsent: boolean;
   refreshGen: number;
+  appliedGen: number;
   taking: { thread: string; seqs: number[]; at: number; resumed: boolean; timer: ReturnType<typeof setTimeout> } | null;
   activityTimer: ReturnType<typeof setInterval> | null;
   live?: LiveBlobs | null;

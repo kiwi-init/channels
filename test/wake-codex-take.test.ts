@@ -339,6 +339,19 @@ describe("a Codex seat reads as wakeable only while Codex serves its thread (#26
     expect(appHow()).toBe("wakes");
   });
 
+  test("when every answer is slower than a refresh, the seat still dims once Codex stops serving it", async () => {
+    const id = "01a1e000-0000-7000-8000-000000000058";
+    thread(id, [{ type: "task_complete", at: Date.now() - 60_000 }]);
+    loadedList = { pages: [[id]] };
+    bindAs({ harness: "codex", session: id });
+    await until("the app lighting claude", lit("wakes"), 15_000);
+    loadedList = { pages: [[OTHER]] };
+    loadedDelayMs = 4_500;
+    await until("the app dimming claude through slow answers", lit(null), 20_000);
+    loadedList = { pages: [[id]] };
+    await until("the app lighting claude again through slow answers", lit("wakes"), 20_000);
+  });
+
   test("a live seat busy on an earlier turn stays lit with its wake not taken, and reads it when free", async () => {
     const id = "01a1e000-0000-7000-8000-000000000056";
     thread(id, [{ type: "task_started", at: Date.now() - 3_600_000 }]);
