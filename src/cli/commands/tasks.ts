@@ -13,7 +13,7 @@ import { pickFor, taskCandidates } from "@kiwi/core/routing.ts";
 import { formatCandidates, reasonText } from "@kiwi/core/routing-text.ts";
 import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
-import { type Command, die, keepDaemon, offlineOk, out, session } from "../context.ts";
+import { type Command, die, keepDaemon, offlineOk, out, readSession, session } from "../context.ts";
 import { firstLine, readText, taskArg, text } from "../input.ts";
 import { landingFromOptions, taskLanded, taskSteps } from "./task-steps.ts";
 import { parseSpan, spanText } from "@kiwi/core/steps.ts";
@@ -54,7 +54,7 @@ const board = () =>
         }
         return;
       }
-      const s = yield* session();
+      const s = yield* readSession();
       const { state } = yield* s.state();
       out(formatTasks(state, reviewCheckOf(s.ch.roomId), { all: opt.all, owner: opt.mine ? s.me : opt.owner, now: Date.now() }));
     }),
@@ -65,8 +65,8 @@ export const taskCommands: Record<string, Command> = {
     oneLook(
       Effect.gen(function* () {
         if (!args[1] || args[1] === "list") return yield* board();
-        const s = yield* session();
         const sub = args[1];
+        const s = yield* sub === "show" || sub === "who" ? readSession() : session();
         const STATE_FOR: Record<string, TaskState> = { start: "doing", review: "review", done: "done" };
         if (sub === "add") {
           const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--ask takes a message number: --ask 18"));

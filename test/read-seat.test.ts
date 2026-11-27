@@ -1,7 +1,6 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { readsOnly } from "../src/cli/reads.ts";
 import { daemonListeners, daemonSock } from "../src/daemon.ts";
 import { created, DEAD, joinSeats } from "./join-seats-setup.ts";
 
@@ -35,37 +34,45 @@ async function slots(h: string): Promise<string[]> {
   return (await daemonListeners(daemonSock(h)).catch(() => [])).map((l) => `${l.kind}:${l.agent}:${l.session ?? ""}`).sort();
 }
 
-const READS: string[][] = [["status"], ["status", "--json"], ["log"], ["show", "1"], ["task"], ["task", "show", "T1"], ["spec", "show", "1"], ["specs"], ["claims"], ["rooms"], ["query", "select 1"]];
+const READS: string[][] = [
+  ["status"],
+  ["status", "--json"],
+  ["log"],
+  ["show", "1"],
+  ["show", "general"],
+  ["task"],
+  ["task", "list"],
+  ["task", "show", "T1"],
+  ["task", "who", "T1"],
+  ["spec", "show", "1"],
+  ["specs"],
+  ["rooms"],
+  ["query", "select 1"],
+  ["note"],
+  ["note", "somekey"],
+  ["lock"],
+  ["lock", "list"],
+  ["lock", "status"],
+  ["wake"],
+  ["color"],
+  ["hold"],
+  ["icon"],
+  ["prompt"],
+];
 
-test("the commands that only read are told apart from the ones that act", () => {
-  for (const read of READS) expect(readsOnly(read)).toBe(true);
-  for (const act of [
-    ["send", "x"],
-    ["reply", "1", "x"],
-    ["react", "1", "x"],
-    ["task", "start", "T1"],
-    ["task", "done", "T1"],
-    ["spec", "start", "1"],
-    ["spec", "tick", "1", "x"],
-    ["join", "c"],
-    ["leave"],
-    ["listen"],
-    ["note", "k"],
-    ["lock", "x"],
-    [],
-  ])
-    expect(readsOnly(act)).toBe(false);
-});
+async function readsTakeNothing(h: string, who: Record<string, string>, cwd: string, channel: string[]) {
+  const before = ownership(h);
+  for (const read of READS) {
+    const r = await run(h, [...channel, ...read], who, cwd);
+    expect({ read, code: r.code, asked: r.err.includes("pass --as NAME"), now: ownership(h) }).toEqual({ read, code: 1, asked: true, now: before });
+  }
+}
 
 describe("a read-only command never takes over a seat (#2688)", () => {
   test("a seated session reading another channel takes nothing, whatever it reads, and is asked for --as", async () => {
     const { h, repo } = await seated();
-    const before = ownership(h);
     const listening = await slots(h);
-    for (const read of READS) {
-      await run(h, ["-c", "beta", ...read], WORKER, repo);
-      expect({ read, now: ownership(h) }).toEqual({ read, now: before });
-    }
+    await readsTakeNothing(h, WORKER, repo, ["-c", "beta"]);
     const status = await run(h, ["-c", "beta", "status"], WORKER, repo);
     expect(status.code).toBe(1);
     expect(status.err).toContain("sleeper in beta works from this folder, and this session is none of them: pass --as NAME to act as one");
@@ -117,8 +124,10 @@ describe("a read-only command never takes over a seat (#2688)", () => {
     expect((await run(h, ["send", "as itself"], WORKER, repo)).code).toBe(0);
   });
 
-  test("a restarted agent with no seat takes its old one back from its hook, and its next command says so once", async () => {
+  test("a restarted agent with no seat takes nothing by reading, takes its old seat back from its hook, and its next command says so once", async () => {
     const { h, projects } = await seated();
+    await readsTakeNothing(h, RESTARTED, projects, []);
+    await readsTakeNothing(h, RESTARTED, projects, ["-c", "beta"]);
     const prompt = await run(h, ["hook", "prompt"], RESTARTED, projects, JSON.stringify({ session_id: "R", cwd: projects, hook_event_name: "UserPromptSubmit", prompt: "hi" }));
     expect(prompt.code).toBe(0);
     const first = await run(h, ["status", "--json"], RESTARTED, projects);
@@ -131,5 +140,28 @@ describe("a read-only command never takes over a seat (#2688)", () => {
     expect(second.code).toBe(0);
     expect(() => JSON.parse(second.out)).not.toThrow();
     expect(second.err).not.toContain("took the seat");
+  });
+
+  test("a message shown to the session as a seat it no longer holds doesn't pick that seat for a reply", async () => {
+    const { h, projects, ownerB } = await seated();
+    const gone = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "G", CLAUDE_PID: String(2 ** 22 + 777) };
+    const hook = (env: Record<string, string>, session: string, prompt: string) =>
+      run(h, ["hook", "prompt"], env, projects, JSON.stringify({ session_id: session, cwd: projects, hook_event_name: "UserPromptSubmit", prompt }));
+    expect((await hook(gone, "G", "hi")).code).toBe(0);
+    const seq = /#(\d+)/.exec(await ok(ownerB, ["send", "--to", "sleeper", "shown to G"]))![1]!;
+    expect((await hook(gone, "G", "anything new")).out).toContain("shown to G");
+    expect((await hook(RESTARTED, "R", "hi")).code).toBe(0);
+    const seats = () => {
+      const { bindings, taken } = ownership(h) as { bindings: unknown; taken: unknown };
+      return { bindings, taken };
+    };
+    const before = seats();
+    const stale = await run(h, ["reply", seq, "from a seat G lost"], gone, projects);
+    expect(stale.code).toBe(1);
+    expect(stale.err).toContain("this session was shown that message as sleeper, and it isn't sleeper now: pass --as NAME to act as one");
+    expect(seats()).toEqual(before);
+    expect(await ok(ownerB, ["log"])).not.toContain("from a seat G lost");
+    expect((await run(h, ["reply", seq, "from the seat that holds it"], RESTARTED, projects)).code).toBe(0);
+    expect(await ok(ownerB, ["log"])).toContain("from the seat that holds it");
   });
 });

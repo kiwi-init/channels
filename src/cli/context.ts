@@ -13,7 +13,6 @@ import { heldAway, heldText, seatHeldAway } from "../hold.ts";
 import { BadName } from "@kiwi/core/refusals.ts";
 import { NAME_RE } from "@kiwi/core/membership.ts";
 import { args, opt } from "./args.ts";
-import { readsOnly } from "./reads.ts";
 
 export class Quit extends Data.TaggedError("Quit")<{ readonly message: string; readonly code: number }> {}
 
@@ -58,7 +57,9 @@ function answered(): { alias: string; as: string } | undefined {
   return from.length === 1 ? from[0] : undefined;
 }
 
-export const channelAlias = Effect.fn("kiwi.channelAlias")(function* (code?: string) {
+export type Use = "acts" | "reads";
+
+export const channelAlias = Effect.fn("kiwi.channelAlias")(function* (code?: string, use: Use = "acts") {
   const cfg = yield* config;
   const all = Object.keys(cfg.channels);
   const linked = code === undefined ? null : all.filter((a) => cfg.channels[a]?.code === code);
@@ -66,9 +67,8 @@ export const channelAlias = Effect.fn("kiwi.channelAlias")(function* (code?: str
   const explicit = opt.channel ?? process.env.KIWI_CHANNEL ?? (linked?.length === 1 ? linked[0] : undefined);
   const elsewhere = (alias: string) => !!linked && !linked.includes(alias);
   const away = (alias: string) => die(`that link is to a message in ${linked?.join(" or ")}, not in ${alias}: pass -c ${linked?.[0]}`);
-  const reading = readsOnly(args);
   const named = opt.as ?? process.env.KIWI_AS;
-  const found = explicit ? [] : seatsFor(process.cwd(), reading ? { claim: "own" } : {});
+  const found = explicit ? [] : seatsFor(process.cwd(), use === "reads" ? { claim: "own" } : {});
   const ours = named ? found : found.filter((b) => ownsSeat(b, declaredHere()));
   if (!explicit) reportSeatTook();
   const fits = ours.length > 1 && named ? ours.filter((b) => b.as === named) : ours;
@@ -100,20 +100,23 @@ export const channelAlias = Effect.fn("kiwi.channelAlias")(function* (code?: str
   return alias;
 });
 
-export const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConfig) {
+export const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConfig, use: Use = "acts") {
   const keys = yield* Keystore;
   const explicit = opt.as ?? process.env.KIWI_AS;
   let raw = explicit;
   if (!raw && ch) {
-    const reading = readsOnly(args);
     const who = declaredHere();
-    const ours = seatsFor(process.cwd(), { room: ch.roomId, ...(reading ? { claim: "own" as const } : {}) });
+    const ours = seatsFor(process.cwd(), { room: ch.roomId, ...(use === "reads" ? { claim: "own" as const } : {}) });
     reportSeatTook();
     const cfg = yield* keys.config;
     const inRoom = ours.filter((b) => cfg.channels[b.alias]?.roomId === ch.roomId);
-    const [bound, ...also] = inRoom.filter((b) => ownsSeat(b, who));
+    const owned = inRoom.filter((b) => ownsSeat(b, who));
+    const [bound, ...also] = owned;
     const heard = answered();
-    const told = heard && cfg.channels[heard.alias]?.roomId === ch.roomId ? heard.as : undefined;
+    const heardAs = heard && cfg.channels[heard.alias]?.roomId === ch.roomId ? heard.as : undefined;
+    const lost = !!who.session && heardAs !== undefined && !owned.some((b) => b.as === heardAs);
+    if (lost) return yield* die(`this session was shown that message as ${heardAs}, and it isn't ${heardAs} now: pass --as NAME to act as one`);
+    const told = heardAs;
     const several = bound !== undefined && also.length > 0;
     if (several && !told) return yield* die(`this session is several agents in this channel (${[bound, ...also].map((b) => b.as).join(", ")}); pass --as NAME to say which`);
     const held = ours.length ? [] : seatsNear(process.cwd()).filter((b) => cfg.channels[b.alias]?.roomId === ch.roomId);
@@ -128,8 +131,7 @@ export const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConf
       const mine = (yield* keys.identitiesIn(ch.roomId)).filter((n) => n !== ch.owner && n !== ch.person);
       const away = inRoom.filter((b) => !ownsSeat(b, who));
       if (who.session && (away.length || mine.length)) {
-        if (!told) return yield* die(away.length ? notYours(away) : `this session is none of the agents on this machine in this channel (${mine.join(", ")}): pass --as NAME to act as one`);
-        raw = told;
+        return yield* die(away.length ? notYours(away) : `this session is none of the agents on this machine in this channel (${mine.join(", ")}): pass --as NAME to act as one`);
       } else {
         if (mine.length > 1 && !told) return yield* die(`several agents on this machine are in this channel (${mine.join(", ")}); pass --as NAME`);
         raw = mine.length > 1 ? told : (mine[0] ?? ch.as);
@@ -142,11 +144,11 @@ export const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConf
   return name;
 });
 
-export const session = Effect.fn("kiwi.session")(function* (code?: string) {
-  const alias = yield* channelAlias(code);
+export const session = Effect.fn("kiwi.session")(function* (code?: string, use: Use = "acts") {
+  const alias = yield* channelAlias(code, use);
   const all = yield* config;
   const cfg = all.channels[alias]!;
-  acting.name = yield* agentName(cfg);
+  acting.name = yield* agentName(cfg, use);
   if (seatHeldAway(all, alias, acting.name)) return yield* die(heldText(alias, acting.name));
   const keys = yield* Keystore;
   if (!(yield* keys.identitiesIn(cfg.roomId)).includes(acting.name)) {
@@ -156,6 +158,8 @@ export const session = Effect.fn("kiwi.session")(function* (code?: string) {
   yield* keepDaemon;
   return yield* openSession(alias, cfg, acting.name);
 });
+
+export const readSession = (code?: string) => session(code, "reads");
 
 export const keepDaemon = Effect.promise(() =>
   ensureDaemon().then(

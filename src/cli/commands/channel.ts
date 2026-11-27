@@ -12,13 +12,13 @@ import { bindDirectory, seatsFor } from "../../hooks.ts";
 import { heldText, seatHeldAway } from "../../hold.ts";
 import { setWake, wakeSeats } from "../../wake-seats.ts";
 import { args, opt } from "../args.ts";
-import { agentName, type Command, die, noteRead, out, seatHere, session } from "../context.ts";
+import { agentName, type Command, die, noteRead, out, readSession, seatHere, session } from "../context.ts";
 import { ADMIN_GONE } from "./admin.ts";
 
 export const channelCommands: Record<string, Command> = {
   rooms: () =>
     Effect.gen(function* () {
-      const s = yield* session();
+      const s = yield* readSession();
       out(formatRooms((yield* s.state()).state, s.me));
     }),
 
@@ -77,8 +77,8 @@ export const channelCommands: Record<string, Command> = {
         const seats = wakeSeats(loadConfig());
         return out(opt.json ? JSON.stringify({ seats }) : seats.map((s) => `${s.alias}/${s.agent}: ${s.wake}`).join("\n") || "no seats on this computer");
       }
-      const s = yield* session();
       const turn = args[1];
+      const s = yield* turn === undefined ? readSession() : session();
       if (turn === "on" || turn === "off") {
         const key = wakeKey(s.alias, s.me);
         updateConfig((cfg) => {
@@ -116,7 +116,7 @@ export const channelCommands: Record<string, Command> = {
 
   status: () =>
     Effect.gen(function* () {
-      const s = yield* session();
+      const s = yield* readSession();
       const [{ messages, state }, online] = yield* Effect.all([s.state(), s.who()], { concurrency: "unbounded" });
       const on = new Map(
         [...online].map(([n, p]) => [
@@ -143,14 +143,14 @@ export const channelCommands: Record<string, Command> = {
 
   hold: () =>
     Effect.gen(function* () {
-      const s = yield* session();
+      const s = yield* readSession();
       if (args.length > 1) return yield* die(ADMIN_GONE);
       out(holdLine((yield* s.state()).state) ?? "not on hold");
     }),
 
   icon: () =>
     Effect.gen(function* () {
-      const s = yield* session();
+      const s = yield* readSession();
       if (args[1] || opt.image || opt.clear) return yield* die(ADMIN_GONE);
       {
         const icon = yield* s.ch.fx.icon();
