@@ -36,8 +36,8 @@ import { backToReview, checkChangeRefusal, closeCancelled, landingTouchedByAsk, 
 import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
-import { settle } from "./leases.ts";
-import { nudge, QUIET_MS, roll, tick, timedStep, waitEndedBy, wakeGot, type ClockView } from "./clocks.ts";
+import { settle, type LeftLine } from "./leases.ts";
+import { nudge, QUIET_MS, roll, rolled, tick, timedStep, waitEndedBy, wakeGot, type ClockView } from "./clocks.ts";
 
 const CLOCK_BLIND_OPS: ReadonlySet<string> = new Set([
   "hello",
@@ -493,6 +493,10 @@ export function cursor(
   const nameTaken = (name: string, except?: string) => [...rooms.values()].some((r) => r.id !== except && !r.members && r.name.toLowerCase() === name.toLowerCase());
   const roomOf = shown<number, string>(from?.roomOf);
   const placeOf = shown<number, Place>(from?.placeOf);
+  const lineLeft: [number, number][] = [];
+  const leftLine: LeftLine = (q, when) => {
+    if (q.task !== undefined) lineLeft.push([q.task, when]);
+  };
   const ctx: FoldCtx = {
     members,
     signed,
@@ -517,6 +521,7 @@ export function cursor(
     facts,
     docs,
     leases,
+    leftLine,
     rooms,
     secret,
     roomsSince,
@@ -563,7 +568,8 @@ export function cursor(
     const by = answered.get(m.seq);
     return !by || ![...by].some((n) => answersAsk(members, m, n));
   };
-  const clockView = (): ClockView => ({ tasks, members, github: ctx.github, branchPrefix: ctx.branchPrefix, quietMs: ctx.quietMs, openAsks: holding.filter(stillOpen) });
+  const clockView = (): ClockView => ({ tasks, members, leases, github: ctx.github, branchPrefix: ctx.branchPrefix, quietMs: ctx.quietMs, openAsks: holding.filter(stillOpen) });
+  const inLine = (): number[] => [...leases.values()].flatMap((l) => l.queue.flatMap((q) => (q.task !== undefined ? [q.task] : [])));
   const present = (m: FoldMember | undefined): m is FoldMember => !!m && m.active && (m.owner || !gone.has(m.pk));
   const agentHere = (name: string): boolean => {
     const who = members.get(name);
@@ -584,9 +590,21 @@ export function cursor(
     timeTask(t);
   };
   const rollTimed = (at: number): void => {
-    if (!timed.size) return;
+    const waiting = inLine();
+    if (!timed.size && !waiting.length) return;
     const view = clockView();
-    for (const id of timed) {
+    for (const id of new Set([...timed, ...waiting])) {
+      const t = tasks.get(id);
+      if (t) roll(view, t, at);
+    }
+  };
+  const rollLine = (at: number): void => {
+    const view = clockView();
+    for (const [id, when] of lineLeft.splice(0)) {
+      const t = tasks.get(id);
+      if (t) roll(view, t, when, when);
+    }
+    for (const id of inLine()) {
       const t = tasks.get(id);
       if (t) roll(view, t, at);
     }
@@ -980,7 +998,7 @@ export function cursor(
       );
 
       const taskAsk = ev.op === "task.update" || ev.op === "task.delete" ? tasks.get(ev.task)?.ask : undefined;
-      const before = "task" in ev ? tasks.get(ev.task) : undefined;
+      const before = "task" in ev && ev.op !== "lease.take" ? tasks.get(ev.task) : undefined;
       const ownedBy = before?.owner;
       if (ev.op === "task.nudge") {
         const wrong = before ? nudge(clockView(), before, ev, { seq: m.seq, at, by: m.from }, { agentQueue: agentHere, lead: leadHere, stands: standsFor }) : `no task ${taskId(ev.task)}`;
@@ -993,6 +1011,7 @@ export function cursor(
       }
       const markWas = member.reset;
       applyEvent(ctx, m, ev, member, at, reject);
+      if (ev.op === "lease.take" || ev.op === "lease.free") rollLine(at);
       const marksMoved = !rejected.has(m.seq) && (ev.op === "review.reset.set" || ev.op === "review.reset.waive" || member.reset !== markWas);
       if (!rejected.has(m.seq) && ev.op !== "task.nudge" && ev.op !== "task.wake") {
         const subject = ev.op === "task.add" ? tasks.get(m.seq) : before && tasks.has(before.id) ? before : undefined;
@@ -1216,9 +1235,12 @@ export function cursor(
       v.facts = facts;
     }
     let leasesOwned = v.own;
+    const left: [number, number][] = [];
     for (const [name, lease] of [...v.leases]) {
       const settled = v.own ? lease : structuredClone(lease);
-      settle(settled, at);
+      settle(settled, at, (q, when) => {
+        if (q.task !== undefined) left.push([q.task, when]);
+      });
       const drop = !settled.holder && !settled.queue.length;
       if (!drop && (v.own || same(settled, lease))) continue;
       if (!leasesOwned) {
@@ -1229,6 +1251,17 @@ export function cursor(
       else v.leases.set(name, settled);
     }
     let tasksOwned = v.own;
+    const view: ClockView = { ...clockView(), tasks: v.tasks, leases: v.leases };
+    for (const [id, when] of left) {
+      const t = v.tasks.get(id);
+      const clock = t && rolled(view, t, when, when);
+      if (!t || clock === t.clock) continue;
+      if (!tasksOwned) {
+        v.tasks = new Map(v.tasks);
+        tasksOwned = true;
+      }
+      v.tasks.set(id, { ...t, clock });
+    }
     for (const t of [...v.tasks.values()]) {
       if (t.state === "done" || !t.owner || v.members.get(t.owner)?.active !== false) continue;
       if (!tasksOwned) {

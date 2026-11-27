@@ -8,7 +8,7 @@ import { isPerson } from "./state/people.ts";
 import type { ChannelState, Task, Woke } from "./state/types.ts";
 import { spanText } from "./steps.ts";
 
-type Board = Pick<ChannelState, "tasks" | "members" | "lead" | "openAsks" | "github" | "branchPrefix" | "quietMs">;
+type Board = Pick<ChannelState, "tasks" | "members" | "lead" | "openAsks" | "github" | "branchPrefix" | "quietMs" | "leases">;
 
 export interface Clock {
   mover: string;

@@ -1,4 +1,4 @@
-import type { Frozen, Lease } from "@kiwi/core/state.ts";
+import type { Frozen, Lease, Task } from "@kiwi/core/state.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { personaAnswers } from "@kiwi/core/personality.ts";
 import * as Deferred from "effect/Deferred";
@@ -602,13 +602,14 @@ export class SessionMessaging extends SessionListen {
 
   readonly lease = Effect.fn("AgentSession.lease")(
     { self: this },
-    function* (this: SessionMessaging, name: string, ttlSec: number, note?: string) {
+    function* (this: SessionMessaging, name: string, ttlSec: number, note?: string, blocks?: number | "own") {
       if (!LEASE_NAME_RE.test(name)) return yield* new Rejected("a lease is named in lowercase letters, digits and . _ / -, up to 64 characters: kiwi lock build");
       if (ttlSec < 60 || ttlSec > MAX_LEASE_SECONDS) return yield* new Rejected(`a lease lasts from a minute to ${MAX_LEASE_SECONDS / 3600}h`);
       const ttl = Math.round(ttlSec);
       const held = yield* this.heldByMe(name);
       if (!held) {
-        const seq = yield* this.event({ op: "lease.take", name, ttl, ...(note ? { note } : {}) }, `asked for ${name}`);
+        const task = blocks === undefined ? undefined : yield* this.lockTask(blocks);
+        const seq = yield* this.event({ op: "lease.take", name, ttl, ...(note ? { note } : {}), ...(task !== undefined ? { task } : {}) }, `asked for ${name}`);
         const lease = (yield* this.confirm(seq)).leases.get(name);
         if (!lease) return yield* new Rejected(`${name} didn't take`);
         return lease;
@@ -621,6 +622,20 @@ export class SessionMessaging extends SessionListen {
     },
     oneLook,
   );
+
+  private lockTask(blocks: number | "own") {
+    return Effect.gen({ self: this }, function* () {
+      const { state } = yield* this.state();
+      const open = (t: Frozen<Task>): boolean => t.state !== "done" && !t.archived;
+      if (blocks !== "own") {
+        const named = state.tasks.get(blocks);
+        if (!named || !open(named)) return yield* new Rejected(`no open task ${taskId(blocks)} to wait for: kiwi lock NAME --task T7 names one`);
+        return blocks;
+      }
+      const doing = [...state.tasks.values()].filter((t) => open(t) && t.state === "doing" && t.owner === this.me);
+      return doing.length === 1 ? doing[0]!.id : undefined;
+    });
+  }
 
   private heldByMe(name: string) {
     return Effect.gen({ self: this }, function* () {

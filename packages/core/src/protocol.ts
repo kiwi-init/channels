@@ -323,7 +323,7 @@ export type Event =
   | { op: "release"; paths?: string[] }
   | { op: "fact.set"; key: string; value: string; ttl?: number }
   | { op: "fact.del"; key: string }
-  | { op: "lease.take"; name: string; ttl: number; note?: string }
+  | { op: "lease.take"; name: string; ttl: number; note?: string; task?: number }
   | { op: "lease.free"; name: string }
   /** The owner, or a person who manages agents (on an agent): set a member's role (and rules), or allow the one they asked for. */
   | { op: "role.set"; member: string; role: string | null; about?: string | null }
@@ -1041,7 +1041,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 34;
+export const FOLD_RULES = 35;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1306,7 +1306,7 @@ function eventCheck(ev: unknown): boolean | null {
     case "fact.del":
       return str(e.key, 200);
     case "lease.take":
-      return leaseName(e.name) && Number.isSafeInteger(e.ttl) && (e.ttl as number) >= 60 && (e.ttl as number) <= MAX_LEASE_SECONDS && opt(e.note, (x): x is string => str(x, 500));
+      return leaseName(e.name) && Number.isSafeInteger(e.ttl) && (e.ttl as number) >= 60 && (e.ttl as number) <= MAX_LEASE_SECONDS && opt(e.note, (x): x is string => str(x, 500)) && opt(e.task, n);
     case "lease.free":
       return leaseName(e.name);
     case "role.set":

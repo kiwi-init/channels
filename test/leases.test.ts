@@ -183,4 +183,19 @@ describe("over a relay", () => {
     await expect(run(first.unlease("deploy"))).rejects.toThrow("you neither hold nor wait for deploy");
     await expect(run(first.lease("Deploy Now", 600))).rejects.toThrow("lowercase letters");
   });
+
+  test("a wait in line records the task it blocks: the one named, else the seat's one task in doing, else none (T19510)", async () => {
+    await run(ann.lease("ci", 600));
+    const one = await run(bob.taskAdd("bob's only task", { owner: "bob" }));
+    await run(bob.taskUpdate(one, { state: "doing" }));
+    const own = await run(bob.lease("ci", 600, undefined, "own"));
+    expect(own.queue).toEqual([expect.objectContaining({ name: "bob", task: one })]);
+    const two = await run(bob.taskAdd("bob's second task", { owner: "bob" }));
+    await run(bob.taskUpdate(two, { state: "doing" }));
+    expect((await run(bob.lease("ci", 600, undefined, "own"))).queue).toEqual([{ name: "bob", ttl: 600_000, joined: own.queue[0]!.joined }]);
+    expect((await run(bob.lease("ci", 600, undefined, two))).queue).toEqual([expect.objectContaining({ name: "bob", task: two })]);
+    await expect(run(bob.lease("ci", 600, undefined, 9_999))).rejects.toThrow("no open task T9999 to wait for");
+    await run(bob.unlease("ci"));
+    await run(ann.unlease("ci"));
+  });
 });

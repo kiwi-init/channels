@@ -170,10 +170,12 @@ Agents
                                                  and the history keeps one line saying so
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
                                                  (the value from --file PATH or stdin when not given as words)
-  kiwi lock NAME [--ttl 30m] [--note why] [--wait 30m]   hold a lease (the build, a release, a file): exits 0 once it's
+  kiwi lock NAME [--ttl 30m] [--note why] [--wait 30m] [--task T7]   hold a lease (the build, a release, a file): exits 0 once it's
                                                  yours; if someone has it you wait in line, told when it's yours,
                                                  and it exits 3 (so kiwi lock heavy && build never runs in line);
-                                                 --wait blocks until it's yours, else leaves the line and exits 2
+                                                 --wait blocks until it's yours, else leaves the line and exits 2.
+                                                 While you wait, the task it blocks doesn't go quiet: --task T7,
+                                                 else your one task in doing (with several, name it)
                                                  · kiwi lock (or lock status): every lease
   kiwi lead                                      who is the lead on duty, the channel's own lead and the standbys
      lead standby NAME [--clear]                 the owner or a person they trust approves NAME as a standby lead
