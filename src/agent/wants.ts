@@ -6,7 +6,7 @@ import { changedAfterApproval, freeAgents, isPerson, leadAnswerOf, onSpec, openR
 import type { Delivery } from "./shared.ts";
 
 import { mentionsOf } from "@kiwi/core/changes.ts";
-import { mentionsOffDutyLead } from "@kiwi/core/duty.ts";
+import { namesOffDutyLead } from "@kiwi/core/duty.ts";
 import { sentHere, sentTo } from "@kiwi/core/room-rules.ts";
 
 export function narrows(d: Delivery): boolean {
@@ -70,7 +70,7 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
     return addressed || m.ev?.op === "hello" || m.ev?.op === "room.create" || m.ev?.op === "room.rename" || m.ev?.op === "charter.set" || m.ev?.op === "repos.set" || m.ev?.op === "hold.set";
   if (d.chat) return true;
   if (mentionsOf(m.body).has(me.toLowerCase())) return true;
-  if (state?.lead === me && mentionsOffDutyLead(state, m)) return true;
+  if (state?.lead === me && namesOffDutyLead(state, m)) return true;
   const place = state?.placeOf.get(m.seq);
   const inMyThread = !!state?.threadPeople.get(state.threadOf.get(m.seq) ?? m.seq)?.has(me);
   if (state && place && place.kind !== "main") return isDirectedAt(m, me) || threadMembers(state, place).includes(me) || inMyThread;

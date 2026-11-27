@@ -104,10 +104,10 @@ export function offDutyHint(state: Frozen<Pick<ChannelState, "duty" | "offDuty" 
   return `${hit.join(", ")} ${hit.length === 1 ? "is" : "are"} off duty; ${state.lead} is the lead on duty`;
 }
 
-export function mentionsOffDutyLead(state: Frozen<Pick<ChannelState, "duty" | "offDuty" | "homeLead" | "lead">>, m: Pick<Message, "kind" | "dm" | "body">): boolean {
-  if (m.kind === "event" || m.dm) return false;
-  const said = mentionsOf(m.body);
-  return offDutyLeads(state).some((name) => said.has(name.toLowerCase()));
+export function namesOffDutyLead(state: Frozen<Pick<ChannelState, "duty" | "offDuty" | "homeLead" | "lead" | "placeOf">>, m: Pick<Message, "seq" | "kind" | "dm" | "body" | "to">): boolean {
+  if (m.kind === "event" || m.dm || state.placeOf.get(m.seq)?.kind === "dm") return false;
+  const named = new Set([...mentionsOf(m.body), ...(m.to ?? []).map((n) => n.toLowerCase())]);
+  return offDutyLeads(state).some((name) => named.has(name.toLowerCase()));
 }
 
 export function leadsNow(state: Frozen<Pick<ChannelState, "members" | "lead" | "duty">>, name: string): boolean {

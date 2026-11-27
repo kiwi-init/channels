@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { leadsNow, mentionsOffDutyLead, offDutyHint, offDutyLeads } from "@kiwi/core/duty.ts";
+import { leadsNow, namesOffDutyLead, offDutyHint, offDutyLeads } from "@kiwi/core/duty.ts";
 import { formatStatus, statusJson } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { EVENT_OPS_VERSION, PROTOCOL_VERSION, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
@@ -21,7 +21,7 @@ beforeAll(async () => {
   ];
 });
 
-type Extra = Partial<Pick<Message, "to" | "ev" | "re" | "room" | "dm">>;
+type Extra = Partial<Pick<Message, "to" | "ev" | "re" | "room" | "dm" | "task">>;
 
 async function channel() {
   const log: Message[] = [];
@@ -68,13 +68,38 @@ describe("messages to an off-duty lead (#19397 box 12)", () => {
     const plain = await c.say("ann", "msg", "the export runs", { room: "ops" });
     const direct = await c.say("ann", "msg", "@lead a private word about the database", { to: ["lead"], dm: true });
     const s = c.state();
-    expect(mentionsOffDutyLead(s, room)).toBe(true);
+    expect(namesOffDutyLead(s, room)).toBe(true);
     expect(wants("spare", room, s)).toBe(true);
     expect(wants("zed", room, s)).toBe(false);
     expect(wants("spare", plain, s)).toBe(false);
-    expect(mentionsOffDutyLead(s, direct)).toBe(false);
+    expect(namesOffDutyLead(s, direct)).toBe(false);
     expect(wants("spare", direct, s)).toBe(false);
     expect(wants("lead", direct, s)).toBe(true);
+  });
+
+  test("a reply to the off-duty lead's message in a room or a task thread reaches the lead on duty; a reply in a direct thread doesn't", async () => {
+    const c = await channel();
+    await c.ev("jow", { op: "room.create", id: "ops", name: "ops" });
+    const task = await c.ev("jow", { op: "task.add", title: "export" });
+    const asked = await c.say("lead", "msg", "Which day?", { room: "ops" });
+    const inTask = await c.say("lead", "msg", "Who reviews this?", { task: task.seq });
+    const annSaid = await c.say("ann", "msg", "the export is slow", { room: "ops" });
+    const privately = await c.say("lead", "msg", "a private word", { to: ["ann"], dm: true });
+    await c.hand("lead", "spare", `T${task.seq} export: open, nobody on it`);
+    expect(c.state().lead).toBe("spare");
+    const reply = (parent: Message, body: string) => c.say("ann", "msg", body, { re: [parent.seq], to: [parent.from], ...(parent.room ? { room: parent.room } : {}) });
+    const friday = await reply(asked, "Friday");
+    const reviewer = await reply(inTask, "zed can");
+    const toAnn = await c.say("zed", "msg", "I'll look", { re: [annSaid.seq], to: ["ann"], room: "ops" });
+    const direct = await reply(privately, "the database password rotates tonight");
+    const s = c.state();
+    expect(s.placeOf.get(direct.seq)?.kind).toBe("dm");
+    expect([friday, reviewer].map((m) => [namesOffDutyLead(s, m), wants("spare", m, s), wants("zed", m, s)])).toEqual([
+      [true, true, false],
+      [true, true, false],
+    ]);
+    expect(wants("spare", toAnn, s)).toBe(false);
+    expect([namesOffDutyLead(s, direct), wants("spare", direct, s), wants("lead", direct, s)]).toEqual([false, false, true]);
   });
 });
 
