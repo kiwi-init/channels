@@ -20,7 +20,7 @@ import {
 import { inlineText } from "../membership.ts";
 import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
-import { allowedOnHold, answersAsk, escalationTargets, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
+import { allowedOnHold, answersAsk, answersLeadAsk, answersLeadOwned, escalationTargets, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
 import { answerChecks, checkFrom, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
 import { checkAnswered, checkClosed, checkStep, migrateChecks, questionAnswered, questionWatched, seedSteps } from "./landing-steps.ts";
 import { choiceIn } from "../checks.ts";
@@ -28,7 +28,7 @@ import { stepsOfThen } from "../steps.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf, sentTo } from "../room-rules.ts";
-import { askHeadOf, askOfMessage, fileTask } from "./asks.ts";
+import { askHeadOf, askOfMessage, fileTask, readHandedOver } from "./asks.ts";
 import { cancelledWithSpec, closesOnItsOwn, foldSpec, noteSpecComment, specGate } from "./specs.ts";
 import { backToReview, checkChangeRefusal, closeCancelled, landingTouchedByAsk, landingTouchedByClose, taskId } from "./tasks.ts";
 import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
@@ -84,6 +84,8 @@ import type {
   SecretRoom,
   Spec,
   Standby,
+  LeadAsk,
+  LeadOwned,
   Task,
   StepQuestion,
   Duty,
@@ -227,6 +229,8 @@ interface Inner {
   specsOnly: ChannelStateDraft["specsOnly"];
   duty: Duty | null;
   standbys: ReadonlyMap<string, Standby>;
+  leadAsks: ReadonlyMap<number, LeadAsk>;
+  leadOwned: ReadonlyMap<number, LeadOwned>;
   dutyLead: (home: string | null) => string | null;
   head: number;
   seen: Set<number>;
@@ -364,6 +368,8 @@ export function cursor(
   }
   let duty: Duty | null = from?.duty ?? null;
   const standbys = new Map<string, Standby>(from?.standbys);
+  const leadAsks = new Map<number, LeadAsk>(from?.leadAsks);
+  const leadOwned = new Map<number, LeadOwned>(from?.leadOwned);
   const trusted = (pk: string, member: FoldMember): boolean => member.kind === "human" && !member.owner && canPost(scopesByKey.get(pk) ?? []) && POWERS.every((p) => held(pk, p));
   const logged = (member: FoldMember): boolean | undefined => {
     const lead = personaLead.get(member.name);
@@ -431,6 +437,7 @@ export function cursor(
   const placesBefore = from?.placesBefore ?? [];
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
   const closedAsks = new Set<number>();
+  const baseAsks = new Set(from?.asks.map((a) => a.seq));
   const askers = new Map([...(from?.asks ?? []), ...messages].flatMap((a): [number, string][] => ((a.kind === "ask" || a.kind === "blocking") && !a.permission ? [[a.seq, a.from]] : [])));
   const decisions = new Set([...(from?.asks ?? []), ...messages].flatMap((a): number[] => ((a.kind === "ask" || a.kind === "blocking") && a.esc && !a.permission ? [a.seq] : [])));
   const settledBy = new Map<number, Set<string>>();
@@ -528,6 +535,8 @@ export function cursor(
     if (ignored(trust.get(m.seq)) || closedAsks.has(m.seq)) return false;
     if (m.permission)
       return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members, bySeq: permBySeq }) !== null));
+    const recorded = leadAsks.get(m.seq) ?? leadOwned.get(m.seq);
+    if (recorded) return !recorded.answer;
     const by = answered.get(m.seq);
     return !by || ![...by].some((n) => answersAsk(members, m, n));
   };
@@ -747,11 +756,33 @@ export function cursor(
           for (const id of m.holds) tickTask(tasks.get(id), m.seq, at);
         }
       }
+      if (m.kind === "ask" || m.kind === "blocking") {
+        const onDuty = leadNow();
+        if (onDuty && m.from !== onDuty && m.to?.includes(onDuty) && readHandedOver(String(m.body ?? ""))?.from === m.from)
+          leadAsks.set(m.seq, { sentTo: onDuty, from: m.from, plain: !m.handoff && !m.step });
+        else if (
+          onDuty &&
+          m.from === onDuty &&
+          !m.permission &&
+          !m.check &&
+          m.to?.length &&
+          m.to.every((t) => {
+            const p = members.get(t);
+            return !!p && isPerson(p);
+          })
+        )
+          leadOwned.set(m.seq, { author: onDuty, to: [...m.to], esc: !!m.esc, plain: !m.handoff && !m.step });
+      }
       member.lastSeen = Math.max(member.lastSeen, at);
       if (!isOverlay(m)) member.messages++;
 
       for (const r of m.re ?? []) {
         if (!(r < m.seq)) continue;
+        const settles = m.kind !== "event" && (r > after || baseAsks.has(r)) && !closedAsks.has(r) && !ignored(trust.get(r)) && !typedOnly(m, r);
+        const handed = leadAsks.get(r);
+        if (settles && handed && !handed.answer && answersLeadAsk(members, handed, leadNow(), m.from)) leadAsks.set(r, { ...handed, answer: { by: m.from, seq: m.seq } });
+        const owned = leadOwned.get(r);
+        if (settles && owned && !owned.answer && answersLeadOwned(members, owned, m.from)) leadOwned.set(r, { ...owned, answer: { by: m.from, seq: m.seq, to: leadNow() ?? owned.author } });
         let set = answered.get(r);
         if (!set) answered.set(r, (set = new Set()));
         if (!typedOnly(m, r)) set.add(m.from);
@@ -1040,6 +1071,8 @@ export function cursor(
         specsOnly,
         duty,
         standbys: [...standbys],
+        leadAsks: [...leadAsks].filter(([seq, a]) => seq > cut || (a.answer?.seq ?? 0) > cut || openAsks.some((o) => o.seq === seq)),
+        leadOwned: [...leadOwned].filter(([seq, o]) => seq > cut || (o.answer?.seq ?? 0) > cut || openAsks.some((a) => a.seq === seq)),
         checks: [...checks.values()],
         answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
         threadOf: keptThreads,
@@ -1075,6 +1108,8 @@ export function cursor(
       specsOnly,
       duty,
       standbys: new Map(standbys),
+      leadAsks: new Map(leadAsks),
+      leadOwned: new Map(leadOwned),
       homeLead: theLead ?? null,
       checks,
       threadOf,
@@ -1205,6 +1240,8 @@ export function cursor(
     specsOnly,
     duty,
     standbys,
+    leadAsks,
+    leadOwned,
     dutyLead,
     head,
     seen,

@@ -26,6 +26,8 @@ function blank(): ChannelStateDraft {
     duty: null,
     standbys: new Map(),
     homeLead: null,
+    leadAsks: new Map(),
+    leadOwned: new Map(),
     checks: new Map(),
     threadOf: new Map(),
     threadPeople: new Map(),

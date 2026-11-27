@@ -1,7 +1,7 @@
 import type { Frozen } from "./types.ts";
 import type { Color, Message } from "../protocol.ts";
 import { canPost } from "../scopes.ts";
-import type { ChannelState, Member } from "./types.ts";
+import type { ChannelState, LeadAsk, LeadOwned, Member } from "./types.ts";
 import { personOf, rootOf } from "../room-rules.ts";
 
 export const isPerson = (m: { kind?: string; owner?: boolean }) => m.kind === "human" || !!m.owner;
@@ -60,8 +60,27 @@ export function trustedOf(state: Pick<ChannelState, "members">): string[] {
   return [...state.members.values()].filter(fullyTrusted).map((x) => x.name);
 }
 
+interface AskShape {
+  from: string;
+  to: readonly string[];
+  esc: boolean;
+  plain: boolean;
+}
+
+function answersShape(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, ask: AskShape, name: string): boolean {
+  return ask.esc ? ask.to.includes(name) || (ask.plain && answersDecisions(members, name)) : name !== ask.from;
+}
+
 export function answersAsk(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, m: Frozen<Pick<Message, "from" | "esc" | "to" | "handoff" | "step">>, name: string): boolean {
-  return m.esc ? !!m.to?.includes(name) || (!m.handoff && !m.step && answersDecisions(members, name)) : name !== m.from;
+  return answersShape(members, { from: m.from, to: m.to ?? [], esc: !!m.esc, plain: !m.handoff && !m.step }, name);
+}
+
+export function answersLeadAsk(members: ReadonlyMap<string, Pick<Member, "active" | "owner" | "answersDecisions">>, ask: Pick<LeadAsk, "plain">, lead: string | null, name: string): boolean {
+  return name === lead || !!(members.get(name)?.owner && members.get(name)?.active) || (ask.plain && answersDecisions(members, name));
+}
+
+export function answersLeadOwned(members: ReadonlyMap<string, Pick<Member, "active" | "answersDecisions">>, ask: Pick<LeadOwned, "author" | "to" | "esc" | "plain">, name: string): boolean {
+  return answersShape(members, { from: ask.author, to: ask.to, esc: ask.esc, plain: ask.plain }, name);
 }
 
 export function decidersOf(state: Pick<ChannelState, "members">, m: Pick<Message, "esc" | "to" | "handoff" | "permission" | "step">): string[] {

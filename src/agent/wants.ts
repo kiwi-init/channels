@@ -2,7 +2,7 @@ import type { Frozen } from "@kiwi/core/state.ts";
 import { personaAnswers } from "@kiwi/core/personality.ts";
 import { isDirectedAt, isForAgent } from "@kiwi/core/client.ts";
 import { GENERAL_ROOM, ignored, type Message } from "@kiwi/core/protocol.ts";
-import { changedAfterApproval, freeAgents, isPerson, onSpec, openRound, specOfComment, threadMembers, type ChannelState, type Task } from "@kiwi/core/state.ts";
+import { changedAfterApproval, freeAgents, isPerson, leadAnswerOf, onSpec, openRound, specOfComment, threadMembers, type ChannelState, type Task } from "@kiwi/core/state.ts";
 import type { Delivery } from "./shared.ts";
 
 import { mentionsOf } from "@kiwi/core/changes.ts";
@@ -60,6 +60,9 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   const waiting = d.loop && state ? waitingTask(state, me) : undefined;
   if (waiting !== undefined) return wantsWhileWaiting(me, m, state, waiting);
   if (state && (specNews(me, m, state) || specComment(me, m, state))) return true;
+  const settled = state && m.kind !== "event" ? leadAnswerOf(state, m) : undefined;
+  if (settled?.to === me) return true;
+  if (settled && settled.author === me && !mentionsOf(m.body).has(me.toLowerCase())) return false;
   const persona = state?.members.get(me)?.persona;
   const addressed = isDirectedAt(m, me) || !!m.to?.includes("*") || !!m.to?.some((t) => t.startsWith("role:") && personaAnswers(persona, t.slice(5)));
   if (m.kind === "event")

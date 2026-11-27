@@ -81,6 +81,8 @@ export function folded(messages: Message[], roster: Roster, now: number, roomsFl
       specsOnly: i.specsOnly,
       duty: i.duty,
       standbys: reused(new Map(i.standbys), was?.standbys),
+      leadAsks: reused(new Map(i.leadAsks), was?.leadAsks),
+      leadOwned: reused(new Map(i.leadOwned), was?.leadOwned),
       homeLead: theLead ?? null,
       checks: shownAs("checks"),
       threadOf: shownAs("threadOf"),
