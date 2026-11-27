@@ -858,6 +858,7 @@ export const PROOF_URL_MAX_LENGTH = 2000;
 export const PROOF_LABEL_MAX_LENGTH = 80;
 export const PROOF_MAX = 50;
 export const CHECKPOINT_MAX_LENGTH = 4000;
+export const HANDOVER_CHECKPOINT_OPS = 34;
 export const REVIEW_SUMMARY_MAX_LENGTH = 4000;
 export const DECISION_KINDS = ["intent", "taste", "irreversible", "scope", "choice"] as const;
 export type DecisionKind = (typeof DECISION_KINDS)[number];

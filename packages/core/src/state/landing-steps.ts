@@ -327,7 +327,7 @@ export function editSteps(task: Task, edit: StepEdit, mark: StepMark): void {
         delete step.wait;
         const seen = step.progress.kind === "open" ? step.progress.seen : undefined;
         if (seen) {
-          step.progress = { kind: "ended", end: { how: "detected", by: seen.by, seq: seen.seq, ts: seen.at, saw: seen.saw } };
+          step.progress = { kind: "ended", end: { how: "detected", by: seen.by, seq: seen.seq, ts: seen.at ?? mark.at, saw: seen.saw } };
           note(`step ${stepText(step)}'s hold is lifted; it ended with what was seen while held: ${seen.saw}`);
         } else note(`step ${stepText(step)}'s hold is lifted`);
         break;

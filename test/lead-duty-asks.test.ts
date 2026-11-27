@@ -14,9 +14,7 @@ async function say(from: string, kind: Kind, body: string, extra: Partial<Pick<M
   const p = await sign(ids[from]!, base);
   return { ...p, seq: n, rts: T0 + n, sigOk: await verify(p) };
 }
-const named = (e: Event, upto: number): Event =>
-  e.op === "lead.duty" && e.checkpoint === undefined ? { ...e, checkpoint: Array.from({ length: Math.min(upto, 80) }, (_, i) => `T${upto - i} #${upto - i}`).join(" ") } : e;
-const ev = (from: string, e: Event) => say(from, "event", "", { ev: named(e, seq + 1) });
+const ev = (from: string, e: Event) => say(from, "event", "", { ev: e });
 
 let roster: Roster;
 beforeAll(async () => {

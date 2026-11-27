@@ -23,8 +23,6 @@ beforeAll(async () => {
   ];
 });
 
-const named = (e: Event, upto: number): Event =>
-  e.op === "lead.duty" && e.checkpoint === undefined ? { ...e, checkpoint: Array.from({ length: Math.min(upto, 80) }, (_, i) => `T${upto - i} #${upto - i}`).join(" ") } : e;
 const T0 = 1_760_000_000_000;
 const N = QUIET_MS;
 const A = "a".repeat(40);
@@ -43,7 +41,7 @@ function channel() {
     log.push(m);
     return m;
   };
-  const ev = (from: Name, e: Event) => say(from, "event", "", { ev: named(e, log.length + 1) });
+  const ev = (from: Name, e: Event) => say(from, "event", "", { ev: e });
   const add = async (more: Partial<Extract<Event, { op: "task.add" }>> = {}): Promise<number> => (await ev("owl", { op: "task.add", title: "ship", ...more })).seq;
   const update = (from: Name, task: number, change: Omit<Extract<Event, { op: "task.update" }>, "op" | "task">) => ev(from, { op: "task.update", task, ...change });
   const nudge = (from: Name, task: number, mover: string, since: number, step: 1 | 2 | 3) => ev(from, { op: "task.nudge", task, mover, since, step });

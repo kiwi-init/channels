@@ -562,7 +562,7 @@ function stepTail(state: ChannelState, t: Frozen<Task>, step: LandingStep, curre
   const hold = holdOf(step);
   const seen = step.progress.seen
     ? hold
-      ? `; delivered outside Kiwi ${ago(step.progress.seen.at, now)}: ${inlineText(step.progress.seen.saw, 120)}`
+      ? `; delivered outside Kiwi${step.progress.seen.at !== undefined ? ` ${ago(step.progress.seen.at, now)}` : ""}: ${inlineText(step.progress.seen.saw, 120)}`
       : `  seen early: ${inlineText(step.progress.seen.saw, 120)}`
     : "";
   if (hold) return `  held by ${inlineText(hold.by, 40)}: ${inlineText(hold.reason, 120)}${seen}`;

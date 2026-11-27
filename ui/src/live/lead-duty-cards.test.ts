@@ -18,7 +18,7 @@ const reply = (seq: number, from: string, to: number, body: string): Wire => wir
 
 const setup = [ev(1, "jow", { op: "role.set", member: "lead", role: "lead" }), ev(2, "jow", { op: "lead.standby", name: "spare", on: true })]
 const decision = wire(3, "dev", { kind: "blocking", body: handedOver("dev", "Which database?", {}), to: ["lead"] })
-const handover = ev(4, "lead", { op: "lead.duty", to: "spare", from: 0, checkpoint: "#3 and #4 are open." })
+const handover = ev(4, "lead", { op: "lead.duty", to: "spare", from: 0 })
 
 const cardFor = (wires: Wire[], me: string) => asksOf(fold(wires, roster, 100_000), wires, me, me === "jow", [], roster, new Map()).asks.find((a) => a.id === String(decision.seq))
 
@@ -37,7 +37,7 @@ describe("the app's card for a decision handed to the Lead follows the duty", ()
   })
 
   test("an answer before the handover stays the answer, on the card of the lead on duty", () => {
-    const wires = [...setup, decision, reply(4, "lead", 3, "postgres"), ev(5, "lead", { op: "lead.duty", to: "spare", from: 0, checkpoint: "#3 and #4 are open." }), reply(6, "spare", 3, "sqlite")]
+    const wires = [...setup, decision, reply(4, "lead", 3, "postgres"), ev(5, "lead", { op: "lead.duty", to: "spare", from: 0 }), reply(6, "spare", 3, "sqlite")]
     expect(cardFor(wires, "spare")).toMatchObject({ answer: { by: "lead", seq: 4 } })
   })
 })
@@ -46,7 +46,7 @@ describe("the app's card for an ask the lead put to a person keeps the accepted 
   test("an answer accepted under a power is still the card's answer after the power is taken back", () => {
     const grant = ev(3, "jow", { op: "power.set", member: "bo", pk: "pk-bo", was: false, power: "answersDecisions", on: true })
     const ask = wire(4, "lead", { kind: "ask", body: "Ship 2.0 today?", to: ["jow"], esc: true })
-    const out = ev(5, "lead", { op: "lead.duty", to: "spare", from: 0, checkpoint: "#3 and #4 are open." })
+    const out = ev(5, "lead", { op: "lead.duty", to: "spare", from: 0 })
     const answer = wire(6, "bo", { body: "yes", re: [4], to: ["lead"] })
     const revoke = ev(7, "jow", { op: "power.set", member: "bo", pk: "pk-bo", was: true, power: "answersDecisions", on: false })
     const wires = [...setup, grant, ask, out, answer, revoke]
@@ -57,7 +57,7 @@ describe("the app's card for an ask the lead put to a person keeps the accepted 
 
 describe("tap-to-answer doesn't rewrite a lead ask's card", () => {
   const ask = wire(3, "lead", { kind: "ask", body: "Ship 2.0 today?", to: ["jow"], esc: true })
-  const out = ev(4, "lead", { op: "lead.duty", to: "spare", from: 0, checkpoint: "#3 and #4 are open." })
+  const out = ev(4, "lead", { op: "lead.duty", to: "spare", from: 0 })
   const cardOf = (wires: Wire[]) => asksOf(fold(wires, roster, 100_000), wires, "jow", true, [], roster, new Map()).asks.find((a) => a.id === "3")
 
   test("an answer typed before tap-only was turned on stays the settled answer after it", () => {

@@ -1,9 +1,10 @@
+import { clockOf, nudgesDue } from "./clock.ts";
 import { ago } from "./format.ts";
 import { inlineText } from "./membership.ts";
 import type { Message } from "./protocol.ts";
 import { handedTo } from "./state/asks.ts";
 import type { ChannelState, Frozen, Task } from "./state/types.ts";
-import { holdOf, stepText, type LandingStep, type StepHold } from "./steps.ts";
+import { holdOf, spanText, stepText, type LandingStep, type StepHold } from "./steps.ts";
 
 export interface HeldStep {
   task: Frozen<Task>;
@@ -25,17 +26,51 @@ export function heldSteps(state: Frozen<Pick<ChannelState, "tasks">>): HeldStep[
 
 const holdLine = (h: HeldStep): string => `T${h.task.id} step ${inlineText(stepText(h.step), 80)}, held by ${inlineText(h.hold.by, 40)} (#${h.hold.seq}): ${inlineText(h.hold.reason, 120)}`;
 
+const section = (title: string, rows: readonly string[]): string[] => [`  ${title}: ${rows.length ? "" : "none"}`.trimEnd(), ...rows.map((r) => `    ${r}`)];
+
+const inFlight = (t: Frozen<Task>): boolean => !t.archived && (t.state === "doing" || t.state === "review" || t.state === "landing");
+
+function leadSteps(state: Frozen<ChannelState>, me: string, now: number): string[] {
+  const due = new Map(
+    nudgesDue(state, now)
+      .filter((d) => d.step === 2 && d.to === me)
+      .map((d) => [d.task, d]),
+  );
+  return [...state.tasks.values()].flatMap((t) => {
+    if (t.state === "done" || t.archived) return [];
+    const clock = clockOf(state, t, now);
+    const quiet = clock ? `, quiet ${spanText(clock.quiet)} with ${inlineText(clock.mover, 40)}` : "";
+    if (clock?.paged && clock.step === 2) return [`T${t.id} ${inlineText(t.title, 80)}${quiet}: told to the Lead`];
+    return due.has(t.id) ? [`T${t.id} ${inlineText(t.title, 80)}${quiet}: the Lead's step is due`] : [];
+  });
+}
+
 export function takenOverLines(state: Frozen<ChannelState>, me: string, now: number): string[] {
   const cp = state.checkpoint;
   const handed = handedTo(state, me);
-  const holds = heldSteps(state);
+  const owned = [...state.leadOwned].filter(([, o]) => !o.answer).map(([seq, o]) => `#${seq} to ${o.to.map((n) => inlineText(n, 40)).join(", ")}, asked by ${inlineText(o.author, 40)}`);
+  const tasks = [...state.tasks.values()].filter(inFlight).map((t) => `T${t.id} ${inlineText(t.title, 80)}: ${t.state}${t.owner ? `, ${inlineText(t.owner, 40)}` : ""}`);
   return [
     `Taken over as the lead on duty:`,
     cp ? `  checkpoint by ${inlineText(cp.by, 40)}, ${ago(cp.at, now)} (#${cp.seq}): ${inlineText(cp.text, 300)}` : "  checkpoint: none yet",
     `  decisions handed to the Lead: ${handed.length ? handed.map((h) => `#${h.ask.seq}`).join(", ") : "none"}`,
-    `  holds: ${holds.length ? "" : "none"}`.trimEnd(),
-    ...holds.map((h) => `    ${holdLine(h)}`),
+    ...section("asks the Lead put to people, not answered yet", owned),
+    ...section("the clock's steps for the Lead", leadSteps(state, me, now)),
+    ...section("holds", heldSteps(state).map(holdLine)),
+    ...section("tasks in flight", tasks),
   ];
+}
+
+export function offDutySince(state: Frozen<Pick<ChannelState, "rejected" | "homeLead">>, messages: readonly Frozen<Message>[], name: string, until: number): number | undefined {
+  let lead = state.homeLead;
+  let left: number | undefined;
+  for (const m of messages) {
+    if (m.seq >= until) break;
+    if (m.ev?.op !== "lead.duty" || state.rejected.has(m.seq)) continue;
+    if (lead === name && m.ev.to !== name) left = m.seq;
+    lead = m.ev.to;
+  }
+  return left;
 }
 
 const ticked = (text: string): Set<string> =>
@@ -63,9 +98,14 @@ function specTicks(messages: readonly Frozen<Message>[], state: Frozen<Pick<Chan
 
 export function offDutyLines(state: Frozen<ChannelState>, messages: readonly Frozen<Message>[], since: number, until: number): string[] {
   const within = (seq: number | undefined): boolean => seq !== undefined && seq > since && seq <= until;
+  const bodies = new Map(messages.map((m) => [m.seq, m.body]));
+  const answer = (seq: number, a: { by: string; seq: number }): string => {
+    const said = bodies.get(a.seq);
+    return `#${seq}, answered by ${inlineText(a.by, 40)} (#${a.seq})${said?.trim() ? `: ${inlineText(said, 160)}` : ""}`;
+  };
   const answered = [
-    ...[...state.leadAsks].filter(([, a]) => within(a.answer?.seq)).map(([seq, a]) => `#${seq}, answered by ${a.answer?.by} (#${a.answer?.seq})`),
-    ...[...state.leadOwned].filter(([, o]) => within(o.answer?.seq)).map(([seq, o]) => `#${seq}, answered by ${o.answer?.by} (#${o.answer?.seq})`),
+    ...[...state.leadAsks].flatMap(([seq, a]) => (a.answer && within(a.answer.seq) ? [answer(seq, a.answer)] : [])),
+    ...[...state.leadOwned].flatMap(([seq, o]) => (o.answer && within(o.answer.seq) ? [answer(seq, o.answer)] : [])),
   ];
   const holds = messages.flatMap((m) => {
     const edit = m.ev?.op === "task.steps" ? m.ev.edit : undefined;
@@ -74,7 +114,6 @@ export function offDutyLines(state: Frozen<ChannelState>, messages: readonly Fro
   });
   const closed = [...state.tasks.values()].filter((t) => t.state === "done" && within(t.closedSeq)).map((t) => `T${t.id} ${inlineText(t.title, 80)}`);
   const specs = specTicks(messages, state, since, until);
-  const section = (title: string, rows: readonly string[]): string[] => [`  ${title}: ${rows.length ? "" : "none"}`.trimEnd(), ...rows.map((r) => `    ${r}`)];
   return [
     `While off duty (#${since} to #${until}):`,
     ...section("asks answered", answered),

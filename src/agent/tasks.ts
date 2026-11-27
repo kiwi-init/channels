@@ -144,11 +144,10 @@ export class SessionTasks extends SessionMessaging {
         const owed = handoverCheckpointRefusal(text, state.tasks.values(), state.openAsks);
         if (owed) return yield* new Rejected(owed);
       }
-      const since = state.duty?.since ?? 0;
-      const seq = yield* this.event({ op: "lead.duty", to, from: since, ...(text ? { checkpoint: text } : {}) }, `handed the lead to ${to}`);
+      const seq = yield* this.event({ op: "lead.duty", to, from: state.duty?.since ?? 0, ...(text ? { checkpoint: text } : {}) }, `handed the lead to ${to}`);
       const after = yield* this.confirm(seq);
       const { messages } = yield* this.state();
-      return { after, seq, since, messages };
+      return { after, seq, messages };
     },
     oneLook,
   );

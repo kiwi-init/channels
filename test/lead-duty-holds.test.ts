@@ -3,10 +3,13 @@ import type { CheckArtifact } from "@kiwi/core/checks.ts";
 import { heldSteps, offDutyLines, takenOverLines } from "@kiwi/core/duty.ts";
 import { stepLines } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { CHECKPOINT_MAX_LENGTH, PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
+import { CHECKPOINT_MAX_LENGTH, EVENT_OPS_VERSION, FOLD_RULES, HANDOVER_CHECKPOINT_OPS, PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
+import { omit } from "@kiwi/core/omit.ts";
 import { reentryText } from "@kiwi/core/reentry.ts";
 import { fold, handedOver, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
+import { QUIET_MS } from "@kiwi/core/state/clocks.ts";
 import { currentStep, landedStepRefusal, stepById, stepMove, timedOf, type StepEdit, type StepSpec } from "@kiwi/core/steps.ts";
+import { handLines } from "../src/cli/commands/lead.ts";
 
 const T0 = 1_760_000_000_000;
 const R = "o/r";
@@ -33,15 +36,15 @@ beforeAll(async () => {
 
 async function channel() {
   const log: Message[] = [];
-  const say = async (from: string, kind: Kind, body: string, extra: Partial<Pick<Message, "to" | "ev" | "re">> = {}): Promise<Message> => {
+  const say = async (from: string, kind: Kind, body: string, extra: Partial<Pick<Message, "to" | "ev" | "re">> = {}, ops: number | null = EVENT_OPS_VERSION): Promise<Message> => {
     const seq = log.length + 1;
-    const payload: Payload = { v: PROTOCOL_VERSION, id: `s${seq}`, from, kind, body, ts: at(seq), ...extra };
+    const payload: Payload = { v: PROTOCOL_VERSION, id: `s${seq}`, from, kind, body, ts: at(seq), ...(ops !== null ? { ops } : {}), ...extra };
     const p = await sign(ids[from]!, payload);
     const m = { ...p, seq, rts: at(seq), sigOk: await verify(p) };
     log.push(m);
     return m;
   };
-  const ev = (from: string, e: Event) => say(from, "event", "", { ev: e });
+  const ev = (from: string, e: Event, ops: number | null = EVENT_OPS_VERSION) => say(from, "event", "", { ev: e }, ops);
   const github = (items: Record<string, unknown>[]) => ev("jow", { op: "github", items: items.map((i) => ({ repo: R, at: at(log.length + 1), ...i })) } as Event);
   const opened = (t: number) => github([{ event: "pull_request", action: "opened", number: 7, state: "open", branch: `T${t}-x`, sha: S1 }]);
   const merged = (t: number) => github([{ event: "pull_request", action: "closed", number: 7, state: "closed", merged: true, merge: M1, branch: `T${t}-x`, sha: S1, happened: at(log.length) }]);
@@ -53,7 +56,8 @@ async function channel() {
   };
   const landed = (from: string, t: number, step: string, said: { artifact?: CheckArtifact } = {}) => ev(from, { op: "task.landed", task: t, step, ...said });
   const edit = (from: string, t: number, change: StepEdit) => ev(from, { op: "task.steps", task: t, edit: change });
-  const hand = (from: string, to: string, checkpoint?: string) => ev(from, { op: "lead.duty", to, from: state().duty?.since ?? 0, ...(checkpoint !== undefined ? { checkpoint } : {}) });
+  const hand = (from: string, to: string, checkpoint?: string, ops: number | null = EVENT_OPS_VERSION) =>
+    ev(from, { op: "lead.duty", to, from: state().duty?.since ?? 0, ...(checkpoint !== undefined ? { checkpoint } : {}) }, ops);
   await ev("jow", { op: "repos.set", repos: [R] });
   await ev("jow", { op: "branch.prefix.set", prefix: "T" });
   await ev("jow", { op: "lead.standby", name: "spare", on: true });
@@ -61,12 +65,20 @@ async function channel() {
   return { log, ev, say, opened, merged, state, task, approve, landed, edit, hand };
 }
 
-function resumedAt(log: Message[], cut: number, now = at(10_000)): ChannelState {
+function baseAt(log: Message[], cut: number, now = at(10_000)): FoldBase {
   let base: FoldBase | null = null;
   fold(log.slice(0, cut), roster, now, null, null, null, (b) => void (base = b));
   if (!base) throw new Error("no base");
-  return fold(log.slice(cut), roster, now, null, null, base);
+  return base;
 }
+
+function resumedAt(log: Message[], cut: number, now = at(10_000)): ChannelState {
+  return fold(log.slice(cut), roster, now, null, null, baseAt(log, cut, now));
+}
+
+const fromOlder = (base: FoldBase): FoldBase => ({ ...structuredClone(base), rules: FOLD_RULES - 1, checkpoint: null });
+
+const withoutOps = (log: readonly Message[]): Message[] => log.map((m) => omit(m, "ops"));
 
 const progressOf = (s: ChannelState, t: number, id: string) => stepById(s.tasks.get(t)!, id)!.progress;
 
@@ -96,6 +108,24 @@ describe("a step wait is timed or a hold, one mechanism", () => {
     expect(landedStepRefusal(s.tasks.get(t)!, "s1")).toBe(`step s1 “merge” of T${t} is held by lead: until the release notes are in`);
     expect(stepMove(currentStep(s.tasks.get(t)!)!, "ann", at(900))).toEqual({ kind: "held", by: "lead", reason: "until the release notes are in" });
     expect(stepLines(s, s.tasks.get(t)!, at(900)).join("\n")).toContain("held by lead: until the release notes are in");
+  });
+});
+
+describe("a snapshot from before waits had a kind", () => {
+  test("restores the shipped {reason, ms, until} wait as timed, with its deadline", async () => {
+    const c = await channel();
+    const t = await c.task([{ words: "soak", by: "zed", wait: { reason: "soak in hml", ms: 24 * HOUR } }, MERGE]);
+    await c.approve(t);
+    const wait = timedOf(stepById(c.state().tasks.get(t)!, "s1")!);
+    const until = wait?.until;
+    expect(until).toBeNumber();
+    const older = fromOlder(baseAt(c.log, c.log.length));
+    const task = older.tasks.find((x) => x.id === t)!;
+    const [first, ...rest] = task.steps!;
+    Object.assign(task, { steps: [{ ...first, wait: { reason: "soak in hml", ms: 24 * HOUR, until } }, ...rest] });
+    const s = fold([], roster, at(10_000), null, null, older);
+    expect(stepById(s.tasks.get(t)!, "s1")!.wait).toEqual({ kind: "timed", reason: "soak in hml", ms: 24 * HOUR, until });
+    expect(stepById(s.tasks.get(t)!, "s2")!.wait).toBeUndefined();
   });
 });
 
@@ -159,6 +189,38 @@ describe("a hold on delivery crosses a handover (#19397 boxes 9 and 10)", () => 
     }
     expect(c.state().rejected.has(lift.seq)).toBe(false);
     expect(c.log.filter((m) => m.ev?.op === "task.landed").length).toBe(1);
+  });
+});
+
+describe("a handover from a writer before the checkpoint rule folds as it did (#19397 box 11)", () => {
+  test("handovers without a checkpoint, signed without ops or below the rule, keep the lead on duty on replay and from an older snapshot", async () => {
+    const c = await channel();
+    const t = await c.task([MERGE]);
+    const out = await c.hand("lead", "spare", undefined, HANDOVER_CHECKPOINT_OPS - 1);
+    const back = await c.hand("spare", "lead", undefined, null);
+    const log = [...c.log];
+    expect([...c.state().rejected.values()]).toEqual([]);
+    for (let cut = 1; cut <= log.length; cut++) {
+      const resumed = cut === log.length ? c.state() : resumedAt(log, cut);
+      const older = fold(log.slice(cut), roster, at(10_000), null, null, fromOlder(baseAt(log, cut)));
+      expect({ cut, lead: resumed.lead, older: older.lead, since: older.duty?.since, refused: older.rejected.size }).toEqual({ cut, lead: "lead", older: "lead", since: back.seq, refused: 0 });
+    }
+    expect(c.state().checkpoint).toBeNull();
+    expect(out.ops).toBe(HANDOVER_CHECKPOINT_OPS - 1);
+    const now = await c.hand("lead", "zed");
+    expect(c.state().rejected.get(now.seq)).toContain("hands over with a checkpoint");
+    const ok = await c.hand("lead", "zed", `T${t} waits for review.`);
+    expect(c.state().rejected.has(ok.seq)).toBe(false);
+  });
+
+  test("a handover valid under the new rule folds the same for a reader that ignores ops", async () => {
+    const c = await channel();
+    const t = await c.task([MERGE]);
+    await c.hand("lead", "spare", `T${t} waits for review.`);
+    await c.hand("spare", "zed", `T${t} still waits.`);
+    const now = c.state();
+    const legacy = fold(withoutOps(c.log), roster, at(10_000));
+    expect({ lead: legacy.lead, duty: legacy.duty, checkpoint: legacy.checkpoint, refused: legacy.rejected.size }).toEqual({ lead: now.lead, duty: now.duty, checkpoint: now.checkpoint, refused: 0 });
   });
 });
 
@@ -229,6 +291,44 @@ describe("the return says what changed while off duty (#19397 box 14)", () => {
     expect(lines).toContain(`T${t} s1 held by spare: until the docs land (#${hold.seq})`);
     expect(lines).toContain(`T${u} export`);
     expect(lines).toContain(`spec #${head.seq}: 1 box ticked`);
+  });
+});
+
+describe("the handover command's report (#19397 boxes 11 and 14)", () => {
+  test("taking over lists the outgoing lead's unanswered asks, the clock's steps for the Lead, holds and tasks in flight", async () => {
+    const c = await channel();
+    const t = await c.task([MERGE]);
+    const doing = await c.ev("ann", { op: "task.update", task: t, state: "doing" });
+    const q = await c.say("lead", "ask", "Ship 2.0 today?", { to: ["jow"] });
+    await c.hand("lead", "spare", `T${t} is being built; #${q.seq} waits for jow.`);
+    const now = at(doing.seq) + 2.5 * QUIET_MS;
+    const lines = takenOverLines(c.state(now), "spare", now).join("\n");
+    expect(lines).toContain(`asks the Lead put to people, not answered yet:\n    #${q.seq} to jow, asked by lead`);
+    expect(lines).toContain(`the clock's steps for the Lead:\n    T${t} export, quiet`);
+    expect(lines).toContain("with ann: the Lead's step is due");
+    expect(lines).toContain(`tasks in flight:\n    T${t} export: doing, ann`);
+    expect(lines).toContain("holds: none");
+  });
+
+  test("the return covers every shift since the lead left, A → B → C → A, with what each answer said", async () => {
+    const c = await channel();
+    const t = await c.task([MERGE]);
+    const ask = await c.say("ann", "blocking", handedOver("ann", "Which database?", {}), { to: ["lead"] });
+    const out = await c.hand("lead", "spare", `T${t} waits; #${ask.seq} is open.`);
+    expect(handLines(c.state(), c.log, "spare", out.seq, at(10_000)).join("\n")).not.toContain("While off duty");
+    const said = await c.say("spare", "msg", "sqlite, it ships in one file", { re: [ask.seq], to: ["ann"] });
+    const hold = await c.edit("spare", t, { kind: "hold", id: "s1", reason: "until the docs land" });
+    const mid = await c.hand("spare", "zed", `T${t} is held until the docs land.`);
+    expect(handLines(c.state(), c.log, "zed", mid.seq, at(10_000)).join("\n")).not.toContain("While off duty");
+    const lift = await c.edit("zed", t, { kind: "unhold", id: "s1" });
+    const back = await c.hand("zed", "lead", `T${t} waits for review.`);
+    expect([...c.state().rejected.values()]).toEqual([]);
+    const lines = handLines(c.state(), c.log, "lead", back.seq, at(10_000)).join("\n");
+    expect(lines).toContain("lead on duty: lead");
+    expect(lines).toContain(`While off duty (#${out.seq} to #${back.seq}):`);
+    expect(lines).toContain(`#${ask.seq}, answered by spare (#${said.seq}): sqlite, it ships in one file`);
+    expect(lines).toContain(`T${t} s1 held by spare: until the docs land (#${hold.seq})`);
+    expect(lines).toContain(`T${t} s1 lifted by zed (#${lift.seq})`);
   });
 });
 

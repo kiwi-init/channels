@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
-import { heldSteps, offDutyLines, takenOverLines } from "@kiwi/core/duty.ts";
+import { heldSteps, offDutyLines, offDutySince, takenOverLines } from "@kiwi/core/duty.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
 import type { ChannelState, Frozen } from "@kiwi/core/state.ts";
 import { stepText } from "@kiwi/core/steps.ts";
 import { args, opt } from "../args.ts";
@@ -23,6 +24,11 @@ function holdLines(state: Frozen<Pick<ChannelState, "tasks">>): string[] {
   return holds.length ? ["holds on delivery:", ...holds.map((h) => `  T${h.task.id} ${stepText(h.step)}: held by ${h.hold.by} (#${h.hold.seq}): ${h.hold.reason}`)] : [];
 }
 
+export function handLines(after: Frozen<ChannelState>, messages: readonly Frozen<Message>[], name: string, seq: number, now: number): string[] {
+  const left = offDutySince(after, messages, name, seq);
+  return [...dutyLines(after), ...takenOverLines(after, after.lead ?? name, now), ...(left !== undefined ? offDutyLines(after, messages, left, seq) : [])];
+}
+
 export const leadCommands: Record<string, Command> = {
   lead: () =>
     Effect.gen(function* () {
@@ -41,9 +47,8 @@ export const leadCommands: Record<string, Command> = {
       if (sub === "hand") {
         const s = yield* session();
         const checkpoint = opt.file !== undefined ? yield* readText(opt.file) : undefined;
-        const { after, seq, since, messages } = yield* s.handLead(name, checkpoint);
-        const back = since !== 0 && after.duty?.lead === after.homeLead;
-        return out([...dutyLines(after), ...takenOverLines(after, after.lead ?? name, Date.now()), ...(back ? offDutyLines(after, messages, since, seq) : [])].join("\n"));
+        const { after, seq, messages } = yield* s.handLead(name, checkpoint);
+        return out(handLines(after, messages, name, seq, Date.now()).join("\n"));
       }
       return yield* die(USAGE);
     }),

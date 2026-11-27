@@ -5,6 +5,7 @@ import {
   olderRules,
   GENERAL_ROOM,
   GITHUB_CLOSED_KEEP_MS,
+  HANDOVER_CHECKPOINT_OPS,
   ignored,
   isOverlay,
   MAX_GOAL_NAME,
@@ -24,7 +25,7 @@ import { allowedOnHold, answersAsk, answersLeadAsk, answersLeadOwned, escalation
 import { answerChecks, checkFrom, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
 import { checkAnswered, checkClosed, checkStep, migrateChecks, questionAnswered, questionWatched, seedSteps } from "./landing-steps.ts";
 import { choiceIn } from "../checks.ts";
-import { stepsOfThen } from "../steps.ts";
+import { stepsOfThen, waitFromOlder, type LandingStep } from "../steps.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf, sentTo } from "../room-rules.ts";
@@ -105,9 +106,15 @@ const closedLongAgo = (at: number, hw: number) => hw - at > GITHUB_CLOSED_KEEP_M
 
 function taskFromOlder(t: FoldBase["tasks"][number], stepless: boolean): Task {
   const rest = omit(t, "then", "landed");
-  const task: Task = rest.run ? { ...rest, run: { id: rest.run.id, seq: rest.run.seq, by: rest.run.by } } : rest;
+  const run: Task = rest.run ? { ...rest, run: { id: rest.run.id, seq: rest.run.seq, by: rest.run.by } } : rest;
+  const task: Task = run.steps ? { ...run, steps: run.steps.map(stepFromOlder) } : run;
   if (stepless && t.then && !task.steps && task.state !== "done") seedSteps(task, stepsOfThen(t.then), "then");
   return task;
+}
+
+function stepFromOlder(step: LandingStep): LandingStep {
+  const wait = waitFromOlder(step.wait);
+  return wait ? { ...step, wait } : omit(step, "wait");
 }
 
 function idHash(id: string): number {
@@ -905,7 +912,7 @@ export function cursor(
         else if (!present(members.get(ev.to))) reject(`${ev.to} isn't here`);
         else if (ev.to === onDuty) reject(`${ev.to} is already the lead on duty`);
         else {
-          const handing = m.from === onDuty;
+          const handing = m.from === onDuty && (m.ops ?? 0) >= HANDOVER_CHECKPOINT_OPS;
           const owed = handing ? handoverCheckpointRefusal(ev.checkpoint, tasks.values(), [...(from?.asks ?? []), ...stepped].filter(stillOpen)) : null;
           if (owed) reject(owed);
           else {

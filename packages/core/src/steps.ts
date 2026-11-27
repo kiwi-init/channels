@@ -17,13 +17,29 @@ type StepEnd =
   | { how: "skipped"; by: string; seq: number; ts: number; why: string }
   | { how: "landed"; by: string; seq: number; ts: number };
 
-type StepSeen = { seq: number; by: string; saw: string; at: number; merged?: number };
+type StepSeen = { seq: number; by: string; saw: string; at?: number; merged?: number };
 
 export type StepWait = { kind: "timed"; reason: string; ms: number; until?: number } | { kind: "hold"; reason: string; by: string; seq: number };
 
 export type StepHold = Extract<StepWait, { kind: "hold" }>;
 
 export const holdOf = (step: Frozen<Pick<LandingStep, "wait">>): Frozen<StepHold> | undefined => (step.wait?.kind === "hold" ? step.wait : undefined);
+
+export function waitFromOlder(wait: unknown): StepWait | undefined {
+  if (typeof wait !== "object" || wait === null || !("reason" in wait) || typeof wait.reason !== "string") return undefined;
+  if ("kind" in wait)
+    return wait.kind === "hold" && "by" in wait && typeof wait.by === "string" && "seq" in wait && typeof wait.seq === "number"
+      ? { kind: "hold", reason: wait.reason, by: wait.by, seq: wait.seq }
+      : wait.kind === "timed"
+        ? timedFromOlder(wait.reason, wait)
+        : undefined;
+  return timedFromOlder(wait.reason, wait);
+}
+
+function timedFromOlder(reason: string, wait: object): StepWait | undefined {
+  if (!("ms" in wait) || typeof wait.ms !== "number") return undefined;
+  return { kind: "timed", reason, ms: wait.ms, ...("until" in wait && typeof wait.until === "number" ? { until: wait.until } : {}) };
+}
 
 export const timedOf = (step: Frozen<Pick<LandingStep, "wait">>): Frozen<Extract<StepWait, { kind: "timed" }>> | undefined => (step.wait?.kind === "timed" ? step.wait : undefined);
 
@@ -198,8 +214,7 @@ export function landedStepRefusal(t: Frozen<StepHolder & { id: number }>, id: st
   return `step ${stepText(step)} of T${t.id} isn't the current one: ${now}. A retry resends the step id it first carried; to end another step, name that one with --step`;
 }
 
-const heldText = (t: { id: number }, step: Frozen<Pick<LandingStep, "id" | "words">>, hold: Frozen<StepHold>): string =>
-  `step ${stepText(step)} of T${t.id} is held by ${hold.by}: ${hold.reason}`;
+const heldText = (t: { id: number }, step: Frozen<Pick<LandingStep, "id" | "words">>, hold: Frozen<StepHold>): string => `step ${stepText(step)} of T${t.id} is held by ${hold.by}: ${hold.reason}`;
 
 const DURATION = /^(\d{1,4})(m|h|d)$/;
 const UNIT = { m: 60_000, h: 3_600_000, d: 86_400_000 } as const;
