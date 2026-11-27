@@ -314,3 +314,20 @@ test("a hold that ended on purpose doesn't block asking again under a limited fi
   expect((await annTakes("again", from)).map((t) => t.op)).toEqual(["lease.take"]);
   await run(ann.unlease("again"));
 });
+
+test("on a cold computer that starts from a snapshot, the history after it can't show whether the hold ran out, so a limited first read sends nothing; asking again takes it fresh", async () => {
+  const held = await run(ann.lease("snap", 60));
+  expect(await run(owner.ownerCh.fx.snapshotIfDue(1))).toBeGreaterThan(0);
+  await run(cat.send("a word after the snapshot"));
+  const from = await headNow();
+  clockAt(held.until - 12_000);
+  Object.assign(limited, { gets: 0, only: [1], jumpTo: held.until + 600 });
+  await expect(onColdComputer(() => runLimited(annAgain().lease("snap", 600)))).rejects.toThrow("can't tell whether it ran out meanwhile: nothing was sent");
+  expect(limited.reads).toBe(1);
+  expect((await run(bob.state())).state.leases.get("snap")?.holder).toBeUndefined();
+  expect(await annTakes("snap", from)).toEqual([]);
+  const again = await onColdComputer(() => run(annAgain().lease("snap", 60)));
+  expect(again.holder).toBe("ann");
+  expect(again.since).toBeGreaterThan(held.until);
+  expect((await annTakes("snap", from)).map((t) => t.op)).toEqual(["lease.take"]);
+});

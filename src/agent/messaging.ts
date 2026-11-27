@@ -643,8 +643,11 @@ export class SessionMessaging extends SessionListen {
     if (lease?.holder && lease.holder !== this.me && lease.since <= asked) return false;
     const mine = messages.filter((m) => m.from === this.me && (m.ev?.op === "lease.take" || m.ev?.op === "lease.free") && m.ev.name === name);
     const last = mine.at(-1);
-    if (last?.ev?.op !== "lease.take") return false;
-    return (last.rts ?? last.ts) + LEASE_WAIT_MS + last.ev.ttl * 1000 > asked;
+    if (last?.ev?.op === "lease.take") return (last.rts ?? last.ts) + LEASE_WAIT_MS + last.ev.ttl * 1000 > asked;
+    if (last) return false;
+    const first = messages[0];
+    if (!first) return true;
+    return first.seq !== 1 && (first.rts ?? first.ts) + LEASE_WAIT_MS + MAX_LEASE_SECONDS * 1000 > asked;
   }
 
   private renewWhileHeld(name: string, ttl: number, note: string | undefined, held: Frozen<Lease>) {
