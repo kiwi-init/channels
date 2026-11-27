@@ -476,7 +476,7 @@ export interface QuestionAsk {
   irreversible?: true
   options: Words[]
   holds: number[]
-  heads?: readonly { readonly id: number; readonly by: string; readonly words: string }[]
+  heads?: readonly ({ readonly id: number; readonly by: string; readonly words: string } | undefined)[]
   task?: number
   idle?: true
   typed?: { text: Words; by: string; at: number; seq: number }

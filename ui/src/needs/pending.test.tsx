@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import type { Event, Message as Wire, Step } from "@kiwi/core/protocol.ts"
-import { fold, type Roster } from "@kiwi/core/state.ts"
+import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts"
 import { holdsWork } from "@kiwi/core/state/asks.ts"
 import { needsPerson } from "@kiwi/core/work.ts"
 import { heldAsks } from "@kiwi/app/asks.ts"
@@ -229,5 +229,22 @@ describe("the card shows what the ask holds: a task, or a person's message (#269
     expect(md).toContain("(<kiwi-task:2>)")
     expect(md).not.toContain("kiwi-msg:99")
     expect(md).not.toContain("kiwi-task:99")
+  })
+})
+
+describe("a held message survives a saved and restored fold (#2690)", () => {
+  test("the snapshot keeps the ask head an open decision holds, beyond the kept window", () => {
+    const owner = said(1, "jow", "just simulate an ask")
+    const ask = choice(10, "Which animal?", [1])
+    const filler = Array.from({ length: 5090 }, (_, i) => said(11 + i, "lead", `note ${i}`))
+    let base: FoldBase | null = null
+    fold([owner, ask, ...filler], roster, 0, null, null, null, (b) => {
+      base = b
+    })
+    const restored = fold([], roster, 0, null, null, base)
+    const { asks } = asksOf(restored, [ask], "jow", true, [], roster, new Map())
+    const channel = { ...channelOf(asks), nicknames: new Map([["jow", "Jow"]]) } as Channel
+    expect(openAsks(channel).length).toBe(1)
+    expect(text(needsText(channel, () => {}).md)).toContain("[just simulate an ask](<kiwi-msg:1>)")
   })
 })

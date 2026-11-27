@@ -131,12 +131,12 @@ const show = (channel: Channel, a: Ask): string => {
 
 const HELD_WORDS = 80
 
-type HeldHead = NonNullable<QuestionAsk["heads"]>[number]
+type HeldHead = NonNullable<NonNullable<QuestionAsk["heads"]>[number]>
 
-const heldRow = (channel: Channel, id: number, heads: readonly HeldHead[]): string[] => {
+const heldRow = (channel: Channel, id: number, heads: readonly (HeldHead | undefined)[]): string[] => {
   const task = channel.tasks.find((x) => x.id === id)
   if (task) return [taskRow(channel, task, steps(task))]
-  const head = heads.find((h) => h.id === id)
+  const head = heads.find((h) => h?.id === id)
   if (!head) return []
   const start = wordsPlain(wrote(head.words), channel.nicknames).replace(/\s+/g, " ").trim()
   return [`- ${link(nickname(channel, head.by), face(head.by))} · ${link(start.length > HELD_WORDS ? `${start.slice(0, HELD_WORDS)}…` : start, `kiwi-msg:${id}`)}`]

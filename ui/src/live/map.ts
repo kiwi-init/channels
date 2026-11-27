@@ -1071,7 +1071,7 @@ export function asksOf(
       ...(m.decision === "irreversible" ? { irreversible: true as const } : {}),
       options: (m.choices ?? []).map(wrote),
       holds,
-      heads: holds.flatMap((id) => state.askHeads.get(id) ?? []),
+      heads: holds.map((id) => state.askHeads.get(id)),
       ...(m.step ? { step: m.step } : {}),
       ...(m.handoff ? { handoff: { url: m.handoff.url, label: handoffLabel(m.handoff), expiresAt: m.handoff.expiresAt } } : {}),
       ...(task !== undefined ? { task } : {}),
