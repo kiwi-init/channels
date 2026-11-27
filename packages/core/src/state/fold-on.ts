@@ -113,6 +113,7 @@ export function folded(messages: Message[], roster: Roster, now: number, roomsFl
       landingSteps: kept(ctx.landingSteps, was?.landingSteps),
       reactions: shownAs("reactions"),
       edits: shownAs("edits"),
+      chatBy: shownAs("chatBy"),
       deleted: shownAs("deleted"),
       head: i.head,
     };

@@ -104,9 +104,11 @@ export function offDutyHint(state: Frozen<Pick<ChannelState, "duty" | "offDuty" 
   return `${hit.join(", ")} ${hit.length === 1 ? "is" : "are"} off duty; ${state.lead} is the lead on duty`;
 }
 
-export function namesOffDutyLead(state: Frozen<Pick<ChannelState, "duty" | "offDuty" | "homeLead" | "lead" | "placeOf">>, m: Pick<Message, "seq" | "kind" | "dm" | "body" | "to">): boolean {
+export function namesOffDutyLead(state: Frozen<Pick<ChannelState, "duty" | "offDuty" | "homeLead" | "lead" | "placeOf" | "chatBy">>, m: Pick<Message, "seq" | "kind" | "dm" | "body" | "re">): boolean {
   if (m.kind === "event" || m.dm || state.placeOf.get(m.seq)?.kind === "dm") return false;
-  const named = new Set([...mentionsOf(m.body), ...(m.to ?? []).map((n) => n.toLowerCase())]);
+  const parent = m.re?.[0];
+  const repliedTo = parent !== undefined && parent < m.seq ? state.chatBy.get(parent) : undefined;
+  const named = new Set([...mentionsOf(m.body), ...(repliedTo ? [repliedTo.toLowerCase()] : [])]);
   return offDutyLeads(state).some((name) => named.has(name.toLowerCase()));
 }
 

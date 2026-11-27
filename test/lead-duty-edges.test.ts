@@ -3,7 +3,8 @@ import { leadsNow, namesOffDutyLead, offDutyHint, offDutyLeads } from "@kiwi/cor
 import { formatStatus, statusJson } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { EVENT_OPS_VERSION, PROTOCOL_VERSION, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
-import { fold, type Roster } from "@kiwi/core/state.ts";
+import { baseFromWire, toWire } from "@kiwi/core/base-wire.ts";
+import { fold, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { wants } from "../src/agent/wants.ts";
 
 const T0 = 1_760_000_000_000;
@@ -77,29 +78,44 @@ describe("messages to an off-duty lead (#19397 box 12)", () => {
     expect(wants("lead", direct, s)).toBe(true);
   });
 
-  test("a reply to the off-duty lead's message in a room or a task thread reaches the lead on duty; a reply in a direct thread doesn't", async () => {
+  test("a reply to the off-duty lead's message in a room or a task thread reaches the lead on duty, with or without a to, and after a restore; asks and direct threads keep their audience", async () => {
     const c = await channel();
     await c.ev("jow", { op: "room.create", id: "ops", name: "ops" });
     const task = await c.ev("jow", { op: "task.add", title: "export" });
     const asked = await c.say("lead", "msg", "Which day?", { room: "ops" });
     const inTask = await c.say("lead", "msg", "Who reviews this?", { task: task.seq });
+    const formal = await c.say("lead", "ask", "Is the build green?", { to: ["ann"], room: "ops" });
     const annSaid = await c.say("ann", "msg", "the export is slow", { room: "ops" });
     const privately = await c.say("lead", "msg", "a private word", { to: ["ann"], dm: true });
-    await c.hand("lead", "spare", `T${task.seq} export: open, nobody on it`);
+    await c.hand("lead", "spare", `T${task.seq} export: open, nobody on it; #${formal.seq} build question to ann`);
     expect(c.state().lead).toBe("spare");
-    const reply = (parent: Message, body: string) => c.say("ann", "msg", body, { re: [parent.seq], to: [parent.from], ...(parent.room ? { room: parent.room } : {}) });
-    const friday = await reply(asked, "Friday");
-    const reviewer = await reply(inTask, "zed can");
-    const toAnn = await c.say("zed", "msg", "I'll look", { re: [annSaid.seq], to: ["ann"], room: "ops" });
-    const direct = await reply(privately, "the database password rotates tonight");
+    const reply = (parent: Message, body: string, addressed: boolean) =>
+      c.say("ann", "msg", body, { re: [parent.seq], ...(addressed ? { to: [parent.from] } : {}), ...(parent.room ? { room: parent.room } : {}) });
+    const reached = [await reply(asked, "Friday", true), await reply(asked, "or Monday", false), await reply(inTask, "zed can", true), await reply(inTask, "or ann", false)];
+    const kept = [
+      await reply(formal, "green", true),
+      await c.say("lead", "msg", "I will look", { re: [annSaid.seq], to: ["ann"], room: "ops" }),
+      await c.say("ann", "msg", "the export is done", { to: ["lead"], room: "ops" }),
+    ];
+    const direct = [await reply(privately, "the database password rotates tonight", true), await reply(privately, "and the key", false)];
     const s = c.state();
-    expect(s.placeOf.get(direct.seq)?.kind).toBe("dm");
-    expect([friday, reviewer].map((m) => [namesOffDutyLead(s, m), wants("spare", m, s), wants("zed", m, s)])).toEqual([
-      [true, true, false],
-      [true, true, false],
-    ]);
-    expect(wants("spare", toAnn, s)).toBe(false);
-    expect([namesOffDutyLead(s, direct), wants("spare", direct, s), wants("lead", direct, s)]).toEqual([false, false, true]);
+    expect(direct.map((m) => s.placeOf.get(m.seq)?.kind)).toEqual(["dm", "dm"]);
+    const view = (st: ChannelState) => ({
+      reached: reached.map((m) => [namesOffDutyLead(st, m), wants("spare", m, st), wants("zed", m, st)]),
+      kept: kept.map((m) => wants("spare", m, st)),
+      direct: direct.map((m) => [namesOffDutyLead(st, m), wants("spare", m, st), wants("lead", m, st)]),
+    });
+    const want = {
+      reached: reached.map(() => [true, true, false]),
+      kept: kept.map(() => false),
+      direct: direct.map(() => [false, false, true]),
+    };
+    expect(view(s)).toEqual(want);
+    let base: FoldBase | null = null;
+    fold(c.log.slice(0, asked.seq + 1), roster, at(10_000), null, null, null, (b) => void (base = b));
+    const restored = baseFromWire(JSON.parse(JSON.stringify(toWire(base!))) as Record<string, unknown>);
+    expect(restored).not.toBeNull();
+    expect(view(fold(c.log.slice(asked.seq + 1), roster, at(10_000), null, null, restored))).toEqual(want);
   });
 });
 

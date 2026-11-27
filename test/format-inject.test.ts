@@ -56,6 +56,7 @@ function blank(): ChannelStateDraft {
     landingSteps: null,
     reactions: new Map(),
     edits: new Map(),
+    chatBy: new Map(),
     deleted: new Map(),
     roleSets: new Map(),
     gone: new Map(),
