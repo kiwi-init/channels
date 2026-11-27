@@ -928,7 +928,14 @@ export function cursor(
     const keptThreads = recent(threadOf);
     const keptRoots = new Set(keptThreads.map(([, root]) => root));
     const keptSpecs = [...specs.values()].filter((sp) => !sp.result || !closedLongAgo(sp.result.at, hw));
-    const filedUnder = new Set([...tasks.values()].flatMap((t) => (t.ask !== undefined ? [t.ask] : [])).concat(keptSpecs.map((sp) => sp.ask)));
+    const filedUnder = new Set(
+      [...tasks.values()]
+        .map((t) => t.ask)
+        .concat(
+          keptSpecs.map((sp) => sp.ask),
+          ...holdsOf.values(),
+        ),
+    );
     keep?.(
       structuredClone({
         n: head,
