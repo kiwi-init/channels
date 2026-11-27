@@ -495,7 +495,7 @@ describe("review rounds through the CLI", () => {
     const oldShown = JSON.parse(await ok(dev, "task", "show", `T${old}`, "--json"));
     expect(oldShown.steps).toEqual([{ id: "s1", words: "merge", detector: { kind: "pr-merged" }, progress: { kind: "open" } }]);
     expect(Object.keys(oldShown)).not.toContain("then");
-    const tagged = taskNo(await ok(dev, "task", "add", "an old release value", "--ask", want, "--then", "release:tag"));
+    const tagged = taskNo(await ok(dev, "task", "add", "cut the tag at release", "--ask", want, "--then", "release:tag"));
     expect(JSON.parse(await ok(dev, "task", "show", `T${tagged}`, "--json")).steps.map((x: { words: string }) => x.words)).toEqual(["merge", "release"]);
     const none = taskNo(await ok(dev, "task", "add", "finishes on approval", "--ask", want, "--then", "none"));
     expect(Object.keys(JSON.parse(await ok(dev, "task", "show", `T${none}`, "--json")))).not.toContain("steps");
