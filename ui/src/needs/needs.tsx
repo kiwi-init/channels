@@ -129,11 +129,25 @@ const show = (channel: Channel, a: Ask): string => {
   return source ? `[${esc(t("needs.card.show"))}](kiwi-msg:${source.seq})` : ""
 }
 
-const holds = (channel: Channel, ids: readonly number[]): string =>
-  ids
-    .map((id) => channel.tasks.find((x) => x.id === id))
-    .flatMap((task) => (task ? [taskRow(channel, task, steps(task))] : []))
-    .join("\n")
+const HELD_WORDS = 80
+
+const heldMessage = (channel: Channel, id: number): { from: string; text: string } | undefined => {
+  const said = channel.messages.find((m) => m.seq === id)
+  if (said) return { from: said.from, text: wordsPlain(said.text, channel.nicknames) }
+  const head = channel.taskGroups.find((g) => g.head.kind === "ask" && g.head.id === id)?.head
+  return head?.kind === "ask" ? { from: head.by, text: head.words } : undefined
+}
+
+const heldRow = (channel: Channel, id: number): string[] => {
+  const task = channel.tasks.find((x) => x.id === id)
+  if (task) return [taskRow(channel, task, steps(task))]
+  const said = heldMessage(channel, id)
+  if (!said) return []
+  const start = said.text.replace(/\s+/g, " ").trim()
+  return [`- ${link(nickname(channel, said.from), face(said.from))} · ${link(start.length > HELD_WORDS ? `${start.slice(0, HELD_WORDS)}…` : start, `kiwi-msg:${id}`)}`]
+}
+
+const holds = (channel: Channel, ids: readonly number[]): string => ids.flatMap((id) => heldRow(channel, id)).join("\n")
 
 const prLine = (pr: PullRequest): string =>
   `- ${link(`#${pr.number} ${pr.title}`, `kiwi-pr:${pr.repo}/${pr.number}`)}${pr.additions === undefined ? "" : ` · +${pr.additions} −${pr.deletions ?? 0}`}${prTail(pr)}`

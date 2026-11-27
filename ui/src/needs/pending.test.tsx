@@ -7,9 +7,10 @@ import { needsPerson } from "@kiwi/core/work.ts"
 import { heldAsks } from "@kiwi/app/asks.ts"
 import { homeOf } from "~/home"
 import { asksOf } from "~/live/map"
-import type { Ask, Channel, Person } from "~/model"
+import type { Ask, Channel, Message, Person, QuestionAsk, Task } from "~/model"
 import { needsText } from "~/needs/needs"
 import { openAsks } from "~/needs/open"
+import { wrote } from "~/words"
 
 const roster: Roster = [
   { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human", display: "Jow", sponsor: { user: "u-jow", name: "Jow" } },
@@ -179,5 +180,45 @@ describe("an answered or closed decision leaves at once (#2690)", () => {
   test("the asker closing it takes it out of the count", () => {
     const messages = [...base, choice(12, "Choice holding nothing?"), wire(30, "lead", { kind: "event", body: "closed #12", ev: { op: "ask.close", ask: 12 }, re: [12] })]
     expect(openAsks(channelOf(asksFor(messages).asks)).length).toBe(0)
+  })
+})
+
+describe("the card shows what the ask holds: a task, or a person's message (#2690)", () => {
+  const card = (holds: number[]): QuestionAsk => ({ kind: "question", id: "q", from: "lead", at: 5, text: wrote("Which one?"), label: "Decision for you", options: ["A", "B"].map(wrote), holds })
+  const longText = "just simulate a real ask so I can look at Needs you before answering it, and tell me what it holds"
+  const held = (asks: QuestionAsk[], more: Partial<Channel>) =>
+    text(
+      needsText(
+        {
+          ...channelOf(asks),
+          ...more,
+          nicknames: new Map([
+            ["lead", "lead"],
+            ["jow", "Jow"],
+          ]),
+        } as Channel,
+        () => {}
+      ).md
+    )
+  const message = { seq: 7, from: "jow", at: 1, text: wrote(longText), where: { kind: "room", room: "general" } } as Message
+  const task = { id: 2, title: wrote("open work"), status: "doing" } as unknown as Task
+
+  test("a held message shows its author, the start of its text, and a link to it", () => {
+    const md = held([card([7])], { messages: [message] })
+    expect(md).toContain("[Jow](<kiwi-face:")
+    expect(md).toContain(`[${longText.slice(0, 80)}…](<kiwi-msg:7>)`)
+  })
+
+  test("a held message that isn't loaded shows from the ask head its tasks are filed under", () => {
+    const md = held([card([7])], { taskGroups: [{ key: "ask:7", head: { kind: "ask", id: 7, by: "jow", words: "just simulate", mayName: true }, tasks: [2] }] })
+    expect(md).toContain("[just simulate](<kiwi-msg:7>)")
+    expect(md).toContain("[Jow](<kiwi-face:")
+  })
+
+  test("a held task shows as before, and an id that is neither shows no line", () => {
+    const md = held([card([2, 99])], { tasks: [task] })
+    expect(md).toContain("(<kiwi-task:2>)")
+    expect(md).not.toContain("kiwi-msg:99")
+    expect(md).not.toContain("kiwi-task:99")
   })
 })
