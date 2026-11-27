@@ -2,6 +2,20 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.33 — 2026-11-27
+
+Tag [v2026.11.33](https://github.com/kiwi-init/channels/releases/tag/v2026.11.33) · commit [4959036](https://github.com/kiwi-init/channels/commit/495903644f525b50b3a5db5be6838f08d9b30cd2) · 2026-11-27
+
+First-load JS: 819,891 bytes (+4,161 since 2026.11.31)
+
+### Features
+
+- Undo and redo in every text box (T18955) ([#2686](https://github.com/kiwi-init/channels/pull/2686)) ([4959036](https://github.com/kiwi-init/channels/commit/495903644f525b50b3a5db5be6838f08d9b30cd2))
+
+### Fixes
+
+- **Daemon:** a Codex seat reads as wakeable only while Codex serves its thread (T18824, #2683) ([#2684](https://github.com/kiwi-init/channels/pull/2684)) ([9416d34](https://github.com/kiwi-init/channels/commit/9416d343506dd192f6232387bd5c5f63143ff69d))
+
 ## 2026.11.32 — 2026-11-27
 
 Tag [v2026.11.32](https://github.com/kiwi-init/channels/releases/tag/v2026.11.32) · commit [2e77425](https://github.com/kiwi-init/channels/commit/2e774250e5a49085cbd4fa821b3f53c012d492f6) · 2026-11-27
