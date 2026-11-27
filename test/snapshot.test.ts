@@ -25,6 +25,7 @@ setDefaultTimeout(60_000);
 
 const T0 = 1_700_000_000_000;
 const NOW = T0 + 10_000_000;
+const RULES_BEFORE_HELD_HEADS = 30;
 
 function rng(seed: number): () => number {
   let a = seed;
@@ -707,6 +708,27 @@ describe("a base folded under older fold rules is set aside wherever the log can
       expect((await runAgent(s.ownerCh.fx.snapshot()))?.tasks[0]?.title).toBe("as older rules folded it");
       const { state } = await runAgent(cold("fresh").state());
       expect(state.tasks.get(task)?.title).toBe("as the log says");
+    } finally {
+      done();
+    }
+  });
+
+  test("a snapshot from before held heads were kept is older rules: the whole log brings the held message's head back (#2690)", async () => {
+    const { s, done, olderBase, cold } = await scene();
+    try {
+      const held = await s.ownerCh.send("just simulate an ask");
+      await s.ownerCh.send("after");
+      const before = await olderBase();
+      const legacy = { ...before, rules: RULES_BEFORE_HELD_HEADS, askHeads: (before.askHeads ?? []).filter((h) => h.id !== held) };
+      expect(olderRules(legacy)).toBe(true);
+      await runAgent(s.ownerCh.fx.putSnapshot(legacy));
+      const { state } = await runAgent(cold("fresh").state());
+      expect(state.askHeads.get(held)?.words).toBe("just simulate an ask");
+      await s.ownerCh.send("one");
+      expect(await runAgent(s.ownerCh.fx.snapshotIfDue(1))).not.toBeNull();
+      const next = await runAgent(s.ownerCh.fx.snapshot());
+      expect(next?.rules).toBe(FOLD_RULES);
+      expect(next?.askHeads?.some((h) => h.id === held)).toBe(true);
     } finally {
       done();
     }

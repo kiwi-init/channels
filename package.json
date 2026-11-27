@@ -34,16 +34,16 @@
     "ui:build": "cd ui && bun run build"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "1.10.0",
-    "@cloudflare/workers-types": "^5.20261119.1",
-    "@types/bun": "^1.4.4",
-    "knip": "6.46.1",
-    "oxc-parser": "0.159.0",
-    "oxfmt": "0.79.0",
-    "oxlint": "1.94.0",
+    "@anthropic-ai/sdk": "1.14.0",
+    "@cloudflare/workers-types": "^5.20261127.1",
+    "@types/bun": "^1.4.5",
+    "knip": "6.48.0",
+    "oxc-parser": "0.160.0",
+    "oxfmt": "0.80.0",
+    "oxlint": "1.95.0",
     "playwright-core": "1.65.1",
-    "tsrs": "7.1.0-beta.tsrs3",
-    "wrangler": "^4.165.0",
+    "tsrs": "7.1.0-beta.tsrs5",
+    "wrangler": "^4.169.0",
     "yjs": "13.6.33"
   },
   "dependencies": {
@@ -51,7 +51,7 @@
     "@kiwi/app": "workspace:*",
     "@kiwi/channel": "workspace:*",
     "@kiwi/core": "workspace:*",
-    "effect": "4.1.4",
+    "effect": "4.1.7",
     "mdast-util-from-markdown": "2.1.0",
     "mdast-util-gfm": "3.1.0",
     "micromark-extension-gfm": "3.0.0"

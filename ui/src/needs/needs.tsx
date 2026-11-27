@@ -5,7 +5,7 @@ import { useEffect, useId, useMemo, useState, type ReactNode } from "react"
 import type { Color } from "@kiwi/core/protocol.ts"
 import { Swatches } from "~/kit/swatches"
 
-import { wordsPlain, wordsRaw } from "~/words"
+import { wordsPlain, wordsRaw, wrote } from "~/words"
 import QuestionCard from "~/chat/question-card"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
@@ -21,7 +21,7 @@ import { wakeLine } from "~/needs/wake-line"
 import SettledList from "~/needs/settled"
 import { nickname } from "~/names"
 import { SendBack } from "~/tasks/send-back"
-import { isIdle, isOpen, openAsks } from "~/needs/open"
+import { isOpen, openAsks } from "~/needs/open"
 import { SpecNeedCard } from "~/specs/card"
 import { authored, esc, face, type Stranger } from "~/panes/engine"
 import { card, join, link, main, maker, newTag, PageFrame, PageText, prTail, steps, taskRow, type Maker } from "~/panes/page"
@@ -46,9 +46,12 @@ const strangerOf =
     return ask ? { name: ask.name, kind: ask.who, harness: ask.harness, presence: "online" } : undefined
   }
 
+const isIdle = (a: Ask): boolean => a.kind === "question" && !!a.idle && !a.answer
+
 export function needsText(channel: Channel, go: (to: Go) => void, tag?: string, now = Date.now()): { md: string; m: Maker } {
   const m = maker(tag)
-  const open = openAsks(channel).sort((a, b) => a.at - b.at)
+  const pending = openAsks(channel)
+  const open = pending.filter((a) => !isIdle(a)).sort((a, b) => a.at - b.at)
   const joins = joinedQuestions(open)
   const unchecked = open.some((a) => a.kind === "join" && a.check === "unchecked")
   const idle = channel.asks.filter(isIdle).sort((a, b) => a.at - b.at)
@@ -62,7 +65,7 @@ export function needsText(channel: Channel, go: (to: Go) => void, tag?: string, 
     `# ${esc(t("shell.channel.needs.you"))}`,
     unchecked ? tone(t("needs.list.unusual.joins"), "decide") : "",
     ...open.filter((a) => !joins.joined.has(a.id)).map((a) => askText(channel, a, m, go, now, joins.more.get(a.id))),
-    open.length ? "" : m.field("clear", () => <Clear loading={!!channel.loading} />),
+    pending.length ? "" : m.field("clear", () => <Clear loading={!!channel.loading} />),
     settled.length ? `## \`kiwi:fold\` ${esc(t("needs.settled", { n: String(settled.length) }))}` : "",
     settled.length ? m.field("settled", () => <SettledList channel={channel} settled={settled} />) : "",
     idle.length ? `## ${esc(t("needs.list.idle.sum", { rest: t("needs.list.idle.rest") }))}` : "",
@@ -126,11 +129,23 @@ const show = (channel: Channel, a: Ask): string => {
   return source ? `[${esc(t("needs.card.show"))}](kiwi-msg:${source.seq})` : ""
 }
 
-const holds = (channel: Channel, ids: readonly number[]): string =>
-  ids
-    .map((id) => channel.tasks.find((x) => x.id === id))
-    .flatMap((task) => (task ? [taskRow(channel, task, steps(task))] : []))
-    .join("\n")
+const HELD_WORDS = 80
+
+type HeldHead = NonNullable<NonNullable<QuestionAsk["heads"]>[number]>
+
+const heldRow = (channel: Channel, id: number, heads: readonly (HeldHead | undefined)[]): string[] => {
+  const task = channel.tasks.find((x) => x.id === id)
+  if (task) return [taskRow(channel, task, steps(task))]
+  const head = heads.find((h) => h?.id === id)
+  if (!head) return []
+  const start = wordsPlain(wrote(head.words), channel.nicknames).replace(/\s+/g, " ").trim()
+  return [`- ${link(nickname(channel, head.by), face(head.by))} · ${link(start.length > HELD_WORDS ? `${start.slice(0, HELD_WORDS)}…` : start, `kiwi-msg:${id}`)}`]
+}
+
+const holds = (channel: Channel, ids: readonly number[], asks: readonly Ask[]): string => {
+  const heads = asks.flatMap((a) => (a.kind === "question" ? (a.heads ?? []) : []))
+  return ids.flatMap((id) => heldRow(channel, id, heads)).join("\n")
+}
 
 const prLine = (pr: PullRequest): string =>
   `- ${link(`#${pr.number} ${pr.title}`, `kiwi-pr:${pr.repo}/${pr.number}`)}${pr.additions === undefined ? "" : ` · +${pr.additions} −${pr.deletions ?? 0}`}${prTail(pr)}`
@@ -180,7 +195,7 @@ function askText(channel: Channel, a: Ask, m: Maker, go: (to: Go) => void, now: 
           "diff"
         ),
         ...a.notes.map((note) => tone(note, "alert")),
-        a.task !== undefined ? holds(channel, [a.task]) : "",
+        a.task !== undefined ? holds(channel, [a.task], [a]) : "",
         m.field(`permission-${a.id}`, () => <PermissionActs channel={channel} ask={a} />),
       ])
     case "question": {
@@ -197,7 +212,7 @@ function askText(channel: Channel, a: Ask, m: Maker, go: (to: Go) => void, now: 
           m.field(`question-${q.id}`, () => <QuestionCard channel={channel} ask={q} joined={i > 0} />),
         ]
       }
-      return card([...one(a, 0), ...more.flatMap((q) => one(q, 1)), holds(channel, [...new Set([a, ...more].flatMap(workOf))])])
+      return card([...one(a, 0), ...more.flatMap((q) => one(q, 1)), holds(channel, [...new Set([a, ...more].flatMap(workOf))], [a, ...more])])
     }
     case "join":
       return card([
