@@ -39,6 +39,10 @@ export function leadCheckpointRefusal(state: ChannelState, me: string, text: str
 }
 
 function leadCheckpoint(state: ChannelState, me: string): Frozen<Fact> | undefined {
+  if (state.duty !== null) {
+    const cp = state.checkpoint;
+    return state.lead === me && cp ? { key: leadCheckpointKey(cp.by), value: cp.text, by: cp.by, ts: cp.at, seq: cp.seq } : undefined;
+  }
   const f = state.facts.get(leadCheckpointKey(me));
   return state.lead === me && f?.by === me && f.expires === undefined ? f : undefined;
 }

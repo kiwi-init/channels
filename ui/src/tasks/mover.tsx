@@ -18,6 +18,7 @@ const MOVES: Readonly<Record<MoveFor, Key>> = {
   revise: "tasks.move.revise",
   answer: "tasks.move.answer",
   land: "tasks.move.land",
+  lift: "tasks.move.lift",
   reset: "tasks.move.reset",
 }
 

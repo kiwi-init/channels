@@ -5,7 +5,7 @@ import { moverOf, moverText } from "@kiwi/core/mover.ts";
 import { PROTOCOL_VERSION, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { QUIET_MS } from "@kiwi/core/state/clocks.ts";
-import type { StepEdit, StepSpec } from "@kiwi/core/steps.ts";
+import { timedOf, type StepEdit, type StepSpec } from "@kiwi/core/steps.ts";
 
 const NAMES = ["jon", "owl", "win", "mac", "zed"] as const;
 type Name = (typeof NAMES)[number];
@@ -280,7 +280,8 @@ describe("a wait set before approval pauses the quiet clock (#5954)", () => {
     c.wait(30 * 60_000);
     const approved = await approve(c, id);
     expect(task(c, id).state).toBe("landing");
-    expect(task(c, id).steps![0]!.wait!.until).toBe(approved.rts! + HOUR);
+    expect(task(c, id).steps![0]!.wait).toMatchObject({ kind: "timed" });
+    expect(timedOf(task(c, id).steps![0]!)?.until).toBe(approved.rts! + HOUR);
     expect(mover(c, id)).toMatchObject({ kind: "hold", until: approved.rts! + HOUR });
 
     const seeded = channel();

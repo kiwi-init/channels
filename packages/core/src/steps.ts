@@ -17,7 +17,15 @@ type StepEnd =
   | { how: "skipped"; by: string; seq: number; ts: number; why: string }
   | { how: "landed"; by: string; seq: number; ts: number };
 
-type StepSeen = { seq: number; by: string; saw: string; merged?: number };
+type StepSeen = { seq: number; by: string; saw: string; at: number; merged?: number };
+
+export type StepWait = { kind: "timed"; reason: string; ms: number; until?: number } | { kind: "hold"; reason: string; by: string; seq: number };
+
+export type StepHold = Extract<StepWait, { kind: "hold" }>;
+
+export const holdOf = (step: Frozen<Pick<LandingStep, "wait">>): Frozen<StepHold> | undefined => (step.wait?.kind === "hold" ? step.wait : undefined);
+
+export const timedOf = (step: Frozen<Pick<LandingStep, "wait">>): Frozen<Extract<StepWait, { kind: "timed" }>> | undefined => (step.wait?.kind === "timed" ? step.wait : undefined);
 
 type StepProgress = { kind: "open"; seen?: StepSeen } | { kind: "ended"; end: StepEnd };
 
@@ -26,7 +34,7 @@ export interface LandingStep {
   words: string;
   by?: string;
   detector?: StepDetector;
-  wait?: { reason: string; ms: number; until?: number };
+  wait?: StepWait;
   run?: { id?: string; expected: number; due?: number };
   hold?: { until?: number; due?: number };
   from?: "then" | "check";
@@ -40,6 +48,8 @@ export type StepEdit =
   | { kind: "by"; id: string; by: string | null }
   | { kind: "skip"; id: string; why: string }
   | { kind: "wait"; id: string; reason: string; ms: number }
+  | { kind: "hold"; id: string; reason: string }
+  | { kind: "unhold"; id: string }
   | { kind: "run"; id: string; run: string; expected?: number };
 
 export const STEPS_MAX = 20;
@@ -94,6 +104,10 @@ export function wellFormedStepEdit(x: unknown): x is StepEdit {
       return only(e, ["kind", "id", "why"]) && wellFormedStepId(e.id) && text(e.why, REASON_MAX);
     case "wait":
       return only(e, ["kind", "id", "reason", "ms"]) && wellFormedStepId(e.id) && text(e.reason, REASON_MAX) && span(e.ms);
+    case "hold":
+      return only(e, ["kind", "id", "reason"]) && wellFormedStepId(e.id) && text(e.reason, REASON_MAX);
+    case "unhold":
+      return only(e, ["kind", "id"]) && wellFormedStepId(e.id);
     case "run":
       return only(e, ["kind", "id", "run", "expected"]) && wellFormedStepId(e.id) && wellFormedRunId(e.run) && (e.expected === undefined || span(e.expected));
     default:
@@ -138,12 +152,13 @@ export const stepById = <S extends Frozen<LandingStep>>(t: { steps?: readonly S[
 export function mintSteps(t: StepHolder, specs: readonly StepSpec[]): LandingStep[] {
   return specs.map((spec) => {
     t.stepCount = (t.stepCount ?? 0) + 1;
-    return { id: `s${t.stepCount}`, ...spec, progress: { kind: "open" } };
+    const { wait, ...rest } = spec;
+    return { id: `s${t.stepCount}`, ...rest, ...(wait ? { wait: { kind: "timed" as const, ...wait } } : {}), progress: { kind: "open" } };
   });
 }
 
 export function arm(step: LandingStep, at: number): void {
-  if (step.wait && step.wait.until === undefined) step.wait.until = at + step.wait.ms;
+  if (step.wait?.kind === "timed" && step.wait.until === undefined) step.wait.until = at + step.wait.ms;
   if (step.run && step.run.due === undefined) step.run.due = at + step.run.expected;
 }
 
@@ -153,9 +168,11 @@ export type StepMove =
   | { kind: "member"; name: string; why?: "run failed" | "run can't be seen" | "run overran" }
   | { kind: "run"; behind: string; due: number }
   | { kind: "waiting"; until: number; reason: string }
+  | { kind: "held"; by: string; reason: string }
   | { kind: "nobody" };
 
 export function stepMove(step: LandingStep, lander: string | undefined, now: number, run: RunSight = "blind"): StepMove {
+  if (step.wait?.kind === "hold") return { kind: "held", by: step.wait.by, reason: step.wait.reason };
   if (step.wait?.until !== undefined && now < step.wait.until) return { kind: "waiting", until: step.wait.until, reason: step.wait.reason };
   if (step.run && step.by) {
     if (run === "failed") return { kind: "member", name: step.by, why: "run failed" };
@@ -174,9 +191,15 @@ export function landedStepRefusal(t: Frozen<StepHolder & { id: number }>, id: st
   const current = currentStep(t);
   const now = current ? `its current step is ${stepText(current)}` : "it has no step left";
   if (!step) return `T${t.id} has no step ${id}: ${now}`;
-  if (step === current || step.progress.kind === "ended") return null;
+  if (step.progress.kind === "ended") return null;
+  const hold = holdOf(step);
+  if (hold) return heldText(t, step, hold);
+  if (step === current) return null;
   return `step ${stepText(step)} of T${t.id} isn't the current one: ${now}. A retry resends the step id it first carried; to end another step, name that one with --step`;
 }
+
+const heldText = (t: { id: number }, step: Frozen<Pick<LandingStep, "id" | "words">>, hold: Frozen<StepHold>): string =>
+  `step ${stepText(step)} of T${t.id} is held by ${hold.by}: ${hold.reason}`;
 
 const DURATION = /^(\d{1,4})(m|h|d)$/;
 const UNIT = { m: 60_000, h: 3_600_000, d: 86_400_000 } as const;

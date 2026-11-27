@@ -262,6 +262,7 @@ const words = {
   "tasks.move.revise": "{who} to send it for review again",
   "tasks.move.answer": "{who} to answer",
   "tasks.move.land": "{who} to land it",
+  "tasks.move.lift": "{who} to lift the hold on it",
   "tasks.move.with.trouble": "{move} ({trouble})",
   "tasks.move.trouble.failed": "its run failed",
   "tasks.move.trouble.unseen": "its run can't be seen",

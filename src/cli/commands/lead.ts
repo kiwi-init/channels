@@ -1,9 +1,12 @@
 import * as Effect from "effect/Effect";
+import { heldSteps, offDutyLines, takenOverLines } from "@kiwi/core/duty.ts";
 import type { ChannelState, Frozen } from "@kiwi/core/state.ts";
+import { stepText } from "@kiwi/core/steps.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out, readSession, session } from "../context.ts";
+import { readText } from "../input.ts";
 
-const USAGE = "usage: kiwi lead · kiwi lead standby NAME [--clear] · kiwi lead hand NAME";
+const USAGE = "usage: kiwi lead · kiwi lead standby NAME [--clear] · kiwi lead hand NAME [--file checkpoint.md]";
 
 export function dutyLines(state: Frozen<Pick<ChannelState, "lead" | "homeLead" | "duty" | "standbys">>): string[] {
   const standbys = [...state.standbys.keys()].sort();
@@ -15,13 +18,19 @@ export function dutyLines(state: Frozen<Pick<ChannelState, "lead" | "homeLead" |
   ];
 }
 
+function holdLines(state: Frozen<Pick<ChannelState, "tasks">>): string[] {
+  const holds = heldSteps(state);
+  return holds.length ? ["holds on delivery:", ...holds.map((h) => `  T${h.task.id} ${stepText(h.step)}: held by ${h.hold.by} (#${h.hold.seq}): ${h.hold.reason}`)] : [];
+}
+
 export const leadCommands: Record<string, Command> = {
   lead: () =>
     Effect.gen(function* () {
       const sub = args[1];
       if (sub === undefined) {
         const s = yield* readSession();
-        return out(dutyLines((yield* s.state()).state).join("\n"));
+        const { state } = yield* s.state();
+        return out([...dutyLines(state), ...holdLines(state)].join("\n"));
       }
       const name = args[2] ?? (yield* die(USAGE));
       if (sub === "standby") {
@@ -31,8 +40,10 @@ export const leadCommands: Record<string, Command> = {
       }
       if (sub === "hand") {
         const s = yield* session();
-        const after = yield* s.handLead(name);
-        return out(dutyLines(after).join("\n"));
+        const checkpoint = opt.file !== undefined ? yield* readText(opt.file) : undefined;
+        const { after, seq, since, messages } = yield* s.handLead(name, checkpoint);
+        const back = since !== 0 && after.duty?.lead === after.homeLead;
+        return out([...dutyLines(after), ...takenOverLines(after, after.lead ?? name, Date.now()), ...(back ? offDutyLines(after, messages, since, seq) : [])].join("\n"));
       }
       return yield* die(USAGE);
     }),

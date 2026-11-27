@@ -80,6 +80,7 @@ export function folded(messages: Message[], roster: Roster, now: number, roomsFl
       specs: shownAs("specs"),
       specsOnly: i.specsOnly,
       duty: i.duty,
+      checkpoint: i.checkpoint,
       standbys: reused(new Map(i.standbys), was?.standbys),
       leadAsks: reused(new Map(i.leadAsks), was?.leadAsks),
       leadOwned: reused(new Map(i.leadOwned), was?.leadOwned),

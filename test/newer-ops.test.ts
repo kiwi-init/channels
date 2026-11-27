@@ -491,6 +491,7 @@ OPS_AT[30] = [...(OPS_AT[29] ?? []), "task.snapshot"];
 OPS_AT[31] = [...(OPS_AT[30] ?? []), "spec.unready"];
 OPS_AT[32] = [...(OPS_AT[31] ?? []), "task.wait", "task.wait.end"];
 OPS_AT[33] = [...(OPS_AT[32] ?? []), "lead.standby", "lead.duty"];
+OPS_AT[34] = [...(OPS_AT[33] ?? [])];
 
 describe("events from a newer client", () => {
   test("every op the Event type has is known, and a new op needs EVENT_OPS_VERSION raised with it", () => {

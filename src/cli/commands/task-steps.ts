@@ -100,6 +100,8 @@ const STEPS_EDIT_USAGE = [
   "       kiwi task steps T7 by ID NAME|none                  who moves it (none: the task's lander)",
   '       kiwi task steps T7 skip ID "why"',
   '       kiwi task steps T7 wait ID 24h "why"',
+  '       kiwi task steps T7 hold ID "until X"                 nothing delivers it until the hold is lifted',
+  "       kiwi task steps T7 unhold ID                        lift the hold (the lead on duty or a person)",
   "       kiwi task steps T7 run ID RUN [--expect 2h]         the run it waits on",
   "a person or the lead changes steps; a step's own mover may set its wait or its run",
 ].join("\n");
@@ -136,6 +138,8 @@ function editFromArgs(): StepEdit | string {
     const reason = args.slice(6).join(" ").trim();
     return ms !== null && reason ? { kind: "wait", id, reason, ms } : 'a wait says how long and why: kiwi task steps T7 wait ID 24h "why"';
   }
+  if (verb === "hold") return rest ? { kind: "hold", id, reason: rest } : 'a hold says until what: kiwi task steps T7 hold ID "until the release notes are in"';
+  if (verb === "unhold") return { kind: "unhold", id };
   if (verb === "run") {
     const run = args[5]?.trim();
     const expected = opt.expect === undefined ? undefined : parseSpan(opt.expect);

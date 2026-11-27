@@ -148,6 +148,13 @@ function wellFormedDuty(x: unknown): boolean {
   return nameOk(d.lead) && seqOk(d.since) && nameOk(d.by);
 }
 
+function wellFormedCheckpoint(x: unknown): boolean {
+  if (x === undefined || x === null) return true;
+  if (typeof x !== "object") return false;
+  const c = x as Record<string, unknown>;
+  return typeof c.text === "string" && c.text.length > 0 && nameOk(c.by) && seqOk(c.seq) && Number.isFinite(c.at);
+}
+
 function wellFormedStandbys(x: unknown): boolean {
   if (x === undefined) return true;
   return (
@@ -203,6 +210,7 @@ export function wellFormedWire(x: unknown, n: number): x is Wire {
     (b.landing === undefined || b.landing === null || isLanding(b.landing)) &&
     (b.landingSteps === undefined || b.landingSteps === null || wellFormedStepSpecs(b.landingSteps)) &&
     wellFormedDuty(b.duty) &&
+    wellFormedCheckpoint(b.checkpoint) &&
     wellFormedStandbys(b.standbys) &&
     wellFormedPairs(b.leadAsks, wellFormedLeadAsk) &&
     wellFormedPairs(b.leadOwned, wellFormedLeadOwned)

@@ -159,6 +159,7 @@ const words = {
   "panels.task.step.skipped": "skipped",
   "panels.task.step.current": "now",
   "panels.task.step.waits": "waits {time}",
+  "panels.task.step.held": "held by {who}",
   "panels.task.step.run": "a run has {time} left",
   "panels.task.step.end": "Mark done",
   "panels.task.closed": "Closed",

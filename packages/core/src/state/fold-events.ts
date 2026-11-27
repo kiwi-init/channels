@@ -16,7 +16,7 @@ import {
 } from "../protocol.ts";
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
-import { leadCheckpointKeyRefusal } from "./lead.ts";
+import { leadCheckpointKey, leadCheckpointKeyRefusal } from "./lead.ts";
 import { addRelease, applyGithub, dropRelease, prKey, repoKey, type GithubPr, type GithubState } from "./github.ts";
 import { branchLinks, prLinks, prOfTask } from "../prs.ts";
 import { recordedRuns } from "../review-check.ts";
@@ -50,7 +50,7 @@ import {
   worked,
 } from "./tasks.ts";
 import { addResetRefusal, clearOnCard, markReset, resetRefusal } from "./reset.ts";
-import type { Charter, CheckpointAsk, Compact, Fact, FoldMember, Hold, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
+import type { Charter, CheckpointAsk, Compact, Fact, FoldMember, Hold, LeadCheckpoint, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { checkpointAskRefusal, keepAsk } from "./checkpoint-asks.ts";
 import type { CheckpointDaily } from "../checkpoint-schedule.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
@@ -76,6 +76,8 @@ export interface FoldCtx {
   powers: Map<string, Partial<Record<Power, boolean>>>;
   leads: (member: FoldMember) => boolean;
   onDuty: () => boolean;
+  leadOnDuty: () => string | null;
+  checkpointed: (cp: LeadCheckpoint) => void;
   keysByName: Map<string, Set<string>>;
   scopesByKey: Map<string, Scope[]>;
   scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
@@ -933,6 +935,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       }
       const ttl = ev.ttl === undefined ? undefined : Math.min(Math.max(Number(ev.ttl) || 0, 60), 30 * 24 * 3600) * 1000;
       facts.set(ev.key, { key: ev.key, value: ev.value, by: m.from, ts: at, seq: m.seq, ...(ttl ? { expires: at + ttl } : {}) });
+      if (ev.key === leadCheckpointKey(m.from) && c.leadOnDuty() === m.from) c.checkpointed({ text: ev.value, by: m.from, seq: m.seq, at });
       break;
     }
 

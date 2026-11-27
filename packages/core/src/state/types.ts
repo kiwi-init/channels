@@ -326,6 +326,7 @@ export interface ChannelStateDraft {
   specs: Map<number, Spec>;
   specsOnly: number | null;
   duty: Duty | null;
+  checkpoint: LeadCheckpoint | null;
   standbys: Map<string, Standby>;
   homeLead: string | null;
   leadAsks: Map<number, LeadAsk>;
@@ -410,6 +411,13 @@ export interface Duty {
   lead: string;
   since: number;
   by: string;
+}
+
+export interface LeadCheckpoint {
+  text: string;
+  by: string;
+  seq: number;
+  at: number;
 }
 
 export interface Standby {
@@ -504,6 +512,7 @@ export interface FoldBase {
   specs?: Spec[];
   specsOnly?: number | null;
   duty?: Duty | null;
+  checkpoint?: LeadCheckpoint | null;
   standbys?: [string, Standby][];
   leadAsks?: [number, LeadAsk][];
   leadOwned?: [number, LeadOwned][];

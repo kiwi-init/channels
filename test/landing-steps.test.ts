@@ -512,7 +512,7 @@ describe("steps are edited by the lead or a person, and never reopen review (#39
     const other = await c.edit("mac", t, { kind: "wait", id: "s1", reason: "soak", ms: HOUR });
     expect(c.state().rejected.get(other.seq)).toBe(`only a person or the lead changes T${t}'s steps, or zed for this one`);
     const set = await c.edit("zed", t, { kind: "wait", id: "s1", reason: "soak a full day", ms: 24 * HOUR });
-    expect(stepById(c.state().tasks.get(t)!, "s1")!.wait).toEqual({ reason: "soak a full day", ms: 24 * HOUR, until: at(set.seq) + 24 * HOUR });
+    expect(stepById(c.state().tasks.get(t)!, "s1")!.wait).toEqual({ kind: "timed", reason: "soak a full day", ms: 24 * HOUR, until: at(set.seq) + 24 * HOUR });
     const noSpan = await c.edit("zed", t, { kind: "run", id: "s2", run: "deploy-1" });
     expect(c.state().rejected.get(noSpan.seq)).toBe(`step s2 “prd pipeline” of T${t} needs how long its run is expected to take`);
     await c.edit("zed", t, { kind: "run", id: "s2", run: "deploy-1", expected: HOUR });

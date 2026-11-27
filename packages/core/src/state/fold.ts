@@ -29,6 +29,7 @@ import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf, sentTo } from "../room-rules.ts";
 import { askHeadOf, askOfMessage, fileTask, readHandedOver } from "./asks.ts";
+import { handoverCheckpointRefusal } from "./lead.ts";
 import { cancelledWithSpec, closesOnItsOwn, foldSpec, noteSpecComment, specGate } from "./specs.ts";
 import { backToReview, checkChangeRefusal, closeCancelled, landingTouchedByAsk, landingTouchedByClose, taskId } from "./tasks.ts";
 import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
@@ -84,6 +85,7 @@ import type {
   SecretRoom,
   Spec,
   Standby,
+  LeadCheckpoint,
   LeadAsk,
   LeadOwned,
   Task,
@@ -228,6 +230,7 @@ interface Inner {
   placesBefore: NonNullable<FoldBase["placesBefore"]>;
   specsOnly: ChannelStateDraft["specsOnly"];
   duty: Duty | null;
+  checkpoint: LeadCheckpoint | null;
   standbys: ReadonlyMap<string, Standby>;
   leadAsks: ReadonlyMap<number, LeadAsk>;
   leadOwned: ReadonlyMap<number, LeadOwned>;
@@ -367,6 +370,7 @@ export function cursor(
       else delete member[power];
   }
   let duty: Duty | null = from?.duty ?? null;
+  let checkpoint: LeadCheckpoint | null = from?.checkpoint ?? null;
   const standbys = new Map<string, Standby>(from?.standbys);
   const leadAsks = new Map<number, LeadAsk>(from?.leadAsks);
   const leadOwned = new Map<number, LeadOwned>(from?.leadOwned);
@@ -483,6 +487,8 @@ export function cursor(
     trusted,
     leads,
     onDuty: () => duty !== null,
+    leadOnDuty: () => leadNow(),
+    checkpointed: (cp: LeadCheckpoint) => void (checkpoint = cp),
     keysByName,
     scopesByKey,
     scopeSets,
@@ -898,7 +904,15 @@ export function cursor(
         else if (ev.to !== home && !standbys.has(ev.to)) reject(`${ev.to} isn't an approved standby lead`);
         else if (!present(members.get(ev.to))) reject(`${ev.to} isn't here`);
         else if (ev.to === onDuty) reject(`${ev.to} is already the lead on duty`);
-        else duty = { lead: ev.to, since: m.seq, by: m.from };
+        else {
+          const handing = m.from === onDuty;
+          const owed = handing ? handoverCheckpointRefusal(ev.checkpoint, tasks.values(), [...(from?.asks ?? []), ...stepped].filter(stillOpen)) : null;
+          if (owed) reject(owed);
+          else {
+            duty = { lead: ev.to, since: m.seq, by: m.from };
+            if (ev.checkpoint !== undefined) checkpoint = { text: ev.checkpoint, by: m.from, seq: m.seq, at };
+          }
+        }
         return;
       }
       if (ev.op === "specs.only.set") {
@@ -1070,6 +1084,7 @@ export function cursor(
         specs: keptSpecs,
         specsOnly,
         duty,
+        checkpoint,
         standbys: [...standbys],
         leadAsks: [...leadAsks].filter(([seq, a]) => seq > cut || (a.answer?.seq ?? 0) > cut || openAsks.some((o) => o.seq === seq)),
         leadOwned: [...leadOwned].filter(([seq, o]) => seq > cut || (o.answer?.seq ?? 0) > cut || openAsks.some((a) => a.seq === seq)),
@@ -1107,6 +1122,7 @@ export function cursor(
       specs,
       specsOnly,
       duty,
+      checkpoint,
       standbys: new Map(standbys),
       leadAsks: new Map(leadAsks),
       leadOwned: new Map(leadOwned),
@@ -1239,6 +1255,7 @@ export function cursor(
     placesBefore,
     specsOnly,
     duty,
+    checkpoint,
     standbys,
     leadAsks,
     leadOwned,

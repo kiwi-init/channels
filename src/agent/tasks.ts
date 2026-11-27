@@ -26,6 +26,7 @@ import { Rejected } from "@kiwi/core/refusals.ts";
 import { wellFormedRunId } from "@kiwi/core/checks.ts";
 import { currentStep, landedStepRefusal, stepById, stepText, type StepEdit, type StepSpec } from "@kiwi/core/steps.ts";
 import { stepEditRefusal } from "@kiwi/core/state/landing-steps.ts";
+import { handoverCheckpointRefusal } from "@kiwi/core/state/lead.ts";
 import {
   isPerson,
   openRound,
@@ -136,10 +137,18 @@ export class SessionTasks extends SessionMessaging {
 
   readonly handLead = Effect.fn("AgentSession.handLead")(
     { self: this },
-    function* (this: SessionTasks, to: string) {
+    function* (this: SessionTasks, to: string, checkpoint?: string) {
       const { state } = yield* this.state();
-      const seq = yield* this.event({ op: "lead.duty", to, from: state.duty?.since ?? 0 }, `handed the lead to ${to}`);
-      return yield* this.confirm(seq);
+      const text = checkpoint?.trim();
+      if (state.lead === this.me) {
+        const owed = handoverCheckpointRefusal(text, state.tasks.values(), state.openAsks);
+        if (owed) return yield* new Rejected(owed);
+      }
+      const since = state.duty?.since ?? 0;
+      const seq = yield* this.event({ op: "lead.duty", to, from: since, ...(text ? { checkpoint: text } : {}) }, `handed the lead to ${to}`);
+      const after = yield* this.confirm(seq);
+      const { messages } = yield* this.state();
+      return { after, seq, since, messages };
     },
     oneLook,
   );
@@ -407,7 +416,7 @@ export class SessionTasks extends SessionMessaging {
             ? { ...change, by: (yield* this.resolveTo([change.by], state))?.[0] ?? change.by }
             : change;
       const me = state.members.get(this.me);
-      const lead = !!me && (!!me.owner || me.persona?.role === "lead" || state.lead === this.me);
+      const lead = !!me && (!!me.owner || state.lead === this.me || (state.duty === null && me.persona?.role === "lead"));
       const refused = me ? stepEditRefusal(t, edit, { name: this.me, person: isPerson(me), lead }) : null;
       if (refused) return yield* new Rejected(refused);
       const about = edit.kind === "add" ? edit.step.words : stepText(stepById(t, edit.id) ?? { id: edit.id, words: "" });

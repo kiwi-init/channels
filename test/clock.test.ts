@@ -5,7 +5,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import { MAX_QUIET_MINUTES, PROTOCOL_VERSION, wellFormed, type Event, type Kind, type Message, type NudgeStep, type Payload, type WakeGot, type WakeSeen } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { QUEUE_MS, QUIET_MS, UNREAD_MS } from "@kiwi/core/state/clocks.ts";
-import type { StepSpec } from "@kiwi/core/steps.ts";
+import { timedOf, type StepSpec } from "@kiwi/core/steps.ts";
 
 const NAMES = ["jon", "owl", "win", "mac", "zed", "ann", "bob", "cal", "dee", "eve"] as const;
 type Name = (typeof NAMES)[number];
@@ -23,6 +23,8 @@ beforeAll(async () => {
   ];
 });
 
+const named = (e: Event, upto: number): Event =>
+  e.op === "lead.duty" && e.checkpoint === undefined ? { ...e, checkpoint: Array.from({ length: Math.min(upto, 80) }, (_, i) => `T${upto - i} #${upto - i}`).join(" ") } : e;
 const T0 = 1_760_000_000_000;
 const N = QUIET_MS;
 const A = "a".repeat(40);
@@ -41,7 +43,7 @@ function channel() {
     log.push(m);
     return m;
   };
-  const ev = (from: Name, e: Event) => say(from, "event", "", { ev: e });
+  const ev = (from: Name, e: Event) => say(from, "event", "", { ev: named(e, log.length + 1) });
   const add = async (more: Partial<Extract<Event, { op: "task.add" }>> = {}): Promise<number> => (await ev("owl", { op: "task.add", title: "ship", ...more })).seq;
   const update = (from: Name, task: number, change: Omit<Extract<Event, { op: "task.update" }>, "op" | "task">) => ev(from, { op: "task.update", task, ...change });
   const nudge = (from: Name, task: number, mover: string, since: number, step: 1 | 2 | 3) => ev(from, { op: "task.nudge", task, mover, since, step });
@@ -276,7 +278,7 @@ describe("a landing step's clock starts when the move reaches a member (#3930 §
     const c = channel();
     const id = await landing(c, [{ words: "soak", by: "zed", wait: { reason: "soak", ms: HOUR } }]);
     const armed = c.state().tasks.get(id)!.clock!;
-    const until = c.state().tasks.get(id)!.steps![0]!.wait!.until!;
+    const until = timedOf(c.state().tasks.get(id)!.steps![0]!)!.until!;
     expect(read(c, id, until - 1)).toBeUndefined();
     expect(read(c, id, until + 5_000)).toEqual({ mover: "zed", party: "zed", epoch: armed.seq, since: until, quiet: 5_000, paged: true, step: 0 });
     c.wait(HOUR + N);

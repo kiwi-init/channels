@@ -261,6 +261,7 @@ export default {
   "tasks.move.revise": "{who} deve enviar para revisão de novo",
   "tasks.move.answer": "{who} deve responder",
   "tasks.move.land": "{who} deve integrar",
+  "tasks.move.lift": "{who} deve liberar a retenção",
   "tasks.move.with.trouble": "{move} ({trouble})",
   "tasks.move.trouble.failed": "a execução falhou",
   "tasks.move.trouble.unseen": "a execução não pode ser vista",

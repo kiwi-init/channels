@@ -158,6 +158,7 @@ export default {
   "panels.task.step.skipped": "スキップ",
   "panels.task.step.current": "いま",
   "panels.task.step.waits": "あと {time} 待ち",
+  "panels.task.step.held": "{who} が保留中",
   "panels.task.step.run": "実行はあと {time}",
   "panels.task.step.end": "完了にする",
   "panels.task.closed": "終了",

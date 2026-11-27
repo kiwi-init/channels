@@ -159,6 +159,7 @@ export function stepState(step: TaskStep, now: number): string | null {
   if (step.state === "done") return t("panels.task.step.done")
   if (step.state === "skipped") return t("panels.task.step.skipped")
   if (step.state !== "current") return null
+  if (step.held) return t("panels.task.step.held", { who: step.held.by })
   if (step.wait) return t("panels.task.step.waits", { time: lasting(step.wait.until - now) })
   if (step.run) return t("panels.task.step.run", { time: lasting(step.run.due - now) })
   return step.trouble ? t(TROUBLES[step.trouble]) : t("panels.task.step.current")
@@ -170,7 +171,7 @@ function Steps({ channel, task, steps, now }: { channel: Channel; task: Task; st
     <ol className="tp-steps">
       {steps.map((step) => {
         const state = stepState(step, now)
-        const waiting = step.wait
+        const waiting = step.held ?? step.wait
         return (
           <li key={step.id} className={cx("tp-step", `is-${step.state}`)} aria-current={step.state === "current" ? "step" : undefined}>
             <span className="tp-step-words">

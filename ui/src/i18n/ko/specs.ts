@@ -261,6 +261,7 @@ export default {
   "tasks.move.revise": "{who} 차례: 다시 리뷰 요청하기",
   "tasks.move.answer": "{who} 차례: 답하기",
   "tasks.move.land": "{who} 차례: 반영하기",
+  "tasks.move.lift": "{who} 차례: 보류 해제하기",
   "tasks.move.with.trouble": "{move} ({trouble})",
   "tasks.move.trouble.failed": "실행이 실패했습니다",
   "tasks.move.trouble.unseen": "실행을 확인할 수 없습니다",

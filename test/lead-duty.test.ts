@@ -8,9 +8,11 @@ import { dutyLines } from "../src/cli/commands/lead.ts";
 const ids: Record<string, Identity> = {};
 let seq = 0;
 const T0 = 1_000_000;
+const named = (e: Event, upto: number): Event =>
+  e.op === "lead.duty" && e.checkpoint === undefined ? { ...e, checkpoint: Array.from({ length: Math.min(upto, 80) }, (_, i) => `T${upto - i} #${upto - i}`).join(" ") } : e;
 async function ev(from: string, e: Event, key = from): Promise<Message> {
   const n = ++seq;
-  const base = { v: 1 as const, id: crypto.randomUUID(), from, kind: "event" as const, body: "", ev: e, ts: T0 + n };
+  const base = { v: 1 as const, id: crypto.randomUUID(), from, kind: "event" as const, body: "", ev: named(e, n), ts: T0 + n };
   const p = await sign(ids[key]!, base);
   return { ...p, seq: n, rts: T0 + n, sigOk: await verify(p) };
 }

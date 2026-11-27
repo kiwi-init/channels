@@ -37,7 +37,7 @@ import { evidenceOf, prLines, refText, stageOf, stageText } from "./stage.ts";
 import { changedSinceApproval, changedAfterApproval, freeAgents, specOfComment, specPlanner, specStage, specTitleOf } from "./state/specs.ts";
 import { commentsLine, commentsWaiting, specLine } from "./spec-lines.ts";
 import { landingWaits, reviewStillRequired, rulesText } from "./prs.ts";
-import { currentStep, spanText, stepById, stepMove, type LandingStep, type StepEdit } from "./steps.ts";
+import { currentStep, holdOf, spanText, stepById, stepMove, timedOf, type LandingStep, type StepEdit } from "./steps.ts";
 import { artifactWords, runSight } from "./state/landing-steps.ts";
 import { resetLine } from "./state/reset.ts";
 import { sayEvent, type EventKey, type EventSay } from "./event-words.ts";
@@ -524,6 +524,10 @@ export function stepEditText(edit: StepEdit): string {
       return `⤼ ${edit.id}: ${inlineText(edit.why, 200)}`;
     case "wait":
       return `${edit.id} ⏸ ${spanText(edit.ms)}: ${inlineText(edit.reason, 200)}`;
+    case "hold":
+      return `${edit.id} ⏸ held: ${inlineText(edit.reason, 200)}`;
+    case "unhold":
+      return `${edit.id} ⏵ unheld`;
     case "run":
       return `${edit.id} ⏵ ${inlineText(edit.run, 80)}${edit.expected === undefined ? "" : ` ≤ ${spanText(edit.expected)}`}`;
     default: {
@@ -555,9 +559,16 @@ function stepTail(state: ChannelState, t: Frozen<Task>, step: LandingStep, curre
       return `  done ${ago(end.ts, now)}${end.by !== (step.by ?? t.lander ?? t.owner) ? ` by ${inlineText(end.by, 40)}` : ""}${end.note ? `: ${inlineText(end.note, 200)}` : ""}${end.link ? ` ${end.link}` : ""}`;
     return `  done ${ago(end.ts, now)}${end.how === "detected" ? `: ${inlineText(end.saw, 120)}` : ""}`;
   }
-  const seen = step.progress.seen ? `  seen early: ${inlineText(step.progress.seen.saw, 120)}` : "";
+  const hold = holdOf(step);
+  const seen = step.progress.seen
+    ? hold
+      ? `; delivered outside Kiwi ${ago(step.progress.seen.at, now)}: ${inlineText(step.progress.seen.saw, 120)}`
+      : `  seen early: ${inlineText(step.progress.seen.saw, 120)}`
+    : "";
+  if (hold) return `  held by ${inlineText(hold.by, 40)}: ${inlineText(hold.reason, 120)}${seen}`;
   if (!current) {
-    const wait = step.wait ? `  not before +${spanText(step.wait.ms)}: ${inlineText(step.wait.reason, 120)}` : "";
+    const timed = timedOf(step);
+    const wait = timed ? `  not before +${spanText(timed.ms)}: ${inlineText(timed.reason, 120)}` : "";
     const run = step.run ? `  waits on ${step.run.id ? `run ${inlineText(step.run.id, 60)}` : "a run"}, expected in ${spanText(step.run.expected)}` : "";
     return `${wait}${run}${seen}`;
   }
@@ -571,6 +582,8 @@ function stepTail(state: ChannelState, t: Frozen<Task>, step: LandingStep, curre
       return move.why ? `  ${move.why}: ${inlineText(move.name, 40)} has the move` : "  current";
     case "nobody":
       return "  current, with nobody to move it";
+    case "held":
+      return `  held by ${inlineText(move.by, 40)}: ${inlineText(move.reason, 120)}`;
     default: {
       const never: never = move;
       return never;

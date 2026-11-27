@@ -8,7 +8,7 @@ import { pausingStep, runSight } from "./state/landing-steps.ts";
 import { waitActive } from "./state/clocks.ts";
 import { currentStep, spanText, stepMove, stepText, type LandingStep } from "./steps.ts";
 
-type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land" | "reset";
+type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land" | "reset" | "lift";
 
 type RunTrouble = "run failed" | "run can't be seen" | "run overran";
 
@@ -57,6 +57,10 @@ function stepMover(state: Board, t: Frozen<Task>, step: LandingStep, now: number
   if (move.kind === "waiting") return { kind: "hold", step: stepText(step), until: move.until, left: move.until - now, reason: move.reason };
   if (move.kind === "run") return { kind: "run", step: stepText(step), behind: move.behind, due: move.due, left: move.due - now };
   if (move.kind === "nobody") return settle(state, state.lead, "assign");
+  if (move.kind === "held") {
+    const lift = settle(state, state.lead, "lift");
+    return lift.kind === "member" ? { ...lift, step: stepText(step) } : lift;
+  }
   const settled = settle(state, move.name, "land");
   return settled.kind === "member" ? { ...settled, step: stepText(step), ...(move.why ? { why: move.why } : {}) } : settled;
 }
@@ -100,6 +104,7 @@ const MOVE_WORDS: Record<MoveFor, string> = {
   answer: "to answer",
   land: "to land it",
   reset: "to reset its reviewer's session or move its review",
+  lift: "to lift the hold on it",
 };
 
 const memberWords = (m: Extract<Mover, { kind: "member" }>): string =>
