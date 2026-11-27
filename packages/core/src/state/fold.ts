@@ -535,8 +535,8 @@ export function cursor(
     if (ignored(trust.get(m.seq)) || closedAsks.has(m.seq)) return false;
     if (m.permission)
       return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members, bySeq: permBySeq }) !== null));
-    const handed = leadAsks.get(m.seq);
-    if (handed) return !handed.answer;
+    const recorded = leadAsks.get(m.seq) ?? leadOwned.get(m.seq);
+    if (recorded) return !recorded.answer;
     const by = answered.get(m.seq);
     return !by || ![...by].some((n) => answersAsk(members, m, n));
   };
@@ -763,6 +763,8 @@ export function cursor(
         else if (
           onDuty &&
           m.from === onDuty &&
+          !m.permission &&
+          !m.check &&
           m.to?.length &&
           m.to.every((t) => {
             const p = members.get(t);

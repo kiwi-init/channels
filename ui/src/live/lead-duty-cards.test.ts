@@ -9,6 +9,7 @@ const roster: Roster = [
   { name: "lead", pk: "pk-lead", owner: false, at: 0, active: true, kind: "agent", runs: { harness: "claude" } },
   { name: "spare", pk: "pk-spare", owner: false, at: 0, active: true, kind: "agent", runs: { harness: "claude" } },
   { name: "dev", pk: "pk-dev", owner: false, at: 0, active: true, kind: "agent", runs: { harness: "claude" } },
+  { name: "bo", pk: "pk-bo", owner: false, at: 0, active: true, kind: "human", display: "Bo" },
 ]
 
 const wire = (seq: number, from: string, more: Partial<Wire>): Wire => ({ v: 1, id: `w${seq}`, seq, from, pk: `pk-${from}`, sigOk: true, kind: "msg", body: "", ts: seq * 1000, ...more }) as Wire
@@ -38,5 +39,18 @@ describe("the app's card for a decision handed to the Lead follows the duty", ()
   test("an answer before the handover stays the answer, on the card of the lead on duty", () => {
     const wires = [...setup, decision, reply(4, "lead", 3, "postgres"), ev(5, "lead", { op: "lead.duty", to: "spare", from: 0 }), reply(6, "spare", 3, "sqlite")]
     expect(cardFor(wires, "spare")).toMatchObject({ answer: { by: "lead", seq: 4 } })
+  })
+})
+
+describe("the app's card for an ask the lead put to a person keeps the accepted answer", () => {
+  test("an answer accepted under a power is still the card's answer after the power is taken back", () => {
+    const grant = ev(3, "jow", { op: "power.set", member: "bo", pk: "pk-bo", was: false, power: "answersDecisions", on: true })
+    const ask = wire(4, "lead", { kind: "ask", body: "Ship 2.0 today?", to: ["jow"], esc: true })
+    const out = ev(5, "lead", { op: "lead.duty", to: "spare", from: 0 })
+    const answer = wire(6, "bo", { body: "yes", re: [4], to: ["lead"] })
+    const revoke = ev(7, "jow", { op: "power.set", member: "bo", pk: "pk-bo", was: true, power: "answersDecisions", on: false })
+    const wires = [...setup, grant, ask, out, answer, revoke]
+    const card = asksOf(fold(wires, roster, 100_000), wires, "jow", true, [], roster, new Map()).asks.find((a) => a.id === "4")
+    expect(card).toMatchObject({ kind: "question", answer: { by: "bo", seq: 6 } })
   })
 })

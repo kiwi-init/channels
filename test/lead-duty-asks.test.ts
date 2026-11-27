@@ -173,6 +173,27 @@ describe("one resolution for a lead's ask: open state, record and delivery agree
     for (let cut = 1; cut < log.length; cut++) expect({ cut, ...view(resumedAt(log, cut)) }).toEqual({ cut, ...want });
   });
 
+  test("an answer accepted under a power stays the answer after the power is taken back, on replay and on restore", async () => {
+    const setup = await channel();
+    const grant = await ev("jon", { op: "power.set", member: "bo", pk: ids.bo!.pk, was: false, power: "answersDecisions", on: true });
+    const ask = await say("lead", "ask", "Ship 2.0 today?", { to: ["jon"], esc: true });
+    const out = await ev("lead", { op: "lead.duty", to: "spare", from: 0 });
+    const answer = await say("bo", "msg", "yes", { re: [ask.seq], to: ["lead"] });
+    const revoke = await ev("jon", { op: "power.set", member: "bo", pk: ids.bo!.pk, was: true, power: "answersDecisions", on: false });
+    const log = [...setup, grant, ask, out, answer, revoke];
+    const view = (s: ChannelState) => ({
+      refused: [grant, revoke].filter((e) => s.rejected.has(e.seq)).length,
+      power: !!s.members.get("bo")?.answersDecisions,
+      open: open(s, ask),
+      by: s.leadOwned.get(ask.seq)?.answer?.by,
+      spare: wants("spare", answer, s),
+      lead: wants("lead", answer, s),
+    });
+    const want = { refused: 0, power: false, open: false, by: "bo", spare: true, lead: false };
+    expect(view(at(log))).toEqual(want);
+    for (let cut = 1; cut < log.length; cut++) expect({ cut, ...view(resumedAt(log, cut)) }).toEqual({ cut, ...want });
+  });
+
   test("a reply to an ask already closed settles nothing and keeps its ordinary delivery", async () => {
     const setup = await channel();
     const ask = await say("lead", "ask", "Ship 2.0 today?", { to: ["jon"], esc: true });

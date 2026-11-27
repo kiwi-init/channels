@@ -1047,11 +1047,12 @@ export function asksOf(
     }
     if (!isQuestion(m)) continue
     const handed = state.leadAsks.get(m.seq)
+    const recorded = handed ?? state.leadOwned.get(m.seq)
     const sentTo = handed ? (state.lead ? [state.lead] : []) : m.to
     const toMe = handed ? !!sentTo?.includes(me) : !m.to?.length || m.to.includes(me) || m.to.includes("*") || (decides && !!m.esc && !m.handoff)
     if (!toMe) continue
     const tapOnly = state.tapToAnswer && !!m.esc
-    const said = (replies.get(m.seq) ?? []).filter((r) => r.kind !== "event" && (handed ? r.seq === handed.answer?.seq : answersAsk(state.members, m, r.from)))
+    const said = (replies.get(m.seq) ?? []).filter((r) => r.kind !== "event" && (recorded ? r.seq === recorded.answer?.seq : answersAsk(state.members, m, r.from)))
     const answer = said.find((r) => !tapOnly || r.pick || r.stepReply)
     const typed = tapOnly && !answer ? said.at(-1) : undefined
     const isOpen = open.has(m.seq)
