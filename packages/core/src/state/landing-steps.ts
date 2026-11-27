@@ -7,7 +7,9 @@ import { approvedAt, judgedHead } from "../stage.ts";
 import { releaseOf, runStart, runsUnknownSince, shaKey, succeededBy, type GithubPr, type GithubState } from "./github.ts";
 import type { Task } from "./types.ts";
 
-export type StepMark = { seq: number; by: string; at: number };
+export type StepMark = { seq: number; by: string; at: number; closed: (task: Pick<Task, "id" | "title">, seq: number) => void };
+
+const unnoted = (): void => undefined;
 
 export interface StepView {
   github: Frozen<GithubState>;
@@ -63,6 +65,7 @@ export function advance(task: Task, mark: StepMark): void {
       task.state = "done";
       task.closedSeq = mark.seq;
       task.updatedAt = mark.at;
+      mark.closed(task, mark.seq);
       return;
     }
     arm(step, mark.at);
@@ -183,7 +186,7 @@ export function migrateChecks(tasks: ReadonlyMap<number, Task>, checks: Readonly
       checkStep(task, { ...check, replaces: undefined });
     }
     const passed = (check.answers ?? (check.answer ? [check.answer] : [])).find((a) => a.pass);
-    if (passed) checkAnswered(tasks, { ...check, answer: passed }, { seq: passed.seq, by: passed.by, at: "at" in passed && typeof passed.at === "number" ? passed.at : 0 });
+    if (passed) checkAnswered(tasks, { ...check, answer: passed }, { seq: passed.seq, by: passed.by, at: "at" in passed && typeof passed.at === "number" ? passed.at : 0, closed: unnoted });
   }
 }
 

@@ -24,7 +24,22 @@ import { approvedAt, sameHead } from "../stage.ts";
 import { reposOf } from "./repos.ts";
 import { trustedAt } from "./times.ts";
 import { runPin } from "../checks.ts";
-import { advance, artifactWords, editSteps, hasOpenSteps, landedRefusal, observedRefusal, reseedThen, say, see, seeAnswered, seedSteps, seeThenSteps, stepEditRefusal } from "./landing-steps.ts";
+import {
+  advance,
+  artifactWords,
+  editSteps,
+  hasOpenSteps,
+  landedRefusal,
+  observedRefusal,
+  reseedThen,
+  say,
+  see,
+  seeAnswered,
+  seedSteps,
+  seeThenSteps,
+  stepEditRefusal,
+  type StepMark,
+} from "./landing-steps.ts";
 import { landedStepRefusal, stepById, stepsOfThen, stepText, thenChanged, type StepSpec } from "../steps.ts";
 import { omit } from "../omit.ts";
 import { inlineText } from "../membership.ts";
@@ -79,6 +94,7 @@ export interface FoldCtx {
   leadOnDuty: () => string | null;
   checkpointed: (cp: LeadCheckpoint) => void;
   dutyNote: (note: DutyNote) => void;
+  closed: StepMark["closed"];
   keysByName: Map<string, Set<string>>;
   scopesByKey: Map<string, Scope[]>;
   scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
@@ -112,7 +128,7 @@ export interface FoldCtx {
   compactProposal: Compact | null;
 }
 
-function approvalHoldsAgain(t: Task, head: string, mark: { seq: number; by: string; at: number }): void {
+function approvalHoldsAgain(t: Task, head: string, mark: StepMark): void {
   const last = t.rounds.at(-1);
   if (t.state !== "review" || last?.result.kind !== "approved" || last.stale === undefined || !approvedAt(last, head)) return;
   last.stale = undefined;
@@ -123,7 +139,7 @@ function approvalHoldsAgain(t: Task, head: string, mark: { seq: number; by: stri
   advance(t, mark);
 }
 
-function headMoved(t: Task, pr: GithubPr & { sha: string }, mark: { seq: number; by: string; at: number }): void {
+function headMoved(t: Task, pr: GithubPr & { sha: string }, mark: StepMark): void {
   const last = t.rounds.at(-1);
   if (last?.result.kind !== "approved" || !last.at) return;
   if (approvedAt(last, pr.sha)) return approvalHoldsAgain(t, pr.sha, mark);
@@ -144,7 +160,7 @@ function keptRefusal(task: Task, kept: KeptEvidence, from: string, lead: boolean
   return null;
 }
 
-function keepApproval(c: FoldCtx, task: Task, kept: KeptEvidence, mark: { seq: number; by: string; at: number; rts?: number }): void {
+function keepApproval(c: FoldCtx, task: Task, kept: KeptEvidence, mark: StepMark & { rts?: number }): void {
   const last = task.rounds.at(-1);
   if (!last) return;
   if (!last.kept?.some((k) => k.head === kept.head)) {
@@ -374,7 +390,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         const moved = { ...pr, sha: pr.sha };
         for (const t of tasks.values()) {
           const linked = branchLinks(pr, c.branchPrefix, t) || !!t.proof?.some((p) => prLinks(p.url).some((l) => prKey(l.repo, l.number) === key));
-          if (linked) headMoved(t, moved, { seq: m.seq, by: m.from, at });
+          if (linked) headMoved(t, moved, { seq: m.seq, by: m.from, at, closed: c.closed });
         }
       }
       break;
@@ -631,7 +647,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (ev.steps) seedSteps(added, ev.steps);
       else if (then && hasLanding(then)) seedSteps(added, stepsOfThen(then), "then");
       else if (ev.then === undefined && c.landingSteps) seedSteps(added, c.landingSteps);
-      seeAnswered(added, c.passedAsks, { seq: m.seq, by: m.from, at });
+      seeAnswered(added, c.passedAsks, { seq: m.seq, by: m.from, at, closed: c.closed });
       tasks.set(m.seq, added);
       break;
     }
@@ -662,10 +678,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const task = tasks.get(ev.task);
       if (!task) reject(`no task ${taskId(ev.task)}`);
       else if (!isPerson(member) && !c.leads(member)) reject(`only a person or the lead deletes ${taskId(task.id)}`);
-      else {
-        if (task.state === "done" && task.closedSeq !== undefined) c.dutyNote({ kind: "closed", task: task.id, title: task.title, seq: task.closedSeq });
-        tasks.delete(task.id);
-      }
+      else tasks.delete(task.id);
       break;
     }
 
@@ -713,7 +726,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         reject(`no task ${taskId(ev.task)}`);
         break;
       }
-      const mark = { seq: m.seq, by: m.from, at };
+      const mark = { seq: m.seq, by: m.from, at, closed: c.closed };
       if ("step" in ev) {
         const step = stepById(task, ev.step);
         const wrong = step && ev.artifact ? null : landedStepRefusal(task, ev.step);
@@ -767,8 +780,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const refused = stepEditRefusal(task, ev.edit, { name: m.from, person: isPerson(member), lead: c.leads(member) });
       if (refused) reject(refused);
       else {
-        editSteps(task, ev.edit, { seq: m.seq, by: m.from, at });
-        seeAnswered(task, c.passedAsks, { seq: m.seq, by: m.from, at });
+        editSteps(task, ev.edit, { seq: m.seq, by: m.from, at, closed: c.closed });
+        seeAnswered(task, c.passedAsks, { seq: m.seq, by: m.from, at, closed: c.closed });
         if (ev.edit.kind === "hold") c.dutyNote({ kind: "hold", task: task.id, step: ev.edit.id, by: m.from, seq: m.seq, reason: ev.edit.reason });
         if (ev.edit.kind === "unhold") c.dutyNote({ kind: "unhold", task: task.id, step: ev.edit.id, by: m.from, seq: m.seq });
       }
@@ -890,7 +903,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       if (state && state !== "done") task.cancelled = undefined;
       if (state === "done" && task.state !== "done") task.closedWith = ev.close?.trim() || undefined;
       if (state && state !== "done") task.closedWith = undefined;
-      if (state === "done" && task.state !== "done") task.closedSeq = m.seq;
+      if (state === "done" && task.state !== "done") {
+        task.closedSeq = m.seq;
+        c.closed(task, m.seq);
+      }
       if (state && state !== "done") task.closedSeq = undefined;
       if (ev.owner !== undefined) {
         const next = ev.owner || undefined;
@@ -916,15 +932,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         task.proof = [...(task.proof ?? []), { seq: m.seq, by: m.from, ts: at, url: ev.proof.url, ...(ev.proof.label ? { label: ev.proof.label } : {}) }];
         for (const l of prLinks(ev.proof.url)) {
           const pr = c.github.prs.get(prKey(l.repo, l.number));
-          if (pr?.sha && pr.state === "open") headMoved(task, { ...pr, sha: pr.sha }, { seq: m.seq, by: m.from, at });
+          if (pr?.sha && pr.state === "open") headMoved(task, { ...pr, sha: pr.sha }, { seq: m.seq, by: m.from, at, closed: c.closed });
         }
       }
-      if (ev.kept) keepApproval(c, task, ev.kept, { seq: m.seq, by: m.from, at, ...rts });
+      if (ev.kept) keepApproval(c, task, ev.kept, { seq: m.seq, by: m.from, at, closed: c.closed, ...rts });
       if (ev.run && task.run?.id !== ev.run.id) task.run = { id: ev.run.id, seq: m.seq, by: m.from };
       if (ev.areas?.length) task.areas = [...new Set(ev.areas)];
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;
-      if (task.state === "landing") advance(task, { seq: m.seq, by: m.from, at });
+      if (task.state === "landing") advance(task, { seq: m.seq, by: m.from, at, closed: c.closed });
       if (judging && mayFinish) markReset(c.reviewReset, member, m.seq);
       break;
     }

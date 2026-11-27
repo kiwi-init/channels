@@ -2,6 +2,7 @@ import type { Frozen } from "./types.ts";
 import { type Landing, type OldTaskState, type TaskState, type Verdict } from "../protocol.ts";
 import type { CheckAsk, CheckPhase } from "../checks.ts";
 import type { CheckState } from "./checks.ts";
+import type { StepMark } from "./landing-steps.ts";
 import { currentStep, thenChanged } from "../steps.ts";
 import type { ChannelState, ReviewRound, Task } from "./types.ts";
 
@@ -34,12 +35,13 @@ export function openRound<T extends Frozen<Task>>(task: T): T["rounds"][number] 
   return last?.result.kind === "open" ? last : undefined;
 }
 
-export function closeCancelled(task: Task, mark: { seq: number; by: string; at: number }, note: string): void {
+export function closeCancelled(task: Task, mark: StepMark, note: string): void {
   const open = openRound(task);
   if (open) open.result = { kind: "withdrawn", seq: mark.seq };
   task.state = "done";
   task.cancelled = true;
   task.closedSeq = mark.seq;
+  mark.closed(task, mark.seq);
   task.approvedBy = undefined;
   task.updatedAt = mark.at;
   task.notes.push({ seq: mark.seq, by: mark.by, ts: mark.at, text: note });

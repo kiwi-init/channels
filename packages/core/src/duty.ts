@@ -75,9 +75,7 @@ export function offDutyLines(state: Frozen<Pick<ChannelState, "offDuty" | "tasks
         ? [`T${n.task} ${n.step} lifted by ${inlineText(n.by, 40)} (#${n.seq})`]
         : [],
   );
-  const closedNow = [...state.tasks.values()].filter((t) => t.state === "done" && within(t.closedSeq)).map((t) => ({ task: t.id, title: t.title, seq: t.closedSeq ?? 0 }));
-  const deleted = notes.flatMap((n) => (n.kind === "closed" && !state.tasks.has(n.task) ? [n] : []));
-  const closed = [...closedNow, ...deleted].sort((a, b) => a.seq - b.seq).map((t) => `T${t.task} ${inlineText(t.title, 80)}`);
+  const closed = [...new Map(notes.flatMap((n) => (n.kind === "closed" ? [[n.task, `T${n.task} ${inlineText(n.title, 80)}`] as const] : []))).values()];
   const gained = new Map<number, number>();
   for (const n of notes) if (n.kind === "ticked") gained.set(n.ask, (gained.get(n.ask) ?? 0) + n.boxes);
   const specs = [...gained].map(([ask, n]) => `spec #${ask}: ${n} ${n === 1 ? "box" : "boxes"} ticked`);

@@ -385,6 +385,7 @@ export function cursor(
   const dutyLeft = new Map<string, number>(from?.offDuty?.left);
   const dutyNotes: DutyNote[] = [...(from?.offDuty?.notes ?? [])];
   const dutyNote = (note: DutyNote): void => void (dutyLeft.size && dutyNotes.push(note));
+  const closedNote = (task: Pick<Task, "id" | "title">, seq: number): void => dutyNote({ kind: "closed", task: task.id, title: task.title, seq });
   const standbys = new Map<string, Standby>(from?.standbys);
   const leadAsks = new Map<number, LeadAsk>(from?.leadAsks);
   const leadOwned = new Map<number, LeadOwned>(from?.leadOwned);
@@ -504,6 +505,7 @@ export function cursor(
     leadOnDuty: () => leadNow(),
     checkpointed: (cp: LeadCheckpoint) => void (checkpoint = cp),
     dutyNote,
+    closed: closedNote,
     keysByName,
     scopesByKey,
     scopeSets,
@@ -745,7 +747,7 @@ export function cursor(
           questions.set(m.seq, { seq: m.seq, from: m.from, ...(m.esc ? { esc: true as const } : {}), ...(m.to?.length ? { to: m.to } : {}), choices: m.choices });
         for (const r of m.re ?? []) {
           const answeredCheck = checks.get(r);
-          if (answeredCheck?.answer?.seq === m.seq) checkAnswered(tasks, answeredCheck, { seq: m.seq, by: m.from, at });
+          if (answeredCheck?.answer?.seq === m.seq) checkAnswered(tasks, answeredCheck, { seq: m.seq, by: m.from, at, closed: closedNote });
           const question = questions.get(r);
           const first = question?.choices[0];
           if (!question || first === undefined || !answersAsk(members, question, m.from) || typedOnly(m, r)) continue;
@@ -758,7 +760,7 @@ export function cursor(
           questions.delete(r);
           passedAsks.set(r, first);
           for (const old of [...passedAsks.keys()].slice(0, Math.max(0, passedAsks.size - PASSED_ASKS_KEPT))) passedAsks.delete(old);
-          for (const t of questionAnswered(tasks, r, first, { seq: m.seq, by: m.from, at })) if (t.state !== "landing") tickTask(t, m.seq, at);
+          for (const t of questionAnswered(tasks, r, first, { seq: m.seq, by: m.from, at, closed: closedNote })) if (t.state !== "landing") tickTask(t, m.seq, at);
         }
         const parentPlace = parent !== undefined ? placeOf.get(parent) : undefined;
         const to = m.to?.length === 1 ? m.to[0]! : undefined;
@@ -889,7 +891,7 @@ export function cursor(
             for (const id of holdsOf.get(ev.ask) ?? []) tickTask(tasks.get(id), m.seq, at);
             questions.delete(ev.ask);
             const closing = checks.get(ev.ask);
-            if (closing && closing.closed === undefined) checkClosed(tasks, closing, { seq: m.seq, by: m.from, at });
+            if (closing && closing.closed === undefined) checkClosed(tasks, closing, { seq: m.seq, by: m.from, at, closed: closedNote });
             closeCheck(checks, ev.ask, m.seq);
             for (const t of reopens) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, `pre-ship check #${ev.ask} closed after the approval`);
           }
@@ -964,7 +966,7 @@ export function cursor(
         if (boxes) dutyNote({ kind: "ticked", ask: ev.ask, boxes, seq: m.seq });
         if (why) reject(why);
         else if (ev.op === "spec.delete" || (ev.op === "spec.result" && ev.verdict === "dropped"))
-          for (const t of cancelledWithSpec({ tasks }, ev.ask)) closeCancelled(t, { seq: m.seq, by: m.from, at }, `cancelled with #${ev.ask}'s spec`);
+          for (const t of cancelledWithSpec({ tasks }, ev.ask)) closeCancelled(t, { seq: m.seq, by: m.from, at, closed: closedNote }, `cancelled with #${ev.ask}'s spec`);
         else closeOnItsOwn(ev.ask, m, at);
         return;
       }
