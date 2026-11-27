@@ -425,7 +425,8 @@ export type DutyNote =
   | { kind: "answer"; ask: number; by: string; seq: number; said: string }
   | { kind: "hold"; task: number; step: string; by: string; seq: number; reason: string }
   | { kind: "unhold"; task: number; step: string; by: string; seq: number }
-  | { kind: "ticked"; ask: number; boxes: number; seq: number };
+  | { kind: "ticked"; ask: number; boxes: number; seq: number }
+  | { kind: "closed"; task: number; title: string; seq: number };
 
 export interface OffDuty {
   left: [string, number][];

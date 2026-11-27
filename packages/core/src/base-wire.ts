@@ -163,6 +163,7 @@ function wellFormedDutyNote(x: unknown): boolean {
   if (n.kind === "answer") return seqOk(n.ask) && nameOk(n.by) && typeof n.said === "string" && n.said.length <= DUTY_SAID_MAX;
   if (n.kind === "hold") return seqOk(n.task) && typeof n.step === "string" && nameOk(n.by) && typeof n.reason === "string";
   if (n.kind === "unhold") return seqOk(n.task) && typeof n.step === "string" && nameOk(n.by);
+  if (n.kind === "closed") return seqOk(n.task) && typeof n.title === "string";
   return n.kind === "ticked" && seqOk(n.ask) && typeof n.boxes === "number" && Number.isSafeInteger(n.boxes) && n.boxes > 0;
 }
 

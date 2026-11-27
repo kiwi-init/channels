@@ -662,7 +662,10 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       const task = tasks.get(ev.task);
       if (!task) reject(`no task ${taskId(ev.task)}`);
       else if (!isPerson(member) && !c.leads(member)) reject(`only a person or the lead deletes ${taskId(task.id)}`);
-      else tasks.delete(task.id);
+      else {
+        if (task.state === "done" && task.closedSeq !== undefined) c.dutyNote({ kind: "closed", task: task.id, title: task.title, seq: task.closedSeq });
+        tasks.delete(task.id);
+      }
       break;
     }
 

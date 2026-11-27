@@ -913,7 +913,7 @@ export function cursor(
         if (!member.owner && !trusted(m.pk ?? "", member)) reject("only the owner or a person the owner trusts approves a standby lead");
         else if (!ev.on) {
           standbys.delete(ev.name);
-          dutyLeft.delete(ev.name);
+          if (ev.name !== homeLead()) dutyLeft.delete(ev.name);
         } else if (!present(target) || isPerson(target)) reject(`${ev.name} isn't an agent here`);
         else standbys.set(ev.name, { since: m.seq, by: m.from });
         return;

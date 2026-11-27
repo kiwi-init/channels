@@ -359,6 +359,32 @@ describe("a long absence keeps its whole report (#19397 box 14)", () => {
     for (const cut of cuts) expect({ cut, lines: handLines(resumedAt(log, cut), "lead", back.seq, at(10_000)) }).toEqual({ cut, lines: full });
   });
 
+  test("clearing the home lead's own standby approval keeps its departure, and a task closed then deleted stays in the report, on replay and resume", async () => {
+    const c = await channel();
+    const t = await c.task([MERGE]);
+    const u = await c.task([MERGE]);
+    await c.ev("jow", { op: "lead.standby", name: "lead", on: true });
+    const ask = await c.say("ann", "blocking", handedOver("ann", "Which region?", {}), { to: ["lead"] });
+    const out = await c.hand("lead", "spare", `T${t} and T${u} wait; #${ask.seq} is open.`);
+    const said = await c.say("spare", "msg", "eu-west-3", { re: [ask.seq], to: ["ann"] });
+    const closed = await c.ev("jow", { op: "task.update", task: u, state: "done", close: "not needed" });
+    await c.ev("jow", { op: "task.delete", task: u });
+    await c.hand("spare", "zed", `T${t} waits.`);
+    await c.ev("jow", { op: "lead.standby", name: "lead", on: false });
+    const back = await c.hand("zed", "lead", `T${t} waits.`);
+    const s = c.state();
+    expect([...s.rejected.values()]).toEqual([]);
+    expect(s.tasks.has(u)).toBe(false);
+    const full = handLines(s, "lead", back.seq, at(10_000));
+    const text = full.join("\n");
+    expect(text).toContain(`While off duty (#${out.seq} to #${back.seq}):`);
+    expect(text).toContain(`#${ask.seq}, answered by spare (#${said.seq}): eu-west-3`);
+    expect(text).toContain(`tasks closed:\n    T${u} export`);
+    expect(closed.seq).toBeLessThan(back.seq);
+    const log = [...c.log];
+    for (let cut = 1; cut < log.length; cut++) expect({ cut, lines: handLines(resumedAt(log, cut), "lead", back.seq, at(10_000)) }).toEqual({ cut, lines: full });
+  });
+
   test("a snapshot keeps notes only from the earliest departure of a lead who can still return", async () => {
     const c = await channel();
     const t = await c.task([MERGE]);
