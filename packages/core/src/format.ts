@@ -766,7 +766,7 @@ function handedLines({ ask, handed }: Frozen<HandedAsk>, now: number): string[] 
   ];
 }
 
-export function handedNote(state: Pick<ChannelState, "openAsks">, me: string, mc: string, shown: readonly number[] = [], now = Date.now()): string | null {
+export function handedNote(state: Pick<ChannelState, "openAsks" | "leadAsks" | "lead">, me: string, mc: string, shown: readonly number[] = [], now = Date.now()): string | null {
   const handed = handedTo(state, me);
   const first = handed[0];
   if (!first || handed.every((h) => shown.includes(h.ask.seq))) return null;
