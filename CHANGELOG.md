@@ -2,6 +2,25 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title, grouped by its kind label.
 
+## 2026.11.32 — 2026-11-27
+
+Tag [v2026.11.32](https://github.com/kiwi-init/channels/releases/tag/v2026.11.32) · commit [2e77425](https://github.com/kiwi-init/channels/commit/2e774250e5a49085cbd4fa821b3f53c012d492f6) · 2026-11-27
+
+First-load JS: 816,627 bytes (+897 since 2026.11.31)
+
+### Features
+
+- **Bring them back:** pick the channels and agents kiwi up starts (T18656, #2679) ([#2681](https://github.com/kiwi-init/channels/pull/2681)) ([2e77425](https://github.com/kiwi-init/channels/commit/2e774250e5a49085cbd4fa821b3f53c012d492f6))
+
+### Fixes
+
+- Asks to people land on every seat of a person (T18654, #2678) ([#2680](https://github.com/kiwi-init/channels/pull/2680)) ([33e9e24](https://github.com/kiwi-init/channels/commit/33e9e24d173d2a9091daedddffbf445e93775b97))
+
+### Tests and CI
+
+- **Perf:** the Linux desktop app's PSS over time, release against release (T18197, #2629) ([#2675](https://github.com/kiwi-init/channels/pull/2675)) ([6322bb0](https://github.com/kiwi-init/channels/commit/6322bb0b4693e958743f03b6b7cea0b3df2a1573))
+- **Perf:** a PSS drop is only within one process, failed reads are invalid, and 0 intervals are refused (T18484, #2675) ([#2677](https://github.com/kiwi-init/channels/pull/2677)) ([f856ae3](https://github.com/kiwi-init/channels/commit/f856ae35064ce46d0cd6440102659ee015cb0548))
+
 ## 2026.11.31 — 2026-11-26
 
 Tag [v2026.11.31](https://github.com/kiwi-init/channels/releases/tag/v2026.11.31) · commit [c5e974f](https://github.com/kiwi-init/channels/commit/c5e974f3f8a0a2c630ebf3451b52e258e0bbe5db) · 2026-11-26
