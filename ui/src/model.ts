@@ -55,6 +55,7 @@ export interface Person {
   kind: Kind
   display?: string
   role?: string
+  duty?: "on" | "off" | "standby"
   color?: Color
   picture?: string
   owner: boolean

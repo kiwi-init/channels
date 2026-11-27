@@ -64,6 +64,7 @@ const board = (tasks: Task[]): ChannelState =>
     merges: "agents",
     reactions: new Map(),
     edits: new Map(),
+    chatBy: new Map(),
     deleted: new Map(),
     head: 0,
   }) as ChannelState;

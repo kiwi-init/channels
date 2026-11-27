@@ -11,6 +11,7 @@ import { seatHolds, seatRefusal } from "../hold.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
 import { decodedWhole, GENERAL_ROOM, knownOp, olderRules, outgrown, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
+import { parentAuthor } from "@kiwi/core/duty.ts";
 import { findRoom, fold, rosterOf, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
 import { narrows, wants } from "./wants.ts";
@@ -320,6 +321,11 @@ export class SessionState {
     const held = messages.find((m) => m.seq === seq);
     if (held || !this.base || seq > this.base.n || seq < 1) return held ?? null;
     return (yield* this.ch.fx.page(seq - 1, 1)).find((m) => m.seq === seq) ?? null;
+  });
+
+  readonly authorOf = Effect.fn("AgentSession.authorOf")({ self: this }, function* (this: SessionState, seq: number, messages: readonly Message[], state: ChannelState) {
+    const held = state.chatBy.has(seq) ? null : yield* this.message(seq, messages).pipe(Effect.orElseSucceed(() => null));
+    return parentAuthor(state, seq, held);
   });
 
   readonly threadMessages = Effect.fn("AgentSession.threadMessages")({ self: this }, function* (this: SessionState, root: number, messages: readonly Message[], state: ChannelState) {

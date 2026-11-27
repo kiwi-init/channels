@@ -4,6 +4,8 @@ import { oneLook, type AgentSession } from "../../agent.ts";
 import { saveMessage } from "../../received-files.ts";
 import { home } from "../../config.ts";
 import { alsoAnswers, formatShown, missingImages, parseDuration, presenceAnswers } from "@kiwi/core/format.ts";
+import { mentionsOf } from "@kiwi/core/changes.ts";
+import { offDutyHint } from "@kiwi/core/duty.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { messageAt } from "@kiwi/core/message-link.ts";
 import reactionPack from "../../../site/reactions/index.json";
@@ -138,7 +140,9 @@ export const messageCommands: Record<string, Command> = {
         const doc =
           !asking && kind === "msg" ? docPlaceOf(state, { ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}), ...(room ? { room } : {}), re }) : null;
         const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
-        const notes = [general ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
+        const replyTo = re.length ? yield* s.authorOf(re[0]!, messages, state) : undefined;
+        const offDuty = offDutyHint(state, [...(to ?? []), ...(dm ? [dm] : []), ...(replyTo && replyTo !== s.me ? [replyTo] : []), ...mentionsOf(body)]);
+        const notes = [general ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body), offDuty].filter((n) => n !== null);
         const thread = re.length ? undefined : chosen.task;
         if (doc) {
           const seq = yield* s.sendToDoc(body, doc, {
@@ -193,8 +197,10 @@ export const messageCommands: Record<string, Command> = {
         const placed = yield* s.replyPlaced(seq, body, kind, imgs, files?.length ? { files } : {}, kind === "msg" ? docPlaceOf(state, { re: [seq] }) : null);
         out(`sent #${placed.seq}`);
         if (placed.under) out(`${placed.under.by} answered #${seq} first (#${placed.under.answer}): yours went under that answer`);
-        const notes = [inGeneral(state, seq) ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body)].filter((n) => n !== null);
         const orig = messages.find((m) => m.seq === seq);
+        const author = yield* s.authorOf(seq, messages, state);
+        const offDuty = offDutyHint(state, [...(author && author !== s.me ? [author] : []), ...mentionsOf(body)]);
+        const notes = [inGeneral(state, seq) ? longForGeneral(state, s.me, body) : null, bareHandleNote(state, body), offDuty].filter((n) => n !== null);
         const waits = orig ? yield* waitingOn(s, state, messages, { seq: placed.seq, body, to: orig.from === s.me ? orig.to : [orig.from], task: orig.task, re: seq }) : [];
         for (const n of [...notes, ...waits]) out(n);
       }),

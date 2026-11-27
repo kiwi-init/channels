@@ -32,6 +32,7 @@ import { specLineTest } from "~/specs/quote"
 import { wordsRaw, wrote } from "~/words"
 import { demoRound, withCheckpoints } from "~/demo/checkpoints"
 import { ownPrefs, setPrefs as setOwnPrefs } from "~/live/prefs"
+import { withLeadDuty } from "~/demo/lead-duty"
 import { withHeldStep, withTaskWait } from "~/demo/task-wait"
 
 const unticked = (text: string): string => text.replace(/^(\s*[-*+]\s+)\[[xX]\]/gm, "$1[ ]").trim()
@@ -427,6 +428,7 @@ export type Scenario =
   | "checkpoints"
   | "task-wait"
   | "task-held"
+  | "lead-duty"
   | "member"
   | "home-calm"
   | "departed-dms"
@@ -593,15 +595,17 @@ function initial(scenario: Scenario, look: Partial<Prefs>): State {
                                                   ? withTaskWait(DEMO_CHANNEL)
                                                   : scenario === "task-held"
                                                     ? withHeldStep(DEMO_CHANNEL)
-                                                    : scenario === "event-runs"
-                                                      ? withEventRuns(DEMO_CHANNEL)
-                                                      : scenario === "own-bubbles"
-                                                        ? withOwnBubbles(DEMO_CHANNEL)
-                                                        : scenario === "signs"
-                                                          ? withSigns(DEMO_CHANNEL)
-                                                          : scenario === "theirs"
-                                                            ? withTheirs(DEMO_CHANNEL)
-                                                            : DEMO_CHANNEL,
+                                                    : scenario === "lead-duty"
+                                                      ? withLeadDuty(DEMO_CHANNEL)
+                                                      : scenario === "event-runs"
+                                                        ? withEventRuns(DEMO_CHANNEL)
+                                                        : scenario === "own-bubbles"
+                                                          ? withOwnBubbles(DEMO_CHANNEL)
+                                                          : scenario === "signs"
+                                                            ? withSigns(DEMO_CHANNEL)
+                                                            : scenario === "theirs"
+                                                              ? withTheirs(DEMO_CHANNEL)
+                                                              : DEMO_CHANNEL,
       DEMO_EMPTY,
       DEMO_WAITING,
       DEMO_INTERLINKED,

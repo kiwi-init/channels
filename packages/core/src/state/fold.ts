@@ -431,7 +431,7 @@ export function cursor(
   const leases = shown<string, Lease>(from?.leases.map((l) => [l.name, l]));
   const reactions = shown<number, Map<string, Reaction>>(from?.reactions.map(([seq, by]) => [seq, new Map(by)]));
   const reactSeqs = new Set<number>(from?.reactSeqs);
-  const chatBy = new Map<number, string>(unpackAuthors(from?.authors) ?? from?.chatBy);
+  const chatBy = shown<number, string>(unpackAuthors(from?.authors) ?? from?.chatBy);
   const edits = shown<number, Edit>(from?.edits);
   const deleted = shown<number, number>(from?.deleted);
   let skipped = from?.skipped === true;
@@ -1209,6 +1209,7 @@ export function cursor(
       landingSteps: ctx.landingSteps,
       reactions,
       edits,
+      chatBy,
       deleted,
       head,
     };
@@ -1303,6 +1304,7 @@ export function cursor(
       placeOf,
       reactions,
       edits,
+      chatBy,
       deleted,
       prs: ctx.github.prs,
       githubChecks: ctx.github.checks,

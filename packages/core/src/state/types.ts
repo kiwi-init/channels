@@ -358,6 +358,7 @@ export interface ChannelStateDraft {
   compactProposal: Compact | null;
   reactions: Map<number, Map<string, Reaction>>;
   edits: Map<number, Edit>;
+  chatBy: Map<number, string>;
   deleted: Map<number, number>;
   head: number;
 }

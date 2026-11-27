@@ -613,6 +613,24 @@ describe("sessions fold from a snapshot only when the log after it is whole", ()
     }
   });
 
+  test("a reply's parent from before the snapshot has its author: an ordinary message from the fold, an ask fetched from the relay", async () => {
+    const { s, origin, done } = await scene();
+    try {
+      const said = await s.ownerCh.send("Which day?");
+      const asked = await s.ownerCh.send("Is the build green?", { kind: "ask" });
+      for (let i = 0; i < 20; i++) await s.ownerCh.send(`noise ${i}`);
+      expect(await runAgent(s.ownerCh.fx.snapshotIfDue(1))).toBeGreaterThan(asked);
+      await s.ownerCh.send("after");
+      const agent = new AgentSession("parent", { ...s.access, relay: origin, code: s.code }, s.owner, () => {});
+      const { messages, state } = await runAgent(agent.state());
+      expect(messages.some((m) => m.seq === said || m.seq === asked)).toBe(false);
+      expect([state.chatBy.get(said), state.chatBy.has(asked)]).toEqual([s.owner.name, false]);
+      expect([await runAgent(agent.authorOf(said, messages, state)), await runAgent(agent.authorOf(asked, messages, state))]).toEqual([s.owner.name, s.owner.name]);
+    } finally {
+      done();
+    }
+  });
+
   test("the owner's session tries again after a snapshot the relay didn't take", async () => {
     const { s, done } = await scene();
     let failing = true;
