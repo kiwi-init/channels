@@ -53,6 +53,52 @@ describe("a lock wait recorded on a task (T19510)", () => {
     expect(dueFor(ms, JOINED + QUIET_MS)).toEqual([expect.objectContaining({ step: 1, mover: "win" })]);
   });
 
+  describe("a wait that names a task its mover isn't the one waiting on", () => {
+    const named = (): Message[] => [
+      ...doing(),
+      event(OTHER, 2_000, "jow", { op: "task.add", title: "Fix the docs", owner: "win" }),
+      event(4, 3_000, "win", { op: "task.update", task: OTHER, state: "doing" }),
+      take(5, 5 * MIN, "mac", 60),
+      take(6, JOINED, "owl", 30, TASK),
+    ];
+
+    test("keeps the named task quiet-free while it's queued; the mover's other task keeps its clock", () => {
+      const now = 5 * MIN + HOUR - MIN;
+      const state = foldAt(named(), now);
+      expect(state.leases.get("build")?.queue).toEqual([expect.objectContaining({ name: "owl", task: TASK })]);
+      expect(dueFor(named(), now, TASK)).toEqual([]);
+      expect(clockOf(state, state.tasks.get(TASK)!, now)?.paged).toBe(false);
+      expect(dueFor(named(), now, OTHER)).toEqual([expect.objectContaining({ task: OTHER, mover: "win" })]);
+    });
+
+    test("stays quiet-free across a mover change while queued", () => {
+      const review = event(7, 20 * MIN, "win", { op: "task.update", task: TASK, state: "review", review: "mac" });
+      const ms = [...named(), review];
+      const now = 5 * MIN + HOUR - MIN;
+      const state = foldAt(ms, now);
+      expect(state.tasks.get(TASK)?.state).toBe("review");
+      expect(dueFor(ms, now, TASK)).toEqual([]);
+    });
+
+    test("resumes from the moment the waiting seat acquires the lock", () => {
+      const ranOut = 5 * MIN + HOUR;
+      expect(dueFor(named(), ranOut + QUIET_MS - MIN, TASK)).toEqual([]);
+      const now = ranOut + QUIET_MS + MIN;
+      const state = foldAt(named(), now);
+      expect(state.leases.get("build")).toMatchObject({ holder: "owl", since: ranOut });
+      expect(clockOf(state, state.tasks.get(TASK)!, now)).toMatchObject({ mover: "win", since: ranOut, paged: true });
+      expect(dueFor(named(), now, TASK)).toEqual([expect.objectContaining({ step: 1, mover: "win" })]);
+    });
+
+    test("resumes from the moment the waiting seat leaves the line", () => {
+      const left = 25 * MIN;
+      const ms = [...named(), event(7, left, "owl", { op: "lease.free", name: "build" })];
+      const now = left + QUIET_MS + MIN;
+      const state = foldAt(ms, now);
+      expect(clockOf(state, state.tasks.get(TASK)!, now)).toMatchObject({ mover: "win", since: left, paged: true });
+    });
+  });
+
   test("one seat with two tasks: only the task on the wait goes quiet-free", () => {
     const ms = [
       ...doing(),

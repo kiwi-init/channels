@@ -48,13 +48,13 @@ function lockWaits(view: ClockView, id: number): { lease: Frozen<Lease>; name: s
   return waits;
 }
 
-const inLine = (view: ClockView, t: Frozen<Task>, who: string, now: number): boolean => lockWaits(view, t.id).some((w) => w.name === who && leftAt(w.lease, w.name, now) === undefined);
+const inLine = (view: ClockView, t: Frozen<Task>, now: number): boolean => lockWaits(view, t.id).some((w) => leftAt(w.lease, w.name, now) === undefined);
 
 const lineEnds = (view: ClockView, t: Frozen<Task>, now: number): (number | undefined)[] => lockWaits(view, t.id).map((w) => leftAt(w.lease, w.name, now));
 
 function partyOf(view: ClockView, t: Frozen<Task>, now: number): Party {
   const party = moverParty(view, t, now);
-  return inLine(view, t, party.mover, now) ? NONE : party;
+  return !party.key.startsWith("?") && inLine(view, t, now) ? NONE : party;
 }
 
 function moverParty(view: ClockView, t: Frozen<Task>, now: number): Party {
