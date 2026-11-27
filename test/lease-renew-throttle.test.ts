@@ -43,11 +43,15 @@ const clockAt = (at: number) => {
   ticker = setInterval(() => setSystemTime(new Date(at + performance.now() - real)), 5);
 };
 
-const limited = { reads: 0, until: 0, gets: 0, only: [] as number[], jumpTo: 0 };
+const limited = { reads: 0, until: 0, gets: 0, only: [] as number[], jumpTo: 0, slowTo: 0 };
 const write = { lateAt: 0, interject: false, lost: false, refused: [] as string[] };
 const historyRead = (path: string, init?: { method?: string }) => {
   if (path !== "/messages" || (init?.method ?? "GET") !== "GET") return false;
   limited.gets++;
+  if (limited.slowTo && limited.gets === 1) {
+    clockAt(limited.slowTo);
+    limited.slowTo = 0;
+  }
   return Date.now() < limited.until || limited.only.includes(limited.gets);
 };
 const appending = (path: string, init?: { method?: string }) => init?.method === "POST" && (path === "/messages" || path.startsWith("/messages/after/"));
@@ -116,7 +120,7 @@ beforeAll(async () => {
 afterEach(() => {
   clearInterval(ticker);
   setSystemTime();
-  Object.assign(limited, { reads: 0, until: 0, gets: 0, only: [], jumpTo: 0 });
+  Object.assign(limited, { reads: 0, until: 0, gets: 0, only: [], jumpTo: 0, slowTo: 0 });
   Object.assign(write, { lateAt: 0, interject: false, lost: false, refused: [] });
 });
 afterAll(() => {
@@ -275,7 +279,7 @@ test("on a cold computer, a hold that runs out while the first read is limited, 
   const from = await headNow();
   clockAt(held.until - 12_000);
   Object.assign(limited, { gets: 0, only: [1], jumpTo: held.until + 600 });
-  await expect(onColdComputer(() => runLimited(annAgain().lease("lapse", 600)))).rejects.toThrow("can't tell whether it ran out meanwhile: nothing was sent");
+  await expect(onColdComputer(() => runLimited(annAgain().lease("lapse", 600)))).rejects.toThrow("while the first read of the channel was coming in, so it wasn't renewed: nothing was sent");
   expect(limited.reads).toBe(1);
   expect((await run(bob.state())).state.leases.get("lapse")?.holder).toBeUndefined();
   expect(await annTakes("lapse", from)).toEqual([]);
@@ -287,7 +291,7 @@ test("on a cold computer, a hold that runs out while the first read is limited, 
   const from = await headNow();
   clockAt(held.until - 12_000);
   Object.assign(limited, { gets: 0, only: [1], jumpTo: held.until + 600 });
-  await expect(onColdComputer(() => runLimited(annAgain().lease("lapse-q", 600)))).rejects.toThrow("can't tell whether it ran out meanwhile: nothing was sent");
+  await expect(onColdComputer(() => runLimited(annAgain().lease("lapse-q", 600)))).rejects.toThrow("while the first read of the channel was coming in, so it wasn't renewed: nothing was sent");
   const lease = (await run(bob.state())).state.leases.get("lapse-q");
   expect(lease).toMatchObject({ holder: "bob", since: held.until });
   expect(lease?.queue.map((q) => q.name)).toEqual([]);
@@ -315,6 +319,64 @@ test("a hold that ended on purpose doesn't block asking again under a limited fi
   await run(ann.unlease("again"));
 });
 
+test("with this computer's copy of the channel, a hold that runs out while the first read is limited, with no one waiting, isn't taken again: nothing is sent and no hold is left", async () => {
+  const held = await run(ann.lease("warm", 60));
+  await run(cat.send("a word in the meantime"));
+  const from = await headNow();
+  clockAt(held.until - 12_000);
+  Object.assign(limited, { gets: 0, only: [1], jumpTo: held.until + 600 });
+  await expect(runLimited(ann.lease("warm", 600))).rejects.toThrow("while the first read of the channel was coming in, so it wasn't renewed: nothing was sent");
+  expect(limited.reads).toBe(1);
+  expect((await run(bob.state())).state.leases.get("warm")?.holder).toBeUndefined();
+  expect(await annTakes("warm", from)).toEqual([]);
+});
+
+test("with this computer's copy of the channel, a hold that runs out while the first read is limited, with a seat waiting, isn't asked for again: the waiting seat holds it and the old holder isn't in line", async () => {
+  const held = await run(ann.lease("warm-q", 60));
+  await run(bob.lease("warm-q", 60));
+  await run(cat.send("a word in the meantime"));
+  const from = await headNow();
+  clockAt(held.until - 12_000);
+  Object.assign(limited, { gets: 0, only: [1], jumpTo: held.until + 600 });
+  await expect(runLimited(ann.lease("warm-q", 600))).rejects.toThrow("while the first read of the channel was coming in, so it wasn't renewed: nothing was sent");
+  const lease = (await run(bob.state())).state.leases.get("warm-q");
+  expect(lease).toMatchObject({ holder: "bob", since: held.until });
+  expect(lease?.queue.map((q) => q.name)).toEqual([]);
+  expect(await annTakes("warm-q", from)).toEqual([]);
+});
+
+test("with this computer's copy of the channel, a limited first read doesn't stop a fresh ask for a lease this seat never asked for", async () => {
+  const from = await headNow();
+  Object.assign(limited, { gets: 0, only: [1] });
+  const got = await runLimited(ann.lease("warm-fresh", 60));
+  expect(got.holder).toBe("ann");
+  expect((await annTakes("warm-fresh", from)).map((t) => t.op)).toEqual(["lease.take"]);
+  await run(ann.unlease("warm-fresh"));
+});
+
+test("a first read that is slow but not refused, answered after the hold ran out, isn't taken for a fresh ask: nothing is sent and the waiting seat holds it", async () => {
+  const held = await run(ann.lease("slow", 60));
+  await run(bob.lease("slow", 60));
+  const from = await headNow();
+  clockAt(held.until - 12_000);
+  Object.assign(limited, { gets: 0, slowTo: held.until + 600 });
+  await expect(runLimited(ann.lease("slow", 600))).rejects.toThrow("while the first read of the channel was coming in, so it wasn't renewed: nothing was sent");
+  expect(limited.reads).toBe(0);
+  const lease = (await run(bob.state())).state.leases.get("slow");
+  expect(lease).toMatchObject({ holder: "bob", since: held.until });
+  expect(lease?.queue.map((q) => q.name)).toEqual([]);
+  expect(await annTakes("slow", from)).toEqual([]);
+});
+
+test("asking again after a hold ran out on its own, with no limit, takes it fresh", async () => {
+  const held = await run(ann.lease("later", 60));
+  clockAt(held.until + 5_000);
+  const got = await run(ann.lease("later", 60));
+  expect(got.holder).toBe("ann");
+  expect(got.since).toBeGreaterThan(held.until);
+  await run(ann.unlease("later"));
+});
+
 test("on a cold computer that starts from a snapshot, the history after it can't show whether the hold ran out, so a limited first read sends nothing; asking again takes it fresh", async () => {
   const held = await run(ann.lease("snap", 60));
   expect(await run(owner.ownerCh.fx.snapshotIfDue(1))).toBeGreaterThan(0);
@@ -322,7 +384,7 @@ test("on a cold computer that starts from a snapshot, the history after it can't
   const from = await headNow();
   clockAt(held.until - 12_000);
   Object.assign(limited, { gets: 0, only: [1], jumpTo: held.until + 600 });
-  await expect(onColdComputer(() => runLimited(annAgain().lease("snap", 600)))).rejects.toThrow("can't tell whether it ran out meanwhile: nothing was sent");
+  await expect(onColdComputer(() => runLimited(annAgain().lease("snap", 600)))).rejects.toThrow("while the first read of the channel was coming in, so it wasn't renewed: nothing was sent");
   expect(limited.reads).toBe(1);
   expect((await run(bob.state())).state.leases.get("snap")?.holder).toBeUndefined();
   expect(await annTakes("snap", from)).toEqual([]);

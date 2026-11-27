@@ -214,6 +214,22 @@ export class SessionState {
     });
   }
 
+  protected leasesAt(at: number) {
+    return Effect.map(Effect.service(Look), (look) => {
+      const seen = look?.seen.get(this);
+      return seen
+        ? fold(
+            seen.messages.filter((m) => (m.rts ?? m.ts) <= at),
+            seen.roster,
+            at,
+            seen.rooms,
+            seen.guard,
+            this.base,
+          ).leases
+        : null;
+    });
+  }
+
   protected foldState(messages: Message[], given: Roster, info?: Info): Effect.Effect<ChannelState, never, Relay | Cache | Cursor> {
     return Effect.gen({ self: this }, function* () {
       this.roomsFloor ??= yield* orNone(this.ch.fx.rooms(info));

@@ -78,9 +78,12 @@ const clockTime = (at: number): string => new Date(at).toTimeString().slice(0, 8
 const stillLimited = (name: string) =>
   new Rejected(`the relay kept limiting history reads for ${FIRST_READ_WAIT_MS / 1000}s and this computer has no copy of the channel, so nothing was sent for ${name} (kiwi lock ${name} tries again)`);
 
+const ranOutWhileReading = (name: string, until: number) =>
+  new Rejected(`your hold on ${name} ran out at ${clockTime(until)}, while the first read of the channel was coming in, so it wasn't renewed: nothing was sent (kiwi lock ${name} asks again)`);
+
 const unsure = (name: string) =>
   new Rejected(
-    `the relay was limiting history reads when you asked, and once a read came through no hold on ${name} was yours, so this can't tell whether it ran out meanwhile: nothing was sent (kiwi lock ${name} asks again)`,
+    `the first read of the channel came from this computer's copy or had to wait out the relay's history limit, and it shows no hold on ${name} of yours, so this can't tell whether it ran out meanwhile: nothing was sent (kiwi lock ${name} asks again)`,
   );
 
 const relayRefused = (err: unknown, tag: string): boolean => err instanceof RelayError && err.tag === tag;
@@ -626,15 +629,17 @@ export class SessionMessaging extends SessionListen {
   private heldByMe(name: string) {
     return Effect.gen({ self: this }, function* () {
       const asked = Date.now();
-      let limited = false;
+      let degraded = false;
       const read = this.state().pipe(
-        Effect.provideService(OfflineReads, { note: () => {} }),
-        Effect.tapError((err) => Effect.sync(() => void (readLimited(err) && (limited = true)))),
+        Effect.provideService(OfflineReads, { note: () => void (degraded = true) }),
+        Effect.tapError((err) => Effect.sync(() => void (readLimited(err) && (degraded = true)))),
       );
       const known = yield* this.retryRead(read, asked + FIRST_READ_WAIT_MS, stillLimited(name));
       const lease = known.state.leases.get(name);
       if (lease?.holder === this.me && lease.until > Date.now()) return lease;
-      if (limited && this.mayHaveHeld(known.messages, lease, name, asked)) return yield* unsure(name);
+      const then = (yield* this.leasesAt(asked))?.get(name);
+      if (then?.holder === this.me && then.until > asked) return yield* ranOutWhileReading(name, then.until);
+      if (degraded && this.mayHaveHeld(known.messages, lease, name, asked)) return yield* unsure(name);
       return null;
     });
   }
