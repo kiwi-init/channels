@@ -354,6 +354,47 @@ test("with this computer's copy of the channel, a limited first read doesn't sto
   await run(ann.unlease("warm-fresh"));
 });
 
+test("with a copy of the channel from before the hold was granted, a first read that falls back to it is checked again against the relay: the hold that ran out isn't taken again", async () => {
+  await run(cat.send("a word before the grant"));
+  await run(ann.state());
+  const held = await run(annAgain().lease("stale", 60));
+  const from = await headNow();
+  clockAt(held.until - 12_000);
+  Object.assign(limited, { gets: 0, only: [1], jumpTo: held.until + 600 });
+  await expect(runLimited(ann.lease("stale", 600))).rejects.toThrow("while the first read of the channel was coming in, so it wasn't renewed: nothing was sent");
+  expect(limited.reads).toBe(1);
+  expect((await run(bob.state())).state.leases.get("stale")?.holder).toBeUndefined();
+  expect(await annTakes("stale", from)).toEqual([]);
+});
+
+test("with a copy of the channel from before the hold was granted, and a seat waiting, the hold that ran out isn't asked for again: the waiting seat holds it and the old holder isn't in line", async () => {
+  await run(cat.send("a word before the grant"));
+  await run(ann.state());
+  const held = await run(annAgain().lease("stale-q", 60));
+  await run(bob.lease("stale-q", 60));
+  const from = await headNow();
+  clockAt(held.until - 12_000);
+  Object.assign(limited, { gets: 0, only: [1], jumpTo: held.until + 600 });
+  await expect(runLimited(ann.lease("stale-q", 600))).rejects.toThrow("while the first read of the channel was coming in, so it wasn't renewed: nothing was sent");
+  const lease = (await run(bob.state())).state.leases.get("stale-q");
+  expect(lease).toMatchObject({ holder: "bob", since: held.until });
+  expect(lease?.queue.map((q) => q.name)).toEqual([]);
+  expect(await annTakes("stale-q", from)).toEqual([]);
+});
+
+test("with a copy of the channel from before, a first read that falls back to it doesn't stop a fresh ask: the read again from the relay shows no hold at the ask, so it is taken", async () => {
+  await run(cat.send("a word before the ask"));
+  await run(ann.state());
+  await run(cat.send("a word the copy hasn't seen"));
+  const from = await headNow();
+  Object.assign(limited, { gets: 0, only: [1] });
+  const got = await runLimited(ann.lease("stale-fresh", 60));
+  expect(limited.reads).toBe(1);
+  expect(got.holder).toBe("ann");
+  expect((await annTakes("stale-fresh", from)).map((t) => t.op)).toEqual(["lease.take"]);
+  await run(ann.unlease("stale-fresh"));
+});
+
 test("a first read that is slow but not refused, answered after the hold ran out, isn't taken for a fresh ask: nothing is sent and the waiting seat holds it", async () => {
   const held = await run(ann.lease("slow", 60));
   await run(bob.lease("slow", 60));
