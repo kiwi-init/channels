@@ -1,6 +1,7 @@
 import type { Message } from "../protocol.ts";
 import { cursor, type Finishing, type MakeMap } from "./fold.ts";
 import type { GithubState } from "./github.ts";
+import { keptOffDuty } from "./duty-notes.ts";
 import { summarize } from "./places.ts";
 import { same } from "./same.ts";
 import { mirrored, TrackedMap, unrecorded } from "./tracked.ts";
@@ -81,6 +82,7 @@ export function folded(messages: Message[], roster: Roster, now: number, roomsFl
       specsOnly: i.specsOnly,
       duty: i.duty,
       checkpoint: i.checkpoint,
+      offDuty: keptOffDuty(i.dutyLeft, i.dutyNotes),
       standbys: reused(new Map(i.standbys), was?.standbys),
       leadAsks: reused(new Map(i.leadAsks), was?.leadAsks),
       leadOwned: reused(new Map(i.leadOwned), was?.leadOwned),

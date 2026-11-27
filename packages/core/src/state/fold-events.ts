@@ -50,7 +50,7 @@ import {
   worked,
 } from "./tasks.ts";
 import { addResetRefusal, clearOnCard, markReset, resetRefusal } from "./reset.ts";
-import type { Charter, CheckpointAsk, Compact, Fact, FoldMember, Hold, LeadCheckpoint, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
+import type { Charter, CheckpointAsk, Compact, DutyNote, Fact, FoldMember, Hold, LeadCheckpoint, Lease, Nickname, PersonaLead, Room, SecretRoom, Task } from "./types.ts";
 import { checkpointAskRefusal, keepAsk } from "./checkpoint-asks.ts";
 import type { CheckpointDaily } from "../checkpoint-schedule.ts";
 import { dmPair, inRoom, leaveSeal, rootOf, selfOnly, type RoomMember } from "../room-rules.ts";
@@ -78,6 +78,7 @@ export interface FoldCtx {
   onDuty: () => boolean;
   leadOnDuty: () => string | null;
   checkpointed: (cp: LeadCheckpoint) => void;
+  dutyNote: (note: DutyNote) => void;
   keysByName: Map<string, Set<string>>;
   scopesByKey: Map<string, Scope[]>;
   scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
@@ -765,6 +766,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       else {
         editSteps(task, ev.edit, { seq: m.seq, by: m.from, at });
         seeAnswered(task, c.passedAsks, { seq: m.seq, by: m.from, at });
+        if (ev.edit.kind === "hold") c.dutyNote({ kind: "hold", task: task.id, step: ev.edit.id, by: m.from, seq: m.seq, reason: ev.edit.reason });
+        if (ev.edit.kind === "unhold") c.dutyNote({ kind: "unhold", task: task.id, step: ev.edit.id, by: m.from, seq: m.seq });
       }
       break;
     }

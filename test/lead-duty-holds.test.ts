@@ -286,7 +286,7 @@ describe("the return says what changed while off duty (#19397 box 14)", () => {
     const back = await c.hand("spare", "lead", `T${t} is held until the docs land.`);
     const s = c.state();
     expect([...s.rejected.values()]).toEqual([]);
-    const lines = offDutyLines(s, c.log, out.seq, back.seq).join("\n");
+    const lines = offDutyLines(s, out.seq, back.seq).join("\n");
     expect(lines).toContain(`#${ask.seq}, answered by spare`);
     expect(lines).toContain(`T${t} s1 held by spare: until the docs land (#${hold.seq})`);
     expect(lines).toContain(`T${u} export`);
@@ -315,20 +315,61 @@ describe("the handover command's report (#19397 boxes 11 and 14)", () => {
     const t = await c.task([MERGE]);
     const ask = await c.say("ann", "blocking", handedOver("ann", "Which database?", {}), { to: ["lead"] });
     const out = await c.hand("lead", "spare", `T${t} waits; #${ask.seq} is open.`);
-    expect(handLines(c.state(), c.log, "spare", out.seq, at(10_000)).join("\n")).not.toContain("While off duty");
+    expect(handLines(c.state(), "spare", out.seq, at(10_000)).join("\n")).not.toContain("While off duty");
     const said = await c.say("spare", "msg", "sqlite, it ships in one file", { re: [ask.seq], to: ["ann"] });
     const hold = await c.edit("spare", t, { kind: "hold", id: "s1", reason: "until the docs land" });
     const mid = await c.hand("spare", "zed", `T${t} is held until the docs land.`);
-    expect(handLines(c.state(), c.log, "zed", mid.seq, at(10_000)).join("\n")).not.toContain("While off duty");
+    expect(handLines(c.state(), "zed", mid.seq, at(10_000)).join("\n")).not.toContain("While off duty");
     const lift = await c.edit("zed", t, { kind: "unhold", id: "s1" });
     const back = await c.hand("zed", "lead", `T${t} waits for review.`);
     expect([...c.state().rejected.values()]).toEqual([]);
-    const lines = handLines(c.state(), c.log, "lead", back.seq, at(10_000)).join("\n");
+    const full = handLines(c.state(), "lead", back.seq, at(10_000));
+    const log = [...c.log];
+    for (let cut = 1; cut < log.length; cut++) expect({ cut, lines: handLines(resumedAt(log, cut), "lead", back.seq, at(10_000)) }).toEqual({ cut, lines: full });
+    const lines = full.join("\n");
     expect(lines).toContain("lead on duty: lead");
     expect(lines).toContain(`While off duty (#${out.seq} to #${back.seq}):`);
     expect(lines).toContain(`#${ask.seq}, answered by spare (#${said.seq}): sqlite, it ships in one file`);
     expect(lines).toContain(`T${t} s1 held by spare: until the docs land (#${hold.seq})`);
     expect(lines).toContain(`T${t} s1 lifted by zed (#${lift.seq})`);
+  });
+});
+
+describe("a long absence keeps its whole report (#19397 box 14)", () => {
+  test("an answer from A's first shift away is still in the return after hundreds of notes in the next shift, on replay and from any snapshot", async () => {
+    const c = await channel();
+    const t = await c.task([MERGE]);
+    const ask = await c.say("ann", "blocking", handedOver("ann", "Which region?", {}), { to: ["lead"] });
+    const out = await c.hand("lead", "spare", `T${t} waits; #${ask.seq} is open.`);
+    const said = await c.say("spare", "msg", "eu-west-3, the Paris region, for the latency budget", { re: [ask.seq], to: ["ann"] });
+    const mid = await c.hand("spare", "zed", `T${t} waits for review.`);
+    for (let n = 0; n < 160; n++) {
+      await c.edit("zed", t, { kind: "hold", id: "s1", reason: `wait ${n}` });
+      await c.edit("zed", t, { kind: "unhold", id: "s1" });
+    }
+    const back = await c.hand("zed", "lead", `T${t} waits for review.`);
+    const s = c.state();
+    expect([...s.rejected.values()]).toEqual([]);
+    expect(s.offDuty?.notes.length).toBe(321);
+    const full = handLines(s, "lead", back.seq, at(10_000));
+    expect(full.join("\n")).toContain(`#${ask.seq}, answered by spare (#${said.seq}): eu-west-3, the Paris region, for the latency budget`);
+    expect(full.filter((l) => l.includes(" lifted by zed ")).length).toBe(160);
+    const log = [...c.log];
+    const cuts = [out.seq, said.seq - 1, said.seq, mid.seq, mid.seq + 1, back.seq - 1, ...Array.from({ length: 12 }, (_, k) => 1 + k * 29)];
+    for (const cut of cuts) expect({ cut, lines: handLines(resumedAt(log, cut), "lead", back.seq, at(10_000)) }).toEqual({ cut, lines: full });
+  });
+
+  test("a snapshot keeps notes only from the earliest departure of a lead who can still return", async () => {
+    const c = await channel();
+    const t = await c.task([MERGE]);
+    await c.hand("lead", "spare", `T${t} waits.`);
+    await c.edit("spare", t, { kind: "hold", id: "s1", reason: "until the docs land" });
+    await c.hand("spare", "lead", `T${t} is held.`);
+    await c.ev("jow", { op: "lead.standby", name: "spare", on: false });
+    const again = await c.hand("lead", "zed", `T${t} is held.`);
+    const lift = await c.edit("zed", t, { kind: "unhold", id: "s1" });
+    expect([...c.state().rejected.values()]).toEqual([]);
+    expect(baseAt(c.log, c.log.length).offDuty).toEqual({ left: [["lead", again.seq]], notes: [{ kind: "unhold", task: t, step: "s1", by: "zed", seq: lift.seq }] });
   });
 });
 

@@ -1,7 +1,6 @@
 import { clockOf, nudgesDue } from "./clock.ts";
 import { ago } from "./format.ts";
 import { inlineText } from "./membership.ts";
-import type { Message } from "./protocol.ts";
 import { handedTo } from "./state/asks.ts";
 import type { ChannelState, Frozen, Task } from "./state/types.ts";
 import { holdOf, spanText, stepText, type LandingStep, type StepHold } from "./steps.ts";
@@ -61,59 +60,25 @@ export function takenOverLines(state: Frozen<ChannelState>, me: string, now: num
   ];
 }
 
-export function offDutySince(state: Frozen<Pick<ChannelState, "rejected" | "homeLead">>, messages: readonly Frozen<Message>[], name: string, until: number): number | undefined {
-  let lead = state.homeLead;
-  let left: number | undefined;
-  for (const m of messages) {
-    if (m.seq >= until) break;
-    if (m.ev?.op !== "lead.duty" || state.rejected.has(m.seq)) continue;
-    if (lead === name && m.ev.to !== name) left = m.seq;
-    lead = m.ev.to;
-  }
-  return left;
+export function offDutySince(state: Frozen<Pick<ChannelState, "offDuty">>, name: string): number | undefined {
+  return state.offDuty?.left.find(([who]) => who === name)?.[1];
 }
 
-const ticked = (text: string): Set<string> =>
-  new Set(
-    text
-      .split("\n")
-      .filter((line) => /^\s*- \[[xX]\]/.test(line))
-      .map((line) => line.replace(/^\s*- \[[xX]\]\s*/, "").trim()),
-  );
-
-function specTicks(messages: readonly Frozen<Message>[], state: Frozen<Pick<ChannelState, "rejected">>, since: number, until: number): string[] {
-  const last = new Map<number, string>();
-  const gained = new Map<number, number>();
-  for (const m of messages) {
-    if (m.ev?.op !== "spec.set" || state.rejected.has(m.seq)) continue;
-    const before = last.get(m.ev.ask);
-    last.set(m.ev.ask, m.ev.text);
-    if (m.seq <= since || m.seq > until || before === undefined) continue;
-    const was = ticked(before);
-    const now = [...ticked(m.ev.text)].filter((box) => !was.has(box)).length;
-    if (now) gained.set(m.ev.ask, (gained.get(m.ev.ask) ?? 0) + now);
-  }
-  return [...gained].map(([ask, n]) => `spec #${ask}: ${n} ${n === 1 ? "box" : "boxes"} ticked`);
-}
-
-export function offDutyLines(state: Frozen<ChannelState>, messages: readonly Frozen<Message>[], since: number, until: number): string[] {
+export function offDutyLines(state: Frozen<Pick<ChannelState, "offDuty" | "tasks">>, since: number, until: number): string[] {
   const within = (seq: number | undefined): boolean => seq !== undefined && seq > since && seq <= until;
-  const bodies = new Map(messages.map((m) => [m.seq, m.body]));
-  const answer = (seq: number, a: { by: string; seq: number }): string => {
-    const said = bodies.get(a.seq);
-    return `#${seq}, answered by ${inlineText(a.by, 40)} (#${a.seq})${said?.trim() ? `: ${inlineText(said, 160)}` : ""}`;
-  };
-  const answered = [
-    ...[...state.leadAsks].flatMap(([seq, a]) => (a.answer && within(a.answer.seq) ? [answer(seq, a.answer)] : [])),
-    ...[...state.leadOwned].flatMap(([seq, o]) => (o.answer && within(o.answer.seq) ? [answer(seq, o.answer)] : [])),
-  ];
-  const holds = messages.flatMap((m) => {
-    const edit = m.ev?.op === "task.steps" ? m.ev.edit : undefined;
-    if (m.ev?.op !== "task.steps" || !edit || (edit.kind !== "hold" && edit.kind !== "unhold") || !within(m.seq) || state.rejected.has(m.seq)) return [];
-    return [`T${m.ev.task} ${edit.id} ${edit.kind === "hold" ? `held by ${m.from}: ${inlineText(edit.reason, 120)}` : `lifted by ${m.from}`} (#${m.seq})`];
-  });
+  const notes = (state.offDuty?.notes ?? []).filter((n) => within(n.seq));
+  const answered = notes.flatMap((n) => (n.kind === "answer" ? [`#${n.ask}, answered by ${inlineText(n.by, 40)} (#${n.seq})${n.said ? `: ${n.said}` : ""}`] : []));
+  const holds = notes.flatMap((n) =>
+    n.kind === "hold"
+      ? [`T${n.task} ${n.step} held by ${inlineText(n.by, 40)}: ${inlineText(n.reason, 120)} (#${n.seq})`]
+      : n.kind === "unhold"
+        ? [`T${n.task} ${n.step} lifted by ${inlineText(n.by, 40)} (#${n.seq})`]
+        : [],
+  );
   const closed = [...state.tasks.values()].filter((t) => t.state === "done" && within(t.closedSeq)).map((t) => `T${t.id} ${inlineText(t.title, 80)}`);
-  const specs = specTicks(messages, state, since, until);
+  const gained = new Map<number, number>();
+  for (const n of notes) if (n.kind === "ticked") gained.set(n.ask, (gained.get(n.ask) ?? 0) + n.boxes);
+  const specs = [...gained].map(([ask, n]) => `spec #${ask}: ${n} ${n === 1 ? "box" : "boxes"} ticked`);
   return [
     `While off duty (#${since} to #${until}):`,
     ...section("asks answered", answered),

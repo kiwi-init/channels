@@ -146,8 +146,7 @@ export class SessionTasks extends SessionMessaging {
       }
       const seq = yield* this.event({ op: "lead.duty", to, from: state.duty?.since ?? 0, ...(text ? { checkpoint: text } : {}) }, `handed the lead to ${to}`);
       const after = yield* this.confirm(seq);
-      const { messages } = yield* this.state();
-      return { after, seq, messages };
+      return { after, seq };
     },
     oneLook,
   );

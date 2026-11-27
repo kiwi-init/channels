@@ -327,6 +327,7 @@ export interface ChannelStateDraft {
   specsOnly: number | null;
   duty: Duty | null;
   checkpoint: LeadCheckpoint | null;
+  offDuty: OffDuty | null;
   standbys: Map<string, Standby>;
   homeLead: string | null;
   leadAsks: Map<number, LeadAsk>;
@@ -418,6 +419,17 @@ export interface LeadCheckpoint {
   by: string;
   seq: number;
   at: number;
+}
+
+export type DutyNote =
+  | { kind: "answer"; ask: number; by: string; seq: number; said: string }
+  | { kind: "hold"; task: number; step: string; by: string; seq: number; reason: string }
+  | { kind: "unhold"; task: number; step: string; by: string; seq: number }
+  | { kind: "ticked"; ask: number; boxes: number; seq: number };
+
+export interface OffDuty {
+  left: [string, number][];
+  notes: DutyNote[];
 }
 
 export interface Standby {
@@ -513,6 +525,7 @@ export interface FoldBase {
   specsOnly?: number | null;
   duty?: Duty | null;
   checkpoint?: LeadCheckpoint | null;
+  offDuty?: OffDuty | null;
   standbys?: [string, Standby][];
   leadAsks?: [number, LeadAsk][];
   leadOwned?: [number, LeadOwned][];
