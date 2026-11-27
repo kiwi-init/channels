@@ -1046,10 +1046,12 @@ export function asksOf(
       continue
     }
     if (!isQuestion(m)) continue
-    const toMe = !m.to?.length || m.to.includes(me) || m.to.includes("*") || (decides && !!m.esc && !m.handoff)
+    const handed = state.leadAsks.get(m.seq)
+    const sentTo = handed ? (state.lead ? [state.lead] : []) : m.to
+    const toMe = handed ? !!sentTo?.includes(me) : !m.to?.length || m.to.includes(me) || m.to.includes("*") || (decides && !!m.esc && !m.handoff)
     if (!toMe) continue
     const tapOnly = state.tapToAnswer && !!m.esc
-    const said = (replies.get(m.seq) ?? []).filter((r) => r.kind !== "event" && answersAsk(state.members, m, r.from))
+    const said = (replies.get(m.seq) ?? []).filter((r) => r.kind !== "event" && (handed ? r.seq === handed.answer?.seq : answersAsk(state.members, m, r.from)))
     const answer = said.find((r) => !tapOnly || r.pick || r.stepReply)
     const typed = tapOnly && !answer ? said.at(-1) : undefined
     const isOpen = open.has(m.seq)
@@ -1057,7 +1059,7 @@ export function asksOf(
     const closed = !isOpen && !answer && !idle ? closes.get(m.seq) : undefined
     if (!isOpen && !answer && !idle && !closed) continue
     const holds = heldBy(state, m)
-    const askedOf = m.esc && !m.handoff && m.to?.length && !m.to.includes(me) && !m.to.includes("*") ? [...m.to] : undefined
+    const askedOf = m.esc && !m.handoff && sentTo?.length && !sentTo.includes(me) && !sentTo.includes("*") ? [...sentTo] : undefined
     if (isOpen) for (const t of holds) held.add(t)
     const via = m.esc ? handedAskOf(m, (seq) => bySeq.get(seq)) : undefined
     asks.push({
@@ -1066,7 +1068,7 @@ export function asksOf(
       from: m.from,
       at: m.ts,
       text: wrote(m.body),
-      label: m.handoff ? t("live.said.browser.you") : m.esc ? decisionWords(m, !askedOf) : m.to?.includes(me) ? t("live.map.question.you") : t("live.map.question.everyone"),
+      label: m.handoff ? t("live.said.browser.you") : m.esc ? decisionWords(m, !askedOf) : sentTo?.includes(me) ? t("live.map.question.you") : t("live.map.question.everyone"),
       ...(!m.handoff && !m.esc ? { plain: true as const } : {}),
       ...(m.decision === "irreversible" ? { irreversible: true as const } : {}),
       options: (m.choices ?? []).map(wrote),

@@ -106,7 +106,7 @@ describe("a decision handed to the Lead follows the duty", () => {
 });
 
 describe("an ask the lead put to a person follows the duty", () => {
-  test("the person's answer after a handover reaches the lead on duty, before and after a snapshot, and back again on a return", async () => {
+  test("the answer is delivered once, to whoever was on duty when it came, on every seat, after a restore and after later transfers", async () => {
     const setup = await channel();
     const ask = await say("lead", "ask", "Ship 2.0 today?", { to: ["jon"], esc: true });
     const out = await ev("lead", { op: "lead.duty", to: "spare", from: 0 });
@@ -114,21 +114,25 @@ describe("an ask the lead put to a person follows the duty", () => {
     const log = [...setup, ask, out, answer];
     const s = at(log);
     expect(open(s, ask)).toBe(false);
-    expect(s.leadOwned.get(ask.seq)).toEqual({ author: "lead" });
-    expect(wants("spare", answer, s)).toBe(true);
-    expect(wants("dev", answer, s)).toBe(false);
-    for (let cut = 1; cut < log.length; cut++) expect({ cut, spare: wants("spare", answer, resumedAt(log, cut)) }).toEqual({ cut, spare: true });
+    expect(s.leadOwned.get(ask.seq)).toEqual({ author: "lead", to: ["jon"], esc: true, plain: true, answer: { by: "jon", seq: answer.seq, to: "spare" } });
+    const seats = (state: ChannelState) => ({ spare: wants("spare", answer, state), lead: wants("lead", answer, state), dev: wants("dev", answer, state) });
+    expect(seats(s)).toEqual({ spare: true, lead: false, dev: false });
+    for (let cut = 1; cut < log.length; cut++) expect({ cut, ...seats(resumedAt(log, cut)) }).toEqual({ cut, spare: true, lead: false, dev: false });
     const back = await ev("spare", { op: "lead.duty", to: "lead", from: out.seq });
-    const later = await say("lead", "ask", "And 2.1?", { to: ["jon"], esc: true });
+    expect(seats(at([...log, back]))).toEqual({ spare: true, lead: false, dev: false });
     const out2 = await ev("lead", { op: "lead.duty", to: "spare", from: back.seq });
     const back2 = await ev("spare", { op: "lead.duty", to: "lead", from: out2.seq });
+    const late = [...log, back, out2, back2];
+    expect(seats(at(late))).toEqual({ spare: true, lead: false, dev: false });
+    for (let cut = 1; cut < late.length; cut++) expect({ cut, ...seats(resumedAt(late, cut)) }).toEqual({ cut, spare: true, lead: false, dev: false });
+    const later = await say("lead", "ask", "And 2.1?", { to: ["jon"], esc: true });
     const reply = await say("jon", "msg", "next week", { re: [later.seq], to: ["lead"] });
-    const round = at([...log, back, later, out2, back2, reply]);
+    const round = at([...late, later, reply]);
     expect(wants("lead", reply, round)).toBe(true);
     expect(wants("spare", reply, round)).toBe(false);
   });
 
-  test("an answer that races the handover is accepted once, under the ask's own entitlement", async () => {
+  test("an answer that races the handover goes to the lead who was on duty then, and a second reply settles nothing", async () => {
     const setup = await channel();
     const ask = await say("lead", "ask", "Ship 2.0 today?", { to: ["jon"], esc: true });
     const answer = await say("jon", "msg", "yes", { re: [ask.seq], to: ["lead"] });
@@ -136,7 +140,23 @@ describe("an ask the lead put to a person follows the duty", () => {
     const second = await say("jon", "msg", "actually no", { re: [ask.seq], to: ["lead"] });
     const s = at([...setup, ask, answer, out, second]);
     expect(open(s, ask)).toBe(false);
-    expect(s.openAsks.filter((a) => a.seq === ask.seq)).toEqual([]);
+    expect(s.leadOwned.get(ask.seq)?.answer).toEqual({ by: "jon", seq: answer.seq, to: "lead" });
+    expect([wants("lead", answer, s), wants("spare", answer, s)]).toEqual([true, false]);
+    expect([wants("lead", second, s), wants("spare", second, s)]).toEqual([true, false]);
+  });
+
+  test("only asks put to people are the duty's, and only an entitled answer settles one", async () => {
+    const setup = await channel();
+    const toAgent = await say("lead", "ask", "Is the build green?", { to: ["dev"] });
+    const toPerson = await say("lead", "ask", "Ship 2.0 today?", { to: ["jon"], esc: true });
+    const out = await ev("lead", { op: "lead.duty", to: "spare", from: 0 });
+    const agentReply = await say("dev", "msg", "green", { re: [toAgent.seq], to: ["lead"] });
+    const aside = await say("bo", "msg", "I'd wait", { re: [toPerson.seq], to: ["lead"] });
+    const s = at([...setup, toAgent, toPerson, out, agentReply, aside]);
+    expect(s.leadOwned.has(toAgent.seq)).toBe(false);
+    expect(s.leadOwned.get(toPerson.seq)?.answer).toBeUndefined();
+    expect([wants("lead", agentReply, s), wants("spare", agentReply, s)]).toEqual([true, false]);
+    expect([wants("lead", aside, s), wants("spare", aside, s)]).toEqual([true, false]);
   });
 });
 
@@ -150,7 +170,7 @@ describe("what the lead owes, in a snapshot", () => {
     const wire = JSON.parse(JSON.stringify(toWire(base!))) as Record<string, unknown>;
     const back = baseFromWire(wire);
     expect(back?.leadAsks).toEqual([[ask.seq, { sentTo: "lead", from: "dev", plain: true }]]);
-    expect(back?.leadOwned).toEqual([[own.seq, { author: "lead" }]]);
+    expect(back?.leadOwned).toEqual([[own.seq, { author: "lead", to: ["jon"], esc: true, plain: true }]]);
     const legacy = { ...wire };
     delete legacy.leadAsks;
     delete legacy.leadOwned;
@@ -163,7 +183,8 @@ describe("what the lead owes, in a snapshot", () => {
       [[ask.seq, { sentTo: "lead", from: "dev", plain: true, answer: { by: 3 } }]],
     ];
     expect(badAsks.map((leadAsks) => baseFromWire({ ...wire, leadAsks }))).toEqual(badAsks.map(() => null));
-    const badOwned = [{}, [[own.seq, {}]], [[own.seq, { author: "" }]]];
+    const owned = { author: "lead", to: ["jon"], esc: true, plain: true };
+    const badOwned = [{}, [[own.seq, {}]], [[own.seq, { ...owned, author: "" }]], [[own.seq, { ...owned, to: [] }]], [[own.seq, { ...owned, answer: { by: "jon", seq: 9 } }]]];
     expect(badOwned.map((leadOwned) => baseFromWire({ ...wire, leadOwned }))).toEqual(badOwned.map(() => null));
   });
 });

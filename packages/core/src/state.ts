@@ -21,6 +21,7 @@ export {
   leadForAsk,
   leadHoldsFor,
   handedToLead,
+  leadAnswerOf,
   mayNameGoal,
   readHandedOver,
   handedAskOf,

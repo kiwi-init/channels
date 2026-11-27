@@ -139,6 +139,14 @@ export function leadHoldsFor(state: Pick<ChannelState, "members" | "lead">, me: 
   return lead?.active && !isPerson(lead) ? lead.name : null;
 }
 
+export function leadAnswerOf(state: Pick<ChannelState, "leadOwned">, m: Pick<Message, "seq" | "re">): { to: string; author: string } | undefined {
+  for (const r of m.re ?? []) {
+    const owned = state.leadOwned.get(r);
+    if (owned?.answer?.seq === m.seq) return { to: owned.answer.to, author: owned.author };
+  }
+  return undefined;
+}
+
 export function handedToLead(state: Pick<ChannelState, "openAsks" | "leadAsks">, seq: number): Frozen<Message | undefined> {
   return state.openAsks.find((a) => a.seq === seq && state.leadAsks.has(seq) && readHandedOver(String(a.body ?? ""))?.from === a.from);
 }

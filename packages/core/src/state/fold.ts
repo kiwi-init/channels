@@ -20,7 +20,7 @@ import {
 import { inlineText } from "../membership.ts";
 import { canPost, refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
-import { allowedOnHold, answersAsk, answersLeadAsk, escalationTargets, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
+import { allowedOnHold, answersAsk, answersLeadAsk, answersLeadOwned, escalationTargets, isLeadRole, isPerson, LEAD, ON_HOLD, sameAuthor } from "./people.ts";
 import { answerChecks, checkFrom, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
 import { checkAnswered, checkClosed, checkStep, migrateChecks, questionAnswered, questionWatched, seedSteps } from "./landing-steps.ts";
 import { choiceIn } from "../checks.ts";
@@ -759,7 +759,16 @@ export function cursor(
         const onDuty = leadNow();
         if (onDuty && m.from !== onDuty && m.to?.includes(onDuty) && readHandedOver(String(m.body ?? ""))?.from === m.from)
           leadAsks.set(m.seq, { sentTo: onDuty, from: m.from, plain: !m.handoff && !m.step });
-        else if (onDuty && m.from === onDuty) leadOwned.set(m.seq, { author: onDuty });
+        else if (
+          onDuty &&
+          m.from === onDuty &&
+          m.to?.length &&
+          m.to.every((t) => {
+            const p = members.get(t);
+            return !!p && isPerson(p);
+          })
+        )
+          leadOwned.set(m.seq, { author: onDuty, to: [...m.to], esc: !!m.esc, plain: !m.handoff && !m.step });
       }
       member.lastSeen = Math.max(member.lastSeen, at);
       if (!isOverlay(m)) member.messages++;
@@ -768,6 +777,8 @@ export function cursor(
         if (!(r < m.seq)) continue;
         const handed = leadAsks.get(r);
         if (handed && !handed.answer && !typedOnly(m, r) && answersLeadAsk(members, handed, leadNow(), m.from)) leadAsks.set(r, { ...handed, answer: { by: m.from, seq: m.seq } });
+        const owned = leadOwned.get(r);
+        if (owned && !owned.answer && !typedOnly(m, r) && answersLeadOwned(members, owned, m.from)) leadOwned.set(r, { ...owned, answer: { by: m.from, seq: m.seq, to: leadNow() ?? owned.author } });
         let set = answered.get(r);
         if (!set) answered.set(r, (set = new Set()));
         if (!typedOnly(m, r)) set.add(m.from);
@@ -1056,8 +1067,8 @@ export function cursor(
         specsOnly,
         duty,
         standbys: [...standbys],
-        leadAsks: [...leadAsks].filter(([seq]) => openAsks.some((a) => a.seq === seq)),
-        leadOwned: [...leadOwned].filter(([seq]) => seq > cut || openAsks.some((a) => a.seq === seq)),
+        leadAsks: [...leadAsks].filter(([seq, a]) => seq > cut || (a.answer?.seq ?? 0) > cut || openAsks.some((o) => o.seq === seq)),
+        leadOwned: [...leadOwned].filter(([seq, o]) => seq > cut || (o.answer?.seq ?? 0) > cut || openAsks.some((a) => a.seq === seq)),
         checks: [...checks.values()],
         answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
         threadOf: keptThreads,

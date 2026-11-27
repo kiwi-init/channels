@@ -426,6 +426,10 @@ export interface LeadAsk {
 
 export interface LeadOwned {
   author: string;
+  to: string[];
+  esc: boolean;
+  plain: boolean;
+  answer?: { by: string; seq: number; to: string };
 }
 
 export interface FoldBase {
