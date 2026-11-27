@@ -10,7 +10,7 @@ import { isNewerList, listedComputer, readDeviceList, type DeviceLink } from "@k
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
-import { listenedPath, pulledPath, viaOf } from "@kiwi/core/wake.ts";
+import { listenedPath, pulledPath, viaOf, type WakePath } from "@kiwi/core/wake.ts";
 import { seatHeldAway } from "../hold.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import {
@@ -46,6 +46,7 @@ import { CHECKPOINT_WINDOW_MS } from "@kiwi/core/checkpoint-schedule.ts";
 import { followDocs } from "./doc-follow.ts";
 import { liveAbout, LiveBlobs, relayLiveIo } from "./live-blobs.ts";
 import { pathOf, seatWakes } from "./wake.ts";
+import { codexControlSocket, codexHome, codexServing, type CodexServing } from "./codex-queue.ts";
 import { sampleRunning } from "../up/sample.ts";
 
 export const ACTIVITY_EVERY_MS = 3_000;
@@ -189,21 +190,42 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     seat.listenerAt = at;
     return true;
   };
-  const livePath = async (cfg: Config, seat: Seat, attached: Attached, activity = seat.activity) =>
-    pulledPath(
+  const servedLivePath = async (cfg: Config, seat: Seat, attached: Attached, activity = seat.activity): Promise<{ path: WakePath; served: CodexServing["kind"] | null }> => {
+    const path = pulledPath(
       listenedPath(await pathOf(cfg, seat.alias, seat.agent), listenedLately(seat, attached), activity?.state === "idle"),
       { harness: seatRecordFor(cfg, seat.alias, seat.agent)?.harness, held: seatHeldAway(cfg, seat.alias, seat.agent, {}) },
       attached === "listener",
     );
+    if (path.kind !== "command" || path.via !== "codex-queue") return { path, served: null };
+    return { path, served: (await codexServing(codexControlSocket(codexHome()), path.session, seatRecordFor(cfg, seat.alias, seat.agent)?.bin)).kind };
+  };
+  const shownPath = (seat: Seat, path: WakePath, served: CodexServing["kind"] | null): WakePath => {
+    if (served === null || path.kind !== "command") return path;
+    if (served === "absent") return { kind: "none", why: `Codex isn't serving thread ${path.session}: its messages queue until that thread is resumed` };
+    if (seat.missedWhileAbsent && seat.untaken) return { kind: "none", why: `Codex serves thread ${path.session} again, but no turn has read the wake it missed yet` };
+    return path;
+  };
+  const livePath = async (cfg: Config, seat: Seat, attached: Attached, activity = seat.activity): Promise<WakePath> => {
+    const { path, served } = await servedLivePath(cfg, seat, attached, activity);
+    return shownPath(seat, path, served);
+  };
 
   const refreshActivity = async (seat: Seat, force = false): Promise<void> => {
+    const gen = ++seat.refreshGen;
     const cfg = loadConfig();
     const record = seatRecordFor(cfg, seat.alias, seat.agent);
     const env = record ? activityEnv(record, process.env) : null;
     const { harnessActivity } = await import("../harness.ts");
     const now = env ? await harnessActivity(env) : undefined;
     const attached = attachedTo(seat);
-    const path = await livePath(cfg, seat, attached, now);
+    const live = await servedLivePath(cfg, seat, attached, now);
+    if (gen < seat.appliedGen || seatRecordFor(loadConfig(), seat.alias, seat.agent)?.session !== record?.session) return;
+    seat.appliedGen = gen;
+    const absent = live.served === "absent";
+    if (seat.untaken && (absent || seat.wasAbsent)) seat.missedWhileAbsent = true;
+    else if (!seat.untaken) seat.missedWhileAbsent = false;
+    seat.wasAbsent = absent;
+    const path = shownPath(seat, live.path, live.served);
     const via = wakeOn(cfg, seat.alias, seat.agent) ? viaOf(path) : null;
     const reach = reachOf(attached, record, now, pidAlive, path.kind !== "none");
     void seat.live?.tick(now).catch(() => {});
@@ -568,6 +590,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         lastMarkAt: 0,
         markTimer: null,
         wakeVia: null,
+        missedWhileAbsent: false,
+        wasAbsent: false,
+        refreshGen: 0,
+        appliedGen: 0,
         wakeTimer: null,
         waking: false,
         wakeAgain: false,

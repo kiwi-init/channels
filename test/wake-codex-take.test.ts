@@ -4,6 +4,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, setDefaultTimeout, t
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { presenceWords } from "@kiwi/core/format.ts";
+import { hear } from "@kiwi/channel/online.ts";
+import { howHere } from "@kiwi/channel/presence.ts";
 import { resumedSession } from "../src/daemon/codex-queue.ts";
 import { AgentSession } from "../src/agent.ts";
 import * as Effect from "effect/Effect";
@@ -20,6 +22,18 @@ const sessions = join(codex, "sessions");
 const tmuxSock = join(codex, "tmux.sock");
 const tuiBin = join(codex, "tui");
 const rpc: string[] = [];
+const presenceConns = new WeakSet<object>();
+const loadedAsked: (string | null)[] = [];
+type LoadedList = { pages: string[][] } | { error: string } | null;
+let loadedList: LoadedList = null;
+let loadedDelayMs = 0;
+const loadedAnswer = (cursor: string | null): object => {
+  if (loadedList === null) return { result: {} };
+  if ("error" in loadedList) return { error: { code: -32000, message: loadedList.error } };
+  const at = cursor === null ? 0 : Number(cursor);
+  const page = loadedList.pages[at] ?? [];
+  return { result: { data: page, nextCursor: at + 1 < loadedList.pages.length ? String(at + 1) : null } };
+};
 let hooks: Partial<Record<string, () => void | Promise<void>>> = {};
 let server: ReturnType<typeof Bun.serve> | undefined;
 const prevHome = process.env.CODEX_HOME;
@@ -85,12 +99,20 @@ beforeAll(() => {
     fetch: (req, srv) => (srv.upgrade(req, { data: undefined }) ? undefined : new Response("websocket only", { status: 400 })),
     websocket: {
       async message(ws, raw) {
-        const m = JSON.parse(String(raw)) as { id?: number; method: string };
-        rpc.push(m.method);
-        const hook = hooks[m.method];
-        delete hooks[m.method];
-        await hook?.();
-        if (m.id !== undefined) ws.send(JSON.stringify({ id: m.id, result: {} }));
+        const m = JSON.parse(String(raw)) as { id?: number; method: string; params?: { cursor?: string; clientInfo?: { name?: string } } };
+        if (m.method === "initialize" && m.params?.clientInfo?.name === "kiwi-presence") presenceConns.add(ws);
+        if (m.method === "thread/loaded/list") loadedAsked.push(m.params?.cursor ?? null);
+        if (!presenceConns.has(ws)) {
+          rpc.push(m.method);
+          const hook = hooks[m.method];
+          delete hooks[m.method];
+          await hook?.();
+        }
+        if (m.id === undefined) return;
+        const answer = m.method === "thread/loaded/list" ? loadedAnswer(m.params?.cursor ?? null) : { result: {} };
+        const delay = m.method === "thread/loaded/list" ? loadedDelayMs : 0;
+        if (delay) await Bun.sleep(delay);
+        ws.send(JSON.stringify({ id: m.id, ...answer }));
       },
     },
   });
@@ -106,6 +128,9 @@ afterAll(() => {
 
 beforeEach(async () => {
   rpc.length = 0;
+  loadedAsked.length = 0;
+  loadedList = null;
+  loadedDelayMs = 0;
   hooks = {};
   afterUnread = null;
   await quiet();
@@ -211,6 +236,135 @@ describe("a Codex wake is checked until the bound session reads it", () => {
     expect(await status()).toMatch(/claude \(you\).* · wake not taken for .*: Codex queued the wake for thread 01a1e000-0000-7000-8000-00000000000c but no turn read it/);
     expect(rpc).toEqual([]);
     await readAll();
+  });
+});
+
+describe("a Codex seat reads as wakeable only while Codex serves its thread (#2683)", () => {
+  const last = () => w.heard.findLast((p) => p.from === "claude")!;
+  const appHow = () => {
+    const p = last();
+    return howHere(hear(new Map(), p, Date.now()).get(p.pk!));
+  };
+  const lit = (how: ReturnType<typeof appHow>) => () => !!w.heard.findLast((p) => p.from === "claude") && appHow() === how;
+
+  test("a thread that isn't loaded, with no client, dims and says why, with the app-server up; its wake is still queued", async () => {
+    const id = "01a1e000-0000-7000-8000-000000000050";
+    thread(id, [{ type: "task_complete", at: Date.now() - 60_000 }]);
+    loadedList = { pages: [[OTHER], ["01a1e000-0000-7000-8000-000000000051"]] };
+    bindAs({ harness: "codex", session: id });
+    await until("the app dimming claude", lit(null), 15_000);
+    expect(existsSync(join(codex, "app-server-control", "app-server-control.sock"))).toBe(true);
+    expect(loadedAsked).toContain("1");
+    expect(presenceWords(last())).toStartWith("not listening · can't be woken");
+    expect(await status()).toMatch(/claude \(you\).* · not listening · can't be woken/);
+    expect((await seat())?.wake.path).toEqual({ kind: "none", why: `Codex isn't serving thread ${id}: its messages queue until that thread is resumed` });
+    await wakeOf("for a seat whose Codex is gone");
+    expect(calls().at(-1)).toContain(id);
+    await readAll();
+  });
+
+  test("a loaded thread wakes via codex queue with no client of its own, found on any page of the list", async () => {
+    const id = "01a1e000-0000-7000-8000-000000000052";
+    thread(id, [{ type: "task_complete", at: Date.now() - 60_000 }]);
+    loadedList = { pages: [[OTHER], [id]] };
+    bindAs({ harness: "codex", session: id });
+    await until("the app lighting claude", lit("wakes"), 15_000);
+    expect(presenceWords(last())).toStartWith("reachable · wakes via codex queue");
+    expect((await seat())?.wake.path).toEqual({ kind: "command", via: "codex-queue", session: id });
+  });
+
+  test("when the app-server can't say, the seat isn't dimmed on a guess", async () => {
+    const id = "01a1e000-0000-7000-8000-000000000053";
+    thread(id, [{ type: "task_complete", at: Date.now() - 60_000 }]);
+    loadedList = { pages: [[OTHER]] };
+    bindAs({ harness: "codex", session: id });
+    await until("the app dimming claude first", lit(null), 15_000);
+    loadedList = { error: "the list is busy" };
+    await until("the app lighting claude on an error", lit("wakes"), 15_000);
+    loadedList = null;
+    await Bun.sleep(4_000);
+    expect(appHow()).toBe("wakes");
+  });
+
+  test.if(exactArgv)("a live client of the thread outside tmux keeps it wakeable while the thread isn't loaded", async () => {
+    const id = "01a1e000-0000-7000-8000-000000000054";
+    thread(id, [{ type: "task_complete", at: Date.now() - 60_000 }]);
+    loadedList = { pages: [[OTHER]] };
+    bindAs({ harness: "codex", session: id });
+    await until("the app dimming claude", lit(null), 15_000);
+    const client = spawnOwned([join(tuiBin, "codex"), "resume", id], { stdout: "ignore", stderr: "ignore" });
+    try {
+      await until("the app lighting claude for its client", lit("wakes"), 15_000);
+    } finally {
+      client.kill();
+      await client.exited;
+    }
+    await until("the app dimming claude once the client is gone", lit(null), 15_000);
+  });
+
+  test("a seat Codex doesn't serve, with a wake no turn read, stays dim until its thread is loaded and a turn reads", async () => {
+    const id = "01a1e000-0000-7000-8000-000000000055";
+    thread(id, [{ type: "task_complete", at: Date.now() - 60_000 }]);
+    loadedList = { pages: [[OTHER]] };
+    bindAs({ harness: "codex", session: id });
+    await wakeOf("for a seat whose Codex is gone, again");
+    await until("the wake-not-taken alert", async () => (await untaken()) !== null, TAKE_MS * 4);
+    await until("the app dimming claude", lit(null), 15_000);
+    loadedList = { pages: [[OTHER, id]] };
+    const asked = loadedAsked.length;
+    await until("two refreshes after the thread loads", () => loadedAsked.length >= asked + 2, 15_000);
+    expect(appHow()).toBeNull();
+    expect((await seat())?.wake.path).toEqual({ kind: "none", why: `Codex serves thread ${id} again, but no turn has read the wake it missed yet` });
+    await readAll();
+    await until("the alert clearing once a turn reads", async () => (await untaken()) === null, 15_000);
+    await until("the app lighting claude", lit("wakes"), 15_000);
+  });
+
+  test("a late answer from an older refresh can't dim a seat a newer refresh found served", async () => {
+    const id = "01a1e000-0000-7000-8000-000000000057";
+    thread(id, [{ type: "task_complete", at: Date.now() - 60_000 }]);
+    loadedList = { pages: [[id]] };
+    bindAs({ harness: "codex", session: id });
+    await until("the app lighting claude", lit("wakes"), 15_000);
+    const asked = loadedAsked.length;
+    loadedList = { pages: [[OTHER]] };
+    loadedDelayMs = 4_500;
+    await until("a refresh asking while the thread is gone", () => loadedAsked.length > asked, 10_000);
+    loadedList = { pages: [[id]] };
+    loadedDelayMs = 0;
+    const from = w.heard.length;
+    await Bun.sleep(9_000);
+    const since = w.heard.slice(from).filter((p) => p.from === "claude");
+    expect(since.map((p) => howHere(hear(new Map(), p, Date.now()).get(p.pk!)))).not.toContain(null);
+    expect(appHow()).toBe("wakes");
+  });
+
+  test("when every answer is slower than a refresh, the seat still dims once Codex stops serving it", async () => {
+    const id = "01a1e000-0000-7000-8000-000000000058";
+    thread(id, [{ type: "task_complete", at: Date.now() - 60_000 }]);
+    loadedList = { pages: [[id]] };
+    bindAs({ harness: "codex", session: id });
+    await until("the app lighting claude", lit("wakes"), 15_000);
+    loadedList = { pages: [[OTHER]] };
+    loadedDelayMs = 4_500;
+    await until("the app dimming claude through slow answers", lit(null), 20_000);
+    loadedList = { pages: [[id]] };
+    await until("the app lighting claude again through slow answers", lit("wakes"), 20_000);
+  });
+
+  test("a live seat busy on an earlier turn stays lit with its wake not taken, and reads it when free", async () => {
+    const id = "01a1e000-0000-7000-8000-000000000056";
+    thread(id, [{ type: "task_started", at: Date.now() - 3_600_000 }]);
+    loadedList = { pages: [[id]] };
+    bindAs({ harness: "codex", session: id });
+    await wakeOf("for a seat busy on an old turn");
+    await until("the wake-not-taken alert", async () => (await untaken()) !== null, TAKE_MS * 4);
+    await until("the alert in claude's presence", () => !!last().untaken, 10_000);
+    expect(appHow()).toBe("wakes");
+    expect(presenceWords(last())).toContain("wake not taken for ");
+    await readAll();
+    await until("the alert clearing once the wake is read", async () => (await untaken()) === null, 15_000);
+    expect(appHow()).toBe("wakes");
   });
 });
 

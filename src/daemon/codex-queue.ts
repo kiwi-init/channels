@@ -183,7 +183,7 @@ type RpcAnswer = { ok: true; result: unknown } | { ok: false; error: string };
 
 type RpcCall = (method: string, params: Record<string, unknown>) => Promise<RpcAnswer>;
 
-async function codexSession<T>(socket: string, work: (call: RpcCall) => Promise<T>, ms = 10_000): Promise<{ ok: true; value: T } | { ok: false; why: string }> {
+async function codexSession<T>(socket: string, work: (call: RpcCall) => Promise<T>, client = "kiwi", ms = 10_000): Promise<{ ok: true; value: T } | { ok: false; why: string }> {
   if (!existsSync(socket)) return { ok: false, why: "Codex's app-server isn't running (no control socket)" };
   const ws = new WebSocket(`ws+unix://${socket}`);
   const waiting = new Map<number, (a: RpcAnswer) => void>();
@@ -225,7 +225,7 @@ async function codexSession<T>(socket: string, work: (call: RpcCall) => Promise<
       ws.onerror = () => resolve(false);
     });
     if (!(await answered(opened, false))) return { ok: false, why: "Codex's app-server refused the connection or didn't answer" };
-    const hello = await call("initialize", { clientInfo: { name: "kiwi", version: "1" }, capabilities: { experimentalApi: true } });
+    const hello = await call("initialize", { clientInfo: { name: client, version: "1" }, capabilities: { experimentalApi: true } });
     if (!hello.ok) return { ok: false, why: `Codex's app-server refused Kiwi: ${hello.error}` };
     ws.send(JSON.stringify({ method: "initialized" }));
     return { ok: true, value: await work(call) };
@@ -233,6 +233,54 @@ async function codexSession<T>(socket: string, work: (call: RpcCall) => Promise<
     closed = true;
     ws.close();
   }
+}
+
+export type CodexServing = { kind: "serving" } | { kind: "absent" } | { kind: "unknown"; why: string };
+
+const LOADED_PAGES_MAX = 100;
+
+function loadedPage(result: unknown): { data: string[]; nextCursor: string | null } | null {
+  if (!result || typeof result !== "object" || !("data" in result) || !("nextCursor" in result)) return null;
+  const { data, nextCursor } = result;
+  if (!Array.isArray(data) || !data.every((t): t is string => typeof t === "string")) return null;
+  if (nextCursor !== null && typeof nextCursor !== "string") return null;
+  return { data, nextCursor };
+}
+
+async function codexLoaded(socket: string, thread: string): Promise<CodexServing> {
+  const ran = await codexSession(
+    socket,
+    async (call): Promise<CodexServing> => {
+      let cursor: string | null = null;
+      for (let page = 0; page < LOADED_PAGES_MAX; page++) {
+        const answer = await call("thread/loaded/list", cursor === null ? {} : { cursor });
+        if (!answer.ok) return { kind: "unknown", why: `Codex's app-server didn't list its loaded threads: ${answer.error}` };
+        const listed = loadedPage(answer.result);
+        if (!listed) return { kind: "unknown", why: "Codex's app-server listed its loaded threads in a shape Kiwi doesn't read" };
+        if (listed.data.includes(thread)) return { kind: "serving" };
+        if (listed.nextCursor === null) return { kind: "absent" };
+        cursor = listed.nextCursor;
+      }
+      return { kind: "unknown", why: `Codex's app-server listed more than ${LOADED_PAGES_MAX} pages of loaded threads` };
+    },
+    "kiwi-presence",
+  );
+  return ran.ok ? ran.value : { kind: "unknown", why: ran.why };
+}
+
+function codexClientSeen(thread: string, bin: string | undefined, procs: () => readonly Proc[]): boolean {
+  return procs().some((p) => {
+    if (!runsCodex(p, bin)) return false;
+    const argv = exactArgv(p.pid);
+    const at = argv ? argv.slice(0, 2).findIndex((word) => isCodex(word, bin)) : -1;
+    return !!argv && at >= 0 && resumedSession(argv.slice(at + 1)) === thread;
+  });
+}
+
+export async function codexServing(socket: string, thread: string, bin?: string, procs: () => readonly Proc[] = processes): Promise<CodexServing> {
+  const loaded = await codexLoaded(socket, thread);
+  if (loaded.kind === "serving" || codexClientSeen(thread, bin, procs)) return { kind: "serving" };
+  return loaded;
 }
 
 export type QueueStart = { kind: "started" } | { kind: "abandoned"; why: string } | { kind: "failed"; why: string };

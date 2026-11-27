@@ -13,10 +13,11 @@ import { LEDGER_ENV, OWNER_ENV, ownerFor, stopOwned } from "../scripts/ci-owned.
 import { ledgerSize } from "./owned.ts";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-test-harness-"));
-for (const name of ["codex", "gemini", "cursor", "grok", "kimi", "pi", "mimo", "zcode", "agy", "claude", "kiwi", "tmux"]) mkdirSync(join(root, name));
+for (const name of ["codex", "codex-home", "gemini", "cursor", "grok", "kimi", "pi", "mimo", "zcode", "agy", "claude", "kiwi", "tmux"]) mkdirSync(join(root, name));
 
 const DIRS: Record<string, string> = {
   KIWI_CODEX_DIR: join(root, "codex"),
+  CODEX_HOME: join(root, "codex-home"),
   KIWI_GEMINI_DIR: join(root, "gemini"),
   KIWI_CURSOR_DIR: join(root, "cursor"),
   KIWI_GROK_DIR: join(root, "grok"),
