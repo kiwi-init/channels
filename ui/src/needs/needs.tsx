@@ -5,7 +5,7 @@ import { useEffect, useId, useMemo, useState, type ReactNode } from "react"
 import type { Color } from "@kiwi/core/protocol.ts"
 import { Swatches } from "~/kit/swatches"
 
-import { wordsPlain, wordsRaw } from "~/words"
+import { wordsPlain, wordsRaw, wrote } from "~/words"
 import QuestionCard from "~/chat/question-card"
 import type { Key } from "~/i18n/en"
 import { t } from "~/i18n/i18n"
@@ -131,23 +131,21 @@ const show = (channel: Channel, a: Ask): string => {
 
 const HELD_WORDS = 80
 
-const heldMessage = (channel: Channel, id: number): { from: string; text: string } | undefined => {
-  const said = channel.messages.find((m) => m.seq === id)
-  if (said) return { from: said.from, text: wordsPlain(said.text, channel.nicknames) }
-  const head = channel.taskGroups.find((g) => g.head.kind === "ask" && g.head.id === id)?.head
-  return head?.kind === "ask" ? { from: head.by, text: head.words } : undefined
-}
+type HeldHead = NonNullable<QuestionAsk["heads"]>[number]
 
-const heldRow = (channel: Channel, id: number): string[] => {
+const heldRow = (channel: Channel, id: number, heads: readonly HeldHead[]): string[] => {
   const task = channel.tasks.find((x) => x.id === id)
   if (task) return [taskRow(channel, task, steps(task))]
-  const said = heldMessage(channel, id)
-  if (!said) return []
-  const start = said.text.replace(/\s+/g, " ").trim()
-  return [`- ${link(nickname(channel, said.from), face(said.from))} · ${link(start.length > HELD_WORDS ? `${start.slice(0, HELD_WORDS)}…` : start, `kiwi-msg:${id}`)}`]
+  const head = heads.find((h) => h.id === id)
+  if (!head) return []
+  const start = wordsPlain(wrote(head.words), channel.nicknames).replace(/\s+/g, " ").trim()
+  return [`- ${link(nickname(channel, head.by), face(head.by))} · ${link(start.length > HELD_WORDS ? `${start.slice(0, HELD_WORDS)}…` : start, `kiwi-msg:${id}`)}`]
 }
 
-const holds = (channel: Channel, ids: readonly number[]): string => ids.flatMap((id) => heldRow(channel, id)).join("\n")
+const holds = (channel: Channel, ids: readonly number[], asks: readonly Ask[]): string => {
+  const heads = asks.flatMap((a) => (a.kind === "question" ? (a.heads ?? []) : []))
+  return ids.flatMap((id) => heldRow(channel, id, heads)).join("\n")
+}
 
 const prLine = (pr: PullRequest): string =>
   `- ${link(`#${pr.number} ${pr.title}`, `kiwi-pr:${pr.repo}/${pr.number}`)}${pr.additions === undefined ? "" : ` · +${pr.additions} −${pr.deletions ?? 0}`}${prTail(pr)}`
@@ -197,7 +195,7 @@ function askText(channel: Channel, a: Ask, m: Maker, go: (to: Go) => void, now: 
           "diff"
         ),
         ...a.notes.map((note) => tone(note, "alert")),
-        a.task !== undefined ? holds(channel, [a.task]) : "",
+        a.task !== undefined ? holds(channel, [a.task], [a]) : "",
         m.field(`permission-${a.id}`, () => <PermissionActs channel={channel} ask={a} />),
       ])
     case "question": {
@@ -214,7 +212,7 @@ function askText(channel: Channel, a: Ask, m: Maker, go: (to: Go) => void, now: 
           m.field(`question-${q.id}`, () => <QuestionCard channel={channel} ask={q} joined={i > 0} />),
         ]
       }
-      return card([...one(a, 0), ...more.flatMap((q) => one(q, 1)), holds(channel, [...new Set([a, ...more].flatMap(workOf))])])
+      return card([...one(a, 0), ...more.flatMap((q) => one(q, 1)), holds(channel, [...new Set([a, ...more].flatMap(workOf))], [a, ...more])])
     }
     case "join":
       return card([

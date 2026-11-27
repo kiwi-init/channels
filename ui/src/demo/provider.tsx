@@ -225,7 +225,19 @@ function withHeldMessage(c: Channel): Channel {
   return {
     ...c,
     messages: [...c.messages, { seq, from: "win", at, text: wrote(text), where: { kind: "room", room: "general" }, ask: "held-1", mentionsYou: true }],
-    asks: [{ kind: "question", id: "held-1", from: "win", at, text: wrote(text), label: "Decision for you", options: ["A: tag now", "B: wait for T12 and T14"].map(wrote), holds: [120] }],
+    asks: [
+      {
+        kind: "question",
+        id: "held-1",
+        from: "win",
+        at,
+        text: wrote(text),
+        label: "Decision for you",
+        options: ["A: tag now", "B: wait for T12 and T14"].map(wrote),
+        holds: [120],
+        heads: [{ id: 120, by: "jow", words: "@win ship it: tag v1.0.0" }],
+      },
+    ],
   }
 }
 

@@ -7,7 +7,8 @@ import { needsPerson } from "@kiwi/core/work.ts"
 import { heldAsks } from "@kiwi/app/asks.ts"
 import { homeOf } from "~/home"
 import { asksOf } from "~/live/map"
-import type { Ask, Channel, Message, Person, QuestionAsk, Task } from "~/model"
+import { findWanted } from "~/live/open-message"
+import type { Ask, Channel, Person, Task } from "~/model"
 import { needsText } from "~/needs/needs"
 import { openAsks } from "~/needs/open"
 import { wrote } from "~/words"
@@ -184,14 +185,16 @@ describe("an answered or closed decision leaves at once (#2690)", () => {
 })
 
 describe("the card shows what the ask holds: a task, or a person's message (#2690)", () => {
-  const card = (holds: number[]): QuestionAsk => ({ kind: "question", id: "q", from: "lead", at: 5, text: wrote("Which one?"), label: "Decision for you", options: ["A", "B"].map(wrote), holds })
-  const longText = "just simulate a real ask so I can look at Needs you before answering it, and tell me what it holds"
-  const held = (asks: QuestionAsk[], more: Partial<Channel>) =>
-    text(
+  const long = "just simulate a real ask so I can look at Needs you before answering it, and tell me what it holds"
+  const owner = said(1, "jow", long)
+  const agent = said(5, "lead", "an agent's own note")
+  const held = (messages: Wire[], loaded: Wire[], tasks: Task[] = []) => {
+    const { asks } = asksOf(fold(messages, roster, 0), loaded, "jow", true, [], roster, new Map())
+    return text(
       needsText(
         {
           ...channelOf(asks),
-          ...more,
+          tasks,
           nicknames: new Map([
             ["lead", "lead"],
             ["jow", "Jow"],
@@ -200,23 +203,29 @@ describe("the card shows what the ask holds: a task, or a person's message (#269
         () => {}
       ).md
     )
-  const message = { seq: 7, from: "jow", at: 1, text: wrote(longText), where: { kind: "room", room: "general" } } as Message
-  const task = { id: 2, title: wrote("open work"), status: "doing" } as unknown as Task
+  }
 
-  test("a held message shows its author, the start of its text, and a link to it", () => {
-    const md = held([card([7])], { messages: [message] })
+  test("a held person's message shows its author, the start of its text and a link, even when it isn't loaded and nothing is filed under it", () => {
+    const ask = choice(10, "Which animal?", [1])
+    const md = held([owner, ask], [ask])
     expect(md).toContain("[Jow](<kiwi-face:")
-    expect(md).toContain(`[${longText.slice(0, 80)}…](<kiwi-msg:7>)`)
+    expect(md).toContain(`[${long.slice(0, 80)}…](<kiwi-msg:1>)`)
   })
 
-  test("a held message that isn't loaded shows from the ask head its tasks are filed under", () => {
-    const md = held([card([7])], { taskGroups: [{ key: "ask:7", head: { kind: "ask", id: 7, by: "jow", words: "just simulate", mayName: true }, tasks: [2] }] })
-    expect(md).toContain("[just simulate](<kiwi-msg:7>)")
-    expect(md).toContain("[Jow](<kiwi-face:")
+  test("the link opens the older message: the feed fetches it when it is before the loaded window", () => {
+    expect(findWanted({ code: "c", seq: 1 }, "c", [], 10)).toEqual({ kind: "older" })
+  })
+
+  test("an agent's message held by an ask gets no line", () => {
+    const ask = choice(10, "Which one?", [5])
+    const md = held([owner, agent, ask], [agent, ask])
+    expect(md).not.toContain("kiwi-msg:5")
+    expect(md).not.toContain("an agent's own note")
   })
 
   test("a held task shows as before, and an id that is neither shows no line", () => {
-    const md = held([card([2, 99])], { tasks: [task] })
+    const ask = choice(10, "Which one?", [2, 99])
+    const md = held([...base, ask], [ask], [{ id: 2, title: wrote("open work"), status: "doing" } as unknown as Task])
     expect(md).toContain("(<kiwi-task:2>)")
     expect(md).not.toContain("kiwi-msg:99")
     expect(md).not.toContain("kiwi-task:99")
