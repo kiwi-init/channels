@@ -258,7 +258,7 @@ export interface Lease {
   since: number;
   until: number;
   note?: string;
-  queue: { name: string; ttl: number; joined: number; note?: string }[];
+  queue: { name: string; ttl: number; joined: number; note?: string; task?: number }[];
 }
 
 export interface CheckpointAsk {

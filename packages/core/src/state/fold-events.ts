@@ -14,7 +14,7 @@ import {
   type Power,
   powerChange,
 } from "../protocol.ts";
-import { free, take } from "./leases.ts";
+import { free, take, type LeftLine } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
 import { leadCheckpointKey, leadCheckpointKeyRefusal } from "./lead.ts";
 import { addRelease, applyGithub, dropRelease, prKey, repoKey, type GithubPr, type GithubState } from "./github.ts";
@@ -106,6 +106,7 @@ export interface FoldCtx {
   facts: Map<string, Fact>;
   docs: Map<string, string>;
   leases: Map<string, Lease>;
+  leftLine: LeftLine;
   rooms: Map<string, Room>;
   secret: Map<string, SecretRoom>;
   roomsSince: number;
@@ -974,15 +975,17 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
     }
 
     case "lease.take": {
+      const blocks = ev.task === undefined ? undefined : c.tasks.get(ev.task);
+      const task = blocks && blocks.state !== "done" && !blocks.archived ? blocks.id : undefined;
       let lease = c.leases.get(ev.name);
       if (!lease) c.leases.set(ev.name, (lease = { name: ev.name, since: at, until: at, queue: [] }));
-      take(lease, m.from, ev.ttl * 1000, at, ev.note);
+      take(lease, m.from, ev.ttl * 1000, at, ev.note, task, c.leftLine);
       break;
     }
 
     case "lease.free": {
       const lease = c.leases.get(ev.name);
-      if (!lease || !free(lease, m.from, at, isPerson(member))) reject(`${m.from} neither holds nor waits for ${ev.name}`);
+      if (!lease || !free(lease, m.from, at, isPerson(member), c.leftLine)) reject(`${m.from} neither holds nor waits for ${ev.name}`);
       else if (!lease.holder && !lease.queue.length) c.leases.delete(ev.name);
       break;
     }

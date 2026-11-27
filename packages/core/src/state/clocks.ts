@@ -5,14 +5,15 @@ import { currentStep, stepMove, timedOf } from "../steps.ts";
 import { heldStep, pausingStep, runSight } from "./landing-steps.ts";
 import { landerOf, openRound, taskId } from "./tasks.ts";
 import { needsReset } from "./reset.ts";
-import type { ChannelState, Task, TaskClock, Woke } from "./types.ts";
+import { leftAt } from "./leases.ts";
+import type { ChannelState, Lease, Task, TaskClock, Woke } from "./types.ts";
 import { quietValues } from "./same.ts";
 
 export const QUIET_MS = QUIET_MINUTES * 60_000;
 export const QUEUE_MS = 24 * 60 * 60_000;
 export const UNREAD_MS = 5 * 60_000;
 
-export type ClockView = Pick<ChannelState, "tasks" | "openAsks" | "github" | "branchPrefix" | "quietMs" | "members">;
+export type ClockView = Pick<ChannelState, "tasks" | "openAsks" | "github" | "branchPrefix" | "quietMs" | "members" | "leases">;
 
 const WAITING = "~waiting|";
 const LEAD = "@lead";
@@ -41,7 +42,22 @@ function queueParty(view: ClockView, t: Frozen<Task>, owner: string): Party {
   return member(owner, "start");
 }
 
+function lockWaits(view: ClockView, id: number): { lease: Frozen<Lease>; name: string }[] {
+  const waits: { lease: Frozen<Lease>; name: string }[] = [];
+  for (const lease of view.leases.values()) for (const q of lease.queue) if (q.task === id) waits.push({ lease, name: q.name });
+  return waits;
+}
+
+const inLine = (view: ClockView, t: Frozen<Task>, now: number): boolean => lockWaits(view, t.id).some((w) => leftAt(w.lease, w.name, now) === undefined);
+
+const lineEnds = (view: ClockView, t: Frozen<Task>, now: number): (number | undefined)[] => lockWaits(view, t.id).map((w) => leftAt(w.lease, w.name, now));
+
 function partyOf(view: ClockView, t: Frozen<Task>, now: number): Party {
+  const party = moverParty(view, t, now);
+  return !party.key.startsWith("?") && inLine(view, t, now) ? NONE : party;
+}
+
+function moverParty(view: ClockView, t: Frozen<Task>, now: number): Party {
   const question = view.openAsks.filter((m) => m.holds?.includes(t.id)).sort((a, b) => a.seq - b.seq)[0];
   if (question) return { key: `?${question.seq}`, mover: `?${question.seq}` };
   if (pausingStep(view.github, t, now)) return NONE;
@@ -77,8 +93,8 @@ function deadlines(view: ClockView, t: Frozen<Task>): (number | undefined)[] {
   return [step ? timedOf(step)?.until : undefined, step?.run?.due, t.wait?.until];
 }
 
-function passedDeadline(view: ClockView, t: Frozen<Task>, now: number): number | undefined {
-  const passed = deadlines(view, t).filter((x): x is number => x !== undefined && x <= now);
+function passedDeadline(view: ClockView, t: Frozen<Task>, now: number, ended: number | undefined): number | undefined {
+  const passed = [...deadlines(view, t), ...lineEnds(view, t, now), ended].filter((x): x is number => x !== undefined && x <= now);
   return passed.length ? Math.max(...passed) : undefined;
 }
 
@@ -91,19 +107,19 @@ export const timedStep = (t: Task): boolean => {
 
 const headOf = (view: ClockView, t: Task): string | undefined => prOfTask(view.github, view.branchPrefix, t)?.sha;
 
-export function rolled<T extends Frozen<Task>>(view: ClockView, t: T, now: number): T["clock"] | undefined {
+export function rolled<T extends Frozen<Task>>(view: ClockView, t: T, now: number, ended?: number): T["clock"] | undefined {
   if (t.state === "done" || t.archived) return undefined;
   const cur = partyOf(view, t, now);
   const was = t.clock;
   if (was?.key === cur.key) return was;
-  const deadline = passedDeadline(view, t, now);
+  const deadline = passedDeadline(view, t, now, ended);
   const floor = t.state === "landing" ? undefined : was?.at;
   const at = deadline !== undefined && floor !== undefined ? Math.max(deadline, floor) : (deadline ?? was?.at ?? t.createdAt);
   return { key: cur.key, seq: was?.seq ?? t.id, at, ...(was?.head ? { head: was.head } : {}) };
 }
 
-export function roll(view: ClockView, t: Task, now: number): void {
-  t.clock = rolled(view, t, now);
+export function roll(view: ClockView, t: Task, now: number, ended?: number): void {
+  t.clock = rolled(view, t, now, ended);
 }
 
 type Act = NonNullable<TaskClock["acts"]>[number];

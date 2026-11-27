@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import { leaseLine, parseDuration } from "@kiwi/core/format.ts";
-import { placeIn } from "@kiwi/core/state.ts";
+import { parseTaskId, placeIn, taskId } from "@kiwi/core/state.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out, readSession, session } from "../context.ts";
 
@@ -24,10 +24,13 @@ export const leaseCommands: Record<string, Command> = {
         return;
       }
       const wait = opt.wait === undefined ? null : parseDuration(opt.wait);
-      const lease = yield* s.lease(name, parseDuration(opt.ttl ?? DEFAULT_LEASE), opt.note);
+      const blocks = opt.task === undefined ? "own" : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
+      const lease = yield* s.lease(name, parseDuration(opt.ttl ?? DEFAULT_LEASE), opt.note, blocks);
       if (lease.holder === s.me) return out(leaseLine(lease, s.me));
       const place = placeIn(lease, s.me);
+      const task = lease.queue.find((q) => q.name === s.me)?.task;
       out(leaseLine(lease, s.me));
+      if (task !== undefined) out(`${taskId(task)} doesn't go quiet while you wait in line`);
       if (wait === null)
         return yield* die(
           `you're ${place === 1 ? "next" : `number ${place} in line`} for ${name}, not holding it: you'll be told when it's yours (kiwi lock ${name} --wait 30m waits for it)`,

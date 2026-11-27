@@ -1,0 +1,263 @@
+import { describe, expect, test } from "bun:test";
+import { clockOf, nudgesDue } from "@kiwi/core/clock.ts";
+import { wellFormedEvent, type Event, type Message } from "@kiwi/core/protocol.ts";
+import { fold, LEASE_WAIT_MS, type FoldBase, type Roster } from "@kiwi/core/state.ts";
+import { folded } from "@kiwi/core/state/fold-on.ts";
+import { QUIET_MS } from "@kiwi/core/state/clocks.ts";
+
+const roster: Roster = [
+  { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human" },
+  { name: "owl", pk: "pk-owl", owner: false, at: 0, active: true, kind: "agent", role: "lead" },
+  { name: "win", pk: "pk-win", owner: false, at: 0, active: true, kind: "agent" },
+  { name: "mac", pk: "pk-mac", owner: false, at: 0, active: true, kind: "agent" },
+];
+
+const MIN = 60_000;
+const HOUR = 60 * MIN;
+const TASK = 1;
+const OTHER = 3;
+const JOINED = 10 * MIN;
+
+const event = (seq: number, at: number, from: string, ev: Event): Message =>
+  ({ v: 1, id: `e${seq}`, seq, from, pk: `pk-${from}`, sigOk: true, kind: "event", body: "", ev, ts: at, rts: at }) as Message;
+
+const doing = (): Message[] => [event(TASK, 0, "jow", { op: "task.add", title: "Ship the release", owner: "win" }), event(2, 1_000, "win", { op: "task.update", task: TASK, state: "doing" })];
+const take = (seq: number, at: number, from: string, ttlMin: number, task?: number): Message =>
+  event(seq, at, from, { op: "lease.take", name: "build", ttl: ttlMin * 60, ...(task !== undefined ? { task } : {}) });
+const free = (seq: number, at: number, from: string): Message => event(seq, at, from, { op: "lease.free", name: "build" });
+const takeOn = (name: string, seq: number, at: number, from: string, ttlMin: number, task?: number): Message =>
+  event(seq, at, from, { op: "lease.take", name, ttl: ttlMin * 60, ...(task !== undefined ? { task } : {}) });
+const olderReader = (ms: Message[]): Message[] => ms.map((m) => (m.ev?.op === "lease.take" && m.ev.task !== undefined ? { ...m, ev: { op: "lease.take", name: m.ev.name, ttl: m.ev.ttl } } : m));
+
+const queued = (): Message[] => [...doing(), take(5, 5 * MIN, "mac", 60), take(6, JOINED, "win", 30, TASK)];
+
+const foldAt = (ms: Message[], now: number) =>
+  fold(
+    ms.filter((m) => m.ts <= now),
+    roster,
+    now,
+  );
+const dueFor = (ms: Message[], now: number, task = TASK) => nudgesDue(foldAt(ms, now), now).filter((d) => d.task === task);
+
+describe("a lock wait recorded on a task (T19510)", () => {
+  test("the task it blocks raises no quiet event while it waits in line", () => {
+    const now = 5 * MIN + HOUR - MIN;
+    const state = foldAt(queued(), now);
+    expect(state.leases.get("build")?.queue).toEqual([{ name: "win", ttl: 30 * MIN, joined: JOINED, task: TASK }]);
+    expect(nudgesDue(state, now)).toEqual([]);
+    expect(clockOf(state, state.tasks.get(TASK)!, now)?.paged).toBe(false);
+  });
+
+  test("without a task on the wait the clock runs as before", () => {
+    const ms = [...doing(), take(5, 5 * MIN, "mac", 60), take(6, JOINED, "win", 30)];
+    expect(dueFor(ms, JOINED + QUIET_MS)).toEqual([expect.objectContaining({ step: 1, mover: "win" })]);
+  });
+
+  describe("a wait that names a task its mover isn't the one waiting on", () => {
+    const named = (): Message[] => [
+      ...doing(),
+      event(OTHER, 2_000, "jow", { op: "task.add", title: "Fix the docs", owner: "win" }),
+      event(4, 3_000, "win", { op: "task.update", task: OTHER, state: "doing" }),
+      take(5, 5 * MIN, "mac", 60),
+      take(6, JOINED, "owl", 30, TASK),
+    ];
+
+    test("keeps the named task quiet-free while it's queued; the mover's other task keeps its clock", () => {
+      const now = 5 * MIN + HOUR - MIN;
+      const state = foldAt(named(), now);
+      expect(state.leases.get("build")?.queue).toEqual([expect.objectContaining({ name: "owl", task: TASK })]);
+      expect(dueFor(named(), now, TASK)).toEqual([]);
+      expect(clockOf(state, state.tasks.get(TASK)!, now)?.paged).toBe(false);
+      expect(dueFor(named(), now, OTHER)).toEqual([expect.objectContaining({ task: OTHER, mover: "win" })]);
+    });
+
+    test("stays quiet-free across a mover change while queued", () => {
+      const review = event(7, 20 * MIN, "win", { op: "task.update", task: TASK, state: "review", review: "mac" });
+      const ms = [...named(), review];
+      const now = 5 * MIN + HOUR - MIN;
+      const state = foldAt(ms, now);
+      expect(state.tasks.get(TASK)?.state).toBe("review");
+      expect(dueFor(ms, now, TASK)).toEqual([]);
+    });
+
+    test("resumes from the moment the waiting seat acquires the lock", () => {
+      const ranOut = 5 * MIN + HOUR;
+      expect(dueFor(named(), ranOut + QUIET_MS - MIN, TASK)).toEqual([]);
+      const now = ranOut + QUIET_MS + MIN;
+      const state = foldAt(named(), now);
+      expect(state.leases.get("build")).toMatchObject({ holder: "owl", since: ranOut });
+      expect(clockOf(state, state.tasks.get(TASK)!, now)).toMatchObject({ mover: "win", since: ranOut, paged: true });
+      expect(dueFor(named(), now, TASK)).toEqual([expect.objectContaining({ step: 1, mover: "win" })]);
+    });
+
+    test("resumes from the moment the waiting seat leaves the line", () => {
+      const left = 25 * MIN;
+      const ms = [...named(), event(7, left, "owl", { op: "lease.free", name: "build" })];
+      const now = left + QUIET_MS + MIN;
+      const state = foldAt(ms, now);
+      expect(clockOf(state, state.tasks.get(TASK)!, now)).toMatchObject({ mover: "win", since: left, paged: true });
+    });
+  });
+
+  test("one seat with two tasks: only the task on the wait goes quiet-free", () => {
+    const ms = [
+      ...doing(),
+      event(OTHER, 2_000, "jow", { op: "task.add", title: "Fix the docs", owner: "win" }),
+      event(4, 3_000, "win", { op: "task.update", task: OTHER, state: "doing" }),
+      take(5, 5 * MIN, "mac", 60),
+      take(6, JOINED, "win", 30, TASK),
+    ];
+    const now = JOINED + QUIET_MS + MIN;
+    expect(dueFor(ms, now, TASK)).toEqual([]);
+    expect(dueFor(ms, now, OTHER)).toEqual([expect.objectContaining({ task: OTHER, step: 1, mover: "win" })]);
+  });
+
+  test("the clock resumes from the moment the holder lets go and the seat acquires it", () => {
+    const handed = 40 * MIN;
+    const ms = [...queued(), free(7, handed, "mac")];
+    expect(foldAt(ms, handed + MIN).leases.get("build")).toMatchObject({ holder: "win", since: handed });
+    expect(dueFor(ms, handed + QUIET_MS - MIN)).toEqual([]);
+    const now = handed + QUIET_MS + MIN;
+    expect(dueFor(ms, now)).toEqual([expect.objectContaining({ step: 1, mover: "win" })]);
+    const state = foldAt(ms, now);
+    expect(clockOf(state, state.tasks.get(TASK)!, now)).toMatchObject({ mover: "win", since: handed, paged: true });
+  });
+
+  test("the clock resumes when the lock passes to the seat as the holder's lease runs out", () => {
+    const ranOut = 5 * MIN + HOUR;
+    expect(dueFor(queued(), ranOut + QUIET_MS - MIN)).toEqual([]);
+    const now = ranOut + QUIET_MS + MIN;
+    const state = foldAt(queued(), now);
+    expect(state.leases.get("build")).toMatchObject({ holder: "win", since: ranOut });
+    expect(clockOf(state, state.tasks.get(TASK)!, now)).toMatchObject({ since: ranOut, paged: true });
+    expect(dueFor(queued(), now)).toEqual([expect.objectContaining({ step: 1, mover: "win" })]);
+  });
+
+  test("the clock resumes from the moment the seat leaves the line", () => {
+    const left = 25 * MIN;
+    const ms = [...queued(), free(7, left, "win")];
+    expect(dueFor(ms, left + QUIET_MS - MIN)).toEqual([]);
+    const now = left + QUIET_MS + MIN;
+    const state = foldAt(ms, now);
+    expect(clockOf(state, state.tasks.get(TASK)!, now)).toMatchObject({ since: left, paged: true });
+    expect(dueFor(ms, now)).toEqual([expect.objectContaining({ step: 1, mover: "win" })]);
+  });
+
+  test("the clock resumes when the wait gives up at joined + LEASE_WAIT_MS, though the holder keeps renewing", () => {
+    const renewals = [0, 1, 2, 3, 4].map((n) => take(7 + n, 5 * MIN + (n + 1) * 25 * MIN, "mac", 60));
+    const ms = [...queued(), ...renewals];
+    const gaveUp = JOINED + LEASE_WAIT_MS;
+    expect(
+      foldAt(ms, gaveUp - MIN)
+        .leases.get("build")
+        ?.queue.map((q) => q.name),
+    ).toEqual(["win"]);
+    expect(dueFor(ms, gaveUp - MIN)).toEqual([]);
+    expect(dueFor(ms, gaveUp + QUIET_MS - MIN)).toEqual([]);
+    const now = gaveUp + QUIET_MS + MIN;
+    const state = foldAt(ms, now);
+    expect(state.leases.get("build")).toMatchObject({ holder: "mac", queue: [] });
+    expect(clockOf(state, state.tasks.get(TASK)!, now)).toMatchObject({ since: gaveUp, paged: true });
+    expect(dueFor(ms, now)).toEqual([expect.objectContaining({ step: 1, mover: "win" })]);
+  });
+
+  test("an event after the wait gave up keeps the restart at the give-up time", () => {
+    const gaveUp = JOINED + LEASE_WAIT_MS;
+    const renewals = [0, 1, 2, 3, 4, 5].map((n) => take(7 + n, 5 * MIN + (n + 1) * 25 * MIN, "mac", 60));
+    const ms = [...queued(), ...renewals];
+    expect(renewals.at(-1)!.ts).toBeGreaterThan(gaveUp);
+    const now = renewals.at(-1)!.ts + MIN;
+    const state = foldAt(ms, now);
+    expect(clockOf(state, state.tasks.get(TASK)!, now)).toMatchObject({ since: gaveUp, paged: true });
+  });
+
+  test("the live fold: a release batch refolds, and time and chat alone resume the clock where a whole fold does", () => {
+    const left = 25 * MIN;
+    const ms = [...queued(), free(7, left, "win")];
+    const release = ms.findIndex((m) => m.ev?.op === "lease.free");
+    expect(release).toBe(ms.length - 1);
+    const live = folded(ms.slice(0, release), roster, JOINED + MIN);
+    expect(nudgesDue(live.next([], JOINED + QUIET_MS + MIN)!, JOINED + QUIET_MS + MIN)).toEqual([]);
+    expect(live.next(ms.slice(release), left + MIN)).toBeNull();
+    const now = left + QUIET_MS + MIN;
+    const refolded = folded(ms, roster, left + MIN).next([], now)!;
+    expect(clockOf(refolded, refolded.tasks.get(TASK)!, now)).toMatchObject({ since: left, paged: true });
+
+    const ranOut = 5 * MIN + HOUR;
+    const byTime = folded(queued(), roster, JOINED + MIN);
+    const chat = { v: 1, id: "m9", seq: 9, from: "jow", pk: "pk-jow", sigOk: true, kind: "msg", body: "how's it going?", ts: ranOut + MIN, rts: ranOut + MIN } as Message;
+    const later = ranOut + QUIET_MS + MIN;
+    const chatted = byTime.next([chat], later)!;
+    expect(chatted.leases.get("build")).toMatchObject({ holder: "win", since: ranOut });
+    expect(clockOf(chatted, chatted.tasks.get(TASK)!, later)).toMatchObject({ since: ranOut, paged: true });
+    const whole = foldAt([...queued(), chat], later);
+    expect(clockOf(chatted, chatted.tasks.get(TASK)!, later)).toEqual(clockOf(whole, whole.tasks.get(TASK)!, later));
+  });
+
+  test("a fold resumed from a snapshot base taken mid-wait agrees with the whole log", () => {
+    const left = 25 * MIN;
+    const ms = [...queued(), free(7, left, "win")];
+    let base: FoldBase | null = null;
+    fold(ms.slice(0, 4), roster, JOINED + MIN, null, null, null, (b) => {
+      base = b;
+    });
+    expect(base!.leases[0]?.queue).toEqual([expect.objectContaining({ name: "win", task: TASK })]);
+    const now = left + QUIET_MS + MIN;
+    const resumed = fold(ms, roster, now, null, null, base);
+    const whole = fold(ms, roster, now);
+    expect(clockOf(resumed, resumed.tasks.get(TASK)!, now)).toEqual(clockOf(whole, whole.tasks.get(TASK)!, now));
+    expect(clockOf(resumed, resumed.tasks.get(TASK)!, now)).toMatchObject({ since: left, paged: true });
+  });
+
+  test("a take naming a task that closed or never was keeps its place, with no task on it, as an older reader folds it", () => {
+    const closed = [...doing(), event(3, 2_000, "win", { op: "task.update", task: TASK, state: "done" })];
+    const holderFirst = [...closed, take(5, 5 * MIN, "mac", 60, TASK), take(6, JOINED, "win", 30)];
+    const queuedSecond = [...closed, take(5, 5 * MIN, "win", 60), take(6, JOINED, "mac", 30, TASK), take(7, JOINED + MIN, "owl", 30, 99)];
+    const now = JOINED + 2 * MIN;
+    expect(foldAt(closed, now).tasks.get(TASK)?.state).toBe("done");
+    for (const ms of [holderFirst, queuedSecond]) {
+      const state = foldAt(ms, now);
+      expect(state.rejected.size).toBe(0);
+      expect(state.leases).toEqual(foldAt(olderReader(ms), now).leases);
+      expect(state.leases.get("build")?.queue.every((q) => q.task === undefined)).toBe(true);
+    }
+    expect(foldAt(holderFirst, now).leases.get("build")).toMatchObject({ holder: "mac", queue: [expect.objectContaining({ name: "win" })] });
+    expect(
+      foldAt(queuedSecond, now)
+        .leases.get("build")
+        ?.queue.map((q) => q.name),
+    ).toEqual(["mac", "owl"]);
+  });
+
+  describe("one task waiting on two locks resumes when the last wait ends", () => {
+    const buildEnds = 5 * MIN + HOUR;
+    const deployEnds = 5 * MIN + 97 * MIN;
+    const holders = { build: takeOn("build", 5, 5 * MIN, "mac", 60), deploy: takeOn("deploy", 6, 5 * MIN, "owl", 97) };
+    const waits = [takeOn("build", 7, JOINED, "win", 30, TASK), takeOn("deploy", 8, JOINED + MIN, "win", 30, TASK)];
+    const orders = { "build first": [...doing(), holders.build, holders.deploy, ...waits], "deploy first": [...doing(), holders.deploy, holders.build, ...waits] };
+    const now = deployEnds + 3 * MIN;
+    for (const [order, ms] of Object.entries(orders)) {
+      test(`${order}: full, incremental and snapshot folds all resume at the second wait's end`, () => {
+        expect(buildEnds).toBeLessThan(deployEnds);
+        expect(dueFor(ms, deployEnds - MIN)).toEqual([]);
+        const whole = foldAt(ms, now);
+        expect(whole.leases.get("deploy")).toMatchObject({ holder: "win", since: deployEnds });
+        const live = folded(ms, roster, JOINED + 2 * MIN);
+        expect(nudgesDue(live.next([], buildEnds + QUIET_MS + MIN)!, buildEnds + QUIET_MS + MIN)).toEqual([]);
+        const incremental = live.next([], now)!;
+        let base: FoldBase | null = null;
+        fold(ms, roster, JOINED + 2 * MIN, null, null, null, (b) => {
+          base = b;
+        });
+        const resumed = fold(ms, roster, now, null, null, base);
+        for (const state of [whole, incremental, resumed]) expect(clockOf(state, state.tasks.get(TASK)!, now)).toMatchObject({ since: deployEnds, paged: true });
+      });
+    }
+  });
+
+  test("the task is checked on the wire", () => {
+    expect(wellFormedEvent({ op: "lease.take", name: "build", ttl: 600, task: 7 })).toBe(true);
+    expect(wellFormedEvent({ op: "lease.take", name: "build", ttl: 600, task: "T7" })).toBe(false);
+    expect(wellFormedEvent({ op: "lease.take", name: "build", ttl: 600, task: -1 })).toBe(false);
+  });
+});
