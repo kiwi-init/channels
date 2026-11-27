@@ -10,10 +10,10 @@
     "@kiwi/channel": "workspace:*",
     "@kiwi/core": "workspace:*",
     "@kiwi/secrets": "workspace:*",
-    "effect": "4.1.4",
+    "effect": "4.1.7",
     "react": "^19.3.1"
   },
   "devDependencies": {
-    "@types/react": "^19.3.0"
+    "@types/react": "^19.3.3"
   }
 }
