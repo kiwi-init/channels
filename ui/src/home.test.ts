@@ -71,7 +71,7 @@ describe("homeOf", () => {
     expect(h.leadName).toBe("lead")
   })
 
-  test("lists open asks oldest first, decisions holding nothing after them, and drops answered asks and idle plain questions", () => {
+  test("lists open asks oldest first, decisions holding nothing among them, and drops answered asks and idle plain questions", () => {
     const h = homeOf(
       channel({
         asks: [
@@ -83,7 +83,7 @@ describe("homeOf", () => {
         ],
       })
     )
-    expect(h.asks.map((a) => a.id)).toEqual(["1", "2", "4"])
+    expect(h.asks.map((a) => a.id)).toEqual(["4", "1", "2"])
     expect(h.asks[0]?.act).toEqual({
       kind: "options",
       options: [

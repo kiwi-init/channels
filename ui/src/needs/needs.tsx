@@ -21,7 +21,7 @@ import { wakeLine } from "~/needs/wake-line"
 import SettledList from "~/needs/settled"
 import { nickname } from "~/names"
 import { SendBack } from "~/tasks/send-back"
-import { isIdle, isOpen, openAsks } from "~/needs/open"
+import { isOpen, openAsks } from "~/needs/open"
 import { SpecNeedCard } from "~/specs/card"
 import { authored, esc, face, type Stranger } from "~/panes/engine"
 import { card, join, link, main, maker, newTag, PageFrame, PageText, prTail, steps, taskRow, type Maker } from "~/panes/page"
@@ -46,10 +46,12 @@ const strangerOf =
     return ask ? { name: ask.name, kind: ask.who, harness: ask.harness, presence: "online" } : undefined
   }
 
+const isIdle = (a: Ask): boolean => a.kind === "question" && !!a.idle && !a.answer
+
 export function needsText(channel: Channel, go: (to: Go) => void, tag?: string, now = Date.now()): { md: string; m: Maker } {
   const m = maker(tag)
   const pending = openAsks(channel)
-  const open = pending.filter((a) => !isIdle(a))
+  const open = pending.filter((a) => !isIdle(a)).sort((a, b) => a.at - b.at)
   const joins = joinedQuestions(open)
   const unchecked = open.some((a) => a.kind === "join" && a.check === "unchecked")
   const idle = channel.asks.filter(isIdle).sort((a, b) => a.at - b.at)

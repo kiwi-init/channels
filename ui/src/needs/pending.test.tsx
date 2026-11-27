@@ -9,7 +9,7 @@ import { homeOf } from "~/home"
 import { asksOf } from "~/live/map"
 import type { Ask, Channel, Person } from "~/model"
 import { needsText } from "~/needs/needs"
-import { isIdle, needsCount, openAsks } from "~/needs/open"
+import { openAsks } from "~/needs/open"
 
 const roster: Roster = [
   { name: "jow", pk: "pk-jow", owner: true, at: 0, active: true, kind: "human", display: "Jow", sponsor: { user: "u-jow", name: "Jow" } },
@@ -91,7 +91,7 @@ describe("an ask-human decision that holds no open work still waits in Needs you
     const { asks } = asksFor(messages)
     const channel = channelOf(asks)
     expect(ids(openAsks(channel)).sort()).toEqual(unheld.map((m) => String(m.seq)).sort())
-    expect(needsCount(channel)).toBe(6)
+    expect(openAsks(channel).length).toBe(6)
     const { md } = needsText(channel, () => {})
     for (const m of unheld) expect(times(md, String(m.body))).toBe(1)
     expect(md).not.toContain("kiwi-field:")
@@ -100,14 +100,14 @@ describe("an ask-human decision that holds no open work still waits in Needs you
   test("with a single such ask open, the count is one and the page has no all-clear", () => {
     const messages = [...base, choice(12, "Choice holding nothing?")]
     const channel = channelOf(asksFor(messages).asks)
-    expect(needsCount(channel)).toBe(1)
+    expect(openAsks(channel).length).toBe(1)
     const { m } = needsText(channel, () => {})
     expect([...m.fields.keys()].some((k) => k.endsWith("-clear"))).toBe(false)
   })
 
   test("with nothing pending the page shows its all-clear and the count is zero", () => {
     const channel = channelOf(asksFor(base).asks)
-    expect(needsCount(channel)).toBe(0)
+    expect(openAsks(channel).length).toBe(0)
     const { m } = needsText(channel, () => {})
     expect([...m.fields.keys()].some((k) => k.endsWith("-clear"))).toBe(true)
   })
@@ -118,9 +118,9 @@ describe("held work comes first, the rest says it holds nothing up (#2690)", () 
   const { asks } = asksFor(messages)
   const channel = channelOf(asks)
 
-  test("the count lists asks holding open work first, oldest first, then the others", () => {
-    expect(ids(openAsks(channel))).toEqual(["16", "17", "10", "11", "12", "13", "14", "15"])
-    expect(homeOf(channel).asks.map((a) => a.id)).toEqual(["16", "17", "10", "11", "12", "13", "14", "15"])
+  test("the count and the home list take every waiting decision, held or not, and leave out the plain question", () => {
+    expect(ids(openAsks(channel)).sort()).toEqual(["10", "11", "12", "13", "14", "15", "16", "17"])
+    expect(homeOf(channel).asks.map((a) => a.id)).toEqual(["10", "11", "12", "13", "14", "15", "16", "17"])
   })
 
   test("on the page every card shows once, held work above the 'holding nothing up' heading and the others below it", () => {
@@ -139,7 +139,7 @@ describe("held work comes first, the rest says it holds nothing up (#2690)", () 
 
   test("a plain question holding nothing is listed as before but not counted", () => {
     const q = asks.find((a) => a.id === "20")
-    expect(q && isIdle(q)).toBe(true)
+    expect(q).toMatchObject({ kind: "question", idle: true, plain: true })
     expect(ids(openAsks(channel))).not.toContain("20")
     expect(times(needsText(channel, () => {}).md, "Plain question holding nothing?")).toBe(1)
   })
@@ -147,7 +147,7 @@ describe("held work comes first, the rest says it holds nothing up (#2690)", () 
   test("someone the ask isn't for gets no card and no count", () => {
     const theirs = asksFor(messages, "sam", false).asks
     expect(theirs.filter((a) => a.kind === "question")).toEqual([])
-    expect(needsCount(channelOf(theirs))).toBe(0)
+    expect(openAsks(channelOf(theirs)).length).toBe(0)
   })
 })
 
@@ -168,16 +168,16 @@ describe("the CLI, the work summary and iOS keep holding work as their rule (#26
 describe("an answered or closed decision leaves at once (#2690)", () => {
   test("a tapped answer takes it out of the count", () => {
     const messages = [...base, choice(12, "Choice holding nothing?"), said(30, "jow", "A: yes", { re: [12], to: ["lead"], pick: true })]
-    expect(needsCount(channelOf(asksFor(messages).asks))).toBe(0)
+    expect(openAsks(channelOf(asksFor(messages).asks)).length).toBe(0)
   })
 
   test("a step marked done takes it out of the count", () => {
     const messages = [...base, stepAsk(13, "Step holding nothing"), said(30, "jow", "Done", { re: [13], to: ["lead"], stepReply: { outcome: "done" } })]
-    expect(needsCount(channelOf(asksFor(messages).asks))).toBe(0)
+    expect(openAsks(channelOf(asksFor(messages).asks)).length).toBe(0)
   })
 
   test("the asker closing it takes it out of the count", () => {
     const messages = [...base, choice(12, "Choice holding nothing?"), wire(30, "lead", { kind: "event", body: "closed #12", ev: { op: "ask.close", ask: 12 }, re: [12] })]
-    expect(needsCount(channelOf(asksFor(messages).asks))).toBe(0)
+    expect(openAsks(channelOf(asksFor(messages).asks)).length).toBe(0)
   })
 })

@@ -51,7 +51,7 @@ import { freeOf, specAsksOf, specsOf } from "~/live/specs"
 import { clock, useNow } from "~/kit/time"
 import type { Channel, SendExtras, Where } from "~/model"
 import { nicknamesOf } from "~/names"
-import { needsCount } from "~/needs/open"
+import { openAsks } from "~/needs/open"
 
 export interface View {
   where: Where | null
@@ -490,7 +490,7 @@ export const OpenMember = memo(function OpenMember({ member, view }: { member: S
     if (task !== null && lastInTask && shown) markSeenIn(roomId, { [placeKey({ kind: "task", task })]: lastInTask })
   }, [task, lastInTask, roomId, shown])
 
-  const needs = useMemo(() => needsCount(asks), [asks])
+  const needs = useMemo(() => openAsks(asks).length, [asks])
   const top = Math.max(live.head, messages.at(-1)?.seq ?? 0)
   const unreadHere = rooms.reduce((n, r) => n + (r.muted ? r.mentions : r.unread), 0) + directs.reduce((n, d) => n + d.unread, 0)
   useEffect(() => {

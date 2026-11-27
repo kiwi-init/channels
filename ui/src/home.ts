@@ -79,7 +79,9 @@ function agentsOf(c: Source): HomeAgent[] {
 }
 
 export function homeOf(c: Source): HomeChannel {
-  const asks = openAsks(c).map((a): HomeAsk => ({ id: a.id, at: a.at, ...lineOf(c, a) }))
+  const asks = openAsks(c)
+    .sort((a, b) => a.at - b.at)
+    .map((a): HomeAsk => ({ id: a.id, at: a.at, ...lineOf(c, a) }))
   const agents = agentsOf(c)
   const now = nowOf({ tasks: c.tasks })
   const lead = c.lead ?? null
