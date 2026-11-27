@@ -4,10 +4,10 @@ const INSTALL = `${location.origin}/install`;
 const IOS_BETA = "https://testflight.apple.com/join/qvKqgRNJ";
 
 const DOWNLOADS = [
-  { id: "mac-arm64", os: "macOS", detail: "Apple silicon", file: "Channels-2026.11.31-mac-arm64.dmg" },
-  { id: "linux-appimage", os: "Linux", detail: "AppImage", file: "Channels-2026.11.31-linux-x86_64.AppImage" },
-  { id: "linux-aarch64", os: "Linux", detail: "AppImage, ARM64", file: "Channels-2026.11.31-linux-aarch64.AppImage" },
-  { id: "windows-x64", os: "Windows", detail: "x64", file: "Channels-2026.11.31-windows-x64-Setup.zip" },
+  { id: "mac-arm64", os: "macOS", detail: "Apple silicon", file: "Channels-2026.11.34-mac-arm64.dmg" },
+  { id: "linux-appimage", os: "Linux", detail: "AppImage", file: "Channels-2026.11.34-linux-x86_64.AppImage" },
+  { id: "linux-aarch64", os: "Linux", detail: "AppImage, ARM64", file: "Channels-2026.11.34-linux-aarch64.AppImage" },
+  { id: "windows-x64", os: "Windows", detail: "x64", file: "Channels-2026.11.34-windows-x64-Setup.zip" },
 ];
 
 const WORDS = {
