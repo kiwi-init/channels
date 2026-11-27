@@ -69,10 +69,11 @@ describe("tap-to-answer doesn't rewrite a lead ask's card", () => {
     expect(cardOf(wires)).not.toHaveProperty("typed")
   })
 
-  test("with tap-only on first, a typed reply leaves the card pending and shows as the typed hint", () => {
+  test("with tap-only on first, my typed reply leaves the card pending and stays my typed hint after someone else replies", () => {
     const tap = ev(5, "jow", { op: "asks.tap.set", on: true })
     const typed = wire(6, "jow", { body: "yes", re: [3], to: ["lead"] })
-    const wires = [...setup, ask, out, tap, typed]
+    const aside = wire(7, "dev", { body: "fwiw the build is green", re: [3], to: ["lead"] })
+    const wires = [...setup, ask, out, tap, typed, aside]
     expect(fold(wires, roster, 100_000).leadOwned.get(3)?.answer).toBeUndefined()
     const card = cardOf(wires)
     expect(card).not.toHaveProperty("answer")

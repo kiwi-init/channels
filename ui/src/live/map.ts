@@ -1053,7 +1053,7 @@ export function asksOf(
     if (!toMe) continue
     const tapOnly = state.tapToAnswer && !!m.esc
     const chat = (replies.get(m.seq) ?? []).filter((r) => r.kind !== "event")
-    const said = chat.filter((r) => (recorded ? r.from !== m.from : answersAsk(state.members, m, r.from)))
+    const said = chat.filter((r) => (recorded ? r.from === me : answersAsk(state.members, m, r.from)))
     const answer = recorded ? chat.find((r) => r.seq === recorded.answer?.seq) : said.find((r) => !tapOnly || r.pick || r.stepReply)
     const typed = tapOnly && !answer ? said.at(-1) : undefined
     const isOpen = open.has(m.seq)
