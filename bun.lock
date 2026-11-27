@@ -5,7 +5,7 @@
     "": {
       "name": "modelchannel",
       "dependencies": {
-        "@firecrawl/anydoc-wasm": "0.2.5",
+        "@firecrawl/anydoc-wasm": "0.2.4",
         "@kiwi/app": "workspace:*",
         "@kiwi/channel": "workspace:*",
         "@kiwi/core": "workspace:*",
@@ -229,7 +229,7 @@
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.28.2", "", { "os": "win32", "cpu": "x64" }, "sha512-5ebpxr3nWMzrL/rnUI755Jkuee0bHL/Gq0WTF9lvcpv73wAp5eu8MfBUgWK9bhWvZjj7yX8etf/8tI8Ney695g=="],
 
-    "@firecrawl/anydoc-wasm": ["@firecrawl/anydoc-wasm@0.2.5", "", {}, "sha512-h1nQMVlc5+TKPx1NP2NGZ0bdvP7Bkh7I47Dpu66Jw63U9foZGDSj6y61OxM3aRlpfqIdWbFeGXiUzgNjN6GQXg=="],
+    "@firecrawl/anydoc-wasm": ["@firecrawl/anydoc-wasm@0.2.4", "", {}, "sha512-ZqrTXBrwi1Ct4kB5R72KQC9fOxwq4W08bZh6T+o84Mork3xCKLpH8TRe+KM3vJ+XqRVlV1dxHvQp0cnkO2r5TQ=="],
 
     "@hugeicons/core-free-icons": ["@hugeicons/core-free-icons@4.4.0", "", {}, "sha512-7Mz8bmGoY6tZ6l3C2TXwNMLVSr0I8HPwjjFIERAuJFj3rWwLxdF2ZLkDqdrVuEE1dx5b/VXyIsP4WoSU6Q40KQ=="],
 
