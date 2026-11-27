@@ -158,6 +158,7 @@ export default {
   "panels.task.step.skipped": "pulada",
   "panels.task.step.current": "agora",
   "panels.task.step.waits": "espera {time}",
+  "panels.task.step.held": "retido por {who}",
   "panels.task.step.run": "uma execução ainda tem {time}",
   "panels.task.step.end": "Marcar como feita",
   "panels.task.closed": "Fechada",

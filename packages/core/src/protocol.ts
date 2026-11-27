@@ -406,7 +406,7 @@ export type Event =
   | { op: "spec.delete"; ask: number; why?: string }
   | { op: "specs.only.set"; on: boolean }
   | { op: "lead.standby"; name: string; on: boolean }
-  | { op: "lead.duty"; to: string; from: number };
+  | { op: "lead.duty"; to: string; from: number; checkpoint?: string };
 
 export type SpecVerdict = "accepted" | "back" | "dropped";
 
@@ -858,6 +858,7 @@ export const PROOF_URL_MAX_LENGTH = 2000;
 export const PROOF_LABEL_MAX_LENGTH = 80;
 export const PROOF_MAX = 50;
 export const CHECKPOINT_MAX_LENGTH = 4000;
+export const HANDOVER_CHECKPOINT_OPS = 34;
 export const REVIEW_SUMMARY_MAX_LENGTH = 4000;
 export const DECISION_KINDS = ["intent", "taste", "irreversible", "scope", "choice"] as const;
 export type DecisionKind = (typeof DECISION_KINDS)[number];
@@ -1006,7 +1007,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 33;
+export const EVENT_OPS_VERSION = 34;
 
 export const TASK_WAIT_REASON_MAX = 200;
 
@@ -1040,7 +1041,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
 
 export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
-export const FOLD_RULES = 33;
+export const FOLD_RULES = 34;
 
 export const olderRules = (base: { rules?: number }): boolean => (base.rules ?? 0) < FOLD_RULES;
 
@@ -1449,7 +1450,7 @@ function eventCheck(ev: unknown): boolean | null {
     case "lead.standby":
       return str(e.name, 64) && typeof e.on === "boolean";
     case "lead.duty":
-      return str(e.to, 64) && n(e.from);
+      return str(e.to, 64) && n(e.from) && opt(e.checkpoint, (x): x is string => str(x, CHECKPOINT_MAX_LENGTH) && x.trim().length > 0);
     case "spec.result":
       return (
         n(e.ask) &&

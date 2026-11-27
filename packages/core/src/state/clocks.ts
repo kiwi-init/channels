@@ -1,7 +1,7 @@
 import type { Frozen } from "./types.ts";
 import { QUIET_MINUTES, type NudgeStep, type WakeGot, type WakeSeen } from "../protocol.ts";
 import { prOfTask } from "../prs.ts";
-import { currentStep, stepMove } from "../steps.ts";
+import { currentStep, stepMove, timedOf } from "../steps.ts";
 import { heldStep, pausingStep, runSight } from "./landing-steps.ts";
 import { landerOf, openRound, taskId } from "./tasks.ts";
 import { needsReset } from "./reset.ts";
@@ -32,7 +32,7 @@ function landingParty(view: ClockView, t: Frozen<Task>, now: number): Party {
   const lander = landerOf(t);
   if (!step) return lander ? member(lander, "land") : lead("assign");
   const move = stepMove(step, lander, now, step.run ? runSight(view.github, t, step) : "blind");
-  if (move.kind === "waiting" || move.kind === "run") return NONE;
+  if (move.kind === "waiting" || move.kind === "run" || move.kind === "held") return NONE;
   return move.kind === "member" ? member(move.name, "land", `${step.id}|${move.why ?? ""}`) : lead("assign");
 }
 
@@ -74,7 +74,7 @@ export function waitEndedBy(view: ClockView, t: Task, by: string, now: number, l
 function deadlines(view: ClockView, t: Frozen<Task>): (number | undefined)[] {
   if (t.state !== "landing") return [heldEnd(view, t), t.wait?.until];
   const step = currentStep(t);
-  return [step?.wait?.until, step?.run?.due, t.wait?.until];
+  return [step ? timedOf(step)?.until : undefined, step?.run?.due, t.wait?.until];
 }
 
 function passedDeadline(view: ClockView, t: Frozen<Task>, now: number): number | undefined {
@@ -86,7 +86,7 @@ export const timedStep = (t: Task): boolean => {
   if (t.wait?.until !== undefined) return true;
   if (t.state !== "landing") return heldStep(t) !== undefined;
   const step = currentStep(t);
-  return !!step && (step.wait !== undefined || step.run !== undefined);
+  return !!step && (timedOf(step) !== undefined || step.run !== undefined);
 };
 
 const headOf = (view: ClockView, t: Task): string | undefined => prOfTask(view.github, view.branchPrefix, t)?.sha;

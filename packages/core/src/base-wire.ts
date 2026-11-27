@@ -1,4 +1,5 @@
 import { isLanding, outgrown, quietMinutes, type Trust } from "./protocol.ts";
+import { DUTY_SAID_MAX } from "./state/duty-notes.ts";
 import { wellFormedStepSpecs } from "./steps.ts";
 import type { FoldBase, Place } from "./state.ts";
 import type { GithubCheck, RunAttempt } from "./state/github.ts";
@@ -148,6 +149,33 @@ function wellFormedDuty(x: unknown): boolean {
   return nameOk(d.lead) && seqOk(d.since) && nameOk(d.by);
 }
 
+function wellFormedCheckpoint(x: unknown): boolean {
+  if (x === undefined || x === null) return true;
+  if (typeof x !== "object") return false;
+  const c = x as Record<string, unknown>;
+  return typeof c.text === "string" && c.text.length > 0 && nameOk(c.by) && seqOk(c.seq) && Number.isFinite(c.at);
+}
+
+function wellFormedDutyNote(x: unknown): boolean {
+  if (!x || typeof x !== "object") return false;
+  const n = x as Record<string, unknown>;
+  if (!seqOk(n.seq)) return false;
+  if (n.kind === "answer") return seqOk(n.ask) && nameOk(n.by) && typeof n.said === "string" && n.said.length <= DUTY_SAID_MAX;
+  if (n.kind === "hold") return seqOk(n.task) && typeof n.step === "string" && nameOk(n.by) && typeof n.reason === "string";
+  if (n.kind === "unhold") return seqOk(n.task) && typeof n.step === "string" && nameOk(n.by);
+  if (n.kind === "closed") return seqOk(n.task) && typeof n.title === "string";
+  return n.kind === "ticked" && seqOk(n.ask) && typeof n.boxes === "number" && Number.isSafeInteger(n.boxes) && n.boxes > 0;
+}
+
+function wellFormedOffDuty(x: unknown): boolean {
+  if (x === undefined || x === null) return true;
+  if (typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return (
+    Array.isArray(o.left) && o.left.length > 0 && o.left.every((e) => Array.isArray(e) && e.length === 2 && nameOk(e[0]) && seqOk(e[1])) && Array.isArray(o.notes) && o.notes.every(wellFormedDutyNote)
+  );
+}
+
 function wellFormedStandbys(x: unknown): boolean {
   if (x === undefined) return true;
   return (
@@ -203,6 +231,8 @@ export function wellFormedWire(x: unknown, n: number): x is Wire {
     (b.landing === undefined || b.landing === null || isLanding(b.landing)) &&
     (b.landingSteps === undefined || b.landingSteps === null || wellFormedStepSpecs(b.landingSteps)) &&
     wellFormedDuty(b.duty) &&
+    wellFormedCheckpoint(b.checkpoint) &&
+    wellFormedOffDuty(b.offDuty) &&
     wellFormedStandbys(b.standbys) &&
     wellFormedPairs(b.leadAsks, wellFormedLeadAsk) &&
     wellFormedPairs(b.leadOwned, wellFormedLeadOwned)

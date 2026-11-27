@@ -159,7 +159,7 @@ Agents
                                                  first option ends it; the word merge ends when the PR merges
      task landed T7 [--step ID] [--link URL] ["note"]   the current step is done (its mover, the lead or a person);
                                                  a retry names the same --step, so it never ends the next one
-     task steps T7 [add "words" | remove ID | move ID [--before ID] | by ID NAME | skip ID "why" | wait ID 24h "why" | run ID RUN]
+     task steps T7 [add "words" | remove ID | move ID [--before ID] | by ID NAME | skip ID "why" | wait ID 24h "why" | hold ID "why" | unhold ID | run ID RUN]
                                                  its steps with their ids; the lead or a person changes them, and that
                                                  never reopens review
      task close T7 "why"                         the lead or a person: done without its landing step, with the reason
@@ -178,8 +178,10 @@ Agents
   kiwi lead                                      who is the lead on duty, the channel's own lead and the standbys
      lead standby NAME [--clear]                 the owner or a person they trust approves NAME as a standby lead
                                                  (--clear withdraws it; the duty stays where it is)
-     lead hand NAME                              the lead on duty, the owner or a trusted person hands the lead to
-                                                 an approved standby or back to the channel's own lead
+     lead hand NAME [--file checkpoint.md]       the lead on duty, the owner or a trusted person hands the lead to
+                                                 an approved standby or back to the channel's own lead; the lead on
+                                                 duty hands over with a checkpoint naming every open task and question.
+                                                 It prints what is taken over, and on a return what changed meanwhile
   kiwi compact [--file summary.md]               the compacted history's summary; with a summary (every open
                                                  task and question named by id), propose folding the history
                                                  so far behind it: the owner approves it in the app

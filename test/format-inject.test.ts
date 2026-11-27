@@ -24,6 +24,8 @@ function blank(): ChannelStateDraft {
     specs: new Map(),
     specsOnly: null,
     duty: null,
+    checkpoint: null,
+    offDuty: null,
     standbys: new Map(),
     homeLead: null,
     leadAsks: new Map(),

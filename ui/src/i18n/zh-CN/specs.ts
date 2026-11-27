@@ -261,6 +261,7 @@ export default {
   "tasks.move.revise": "该 {who} 再次送审",
   "tasks.move.answer": "该 {who} 回答",
   "tasks.move.land": "该 {who} 落地",
+  "tasks.move.lift": "该 {who} 解除暂停",
   "tasks.move.with.trouble": "{move}（{trouble}）",
   "tasks.move.trouble.failed": "运行失败了",
   "tasks.move.trouble.unseen": "看不到运行",

@@ -844,9 +844,10 @@ function quietFor(state: ChannelState, t: Frozen<CoreTask>, now: number): TaskQu
   return c?.paged ? { with: c.mover, since: c.since, from: c.since + state.quietMs, every: state.quietMs, step: c.step } : undefined
 }
 
-function stepNow(state: ChannelState, t: Frozen<CoreTask>, s: LandingStep, me: string, now: number): Pick<TaskStep, "wait" | "run" | "trouble" | "yours"> {
+function stepNow(state: ChannelState, t: Frozen<CoreTask>, s: LandingStep, me: string, now: number): Pick<TaskStep, "wait" | "held" | "run" | "trouble" | "yours"> {
   const move = stepMove(s, landerOf(t), now, s.run ? runSight(state.github, t, s) : "blind")
   if (move.kind === "waiting") return { wait: { reason: wrote(move.reason), until: move.until } }
+  if (move.kind === "held") return { held: { by: move.by, reason: wrote(move.reason) } }
   if (move.kind === "run") return { run: { due: move.due } }
   if (move.kind === "nobody") return {}
   return { ...(move.why ? { trouble: TROUBLE[move.why] } : {}), ...(move.name === me ? { yours: true as const } : {}) }

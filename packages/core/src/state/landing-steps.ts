@@ -1,13 +1,15 @@
 import type { Frozen } from "./types.ts";
 import type { CheckArtifact } from "../checks.ts";
-import { arm, currentStep, mintSteps, STEPS_MAX, stepById, stepsOfThen, stepText, type LandingStep, type RunSight, type StepEdit, type StepSpec } from "../steps.ts";
+import { arm, currentStep, holdOf, mintSteps, STEPS_MAX, stepById, stepsOfThen, stepText, type LandingStep, type RunSight, type StepEdit, type StepSpec } from "../steps.ts";
 import type { CheckState } from "./checks.ts";
 import { isReviewCheck } from "../protocol.ts";
 import { approvedAt, judgedHead } from "../stage.ts";
 import { releaseOf, runStart, runsUnknownSince, shaKey, succeededBy, type GithubPr, type GithubState } from "./github.ts";
 import type { Task } from "./types.ts";
 
-export type StepMark = { seq: number; by: string; at: number };
+export type StepMark = { seq: number; by: string; at: number; closed: (task: Pick<Task, "id" | "title">, seq: number) => void };
+
+const unnoted = (): void => undefined;
 
 export interface StepView {
   github: Frozen<GithubState>;
@@ -63,11 +65,12 @@ export function advance(task: Task, mark: StepMark): void {
       task.state = "done";
       task.closedSeq = mark.seq;
       task.updatedAt = mark.at;
+      mark.closed(task, mark.seq);
       return;
     }
     arm(step, mark.at);
     const seen = step.progress.kind === "open" ? step.progress.seen : undefined;
-    if (!seen) return;
+    if (!seen || step.wait?.kind === "hold") return;
     step.progress = { kind: "ended", end: { how: "detected", by: seen.by, seq: mark.seq, ts: mark.at, saw: seen.saw } };
     task.updatedAt = mark.at;
     task.notes.push({ seq: mark.seq, by: seen.by, ts: mark.at, text: `step ${stepText(step)} ended: ${seen.saw}${mergedUnapproved(task, seen.merged) ? ", which merged before its approval" : ""}` });
@@ -82,12 +85,12 @@ function mergedUnapproved(task: Task, merged: number | undefined): boolean {
 
 export function see(task: Task, step: LandingStep, mark: StepMark, saw: string, merged?: number): void {
   if (step.progress.kind !== "open" || step.progress.seen) return;
-  step.progress = { kind: "open", seen: { seq: mark.seq, by: mark.by, saw, ...(merged !== undefined ? { merged } : {}) } };
+  step.progress = { kind: "open", seen: { seq: mark.seq, by: mark.by, saw, at: mark.at, ...(merged !== undefined ? { merged } : {}) } };
   advance(task, mark);
 }
 
 export function seeThenSteps(task: Task, mark: StepMark, saw: string): void {
-  for (const s of task.steps ?? []) if (s.from === "then" && s.progress.kind === "open" && !s.progress.seen) s.progress = { kind: "open", seen: { seq: mark.seq, by: mark.by, saw } };
+  for (const s of task.steps ?? []) if (s.from === "then" && s.progress.kind === "open" && !s.progress.seen) s.progress = { kind: "open", seen: { seq: mark.seq, by: mark.by, saw, at: mark.at } };
 }
 
 export function say(task: Task, step: LandingStep, mark: StepMark, said: { link?: string; note?: string }): void {
@@ -183,7 +186,7 @@ export function migrateChecks(tasks: ReadonlyMap<number, Task>, checks: Readonly
       checkStep(task, { ...check, replaces: undefined });
     }
     const passed = (check.answers ?? (check.answer ? [check.answer] : [])).find((a) => a.pass);
-    if (passed) checkAnswered(tasks, { ...check, answer: passed }, { seq: passed.seq, by: passed.by, at: "at" in passed && typeof passed.at === "number" ? passed.at : 0 });
+    if (passed) checkAnswered(tasks, { ...check, answer: passed }, { seq: passed.seq, by: passed.by, at: "at" in passed && typeof passed.at === "number" ? passed.at : 0, closed: unnoted });
   }
 }
 
@@ -259,6 +262,14 @@ export function stepEditRefusal(task: Frozen<Task>, edit: StepEdit, from: { name
   const step = stepById(task, edit.id);
   if (!step) return `${id(task)} has no step ${edit.id}`;
   if (step.progress.kind === "ended") return `step ${stepText(step)} of ${id(task)} has already ended`;
+  const hold = holdOf(step);
+  if (edit.kind === "hold" || edit.kind === "unhold") {
+    if (!trusted) return `only the lead on duty or a person ${edit.kind === "hold" ? "holds" : "lifts the hold on"} step ${stepText(step)} of ${id(task)}`;
+    if (edit.kind === "hold" && hold) return `step ${stepText(step)} of ${id(task)} is already held by ${hold.by}: ${hold.reason}`;
+    if (edit.kind === "unhold" && !hold) return `step ${stepText(step)} of ${id(task)} isn't held`;
+    return null;
+  }
+  if (edit.kind === "wait" && hold) return `step ${stepText(step)} of ${id(task)} is held by ${hold.by}; unhold it first`;
   const mover = step.by ?? task.lander ?? task.owner;
   const own = (edit.kind === "wait" || edit.kind === "run") && from.name === mover;
   if (!trusted && !own) return `only a person or the lead changes ${id(task)}'s steps${edit.kind === "wait" || edit.kind === "run" ? `, or ${mover ?? "its mover"} for this one` : ""}`;
@@ -307,10 +318,23 @@ export function editSteps(task: Task, edit: StepEdit, mark: StepMark): void {
         note(`skipped step ${stepText(step)}: ${edit.why}`);
         break;
       case "wait":
-        step.wait = { reason: edit.reason, ms: edit.ms, ...(current(step) ? { until: mark.at + edit.ms } : {}) };
+        step.wait = { kind: "timed", reason: edit.reason, ms: edit.ms, ...(current(step) ? { until: mark.at + edit.ms } : {}) };
         if (held(step)) step.hold = { ...step.hold, until: mark.at + edit.ms };
         note(`step ${stepText(step)} waits: ${edit.reason}`);
         break;
+      case "hold":
+        step.wait = { kind: "hold", reason: edit.reason, by: mark.by, seq: mark.seq };
+        note(`step ${stepText(step)} is held: ${edit.reason}`);
+        break;
+      case "unhold": {
+        delete step.wait;
+        const seen = step.progress.kind === "open" ? step.progress.seen : undefined;
+        if (seen) {
+          step.progress = { kind: "ended", end: { how: "detected", by: seen.by, seq: seen.seq, ts: seen.at ?? mark.at, saw: seen.saw } };
+          note(`step ${stepText(step)}'s hold is lifted; it ended with what was seen while held: ${seen.saw}`);
+        } else note(`step ${stepText(step)}'s hold is lifted`);
+        break;
+      }
       case "run": {
         const expected = edit.expected ?? step.run?.expected;
         if (expected === undefined) return;

@@ -5,6 +5,7 @@ import {
   olderRules,
   GENERAL_ROOM,
   GITHUB_CLOSED_KEEP_MS,
+  HANDOVER_CHECKPOINT_OPS,
   ignored,
   isOverlay,
   MAX_GOAL_NAME,
@@ -24,11 +25,12 @@ import { allowedOnHold, answersAsk, answersLeadAsk, answersLeadOwned, escalation
 import { answerChecks, checkFrom, closeCheck, openCheck, replaceRefusal, type CheckState } from "./checks.ts";
 import { checkAnswered, checkClosed, checkStep, migrateChecks, questionAnswered, questionWatched, seedSteps } from "./landing-steps.ts";
 import { choiceIn } from "../checks.ts";
-import { stepsOfThen } from "../steps.ts";
+import { stepsOfThen, waitFromOlder, type LandingStep } from "../steps.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { rootOf, sentTo } from "../room-rules.ts";
 import { askHeadOf, askOfMessage, fileTask, readHandedOver } from "./asks.ts";
+import { handoverCheckpointRefusal } from "./lead.ts";
 import { cancelledWithSpec, closesOnItsOwn, foldSpec, noteSpecComment, specGate } from "./specs.ts";
 import { backToReview, checkChangeRefusal, closeCancelled, landingTouchedByAsk, landingTouchedByClose, taskId } from "./tasks.ts";
 import { linkSafe, prKey, releasesFrom, repoKey, runKey } from "./github.ts";
@@ -84,13 +86,16 @@ import type {
   SecretRoom,
   Spec,
   Standby,
+  LeadCheckpoint,
   LeadAsk,
   LeadOwned,
   Task,
   StepQuestion,
   Duty,
+  DutyNote,
 } from "./types.ts";
 import { inRoom } from "../room-rules.ts";
+import { DUTY_SAID_MAX, keptOffDuty, newlyTicked } from "./duty-notes.ts";
 import { packAuthors, unpackAuthors } from "./authors.ts";
 import { same } from "./same.ts";
 
@@ -103,9 +108,15 @@ const closedLongAgo = (at: number, hw: number) => hw - at > GITHUB_CLOSED_KEEP_M
 
 function taskFromOlder(t: FoldBase["tasks"][number], stepless: boolean): Task {
   const rest = omit(t, "then", "landed");
-  const task: Task = rest.run ? { ...rest, run: { id: rest.run.id, seq: rest.run.seq, by: rest.run.by } } : rest;
+  const run: Task = rest.run ? { ...rest, run: { id: rest.run.id, seq: rest.run.seq, by: rest.run.by } } : rest;
+  const task: Task = run.steps ? { ...run, steps: run.steps.map(stepFromOlder) } : run;
   if (stepless && t.then && !task.steps && task.state !== "done") seedSteps(task, stepsOfThen(t.then), "then");
   return task;
+}
+
+function stepFromOlder(step: LandingStep): LandingStep {
+  const wait = waitFromOlder(step.wait);
+  return wait ? { ...step, wait } : omit(step, "wait");
 }
 
 function idHash(id: string): number {
@@ -228,6 +239,9 @@ interface Inner {
   placesBefore: NonNullable<FoldBase["placesBefore"]>;
   specsOnly: ChannelStateDraft["specsOnly"];
   duty: Duty | null;
+  checkpoint: LeadCheckpoint | null;
+  dutyLeft: ReadonlyMap<string, number>;
+  dutyNotes: readonly DutyNote[];
   standbys: ReadonlyMap<string, Standby>;
   leadAsks: ReadonlyMap<number, LeadAsk>;
   leadOwned: ReadonlyMap<number, LeadOwned>;
@@ -367,6 +381,11 @@ export function cursor(
       else delete member[power];
   }
   let duty: Duty | null = from?.duty ?? null;
+  let checkpoint: LeadCheckpoint | null = from?.checkpoint ?? null;
+  const dutyLeft = new Map<string, number>(from?.offDuty?.left);
+  const dutyNotes: DutyNote[] = [...(from?.offDuty?.notes ?? [])];
+  const dutyNote = (note: DutyNote): void => void (dutyLeft.size && dutyNotes.push(note));
+  const closedNote = (task: Pick<Task, "id" | "title">, seq: number): void => dutyNote({ kind: "closed", task: task.id, title: task.title, seq });
   const standbys = new Map<string, Standby>(from?.standbys);
   const leadAsks = new Map<number, LeadAsk>(from?.leadAsks);
   const leadOwned = new Map<number, LeadOwned>(from?.leadOwned);
@@ -483,6 +502,10 @@ export function cursor(
     trusted,
     leads,
     onDuty: () => duty !== null,
+    leadOnDuty: () => leadNow(),
+    checkpointed: (cp: LeadCheckpoint) => void (checkpoint = cp),
+    dutyNote,
+    closed: closedNote,
     keysByName,
     scopesByKey,
     scopeSets,
@@ -724,7 +747,7 @@ export function cursor(
           questions.set(m.seq, { seq: m.seq, from: m.from, ...(m.esc ? { esc: true as const } : {}), ...(m.to?.length ? { to: m.to } : {}), choices: m.choices });
         for (const r of m.re ?? []) {
           const answeredCheck = checks.get(r);
-          if (answeredCheck?.answer?.seq === m.seq) checkAnswered(tasks, answeredCheck, { seq: m.seq, by: m.from, at });
+          if (answeredCheck?.answer?.seq === m.seq) checkAnswered(tasks, answeredCheck, { seq: m.seq, by: m.from, at, closed: closedNote });
           const question = questions.get(r);
           const first = question?.choices[0];
           if (!question || first === undefined || !answersAsk(members, question, m.from) || typedOnly(m, r)) continue;
@@ -737,7 +760,7 @@ export function cursor(
           questions.delete(r);
           passedAsks.set(r, first);
           for (const old of [...passedAsks.keys()].slice(0, Math.max(0, passedAsks.size - PASSED_ASKS_KEPT))) passedAsks.delete(old);
-          for (const t of questionAnswered(tasks, r, first, { seq: m.seq, by: m.from, at })) if (t.state !== "landing") tickTask(t, m.seq, at);
+          for (const t of questionAnswered(tasks, r, first, { seq: m.seq, by: m.from, at, closed: closedNote })) if (t.state !== "landing") tickTask(t, m.seq, at);
         }
         const parentPlace = parent !== undefined ? placeOf.get(parent) : undefined;
         const to = m.to?.length === 1 ? m.to[0]! : undefined;
@@ -780,9 +803,16 @@ export function cursor(
         if (!(r < m.seq)) continue;
         const settles = m.kind !== "event" && (r > after || baseAsks.has(r)) && !closedAsks.has(r) && !ignored(trust.get(r)) && !typedOnly(m, r);
         const handed = leadAsks.get(r);
-        if (settles && handed && !handed.answer && answersLeadAsk(members, handed, leadNow(), m.from)) leadAsks.set(r, { ...handed, answer: { by: m.from, seq: m.seq } });
+        const said = (): DutyNote => ({ kind: "answer", ask: r, by: m.from, seq: m.seq, said: inlineText(String(m.body ?? ""), DUTY_SAID_MAX) });
+        if (settles && handed && !handed.answer && answersLeadAsk(members, handed, leadNow(), m.from)) {
+          leadAsks.set(r, { ...handed, answer: { by: m.from, seq: m.seq } });
+          dutyNote(said());
+        }
         const owned = leadOwned.get(r);
-        if (settles && owned && !owned.answer && answersLeadOwned(members, owned, m.from)) leadOwned.set(r, { ...owned, answer: { by: m.from, seq: m.seq, to: leadNow() ?? owned.author } });
+        if (settles && owned && !owned.answer && answersLeadOwned(members, owned, m.from)) {
+          leadOwned.set(r, { ...owned, answer: { by: m.from, seq: m.seq, to: leadNow() ?? owned.author } });
+          dutyNote(said());
+        }
         let set = answered.get(r);
         if (!set) answered.set(r, (set = new Set()));
         if (!typedOnly(m, r)) set.add(m.from);
@@ -861,7 +891,7 @@ export function cursor(
             for (const id of holdsOf.get(ev.ask) ?? []) tickTask(tasks.get(id), m.seq, at);
             questions.delete(ev.ask);
             const closing = checks.get(ev.ask);
-            if (closing && closing.closed === undefined) checkClosed(tasks, closing, { seq: m.seq, by: m.from, at });
+            if (closing && closing.closed === undefined) checkClosed(tasks, closing, { seq: m.seq, by: m.from, at, closed: closedNote });
             closeCheck(checks, ev.ask, m.seq);
             for (const t of reopens) backToReview(t, { seq: m.seq, by: m.from, ts: at, ...(m.rts !== undefined ? { rts: m.rts } : {}) }, `pre-ship check #${ev.ask} closed after the approval`);
           }
@@ -883,8 +913,10 @@ export function cursor(
         placeOf.set(m.seq, MAIN);
         const target = members.get(ev.name);
         if (!member.owner && !trusted(m.pk ?? "", member)) reject("only the owner or a person the owner trusts approves a standby lead");
-        else if (!ev.on) standbys.delete(ev.name);
-        else if (!present(target) || isPerson(target)) reject(`${ev.name} isn't an agent here`);
+        else if (!ev.on) {
+          standbys.delete(ev.name);
+          if (ev.name !== homeLead()) dutyLeft.delete(ev.name);
+        } else if (!present(target) || isPerson(target)) reject(`${ev.name} isn't an agent here`);
         else standbys.set(ev.name, { since: m.seq, by: m.from });
         return;
       }
@@ -898,7 +930,16 @@ export function cursor(
         else if (ev.to !== home && !standbys.has(ev.to)) reject(`${ev.to} isn't an approved standby lead`);
         else if (!present(members.get(ev.to))) reject(`${ev.to} isn't here`);
         else if (ev.to === onDuty) reject(`${ev.to} is already the lead on duty`);
-        else duty = { lead: ev.to, since: m.seq, by: m.from };
+        else {
+          const handing = m.from === onDuty && (m.ops ?? 0) >= HANDOVER_CHECKPOINT_OPS;
+          const owed = handing ? handoverCheckpointRefusal(ev.checkpoint, tasks.values(), [...(from?.asks ?? []), ...stepped].filter(stillOpen)) : null;
+          if (owed) reject(owed);
+          else {
+            duty = { lead: ev.to, since: m.seq, by: m.from };
+            if (onDuty) dutyLeft.set(onDuty, m.seq);
+            if (ev.checkpoint !== undefined) checkpoint = { text: ev.checkpoint, by: m.from, seq: m.seq, at };
+          }
+        }
         return;
       }
       if (ev.op === "specs.only.set") {
@@ -919,10 +960,13 @@ export function cursor(
       }
       if (ev.op === "spec.set" || ev.op === "spec.ready" || ev.op === "spec.unready" || ev.op === "spec.approve" || ev.op === "spec.result" || ev.op === "spec.delete") {
         placeOf.set(m.seq, MAIN);
+        const before = ev.op === "spec.set" ? specs.get(ev.ask)?.text : undefined;
         const why = foldSpec(specs, askHeads, members, m, ev, at, leads(member));
+        const boxes = !why && ev.op === "spec.set" && before !== undefined ? newlyTicked(before, ev.text) : 0;
+        if (boxes) dutyNote({ kind: "ticked", ask: ev.ask, boxes, seq: m.seq });
         if (why) reject(why);
         else if (ev.op === "spec.delete" || (ev.op === "spec.result" && ev.verdict === "dropped"))
-          for (const t of cancelledWithSpec({ tasks }, ev.ask)) closeCancelled(t, { seq: m.seq, by: m.from, at }, `cancelled with #${ev.ask}'s spec`);
+          for (const t of cancelledWithSpec({ tasks }, ev.ask)) closeCancelled(t, { seq: m.seq, by: m.from, at, closed: closedNote }, `cancelled with #${ev.ask}'s spec`);
         else closeOnItsOwn(ev.ask, m, at);
         return;
       }
@@ -1070,6 +1114,8 @@ export function cursor(
         specs: keptSpecs,
         specsOnly,
         duty,
+        checkpoint,
+        offDuty: keptOffDuty(dutyLeft, dutyNotes),
         standbys: [...standbys],
         leadAsks: [...leadAsks].filter(([seq, a]) => seq > cut || (a.answer?.seq ?? 0) > cut || openAsks.some((o) => o.seq === seq)),
         leadOwned: [...leadOwned].filter(([seq, o]) => seq > cut || (o.answer?.seq ?? 0) > cut || openAsks.some((a) => a.seq === seq)),
@@ -1107,6 +1153,8 @@ export function cursor(
       specs,
       specsOnly,
       duty,
+      checkpoint,
+      offDuty: keptOffDuty(dutyLeft, dutyNotes),
       standbys: new Map(standbys),
       leadAsks: new Map(leadAsks),
       leadOwned: new Map(leadOwned),
@@ -1239,6 +1287,9 @@ export function cursor(
     placesBefore,
     specsOnly,
     duty,
+    checkpoint,
+    dutyLeft,
+    dutyNotes,
     standbys,
     leadAsks,
     leadOwned,

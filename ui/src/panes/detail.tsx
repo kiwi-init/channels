@@ -208,7 +208,8 @@ export function taskPage(channel: Channel, id: number, m: Maker, x: Ctx): TaskTe
   const links = ownList([task.pr ? prRow(task.pr) : "", issue ? issueRow(issue) : ""].filter(Boolean).join("\n"))
   const landing = (task.steps ?? []).map((s) => {
     const meta = [s.by ? nickname(channel, s.by) : "", stepState(s, x.now) ?? ""].filter(Boolean).join(" · ")
-    const wait = s.wait ? `: ${inert(wordsPlain(s.wait.reason, channel.nicknames))}` : ""
+    const why = s.held ?? s.wait
+    const wait = why ? `: ${inert(wordsPlain(why.reason, channel.nicknames))}` : ""
     const end = s.yours ? ` · ${m.act(t("panels.task.step.end"), () => actions.endStep(code, id, s.id))}` : ""
     return `- [${s.state === "done" ? "x" : " "}] ${inert(wordsRaw(s.words))}${meta ? ` · ${meta}${wait}` : ""}${end}`
   })

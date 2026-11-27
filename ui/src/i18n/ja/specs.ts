@@ -261,6 +261,7 @@ export default {
   "tasks.move.revise": "{who} がもう一度レビューに出す番",
   "tasks.move.answer": "{who} が答える番",
   "tasks.move.land": "{who} が反映する番",
+  "tasks.move.lift": "{who} が保留を解除する番",
   "tasks.move.with.trouble": "{move}（{trouble}）",
   "tasks.move.trouble.failed": "実行が失敗しました",
   "tasks.move.trouble.unseen": "実行を確認できません",

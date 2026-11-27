@@ -120,6 +120,7 @@ export const SHOTS: Record<string, Shot> = {
   "checkpoints-agents": { scenario: "checkpoints", channel: "kiwi", nav: { tab: "agents" } },
   "checkpoints-settings": { scenario: "checkpoints", channel: "kiwi", nav: { modal: { kind: "channel", tab: "tasks" } } },
   "task-wait": { scenario: "task-wait", channel: "kiwi", nav: { tab: "specs", panel: { kind: "task", task: 17 } } },
+  "task-held": { scenario: "task-held", channel: "kiwi", nav: { tab: "specs", panel: { kind: "task", task: 13 } } },
   "channel-settings-github": kiwi({ modal: { kind: "channel", tab: "github" } }),
   "channel-settings-no-repo": { scenario: "full", channel: "landing", nav: { modal: { kind: "channel", tab: "tasks" } } },
   "review-reset-agent": { scenario: "review-reset", channel: "kiwi", nav: { modal: { kind: "person", name: "atlas" } } },

@@ -184,7 +184,7 @@ export interface TaskEvent {
   root?: number
 }
 
-export type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land" | "reset"
+export type MoveFor = "work" | "start" | "assign" | "review" | "route" | "revise" | "answer" | "land" | "reset" | "lift"
 
 export type RunTrouble = "failed" | "unseen" | "overran"
 
@@ -210,6 +210,7 @@ export interface TaskStep {
   by?: string
   state: "done" | "skipped" | "current" | "next"
   wait?: { reason: Words; until: number }
+  held?: { by: string; reason: Words }
   run?: { due: number }
   trouble?: RunTrouble
   yours?: true

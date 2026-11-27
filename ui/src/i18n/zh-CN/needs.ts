@@ -158,6 +158,7 @@ export default {
   "panels.task.step.skipped": "已跳过",
   "panels.task.step.current": "当前",
   "panels.task.step.waits": "等待 {time}",
+  "panels.task.step.held": "由 {who} 暂停",
   "panels.task.step.run": "运行还剩 {time}",
   "panels.task.step.end": "标为完成",
   "panels.task.closed": "已关闭",

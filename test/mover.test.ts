@@ -4,7 +4,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import { moverOf, moverText, type Mover } from "@kiwi/core/mover.ts";
 import { PROTOCOL_VERSION, type Event, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts";
-import { currentStep, type StepSpec } from "@kiwi/core/steps.ts";
+import { currentStep, timedOf, type StepSpec } from "@kiwi/core/steps.ts";
 
 const NAMES = ["jon", "owl", "win", "mac", "zed"] as const;
 type Name = (typeof NAMES)[number];
@@ -243,7 +243,7 @@ describe("a landing task's mover is its current step's (#3930 §1 and §3, T4348
     const c = channel();
     const id = await landing(c, [{ words: "soak in hml", by: "zed", wait: { reason: "24h soak", ms: 24 * HOUR } }]);
     const s = c.state();
-    const until = currentStep(s.tasks.get(id)!)!.wait!.until!;
+    const until = timedOf(currentStep(s.tasks.get(id)!)!)!.until!;
     expect(moverOf(s, s.tasks.get(id)!, until - HOUR)).toEqual({ kind: "hold", step: "s1 “soak in hml”", until, left: HOUR, reason: "24h soak" });
     expect(moverOf(s, s.tasks.get(id)!, until)).toEqual({ kind: "member", name: "zed", move: "land", step: "s1 “soak in hml”" });
     expect(formatTask(s, s.tasks.get(id)!, until - HOUR).split("\n")).toContain("  move: nobody for 1h: step s1 “soak in hml” waits (24h soak)");

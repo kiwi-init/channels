@@ -158,6 +158,7 @@ export default {
   "panels.task.step.skipped": "건너뜀",
   "panels.task.step.current": "지금",
   "panels.task.step.waits": "{time} 대기",
+  "panels.task.step.held": "{who}이(가) 보류 중",
   "panels.task.step.run": "실행이 {time} 남음",
   "panels.task.step.end": "완료로 표시",
   "panels.task.closed": "닫힘",
