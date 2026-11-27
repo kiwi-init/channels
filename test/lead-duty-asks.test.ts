@@ -160,6 +160,46 @@ describe("an ask the lead put to a person follows the duty", () => {
   });
 });
 
+describe("one resolution for a lead's ask: open state, record and delivery agree", () => {
+  test("a plain ask to a person is settled by anyone but its author, as any plain ask is, and that answer reaches the lead on duty", async () => {
+    const setup = await channel();
+    const ask = await say("lead", "ask", "Anyone against shipping today?", { to: ["jon"] });
+    const out = await ev("lead", { op: "lead.duty", to: "spare", from: 0 });
+    const answer = await say("bo", "msg", "not me", { re: [ask.seq], to: ["lead"] });
+    const log = [...setup, ask, out, answer];
+    const view = (s: ChannelState) => ({ open: open(s, ask), by: s.leadOwned.get(ask.seq)?.answer?.by, spare: wants("spare", answer, s), lead: wants("lead", answer, s) });
+    const want = { open: false, by: "bo", spare: true, lead: false };
+    expect(view(at(log))).toEqual(want);
+    for (let cut = 1; cut < log.length; cut++) expect({ cut, ...view(resumedAt(log, cut)) }).toEqual({ cut, ...want });
+  });
+
+  test("a reply to an ask already closed settles nothing and keeps its ordinary delivery", async () => {
+    const setup = await channel();
+    const ask = await say("lead", "ask", "Ship 2.0 today?", { to: ["jon"], esc: true });
+    const closed = await say("lead", "event", "", { ev: { op: "ask.close", ask: ask.seq }, re: [ask.seq] });
+    const out = await ev("lead", { op: "lead.duty", to: "spare", from: 0 });
+    const back = await ev("spare", { op: "lead.duty", to: "lead", from: out.seq });
+    const out2 = await ev("lead", { op: "lead.duty", to: "spare", from: back.seq });
+    const late = await say("jon", "msg", "yes", { re: [ask.seq], to: ["lead"] });
+    const log = [...setup, ask, closed, out, back, out2, late];
+    const view = (s: ChannelState) => ({ rejected: s.rejected.has(closed.seq), answer: s.leadOwned.get(ask.seq)?.answer ?? null, spare: wants("spare", late, s), lead: wants("lead", late, s) });
+    const want = { rejected: false, answer: null, spare: false, lead: true };
+    expect(view(at(log))).toEqual(want);
+    for (let cut = 1; cut < log.length; cut++) expect({ cut, ...view(resumedAt(log, cut)) }).toEqual({ cut, ...want });
+  });
+
+  test("a reply to a closed decision handed to the Lead doesn't become its answer", async () => {
+    const setup = await channel();
+    const ask = await handed("Which database?");
+    const closed = await say("dev", "event", "", { ev: { op: "ask.close", ask: ask.seq }, re: [ask.seq] });
+    const out = await ev("lead", { op: "lead.duty", to: "spare", from: 0 });
+    const late = await say("spare", "msg", "sqlite", { re: [ask.seq], to: ["dev"] });
+    const log = [...setup, ask, closed, out, late];
+    expect(at(log).leadAsks.get(ask.seq)?.answer).toBeUndefined();
+    for (let cut = 1; cut < log.length; cut++) expect({ cut, answer: resumedAt(log, cut).leadAsks.get(ask.seq)?.answer ?? null }).toEqual({ cut, answer: null });
+  });
+});
+
 describe("what the lead owes, in a snapshot", () => {
   test("lead asks and lead-owned asks cross the wire, and a malformed snapshot is refused", async () => {
     const setup = await channel();

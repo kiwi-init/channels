@@ -437,6 +437,7 @@ export function cursor(
   const placesBefore = from?.placesBefore ?? [];
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
   const closedAsks = new Set<number>();
+  const baseAsks = new Set(from?.asks.map((a) => a.seq));
   const askers = new Map([...(from?.asks ?? []), ...messages].flatMap((a): [number, string][] => ((a.kind === "ask" || a.kind === "blocking") && !a.permission ? [[a.seq, a.from]] : [])));
   const decisions = new Set([...(from?.asks ?? []), ...messages].flatMap((a): number[] => ((a.kind === "ask" || a.kind === "blocking") && a.esc && !a.permission ? [a.seq] : [])));
   const settledBy = new Map<number, Set<string>>();
@@ -775,10 +776,11 @@ export function cursor(
 
       for (const r of m.re ?? []) {
         if (!(r < m.seq)) continue;
+        const settles = m.kind !== "event" && (r > after || baseAsks.has(r)) && !closedAsks.has(r) && !ignored(trust.get(r)) && !typedOnly(m, r);
         const handed = leadAsks.get(r);
-        if (handed && !handed.answer && !typedOnly(m, r) && answersLeadAsk(members, handed, leadNow(), m.from)) leadAsks.set(r, { ...handed, answer: { by: m.from, seq: m.seq } });
+        if (settles && handed && !handed.answer && answersLeadAsk(members, handed, leadNow(), m.from)) leadAsks.set(r, { ...handed, answer: { by: m.from, seq: m.seq } });
         const owned = leadOwned.get(r);
-        if (owned && !owned.answer && !typedOnly(m, r) && answersLeadOwned(members, owned, m.from)) leadOwned.set(r, { ...owned, answer: { by: m.from, seq: m.seq, to: leadNow() ?? owned.author } });
+        if (settles && owned && !owned.answer && answersLeadOwned(members, owned, m.from)) leadOwned.set(r, { ...owned, answer: { by: m.from, seq: m.seq, to: leadNow() ?? owned.author } });
         let set = answered.get(r);
         if (!set) answered.set(r, (set = new Set()));
         if (!typedOnly(m, r)) set.add(m.from);
